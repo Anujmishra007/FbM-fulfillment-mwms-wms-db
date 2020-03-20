@@ -1,0 +1,209 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Print_ViewReport]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [WM].[lsp_WM_Print_ViewReport]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/************************************************************************/
+/* Stored Proc: lsp_WM_Print_ViewReport                                 */
+/* Creation Date: 02-FEB-2018                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by: Wan                                                      */
+/*                                                                      */
+/* Purpose: LFWM-183:List of Labels, Document Print and Reports to be   */
+/*          considered & DB procedute Details for the same              */
+/*        :                                                             */
+/* Called By:                                                           */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/************************************************************************/
+CREATE PROC [WM].[lsp_WM_Print_ViewReport]
+           @c_ModuleID           NVARCHAR(30)  = 'ViewReport'
+         , @c_ReportID           NVARCHAR(10)
+         , @c_UserName           NVARCHAR(128) 
+         , @c_PrinterID          NVARCHAR(30)
+         , @n_NoOfCopy           INT            = 1
+         , @c_IsPaperPrinter     NCHAR(1)       = 'Y'
+         , @c_ParmValue1         NVARCHAR(60)
+         , @c_ParmValue2         NVARCHAR(60)   = ''
+         , @c_ParmValue3         NVARCHAR(60)   = ''
+         , @c_ParmValue4         NVARCHAR(60)   = ''
+         , @c_ParmValue5         NVARCHAR(60)   = ''
+         , @c_ParmValue6         NVARCHAR(60)   = ''
+         , @c_ParmValue7         NVARCHAR(60)   = ''
+         , @c_ParmValue8         NVARCHAR(60)   = ''
+         , @c_ParmValue9         NVARCHAR(60)   = ''
+         , @c_ParmValue10        NVARCHAR(60)   = ''         
+         , @c_ParmValue11        NVARCHAR(60)   = ''
+         , @c_ParmValue12        NVARCHAR(60)   = ''
+         , @c_ParmValue13        NVARCHAR(60)   = ''
+         , @c_ParmValue14        NVARCHAR(60)   = ''
+         , @c_ParmValue15        NVARCHAR(60)   = ''
+         , @c_ParmValue16        NVARCHAR(60)   = ''
+         , @c_ParmValue17        NVARCHAR(60)   = ''
+         , @c_ParmValue18        NVARCHAR(60)   = ''
+         , @c_ParmValue19        NVARCHAR(60)   = ''
+         , @c_ParmValue20        NVARCHAR(60)   = ''
+         , @b_Success            INT            OUTPUT
+         , @n_Err                INT            OUTPUT
+         , @c_ErrMsg             NVARCHAR(255)  OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE  
+           @n_StartTCnt             INT
+         , @n_Continue              INT 
+         , @n_FunctionID            INT               = 999
+
+         , @n_NoOfParms             INT               = 0
+         , @c_Storerkey             NVARCHAR(15)      = ''
+         , @c_Facility              NVARCHAR(5)       = ''
+         , @c_ReportTemplate        NVARCHAR(4000)    = ''
+         , @c_SCEPrintType          NVARCHAR(30)      = ''
+
+   SET @n_StartTCnt = @@TRANCOUNT
+   SET @n_Continue = 1
+   SET @b_Success  = 1
+   SET @n_err      = 0
+   SET @c_errmsg   = ''
+
+   SET @n_Err = 0 
+   EXEC [WM].[lsp_SetUser] 
+         @c_UserName = @c_UserName  OUTPUT
+      ,  @n_Err      = @n_Err       OUTPUT
+      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+   EXECUTE AS LOGIN = @c_UserName
+
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END
+
+   IF @n_NoOfCopy = 0  SET @n_NoOfCopy = '1'
+
+   SELECT @c_ReportTemplate = ISNULL(RTRIM(VR.rpt_datawindow),'')
+         ,@c_SCEPrintType = ISNULL(RTRIM(VR.SCEPrintType),'')
+   FROM dbo.PBSRPT_REPORTS VR  WITH (NOLOCK)
+   WHERE VR.Rpt_ID = @c_ReportID
+
+   SELECT @n_NoOfParms = COUNT(1)
+   FROM dbo.PBSRPT_PARMS VP  WITH (NOLOCK)
+   WHERE VP.Rpt_ID = @c_ReportID
+
+   IF @n_NoOfParms > 20
+   BEGIN
+      SET @n_err = 554351
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': View Report parameters more than 20. (lsp_WM_Print_ViewReport)'
+      GOTO EXIT_SP
+   END 
+
+   SELECT TOP 1 @c_Storerkey = DefaultStorer
+            ,   @c_Facility  = DefaultFacility
+   FROM RDT.RDTUser (NOLOCK)
+   WHERE UserName = @c_UserName
+
+   IF @c_SCEPrintType = ''
+   BEGIN
+      SET @c_SCEPrintType = 'TCPSPOOLER'
+   END
+
+   BEGIN TRY
+      EXEC  isp_PrintToRDTSpooler                      
+            @c_ReportType     = @c_ReportID         
+         ,  @c_Storerkey      = @c_Storerkey           
+         ,  @n_Noofparam      = @n_Noofparms           
+         ,  @c_Param01        = @c_ParmValue1             
+         ,  @c_Param02        = @c_ParmValue2             
+         ,  @c_Param03        = @c_ParmValue3             
+         ,  @c_Param04        = @c_ParmValue4             
+         ,  @c_Param05        = @c_ParmValue5           
+         ,  @c_Param06        = @c_ParmValue6             
+         ,  @c_Param07        = @c_ParmValue7            
+         ,  @c_Param08        = @c_ParmValue8             
+         ,  @c_Param09        = @c_ParmValue9             
+         ,  @c_Param10        = @c_ParmValue10             
+         ,  @n_Noofcopy       = @n_Noofcopy            
+         ,  @c_UserName       = @c_UserName           
+         ,  @c_Facility       = @c_Facility            
+         ,  @c_PrinterID      = @c_PrinterID           
+         ,  @c_Datawindow     = @c_ReportTemplate          
+         ,  @c_IsPaperPrinter = 'Y'      
+         ,  @c_JobType        = @c_SCEPrintType          
+         ,  @c_PrintData      = ''        
+         ,  @b_success        = @b_success   OUTPUT    
+         ,  @n_err            = @n_err       OUTPUT    
+         ,  @c_errmsg         = @c_errmsg    OUTPUT 
+         ,  @n_Function_ID    = 999    -- Print From WMS Setup
+         ,  @c_Param11        = @c_ParmValue11             
+         ,  @c_Param12        = @c_ParmValue12             
+         ,  @c_Param13        = @c_ParmValue13             
+         ,  @c_Param14        = @c_ParmValue14             
+         ,  @c_Param15        = @c_ParmValue15           
+         ,  @c_Param16        = @c_ParmValue16             
+         ,  @c_Param17        = @c_ParmValue17            
+         ,  @c_Param18        = @c_ParmValue18             
+         ,  @c_Param19        = @c_ParmValue19             
+         ,  @c_Param20        = @c_ParmValue20   
+   END TRY
+   BEGIN CATCH
+      SET @n_err = 554352
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing isp_PrintToRDTSpooler. (lsp_WM_Print_ViewReport)'
+                     + '( ' + @c_errmsg + ' )'
+   END CATCH
+      
+   IF @b_Success = 0 OR @n_Err <> 0
+   BEGIN
+      SET @n_Continue=3 
+      SET @c_errmsg = @c_errmsg
+      GOTO EXIT_SP 
+   END
+   
+EXIT_SP:
+   REVERT
+
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SET @b_Success = 0
+      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_WM_Print_ViewReport'
+   END
+   ELSE
+   BEGIN
+      SET @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+END -- procedure
+GO
+GRANT EXECUTE ON [WM].[lsp_WM_Print_ViewReport] TO nSQL 
+GO

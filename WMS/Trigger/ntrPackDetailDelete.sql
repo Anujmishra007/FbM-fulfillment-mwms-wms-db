@@ -1,0 +1,391 @@
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPackDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+   drop trigger [dbo].[ntrPackDetailDelete]
+GO
+
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO
+
+/************************************************************************/        
+/* Trigger: ntrPackDetailDelete                                         */        
+/* Creation Date:                                                       */        
+/* Copyright: IDS                                                       */        
+/* Written by:                                                          */        
+/*                                                                      */        
+/* Purpose:                                                             */        
+/*                                                                      */        
+/* Usage:                                                               */        
+/*                                                                      */        
+/* Called By: When records delete from PackDetail                       */        
+/*                                                                      */        
+/* PVCS Version: 1.0                                                    */        
+/*                                                                      */        
+/* Version: 5.4                                                         */        
+/*                                                                      */        
+/* Modifications:                                                       */        
+/* Date         Author     Ver.  Purposes                               */    
+/* 2011-May-12  KHLim01   1.1   Insert Delete log                       */
+/* 2011-Apr-08  AQSKC     1.2   SOS210154 - Auto Shortpick When ExpQty  */
+/*                              Reduced (Kc01)                          */
+/* 2011-Jul-14  KHLim02   1.3   GetRight for Delete log                 */
+/* 2012-Aug-03  TLTING01  1.4   Add New Col to DELLOG                   */  
+/* 2013-Nov-13  NJOW01    1.5   293687 - Anti Diversity LOR Delete      */
+/*                              SerialNo                                */
+/* 2015-Nov-17  NJOW02    1.6   Delete packinfo carton if the carton is */
+/*                              deleted                                 */
+/* 2015-Nov-30  NJOW03    1.7   356837-fix delete packdetail update to  */
+/*                              packinfo.qty                            */
+/* 2017-May-29  Ung       1.8   WMS-1919 Add serial no                  */
+/* 2019-Mar-13  Ung       1.9   WMS-8134 Add PackDetailInfo             */
+/************************************************************************/        
+CREATE TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
+FOR  DELETE      
+AS      
+BEGIN      
+IF @@ROWCOUNT = 0      
+BEGIN      
+   RETURN      
+END        
+          
+SET NOCOUNT ON        
+SET ANSI_NULLS OFF         
+SET QUOTED_IDENTIFIER OFF        
+SET CONCAT_NULL_YIELDS_NULL OFF        
+          
+ DECLARE @b_Success          INT -- Populated by calls to stored procedures - was the proc successful?      
+        ,@n_err              INT -- Error number returned by stored procedure or this trigger      
+        ,@n_err2             INT -- For Additional Error Detection      
+        ,@c_errmsg           NVARCHAR(250) -- Error message returned by stored procedure or this trigger      
+        ,@n_continue         INT      
+        ,@n_starttcnt        INT -- Holds the current transaction count      
+        ,@c_preprocess       NVARCHAR(250) -- preprocess      
+        ,@c_pstprocess       NVARCHAR(250) -- post process      
+        ,@n_cnt              INT      
+        ,@n_PackDetailSysId  INT      
+        ,@c_authority        NVARCHAR(1)      
+        ,@c_Facility         NVARCHAR(5)      
+        ,@c_Storerkey        NVARCHAR(15)      
+ 
+ DECLARE @c_Pickdetailkey     NVARCHAR(10)    --(Kc01)
+         ,@n_ShortPackQty     INT            --(Kc01)
+       
+ SELECT @n_continue = 1      
+       ,@n_starttcnt = @@TRANCOUNT      
+                  
+ IF (SELECT COUNT(*) FROM   DELETED) =      
+    (SELECT COUNT(*) FROM   DELETED WHERE  DELETED.ArchiveCop = '9')      
+ BEGIN      
+     SELECT @n_continue = 4      
+ END       
+
+   --(Kc01) - start
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN  
+   	  IF EXISTS(SELECT 1 FROM DELETED WHERE Qty > 0 OR ExpQty > 0) 
+      BEGIN
+         SELECT TOP 1 @c_Storerkey = Storerkey FROM DELETED   
+         SELECT @b_success = 0       
+         
+         EXECUTE nspGetRight NULL, -- facility        
+            @c_Storerkey, -- Storerkey        
+            NULL, -- Sku        
+            'AutoShortPick', -- Configkey        
+            @b_success OUTPUT,       
+            @c_authority OUTPUT,       
+            @n_err OUTPUT,       
+            @c_errmsg OUTPUT        
+         
+         IF @b_success <> 1      
+         BEGIN      
+             SELECT @n_continue = 3      
+                   ,@c_errmsg = 'ntrPackDetailDelete' + dbo.fnc_RTrim(@c_errmsg)      
+         END      
+         
+         IF @c_authority = '1'      
+         BEGIN      
+             SET @c_Pickdetailkey = ''
+             SET @n_ShortPackQty = 0
+             SELECT  @n_ShortPackQty = DELETED.ExpQty FROM DELETED
+                      
+         
+             SELECT TOP 1 @c_Pickdetailkey = ISNULL(PK.Pickdetailkey,'')
+                FROM DELETED
+                JOIN PACKDETAIL PACKD WITH (NOLOCK)
+                  ON PACKD.pickslipno = DELETED.pickslipno
+                 AND PACKD.cartonno = DELETED.cartonno 
+                 AND PACKD.labelno = DELETED.labelno 
+                 AND PACKD.labelline = DELETED.labelline 
+                 AND PACKD.sku = DELETED.sku
+                JOIN PACKHEADER PH WITH (NOLOCK) on (PACKD.pickslipno = PH.pickslipno and PH.Status < '9')
+                JOIN ORDERDETAIL OD WITH (NOLOCK) on (PH.orderkey = OD.orderkey and PACKD.sku = OD.sku and OD.openqty >= PACKD.expqty)
+                JOIN PICKDETAIL PK WITH (NOLOCK) on (OD.orderkey = PK.orderkey and OD.orderlinenumber = PK.orderlinenumber and PK.Status <= '5')
+                order by OD.openqty 
+         
+             IF @c_Pickdetailkey <> ''
+             BEGIN
+                UPDATE PICKDETAIL WITH (ROWLOCK)
+                SET QTY = QTY - @n_ShortPackQty
+                   ,UOMQTY = UOMQTY - @n_ShortPackQty
+                WHERE Pickdetailkey = @c_Pickdetailkey
+         
+                SELECT @n_err = @@ERROR
+                IF @n_err <> 0
+                BEGIN
+                   SELECT @n_continue = 3
+                   SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61811  
+                   SELECT @c_errmsg="NSQL"+CONVERT(char(5), @n_err)+": Update Failed On PICKDETAIL. (ntrPackDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+                END
+             END          
+             ELSE
+             BEGIN
+                SELECT @n_continue = 3
+                SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61812
+                SELECT @c_errmsg="NSQL"+CONVERT(char(5), @n_err)+": Unable To Find Pickdetail to Auto Unallocate. (ntrPackDetailDelete)" 
+             END
+        END
+      END
+   END
+   --(Kc01) - end
+       
+-- Serial no
+IF @n_continue=1 OR @n_continue=2   
+BEGIN
+   IF EXISTS( SELECT TOP 1 1 
+      FROM DELETED D
+         JOIN PackSerialNo PSNO ON (D.PickSlipNo = PSNO.PickSlipNo AND D.CartonNo = PSNO.CartonNo AND D.LabelNo = PSNO.LabelNo AND D.LabelLine = PSNO.LabelLine))
+   BEGIN
+      DECLARE @n_PackSerialNoKey BIGINT
+      DECLARE @curPSNO CURSOR
+      SET @curPSNO = CURSOR FOR
+         SELECT PSNO.PackSerialNoKey
+         FROM DELETED D
+            JOIN PackSerialNo PSNO ON (D.PickSlipNo = PSNO.PickSlipNo AND D.CartonNo = PSNO.CartonNo AND D.LabelNo = PSNO.LabelNo AND D.LabelLine = PSNO.LabelLine)
+         ORDER BY PSNO.PackSerialNoKey
+      OPEN @curPSNO      
+      FETCH NEXT FROM @curPSNO INTO @n_PackSerialNoKey    
+      WHILE @@FETCH_STATUS = 0 
+      BEGIN
+         DELETE PackSerialNo WHERE PackSerialNoKey = @n_PackSerialNoKey
+         SELECT @n_err = @@ERROR      
+         IF @n_err <> 0      
+         BEGIN      
+            SELECT @n_continue = 3      
+            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61813
+            SELECT @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table PackSerialNo. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+            BREAK
+         END  
+         FETCH NEXT FROM @curPSNO INTO @n_PackSerialNoKey
+      END
+   END
+END
+
+-- PackDetailInfo
+IF @n_continue=1 OR @n_continue=2   
+BEGIN
+   IF EXISTS( SELECT TOP 1 1 
+      FROM DELETED D
+         JOIN PackDetailInfo PDInfo ON (D.PickSlipNo = PDInfo.PickSlipNo AND D.CartonNo = PDInfo.CartonNo AND D.LabelNo = PDInfo.LabelNo AND D.LabelLine = PDInfo.LabelLine))
+   BEGIN
+      DECLARE @n_PackDetailInfoKey BIGINT
+      DECLARE @curPDInfo CURSOR
+      SET @curPDInfo = CURSOR FOR
+         SELECT PDInfo.PackDetailInfoKey
+         FROM DELETED D
+            JOIN PackDetailInfo PDInfo ON (D.PickSlipNo = PDInfo.PickSlipNo AND D.CartonNo = PDInfo.CartonNo AND D.LabelNo = PDInfo.LabelNo AND D.LabelLine = PDInfo.LabelLine)
+         ORDER BY PDInfo.PackDetailInfoKey
+      OPEN @curPDInfo      
+      FETCH NEXT FROM @curPDInfo INTO @n_PackDetailInfoKey    
+      WHILE @@FETCH_STATUS = 0 
+      BEGIN
+         DELETE PackDetailInfo WHERE PackDetailInfoKey = @n_PackDetailInfoKey
+         SELECT @n_err = @@ERROR      
+         IF @n_err <> 0      
+         BEGIN      
+            SELECT @n_continue = 3      
+            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61818
+            SELECT @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table PackDetailInfo. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+            BREAK
+         END  
+         FETCH NEXT FROM @curPDInfo INTO @n_PackDetailInfoKey
+      END
+   END
+END
+
+ IF @n_continue=1 OR @n_continue=2   
+ BEGIN      
+     SELECT TOP 1 @c_Storerkey = Storerkey FROM DELETED   
+     SELECT @b_success = 0       
+     EXECUTE nspGetRight NULL, -- facility        
+     @c_Storerkey, -- Storerkey        
+     NULL, -- Sku        
+     'AutoDelPHeader', -- Configkey        
+     @b_success OUTPUT,       
+     @c_authority OUTPUT,       
+     @n_err OUTPUT,       
+     @c_errmsg OUTPUT        
+     IF @b_success <> 1      
+     BEGIN      
+         SELECT @n_continue = 3      
+               ,@c_errmsg = 'ntrPackDetailDelete' + dbo.fnc_RTrim(@c_errmsg)      
+     END      
+  
+     IF @c_authority = '1'      
+     BEGIN      
+       IF EXISTS ( SELECT 1   
+                   FROM PackHeader with (NOLOCK)  
+                        JOIN DELETED on DELETED.PickSlipNo = PackHeader.PickSlipNo  
+                   WHERE NOT EXISTS ( SELECT 1 FROM PackDetail with (NOLOCK)  
+                                      WHERE PackDetail.PickSlipNo = PackHeader.PickSlipNo ) )  
+       BEGIN  
+          DELETE PackHeader   
+          FROM PackHeader   
+               JOIN DELETED on DELETED.PickSlipNo = PackHeader.PickSlipNo  
+          WHERE NOT EXISTS ( SELECT 1 FROM PackDetail (NOLOCK)  
+                             WHERE PackDetail.PickSlipNo = PackHeader.PickSlipNo )  
+          SELECT @n_err = @@ERROR,@n_cnt = @@ROWCOUNT    
+          IF @n_err <> 0  
+          BEGIN      
+              SELECT @n_continue = 3      
+                    ,@n_err = 61814        
+              SELECT @c_errmsg = "NSQL"+CONVERT(CHAR(5) ,@n_err)+      
+               ": Deletion of PackHeader not allowed. (ntrPackDetailDelete)"      
+          END  
+       END  
+     END   -- END StorerConfig   
+ END  
+       
+   -- Start (KHLim01) 
+   IF @n_continue = 1 or @n_continue = 2
+   BEGIN
+      SELECT @b_success = 0         --    Start (KHLim02)
+      EXECUTE nspGetRight  NULL,             -- facility  
+                           NULL,             -- Storerkey  
+                           NULL,             -- Sku  
+                           'DataMartDELLOG', -- Configkey  
+                           @b_success     OUTPUT, 
+                           @c_authority   OUTPUT, 
+                           @n_err         OUTPUT, 
+                           @c_errmsg      OUTPUT  
+      IF @b_success <> 1
+      BEGIN
+         SELECT @n_continue = 3
+               ,@c_errmsg = 'ntrPackDetailDelete' + dbo.fnc_RTrim(@c_errmsg)
+      END
+      ELSE 
+      IF @c_authority = '1'         --    End   (KHLim02)
+      BEGIN
+            -- tlting01  
+         INSERT INTO dbo.PackDetail_DELLOG ( PickSlipNo, CartonNo, LabelNo, LabelLine, Storerkey, SKU, QTY )     
+         SELECT PickSlipNo, CartonNo, LabelNo, LabelLine, Storerkey, SKU, QTY FROM DELETED  
+         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+         IF @n_err <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61815
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+         END
+      END
+   END
+   -- End (KHLim01) 
+
+ --NJOW01
+ IF @n_continue = 1 or @n_continue = 2
+ BEGIN
+ 	  DELETE SerialNo 
+ 	  FROM SerialNo
+ 	  JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
+ 	  JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
+ 	                 AND SerialNo.Sku = DELETED.Sku 
+ 	                 AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))
+ 	  JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+ 	  WHERE SKU.Susr4 = 'AD' 	  
+ 	   	  
+    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+    IF @n_err <> 0
+    BEGIN
+       SELECT @n_continue = 3
+       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61816
+       SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+    END        
+ END      
+
+ --NJOW02
+ IF @n_continue = 1 or @n_continue = 2
+ BEGIN
+ 	  DELETE PACKINFO
+ 	  FROM PACKINFO
+ 	  JOIN DELETED ON PACKINFO.Pickslipno = DELETED.Pickslipno AND PACKINFO.Cartonno = DELETED.Cartonno
+ 	  LEFT JOIN PACKDETAIL (NOLOCK) ON PACKINFO.Pickslipno = PACKDETAIL.Pickslipno AND PACKINFO.Cartonno = PACKDETAIL.Cartonno
+ 	  WHERE PACKDETAIL.Cartonno IS NULL
+
+    SELECT @n_err = @@ERROR
+    IF @n_err <> 0
+    BEGIN
+       SELECT @n_continue = 3
+       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
+       SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackInfo Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+    END
+ END
+
+ --NJOW03
+ IF @n_continue = 1 or @n_continue = 2
+ BEGIN
+    UPDATE PACKINFO WITH (ROWLOCK)
+    SET PACKINFO.Qty = PACKINFO.Qty - DELETED.Qty
+    FROM DELETED
+    JOIN PACKINFO ON DELETED.Pickslipno = PACKINFO.Pickslipno
+                  AND DELETED.CartonNo = PACKINFO.CartonNo                         
+
+ 	  IF EXISTS(SELECT 1
+ 	            FROM DELETED
+ 	            JOIN STORERCONFIG (NOLOCK) ON DELETED.StorerKey = STORERCONFIG.StorerKey     
+                                         AND STORERCONFIG.ConfigKey = 'Default_PackInfo' AND STORERCONFIG.SValue='1')
+    BEGIN
+       UPDATE PACKINFO WITH (ROWLOCK)
+       SET PACKINFO.Weight = PACKINFO.Weight - (DELETED.Qty * Sku.StdGrossWgt),
+           PACKINFO.Cube = PACKINFO.Cube - CASE WHEN ISNULL(CZ.Cube,0) = 0 THEN DELETED.Qty * Sku.StdCube ELSE 0 END
+       FROM DELETED 
+       JOIN PACKINFO ON DELETED.Pickslipno = PACKINFO.Pickslipno
+                     AND DELETED.CartonNo = PACKINFO.CartonNo                         
+       JOIN STORERCONFIG (NOLOCK) ON DELETED.StorerKey = STORERCONFIG.StorerKey     
+                                   AND STORERCONFIG.ConfigKey = 'Default_PackInfo' AND STORERCONFIG.SValue='1'
+   	   JOIN STORER (NOLOCK) ON (DELETED.StorerKey = STORER.StorerKey)
+       JOIN SKU (NOLOCK) ON (DELETED.Storerkey = SKU.Storerkey AND DELETED.SKU = SKU.Sku)
+   	   LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = PACKINFO.CartonType) 
+    END
+ END 
+ 
+ IF @n_continue=3 -- Error Occured - Process And Return      
+ BEGIN      
+     IF @@TRANCOUNT = 1      
+     AND @@TRANCOUNT >= @n_starttcnt      
+     BEGIN      
+         ROLLBACK TRAN      
+     END      
+     ELSE      
+     BEGIN      
+         WHILE @@TRANCOUNT > @n_starttcnt      
+         BEGIN      
+             COMMIT TRAN      
+         END      
+     END       
+     EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrPackDetailDelete"       
+     RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012       
+     RETURN      
+ END      
+ ELSE      
+ BEGIN      
+     WHILE @@TRANCOUNT > @n_starttcnt      
+     BEGIN      
+         COMMIT TRAN      
+     END       
+     RETURN      
+ END      
+END 
+
+GO
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO

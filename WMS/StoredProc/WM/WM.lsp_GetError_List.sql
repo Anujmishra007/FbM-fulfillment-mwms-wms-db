@@ -1,0 +1,54 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_GetError_List]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [WM].[lsp_GetError_List]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/************************************************************************/    
+/* Stored Procedure:  lsp_                                      */    
+/* Creation Date:                                                       */    
+/* Copyright: IDS                                                       */    
+/* Written by:                                                          */    
+/*                                                                      */    
+/* Purpose:  Retrieve Error List for WMS Web                            */    
+/*                                                                      */    
+/* 27-May-2013  TLTING     1.1  Use table Identity to generate running  */  
+
+/************************************************************************/   
+    
+Create PROC [WM].[lsp_GetError_List]
+     @ErrGroupKey   INT,
+     @Refkey1       NVARCHAR(20),
+     @Refkey2       NVARCHAR(20),
+     @Refkey3       NVARCHAR(20),
+     @b_Success     int            OUTPUT,
+     @n_err         int            OUTPUT,
+     @c_errmsg      NVARCHAR(250)  OUTPUT    
+AS
+BEGIN
+
+   SET NOCOUNT ON     
+   SET ANSI_NULLS OFF    
+   SET QUOTED_IDENTIFIER OFF     
+   SET CONCAT_NULL_YIELDS_NULL OFF    
+    
+
+   DECLARE @n_starttcnt int /* Holds the current transaction count */    
+   DECLARE @n_continue int /* Continuation flag: 1=Continue, 2=failed but continue processsing, 3=failed do not continue processing, 4=successful but skip furthur processing */    
+   DECLARE @n_cnt int /* Variable to record if @@ROWCOUNT=0 after UPDATE */    
+
+   SELECT @n_starttcnt=@@TRANCOUNT, @n_continue=1, @b_success=0, @n_err=0, @c_errmsg=''    
+
+   SELECT RowRefNo, ErrCode ,ErrMsg -- TableName, SourceType
+   FROM [WM].[WMS_Error_List]
+   WHERE ErrGroupKey = @ErrGroupKey AND RefKey1 = @Refkey1 AND RefKey2 = @Refkey2 AND RefKey3 = @Refkey3
+
+
+
+END
+GO
+GRANT EXECUTE ON [WM].[lsp_GetError_List] TO nSQL 
+GO

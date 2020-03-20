@@ -1,0 +1,289 @@
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_batching_task_summary]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_batching_task_summary]
+GO
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO 
+/************************************************************************/
+/* Store Procedure:  isp_batching_task_summary                          */
+/* Creation Date:  12-Jan-2016                                          */
+/* Copyright: LF                                                        */
+/* Written by:                                                          */
+/*                                                                      */
+/* Purpose: 358572-CN-Batching order - Task summary report              */
+/*                                                                      */
+/* Input Parameters:                                                    */
+/*                                                                      */
+/* Output Parameters:  None                                             */
+/*                                                                      */
+/* Return Status:  None                                                 */
+/*                                                                      */
+/* Usage:                                                               */
+/*                                                                      */
+/* Local Variables:                                                     */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* PVCS Version: 1.2                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author  Ver.  Purposes                                   */
+/* 23/08/2016  NJOW01  1.0   375824-add parameter for re-gen batch      */
+/* 13Oct2017   TLTING  1.1   Performance tune                           */
+/* 03-04-2018  Wan01   1.2   WMS-4263 - [CN] MAST Bulk Inventory - Order*/
+/*                           Selection Summary Report CR                */
+/* 09-01-2020  NJOW02  1.3   WMS-11479 - CN IKEA support group by       */
+/*                           loc.descr instead of pickzone              */ 
+/************************************************************************/
+
+CREATE PROC [dbo].[isp_batching_task_summary] (
+            @c_Loadkey NVARCHAR(10)
+           ,@c_OrderCount NVARCHAR(10) = '9999'
+           ,@c_Pickzone NVARCHAR(1000) = ''
+           ,@c_Mode NVARCHAR(10) = ''  -- 1=Multi-S 4=Multi-M 5=BIG 9=Single
+           ,@c_ReGen NVARCHAR(10) = 'N' --Regnerate flag Y/N   --NJOW01
+           ,@c_updatepick  NCHAR(1) = 'N' --(Wan02)
+ )
+ AS
+ BEGIN
+    SET NOCOUNT ON 
+    SET QUOTED_IDENTIFIER OFF 
+    SET CONCAT_NULL_YIELDS_NULL OFF
+    
+    DECLARE @n_OrderCount INT
+           ,@b_Success    INT           
+           ,@n_Err        INT           
+           ,@c_ErrMsg     NVARCHAR(250)
+           ,@c_ZoneList   NVARCHAR(1000) 
+           ,@n_Continue   INT
+           ,@n_StartTCnt  INT
+           ,@c_CallSource NVARCHAR(10)        
+    
+    --NJOW02          
+    DECLARE @c_OrderBatchBylocdescr    NVARCHAR(10)
+           ,@c_OrderBatchByLocDescr_OPT1 NVARCHAR(50) 
+           ,@c_Storerkey  NVARCHAR(15) 
+           ,@c_Facility   NVARCHAR(5) 
+           
+    SELECT @n_OrderCount = CONVERT(INT, @c_OrderCount)
+    SELECT @c_ZoneList = '', @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT 
+            
+    IF ISNULL(@c_PickZone,'') = ''
+       SET @c_PickZone = ''
+       
+       
+    IF @c_Mode NOT IN('1','4','5','9')
+    BEGIN 
+       SELECT @n_Continue = 3  
+       SELECT @n_Err = 63200  
+       SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Invalid Mode. The value must be 1,4,5,9 (isp_batching_task_summary)' 
+       GOTO Quit
+    END
+
+    --NJOW02 Start
+    SELECT TOP 1 @c_Storerkey = Storerkey
+                ,@c_Facility = Facility
+    FROM ORDERS (NOLOCK)
+    WHERE Loadkey = @c_Loadkey      
+    
+    SET @c_OrderBatchBylocdescr = ''
+    
+    EXEC nspGetRight  
+        @c_Facility  = @c_Facility   
+      , @c_StorerKey = @c_StorerKey  
+      , @c_sku       = NULL 
+      , @c_ConfigKey = 'OrderBatchByLocDescr' 
+      , @b_Success   = @b_Success         OUTPUT  
+      , @c_authority = @c_OrderBatchBylocdescr   OUTPUT    
+      , @n_err       = @n_err             OUTPUT    
+      , @c_errmsg    = @c_errmsg          OUTPUT  
+      , @c_Option1   = @c_OrderBatchByLocDescr_OPT1  OUTPUT
+      
+    IF @c_OrderBatchBylocdescr = '1'
+    BEGIN
+    	  IF @c_OrderBatchByLocDescr_OPT1 = 'TMALL' 
+    	  BEGIN
+    	     IF NOT EXISTS(SELECT 1 
+    	                   FROM LOADPLANDETAIL LPD (NOLOCK)
+    	                   JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+    	                   JOIN ORDERINFO OI (NOLOCK) ON O.Orderkey = OI.Orderkey
+    	                   WHERE LPD.Loadkey = @c_Loadkey 
+    	                   AND OI.StoreName = '618'
+    	                   AND O.Shipperkey = 'SN')   	                   
+    	     BEGIN
+    	        SET @c_OrderBatchBylocdescr = '0'
+    	     END             
+    	  END
+    END
+    --NJOW02 End
+       
+    IF @c_PickZone = 'ALL'
+    BEGIN
+      IF @c_OrderBatchBylocdescr = '1'  
+      BEGIN   
+      	 --NJOW02   	
+         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','
+         FROM ORDERS O (NOLOCK)
+         JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
+         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
+         JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
+         WHERE LPD.Loadkey = @c_Loadkey
+         GROUP BY LOC.Descr
+         ORDER BY LOC.Descr
+      END
+      ELSE
+      BEGIN
+         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
+         FROM ORDERS O (NOLOCK)
+         JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
+         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
+         JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
+         WHERE LPD.Loadkey = @c_Loadkey
+         GROUP BY LOC.PickZone
+         ORDER BY LOC.PickZone      	
+      END
+      
+      IF ISNULL(@c_ZoneList,'') <> ''
+      BEGIN
+          SET @c_ZoneList = LEFT(@c_ZoneList, LEN(RTRIM(@c_ZoneList)) - 1)
+          SET @c_PickZone = @c_ZoneList
+      END
+    END       
+
+    --NJOW01
+    IF @c_ReGen = 'Y'
+       SET @c_CallSource = 'RPTREGEN'
+    ELSE
+       SET @c_CallSource = 'RPT'   
+
+    WHILE @@TRANCOUNT > 0
+      COMMIT
+      
+    BEGIN TRAN  
+
+    --(Wan02) - START
+    EXEC ispOrderBatching
+         @c_LoadKey     = @c_LoadKey
+        ,@n_OrderCount  = @n_OrderCount  
+        ,@c_PickZones   = @c_PickZone
+        ,@c_Mode        = @c_Mode
+        ,@b_Success     = @b_Success   OUTPUT  
+        ,@n_Err         = @n_Err       OUTPUT  
+        ,@c_ErrMsg      = @c_ErrMsg    OUTPUT
+        ,@c_CallSource  = @c_CallSource
+        ,@c_updatepick  = @c_updatepick
+     --(Wan02) - END
+
+    IF @b_Success = 0
+    BEGIN       
+       ROLLBACK
+       SELECT @n_Continue = 3
+       GOTO Quit
+    END    
+    
+    WHILE @@TRANCOUNT > 0
+      COMMIT
+
+    IF @c_OrderBatchBylocdescr = '1'  
+    BEGIN
+    	 --NJOW02
+       SELECT PT.TaskBatchNo, 
+              PD.Notes, 
+              LP.Loadkey, 
+              COUNT(DISTINCT PD.Sku) AS NoOfSku,
+              SUM(PD.Qty) AS Qty,
+              L.Descr,
+              CASE WHEN ISNULL(CL.Long,'') <> '' THEN
+                   CL.Long
+              ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
+              COUNT(DISTINCT PD.Orderkey) AS NoOfOrder
+       FROM LOADPLANDETAIL LP (NOLOCK)
+       JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
+       JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
+       JOIN PACKTASK PT (NOLOCK) ON PD.Orderkey = PT.Orderkey
+       LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
+       WHERE LP.Loadkey = @c_Loadkey
+       AND L.Descr IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
+       AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+       GROUP BY PT.TaskBatchNo, 
+                PD.Notes, 
+                LP.Loadkey,
+                L.Descr,
+                CASE WHEN ISNULL(CL.Long,'') <> '' THEN
+                   CL.Long
+                ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END 
+       ORDER BY L.Descr, PD.NOTES    
+    END               
+    ELSE
+    BEGIN
+       SELECT PT.TaskBatchNo, 
+              PD.Notes, 
+              LP.Loadkey, 
+              COUNT(DISTINCT PD.Sku) AS NoOfSku,
+              SUM(PD.Qty) AS Qty,
+              L.PickZone,
+              CASE WHEN ISNULL(CL.Long,'') <> '' THEN
+                   CL.Long
+              ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
+              COUNT(DISTINCT PD.Orderkey) AS NoOfOrder
+       FROM LOADPLANDETAIL LP (NOLOCK)
+       JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
+       JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
+       JOIN PACKTASK PT (NOLOCK) ON PD.Orderkey = PT.Orderkey
+       LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
+       WHERE LP.Loadkey = @c_Loadkey
+       AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
+       AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+       GROUP BY PT.TaskBatchNo, 
+                PD.Notes, 
+                LP.Loadkey,
+                L.PickZone,
+                CASE WHEN ISNULL(CL.Long,'') <> '' THEN
+                   CL.Long
+                ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END 
+       ORDER BY L.PickZone, PD.NOTES    
+    END
+        
+Quit:
+   
+   WHILE @@TRANCOUNT < @n_StartTCnt
+       BEGIN TRAN
+
+   IF @n_Continue=3  -- Error Occured - Process And Return  
+   BEGIN  
+      SELECT @b_Success = 0  
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt  
+      BEGIN  
+         ROLLBACK TRAN  
+      END  
+      ELSE  
+      BEGIN  
+         WHILE @@TRANCOUNT > @n_StartTCnt  
+         BEGIN  
+            COMMIT TRAN  
+         END  
+      END  
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispOrderBatching'  
+        --RAISERROR @n_Err @c_ErrMsg  
+        RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN  
+   END  
+   ELSE  
+   BEGIN  
+      SELECT @b_Success = 1  
+      WHILE @@TRANCOUNT > @n_StartTCnt  
+      BEGIN  
+         COMMIT TRAN  
+      END  
+      RETURN  
+   END      
+END /* main procedure */
+GO
+GRANT EXECUTE ON isp_batching_task_summary TO NSQL
+GO
+

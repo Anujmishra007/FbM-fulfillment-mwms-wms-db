@@ -1,0 +1,114 @@
+IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ispPKINS01' AND type = 'P')
+   DROP PROC ispPKINS01
+GO
+
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO
+/************************************************************************/
+/* Store procedure: ispPKINS01                                          */
+/* Copyright      : LF                                                  */
+/*                                                                      */
+/* Purpose: SOS#320446 - SG Prestige- get sku pack instruction          */
+/*                                                                      */
+/* Called from: isp_PackGetInstruction_Wrapper                          */
+/*              storerconfig: PackGetInstruction_SP                     */
+/*                                                                      */
+/* Exceed version: 7.0                                                  */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date        Rev  Author     Purposes                                 */
+/* 15-SEP-2016 1.0  NJOW01     WMS-368 Change externorderkey extract    */
+/*                             condition from SOR to SO                 */
+/* 12-JAN-2017 1.1  Wan01      WMS-929 - Prestige SG - Scan Pack        */
+/************************************************************************/
+
+CREATE PROCEDURE ispPKINS01
+   @c_Pickslipno       NVARCHAR(10),
+   @c_Storerkey        NVARCHAR(15),
+   @c_Sku              NVARCHAR(50),
+   @c_PackInstruction  NVARCHAR(20) OUTPUT,
+   @b_Success          INT      OUTPUT,
+   @n_ErrNo            INT      OUTPUT, 
+   @c_ErrMsg           NVARCHAR(250) OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON 
+   SET QUOTED_IDENTIFIER OFF 
+   SET ANSI_NULLS OFF   
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   
+   DECLARE @c_OVAS NVARCHAR(30)
+                                 
+   SELECT @b_Success = 1, @n_ErrNo = 0, @c_ErrMsg = '', @c_PackInstruction = '', @c_OVAS = ''  
+    
+   --(Wan01) - START
+   SET @c_PackInstruction = ISNULL(RTRIM(@c_PackInstruction),'')
+   IF EXISTS (SELECT 1
+              FROM PICKHEADER (NOLOCK)
+              JOIN ORDERS (NOLOCK) ON PICKHEADER.Orderkey = ORDERS.OrderKey
+              JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey
+              JOIN STORER (NOLOCK) ON ORDERS.ConsigneeKey = STORER.Storerkey
+              JOIN SKU (NOLOCK) ON ORDERDETAIL.StorerKey = SKU.StorerKey AND ORDERDETAIL.Sku = SKU.Sku
+              WHERE PICKHEADER.PickHeaderKey = @c_Pickslipno
+              AND ORDERDETAIL.Sku = @c_Sku  
+              AND ORDERDETAIL.Storerkey = @c_Storerkey 
+              AND STORER.SUSR4 = 'SECURITY TAG' 
+              AND STORER.Type = '2'                   --(Wan01)
+              AND SKU.Price >= 50)
+
+   BEGIN
+      IF CHARINDEX('S.TAG', @c_PackInstruction) = 0
+      BEGIN
+         IF RTRIM(@c_PackInstruction) <> ''
+         BEGIN
+            SET @c_PackInstruction = @c_PackInstruction + ', '
+         END 
+         SET @c_PackInstruction = @c_PackInstruction + 'S.TAG'
+      END
+   END
+
+   IF EXISTS ( 
+   	         SELECT 1 -- @c_OVAS = SKU.OVAS         --(Wan01)
+   	         FROM PICKHEADER (NOLOCK)
+               JOIN ORDERS (NOLOCK) ON PICKHEADER.Orderkey = ORDERS.OrderKey
+               JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey
+               JOIN STORER (NOLOCK) ON ORDERS.ConsigneeKey = STORER.Storerkey
+               JOIN SKU (NOLOCK) ON ORDERDETAIL.StorerKey = SKU.StorerKey AND ORDERDETAIL.Sku = SKU.Sku
+               WHERE PICKHEADER.PickHeaderKey = @c_Pickslipno
+               AND ORDERDETAIL.Sku = @c_Sku  
+               AND ORDERDETAIL.Storerkey = @c_Storerkey
+               --AND LEFT(LTRIM(ORDERS.ExternOrderkey), 2) = 'SO' --NJOW01 --(Wan01)
+               AND STORER.Country = 'SG' 
+               AND STORER.ISOCntryCode = 'SG'
+               AND STORER.Type = '2'                  --(Wan01)
+               AND SKU.OVAS = 'GMR'                   --(Wan01)
+               )
+   BEGIN      
+         --IF ISNULL(@c_OVAS,'') <> ''
+   	   --   SET @c_PackInstruction = 'S.TAG,' + LTRIM(RTRIM(@c_OVAS))
+   	   --ELSE
+   	   --   SET @c_PackInstruction = 'S.TAG'
+      IF CHARINDEX('GMR', @c_PackInstruction) = 0
+      BEGIN
+         IF RTRIM(@c_PackInstruction) <> ''
+         BEGIN
+            SET @c_PackInstruction = @c_PackInstruction + ', '
+         END 
+         SET @c_PackInstruction = @c_PackInstruction + 'GMR'
+      END
+   END     
+   --(Wan01) - END   
+END -- End Procedure
+
+GO
+
+GRANT EXECUTE ON  ispPKINS01 TO NSQL 
+GO   
+
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO
