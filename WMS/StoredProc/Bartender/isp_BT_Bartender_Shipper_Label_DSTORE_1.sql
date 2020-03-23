@@ -1,7 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]
-GO
+--IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]') 
+--AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+--DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]
+--GO
 
 SET ANSI_NULLS OFF
 GO
@@ -26,11 +26,10 @@ GO
 /* 2014-06-13 2.4  CSCHONG    Fix total page = 1 , add new field and          */  
 /*                            tote Consolidation (CS06)                       */  
 /* 2017-02-27 2.5  CSCHONG    Remove SET ANSI_WARNINGS OFF (CS07)             */  
-/* 2017-08-30 2.6  CSCHONG    Scripts tunning (CS08)                          */ 
-/* 2020-03-19 2.7  WLChooi    WMS-12525 - Modify Col02, Add Col37-40 (WL01)   */             
+/* 2017-08-30 2.6  CSCHONG    Scripts tunning (CS08)                          */              
 /******************************************************************************/                          
                             
-CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]                                 
+ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]                                 
 (  @c_Sparm1            NVARCHAR(250),                        
    @c_Sparm2            NVARCHAR(250),                        
    @c_Sparm3            NVARCHAR(250),                        
@@ -151,15 +150,7 @@ BEGIN
       @c_colContent12    NVARCHAR(80),     --(CS06)   
       @c_colContent13    NVARCHAR(80),     --(CS06)     
       @c_colContent14    NVARCHAR(80),     --(CS06)     
-      @c_colContent15    NVARCHAR(80),     --(CS06)     
-      @c_S1Address1      NVARCHAR(80),     --WL01
-      @c_S1Address2      NVARCHAR(80),     --WL01
-      @c_S1Address3      NVARCHAR(80),     --WL01
-      @c_S1Address4      NVARCHAR(80),     --WL01
-      @c_S1Address1_1    NVARCHAR(80),     --WL01
-      @c_S1Address2_1    NVARCHAR(80),     --WL01
-      @c_S1Address3_1    NVARCHAR(80),     --WL01
-      @c_S1Address4_1    NVARCHAR(80)      --WL01
+      @c_colContent15    NVARCHAR(80)     --(CS06)          
               
             
   DECLARE  @d_Trace_StartTime   DATETIME,             
@@ -173,23 +164,23 @@ BEGIN
    SET @c_Trace_ModuleName = ''            
                   
     -- SET RowNo = 0                       
-   SET @c_SQL = ''                  
-   SET @n_SumPickDETQTY = 0                      
-   SET @n_SumUnitPrice = 0                      
+    SET @c_SQL = ''                  
+    SET @n_SumPickDETQTY = 0                      
+    SET @n_SumUnitPrice = 0                      
                         
 --    IF OBJECT_ID('tempdb..#Result','u') IS NOT NULL          
 --      DROP TABLE #Result;   
   
-   IF ISNULL(@c_Sparm3,'') = ''  
-   BEGIN  
-      IF @b_debug = '1'  
+    IF ISNULL(@c_Sparm3,'') = ''  
       BEGIN  
-         PRINT 'Caseid null'  
-      END  
-      RETURN;  
-   END          
+         IF @b_debug = '1'  
+          BEGIN  
+            PRINT 'Caseid null'  
+            END  
+         RETURN;  
+      END          
             
-   CREATE TABLE [#Result] (                       
+    CREATE TABLE [#Result] (                       
       [ID]    [INT] IDENTITY(1,1) NOT NULL,                                      
       [Col01] [NVARCHAR] (80) NULL,                        
       [Col02] [NVARCHAR] (80) NULL,                        
@@ -256,7 +247,7 @@ BEGIN
 --      IF OBJECT_ID('tempdb..#CartonContent','u') IS NOT NULL          
 --      DROP TABLE #CartonContent;          
           
-   CREATE TABLE [#CartonContent] (                       
+     CREATE TABLE [#CartonContent] (                       
       [ID]          [INT] IDENTITY(1,1) NOT NULL,            
       [OrderKey]    [NVARCHAR] (10) NULL,                                      
       [DUdef10]     [NCHAR] (2) NULL,             
@@ -271,7 +262,7 @@ BEGIN
 --      IF OBJECT_ID('tempdb..#PICK','u') IS NOT NULL          
 --      DROP TABLE #PICK;          
           
-   CREATE TABLE [#PICK] (                       
+    CREATE TABLE [#PICK] (                       
       [ID]          [INT] IDENTITY(1,1) NOT NULL,                                      
       [OrderKey]    [NVARCHAR] (80) NULL,                        
       [TTLPICKQTY]  [INT] NULL)                     
@@ -280,75 +271,65 @@ BEGIN
 --      IF OBJECT_ID('tempdb..#SKU','u') IS NOT NULL          
 --      DROP TABLE #SKU;          
           
-   CREATE TABLE [#SKU] (                       
+    CREATE TABLE [#SKU] (                       
       [ID]          [INT] IDENTITY(1,1) NOT NULL,                                      
       [measurement] [NVARCHAR] (10) NULL)                 
      
   
-   CREATE TABLE [#Order] (                     
+     CREATE TABLE [#Order] (                     
       [ID]           [INT] IDENTITY(1,1) NOT NULL,                                    
       [userdefine04] [NVARCHAR] (80) NULL)                      
         
    IF @b_debug=1                  
    BEGIN                    
-      PRINT 'start'                    
+     PRINT 'start'                    
    END            
             
-   DECLARE CUR_StartRecLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                      
-   SELECT s1.company as ShipTo_Company,
-          SUBSTRING((LTRIM(RTRIM(ISNULL(s1.Address1,''))) + LTRIM(RTRIM(ISNULL(s1.Address2,''))) + 
-          LTRIM(RTRIM(ISNULL(s1.Address3,''))) + LTRIM(RTRIM(ISNULL(s1.Address4,''))) ),1,80) as shipTo_Address,  --WL01        
-          s1.state as ShipTo_State,s1.city as ShipTo_City,s1.zip as ShipTo_Zip ,s1.country as ShipTo_Country,          
-          s2.company as ShipFrom_Company,ISNULL((s2.address1+s2.address2+s2.address3+s2.address4),'') as shipFrom_address,          
-          s2.state as ShipFrom_State,ISNULL(s2.city,'') as ShipFrom_City, ISNULL(s2.zip,'') as ShipFrom_Zip,          
-          ISNULL(s2.country,'') as ShipFrom_Country,'',WD.wavekey,pd.caseid,          
-          MAX(ISNULL(od.userdefine01,'')) as DUDef01,replace(max(od.userdefine02),'ANF','') as DUdef02,          
-          substring(pd.caseID,7,5),CP.Short,
-          LTRIM(RTRIM(ISNULL(s1.Address1,''))), LTRIM(RTRIM(ISNULL(s1.Address2,''))),   --WL01
-          LTRIM(RTRIM(ISNULL(s1.Address3,''))), LTRIM(RTRIM(ISNULL(s1.Address4,'')))    --WL01
-   FROM ORDERS ORD  WITH (NOLOCK) INNER JOIN ORDERDETAIL od WITH (NOLOCK) ON od.orderkey=ORD.orderkey               
-   LEFT JOIN STORER s1 WITH (NOLOCK) ON s1.storerkey = od.userdefine02              
-   LEFT JOIN STORER s2 WITH (NOLOCK) ON s2.storerkey = ORD.facility             
-   LEFT JOIN Wavedetail WD WITH (NOLOCK) ON WD.Orderkey = ORD.Orderkey              
-   LEFT JOIN SKU s WITH (NOLOCK) ON s.sku=od.sku AND s.StorerKey = od.StorerKey               
-   JOIN pickdetail pd WITH (NOLOCK) ON pd.orderkey=ORD.orderkey              
-               AND pd.OrderLineNumber = od.OrderLineNumber             
-   LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON PH.loadkey = ORD.loadkey          
-   LEFT JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Pickslipno = PH.Pickslipno --AND od.sku=od.sku          
-   JOIN CODELKUP CP WITH (NOLOCK) ON CP.CODE=ORD.Facility  
+    DECLARE CUR_StartRecLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                      
+    SELECT s1.company as ShipTo_Company,(s1.address1+s1.address2+s1.address3+s1.address4) as shipTo_Address,          
+           s1.state as ShipTo_State,s1.city as ShipTo_City,s1.zip as ShipTo_Zip ,s1.country as ShipTo_Country,          
+           s2.company as ShipFrom_Company,ISNULL((s2.address1+s2.address2+s2.address3+s2.address4),'') as shipFrom_address,          
+           s2.state as ShipFrom_State,ISNULL(s2.city,'') as ShipFrom_City, ISNULL(s2.zip,'') as ShipFrom_Zip,          
+           ISNULL(s2.country,'') as ShipFrom_Country,'',WD.wavekey,pd.caseid,          
+           MAX(ISNULL(od.userdefine01,'')) as DUDef01,replace(max(od.userdefine02),'ANF','') as DUdef02,          
+           substring(pd.caseID,7,5),CP.Short               
+    FROM ORDERS ORD  WITH (NOLOCK) INNER JOIN ORDERDETAIL od WITH (NOLOCK) ON od.orderkey=ORD.orderkey               
+    LEFT JOIN STORER s1 WITH (NOLOCK) ON s1.storerkey=od.userdefine02              
+    LEFT JOIN STORER s2 WITH (NOLOCK) ON s2.storerkey = ORD.facility             
+    LEFT JOIN Wavedetail WD WITH (NOLOCK) ON WD.Orderkey = ORD.Orderkey              
+    LEFT JOIN SKU s WITH (NOLOCK) ON s.sku=od.sku AND s.StorerKey = od.StorerKey               
+    JOIN pickdetail pd WITH (NOLOCK) ON pd.orderkey=ORD.orderkey              
+             AND pd.OrderLineNumber = od.OrderLineNumber             
+    LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON PH.loadkey = ORD.loadkey          
+    LEFT JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Pickslipno = PH.Pickslipno --AND od.sku=od.sku          
+    JOIN CODELKUP CP WITH (NOLOCK) ON CP.CODE=ORD.Facility  
      --WHERE ORD.LoadKey =  CASE WHEN ISNULL(RTRIM(@c_Sparm1),'') <> '' THEN @c_Sparm1 ELSE ORD.LoadKey END --@c_Sparm1        --(CS06)  
-   WHERE (ISNULL(RTRIM(@c_Sparm1),'') = '' OR ORD.LoadKey = RTRIM(@c_Sparm1))                                                --(CS08)
-   AND CP.listname='ANFFAC'         
+     WHERE (ISNULL(RTRIM(@c_Sparm1),'') = '' OR ORD.LoadKey = RTRIM(@c_Sparm1))                                                --(CS08)
+    AND CP.listname='ANFFAC'         
     --AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(@c_Sparm2),'') <> '' THEN @c_Sparm2 ELSE ORD.OrderKey END    
-   AND   (ISNULL(RTRIM(@c_Sparm2),'') = '' OR ORD.OrderKey = RTRIM(@c_Sparm2))     
-   AND pd.caseid = @c_Sparm3          
+    AND   (ISNULL(RTRIM(@c_Sparm2),'') = '' OR ORD.OrderKey = RTRIM(@c_Sparm2))     
+    AND pd.caseid = @c_Sparm3          
    -- AND ORD.type = CASE WHEN ISNULL(RTRIM(@c_Sparm4),'') <> '' THEN @c_Sparm4 ELSE ORD.type END   
-   AND   (ISNULL(RTRIM(@c_Sparm4),'') = '' OR ORD.type = RTRIM(@c_Sparm4))      
+    AND   (ISNULL(RTRIM(@c_Sparm4),'') = '' OR ORD.type = RTRIM(@c_Sparm4))      
    -- AND PDET.Dropid = CASE WHEN ISNULL(RTRIM(@c_Sparm5),'') <> '' THEN @c_Sparm5 ELSE PDET.Dropid END      
-   AND   (ISNULL(RTRIM(@c_Sparm5),'') = '' OR PDET.Dropid = RTRIM(@c_Sparm5))                 
-   group by s1.company,
-   SUBSTRING((LTRIM(RTRIM(ISNULL(s1.Address1,''))) + LTRIM(RTRIM(ISNULL(s1.Address2,''))) + 
-   LTRIM(RTRIM(ISNULL(s1.Address3,''))) + LTRIM(RTRIM(ISNULL(s1.Address4,''))) ),1,80),  --WL01  
-   s1.state,s1.city,            
-   s1.zip ,s1.country, s2.company,(s2.address1+s2.address2+s2.address3+s2.address4),s2.state,            
-   s2.city ,s2.zip ,s2.country,WD.wavekey,pd.caseid,substring(pd.caseID,7,5),            
-   CP.Short,
-   LTRIM(RTRIM(ISNULL(s1.Address1,''))), LTRIM(RTRIM(ISNULL(s1.Address2,''))),   --WL01
-   LTRIM(RTRIM(ISNULL(s1.Address3,''))), LTRIM(RTRIM(ISNULL(s1.Address4,'')))    --WL01            
+    AND   (ISNULL(RTRIM(@c_Sparm5),'') = '' OR PDET.Dropid = RTRIM(@c_Sparm5))                 
+    group by s1.company ,(s1.address1+s1.address2+s1.address3+s1.address4),s1.state,s1.city,            
+    s1.zip ,s1.country, s2.company,(s2.address1+s2.address2+s2.address3+s2.address4),s2.state,            
+    s2.city ,s2.zip ,s2.country,WD.wavekey,pd.caseid,substring(pd.caseID,7,5),            
+    CP.Short            
             
    OPEN CUR_StartRecLoop                      
                  
    FETCH NEXT FROM CUR_StartRecLoop INTO @c_ToCompany,@C_ToAddress,@C_ToState,@C_ToCity,@C_ToZip,@C_ToCountry,@c_FromCompany,            
                                          @C_FromAddress,@C_FromState,@C_FromCity,@C_FromZip,@C_FromCountry,@c_ORDUDef04,            
-                                         @c_wavekey,@c_CaseID,@c_ODUDEF01,@c_ODUDEF02,@c_Carton,@c_CodelShort,
-                                         @c_S1Address1, @c_S1Address2 ,@c_S1Address3, @c_S1Address4          --WL01       
+                                         @c_wavekey,@c_CaseID,@c_ODUDEF01,@c_ODUDEF02,@c_Carton,@c_CodelShort                 
                    
    WHILE @@FETCH_STATUS <> -1                      
    BEGIN             
             
       IF @b_debug=1                  
       BEGIN                    
-         PRINT 'Cur start'                    
+        PRINT 'Cur start'                    
       END            
             
       INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09                     
@@ -357,17 +338,16 @@ BEGIN
                                ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                     
                                ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54                   
                                ,Col55,Col56,Col57,Col58,Col59,Col60)               
-      VALUES(@c_ToCompany,@C_ToAddress,@C_ToState,@C_ToCity,@C_ToZip,@C_ToCountry,@c_FromCompany,            
-             @C_FromAddress,@C_FromState,@C_FromCity,@C_FromZip,@C_FromCountry,'',            
-             '',@c_wavekey,@c_CaseID,@c_ODUDEF01,@c_ODUDEF02,@c_Carton,@c_CodelShort,     --20        
-             '','','','','','','','','','','','','','','','',@c_S1Address1, @c_S1Address2, @c_S1Address3, @c_S1Address4, --40
-             '','','','','','','','','','',            
-             '','','','','','','','','','O')            
+        VALUES(@c_ToCompany,@C_ToAddress,@C_ToState,@C_ToCity,@C_ToZip,@C_ToCountry,@c_FromCompany,            
+               @C_FromAddress,@C_FromState,@C_FromCity,@C_FromZip,@C_FromCountry,'',            
+               '',@c_wavekey,@c_CaseID,@c_ODUDEF01,@c_ODUDEF02,@c_Carton,@c_CodelShort,             
+               '','','','','','','','','','','','','','','','','','','','','','','','','','','','','',''            
+               ,'','','','','','','','','','O')            
             
             
       IF @b_debug=1                  
       BEGIN                  
-         SELECT * FROM #Result (nolock)                  
+        SELECT * FROM #Result (nolock)                  
       END             
                
       SET @n_MaxLine = 15            
@@ -380,8 +360,7 @@ BEGIN
       DECLARE CUR_RowNoLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                        
                           
       SELECT DISTINCT col01,col02,col03,col04,col05,col06,col07,col08,col09,Col10,            
-                      col11,col12,col13,col15,col16,col17,col18,col19,Col20,
-                      col37, col38, col39, col40      --WL01      
+                      col11,col12,col13,col15,col16,col17,col18,col19,Col20            
       FROM #Result                   
       WHERE Col60 = 'O'             
                  
@@ -389,8 +368,7 @@ BEGIN
                  
       FETCH NEXT FROM CUR_RowNoLoop INTO @c_ToCompany1,@C_ToAddress1,@C_ToState1,@C_ToCity1,@C_ToZip1,@C_ToCountry1,@c_FromCompany1,            
                                          @C_FromAddress1,@C_FromState1,@C_FromCity1,@C_FromZip1,@C_FromCountry1,@c_ORDUDef04_1,            
-                                         @c_wavekey1,@c_CaseID1,@c_ODUDEF01_1,@c_ODUDEF02_1,@c_Carton1,@c_CodelShort1,
-                                         @c_S1Address1_1, @c_S1Address2_1 ,@c_S1Address3_1, @c_S1Address4_1          --WL01               
+                                         @c_wavekey1,@c_CaseID1,@c_ODUDEF01_1,@c_ODUDEF02_1,@c_Carton1,@c_CodelShort1              
                    
       WHILE @@FETCH_STATUS <> -1                 
       BEGIN                     
@@ -424,26 +402,28 @@ BEGIN
 --              ,s.itemclass        
 --              ,s.skugroup        
 --              ,s.style    
-         SELECT --pd.orderkey        --(CS02)  
-             ISNULL(o.userdefine10 ,'')      
+   SELECT --pd.orderkey        --(CS02)  
+            ISNULL(o.userdefine10 ,'')      
             ,ISNULL(o.userdefine03 ,'')      
             ,s.itemclass      
             ,s.skugroup      
             ,ISNULL(s.style ,'')      
             ,SUM(pd.qty)      
-         FROM   orders o WITH (NOLOCK) --JOIN ORDERDETAIL od WITH (NOLOCK)      
+      FROM   orders o WITH (NOLOCK) --JOIN ORDERDETAIL od WITH (NOLOCK)      
                       --on od.orderkey=o.orderkey      
-         JOIN pickdetail pd WITH (NOLOCK)      
+             JOIN pickdetail pd WITH (NOLOCK)      
                   ON  pd.orderkey = o.orderkey      
-         JOIN sku s WITH (NOLOCK)      
+             JOIN sku s WITH (NOLOCK)      
                   ON  s.sku = pd.sku      
-         AND    s.StorerKey = pd.Storerkey      
-         WHERE  pd.caseid = @c_caseid1      
-         AND    pd.orderkey = CASE WHEN @c_Sparm2 <> '' THEN @c_Sparm2      
-                               ELSE pd.orderkey END      
-         GROUP BY      
+      AND             s.StorerKey = pd.Storerkey      
+      WHERE  pd.caseid = @c_caseid1      
+      AND    pd.orderkey = CASE       
+                                WHEN @c_Sparm2 <> '' THEN @c_Sparm2      
+                                ELSE pd.orderkey      
+                           END      
+      GROUP BY      
             -- pd.orderkey    --(CS02)  
-             ISNULL(o.userdefine10 ,'')      
+            ISNULL(o.userdefine10 ,'')      
             ,ISNULL(o.userdefine03 ,'')      
             ,s.itemclass      
             ,s.skugroup      
@@ -474,7 +454,7 @@ BEGIN
                   
          SELECT @n_CntRec = count(1)             
          FROM #CartonContent                     
-         WHERE Retrieve = 'N'            
+		 WHERE Retrieve = 'N'            
                
          --SET @n_TTLpage = round((@n_CntRec/@n_MaxLine),1) + 1      
          -- Fixed by SHONG (SHONG01)          
@@ -491,8 +471,8 @@ BEGIN
          BEGIN            
             IF @b_debug = '1'                
             BEGIN               
-               SELECT * FROM  #CartonContent  WITH (NOLOCK)              
-               PRINT ' update for column no : ' + @c_Colno + 'with ID ' + convert(nvarchar(2),@n_intFlag)            
+              SELECT * FROM  #CartonContent  WITH (NOLOCK)              
+              PRINT ' update for column no : ' + @c_Colno + 'with ID ' + convert(nvarchar(2),@n_intFlag)            
             END                
            /*CS06 start */  
           /*  IF @n_intFlag = 11 OR @n_intFlag = 21 OR @n_intFlag = 31 OR @n_intFlag = 41 OR @n_intFlag = 51            
@@ -540,7 +520,7 @@ BEGIN
 --                                + case when style = '' then space(11) ELSE cast(style as nchar(5)) + space(2) END        
 --                                + convert(nchar(5),TTLPICKQTY)   
            -- SELECT @c_Colcontent = DUdef10 + space(2) + DUdef03 + space(2) + itemclass + space(2) + skugroup + space(2) + style + space(2) +   
-            SELECT @c_Colcontent = DUdef10 + DUdef03 + itemclass + skugroup +  style +  convert(nvarchar(5),TTLPICKQTY)             
+               SELECT @c_Colcontent = DUdef10 + DUdef03 + itemclass + skugroup +  style +  convert(nvarchar(5),TTLPICKQTY)             
             FROM  #CartonContent c WITH (NOLOCK)                        
             WHERE c.ID = @n_intFlag            
           
@@ -560,89 +540,89 @@ BEGIN
             
             --IF @n_intFlag = 1 or @n_intFlag = 11 or @n_intFlag = 21 or @n_intFlag = 31   
             IF (@n_intFlag%@n_MaxLine) = 1            
-            BEGIN            
-               SET @c_colContent01 = @c_Colcontent            
-            END                        
+               BEGIN            
+                SET @c_colContent01 = @c_Colcontent            
+               END                        
             --ELSE IF @n_intFlag = 2 OR @n_intFlag = 12 OR @n_intFlag = 22 OR @n_intFlag = 32            
             ELSE IF (@n_intFlag%@n_MaxLine) = 2  
-            BEGIN            
-               SET @c_colContent02 = @c_Colcontent            
-            END    
+               BEGIN            
+                SET @c_colContent02 = @c_Colcontent            
+               END    
                       
             --ELSE IF @n_intFlag = 3 OR @n_intFlag = 13 OR @n_intFlag = 23            
             ELSE IF (@n_intFlag%@n_MaxLine) = 3  
-            BEGIN              
-               SET @c_colContent03 = @c_Colcontent            
-            END   
+               BEGIN              
+                 SET @c_colContent03 = @c_Colcontent            
+               END   
                        
             --ELSE IF @n_intFlag = 4 OR @n_intFlag = 14 OR @n_intFlag = 24            
             ELSE IF (@n_intFlag%@n_MaxLine) = 4  
-            BEGIN            
-               SET @c_colContent04 = @c_Colcontent            
-            END  
+               BEGIN            
+                SET @c_colContent04 = @c_Colcontent            
+               END  
                   
             --ELSE IF @n_intFlag = 5 OR @n_intFlag = 15 OR @n_intFlag = 25            
             ELSE IF (@n_intFlag%@n_MaxLine) = 5  
-            BEGIN            
-               SET @c_colContent05 = @c_Colcontent            
-            END  
+               BEGIN            
+                SET @c_colContent05 = @c_Colcontent            
+               END  
                   
             --ELSE IF @n_intFlag = 6 OR @n_intFlag = 16 OR @n_intFlag = 26            
             ELSE IF (@n_intFlag%@n_MaxLine) = 6  
-            BEGIN            
-               SET @c_colContent06 = @c_Colcontent            
-            END                         
+               BEGIN            
+                SET @c_colContent06 = @c_Colcontent            
+               END                         
             --ELSE IF @n_intFlag = 7 OR @n_intFlag = 17 OR @n_intFlag = 27            
             ELSE IF (@n_intFlag%@n_MaxLine) = 7  
-            BEGIN            
-               SET @c_colContent07 = @c_Colcontent            
-            END                  
+               BEGIN            
+                SET @c_colContent07 = @c_Colcontent            
+               END                  
             --ELSE IF @n_intFlag = 8 OR @n_intFlag = 18 OR @n_intFlag = 28            
             ELSE IF (@n_intFlag%@n_MaxLine) = 8  
-            BEGIN            
-               SET @c_colContent08 = @c_Colcontent            
-            END                  
+               BEGIN            
+                SET @c_colContent08 = @c_Colcontent            
+               END                  
             --ELSE IF @n_intFlag = 9 OR @n_intFlag = 19 OR @n_intFlag = 29            
             ELSE IF (@n_intFlag%@n_MaxLine) = 9  
-            BEGIN            
-               SET @c_colContent09 = @c_Colcontent            
-            END            
+               BEGIN            
+                SET @c_colContent09 = @c_Colcontent            
+               END            
             --ELSE IF @n_intFlag = 10 OR @n_intFlag = 20 OR @n_intFlag = 30            
             ELSE IF (@n_intFlag%@n_MaxLine) = 10  
-            BEGIN            
-               SET @c_colContent10 = @c_Colcontent            
-            END   
+        BEGIN            
+                SET @c_colContent10 = @c_Colcontent            
+               END   
              
-            ELSE IF (@n_intFlag%@n_MaxLine) = 11  
-            BEGIN            
-               SET @c_colContent11 = @c_Colcontent            
-            END    
+           ELSE IF (@n_intFlag%@n_MaxLine) = 11  
+               BEGIN            
+                SET @c_colContent11 = @c_Colcontent            
+               END    
   
-            ELSE IF (@n_intFlag%@n_MaxLine) = 12  
-            BEGIN            
-               SET @c_colContent12 = @c_Colcontent            
-            END    
+           ELSE IF (@n_intFlag%@n_MaxLine) = 12  
+               BEGIN            
+                SET @c_colContent12 = @c_Colcontent            
+               END    
   
-            ELSE IF (@n_intFlag%@n_MaxLine) = 13  
-            BEGIN            
-               SET @c_colContent13 = @c_Colcontent            
-            END    
+           ELSE IF (@n_intFlag%@n_MaxLine) = 13  
+               BEGIN            
+                SET @c_colContent13 = @c_Colcontent            
+               END    
             
-            ELSE IF (@n_intFlag%@n_MaxLine) = 14  
-            BEGIN            
-               SET @c_colContent14 = @c_Colcontent            
-            END    
+           ELSE IF (@n_intFlag%@n_MaxLine) = 14  
+               BEGIN            
+                SET @c_colContent14 = @c_Colcontent            
+               END    
            
-            ELSE IF (@n_intFlag%@n_MaxLine) = 0  
-            BEGIN            
-               SET @c_colContent15 = @c_Colcontent            
-            END      
+           ELSE IF (@n_intFlag%@n_MaxLine) = 0  
+               BEGIN            
+                SET @c_colContent15 = @c_Colcontent            
+               END      
            /*CS03 start*/  
   
-            SET @n_TTLQty = 0  
+           SET @n_TTLQty = 0  
   
-            SELECT @n_TTLQty = SUM(TTLPICKQTY)  
-            FROM  #CartonContent c WITH (NOLOCK)                          
+           SELECT @n_TTLQty = SUM(TTLPICKQTY)  
+           FROM  #CartonContent c WITH (NOLOCK)                          
                    
             IF @b_debug = '1'                
             BEGIN                
@@ -670,10 +650,10 @@ BEGIN
                 Col34 = @c_ColContent13,           
                 Col35 = @c_ColContent14,  
                 Col36 = @c_ColContent15           
-            WHERE ID = @n_CurrentPage              
+             WHERE ID = @n_CurrentPage              
               /*CS03 End*/                  
             --SET @n_intFlag = @n_intFlag + 1            
-            
+                   
             IF @b_debug = '1'            
             BEGIN            
              SELECT convert(nvarchar(3),@n_intFlag),* FROM #Result            
@@ -692,20 +672,20 @@ BEGIN
             FROM #SKU          
             GROUP BY Measurement   
   
-            /*CS04 start*/  
-            
-            SET @n_cntOrdUdef04 = 0        
-            INSERT INTO #Order (userdefine04)        
-            SELECT DISTINCT ORD.userdefine04  
-            FROM pickdetail PD WITH (nolock)  
-            JOIN orders ORD WITH (nolock) on ord.orderkey=pd.orderkey  
-            WHERE caseid=@c_caseid        
-                
-            SELECT @n_cntOrdUdef04= count (distinct userdefine04)        
-               -- , @c_getOrdUdef04 = userdefine04        
-            FROM #Order        
-            -- GROUP BY userdefine04    
-            /*Cs04 End*/         
+    /*CS04 start*/  
+    
+    SET @n_cntOrdUdef04 = 0        
+    INSERT INTO #Order (userdefine04)        
+    SELECT DISTINCT ORD.userdefine04  
+    FROM pickdetail PD WITH (nolock)  
+    JOIN orders ORD WITH (nolock) on ord.orderkey=pd.orderkey  
+    WHERE caseid=@c_caseid        
+        
+    SELECT @n_cntOrdUdef04= count (distinct userdefine04)        
+       -- , @c_getOrdUdef04 = userdefine04        
+    FROM #Order        
+  -- GROUP BY userdefine04    
+   /*Cs04 End*/         
           
             IF @b_debug='1'          
             BEGIN          
@@ -713,30 +693,30 @@ BEGIN
               SELECT 'Userdefine04', * from #Order         
             END   
   
-            /*CS04 Start*/     
-            IF @n_cntOrdUdef04 = 1           
-            BEGIN        
-               SELECT TOP 1 @c_getOrdUdef04 = userdefine04  
+        /*CS04 Start*/     
+    IF @n_cntOrdUdef04 = 1           
+    BEGIN        
+        SELECT TOP 1 @c_getOrdUdef04 = userdefine04  
                FROM #Order   
-            
-               UPDATE #Result                    
-               SET Col13= @c_getOrdUdef04          
-               WHERE ID = @n_CurrentPage     
-               
-            END          
-            ELSE          
-            BEGIN          
-               UPDATE #Result                    
-               SET Col13 = ''          
-               WHERE ID = @n_CurrentPage          
-            END        
-            /*CS04 END*/         
+   
+        UPDATE #Result                    
+        SET Col13= @c_getOrdUdef04          
+        WHERE ID = @n_CurrentPage     
+       
+    END          
+    ELSE          
+    BEGIN          
+       UPDATE #Result                    
+       SET Col13 = ''          
+       WHERE ID = @n_CurrentPage          
+    END        
+   /*CS04 END*/         
             
             IF @n_cntsku = 1             
             BEGIN            
-               UPDATE #Result                      
-               SET Col14= @c_skuMeasurement            
-               WHERE ID = @n_CurrentPage            
+                UPDATE #Result                      
+                SET Col14= @c_skuMeasurement            
+                WHERE ID = @n_CurrentPage            
             END            
             ELSE            
             BEGIN            
@@ -754,9 +734,8 @@ BEGIN
          END                
               
          FETCH NEXT FROM CUR_RowNoLoop INTO @c_ToCompany1,@C_ToAddress1,@C_ToState1,@C_ToCity1,@C_ToZip1,@C_ToCountry1,@c_FromCompany1,            
-                                            @C_FromAddress1,@C_FromState1,@C_FromCity1,@C_FromZip1,@C_FromCountry1,@c_ORDUDef04_1,            
-                                            @c_wavekey1,@c_CaseID1,@c_ODUDEF01_1,@c_ODUDEF02_1,@c_Carton1,@c_CodelShort1,
-                                            @c_S1Address1_1, @c_S1Address2_1 ,@c_S1Address3_1, @c_S1Address4_1          --WL01                        
+                                      @C_FromAddress1,@C_FromState1,@C_FromCity1,@C_FromZip1,@C_FromCountry1,@c_ORDUDef04_1,            
+                                      @c_wavekey1,@c_CaseID1,@c_ODUDEF01_1,@c_ODUDEF02_1,@c_Carton1,@c_CodelShort1                      
               
       END -- While                       
       CLOSE CUR_RowNoLoop                      
@@ -764,9 +743,8 @@ BEGIN
                
             
       FETCH NEXT FROM CUR_StartRecLoop INTO @c_ToCompany,@C_ToAddress,@C_ToState,@C_ToCity,@C_ToZip,@C_ToCountry,@c_FromCompany,            
-                                            @C_FromAddress,@C_FromState,@C_FromCity,@C_FromZip,@C_FromCountry,@c_ORDUDef04,            
-                                            @c_wavekey,@c_CaseID,@c_ODUDEF01,@c_ODUDEF02,@c_Carton,@c_CodelShort,
-                                            @c_S1Address1, @c_S1Address2 ,@c_S1Address3, @c_S1Address4          --WL01                           
+                                         @C_FromAddress,@C_FromState,@C_FromCity,@C_FromZip,@C_FromCountry,@c_ORDUDef04,            
+                                         @c_wavekey,@c_CaseID,@c_ODUDEF01,@c_ODUDEF02,@c_Carton,@c_CodelShort                     
             
    END -- While                       
    CLOSE CUR_StartRecLoop                      
