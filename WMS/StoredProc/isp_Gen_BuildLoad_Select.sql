@@ -29,6 +29,8 @@ GO
 /* 06-JUL-2018  Wan01   1.2   Fixed IN and LIKE operator for INT type   */
 /* 09-AUG-2018  Wan01   1.2   Fixed:SKu/Loc identifier cound not be bound*/
 /* 18-JUL-2019  NJOW01  1.3   Fixed: orderinfo table name               */
+/* 19-MAR-2020  NJOW02  1.4   Fix sort by sku or pickdetail table need  */
+/*                            to include min function for the field     */
 /************************************************************************/                                                                                  
 CREATE PROC [dbo].[isp_Gen_BuildLoad_Select]                                                                                                                       
    @cParmCode              NVARCHAR(10),                                                                                                                    
@@ -259,7 +261,7 @@ BEGIN
         ELSE
             SET @cSortSeq = ''                                                                                                                                 
         
-        IF @cTableName = 'ORDERDETAIL'
+        IF @cTableName IN('ORDERDETAIL','LOC','PICKDETAIL') --NJOW02
             SET @cColumnName = 'MIN(' + RTRIM(@cColumnName) + ')'
         ELSE
         IF ISNULL(@c_GroupBySortField, '') = ''                                                                                                 
