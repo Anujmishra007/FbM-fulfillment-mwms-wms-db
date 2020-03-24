@@ -37,7 +37,8 @@ GO
 /*                                                                        */
 /*                                                                        */
 /* Updates:                                                               */
-/*Date         Author  Ver. Purposes                                      */
+/*Date        Author  Ver.   Purposes                                     */
+/*2020-03-24  WLChooi v1.1   Error message show Orderkey & fix bugs(WL01) */
 /**************************************************************************/
 
 CREATE PROCEDURE ispPopulateTOASN_PMSTOPMI
@@ -133,12 +134,19 @@ BEGIN
       FROM  ORDERS WITH (NOLOCK)
       JOIN MBOLDETAIL WITH (NOLOCK) ON ORDERS.ORDERKEY = MBOLDETAIL.ORDERKEY
       JOIN MBOL WITH (NOLOCK) ON MBOL.MBOLKEY = MBOLDETAIL.MBOLKEY
-      LEFT JOIN CODELKUP WITH (NOLOCK) ON ORDERS.Type = CODELKUP.Code AND CODELKUP.ListName = 'ORDTYP2ASN'  
+      JOIN CODELKUP WITH (NOLOCK) ON ORDERS.Type = CODELKUP.Code AND CODELKUP.ListName = 'ORDTYP2ASN' AND CODELKUP.Storerkey = 'PMS' --WL01 - Use Join
       WHERE ORDERS.OrderKey = @c_OrderKey
             
       SELECT TOP 1 @c_ToFacility = ISNULL(STORER.Facility,'')
       FROM STORER (NOLOCK)
       WHERE STORER.Storerkey = @c_ToStorerkey
+
+      --WL01 START
+      IF LTRIM(RTRIM(@c_Storerkey)) NOT IN ('PMS','PMI')
+      BEGIN
+         GOTO QUIT_SP
+      END
+      --WL01 END
 
       --Check Consigneekey
       IF @c_Consigneekey = ''
@@ -146,7 +154,7 @@ BEGIN
          SET @n_continue = 3
          SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
          SET @n_err = 63494
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Consigneekey is empty' +
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Consigneekey is empty, Orderkey = ' + @c_OrderKey +   --WL01
                        ' (ispPopulateTOASN_PMSTOPMI)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(ISNULL(@c_errmsg,'')) + ' ) '
          GOTO QUIT_SP
       END
@@ -198,6 +206,7 @@ BEGIN
 	      	  AND Storerkey = @c_ToStorerKey
 	      	  AND Rectype = @c_Type
 	      	  AND Facility = @c_ToFacility
+              AND WarehouseReference = @c_Orderkey --WL01
 	      	  AND Status <> '9'
             
 	      	  IF ISNULL(@c_FoundReceiptKey,'') <> ''
@@ -219,9 +228,9 @@ BEGIN
 	            IF @b_success = 1
 	            BEGIN
 	               INSERT INTO RECEIPT (ReceiptKey, ExternReceiptkey, UserDefine01
-	                                  , StorerKey, RecType, Facility, ReceiptDate)
+	                                  , StorerKey, RecType, Facility, ReceiptDate, WarehouseReference)  --WL01
 	               VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_UserDefine01
-	                     , @c_ToStorerKey, @c_Type, @c_ToFacility, @dt_ReceiptDate)           
+	                     , @c_ToStorerKey, @c_Type, @c_ToFacility, @dt_ReceiptDate, @c_Orderkey)     --WL01        
 
 	               SET @n_err = @@Error
 	               IF @n_err <> 0
@@ -503,7 +512,7 @@ BEGIN
 				   END
 	      END --while
      END
-     SET ROWCOUNT 0
+      SET ROWCOUNT 0
 
      IF (@n_continue = 1 OR @n_continue = 2) AND @c_FinalizeFlag = 'Y'
      BEGIN
