@@ -21,7 +21,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Purposes                                       */ 
+/* Date         Author   Ver.   Purposes                                */ 
+/* 2020-03-19   WLChooi  1.0    WMS-11944 - Modify BOXType logic (WL01) */
 /************************************************************************/  
   
 CREATE PROC dbo.isp_GetPickSlipWave18 (  
@@ -401,7 +402,7 @@ BEGIN
           PACK.CaseCnt,  
           pack.innerpack,  
           PACK.Qty,  
-          '' AS ExternOrderKey,--ORDERS.ExternOrderKey          AS ExternOrderKey,  
+          ORDERS.ExternOrderKey AS ExternOrderKey,--ORDERS.ExternOrderKey          AS ExternOrderKey,   --WL01
           ISNULL(LOC.LogicalLocation, '') AS LogicalLocation,  
           '' AS Areakey,   --ISNULL(AreaDetail.AreaKey, '00') AS Areakey,  
           ISNULL(OrderDetail.UOM, '')     AS UOM, PACK.OtherUnit1,
@@ -536,7 +537,7 @@ BEGIN
           pack.innerpack,  
           PACK.Qty,  
           Pack.OtherUnit1,
-         -- ORDERS.ExternOrderKey,  
+          ORDERS.ExternOrderKey,  --WL01
           ISNULL(LOC.LogicalLocation, ''),  
           --ISNULL(AreaDetail.AreaKey, '00'),  
           ISNULL(OrderDetail.UOM, ''),  
@@ -947,6 +948,12 @@ QUIT:
          , @c_Remark2   NVARCHAR(10)
          , @c_Remark3   NVARCHAR(10)
 
+   --WL01 START
+   SET @c_Remark1 = ''
+   SET @c_Remark2 = ''
+   SET @c_Remark3 = ''
+   --WL01 END
+
    DECLARE cur_Loop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT PickSlipNo, 'Others', SUM(Qty)
    FROM #TMP_PICK
@@ -1051,16 +1058,19 @@ QUIT:
          
       END*/
 
-      SELECT @c_Remark1 = CASE WHEN PM001 > 0 THEN CAST(PM001 AS NVARCHAR(10)) + ' PM001 ' ELSE '' END
+      SELECT @c_Remark1 = CASE WHEN PM001 > 0 THEN CAST(PM001 AS NVARCHAR(10)) + ' SMALL ' ELSE '' END --WL01
       FROM #Temp_Box
 
-      SELECT @c_Remark2 = CASE WHEN PM002 > 0 THEN CAST(PM002 AS NVARCHAR(10)) + ' PM002 ' ELSE '' END
+      SELECT @c_Remark2 = CASE WHEN PM002 > 0 THEN CAST(PM002 AS NVARCHAR(10)) + ' MEDIUM ' ELSE '' END --WL01
       FROM #Temp_Box
 
-      SELECT @c_Remark3 = CASE WHEN PM003 > 0 THEN CAST(PM003 AS NVARCHAR(10)) + ' PM003 ' ELSE '' END
+      SELECT @c_Remark3 = CASE WHEN PM003 > 0 THEN CAST(PM003 AS NVARCHAR(10)) + ' LARGE ' ELSE '' END --WL01
       FROM #Temp_Box
 
-      SELECT @c_Remarks = LTRIM(RTRIM(@c_Remark1 + ' ' + @c_Remark2 + ' ' + @c_Remark3))
+      --WL01
+      SELECT @c_Remarks = LTRIM(RTRIM(@c_Remark1 + CASE WHEN ISNULL(@c_Remark1,'') = '' THEN '' ELSE CHAR(13) END +
+                                      @c_Remark2 + CASE WHEN ISNULL(@c_Remark2,'') = '' THEN '' ELSE CHAR(13) END +
+                                      @c_Remark3))
 
       INSERT INTO #TempTotalQtyPerPickslip
       SELECT @c_GetPSNo, @c_Pickzones, @n_TempQty, @c_Remarks
