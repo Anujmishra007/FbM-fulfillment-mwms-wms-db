@@ -19,12 +19,13 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver  Purposes                                    */ 
+/* 2020-03-20  Wan01    1.1  Fixed                                       */ 
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]  
    @c_AdjustmentKey  NVARCHAR(10)
@@ -333,7 +334,7 @@ BEGIN
                       , @c_errmsg      = @c_errmsg    
                 END
             END
-            ELSE IF @c_Lottable01 <> ''
+            ELSE IF @c_Lottable01 = ''       --(Wan01)
             BEGIN
                SET @n_Continue = 3
                SET @n_err = 551105
@@ -813,6 +814,19 @@ BEGIN
       IF @b_Success = 0 OR @n_Err <> 0 
       BEGIN
          SET @n_Continue = 3
+
+         EXEC [WM].[lsp_WriteError_List]              --(Wan03)
+           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+         , @c_TableName   = @c_TableName
+         , @c_SourceType  = @c_SourceType
+         , @c_Refkey1     = @c_AdjustmentKey
+         , @c_Refkey2     = ''
+         , @c_Refkey3     = ''
+         , @n_err2        = @n_err
+         , @c_errmsg2     = @c_errmsg
+         , @b_Success     = @b_Success   
+         , @n_err         = @n_err       
+         , @c_errmsg      = @c_errmsg 
          GOTO EXIT_SP 
       END   
    END   
@@ -833,19 +847,6 @@ BEGIN
             COMMIT TRAN
          END
       END
-
-      EXEC [WM].[lsp_WriteError_List] 
-        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-      , @c_TableName   = @c_TableName
-      , @c_SourceType  = @c_SourceType
-      , @c_Refkey1     = @c_AdjustmentKey
-      , @c_Refkey2     = ''
-      , @c_Refkey3     = ''
-      , @n_err2        = @n_err
-      , @c_errmsg2     = @c_errmsg
-      , @b_Success     = @b_Success   
-      , @n_err         = @n_err       
-      , @c_errmsg      = @c_errmsg 
 
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_finalizeADJ_Wrapper'
    END
