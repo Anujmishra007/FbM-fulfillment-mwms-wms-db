@@ -1,7 +1,12 @@
 ﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave18]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_GetPickSlipWave18]
+   DROP PROCEDURE [dbo].[isp_GetPickSlipWave18]
 GO
-  
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+ 
 /************************************************************************/  
 /* Stored Procedure: isp_GetPickSlipWave18                              */  
 /* Creation Date: 04-Feb-2020                                           */  
