@@ -55,6 +55,7 @@ DECLARE @d_MyDate Datetime
    AND DATEDIFF(MINUTE, Login_Time, GETDATE()) > 8  -- @n_Minutes          
    AND DATEDIFF(MINUTE, last_batch, GETDATE()) > 8         
    AND cmd <> 'AWAITING COMMAND'      
+   AND NOT (lastwaittype='WAITFOR' AND memusage=6 AND loginame IN ('ALPHA\wmsadmingt','ALPHA\wmsrt') AND spid<100) -- exclude system CDC scheduled jobs sys.sp_MScdc_capture_job
    AND NOT ( loginame= 'sa' and  LastWaitType  in ( 'CHECKPOINT_QUEUE', 'BROKER_EVENTHANDLER') )
    group by spid, blocked,hostname, [program_name], net_address, loginame,     
           login_time, last_batch, DATEDIFF(MINUTE, last_batch, GETDATE()),    db_name(a.dbid), lastwaittype --KH03    
