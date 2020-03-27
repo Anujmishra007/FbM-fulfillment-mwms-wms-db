@@ -14,7 +14,7 @@ GO
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose: 358754 - CN Carters SZ - Allocate loose from DPP. UOM7      */
-/*          For IFC, Traditional and Asia Ecom only.                    */
+/*          For IFC, Traditional, Asia Ecom and skip hop only.          */
 /*          IFC is not allow partial loose qty allocate from DPP        */
 /*                                                                      */
 /* Called By:                                                           */
@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 23-Feb-2018  NJOW01  1.0   WMS-4038 include Asia Ecom                */
+/* 22-Jan-2020  NJOW02  1.1   WMS-11883 Include Skip Hop                */
 /************************************************************************/
 CREATE  PROC [dbo].[ispALCAR01]
    @c_WaveKey    NVARCHAR(10),   
@@ -123,7 +124,7 @@ BEGIN
                          @n_QtyAvailable OUTPUT      
    END
       
-   IF ISNULL(@c_WaveType,'') NOT IN('I','T','E') OR (@n_QtyAvailable < @n_QtyLeftToFulfill AND ISNULL(@c_WaveType,'') = 'I')
+   IF ISNULL(@c_WaveType,'') NOT IN('I','T','E','S') OR (@n_QtyAvailable < @n_QtyLeftToFulfill AND ISNULL(@c_WaveType,'') = 'I')
    BEGIN   
       DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT LOTxLOCxID.LOT,    
@@ -145,8 +146,9 @@ BEGIN
          JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)    
          JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID AND ID.STATUS <> ''HOLD'')     
          JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOT.STATUS <> ''HOLD'')       
-         JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT          
-         WHERE LOC.LocationFlag <> ''HOLD''     
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT ' +         
+         CASE WHEN ISNULL(@c_WaveType,'') = 'S' THEN ' JOIN ##CARLOT ON LOT.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = ' + CAST(@@SPID AS NVARCHAR) + ' AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0 ' ELSE ' ' END +  --NJOW02
+       ' WHERE LOC.LocationFlag <> ''HOLD''     
          AND LOC.LocationFlag <> ''DAMAGE''     
          AND LOC.Status <> ''HOLD''
          AND LOC.Facility = @c_Facility
@@ -166,8 +168,12 @@ BEGIN
          CASE WHEN ISNULL(RTRIM(@c_Lottable09),'') = '' THEN '' ELSE ' AND LA.Lottable09 = @c_Lottable09 ' + CHAR(13) END +      
          CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LA.Lottable10 = @c_Lottable10 ' + CHAR(13) END +      
          CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' + CHAR(13) END +         
-         CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END +                        
-         'ORDER BY LOC.LogicalLocation, LOC.LOC' 
+         CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END +         
+         CASE WHEN @c_WaveType = 'S' THEN 
+            'ORDER BY LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC'   --NJOW02
+         ELSE              
+            'ORDER BY LOC.LogicalLocation, LOC.LOC' 
+         END 
        
       SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU        NVARCHAR(20), ' +    
                          '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +

@@ -16,7 +16,7 @@ GO
 /* Purpose: 358754 - CN Carters SZ - Pre-Allocation process to allocate */
 /*          full carton by ship-to(M_Address4) and omnia order#         */
 /*          (Userdefine03) or single order(AE) from case->pallet location*/ 
-/*          For IFC, Traditional and Asia Ecom only.                    */
+/*          For IFC, Traditional, Asia Ecom and skip hop only.          */
 /*          Set to storerconfig PreProcessingStrategyKey                */ 
 /*                                                                      */    
 /* Called By:                                                           */    
@@ -31,6 +31,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 23-Feb-2018  NJOW01    1.0   WMS-4038 change M_ISOCntrycode to       */
 /*                              M_address4. Include AE single order.    */
+/* 22-Jan-2020  NJOW02    1.1   WMS-11883 Include Skip Hop              */
 /************************************************************************/    
 CREATE  PROC [dbo].[ispPRCAR02]        
     @c_WaveKey                      NVARCHAR(10)
@@ -101,7 +102,8 @@ BEGIN
       @c_WaveType          NVARCHAR(10),
       @c_ShipTo            NVARCHAR(45), --NJOW01
       @c_OmniaOrderNo      NVARCHAR(20),
-      @c_LocationHandling  NVARCHAR(10)
+      @c_LocationHandling  NVARCHAR(10),
+      @n_SeqNo             INT --NJOW02
 
    -- FROM BULK Area 
    SET @c_LocationType = 'OTHER'      
@@ -120,12 +122,12 @@ BEGIN
    FROM WAVE (NOLOCK)
    WHERE Wavekey = @c_Wavekey
 
-   IF ISNULL(@c_WaveType,'') NOT IN('I','T','H','E')
+   IF ISNULL(@c_WaveType,'') NOT IN('I','T','H','E','S')
    BEGIN   
       SET @n_Err = 13000
       SET @n_Continue = 3
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
-                      ': Invalid Wave Piece Pick Task Dispatch Method. Must Be I,H,T or E (ispPRCAR02)'
+                      ': Invalid Wave Piece Pick Task Dispatch Method. Must Be I,H,T,E or S (ispPRCAR02)'
       GOTO Quit
    END                     
    
@@ -167,6 +169,7 @@ BEGIN
 
    -- Store Stock in Inventory (UCC & LOTxLOCxID info)
    CREATE TABLE #UCCxLOTxLOCxID (  
+      SeqNo             INT IDENTITY(1, 1),  --NJOW02
       UCCQty            INT, 
       CntCount          INT, 
       Loc               NVARCHAR(10), 
@@ -288,7 +291,7 @@ START:
    /***  LOOP BY DISTINCT SKU   ***/
    /*******************************/
 
-   DECLARE CURSOR_ORDERLINES CURSOR FAST_FORWARD READ_ONLY FOR 
+   DECLARE CURSOR_ORDERLINES CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
    SELECT DISTINCT SKU, StorerKey, Facility, Lottable01, Lottable02, Lottable03, Lottable06, 
                    Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12
    FROM #ORDERLINES
@@ -368,12 +371,69 @@ START:
          
       EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_Lottable01, @c_Lottable02, @c_Lottable03, 
                          @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12  
+      
+
+      --NJOW02
+      IF ISNULL(@c_WaveType,'') = 'S'
+      BEGIN
+      	 --Remove lot not reserved
+      	 DELETE #UCCxLOTxLOCxID
+         FROM #UCCxLOTxLOCxID
+         LEFT JOIN ##CARLOT ON #UCCxLOTxLOCxID.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = @@SPID AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0
+         WHERE ##CARLOT.Lot IS NULL          
+         
+         --loop to remove ucc not suffience qty with reserved lot        
+         DECLARE CURSOR_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
+            SELECT ##CARLOT.Lot, ##CARLOT.Qty - ##CARLOT.QtyAllocated AS QtyAvailable
+            FROM ##CARLOT 
+            WHERE ##CARLOT.SP_ID= @@SPID 
+            AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0
+            ORDER BY ##CARLOT.Lot
+         
+         OPEN CURSOR_LOT           
+          
+         FETCH NEXT FROM CURSOR_LOT INTO @c_Lot, @n_Qty
+          
+         WHILE (@@FETCH_STATUS <> -1)        
+         BEGIN         	  
+         	  DECLARE CURSOR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         	     SELECT Seqno, UCCQty
+         	     FROM #UCCxLOTxLOCxID 
+         	     WHERE Lot = @c_Lot
+         	     ORDER BY LocationHandling DESC, LogicalLocation, LOC
+
+            OPEN CURSOR_UCC
+            
+            FETCH NEXT FROM CURSOR_UCC INTO @n_SeqNo, @n_UCCQty
+         	
+         	  WHILE (@@FETCH_STATUS <> -1) 
+         	  BEGIN
+         	  	 IF @n_Qty >= @n_UCCQty
+         	  	    SET @n_Qty = @n_Qty - @n_UCCQty
+         	  	 ELSE IF @n_Qty < @n_UCCQty
+         	  	 BEGIN
+         	  	    DELETE FROM #UCCxLOTxLOCxID 
+         	  	    WHERE Seqno = @n_Seqno
+         	  	    
+         	  	    SET @n_Qty = 0
+         	  	 END          	  	       
+         	  	 
+               FETCH NEXT FROM CURSOR_UCC INTO @n_SeqNo, @n_UCCQty
+         	  END      
+         	  CLOSE CURSOR_UCC
+         	  DEALLOCATE CURSOR_UCC  
+         	
+            FETCH NEXT FROM CURSOR_LOT INTO @c_Lot, @n_Qty
+         END
+         CLOSE CURSOR_LOT
+         DEALLOCATE CURSOR_LOT         
+      END                                                  
 
       INSERT INTO #NumPool (UCCQty, CntCount)
       SELECT UCCQty, SUM(CntCount)
       FROM #UCCxLOTxLOCxID WITH (NOLOCK)
       GROUP BY UCCQty
-      
+            
       -- Get Lower Bound to reduce loop size
       SELECT @n_LowerBound = MIN(UCCQty)
       FROM #NumPool
@@ -429,6 +489,7 @@ START:
          /*********************************************************************************************/
          SET @n_UCCQty = 0
 
+         --find the ucc size fit the order qty.
          SELECT TOP 1 @n_UCCQty = UCCQty
          FROM #NumPool WITH (NOLOCK)
          WHERE @n_OrderQty % UCCQty = 0
@@ -585,9 +646,9 @@ START:
             -- GET Combination with least Remainder, least number combination
             SELECT TOP 1 @c_Result = Subset, @n_Result = [Sum]
             FROM #CombinationPool WITH (NOLOCK)
-            WHERE [Sum] <= @n_OrderQty
+            WHERE [Sum] <= @n_OrderQty               
             ORDER BY [Sum] DESC,
-                     LEN(Subset) - LEN(REPLACE(Subset, '+', ''))
+                     LEN(Subset) - LEN(REPLACE(Subset, '+', ''))   --less combination
 
             IF ISNULL(@c_Result,'') <> ''
             BEGIN
@@ -874,12 +935,24 @@ START:
             BEGIN 
                WHILE @n_Count > 0
                BEGIN
-                  SELECT TOP 1 @c_Loc = Loc, @c_Lot = Lot, @c_ID = ID, @n_CntCount = CntCount
-                  FROM #UCCxLOTxLOCxID WITH (NOLOCK)
-                  WHERE UCCQty = @n_UCCQty
-                  AND CntCount > 0
-                  ORDER BY LocationHandling DESC, LogicalLocation, Loc, CntCount DESC
-                  --ORDER BY AllocFullPallet DESC, LocationHandling DESC, LogicalLocation, Loc, CntCount DESC
+               	  IF ISNULL(@c_WaveType,'') = 'S'  --NJOW02
+               	  BEGIN
+                     SELECT TOP 1 @c_Loc = LLI.Loc, @c_Lot = LLI.Lot, @c_ID = LLI.ID, @n_CntCount = LLI.CntCount
+                     FROM #UCCxLOTxLOCxID LLI WITH (NOLOCK)
+                     JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot
+                     WHERE LLI.UCCQty = @n_UCCQty
+                     AND LLI.CntCount > 0
+                     ORDER BY LLI.LocationHandling DESC, LA.Lottable05, LA.Lot, LLI.LogicalLocation, LLI.Loc, LLI.CntCount DESC               	  	
+               	  END
+               	  ELSE
+               	  BEGIN
+                     SELECT TOP 1 @c_Loc = Loc, @c_Lot = Lot, @c_ID = ID, @n_CntCount = CntCount
+                     FROM #UCCxLOTxLOCxID WITH (NOLOCK)
+                     WHERE UCCQty = @n_UCCQty
+                     AND CntCount > 0
+                     ORDER BY LocationHandling DESC, LogicalLocation, Loc, CntCount DESC
+                     --ORDER BY AllocFullPallet DESC, LocationHandling DESC, LogicalLocation, Loc, CntCount DESC
+                  END
                   
                   IF ISNULL(@c_Lot,'') = ''
                      BREAK
@@ -1009,6 +1082,15 @@ START:
                                            ': Insert PickDetail Failed. (ispPRCAR02)'
                            GOTO Quit
                         END
+                        
+                        --NJOW02
+                        IF ISNULL(@c_WaveType,'') = 'S' 
+                        BEGIN 
+                           UPDATE ##CARLOT
+                           SET QtyAllocated = QtyAllocated + @n_InsertQty
+                           WHERE Lot = @c_Lot
+                           AND SP_ID = @@SPID
+                        END                         
                      END -- IF @b_Success = 1                  	 
                   	 
                      FETCH NEXT FROM CURSOR_ORDLINE INTO @c_Orderkey, @c_OrderLineNumber, @n_Qty
