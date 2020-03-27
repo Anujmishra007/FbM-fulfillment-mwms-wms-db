@@ -15,7 +15,7 @@ GO
 /*                                                                      */    
 /* Purpose: 358754 - CN Carters SZ - Pre-Allocation process to allocate */
 /*          full pallet of conso carton from pallet location            */
-/*          For IFC, Traditional and Hub                                */
+/*          For IFC, Traditional, Hub, Asia ECOM and skip hop           */
 /*          Set to storerconfig PreProcessingStrategyKey                */ 
 /*                                                                      */    
 /* Called By:                                                           */    
@@ -32,6 +32,7 @@ GO
 /*                              M_address4. Include AE sort by          */
 /*                              multi/single order.                     */
 /*                              Allow multi lot / ucc in full pallet    */
+/* 22-Jan-2020  NJOW02    1.1   WMS-11883 Include Skip Hop              */
 /************************************************************************/    
 CREATE  PROC [dbo].[ispPRCAR03]        
     @c_WaveKey                      NVARCHAR(10)
@@ -104,12 +105,12 @@ BEGIN
    FROM WAVE (NOLOCK)
    WHERE Wavekey = @c_Wavekey
 
-   IF ISNULL(@c_WaveType,'') NOT IN('I','T','H','E')
+   IF ISNULL(@c_WaveType,'') NOT IN('I','T','H','E','S')
    BEGIN   
       SET @n_Err = 13000
       SET @n_Continue = 3
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
-                      ': Invalid Wave Piece Pick Task Dispatch Method. Must Be I,H,T or E (ispPRCAR03)'
+                      ': Invalid Wave Piece Pick Task Dispatch Method. Must Be I,H,T,E or S (ispPRCAR03)'
       GOTO Quit
    END                     
    
@@ -223,7 +224,7 @@ BEGIN
    /***  LOOP BY DISTINCT SKU   ***/
    /*******************************/
 
-   DECLARE CURSOR_ORDERLINES CURSOR FAST_FORWARD READ_ONLY FOR 
+   DECLARE CURSOR_ORDERLINES CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
    SELECT SKU, StorerKey, Facility, Packkey, Lottable01, Lottable02, Lottable03, Lottable06, 
                    Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, SUM(OrderQty)
    FROM #ORDERLINES
@@ -303,30 +304,67 @@ BEGIN
                          @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12  
       
       --Remove pallet with multi-sku, partial allocated and UCC in progress.
-      DELETE FROM #LOTxLOCxID      
-      WHERE ID IN (
-                    SELECT LID.ID
-                    FROM #LOTxLOCxID LID
-                    JOIN LOTATTRIBUTE LA (NOLOCK) ON LID.LOT = LA.LOT
-                    LEFT JOIN UCC WITH (NOLOCK) ON (LID.LOT = UCC.LOT AND LID.LOC = UCC.LOC AND LID.ID = UCC.ID
-                                                    AND UCC.Status > '2' AND UCC.Status < '9')
-                    WHERE ISNULL(LID.ID,'') <> ''            
-                    GROUP BY LID.ID
-                    HAVING COUNT(DISTINCT LA.Sku) > 1 OR SUM(LID.Qty - LID.QtyAvailable) > 0 OR SUM(CASE WHEN ISNULL(UCC.UCCNo,'') <> '' THEN 1 ELSE 0 END) > 0 
-                           OR SUM(LID.QtyReplen) > 0  --NJOW01
-                    --HAVING COUNT(DISTINCT LA.Lot) > 1 OR SUM(LID.Qty - LID.QtyAvailable) > 0 OR SUM(CASE WHEN ISNULL(UCC.UCCNo,'') <> '' THEN 1 ELSE 0 END) > 0 
-                    --       OR SUM(LID.QtyReplen) > 0  --NJOW01
-                  )
       
-      DELETE FROM #IDxLOC
-      
-      --Retrieve sum qty for the pallet and loc
-      INSERT INTO #IDxLOC
-      SELECT ID, LOC, SUM(QtyAvailable)
-      FROM #LOTxLOCxID
-      GROUP BY ID, LOC, LogicalLocation
-      ORDER BY MIN(Lot), LogicalLocation, Loc, ID
-                  
+      IF ISNULL(@c_WaveType,'') = 'S'  --NJOW02
+      BEGIN
+         DELETE FROM #LOTxLOCxID      
+         WHERE ID IN (
+                       SELECT LID.ID
+                       FROM #LOTxLOCxID LID
+                       JOIN LOTATTRIBUTE LA (NOLOCK) ON LID.LOT = LA.LOT
+                       LEFT JOIN UCC WITH (NOLOCK) ON (LID.LOT = UCC.LOT AND LID.LOC = UCC.LOC AND LID.ID = UCC.ID
+                                                       AND UCC.Status > '2' AND UCC.Status < '9')
+                       WHERE ISNULL(LID.ID,'') <> ''            
+                       GROUP BY LID.ID
+                       HAVING COUNT(DISTINCT LA.Lottable05) > 1 OR COUNT(DISTINCT LA.Sku) > 1 OR SUM(LID.Qty - LID.QtyAvailable) > 0 OR SUM(CASE WHEN ISNULL(UCC.UCCNo,'') <> '' THEN 1 ELSE 0 END) > 0  --Must be same lottable05
+                              OR SUM(LID.QtyReplen) > 0  --NJOW01                       
+                     )      	
+
+         DELETE FROM #IDxLOC
+         
+         --Retrieve sum qty for the pallet and loc
+         INSERT INTO #IDxLOC (ID, LOC, QtyAvailable)
+         SELECT LLI.ID, LLI.LOC, SUM(LLI.QtyAvailable)
+         FROM #LOTxLOCxID LLI
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot 
+         GROUP BY LLI.ID, LLI.LOC, LLI.LogicalLocation
+         ORDER BY MIN(LA.Lottable05), MIN(LLI.Lot), LLI.LogicalLocation, LLI.Loc, LLI.ID  --NJOW02                  
+                           
+         --Delete pallet with non selected lot
+         DELETE #IDxLOC
+         FROM #IDXLOC
+         JOIN #LOTxLOCxID LLI ON #IDXLOC.ID = LLI.ID AND #IDXLOC.Loc = LLI.Loc
+         LEFT JOIN ##CARLOT ON LLI.Lot = ##CARLOT.Lot AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0 AND ##CARLOT.SP_ID = @@SPID 
+         WHERE ##CARLOT.Lot IS NULL          
+      END
+      ELSE
+      BEGIN      
+         DELETE FROM #LOTxLOCxID      
+         WHERE ID IN (
+                       SELECT LID.ID
+                       FROM #LOTxLOCxID LID
+                       JOIN LOTATTRIBUTE LA (NOLOCK) ON LID.LOT = LA.LOT
+                       LEFT JOIN UCC WITH (NOLOCK) ON (LID.LOT = UCC.LOT AND LID.LOC = UCC.LOC AND LID.ID = UCC.ID
+                                                       AND UCC.Status > '2' AND UCC.Status < '9')
+                       WHERE ISNULL(LID.ID,'') <> ''            
+                       GROUP BY LID.ID
+                       HAVING COUNT(DISTINCT LA.Sku) > 1 OR SUM(LID.Qty - LID.QtyAvailable) > 0 OR SUM(CASE WHEN ISNULL(UCC.UCCNo,'') <> '' THEN 1 ELSE 0 END) > 0 
+                              OR SUM(LID.QtyReplen) > 0  --NJOW01
+                       --HAVING COUNT(DISTINCT LA.Lot) > 1 OR SUM(LID.Qty - LID.QtyAvailable) > 0 OR SUM(CASE WHEN ISNULL(UCC.UCCNo,'') <> '' THEN 1 ELSE 0 END) > 0 
+                       --       OR SUM(LID.QtyReplen) > 0  --NJOW01
+                     )
+         
+         DELETE FROM #IDxLOC
+         
+         --Retrieve sum qty for the pallet and loc      
+         INSERT INTO #IDxLOC (ID, LOC, QtyAvailable)
+         SELECT LLI.ID, LLI.LOC, SUM(LLI.QtyAvailable)
+         FROM #LOTxLOCxID LLI
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot 
+         GROUP BY LLI.ID, LLI.LOC, LLI.LogicalLocation
+         ORDER BY MIN(LA.Lottable05), MIN(LLI.Lot), LLI.LogicalLocation, LLI.Loc, LLI.ID  --NJOW02
+      END
+                        
       /*****************************************************************************/
       /***  START ALLOC BY SKU                                                   ***/
       /*****************************************************************************/
@@ -343,11 +381,30 @@ BEGIN
          SELECT @c_ID = '', @c_Loc ='',  @n_IDQty = 0, @n_PickQty = 0
          
          --Find the full pallet
-         SELECT TOP 1 @c_ID = ID, @c_Loc = Loc, @n_IDQty = QtyAvailable
-         FROM #IDxLOC
-         WHERE QtyAvailable <= @n_OrderQty
-         AND QtyAvailable > 0
-         ORDER BY SeqNo
+         IF ISNULL(@c_WaveType,'') = 'S'  --NJOW02
+         BEGIN
+         	 --make sure the lot in pallet are enough with reserved lot qty
+            SELECT TOP 1 @c_ID = ID, @c_Loc = Loc, @n_IDQty = QtyAvailable
+            FROM #IDxLOC            
+            WHERE QtyAvailable <= @n_OrderQty
+            AND QtyAvailable > 0
+            AND NOT EXISTS (SELECT 1 
+                            FROM #LOTxLOCxID LLI 
+                            LEFT JOIN ##CARLOT ON LLI.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = @@SPID                    
+                            WHERE LLI.ID = #IDxLOC.ID 
+                            AND LLI.Loc = #IDxLOC.Loc
+                            GROUP BY LLI.Lot, ##CARLOT.Qty, ##CARLOT.QtyAllocated
+                            HAVING SUM(LLI.QtyAvailable) > (ISNULL(##CARLOT.Qty,0) - ISNULL(##CARLOT.QtyAllocated,0)))
+            ORDER BY SeqNo
+         END
+         ELSE
+         BEGIN         
+            SELECT TOP 1 @c_ID = ID, @c_Loc = Loc, @n_IDQty = QtyAvailable
+            FROM #IDxLOC
+            WHERE QtyAvailable <= @n_OrderQty
+            AND QtyAvailable > 0
+            ORDER BY SeqNo
+         END
          
          IF ISNULL(@n_IDQty,0) = 0
             BREAK
@@ -471,6 +528,15 @@ BEGIN
                      GOTO Quit
                   END
                END -- IF @b_Success = 1                  	 
+
+               --NJOW02
+               IF ISNULL(@c_WaveType,'') = 'S' 
+               BEGIN 
+                  UPDATE ##CARLOT
+                  SET QtyAllocated = QtyAllocated + @n_Pickqty
+                  WHERE Lot = @c_Lot  
+                  AND SP_ID = @@SPID
+               END
             	 
                FETCH NEXT FROM CURSOR_ORDLINE INTO @c_Orderkey, @c_OrderLineNumber, @n_OrderLineQty
             END
