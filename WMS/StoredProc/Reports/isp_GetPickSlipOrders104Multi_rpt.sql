@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver   Purposes                                */
 /* 12-Mar-2020  NJOW01    1.0   Fix total qty/sku by batchkey           */
+/* 27-Mar-2020  WLChooi   1.1   Add sorting (WL01)                      */
 /************************************************************************/
 
 CREATE PROC isp_GetPickSlipOrders104Multi_rpt 
@@ -60,6 +61,7 @@ BEGIN
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT Batchkey
    FROM #Temp_Zone
+   ORDER BY BatchKey    --WL01
 
    OPEN CUR_LOOP
 
@@ -102,7 +104,8 @@ BEGIN
           , #Temp_Zone.Descr
           , CASE WHEN #Temp_Zone.Descr = 'T1' THEN '2' ELSE '1' END 
           , PH.Pickheaderkey
-          , OH.Orderkey  
+          , OH.Orderkey
+   ORDER BY OH.Loadkey, PD.Pickslipno, PH.Pickheaderkey, OH.Orderkey    --WL01  
 
 
 QUIT_SP:
