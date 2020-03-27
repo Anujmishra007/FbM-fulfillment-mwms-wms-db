@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
 /* 12/02/2018   NJOW01   1.0  WMS-4039 Add Asia Ecom strategy            */
+/* 22/01/2020   NJOW02   1.1  WMS-11884 Include skip hop task            */
 /*************************************************************************/   
 /*
 declare @b_Success      int          
@@ -70,7 +71,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV05]
     BEGIN
         IF NOT EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
                    WHERE TD.Wavekey = @c_Wavekey
-                   AND TD.Sourcetype IN ('ispRLWAV05-IFC','ispRLWAV05-TRA','ispRLWAV05-HUB', 'ispRLWAV05-AE')  --NJOW01
+                   AND TD.Sourcetype IN ('ispRLWAV05-IFC','ispRLWAV05-TRA','ispRLWAV05-HUB', 'ispRLWAV05-AE', 'ispRLWAV05-SH')  --NJOW01
                    AND TD.Tasktype IN ('RPF')) 
         BEGIN
           SELECT @n_continue = 3  
@@ -84,7 +85,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV05]
     BEGIN
         IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
                    WHERE TD.Wavekey = @c_Wavekey
-                   AND TD.Sourcetype IN ('ispRLWAV05-IFC','ispRLWAV05-TRA','ispRLWAV05-HUB','ispRLWAV05-AE') --NJOW01
+                   AND TD.Sourcetype IN ('ispRLWAV05-IFC','ispRLWAV05-TRA','ispRLWAV05-HUB','ispRLWAV05-AE','ispRLWAV05-SH') --NJOW01
                    AND TD.Status <> '0'
                    AND TD.Tasktype IN ('RPF'))
         BEGIN
@@ -101,7 +102,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV05]
     BEGIN
          DELETE TASKDETAIL
          WHERE TASKDETAIL.Wavekey = @c_Wavekey 
-         AND TASKDETAIL.Sourcetype IN ('ispRLWAV05-IFC','ispRLWAV05-TRA','ispRLWAV05-HUB','ispRLWAV05-AE') --NJOW01
+         AND TASKDETAIL.Sourcetype IN ('ispRLWAV05-IFC','ispRLWAV05-TRA','ispRLWAV05-HUB','ispRLWAV05-AE','ispRLWAV05-SH') --NJOW01
          AND TASKDETAIL.Tasktype IN ('RPF') 
          
          SELECT @n_err = @@ERROR
