@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenLabelNo_Wrapper                              */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,6 +31,8 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2020-03-06  Wan01    1.1   WMS-12330 - CN IKEA NormalPacking for SN  */
 /*                            order CR                                  */
+/* 2020-03-23  Wan02    1.2   Fixed. Not to gen label if previous or    */
+/*                            Fully Pack                                */
 /************************************************************************/
 CREATE PROC isp_GLBL20 ( 
          @c_PickSlipNo   NVARCHAR(10) 
@@ -53,7 +55,12 @@ BEGIN
          , @c_ShipperKey         NVARCHAR(15)   = ''
          , @c_Storerkey          NVARCHAR(15)   = ''
          , @c_CTNTrackNo         NVARCHAR(40)   = ''
-         , @n_CartonNo_New      INT            = ''
+         , @n_CartonNo_Last      INT            = 0      --(Wan02)
+         , @n_CartonNo_New       INT            = 0      --(Wan02)
+
+         , @n_QtyAllocated       INT            = 0      --(Wan02)
+         , @n_QtyPacked          INT            = 0      --(Wan02)
+         , @c_Loadkey            NVARCHAR(10)   = ''     --(Wan02)
   
    DECLARE @c_Identifier         NVARCHAR(2)    = ''  
          , @c_Packtype           NVARCHAR(1)    = ''  
@@ -82,15 +89,45 @@ BEGIN
    SET @c_Orderkey = ''
    SET @c_Storerkey= ''  
    SELECT @c_Orderkey = P.Orderkey  
-         ,@c_Storerkey= P.Storerkey  
+         ,@c_Storerkey= P.Storerkey
+         ,@c_Loadkey  = P.Loadkey  
    FROM PACKHEADER P WITH (NOLOCK)
    WHERE P.PickSlipNo = @c_PickSlipNo
-   
+
+   SET @n_QtyPacked = 0
+   SELECT @n_QtyPacked = ISNULL(SUM(PD.Qty),0)
+   FROM PACKDETAIL PD WITH (NOLOCK)
+   WHERE PD.PickSlipNo = @c_PickSlipNo
+         
    SET @c_ShipperKey = ''
-   SELECT @c_ShipperKey = O.ShipperKey
-         ,@c_CTNTrackNo = ISNULL(RTRIM(O.Userdefine04),'')
-   FROM ORDERS O WITH (NOLOCK)
-   WHERE O.Orderkey = @c_Orderkey
+   --(Wan02) - START
+   IF @c_Orderkey <> ''
+   BEGIN
+      SELECT @c_ShipperKey = O.ShipperKey
+            ,@c_CTNTrackNo = ISNULL(RTRIM(O.Userdefine04),'')
+      FROM ORDERS O WITH (NOLOCK)
+      WHERE O.Orderkey = @c_Orderkey
+
+      SET @n_QtyAllocated = 0
+      SELECT @n_QtyAllocated = ISNULL(SUM(PD.Qty),0)
+      FROM PICKDETAIL PD WITH (NOLOCK)
+      WHERE PD.Orderkey = @c_Orderkey
+   END
+   ELSE
+   BEGIN
+      SET @n_QtyAllocated = 0
+      SELECT @n_QtyAllocated = ISNULL(SUM(PD.Qty),0)
+      FROM ORDERS OH WITH (NOLOCK)
+      JOIN PICKDETAIL PD WITH (NOLOCK) ON OH.Orderkey = PD.Orderkey
+      WHERE OH.Loadkey = @c_Loadkey
+   END
+
+   IF @n_QtyAllocated = @n_QtyPacked -- Fully Packed
+   BEGIN
+      SET @c_LabelNo = 'ERROR'
+      GOTO QUIT_SP  
+   END
+   --(Wan02) - END
 
    SET @c_LabelNo = ''
    IF @c_ShipperKey = 'SN'
@@ -102,17 +139,24 @@ BEGIN
                   AND TaskBatchNo = ''
                 )
       BEGIN
-         SET @n_CartonNo_New = 0
-         SELECT TOP 1 @n_CartonNo_New = PD.CartonNo  
+         SET @n_CartonNo_Last = 0                           --(Wan02)
+         SELECT TOP 1 @n_CartonNo_Last = PD.CartonNo        --(Wan02)
          FROM PACKDETAIL PD WITH (NOLOCK)
          WHERE PD.PickSlipNo = @c_PickSlipNo
          ORDER BY PD.CartonNo DESC
 
-         SET @n_CartonNo_New = @n_CartonNo_New + 1
+         SET @n_CartonNo_New = @n_CartonNo_Last + 1         --(Wan02)
 
-         IF @n_CartonNo_New <> 1
+         IF @n_CartonNo_New <> 1  --- If First Carton, Use Tracking from ORDERS.UserDefine04
          BEGIN
             SET @c_CTNTrackNo = ''
+            --(Wan02) - START
+            IF @n_CartonNo_Last <> @n_CartonNo
+            BEGIN
+               SET @c_LabelNo = 'ERROR'
+               GOTO QUIT_SP  
+            END
+            --(Wan02) - END
      
             EXEC ispAsgnTNo2        
               @c_OrderKey    = @c_OrderKey           
@@ -124,7 +168,8 @@ BEGIN
             , @c_TrackingNo  = @c_CTNTrackNo OUTPUT         
         
             IF ISNULL(RTRIM(@c_CTNTrackNo),'') = ''        
-            BEGIN        
+            BEGIN      
+               SET @c_CTNTrackNo = 'ERROR'            --(Wan02)  
                SET @n_continue = 3        
                SET @n_err = 60010          
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Get Empty Tracking #. (isp_GLBL20)'         
