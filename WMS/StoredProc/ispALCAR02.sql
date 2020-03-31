@@ -83,7 +83,7 @@ BEGIN
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID AND ID.STATUS <> ''HOLD'')  
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOT.STATUS <> ''HOLD'')         
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT ' +     
-      CASE WHEN ISNULL(@c_WaveType,'') = 'S' THEN ' JOIN ##CARLOT ON LOT.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = ' + CAST(@@SPID AS NVARCHAR) + ' AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0 ' ELSE ' ' END +  --NJOW01      
+      CASE WHEN ISNULL(@c_WaveType,'') = 'S' THEN ' JOIN ##CARLOT(NOLOCK) ON LOT.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = ' + CAST(@@SPID AS NVARCHAR) + ' AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0 ' ELSE ' ' END +  --NJOW01      
     ' WHERE LOC.LocationFlag <> ''HOLD''  
       AND LOC.LocationFlag <> ''DAMAGE''  
       AND LOC.Status <> ''HOLD''
