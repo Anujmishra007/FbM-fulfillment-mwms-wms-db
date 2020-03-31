@@ -334,7 +334,7 @@ BEGIN
          DELETE #IDxLOC
          FROM #IDXLOC
          JOIN #LOTxLOCxID LLI ON #IDXLOC.ID = LLI.ID AND #IDXLOC.Loc = LLI.Loc
-         LEFT JOIN ##CARLOT ON LLI.Lot = ##CARLOT.Lot AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0 AND ##CARLOT.SP_ID = @@SPID 
+         LEFT JOIN ##CARLOT (NOLOCK) ON LLI.Lot = ##CARLOT.Lot AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0 AND ##CARLOT.SP_ID = @@SPID 
          WHERE ##CARLOT.Lot IS NULL          
       END
       ELSE
@@ -390,7 +390,7 @@ BEGIN
             AND QtyAvailable > 0
             AND NOT EXISTS (SELECT 1 
                             FROM #LOTxLOCxID LLI 
-                            LEFT JOIN ##CARLOT ON LLI.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = @@SPID                    
+                            LEFT JOIN ##CARLOT (NOLOCK) ON LLI.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = @@SPID                    
                             WHERE LLI.ID = #IDxLOC.ID 
                             AND LLI.Loc = #IDxLOC.Loc
                             GROUP BY LLI.Lot, ##CARLOT.Qty, ##CARLOT.QtyAllocated
@@ -532,7 +532,7 @@ BEGIN
                --NJOW02
                IF ISNULL(@c_WaveType,'') = 'S' 
                BEGIN 
-                  UPDATE ##CARLOT
+                  UPDATE ##CARLOT WITH (ROWLOCK)
                   SET QtyAllocated = QtyAllocated + @n_Pickqty
                   WHERE Lot = @c_Lot  
                   AND SP_ID = @@SPID

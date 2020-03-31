@@ -379,13 +379,13 @@ START:
       	 --Remove lot not reserved
       	 DELETE #UCCxLOTxLOCxID
          FROM #UCCxLOTxLOCxID
-         LEFT JOIN ##CARLOT ON #UCCxLOTxLOCxID.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = @@SPID AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0
+         LEFT JOIN ##CARLOT (NOLOCK) ON #UCCxLOTxLOCxID.Lot = ##CARLOT.Lot AND ##CARLOT.SP_ID = @@SPID AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0
          WHERE ##CARLOT.Lot IS NULL          
          
          --loop to remove ucc not suffience qty with reserved lot        
          DECLARE CURSOR_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
             SELECT ##CARLOT.Lot, ##CARLOT.Qty - ##CARLOT.QtyAllocated AS QtyAvailable
-            FROM ##CARLOT 
+            FROM ##CARLOT (NOLOCK) 
             WHERE ##CARLOT.SP_ID= @@SPID 
             AND ##CARLOT.Qty - ##CARLOT.QtyAllocated > 0
             ORDER BY ##CARLOT.Lot
@@ -1086,7 +1086,7 @@ START:
                         --NJOW02
                         IF ISNULL(@c_WaveType,'') = 'S' 
                         BEGIN 
-                           UPDATE ##CARLOT
+                           UPDATE ##CARLOT WITH (ROWLOCK)
                            SET QtyAllocated = QtyAllocated + @n_InsertQty
                            WHERE Lot = @c_Lot
                            AND SP_ID = @@SPID
