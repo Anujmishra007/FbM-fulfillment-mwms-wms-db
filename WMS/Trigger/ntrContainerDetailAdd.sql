@@ -40,10 +40,11 @@ GO
 /*                              prevent same ContainerLineNumber        */
 /*                              being assigned concurrently             */  
 /*                              (Vicky01)                               */  
+/* 30-Mar-2020  kocy      1.3   Skip when data move from Archive (kocy01)  */
 /************************************************************************/  
 
-CREATE TRIGGER ntrContainerDetailAdd
- ON  CONTAINERDETAIL
+CREATE TRIGGER [dbo].[ntrContainerDetailAdd]
+ ON  [dbo].[CONTAINERDETAIL]
  FOR INSERT
  AS
  BEGIN
@@ -70,6 +71,17 @@ CREATE TRIGGER ntrContainerDetailAdd
 
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
       /* #INCLUDE <TRCONDA1.SQL> */     
+ 
+ -- kocy01(s)
+ IF @n_continue=1 or @n_continue=2  
+ BEGIN
+    IF EXISTS (SELECT 1 FROM INSERTED WHERE ArchiveCop = "9")
+    BEGIN
+       SELECT @n_continue = 4
+    END
+ END
+ --kocy01(e)
+
  IF @n_continue=1 or @n_continue=2
  BEGIN
      IF EXISTS (SELECT 1 FROM CONTAINER WITH (NOLOCK)

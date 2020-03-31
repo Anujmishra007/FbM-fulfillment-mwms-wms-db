@@ -7,6 +7,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
+/* 31-Mar-2020  kocy      1.1   Skip when data move from Archive (kocy01)  */
 CREATE TRIGGER ntrPalletHeaderAdd
  ON  Pallet
  FOR INSERT
@@ -29,6 +30,17 @@ CREATE TRIGGER ntrPalletHeaderAdd
  ,         @n_cnt int                  
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
       /* #INCLUDE <TRPALHA1.SQL> */     
+      
+ -- kocy01(s)
+ IF @n_continue=1 or @n_continue=2  
+ BEGIN
+    IF EXISTS (SELECT 1 FROM INSERTED WHERE ArchiveCop = "9")
+    BEGIN
+       SELECT @n_continue = 4
+    END
+ END
+ --kocy01(e)
+ 
  IF @n_continue=1 or @n_continue=2
  BEGIN
  IF EXISTS (SELECT * FROM INSERTED WHERE Status = "9")
