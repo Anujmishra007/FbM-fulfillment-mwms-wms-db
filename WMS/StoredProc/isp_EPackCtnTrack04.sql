@@ -27,7 +27,7 @@ GO
 /*                                                                      */        
 /* Updates:                                                             */        
 /* Date        Author   Ver   Purposes                                  */        
-/*                                                                      */        
+/* 2020-03-25  Wan01    1.1   Ikea Fixed Issue - Duplicate Tracking#    */          
 /************************************************************************/        
 CREATE PROC [dbo].[isp_EPackCtnTrack04]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -52,7 +52,9 @@ BEGIN
          , @c_Storerkey    NVARCHAR(15)        
         
          , @c_Shipperkey   NVARCHAR(10)        
-         , @c_ShipperName  NVARCHAR(250)        
+         , @c_ShipperName  NVARCHAR(250) 
+         
+         , @c_TrackingNo   NVARCHAR(20) = ''       
         
    SET @n_StartTCnt = @@TRANCOUNT        
    SET @n_Continue = 1        
@@ -72,7 +74,7 @@ BEGIN
         
    SET @c_Orderkey = ''        
    SELECT @c_Orderkey = Orderkey         
-         ,@c_Storerkey= Storerkey        
+         ,@c_Storerkey= Storerkey 
    FROM PACKHEADER WITH (NOLOCK)        
    WHERE PickSlipNo = @c_PickSlipNo        
         
@@ -81,7 +83,8 @@ BEGIN
       GOTO QUIT_SP        
    END           
   
-   SELECT @c_Shipperkey = ShipperKey      
+   SELECT @c_Shipperkey = ShipperKey   
+         ,@c_TrackingNo = ISNULL(UserDefine04,'')  --(Wan01)      
    FROM ORDERS WITH (NOLOCK)       
    WHERE OrderKey = @c_Orderkey       
       
@@ -91,17 +94,24 @@ BEGIN
    END  
   
    SET @n_Cnt = 0        
-                              
-   IF EXISTS ( SELECT 1        
-               FROM PACKINFO WITH (NOLOCK)        
-               WHERE PickSlipNo = @c_PickSlipNo        
-               AND  RefNo = @c_CTNTrackNo        
-               AND  CartonNo = @n_CartonNo        
-             )        
-   BEGIN        
-      GOTO QUIT_SP        
-   END        
-        
+   
+   IF @c_TrackingNo <> @c_CTNTrackNo               --(Wan01)
+   BEGIN
+      IF EXISTS ( SELECT 1        
+                  FROM PACKINFO PIF WITH (NOLOCK)        
+                  WHERE PIF.PickSlipNo = @c_PickSlipNo        
+                  AND  PIF.RefNo = @c_CTNTrackNo        
+                  AND  PIF.CartonNo = @n_CartonNo      
+                  AND  EXISTS (  SELECT 1 FROM CARTONTRACK CT WITH (NOLOCK)
+                                 WHERE CT.TrackingNo = PIF.RefNo
+                                 AND LabelNo = @c_Orderkey
+                              )
+                )        
+      BEGIN        
+         GOTO QUIT_SP        
+      END        
+   END
+          
    BEGIN TRAN        
    SET @c_CTNTrackNo = ''        
    EXEC ispAsgnTNo2        
