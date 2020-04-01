@@ -1,12 +1,10 @@
-IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_BatchSKUProcessing]  ')
-              and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_BatchSKUProcessing]  
+if exists (select * from dbo.sysobjects where id = object_id('dbo.isp_BatchSKUProcessing') and sysstat & 0xf = 4)
+	drop procedure dbo.isp_BatchSKUProcessing
 GO
-
-SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
+SET ANSI_NULLS OFF 
+GO  
 
 /************************************************************************/  
 /* Stored Procedure: isp_BatchSKUProcessing                             */  
@@ -41,7 +39,7 @@ GO
 /* 23-JUL-2019  Wan02   2.1   ChannelInventoryMgmt use nspGetRight2     */  
 /* 23-JUL-2019  Wan03   2.1   WMS - 9914 [MY] JDSPORTSMY - Channel      */  
 /*                            Inventory Ignore QtyOnHold - CR           */  
-/* 25-Mar-2020  Shong   2.2   Add HostWHCOde                            */  
+/* 25-Mar-2020  Shong   2.2   WMS-12596 TW Add HostWHCOde               */  
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -71,7 +69,7 @@ BEGIN
             @c_ToLoc                 NVARCHAR(10),  
             @n_Fetch_Status          INT,  
             @c_Lottable01            NVARCHAR(18),  
-            @c_Lottable02            NVARCHAR(18),  
+            @c_Lottable02     NVARCHAR(18),  
             @c_Lottable03            NVARCHAR(18),  
             @d_Lottable04            DATETIME,  
    @d_Lottable05            DATETIME,  
@@ -348,7 +346,7 @@ BEGIN
          INSERT #OPORDERLINES  
          SELECT  [PREALLOCATEPICKDETAIL].[PreAllocatePickDetailKey],  
             [PREALLOCATEPICKDETAIL].[OrderKey],  
-            [PREALLOCATEPICKDETAIL].[OrderLineNumber],  
+            [PREALLOCATEPICKDETAIL].[OrderLineNumber], 
             [PREALLOCATEPICKDETAIL].[Storerkey],  
             [PREALLOCATEPICKDETAIL].[Sku],  
             [PREALLOCATEPICKDETAIL].[Lot],  
@@ -417,7 +415,7 @@ BEGIN
             END,   
             ISNULL(OD.Channel, ''),  
             OD.Lottable01  -- HostWHCode                                       
-         FROM ORDERDETAIL OD WITH (NOLOCK)  
+         FROM ORDERDETAIL OD WITH (NOLOCK) 
          JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = OD.StorerKey AND SKU.Sku = OD.Sku  
          JOIN STRATEGY (NOLOCK) ON Strategy.StrategyKey = CASE WHEN @c_Strategy = '' THEN SKU.StrategyKey ELSE @c_Strategy END   
          JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = OD.OrderKey  
@@ -507,7 +505,7 @@ BEGIN
                  @c_preallocationgrouping = preallocationgrouping,  
                  @c_preallocationsort = preallocationsort,      
                  @c_waveoption = waveoption,   
-                 @n_batchpickmaxcube = batchpickmaxcube,  
+        @n_batchpickmaxcube = batchpickmaxcube,  
                  @n_batchpickmaxcount = batchpickmaxcount,  
                  @c_workoskey = OrderSelectionkey  
          FROM OrderSelection (NOLOCK)   
@@ -826,7 +824,7 @@ BEGIN
                   O.Lottable01, O.Lottable02, O.Lottable03, O.Lottable04, O.Lottable05,  
                   O.Lottable06, O.Lottable07, O.Lottable08, O.Lottable09, O.Lottable10,         
                   O.Lottable11, O.Lottable12, O.Lottable13, O.Lottable14, O.Lottable15,          
-                  SUM(#OPORDERLINES.LooseQty),   
+      SUM(#OPORDERLINES.LooseQty),   
                   ISNULL(O.Channel,''),  
                   #OPORDERLINES.HostWHCode    
               FROM #OPORDERLINES  
@@ -1108,7 +1106,7 @@ BEGIN
   
                SELECT @n_PalletQty = Pallet, @c_CartonizePallet = CartonizeUOM4,  
                       @n_CaseQty = CaseCnt, @c_CartonizeCase = CartonizeUOM1,  
-                      @n_InnerPackQty = InnerPack, @c_CartonizeInner = CartonizeUOM2,  
+                 @n_InnerPackQty = InnerPack, @c_CartonizeInner = CartonizeUOM2,  
                       @n_OtherUnit1 = CONVERT(INT,OtherUnit1), @c_CartonizeOther1 = CartonizeUOM8,  
                       @n_OtherUnit2 = CONVERT(INT,OtherUnit2), @c_CartonizeOther2 = CartonizeUOM9,  
                       @c_CartonizeEA = CartonizeUOM3  
@@ -1257,7 +1255,7 @@ BEGIN
                   ELSE  
                   BEGIN  
   
-                     IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101'  
+IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101'  
                         SELECT @c_Lottable04 = ''  
                      ELSE  
                         SELECT @c_Lottable04 = CONVERT(VARCHAR(20), @d_Lottable04, 112)  
@@ -1317,7 +1315,7 @@ BEGIN
                                     WHEN '@c_Lottable03' THEN ',@c_Lottable03 = N''' + RTRIM(@c_Lottable03) + ''''   
                                     WHEN '@d_Lottable04' THEN ',@d_Lottable04 = N''' + @c_Lottable04 + ''''    
                                     WHEN '@c_Lottable04' THEN ',@c_Lottable04 = N''' + @c_Lottable04 + ''''    
-                                    WHEN '@d_Lottable05' THEN ',@d_Lottable05 = N''' + @c_Lottable05 + ''''    
+                 WHEN '@d_Lottable05' THEN ',@d_Lottable05 = N''' + @c_Lottable05 + ''''    
                                     WHEN '@c_Lottable05' THEN ',@c_Lottable05 = N''' + @c_Lottable05 + ''''    
                                     WHEN '@c_Lottable06' THEN ',@c_Lottable06 = N''' + RTRIM(@c_Lottable06) + ''''   
                                     WHEN '@c_Lottable07' THEN ',@c_Lottable07 = N''' + RTRIM(@c_Lottable07) + ''''   
@@ -1368,7 +1366,7 @@ BEGIN
                                     + ',' + '@c_HostWHCode=N''' + RTRIM(@c_HostWHCode) + '''' + ',' + RTRIM(@c_EndString)  
                         END  
   
-                        --Select @c_sAllocatePickCode '@c_sAllocatePickCode', @c_EndString '@c_EndString' -- testing  
+    --Select @c_sAllocatePickCode '@c_sAllocatePickCode', @c_EndString '@c_EndString' -- testing  
                         IF EXISTS(SELECT 1  
                                   FROM sys.parameters AS p  
                                   JOIN sys.types AS t ON t.user_type_id = p.user_type_id  
@@ -1517,7 +1515,7 @@ BEGIN
                            SET @n_LotAvailableQty = 0  
                            SELECT @n_LotAvailableQty = Qty - QtyAllocated - QtyPicked - QtyPreAllocated  
                            FROM LOT (NOLOCK)   
-                           WHERE Lot = @c_aLOT     
+  WHERE Lot = @c_aLOT     
               
                            IF @n_cQtyAvailable > @n_LotAvailableQty   
                               SET @n_cQtyAvailable = @n_LotAvailableQty    
@@ -1914,7 +1912,7 @@ BEGIN
                              
                               SELECT TOP 1 @c_PickLoc = LOC  
                               FROM #OP_PickLocType  
-                              ORDER BY LOC                             
+                              ORDER BY LOC         
                            END  
                              
                            INSERT #OP_PICKLOCS (StorerKey, Sku, Loc, LocationType)  
@@ -1998,7 +1996,7 @@ BEGIN
                         SELECT @n_UOMQty = @n_QtyToTake / @n_cPackQty  
   
                         IF @b_debug = 1 OR @b_debug = 2  
-                        BEGIN  
+                   BEGIN  
                            PRINT '     Location: ' + RTRIM(@c_cLOC) + ' Pallet ID: ' + @c_cid  
                            PRINT '     Qty To Take: ' + CAST(@n_QtyToTake AS NVARCHAR(10))  
                            PRINT '     Qty Left: ' + CAST(@n_aQtyLeftToFulfill AS NVARCHAR(10))  
@@ -2083,7 +2081,7 @@ BEGIN
                ELSE 'N'  
             END  
   
-            IF @b_debug = 1  
+          IF @b_debug = 1  
             BEGIN  
                PRINT ''  
               PRINT '**** Try If Qty Remain (ON) ****'  
@@ -2181,7 +2179,7 @@ BEGIN
            
          IF @c_PostAllocationSP <> '' AND (@c_OrderStatus = '2' OR (@c_OrderStatus = '1' AND @c_Option1 = 'AllowPartialAllocate'))  -- (SWT01)      
          BEGIN  
-            IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')              
+   IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')              
                OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP)   
             BEGIN  
                SET @b_Success = 0     
@@ -2374,7 +2372,7 @@ BEGIN
           ORDER BY ORDERS.Priority, --NJOW03  
                      CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
                      CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                                                           / PACK.CaseCnt) ELSE 0 END DESC, --NJOW03  
+                       / PACK.CaseCnt) ELSE 0 END DESC, --NJOW03  
                      CASE WHEN PACK.InnerPack > 0 THEN FLOOR(CASE WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
                                                                   WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
                                                              / PACK.InnerPack) ELSE 0 END DESC, --NJOW03  
@@ -2479,7 +2477,7 @@ BEGIN
                                             WHEN OD.Lottable15 = LA.Lottable15  
                              THEN 1  
                                             ELSE 0  
-                                       END  
+              END  
                             )  
                ORDER BY ORDERS.Priority, --NJOW03  
                         CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
@@ -2693,9 +2691,8 @@ BEGIN
    BEGIN  
       GOTO RETURNFROMUPDATEINV_02  
    END  
-END  
+END 
 GO
 
-
-GRANT EXECUTE ON [dbo].[isp_BatchSKUProcessing]   TO NSQL 
+GRANT EXECUTE ON isp_BatchSKUProcessing To nSQL
 GO
