@@ -29,6 +29,7 @@ GO
 /* 29-Aug-2019  NJOW01  1.0   WMS-9366 add allocation logic for order   */
 /*                            type BQ and HOME                          */
 /* 02-OCT-2019  NJOW02  1.1   WMS-9366 add NESCOFEEB filtering          */
+/* 05-MAR-2020  NJOW04  1.3   WMS-12734 Order not allocate cross PAZONE */
 /************************************************************************/      
 CREATE  PROC [dbo].[nspALNPSO1]          
    @c_DocumentNo NVARCHAR(10),    
@@ -81,8 +82,11 @@ BEGIN
            @C_OrderType          NVARCHAR(10),
            @c_Wavekey            NVARCHAR(10),
            @c_PAZones            NVARCHAR(500),
-           @c_UserDefine02       NVARCHAR(20)  
-  
+           @c_UserDefine02       NVARCHAR(20),
+           @n_SkuMinShelfLife    INT,
+           @n_SkuShelfLife       INT,
+           @c_OrderPAzone        NVARCHAR(10) --NJOW04  
+    
    SET @n_QtyAvailable = 0            
    SET @c_OtherValue = '1'   
    SET @n_QtyToTake = 0  
@@ -179,13 +183,27 @@ BEGIN
                AND EXISTS(SELECT 1 
                           FROM ORDERS O (NOLOCK)
                           JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+                          JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku --NJOW04
                           WHERE O.Orderkey = WD.Orderkey
                           AND O.Type IN('HOME','OOH')
-                          AND OD.Sku = @c_Sku)
+                          AND SKU.SkuGroup = @c_SkuGroup) --NJOW04
+                          --AND OD.Sku = @c_Sku)
                ) S
          WHERE S.orderkey = @c_Orderkey
       END         	
    END
+   
+   --NJOW04
+   IF @C_OrderType IN('HOME','OOH') AND ISNULL(@c_PAZones,'') = ''
+   BEGIN
+      SELECT TOP 1 @c_OrderPAzone = LOC.Putawayzone 
+      FROM PICKDETAIL PD (NOLOCK) 
+      JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
+      AND PD.Orderkey = @c_Orderkey
+      
+      IF ISNULL(@c_OrderPAzone,'') <> ''
+         SET @c_PAZones = @c_OrderPAzone           
+   END    
   
    --for NESCOFEE
    IF ISNULL(@c_PAZones,'') <> ''
@@ -195,7 +213,7 @@ BEGIN
    ELSE
       SET @c_PAZones = ' AND Loc.Putawayzone IN ( ''AIRCON'', ''PTLB2BZONE'', ''PTLB2CZONE'') '
   
-   SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)  
+   SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)  
    JOIN Storer (nolock) ON Sku.Storerkey = Storer.Storerkey  
    WHERE Sku.Sku = @c_sku  
