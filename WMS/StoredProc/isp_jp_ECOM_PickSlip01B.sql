@@ -25,9 +25,11 @@ GO
 /* Updates:                                                                   */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2019/08/09   LCHuang   1.0   Add Packinginstruction info for DW   (H01)    */
-/* 2020/01/06   WLChooi   1.1   WMS-11538 - Add remark (WL01)                 */   --Not yet go live, comment out WL01 code
+/* 2020/01/06   WLChooi   1.1   WMS-11538 - Add remark (WL01)                 */   --Not yet go live, comment out WL01 code     
 /* 2020/03/20   WLChooi   1.2   WMS-12588 - Add ReportCFG to show Orderkey    */
 /*                              Barcode (WL02)                                */
+/* 2020/04/03   WLChooi   1.3   WMS-12588 - Add ReportCFG to show             */
+/*                              Pickdetail.ID (WL03)                          */
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_jp_ECOM_PickSlip01B]
@@ -74,7 +76,9 @@ BEGIN
     SKUDESCR            NVARCHAR(90),
     LWDESCR             NVARCHAR(30),
     --Remark              NVARCHAR(250),  --WL01
-    ShowOrderkeyBarcode NVARCHAR(10) )  --WL02
+    ShowOrderkeyBarcode NVARCHAR(10),   --WL02
+    ShowPickdetailID    NVARCHAR(10),   --WL03
+    ID                  NVARCHAR(18) )  --WL03
    
    SELECT ROW_NUMBER() OVER (ORDER BY OrderKey) AS OrderNo,Orderkey as orderkey,LoadKey as loadkey
    INTO #Temp1
@@ -91,6 +95,8 @@ BEGIN
         , ISNULL(D.UserDefine03, '') AS [LWCODE]  --H01
         --, Remark = CLK.Remark    --WL01
         , ShowOrderkeyBarcode = ISNULL(CLK2.Short,'N')   --WL02
+        , ShowPickdetailID = ISNULL(CLK3.Short,'N')      --WL03
+        , b.ID   --WL03
    INTO #TEMP2
    FROM Orders a WITH (NOLOCK)
    JOIN PickDetail b (NOLOCK) ON a.OrderKey = b.OrderKey
@@ -102,6 +108,8 @@ BEGIN
                                  AND CL.Short = 'Y' AND CL.LISTNAME = 'DWPCKLBL') AS CLK*/              --WL01
    LEFT JOIN CODELKUP CLK2 (NOLOCK) ON CLK2.LISTNAME = 'REPORTCFG' AND CLK2.Code = 'ShowOrderkeyBarcode' 
                                    AND CLK2.Long = 'r_jp_ecom_pickslip01b' AND CLK2.Storerkey = @storerkey  --WL02
+   LEFT JOIN CODELKUP CLK3 (NOLOCK) ON CLK3.LISTNAME = 'REPORTCFG' AND CLK3.Code = 'ShowPickdetailID' 
+                                   AND CLK3.Long = 'r_jp_ecom_pickslip01b' AND CLK3.Storerkey = @storerkey  --WL03
    WHERE a.Storerkey = @storerkey
      and a.Loadkey  = CASE WHEN ISNULL(@loadkey, '') = '' THEN  a.Loadkey  ELSE  @loadkey  END --H01
      and a.OrderKey = CASE WHEN ISNULL(@orderkey,'') = '' THEN  a.OrderKey ELSE  @orderkey END
@@ -112,6 +120,8 @@ BEGIN
           , D.UserDefine03
           --, CLK.Remark  --WL01
           , ISNULL(CLK2.Short,'N') --WL02
+          , ISNULL(CLK3.Short,'N') --WL03
+          , b.ID   --WL03
    
    SELECT
       a.orderkey,a.sku,a.logicallocation,a.loc,[qty]=1,a.externlineno,a.skudescr,a.score
@@ -120,6 +130,8 @@ BEGIN
         ELSE ISNULL(a.[LWCODE],'')  END  AS [LWDESCR]
       --, a.Remark    --WL01
       , a.ShowOrderkeyBarcode   --WL02
+      , a.ShowPickdetailID      --WL03
+      , a.ID   --WL03
    INTO #TEMP3
    FROM #TEMP2 AS A(NOLOCK)
    INNER JOIN [master].dbo.spt_values AS M(NOLOCK) ON a.qty > m.number
@@ -132,14 +144,17 @@ BEGIN
           LWDESCR,            Qty,                Loc,                        Loadkey,--H01
            ExternLineNo,      LineNumber,         TotalLines,                 SKUDESCR,
            --Remark,      --WL01
-           ShowOrderkeyBarcode )      --WL02
+           ShowOrderkeyBarcode,     --WL02
+           ShowPickdetailID, ID  )      --WL03
    SELECT  t1.OrderNo,        t1.OrderKey,        t2.LogicalLocation,         t2.SKU,
            t2.LWDESCR,        t2.Qty,             t2.Loc,                     t1.LoadKey,--H01
            t2.ExternLineNo,
-           ROW_NUMBER() OVER (ORDER BY t2.Score,t2.LogicalLocation,t2.Loc,t1.OrderKey),
+           CASE WHEN t2.ShowPickdetailID = 'Y' THEN ROW_NUMBER() OVER (ORDER BY t2.LogicalLocation,t2.Loc)                             --WL03
+                                               ELSE ROW_NUMBER() OVER (ORDER BY t2.Score,t2.LogicalLocation,t2.Loc,t1.OrderKey) END,   --WL03
            0,   t2.SKUDESCR,
            --t2.Remark,    --WL01
-           t2.ShowOrderkeyBarcode   --WL02
+           t2.ShowOrderkeyBarcode,      --WL02
+           t2.ShowPickdetailID, t2.ID   --WL03
    FROM #TEMP1 AS t1 JOIN #TEMP3 AS t2 ON t1.orderkey = t2.orderkey
    
    SELECT @TotalLines = COUNT(*)
@@ -185,7 +200,8 @@ BEGIN
          A.ExternLineNo,       A.LineNumber,         A.TotalLines,                 A.SKUDESCR,
          '',
          --A.Remark,  --WL01
-         A.ShowOrderkeyBarcode 
+         A.ShowOrderkeyBarcode,         --WL02 
+         A.ShowPickdetailID, A.ID       --WL03
       FROM #HM_Label1 AS A(NOLOCK)
       ORDER BY A.LineNumber
    END
@@ -199,7 +215,8 @@ BEGIN
          A.ExternLineNo,       A.LineNumber,         A.TotalLines,                 A.SKUDESCR,
          B.pickheaderkey,
          --A.Remark,   --WL01
-         A.ShowOrderkeyBarcode   --WL02
+         A.ShowOrderkeyBarcode,         --WL02
+         A.ShowPickdetailID, A.ID       --WL03
       FROM #HM_Label1 AS A(NOLOCK)
       JOIN  PICKHEADER AS B (NOLOCK) ON A.ORDERKEY = B.ORDERKEY
       ORDER BY A.LineNumber
