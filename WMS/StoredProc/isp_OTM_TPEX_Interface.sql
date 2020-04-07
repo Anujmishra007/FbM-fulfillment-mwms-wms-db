@@ -41,9 +41,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver. Purposes                                   */
+/* 11-Feb-2020  CSCHONG 1.0  WMS-12015 revised field logic (CS01)       */
 /************************************************************************/
 
-CREATE  PROC   isp_OTM_TPEX_Interface
+CREARE  PROC   isp_OTM_TPEX_Interface
                @c_TableName      NVARCHAR(30)
 ,              @c_Key1           NVARCHAR(10)
 ,              @c_Key2           NVARCHAR(5)
@@ -65,6 +66,18 @@ DECLARE @n_continue int,
 
 DECLARE @c_trmlogkey NVARCHAR(10)
 
+/*CS01 START*/
+
+DECLARE @c_SORCMNVOTM   NVARCHAR(5)
+       ,@c_Facility     NVARCHAR(5)
+	   ,@c_storerkey    NVARCHAR(20)
+	   ,@c_orderkey     NVARCHAR(20)
+
+
+	   SET @c_SORCMNVOTM = '0'
+
+/*CS01 END*/
+
 SELECT @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0, @n_err=0, @c_errmsg=''
 
 IF ISNULL(@c_Key1,'') = ''
@@ -72,10 +85,41 @@ BEGIN
    RETURN
 END
 
+
 SELECT @c_Key2 = ISNULL(@c_Key2,'')
 SELECT @c_Key3 = ISNULL(@c_Key3,'')
 SELECT @c_TransmitFlag = ISNULL(@c_TransmitFlag,'0')
 SELECT @c_TransmitBatch = ISNULL(@c_TransmitBatch,'')
+
+
+/*CS01 START*/
+
+SET @c_orderkey = ''
+SET @c_storerkey = ''
+
+IF @c_TableName = 'SORCMOTM' 
+BEGIN
+
+   SELECT @c_Storerkey = storerkey
+   FROM ORDERS OH WITH (NOLOCK)
+   where OH.Orderkey = @c_key1
+
+END
+
+SELECT @c_SORCMNVOTM = svalue
+FROM STORERCONFIG (NOLOCK)
+WHERE Configkey = 'SORCMNVOTM'
+AND Storerkey = @c_Storerkey
+
+IF @c_SORCMNVOTM = '1'
+BEGIN
+
+ SET @c_TableName = 'SORCMNVOTM'
+ SET @c_key3 = @c_Storerkey
+
+END
+
+/*CS01 END*/
 
 IF @n_continue=1 or @n_continue=2
 BEGIN
