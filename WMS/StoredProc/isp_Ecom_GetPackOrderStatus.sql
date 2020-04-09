@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 21-SEP-2016 Wan01    1.1   Performance Tune                          */
+/* 01-Apr-2020 WLChooi  1.2   Add SKU.Descr (WL01)                      */
 /************************************************************************/
 CREATE PROC isp_Ecom_GetPackOrderStatus 
             @c_TaskBatchNo NVARCHAR(10)
@@ -116,16 +117,19 @@ BEGIN
          ,QtyPacked = ISNULL(SUM(PD.Qty),0)
          ,Packed = CASE WHEN  PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END  
          ,rowfocusindicatorcol = '    '
+         ,S.Descr   --WL01
    FROM PACKTASKDETAIL  PTD WITH (NOLOCK) 
    LEFT JOIN PACKDETAIL PD  WITH (NOLOCK) ON (PTD.PickSlipNo = PD.PickSlipNo) 
                                           AND(PTD.Storerkey = PD.Storerkey)
                                           AND(PTD.Sku = PD.Sku)
+   JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU   --WL01
    WHERE PTD.TaskBatchNo = @c_TaskBatchNo
    AND   PTD.Orderkey = @c_Orderkey  
    GROUP  BY PTD.Orderkey
          ,PTD.Storerkey
          ,PTD.Sku
          ,PTD.QtyAllocated
+         ,S.Descr   --WL01
 
 QUIT_SP:
   
