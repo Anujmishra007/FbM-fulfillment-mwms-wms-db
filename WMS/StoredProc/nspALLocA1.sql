@@ -6,7 +6,6 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-
 /************************************************************************/
 /* Stored Procedure: nspALLocA1                                         */
 /* Creation Date:                                                       */
@@ -17,15 +16,16 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 7-May-15     TLTING        Std Parameter name                        */
+/* Date        Author   Ver.  Purposes                                  */
+/* 7-May-15    TLTING         Std Parameter name                        */
+/* 02-Jan-2020 Wan01    1.2   Dynamic SQL review, impact SQL cache log  */ 
 /************************************************************************/
 
 CREATE  PROC  nspALLocA1
@@ -42,7 +42,8 @@ BEGIN
     DECLARE @n_ConsigneeMinShelfLife int,
             @c_LimitString           nvarchar(512) 
    
-    DECLARE @c_OrderKey         NVARCHAR(10) 
+    DECLARE @c_OrderKey          NVARCHAR(10) 
+         ,  @c_SQLParms          NVARCHAR(4000) = ''     --(Wan01)   
     
     SET @c_OrderKey = @c_HostWHCode
     
@@ -55,7 +56,7 @@ BEGIN
 
        IF @n_ConsigneeMinShelfLife > 0 
        BEGIN
-          SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND DATEDIFF(day, GETDATE(), Lottable04) >= " + CAST(@n_ConsigneeMinShelfLife as NVARCHAR(10))
+          SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND DATEDIFF(day, GETDATE(), Lottable04) >= @n_ConsigneeMinShelfLife "  
        END
        ELSE
        BEGIN
@@ -67,9 +68,9 @@ BEGIN
 
    SELECT  @c_SQLStatement = "DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY " +
                              "FOR SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID, " +
-         "QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1' " + 
-   "FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK), SKUxLOC (NOLOCK), LOTAttribute (NOLOCK) " + 
-   "WHERE LOTxLOCxID.Lot = N'" + dbo.fnc_RTrim(@c_lot) + "'" + 
+      "QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1' " + 
+      "FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK), SKUxLOC (NOLOCK), LOTAttribute (NOLOCK) " + 
+      "WHERE LOTxLOCxID.Lot = @c_lot " + 
       "AND LOTxLOCxID.Loc = LOC.LOC " + 
       "AND LOTxLOCxID.Storerkey = SKUxLOC.Storerkey " + 
       "AND LOTxLOCxID.Sku = SKUxLOC.Sku " + 
@@ -78,12 +79,19 @@ BEGIN
       "AND LOC.Locationflag <> 'HOLD' " + 
       "AND LOC.Locationflag <> 'DAMAGE' " + 
       "AND LOC.Status <> 'HOLD' " + 
-      "AND LOC.Facility = N'" + dbo.fnc_RTrim(@c_Facility) + "'" +
+      "AND LOC.Facility = @c_Facility " +
       "AND LOTxLOCxID.LOT = LOTAttribute.LOT " +
       dbo.fnc_RTrim(@c_Limitstring) + " " + 
       "ORDER BY LOC.LOC " 
 
-   EXECUTE(@c_SQLStatement)
+   --(Wan01) - START                      
+   SET @c_SQLParms= N'@c_facility   NVARCHAR(5)'
+                  + ',@c_lot        NVARCHAR(10)'
+                  + ',@n_ConsigneeMinShelfLife INT'
+                    
+      
+   EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms, @c_facility, @c_lot, @n_ConsigneeMinShelfLife        
+   --(Wan01) - END   
 END
 GO
 

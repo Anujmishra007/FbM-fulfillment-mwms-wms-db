@@ -15,7 +15,7 @@ GO
 /*                                                                       */
 /* Called By: Exceed Allocate Orders                                     */
 /*                                                                       */
-/* PVCS Version: 1.1                                                     */
+/* PVCS Version: 1.3                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -27,6 +27,7 @@ GO
 /*                                           - Revise MinShelfLife60Mth  */
 /* 31-Aug-2018  NJOW01     1.2   WMS-6088 - Filter by hostwhcode based on*/
 /*                               loadplan.Load_Userdef1 and codelkup     */
+/* 02-Jan-2020  Wan01      1.3   Dynamic SQL review, impact SQL cache log*/ 
 /*************************************************************************/
 
 CREATE PROC nspPRFEFO1
@@ -77,6 +78,8 @@ SELECT @b_success = 0, @n_err = 0, @c_errmsg = "", @b_debug = 0, @c_manual = 'N'
 
 SELECT @c_UOMBase = @n_uombase
 
+DECLARE @c_SQLParms        NVARCHAR(4000) = ''  --(Wan01) 
+   
 --NJOW01 S
 IF EXISTS (SELECT 1  
            FROM CODELKUP (NOLOCK)
@@ -240,49 +243,49 @@ BEGIN
       SELECT @c_LimitString = ''
 
       IF @c_lottable01 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND Lottable01= N'" + ISNULL(LTRIM(RTRIM(@c_lottable01)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND Lottable01= @c_lottable01"  
 
       IF @c_lottable02 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable02= N'" + ISNULL(LTRIM(RTRIM(@c_lottable02)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable02= @c_lottable02"   
 
       IF @c_lottable03 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable03= N'" + ISNULL(LTRIM(RTRIM(@c_lottable03)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable03= @c_lottable03"   
 
       IF @d_lottable04 IS NOT NULL AND @d_lottable04 <> '1900-01-01'
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable04 = N'" + ISNULL(LTRIM(RTRIM(CONVERT(CHAR(20), @d_lottable04))),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable04 = @d_lottable04"  
 
       IF @d_lottable05 IS NOT NULL AND @d_lottable05 <> '1900-01-01'
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable05= N'" + ISNULL(LTRIM(RTRIM(CONVERT(CHAR(20), @d_lottable05))),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable05= @d_lottable05"   
 
       IF @c_lottable06 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable06= N'" + ISNULL(LTRIM(RTRIM(@c_lottable06)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable06= @c_lottable06"  
 
       IF @c_lottable07 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable07= N'" + ISNULL(LTRIM(RTRIM(@c_lottable07)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable07= @c_lottable07"   
 
       IF @c_lottable08 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable08= N'" + ISNULL(LTRIM(RTRIM(@c_lottable08)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable08= @c_lottable08"   
 
       IF @c_lottable09 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable09= N'" + ISNULL(LTRIM(RTRIM(@c_lottable09)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable09= @c_lottable09"   
 
       IF @c_lottable10 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable10= N'" + ISNULL(LTRIM(RTRIM(@c_lottable10)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable10= @c_lottable10"
 
       IF @c_lottable11 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable11= N'" + ISNULL(LTRIM(RTRIM(@c_lottable11)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable11= @c_lottable11"
 
       IF @c_lottable12 <> ' '
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable12= N'" + ISNULL(LTRIM(RTRIM(@c_lottable12)),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable12= @c_lottable12"
 
       IF @d_lottable13 IS NOT NULL AND @d_lottable13 <> '1900-01-01'
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable13 = N'" + ISNULL(LTRIM(RTRIM(CONVERT(CHAR(20), @d_lottable13))),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable13 = @d_lottable13"
 
       IF @d_lottable14 IS NOT NULL AND @d_lottable14 <> '1900-01-01'
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable14 = N'" + ISNULL(LTRIM(RTRIM(CONVERT(CHAR(20), @d_lottable14))),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable14 = @d_lottable14"
 
       IF @d_lottable15 IS NOT NULL AND @d_lottable15 <> '1900-01-01'
-         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable15 = N'" + ISNULL(LTRIM(RTRIM(CONVERT(CHAR(20), @d_lottable15))),'') + "'"
+         SELECT @c_LimitString = ISNULL(RTRIM(@c_LimitString),'') + " AND lottable15 = @d_lottable15"
 
       SELECT @c_Lottable04Label = ISNULL(LOTTABLE04LABEL, '')
       FROM  SKU (NOLOCK)
@@ -343,14 +346,14 @@ BEGIN
                ELSE
                   SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND convert(char(8),Lottable04, 112) >= N'"  + convert(char(8), DateAdd(DAY, @n_shelflife, getdate()), 112) + "'"
                */
-               SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= N'"  + CONVERT(CHAR(8), DATEADD(DAY, @n_shelflife, GETDATE()), 112) + "'"
+               SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= @n_shelflife"
             END
             ELSE
             BEGIN
                IF @n_shelflife < 13
-                  SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= N'"  + CONVERT(CHAR(8), DATEADD(MONTH, @n_shelflife, GETDATE()), 112) + "'"
+                  SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= @n_shelflife"
                ELSE
-                  SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= N'"  + CONVERT(CHAR(8), DATEADD(DAY, @n_shelflife, GETDATE()), 112) + "'"
+                  SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= @n_shelflife"
             END
 
             /*
@@ -367,14 +370,14 @@ BEGIN
          ELSE
          BEGIN
             -- IF Shelf Life not provided, filter Lottable04 < Today date
-            SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= N'" + CONVERT(CHAR(8), GETDATE(), 112) + "'"
+            SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND CONVERT(CHAR(8),Lottable04, 112) >= CONVERT(CHAR(8), GETDATE(), 112) "
          END
       END                                               
       
       --NJOW01     
       IF @c_FilterHOSTWHCode = 'Y' AND ISNULL(@c_Load_Userdef1,'') <> ''
       BEGIN       
-      	SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND LOC.HOSTWHCode = '" + RTRIM(@c_Load_Userdef1) + "' "
+      	SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND LOC.HOSTWHCode = @c_Load_Userdef1 "
       END
 
       IF @b_debug = 1
@@ -391,16 +394,16 @@ BEGIN
       SELECT @c_sql = " DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR " +
          " SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT," +
          " QTYAVAILABLE = CASE WHEN ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - " +
-          " SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) < " + @c_UOMBase +
+          " SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) < @n_UOMBase" +  
                   " THEN ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) " +
                        " - SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) " +
                   " WHEN ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - " +
-                        " SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) % " + @c_UOMBase + " = 0 " +
+                        " SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) % @n_UOMBase = 0 " +
                   " THEN ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) " +
                         " - SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) " +
                   " ELSE " +
                   " ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) " +
-                  " -  ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated,0))) % " + @c_UOMBase + " " +
+                  " -  ( SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated,0))) % @n_UOMBase " +  
                   " END " +
          " FROM LOT (NOLOCK) " +
          " INNER JOIN LOTXLOCXID (NOLOCK) ON LOT.LOT = LOTXLOCXID.LOT " +
@@ -412,30 +415,59 @@ BEGIN
          "             FROM   PreallocatePickdetail p (NOLOCK), ORDERS (NOLOCK), LOADPLAN (NOLOCK) " +
          "             WHERE  p.Orderkey = ORDERS.Orderkey " +
          "             AND    ORDERS.Loadkey = LOADPLAN.Loadkey " +
-         "             AND    LOADPLAN.Load_Userdef1 = N'" + @c_Load_Userdef1 + "' " +         
-         "             AND    p.SKU = N'" + @c_Sku + "'" +
-         "             AND    p.StorerKey = N'" + @c_StorerKey + "'" +
+         "             AND    LOADPLAN.Load_Userdef1 = @c_Load_Userdef1" +         
+         "             AND    p.SKU = @c_Sku" +
+         "             AND    p.StorerKey = @c_StorerKey" +
          "             AND    p.Qty > 0 " +
          "             GROUP BY p.Lot, ORDERS.Facility) As P ON LOTXLOCXID.Lot = P.Lot AND LOC.Facility = P.Facility " 
          ELSE
          " LEFT OUTER JOIN (SELECT p.Lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +
          "             FROM   PreallocatePickdetail p (NOLOCK), ORDERS (NOLOCK) " +
          "             WHERE  p.Orderkey = ORDERS.Orderkey " +
-         "             AND    p.SKU = N'" + @c_Sku + "'" +
-         "             AND    p.StorerKey = N'" + @c_StorerKey + "'" +
+         "             AND    p.SKU = @c_Sku" +
+         "             AND    p.StorerKey = @c_StorerKey" +
          "             AND    p.Qty > 0 " +
          "             GROUP BY p.Lot, ORDERS.Facility) As P ON LOTXLOCXID.Lot = P.Lot AND LOC.Facility = P.Facility " 
          END +
-         " WHERE LOTXLOCXID.STORERKEY = N'" + @c_StorerKey + "'" + " AND LOTXLOCXID.SKU = N'" + @c_Sku + "' " +
+         " WHERE LOTXLOCXID.STORERKEY = @c_StorerKey AND LOTXLOCXID.SKU = @c_Sku " +
          " AND LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK'  And LOC.LocationFlag = 'NONE' " +
-         " AND LOC.FACILITY = N'" + @c_facility + "'"  +
-         " AND LOTATTRIBUTE.STORERKEY = N'" + @c_StorerKey + "'" + " AND LOTATTRIBUTE.SKU = N'" + @c_Sku + "' " +
+         " AND LOC.FACILITY = @c_facility "  +
+         " AND LOTATTRIBUTE.STORERKEY = @c_StorerKey AND LOTATTRIBUTE.SKU = @c_Sku " +
          @c_LimitString + " " +
          " GROUP BY LOT.LOT , LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable05 " +
-         " HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(ISNULL(P.QtyPreAllocated, 0))) >= " + @c_UOMBase + " " +
+         " HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(ISNULL(P.QtyPreAllocated, 0))) >= @n_UOMBase " +
          @c_SortOrder
 
-      EXEC (@c_sql)
+      --Wan01 - START
+      --EXEC (@c_sql)
+      SET @c_SQLParms= N'@c_facility   NVARCHAR(5)'
+                     + ',@c_storerkey  NVARCHAR(15)'
+                     + ',@c_SKU        NVARCHAR(20)'
+                     + ',@c_Lottable01 NVARCHAR(18)'
+                     + ',@c_Lottable02 NVARCHAR(18)'
+                     + ',@c_Lottable03 NVARCHAR(18)'
+                     + ',@d_lottable04 datetime'
+                     + ',@d_lottable05 datetime'
+                     + ',@c_Lottable06 NVARCHAR(30)'
+                     + ',@c_Lottable07 NVARCHAR(30)'
+                     + ',@c_Lottable08 NVARCHAR(30)'
+                     + ',@c_Lottable09 NVARCHAR(30)'
+                     + ',@c_Lottable10 NVARCHAR(30)'
+                     + ',@c_Lottable11 NVARCHAR(30)'
+                     + ',@c_Lottable12 NVARCHAR(30)'
+                     + ',@d_lottable13 datetime'
+                     + ',@d_lottable14 datetime'
+                     + ',@d_lottable15 datetime'
+                     + ',@n_shelflife  int'
+                     + ',@n_UOMBase    int'
+                     + ',@c_Load_Userdef1 NVARCHAR(20)'
+      
+      EXEC sp_ExecuteSQL @c_SQL, @c_SQLParms, @c_facility, @c_storerkey, @c_SKU
+                        ,@c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
+                        ,@c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
+                        ,@c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
+                        ,@n_shelflife, @n_UOMBase, @c_Load_Userdef1 
+      --Wan01 - END
 
       IF @b_debug = 1 SELECT @c_sql
    END
