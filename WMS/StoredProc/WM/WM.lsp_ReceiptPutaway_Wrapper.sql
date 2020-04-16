@@ -13,7 +13,9 @@ GO
 /*                                                                      */
 /* Purpose: Dynamic lottable                                            */
 /*                                                                      */
-/* Date        Rev  Author      Purposes                                */
+/* Date        Rev   Author      Purposes                               */
+/* 2020-04-06  1.1   Wan02       LFWM-2053 - UAT - MY  Putaway All in   */
+/*                               Receipt not working                    */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_ReceiptPutaway_Wrapper]
       @c_ReceiptKey NVARCHAR(10)
@@ -303,7 +305,7 @@ BEGIN
       SET @c_SourceKey = RTRIM(@c_ReceiptKey) + @c_ReceiptLineNumber
       SET @c_SuggestedLoc = ''
       
-      IF @c_RecType = 'RGR' OR @c_RecType = 'RET' AND @c_DefaultReturnPickFace = '1'
+      IF (@c_RecType = 'RGR' OR @c_RecType = 'RET') AND @c_DefaultReturnPickFace = '1' --(Wan02)
       BEGIN
          IF @c_PutawayLoc <> '' AND @c_PutawayLoc NOT IN ('UNKNOWN','SEE_SUPV') AND 
             NOT EXISTS(SELECT 1 
@@ -443,7 +445,7 @@ BEGIN
             @c_errmsg      = @c_errmsg OUTPUT   
       END CATCH
      
-      IF @n_Continue <> 3 
+      IF @n_Continue = 3               --(Wan02)
       BEGIN  
          GOTO FETCH_NEXT
       END
