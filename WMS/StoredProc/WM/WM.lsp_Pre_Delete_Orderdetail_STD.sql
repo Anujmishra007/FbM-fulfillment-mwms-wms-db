@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date        Author   Ver  Purposes                                   */ 
+/* 2020-04-08  Wan01    1.1   LFWM-2062 - MYS SCE unable to delete      */
+/*                            shipment order detail                     */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Orderdetail_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -84,7 +86,7 @@ BEGIN
    
    IF @n_Continue IN (1,2)
    BEGIN      
-      IF EXISTS (SELECT count(*) PicksReleased 
+      IF EXISTS (SELECT 1 PicksReleased            --(Wan01)
                  FROM TASKDETAIL WITH (NOLOCK)
                  WHERE TaskType = 'PK'
                  AND OrderKey = @c_Orderkey
