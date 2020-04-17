@@ -8,7 +8,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 /*************************************************************************/  
-/* Stored Procedure: lsp_Validate_AdjustmentDetail_Std                   */  
+/* Stored Procedure: WM.lsp_Validate_AdjustmentDetail_Std                */  
 /* Creation Date: 30-JUL-2018                                            */  
 /* Copyright: LFL                                                        */  
 /* Written by: Wan                                                       */  
@@ -18,12 +18,13 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2020-03-03  Wan01    1.1   Validate Lot                               */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -164,6 +165,9 @@ BEGIN
       ,  @c_SeekCode             NVARCHAR(40) = ''
       ,  @c_MatchCfgValue        NVARCHAR(30) = ''
 
+      ,  @c_Lot                  NVARCHAR(10) = ''       --(Wan01)   
+      ,  @c_Getlot               NVARCHAR(10) = ''       --(Wan01)   
+
       ,  @c_AdjStatusControl     NVARCHAR(30) = ''
       ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
       ,  @c_SkipUDF05UccChkInAdj NVARCHAR(30) = ''
@@ -174,6 +178,7 @@ BEGIN
       ,  @c_Storerkey         = AD.Storerkey
       ,  @c_Sku               = AD.Sku
       ,  @c_FinalizedFlag_Ins = AD.FinalizedFlag
+      ,  @c_Lot               = AD.Lot                   --(Wan01)          
       ,  @c_Loc               = ISNULL(AD.Loc,'')
       ,  @c_Lottable01        = AD.Lottable01
       ,  @c_Lottable02        = AD.Lottable02
@@ -367,7 +372,7 @@ BEGIN
          ,T.Code
          ,T.ConfigValue
          ,SeekCode = 'MATCHLNAME' + RTRIM(T.Code)
-	FROM #TMP_CFG T
+   FROM #TMP_CFG T
    LEFT JOIN CODELKUP CL WITH (NOLOCK) ON  T.ConfigValue = CL.ListName 
                                        AND T.Code = CL.Code
 
@@ -440,7 +445,11 @@ BEGIN
             GOTO EXIT_SP
          END
       
-         IF @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND ISNULL(@c_LottableValue,'') <> ''
+         IF @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND 
+            (
+             ( @n_Cnt NOT IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '' ) OR
+             ( @n_Cnt IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '19000101' )
+            )
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 552057
@@ -468,9 +477,9 @@ BEGIN
       SET @n_ExistsCnt = 0
       SELECT @n_Cnt = COUNT(1)
             ,@n_ExistsCnt = ISNULL(MAX(CASE WHEN Sku = @c_Sku THEN 1 ELSE 0 END),0)
-		FROM   UCC WITH (NOLOCK) 
-		WHERE  StorerKey = @c_StorerKey
-		AND    UCCNo = @c_UCCNo
+      FROM   UCC WITH (NOLOCK) 
+      WHERE  StorerKey = @c_StorerKey
+      AND    UCCNo = @c_UCCNo
 
       IF @n_Cnt = 0
       BEGIN
@@ -493,7 +502,58 @@ BEGIN
          END
       END
    END
-    
+
+   --(Wan01) - START
+   IF @c_Lot <> ''
+   BEGIN
+      IF NOT EXISTS (SELECT 1 
+                     FROM LOT WITH (NOLOCK)
+                     WHERE Lot = @c_lot
+                     )
+      BEGIN
+         SET @c_Getlot = ''
+         EXECUTE nsp_lotlookup
+               @c_Storerkey=@c_Storerkey 
+            ,  @c_Sku=@c_Sku 
+            ,  @c_Lottable01=@c_Lottable01 
+            ,  @c_Lottable02=@c_Lottable02 
+            ,  @c_Lottable03=@c_Lottable03 
+            ,  @c_Lottable04=@dt_Lottable04 
+            ,  @c_Lottable05=@dt_Lottable05 
+            ,  @c_Lottable06=@c_Lottable06 
+            ,  @c_Lottable07=@c_Lottable07 
+            ,  @c_Lottable08=@c_Lottable08 
+            ,  @c_Lottable09=@c_Lottable09 
+            ,  @c_Lottable10=@c_Lottable10 
+            ,  @c_Lottable11=@c_Lottable11 
+            ,  @c_Lottable12=@c_Lottable12 
+            ,  @c_Lottable13=@dt_Lottable13 
+            ,  @c_Lottable14=@dt_Lottable14 
+            ,  @c_Lottable15=@dt_Lottable15 
+            ,  @c_lot=@c_Getlot        OUTPUT 
+            ,  @b_Success=@b_Success   OUTPUT 
+            ,  @n_err=@n_err           OUTPUT 
+            ,  @c_errmsg=@c_errmsg     OUTPUT 
+
+         IF @c_Getlot <> ''  
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 552060
+            SET @c_errmsg = 'Invalid Lot found. (lsp_Validate_AdjustmentDetail_Std)'
+                           + '|' + @c_Lot 
+            GOTO EXIT_SP
+         END
+         ELSE
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 552061
+            SET @c_errmsg = 'Lot is not required. Please empty lot for system to generate lot. (lsp_Validate_AdjustmentDetail_Std)'
+            GOTO EXIT_SP
+         END
+      END
+   END
+   --(Wan01) - END 
+         
    EXIT_SP:
    
    IF @n_Continue = 3
