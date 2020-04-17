@@ -28,7 +28,8 @@ GO
 /*                              Userdefine01.(Wan01)                    */
 /* 21-May-2014  TKLIM     1.1   Added Lottables 06-15                   */
 /* 27-AUG-2015  YTWAN     1.4   SOS#351301-TH-CTX auto calucate Lot04   */
-/*                              (Wan02)                                 */             
+/*                              (Wan02)                                 */ 
+/* 06-MAR-2020  SPChin    1.5   INC1064615 - Add Filter By StorerKey    */              
 /************************************************************************/
 
 CREATE PROCEDURE ispGenExpiryDateLot4
@@ -135,11 +136,13 @@ BEGIN
    --(Wan01) - END
 
    --(Wan02) - START
-   SELECT @c_Lottable = ListName
+   SELECT TOP 1 @c_Lottable = ListName                --INC1064615
    FROM CODELKUP WITH (NOLOCK)
    WHERE ListName Like 'Lottable%'
    AND   Code    = @c_LottableLabel
    AND   Long    = 'ispGenExpiryDateLot4'
+   AND  (Storerkey = @c_Storerkey OR Storerkey = '')  --INC1064615
+   Order by Storerkey DESC                            --INC1064615
 
    IF @c_Lottable = 'Lottable04'
    BEGIN
