@@ -27,7 +27,7 @@ GO
 /*                                                                      */
 /* Called By: When records updated                                      */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -41,7 +41,8 @@ GO
 /* 09-Sept-2005 June         SOS40620 - include allocate by Full uom    */
 /* 13-Sept-2005 June         SOS40699 - bug fixed                       */
 /* 18-AUG-2015  YTWan   1.1   SOS#350432 - Project Merlion -            */
-/*                            Allocation Strategy (Wan01)               */ 
+/*                            Allocation Strategy (Wan01)               */
+/* 17-Jan-2020  Wan02   1.2   Dynamic SQL review, impact SQL cache log  */   
 /************************************************************************/
 CREATE PROC    nspPRIDS26
          @c_storerkey    NVARCHAR(15) ,
@@ -69,7 +70,6 @@ CREATE PROC    nspPRIDS26
         ,@c_OtherParms NVARCHAR(200)=''  --(Wan01)
 AS
 BEGIN
-
    -- Start : SOS40620
    DECLARE @c_UOMBase NVARCHAR(10)
    IF @n_uombase <= 0 SELECT @n_uombase = 1
@@ -85,6 +85,8 @@ BEGIN
         @c_sql NVARCHAR(max),
         @c_Lottable04Label NVARCHAR(20) 
    -- End : SOS24337
+
+   DECLARE @c_SQLParms        NVARCHAR(4000) = ''        --(Wan02)  
 
    SELECT @b_debug = 0
 
@@ -114,15 +116,15 @@ BEGIN
 
       IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) <> "" AND @c_Lottable01 IS NOT NULL
       BEGIN
-         SELECT @c_Condition = ' AND LOTTABLE01 = N''' + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) + ''''
+         SELECT @c_Condition = ' AND LOTTABLE01 = @c_Lottable01'
       END
       IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable02)) <> "" AND @c_Lottable02 IS NOT NULL
       BEGIN
-         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE02 = N''' + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable02)) + ''''
+         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE02 = @c_Lottable02'
       END
       IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable03)) <> "" AND @c_Lottable03 IS NOT NULL
       BEGIN
-         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE03 = N''' + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable03)) + ''''
+         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE03 = @c_Lottable03'
       END
       -- Start : SOS24337 
 --       IF CONVERT(char(10), @d_Lottable04, 103) <> "01/01/1900"
@@ -132,7 +134,7 @@ BEGIN
       -- End : SOS24337 
       IF CONVERT(char(10), @d_Lottable05, 103) <> "01/01/1900"
       BEGIN
-         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE05 = N''' + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) + ''''
+         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE05 = @d_Lottable05'
       END
       
       if @b_debug = 1
@@ -175,11 +177,11 @@ BEGIN
 --                ELSE
 --                   SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND Lottable04 >= '"  + convert(char(12), DateAdd(DAY, @n_shelflife, getdate()), 106) + "'"
 --             END               
-               SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND Lottable04 >= N'''  + convert(char(12), DateAdd(DAY, @n_shelflife, getdate()), 106) + ''''
+               SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND Lottable04 >= DateAdd(DAY, @n_shelflife, getdate())'
          END
          ELSE
          BEGIN
-            SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND Lottable04 >= N''' + convert(char(12), getdate(), 106) + ''''
+            SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND Lottable04 >= CONVERT(DATETIME, convert(char(12), getdate(), 106))'
          END 
       END 
       -- End : SOS24337 
@@ -187,70 +189,72 @@ BEGIN
       --(Wan01) - START
       IF RTRIM(@c_Lottable06) <> '' AND @c_Lottable06 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable06 = N''' + RTRIM(@c_Lottable06) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable06 = @c_Lottable06' 
       END   
 
       IF RTRIM(@c_Lottable07) <> '' AND @c_Lottable07 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable07 = N''' + RTRIM(@c_Lottable07) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable07 = @c_Lottable07' 
       END   
 
       IF RTRIM(@c_Lottable08) <> '' AND @c_Lottable08 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable08 = N''' + RTRIM(@c_Lottable08) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable08 = @c_Lottable08' 
       END   
 
       IF RTRIM(@c_Lottable09) <> '' AND @c_Lottable09 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable09 = N''' + RTRIM(@c_Lottable09) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable09 = @c_Lottable09' 
       END   
 
       IF RTRIM(@c_Lottable10) <> '' AND @c_Lottable10 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable10 = N''' + RTRIM(@c_Lottable10) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable10 = @c_Lottable10' 
       END   
 
       IF RTRIM(@c_Lottable11) <> '' AND @c_Lottable11 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable11 = N''' + RTRIM(@c_Lottable11) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable11 = @c_Lottable11' 
       END   
 
       IF RTRIM(@c_Lottable12) <> '' AND @c_Lottable12 IS NOT NULL
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable12 = N''' + RTRIM(@c_Lottable12) + '''' 
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable12 = @c_Lottable12' 
       END  
 
       IF CONVERT(CHAR(10), @d_Lottable13, 103) <> '01/01/1900'
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable13 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) + ''''
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable13 = @d_Lottable13'
       END
 
       IF CONVERT(CHAR(10), @d_Lottable14, 103) <> '01/01/1900'
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable14 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) + ''''
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable14 = @d_Lottable14'
       END
 
       IF CONVERT(CHAR(10), @d_Lottable15, 103) <> '01/01/1900'
       BEGIN
-         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable15 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) + ''''
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND Lottable15 = @d_Lottable15'
       END
 
       --SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' ORDER BY LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 '
       SET @c_OrderBy = ' ORDER BY LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 '
       --(Wan01) - END
             
+      SET @c_Condition = @c_Condition + ' ' -- Wan02
+
       DECLARE @sql NVARCHAR(max)
       SELECT @sql = "DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR "
             + "SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, "
             -- Start : SOS40620
             -- + "QTYAVAILABLE = SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0)) "
-            + " QTYAVAILABLE = CASE WHEN SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) < " + @c_UOMBase +
+            + " QTYAVAILABLE = CASE WHEN SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) < @n_UOMBase "   
             + "                THEN SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) " +
-            + "                WHEN SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) % " + @c_UOMBase + " = 0 " +
+            + "                WHEN SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) % @n_UOMBase = 0 "  
             + "                THEN SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) " +
             + "                ELSE   " +
             + "                      SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0)) " +
-            + "                      - ((SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0))) % " + @c_UOMBase + ") " +
+            + "                      - ((SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(p.QTYPREALLOCATED, 0))) % @n_UOMBase) "  
             + "                END " + 
             -- End : SOS40620
             + "FROM LOT (NOLOCK) "
@@ -261,12 +265,12 @@ BEGIN
             + "LEFT OUTER JOIN (SELECT p.Lot, ORDERS.Facility, QtyPreallocated = SUM(p.Qty) "
             + "                  FROM   PreallocatePickDetail p (NOLOCK), ORDERS (NOLOCK) "
             + "                  WHERE  p.Orderkey = ORDERS.Orderkey "
-            + "                  AND    p.Storerkey = N'" + @c_storerkey + "' " 
-            + "                  AND    p.SKU = N'" + @c_sku + "' " 
+            + "                  AND    p.Storerkey = @c_storerkey " 
+            + "                  AND    p.SKU = @c_sku " 
             + "                  GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = p.Lot AND p.Facility = LOC.Facility "
-            + "WHERE LOT.STORERKEY = N'" + @c_storerkey  + "' "
-            + "AND LOT.SKU = '" + @c_sku + "' "
-            + "AND LOC.Facility = N'" + @c_facility + "' "
+            + "WHERE LOT.STORERKEY = @c_storerkey "
+            + "AND LOT.SKU = @c_sku "
+            + "AND LOC.Facility = @c_facility "
             -- Start : SOS40699 
             -- + "AND LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' AND (LOC.LOCATIONFLAG <> 'HOLD'  OR LOC.LOCATIONFLAG <> 'DAMAGE' ) "
             + "AND LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' AND LOC.LOCATIONFLAG <> 'HOLD' AND LOC.LOCATIONFLAG <> 'DAMAGE' "
@@ -275,12 +279,40 @@ BEGIN
             + "GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.LOTTABLE01, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE03, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05 "
           -- SOS40620
           -- + "HAVING SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0)) > 0 "
-           + " HAVING SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0)) >= " + @c_UOMBase + " " +
+           + " HAVING SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0)) >= @n_UOMBase " +
            -- + @c_Condition  --(Wan01)
            + @c_OrderBy
       
-      EXEC ( @sql )
+      --(Wan02) - START
+      --EXEC ( @sql )
+      SET @c_SQLParms= N'@c_facility   NVARCHAR(5)'
+                     + ',@c_storerkey  NVARCHAR(15)'
+                     + ',@c_SKU        NVARCHAR(20)'
+                     + ',@c_Lottable01 NVARCHAR(18)'
+                     + ',@c_Lottable02 NVARCHAR(18)'
+                     + ',@c_Lottable03 NVARCHAR(18)'
+                     + ',@d_lottable04 datetime'
+                     + ',@d_lottable05 datetime'
+                     + ',@c_Lottable06 NVARCHAR(30)'
+                     + ',@c_Lottable07 NVARCHAR(30)'
+                     + ',@c_Lottable08 NVARCHAR(30)'
+                     + ',@c_Lottable09 NVARCHAR(30)'
+                     + ',@c_Lottable10 NVARCHAR(30)'
+                     + ',@c_Lottable11 NVARCHAR(30)'
+                     + ',@c_Lottable12 NVARCHAR(30)'
+                     + ',@d_lottable13 datetime'
+                     + ',@d_lottable14 datetime'
+                     + ',@d_lottable15 datetime'
+                     + ',@n_shelflife  int'
+                     + ',@n_UOMBase    int'
       
+      EXEC sp_ExecuteSQL @sql, @c_SQLParms, @c_facility, @c_storerkey, @c_SKU
+                        ,@c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
+                        ,@c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
+                        ,@c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
+                        ,@n_shelflife, @n_UOMBase       
+    --(Wan02) - END
+          
       IF @b_debug = 1 
       BEGIN
          SELECT @sql
