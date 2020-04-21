@@ -17,14 +17,15 @@ GO
 /*                                                                      */  
 /* Called By: Exceed Allocate Orders                                    */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version:                                                             */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author  Ver   Purposes                                  */  
+/* Date         Author  Ver   Purposes                                  */
+/* 17-Jan-2020  Wan01   1.1   Dynamic SQL review, impact SQL cache log  */     
 /************************************************************************/  
   
 CREATE proc nspPRIDS5C  
@@ -45,6 +46,8 @@ AS
 BEGIN  
    SET NOCOUNT ON  
   
+   DECLARE @c_SQLParms        NVARCHAR(4000) = ''        --(Wan01)  
+
    Declare @b_debug int  
    SELECT @b_debug= 0  
   
@@ -121,8 +124,7 @@ BEGIN
          -- Change condition greater or equal to..  
          IF @n_ConsigneeMinShelfLife > 0  
          BEGIN  
-            SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND ( DATEDIFF(day, GETDATE(), Lottable04) >= "  
-            + CAST(@n_ConsigneeMinShelfLife as NVARCHAR(10)) + " OR Lottable04 IS NULL) "  
+            SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND ( DATEDIFF(day, GETDATE(), Lottable04) >= @n_ConsigneeMinShelfLife OR Lottable04 IS NULL) "  
   
             IF @b_debug = 1  
             BEGIN  
@@ -143,8 +145,7 @@ BEGIN
   
             IF ISNULL(@n_SKUShelfLife,0) > 0  
             BEGIN  
-               SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND ( DATEDIFF(day, GETDATE(), Lottable04) >= "  
-               + RTRIM(CAST(@n_SKUShelfLife as NVARCHAR(10))) + " OR Lottable04 IS NULL) "  
+               SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND ( DATEDIFF(day, GETDATE(), Lottable04) >= @n_SKUShelfLife OR Lottable04 IS NULL) "  
   
                IF @b_debug = 1  
                BEGIN  
@@ -154,7 +155,7 @@ BEGIN
               
             IF @n_SKUShelfLife IS NULL
             BEGIN
-            	 SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND 1=2 "  
+                SELECT @c_Limitstring = ISNULL(RTRIM(@c_LimitString),'') + " AND 1=2 "  
             END
          END  
       END  
@@ -163,28 +164,28 @@ BEGIN
       
       IF RTrim(LTrim(@c_Lottable01)) <> '' AND @c_Lottable01 IS NOT NULL
       BEGIN
-         SELECT @c_Condition = " AND LOTTABLE01 = N'" + RTrim(LTrim(@c_Lottable01)) + "' "
+         SELECT @c_Condition = " AND LOTTABLE01 = @c_Lottable01 "
       END
       IF RTrim(LTrim(@c_Lottable02)) <> '' AND @c_Lottable02 IS NOT NULL
       BEGIN
-         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE02 = N'" + RTrim(LTrim(@c_Lottable02)) + "' "
+         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE02 = @c_Lottable02 "
       END
       IF RTrim(LTrim(@c_Lottable03)) <> '' AND @c_Lottable03 IS NOT NULL
       BEGIN
-         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE03 = N'" + RTrim(LTrim(@c_Lottable03)) + "' "
+         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE03 = @c_Lottable03 "
       END
       IF CONVERT(char(10), @d_Lottable04, 103) <> "01/01/1900"
       BEGIN
-         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE04 = N'" + RTrim(CONVERT( NVARCHAR(20), @d_Lottable04, 112)) + "' "
+         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE04 = @d_Lottable04 "
       END
       IF CONVERT(char(10), @d_Lottable05, 103) <> "01/01/1900"
       BEGIN
-         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE05 = N'" + RTrim(CONVERT( NVARCHAR(20), @d_Lottable05, 112)) + "' "
+         SELECT @c_Condition = RTrim(@c_Condition) + " AND LOTTABLE05 = @d_Lottable05 "
       END
       
       IF @c_UOM = '1' --Pallet
       BEGIN
-      	 SELECT @c_Condition = RTrim(@c_Condition) + " AND SKUXLOC.LocationType NOT IN ('PICK','CASE') "
+          SELECT @c_Condition = RTrim(@c_Condition) + " AND SKUXLOC.LocationType NOT IN ('PICK','CASE') "
       END
        
       DECLARE @c_SQLStatement nvarchar(max)  
@@ -203,9 +204,9 @@ BEGIN
       " AND LOTXLOCXID.Storerkey = SKUXLOC.Storerkey " +  
       " AND LOTXLOCXID.Sku = SKUXLOC.Sku " +  
       " AND LOTXLOCXID.Loc = SKUXLOC.Loc " +  
-      " AND LOC.Facility = N'" + ISNULL(RTRIM(@c_facility),'') + "'" +  
-      " AND LOT.STORERKEY = N'" + ISNULL(RTRIM(@c_storerkey),'') + "'" +  
-      " AND LOT.SKU = N'" + ISNULL(RTRIM(@c_sku),'') + "'" +  
+      " AND LOC.Facility = @c_facility" +  
+      " AND LOT.STORERKEY = @c_storerkey" +  
+      " AND LOT.SKU = @c_sku" +  
       " AND LOT.STATUS = 'OK' " +  
       -- SOS24348  
       -- " AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD) > 0 " +  
@@ -216,8 +217,26 @@ BEGIN
       -- End : SOS24348  
       " ORDER BY LOTATTRIBUTE.LOTTABLE04,  LOTATTRIBUTE.LOTTABLE05"  
   
-      EXECUTE(@c_SQLStatement)  
-  
+      --(Wan02) - START
+      --EXECUTE(@c_SQLStatement)
+      SET @c_SQLParms= N'@c_facility   NVARCHAR(5)'
+                     + ',@c_storerkey  NVARCHAR(15)'
+                     + ',@c_SKU        NVARCHAR(20)'
+                     + ',@c_Lottable01 NVARCHAR(18)'
+                     + ',@c_Lottable02 NVARCHAR(18)'
+                     + ',@c_Lottable03 NVARCHAR(18)'
+                     + ',@d_lottable04 datetime'
+                     + ',@d_lottable05 datetime'
+                     + ',@n_ConsigneeMinShelfLife  int'
+                     + ',@n_SKUShelfLife           int'
+ 
+      
+      EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms, @c_facility, @c_storerkey, @c_SKU
+                        ,@c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
+                        ,@n_ConsigneeMinShelfLife, @n_SKUShelfLife   
+    --(Wan02) - END
+
+
       IF @b_debug = 1  
       BEGIN  
          SELECT '@c_SQLStatement' = @c_SQLStatement  
