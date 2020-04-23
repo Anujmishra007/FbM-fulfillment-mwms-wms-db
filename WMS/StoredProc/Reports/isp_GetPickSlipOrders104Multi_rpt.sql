@@ -30,6 +30,8 @@ GO
 /* 27-Mar-2020  WLChooi   1.1   Add sorting (WL01)                      */
 /* 01-Apr-2020  WLChooi   1.2   WMS-12744 - Limit 9 detail lines per    */
 /*                              page, modify title logic (WL02)         */
+/* 21-Apr-2020  WLChooi   1.3   WMS-12744 - Only show result based on   */
+/*                              certain condition (WL03)                */
 /************************************************************************/
 
 CREATE PROC isp_GetPickSlipOrders104Multi_rpt 
@@ -45,6 +47,7 @@ BEGIN
 
    DECLARE @n_Continue INT = 1, @c_Zones NVARCHAR(255) = '', @c_GetBatchkey NVARCHAR(10) = ''
    DECLARE @n_MaxLine INT = 9  --WL02
+   DECLARE @c_Facility NVARCHAR(15) = '' --WL03
 
    IF @c_batchkey = NULL SET @c_batchkey = ''
 
@@ -67,6 +70,17 @@ BEGIN
    CREATE TABLE #TEMP_ByBatch(
    Batchkey        NVARCHAR(10),
    ShipperKey      NVARCHAR(15) )
+
+   --WL03 START
+   SELECT @c_Facility = Facility
+   FROM LOADPLAN (NOLOCK)
+   WHERE Loadkey = @c_loadkey
+
+   IF NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE Listname = 'IKEATITLE' AND Code2 = @c_Facility)
+   BEGIN
+      GOTO QUIT_SP
+   END
+   --WL03 END
 
    INSERT INTO #TEMP_ByBatch
    SELECT DISTINCT PD.Pickslipno AS Batchkey, ISNULL(OH.ShipperKey,'')
