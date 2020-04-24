@@ -25,6 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 24-Apr-2020  WLChooi   1.1 Fix Carton Sorting, and missing SKU if    */
+/*                            SKUCount < 7 (WL01)                       */
 /************************************************************************/  
   
 CREATE PROC isp_UCC_Carton_Label_93  
@@ -205,7 +207,7 @@ BEGIN
              , LabelNo       
              , Storerkey     
              , Pickslipno  
-      ORDER BY CartonNo
+      ORDER BY CAST(CartonNo AS INT)   --WL01
    END
    ELSE IF @c_Type = 'SUB1'
    BEGIN
@@ -245,7 +247,7 @@ BEGIN
 
          IF @n_CountSKU < @n_MaxLineFirstPage
          BEGIN
-            SET @n_Loop = @n_MaxLineFirstPage - @n_CountSKU - 1
+            SET @n_Loop = @n_MaxLineFirstPage - @n_CountSKU -- - 1  --WL01
 
             WHILE (@n_Loop > 0)
             BEGIN
