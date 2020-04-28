@@ -160,6 +160,7 @@ GO
 /* 23-JUL-2019  Wan03     4.4   ChannelInventoryMgmt use fnc_SelectGetRight*/
 /* 12-Dec-2019  James     4.5   WMS-11215 Add config to bypass receiptserial*/
 /*                              checking (james02)                          */
+/* 15-Apr-2020  NJOW10    4.9   WMS-12880 add offset to ReturnDefaultLottable05*/ 
 /****************************************************************************/ 
  
 CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -188,6 +189,7 @@ DECLARE
        , @n_cnt                int 
        , @c_authority          NVARCHAR(1)    -- Added by June 25.Jun.02 for IDSV5 
        , @c_DefaultLottable_Returns   NVARCHAR(1) -- Added by June 25.Jun.02 for IDSV5 
+       , @c_DeftLot_Returns_Opt1 NVARCHAR(50)   --NJOW10
        , @c_StorerKey          NVARCHAR(15) 
        , @c_sku                NVARCHAR(20) 
        , @c_facility           NVARCHAR(5) 
@@ -1145,7 +1147,8 @@ BEGIN
                   @b_success                   output, 
                   @c_DefaultLottable_Returns   output, 
                   @n_err2                      output, 
-                  @c_errmsg                    output 
+                  @c_errmsg                    OUTPUT, 
+                  @c_DeftLot_Returns_Opt1      output --NJOW10
  
             IF @b_success <> 1 
             BEGIN 
@@ -1188,6 +1191,12 @@ BEGIN
                   ,    @b_Success     OUTPUT 
                   ,    @n_err2        OUTPUT 
                   ,    @c_errmsg      OUTPUT 
+
+                  --NJOW10
+                  IF ISNUMERIC(@c_DeftLot_Returns_Opt1) = 1 AND @d_Lottable05 <> '1900-01-01' AND @d_Lottable05 IS NOT NULL
+                  BEGIN
+                    	SET @d_Lottable05 = DATEADD(Day, CAST(@c_DeftLot_Returns_Opt1 AS INT), @d_Lottable05)
+                  END                                 
                END 
             END 
          END -- @n_continue=1 or @n_continue=2 
@@ -1231,7 +1240,13 @@ BEGIN
                   AND Lottable03 = @c_Lottable03 
                   AND convert(char(8), Lottable04) = convert(char(8), @d_Lottable04) 
                END 
-            END    -- END SOS 3333 
+               
+               --NJOW10
+               IF ISNUMERIC(@c_DeftLot_Returns_Opt1) = 1 AND @d_Lottable05 <> '1900-01-01' AND @d_Lottable05 IS NOT NULL AND @@ROWCOUNT > 0
+               BEGIN
+                 	SET @d_Lottable05 = DATEADD(Day, CAST(@c_DeftLot_Returns_Opt1 AS INT), @d_Lottable05)
+               END                                                              
+            END    -- END SOS 3333             
          END   -- Added for IDSV5 by June 25.Jun.02, (extract from IDSHK) 
  
          IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Lottable01Label)) > '' AND (@c_Lottable01 IS NULL OR @c_Lottable01 = '') 
