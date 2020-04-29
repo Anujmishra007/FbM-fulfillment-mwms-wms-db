@@ -30,6 +30,7 @@ GO
 /* 11-JAN-2018 Wan03    1.3   Fixed. Partial allocate UCC from Pallet   */    
 /* 18-JUL-2019 CSCHONG  1.4   WMS-9822-revised report condition (CS01)  */    
 /* 08-AUG-2019 CSCHONG  1.5   WMS-10204 - add channel checking (CS01a)  */    
+/* 11-MAR-2020 CSCHONG  1.6   Fix execute SP Error (CS02)               */
 /************************************************************************/        
 CREATE  PROC [dbo].[ispPRNIK05]            
     @c_WaveKey                      NVARCHAR(10)    
@@ -547,7 +548,7 @@ BEGIN
                      +  ',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30) '     
                      +  ',@c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30) '      
                      +  ',@c_Lottable12 NVARCHAR(30) '     
-                     +  ',@c_LocationTypeOverride NVARCHAR(10),@c_channel NVARCHAR(30) '  --(Wan01)   --CS01a    
+                     +  ',@c_LocationTypeOverride NVARCHAR(10) '  --(Wan01)   --CS01a    --CS02
            
       EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU    
                         ,@c_Lottable01, @c_Lottable02, @c_Lottable03     

@@ -28,6 +28,7 @@ GO
 /* 06-Sep-2018 Wan01    1.1   WMS-5588 CR V2.2                          */
 /* 28-Feb-2019 WLCHOOI  1.2   WMS-7914 Increase URL char size (WL01)    */
 /* 23-Dec-2019 Grick    1.3   INC0924884 - Add customer title (G01)     */
+/* 15-Apr-2020 CSCHONG  1.4   WMS-12891 (CS01)                          */
 /************************************************************************/
 CREATE PROC isp_delivery_note30_rpt
          @c_Orderkey    NVARCHAR(10) 
@@ -384,10 +385,10 @@ BEGIN
          , OH.Orderkey
          , ExternOrderkey = ISNULL(RTRIM(OH.ExternOrderkey),'')
          , OH.OrderDate 
-         , C_Contact1	= ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.UDF01),'') = '20' AND ISNULL(RTRIM(CL.UDF02),'') = ISNULL(RTRIM(OH.M_ISOCntryCode),'')
+         , C_Contact1   = ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.UDF01),'') = '20' AND ISNULL(RTRIM(CL.UDF02),'') = ISNULL(RTRIM(OH.M_ISOCntryCode),'')
                                            THEN (ISNULL(RTRIM(OH.C_Contact1),'') + ' ' + ISNULL(RTRIM(CL.Notes),'') + ' ')
                                            ELSE ISNULL(RTRIM(OH.C_Contact1),'') + ' '
-                                           END),'')	           --(G01)
+                                           END),'')              --(G01)
          , C_Address = ISNULL(RTRIM(OH.C_State),'') + ' '      --(Wan01)
                      + ISNULL(RTRIM(OH.C_City),'') + ' '       --(Wan01)
                      + ISNULL(RTRIM(OH.C_Address1),'') + ' '
@@ -403,7 +404,11 @@ BEGIN
          , InvoiceAmount =  ISNULL(OH.InvoiceAmount,0.00)
          , TotalPaid     =  '0.00'
          , Total         =  '0.00'
-         , SubTotal      =  '0.00'  
+        -- , SubTotal      =  '0.00'           --CS01  START
+         , SubTotal     = CASE WHEN ISNUMERIC( ISNULL(RTRIM(OH.UserDefine01),'') ) = 1 
+                                THEN CONVERT( FLOAT, ISNULL(RTRIM(OH.UserDefine01),'') )
+                                ELSE 0.00
+                                END            --CS01 END
          , Sku    = PD.Sku
          , Descr  = PD.SkuDescr 
          , Price  = PD.UnitPrice  
@@ -440,6 +445,7 @@ BEGIN
          ,  PD.Qty 
          ,  PD.LogicalLocation 
          ,  PD.Loc
+         ,  ISNULL(RTRIM(OH.UserDefine01),'')    --(CS01)
 
    UPDATE #TMP_DN
       SET TotalPaid = CASE WHEN Qty IS NULL 
@@ -452,9 +458,9 @@ BEGIN
                            THEN FORMAT(PostageAmount, '#,###,###,##0') + ' ' + Packing
                            ELSE FORMAT(PostageAmount, '##,###,##0.00') + ' ' + Packing
                            END
-         ,  SubTotal= CASE WHEN InvoiceAmount - FLOOR(InvoiceAmount) = 0
-                           THEN FORMAT(InvoiceAmount, '#,###,###,##0') + ' ' + Packing
-                           ELSE FORMAT(InvoiceAmount, '##,###,##0.00') + ' ' + Packing
+         ,  SubTotal= CASE WHEN CAST(SubTotal as FLOAT) - FLOOR(CAST(SubTotal as FLOAT)) = 0
+                           THEN FORMAT(CAST(SubTotal as FLOAT), '#,###,###,##0') + ' ' + Packing
+                           ELSE FORMAT(CAST(SubTotal as FLOAT), '##,###,##0.00') + ' ' + Packing
                            END
          ,  Total   = CASE WHEN InvoiceAmount - FLOOR(InvoiceAmount) = 0
                            THEN FORMAT(InvoiceAmount, '#,###,###,##0') + ' ' + Packing
@@ -494,7 +500,7 @@ QUIT_SP:
          ,  InvoiceAmount        
          ,  TotalPaid  
          ,  Total 
-         ,  SubTotal    
+         ,  SubTotal   
          ,  Sku  
          ,  SkuDescr           
          ,  UnitPrice = CASE WHEN UnitPrice - FLOOR(UnitPrice) = 0 
