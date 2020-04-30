@@ -1,3 +1,13 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_ECOM_PackSaveEnd]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_ECOM_PackSaveEnd]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO    
+
 /************************************************************************/    
 /* Stored Proc: isp_ECOM_PackSaveEnd                                    */    
 /* Creation Date: 11-JUN-2019                                           */    
@@ -184,3 +194,7 @@ QUIT_SP:
       BEGIN TRAN    
    END    
 END -- procedure 
+GO
+GRANT EXECUTE ON [dbo].[isp_ECOM_PackSaveEnd] TO nSQL 
+GO
+
