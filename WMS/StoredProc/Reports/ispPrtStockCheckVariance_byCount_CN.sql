@@ -27,7 +27,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author    Ver.  Purposes                                */
+/* 2020-Apr-27  WLChooi   1.1   WMS-13148 - LEFT JOIN Storer (WL01)     */
 /************************************************************************/
 
 CREATE PROCEDURE ispPrtStockCheckVariance_byCount_CN (
@@ -149,8 +150,8 @@ BEGIN
    JOIN  SKU SKU (NOLOCK) ON ( SKU.SKU = CCDetail.SKU AND SKU.StorerKey = CCDetail.StorerKey) 
    JOIN  PACK PACK (NOLOCK) ON ( PACK.PackKey = SKU.PackKey ) 
    JOIN  LOC LOC (NOLOCK) ON ( CCDetail.Loc = LOC.Loc )  
-   JOIN  STORER COMPANY (NOLOCK) ON (COMPANY.Storerkey = 'JDHR')			-- (YokeBeen01) SOS25214
-   JOIN  STORER CURRENCY (NOLOCK) ON (CURRENCY.Storerkey = 'CURRENCY')	-- (YokeBeen01)
+   LEFT JOIN STORER COMPANY (NOLOCK) ON (COMPANY.Storerkey = 'JDHR')			-- (YokeBeen01) SOS25214   --WL01
+   LEFT JOIN STORER CURRENCY (NOLOCK) ON (CURRENCY.Storerkey = 'CURRENCY')	-- (YokeBeen01)            --WL01
 	WHERE ( CCDetail.CCKey = @c_StockTakeKey )  
    AND   ( CCDetail.StorerKey >= @c_StorerKeyStart )  
    AND   ( CCDetail.StorerKey <= @c_StorerKeyEnd )  
