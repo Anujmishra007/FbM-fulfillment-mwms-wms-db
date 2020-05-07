@@ -34,6 +34,7 @@ GO
 /* 15-JAN-2018  Wan05   1.5   Not reserve DP loc as pick to zero        */
 /* 08-MAR-2018  Wan06   1.5   Performance Fix.                          */
 /* 24-JUL-2018  Wan07   1.6   WMS-5771 - CN - NIKESDC_WMS_ReleaseWave_CR*/
+/* 16-JAN-2020  NJOW02  1.7   WMS-11717 Generate transmitlog2           */
 /************************************************************************/
 CREATE PROC ispRLWAV07
         @c_wavekey      NVARCHAR(10)  
@@ -103,6 +104,7 @@ BEGIN
          , @c_PreCTNLevel        CHAR(1)                    --(Wan07)
          , @c_PackOrderkey       NVARCHAR(10)               --(Wan07)
          , @c_Zone               NVARCHAR(10)               --(Wan07)
+         , @c_Status             NVARCHAR(10)               --NJOW02
    
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -1230,6 +1232,75 @@ BEGIN
    END
    CLOSE CUR_ID
    DEALLOCATE CUR_ID
+   
+   --NJOW02
+   DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT O.Orderkey, O.Storerkey, O.Status
+      FROM ORDERS O WITH (NOLOCK)
+      JOIN WAVEDETAIL WD WITH (NOLOCK) ON O.Orderkey = WD.Orderkey
+      WHERE WD.Wavekey = @c_Wavekey      
+      ORDER BY O.Orderkey
+
+   OPEN CUR_ORD      
+
+   FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Storerkey, @c_Status
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+   	
+   	  EXEC ispGenTransmitlog2
+   	     @c_TableName = 'WSWAVERESRCMLOG'  
+   	    ,@c_Key1 = @c_Orderkey         
+   	    ,@c_Key2 = @c_Status
+   	    ,@c_Key3 = @c_Storerkey            
+   	    ,@c_TransmitBatch = ''  
+   	    ,@b_Success = @b_success OUTPUT           
+   	    ,@n_err = @n_err OUTPUT               
+   	    ,@c_errmsg = @c_errmsg OUTPUT   	          
+      
+      IF @b_Success <> 1  
+      BEGIN
+         SET @n_continue = 3  
+         GOTO QUIT_SP
+      END 
+
+   	  EXEC ispGenTransmitlog2
+   	     @c_TableName = 'WSITRNLOGWAVE'  
+   	    ,@c_Key1 = @c_Orderkey         
+   	    ,@c_Key2 = @c_Status
+   	    ,@c_Key3 = @c_Storerkey            
+   	    ,@c_TransmitBatch = ''  
+   	    ,@b_Success = @b_success OUTPUT           
+   	    ,@n_err = @n_err OUTPUT               
+   	    ,@c_errmsg = @c_errmsg OUTPUT   	          
+      
+      IF @b_Success <> 1  
+      BEGIN
+         SET @n_continue = 3  
+         GOTO QUIT_SP
+      END 
+
+   	  EXEC ispGenTransmitlog2
+   	     @c_TableName = 'WSSTATUSLOG'  
+   	    ,@c_Key1 = @c_Orderkey         
+   	    ,@c_Key2 = @c_Status
+   	    ,@c_Key3 = @c_Storerkey            
+   	    ,@c_TransmitBatch = ''  
+   	    ,@b_Success = @b_success OUTPUT           
+   	    ,@n_err = @n_err OUTPUT               
+   	    ,@c_errmsg = @c_errmsg OUTPUT   	          
+      
+      IF @b_Success <> 1  
+      BEGIN
+         SET @n_continue = 3  
+         GOTO QUIT_SP
+      END 
+      
+      FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Storerkey, @c_Status
+   END     
+   CLOSE CUR_ORD
+   DEALLOCATE CUR_ORD
+
 
    /*
    DECLARE CUR_ID CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -1653,7 +1724,14 @@ QUIT_SP:
       DEALLOCATE CUR_DPP
    END
       --(Wan02) - END
-
+   
+   --NJOW01   
+   IF CURSOR_STATUS( 'LOCAL', 'CUR_ORD') in (0 , 1)  
+   BEGIN
+      CLOSE CUR_ORD
+      DEALLOCATE CUR_ORD
+   END
+      
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
