@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 27-Feb-2020  NJOW01   1.0  WMS-12288 trackno support leading zero    */
+/* 06-May-2020  NJOW02   1.1  WMS-13239 update trackno to placeofloading*/
 /************************************************************************/
 
 CREATE PROC ispREC02   
@@ -137,6 +138,14 @@ BEGIN
 	    	    WHERE Listname ='RTNTRACKNO'
 	    	    AND Code = @c_PlaceOfDelivery	    
 	    	    AND Storerkey = @c_Storerkey	    
+	    	    
+	    	    --NJOW02
+	    	    UPDATE RECEIPT WITH (ROWLOCK)
+	    	    SET PlaceOfLoading = @c_TrackingNo,
+	    	        Trafficcop = NULL,
+	    	        EditWho = SUSER_SNAME(),
+	    	        EditDate = GETDATE()
+	    	    WHERE Receiptkey = @c_Receiptkey
 	    	 END
 	    		    		    	
          FETCH NEXT FROM Cur_Receipt INTO @c_Receiptkey, @c_CarrierName, @c_PlaceOfDelivery
