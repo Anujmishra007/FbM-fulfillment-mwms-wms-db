@@ -119,6 +119,7 @@ BEGIN
    FROM TaskDetail WITH (NOLOCK)
    WHERE OrderKey = @c_OrderKey
    AND Storerkey = @c_StorerKey
+   AND OrderKey <> ''
    AND [Status] <> '9'
    
    OPEN CUR_TaskDetail
