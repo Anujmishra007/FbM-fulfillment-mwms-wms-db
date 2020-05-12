@@ -37,7 +37,9 @@ GO
 /* 19-FEB-2019  CHEEMUN   2.0   INC0582740 - Clear @c_ODUDEF05 value    */ 
 /* 17-JUN-2019  CSCHONG   2.1   WMS-8806 revised field logic (CS06)     */  
 /* 05-AUG-2019  CSCHONG   2.2   WMS-9970 revised field logic (CS07)     */      
-/* 30-JAN-2020  CSCHONG   2.3   WMS-11894 revised field logic (CS08)    */                                              
+/* 30-JAN-2020  CSCHONG   2.3   WMS-11894 revised field logic (CS08)    */    
+/* 23-APR-2020  WLChooi   2.4   WMS-13021 - ShowModelNumber by ReportCFG*/
+/*                              (WL02)                                  */                                          
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_Packing_List_37] (  
@@ -103,7 +105,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@n_PGrossWgt           FLOAT  
        ,@c_PCubeUom1           FLOAT  
        ,@c_PalletKey           NVARCHAR(30)  
-       ,@c_ODUDEF05            NVARCHAR(30)  
+       ,@c_ODUDEF05            NVARCHAR(50)   --WL02  
        ,@c_CTNCOUNT            INT  
        ,@n_PieceQty            INT  
        ,@n_TTLWGT              FLOAT  
@@ -190,7 +192,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             PGrossWgt        FLOAT,  
             PCubeUom1        FLOAT,  
             PalletKey        NVARCHAR(30) NULL,   
-            ODUDEF05         NVARCHAR(30) NULL,  
+            ODUDEF05         NVARCHAR(50) NULL,   --WL02
             CTNCOUNT         INT ,  
             PieceQty         INT,  
             TTLWGT           FLOAT,  
@@ -286,18 +288,18 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                 --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address3,'') ELSE ISNULL(S.B_Address3,'') END AS IDS_Address3,  --CS02,  
                 --CASE WHEN  ORDERS.facility='YPCN1' THEN '' ELSE ISNULL(S.B_Address4,'') END AS IDS_Address4,  --CS02,  
                 --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Phone1,'')  ELSE ISNULL(S.B_Phone1,'')  END AS IDS_Phone1,  --CS02 
-            CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Company,'')
-             ELSE ISNULL(S.B_Company,'') END AS IDS_Company,
+                CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Company,'')
+                ELSE ISNULL(S.B_Company,'') END AS IDS_Company,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Address1,'')
-             ELSE ISNULL(S.B_Address1,'') END AS IDS_Address1,
+                ELSE ISNULL(S.B_Address1,'') END AS IDS_Address1,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Address2,'')
-             ELSE ISNULL(S.B_Address2,'') END AS IDS_Address2,
+                ELSE ISNULL(S.B_Address2,'') END AS IDS_Address2,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Address3,'')
-             ELSE ISNULL(S.B_Address3,'') END AS IDS_Address3,
+                ELSE ISNULL(S.B_Address3,'') END AS IDS_Address3,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Address4,'')
-             ELSE ISNULL(S.B_Address4,'') END AS IDS_Address4,
+                ELSE ISNULL(S.B_Address4,'') END AS IDS_Address4,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Phone1,'')
-             ELSE ISNULL(S.B_Phone1,'') END AS IDS_Phone1, 
+                ELSE ISNULL(S.B_Phone1,'') END AS IDS_Phone1, 
             /*CS07 END*/ 
                 (ISNULL(S.b_city,'') + SPACE(2) + ISNULL(S.B_state,'') + SPACE(2) +  ISNULL(s.B_zip,'') +  
                  ISNULL(S.B_country,'') ) AS IDS_City,  
@@ -420,10 +422,10 @@ DECLARE @c_OrderKey            NVARCHAR(10)
               LEFT JOIN STORER MWRAU WITH (NOLOCK) ON (MWRAU.Storerkey = 'LOGISMWRAU')      
               LEFT JOIN STORER MWRNZ WITH (NOLOCK) ON (MWRNZ.Storerkey = 'LOGISMWRNZ')   
               /*CS04 End*/
-           /*CS07 Start*/
-           LEFT JOIN storersodefault SOD WITH (NOLOCK) ON SOD.StorerKey = ORDERS.ConsigneeKey
-           LEFT JOIN STORER SD WITH (NOLOCK) ON (SD.Storerkey = SOD.Door)
-           /*CS07 End*/           
+              /*CS07 Start*/
+              LEFT JOIN storersodefault SOD WITH (NOLOCK) ON SOD.StorerKey = ORDERS.ConsigneeKey
+              LEFT JOIN STORER SD WITH (NOLOCK) ON (SD.Storerkey = SOD.Door)
+              /*CS07 End*/       
               WHERE MBOL.Mbolkey = @c_mbolkey  
           
        OPEN CS_ORDERS_INFO  
@@ -597,16 +599,24 @@ DECLARE @c_OrderKey            NVARCHAR(10)
               IF @n_CBM < 0.01  
                 SET @n_CBM = 0.01   
                   
-           SET @c_ODUDEF05 = ''     --INC0582740
+              SET @c_ODUDEF05 = ''     --INC0582740
            
               SELECT TOP 1  
                       @c_UnitPrice = CONVERT(decimal(10,2),o.UnitPrice)  
-                     ,@c_ODUDEF05  = CASE WHEN OH.C_COUNTRY IN ('IN','KR') THEN --WL01
-                      ISNULL(SKUINFO.EXTENDEDFIELD05,'')  ELSE '' END--WL01
+                     ,@c_ODUDEF05  = CASE WHEN OH.C_COUNTRY IN ('IN','KR') THEN ISNULL(SKUINFO.EXTENDEDFIELD05,'')  --WL01
+                                          --WL02 START
+                                          WHEN ISNULL(CL.Short,'N') = 'Y'
+                                          THEN CASE WHEN LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))) > 20
+                                                    THEN SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),1,20) + ' ' + SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),21,LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))))
+                                                    ELSE ISNULL(SKUINFO.EXTENDEDFIELD05,'') END
+                                          --WL02 END
+                                          ELSE '' END--WL01
               FROM ORDERDETAIL AS O WITH(NOLOCK)  
               INNER JOIN ORDERS AS OH WITH (NOLOCK) ON (O.OrderKey = OH.OrderKey)  --WL01
               INNER JOIN SKU WITH (NOLOCK) ON (O.StorerKey = SKU.StorerKey AND O.Sku = SKU.Sku)--WL01
               INNER JOIN SKUINFO WITH (NOLOCK) ON (SKUINFO.StorerKey = SKU.StorerKey AND O.Sku = SKUINFO.Sku AND SKU.SKU = SKUINFO.SKU)--WL01
+              LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.Listname = 'REPORTCFG' AND CL.Code = 'ShowModelNumber' AND CL.Storerkey = OH.Storerkey
+                                                      AND CL.code2 = OH.Facility) --WL02
               WHERE o.OrderKey = @c_OrderKey   
               AND   o.Sku = @c_sku   
                 
