@@ -26,6 +26,7 @@ GO
 /* Date         Author   Ver  Purposes                                   */  
 /* 18/10/2018   NJOW01   1.0  addtional Search DPP from codelkup IKVLOC  */
 /* 19/11/2018   TLTING01 1.1  performance tune - avoid bulk delete       */  
+/* 12/05/2020   NJOW02   1.2  performance tune - avoid bulk update       */  
 /*************************************************************************/  
   
 CREATE PROC ispRLBLP03  
@@ -217,7 +218,7 @@ BEGIN
       	PD.EffectiveDate,    		 PD.AddDate,      	  PD.AddWho,
       	PD.EditDate,         		 PD.EditWho,      	  PD.TrafficCop,
       	PD.ArchiveCop,       		 PD.OptimizeCop,      PD.ShipFlag,
-      	PD.PickSlipNo,       		 PD.TaskDetailKey,    PD.TaskManagerReasonKey,
+      	PD.PickSlipNo,       		 '',   								PD.TaskManagerReasonKey,  --NJOW02
       	PD.Notes,      	     		 PD.MoveRefKey,       @c_SourceType 
       FROM LOADPLANDETAIL LD (NOLOCK) 
       JOIN PICKDETAIL PD (NOLOCK) ON LD.Orderkey = PD.Orderkey
@@ -233,7 +234,8 @@ BEGIN
       END      
    END       
 
-   --Remove taskdetailkey 
+   --Remove taskdetailkey --NJOW02
+   /*
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       UPDATE PICKDETAIL_WIP WITH (ROWLOCK) 
@@ -252,6 +254,7 @@ BEGIN
         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+':Load# ' + RTRIM(@c_Loadkey) + '. Update Pickdetail_WIP Table Failed. (ispRLBLP03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
       END 
    END
+   */
    
    --Get Packstation
    IF @n_continue = 1 OR @n_continue = 2
