@@ -29,6 +29,7 @@ GO
 /* 25-Apr-2017  Shong   1.0   Initial Version                           */   
 /* 10-Aug-2017  Shong   1.1   Remove HardCode IP and Port               */ 
 /* 06-Sep-2017  TLTING  1.2   Performance tune                          */ 
+/* 06-May-2020  Shong   1.4   Addding Priority to Q-Cmd Task (SWT01)    */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_QCmd_SubmitAssignTrackingNo] (
    @d_StartDate  DATETIME,  
@@ -59,7 +60,8 @@ BEGIN
          , @c_PORT                  NVARCHAR(5)   = ''
          , @c_IniFilePath           NVARCHAR(200) = ''
          , @c_CmdType               NVARCHAR(10)  = ''        
-         , @c_TaskType              NVARCHAR(1)   = ''        
+         , @c_TaskType              NVARCHAR(1)   = ''     
+         , @n_Priority              INT = 0 -- (SWT01)   
          
 	SELECT @c_APP_DB_Name          = APP_DB_Name
 	      , @c_DataStream          = DataStream 
@@ -70,7 +72,8 @@ BEGIN
          , @c_PORT                = PORT
          , @c_IniFilePath         = IniFilePath
          , @c_CmdType             = CmdType             
-         , @c_TaskType            = TaskType            
+         , @c_TaskType            = TaskType       
+         , @n_Priority            = ISNULL([Priority],0) -- (SWT01)            
 	FROM  QCmd_TransmitlogConfig WITH (NOLOCK)
 	WHERE TableName               = 'ASSIGNTRACKNO'
    AND   [App_Name]					= 'WMS'
@@ -149,7 +152,7 @@ BEGIN
                   EXEC isp_QCmd_SubmitTaskToQCommander 
                           @cTaskType         = 'O' -- D=By Datastream, T=Transmitlog, O=Others
                         , @cStorerKey        = @cStorerKey 
-                        , @cDataStream       = ''
+                        , @cDataStream       = 'AsgnTNo'
                         , @cCmdType          = 'SQL' 
                         , @cCommand          = @cCommand  
                         , @cTransmitlogKey   = @cCarrierName
@@ -164,6 +167,7 @@ BEGIN
                         , @bSuccess          = 1   
                         , @nErr              = 0   
                         , @cErrMsg           = ''   
+                        , @nPriority         = @n_Priority -- (SWT01) 
       		
       	      END TRY
       	      BEGIN CATCH
