@@ -1,7 +1,11 @@
-
 IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_QCmd_ValidateMBOL]')
               and OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[nsp_QCmd_ValidateMBOL]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
   
 /************************************************************************/  
@@ -11,8 +15,9 @@ GO
 /* Updates:                                                             */  
 /* Date         Author       Purposes                                   */  
 /* 23-Mar-2020  Shong        Created                                    */
+/* 29-Mar-2020  TLTING01     StorerConfig - NoCont4VldMBOL              */
+/* 06-May-2020  Shong        Addding Priority to Q-Cmd Task (SWT01)     */
 /************************************************************************/  
-  
 CREATE PROCEDURE [dbo].[nsp_QCmd_ValidateMBOL]  
       @c_StorerKey NVARCHAR(15) = '%'  
      ,@b_debug    INT = 0  
@@ -60,6 +65,9 @@ BEGIN
            ,@c_CmdType             NVARCHAR(10)=''  
            ,@c_TaskType            NVARCHAR(1)=''
            ,@n_ShipCounter         INT = 0       
+           ,@n_Priority            INT = 0 -- (SWT01)
+           
+   DECLARE @n_SC_NoCont4VldMBOL INT = 0  
       
     SELECT @c_APP_DB_Name = APP_DB_Name  
           ,@c_DataStream          = DataStream  
@@ -71,6 +79,7 @@ BEGIN
           ,@c_IniFilePath         = IniFilePath  
           ,@c_CmdType             = CmdType  
           ,@c_TaskType            = TaskType  
+          ,@n_Priority            = ISNULL([Priority],0) -- (SWT01)
     FROM   QCmd_TransmitlogConfig WITH (NOLOCK)  
     WHERE  TableName              = 'BackendValidMBOL'  
            AND [App_Name]         = 'WMS'  
@@ -148,27 +157,50 @@ BEGIN
                ' Minute Diff: ' +   CONVERT(VARCHAR(20), DATEDIFF(minute, @d_EditDate, GETDATE())) +
                ' Ship Counter: ' +  CAST(@n_ShipCounter AS VARCHAR(3)) 
       END  
-      
 
       -- If this is the 1st time, go to submit task.
       IF @c_ValidatedFlag = 'N'
          GOTO SUBMIT_TASK
 
-      SET @c_ContainerStatus = '0'
-         
-      SELECT TOP 1 
-         @c_ContainerStatus =  ISNULL(C.[Status],'0')  
-      FROM CONTAINER C WITH (NOLOCK)  
-      JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON C.ContainerKey = CD.ContainerKey  
-      JOIN dbo.Mbol M WITH (NOLOCK) ON CD.PalletKey = M.ExternMbolKey  
-      WHERE M.MBOLKey = @c_MBOLKey  
-      AND C.ContainerType = 'ECOM' 
+     --TLTING01                        
+      SET @n_SC_NoCont4VldMBOL = 0
+      EXECUTE nspGetRight   
+         NULL,          -- facility  
+         @c_StorerKey, -- StorerKey  
+         NULL,          -- Sku  
+         'NoCont4VldMBOL', -- Configkey for CartonTrack delay archive 
+         @b_Success OUTPUT,   
+         @n_SC_NoCont4VldMBOL OUTPUT,     -- this is return result
+         @n_err OUTPUT,  
+         @c_errmsg OUTPUT
+    
+      IF (@n_err <> 0)
+      BEGIN
+         PRINT N' FAIL Retrieved Config.  ConfigKey ''NoCont4VldMBOL'' for storerkey ''' + @c_StorerKey +'''. '
+      END   
 
-      IF @b_debug = 1  
-      BEGIN  
-         PRINT '   Container Status: ' + @c_ContainerStatus 
-      END 
-            
+      SET @c_ContainerStatus = '0'
+      -- tlting01
+      IF @n_SC_NoCont4VldMBOL = 1
+      BEGIN
+         SET @c_ContainerStatus   = '9'
+      END
+      ELSE
+      BEGIN             
+         SELECT TOP 1 
+            @c_ContainerStatus =  ISNULL(C.[Status],'0')  
+         FROM CONTAINER C WITH (NOLOCK)  
+         JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON C.ContainerKey = CD.ContainerKey  
+         JOIN dbo.Mbol M WITH (NOLOCK) ON CD.PalletKey = M.ExternMbolKey  
+         WHERE M.MBOLKey = @c_MBOLKey  
+         AND C.ContainerType = 'ECOM' 
+
+         IF @b_debug = 1  
+         BEGIN  
+            PRINT '   Container Status: ' + @c_ContainerStatus 
+         END 
+      END
+      
       -- If Validation Fail, try 3 times
       IF @c_ValidatedFlag = 'E' AND @n_ShipCounter >= 3 AND @c_ContainerStatus <> '9'
       BEGIN
@@ -261,6 +293,7 @@ BEGIN
                   , @bSuccess          = 1     
                   , @nErr              = 0     
                   , @cErrMsg           = ''     
+                  , @nPriority         = @n_Priority -- (SWT01)
 
             IF @b_debug = 1  
             BEGIN  
