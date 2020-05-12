@@ -29,6 +29,8 @@ GO
 /*                            else orders.storerkey and add codelkup    */
 /* 3/12/2019   mingle01 1.1   continue to use case when to select       */
 /*                            orders.incoterm else orders.storerkey     */
+/* 08/05/2020  WLChooi  1.2   WMS-13267 - Add ReportCFG to remove logo  */
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC isp_delivery_note13
          @c_Mbolkey     NVARCHAR(10) 
@@ -135,25 +137,30 @@ BEGIN
                   ELSE 'SLIPI - JAKARTA 11410, INDONESIA' END AS Address3,
              CASE WHEN ISNULL(CL1.SHORT,'N') = 'Y' THEN CASE WHEN ISNULL(A.Storerkey,'') = '' THEN ('Tel: ' + (LTRIM(RTRIM(ISNULL(C.Phone1,'')))) + ', ' + 'Fax: ' + TRIM(RTRIM(ISNULL(C.Fax1,'')))) 
                                                    ELSE ('Tel: ' + (LTRIM(RTRIM(ISNULL(A.Phone1,'')))) + ', ' + 'Fax: ' + LTRIM(RTRIM(ISNULL(A.Fax1,''))))  END 
-                  ELSE 'TEL: +62 21 2567 8989, FAX: +62 21 5366 1038' END as Fax
+                  ELSE 'TEL: +62 21 2567 8989, FAX: +62 21 5366 1038' END as Fax,
              --end --mingle01
+             ISNULL(CL2.Short,'N') AS RemoveLogo
       FROM ORDERS (NOLOCK)     
-           JOIN ORDERDETAIL (NOLOCK) ON ( ORDERS.OrderKey = ORDERDETAIL.OrderKey ) 
-           JOIN PICKDETAIL (NOLOCK) ON ( ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey ) AND    
-                                       ( ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber )  
-           JOIN SKU (NOLOCK) ON ( SKU.StorerKey = ORDERDETAIL.Storerkey ) AND    
-                                 (SKU.Sku = ORDERDETAIL.Sku )     
-           JOIN LOTATTRIBUTE (NOLOCK) ON ( PICKDETAIL.Lot = LOTATTRIBUTE.Lot)     
-           JOIN MBOL (NOLOCK) ON ( ORDERS.Mbolkey = MBOL.Mbolkey )    
-           LEFT JOIN CODELKUP (NOLOCK) ON (ORDERS.Storerkey = CODELKUP.Storerkey AND CODELKUP.Listname='REPORTCOPY' 
-                                       AND CODELKUP.Long = 'r_dw_delivery_note13')  
-           --start --mingle01
-           LEFT JOIN STORER A (NOLOCK) ON A.StorerKey = ORDERS.IncoTerm                       
-           JOIN STORER B (NOLOCK) ON B.Storerkey = CASE WHEN ISNULL(A.StorerKey,'') = '' THEN  ORDERS.Storerkey ELSE ORDERS.Consigneekey END --mingle01           
-           JOIN STORER C (NOLOCK) ON C.Storerkey = ORDERS.Storerkey--mingle01      
-           LEFT JOIN CODELKUP AS CL1 (NOLOCK) ON (ORDERS.Storerkey = CL1.Storerkey AND CL1.Listname='REPORTCFG' 
-                                       AND CL1.Long = 'r_dw_delivery_note13') AND CL1.CODE = 'ShowIncoTermInfo'
-           --end --mingle01
+      JOIN ORDERDETAIL (NOLOCK) ON ( ORDERS.OrderKey = ORDERDETAIL.OrderKey ) 
+      JOIN PICKDETAIL (NOLOCK) ON ( ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey ) AND    
+                                  ( ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber )  
+      JOIN SKU (NOLOCK) ON ( SKU.StorerKey = ORDERDETAIL.Storerkey ) AND    
+                            (SKU.Sku = ORDERDETAIL.Sku )     
+      JOIN LOTATTRIBUTE (NOLOCK) ON ( PICKDETAIL.Lot = LOTATTRIBUTE.Lot)     
+      JOIN MBOL (NOLOCK) ON ( ORDERS.Mbolkey = MBOL.Mbolkey )    
+      LEFT JOIN CODELKUP (NOLOCK) ON (ORDERS.Storerkey = CODELKUP.Storerkey AND CODELKUP.Listname='REPORTCOPY' 
+                                  AND CODELKUP.Long = 'r_dw_delivery_note13')  
+      --start --mingle01
+      LEFT JOIN STORER A (NOLOCK) ON A.StorerKey = ORDERS.IncoTerm                       
+      JOIN STORER B (NOLOCK) ON B.Storerkey = CASE WHEN ISNULL(A.StorerKey,'') = '' THEN  ORDERS.Storerkey ELSE ORDERS.Consigneekey END --mingle01           
+      JOIN STORER C (NOLOCK) ON C.Storerkey = ORDERS.Storerkey--mingle01      
+      LEFT JOIN CODELKUP AS CL1 (NOLOCK) ON (ORDERS.Storerkey = CL1.Storerkey AND CL1.Listname='REPORTCFG' 
+                                  AND CL1.Long = 'r_dw_delivery_note13') AND CL1.CODE = 'ShowIncoTermInfo'
+      --end --mingle01
+      --WL01 START
+      LEFT JOIN CODELKUP AS CL2 (NOLOCK) ON (ORDERS.Storerkey = CL2.Storerkey AND CL2.Listname='REPORTCFG' 
+                                  AND CL2.Long = 'r_dw_delivery_note13') AND CL2.CODE = 'RemoveLogo'   
+      --WL01 END
       WHERE ( ORDERS.Status = '9' ) AND     
             ( MBOL.Mbolkey = @c_Mbolkey )      
       GROUP BY --ORDERS.Storerkey, 
@@ -246,8 +253,9 @@ BEGIN
                     ELSE 'SLIPI - JAKARTA 11410, INDONESIA' END,
                CASE WHEN ISNULL(CL1.SHORT,'N') = 'Y' THEN CASE WHEN ISNULL(A.Storerkey,'') = '' THEN ('Tel: ' + (LTRIM(RTRIM(ISNULL(C.Phone1,'')))) + ', ' + 'Fax: ' + TRIM(RTRIM(ISNULL(C.Fax1,'')))) 
                                                      ELSE ('Tel: ' + (LTRIM(RTRIM(ISNULL(A.Phone1,'')))) + ', ' + 'Fax: ' + LTRIM(RTRIM(ISNULL(A.Fax1,''))))  END 
-                    ELSE 'TEL: +62 21 2567 8989, FAX: +62 21 5366 1038' END
+                    ELSE 'TEL: +62 21 2567 8989, FAX: +62 21 5366 1038' END,
                --end    --mingle01
+               ISNULL(CL2.Short,'N')   --WL01
    END
    
 END -- procedure

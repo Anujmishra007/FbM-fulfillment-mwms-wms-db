@@ -27,6 +27,8 @@
    /*                                                                      */
    /* Updates:                                                             */
    /* Date         Author    Ver.  Purposes                                */
+   /* 23-APR-2020  WLChooi   1.1   WMS-13022 - ShowModelNumber by ReportCFG*/
+   /*                              (WL01)                                  */    
    /************************************************************************/
    
    CREATE PROC isp_CommecialInvoice_06 (
@@ -121,7 +123,7 @@
                ShipMode         NVARCHAR(18) NULL,
                SONo             NVARCHAR(30) NULL,
                consigneekey     NVARCHAR(20) NULL,
-               ODUDF05          NVARCHAR(30) NULL,        
+               ODUDF05          NVARCHAR(50) NULL,   --WL01        
                Taxtitle         NVARCHAR(20) NULL,
                Amt              FLOAT ,                   
                TaxAmt           FLOAT NULL,               
@@ -139,7 +141,7 @@
                Orderkey         NVARCHAR(20) NULL,
                Madein           NVARCHAR(250) NULL
             ,  OrderKey_Inv     NVARCHAR(10) NULL     
-			,  Freight          FLOAT     
+            ,  Freight          FLOAT     
             )
             
 
@@ -149,12 +151,10 @@
       SKU            NVARCHAR(20) NULL,
       lot11          NVARCHAR(50) NULL,
       company        NVARCHAR(45) NULL
-   ,  OrderKey_Inv     NVARCHAR(10)                      
+   ,  OrderKey_Inv   NVARCHAR(10)                      
       )
 
       SET @c_UPDATECCOM = 'N'              
-
-
 
       CREATE TABLE #TEMP_Orderkey
                (  MBOLKey          NVARCHAR(20) NULL,
@@ -186,8 +186,6 @@
          FROM MBOLDETAIL MBD WITH (NOLOCK)
          WHERE MBD.MBolKey = @c_MBOLKey
       END   
-
-
 
       INSERT INTO #TEMP_CommINV06
       SELECT  MBOL.Mbolkey AS MBOLKEY,
@@ -276,7 +274,14 @@
              ORDERS.Userdefine03 AS ShipMode,
              ORDERS.Userdefine01 AS SONo,
              ORDERS.Consigneekey AS Consigneekey,
-             ORDERDETAIL.Userdefine05 AS ODUDF05,'Tax:',
+             --WL01 START
+             CASE WHEN ISNULL(CL1.Short,'N') = 'Y' 
+                  THEN CASE WHEN LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))) > 16 
+                            THEN SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),1,16) + ' ' + SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),17,LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))))    --WL04
+                            ELSE ISNULL(SKUINFO.EXTENDEDFIELD05,'') END
+             ELSE ORDERDETAIL.Userdefine05 END AS ODUDF05,
+             --WL01 END
+             'Tax:',
 			 CASE WHEN ISNUMERIC(ISNULL(ORDERS.INVOICENO,'')) = 1 THEN 
 			 ROUND( (1+(CAST(ORDERS.INVOICENO AS FLOAT)/100)) * (SUM(PICKDETAIL.Qty)*CONVERT(decimal(10,2),ORDERDETAIL.UnitPrice)),2)  
 					ELSE ROUND(SUM(PICKDETAIL.Qty)*CONVERT(decimal(10,2),ORDERDETAIL.UnitPrice),2) END AS Amt,
@@ -326,11 +331,11 @@
                            ELSE '' END
              ELSE '' END AS CON_Address4
              , ORDERS.OrderGroup AS OrdGrp
-			 , '' AS palletkey,0,ORDERS.Orderkey,'' AS madein
-			 , OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN ORDERS.Orderkey ELSE '' END
-			 , CASE WHEN ISNUMERIC(ISNULL(ORDERS.INVOICENO,'')) = 1 THEN 
-			   ROUND( (CAST(ORDERS.INVOICENO AS FLOAT)/100) * (SUM(PICKDETAIL.Qty)*CONVERT(decimal(10,2),ORDERDETAIL.UnitPrice)),2)  
-			   ELSE CONVERT(decimal(10,2),0) END AS Freight
+             , '' AS palletkey,0,ORDERS.Orderkey,'' AS madein
+             , OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN ORDERS.Orderkey ELSE '' END
+             , CASE WHEN ISNUMERIC(ISNULL(ORDERS.INVOICENO,'')) = 1 THEN 
+             ROUND( (CAST(ORDERS.INVOICENO AS FLOAT)/100) * (SUM(PICKDETAIL.Qty)*CONVERT(decimal(10,2),ORDERDETAIL.UnitPrice)),2)  
+             ELSE CONVERT(decimal(10,2),0) END AS Freight
              FROM MBOL WITH (NOLOCK)
              INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)
              INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)
@@ -343,62 +348,73 @@
                                                      AND ORDERDETAIL.OrderLineNumber=pickdetail.OrderLineNumber)
              INNER JOIN LOTATTRIBUTE LOTT WITH (NOLOCK) ON (LOTT.Lot=PICKDETAIL.Lot AND LOTT.Storerkey=PICKDETAIL.Storerkey
                                                           AND LOTT.SKU=PICKDETAIL.SKU)
-              LEFT JOIN STORER STW WITH (NOLOCK) ON (STW.Storerkey = 'LOGITWDDP')    
-              LEFT JOIN STORER SHK WITH (NOLOCK) ON (SHK.Storerkey = 'LOGIHKDDP')
-              LEFT JOIN STORER MWRHK WITH (NOLOCK) ON (MWRHK.Storerkey = 'LOGISMWRHK')    
-              LEFT JOIN STORER MWRTW WITH (NOLOCK) ON (MWRTW.Storerkey = 'LOGISMWRTW') 
-              LEFT JOIN STORER MWRAU WITH (NOLOCK) ON (MWRAU.Storerkey = 'LOGISMWRAU')    
-              LEFT JOIN STORER MWRNZ WITH (NOLOCK) ON (MWRNZ.Storerkey = 'LOGISMWRNZ')                                               
-      WHERE MBOL.Mbolkey = @c_mbolkey
-      AND EXISTS (SELECT 1 FROM #TEMP_Orderkey TMP WHERE TMP.Orderkey = ORDERS.Orderkey)      
-      GROUP BY  MBOL.Mbolkey ,
-             ORDERS.PmtTerm,
-             Lott.lottable11,
-             ORDERS.ExternPOKey,
-             ORDERS.Userdefine05,
-             ORDERS.ExternOrderKey,
-             ISNULL(S.B_Company,'') ,
-             ISNULL(S.B_Address1,'') ,
-             ISNULL(S.B_Address2,'') ,
-             ISNULL(S.B_Address3,'') ,
-             ISNULL(S.B_Address4,'') ,
-              ISNULL(S.B_Phone1,'') ,
-             (ISNULL(S.b_city,'')+ SPACE(2) + ISNULL(S.B_state,'') + SPACE(2) +  ISNULL(s.B_zip,'') +
-              ISNULL(S.B_country,'') ) ,
-             ISNULL(ORDERS.B_Company,'') ,
-             ISNULL(ORDERS.B_Address1,'') ,
-             ISNULL(ORDERS.B_Address2,'') ,
-             ISNULL(ORDERS.B_Address3,'') ,
-             ISNULL(ORDERS.B_Address4,'') ,
-             (ISNULL(ORDERS.B_City,'') + SPACE(2) + ISNULL(ORDERS.B_State,'') + SPACE(2) +
-             ISNULL(ORDERS.B_Zip,'') + SPACE(2) +   ISNULL(ORDERS.B_Country,'')) ,
-             ORDERS.C_Company ,
-             ISNULL(ORDERS.C_Address1,'') ,
-             ISNULL(ORDERS.C_Address2,'') ,
-             ISNULL(ORDERS.C_Address3,'') ,
-             ISNULL(ORDERS.C_Address4,'') ,
-             (ISNULL(ORDERS.C_City,'') + SPACE(2) + ISNULL(ORDERS.C_State,'') + SPACE(2) +
-             ISNULL(ORDERS.C_Zip,'') + SPACE(2) +   ISNULL(ORDERS.C_Country,'')) ,
-             ISNULL(ORDERS.C_phone1,'') , ISNULL(ORDERS.C_contact1,'') , 
-             ISNULL(ORDERS.C_country,''),  ISNULL(S.country,'') , 
-             ORDERS.StorerKey,
-             ORDERDETAIL.SKU,
-             RTRIM(SKU.Descr) ,
-             CONVERT(decimal(10,2),ORDERDETAIL.UnitPrice) ,
-             ORDERDETAIL.Userdefine03,ORDERS.Userdefine03,
-             ORDERS.Userdefine01 ,ORDERS.Consigneekey,ORDERDETAIL.Userdefine05                  
-             ,ORDERS.Facility,ORDERS.C_Country,ORDERS.UserDefine05,SHK.company,STW.company      
-             ,SHK.Address1,STW.Address1 ,SHK.Address2,STW.Address2 ,SHK.Address3,STW.Address3  --CS03
-             ,ORDERS.Ordergroup ,ORDERS.type,ISNULL(MWRHK.company,''),ISNULL(MWRTW.company,'')  
-             ,ISNULL(MWRAU.company,''),ISNULL(MWRNZ.company,''),ISNULL(MWRHK.Address1,'')
-             ,ISNULL(MWRTW.Address1,''),ISNULL(MWRAU.Address1,''),ISNULL(MWRNZ.Address1,'')
-             ,ISNULL(MWRHK.Address2,''),ISNULL(MWRTW.Address2,''),ISNULL(MWRAU.Address2,''),ISNULL(MWRNZ.Address2,'')
-             ,ISNULL(MWRHK.Address3,'')
-             ,ISNULL(MWRTW.Address3,''),ISNULL(MWRAU.Address3,''),ISNULL(MWRNZ.Address3,'')
-             ,ISNULL(MWRHK.Address4,'')
-             ,ISNULL(MWRTW.Address4,''),ISNULL(MWRAU.Address4,''),ISNULL(MWRNZ.Address4,'')
-             ,ORDERS.Orderkey
-			 ,ORDERS.INVOICENO
+             LEFT JOIN STORER STW WITH (NOLOCK) ON (STW.Storerkey = 'LOGITWDDP')    
+             LEFT JOIN STORER SHK WITH (NOLOCK) ON (SHK.Storerkey = 'LOGIHKDDP')
+             LEFT JOIN STORER MWRHK WITH (NOLOCK) ON (MWRHK.Storerkey = 'LOGISMWRHK')    
+             LEFT JOIN STORER MWRTW WITH (NOLOCK) ON (MWRTW.Storerkey = 'LOGISMWRTW') 
+             LEFT JOIN STORER MWRAU WITH (NOLOCK) ON (MWRAU.Storerkey = 'LOGISMWRAU')    
+             LEFT JOIN STORER MWRNZ WITH (NOLOCK) ON (MWRNZ.Storerkey = 'LOGISMWRNZ')   
+             LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.Listname = 'REPORTCFG' AND CL1.Code = 'ShowModelNumber' AND CL1.Storerkey = ORDERS.Storerkey
+                                                  AND CL1.code2 = ORDERS.Facility) --WL01        
+             LEFT JOIN SKUINFO WITH (NOLOCK) ON (SKUINFO.StorerKey = SKU.StorerKey    
+                                                  AND ORDERDETAIL.Sku = SKUINFO.Sku AND SKU.SKU = SKUINFO.SKU) --WL01                                     
+             WHERE MBOL.Mbolkey = @c_mbolkey
+             AND EXISTS (SELECT 1 FROM #TEMP_Orderkey TMP WHERE TMP.Orderkey = ORDERS.Orderkey)      
+             GROUP BY  MBOL.Mbolkey ,
+                       ORDERS.PmtTerm,
+                       Lott.lottable11,
+                       ORDERS.ExternPOKey,
+                       ORDERS.Userdefine05,
+                       ORDERS.ExternOrderKey,
+                       ISNULL(S.B_Company,'') ,
+                       ISNULL(S.B_Address1,'') ,
+                       ISNULL(S.B_Address2,'') ,
+                       ISNULL(S.B_Address3,'') ,
+                       ISNULL(S.B_Address4,'') ,
+                       ISNULL(S.B_Phone1,'') ,
+                       (ISNULL(S.b_city,'')+ SPACE(2) + ISNULL(S.B_state,'') + SPACE(2) +  ISNULL(s.B_zip,'') +
+                       ISNULL(S.B_country,'') ) ,
+                       ISNULL(ORDERS.B_Company,'') ,
+                       ISNULL(ORDERS.B_Address1,'') ,
+                       ISNULL(ORDERS.B_Address2,'') ,
+                       ISNULL(ORDERS.B_Address3,'') ,
+                       ISNULL(ORDERS.B_Address4,'') ,
+                       (ISNULL(ORDERS.B_City,'') + SPACE(2) + ISNULL(ORDERS.B_State,'') + SPACE(2) +
+                       ISNULL(ORDERS.B_Zip,'') + SPACE(2) +   ISNULL(ORDERS.B_Country,'')) ,
+                       ORDERS.C_Company ,
+                       ISNULL(ORDERS.C_Address1,'') ,
+                       ISNULL(ORDERS.C_Address2,'') ,
+                       ISNULL(ORDERS.C_Address3,'') ,
+                       ISNULL(ORDERS.C_Address4,'') ,
+                       (ISNULL(ORDERS.C_City,'') + SPACE(2) + ISNULL(ORDERS.C_State,'') + SPACE(2) +
+                       ISNULL(ORDERS.C_Zip,'') + SPACE(2) +   ISNULL(ORDERS.C_Country,'')) ,
+                       ISNULL(ORDERS.C_phone1,'') , ISNULL(ORDERS.C_contact1,'') , 
+                       ISNULL(ORDERS.C_country,''),  ISNULL(S.country,'') , 
+                       ORDERS.StorerKey,
+                       ORDERDETAIL.SKU,
+                       RTRIM(SKU.Descr) ,
+                       CONVERT(decimal(10,2),ORDERDETAIL.UnitPrice) ,
+                       ORDERDETAIL.Userdefine03,ORDERS.Userdefine03,
+                       ORDERS.Userdefine01 ,ORDERS.Consigneekey
+                       --WL01 START
+                      ,CASE WHEN ISNULL(CL1.Short,'N') = 'Y' 
+                       THEN CASE WHEN LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))) > 16 
+                                 THEN SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),1,16) + ' ' + SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),17,LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))))    --WL04
+                                 ELSE ISNULL(SKUINFO.EXTENDEDFIELD05,'') END
+                       ELSE ORDERDETAIL.Userdefine05 END
+                       --WL01 END             
+                      ,ORDERS.Facility,ORDERS.C_Country,ORDERS.UserDefine05,SHK.company,STW.company      
+                      ,SHK.Address1,STW.Address1 ,SHK.Address2,STW.Address2 ,SHK.Address3,STW.Address3  --CS03
+                      ,ORDERS.Ordergroup ,ORDERS.type,ISNULL(MWRHK.company,''),ISNULL(MWRTW.company,'')  
+                      ,ISNULL(MWRAU.company,''),ISNULL(MWRNZ.company,''),ISNULL(MWRHK.Address1,'')
+                      ,ISNULL(MWRTW.Address1,''),ISNULL(MWRAU.Address1,''),ISNULL(MWRNZ.Address1,'')
+                      ,ISNULL(MWRHK.Address2,''),ISNULL(MWRTW.Address2,''),ISNULL(MWRAU.Address2,''),ISNULL(MWRNZ.Address2,'')
+                      ,ISNULL(MWRHK.Address3,'')
+                      ,ISNULL(MWRTW.Address3,''),ISNULL(MWRAU.Address3,''),ISNULL(MWRNZ.Address3,'')
+                      ,ISNULL(MWRHK.Address4,'')
+                      ,ISNULL(MWRTW.Address4,''),ISNULL(MWRAU.Address4,''),ISNULL(MWRNZ.Address4,'')
+                      ,ORDERS.Orderkey
+                      ,ORDERS.INVOICENO
 
       
       SET @c_FromCountry = ''    
