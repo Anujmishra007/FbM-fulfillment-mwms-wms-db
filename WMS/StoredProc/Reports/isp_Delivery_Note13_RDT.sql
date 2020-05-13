@@ -36,6 +36,7 @@ GO
 /*                            & field23(remarks) mapping (CS01)          */
 /* 02-JUNE-2017 CSCHONG 1.6   WMS-2049 Add new field (CS02)              */
 /* 30-JAN-2018  CSCHONG 1.7   WMS-3813 - Revised report logic (CS03)     */
+/* 05-MAY-2020  KuanYee 1.8   INC1132406 - Bug Fix (KY01)                */   
 /*************************************************************************/
 
 CREATE PROC isp_Delivery_Note13_RDT 
@@ -441,7 +442,8 @@ BEGIN
    VALUES ('isp_Delivery_Note13_RDT', getdate(), @c_DWCategory, @c_Loadkey, @c_orderkey, @n_SerialNo, suser_name())
 END
 
-      SELECT SerialNo = RIGHT('00' + CONVERT(NVARCHAR(2), #TMP_SER.SerialNo),2)
+      SELECT SerialNo = CASE WHEN LEN(#TMP_SER.SerialNo) < 3 THEN RIGHT('00' + CONVERT(NVARCHAR(2), #TMP_SER.SerialNo),2) ELSE CONVERT(NVARCHAR(10), #TMP_SER.SerialNo) END --(KY01)
+                        --RIGHT('00' + CONVERT(NVARCHAR(2), #TMP_SER.SerialNo),2)    
             ,Article = CASE WHEN TMP.Sku IS NULL THEN ''
                        ELSE SUBSTRING(#TMP_SER.Sku,1,7) + '-' + SUBSTRING(#TMP_SER.Sku,8,3) + '-' +  SUBSTRING(#TMP_SER.Sku,11,3)
                        END
