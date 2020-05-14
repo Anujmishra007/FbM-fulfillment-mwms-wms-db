@@ -1,6 +1,6 @@
---if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_CancelOrdersWithTransferTrasmitlog]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
---drop procedure [dbo].[isp_CancelOrdersWithTransferTrasmitlog]
---GO
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_CancelOrdersWithTransferTrasmitlog]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_CancelOrdersWithTransferTrasmitlog]
+GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
