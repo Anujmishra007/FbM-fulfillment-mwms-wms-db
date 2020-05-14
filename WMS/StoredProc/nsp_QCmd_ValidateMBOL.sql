@@ -1,12 +1,14 @@
-IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_QCmd_ValidateMBOL]')
+IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_QCmd_ValidateMBOL] ')
               and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[nsp_QCmd_ValidateMBOL]
+   DROP PROCEDURE [dbo].[nsp_QCmd_ValidateMBOL] 
 GO
 
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
   
 /************************************************************************/  
 /* Stored Procedure: nsp_QCmd_ValidateMBOL                              */  
@@ -335,5 +337,6 @@ BEGIN
 END  
 GO
 
-GRANT EXECUTE ON [dbo].[nsp_QCmd_ValidateMBOL] TO NSQL 
+
+GRANT EXECUTE ON [dbo].[nsp_QCmd_ValidateMBOL]  TO NSQL 
 GO

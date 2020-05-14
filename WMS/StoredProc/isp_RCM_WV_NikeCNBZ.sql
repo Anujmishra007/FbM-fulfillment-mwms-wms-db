@@ -31,6 +31,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */   
 /* 19-Sep-2019  WLChooi   1.1   WMS-10618 - New Tablename - ALLOCLP2LOG */
 /*                              (WL01)                                  */  
+/* 08-Apr-2020  WLChooi   1.2   WMS-12756 - New Tablename - ALLOCLP3LOG */
+/*                              (WL02)                                  */ 
 /************************************************************************/    
     
 CREATE  PROCEDURE isp_RCM_WV_NikeCNBZ    
@@ -66,6 +68,8 @@ BEGIN
    SELECT 'ALLOCLPLOG'
    UNION ALL 
    SELECT 'ALLOCLP2LOG'
+   UNION ALL              --WL02
+   SELECT 'ALLOCLP3LOG'   --WL02
    --WL01 End
                   
    SELECT @n_Continue = 1, @b_success = 1, @n_starttcnt=@@TRANCOUNT, @c_errmsg='', @n_err=0     
