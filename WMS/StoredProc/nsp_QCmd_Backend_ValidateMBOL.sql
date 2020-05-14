@@ -11,6 +11,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author       Purposes                                   */  
 /* 23-Mar-2020  Shong        Created                                    */
+/* 29-Mar-2020  TLTING01     StorerConfig - NoCont4VldMBOL              */
 /************************************************************************/  
   
 CREATE PROCEDURE [dbo].[nsp_QCmd_Backend_ValidateMBOL]  
@@ -38,6 +39,33 @@ BEGIN
            @b_ReturnErr       INT = 0,  
            @c_ReturnErrMsg    NVARCHAR (255) = '',  
            @b_success         INT = 0   
+  --TLTING01
+   DECLARE @c_VStorerKey      NVARCHAR(15) = ''
+   DECLARE @n_SC_NoCont4VldMBOL INT = 0  
+                      
+   --TLTING01
+   SELECT TOP 1 @c_VStorerKey = O.StorerKey    
+   FROM dbo.MBOLDETAIL MD (NOLOCK) 
+   JOIN Orders O (NOLOCK) ON O.Orderkey = MD.Orderkey
+   WHERE MD.MBOLKey = @c_MBOLKey
+      
+   SET @n_SC_NoCont4VldMBOL = 0
+   EXECUTE nspGetRight   
+      NULL,          -- facility  
+      @c_VStorerKey, -- StorerKey  
+      NULL,          -- Sku  
+      'NoCont4VldMBOL', -- Configkey for CartonTrack delay archive 
+      @b_Success OUTPUT,   
+      @n_SC_NoCont4VldMBOL OUTPUT,     -- this is return result
+      @n_err OUTPUT,  
+      @c_errmsg OUTPUT
+    
+   IF (@n_err <> 0)
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = N' FAIL Retrieved.  ConfigKey ''NoCont4VldMBOL'' for storerkey ''' +@c_VStorerKey
+                        +'''. '
+   END   
      
    IF @c_ValidatedFlag = 'Y'  
    BEGIN  
@@ -98,21 +126,29 @@ BEGIN
    END  
    ELSE  
    BEGIN  
-      SET @c_ContainerStatus = '0'  
-  
-      SELECT TOP 1  
-         @c_ContainerStatus = ISNULL(C.[Status],'0')  
-      FROM CONTAINER C WITH (NOLOCK)  
-      JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON C.ContainerKey = CD.ContainerKey  
-      JOIN dbo.Mbol M WITH (NOLOCK) ON CD.PalletKey = M.ExternMbolKey  
-      WHERE M.MBOLKey = @c_MBOLKey  
-      AND C.ContainerType = 'ECOM'  
-  
-      IF @b_debug = 1  
-      BEGIN  
-         PRINT 'MBOLKey - ' + @c_MBOLKey  
-         PRINT 'Container Status - ' + @c_ContainerStatus  
-      END  
+
+     -- TLTING01
+      SET @c_ContainerStatus = '0'
+
+      IF @n_SC_NoCont4VldMBOL = 1
+      BEGIN
+         SET @c_ContainerStatus   = '9'
+      END
+      ELSE
+      BEGIN       
+         SELECT TOP 1  
+            @c_ContainerStatus = ISNULL(C.[Status],'0')  
+         FROM CONTAINER C WITH (NOLOCK)  
+         JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON C.ContainerKey = CD.ContainerKey  
+         JOIN dbo.Mbol M WITH (NOLOCK) ON CD.PalletKey = M.ExternMbolKey  
+         WHERE M.MBOLKey = @c_MBOLKey  
+         AND C.ContainerType = 'ECOM'  
+         IF @b_debug = 1  
+         BEGIN  
+            PRINT 'MBOLKey - ' + @c_MBOLKey  
+            PRINT 'Container Status - ' + @c_ContainerStatus  
+         END  
+      END         
   
       IF @c_ContainerStatus = '9'  
       BEGIN  

@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Rev   Purposes                                  */
 /* 07-AUG-2018 Wan01    1.1   Fixed                                     */
+/* 06-May-2020 Shong    1.2   Addding Priority to Q-Cmd Task (SWT01)    */
 /************************************************************************/
 CREATE PROC [dbo].[isp_QCmd_SubmitBackendAllocTask_2] ( 
 	  @nAllocBatchNo BIGINT = 0 	
@@ -91,7 +92,9 @@ BEGIN
          , @c_IniFilePath           NVARCHAR(200) = ''
          , @c_CmdType               NVARCHAR(10)  = ''      
          , @c_TaskType              NVARCHAR(1)   = ''  
-
+         , @n_Priority              INT = 0 -- (SWT01)
+         
+         
 	SELECT @c_APP_DB_Name         = APP_DB_Name
 	      , @c_DataStream          = DataStream 
 	      , @n_ThreadPerAcct       = ThreadPerAcct 
@@ -101,7 +104,8 @@ BEGIN
          , @c_PORT                = PORT
          , @c_IniFilePath         = IniFilePath
          , @c_CmdType             = CmdType             
-         , @c_TaskType            = TaskType            
+         , @c_TaskType            = TaskType    
+         , @n_Priority            = ISNULL([Priority],0) -- (SWT01)        
 	FROM  QCmd_TransmitlogConfig WITH (NOLOCK)
 	WHERE TableName               = 'BACKENDALLOC'
    AND   [App_Name]					= 'WMS'
@@ -182,7 +186,7 @@ BEGIN
       
             BEGIN TRY
                EXEC isp_QCmd_SubmitTaskToQCommander 
-                        @cTaskType         = 'O' -- D=By Datastream, T=Transmitlog, O=Others       
+                       @cTaskType         = 'O' -- D=By Datastream, T=Transmitlog, O=Others       
                      , @cStorerKey        = @cStorerKey                                            
                      , @cDataStream       = ''                                                     
                      , @cCmdType          = 'SQL'                                                  
@@ -199,6 +203,7 @@ BEGIN
                      , @bSuccess          = @bSuccess OUTPUT  
                      , @nErr              = @nErr OUTPUT  
                      , @cErrMsg           = @cErrMsg OUTPUT
+                     , @nPriority         = @n_Priority -- (SWT01)
             
                IF @nErr <> 0 AND ISNULL(@cErrMsg,'') <> ''
                BEGIN

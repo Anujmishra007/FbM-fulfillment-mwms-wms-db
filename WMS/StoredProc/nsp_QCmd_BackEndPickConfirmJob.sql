@@ -1,13 +1,12 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_QCmd_BackEndPickConfirmJob]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_QCmd_BackEndPickConfirmJob]')
+              and OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[nsp_QCmd_BackEndPickConfirmJob]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/  
 /* Stored Procedure: nsp_QCmd_BackEndPickConfirmJob                     */  
 /* Purpose: Update PickDetail to Status 5 from backend                  */  
@@ -15,7 +14,8 @@ GO
 /* Called By: SQL Schedule Job   BEJ - Backend Pick (All Storers)       */  
 /* Updates:                                                             */  
 /* Date         Author       Purposes                                   */  
-/* 2019-12-13  SHONG     1.0 Submit to Q-Commander                      */
+/* 2019-12-13   SHONG        1.0 Submit to Q-Commander                  */
+/* 06-May-2020  Shong        Addding Priority to Q-Cmd Task (SWT01)     */
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[nsp_QCmd_BackEndPickConfirmJob]  
      @cStorerKey NVARCHAR(15)  
@@ -53,7 +53,8 @@ BEGIN
            ,@c_PORT                NVARCHAR(5)=''
            ,@c_IniFilePath         NVARCHAR(200)=''
            ,@c_CmdType             NVARCHAR(10)=''
-           ,@c_TaskType            NVARCHAR(1)=''    
+           ,@c_TaskType            NVARCHAR(1)='' 
+           ,@n_Priority            INT = 0 -- (SWT01)   
     
     SELECT @c_APP_DB_Name = APP_DB_Name
           ,@c_DataStream          = DataStream
@@ -65,6 +66,7 @@ BEGIN
           ,@c_IniFilePath         = IniFilePath
           ,@c_CmdType             = CmdType
           ,@c_TaskType            = TaskType
+          ,@n_Priority            = ISNULL([Priority],0) -- (SWT01)
     FROM   QCmd_TransmitlogConfig WITH (NOLOCK)
     WHERE  TableName              = 'BACKENDPICK'
            AND [App_Name]         = 'WMS'
@@ -158,6 +160,7 @@ BEGIN
                   , @bSuccess          = 1   
                   , @nErr              = 0   
                   , @cErrMsg           = ''   
+                  , @nPriority         = @n_Priority -- (SWT01)
       		
          END TRY
          BEGIN CATCH
@@ -189,9 +192,7 @@ EXIT_SP:
       RETURN  
    END  
 END
-
 GO
 
-GRANT EXECUTE ON [dbo].[nsp_QCmd_BackEndPickConfirmJob] TO NSQL
+GRANT EXECUTE ON [dbo].[nsp_QCmd_BackEndPickConfirmJob]  TO NSQL 
 GO
-

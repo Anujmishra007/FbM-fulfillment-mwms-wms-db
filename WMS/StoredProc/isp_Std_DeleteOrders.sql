@@ -11,7 +11,9 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2020-04-27 1.0  SHONG      Created                                         */   
+/* 2020-04-27 1.0  SHONG      Created                                         */  
+/* 2020-05-06 1.1  SHONG      Not allow to proceed if OrderKey = BLANK or     */
+/*                            OrderKey not found                              */
 /******************************************************************************/                 
 CREATE PROC [dbo].[isp_Std_DeleteOrders] (
    @c_OrderKey    NVARCHAR(10),
@@ -36,12 +38,26 @@ BEGIN
    SELECT @n_StartTCnt=@@TRANCOUNT  
    
    BEGIN TRAN;
-   
+
+   IF ISNULL(RTRIM(@c_OrderKey), '') = ''
+   BEGIN
+      SET @n_Error = 65006
+      SET @c_ErrMsg = 'OrderKey is BLANK'
+      GOTO EXIT_SP      
+   END
+
+   SET @c_StorerKey=''   
    SELECT  @c_Status   = ISNULL(o.[Status],''), 
            @c_SOStatus = ISNULL(o.SOStatus,''),
            @c_StorerKey = ISNULL(o.StorerKey,'') 
    FROM ORDERS AS o WITH(NOLOCK)
    WHERE o.OrderKey = @c_OrderKey
+   IF @c_StorerKey=''
+   BEGIN
+      SET @n_Error = 65007
+      SET @c_ErrMsg = 'OrderKey is Exists'
+      GOTO EXIT_SP            
+   END
 
    IF @c_SOStatus = 'CANC' OR @c_Status = 'CANC'
    BEGIN
@@ -56,8 +72,7 @@ BEGIN
    BEGIN
       SET @n_Error = 65002
       SET @c_ErrMsg = 'Order Already Shipped, Not allow to delete'
-      GOTO EXIT_SP
-      
+      GOTO EXIT_SP      
    END
    
    SET @c_PickSlipNo = ''
@@ -103,6 +118,8 @@ BEGIN
    SELECT TaskDetailKey
    FROM TaskDetail WITH (NOLOCK)
    WHERE OrderKey = @c_OrderKey
+   AND Storerkey = @c_StorerKey
+   AND OrderKey <> ''
    AND [Status] <> '9'
    
    OPEN CUR_TaskDetail
