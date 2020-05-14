@@ -30,8 +30,9 @@ GO
 /* 2019-09-10  Wan01    1.1   Fixed.QtyReplen has not updated to LotxLocxid*/
 /*                            yet. Get Same Lot,Loc,Id repeatedly          */
 /* 2019-11-27  CSCHONG  1.2   WMS-11125 revised parameter list (CS01)      */
+/* 2020-03-23  CSCHONG  1.3   WMS-12435 revised replen logic (CS02)        */
 /***************************************************************************/
-alter PROC [dbo].[isp_ReplenishmentRpt_PC27]
+CREATE PROC [dbo].[isp_ReplenishmentRpt_PC27]
                @c_zone01            NVARCHAR(10)
 ,              @c_zone02            NVARCHAR(10)
 ,              @c_zone03            NVARCHAR(10)
@@ -96,6 +97,8 @@ BEGIN
             ,  @c_sqlgrpby         NVARCHAR(MAX)
             ,  @c_ExecStatements   NVARCHAR(4000)  
             ,  @c_ExecArguments    NVARCHAR(4000) 
+            ,  @c_LottableName     NVARCHAR(30)     --(CS02)
+            ,  @c_LottableValue    NVARCHAR(30)     --(CS02)
 
        --CS01 END
 
@@ -172,8 +175,8 @@ BEGIN
 
       SET @c_NoMixLottable02  = '0'
       SET @c_Lottable02       = '' 
-     SET @c_condition1 = ''       --CS01
-     SET @c_condition2 = ''       --CS01
+      SET @c_condition1 = ''       --CS01
+      SET @c_condition2 = ''       --CS01
       /* Make a temp version of SKUxLOC */
 
       IF OBJECT_ID('tempdb..#TempSKUxLOC','u') IS NOT NULL
@@ -378,6 +381,7 @@ BEGIN
                         ,SUSR2      = SUSR2
                   FROM #TempSKUxLOC
                END
+
       /* Loop through SKUxLOC for the currentSKU, current storer */
       /* to pickup the next severity */
       DECLARE CUR_SKUxLOC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -454,6 +458,8 @@ BEGIN
          AND LLI.Loc = @c_CurrentLoc
          AND LLI.Qty - LLI.QtyPicked > 0
 
+      
+
          IF @c_Storerkey_CL <> @c_Storerkey
          BEGIN
             SET @c_ReplFullPallet = 'N'
@@ -474,12 +480,13 @@ BEGIN
          SET @n_FilterQty = 1
          IF @c_ReplFullPallet = 'Y'
          BEGIN
-            IF @n_Pallet = 0   
+            IF @n_Pallet = 0  
             BEGIN  
                GOTO NEXT_SKUxLOC    
             END  
             SET @n_FilterQty = @n_Pallet  
          END
+
 
          SET @n_ShelfLife = 0
          SET @d_today = CONVERT(DATETIME,'1900-01-01')
@@ -544,6 +551,7 @@ BEGIN
 
          WHILE @@Fetch_Status <> -1 AND @n_RemainingQty > 0
          BEGIN
+
             --(Wan01) - Fixed - QtyReplen has not updated to LotxLocxid yet
             IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
                         WHERE LOT = @c_fromlot 
@@ -635,6 +643,46 @@ BEGIN
                BEGIN
                   GOTO NEXT_CANDIDATE
                END
+
+            --CS02 START
+             SELECT @c_LottableName = ''
+               SELECT TOP 1 @c_LottableName = Code
+               FROM CODELKUP (NOLOCK)  
+               WHERE Listname = 'REPLENLOT'  
+               AND Storerkey = @c_StorerKey  
+            --AND Short = 'Y'  
+              ORDER BY Code  
+
+            --CS02 START
+     SET @c_LottableValue = ''
+     IF ISNULL(@c_LottableName,'') <> ''
+     BEGIN
+
+     
+    SET @c_SQL = N'SELECT TOP 1 @c_LottableValue = LA.' + RTRIM(LTRIM(@c_LottableName))  +  
+           ' FROM LOTATTRIBUTE LA (NOLOCK)      
+            WHERE LA.StorerKey = @c_Storerkey     
+            AND LA.lot = @c_FromLot  '   
+           -- AND LLI.Loc = @c_CurrentLoc''    
+           
+            EXEC sp_executesql @c_SQL,  
+            N'@c_LottableValue NVARCHAR(30) OUTPUT, @c_Storerkey NVARCHAR(15), @c_FromLot NVARCHAR(20)',   
+            @c_LottableValue OUTPUT,  
+            @c_Storerkey,  
+            @c_FromLot
+    END
+   --    print @c_SQL
+   --select @c_SQL
+   --select @c_Storerkey'@c_Storerkey', @c_FromLot '@c_FromLot',@c_LottableName '@c_LottableName',@c_LottableValue 'c_LottableValue'
+
+   
+       IF ISNULL(@c_LottableValue,'') <> ''    --CS02
+         BEGIN  
+              GOTO NEXT_CANDIDATE    
+         END  
+
+       --CS02 END
+
 
                IF @n_FromQty > @n_RemainingQty
                BEGIN
@@ -800,6 +848,7 @@ BEGIN
                            , @c_UOM
    WHILE @@FETCH_STATUS <> -1
    BEGIN
+
       EXECUTE nspg_GetKey
             'REPLENISHKEY'
          ,  10

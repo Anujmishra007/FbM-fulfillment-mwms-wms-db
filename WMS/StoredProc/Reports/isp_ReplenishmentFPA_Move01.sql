@@ -27,6 +27,7 @@ GO
 /* 31-Aug-2019  SHONG   1.1   Bug Fixing                                   */
 /* 04-Sep-2019  SHONG   1.2   Bug Fixing 2                                 */
 /* 15-Nov-2019  Leong   1.3   INC0934078 - Bug Fix.                        */
+/* 23-Mar-2020  CSCHONG 1.4    WMS-12435 revised replen logic (CS01)       */
 /***************************************************************************/
 
 CREATE PROC [dbo].[isp_ReplenishmentFPA_Move01]
@@ -94,6 +95,9 @@ BEGIN
          , @n_QtyReplen             INT            = 0
          , @c_NextLOC               NVARCHAR(10)   = ''
          , @n_TotReplenQty          INT            = 0
+         , @c_LottableName          NVARCHAR(30)   = ''  --(CS01)
+         , @c_LottableValue         NVARCHAR(30)   = ''  --(CS01)
+         , @c_SQL                   NVARCHAR(MAX)  = ''  --(CS01) 
 
 
    SET @c_Wavekey = LEFT(@c_Key_Type,10)
@@ -350,7 +354,7 @@ BEGIN
 
          IF @b_success = 1
             SET @c_ReplenishmentGroup = 'T' + @c_ReplenishmentGroup
-      END
+         END
 
 
       IF @b_debug = 1
@@ -489,7 +493,7 @@ BEGIN
          SET @n_FilterQty = 1
          IF @c_ReplFullPallet = 'Y'
          BEGIN
-            IF @n_Pallet = 0
+            IF @n_Pallet = 0   
             BEGIN
                GOTO NEXT_SKUxLOC
             END
@@ -653,6 +657,44 @@ BEGIN
                         GOTO NEXT_CANDIDATE
                      END
                   END
+
+              --CS0- START
+             SELECT @c_LottableName = ''
+               SELECT TOP 1 @c_LottableName = Code
+               FROM CODELKUP (NOLOCK)  
+               WHERE Listname = 'REPLENLOT'  
+               AND Storerkey = @c_StorerKey  
+            --AND Short = 'Y'  
+              ORDER BY Code  
+
+     SET @c_LottableValue = ''
+     IF ISNULL(@c_LottableName,'') <> ''
+     BEGIN
+
+     
+    SET @c_SQL = N'SELECT TOP 1 @c_LottableValue = LA.' + RTRIM(LTRIM(@c_LottableName))  +  
+           ' FROM LOTATTRIBUTE LA (NOLOCK)      
+            WHERE LA.StorerKey = @c_Storerkey     
+            AND LA.lot = @c_FromLot  '   
+           -- AND LLI.Loc = @c_CurrentLoc''    
+           
+            EXEC sp_executesql @c_SQL,  
+            N'@c_LottableValue NVARCHAR(30) OUTPUT, @c_Storerkey NVARCHAR(15), @c_FromLot NVARCHAR(20)',   
+            @c_LottableValue OUTPUT,  
+            @c_Storerkey,  
+            @c_FromLot
+    END
+   --    print @c_SQL
+   --select @c_SQL
+   --select @c_Storerkey'@c_Storerkey', @c_FromLot '@c_FromLot',@c_LottableName '@c_LottableName',@c_LottableValue 'c_LottableValue'
+
+   
+       IF ISNULL(@c_LottableValue,'') <> ''   
+         BEGIN  
+              GOTO NEXT_CANDIDATE    
+         END  
+
+       --CS01 END
 
                   IF @n_FromQty > @n_RemainingQty
                   BEGIN
