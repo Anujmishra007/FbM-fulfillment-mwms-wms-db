@@ -1,3 +1,8 @@
+IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_GetInvTrace]')
+              and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+   DROP PROCEDURE [dbo].[isp_GetInvTrace]
+GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -28,17 +33,9 @@ GO
 /* 2019-09-24   TLTING    Performance tune                              */
 /* 2020-01-30   TLTING02  Performance tune                              */
 /* 2020-02-28   TLTING02  TraceInfo                                     */
-/* 2020-02-28   TLTING03  Performance tune                                      */
+/* 2020-02-28   TLTING03  Performance tune                              */
 /************************************************************************/
-
-/*
-
-   INSERT INTO CodeLKUP (LISTNAME,Code,Description,Short, Long)
-   Select 'TraceInfo', 'GetInvTrace','isp_GetInvTrace log', 1 , ''
-
-   */
-
-ALTER  PROCEDURE [dbo].[isp_GetInvTrace]
+CREATE  PROCEDURE [dbo].[isp_GetInvTrace]
         @dt_date_start datetime,
         @dt_date_end datetime,
         @c_facility_start NVARCHAR(5),
@@ -703,3 +700,7 @@ BEGIN
 
    END      
 END
+GO
+
+GRANT EXECUTE ON [dbo].[isp_GetInvTrace] TO NSQL 
+GO
