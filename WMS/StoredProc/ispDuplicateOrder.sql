@@ -5,6 +5,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Stored Procedure: ispDuplicateOrder                                  */
 /* Creation Date:                                                       */
@@ -24,7 +25,8 @@ GO
 /* Updates:                                                             */
 /* 20-May-2014  TKLIM      1.1   Added Lottables 06-15                  */
 /* 28-Jul-2015  SHONG      1.2   Added Number Of Orders to duplicate    */
-/* 27-Feb-2017  TLTING     1.3  Variable Nvarchar                       */
+/* 27-Feb-2017  TLTING     1.3   Variable Nvarchar                      */
+/* 13-May-2020  SHONG      1.4   Adding missing columns                 */
 /************************************************************************/
 CREATE PROC [dbo].[ispDuplicateOrder]   
  (   
@@ -56,92 +58,110 @@ AS
    SELECT @bSuccess = 1
    SET @nCounter = 0  
 
-   WHILE @nCounter <= @nNo2Duplicate
+   WHILE @nCounter < @nNo2Duplicate
    BEGIN
        EXECUTE nspg_GetKey  
-         "ORDER",  
+         'ORDER',  
          10,  
-         @cOrderKey      OUTPUT,  
+         @cOrderKey    OUTPUT,  
          @bSuccess     OUTPUT,  
-         @nErrNo         OUTPUT,  
+         @nErrNo       OUTPUT,  
          @cErrMsg      OUTPUT  
       IF NOT @bSuccess = 1  
       BEGIN  
         GOTO SP_EXIT  
       END  
   
-      SELECT @cOrderKey 'Inserted @cOrderKey'  
+     PRINT 'Inserted @cOrderKey: ' + @cOrderKey   
   
-      INSERT INTO ORDERS(OrderKey, StorerKey, ExternOrderKey,   
-                        OrderDate,        DeliveryDate,       Priority,   
-                        ConsigneeKey,     C_contact1,         C_Contact2,   
-                        C_Company,        C_Address1,         C_Address2,   
-                        C_Address3,       C_Address4,         C_City,   
-                        C_State,          C_Zip,              C_Country,   
-                        C_ISOCntryCode,   C_Phone1,           C_Phone2,   
-                        C_Fax1,           C_Fax2,             C_vat,   
-                        BuyerPO,          BillToKey,          B_contact1,   
-                        B_Contact2,       B_Company,          B_Address1,   
-                        B_Address2,       B_Address3,         B_Address4,   
-                        B_City,           B_State,            B_Zip,   
-                        B_Country,        B_ISOCntryCode,   
-                        B_Phone1,         B_Phone2,           B_Fax1,   
-                        B_Fax2,           B_Vat,              IncoTerm,   
-                        PmtTerm,          OpenQty,            Status,   
-                        DischargePlace,   DeliveryPlace,      IntermodalVehicle,   
-                        CountryOfOrigin,  CountryDestination, UpdateSource,   
-                        Type,             OrderGroup,         Door,   
-                        Route,            Stop,               Notes,   
-                        ContainerType,    ContainerQty,       BilledContainerQty,  
-                        SOStatus,         MBOLKey,            InvoiceNo,   
-                        InvoiceAmount,    Salesman,           GrossWeight,   
-                        Capacity,         PrintFlag,          LoadKey,   
-                        Rdd,              Notes2,             SequenceNo,   
-                        Rds,              SectionKey,         Facility,   
-                        PrintDocDate,     LabelPrice,         POKey,   
-                        ExternPOKey,      XDockFlag,          UserDefine01,   
-                        UserDefine02,     UserDefine03,       UserDefine04,   
-                        UserDefine05,     UserDefine06,       UserDefine07,   
-                        UserDefine08,     UserDefine09,       UserDefine10,   
-                        Issued,           DeliveryNote,       PODCust,   
-                        PODArrive,        PODReject,          PODUser,   
-                        xdockpokey,       SpecialHandling,    DocType, 
-                        ShipperKey)  
-      SELECT @cOrderKey, StorerKey, ExternOrderKey,   
-                        OrderDate,        DeliveryDate,       Priority,   
-                        ConsigneeKey,     C_contact1,         C_Contact2,   
-                        C_Company,        C_Address1,         C_Address2,   
-                        C_Address3,       C_Address4,         C_City,   
-                        C_State,          C_Zip,              C_Country,   
-                        C_ISOCntryCode,   C_Phone1,           C_Phone2,   
-                        C_Fax1,           C_Fax2,             C_vat,   
-                        BuyerPO,          BillToKey,          B_contact1,   
-                        B_Contact2,       B_Company,          B_Address1,   
-                        B_Address2,       B_Address3,         B_Address4,   
-                        B_City,           B_State,            B_Zip,   
-                        B_Country,        B_ISOCntryCode,   
-                        B_Phone1,         B_Phone2,           B_Fax1,   
-                        B_Fax2,           B_Vat,              IncoTerm,   
-                        PmtTerm,          0 As OpenQty,       '0' as Status,   
-                        DischargePlace,   DeliveryPlace,      IntermodalVehicle,   
-                        CountryOfOrigin,  CountryDestination, UpdateSource,   
-                        Type,             OrderGroup,         Door,   
-                        Route,            Stop,               Notes,   
-                        ContainerType,    ContainerQty,       BilledContainerQty,  
-                        '0' as SOStatus,  '' as MBOLKey,      InvoiceNo,   
-                        InvoiceAmount,    Salesman,           GrossWeight,   
-                        Capacity,         '' as PrintFlag,    '' as LoadKey,   
-                        Rdd,              Notes2,             SequenceNo,   
-                        Rds,              SectionKey,         Facility,   
-                        PrintDocDate,     LabelPrice,         POKey,   
-                        ExternPOKey,      XDockFlag,          UserDefine01,   
-                        UserDefine02,     UserDefine03,       UserDefine04,   
-                        UserDefine05,     UserDefine06,       UserDefine07,   
-                        UserDefine08,     UserDefine09,       UserDefine10,   
-                        NULL as Issued,   DeliveryNote,       PODCust,   
-                        PODArrive,        PODReject,          PODUser,   
-                        XDOCKPOKEY,       SpecialHandling,    DocType, 
-                        ShipperKey  
+     INSERT INTO ORDERS
+     (
+        OrderKey,          StorerKey,        ExternOrderKey,
+        OrderDate,         DeliveryDate,     Priority,
+        ConsigneeKey,      C_contact1,       C_Contact2,
+        C_Company,         C_Address1,       C_Address2,
+        C_Address3,        C_Address4,       C_City,
+        C_State,           C_Zip,            C_Country,
+        C_ISOCntryCode,    C_Phone1,         C_Phone2,
+        C_Fax1,            C_Fax2,           C_vat,
+        BuyerPO,           BillToKey,        B_contact1,
+        B_Contact2,        B_Company,        B_Address1,
+        B_Address2,        B_Address3,       B_Address4,
+        B_City,            B_State,          B_Zip,
+        B_Country,         B_ISOCntryCode,   B_Phone1,
+        B_Phone2,          B_Fax1,           B_Fax2,
+        B_Vat,             IncoTerm,         PmtTerm,
+        OpenQty,           [Status],         DischargePlace,
+        DeliveryPlace,     IntermodalVehicle,CountryOfOrigin,
+        CountryDestination,UpdateSource,     [Type],
+        OrderGroup,        Door,             [Route],
+        [Stop],            Notes,            EffectiveDate,
+        ContainerType,     ContainerQty,     BilledContainerQty,
+        SOStatus,          MBOLKey,          InvoiceNo,
+        InvoiceAmount,     Salesman,         GrossWeight,
+        Capacity,          PrintFlag,        LoadKey,
+        Rdd,               Notes2,           SequenceNo,     
+        Rds,               SectionKey,       Facility,     
+        PrintDocDate,      LabelPrice,       POKey,     
+        ExternPOKey,       XDockFlag,        UserDefine01,     
+        UserDefine02,      UserDefine03,     UserDefine04,     
+        UserDefine05,      UserDefine06,     UserDefine07,     
+        UserDefine08,      UserDefine09,     UserDefine10,     
+        Issued,            DeliveryNote,     PODCust,     
+        PODArrive,         PODReject,        PODUser,     
+        xdockpokey,        SpecialHandling,  RoutingTool,     
+        MarkforKey,        M_Contact1,       M_Contact2,     
+        M_Company,         M_Address1,       M_Address2,     
+        M_Address3,        M_Address4,       M_City,     
+        M_State,           M_Zip,            M_Country,     
+        M_ISOCntryCode,    M_Phone1,         M_Phone2,     
+        M_Fax1,            M_Fax2,           M_vat,     
+        ShipperKey,        DocType,          TrackingNo,     
+        ECOM_PRESALE_FLAG, ECOM_SINGLE_Flag, CurrencyCode,     
+        RTNTrackingNo,     BizUnit  )
+      SELECT @cOrderKey,   StorerKey,        ExternOrderKey,
+        OrderDate,         DeliveryDate,     Priority,
+        ConsigneeKey,      C_contact1,       C_Contact2,
+        C_Company,         C_Address1,       C_Address2,
+        C_Address3,        C_Address4,       C_City,
+        C_State,           C_Zip,            C_Country,
+        C_ISOCntryCode,    C_Phone1,         C_Phone2,
+        C_Fax1,            C_Fax2,           C_vat,
+        BuyerPO,           BillToKey,        B_contact1,
+        B_Contact2,        B_Company,        B_Address1,
+        B_Address2,        B_Address3,       B_Address4,
+        B_City,            B_State,          B_Zip,
+        B_Country,         B_ISOCntryCode,   B_Phone1,
+        B_Phone2,          B_Fax1,           B_Fax2,
+        B_Vat,             IncoTerm,         PmtTerm,
+        OpenQty,           '0' as [Status],  DischargePlace,
+        DeliveryPlace,     IntermodalVehicle,CountryOfOrigin,
+        CountryDestination,UpdateSource,     [Type],
+        OrderGroup,        Door,             [Route],
+        [Stop],            Notes,            EffectiveDate,
+        ContainerType,     ContainerQty,     BilledContainerQty,
+        '0' as SOStatus,   '' as MBOLKey,    InvoiceNo,
+        InvoiceAmount,     Salesman,         GrossWeight,
+        Capacity,          'N' as PrintFlag, '' as LoadKey,
+        Rdd,               Notes2,           SequenceNo,     
+        Rds,               SectionKey,       Facility,     
+        PrintDocDate,      LabelPrice,       POKey,     
+        ExternPOKey,       XDockFlag,        UserDefine01,     
+        UserDefine02,      UserDefine03,     UserDefine04,     
+        UserDefine05,      UserDefine06,     UserDefine07,     
+        UserDefine08,      UserDefine09,     UserDefine10,     
+        '' as Issued,      DeliveryNote,     PODCust,     
+        PODArrive,         PODReject,        PODUser,     
+        XDockPOKey,        SpecialHandling,  RoutingTool,     
+        MarkforKey,        M_Contact1,       M_Contact2,     
+        M_Company,         M_Address1,       M_Address2,     
+        M_Address3,        M_Address4,       M_City,     
+        M_State,           M_Zip,            M_Country,     
+        M_ISOCntryCode,    M_Phone1,         M_Phone2,     
+        M_Fax1,            M_Fax2,           M_vat,     
+        ShipperKey,        DocType,          '' AS TrackingNo,     
+        ECOM_PRESALE_FLAG, ECOM_SINGLE_Flag, CurrencyCode,     
+        RTNTrackingNo,     BizUnit  
       FROM  ORDERS (NOLOCK)  
       WHERE ORDERKEY = @cFromOrdKey  
   
