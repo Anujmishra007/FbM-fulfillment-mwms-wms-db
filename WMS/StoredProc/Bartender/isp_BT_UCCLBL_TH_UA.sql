@@ -15,6 +15,7 @@ GO
 /*                                                                            */                       
 /* Date       Rev  Author     Purposes                                        */    
 /*02-Apr-2020 1.0  CSCHONG   WMS-12603 TH-UA_Ecom_Shipping label              */  
+/*28-Apr-2020 1.1  CSCHONG   WMS-12603 add table link logic (CS01)            */
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_UCCLBL_TH_UA]                            
@@ -172,7 +173,8 @@ BEGIN
                    +' JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.Pickslipno = PH.Pickslipno AND PD.sku = ORDET.sku' + CHAR(13)     
                    +' JOIN PACKINFO PI WITH (NOLOCK) ON PD.Pickslipno = PI.Pickslipno AND PI.CartonNo = PD.CartonNo' + CHAR(13)    
                    +' JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = ORD.Storerkey '
-                   +' JOIN CARTONIZATION CT WITH (NOLOCK) ON CT.CartonizationGroup = ST.Cartongroup' + CHAR(13)     
+                   +' JOIN CARTONIZATION CT WITH (NOLOCK) ON CT.CartonizationGroup = ST.Cartongroup ' + CHAR(13)     --CS01
+                   + '                                    AND CT.Cartontype = PI.CartonType '                        --CS01
                    +' WHERE PD.Pickslipno =  @c_Sparm01'                                                  
                    +' AND PD.LabelNo = @c_Sparm02 '                  
                    +' GROUP BY PD.LabelNo, ' + CHAR(13)      
