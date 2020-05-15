@@ -17,6 +17,8 @@ GO
 /*                                                                            */               
 /* Date           Rev  Author     Purposes                                    */       
 /* 03-Oct-2019    1.0  WLChooi    WMS-10789 (Created)                         */ 
+/* 29-Apr-2020    1.1  WLChooi    WMS-13194 - Don't print labelno label from  */
+/*                                second SKU onwards (WL01)                   */
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_CN_PVHLBL1_label]                     
@@ -48,26 +50,27 @@ BEGIN
       @c_sql             NVARCHAR(MAX) ,
       @c_condition       NVARCHAR(4000)       
 
-  DECLARE @d_Trace_StartTime   DATETIME, 
+   DECLARE @d_Trace_StartTime   DATETIME, 
            @d_Trace_EndTime    DATETIME,
            @c_Trace_ModuleName NVARCHAR(20), 
            @d_Trace_Step1      DATETIME, 
            @c_Trace_Step1      NVARCHAR(20),
            @c_UserName         NVARCHAR(20),
            @c_billtokey        NVARCHAR(20),
-           @c_notes            NVARCHAR(250)   
+           @c_notes            NVARCHAR(250),
+           @c_SKU              NVARCHAR(20)   --WL01
 
    SET @d_Trace_StartTime = GETDATE()
    SET @c_Trace_ModuleName = ''
       
     -- SET RowNo = 0           
    
-    SET @n_copy = 0
+   SET @n_copy = 0
     
-    SET @n_copy = CAST (@c_Sparm4 AS INT)
+   SET @n_copy = CAST (@c_Sparm4 AS INT)
           
             
-    CREATE TABLE [#Result] (           
+   CREATE TABLE [#Result] (           
       [ID]    [INT] IDENTITY(1,1) NOT NULL,                          
       [Col01] [NVARCHAR] (80) NULL,            
       [Col02] [NVARCHAR] (80) NULL,            
@@ -145,22 +148,33 @@ BEGIN
     --  [ID]          [INT] IDENTITY(1,1) NOT NULL,                          
     --  [Lottable03]  [NVARCHAR] (80) NULL)           
     
-    SET @c_condition = ''
-    SET @c_billtokey = ''
-    SET @c_notes = ''
+   SET @c_condition = ''
+   SET @c_billtokey = ''
+   SET @c_notes = ''
 
-    INSERT INTO #Result(Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09,Col10,
-                        Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
-                        Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
-                        Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
-                        Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
-                        Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
-    VALUES('','','','','','','','','','',
-           @c_Sparm2,'','','','','','','','','',
-           '','','','','','','','','','',
-           '','','','','','','','','','',
-           '','','','','','','','','','', 
-           '','','','','','','','','','')	
+   --WL01 START
+    
+   SELECT TOP 1 @c_SKU = PD.SKU
+   FROM PACKDETAIL PD (NOLOCK)
+   WHERE PD.LabelNo = @c_Sparm2
+   ORDER BY PD.SKU
+
+   IF @c_SKU = @c_Sparm3
+   BEGIN
+      INSERT INTO #Result(Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09,Col10,
+                          Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
+                          Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
+                          Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
+                          Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
+                          Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
+      VALUES('','','','','','','','','','',
+             @c_Sparm2,'','','','','','','','','',
+             '','','','','','','','','','',
+             '','','','','','','','','','',
+             '','','','','','','','','','', 
+             '','','','','','','','','','')
+   END
+   --WL01 END
     
     INSERT INTO #Result(Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09,Col10,
                         Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
@@ -168,63 +182,63 @@ BEGIN
                         Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
                         Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
                         Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
-    SELECT TOP 1 '',S.style,S.BUSR1,S.color,S.Measurement, S.size,'','','','',
-                 '',@c_Sparm3,S.DESCR,'','','','','','','',
-                 '','','','','','','','','','',
-                 '','','','','','','','','','',
-                 '','','','','','','','','','', 
-                 '','','','','','','','','',''
-    FROM SKU S (NOLOCK)
-    where s.storerkey = @c_Sparm1 
-    and s.sku = @c_Sparm3
-
-    SELECT DISTINCT @c_billtokey   =  billtokey 
-    FROM orders WITH (NOLOCK) 
-    where orderkey in (
-    select orderkey from pickdetail WITH (NOLOCK)  where pickslipno in (select pickslipno 
-    from packdetail WITH (NOLOCK)  where storerkey = @c_Sparm1 and sku = @c_Sparm3 and labelno=@c_Sparm2)) 
-     
-    SELECT @c_notes = notes
-    FROM CODELKUP WITH (NOLOCK) 
-    WHERE LISTNAME='PVHPXLBL'
-    AND code = @c_billtokey
+   SELECT TOP 1 '',S.style,S.BUSR1,S.color,S.Measurement, S.size,'','','','',
+                '',@c_Sparm3,S.DESCR,'','','','','','','',
+                '','','','','','','','','','',
+                '','','','','','','','','','',
+                '','','','','','','','','','', 
+                '','','','','','','','','',''
+   FROM SKU S (NOLOCK)
+   where s.storerkey = @c_Sparm1 
+   and s.sku = @c_Sparm3
+   
+   SELECT DISTINCT @c_billtokey   =  billtokey 
+   FROM orders WITH (NOLOCK) 
+   where orderkey in (
+   select orderkey from pickdetail WITH (NOLOCK)  where pickslipno in (select pickslipno 
+   from packdetail WITH (NOLOCK)  where storerkey = @c_Sparm1 and sku = @c_Sparm3 and labelno=@c_Sparm2)) 
     
+   SELECT @c_notes = notes
+   FROM CODELKUP WITH (NOLOCK) 
+   WHERE LISTNAME='PVHPXLBL'
+   AND code = @c_billtokey
+   
    -- SELECT @c_notes '@c_notes'
-    IF ISNULL(@c_notes,'') <> ''
-    BEGIN
-      SET @c_condition = ' AND ' + @c_notes
-    END      
+   IF ISNULL(@c_notes,'') <> ''
+   BEGIN
+     SET @c_condition = ' AND ' + @c_notes
+   END      
     
-  SET @c_SQLJOIN = +' SELECT DISTINCT @c_Sparm4,SKU.Style,SKU.BUSR1,SKU.Color,SKU.Measurement,'
-                   +' SKU.[Size],'''', ' --7 --OD.userdefine08
-                   +' ISNULL(C1.Short,''''),'                           --CS01
-                   +' CASE WHEN orders.B_Country IN (''SG'',''MY'',''CN'',''HK'',''MO'') THEN '
-                   +' CONVERT(NVARCHAR(10),CAST(OD.Tax01 AS Decimal(10,2))) ELSE CONVERT(NVARCHAR(10),CAST(OD.Tax01 AS Decimal(10,0)))  END,'   --9
-                   +' ISNULL(C2.Short,''''),'''','''','''','''','''','        --15
-                   +' '''','''','''','''','''','      --20
-                   -- +' '''','''','''','''','''','    --25                                                                  
-                   +' '''' ,'''','''','''','''','''','''','''','''','''','''','''','''','''','''', '  --35  
-                   +' '''','''','''','''','''','''','''','''','''','''' ,'''','''','''','''','''','   --50
-                   +' '''','''','''','''','''','''','''','''','''','''' '                              --60
-                   +' FROM PICKDETAIL PID WITH (NOLOCK) '-- ON PID.CaseID=PD.LabelNo'
-                   +' JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey=PID.StorerKey AND SKU.sku = PID.SKU'
-                   +' JOIN ORDERDETAIL OD WITH (NOLOCK) ON od.orderkey=PID.orderkey AND od.sku=PID.sku '
-                   +'                                  AND od.OrderLineNumber=PID.OrderLineNumber  '
-                   +' JOIN ORDERS orders WITH (NOLOCK) ON orders.OrderKey=od.OrderKey '
-                   +' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME=''PVHCURR'' ' 
-                   +'                                    AND C1.Storerkey=orders.StorerKey AND C1.Code=orders.B_Country'
-                   +' LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME=''PVHPXLBL'' '
-                   +'                                    AND C2.Storerkey=orders.StorerKey AND C2.Code=orders.BillToKey '    
-                   +' WHERE PID.StorerKey =  @c_Sparm1 '                                            
-                   +' AND PID.caseid = @c_Sparm2 '  
-                   +' AND PID.sku = @c_Sparm3'                               
+   SET @c_SQLJOIN = +' SELECT DISTINCT @c_Sparm4,SKU.Style,SKU.BUSR1,SKU.Color,SKU.Measurement,'
+                    +' SKU.[Size],'''', ' --7 --OD.userdefine08
+                    +' ISNULL(C1.Short,''''),'                           --CS01
+                    +' CASE WHEN orders.B_Country IN (''SG'',''MY'',''CN'',''HK'',''MO'') THEN '
+                    +' CONVERT(NVARCHAR(10),CAST(OD.Tax01 AS Decimal(10,2))) ELSE CONVERT(NVARCHAR(10),CAST(OD.Tax01 AS Decimal(10,0)))  END,'   --9
+                    +' ISNULL(C2.Short,''''),'''','''','''','''','''','        --15
+                    +' '''','''','''','''','''','      --20
+                    -- +' '''','''','''','''','''','    --25                                                                  
+                    +' '''' ,'''','''','''','''','''','''','''','''','''','''','''','''','''','''', '  --35  
+                    +' '''','''','''','''','''','''','''','''','''','''' ,'''','''','''','''','''','   --50
+                    +' '''','''','''','''','''','''','''','''','''','''' '                              --60
+                    +' FROM PICKDETAIL PID WITH (NOLOCK) '-- ON PID.CaseID=PD.LabelNo'
+                    +' JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey=PID.StorerKey AND SKU.sku = PID.SKU'
+                    +' JOIN ORDERDETAIL OD WITH (NOLOCK) ON od.orderkey=PID.orderkey AND od.sku=PID.sku '
+                    +'                                  AND od.OrderLineNumber=PID.OrderLineNumber  '
+                    +' JOIN ORDERS orders WITH (NOLOCK) ON orders.OrderKey=od.OrderKey '
+                    +' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME=''PVHCURR'' ' 
+                    +'                                    AND C1.Storerkey=orders.StorerKey AND C1.Code=orders.B_Country'
+                    +' LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME=''PVHPXLBL'' '
+                    +'                                    AND C2.Storerkey=orders.StorerKey AND C2.Code=orders.BillToKey '    
+                    +' WHERE PID.StorerKey =  @c_Sparm1 '                                            
+                    +' AND PID.caseid = @c_Sparm2 '  
+                    +' AND PID.sku = @c_Sparm3'                               
                  
    IF @b_debug=1      
    BEGIN      
       PRINT @c_SQLJOIN        
    END              
             
-  SET @c_SQL='INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +         
+   SET @c_SQL='INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +         
              +',Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22'  + CHAR(13) +         
              +',Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34' + CHAR(13) +         
              +',Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44'  + CHAR(13) +         
@@ -258,7 +272,6 @@ BEGIN
    BEGIN      
       SELECT * FROM #Result (nolock)      
    END      
-   
    
    WHILE @n_copy > 1
    BEGIN
@@ -392,9 +405,6 @@ BEGIN
    	
    	SET @n_copy = @n_copy - 1
    END
-
-
-
 
 EXIT_SP:  
 
