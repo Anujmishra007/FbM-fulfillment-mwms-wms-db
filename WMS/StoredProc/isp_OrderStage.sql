@@ -107,8 +107,8 @@ SELECT                O.OrderKey, O.StorerKey, O.ExternOrderKey, O.DeliveryDate,
    ,O.MBOLKey, O.LoadKey, O.Facility, O.ShipperKey, O.DocType, O.TrackingNo , O.ECOM_PRESALE_FLAG
    , case when O.ECOM_PRESALE_FLAG<>'' then 1 else 0 end, O.ECOM_SINGLE_FLAG
    ,O.UserDefine01 ,O.UserDefine02 ,O.UserDefine03
-   ,Lines  = ISNULL(Lines_Open  ,0) + ISNULL(Lines_ALLOC  ,0) + ISNULL(Lines_Pick_Packed  ,0) + ISNULL(Lines_Shipped  ,0)
-   ,Units  = ISNULL(CASE WHEN O.Status='0' THEN OpenQty ELSE 0 END  ,0) + ISNULL(Units_ALLOC  ,0) + ISNULL(Units_Pick_Packed  ,0) + ISNULL(Units_Shipped  ,0)
+   ,Lines  = ISNULL(Lines_Open  ,0) + ISNULL(Lines_ALLOC  ,0) + ISNULL(Lines_Pick_Packed  ,0) + ISNULL(Lines_Shipped  ,0) + ISNULL(Lines_Cancelled  ,0)
+   ,Units  = ISNULL(CASE WHEN O.Status='0' THEN OpenQty ELSE 0 END  ,0) + ISNULL(Units_ALLOC  ,0) + ISNULL(Units_Pick_Packed  ,0) + ISNULL(Units_Shipped  ,0) + ISNULL(CASE WHEN O.Status='CANC' THEN EnteredQTY ELSE 0 END,0)
    ,0 --default PickDet_Lines to 0 first
    ,ISNULL(Orders_Open,0)
    ,ISNULL(Lines_Open,0)
