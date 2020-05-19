@@ -37,6 +37,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
 /*2020-03-17    WLChooi   1.1   Sort by C_Company (WL01)                */
+/*2020-05-13    WLChooi   1.2   WMS-13321 - Add SumQtyPerOrder (WL02)   */
 /************************************************************************/  
 CREATE PROC dbo.isp_loadmani_mbol06 (  
      @c_MBOLKey   NVARCHAR(10)  
@@ -74,6 +75,37 @@ BEGIN
    IF @n_count > 0 SET @c_CheckConso = 'N'
    ELSE SET @c_CheckConso = 'Y'
 
+   --WL02 START
+   CREATE TABLE #TEMP_DATA (
+      Orderkey   NVARCHAR(10),
+      Qty        INT )
+
+   IF @c_CheckConso = 'N'
+   BEGIN
+      INSERT INTO #TEMP_DATA
+      SELECT OH.Orderkey, SUM(PD.Qty) AS Qty
+      FROM MBOL MB (NOLOCK)
+      JOIN ORDERS OH (NOLOCK) ON OH.MBOLKEY = MB.MBOLKEY
+      JOIN PACKHEADER PH (NOLOCK) ON PH.ORDERKEY = OH.ORDERKEY
+      JOIN PACKDETAIL PD (NOLOCK) ON PD.Pickslipno = PH.Pickslipno
+      WHERE MB.MBOLKey = @c_MBOLKey
+      GROUP BY OH.OrderKey
+   END
+   ELSE
+   BEGIN
+      INSERT INTO #TEMP_DATA
+      SELECT OH.Orderkey, SUM(PD.Qty) AS Qty
+      FROM MBOL MB (NOLOCK)
+      JOIN ORDERS OH (NOLOCK) ON OH.MBOLKEY = MB.MBOLKEY
+      JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+      JOIN PACKHEADER PH (NOLOCK) ON LPD.Loadkey = PH.Loadkey
+      JOIN PACKDETAIL PD (NOLOCK) ON PD.Pickslipno = PH.Pickslipno
+      WHERE MB.MBOLKey = @c_MBOLKey
+      GROUP BY OH.OrderKey
+   END
+
+   --WL02 END
+
    IF ((@n_continue = 1 OR @n_continue = 2) AND @c_CheckConso = 'N')
    BEGIN
       SELECT DISTINCT OH.[Route]
@@ -90,11 +122,13 @@ BEGIN
            , OH.ExternOrderKey
            , COUNT(DISTINCT PD.LabelNo) AS TotalLabelNo
            , PLT.Palletkey
+           , temp.Qty --WL02
       FROM ORDERS OH (NOLOCK)
       JOIN MBOL (NOLOCK) ON MBOL.MbolKey = OH.MBOLKey
       JOIN PACKHEADER PH (NOLOCK) ON PH.Orderkey = OH.Orderkey
       JOIN PACKDETAIL PD (NOLOCK) ON PD.Pickslipno = PH.Pickslipno
       CROSS APPLY (SELECT TOP 1 Palletkey FROM PALLETDETAIL PLTD (NOLOCK) WHERE PLTD.UserDefine02 = OH.OrderKey) AS PLT
+      CROSS APPLY (SELECT SUM(t.Qty) AS Qty FROM #TEMP_DATA t WHERE t.Orderkey = OH.Orderkey ) AS temp   --WL02
       WHERE MBOL.MBOLKEY = @c_MBOLKey
       GROUP BY OH.[Route]
              , MBOL.MbolKey
@@ -109,6 +143,7 @@ BEGIN
              , LTRIM(RTRIM(ISNULL(OH.C_Country,'')))
              , OH.ExternOrderKey
              , PLT.Palletkey
+             , temp.Qty --WL02
       ORDER BY OH.C_Company   --WL01
    END
    ELSE IF ((@n_continue = 1 OR @n_continue = 2) AND @c_CheckConso = 'Y')
@@ -127,12 +162,14 @@ BEGIN
            , OH.ExternOrderKey
            , COUNT(DISTINCT PD.LabelNo) AS TotalLabelNo
            , PLT.Palletkey
+           , temp.Qty --WL02
       FROM ORDERS OH (NOLOCK)
       JOIN MBOL (NOLOCK) ON MBOL.MbolKey = OH.MBOLKey
       JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Orderkey = OH.Orderkey
       JOIN PACKHEADER PH (NOLOCK) ON LPD.Loadkey = PH.Loadkey
       JOIN PACKDETAIL PD (NOLOCK) ON PD.Pickslipno = PH.Pickslipno
       CROSS APPLY (SELECT TOP 1 Palletkey FROM PALLETDETAIL PLTD (NOLOCK) WHERE PLTD.UserDefine02 = OH.OrderKey) AS PLT
+      CROSS APPLY (SELECT SUM(t.Qty) AS Qty FROM #TEMP_DATA t WHERE t.Orderkey = OH.Orderkey ) AS temp   --WL02
       WHERE MBOL.MBOLKEY = @c_MBOLKey
       GROUP BY OH.[Route]
              , MBOL.MbolKey
@@ -147,8 +184,14 @@ BEGIN
              , LTRIM(RTRIM(ISNULL(OH.C_Country,'')))
              , OH.ExternOrderKey
              , PLT.Palletkey
+             , temp.Qty --WL02
       ORDER BY OH.C_Company   --WL01
    END
+
+   --WL02 START
+   IF OBJECT_ID('tempdb..#TEMP_DATA') IS NOT NULL
+      DROP TABLE #TEMP_DATA
+   --WL02 END
 
    WHILE @@TRANCOUNT < @n_StartTCnt  
    BEGIN  

@@ -27,6 +27,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 08-May-2020  WLChooi   1.1   WMS-13263 - Revised field logic (WL01)  */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_delivery_note43a_rpt]  
@@ -73,7 +74,8 @@ BEGIN
            , Company          = ORD.Company
            , ConsigneeKey     = ORD.ConsigneeKey
            , C_Company        = ORD.C_Company
-           , C_Address        = RTRIM(RTRIM(RTRIM(RTRIM(RTRIM( ORD.C_Address1 +' '+ ORD.C_Address2 ) + ' '+ ORD.C_Address3) +' '+ ORD.C_Address4) +' '+ ORD.C_City) +' '+ ORD.C_Country)
+           --, C_Address        = RTRIM(RTRIM(RTRIM(RTRIM(RTRIM( ORD.C_Address1 +' '+ ORD.C_Address2 ) + ' '+ ORD.C_Address3) +' '+ ORD.C_Address4) +' '+ ORD.C_City) +' '+ ORD.C_Country)
+           , C_Address        = RTRIM(RTRIM(RTRIM(RTRIM(RTRIM( ORD.C_Company +' '+ ORD.C_Address1 ) + ' '+ ORD.C_Address2) +' '+ ORD.C_Address3) +' '+ ORD.C_City) +' '+ ORD.C_Country)   --WL01
            , C_Country        = ORD.C_Country
            , SoldTo           = ORD.SoldTo
            , Route            = ORD.Route
@@ -93,13 +95,21 @@ BEGIN
               , Storerkey        = ISNULL( RTRIM( OH.Storerkey ), '')
               , Company          = ISNULL( RTRIM( ST.Company ), '')
               , ConsigneeKey     = ISNULL( RTRIM( OH.ConsigneeKey ), '')
-              , C_Company        = ISNULL( RTRIM( OH.C_Company ), '')
-              , C_Address1       = ISNULL( RTRIM( OH.C_Address1 ), '')
-              , C_Address2       = ISNULL( RTRIM( OH.C_Address2 ), '')
-              , C_Address3       = ISNULL( RTRIM( OH.C_Address3 ), '')
-              , C_Address4       = ISNULL( RTRIM( OH.C_Address4 ), '')
-              , C_City           = ISNULL( RTRIM( OH.C_City ), '')
-              , C_Country        = ISNULL( RTRIM( OH.C_Country ), '')
+              --WL01 START
+              , C_Company        = CASE WHEN ISNULL(RTRIM( SR.Fax1 ) , '') = '' THEN ISNULL(RTRIM( OH.C_Company ) , '')
+                                                                                ELSE ISNULL(RTRIM( SR.B_Company ) , '') END
+              , C_Address1       = CASE WHEN ISNULL(RTRIM( SR.Fax1 ) , '') = '' THEN ISNULL(RTRIM( OH.C_Address1 ) , '')
+                                                                                ELSE ISNULL(RTRIM( SR.B_Address1 ) , '') END
+              , C_Address2       = CASE WHEN ISNULL(RTRIM( SR.Fax1 ) , '') = '' THEN ISNULL(RTRIM( OH.C_Address2 ) , '')
+                                                                                ELSE ISNULL(RTRIM( SR.B_Address2 ) , '') END
+              , C_Address3       = CASE WHEN ISNULL(RTRIM( SR.Fax1 ) , '') = '' THEN ISNULL(RTRIM( OH.C_Address3 ) , '')
+                                                                                ELSE ISNULL(RTRIM( SR.B_Address3 ) , '') END
+              , C_Address4       = ISNULL( RTRIM( OH.B_Address4 ), '')
+              , C_City           = CASE WHEN ISNULL(RTRIM( SR.Fax1 ) , '') = '' THEN ISNULL(RTRIM( OH.C_City ) , '')
+                                                                                ELSE ISNULL(RTRIM( SR.B_City ) , '') END
+              , C_Country        = CASE WHEN ISNULL(RTRIM( SR.Fax1 ) , '') = '' THEN ISNULL(RTRIM( OH.C_State ) , '')
+                                                                                ELSE ISNULL(RTRIM( SR.B_Country ) , '') END
+              --WL01 END
               , SoldTo           = ISNULL( RTRIM( OH.BillToKey ), '') +' '+ ISNULL( RTRIM( IIF(OH.Type IN ('L','R'), ST.Company, BT.COmpany) ), '')
               , Route            = ISNULL( RTRIM( OH.Route ), '')
               , DeliveryDate     = OH.DeliveryDate
@@ -110,6 +120,7 @@ BEGIN
            LEFT JOIN dbo.PICKHEADER PIKHDD (NOLOCK) ON PIKHDD.Orderkey = OH.Orderkey AND PIKHDD.Orderkey<>''
            LEFT JOIN dbo.PICKHEADER PIKHDC (NOLOCK) ON PIKHDC.ExternOrderkey = OH.Loadkey AND PIKHDC.ExternOrderkey<>'' AND ISNULL(PIKHDC.Orderkey,'')=''
            LEFT JOIN dbo.STORER     BT     (NOLOCK) ON OH.BillToKey = BT.Storerkey AND BT.Type='2'
+           LEFT JOIN dbo.STORER     SR     (NOLOCK) ON SR.Storerkey = 'QHW-' + LTRIM(RTRIM(OH.ConsigneeKey)) AND SR.ConsigneeFor = 'PVHQHW' AND SR.[Type] = '2'   --WL01
            WHERE OH.Storerkey = @c_storerkey
             --AND (:as_mbolkey<>'' OR :as_loadkey<>'')
             AND (@c_mbolkey = '' OR OH.MBOLKey IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@c_mbolkey,char(13)+char(10),',')) WHERE ColValue <> ''))
