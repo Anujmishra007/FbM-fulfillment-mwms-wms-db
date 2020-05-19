@@ -1,6 +1,7 @@
 IF EXISTS (SELECT name FROM dbo.sysobjects WHERE  name = N'nspPRFEFO2' AND type = 'P')
     DROP PROCEDURE nspPRFEFO2
 GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 
@@ -17,7 +18,7 @@ GO
 /*                                                                      */      
 /* Called By:                                                           */      
 /*                                                                      */      
-/* PVCS Version: 1.5                                                    */      
+/* PVCS Version: 1.6                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -31,7 +32,9 @@ GO
 /*                            consignee                                 */  
 /* 09-NOV-2018  NJOW02  1.3   WMS-6892 change FEFO shelflife filter     */
 /* 24-JUL-2019  NJOW03  1.4   WMS-9509 SG Prestige lottable03 filter    */
-/* 16-Jan-2020  Wan02   1.5   Dynamic SQL review, impact SQL cache log  */    
+/* 16-Jan-2020  Wan02   1.5   Dynamic SQL review, impact SQL cache log  */  
+/* 25-MAR-2020  NJOW04  1.6   WMS-12622 add sku brand and skugroup FEFO */  
+/*                            shelflife by consignee                    */   
 /************************************************************************/      
 
 -- PGD TH Preallocation Strategy 
@@ -71,7 +74,9 @@ DECLARE @c_Lottable04Label NVARCHAR(20),
         @c_SortOrder       NVARCHAR(255),
         @n_ConMinShelfLife INT, --NJOW01
         @c_Orderkey        NVARCHAR(10), --NJOW01
-        @c_Strategykey     NVARCHAR(10)  --NJOW01
+        @c_Strategykey     NVARCHAR(10), --NJOW01
+        @n_SkuGroupShelfLife INT, --NJOW04
+        @n_SkuGroupShelfLife2 INT --NJOW04        
 
 DECLARE @c_SQLParms        NVARCHAR(4000) = ''  --(Wan02) 
 
@@ -256,12 +261,27 @@ BEGIN
       SELECT @c_SortOrder = " ORDER BY LOTATTRIBUTE.Lottable04, LOT.Lot"      
       
       --NJOW01
-    	SELECT @n_ConMinShelfLife = S.MinShelflife
+          	SELECT TOP 1 @n_ConMinShelfLife = S.MinShelflife,
+    	             @n_SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END, --NJOW04
+    	             @n_SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW04
       FROM ORDERS O (NOLOCK)
       JOIN STORER S (NOLOCK) ON O.Consigneekey = S.Storerkey
+      JOIN SKU (NOLOCK) ON SKU.Storerkey = @c_Storerkey AND SKU.Sku = @c_Sku
+      LEFT JOIN CODELKUP CL (NOLOCK) ON (O.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND SKU.SkuGroup = CL.Code2 AND CL.Listname = 'PRESTALLOC'
+                                      AND (S.Secondary = CL.UDF01 OR S.Secondary = CL.UDF02 OR S.Secondary = CL.UDF03 OR S.Secondary = CL.UDF04 OR S.Secondary = CL.UDF05)) --NJOW04
+      OUTER APPLY (SELECT TOP 1 CL3.Short FROM CODELKUP CL3 (NOLOCK) WHERE O.Storerkey = CL3.Storerkey AND SKU.Busr6 <> CL3.Code AND SKU.SkuGroup <> CL3.Code2 AND CL3.Listname = 'PRESTALLOC' AND CL3.Code = 'ALLOTHERS'
+                   AND (S.Secondary = CL3.UDF01 OR S.Secondary = CL3.UDF02 OR S.Secondary = CL3.UDF03 OR S.Secondary = CL3.UDF04 OR S.Secondary = CL3.UDF05)) CL2   --NJOW04      
       WHERE O.Orderkey = @c_Orderkey
 
-      IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_ConMinShelfLife,0) > 0
+      IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife,0) > 0
+      BEGIN
+         SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife " --NJOW04               	
+      END
+      ELSE IF  @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife2,0) > 0
+      BEGIN
+         SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife2 " --NJOW04               	
+      END      
+      ELSE IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_ConMinShelfLife,0) > 0
       BEGIN
       	 --NJOW01
          --SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + " AND Lottable04 > N'"  + CONVERT( NVARCHAR(8), DateAdd(day, @n_ConMinShelfLife, GETDATE()), 112) + "'"      	       	      	 
@@ -326,14 +346,16 @@ BEGIN
                      + ',@d_lottable13 datetime'
                      + ',@d_lottable14 datetime'
                      + ',@d_lottable15 datetime'
-                     + ',@n_ConMinShelfLife  int'
-                     + ',@n_ShelfLife        int'
+                     + ',@n_ConMinShelfLife   int'
+                     + ',@n_ShelfLife         int'
+                     + ',@n_SkuGroupShelfLife int'                                                  
+                     + ',@n_SkuGroupShelfLife2 int'                                                  
       
       EXEC sp_ExecuteSQL @c_SQL, @c_SQLParms, @c_facility, @c_storerkey, @c_SKU
                         ,@c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
                         ,@c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                         ,@c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
-                        ,@n_ConMinShelfLife,@n_ShelfLife 
+                        ,@n_ConMinShelfLife,@n_ShelfLife,@n_SkuGroupShelfLife,@n_SkuGroupShelfLife2                     
       --Wan02 - END         
 
       IF @b_debug = 1 SELECT @c_SQL          
