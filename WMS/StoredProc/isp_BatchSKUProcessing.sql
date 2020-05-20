@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 2.1 (Unicode)                                          */
+/* PVCS Version: 2.3 (Unicode)                                          */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -40,6 +40,9 @@ GO
 /* 23-JUL-2019  Wan02   2.1   ChannelInventoryMgmt use nspGetRight2     */
 /* 23-JUL-2019  Wan03   2.1   WMS - 9914 [MY] JDSPORTSMY - Channel      */
 /*                            Inventory Ignore QtyOnHold - CR           */
+/* 25-Mar-2020  Shong   2.2   WMS-12596 TW Add HostWHCOde               */  
+/* 12-Feb-2020  Wan04   2.3   SQLBindParm. Create Temp table to Store   */
+/*                            Preallocate data from pickcode            */  
 /************************************************************************/
 CREATE PROC [dbo].[isp_BatchSKUProcessing]
      @n_AllocBatchNo  BIGINT
@@ -94,7 +97,6 @@ BEGIN
             @n_LotAvailableQty              INT = 0 --SWT02 
          ,  @n_FacLotAvailQty               INT = 0 --(Wan01) 
          ,  @n_OD_OpenQty                   INT = 0 --SWT03
-
 
    DECLARE 
          @c_Lottable06 NVARCHAR(30),              @c_Lottable07 NVARCHAR(30),
@@ -213,8 +215,8 @@ BEGIN
       Begin
          Select @n_continue = 3, @c_ErrMsg = 'nspLoadProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')
       End
-   END   
-             
+   END  
+   
    SET @c_SkipPreAllocationFlag= '0'
  
    EXEC nspGetRight
@@ -270,7 +272,25 @@ BEGIN
         @c_authority = @c_ALFullPLTByBal        OUTPUT,
         @n_err       = @n_err                   OUTPUT,
         @c_errmsg    = @c_errmsg                OUTPUT
-   
+
+  --(Wan04) - START
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN  
+      IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #ALLOCATE_CANDIDATES;
+      END
+
+      CREATE TABLE #ALLOCATE_CANDIDATES
+      (  RowID          INT            NOT NULL IDENTITY(1,1) 
+      ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+      ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
+      )
+   END
+   --(Wan04) - END   
 
    SET @d_Step1 = GETDATE() - @d_Step1 
    SET @c_Col1 = 'Stp1-Prealloc' 
@@ -338,7 +358,8 @@ BEGIN
          [StrategyKey]              [nvarchar](10) NOT NULL,
          [Facility]                 [nvarchar](5)  NOT NULL,
          [LooseQty]                 [int] NOT NULL, 
-         [Channel]                  [NVARCHAR](20) NOT NULL )
+         [Channel]                  [NVARCHAR](20) NOT NULL, 
+         [HostWHCode]               [NVARCHAR](18) NOT NULL ) -- Add HostWHCode
 
       IF ISNULL(@c_SkipPreAllocationFlag,'0') <> '1'
       BEGIN
@@ -365,7 +386,8 @@ BEGIN
                  WHEN PACK.CaseCnt > 0 THEN PREALLOCATEPICKDETAIL.Qty % CAST(PACK.CaseCnt AS INT)
                  WHEN PACK.Pallet > 0 THEN PREALLOCATEPICKDETAIL.Qty % CAST(PACK.Pallet AS INT) ELSE PREALLOCATEPICKDETAIL.Qty 
             END, 
-            ISNULL(OD.Channel, '')                           
+            ISNULL(OD.Channel, ''),
+            OD.Lottable01 -- HostWHCode                              
          FROM ORDERS (NOLOCK)
          JOIN PREALLOCATEPICKDETAIL (NOLOCK) ON PREALLOCATEPICKDETAIL.OrderKey = ORDERS.OrderKey 
          JOIN ORDERDETAIL AS OD WITH(NOLOCK) ON OD.OrderKey = PREALLOCATEPICKDETAIL.OrderKey 
@@ -411,7 +433,8 @@ BEGIN
                  WHEN PACK.Pallet > 0 THEN (OD.OpenQty - (OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked)) % CAST(PACK.Pallet AS INT) 
                  ELSE (OD.OpenQty - (OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked)) 
             END, 
-            ISNULL(OD.Channel, '')                                    
+            ISNULL(OD.Channel, ''),
+            OD.Lottable01 -- HostWHCode                                        
          FROM ORDERDETAIL OD WITH (NOLOCK)
          JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = OD.StorerKey AND SKU.Sku = OD.Sku
          JOIN STRATEGY (NOLOCK) ON Strategy.StrategyKey = CASE WHEN @c_Strategy = '' THEN SKU.StrategyKey ELSE @c_Strategy END 
@@ -792,7 +815,8 @@ BEGIN
                   #OPORDERLINES.Facility,
                   #OPORDERLINES.UOMQty,
                   SUM(#OPORDERLINES.LooseQty), 
-                  #OPORDERLINES.Channel
+                  #OPORDERLINES.Channel,
+                  #OPORDERLINES.HostWHCode
               FROM #OPORDERLINES
            GROUP BY #OPORDERLINES.StorerKey ,
                   #OPORDERLINES.SKU ,
@@ -802,7 +826,8 @@ BEGIN
                   #OPORDERLINES.StrategyKey,
                   #OPORDERLINES.Facility,
                   #OPORDERLINES.UOMQty, 
-                  #OPORDERLINES.Channel
+                  #OPORDERLINES.Channel,
+                  #OPORDERLINES.HostWHCode
       END
       ELSE
       BEGIN
@@ -820,7 +845,8 @@ BEGIN
                   O.Lottable06, O.Lottable07, O.Lottable08, O.Lottable09, O.Lottable10,       
                   O.Lottable11, O.Lottable12, O.Lottable13, O.Lottable14, O.Lottable15,        
                   SUM(#OPORDERLINES.LooseQty), 
-                  ISNULL(O.Channel,'')  
+                  ISNULL(O.Channel,''),
+                  #OPORDERLINES.HostWHCode   
               FROM #OPORDERLINES
               JOIN ORDERDETAIL o WITH (NOLOCK) ON o.OrderKey = #OPORDERLINES.OrderKey AND o.OrderLineNumber = #OPORDERLINES.OrderLineNumber
            GROUP BY #OPORDERLINES.StorerKey ,
@@ -834,7 +860,8 @@ BEGIN
                   O.Lottable01, O.Lottable02, O.Lottable03, O.Lottable04, O.Lottable05,
                   O.Lottable06, O.Lottable07, O.Lottable08, O.Lottable09, O.Lottable10,           
                   O.Lottable11, O.Lottable12, O.Lottable13, O.Lottable14, O.Lottable15, 
-                  O.Channel            
+                  ISNULL(O.Channel,''),
+                  #OPORDERLINES.HostWHCode             
       END
 
       OPEN C_OPORDERLINES
@@ -855,7 +882,8 @@ BEGIN
                   @c_aFacility,
                   @n_aUOMQty,
                   @n_LooseQty,
-                  @c_Channel
+                  @c_Channel,
+                  @c_HostWHCode
          END
          ELSE
          BEGIN
@@ -885,7 +913,8 @@ BEGIN
                   @d_Lottable14,      
                   @d_Lottable15,       
                   @n_LooseQty,
-                  @c_Channel 
+                  @c_Channel,
+                  @c_HostWHCode 
          END
 
          IF @@Fetch_Status <> 0
