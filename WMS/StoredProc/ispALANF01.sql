@@ -15,18 +15,19 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 1.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver.  Purposes                                */
-/* 2014-05-26   Chee      1.1   Bug Fix when calculating combinations   */
+/* Date        Author   Ver.  Purposes                                  */
+/* 2014-05-26  Chee     1.1   Bug Fix when calculating combinations     */
 /*                              for low UCC qty (Chee01)                */
-/* 2015-02-12   CSCHONG   1.2   New Lottable06 to 15  (CS11)            */
-/* 2015-10-30   Leong     1.3   SOS# 355313 - Change to UNION ALL.      */
+/* 2015-02-12  CSCHONG  1.2   New Lottable06 to 15  (CS11)              */
+/* 2015-10-30  Leong    1.3   SOS# 355313 - Change to UNION ALL.        */
+/* 14-Feb-2020 Wan01    1.4   Dynamic SQL review, impact SQL cache log  */ 
 /************************************************************************/
 
 CREATE PROC [dbo].[ispALANF01]
@@ -56,8 +57,8 @@ CREATE PROC [dbo].[ispALANF01]
 AS
 BEGIN
    SET NOCOUNT ON
-   SET QUOTED_IDENTIFIER OFF
-   SET ANSI_NULLS OFF
+   --SET QUOTED_IDENTIFIER OFF
+   --SET ANSI_NULLS OFF
 
    DECLARE @b_debug       INT,
            @c_SQL         NVARCHAR(MAX),
@@ -88,6 +89,8 @@ BEGIN
    SET @b_debug = 0
    SET @c_LocationType = 'OTHER'
    SET @c_LocationCategory = 'SELECTIVE'
+
+   EXEC isp_Init_Allocate_Candidates         --(Wan01)  
 
    -- GET LoadType FROM LoadPlan
    SELECT TOP 1
@@ -420,21 +423,33 @@ BEGIN
 
                   SET @n_QtyAvailable = @n_UCCQty * @n_CntCount
 
-                  IF ISNULL(@c_SQL,'') = ''
-                  BEGIN
-                     SET @c_SQL = N'
-                           DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
-                           SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
-                           '
-                  END
-                  ELSE
-                  BEGIN
-                     -- SOS# 355313
-                     SET @c_SQL = @c_SQL + N'
-                           UNION ALL
-                           SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
-                           '
-                  END
+                  --(Wan01) - START
+                  --IF ISNULL(@c_SQL,'') = ''
+                  --BEGIN
+                  --   SET @c_SQL = N'
+                  --         DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
+                  --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
+                  --         '
+                  --END
+                  --ELSE
+                  --BEGIN
+                  --   -- SOS# 355313
+                  --   SET @c_SQL = @c_SQL + N'
+                  --         UNION ALL
+                  --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
+                  --         '
+                  --END
+                  SET @c_Lot       = RTRIM(@c_Lot)             
+                  SET @c_Loc       = RTRIM(@c_Loc)
+                  SET @c_ID        = RTRIM(@c_ID)
+
+                  EXEC isp_Insert_Allocate_Candidates
+                     @c_Lot = @c_Lot
+                  ,  @c_Loc = @c_Loc
+                  ,  @c_ID  = @c_ID
+                  ,  @n_QtyAvailable = @n_QtyAvailable
+                  ,  @c_OtherValue = '1'
+                  --(Wan01) - END
                END -- WHILE @n_Count > 0
 
                FETCH NEXT FROM CURSOR_SPLITLIST INTO @n_UCCQty, @n_Count
@@ -445,15 +460,19 @@ BEGIN
       END -- IF @n_QtyLeftToFulfill >= @n_LowerBound
    END  -- IF ISNULL(@c_LoadType,'') IN ('N', 'DCToDC')
 
-   IF ISNULL(@c_SQL,'') <> ''
-   BEGIN
-      EXEC sp_ExecuteSQL @c_SQL
-   END
-   ELSE
-   BEGIN
-      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
-      SELECT TOP 0 NULL, NULL, NULL, NULL, NULL
-   END
+   --(Wan01) - START
+   EXEC isp_Cursor_Allocate_Candidates   
+         @n_SkipPreAllocationFlag = 1    --Return Lot column
+   --IF ISNULL(@c_SQL,'') <> ''
+   --BEGIN
+   --   EXEC sp_ExecuteSQL @c_SQL
+   --END
+   --ELSE
+   --BEGIN
+   --   DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
+   --   SELECT TOP 0 NULL, NULL, NULL, NULL, NULL
+   --END
+   --(Wan01) - END
 END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispALANF01] TO nSQL
