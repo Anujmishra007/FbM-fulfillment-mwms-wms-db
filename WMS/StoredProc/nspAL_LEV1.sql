@@ -16,16 +16,17 @@ GO
 /*                                                                       */            
 /* Called By:                                                            */            
 /*                                                                       */            
-/* PVCS Version: 1.0                                                     */            
+/* PVCS Version: 1.2                                                     */            
 /*                                                                       */            
 /* Version: 7.0                                                          */            
 /*                                                                       */            
 /* Data Modifications:                                                   */            
 /*                                                                       */            
 /* Updates:                                                              */            
-/* Date         Author    Ver.  Purposes                                 */    
-/* 05-Dec-2018  NJOW01    1.0   Fix - short allocation                   */
-/* 27-DEC-2018  Grick01   1.1   INC0513699 - Check for PendingMoveIn(G01)*/
+/* Date         Author  Ver.  Purposes                                   */    
+/* 05-Dec-2018  NJOW01  1.0   Fix - short allocation                     */
+/* 27-DEC-2018  Grick01 1.1   INC0513699 - Check for PendingMoveIn(G01)  */
+/* 27-Feb-2020  Wan01   1.2   Dynamic SQL review, impact SQL cache log   */ 
 /*************************************************************************/            
 
 CREATE PROC nspAL_LEV1
@@ -56,28 +57,29 @@ CREATE PROC nspAL_LEV1
 AS
 BEGIN   
    DECLARE @c_Condition          NVARCHAR(MAX),
-           @c_SQL                NVARCHAR(MAX),
-           @c_OrderBy            NVARCHAR(1000), 
-           @n_QtyToTake          INT,
-           @n_QtyAvailable       INT,
-           @c_Lot                NVARCHAR(10),
-           @c_Loc                NVARCHAR(10), 
-           @c_ID                 NVARCHAR(18),
-           @c_UCCQty             INT,
-           @n_PackQty            INT,
-           @c_OtherValue         NVARCHAR(20),
-           @n_UCCQty             INT,
-           @c_Wavekey            NVARCHAR(10),
-    	     @c_key1               NVARCHAR(10),    
-           @c_key2               NVARCHAR(5),  
-           @c_key3               NCHAR(1),
-           @c_WaveType           NVARCHAR(18),
-           @n_LotQty             INT --NJOW01              
-           
+            @c_SQL                NVARCHAR(MAX),
+            @c_OrderBy            NVARCHAR(1000), 
+            @n_QtyToTake          INT,
+            @n_QtyAvailable       INT,
+            @c_Lot                NVARCHAR(10),
+            @c_Loc                NVARCHAR(10), 
+            @c_ID                 NVARCHAR(18),
+            @c_UCCQty             INT,
+            @n_PackQty            INT,
+            @c_OtherValue         NVARCHAR(20),
+            @n_UCCQty             INT,
+            @c_Wavekey            NVARCHAR(10),
+    	      @c_key1               NVARCHAR(10),    
+            @c_key2               NVARCHAR(5),  
+            @c_key3               NCHAR(1),
+            @c_WaveType           NVARCHAR(18),
+            @n_LotQty             INT --NJOW01  
+                        
+   EXEC isp_Init_Allocate_Candidates         --(Wan01)                
    --NJOW01        
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
-                          QtyAvailable INT NULL DEFAULT(0)
-                          )       
+                           QtyAvailable INT NULL DEFAULT(0)
+                           )       
                                
    IF ISNULL(RTRIM(@c_OtherParms) ,'')<>''          
    BEGIN        
@@ -116,66 +118,66 @@ BEGIN
       
       RETURN    
    END
-                    
+             
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) <> '' AND @c_Lottable01 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = " AND LOTTABLE01 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) + "' "
+      SELECT @c_Condition = " AND LOTTABLE01 = @c_Lottable01 "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable02)) <> '' AND @c_Lottable02 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE02 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable02)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE02 = @c_Lottable02 "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable03)) <> '' AND @c_Lottable03 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE03 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable03)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE03 = @c_Lottable03 "
    END
    IF CONVERT(NVARCHAR(10), @d_Lottable04, 103) <> "01/01/1900" AND @d_Lottable04 IS NOT NULL 
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE04 = N'" + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE04 = CONVERT( NVARCHAR(20), @d_Lottable04, 106) "
    END
    IF CONVERT(NVARCHAR(10), @d_Lottable05, 103) <> "01/01/1900" AND @d_Lottable05 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE05 = N'" + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE05 = CONVERT( NVARCHAR(20), @d_Lottable05, 106) "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable06)) <> '' AND @c_Lottable06 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE06 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable06)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE06 = @c_Lottable06 "
    END   	     	  
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable07)) <> '' AND @c_Lottable07 IS NOT NULL
    BEGIN      
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE07 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable07)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE07 = @c_Lottable07 "
    END   	  
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable08)) <> '' AND @c_Lottable08 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE08 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable08)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE08 = @c_Lottable08 "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable09)) <> '' AND @c_Lottable09 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE09 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable09)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE09 = @c_Lottable09 "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable10)) <> '' AND @c_Lottable10 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE10 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable10)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE10 = @c_Lottable10 "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable11)) <> '' AND @c_Lottable11 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE11 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable11)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE11 = @c_Lottable11 "
    END
    IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable12)) <> '' AND @c_Lottable12 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE12 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable12)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE12 = @c_Lottable12 "
    END
    IF CONVERT(NVARCHAR(10), @d_Lottable13, 103) <> "01/01/1900" AND @d_Lottable13 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE13 = N'" + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE13 = CONVERT( NVARCHAR(20), @d_Lottable13, 106) "
    END
    IF CONVERT(NVARCHAR(10), @d_Lottable14, 103) <> "01/01/1900" AND @d_Lottable14 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE14 = N'" + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE14 = CONVERT( NVARCHAR(20), @d_Lottable14, 106) "
    END
    IF CONVERT(NVARCHAR(10), @d_Lottable15, 103) <> "01/01/1900" AND @d_Lottable15 IS NOT NULL
    BEGIN
-      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE15 = N'" + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) + "' "
+      SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE15 = CONVERT( NVARCHAR(20), @d_Lottable15, 106) "
    END
 
    IF @c_UOM IN ('1','2')  
@@ -213,10 +215,31 @@ BEGIN
           RTRIM(ISNULL(@c_OrderBy,''))
 
    EXEC sp_executesql @c_SQL 
-      , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(15), @c_Facility NVARCHAR(5)'             
+      , N'@c_Storerkey  NVARCHAR(15), @c_Sku NVARCHAR(15), @c_Facility NVARCHAR(5), 
+          @c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18),
+          @d_Lottable04 DATETIME,     @d_Lottable05 DATETIME,     @c_Lottable06 NVARCHAR(30), 
+          @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), 
+          @c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30),
+          @d_Lottable13 DATETIME,     @d_Lottable14 DATETIME,     @d_Lottable15 DATETIME'
+             
       , @c_StorerKey
       , @c_Sku
       , @c_Facility
+      , @c_Lottable01
+      , @c_Lottable02
+      , @c_Lottable03
+      , @d_Lottable04
+      , @d_Lottable05
+      , @c_Lottable06
+      , @c_Lottable07
+      , @c_Lottable08
+      , @c_Lottable09
+      , @c_Lottable10
+      , @c_Lottable11
+      , @c_Lottable12
+      , @d_Lottable13
+      , @d_Lottable14
+      , @d_Lottable15
    
    SET @c_SQL = ''
    
@@ -225,14 +248,14 @@ BEGIN
       
    WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)          
    BEGIN           	
-   	  --NJOW01 S
-   	  IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
-   	  BEGIN
-   	  	 INSERT INTO #TMP_LOT (Lot, QtyAvailable)
-   	  	 SELECT Lot, Qty - QtyAllocated - QtyPicked
-      	 FROM LOT (NOLOCK)
-      	 WHERE LOT = @c_LOT       	 
-   	  END
+      --NJOW01 S
+      IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
+      BEGIN
+         INSERT INTO #TMP_LOT (Lot, QtyAvailable)
+         SELECT Lot, Qty - QtyAllocated - QtyPicked
+         FROM LOT (NOLOCK)
+         WHERE LOT = @c_LOT       	 
+      END
       SET @n_LotQty = 0
       
       SELECT @n_LotQty = QtyAvailable
@@ -268,35 +291,42 @@ BEGIN
          END
       END
                               	     	     
-   	  IF @n_QtyAvailable > @n_QtyLeftToFulfill
-   	     SET @n_QtyToTake = FLOOR(@n_QtyLeftToFulfill / @n_PackQty) * @n_PackQty
-   	  ELSE
-   	     SET @n_QtyToTake = FLOOR(@n_QtyAvailable / @n_PackQty) * @n_PackQty      	           	  
+   	IF @n_QtyAvailable > @n_QtyLeftToFulfill
+   	   SET @n_QtyToTake = FLOOR(@n_QtyLeftToFulfill / @n_PackQty) * @n_PackQty
+   	ELSE
+   	   SET @n_QtyToTake = FLOOR(@n_QtyAvailable / @n_PackQty) * @n_PackQty      	           	  
    	        	 
-   	  IF @n_QtyToTake > 0       	        	  
-   	  BEGIN
-   	  	  --NJOW01
-   	  	  UPDATE #TMP_LOT
-   	  	  SET QtyAvailable = QtyAvailable - @n_QtyToTake
-   	  	  WHERE Lot = @c_Lot
-   	  	  
-          IF ISNULL(@c_SQL,'') = ''
-          BEGIN
-             SET @c_SQL = N'   
-                   DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
-                   SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                   '             
-          END
-          ELSE
-          BEGIN
-             SET @c_SQL = @c_SQL + N'  
-                   UNION ALL
-                   SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                   '
-          END
-       END
-      
-   	  SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake                	 
+   	IF @n_QtyToTake > 0       	        	  
+   	BEGIN
+         --NJOW01
+         UPDATE #TMP_LOT
+         SET QtyAvailable = QtyAvailable - @n_QtyToTake
+         WHERE Lot = @c_Lot
+
+         --(Wan01) - START   	  	  
+         --IF ISNULL(@c_SQL,'') = ''
+         --BEGIN
+         --   SET @c_SQL = N'   
+         --         DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '             
+         --END
+         --ELSE
+         --BEGIN
+         --   SET @c_SQL = @c_SQL + N'  
+         --         UNION ALL
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+         EXEC isp_Insert_Allocate_Candidates
+            @c_Lot = @c_Lot
+         ,  @c_Loc = @c_Loc
+         ,  @c_ID  = @c_ID
+         ,  @n_QtyAvailable = @n_QtyToTake
+         ,  @c_OtherValue = @c_OtherValue
+         --(Wan01) - END
+      END
+   	SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake                	 
              
       FETCH NEXT FROM CURSOR_LEV_AVAILABLE INTO @c_Storerkey, @c_Sku, @c_LOT, @c_Loc, @c_ID, @n_QtyAvailable 
    END -- END WHILE FOR CURSOR_LEV_AVAILABLE                
@@ -306,17 +336,22 @@ BEGIN
       CLOSE CURSOR_LEV_AVAILABLE          
       DEALLOCATE CURSOR_LEV_AVAILABLE          
    END    
-   
-   IF ISNULL(@c_SQL,'') <> ''
-   BEGIN
-      EXEC sp_ExecuteSQL @c_SQL
-   END
-   ELSE
-   BEGIN
-      DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
-   END            
 
+   --(Wan01) - START
+   EXEC isp_Cursor_Allocate_Candidates   
+         @n_SkipPreAllocationFlag = 1    --Return Lot column
+
+   --IF ISNULL(@c_SQL,'') <> ''
+   --BEGIN
+   --   EXEC sp_ExecuteSQL @c_SQL
+   --END
+   --ELSE
+   --BEGIN
+   --   DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+   --   SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
+   --END  
+   --(Wan01) - END     
+   
    EXIT_SP:
 END
 GO
