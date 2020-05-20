@@ -34,6 +34,8 @@ GO
 /* 23-JUL-2019  Wan03   1.6   ChannelInventoryMgmt use nspGetRight2     */
 /* 23-JUL-2019  Wan04   1.7   WMS - 9914 [MY] JDSPORTSMY - Channel      */
 /*                            Inventory Ignore QtyOnHold - CR           */
+/* 12-Feb-2020  Wan05   1.8   SQLBindParm. Create Temp table to Store   */
+/*                            Preallocate data from pickcode            */  
 /************************************************************************/
 CREATE PROC  [dbo].[isp_BatchSKUPreProcessing]
    @n_AllocBatchNo BIGINT
@@ -207,6 +209,24 @@ BEGIN
       END
    END -- Allocate By Order Key
 END
+
+--(Wan04) - START
+IF @n_continue = 1 OR @n_continue = 2  
+BEGIN  
+   IF OBJECT_ID('tempdb..#PREALLOCATE_CANDIDATES','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #PREALLOCATE_CANDIDATES;
+   END
+
+   CREATE TABLE #PREALLOCATE_CANDIDATES
+   (  RowID          INT            NOT NULL IDENTITY(1,1) 
+   ,  Storerkey      NVARCHAR(15)   NOT NULL DEFAULT('')
+   ,  Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
+   ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+   )
+END
+--(Wan04) - END
 
 IF @b_debug = 1 OR @b_debug = 2
 BEGIN

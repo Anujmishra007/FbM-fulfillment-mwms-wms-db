@@ -160,6 +160,9 @@ GO
 /* 23-JUL-2019  Wan03     4.4   ChannelInventoryMgmt use fnc_SelectGetRight*/
 /* 12-Dec-2019  James     4.5   WMS-11215 Add config to bypass receiptserial*/
 /*                              checking (james02)                          */
+/* 26-Mar-2020  NJOW09    4.8   WMS-12665 add config to copy receiptdetail  */
+/*                              field to lottable when finalize asn         */
+/* 15-Apr-2020  NJOW10    4.9   WMS-12880 add offset to ReturnDefaultLottable05*/ 
 /****************************************************************************/ 
  
 CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -188,6 +191,7 @@ DECLARE
        , @n_cnt                int 
        , @c_authority          NVARCHAR(1)    -- Added by June 25.Jun.02 for IDSV5 
        , @c_DefaultLottable_Returns   NVARCHAR(1) -- Added by June 25.Jun.02 for IDSV5 
+       , @c_DeftLot_Returns_Opt1 NVARCHAR(50)   --NJOW10
        , @c_StorerKey          NVARCHAR(15) 
        , @c_sku                NVARCHAR(20) 
        , @c_facility           NVARCHAR(5) 
@@ -241,7 +245,25 @@ DECLARE @c_PODLottable01       NVARCHAR(18)
       , @c_DelToID             NVARCHAR(10)     --TK02 
       , @c_SerialNoCapture     NVARCHAR(1) 
       , @c_loseUCC             NVARCHAR(1) -- (ChewKP01)  
-	  , @c_ASNNoCheckSerialNoCapture NVARCHAR(1)   --CS02   
+	    , @c_ASNNoCheckSerialNoCapture NVARCHAR(1)   --CS02   
+ 	    , @c_CopyRecDetValueToLottable      NVARCHAR(30) --NJOW09
+	    , @c_CopyRecDetValueToLottable_opt1 NVARCHAR(50) --NJOW09
+	    , @c_CopyRecDetValueToLottable_opt2 NVARCHAR(50) --NJOW09
+	    , @c_CopyRecDetValue                NVARCHAR(30) --NJOW09
+      , @n_SeqNo                          INT          --NJOW09
+      , @c_FromColValue 	                NVARCHAR(30) --NJOW09
+      , @c_ToColValue 	                  NVARCHAR(30) --NJOW09
+      , @c_Userdefine01                   NVARCHAR(30) --NJOW09
+      , @c_Userdefine02                   NVARCHAR(30) --NJOW09
+      , @c_Userdefine03                   NVARCHAR(30) --NJOW09
+      , @c_Userdefine04                   NVARCHAR(30) --NJOW09
+      , @c_Userdefine05                   NVARCHAR(30) --NJOW09
+      , @d_Userdefine06                   DATETIME     --NJOW09
+      , @d_Userdefine07                   DATETIME     --NJOW09
+      , @c_Userdefine08                   NVARCHAR(30) --NJOW09
+      , @c_Userdefine09                   NVARCHAR(30) --NJOW09
+      , @c_Userdefine10                   NVARCHAR(30) --NJOW09
+
  
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT 
  
@@ -899,11 +921,22 @@ BEGIN
             DELETED.FinalizeFlag,    --(TK02) 
             DELETED.ToID,   --(TK02) 
             SKU.SerialNoCapture , 
-            INSERTED.Channel  --(SWT02) 
+            INSERTED.Channel,  --(SWT02) 
+            RECEIPTDETAIL.Userdefine01, --NJOW09
+            RECEIPTDETAIL.Userdefine02, --NJOW09
+            RECEIPTDETAIL.Userdefine03, --NJOW09
+            RECEIPTDETAIL.Userdefine04, --NJOW09
+            RECEIPTDETAIL.Userdefine05, --NJOW09
+            RECEIPTDETAIL.Userdefine06, --NJOW09
+            RECEIPTDETAIL.Userdefine07, --NJOW09
+            RECEIPTDETAIL.Userdefine08, --NJOW09
+            RECEIPTDETAIL.Userdefine09, --NJOW09
+            RECEIPTDETAIL.Userdefine10  --NJOW09                        
       FROM INSERTED 
       JOIN DELETED ON (INSERTED.ReceiptKey  = DELETED.ReceiptKey AND INSERTED.ReceiptLineNumber = DELETED.ReceiptLineNumber) 
       JOIN SKU WITH (NOLOCK) ON (INSERTED.SKU = SKU.SKU AND INSERTED.StorerKey = SKU.StorerKey) 
       JOIN RECEIPT WITH (NOLOCK) ON (RECEIPT.ReceiptKey = INSERTED.ReceiptKey AND RECEIPT.ReceiptKey = DELETED.ReceiptKey) 
+      JOIN RECEIPTDETAIL WITH (NOLOCK) ON INSERTED.Receiptkey = RECEIPTDETAIL.Receiptkey AND INSERTED.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber --NJOW09      
       WHERE (INSERTED.QtyReceived - DELETED.QtyReceived > 0  OR INSERTED.BeforeReceivedQty - DELETED.BeforeReceivedQty > 0 ) 
       AND   INSERTED.FinalizeFlag = 'Y' 
       ORDER BY INSERTED.ReceiptKey ,INSERTED.ReceiptLineNumber 
@@ -936,6 +969,8 @@ BEGIN
       ,@n_IncomingShelfLife       ,@c_SubReasonCode           ,@c_ExternLineNo 
       ,@n_TolerancePerc           ,@c_CopyPackKey             ,@c_DelFinalizeFlag   ,@c_DelToID      --(TK02) 
       ,@c_SerialNoCapture         ,@c_Channel  -- (SWT02) 
+      ,@c_Userdefine01, @c_Userdefine02, @c_Userdefine03, @c_Userdefine04, @c_Userdefine05  --NJOW09       
+      ,@d_Userdefine06, @d_Userdefine07, @c_Userdefine08, @c_Userdefine09, @c_Userdefine10  --NJOW09
  
    WHILE (@@FETCH_STATUS <> -1) AND (@n_continue = 1 or @n_continue=2) 
    BEGIN 
@@ -1124,6 +1159,145 @@ BEGIN
             END 
          END 
  
+         --NJOW09 S         
+         SELECT @b_success = 0 
+         EXECUTE nspGetRight 
+                 @c_Facility = NULL,  -- facility 
+                 @c_Storerkey = @c_StorerKey,      -- Storerkey 
+                 @c_Sku = @c_Sku,            -- Sku 
+                 @c_configkey = 'CopyRecDetValueToLottable',  -- Configkey 
+                 @b_Success = @b_success     output, 
+                 @c_Authority = @c_CopyRecDetValueToLottable output, 
+                 @n_err = @n_err2        output, 
+                 @c_errmsg = @c_errmsg      OUTPUT,
+                 @c_Option1 = @c_CopyRecDetValueToLottable_opt1 OUTPUT, --From receiptdetail field e.g. receiptkey, packkey, toid
+                 @c_Option2 = @c_CopyRecDetValueToLottable_opt2 OUTPUT --to lottable field except datetime field e.g. lottable01, lottable08, lottable09
+ 
+         IF @b_success <> 1 
+         BEGIN 
+            SELECT @n_err = 60072 -- @n_err2 
+            SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptDetailUpdate' + dbo.fnc_RTrim(@c_errmsg) 
+         END 
+         ELSE IF @c_CopyRecDetValueToLottable ='1' AND ISNULL(@c_CopyRecDetValueToLottable_opt1,'') <> '' AND ISNULL(@c_CopyRecDetValueToLottable_opt2,'') <> ''
+         BEGIN     
+            DECLARE cur_RECDETVAL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT SeqNo, ColValue
+               FROM dbo.fnc_DelimSplit(',', @c_CopyRecDetValueToLottable_opt1)
+               ORDER BY SeqNo
+
+            OPEN cur_RECDETVAL    
+         
+            FETCH NEXT FROM cur_RECDETVAL INTO @n_SeqNo, @c_FromColValue 
+            
+            WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
+            BEGIN               	 
+            	 SET @c_ToColValue = ''
+
+            	 SELECT @c_ToColvalue = ColValue
+            	 FROM dbo.fnc_DelimSplit(',', @c_CopyRecDetValueToLottable_opt2)
+            	 WHERE SeqNo = @n_SeqNo
+            	 
+            	 IF @@ROWCOUNT = 0 OR @c_ToColvalue NOT IN('LOTTABLE01','LOTTABLE02','LOTTABLE03','LOTTABLE06','LOTTABLE07','LOTTABLE08','LOTTABLE09','LOTTABLE10','LOTTABLE11','LOTTABLE12', 
+            	                                            'USERDEFINE01','USERDEFINE02','USERDEFINE03','USERDEFINE04','USERDEFINE05','USERDEFINE08','USERDEFINE09','USERDEFINE10')
+            	    GOTO NEXT_SEQ
+ 
+               SET @c_CopyRecDetValue = ''
+               
+               SELECT @c_CopyRecDetValue =
+         	     CASE WHEN @c_FromColValue = 'RECEIPTKEY' THEN
+         	            @c_Receiptkey
+         	          WHEN @c_FromColValue = 'RECEIPTLINENUMBER' THEN
+         	            @c_ReceiptLineNumber
+         	          WHEN @c_FromColValue = 'TOLOC' THEN
+         	            @c_ToLoc
+         	          WHEN @c_FromColValue = 'TOID' THEN
+         	            @c_ToID
+         	          WHEN @c_FromColValue = 'LOTTABLE01' THEN
+         	            @c_Lottable01
+         	          WHEN @c_FromColValue = 'LOTTABLE02' THEN
+         	            @c_Lottable02
+         	          WHEN @c_FromColValue = 'LOTTABLE03' THEN
+         	            @c_Lottable03
+         	          WHEN @c_FromColValue = 'LOTTABLE04' THEN
+         	            CONVERT(NVARCHAR, @d_Lottable04, 120)
+         	          WHEN @c_FromColValue = 'LOTTABLE05' THEN
+         	            CONVERT(NVARCHAR, @d_Lottable05, 120)
+         	          WHEN @c_FromColValue = 'LOTTABLE06' THEN
+         	            @c_Lottable06
+         	          WHEN @c_FromColValue = 'LOTTABLE07' THEN
+         	            @c_Lottable07
+         	          WHEN @c_FromColValue = 'LOTTABLE08' THEN
+         	            @c_Lottable08
+         	          WHEN @c_FromColValue = 'LOTTABLE09' THEN
+         	            @c_Lottable09
+         	          WHEN @c_FromColValue = 'LOTTABLE10' THEN
+         	            @c_Lottable10
+         	          WHEN @c_FromColValue = 'LOTTABLE11' THEN
+         	            @c_Lottable11
+         	          WHEN @c_FromColValue = 'LOTTABLE12' THEN
+         	            @c_Lottable12
+         	          WHEN @c_FromColValue = 'LOTTABLE13' THEN
+         	            CONVERT(NVARCHAR, @d_Lottable13, 120)
+         	          WHEN @c_FromColValue = 'LOTTABLE14' THEN
+         	            CONVERT(NVARCHAR, @d_Lottable14, 120)
+         	          WHEN @c_FromColValue = 'LOTTABLE15' THEN
+         	            CONVERT(NVARCHAR, @d_Lottable15, 120)
+         	          WHEN @c_FromColValue = 'PACKKEY' THEN
+         	            @c_packkey
+         	          WHEN @c_FromColValue = 'UOM' THEN
+         	            @c_UOM
+         	          WHEN @c_FromColValue = 'POKEY' THEN
+         	            @c_pokey
+         	          WHEN @c_FromColValue = 'RECTYPE' THEN
+         	            @c_RecType
+         	          WHEN @c_FromColValue = 'DOCTYPE' THEN
+         	            @c_DocType
+         	          WHEN @c_FromColValue = 'EXTERNLINENO' THEN
+         	            @c_ExternLineNo
+         	          WHEN @c_FromColValue = '<EMPTY>' THEN
+         	            ''
+         	          ELSE 'INVALID'
+         	     END
+         	     
+         	     IF @c_CopyRecDetValue = 'INVALID'
+         	        GOTO NEXT_SEQ   	    
+         	                 	       
+               SELECT @c_SQL = N'SELECT @c_' + LTRIM(RTRIM(@c_ToColvalue)) + ' = RTRIM(ISNULL(@c_CopyRecDetValue,'''')) '
+                                                                                               
+               EXEC sp_executesql @c_SQL,
+               N'@c_Lottable01 NVARCHAR(18) OUTPUT, @c_Lottable02 NVARCHAR(18) OUTPUT, @c_Lottable03 NVARCHAR(18) OUTPUT, @c_Lottable06 NVARCHAR(30) OUTPUT, @c_Lottable07 NVARCHAR(30) OUTPUT,  
+                 @c_Lottable08 NVARCHAR(30) OUTPUT, @c_Lottable09 NVARCHAR(30) OUTPUT, @c_Lottable10 NVARCHAR(30) OUTPUT, @c_Lottable11 NVARCHAR(30) OUTPUT, @c_Lottable12 NVARCHAR(30) OUTPUT,
+                 @c_Userdefine01 NVARCHAR(30) OUTPUT, @c_Userdefine02 NVARCHAR(30) OUTPUT, @c_Userdefine03 NVARCHAR(30) OUTPUT, @c_Userdefine04 NVARCHAR(30) OUTPUT, @c_Userdefine05 NVARCHAR(30) OUTPUT,
+                 @c_Userdefine08 NVARCHAR(30) OUTPUT, @c_Userdefine09 NVARCHAR(30) OUTPUT, @c_Userdefine10 NVARCHAR(30) OUTPUT, @c_CopyRecDetValue NVARCHAR(30) ',
+                 @c_Lottable01 OUTPUT,                             
+                 @c_Lottable02 OUTPUT,                             
+                 @c_Lottable03 OUTPUT,                             
+                 @c_Lottable06 OUTPUT,                             
+                 @c_Lottable07 OUTPUT,                             
+                 @c_Lottable08 OUTPUT,                             
+                 @c_Lottable09 OUTPUT,                             
+                 @c_Lottable10 OUTPUT,                             
+                 @c_Lottable11 OUTPUT,                             
+                 @c_Lottable12 OUTPUT,
+                 @c_Userdefine01 OUTPUT,
+                 @c_Userdefine02 OUTPUT,
+                 @c_Userdefine03 OUTPUT,
+                 @c_Userdefine04 OUTPUT,
+                 @c_Userdefine05 OUTPUT,
+                 @c_Userdefine08 OUTPUT,
+                 @c_Userdefine09 OUTPUT,
+                 @c_Userdefine10 OUTPUT,
+                 @c_CopyRecDetValue                                              
+            	                	                	
+            	 NEXT_SEQ:
+            	 
+               FETCH NEXT FROM cur_RECDETVAL INTO @n_SeqNo, @c_FromColValue             	
+            END
+            CLOSE cur_RECDETVAL
+            DEALLOCATE cur_RECDETVAL                                           	     	           	                  	  
+         END 
+         --NJOW09 E         
+ 
          IF @c_Lottable03Label = 'RCP_DATE' AND ( dbo.fnc_RTrim(@c_Lottable03) IS NULL OR  dbo.fnc_RTrim(@c_Lottable03) = '') 
          BEGIN 
             SELECT @c_Lottable03 = CONVERT(CHAR(10), GETDATE(), 21)  /* yyyy-mm-dd */ 
@@ -1145,7 +1319,8 @@ BEGIN
                   @b_success                   output, 
                   @c_DefaultLottable_Returns   output, 
                   @n_err2                      output, 
-                  @c_errmsg                    output 
+                  @c_errmsg                    OUTPUT, 
+                  @c_DeftLot_Returns_Opt1      output --NJOW10
  
             IF @b_success <> 1 
             BEGIN 
@@ -1188,6 +1363,12 @@ BEGIN
                   ,    @b_Success     OUTPUT 
                   ,    @n_err2        OUTPUT 
                   ,    @c_errmsg      OUTPUT 
+
+                  --NJOW10
+                  IF ISNUMERIC(@c_DeftLot_Returns_Opt1) = 1 AND @d_Lottable05 <> '1900-01-01' AND @d_Lottable05 IS NOT NULL
+                  BEGIN
+                    	SET @d_Lottable05 = DATEADD(Day, CAST(@c_DeftLot_Returns_Opt1 AS INT), @d_Lottable05)
+                  END                                 
                END 
             END 
          END -- @n_continue=1 or @n_continue=2 
@@ -1231,7 +1412,13 @@ BEGIN
                   AND Lottable03 = @c_Lottable03 
                   AND convert(char(8), Lottable04) = convert(char(8), @d_Lottable04) 
                END 
-            END    -- END SOS 3333 
+               
+               --NJOW10
+               IF ISNUMERIC(@c_DeftLot_Returns_Opt1) = 1 AND @d_Lottable05 <> '1900-01-01' AND @d_Lottable05 IS NOT NULL AND @@ROWCOUNT > 0
+               BEGIN
+                 	SET @d_Lottable05 = DATEADD(Day, CAST(@c_DeftLot_Returns_Opt1 AS INT), @d_Lottable05)
+               END                                                              
+            END    -- END SOS 3333             
          END   -- Added for IDSV5 by June 25.Jun.02, (extract from IDSHK) 
  
          IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Lottable01Label)) > '' AND (@c_Lottable01 IS NULL OR @c_Lottable01 = '') 
@@ -1370,7 +1557,7 @@ BEGIN
          IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Lottable13Label)) > '' AND (@d_Lottable13 <= '01/01/1900' OR @d_Lottable13 IS NULL) 
          BEGIN 
             IF NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE Listname = 'EXLOTLBCHK' AND Storerkey = @c_Storerkey AND Code = 'LOTTABLE13' AND CHARINDEX(@c_DocType, Long) > 0) --NJOW02 
-BEGIN 
+            BEGIN 
                SELECT @n_continue = 3 
                SELECT @n_err = 60100 
                SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err) + ': Lottable13 = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Lottable13Label)) + ' REQUIRED' 
@@ -1448,7 +1635,7 @@ BEGIN
                'Allow_OverReceipt', -- Configkey 
                @b_success             output, 
                @c_authority_OverRcp   output, 
-   @n_err2                output, 
+               @n_err2                output, 
                @c_errmsg              output, 
                @c_Option1             output,  --NJOW04 
                @c_Option2             output, --NJOW04 
@@ -1615,7 +1802,7 @@ BEGIN
          UPDATE RECEIPTDETAIL WITH (ROWLOCK) 
             SET Lottable01 = @c_Lottable01, 
                 Lottable02 = @c_Lottable02, 
-             Lottable03 = @c_Lottable03, 
+                Lottable03 = @c_Lottable03, 
                 Lottable04 = @d_Lottable04, 
                 Lottable05 = @d_Lottable05, 
                 Lottable06 = @c_Lottable06, 
@@ -1635,7 +1822,17 @@ BEGIN
                 DateReceived = GETDATE(), --SOS 26930 
                 TrafficCop = NULL, 
                 EditDate = GETDATE(),   --tlting 
-                EditWho = SUSER_SNAME() 
+                EditWho = SUSER_SNAME(),
+                Userdefine01 = @c_Userdefine01, --NJOW09 S
+                Userdefine02 = @c_Userdefine02, 
+                Userdefine03 = @c_Userdefine03, 
+                Userdefine04 = @c_Userdefine04, 
+                Userdefine05 = @c_Userdefine05,
+                Userdefine06 = @d_Userdefine06, 
+                Userdefine07 = @d_Userdefine07, 
+                Userdefine08 = @c_Userdefine08, 
+                Userdefine09 = @c_Userdefine09, 
+                Userdefine10 = @c_Userdefine10  --NJOW09 E                               
          WHERE RECEIPTDETAIL.Receiptkey = @c_ReceiptKey 
          AND   RECEIPTDETAIL.RECEIPTLINENUMBER = @c_ReceiptLineNumber 
  
@@ -2150,6 +2347,8 @@ BEGIN
                      ,@n_IncomingShelfLife       ,@c_SubReasonCode           ,@c_ExternLineNo 
                      ,@n_TolerancePerc           ,@c_CopyPackKey             ,@c_DelFinalizeFlag   ,@c_DelToID      --(TK02) 
                      ,@c_SerialNoCapture         ,@c_Channel  -- (SWT02) 
+                     ,@c_Userdefine01, @c_Userdefine02, @c_Userdefine03, @c_Userdefine04, @c_Userdefine05  --NJOW09       
+                     ,@d_Userdefine06, @d_Userdefine07, @c_Userdefine08, @c_Userdefine09, @c_Userdefine10  --NJOW09                     
    END -- While 
 END -- @n_continue = 1 or @n_continue=2 
  

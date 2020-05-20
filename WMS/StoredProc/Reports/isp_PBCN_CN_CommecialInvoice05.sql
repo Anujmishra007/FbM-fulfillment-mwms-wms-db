@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 23-JAN-2020  CSCHONG   1.1   WMS-11885 revised field logic (CS01)    */
+/* 29-Apr-2020  WLChooi   1.2   WMS-13130 - Revised field logic (WL01)  */
 /************************************************************************/
 
 CREATE PROC isp_PBCN_CN_CommecialInvoice05(
@@ -67,13 +68,22 @@ FROM (
         , Address3     = ISNULL( MAX( RTRIM( ST.Address3 ) ), '')
         , City         = ISNULL( MAX( RTRIM( ST.City ) ), '')
         , Country      = ISNULL( MAX( RTRIM( ST.Country ) ), '')
-        , B_Company    = ISNULL( MAX( RTRIM( FOH.B_Company ) ), '')
-        , B_Address1   = ISNULL( MAX( RTRIM( FOH.B_Address1 ) ), '')
-        , B_Address2   = ISNULL( MAX( RTRIM( FOH.B_Address2 ) ), '')
-        , B_Address3   = ISNULL( MAX( RTRIM( FOH.B_Address3 ) ), '')
-        , B_Address4   = ISNULL( MAX( RTRIM( FOH.B_Address4 ) ), '')
-        , B_City       = ISNULL( MAX( RTRIM( FOH.B_City ) ), '')
-        , B_Country    = ISNULL( MAX( RTRIM( FOH.B_Country ) ), '')
+        --WL01 START
+        , B_Company    = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_Company ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.Company ) ), '') END
+        , B_Address1   = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_Address1 ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.Address1 ) ), '') END
+        , B_Address2   = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_Address2 ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.Address2 ) ), '') END
+        , B_Address3   = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_Address3 ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.Address3 ) ), '') END
+        , B_Address4   = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_Address4 ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.Address4 ) ), '') END
+        , B_City       = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_City ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.City ) ), '') END
+        , B_Country    = CASE WHEN ISNULL( MAX( RTRIM( SR.Fax1 ) ), '') = '' THEN ISNULL( MAX( RTRIM( FOH.B_Country ) ), '') 
+                                                                             ELSE ISNULL( MAX( RTRIM( SR.Country ) ), '') END
+        --WL01 END
         , BillToKey    = ISNULL( MAX( RTRIM( FOH.BillToKey ) ), '')
         , HTS_CODES    = SubString(SI.Data,1,6)--SubString(SKU.BUSR3,1,6)   --(CS01)
         , Style        = RTRIM( SKU.Style )
@@ -140,13 +150,14 @@ FROM (
    LEFT JOIN dbo.CODELKUP RL (NOLOCK) ON RL.Listname = 'RPTLOGO' AND RL.Code='LOGO' AND RL.Storerkey = OH.Storerkey AND RL.Long = @c_DataWidnow
    LEFT JOIN dbo.CODELKUP TC (NOLOCK) ON TC.Listname = 'RPTLOGO' AND TC.Code='TCImg' AND TC.Storerkey = OH.Storerkey AND TC.Long = @c_DataWidnow
    LEFT JOIN dbo.STORER   BT (NOLOCK) ON FOH.BillToKey = BT.Storerkey
+   LEFT JOIN dbo.STORER   SR (NOLOCK) ON SR.Storerkey = 'QHW-' + LTRIM(RTRIM(FOH.BillToKey)) AND SR.ConsigneeFor = 'PVHQHW' AND SR.[Type] = '2'   --WL01
    LEFT JOIN (
       SELECT Code        = X.Code
            , Description = MAX(X.Description)
       FROM (
-         SELECT Code , Description FROM dbo.CODELKUP (NOLOCK) WHERE Listname = 'ISOCOUNTRY' AND Code<>'' AND Description<>''
+         SELECT Code , Description FROM dbo.CODELKUP (NOLOCK) WHERE Listname = 'PVHCountry' AND Code<>'' AND Description<>''   --WL01
          UNION
-         SELECT Short, Description FROM dbo.CODELKUP (NOLOCK) WHERE Listname = 'ISOCOUNTRY' AND Short<>'' AND LEN(Short)=2 AND Description<>''
+         SELECT Short, Description FROM dbo.CODELKUP (NOLOCK) WHERE Listname = 'PVHCountry' AND Short<>'' AND LEN(Short)=2 AND Description<>''   --WL01
       ) X
       GROUP BY X.Code
    ) ISO ON ISO.Code = LA.Lottable01

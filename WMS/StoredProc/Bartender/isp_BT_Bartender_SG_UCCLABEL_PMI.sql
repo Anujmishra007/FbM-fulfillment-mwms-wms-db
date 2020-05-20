@@ -17,6 +17,7 @@ GO
 /*                                                                              */                   
 /* Date       Rev  Author     Purposes                                          */                   
 /* 2020-02-03 1.0  WLChooi    Created (WMS-11927)                               */  
+/* 2020-05-08 1.1  CSCHONG    WMS-13227 revised col12 logic (CS01)              */
 /********************************************************************************/                  
                     
 CREATE PROC [dbo].[isp_BT_Bartender_SG_UCCLABEL_PMI]                        
@@ -119,7 +120,8 @@ BEGIN
            @c_Trace_ModuleName  NVARCHAR(20),     
            @d_Trace_Step1       DATETIME,     
            @c_Trace_Step1       NVARCHAR(20),    
-           @c_UserName          NVARCHAR(20)       
+           @c_UserName          NVARCHAR(20),
+           @c_caseid            NVARCHAR(20)   --CS01                   
     
    SET @d_Trace_StartTime = GETDATE()    
    SET @c_Trace_ModuleName = ''   
@@ -562,6 +564,7 @@ BEGIN
          END  */
   
          SELECT @n_SumQty = SUM(Qty)
+               ,@c_caseid = MAX(caseid)                   --CS01
          FROM PICKDETAIL (NOLOCK)
          WHERE ORDERKEY IN (SELECT DISTINCT COL58 FROM #RESULT) 
           
@@ -576,7 +579,12 @@ BEGIN
 
          SELECT @n_Casecnt = CASE WHEN ISNULL(@n_Casecnt,0) = 0 THEN 1.00 ELSE @n_Casecnt END
 
-         SELECT @n_TotalCarton = CEILING(@n_SumQty / CAST(@n_Casecnt AS FLOAT))
+         --SELECT @n_TotalCarton = CEILING(@n_SumQty / CAST(@n_Casecnt AS FLOAT))  --CS01
+         SET @n_totalCarton = CASE WHEN PATINDEX('%-0', @c_caseid) = 1   THEN    --CS01 START
+                                         CAST(CAST(@c_caseid AS INT) AS VARCHAR(10)) 
+                                    ELSE 
+                                         CAST(CAST(@c_caseid AS INT) AS VARCHAR(10)) 
+                                    END
 
          UPDATE #Result  
          SET Col12 = Col12 + '/' + CAST(@n_TotalCarton AS NVARCHAR(20))  

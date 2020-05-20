@@ -1,6 +1,6 @@
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispALANF02]')
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispALANF02]
+   DROP PROCEDURE [dbo].[ispALANF02]
 GO
 
 SET ANSI_NULLS OFF
@@ -28,6 +28,8 @@ GO
 /* 07-Nov-2014  YTWan   1.1   SOS#324691 - CR on Allocation Strategy for*/
 /*                            ANF (Wan01)                               */
 /* 2015-02-12   CSCHONG 1.2   New Lottable06 to 15  (CS11)              */
+/* 08-Apr-2020  WLChooi 1.3   WMS-12808 - Use Codelkup to control       */
+/*                            sorting (WL01)                            */
 /************************************************************************/
 CREATE  PROC [dbo].[ispALANF02]
    @c_LoadKey    NVARCHAR(10),   
@@ -63,16 +65,36 @@ BEGIN
            @c_SQL         NVARCHAR(MAX),    
            @c_SQLParm     NVARCHAR(MAX)    
           
-   DECLARE @c_LocationType     NVARCHAR(10),    
-           @c_LocationCategory NVARCHAR(10),
-           @c_LOT              NVARCHAR(10),
-           @c_LOC              NVARCHAR(10),
-           @c_ID               NVARCHAR(18) 
+   DECLARE @c_LocationType      NVARCHAR(10),    
+           @c_LocationCategory  NVARCHAR(10),
+           @c_LOT               NVARCHAR(10),
+           @c_LOC               NVARCHAR(10),
+           @c_ID                NVARCHAR(18) 
          , @c_LocationCategory2 NVARCHAR(10)    --(Wan01) 
+         , @c_SortingSQL        NVARCHAR(4000)  --WL01
 
    SET @c_LocationType = 'DYNPPICK'    
    SET @c_LocationCategory = 'MEZZANINE'  
    SET @c_LocationCategory2= 'MEZZALLOC'    
+   SET @c_SortingSQL = 'ORDER BY LOC.LogicalLocation, LOC.LOC '   --WL01
+
+   --WL01 START
+   IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)  
+              WHERE CL.Storerkey = @c_Storerkey  
+              AND CL.Code = 'SORTBY'  
+              AND CL.Listname = 'PKCODECFG'  
+              AND CL.Long = 'ispALANF02'
+              AND ISNULL(CL.Short,'') <> 'N')
+   BEGIN
+      SELECT @c_SortingSQL = LTRIM(RTRIM(ISNULL(CL.Notes,'')))
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.Storerkey = @c_Storerkey
+      AND CL.Code = 'SORTBY'
+      AND CL.Listname = 'PKCODECFG'
+      AND CL.Long = 'ispALANF02'
+      AND ISNULL(CL.Short,'') <> 'N'
+   END
+   --WL01 END
 
    SET @c_SQL = N'    
       DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
@@ -108,7 +130,8 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LA.Lottable10 = @c_Lottable10 ' + CHAR(13) END +      
       CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' + CHAR(13) END +         
       CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END +                        
-      'ORDER BY LOC.LogicalLocation, LOC.LOC' 
+      --'ORDER BY LOC.LogicalLocation, LOC.LOC' --WL01
+      @c_SortingSQL                             --WL01
     
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU        NVARCHAR(20), ' +    
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +

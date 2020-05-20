@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                         
 /*                                                                            */                         
 /* Date         Rev  Author     Purposes                                      */                            
-/* 21-Feb-2019  1.1  CHEEMUN    SCTASK0310656 - Filter Non-Return Receipt     */                       
+/* 21-Feb-2019  1.1  CHEEMUN    SCTASK0310656 - Filter Non-Return Receipt     */        
+/* 20-Feb-2020  1.2  WLChooi    WMS-12113-Cater for Storerkey = 'MATA' (WL01) */                    
 /******************************************************************************/                        
                           
 CREATE PROC [dbo].[isp_Bartender_TH_PALLETLBL_GetParm]                              
@@ -56,7 +57,7 @@ BEGIN
       @c_ExecArguments   NVARCHAR(4000)        
               
             
-  DECLARE @d_Trace_StartTime   DATETIME,           
+   DECLARE @d_Trace_StartTime   DATETIME,           
            @d_Trace_EndTime    DATETIME,          
            @c_Trace_ModuleName NVARCHAR(20),           
            @d_Trace_Step1      DATETIME,           
@@ -72,74 +73,87 @@ BEGIN
    SET @c_Trace_ModuleName = ''          
                 
     -- SET RowNo = 0                     
-    SET @c_SQL = ''           
-    SET @c_mode = '0'           
-    SET @c_getUCCno = ''        
-    SET @c_getUdef09 = ''          
-    SET @c_SQLJOIN = ''                
-    SET @c_condition1 = ''        
-    SET @c_condition2= ''        
-    SET @c_SQLOrdBy = ''        
-    SET @c_SQLGroup = ''        
+   SET @c_SQL = ''           
+   SET @c_mode = '0'           
+   SET @c_getUCCno = ''        
+   SET @c_getUdef09 = ''          
+   SET @c_SQLJOIN = ''                
+   SET @c_condition1 = ''        
+   SET @c_condition2= ''        
+   SET @c_SQLOrdBy = ''        
+   SET @c_SQLGroup = ''        
       
             
-    SET @c_ExecArguments = ''        
+   SET @c_ExecArguments = ''        
         
-    SELECT @c_StorerKey = STORERKEY FROM RECEIPT WITH (NOLOCK)    
-    WHERE RECEIPTKEY = @Parm01  
+   SELECT @c_StorerKey = STORERKEY FROM RECEIPT WITH (NOLOCK)    
+   WHERE RECEIPTKEY = @Parm01  
 	  
 	--SCTASK0310656 (START)    
-	IF (@c_StorerKey = 'UA')    
-	BEGIN    
-	 SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 = RD.Receiptkey,PARM2 = RD.SKU,PARM3= '''',PARM4 = '''',PARM5 = '''',' + CHAR(13) +       
-	                    ' PARM6 ='''',PARM7 = '''' ,PARM8 = '''',PARM9 = '''',PARM10 = '''',' + CHAR(13) +     
-	                    ' Key1 = ''Receiptkey'',Key2 = ''SKU'',Key3 = '''',Key4 = '''',Key5 = '''' ' + CHAR(13) +        
-	                    ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +        
-	                    ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey AND RH.STORERKEY = RD.STORERKEY)' + CHAR(13) +        
-	                    ' WHERE RH.Receiptkey = @Parm01 ' +        
-	                    ' AND RD.Lottable07 = @Parm02 ' +        
-	                    ' AND RD.SKU= @Parm03 '    
-	 SET @c_condition1 = ' AND LEFT(LTRIM(RH.NOTES),2) <> ''RE'' '          
-	 SET @c_SQLJOIN = @c_SQLJOIN + @c_condition1    
+   IF (@c_StorerKey = 'UA')    
+   BEGIN    
+      SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 = RD.Receiptkey,PARM2 = RD.SKU,PARM3= '''',PARM4 = '''',PARM5 = '''',' + CHAR(13) +       
+                       ' PARM6 ='''',PARM7 = '''' ,PARM8 = '''',PARM9 = '''',PARM10 = '''',' + CHAR(13) +     
+                       ' Key1 = ''Receiptkey'',Key2 = ''SKU'',Key3 = '''',Key4 = '''',Key5 = '''' ' + CHAR(13) +        
+                       ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +        
+                       ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey AND RH.STORERKEY = RD.STORERKEY)' + CHAR(13) +        
+                       ' WHERE RH.Receiptkey = @Parm01 ' +        
+                       ' AND RD.Lottable07 = @Parm02 ' +        
+                       ' AND RD.SKU= @Parm03 '    
+      SET @c_condition1 = ' AND LEFT(LTRIM(RH.NOTES),2) <> ''RE'' '          
+      SET @c_SQLJOIN = @c_SQLJOIN + @c_condition1    
 	     
-	END    
-	--SCTASK0310656 (END)    
+   END    
+	--SCTASK0310656 (END)  
+   --WL01 START
+   ELSE IF (@c_StorerKey = 'MATA')
+   BEGIN
+      SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 = RD.Receiptkey, PARM2 = RD.Lottable02, PARM3= '''', PARM4 = '''', PARM5 = '''',' + CHAR(13) +       
+                       ' PARM6 ='''',PARM7 = '''' ,PARM8 = '''',PARM9 = '''',PARM10 = '''',' + CHAR(13) +     
+                       ' Key1 = ''Receiptkey'',Key2 = ''SKU'',Key3 = '''',Key4 = '''',Key5 = '''' ' + CHAR(13) +        
+                       ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +        
+                       ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey AND RH.STORERKEY = RD.STORERKEY)' + CHAR(13) +        
+                       ' WHERE RH.Receiptkey = @Parm01 ' +          
+                       ' AND RD.Lottable02 = CASE WHEN ISNULL(@Parm02,'''') = '''' THEN RD.Lottable02 ELSE @Parm02 END '
+   END
+   --WL01 END  
 	ELSE    
 	BEGIN    
-	 SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 = RD.Receiptkey ,PARM2 = RD.SKU,PARM3= '''',PARM4 = '''',PARM5 = '''',' + CHAR(13) +       
-	                    ' PARM6 ='''',PARM7 = '''' ,PARM8 = '''',PARM9 = '''',PARM10 = '''',' + CHAR(13) +     
-	                    ' Key1 = ''Receiptkey'',Key2 = ''SKU'',Key3 = '''',Key4 = '''',Key5 = '''' ' + CHAR(13) +        
-	                    ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +        
-	                    ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey AND RH.STORERKEY = RD.STORERKEY)' + CHAR(13) +        
-	                    ' WHERE RH.Receiptkey = @Parm01 ' +        
-	                    ' AND RD.Lottable07 = @Parm02 ' +        
-	                    ' AND RD.SKU= @Parm03 '     
-	    
-	END    
+      SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 = RD.Receiptkey ,PARM2 = RD.SKU,PARM3= '''',PARM4 = '''',PARM5 = '''',' + CHAR(13) +       
+                       ' PARM6 ='''',PARM7 = '''' ,PARM8 = '''',PARM9 = '''',PARM10 = '''',' + CHAR(13) +     
+                       ' Key1 = ''Receiptkey'',Key2 = ''SKU'',Key3 = '''',Key4 = '''',Key5 = '''' ' + CHAR(13) +        
+                       ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +        
+                       ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey AND RH.STORERKEY = RD.STORERKEY)' + CHAR(13) +        
+                       ' WHERE RH.Receiptkey = @Parm01 ' +        
+                       ' AND RD.Lottable07 = @Parm02 ' +        
+                       ' AND RD.SKU= @Parm03 '     
+   END    
      
-               
-     
-    SET @c_ExecArguments = N'@parm01          NVARCHAR(80),'        
-                          + ' @parm02          NVARCHAR(80),'         
-                          + ' @parm03          NVARCHAR(80)'                                   
+   SET @c_ExecArguments = N' @parm01          NVARCHAR(80),'        
+                          +' @parm02          NVARCHAR(80),'         
+                          +' @parm03          NVARCHAR(80),'    
+                          +' @parm04          NVARCHAR(80),'   --WL01   
+                          +' @parm05          NVARCHAR(80) '   --WL01                          
               
-    SET @c_SQL = @c_SQLJOIN         
+   SET @c_SQL = @c_SQLJOIN         
         
              
-    EXEC sp_executesql   @c_SQL          
-                       , @c_ExecArguments          
-                       , @parm01          
-                       , @parm02        
-                       , @parm03         
+   EXEC sp_executesql   @c_SQL          
+                      , @c_ExecArguments          
+                      , @parm01          
+                      , @parm02        
+                      , @parm03   
+                      , @parm04   --WL01
+                      , @parm05   --WL01       
         
                            
    EXIT_SP:            
           
-      SET @d_Trace_EndTime = GETDATE()          
-      SET @c_UserName = SUSER_SNAME()          
+   SET @d_Trace_EndTime = GETDATE()          
+   SET @c_UserName = SUSER_SNAME()          
         
                                           
-   END -- procedure 
+END -- procedure 
 
 
 GO

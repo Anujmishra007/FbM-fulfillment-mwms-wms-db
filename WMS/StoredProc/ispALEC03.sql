@@ -19,20 +19,21 @@ GO
 /*                                                                      */
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.2                                                    */    
+/* PVCS Version: 1.3                                                    */    
 /*                                                                      */    
 /* Version: 1.0                                                         */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */ 
-/* 10-Oct-2016  Shong01 1.1   Cater Qty Preallocated                    */
-/* 24-Jul-2017  TLTING  1.1   Dynamic SQL review, impact SQL cache log  */  
-/* 15-Apr-2019  Wan01   1.2   WMS-8610 - CN_Skecher_Robot_AllocateStrategy*/
+/* Date        Author   Ver.  Purposes                                  */ 
+/* 10-Oct-2016 Shong01  1.1   Cater Qty Preallocated                    */
+/* 24-Jul-2017 TLTING   1.1   Dynamic SQL review, impact SQL cache log  */  
+/* 15-Apr-2019 Wan01    1.2   WMS-8610 - CN_Skecher_Robot_AllocateStrategy*/
 /*                            _CR1(ispALEC03). Exclude Robot Location   */ 
+/* 14-Feb-2020 Wan02    1.3   Dynamic SQL review, impact SQL cache log   */ 
 /************************************************************************/    
-CREATE  PROC [dbo].[ispALEC03]        
+CREATE PROC [dbo].[ispALEC03]        
    @c_LoadKey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -60,8 +61,8 @@ CREATE  PROC [dbo].[ispALEC03]
 AS    
 BEGIN    
    SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET ANSI_NULLS OFF    
+   --SET QUOTED_IDENTIFIER OFF 
+   --SET ANSI_NULLS OFF    
 
    DECLARE @b_debug        INT  
           ,@c_SQL          NVARCHAR(MAX)  
@@ -82,6 +83,8 @@ BEGIN
            @c_PrevLOT          NVARCHAR(10),
            @n_LotQtyAvailable  INT
      
+   EXEC isp_Init_Allocate_Candidates         --(Wan02) 
+
    SELECT @b_debug = 0  
          ,@c_LimitString = ''                 
          ,@c_SQL = ''
@@ -274,21 +277,35 @@ BEGIN
       END      	 
       
       IF @n_QtyToTake > 0
-      BEGIN      	
-         IF ISNULL(@c_SQL,'') = ''
-         BEGIN
-            SET @c_SQL = N'   
-                  DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
-                  SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                  '
-         END
-         ELSE
-         BEGIN
-            SET @c_SQL = @c_SQL + N'  
-                  UNION ALL
-                  SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                  '
-         END
+      BEGIN
+         --(Wan02) - START      	
+         --IF ISNULL(@c_SQL,'') = ''
+         --BEGIN
+         --   SET @c_SQL = N'   
+         --         DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+         --ELSE
+         --BEGIN
+         --   SET @c_SQL = @c_SQL + N'  
+         --         UNION ALL
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+
+         SET @c_Lot       = RTRIM(@c_Lot)             
+         SET @c_Loc       = RTRIM(@c_Loc)
+         SET @c_ID        = RTRIM(@c_ID)
+
+         EXEC isp_Insert_Allocate_Candidates
+            @c_Lot = @c_Lot
+         ,  @c_Loc = @c_Loc
+         ,  @c_ID  = @c_ID
+         ,  @n_QtyAvailable = @n_QtyToTake
+         ,  @c_OtherValue = @c_OtherValue
+         --(Wan02) - END
+
          SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake         
          SET @n_LotQtyAvailable = @n_LotQtyAvailable - @n_QtyToTake    
       END
@@ -304,15 +321,21 @@ BEGIN
       DEALLOCATE CURSOR_AVAILABLE          
    END    
 
-   IF ISNULL(@c_SQL,'') <> ''
-   BEGIN
-      EXEC sp_ExecuteSQL @c_SQL
-   END
-   ELSE
-   BEGIN
-      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
-   END      
+   --(Wan02) - START
+   EXEC isp_Cursor_Allocate_Candidates   
+         @n_SkipPreAllocationFlag = 1    --Return Lot column
+       
+   --IF ISNULL(@c_SQL,'') <> ''
+   --BEGIN
+   --   EXEC sp_ExecuteSQL @c_SQL
+   --END
+   --ELSE
+   --BEGIN
+   --   DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+   --   SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
+   --END   
+   --(Wan02) - END
+      
 END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispALEC03] TO nSQL

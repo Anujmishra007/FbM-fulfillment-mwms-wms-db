@@ -34,6 +34,7 @@ GO
 /* 2018-09-29   TLTING  1.3   Remove #tmp and remove row lock           */  
 /* 2018-10-18   SHONG   1.4   Revise Priority                           */
 /* 2019-05-16   SHONG   1.5   Bug Fixing                                */
+/* 06-May-2020  Shong   1.6   Addding Priority to Q-Cmd Task (SWT02)    */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_QCmd_SubmitBackendAllocTask] (   
      @bSuccess      INT = 1            OUTPUT  
@@ -103,6 +104,7 @@ BEGIN
            ,@c_IniFilePath         NVARCHAR(200)=''
            ,@c_CmdType             NVARCHAR(10)=''
            ,@c_TaskType            NVARCHAR(1)=''    
+           ,@n_Priority            INT = 0 -- (SWT02)   
     
     SELECT @c_APP_DB_Name = APP_DB_Name
           ,@c_DataStream          = DataStream
@@ -114,6 +116,7 @@ BEGIN
           ,@c_IniFilePath         = IniFilePath
           ,@c_CmdType             = CmdType
           ,@c_TaskType            = TaskType
+          ,@n_Priority            = ISNULL([Priority],0) -- (SWT01)
     FROM   QCmd_TransmitlogConfig WITH (NOLOCK)
     WHERE  TableName              = 'BACKENDALLOC'
            AND [App_Name]         = 'WMS'
@@ -569,7 +572,8 @@ BEGIN
                                , @cAPPDBName        = @c_APP_DB_Name                                                 
                                , @bSuccess          = @bSuccess OUTPUT    
                                , @nErr              = @nErr OUTPUT    
-                               , @cErrMsg           = @cErrMsg OUTPUT  
+                               , @cErrMsg           = @cErrMsg OUTPUT
+                               , @nPriority         = @n_Priority -- (SWT02)  
               
                          IF @nErr <> 0 AND ISNULL(@cErrMsg,'') <> ''  
                          BEGIN  

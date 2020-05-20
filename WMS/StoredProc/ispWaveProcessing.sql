@@ -88,6 +88,8 @@ GO
 /* 23-JUL-2019  Wan02   4.2   ChannelInventoryMgmt use nspGetRight2     */
 /* 23-JUL-2019  Wan03   4.2   WMS - 9914 [MY] JDSPORTSMY - Channel      */
 /*                            Inventory Ignore QtyOnHold - CR           */
+/* 12-Feb-2020  Wan04   4.3   SQLBindParm. Create Temp table to Store   */
+/*                            Preallocate data from pickcode            */ 
 /************************************************************************/    
 
 CREATE PROC [dbo].[ispWaveProcessing]      
@@ -241,8 +243,8 @@ BEGIN
             , @b_Success OUTPUT      
             , @n_Err     OUTPUT      
             , @c_ErrMsg  OUTPUT      
-   END      
-      
+   END    
+   
    SET @d_Step1 = GETDATE() -- (tlting01)      
       
    SET @c_SkipPreAllocationFlag= '0'      
@@ -497,7 +499,27 @@ BEGIN
         @b_Success   = @b_Success                OUTPUT,
         @c_authority = @c_AllocateByOrderPackkey OUTPUT,
         @n_err       = @n_err                    OUTPUT,
-        @c_errmsg    = @c_errmsg                 OUTPUT         
+        @c_errmsg    = @c_errmsg                 OUTPUT     
+        
+   --(Wan04) - START
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN  
+      IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #ALLOCATE_CANDIDATES;
+      END
+
+      CREATE TABLE #ALLOCATE_CANDIDATES
+      (  RowID          INT            NOT NULL IDENTITY(1,1) 
+      ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+      ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
+      )
+   END
+   --(Wan04) - END
+      
       
    SET @d_Step1 = GETDATE() - @d_Step1 -- (tlting01)      
    SET @c_Col1 = 'Stp1-Prealloc' -- (tlting01)      

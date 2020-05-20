@@ -59,7 +59,9 @@ GO
 /*                            Inventory Ignore QtyOnHold - CR           */   
 /* 08-OCT-2019  Wan06   2.9   Fixed to Get Channel If there is candidate*/  
 /*                            in Cursor                                 */  
-/* 21-Nov-2019  TLTING02 2.10  Dynamic SQL - cache issue                */   
+/* 21-Nov-2019  TLTING02 2.10  Dynamic SQL - cache issue                */ 
+/* 12-Feb-2020  Wan07   3.2   SQLBindParm. Create Temp table to Store   */
+/*                            Preallocate data from pickcode            */     
 /************************************************************************/  
   
 CREATE PROC  [dbo].[nspPreAllocateLoadProcessing]  
@@ -318,6 +320,24 @@ BEGIN
    PRINT ''  
 END  
   
+--(Wan07) - START
+IF @n_continue = 1 OR @n_continue = 2  
+BEGIN  
+   IF OBJECT_ID('tempdb..#PREALLOCATE_CANDIDATES','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #PREALLOCATE_CANDIDATES;
+   END
+
+   CREATE TABLE #PREALLOCATE_CANDIDATES
+   (  RowID          INT            NOT NULL IDENTITY(1,1) 
+   ,  Storerkey      NVARCHAR(15)   NOT NULL DEFAULT('')
+   ,  Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
+   ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+   )
+END
+--(Wan07) - END
+
 IF @n_continue = 1 OR @n_continue = 2  
 BEGIN  
  --(Wan02) - START  
@@ -1815,4 +1835,4 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-GRANT EXECUTE ON nspPreAllocateLoadProcessing
+GRANT EXECUTE ON nspPreAllocateLoadProcessing TO nSQL 

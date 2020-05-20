@@ -1,5 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id('dbo.isp_BatchSKUProcessing') and sysstat & 0xf = 4)
-	drop procedure dbo.isp_BatchSKUProcessing
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BatchSKUProcessing]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_BatchSKUProcessing]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -16,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By:                                                           */  
 /*                                                                      */  
-/* PVCS Version: 2.1 (Unicode)                                          */  
+/* PVCS Version: 2.3 (Unicode)                                          */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -39,7 +40,9 @@ GO
 /* 23-JUL-2019  Wan02   2.1   ChannelInventoryMgmt use nspGetRight2     */  
 /* 23-JUL-2019  Wan03   2.1   WMS - 9914 [MY] JDSPORTSMY - Channel      */  
 /*                            Inventory Ignore QtyOnHold - CR           */  
-/* 25-Mar-2020  Shong   2.2   WMS-12596 TW Add HostWHCOde               */  
+/* 25-Mar-2020  Shong   2.2   WMS-12596 TW Add HostWHCOde               */
+/* 12-Feb-2020  Wan04   2.3   SQLBindParm. Create Temp table to Store   */
+/*                            Preallocate data from pickcode            */    
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -271,7 +274,25 @@ BEGIN
         @n_err       = @n_err                   OUTPUT,  
         @c_errmsg    = @c_errmsg                OUTPUT  
      
-  
+    --(Wan04) - START
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN  
+      IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #ALLOCATE_CANDIDATES;
+      END
+
+      CREATE TABLE #ALLOCATE_CANDIDATES
+      (  RowID          INT            NOT NULL IDENTITY(1,1) 
+      ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+      ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
+      )
+   END
+   --(Wan04) - END   
+
    SET @d_Step1 = GETDATE() - @d_Step1   
    SET @c_Col1 = 'Stp1-Prealloc'   
   
@@ -840,7 +861,7 @@ BEGIN
                   O.Lottable01, O.Lottable02, O.Lottable03, O.Lottable04, O.Lottable05,  
                   O.Lottable06, O.Lottable07, O.Lottable08, O.Lottable09, O.Lottable10,             
                   O.Lottable11, O.Lottable12, O.Lottable13, O.Lottable14, O.Lottable15,   
-                  O.Channel, #OPORDERLINES.HostWHCode              
+                  ISNULL(O.Channel,''), #OPORDERLINES.HostWHCode              
       END  
   
       OPEN C_OPORDERLINES  

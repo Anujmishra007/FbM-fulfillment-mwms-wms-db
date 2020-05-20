@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
 /* 2020-02-17   WLChooi   1.1 WMS-12047 - Modify logic of SDescr (WL01) */
+/* 2020-04-15   WLChooi   1.2 Fix Pickdetail Table Linkage (WL02)       */
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_71  
@@ -169,8 +170,8 @@ BEGIN
          JOIN ORDERDETAIL OD(NOLOCK) ON OD.ORDERKEY = OS.ORDERKEY
          JOIN SKU (NOLOCK) ON OD.SKU = SKU.SKU AND OD.STORERKEY = SKU.STORERKEY
          JOIN PACKHEADER PH (NOLOCK) ON PH.ORDERKEY =OS.ORDERKEY AND PH.STORERKEY = OS.STORERKEY
-         JOIN PACKDETAIL PD (NOLOCk) ON PD.PICKSLIPNO = PH.PICKSLIPNO AND PD.SKU = OD.SKU
-         JOIN PICKDETAIL PID (NOLOCk) ON PID.Orderkey = OD.Orderkey AND PID.SKU = OD.SKU
+         JOIN PACKDETAIL PD (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO AND PD.SKU = OD.SKU
+         JOIN PICKDETAIL PID (NOLOCK) ON PID.Orderkey = OD.Orderkey AND PID.SKU = OD.SKU AND PID.OrderLineNumber = OD.OrderLineNumber  --WL02
          LEFT JOIN CODELKUP CL1 (NOLOCK) ON OS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECDLMODE' and CL1.Code = OS.Shipperkey
          LEFT JOIN CODELKUP CL2 (NOLOCK) ON OS.STORERKEY = CL2.STORERKEY AND CL2.LISTNAME ='PLATFORM' and CL2.Code = OI.Platform
          LEFT JOIN CODELKUP CL3 (NOLOCK) ON OS.STORERKEY = CL3.STORERKEY AND CL3.LISTNAME ='REPORTCFG' and CL3.Code = '01'
