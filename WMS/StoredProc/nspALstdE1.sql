@@ -19,6 +19,7 @@ GO
 /* Oct 11 2004  Admin         Changed by SHONG                          */  
 /* Aug 05 2002  Admin         Initial revision.                         */  
 /* Jan 12 2011  Shong         Add Other Parms                           */  
+/* Mar 26 2020  NJOW01        WMS-12671 TW Conditional filter hostwhcode*/ 
 /************************************************************************/  
 CREATE PROC  nspALSTDE1     
    @c_lot NVARCHAR(10) ,  
@@ -31,10 +32,20 @@ CREATE PROC  nspALSTDE1
 AS  
 BEGIN  
    SET NOCOUNT ON   
-      
-     
-  
-IF dbo.fnc_RTrim(@c_HostWHCode) IS NOT NULL AND dbo.fnc_RTrim(@c_HostWHCode) <> ''  
+   
+DECLARE @c_Storerkey NVARCHAR(15)
+
+SELECT @c_Storerkey = Storerkey
+FROM LOT (NOLOCK)
+WHERE Lot = @c_Lot
+            
+IF (dbo.fnc_RTrim(@c_HostWHCode) IS NOT NULL AND dbo.fnc_RTrim(@c_HostWHCode) <> '') 
+	 OR (EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)  
+					     WHERE CL.Storerkey = @c_Storerkey  
+					     AND CL.Code = 'NOFILTERHWCODE'  
+					     AND CL.Listname = 'PKCODECFG'  
+					     AND CL.Long = 'nspALstdE1'  
+					     AND ISNULL(CL.Short,'') = 'N'))  --NJOW01
 BEGIN  
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR    
    SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID,  
@@ -52,7 +63,7 @@ BEGIN
    AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase  
    AND LOC.Status <> 'HOLD'  
    AND SKUxLOC.LocationType NOT IN ('PICK', 'CASE')  
-   AND LOC.HostWhCode = @c_HostWHCode  
+   AND ISNULL(LOC.HostWhCode,'') = @c_HostWHCode  
    ORDER BY LOTxLOCxID.LOC  
 END  
 ELSE  
