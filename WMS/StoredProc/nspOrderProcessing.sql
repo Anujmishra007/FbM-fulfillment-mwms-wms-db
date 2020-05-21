@@ -95,6 +95,10 @@ GO
 /*                            Inventory Ignore QtyOnHold - CR           */  
 /* 22-SEP-2019  WLChooi  3.3  WMS-10216 - Able to filter by HostWHCode  */
 /*                            when overallocation (Discrete only) (WL01)*/
+/* 12-Feb-2020  Wan06    3.4  SQLBindParm. Create Temp table to Store   */
+/*                            Preallocate data from pickcode            */ 
+/* 21-MAY-2020  Wan07    3.5  Fixed no record retrieve if Loc.HostWHCode*/
+/*                            is null & OverAllocPickByHostWHCode is off*/
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspOrderProcessing]  
@@ -330,7 +334,27 @@ BEGIN
    IF @c_tblprefix = 'DS1' or @c_tblprefix = 'DS2'  
    BEGIN  
       SELECT @b_debug = Convert(Int, Right(dbo.fnc_RTrim(@c_tblprefix), 1))  
-   END  
+   END 
+   
+   --(Wan06) - START
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN  
+      IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #ALLOCATE_CANDIDATES;
+      END
+
+      CREATE TABLE #ALLOCATE_CANDIDATES
+      (  RowID          INT            NOT NULL IDENTITY(1,1) 
+      ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+      ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
+      )
+   END
+   --(Wan06) - END
+ 
   
    IF @b_debug = 1 or @b_debug = 2  
    BEGIN  
@@ -2314,16 +2338,42 @@ BEGIN
                   TRUNCATE TABLE #OP_OVERPICKLOCS  
                   TRUNCATE TABLE #OP_PICKLOCTYPE  
                   -- END  
-                  INSERT INTO #OP_PICKLOCTYPE (LOC)   
-                  SELECT SKUXLOC.LOC  
-                    FROM SKUxLOC (nolock) join LOC (nolock)  
-                        on SKUXLOC.loc = LOC.loc  
-                   WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
-                     AND SKUxLOC.SKU = @c_aSKU  
-                     AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
-                     AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility  
-                     AND LOC.HostWHCode = CASE WHEN @c_OverAllocPickByHostWHCode = '1' THEN @c_HostWHCode ELSE LOC.HostWHCode END  --WL01
-  
+                  
+                  --(Wan07) - Fixed - 2020-05-21 By Wan - START
+                  --INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                  --SELECT SKUXLOC.LOC  
+                  --  FROM SKUxLOC (nolock) join LOC (nolock)  
+                  --      on SKUXLOC.loc = LOC.loc  
+                  -- WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                  --   AND SKUxLOC.SKU = @c_aSKU  
+                  --   AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                  --   AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility  
+                  --   AND LOC.HostWHCode = CASE WHEN @c_OverAllocPickByHostWHCode = '1' THEN @c_HostWHCode ELSE LOC.HostWHCode END  --WL01
+                  IF @c_OverAllocPickByHostWHCode = '1'
+                  BEGIN
+                     INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                     SELECT SKUXLOC.LOC  
+                       FROM SKUxLOC (nolock) join LOC (nolock)  
+                           on SKUXLOC.loc = LOC.loc  
+                      WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                        AND SKUxLOC.SKU = @c_aSKU  
+                        AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                        AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
+                        AND LOC.HostWHCode = @c_HostWHCode 
+                  END
+                  ELSE
+                  BEGIN
+                     INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                     SELECT SKUXLOC.LOC  
+                       FROM SKUxLOC (nolock) join LOC (nolock)  
+                           on SKUXLOC.loc = LOC.loc  
+                      WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                        AND SKUxLOC.SKU = @c_aSKU  
+                        AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                        AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
+                  END
+                  --(Wan07) - Fixed - 2020-05-21 By Wan - END
+                    
                   SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR  
                   IF @n_cnt = 0 or @n_err <> 0  
                   BEGIN  

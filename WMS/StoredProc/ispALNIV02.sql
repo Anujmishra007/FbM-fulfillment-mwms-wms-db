@@ -25,8 +25,9 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */    
-/* 25-Nov-2014  NJOW01  1.0   Cater for overallocation lot qty available*/
+/* Date        Author   Ver.  Purposes                                  */    
+/* 25-Nov-2014 NJOW01   1.0   Cater for overallocation lot qty available*/
+/* 08-APR-2020 Wan01    1.3   Dynamic SQL review, impact SQL cache log  */ 
 /************************************************************************/    
 CREATE  PROC [dbo].[ispALNIV02]        
    @c_LoadKey    NVARCHAR(10),  
@@ -45,8 +46,8 @@ CREATE  PROC [dbo].[ispALNIV02]
 AS    
 BEGIN    
    SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET ANSI_NULLS OFF    
+   --SET QUOTED_IDENTIFIER OFF 
+   --SET ANSI_NULLS OFF    
 
    DECLARE @b_debug       INT,      
            @c_SQL         NVARCHAR(MAX),    
@@ -69,6 +70,8 @@ BEGIN
    SET @n_QtyToTake = 0
    SET @c_PrevLOT = ''
    SET @n_LotQtyAvailable = 0
+   
+   EXEC isp_Init_Allocate_Candidates   --(Wan01)   
 
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
@@ -110,13 +113,14 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' + CHAR(13) END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' + CHAR(13) END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' + CHAR(13) END +
-      CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', LA.Lottable04) > GetDate() ' ELSE ' ' + CHAR(13) END + CHAR(13) +
+      CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, @n_StorerMinShelfLife, LA.Lottable04) > GetDate() ' ELSE ' ' + CHAR(13) END + CHAR(13) + --(Wan01)
       ' ORDER BY LA.Lottable04, 4, LOC.LogicalLocation, LOC.LOC'
              
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
-                      '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18) '
+                      '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @n_StorerMinShelfLife INT '                      --(Wan01)
 
    EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @n_QtyLeftToFulfill, @n_UOMBase, @c_Lottable01, @c_Lottable02, @c_Lottable03 
+                           , @n_StorerMinShelfLife                                                                                                          --(Wan01)
 
    SET @c_SQL = ''
 
@@ -128,9 +132,9 @@ BEGIN
 
       IF @c_LOT <> @c_PrevLOT 
       BEGIN
-      	 SELECT @n_LotQtyAvailable = SUM(Qty - QtyAllocated - QtyPicked)
-      	 FROM LOT (NOLOCK)
-      	 WHERE LOT = @c_LOT
+          SELECT @n_LotQtyAvailable = SUM(Qty - QtyAllocated - QtyPicked)
+          FROM LOT (NOLOCK)
+          WHERE LOT = @c_LOT
       END
 
       IF @n_LotQtyAvailable < @n_QtyAvailable 
@@ -140,29 +144,41 @@ BEGIN
  
       IF @n_QtyLeftToFulfill >= @n_QtyAvailable
       BEGIN
-      		 SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
+             SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
       END
       ELSE
       BEGIN
-      	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
-      END      	 
+           SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
+      END          
       
       IF @n_QtyToTake > 0
-      BEGIN      	
-         IF ISNULL(@c_SQL,'') = ''
-         BEGIN
-            SET @c_SQL = N'   
-                  DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
-                  SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                  '
-         END
-         ELSE
-         BEGIN
-            SET @c_SQL = @c_SQL + N'  
-                  UNION ALL
-                  SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                  '
-         END
+      BEGIN  
+         --(Wan01) - START     
+         --IF ISNULL(@c_SQL,'') = ''
+         --BEGIN
+         --   SET @c_SQL = N'   
+         --         DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+         --ELSE
+         --BEGIN
+         --   SET @c_SQL = @c_SQL + N'  
+         --         UNION ALL
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+         SET @c_LOT = ISNULL(@c_LOT,'')
+         SET @c_LOC = ISNULL(@c_LOC,'')
+         SET @c_ID  = ISNULL(@c_ID,'')
+         
+         EXEC [isp_Insert_Allocate_Candidates] 
+               @c_LOT   = @c_LOT 
+            ,  @c_LOC   = @c_LOC 
+            ,  @c_ID    = @c_ID  
+            ,  @n_QtyAvailable = @n_QtyToTake
+            ,  @c_OtherValue   = @c_OtherValue 
+         --(Wan01) - END
          SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake         
          SET @n_LotQtyAvailable = @n_LotQtyAvailable - @n_QtyToTake    
       END
@@ -178,15 +194,19 @@ BEGIN
       DEALLOCATE CURSOR_AVAILABLE          
    END    
 
-   IF ISNULL(@c_SQL,'') <> ''
-   BEGIN
-      EXEC sp_ExecuteSQL @c_SQL
-   END
-   ELSE
-   BEGIN
-      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
-   END
+   --(Wan01) - START
+   EXEC isp_Cursor_Allocate_Candidates 
+      @n_SkipPreAllocationFlag = 1  -- Return Lot
+   --IF ISNULL(@c_SQL,'') <> ''
+   --BEGIN
+   --   EXEC sp_ExecuteSQL @c_SQL
+   --END
+   --ELSE
+   --BEGIN
+   --   DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+   --   SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
+   --END
+   --(Wan01) - END
 END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispALNIV02] TO nSQL

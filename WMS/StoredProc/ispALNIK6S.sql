@@ -19,14 +19,15 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.1                                                    */    
 /*                                                                      */    
 /* Version: 1.0                                                         */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */    
+/* Date         Author  Ver.  Purposes                                  */  
+/* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */   
 /************************************************************************/    
 CREATE  PROC [dbo].[ispALNIK6S]        
    @c_DocumentNo NVARCHAR(10),  
@@ -56,8 +57,8 @@ CREATE  PROC [dbo].[ispALNIK6S]
 AS    
 BEGIN    
    SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET ANSI_NULLS OFF    
+   --SET QUOTED_IDENTIFIER OFF 
+   --SET ANSI_NULLS OFF    
       
    DECLARE @c_SQL                NVARCHAR(MAX),    
            @c_SQLParm            NVARCHAR(MAX),                                   
@@ -83,6 +84,8 @@ BEGIN
    
    IF @n_UOMBase = 0
      SET @n_UOMBase = 1
+     
+   EXEC isp_Init_Allocate_Candidates         --(Wan01)      
 
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0))
@@ -92,8 +95,8 @@ BEGIN
    BEGIN
       SET @c_OrderKey = LEFT(@c_OtherParms,10)  --if call by discrete
       SET @c_key1 = LEFT(@c_OtherParms, 10) --Orderkey, Loadkey(conso), Wavekey(conso)
-      SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber      	    
-      SET @c_key3 = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave     	    
+      SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber             
+      SET @c_key3 = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave          
       
       IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='' --call by load conso
       BEGIN
@@ -105,8 +108,8 @@ BEGIN
          AND OD.Sku = @c_SKU
          ORDER BY O.Orderkey, OD.OrderLineNumber
          
-         SET @c_key4 = SUBSTRING(@c_OtherParms, 17, 50) --additional grouping value     	             
-      END        	     
+         SET @c_key4 = SUBSTRING(@c_OtherParms, 17, 50) --additional grouping value                    
+      END              
          
       IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='W' --call by wave conso
       BEGIN
@@ -119,8 +122,8 @@ BEGIN
          AND OD.Sku = @c_SKU
          ORDER BY O.Orderkey, OD.OrderLineNumber
 
-         SET @c_key4 = SUBSTRING(@c_OtherParms, 17, 50) --additional grouping value     	                      
-      END        	     
+         SET @c_key4 = SUBSTRING(@c_OtherParms, 17, 50) --additional grouping value                             
+      END              
                  
       SELECT TOP 1 @c_Doctype = O.DocType,
                    @c_ECOM_SINGLE_Flag = O.ECOM_SINGLE_Flag
@@ -205,56 +208,68 @@ BEGIN
    WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)          
    BEGIN    
 
-   	  IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
-   	  BEGIN
-   	  	 INSERT INTO #TMP_LOT (Lot, QtyAvailable)
-   	  	 SELECT Lot, Qty - QtyAllocated - QtyPicked
-      	 FROM LOT (NOLOCK)
-      	 WHERE LOT = @c_LOT       	 
-   	  END
+        IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
+        BEGIN
+          INSERT INTO #TMP_LOT (Lot, QtyAvailable)
+          SELECT Lot, Qty - QtyAllocated - QtyPicked
+          FROM LOT (NOLOCK)
+          WHERE LOT = @c_LOT         
+        END
       SET @n_LotQtyAvailable = 0
 
       SELECT @n_LotQtyAvailable = QtyAvailable
       FROM #TMP_LOT 
-      WHERE Lot = @c_Lot   	  
+      WHERE Lot = @c_Lot        
       
       IF @n_LotQtyAvailable < @n_QtyAvailable 
       BEGIN
-      	 IF @c_UOM = '1' 
-      	    SET @n_QtyAvailable = 0
-      	 ELSE
+          IF @c_UOM = '1' 
+             SET @n_QtyAvailable = 0
+          ELSE
             SET @n_QtyAvailable = @n_LotQtyAvailable
       END
-               	                  
+                                    
       IF @n_QtyLeftToFulfill >= @n_QtyAvailable
       BEGIN
-      		 SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
+             SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
       END
       ELSE
       BEGIN
-      	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
-      END      	 
+           SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
+      END          
       
       IF @n_QtyToTake > 0
       BEGIN
-   	  	 UPDATE #TMP_LOT
-   	  	 SET QtyAvailable = QtyAvailable - @n_QtyToTake 
-   	  	 WHERE Lot = @c_Lot
-      	
-         IF ISNULL(@c_SQL,'') = ''
-         BEGIN
-            SET @c_SQL = N'   
-                  DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
-                  SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                  '
-         END
-         ELSE
-         BEGIN
-            SET @c_SQL = @c_SQL + N'  
-                  UNION ALL
-                  SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
-                  '
-         END
+          UPDATE #TMP_LOT
+          SET QtyAvailable = QtyAvailable - @n_QtyToTake 
+          WHERE Lot = @c_Lot
+         
+         --(Wan01) - START
+         --IF ISNULL(@c_SQL,'') = ''
+         --BEGIN
+         --   SET @c_SQL = N'   
+         --         DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+         --ELSE
+         --BEGIN
+         --   SET @c_SQL = @c_SQL + N'  
+         --         UNION ALL
+         --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyToTake AS NVARCHAR(10)) + ''', ''' + @c_OtherValue + '''
+         --         '
+         --END
+         SET @c_Lot       = RTRIM(@c_Lot)             
+         SET @c_Loc       = RTRIM(@c_Loc)
+         SET @c_ID        = RTRIM(@c_ID)
+
+         EXEC isp_Insert_Allocate_Candidates
+            @c_Lot = @c_Lot
+         ,  @c_Loc = @c_Loc
+         ,  @c_ID  = @c_ID
+         ,  @n_QtyAvailable = @n_QtyToTake
+         ,  @c_OtherValue = @c_OtherValue
+         --(Wan01) - END
          SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake       
       END
             
@@ -269,15 +284,19 @@ BEGIN
       DEALLOCATE CURSOR_AVAILABLE          
    END    
 
-   IF ISNULL(@c_SQL,'') <> ''
-   BEGIN
-      EXEC sp_ExecuteSQL @c_SQL
-   END
-   ELSE
-   BEGIN
-      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
-   END
+   --(Wan01) - START
+   EXEC isp_Cursor_Allocate_Candidates   
+         @n_SkipPreAllocationFlag = 1    --Return Lot column  
+   --IF ISNULL(@c_SQL,'') <> ''
+   --BEGIN
+   --   EXEC sp_ExecuteSQL @c_SQL
+   --END
+   --ELSE
+   --BEGIN
+   --   DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+   --   SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
+   --END
+   --(Wan01) - END  
 END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispALNIK6S] TO nSQL

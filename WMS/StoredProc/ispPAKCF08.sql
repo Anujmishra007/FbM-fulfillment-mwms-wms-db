@@ -31,6 +31,8 @@ GO
 /*                            and packdetail.dropid for B2C only           */
 /* 06/05/2019   CSCHONG 1.1   WMS-8860 update pickdetail.dropid (CS01)     */
 /* 16/08/2019   WAN01   1.2   WMS-10243 - CN UA EcomPacking_For JD ORD CR  */
+/* 03/01/2020   NJOW02  1.3   WMS-10647 update packdetail labelno=dropid   */
+/*                            for JD                                       */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPAKCF08]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -339,6 +341,7 @@ BEGIN
             BEGIN                                                            
                UPDATE PACKDETAIL WITH (ROWLOCK)  
                SET DropID = @c_GetTrackingNo 
+                  ,LabelNo = @c_GetTrackingNo  --NJOW02
                   ,ArchiveCop = NULL
                WHERE PickSlipNo = @c_PickSlipNo  
                AND   CartonNo = @n_TCartonNo 
