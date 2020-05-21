@@ -7,6 +7,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
+
 /************************************************************************/  
 /* Stored Proc: nspPreAllocateLoadProcessing                            */  
 /* Creation Date: 07-Oct-2009                                           */  
@@ -58,8 +59,9 @@ GO
 /* 08-OCT-2019  Wan05   2.9   WMS - 9914 [MY] JDSPORTSMY - Channel      */  
 /*                            Inventory Ignore QtyOnHold - CR           */   
 /* 08-OCT-2019  Wan06   2.9   Fixed to Get Channel If there is candidate*/  
-/*                            in Cursor                                 */  
-/* 21-Nov-2019  TLTING02 2.10  Dynamic SQL - cache issue                */ 
+/*             in Cursor                                 */  
+/* 21-Nov-2019  TLTING02 3.0  Dynamic SQL - cache issue                 */   
+/* 08-Jan-2020  NJOW06  3.1   WMS-10420 add strategykey parameter       */ 
 /* 12-Feb-2020  Wan07   3.2   SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */     
 /************************************************************************/  
@@ -71,6 +73,7 @@ CREATE PROC  [dbo].[nspPreAllocateLoadProcessing]
 ,              @n_err          INT        OUTPUT  
 ,              @c_errmsg       NVARCHAR(250)  OUTPUT  
 ,              @b_Debug        INT = 0  
+,              @c_StrategykeyParm NVARCHAR(10) = '' --NJOW06 
 AS  
    SET NOCOUNT ON  
    SET ANSI_NULLS OFF  
@@ -929,7 +932,25 @@ BEGIN
          --(Wan01) - START  
          --(Shong01)  
          SET @c_aPreAllocatePickCode = ''  
-         IF @c_DefaultStrategykey = 'Y'  
+         
+         IF ISNULL(@c_StrategykeyParm,'') <> ''  --NJOW06  
+         BEGIN  
+            SET @c_aPreAllocateStrategyKey=''    
+  
+            SELECT @c_aPreAllocateStrategyKey = ISNULL(STRATEGY.PreAllocateStrategyKey, '')    
+            FROM  STRATEGY  WITH (NOLOCK)   
+            WHERE STRATEGY.Strategykey = @c_StrategykeyParm                              
+              
+            SELECT   TOP 1    
+                     @c_sCurrentLineNumber   = ISNULL(RTRIM(PA.PreAllocateStrategyLineNumber),'')    
+                  ,  @c_aPreAllocatePickCode = ISNULL(RTRIM(PA.PreAllocatePickCode),'')    
+                  ,  @c_sUOM = ISNULL(RTRIM(PA.UOM),'')    
+            FROM     dbo.PREALLOCATESTRATEGYDETAIL PA WITH ( NOLOCK )    
+            WHERE    PA.PreAllocateStrategyKey = @c_aPreAllocateStrategyKey    
+            AND      PA.PreAllocateStrategyLineNumber > @c_sCurrentLineNumber    
+            ORDER BY PA.PreAllocateStrategyLineNumber                            
+         END  
+         ELSE IF @c_DefaultStrategykey = 'Y'  
          BEGIN  
             SET @c_aPreAllocateStrategyKey=''  
   
@@ -1122,13 +1143,13 @@ BEGIN
                   WHEN '@d_Lottable14' THEN '@d_Lottable14 = N''' + RTRIM(@c_aLottable14) + ''''   --(Wan01)  
                   WHEN '@d_Lottable15' THEN '@d_Lottable15 = N''' + RTRIM(@c_aLottable15) + ''''   --(Wan01)  
                   WHEN '@c_UOM'        THEN '@c_UOM = N''' + RTRIM(@c_sUOM) + ''''  
-                  WHEN '@c_OtherParms' THEN '@c_OtherParms= N''' +  
-                                            CASE  
-                                              WHEN @c_LoadConsoAllocationOParms = '1'  
-                                                  THEN LTRIM(RTRIM(@c_LoadKey)) + '      ' + LTRIM(RTRIM(ISNULL(@c_Oparms,''))) + ''' ' --NJOW03  
-                                              ELSE  
-                                                  RTRIM(@c_aOrderKey) + RTRIM(@c_aOrderLineNumber) + ''' '  
-                                            END  
+                  WHEN '@c_OtherParms' THEN '@c_OtherParms= N''' +  LTRIM(RTRIM(@c_LoadKey)) + '      ' + LTRIM(RTRIM(ISNULL(@c_Oparms,''))) + ''' ' --NJOW03  NJOW06  
+                                            /*CASE    
+                                              WHEN @c_LoadConsoAllocationOParms = '1'    
+                                                  THEN LTRIM(RTRIM(@c_LoadKey)) + '      ' + LTRIM(RTRIM(ISNULL(@c_Oparms,''))) + ''' ' --NJOW03   
+                                              ELSE    
+          RTRIM(@c_aOrderKey) + RTRIM(@c_aOrderLineNumber) + ''' '    
+                                            END*/    
                   WHEN '@n_UOMBase'    THEN '@n_UOMBase = ' + RTRIM(CONVERT(VARCHAR(10),@n_PackQty))  
                   WHEN '@n_QtyLeftToFulfill' THEN '@n_QtyLeftToFulfill = ' + RTRIM(CONVERT(VARCHAR(10),@n_QtyLeftToFulfill))  
                END  
@@ -1829,6 +1850,7 @@ BEGIN
 END  
 GOTO RETURNFROMUPDATEINV_01  
 
+
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -1836,3 +1858,4 @@ SET ANSI_NULLS OFF
 GO
 
 GRANT EXECUTE ON nspPreAllocateLoadProcessing TO nSQL 
+GO
