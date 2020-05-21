@@ -59,7 +59,7 @@ GO
 /*                            Facility                                  */  
 /* 29-May-2015  NJOW04   1.8  342109 - Get casecnt from lottable        */  
 /* 18-Nov-2015  NJOW05   1.9  Skip PreAllocate and Allocate by Storer & */  
-/*                            Facility                                  */  
+/*           Facility                                  */  
 /* 18-Nov-2015  NJOW06   2.0  312318-Full pallet determind by pallet    */  
 /*                            Id & Loc. Work with skip preallocation.   */  
 /*                            @c_loctype=FULLPALLET                     */  
@@ -95,9 +95,13 @@ GO
 /*                            Inventory Ignore QtyOnHold - CR           */  
 /* 22-SEP-2019  WLChooi  3.3  WMS-10216 - Able to filter by HostWHCode  */
 /*                            when overallocation (Discrete only) (WL01)*/
+/* 08-Jan-2020  NJOW14   3.4  WMS-10420 add strategykey parameter       */  
 /* 12-Feb-2020  Wan06    3.4  SQLBindParm. Create Temp table to Store   */
-/*                            Preallocate data from pickcode            */ 
-/* 21-MAY-2020  Wan07    3.5  Fixed no record retrieve if Loc.HostWHCode*/
+/*                            Preallocate data from pickcode            */  
+/* 18-Feb-2020  Wan07    3.4  WMS-11774                                 */  
+/* 27-Mar-2020  NJOW15   3.5  WMS-12491 Get Over allocation pick loc by */
+/*                            Custom SP                                 */ 
+/* 21-MAY-2020  Wan08    3.6  Fixed no record retrieve if Loc.HostWHCode*/
 /*                            is null & OverAllocPickByHostWHCode is off*/
 /************************************************************************/  
   
@@ -110,7 +114,8 @@ CREATE PROC [dbo].[nspOrderProcessing]
    , @b_Success      Int        OUTPUT  
    , @n_err          Int        OUTPUT  
    , @c_errmsg       NVARCHAR(250)  OUTPUT  
-   , @c_extendparms  NVARCHAR(250) = ''   --(Wan02)  
+   , @c_extendparms  NVARCHAR(250) = ''   --(Wan02)
+   , @c_StrategykeyParm NVARCHAR(10) = '' --NJOW14       
 AS  
 BEGIN  
    SET NOCOUNT ON  
@@ -151,7 +156,11 @@ BEGIN
          , @c_UCCAllocation             NVARCHAR(30) --NJOW13  
          , @c_UCCNo                     NVARCHAR(20) --NJOW13  
          , @c_PrevUCCNo                 NVARCHAR(20) --NJOW13 
-         , @c_OverAllocPickByHostWHCode NVARCHAR(10) --WL01  
+         , @c_OverAllocPickByHostWHCode NVARCHAR(10) --WL01 
+         , @c_OtherParmsExist           NVARCHAR(10) --NJOW14            
+         , @c_OverAllocPickLoc_SP       NVARCHAR(30) --NJOW15            
+         , @c_CallSource                NVARCHAR(20) --NJOW15
+         , @n_OverAlQtyLeftToFulfill    INT          --NJOW15
       
     -- NJOW05       
     DECLARE   
@@ -283,6 +292,32 @@ BEGIN
          Select @n_continue = 3, @c_ErrMsg = 'nspOrderProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')  
       END  
    END               
+
+   --NJOW15 S
+   EXEC nspGetRight
+        @c_Facility  = @c_Facility,
+        @c_StorerKey = @c_StorerKey,
+        @c_sku       = NULL,
+        @c_ConfigKey = 'OverAllocPickLoc_SP',
+        @b_Success   = @b_Success                   OUTPUT,
+        @c_authority = @c_OverAllocPickLoc_SP       OUTPUT,
+        @n_err       = @n_err                       OUTPUT,
+        @c_errmsg    = @c_errmsg                    OUTPUT
+
+   IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_OverAllocPickLoc_SP) AND type = 'P')       
+   BEGIN
+   	  SET @c_OverAllocPickLoc_SP = ''
+   END 
+   ELSE
+   BEGIN
+      IF @c_ExtendParms = 'WP'
+         SET @c_CallSource = 'WAVEORDER'
+      ELSE IF @c_ExtendParms = 'LP'
+         SET @c_CallSource = 'LOADORDER'
+      ELSE 
+         SET @c_CallSource = 'ORDER'                   
+   END
+   --NJOW15 E                
            
    SET @d_step1 = GETDATE() -- (tlting01)  
   
@@ -314,17 +349,18 @@ BEGIN
   
       IF (@n_Continue = 1 OR @n_Continue = 2) AND ISNULL(@c_SkipPreAllocationFlag,'0') <> '1' --NJOW05  
       BEGIN  
-         EXECUTE   dbo.nspPreAllocateOrderProcessing  
-         @c_OrderKey  
-         , @c_oskey  
-         , @c_oprun  
-         , @c_doroute  
-         , '' -- @c_XDOCK  
-         , @c_fromloc  
-         , @b_success OUTPUT  
-         , @n_err OUTPUT  
-         , @c_errmsg OUTPUT  
-         , @c_extendparms              --(Wan02)  
+         EXECUTE   dbo.nspPreAllocateOrderProcessing    
+           @c_orderkey = @c_OrderKey    
+         , @c_oskey = @c_oskey    
+         , @c_oprun = @c_oprun    
+         , @c_doroute = @c_doroute    
+         , @c_xdock = '' -- @c_XDOCK    
+         , @c_fromloc = @c_fromloc    
+         , @b_Success = @b_success OUTPUT    
+         , @n_err = @n_err OUTPUT    
+         , @c_errmsg = @c_errmsg OUTPUT    
+         , @c_extendparms = @c_extendparms              --(Wan02)    
+         , @c_StrategykeyParm = @c_StrategykeyParm      --NJOW14  
       END  
    END  
   
@@ -334,8 +370,8 @@ BEGIN
    IF @c_tblprefix = 'DS1' or @c_tblprefix = 'DS2'  
    BEGIN  
       SELECT @b_debug = Convert(Int, Right(dbo.fnc_RTrim(@c_tblprefix), 1))  
-   END 
-   
+   END  
+  
    --(Wan06) - START
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
@@ -354,8 +390,7 @@ BEGIN
       )
    END
    --(Wan06) - END
- 
-  
+   
    IF @b_debug = 1 or @b_debug = 2  
    BEGIN  
       PRINT ''  
@@ -623,7 +658,7 @@ BEGIN
                                              Packkey, Wavekey, PreAllocateStrategykey, PreAllocatePickCode, DoCartonize, PickMethod, Runkey,  
                                              Effectivedate, adddate, addwho, editdate, editwho,  
                                              CartonGroup, Strategykey, Facility, XDockFlag, Channel)  
-                  SELECT                       PreAllocatePickDetailKey = '',  
+                  SELECT                     PreAllocatePickDetailKey = '',  
                      OD.OrderKey,  
                      OD.OrderLineNumber,  
                      OD.Storerkey,  
@@ -695,7 +730,7 @@ BEGIN
                        @n_PackQty     Int  
   
                CREATE TABLE #TempBatchPick (  
-                  StorerKey    NVARCHAR(15),  
+      StorerKey    NVARCHAR(15),  
                   SKU          NVARCHAR(20),  
                   LOT          NVARCHAR(10),  
   UOM          NVARCHAR(10), -- (ChewKP01)  
@@ -942,11 +977,18 @@ BEGIN
       END  
   
       --IF @c_DefaultStrategykey = 'Y'   
-      IF (@c_DefaultStrategykey = 'Y' AND (@c_extendparms = 'LP' OR  @c_oskey <> ''))   
-         OR (@c_extendparms <> 'LP')   --NJOW12  
+      IF ISNULL(@c_StrategykeyParm,'') <> ''  --NJOW14   
+      BEGIN  
+         UPDATE TMP    
+         SET StrategyKey = ISNULL(STRATEGY.AllocateStrategyKey, '')    
+         FROM #OPORDERLINES TMP    
+         JOIN STRATEGY     WITH (NOLOCK) ON  STRATEGY.Strategykey = @c_StrategykeyParm           
+      END  
+      ELSE IF (@c_DefaultStrategykey = 'Y' AND (@c_extendparms = 'LP' OR  @c_oskey <> ''))   
+         OR (@c_extendparms <> 'LP')   --NJOW12   if from load plan depend on defaultstrategykey flag to change strategy. if from wave/order is not depend.  
       BEGIN  
           --NJOW03  
-         IF @c_extendparms = 'LP' OR @c_oskey <> ''  
+         IF @c_extendparms = 'LP' OR @c_oskey <> ''  --from load plan or load conso call from wave  
          BEGIN  
             UPDATE TMP   
                SET Strategykey = CASE   
@@ -1527,7 +1569,7 @@ BEGIN
   
                      --Remove to support dynamic uom qty control at pickcode                                             
                      --IF @n_cPackQty > @n_aQtyLeftToFulfill   
-                     --   AND @c_aUOM <> '1' --NJOW06 support full pallet by loc/id  
+                     --  AND @c_aUOM <> '1' --NJOW06 support full pallet by loc/id  
                      --   GOTO GET_NEXT_STRATEGY_SUPER                                           
                     END  
                     ELSE  
@@ -1687,6 +1729,20 @@ BEGIN
                SELECT @n_cursorcandidates_open = 0  
                SELECT @c_endstring = ' @n_uombase = ' + LTRIM(convert(Char(10),@n_cPackQty)) + ", @n_qtylefttofulfill=" + LTRIM(convert(Char(10), @n_aQtyLeftToFulfill))  
   
+               --NJOW14  
+               IF EXISTS(SELECT 1    
+                         FROM sys.parameters AS p    
+                         JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                         WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
+                         AND   P.name = N'@c_OtherParms')                          
+               BEGIN  
+                  SET @c_OtherParmsExist = 'Y'  
+               END  
+               ELSE  
+               BEGIN    
+                  SET @c_OtherParmsExist = 'N'  
+               END     
+                 
                IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1' --NJOW05  
                BEGIN  
                   IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101'  
@@ -1715,7 +1771,7 @@ BEGIN
                      SELECT @c_Lottable15 = CONVERT(VARCHAR(20), @d_Lottable15, 112)  
                               
                   SET @c_Lottable_Parm = ''  
-                  SET @c_OtherParms = dbo.fnc_RTrim(@c_aOrderKey) + dbo.fnc_RTrim(@c_aOrderLineNumber)  
+                  SET @c_OtherParms = dbo.fnc_RTrim(@c_aOrderKey) + dbo.fnc_RTrim(@c_aOrderLineNumber)  + 'O'  --NJOW14  
   
                   SELECT @c_Lottable_Parm = ISNULL(MAX(PARAMETER_NAME),'')  
                   FROM [INFORMATION_SCHEMA].[PARAMETERS]   
@@ -1765,7 +1821,8 @@ BEGIN
                                  WHEN '@c_UOM'        THEN ',@c_UOM = N''' + RTRIM(@c_aUOM) + ''''   
                                  WHEN '@c_HostWHCode' THEN ',@c_HostWHCode = N''' + RTRIM(@c_HostWHCode) + ''''   
                                  WHEN '@n_UOMBase'   THEN ',@n_UOMBase=''' + CONVERT(VARCHAR(10),@n_cPackQty) + ''''  
-                                 WHEN '@n_QtyLeftToFulfill' THEN ',@n_QtyLeftToFulfill=''' + CONVERT(VARCHAR(10), @n_aQtyLeftToFulfill) + ''''  
+                                 WHEN '@n_QtyLeftToFulfill' THEN ',@n_QtyLeftToFulfill=''' + CONVERT(VARCHAR(10), @n_aQtyLeftToFulfill) + '''' 
+                                 WHEN '@c_OtherParms' THEN ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''   --NJOW14                                    
                               END   
                             --  + '''' + ',' + RTRIM(@c_EndString)  
                         END  
@@ -1775,8 +1832,10 @@ BEGIN
                      CLOSE Cur_Parameters  
                      DEALLOCATE Cur_Parameters     
   
-                      IF @c_Orderinfo4Allocation = '1' --NJOW07  
-                         SELECT @c_SQLExecute = RTRIM(@c_SQLExecute) + ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''                             
+                     --NJOW14 Removed  
+                     --IF @c_Orderinfo4Allocation = '1' --NJOW07    
+                     --   SELECT @c_SQLExecute = RTRIM(@c_SQLExecute) + ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''                           
+                           
                               
                      IF @b_debug = 1 OR @b_debug = 2  
                      BEGIN  
@@ -1814,9 +1873,10 @@ BEGIN
                         FROM LOTxLOCxID (NOLOCK)  
                         WHERE 1=2  
                      END  
-                     ELSE  
+                     ELSE
                      BEGIN  
-                        IF @c_Orderinfo4Allocation = '1'   
+                        --IF @c_Orderinfo4Allocation = '1'     
+                        IF @c_OtherParmsExist = 'Y' --NJOW14   
                            EXEC(@c_sAllocatePickCode + ' '  
                                  + 'N''' + @c_aOrderKey   + ''''  + ','  
                                  + 'N''' + @c_aFacility + ''''  + ','  
@@ -1847,6 +1907,7 @@ BEGIN
                             WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)  
                   AND   P.name = N'@c_LOT')  
                   BEGIN  
+                  	 print 'lot not found'
                      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY  
                      FOR SELECT LOC = '', ID='', QTYAVAILABLE = 0, '1'  
                      FROM LOTxLOCxID (NOLOCK)  
@@ -1858,11 +1919,15 @@ BEGIN
                      END  
                   END  
                   ELSE  
-                  BEGIN  
-                     IF @c_Orderinfo4Allocation = '1'  
-                     BEGIN  
-                        SELECT @c_OtherParms = dbo.fnc_RTrim(@c_aOrderKey) + dbo.fnc_RTrim(@c_aOrderLineNumber)  
+                  BEGIN 
+                     --IF @c_Orderinfo4Allocation = '1'    
+                     IF @c_OtherParmsExist = 'Y' --NJOW14  
+                     BEGIN    
+                        SELECT @c_OtherParms = dbo.fnc_RTrim(@c_aOrderKey) + dbo.fnc_RTrim(@c_aOrderLineNumber) +'O'  --NJOW14   
                         --EXEC(@c_sAllocatePickCode + " " + "N'" + @c_aLOT + "'" + "," + "N'" + @c_aUOM + "'" + "," + "N'" + @c_HostWHCode + "'" + "," + "N'" + @c_AFacility + "'" + "," + @c_endstring + ",N'" +  @c_OtherParms + "'" )  
+                        
+                        print @c_sAllocatePickCode + " @c_lot= " + "N'" + @c_aLOT + "'" + "," + " @c_uom = N'" + @c_aUOM + "'" + "," + " @c_HostWHCode = N'" + @c_HostWHCode + "'" + "," + " @c_Facility= N'" + @c_AFacility + "'" + "," + @c_endstring   
+                              + ",@c_OtherParms= N'" +  @c_OtherParms + "'" 
                        
                         EXEC(@c_sAllocatePickCode + " @c_lot= " + "N'" + @c_aLOT + "'" + "," + " @c_uom = N'" + @c_aUOM + "'" + "," + " @c_HostWHCode = N'" + @c_HostWHCode + "'" + "," + " @c_Facility= N'" + @c_AFacility + "'" + "," + @c_endstring   
                               + ",@c_OtherParms= N'" +  @c_OtherParms + "'" )  
@@ -2189,7 +2254,7 @@ BEGIN
                                  SET @n_otherunit2 = @n_dynUOMQty                         
                                 
                               SET @n_cPackQty = @n_dynUOMQty  
-                          END                                    
+                          END            
                         END  
 
                         --NJOW13  
@@ -2270,7 +2335,7 @@ BEGIN
                            BEGIN  
                                 --NJOW05  
                               IF @b_OverContinue = 1  
-                              BEGIN  
+                             BEGIN  
                                  SELECT @n_JumpSource = 1  
                                  GOTO UPDATEINV  
                           END  
@@ -2338,24 +2403,68 @@ BEGIN
                   TRUNCATE TABLE #OP_OVERPICKLOCS  
                   TRUNCATE TABLE #OP_PICKLOCTYPE  
                   -- END  
-                  
-                  --(Wan07) - Fixed - 2020-05-21 By Wan - START
-                  --INSERT INTO #OP_PICKLOCTYPE (LOC)   
-                  --SELECT SKUXLOC.LOC  
-                  --  FROM SKUxLOC (nolock) join LOC (nolock)  
-                  --      on SKUXLOC.loc = LOC.loc  
-                  -- WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
-                  --   AND SKUxLOC.SKU = @c_aSKU  
-                  --   AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
-                  --   AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility  
-                  --   AND LOC.HostWHCode = CASE WHEN @c_OverAllocPickByHostWHCode = '1' THEN @c_HostWHCode ELSE LOC.HostWHCode END  --WL01
-                  IF @c_OverAllocPickByHostWHCode = '1'
+
+                  --NJOW15 S
+                  IF ISNULL(@c_OverAllocPickLoc_SP,'') <> ''
+                  BEGIN
+                  	 SET @n_OverAlQtyLeftToFulfill = @n_NextQtyLeftToFulfill + @n_QtyToTake
+                  	 
+                     SET @c_SQL = N'
+                     INSERT INTO #OP_PICKLOCTYPE        
+                     EXEC ' + RTRIM(@c_overAllocPickLoc_sp) + ' @c_Storerkey=@c_aStorerkey, @c_Sku=@c_aSku, @c_AllocateStrategykey=@c_aAllocateStrategykey, @c_AllocateStrategyLineNumber=@c_aAllocateStrategyLineNumber,   
+                                                       @c_LocationTypeOverride=@c_aLocationTypeOverride, @c_LocationTypeOverridestripe=@c_aLocationTypeOverridestripe, @c_Facility=@c_aFacility, @c_HostWHCode=@c_aHostWHCode,   
+                                                       @c_Orderkey=@c_aOrderkey,  @c_Loadkey=@c_aLoadkey, @c_Wavekey=@c_aWavekey, @c_Lot=@c_aLot, @c_Loc=@c_aLoc, @c_ID=@c_aID, @c_UOM=@c_aUOM, @n_QtyToTake=@n_aQtyToTake,  
+                                                       @n_QtyLeftToFulfill=@n_aQtyLeftToFulfill, @c_CallSource=@c_aCallSource, @b_success=@b_asuccess OUTPUT, @n_err=@n_aerr OUTPUT, @c_errmsg=@c_aerrmsg OUTPUT '
+                     
+                     EXEC SP_EXECUTESQL @c_SQL, N'@c_aStorerkey NVARCHAR(15), @c_aSku NVARCHAR(20), @c_aAllocateStrategykey NVARCHAR(10), @c_aAllocateStrategyLineNumber NVARCHAR(5), @c_aLocationTypeOverride NVARCHAR(10), 
+                     @c_aLocationTypeOverridestripe NVARCHAR(10), @c_aFacility NVARCHAR(5), @c_aHostWHCode NVARCHAR(10), @c_aOrderkey NVARCHAR(10), @c_aLoadkey NVARCHAR(10), @c_aWavekey NVARCHAR(10), @c_aLot NVARCHAR(10),  
+                     @c_aLoc NVARCHAR(10), @c_aID NVARCHAR(18), @c_aUOM NVARCHAR(10), @n_aQtyToTake INT, @n_aQtyLeftToFulfill INT, @c_aCallSource NVARCHAR(20), @b_asuccess INT OUTPUT, @n_aerr INT OUTPUT, @c_aErrMsg NVARCHAR(250) OUTPUT',
+                     @c_aStorerkey,
+                     @c_aSku, 
+                     @c_aStrategykey,
+                     @c_sCurrentLineNumber,
+                     @c_sLocationTypeOverride, 
+                     @c_sLocationTypeOverridestripe,
+                     @c_aFacility, 
+                     @c_HostWHCode,                               
+                     @c_Orderkey,
+                     '', --@c_Loadkey
+                     '', --@c_Wavekey
+                     @c_aLot,
+                     @c_cLoc,
+                     @c_cID, 
+                     @c_aUOM, 
+                     @n_QtyToTake, 
+                     @n_OverAlQtyLeftToFulfill,
+                     @c_CallSource,  --WAVEORDER, LOADORDER, ORDER          
+                     @b_success OUTPUT,      
+                     @n_err     OUTPUT,      
+                     @c_errmsg  OUTPUT       
+                     
+                     SELECT @n_cnt = COUNT(1) FROM #OP_PICKLOCTYPE
+                  END --NJOW15 E  
+                  --(Wan08) - Fixed - 2020-05-21 By Wan - START                   
+                  --ELSE
+                  --BEGIN                  
+                  --   INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                  --   SELECT SKUXLOC.LOC  
+                  --     FROM SKUxLOC (nolock) join LOC (nolock)  
+                  --         on SKUXLOC.loc = LOC.loc  
+                  --    WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                  --      AND SKUxLOC.SKU = @c_aSKU  
+                  --      AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                  --      AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility  
+                  --      AND ISNULL(LOC.HostWHCode,'') = CASE WHEN @c_OverAllocPickByHostWHCode = '1' THEN @c_HostWHCode ELSE ISNULL(LOC.HostWHCode,'') END  --WL01 NJOW14
+                     
+                  --   SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR  
+                  --END
+                  ELSE IF @c_OverAllocPickByHostWHCode = '1'
                   BEGIN
                      INSERT INTO #OP_PICKLOCTYPE (LOC)   
                      SELECT SKUXLOC.LOC  
                        FROM SKUxLOC (nolock) join LOC (nolock)  
                            on SKUXLOC.loc = LOC.loc  
-                      WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                     WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
                         AND SKUxLOC.SKU = @c_aSKU  
                         AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
                         AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
@@ -2372,9 +2481,10 @@ BEGIN
                         AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
                         AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
                   END
-                  --(Wan07) - Fixed - 2020-05-21 By Wan - END
-                    
+                  --(Wan08) - Fixed - 2020-05-21 By Wan - END
+                  
                   SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR  
+
                   IF @n_cnt = 0 or @n_err <> 0  
                   BEGIN  
                      SELECT @b_overcontinue = 0  
@@ -2448,7 +2558,7 @@ BEGIN
                                     WHERE ColValue IN ('01','02','03','04','05','06','07','08','09','10','11','12','13','14','15'))  
                         BEGIN    
                             --NJOW02  
-                            --Search pick loc with similar lottable        
+                           --Search pick loc with similar lottable        
                                SET @c_SQL = N'SELECT @c_PickLoc = PL.Loc ' +           
                                    ' FROM #OP_PickLocType PL ' +  
                                  ' JOIN LOTxLOCxID LLI (NOLOCK) ON PL.LOC = LLI.LOC ' +  
@@ -2483,7 +2593,7 @@ BEGIN
                               SELECT TOP 1 @c_pickloc = PL.LOC  
                               FROM #OP_PickLocType PL  
                               JOIN LOTxLOCxID LLI (NOLOCK) ON PL.LOC = LLI.LOC   
-                                    AND (LLI.Qty - LLI.QtyPicked > 0 OR (LLI.QtyAllocated + LLI.QtyPicked) - LLI.Qty > 0)  
+                              AND (LLI.Qty - LLI.QtyPicked > 0 OR (LLI.QtyAllocated + LLI.QtyPicked) - LLI.Qty > 0)  
                               JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot  
                               JOIN LOTATTRIBUTE LA2 (NOLOCK) ON LA2.Lot = @c_aLOT AND LA.Lottable04 = LA2.Lottable04  
                               ORDER BY LLI.Qty DESC, PL.Loc  
@@ -2506,7 +2616,7 @@ BEGIN
                               SELECT TOP 1 @c_pickloc = PL.LOC  
                               FROM #OP_PickLocType PL  
                               JOIN LOTxLOCxID LLI (NOLOCK) ON PL.LOC = LLI.LOC  
-  GROUP BY PL.Loc  
+                              GROUP BY PL.Loc  
                               HAVING (SUM(LLI.Qty - LLI.QtyPicked) = 0 AND SUM((LLI.QtyAllocated + LLI.QtyPicked) - LLI.Qty) = 0)  
                               ORDER BY PL.Loc  
                            END  
@@ -2545,8 +2655,8 @@ BEGIN
                                  AND LocationType = @c_sLocationTypeOverride  
                              
   
-            SELECT TOP 1 @c_pickloc = LOC  
-                                FROM #OP_PickLocType  
+                              SELECT TOP 1 @c_pickloc = LOC  
+                              FROM #OP_PickLocType  
                               ORDER BY LOC  
                              
                            END  
@@ -2581,7 +2691,7 @@ BEGIN
                   BEGIN  
                      SELECT @b_overcontinue = 0  
                   END  
- ELSE IF @b_debug = 1 or @b_debug = 2  
+                  ELSE IF @b_debug = 1 or @b_debug = 2  
                   BEGIN  
                      PRINT ''  
                      PRINT '**** Over Allocation - Pick Location ****'  
@@ -3047,7 +3157,7 @@ BEGIN
                END  
                FETCH NEXT FROM order_cur INTO @c_loadorderkey  
             END -- @@FETCH_STATUS  
-    CLOSE order_cur  
+            CLOSE order_cur  
             DEALLOCATE order_cur  
             -- Force to trigger Status update  
             UPDATE Loadplan  
@@ -3091,7 +3201,7 @@ BEGIN
                        'DROPID AFTER ALLOCATION',      -- ConfigKey  
                        @b_success    OUTPUT,  
                        @c_authority  OUTPUT,  
-    @n_err        OUTPUT,  
+                       @n_err        OUTPUT,  
                        @c_errmsg     OUTPUT  
             IF @b_success <> 1  
             BEGIN  
@@ -3265,7 +3375,7 @@ BEGIN
                      WHEN '3' THEN @c_uom2pickmethod -- Inner  
                      WHEN '4' THEN @c_uom5pickmethod -- Other 1  
                      WHEN '5' THEN @c_uom6pickmethod -- Other 2 (uses the same pickmethod AS other1)  
-                     WHEN '6' THEN @c_uom3pickmethod -- Piece  
+       WHEN '6' THEN @c_uom3pickmethod -- Piece  
                      WHEN '7' THEN @c_uom3pickmethod -- Piece  
                      ELSE '0'  
                   END  
@@ -3278,7 +3388,7 @@ BEGIN
       -- to group inner pack (uom = '3') INTO 1 pickdetail  
       IF @c_SuperFlag = 'Y'  
       BEGIN  
-         IF (@c_aUOM = '6' or @c_aUOM = '7' or @c_aUOM = '2' or @c_aUOM = '3')  
+         IF (@c_aUOM = '6' or @c_aUOM = '7' or @c_aUOM = '2' or @c_aUOM = '3' or @c_aUOM = '4')    --(Wan07)   
          BEGIN  
             SELECT @n_QtyToInsert = @n_QtyToTake  
             SELECT @n_UOMQtyToInsert = @n_UOMQty  
@@ -3292,7 +3402,7 @@ BEGIN
       END  
       ELSE  
       BEGIN  
-         IF (@c_aUOM = '6' or @c_aUOM = '7' or @c_aUOM = '2' or @c_aUOM = '3')  
+         IF (@c_aUOM = '6' or @c_aUOM = '7' or @c_aUOM = '2' or @c_aUOM = '3' or @c_aUOM = '4')    --(Wan07) 
          BEGIN  
             SELECT @n_QtyToInsert = @n_QtyToTake  
             SELECT @n_UOMQtyToInsert = @n_UOMQty  
@@ -3440,7 +3550,7 @@ BEGIN
                   IF EXISTS(SELECT 1 FROM UCC (NOLOCK)  
                                WHERE UCCNo = @c_UCCNo  
                                AND Storerkey = @c_aStorerkey  
-                               AND Sku = @c_aSku  
+             AND Sku = @c_aSku  
                                AND Status < '3') 
                   BEGIN
                      UPDATE UCC WITH (ROWLOCK)  
@@ -3462,12 +3572,12 @@ BEGIN
          END  
          ELSE  
          BEGIN  
-     SELECT @b_pickupdatesuccess = 0  
+            SELECT @b_pickupdatesuccess = 0  
          END  -- IF @b_sucess = 1  
          SELECT @n_pickrecscreated = @n_pickrecscreated + 1  
          -- SOS 10581: wally 31.mar.03  
          -- to group inner pack (uom = '3') INTO 1 pickdetail  
-         IF @c_aUOM = '6' or @c_aUOM = '7' or @c_aUOM = '2' or @c_aUOM = '3'  
+         IF @c_aUOM = '6' or @c_aUOM = '7' or @c_aUOM = '2' or @c_aUOM = '3' or @c_aUOM = '4' --(Wan07)
          BEGIN  
             BREAK  
          END  
