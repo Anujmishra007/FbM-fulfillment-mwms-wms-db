@@ -97,6 +97,8 @@ GO
 /*                            when overallocation (Discrete only) (WL01)*/
 /* 12-Feb-2020  Wan06    3.4  SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */ 
+/* 21-MAY-2020  Wan07    3.5  Fixed no record retrieve if Loc.HostWHCode*/
+/*                            is null & OverAllocPickByHostWHCode is off*/
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspOrderProcessing]  
@@ -2336,16 +2338,42 @@ BEGIN
                   TRUNCATE TABLE #OP_OVERPICKLOCS  
                   TRUNCATE TABLE #OP_PICKLOCTYPE  
                   -- END  
-                  INSERT INTO #OP_PICKLOCTYPE (LOC)   
-                  SELECT SKUXLOC.LOC  
-                    FROM SKUxLOC (nolock) join LOC (nolock)  
-                        on SKUXLOC.loc = LOC.loc  
-                   WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
-                     AND SKUxLOC.SKU = @c_aSKU  
-                     AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
-                     AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility  
-                     AND LOC.HostWHCode = CASE WHEN @c_OverAllocPickByHostWHCode = '1' THEN @c_HostWHCode ELSE LOC.HostWHCode END  --WL01
-  
+                  
+                  --(Wan07) - Fixed - 2020-05-21 By Wan - START
+                  --INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                  --SELECT SKUXLOC.LOC  
+                  --  FROM SKUxLOC (nolock) join LOC (nolock)  
+                  --      on SKUXLOC.loc = LOC.loc  
+                  -- WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                  --   AND SKUxLOC.SKU = @c_aSKU  
+                  --   AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                  --   AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility  
+                  --   AND LOC.HostWHCode = CASE WHEN @c_OverAllocPickByHostWHCode = '1' THEN @c_HostWHCode ELSE LOC.HostWHCode END  --WL01
+                  IF @c_OverAllocPickByHostWHCode = '1'
+                  BEGIN
+                     INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                     SELECT SKUXLOC.LOC  
+                       FROM SKUxLOC (nolock) join LOC (nolock)  
+                           on SKUXLOC.loc = LOC.loc  
+                      WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                        AND SKUxLOC.SKU = @c_aSKU  
+                        AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                        AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
+                        AND LOC.HostWHCode = @c_HostWHCode 
+                  END
+                  ELSE
+                  BEGIN
+                     INSERT INTO #OP_PICKLOCTYPE (LOC)   
+                     SELECT SKUXLOC.LOC  
+                       FROM SKUxLOC (nolock) join LOC (nolock)  
+                           on SKUXLOC.loc = LOC.loc  
+                      WHERE SKUxLOC.STORERKEY = @c_aStorerKey  
+                        AND SKUxLOC.SKU = @c_aSKU  
+                        AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
+                        AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
+                  END
+                  --(Wan07) - Fixed - 2020-05-21 By Wan - END
+                    
                   SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR  
                   IF @n_cnt = 0 or @n_err <> 0  
                   BEGIN  
