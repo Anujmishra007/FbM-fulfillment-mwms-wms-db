@@ -7,7 +7,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Trigger: nsp_GetPickSlipOrders04e                             	    */
+/* Trigger: nsp_GetPickSlipOrders04e                                    */
 /* Creation Date: 13-Sep-2018                                           */
 /* Copyright: IDS                                                       */
 /* Written by:                                                          */
@@ -25,9 +25,9 @@ GO
 /*                                                                      */
 /* Local Variables:                                                     */
 /*                                                                      */
-/* Called By: RCM	Report	                                            */
+/* Called By: RCM	Report	                                             */
 /*                                                                      */
-/* PVCS Version: 1.1		                                            */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -36,6 +36,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 15-Aug-2019  CSCHONG       WMS-10143 - revosed field mapping (CS01)  */
+/* 13-May-2020  WLChooi       WMS-13324 - Revised logic (WL01)          */
 /************************************************************************/
 
 CREATE PROC nsp_GetPickSlipOrders04e (@c_loadkey NVARCHAR(10))
@@ -46,54 +47,51 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
 	DECLARE  @c_orderkey   NVARCHAR(10),
-				@c_pickslipno NVARCHAR(10),
-				@c_invoiceno  NVARCHAR(10),
-				@c_storerkey  NVARCHAR(18),
-				@b_success    int,
-				@n_err        int,
-				@c_errmsg     NVARCHAR(255)
+            @c_pickslipno NVARCHAR(10),
+            @c_invoiceno  NVARCHAR(10),
+            @c_storerkey  NVARCHAR(18),
+            @b_success    int,
+            @n_err        int,
+            @c_errmsg     NVARCHAR(255)
 
   
   DECLARE @c_getorderkey     NVARCHAR(10),
           @c_Preorderkey     NVARCHAR(10),
           @c_OHNotes         NVARCHAR(250),
-		  @c_SplitOHNotes    NVARCHAR(250),
-		  @c_getsku          NVARCHAR(20),
-		  @c_MergeSku        NVARCHAR(500),
-		  @c_ODNotes         NVARCHAR(250),
-		  @c_PreODNotes      NVARCHAR(250),
-		  @c_DelimiterSign   NVARCHAR(1),
-		  @n_Recno           INT,
-		  @n_ttlcnt          INT,
-		  @n_seqno           INT,
+          @c_SplitOHNotes    NVARCHAR(250),
+          @c_getsku          NVARCHAR(20),
+          @c_MergeSku        NVARCHAR(500),
+          @c_ODNotes         NVARCHAR(250),
+          @c_PreODNotes      NVARCHAR(250),
+          @c_DelimiterSign   NVARCHAR(1),
+          @n_Recno           INT,
+          @n_ttlcnt          INT,
+          @n_seqno           INT,
           @c_ColValue        NVARCHAR(150) ,
-		  @c_premergesku     NVARCHAR(500),
-		  @c_lastrec         NVARCHAR(5),
-		  @c_GMergeSku       NVARCHAR(20)
+          @c_premergesku     NVARCHAR(500),
+          @c_lastrec         NVARCHAR(5),
+          @c_GMergeSku       NVARCHAR(20)
 
+   SET @c_DelimiterSign = '|'
 
-
-		 SET @c_DelimiterSign = '|'
-
-		 CREATE table #TMP_ODNotes (
+   CREATE table #TMP_ODNotes (
 		 Pickslipno NVARCHAR(20),
 		 Orderkey   NVARCHAR(20),
 		 ODNotes    NVARCHAR(250),
 		 mergesku   NVARCHAR(500)
 
-		 )
-		 --CS01 START
-		 CREATE table #TMP_PACKINST (
-		 Orderkey   NVARCHAR(20),
-		 pcode      NVARCHAR(20),
-		 storerkey  NVARCHAR(20),
-		 PackInst   NVARCHAR(50)
-
-		 )
-    --CS01 END
+   )
+   --CS01 START
+   CREATE table #TMP_PACKINST (
+      Orderkey   NVARCHAR(20),
+      pcode      NVARCHAR(20),
+      storerkey  NVARCHAR(20),
+      PackInst   NVARCHAR(50)
+   )
+   --CS01 END
 
    INSERT INTO #TMP_PACKINST (orderkey,pcode,storerkey,PackInst)
-   SELECT DISTINCT od.orderkey,c.code, od.storerkey,c.code + '(' + c.short + ')'
+   SELECT DISTINCT od.orderkey,c.code, od.storerkey,c.code --+ '(' + c.short + ')'   --WL01
    FROM codelkup  c (NOLOCK)
    JOIN orderdetail od (NOLOCK) on od.storerkey = c.storerkey 
    AND  substring(od.userdefine03,1,4) = c.code
@@ -151,14 +149,14 @@ BEGIN
       CODELKUP.description as principal,
       ORDERS.Facility, -- Add by June 11.Jun.03 (SOS11736)
       FacilityDescr = Facility.Descr, -- Add by June 11.Jun.03 (SOS11736)
-	  Custbarcode = CONVERT(NVARCHAR(15),BILLTO.Notes1), -- SOS37766
-	  ISNULL(SKU.Busr6, 0) as Busr6,  -- SOS37766
+      Custbarcode = CONVERT(NVARCHAR(15),BILLTO.Notes1), -- SOS37766
+      ISNULL(SKU.Busr6, 0) as Busr6,  -- SOS37766
       LOC.LogicalLocation, -- SOS52808. All pick list must sort by LogicalLocation
-	  ISNULL(ORDERDETAIL.notes,'') as ODNotes,
-	  CONVERT(NVARCHAR(250),ORDERS.Notes) as splitohnotes,
-	  CONVERT(NVARCHAR(500),'') as mergesku,
-	  CASE WHEN ISNULL(PST.PackInst,'') <> ''THEN PST.PackInst ELSE ORDERDETAIL.Userdefine03 END AS ODUDF03               --CS01
-	INTO	#RESULT
+      ISNULL(ORDERDETAIL.notes,'') as ODNotes,
+      CONVERT(NVARCHAR(250),ORDERS.Notes) as splitohnotes,
+      CONVERT(NVARCHAR(500),'') as mergesku,
+      CASE WHEN ISNULL(PST.PackInst,'') <> '' THEN PST.PackInst ELSE ORDERDETAIL.Userdefine03 END AS ODUDF03               --CS01
+   INTO	#RESULT
 	FROM 	LOC (Nolock) join PICKDETAIL (Nolock)
       ON LOC.Loc = PICKDETAIL.Loc
    JOIN ORDERS (Nolock)
@@ -186,7 +184,7 @@ BEGIN
       ON Facility.Facility = ORDERS.Facility -- Add by June 11.Jun.03 (SOS11736)
 	  --CS01 START
     LEFT OUTER JOIN #TMP_PACKINST PST ON PST.Storerkey = ORDERDETAIL.Storerkey AND PST.Orderkey = ORDERDETAIL.Orderkey
-	                       AND PST.pcode = SUBSTRING(ORDERDETAIL.Userdefine03,1,4) 
+	                                  AND PST.pcode = SUBSTRING(ORDERDETAIL.Userdefine03,1,4) 
     --CS01 END
 	WHERE	ORDERDETAIL.loadkey = @c_loadkey
 	GROUP BY 
@@ -601,8 +599,8 @@ BEGIN
 		   R.LogicalLocation, -- SOS52808. All pick list must sort by LogicalLocation
 		   R.ODNotes,
 		   R.splitohnotes
-		   ,R.ODUDF03                        --CS01
-		   order by r.pickslipno,r.orderkey,r.sku
+         ,R.ODUDF03                        --CS01
+   order by r.pickslipno,r.orderkey,r.sku
 
 	-- drop table
 	DROP TABLE #RESULT
