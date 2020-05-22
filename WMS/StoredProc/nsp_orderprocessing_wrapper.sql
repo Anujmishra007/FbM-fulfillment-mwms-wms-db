@@ -53,6 +53,7 @@ GO
 /* 11-Oct-2016  SHONG     2.7  Check ECOM Skip Preallocation Strategy if   */
 /*                             Checking flag turn on                       */
 /* 19-Jul-2018  NJOW06    2.8  WMS-5745 Standard Pre/Post allocation process*/
+/* 08-Jan-2020  NJOW07    2.9  WMS-10420 add strategykey parameter         */
 /***************************************************************************/    
 CREATE PROCEDURE [dbo].[nsp_OrderProcessing_Wrapper]  
                   @c_OrderKey NVARCHAR(10) ,  
@@ -60,7 +61,8 @@ CREATE PROCEDURE [dbo].[nsp_OrderProcessing_Wrapper]
                   @c_docarton char (1),  
                   @c_doroute  char (1),  
                   @c_tblprefix char (3),
-                  @c_extendparms NVARCHAR(250) = ''   --(Wan01)  
+                  @c_extendparms NVARCHAR(250) = '',   --(Wan01)  
+                  @c_StrategykeyParm NVARCHAR(10) = '' --NJOW07
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -434,6 +436,7 @@ BEGIN
                                        @c_Wavekey = '',
                                        @c_Mode = 'PRE',
                                        @c_extendparms = @c_extendparms,
+                                       @c_StrategykeyParm = @c_StrategykeyParm, --NJOW07
                                        @b_Success = @i_Success OUTPUT,          
                                        @n_Err = @i_error OUTPUT,          
                                        @c_Errmsg = @c_ErrMsg OUTPUT
@@ -554,16 +557,18 @@ BEGIN
             -- But this SP must work together with IDS's nspOrderprocessing 
             SET @c_Trace_ModuleName = 'OrderProcessing' 
             SET @d_Trace_Step1 = GETDATE()
-            EXECUTE nsporderprocessing @c_OrderKey,  
-                     @c_oskey,  
-                     'N', -- @c_docarton,  
-                     @c_doroute,  
-                     @c_tblprefix,
-                     @i_Success OUTPUT,  
-                     @i_error OUTPUT,  
-                     @c_errmsg OUTPUT,  
-                     @c_extendparms          --(Wan01)  
-            
+            EXECUTE nsporderprocessing 
+                     @c_OrderKey = @c_OrderKey,  
+                     @c_oskey = @c_oskey,  
+                     @c_docarton = 'N', -- @c_docarton,  
+                     @c_doroute = @c_doroute,  
+                     @c_tblprefix = @c_tblprefix,
+                     @b_Success = @i_Success OUTPUT,  
+                     @n_err = @i_error OUTPUT,  
+                     @c_errmsg = @c_errmsg OUTPUT,  
+                     @c_extendparms = @c_extendparms,          --(Wan01)  
+                     @c_StrategykeyParm = @c_StrategykeyParm  --NJOW07
+                                 
             IF @b_debug = 1 AND @i_error <> 0 
                SELECT @i_Success, @i_error, @c_errmsg  
                
@@ -852,9 +857,11 @@ BEGIN
             SET @c_Trace_ModuleName = 'LoadProcessing'
             SET @d_Trace_Step1 = GETDATE() 
                         
-            EXECUTE dbo.nspLoadProcessing @c_LoadKey = @c_oskey,
+            EXECUTE dbo.nspLoadProcessing 
+               @c_LoadKey = @c_oskey,
                @b_Success = @i_Success OUTPUT, @n_Err = @i_error OUTPUT,
-               @c_ErrMsg = @c_errmsg OUTPUT, @b_Debug = @b_debug --0
+               @c_ErrMsg = @c_errmsg OUTPUT, @b_Debug = @b_debug, --0
+               @c_StrategykeyParm = @c_StrategykeyParm --NJOW07
 
             IF @b_debug = 1 AND @i_error <> 0 
                SELECT @i_Success, @i_error, @c_errmsg               
@@ -865,17 +872,19 @@ BEGIN
          BEGIN           
             SET @c_Trace_ModuleName = 'OrderProcessing'
             SET @d_Trace_Step1 = GETDATE()
-              
-            EXECUTE nsporderprocessing @c_OrderKey,  
-                     @c_oskey,  
-                     'N', -- @c_docarton,  
-                     @c_doroute,  
-                     @c_tblprefix,  
-                     @i_Success OUTPUT,  
-                     @i_error OUTPUT,  
-                     @c_errmsg OUTPUT,
-                     @c_extendparms          --(Wan01)   
 
+            EXECUTE nsporderprocessing 
+                     @c_OrderKey = @c_OrderKey,  
+                     @c_oskey = @c_oskey,  
+                     @c_docarton = 'N', -- @c_docarton,  
+                     @c_doroute = @c_doroute,  
+                     @c_tblprefix = @c_tblprefix,
+                     @b_Success = @i_Success OUTPUT,  
+                     @n_err = @i_error OUTPUT,  
+                     @c_errmsg = @c_errmsg OUTPUT,  
+                     @c_extendparms = @c_extendparms,          --(Wan01)  
+                     @c_StrategykeyParm = @c_StrategykeyParm  --NJOW07
+              
             IF @b_debug = 1 AND @i_error <> 0 
                SELECT @i_Success, @i_error, @c_errmsg  
                
@@ -941,6 +950,7 @@ BEGIN
                                        @c_Wavekey = '',
                                        @c_Mode = 'POST',
                                        @c_extendparms = @c_extendparms,
+                                       @c_StrategykeyParm = @c_StrategykeyParm, --NJOW07                                       
                                        @b_Success = @i_Success OUTPUT,          
                                        @n_Err = @i_error OUTPUT,          
                                        @c_Errmsg = @c_ErrMsg OUTPUT

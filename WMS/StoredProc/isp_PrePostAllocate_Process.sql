@@ -30,17 +30,19 @@ GO
 /*                              and only allocate after conso              */
 /* 03/12/2019   NJOW02    1.1   WMS-11282 able to run discrete alllocation */
 /*                              after load/wave conso allocate.            */
+/* 08-Jan-2020  NJOW03    1.2   WMS-10420 add strategykey parameter        */
 /***************************************************************************/
 
 CREATE PROC [dbo].[isp_PrePostallocate_Process] 
-   @c_Orderkey   NVARCHAR(10) = '', 
-   @c_Loadkey    NVARCHAR(10) = '',
-   @c_Wavekey    NVARCHAR(10) = '',
-   @c_Mode       NVARCHAR(10) = '',  -- PRE/POST 
-   @c_ExtendParms NVARCHAR(250) = '',
-   @b_Success    INT = 1    OUTPUT,
-   @n_Err        INT = 0    OUTPUT, 
-   @c_ErrMsg     NVARCHAR(250) = '' OUTPUT 
+   @c_Orderkey        NVARCHAR(10) = '', 
+   @c_Loadkey         NVARCHAR(10) = '',
+   @c_Wavekey         NVARCHAR(10) = '',
+   @c_Mode            NVARCHAR(10) = '',  -- PRE/POST 
+   @c_ExtendParms     NVARCHAR(250) = '',  
+   @c_StrategyKeyParm NVARCHAR(10) = '',  --NJOW03 
+   @b_Success         INT = 1            OUTPUT,
+   @n_Err             INT = 0            OUTPUT, 
+   @c_ErrMsg          NVARCHAR(250) = '' OUTPUT 
 AS 
 BEGIN
    DECLARE @n_StartTCnt                   INT,
@@ -150,8 +152,11 @@ BEGIN
    
    IF @n_continue IN(1,2) AND
        ((@c_DiscreteAllocB4LoadConso = '1' AND @c_AllocationType = 'DISCRETE') OR
-       (@c_DiscreteAllocB4WaveConso = '1' AND @c_AllocationType = 'DISCRETE') OR
-       (@c_LoadConsoAllocB4WaveConso = '1' AND @c_AllocationType = 'LOADCONSO')) 
+        (@c_DiscreteAllocB4WaveConso = '1' AND @c_AllocationType = 'DISCRETE') OR
+        (@c_LoadConsoAllocB4WaveConso = '1' AND @c_AllocationType = 'LOADCONSO') OR
+        (@c_DiscreteAllocAfterLoadConso = '1' AND @c_AllocationType = 'DISCRETE') OR  --NJOW02
+        (@c_DiscreteAllocAfterWaveConso = '1' AND @c_AllocationType = 'DISCRETE')   --NJOW02      
+       ) 
    BEGIN
       SELECT @n_continue = 4 --Skip if recurring call
    END    
@@ -178,14 +183,15 @@ BEGIN
          FETCH NEXT FROM CUR_LOADORD INTO @c_Orderkey2
              
          WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
-         BEGIN
+         BEGIN         	                           	
          	  EXEC nsp_orderprocessing_wrapper 
          	     @c_OrderKey = @c_Orderkey2, 
          	     @c_oskey = '', 
          	     @c_docarton = 'N',
          	     @c_doroute = 'N', 
          	     @c_tblprefix= '', 
-         	     @c_Extendparms = @c_extendparms2
+         	     @c_Extendparms = @c_extendparms2,
+         	     @c_StrategykeyParm = @c_StrategykeyParm --NJOW03
          	
             FETCH NEXT FROM CUR_LOADORD INTO @c_Orderkey2
          END
@@ -217,8 +223,9 @@ BEGIN
          	     @c_docarton = 'N',
          	     @c_doroute = 'N', 
          	     @c_tblprefix= '', 
-         	     @c_Extendparms = @c_extendparms2
-         	
+         	     @c_Extendparms = @c_extendparms2,
+         	     @c_StrategykeyParm = @c_StrategykeyParm --NJOW03
+         	              	
             FETCH NEXT FROM CUR_WAVORD INTO @c_Orderkey2
          END
          CLOSE CUR_WAVORD
@@ -251,8 +258,9 @@ BEGIN
          	     @c_docarton = 'N',
          	     @c_doroute = 'N', 
          	     @c_tblprefix= '', 
-         	     @c_Extendparms = @c_extendparms2
-         	
+         	     @c_Extendparms = @c_extendparms2,
+         	     @c_StrategykeyParm = @c_StrategykeyParm --NJOW03
+         	              	
             FETCH NEXT FROM CUR_WAVLOAD INTO @c_Loadkey2
          END
          CLOSE CUR_WAVLOAD
@@ -310,7 +318,8 @@ BEGIN
               	     @c_docarton = 'N',
               	     @c_doroute = 'N', 
               	     @c_tblprefix= '', 
-              	     @c_Extendparms = @c_extendparms2
+              	     @c_Extendparms = @c_extendparms2,
+              	     @c_StrategykeyParm = @c_StrategykeyParm --NJOW03              	     
               	
                  FETCH NEXT FROM CUR_WAVEORD INTO @c_Orderkey2
               END
@@ -340,7 +349,8 @@ BEGIN
             	     @c_docarton = 'N',
             	     @c_doroute = 'N', 
             	     @c_tblprefix= '', 
-            	     @c_Extendparms = @c_extendparms2
+            	     @c_Extendparms = @c_extendparms2,
+            	     @c_StrategykeyParm = @c_StrategykeyParm --NJOW03            	     
             	
                FETCH NEXT FROM CUR_LOADORD INTO @c_Orderkey2
             END
@@ -373,8 +383,9 @@ BEGIN
          	     @c_docarton = 'N',
          	     @c_doroute = 'N', 
          	     @c_tblprefix= '', 
-         	     @c_Extendparms = @c_extendparms2
-         	
+         	     @c_Extendparms = @c_extendparms2,
+         	     @c_StrategykeyParm = @c_StrategykeyParm --NJOW03
+         	              	
             FETCH NEXT FROM CUR_WAVORD INTO @c_Orderkey2
          END
          CLOSE CUR_WAVORD

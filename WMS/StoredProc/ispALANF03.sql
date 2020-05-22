@@ -17,19 +17,20 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 1.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver.  Purposes                                */
-/* 2014-05-26   Chee      1.1   Bug Fix when calculating combinations   */
-/*                              for low UCC qty (Chee01)                */
-/* 2015-02-12   CSCHONG 1.2   New Lottable06 to 15  (CS11)              */
+/* Date        Author   Ver.  Purposes                                  */
+/* 2014-05-26  Chee     1.1   Bug Fix when calculating combinations     */
+/*                            for low UCC qty (Chee01)                  */
+/* 2015-02-12  CSCHONG  1.2   New Lottable06 to 15  (CS11)              */
+/* 14-Feb-2020 Wan01    1.3   Dynamic SQL review, impact SQL cache log  */ 
 /************************************************************************/
-CREATE  PROC [dbo].[ispALANF03]
+CREATE PROC [dbo].[ispALANF03]
    @c_LoadKey    NVARCHAR(10), 
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -56,8 +57,8 @@ CREATE  PROC [dbo].[ispALANF03]
 AS    
 BEGIN    
    SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET ANSI_NULLS OFF    
+   --SET QUOTED_IDENTIFIER OFF 
+   --SET ANSI_NULLS OFF    
 
    DECLARE @b_debug       INT,      
            @c_SQL         NVARCHAR(MAX),    
@@ -87,6 +88,8 @@ BEGIN
    SET @b_debug = 0
    SET @c_LocationType = 'OTHER'
    SET @c_LocationCategory = 'SELECTIVE'
+
+   EXEC isp_Init_Allocate_Candidates         --(Wan01)   
 
    -- GET LoadType FROM LoadPlan
    SELECT TOP 1 
@@ -180,9 +183,9 @@ BEGIN
          AND LOTxLOCxID.STORERKEY = @c_StorerKey
          AND LOTxLOCxID.SKU = @c_SKU ' + CHAR(13) +
          CASE WHEN ISNULL(RTRIM(@c_LocationType),'') = '' THEN '' 
-              ELSE ' AND LOC.LocationType = ''' + @c_LocationType + '''' + CHAR(13) END +      
+              ELSE ' AND LOC.LocationType = @c_LocationType' + CHAR(13) END +      
          CASE WHEN ISNULL(RTRIM(@c_LocationCategory),'') = '' THEN ''       
-              ELSE ' AND LOC.LocationCategory = ''' + @c_LocationCategory + '''' + CHAR(13) END +      
+              ELSE ' AND LOC.LocationCategory = @c_LocationCategory' + CHAR(13) END +      
          CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' + CHAR(13) END +      
          CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' + CHAR(13) END +      
          CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' + CHAR(13) END +
@@ -199,13 +202,16 @@ BEGIN
       HAVING COUNT(1) > 0 
       ORDER BY Loc.LogicalLocation, LOC.LOC'
 
-      SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), ' +      
+      SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), ' + 
+                         '@c_LocationType NVARCHAR(10), @c_LocationCategory NVARCHAR(10),' +           
                          '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +
                          '@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), ' + 
                          '@c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30), ' + 
-                         '@c_Lottable12 NVARCHAR(30) ' 
+                         '@c_Lottable12 NVARCHAR(30)'   
+
          
-      EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_Lottable01, @c_Lottable02, @c_Lottable03, 
+      EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_LocationType, @c_LocationCategory, 
+                         @c_Lottable01, @c_Lottable02, @c_Lottable03, 
                          @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12
       
       /*CS01 End*/
@@ -409,20 +415,33 @@ BEGIN
 
                   SET @n_QtyAvailable = @n_UCCQty * @n_CntCount
 
-                  IF ISNULL(@c_SQL,'') = ''
-                  BEGIN
-                     SET @c_SQL = N'   
-                           DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
-                           SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
-                           '
-                  END
-                  ELSE
-                  BEGIN
-                     SET @c_SQL = @c_SQL + N'  
-                           UNION
-                           SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
-                           '
-                  END
+                  --(Wan01) - START
+                  --IF ISNULL(@c_SQL,'') = ''
+                  --BEGIN
+                  --   SET @c_SQL = N'   
+                  --         DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
+                  --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
+                  --         '
+                  --END
+                  --ELSE
+                  --BEGIN
+                  --   SET @c_SQL = @c_SQL + N'  
+                  --         UNION
+                  --         SELECT '''  + @c_LOT + ''', ''' + @c_LOC + ''', ''' + @c_ID + ''', ''' + CAST(@n_QtyAvailable AS NVARCHAR(10)) + ''', ''1''
+                  --         '
+                  --END
+                  SET @c_Lot       = RTRIM(@c_Lot)             
+                  SET @c_Loc       = RTRIM(@c_Loc)
+                  SET @c_ID        = RTRIM(@c_ID)
+
+                  EXEC isp_Insert_Allocate_Candidates
+                     @c_Lot = @c_Lot
+                  ,  @c_Loc = @c_Loc
+                  ,  @c_ID  = @c_ID
+                  ,  @n_QtyAvailable = @n_QtyAvailable
+                  ,  @c_OtherValue = '1'
+
+                  --(Wan01) - END
                END -- WHILE @n_Count > 0
 
                FETCH NEXT FROM CURSOR_SPLITLIST INTO @n_UCCQty, @n_Count
@@ -433,15 +452,19 @@ BEGIN
       END -- IF @n_QtyLeftToFulfill >= @n_LowerBound
    END  -- IF ISNULL(@c_LoadType,'') NOT IN ('N', 'DCToDC')
 
-   IF ISNULL(@c_SQL,'') <> ''
-   BEGIN
-      EXEC sp_ExecuteSQL @c_SQL
-   END
-   ELSE
-   BEGIN
-      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
-   END
+   --(Wan01) - START
+   EXEC isp_Cursor_Allocate_Candidates   
+         @n_SkipPreAllocationFlag = 1    --Return Lot column
+   --IF ISNULL(@c_SQL,'') <> ''
+   --BEGIN
+   --   EXEC sp_ExecuteSQL @c_SQL
+   --END
+   --ELSE
+   --BEGIN
+   --   DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+   --   SELECT TOP 0 NULL, NULL, NULL, NULL, NULL    
+   --END
+   --(Wan01) - END
 END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispALANF03] TO nSQL

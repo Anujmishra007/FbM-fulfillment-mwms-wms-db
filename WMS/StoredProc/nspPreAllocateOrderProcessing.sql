@@ -1,12 +1,12 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspPreAllocateOrderProcessing]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[nspPreAllocateOrderProcessing]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPreAllocateOrderProcessing]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[nspPreAllocateOrderProcessing]
 GO
 
-SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET QUOTED_IDENTIFIER OFF
+SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Stored Proc: nspPreAllocateOrderProcessing                           */
 /* Creation Date: 05-Aug-2002                                           */
@@ -59,7 +59,7 @@ GO
 /* 20-Jul-2005  June       SOS38185 - Include Partially Picked Orders   */
 /*                         in Mass Allocation Processing                */
 /* 23-Nov-2005  MaryVong   SOS42877 Add in missing range Ordergroupend  */
-/*                         for mass allocation                         */
+/*                         for mass allocation                        */
 /* 07-Mar-2006  MaryVong   SOS47070 Add in extra checking for partial   */
 /*                         pallet allocation                            */
 /* 01-Oct-2009  SHONG      Enhance the Debug Message                    */
@@ -90,6 +90,9 @@ GO
 /* 08-OCT-2019  Wan07      Fixed to Get Channel If there is candidate   */
 /*                         in Cursor                                    */ 
 /* 15-OCT-2019  CSCHONG    WMS-10874 - support lottable02 ' value(CS02) */
+/* 08-Jan-2020  NJOW05     WMS-10420 add strategykey parameter          */  
+/* 12-Feb-2020  Wan08      SQLBindParm. Create Temp table to Store      */
+/*                         Preallocate data from pickcode               */  
 /************************************************************************/
 CREATE PROC  [dbo].[nspPreAllocateOrderProcessing]
                @c_orderkey     NVARCHAR(10)
@@ -102,6 +105,7 @@ CREATE PROC  [dbo].[nspPreAllocateOrderProcessing]
 ,              @n_err          int        OUTPUT
 ,              @c_errmsg       NVARCHAR(250)  OUTPUT
 ,              @c_extendparms  NVARCHAR(250) = ''
+,              @c_StrategykeyParm NVARCHAR(10) = '' --NJOW05  
 AS
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
@@ -518,6 +522,24 @@ BEGIN
    -- SELECT * FROM #OPORDERS
 END
 
+--(Wan08) - START
+IF @n_continue = 1 OR @n_continue = 2  
+BEGIN  
+   IF OBJECT_ID('tempdb..#PREALLOCATE_CANDIDATES','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #PREALLOCATE_CANDIDATES;
+   END
+
+   CREATE TABLE #PREALLOCATE_CANDIDATES
+   (  RowID          INT            NOT NULL IDENTITY(1,1) 
+   ,  Storerkey      NVARCHAR(15)   NOT NULL DEFAULT('')
+   ,  Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
+   ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+   )
+END
+--(Wan08) - END
+
 IF @n_continue = 1 or @n_continue = 2
 BEGIN
    --(Wan03) - START
@@ -647,7 +669,7 @@ BEGIN
    END
    
    --IF @n_continue = 1 or @n_continue = 2
-   --BEGIN
+--BEGIN
    --   CREATE INDEX OPOrderLineIdx1 ON #OPORDERLINES (OrderKey)
    --END
       
@@ -910,7 +932,14 @@ BEGIN
       END
 
       --IF @c_DefaultStrategykey = 'Y'
-      IF (@c_DefaultStrategykey = 'Y' AND (@c_extendparms = 'LP' OR  @c_oskey <> '')) 
+            IF ISNULL(@c_StrategykeyParm,'') <> ''  --NJOW05   
+      BEGIN  
+         UPDATE TMP    
+         SET StrategyKey = ISNULL(STRATEGY.PreAllocateStrategyKey, '')    
+         FROM #OPORDERLINES TMP    
+         JOIN STRATEGY     WITH (NOLOCK) ON  STRATEGY.Strategykey = @c_StrategykeyParm           
+      END        
+      ELSE IF (@c_DefaultStrategykey = 'Y' AND (@c_extendparms = 'LP' OR  @c_oskey <> '')) 
          OR (@c_extendparms <> 'LP')   --NJOW04
       BEGIN
 --         UPDATE #OPORDERLINES
@@ -1754,7 +1783,7 @@ BEGIN
          WHEN '@d_Lottable15' THEN '@d_Lottable15 = N''' + @c_aLottable15 + ''''
          WHEN '@c_Lottable15' THEN '@c_Lottable15 = N''' + @c_aLottable15 + ''''
          WHEN '@c_UOM'        THEN '@c_UOM = N''' + @c_sUOM + ''''
-         WHEN '@c_OtherParms' THEN '@c_OtherParms= N''' + RTRIM(@c_aOrderKey) + RTRIM(@c_aOrderLineNumber) + ''' '
+         WHEN '@c_OtherParms' THEN '@c_OtherParms= N''' + RTRIM(@c_aOrderKey) + RTRIM(@c_aOrderLineNumber) + 'O'' '  --NJOW05  
          WHEN '@n_UOMBase'    THEN '@n_UOMBase = ' + RTRIM(CONVERT(VARCHAR(10),@n_PackQty))
          WHEN '@n_QtyLeftToFulfill' THEN '@n_QtyLeftToFulfill = ' + RTRIM(CONVERT(VARCHAR(10),@n_QtyLeftToFulfill))
       END
@@ -2029,7 +2058,7 @@ BEGIN
            EXEC sp_executesql @c_SQL,
            N'@c_CaseQty NVARCHAR(30) OUTPUT, @c_sLOT NVARCHAR(10)',
            @c_CaseQty OUTPUT,
-           @c_sLOT
+          @c_sLOT
 
            IF ISNUMERIC(@c_CaseQty) = 1
            BEGIN
@@ -2229,6 +2258,12 @@ ELSE BEGIN
 END
 END
 GOTO RETURNFROMUPDATEINV_01
+
 GO
-GRANT EXECUTE ON [dbo].[nspPreAllocateOrderProcessing] TO nSQL 
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO
+
+GRANT EXECUTE ON nspPreAllocateOrderProcessing TO nSQL 
 GO

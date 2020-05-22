@@ -30,6 +30,8 @@ GO
 /* 24/07/2019  NJOW04   1.3   WMS-9509 SG Prestige lottable03 filter    */
 /* 24/10/2019  NJOW05   1.4   WMS-9509 Filter hold stock for CONSIGTAG  */
 /*                            or DMGALLOC at staging                    */
+/* 25/03/2020  NJOW06   1.5   WMS-12622 add sku brand and skugroup FEFO */
+/*                            shelflife by consignee                    */
 /************************************************************************/    
 CREATE  PROC [dbo].[ispPreAL03]        
            @c_OrderKey NVARCHAR(10) 
@@ -100,6 +102,8 @@ BEGIN
          , @c_Strategykey        NVARCHAR(10) --NJOW01
          , @n_ConMinShelfLife    INT --NJOW01 
          , @n_SkuOGShelflife     INT --NJOW03         
+         , @n_SkuGroupShelfLife  INT --NJOW06
+         , @n_SkuGroupShelfLife2 INT --NJOW06
 
          --NJOW04
    DECLARE @c_CONSIGTAG          NVARCHAR(1)
@@ -200,12 +204,18 @@ BEGIN
          ,Strategykey = SKU.Strategykey --NJOW01
          ,ConMinShelfLife = ISNULL(CONS.MinShelflife,0)  --NJOW01
          ,SkuOGShelflife = CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END --NJOW03
+         ,SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END --NJOW06
+         ,SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW06
    FROM ORDERS OH      WITH (NOLOCK)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey  = OD.Orderkey)
    JOIN SKU        SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
                                        AND(OD.Sku       = SKU.Sku)
    JOIN PACK        PK WITH (NOLOCK) ON (SKU.Packkey  = PK.Packkey) 
    LEFT JOIN STORER CONS WITH (NOLOCK) ON (OH.Consigneekey = CONS.Storerkey) --NJOW01 
+   LEFT JOIN CODELKUP CL (NOLOCK) ON (OH.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND SKU.SkuGroup = CL.Code2 AND CL.Listname = 'PRESTALLOC'
+                                      AND (CONS.Secondary = CL.UDF01 OR CONS.Secondary = CL.UDF02 OR CONS.Secondary = CL.UDF03 OR CONS.Secondary = CL.UDF04 OR CONS.Secondary = CL.UDF05)) --NJOW06
+   OUTER APPLY (SELECT TOP 1 CL3.Short FROM CODELKUP CL3 (NOLOCK) WHERE OH.Storerkey = CL3.Storerkey AND SKU.Busr6 <> CL3.Code AND SKU.SkuGroup <> CL3.Code2 AND CL3.Listname = 'PRESTALLOC' AND CL3.Code = 'ALLOTHERS'
+               AND (CONS.Secondary = CL3.UDF01 OR CONS.Secondary = CL3.UDF02 OR CONS.Secondary = CL3.UDF03 OR CONS.Secondary = CL3.UDF04 OR CONS.Secondary = CL3.UDF05)) CL2   --NJOW06
    WHERE OH.Orderkey = @c_Orderkey
    AND   OH.SOStatus <> 'CANC'
    AND   OH.Status < '9'      
@@ -242,7 +252,9 @@ BEGIN
                               , @n_Pallet
                               , @c_Strategykey --NJOW01
                               , @n_ConMinShelfLife --NJOW01
-                              , @n_skuOGShelflife --NJOW03
+                              , @n_skuOGShelflife  --NJOW03
+                              , @n_SkuGroupShelfLife  --NJOW06
+                              , @n_SkuGroupShelfLife2 --NJOW06
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @b_debug = 1
@@ -307,15 +319,23 @@ BEGIN
       IF @c_Lottable03Inc <> ''
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN(' + @c_Lottable03Inc + ') '
 
-      IF @n_ConMinShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW01
+      IF @n_SkuGroupShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW06     
+      BEGIN
+      	 SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuGroupShelfLife ' --+ CAST(@n_SkuGroupShelfLife AS NVARCHAR)
+      END
+      ELSE IF @n_SkuGroupShelfLife2 > 0 AND @c_Strategy = 'FEFO' --NJOW06
+      BEGIN
+      	 SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuGroupShelfLife2 ' --+ CAST(@n_SkuGroupShelfLife2 AS NVARCHAR)
+      END
+      ELSE IF @n_ConMinShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW01
       BEGIN
          --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable04 > CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife, GETDATE()), 112))'
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= ' + CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
          SET @n_MinShelfLife = @n_ConMinShelfLife 	  
       END    
       ELSE IF @n_SkuOGShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW03
       BEGIN
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= ' + CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
       END
       ELSE IF @c_Lottable04Label <> '' AND @n_MinShelfLife > 0
       BEGIN 
@@ -336,12 +356,12 @@ BEGIN
       IF @n_ConMinShelfLife > 0 AND @c_Strategy = 'FIFO' --NJOW01
       BEGIN
          --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable05 >= CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife * -1, GETDATE()), 112))'   --NJOW02         
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= ' + CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
          SET @n_MinShelfLife = @n_ConMinShelfLife
       END 	  
       ELSE IF @n_SkuOGShelfLife > 0 AND @c_Strategy = 'FIFO' --NJOW03
       BEGIN
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= ' + CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
          SET @n_MinShelfLife = @n_SkuOGShelfLife        
       END
       ELSE IF CONVERT(NVARCHAR(8), @dt_Lottable05, 112) <> '19000101'
@@ -458,6 +478,9 @@ BEGIN
                       + ',@n_Pallet       INT'
                       + ',@n_MinShelfLife INT'
                       + ',@n_SkuOGShelfLife INT'
+                      + ',@n_ConMinShelfLife INT'                      
+                      + ',@n_SkuGroupShelfLife INT'
+                      + ',@n_SkuGroupShelfLife2 INT'
 
       IF @b_debug = 1
       BEGIN
@@ -488,7 +511,10 @@ BEGIN
          ,@n_Pallet
          ,@n_MinShelfLife
          ,@n_SkuOGShelfLife --NJOW03
-
+         ,@n_ConMinShelfLife
+         ,@n_SkuGroupShelfLife
+         ,@n_SkuGroupShelfLife2
+         
       OPEN CUR_LLI
 
       FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvailable, @c_aUOM   
@@ -617,6 +643,8 @@ BEGIN
                                  , @c_Strategykey --NJOW01
                                  , @n_ConMinShelfLife --NJOW01
                                  , @n_skuOGShelflife --NJOW03
+                                 , @n_SkuGroupShelfLife --NJOW06
+                                 , @n_SkuGroupShelfLife2 --NJOW06                                 
    END
 
    QUIT_SP:
