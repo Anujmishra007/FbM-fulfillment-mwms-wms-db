@@ -2838,6 +2838,7 @@ BEGIN
          DECLARE CUR_OrderLines CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
             SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty      
             FROM   #OPORDERLINES o     
+            JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber                
             JOIN   ORDERS AS SO WITH (NOLOCK) ON SO.OrderKey = o.OrderKey      
             JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku --NJOW02
             JOIN   PACK (NOLOCK) ON o.Packkey = PACK.Packkey --NJOW23           
