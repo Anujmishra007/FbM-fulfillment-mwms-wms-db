@@ -42,7 +42,7 @@ WITH O AS (
    ,ShipperKey=ISNULL(ShipperKey,''), DocType, TrackingNo=ISNULL(TrackingNo,''), ECOM_PRESALE_FLAG=ISNULL(O.ECOM_PRESALE_FLAG,''), ECOM_SINGLE_FLAG=ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,UserDefine01=ISNULL(O.UserDefine01,'') ,UserDefine02=ISNULL(O.UserDefine02,'') ,UserDefine03=ISNULL(O.UserDefine03,'') 
    ,Lines     = COUNT(1)
-   ,OpenQty   = SUM(O.OpenQty)
+   ,OpenQty   = SUM(OD.OpenQty)
    ,QtyAPS    = SUM(OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty)
    ,EnteredQTY= SUM(OD.EnteredQTY)
    FROM ARC.V_ORDERS      O  WITH (NOLOCK)
