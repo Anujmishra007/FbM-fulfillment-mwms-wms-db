@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-May-2020 WLChooi  1.1   Raise error on PB side but not from SP    */
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[isp_GetJReportURL] 
            @c_Storerkey      NVARCHAR(15) = ''
@@ -283,7 +285,7 @@ QUIT_SP:
       END  
   
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'isp_GetJReportURL'  
-      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
+      --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012   --WL01  
    END  
    ELSE  
    BEGIN  
