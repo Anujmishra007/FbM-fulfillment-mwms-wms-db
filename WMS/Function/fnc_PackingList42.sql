@@ -31,53 +31,54 @@ GO
 /* 14/12/2018   WLCHOOI   1.1   WMS-7277 Combine G6 and G7,             */  
 /*                              add more text to G6, Remove G7 (WL01)   */  
 /* 10/06/2019   WLCHOOI   1.2   WMS-9371 Add New Fields (WL02)          */  
+/* 05/05/2020   CHONGCS   1.3   WMS-12994 Add New Fields (CS01)          */  
 /************************************************************************/  
   
 CREATE FUNCTION [dbo].fnc_PackingList42 (   
                   @c_orderkey NVARCHAR(20)   
 ) RETURNS @RetPackList42 TABLE   
-         (     Orderkey       NVARCHAR(20)  
-            ,  A1             NVARCHAR(4000)   
-            ,  A2             NVARCHAR(4000)   
-            ,  A3             NVARCHAR(4000)   
-            ,  A4             NVARCHAR(4000)   
-            ,  A5             NVARCHAR(4000)    
-            ,  A6             NVARCHAR(4000)    
-            ,  A7             NVARCHAR(4000)    
-            ,  A8             NVARCHAR(4000)    
-            ,  A9             NVARCHAR(4000)    
-            ,  A10            NVARCHAR(4000)    
-            ,  A11            NVARCHAR(4000)  
-            ,  A12            NVARCHAR(4000)   
-            ,  A14            NVARCHAR(4000)  --NJOW01  
-            ,  B2            NVARCHAR(4000)     
-            ,  C1            NVARCHAR(4000)   
-            ,  C2            NVARCHAR(4000)       
-            ,  C3            NVARCHAR(4000)  
-            ,  C4            NVARCHAR(4000)      
-            ,  C5            NVARCHAR(4000)   
-            ,  C6            NVARCHAR(4000)    
-            ,  C7            NVARCHAR(4000)                     
-            ,  E1             NVARCHAR(4000)  
-            ,  E2             NVARCHAR(4000)    
-            ,  E3             NVARCHAR(4000)    
-            ,  E4            NVARCHAR(4000)    
+         (     Orderkey     NVARCHAR(20)  
+            ,  A1           NVARCHAR(4000)   
+            ,  A2           NVARCHAR(4000)   
+            ,  A3           NVARCHAR(4000)   
+            ,  A4           NVARCHAR(4000)   
+            ,  A5           NVARCHAR(4000)    
+            ,  A6           NVARCHAR(4000)    
+            ,  A7           NVARCHAR(4000)    
+            ,  A8           NVARCHAR(4000)    
+            ,  A9           NVARCHAR(4000)    
+            ,  A10          NVARCHAR(4000)    
+            ,  A11          NVARCHAR(4000)  
+            ,  A12          NVARCHAR(4000)   
+            ,  A14          NVARCHAR(4000)  --NJOW01  
+            ,  B2           NVARCHAR(4000)     
+            ,  C1           NVARCHAR(4000)   
+            ,  C2           NVARCHAR(4000)       
+            ,  C3           NVARCHAR(4000)  
+            ,  C4           NVARCHAR(4000)      
+            ,  C5           NVARCHAR(4000)   
+            ,  C6           NVARCHAR(4000)    
+            ,  C7           NVARCHAR(4000)                     
+            ,  E1           NVARCHAR(4000)  
+            ,  E2           NVARCHAR(4000)    
+            ,  E3           NVARCHAR(4000)    
+            ,  E4           NVARCHAR(4000)    
             ,  E5           NVARCHAR(4000)  
-            ,  E6             NVARCHAR(4000)   
-            ,  E7            NVARCHAR(4000)  
-            ,  E8             NVARCHAR(4000)    
-            ,  E9             NVARCHAR(4000)    
-            ,  G1            NVARCHAR(4000)    
-            ,  G2            NVARCHAR(4000)    
-            ,  G3            NVARCHAR(4000)    
-            ,  G4            NVARCHAR(4000)      
-            ,  G5            NVARCHAR(4000)      
-            ,  G6            NVARCHAR(4000)    
+            ,  E6           NVARCHAR(4000)   
+            ,  E7           NVARCHAR(4000)  
+            ,  E8           NVARCHAR(4000)    
+            ,  E9           NVARCHAR(4000)    
+            ,  G1           NVARCHAR(4000)    
+            ,  G2           NVARCHAR(4000)    
+            ,  G3           NVARCHAR(4000)    
+            ,  G4           NVARCHAR(4000)      
+            ,  G5           NVARCHAR(4000)      
+            ,  G6           NVARCHAR(4000)    
           --  ,  G7            NVARCHAR(4000)  --WL01  
-            ,  G8            NVARCHAR(4000)    
+            ,  G8           NVARCHAR(4000)    
             ,  G9           NVARCHAR(4000)     --WL02  
             ,  G10          NVARCHAR(4000)     --WL02  
-             
+            ,  A15          NVARCHAR(4000)  --CS01   
   
          )                                     
 AS  
@@ -86,48 +87,48 @@ BEGIN
   
    DECLARE  @c_LabelName      NVARCHAR(60)  
          ,  @c_LabelValue     NVARCHAR(4000)     
-         ,  @c_A1     NVARCHAR(4000)  
-         ,  @c_A2     NVARCHAR(4000)  
-         ,  @c_A3     NVARCHAR(4000)  
-         ,  @c_A4         NVARCHAR(4000)  
-         ,  @c_A5     NVARCHAR(4000)  
-         ,  @c_A6     NVARCHAR(4000)  
-         ,  @c_A7     NVARCHAR(4000)  
-         ,  @c_A8     NVARCHAR(4000)  
-         ,  @c_A9     NVARCHAR(4000)  
-         ,  @c_A10    NVARCHAR(4000)  
-         ,  @c_A11    NVARCHAR(4000)  
-         ,  @c_A12    NVARCHAR(4000)  
-         ,  @c_A14    NVARCHAR(4000) --NJOW01  
-         ,  @c_B2       NVARCHAR(4000)  
-         ,  @c_C1         NVARCHAR(4000)  
-         ,  @c_C2         NVARCHAR(4000)  
-         ,  @c_C3         NVARCHAR(4000)  
-         ,  @c_C4         NVARCHAR(4000)  
-         ,  @c_C5         NVARCHAR(4000)  
-         ,  @c_C6         NVARCHAR(4000)  
-         ,  @c_C7         NVARCHAR(4000)  
+         ,  @c_A1             NVARCHAR(4000)  
+         ,  @c_A2             NVARCHAR(4000)  
+         ,  @c_A3             NVARCHAR(4000)  
+         ,  @c_A4             NVARCHAR(4000)  
+         ,  @c_A5             NVARCHAR(4000)  
+         ,  @c_A6             NVARCHAR(4000)  
+         ,  @c_A7             NVARCHAR(4000)  
+         ,  @c_A8             NVARCHAR(4000)  
+         ,  @c_A9             NVARCHAR(4000)  
+         ,  @c_A10            NVARCHAR(4000)  
+         ,  @c_A11            NVARCHAR(4000)  
+         ,  @c_A12            NVARCHAR(4000)  
+         ,  @c_A14            NVARCHAR(4000) --NJOW01  
+         ,  @c_B2             NVARCHAR(4000)  
+         ,  @c_C1             NVARCHAR(4000)  
+         ,  @c_C2             NVARCHAR(4000)  
+         ,  @c_C3             NVARCHAR(4000)  
+         ,  @c_C4             NVARCHAR(4000)  
+         ,  @c_C5             NVARCHAR(4000)  
+         ,  @c_C6             NVARCHAR(4000)  
+         ,  @c_C7             NVARCHAR(4000)   
+         ,  @c_E1             NVARCHAR(4000)  
+         ,  @c_E2             NVARCHAR(4000)  
+         ,  @c_E3             NVARCHAR(4000)  
+         ,  @c_E4             NVARCHAR(4000)  
+         ,  @c_E5             NVARCHAR(4000)  
+         ,  @c_E6             NVARCHAR(4000)  
+         ,  @c_E7             NVARCHAR(4000)  
+         ,  @c_E8             NVARCHAR(4000)  
+         ,  @c_E9             NVARCHAR(4000)  
            
-         ,  @c_E1         NVARCHAR(4000)  
-         ,  @c_E2         NVARCHAR(4000)  
-         ,  @c_E3         NVARCHAR(4000)  
-         ,  @c_E4         NVARCHAR(4000)  
-         ,  @c_E5         NVARCHAR(4000)  
-         ,  @c_E6         NVARCHAR(4000)  
-         ,  @c_E7         NVARCHAR(4000)  
-         ,  @c_E8         NVARCHAR(4000)  
-         ,  @c_E9         NVARCHAR(4000)  
-           
-         ,  @c_G1        NVARCHAR(4000)  
-         ,  @c_G2        NVARCHAR(4000)  
-         ,  @c_G3        NVARCHAR(4000)  
-         ,  @c_G4        NVARCHAR(4000)  
-         ,  @c_G5        NVARCHAR(4000)  
-         ,  @c_G6       NVARCHAR(4000)  
+         ,  @c_G1             NVARCHAR(4000)  
+         ,  @c_G2             NVARCHAR(4000)  
+         ,  @c_G3             NVARCHAR(4000)  
+         ,  @c_G4             NVARCHAR(4000)  
+         ,  @c_G5             NVARCHAR(4000)  
+         ,  @c_G6             NVARCHAR(4000)  
         -- ,  @c_G7        NVARCHAR(4000) --WL01  
-         ,  @c_G8        NVARCHAR(4000)  
-         ,  @c_G9        NVARCHAR(4000)   --WL02  
-         ,  @c_G10       NVARCHAR(4000)   --WL02  
+         ,  @c_G8             NVARCHAR(4000)  
+         ,  @c_G9             NVARCHAR(4000)   --WL02  
+         ,  @c_G10            NVARCHAR(4000)   --WL02  
+         ,  @c_A15            NVARCHAR(4000)   --CS01 
             
   
   
@@ -174,6 +175,7 @@ BEGIN
    SET @c_C5   = ''     
    SET @c_C6   = ''   
    SET @c_C7   = ''     
+   SET @c_A15  = ''     --CS01  
     
   
    DECLARE CUR_LBL CURSOR LOCAL FORWARD_ONLY STATIC READ_ONLY FOR  
@@ -194,7 +196,7 @@ BEGIN
   
    WHILE @@FETCH_STATUS <> -1  
    BEGIN    
-    SET @c_A1   =  CASE WHEN @c_LabelName = 'A1'   THEN @c_LabelValue ELSE @c_A1   END   
+      SET @c_A1   =  CASE WHEN @c_LabelName = 'A1'   THEN @c_LabelValue ELSE @c_A1   END   
       SET @c_A2   =  CASE WHEN @c_LabelName = 'A2'   THEN @c_LabelValue ELSE @c_A2   END   
       SET @c_A3   =  CASE WHEN @c_LabelName = 'A3'   THEN @c_LabelValue ELSE @c_A3   END  
       SET @c_A4   =  CASE WHEN @c_LabelName = 'A4'   THEN @c_LabelValue ELSE @c_A4   END   
@@ -233,8 +235,8 @@ BEGIN
       SET @c_C4   =  CASE WHEN @c_LabelName = 'C4'   THEN @c_LabelValue ELSE @c_C4   END     
       SET @c_C5   =  CASE WHEN @c_LabelName = 'C5'   THEN @c_LabelValue ELSE @c_C5   END    
       SET @c_C6   =  CASE WHEN @c_LabelName = 'C6'   THEN @c_LabelValue ELSE @c_C6   END     
-      SET @c_C7   =  CASE WHEN @c_LabelName = 'C7'   THEN @c_LabelValue ELSE @c_C7   END     
-           
+      SET @c_C7   =  CASE WHEN @c_LabelName = 'C7'   THEN @c_LabelValue ELSE @c_C7   END    
+      SET @c_A15   = CASE WHEN @c_LabelName = 'A15'  THEN @c_LabelValue ELSE @c_A15  END   --CS01   
         
       FETCH NEXT FROM CUR_LBL INTO @c_LabelName  
                                 ,  @c_LabelValue  
@@ -247,7 +249,7 @@ BEGIN
   
    INSERT INTO @RetPackList42  
      ( Orderkey    
-     ,  A1       
+         ,  A1       
          ,  A2   
          ,  A3  
          ,  A4    
@@ -286,7 +288,8 @@ BEGIN
        --  ,  G7        --WL01  
          ,  G8  
          ,  G9  --WL02     
-         ,  G10 --WL02    
+         ,  G10 --WL02
+         ,  A15 --CS01
          )  
    SELECT @c_orderkey  
          ,  @c_A1   
@@ -329,6 +332,7 @@ BEGIN
          ,  @c_G8      
          ,  @c_G9  --WL02   
          ,  @c_G10 --WL02  
+         ,  @c_A15 --CS01
          
   
    RETURN  
