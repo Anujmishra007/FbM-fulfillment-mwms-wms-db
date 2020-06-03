@@ -23,6 +23,7 @@ GO
 /* Date         Author        Purposes                                  */
 /* 28-Jul-2016  MCTang 1.0    Add ITFTriggerConfig for MBOL (MC01)      */
 /* 11-Jul_2017  MCTang 1.1    Enhance Generaic Trigger Interface (MC02) */
+/* 18-May_2020  TLTING 1.2    ANSI NULL                                 */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrDocStatusTrackAdd]
@@ -31,6 +32,7 @@ FOR INSERT
 AS
 BEGIN
    SET NOCOUNT ON
+   SET ANSI_NULLS OFF 
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 

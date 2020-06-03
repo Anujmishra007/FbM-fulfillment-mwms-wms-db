@@ -16,7 +16,7 @@ GO
 /*                                                                      */
 /* Called By: Packing                                                   */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -24,6 +24,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 01-Jun-2020  WLChooi  1.1  Fix Typo (WL01)                           */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_UnPlanNonFullAllocateOrder]  
    @c_Sourcekey                  NVARCHAR(4000),
@@ -69,7 +70,7 @@ BEGIN
       SELECT TOP 1 @c_Facility  = ORDERS.Facility
                  , @c_StorerKey = ORDERS.Storerkey
       FROM ORDERS (NOLOCK)
-      JOIN LOADPLANDETAL (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey
+      JOIN LOADPLANDETAIL (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey   --WL01
       WHERE LOADPLANDETAIL.Loadkey = @c_Sourcekey
    END
    ELSE IF @c_CallFrom = 'WAVE'

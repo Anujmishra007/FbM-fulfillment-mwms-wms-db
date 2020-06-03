@@ -1,40 +1,52 @@
-IF OBJECT_ID('dbo.isp_OrderStageArc','P') IS NOT NULL
-   DROP PROC  dbo.isp_OrderStageArc
+IF OBJECT_ID('dbo.isp_OrderSumIntegrity','P') IS NOT NULL
+   DROP PROC  dbo.isp_OrderSumIntegrity
 GO
 SET ANSI_NULLS OFF      ;   SET QUOTED_IDENTIFIER OFF;
 GO
--- 20200419   KHLim   Staging shipment Orders and store in Summary table
-CREATE  PROC  dbo.isp_OrderStageArc
-   @d_StartDate datetime  = NULL -- last Cut Off time
-  ,@d_Date  smalldatetime = NULL
-  ,@nDaysAgo smallint = 14
-  ,@b_debug  INT = 0
+-- 20200602   KHLim   Data Integrity detect & patch
+-- Test: EXEC dbo.isp_OrderSumIntegrity @b_debug=1
+CREATE  PROC  dbo.isp_OrderSumIntegrity
+   @b_debug  INT = 0
   ,@FreqInterval smallint = 10
 AS    
 BEGIN    
    SET NOCOUNT ON       ;   SET ANSI_NULLS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
    SET ANSI_WARNINGS OFF;
 
-   IF @d_StartDate IS NULL
-   BEGIN
-      SELECT TOP 1 @d_StartDate = DATEADD(minute, -20, SQLDate)
-      FROM   dbo.LogSQL WITH (NOLOCK)
-      WHERE SourceTable='BI.OrderSum'
-      ORDER BY SQLId DESC;
-
-      IF @@ROWCOUNT = 0 SET @d_StartDate = DATEADD(day, -2, CONVERT (date, GETDATE()));
-   END
-
-   IF @d_Date      IS NULL SET @d_Date      = GETDATE();
-   PRINT 'Last Cut Off: '+CAST(@d_StartDate AS VARCHAR(25));
    DECLARE @GetDate DATETIME = GETDATE()
-         , @DB NVARCHAR(128) = DB_NAME()
-         , @Schema NVARCHAR(128) = OBJECT_SCHEMA_NAME(@@PROCID)
-         , @Proc   NVARCHAR(128) = ISNULL(OBJECT_NAME(@@PROCID),'')
-         , @Id INT = ISNULL(TRY_CAST(SUBSTRING(REPLACE(REPLACE(REPLACE(CONVERT(VARCHAR,@d_StartDate,126),'-',''),'T',''),':',''),3,10) AS INT),0)
-         , @Duration INT, @DurationSP INT, @SQLId INT, @RowCnt INT = 0, @RowCntMain INT
+          ,@d_Date  smalldatetime = GETDATE()
+          ,@OrderKey nvarchar(10)
+          ,@Status   nvarchar(10)
+          ,@RowCnt int = 0
+          ,@RowCntMain int
 
-TRUNCATE TABLE BI.OrderStage;
+   DECLARE CUR_SO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT OrderKey
+         ,[Status] 
+   FROM BI.OrderSum
+   WHERE Orders_Open + Orders_ALLOC + Orders_Pick_Packed + Orders_Shipped + Orders_Cancelled = 0
+
+   OPEN CUR_SO
+
+   FETCH NEXT FROM CUR_SO INTO @OrderKey, @Status
+   WHILE @@FETCH_STATUS = 0
+   BEGIN
+
+      IF OBJECT_ID('tempdb..#tempOrderStage','u') IS NOT NULL 
+         DROP TABLE #tempOrderStage
+
+      SELECT * INTO #tempOrderStage FROM BI.OrderStage WHERE 1=2
+
+      IF @b_debug > 0
+      BEGIN
+         PRINT 'Detect OrderKey='''+@OrderKey+''', Status='''+@Status+''' has illogical zero value in BI.OrderSum.Orders_Open/ALLOC/Pick/Ship/Canc column.';
+         SELECT Orders_Open , Orders_ALLOC , Orders_Pick_Packed , Orders_Shipped , Orders_Cancelled , * FROM BI.OrderSum WHERE OrderKey=@OrderKey;
+      END
+      ELSE
+      BEGIN
+         PRINT 'Detect OrderKey='''+@OrderKey+''', Status='''+@Status+'''';
+      END;
+
 WITH O AS (
    SELECT O.OrderKey, O.StorerKey, O.ExternOrderKey, DeliveryDate=CAST(O.DeliveryDate AS date), O.ConsigneeKey, C_City=ISNULL(O.C_City,'')
    ,O.Status, O.Type, O.OrderGroup, AddDate=CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), EditDate=CAST(O.EditDate AS smalldatetime)
@@ -49,7 +61,7 @@ WITH O AS (
    JOIN ARC.V_OrderDetail OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey
 
    LEFT JOIN STORER   S WITH (NOLOCK) ON O.ShipperKey = S.StorerKey
-   WHERE O.EditDate >= CONVERT(NVARCHAR(23),@d_StartDate,121)
+   WHERE O.OrderKey = @OrderKey
    GROUP BY O.OrderKey, O.StorerKey, O.ExternOrderKey, CAST(O.DeliveryDate AS date), O.ConsigneeKey, ISNULL(O.C_City,'')
    ,O.Status, O.Type, O.OrderGroup, CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), CAST(O.EditDate AS smalldatetime)
    ,ISNULL(O.MBOLKey,''), ISNULL(O.LoadKey,''), O.Facility
@@ -77,7 +89,7 @@ WITH O AS (
    FOR Status IN (     [1], [2], [3], [4], [5], [9]      )  
    ) AS pvt
 )
-INSERT BI.OrderStage (  OrderKey,   StorerKey,   ExternOrderKey,   DeliveryDate,   ConsigneeKey,   C_City
+INSERT #tempOrderStage (  OrderKey,   StorerKey,   ExternOrderKey,   DeliveryDate,   ConsigneeKey,   C_City
    ,   Status,  Type,   OrderGroup,   AddDate,   EditDate
    ,  MBOLKey,   LoadKey,   Facility,   ShipperKey,   DocType,   TrackingNo ,   ECOM_PRESALE_FLAG
    , PreSale, ECOM_SINGLE_FLAG
@@ -138,26 +150,26 @@ LEFT JOIN Uni U WITH (NOLOCK) ON O.OrderKey = U.OrderKey;
 
 WITH l AS (
    SELECT  O.OrderKey, Orders_PendBuildLoad=SUM(CASE WHEN O.Status < '5' AND L.LoadKey IS NULL THEN 1 ELSE 0 END)
-   FROM BI.OrderStage AS O WITH (NOLOCK) 
+   FROM #tempOrderStage AS O WITH (NOLOCK) 
    LEFT JOIN ARC.V_LoadPlan L WITH (NOLOCK)ON L.LoadKey = O.LoadKey
    GROUP BY O.OrderKey
 )
 UPDATE O SET Orders_PendBuildLoad = ISNULL(l.Orders_PendBuildLoad,0)
-FROM BI.OrderStage AS O WITH (NOLOCK) JOIN l ON O.OrderKey = l.OrderKey;
+FROM #tempOrderStage AS O WITH (NOLOCK) JOIN l ON O.OrderKey = l.OrderKey;
 
    IF @b_debug=1 SELECT 'Join LoadPlan', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
 
 WITH m AS (
    SELECT o.Orderkey, ShipDate=CAST(MIN(m.ShipDate) AS smalldatetime)
    ,MBOL_NotValid =ISNULL(SUM(CASE WHEN m.status = '5' AND m.ValidatedFlag = 'E' THEN 1 ELSE 0 END),0)
-   FROM BI.OrderStage AS O WITH (NOLOCK)
+   FROM #tempOrderStage AS O WITH (NOLOCK)
    LEFT JOIN ARC.V_MBOLDETAIL d WITH (NOLOCK) ON O.OrderKey = d.OrderKey --AND O.Status='9'
    LEFT JOIN ARC.V_MBOL       m WITH (NOLOCK) ON m.MbolKey  = d.MbolKey
    GROUP BY O.OrderKey
 )
 UPDATE O SET ShipDate = m.ShipDate
       ,MBOL_NotValid = m.MBOL_NotValid
-FROM BI.OrderStage AS O WITH (NOLOCK) JOIN m ON O.OrderKey = m.OrderKey;
+FROM #tempOrderStage AS O WITH (NOLOCK) JOIN m ON O.OrderKey = m.OrderKey;
 
    IF @b_debug=1 SELECT 'Join MBOL', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
 
@@ -165,7 +177,7 @@ WITH p AS (
    SELECT o.Orderkey, PickDet_Lines=COUNT(1), AllocDate=CAST(MIN(P.AddDate) AS smalldatetime), PickDate=CAST(MIN(P.EditDate) AS smalldatetime)
    , Orders_OverRun=SUM(CASE WHEN (P.ShipFlag <> 'Y' OR P.Status <> '9') AND P.AddDate < DATEADD(HOUR,-                      8 ,@d_Date) THEN 1 ELSE 0 END)--Alloc until MarkShip
    , PickDetails_Inserted=SUM(CASE WHEN P.EditDate >= DATEADD(minute,-@FreqInterval,@d_Date) THEN 1 ELSE 0 END)
-   FROM BI.OrderStage AS O WITH (NOLOCK)
+   FROM #tempOrderStage AS O WITH (NOLOCK)
    JOIN ARC.V_ORDERS AS r WITH (NOLOCK) on O.OrderKey = R.OrderKey
    JOIN ARC.V_PICKDETAIL P WITH (NOLOCK) ON P.OrderKey = O.OrderKey
 
@@ -179,15 +191,15 @@ UPDATE O SET PickDet_Lines = p.PickDet_Lines
                                                                                               ELSE O.PickDate END
       ,Orders_OverRun      = p.Orders_OverRun
       ,PickDetails_Inserted= p.PickDetails_Inserted
-FROM BI.OrderStage AS O JOIN p ON O.OrderKey = p.OrderKey;
+FROM #tempOrderStage AS O JOIN p ON O.OrderKey = p.OrderKey;
 
    IF @b_debug=1 SELECT 'Join PickDetail', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
 
 DECLARE @SummaryOfChanges TABLE(Change VARCHAR(20));  
   
 MERGE BI.OrderSum AS t
-USING BI.OrderStage AS s ON t.OrderKey = s.OrderKey
-WHEN MATCHED AND t.Status NOT IN ('9','CANC') THEN
+USING #tempOrderStage AS s ON t.OrderKey = s.OrderKey
+WHEN MATCHED                                 THEN
    UPDATE SET ModifyDate=GETDATE() ,StorerKey=s.StorerKey, ExternOrderKey=s.ExternOrderKey,DeliveryDate=s.DeliveryDate,ConsigneeKey=s.ConsigneeKey,C_City=s.C_City
    , Status=s.Status, Type=s.Type, OrderGroup=s.OrderGroup, AddDate=s.AddDate, EditDate=s.EditDate
    ,MBOLKey=s.MBOLKey,LoadKey=s.LoadKey, Facility=s.Facility, ShipperKey=s.ShipperKey, DocType=s.DocType, TrackingNo=s.TrackingNo ,ECOM_PRESALE_FLAG=s.ECOM_PRESALE_FLAG
@@ -240,10 +252,6 @@ WHEN NOT MATCHED THEN
    ,s.CancDate )
 OUTPUT $action INTO @SummaryOfChanges;  
 
-   SELECT @DurationSP = DATEDIFF(s,@GetDate,GETDATE()), @RowCnt = @@ROWCOUNT;
-   EXEC dbo.ispLogQuery @DB, @Schema, @Proc, @Id, 'WITH O AS... MERGE...', @DurationSP, @RowCntMain, 'BI.OrderSum', @SQLId OUTPUT;
-   IF @b_debug=1 SELECT 'MERGE UPSERT', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt=@RowCnt; 
-
 -- Query the results of the table variable.  
 IF @b_debug = 1
 BEGIN
@@ -252,4 +260,12 @@ BEGIN
    GROUP BY Change;  
 END
 
+      IF @b_debug=1 
+         SELECT Orders_Open , Orders_ALLOC , Orders_Pick_Packed , Orders_Shipped , Orders_Cancelled , * FROM BI.OrderSum WHERE OrderKey=@OrderKey;
+
+      FETCH NEXT FROM CUR_SO INTO @OrderKey, @Status
+   END
+
+   CLOSE CUR_SO
+   DEALLOCATE CUR_SO
 END

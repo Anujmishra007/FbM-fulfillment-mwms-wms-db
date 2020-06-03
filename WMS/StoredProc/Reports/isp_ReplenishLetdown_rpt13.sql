@@ -9,13 +9,13 @@ GO
 /* Store Procedure: isp_ReplenishLetdown_rpt13                          */      
 /* Creation Date: 09-Apr-2020                                           */      
 /* Copyright: LFL                                                       */      
-/* Written by: Rick Liew                                                */      
+/* Written by: WLChooi                                                  */      
 /*                                                                      */      
 /* Purpose: WMS-12773 - CN PUMA replenishment report                    */      
 /*                                                                      */      
 /* Called By: r_dw_replenishletdown_rpt13                               */      
 /*                                                                      */      
-/* PVCS Version: 1.0                                                    */      
+/* GitLab Version: 1.1                                                  */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -23,7 +23,9 @@ GO
 /*                                                                      */      
 /*                                                                      */      
 /* Updates:                                                             */      
-/* Date         Author     Purposes                                     */         
+/* Date         Author   Ver.  Purposes                                 */   
+/* 2020-05-27   WLChooi  1.1   Fix - Remove Order Status filter and add */
+/*                             filter by Wavekey (WL01)                 */    
 /************************************************************************/      
       
 CREATE PROC isp_ReplenishLetdown_rpt13 (      
@@ -54,9 +56,9 @@ BEGIN
      @n_continue         Int,      
      @c_errmsg           NVARCHAR(255),      
      @n_starttcnt        INT,      
-     @c_showField        NVARCHAR(5),                --CS01      
-     @c_showskufield     NVARCHAR(5),                --CS02      
-     @c_showdiffskuformat NVARCHAR(5)                --CS03      
+     @c_showField        NVARCHAR(5),                   
+     @c_showskufield     NVARCHAR(5),                   
+     @c_showdiffskuformat NVARCHAR(5)                   
            
      
    SET @c_showField = 'N'       
@@ -97,7 +99,7 @@ BEGIN
    JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.Orderkey = ORD.Orderkey    
    WHERE WD.WaveKey = @c_wavekey   
    AND   ORD.Facility = @c_facility      
-   AND   ORD.Status in ('1','2')      
+   --AND   ORD.Status in ('1','2')   --WL01      
    AND   SL.LocationType <> 'PICK'      
    --AND   PD.Status < '5'      
    AND   PD.StorerKey = @c_storerkey      
@@ -115,7 +117,8 @@ BEGIN
    --AND   
    WHERE RP.Confirmed = 'N'      
    AND   RP.RepLENNo <> 'Y'      
-   AND   RP.StorerKey = @c_Storerkey   
+   AND   RP.StorerKey = @c_Storerkey  
+   AND   RP.Wavekey =  @c_wavekey   --WL01 
    AND   L.Facility = @c_facility      
    GROUP BY RP.Storerkey, RP.Sku, RP.FromLoc, RP.ToLoc, RP.ID, RP.Lot, L.Pickzone           
 
