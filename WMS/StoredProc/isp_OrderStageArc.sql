@@ -37,7 +37,7 @@ BEGIN
 TRUNCATE TABLE BI.OrderStage;
 WITH O AS (
    SELECT O.OrderKey, O.StorerKey, O.ExternOrderKey, DeliveryDate=CAST(O.DeliveryDate AS date), O.ConsigneeKey, C_City=ISNULL(O.C_City,'')
-   ,O.Status, O.Type, O.OrderGroup, AddDate=CAST(CONVERT(char(16),O.AddDate,112) AS smalldatetime), EditDate=CAST(O.EditDate AS smalldatetime)
+   ,O.Status, O.Type, O.OrderGroup, AddDate=CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), EditDate=CAST(O.EditDate AS smalldatetime)
    ,MBOLKey=ISNULL(O.MBOLKey,''), LoadKey=ISNULL(O.LoadKey,''), O.Facility
    ,ShipperKey=ISNULL(ShipperKey,''), DocType, TrackingNo=ISNULL(TrackingNo,''), ECOM_PRESALE_FLAG=ISNULL(O.ECOM_PRESALE_FLAG,''), ECOM_SINGLE_FLAG=ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,UserDefine01=ISNULL(O.UserDefine01,'') ,UserDefine02=ISNULL(O.UserDefine02,'') ,UserDefine03=ISNULL(O.UserDefine03,'') 
@@ -51,7 +51,7 @@ WITH O AS (
    LEFT JOIN STORER   S WITH (NOLOCK) ON O.ShipperKey = S.StorerKey
    WHERE O.EditDate >= CONVERT(NVARCHAR(23),@d_StartDate,121)
    GROUP BY O.OrderKey, O.StorerKey, O.ExternOrderKey, CAST(O.DeliveryDate AS date), O.ConsigneeKey, ISNULL(O.C_City,'')
-   ,O.Status, O.Type, O.OrderGroup, CAST(CONVERT(char(16),O.AddDate,112) AS smalldatetime), CAST(O.EditDate AS smalldatetime)
+   ,O.Status, O.Type, O.OrderGroup, CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), CAST(O.EditDate AS smalldatetime)
    ,ISNULL(O.MBOLKey,''), ISNULL(O.LoadKey,''), O.Facility
    ,ISNULL(ShipperKey,''), DocType, ISNULL(TrackingNo,'') , ISNULL(O.ECOM_PRESALE_FLAG,''), ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,ISNULL(O.UserDefine01,'') ,ISNULL(O.UserDefine02,'') ,ISNULL(O.UserDefine03,'') 
