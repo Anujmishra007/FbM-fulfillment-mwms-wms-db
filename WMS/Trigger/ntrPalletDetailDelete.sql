@@ -7,7 +7,33 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-/* 09-Oct-2012  KHLim      Insert Delete log (KH01)                          */
+/***************************************************************************/
+/* Trigger:  ntrPalletHeaderUpdate                                         */
+/* Creation Date:                                                          */
+/* Copyright: IDS                                                          */
+/* Written by:                                                             */
+/*                                                                         */
+/* Purpose:  Trigger point upon any Update on the Container                */
+/*                                                                         */
+/* Return Status:  None                                                    */
+/*                                                                         */
+/* Usage:                                                                  */
+/*                                                                         */
+/* Local Variables:                                                        */
+/*                                                                         */
+/* Called By: When records updated                                         */
+/*                                                                         */
+/* PVCS Version: 1.2                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date         Author    Ver.  Purposes                                   */
+/* 09-Oct-2012  KHLim     1.0   Insert Delete log (KH01)                   */
+/* 12-Dec-2018  NJOW01    1.1   WMS-7187 allow supervisor delete carton    */
+/***************************************************************************/
 
 CREATE TRIGGER ntrPalletDetailDelete
  ON PALLETDETAIL
@@ -27,8 +53,10 @@ CREATE TRIGGER ntrPalletDetailDelete
  @c_errmsg           NVARCHAR(250), -- Error message returned by stored procedure or this trigger
  @n_continue         int,       -- continuation flag: 1=Continue, 2=failed but continue processsing, 3=failed do not continue processing, 4=successful but skip further processing
  @n_starttcnt        int,       -- Holds the current transaction count
- @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
-,@c_authority        nvarchar(1)  -- KH01
+ @n_cnt              INT,       -- Holds the number of rows affected by the DELETE statement that fired this trigger.
+ @c_authority        nvarchar(1),  -- KH01
+ @c_issupervisor NVARCHAR(10), --NJOW01
+ @c_Username NVARCHAR(18) --NJOW01
 
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
  if (select count(*) from DELETED) =
@@ -37,27 +65,41 @@ CREATE TRIGGER ntrPalletDetailDelete
  SELECT @n_continue = 4
  END
       /* #INCLUDE <TRPALDD1.SQL> */     
- IF @n_continue=1 or @n_continue=2
- BEGIN
- IF EXISTS (SELECT * FROM PALLET, DELETED
- WHERE PALLET.PalletKey = DELETED.PalletKey
- AND PALLET.Status = "9")
- BEGIN
- SELECT @n_continue = 3
- SELECT @n_err=67800
- SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": PALLET.Status = 'SHIPPED'. DELETE rejected. (ntrPalletDetailDelete)"
- END
- END
- IF @n_continue=1 or @n_continue=2
- BEGIN
- IF EXISTS (SELECT * FROM DELETED
- WHERE DELETED.Status = "9")
- BEGIN
- SELECT @n_continue = 3
- SELECT @n_err=67800
- SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": PALLET.Status = 'SHIPPED'. DELETE rejected. (ntrPalletDetailDelete)"
- END
- END
+   
+   --NJOW01
+   SET @c_issupervisor = 'N'
+   SET @c_username = SUSER_SNAME()
+   EXEC isp_CheckSupervisorRole
+        @c_username  = @c_username
+       ,@c_Flag     = @c_issupervisor OUTPUT
+       ,@b_Success  = @b_success      OUTPUT  
+       ,@n_Err      = @n_err          OUTPUT  
+       ,@c_ErrMsg   = @c_errmsg       OUTPUT
+         
+   IF @n_continue=1 or @n_continue=2
+   BEGIN	        	
+     IF EXISTS (SELECT * FROM PALLET, DELETED
+                WHERE PALLET.PalletKey = DELETED.PalletKey
+                AND PALLET.Status = "9")
+        AND ISNULL(@c_issupervisor,'N') <> 'Y'  --NJOW01
+     BEGIN
+        SELECT @n_continue = 3
+        SELECT @n_err=67800
+        SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": PALLET.Status = 'SHIPPED'. DELETE rejected. (ntrPalletDetailDelete)"
+     END
+   END
+    
+   IF @n_continue=1 or @n_continue=2
+   BEGIN
+      IF EXISTS (SELECT * FROM DELETED
+                 WHERE DELETED.Status = "9")
+         AND ISNULL(@c_issupervisor,'N') <> 'Y'  --NJOW01      
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @n_err=67800
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": PALLET.Status = 'SHIPPED'. DELETE rejected. (ntrPalletDetailDelete)"
+      END
+   END
  
    IF @n_continue = 1 or @n_continue = 2  --KH01 start
    BEGIN
