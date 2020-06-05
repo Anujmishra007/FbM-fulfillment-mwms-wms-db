@@ -58,7 +58,7 @@ WITH O AS (
    ,QtyAPS    = SUM(OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty)
    ,EnteredQTY= SUM(OD.EnteredQTY)
    FROM ARC.V_ORDERS      O  WITH (NOLOCK)
-   JOIN ARC.V_OrderDetail OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey
+   LEFT JOIN ARC.V_OrderDetail OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey
 
    LEFT JOIN STORER   S WITH (NOLOCK) ON O.ShipperKey = S.StorerKey
    WHERE O.OrderKey = @OrderKey
