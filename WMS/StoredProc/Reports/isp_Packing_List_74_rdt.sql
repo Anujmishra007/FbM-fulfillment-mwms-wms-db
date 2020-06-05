@@ -1,5 +1,5 @@
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Packing_List_74_rdt]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_Packing_List_74_rdt]
+   DROP PROCEDURE [dbo].[isp_Packing_List_74_rdt]
 GO
 
 SET ANSI_NULLS OFF
@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_packing_list_74_rdt                                  */  
 /*          :                                                           */  
-/* PVCS Version: 1.0                                                    */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 05-Jun-2020  WLChooi   1.1 WMS-13658 - Modify col logic (WL01)       */
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_74_rdt  
@@ -76,7 +77,8 @@ BEGIN
         , ISNULL(OD.UserDefine02,'') AS UserDefine02
         , SUM(PD.Qty) AS Qty
         , OD.UnitPrice
-        , ISNULL(St.LabelPrice,'') AS LabelPrice
+        --, ISNULL(St.LabelPrice,'') AS LabelPrice
+        , CASE WHEN OH.InvoiceAmount > 100000 THEN '0' ELSE ISNULL(St.LabelPrice,'') END AS LabelPrice   --WL01
         , OH.InvoiceAmount
    FROM ORDERS OH (NOLOCK)
    JOIN STORER St (NOLOCK) ON St.Storerkey = OH.StorerKey
@@ -97,7 +99,8 @@ BEGIN
           , ISNULL(OD.UserDefine01,'')
           , ISNULL(OD.UserDefine02,'')
           , OD.UnitPrice
-          , ISNULL(St.LabelPrice,'')
+          --, ISNULL(St.LabelPrice,'')
+          , CASE WHEN OH.InvoiceAmount > 100000 THEN '0' ELSE ISNULL(St.LabelPrice,'') END   --WL01
           , OH.InvoiceAmount
 
 QUIT_SP:  
