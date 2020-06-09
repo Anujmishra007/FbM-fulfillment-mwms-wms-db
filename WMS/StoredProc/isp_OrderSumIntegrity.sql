@@ -165,6 +165,7 @@ WITH m AS (
    FROM #tempOrderStage AS O WITH (NOLOCK)
    LEFT JOIN ARC.V_MBOLDETAIL d WITH (NOLOCK) ON O.OrderKey = d.OrderKey --AND O.Status='9'
    LEFT JOIN ARC.V_MBOL       m WITH (NOLOCK) ON m.MbolKey  = d.MbolKey
+   WHERE m.Status = '9'
    GROUP BY O.OrderKey
 )
 UPDATE O SET ShipDate = m.ShipDate
