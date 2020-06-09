@@ -23,6 +23,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */  
+/* 09-Jun-2002  NJOW01   1.1  Fix to filter by storerkey                 */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[nspLPRTSK9]      
@@ -85,6 +86,7 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
                       WHERE LD.Loadkey = @c_Loadkey                   
                       AND PD.Status = '0'
                       AND TD.Taskdetailkey IS NULL
+                      AND (PD.Storerkey = @c_Storerkey OR ISNULL(@c_Storerkey,'') = '')  --NJOW01
                      )
        BEGIN
           SELECT @n_continue = 3  
@@ -98,7 +100,8 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
        IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK)
                   WHERE TD.Loadkey = @c_Loadkey
                   AND TD.Sourcetype = @c_SourceType
-                  AND TD.Tasktype IN('FCP','FPK'))
+                  AND TD.Tasktype IN('FCP','FPK')
+                  AND (TD.Storerkey = @c_Storerkey OR ISNULL(@c_Storerkey,'') = '')) --NJOW01
        BEGIN
          SELECT @n_continue = 3  
          SELECT @n_err = 83010    
@@ -112,12 +115,13 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
     -----Get Storerkey and facility
     IF  (@n_continue = 1 OR @n_continue = 2)
     BEGIN
-        SELECT TOP 1 @c_Storerkey = O.Storerkey, 
+        SELECT TOP 1 --@c_Storerkey = O.Storerkey, 
                      @c_Facility = O.Facility
         FROM LOADPLAN L (NOLOCK)
         JOIN LOADPLANDETAIL LD(NOLOCK) ON L.Loadkey = LD.Loadkey
         JOIN ORDERS O (NOLOCK) ON LD.Orderkey = O.Orderkey
-        AND L.LOadkey = @c_Loadkey                     
+        AND L.LOadkey = @c_Loadkey                 
+        AND (O.Storerkey = @c_Storerkey OR ISNULL(@c_Storerkey,'') = '') --NJOW01    
         
         SELECT TOP 1 @c_BookToLoc = BO.Loc
         FROM BOOKING_OUT BO (NOLOCK)
@@ -167,13 +171,15 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
           WHERE LD.Loadkey = @c_Loadkey
           AND PD.Status = ''0''
           AND PD.WIP_RefNo = @c_SourceType
+          AND (O.Storerkey = @c_Storerkey OR ISNULL(@c_Storerkey,'''') = '''')
           GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, O.Consigneekey, Loc.LogicalLocation, ISNULL(PLT.PLTBalQty,0), ISNULL(PLT.PLTQtyAllocated,0), SL.LocationType, CON.Company                    
           ORDER BY PD.Storerkey, O.Consigneekey, Loc.LogicalLocation, PD.Loc '       
        
        EXEC sp_executesql @c_SQL,
-          N'@c_Loadkey NVARCHAR(10), @c_SourceType NVARCHAR(30)', 
+          N'@c_Loadkey NVARCHAR(10), @c_SourceType NVARCHAR(30), @c_Storerkey NVARCHAR(15)', 
           @c_Loadkey,
-          @c_SourceType   
+          @c_SourceType,
+          @c_Storerkey   --NJOW01
              
        OPEN cur_pick  
        
