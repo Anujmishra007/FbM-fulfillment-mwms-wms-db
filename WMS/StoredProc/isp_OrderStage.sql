@@ -153,7 +153,6 @@ WITH m AS (
    FROM BI.OrderStage AS O WITH (NOLOCK)
    LEFT JOIN dbo.MBOLDETAIL d WITH (NOLOCK) ON O.OrderKey = d.OrderKey --AND O.Status='9'
    LEFT JOIN dbo.MBOL       m WITH (NOLOCK) ON m.MbolKey  = d.MbolKey
-   WHERE m.Status = '9'
    GROUP BY O.OrderKey
 )
 UPDATE O SET ShipDate = m.ShipDate
