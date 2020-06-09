@@ -160,13 +160,12 @@ FROM #tempOrderStage AS O WITH (NOLOCK) JOIN l ON O.OrderKey = l.OrderKey;
    IF @b_debug=1 SELECT 'Join LoadPlan', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
 
 WITH m AS (
-   SELECT o.Orderkey, ShipDate=CAST(MIN(m.ShipDate) AS smalldatetime)
+   SELECT o.Orderkey, ShipDate = CASE WHEN m.Status = '9' THEN CAST(MIN(m.ShipDate) AS smalldatetime) ELSE NULL END
    ,MBOL_NotValid =ISNULL(SUM(CASE WHEN m.status = '5' AND m.ValidatedFlag = 'E' THEN 1 ELSE 0 END),0)
    FROM #tempOrderStage AS O WITH (NOLOCK)
    LEFT JOIN ARC.V_MBOLDETAIL d WITH (NOLOCK) ON O.OrderKey = d.OrderKey --AND O.Status='9'
    LEFT JOIN ARC.V_MBOL       m WITH (NOLOCK) ON m.MbolKey  = d.MbolKey
-   WHERE m.Status = '9'
-   GROUP BY O.OrderKey
+   GROUP BY O.OrderKey, m.Status
 )
 UPDATE O SET ShipDate = m.ShipDate
       ,MBOL_NotValid = m.MBOL_NotValid
