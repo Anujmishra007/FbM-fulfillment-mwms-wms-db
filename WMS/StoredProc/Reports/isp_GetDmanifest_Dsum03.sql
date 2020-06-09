@@ -35,12 +35,13 @@ GO
 /* 2018-Mar-05  CSCHONG  1.0  WMS-3979-revised field mapping (CS01)     */  
 /* 2018-Jun-18  SPChin   1.1  INC0254077 - Bug Fixed                    */  
 /* 2018-Aug-01  NJOW01   1.2  WMS-5655 Change estimate uploading time   */  
-/* 2018-Nov-22  WLCHOOI  1.3  WMS-7090 Add new zone setup (WL01)	    */  
+/* 2018-Nov-22  WLCHOOI  1.3  WMS-7090 Add new zone setup (WL01)	      */  
+/* 2020-Jun-09  WLChooi  1.4  Performance Tunning (WL02)                */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_GetDmanifest_Dsum03] (  
          @c_mbolKey      NVARCHAR(20)   
-          ,@c_Zone         NVARCHAR(20)  
+        ,@c_Zone         NVARCHAR(20)  
 )  
 AS  
 BEGIN  
@@ -57,6 +58,7 @@ BEGIN
      ,@c_qtyPick            int  --(vince)  
      ,@c_qtyPack            int  --(vince)  
      ,@n_err        INT --(vince)  
+     ,@c_CodeCityLdTime     NVARCHAR(30) = 'CityLdTime'   --WL02
        
    SET @n_err = 0  --(vince)  
   
@@ -193,7 +195,7 @@ BEGIN
         LEFT OUTER JOIN PICKHEADER (NOLOCK) ON (ORDERS.Loadkey = PICKHEADER.ExternOrderkey)  
      LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
               CLC.Description = ORDERS.c_City AND  
-              CLC.ListName = 'CityLdTime' AND   
+              CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                           CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)   
     LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
           CODELKUP.Code = ORDERS.StorerKey)   
@@ -304,7 +306,7 @@ BEGIN
          INNER JOIN PICKHEADER (NOLOCK) ON (PACKHEADER.Pickslipno = PICKHEADER.Pickheaderkey)  
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                  CLC.Description = ORDERS.c_City AND  
-                 CLC.ListName = 'CityLdTime' AND   
+                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                              CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)   
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
             CODELKUP.Code = ORDERS.StorerKey)   
@@ -417,7 +419,7 @@ BEGIN
          INNER JOIN PICKHEADER (NOLOCK) ON (PACKHEADER.Pickslipno = PICKHEADER.Pickheaderkey)  
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                  CLC.Description = ORDERS.c_City AND  
-                 CLC.ListName = 'CityLdTime' AND   
+                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                              CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)   
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
             CODELKUP.Code = ORDERS.StorerKey)   
@@ -560,7 +562,7 @@ BEGIN
             LEFT OUTER JOIN PICKHEADER (NOLOCK) ON (ORDERS.Loadkey = PICKHEADER.ExternOrderkey)  
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                  CLC.Description = ORDERS.c_City AND  
-                 CLC.ListName = 'CityLdTime' AND   
+                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                              CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)   
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
             CODELKUP.Code = ORDERS.StorerKey)   
@@ -663,7 +665,7 @@ BEGIN
             INNER JOIN PICKHEADER (NOLOCK) ON (PACKHEADER.Pickslipno = PICKHEADER.Pickheaderkey)  
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                  CLC.Description = ORDERS.c_City AND  
-                 CLC.ListName = 'CityLdTime' AND   
+                 CLC.ListName = @c_CodeCityLdTime AND   --WL02  
                                              CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)   
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
             CODELKUP.Code = ORDERS.StorerKey)   
@@ -766,7 +768,7 @@ BEGIN
             INNER JOIN PICKHEADER (NOLOCK) ON (PACKHEADER.Pickslipno = PICKHEADER.Pickheaderkey)  
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                  CLC.Description = ORDERS.c_City AND  
-                 CLC.ListName = 'CityLdTime' AND   
+                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                              CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)   
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
             CODELKUP.Code = ORDERS.StorerKey)   
