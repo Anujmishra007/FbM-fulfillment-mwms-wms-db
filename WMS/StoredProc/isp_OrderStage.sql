@@ -153,6 +153,7 @@ WITH m AS (
    FROM BI.OrderStage AS O WITH (NOLOCK)
    LEFT JOIN dbo.MBOLDETAIL d WITH (NOLOCK) ON O.OrderKey = d.OrderKey --AND O.Status='9'
    LEFT JOIN dbo.MBOL       m WITH (NOLOCK) ON m.MbolKey  = d.MbolKey
+   WHERE m.Status = '9'
    GROUP BY O.OrderKey
 )
 UPDATE O SET ShipDate = m.ShipDate
@@ -187,7 +188,8 @@ DECLARE @SummaryOfChanges TABLE(Change VARCHAR(20));
   
 MERGE BI.OrderSum AS t
 USING BI.OrderStage AS s ON t.OrderKey = s.OrderKey
-WHEN MATCHED AND t.Status NOT IN ('9','CANC') THEN
+WHEN MATCHED --AND t.Status NOT IN ('9','CANC') 
+THEN
    UPDATE SET ModifyDate=GETDATE() ,StorerKey=s.StorerKey, ExternOrderKey=s.ExternOrderKey,DeliveryDate=s.DeliveryDate,ConsigneeKey=s.ConsigneeKey,C_City=s.C_City
    , Status=s.Status, Type=s.Type, OrderGroup=s.OrderGroup, AddDate=s.AddDate, EditDate=s.EditDate
    ,MBOLKey=s.MBOLKey,LoadKey=s.LoadKey, Facility=s.Facility, ShipperKey=s.ShipperKey, DocType=s.DocType, TrackingNo=s.TrackingNo ,ECOM_PRESALE_FLAG=s.ECOM_PRESALE_FLAG

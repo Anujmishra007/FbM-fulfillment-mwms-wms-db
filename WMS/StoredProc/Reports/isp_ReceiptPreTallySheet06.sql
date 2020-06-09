@@ -14,7 +14,7 @@ GO
 /* Copyright: LF Logistics                                              */  
 /* Written by:                                                          */  
 /*                                                                      */  
-/* Purpose: WMS-12105 - NIKE_PH_WMS_PreTallySheet                       */   
+/* Purpose: WMS-10604 - NIKE_PH_WMS_PreTallySheet                       */   
 /*        :                                                             */  
 /* Called By: r_receipt_pre_tallysheet06                                */
 /*          :                                                           */  
@@ -26,6 +26,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 09-Jun-2020  WLChooi   1.1 Remove group by ExternPOKey (WL01)        */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptPreTallySheet06]  
@@ -154,7 +155,7 @@ BEGIN
       --GROUP BY PalletPosition, SKU
         
    SELECT RECEIPT.ReceiptKey,   
-          RECEIPTDETAIL.ExternPOKey,   
+          '',--RECEIPTDETAIL.ExternPOKey,   --WL01
           t.Sku,  
           PRINCIPAL = SKU.SUSR3,
           PRINDESC = CODELKUP.DESCRIPTION, 
@@ -199,7 +200,7 @@ BEGIN
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable02' AND Code = 'Lottable02' AND Storerkey = RECEIPT.StorerKey) AS CL2
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable12' AND Code = 'Lottable12' AND Storerkey = RECEIPT.StorerKey) AS CL3
     GROUP BY RECEIPT.ReceiptKey,   
-             RECEIPTDETAIL.ExternPOKey,   
+             --RECEIPTDETAIL.ExternPOKey,   --WL01
              t.Sku,  
              SKU.SUSR3,
              CODELKUP.DESCRIPTION, 
