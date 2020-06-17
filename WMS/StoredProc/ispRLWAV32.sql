@@ -23,6 +23,7 @@ GO
 /*                                                                          */  
 /* Updates:                                                                 */  
 /* Date         Author   Ver  Purposes                                      */  
+/* 17-Jun-2020  NJOW01   1.0  Fix filter by facility                        */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV32]      
@@ -1075,7 +1076,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV32]
              AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) > 0
              AND LLI.Storerkey = @c_Storerkey
              AND LLI.Sku = @c_Sku
-             AND LLI.Lot = @c_Lot 
+             AND LLI.Lot = @c_Lot         
+             AND LOC.Facility = @c_Facility  --NJOW01
              ORDER BY CASE WHEN LOC.LocationRoom = @c_LocationRoom THEN 1 ELSE 2 END,  --get the locatioroom of the pick face first.
                       LOC.LocationRoom, LOC.Logicallocation, LOC.Loc
              
