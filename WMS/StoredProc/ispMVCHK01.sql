@@ -28,6 +28,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 11-Jun-2020  NJOW01   1.0  WMS-13698 not allow inventory move        */
 /*                            if pendingmovein                          */
+/* 18-Jun-2020  NJOW02   1.1  Fix to include fitler id and locationtype */
 /************************************************************************/
 
 CREATE PROCEDURE dbo.ispMVCHK01
@@ -95,8 +96,12 @@ BEGIN
                   WHERE LLI.StorerKey = @c_StorerKey
                   AND   LLI.ID = @c_FromID
                   AND   LOC.Facility = @c_Facility
+                  AND   ISNULL(@c_FromID,'') <> '' --NJOW01                                
                   GROUP BY LLI.ID
                   HAVING ISNULL( SUM( LLI.PendingMoveIn), 0) > 0)
+         AND NOT EXISTS(SELECT 1 FROM LOC(NOLOCK)  --NJOW01
+                        WHERE LOC.Loc = @c_FromLoc 
+                        AND LOC.LocationType IN('PICK','CASE'))         
       BEGIN
          SELECT @n_continue = 3
          SELECT @n_Err = 7595
