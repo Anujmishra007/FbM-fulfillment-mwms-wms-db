@@ -31,6 +31,7 @@ GO
 /*                            yet. Get Same Lot,Loc,Id repeatedly          */
 /* 2019-11-27  CSCHONG  1.2   WMS-11125 revised parameter list (CS01)      */
 /* 2020-03-23  CSCHONG  1.3   WMS-12435 revised replen logic (CS02)        */
+/* 2020-06-04  NJOW01   1.4   WMS-13603 Custom sorting by config           */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC27]
                @c_zone01            NVARCHAR(10)
@@ -137,9 +138,9 @@ BEGIN
          ,  [Priority]              NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  UOM                     NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  Packkey                 NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  ReplLottable02          NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  ReplLottable02          NVARCHAR(18)   NOT NULL DEFAULT('')                  
       )
-
+                      
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       DECLARE @n_InvCnt                      INT
@@ -498,47 +499,103 @@ BEGIN
             END
             SET @d_today = CONVERT(NVARCHAR(10), GETDATE(),120) 
          END
-    
-         SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT LOTxLOCxID.LOT
-               ,LOTxLOCxID.Loc
-               ,LOTxLOCxID.ID
-               ,LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen  
-               ,LOTxLOCxID.QtyAllocated
-               ,LOTxLOCxID.QtyPicked
-               ,LOTATTRIBUTE.Lottable02
-         FROM LOT          WITH (NOLOCK)
-         JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)
-         JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)
-         JOIN LOC          WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)
-         WHERE LOTxLOCxID.LOC <> @c_CurrentLoc
-         AND LOTxLOCxID.StorerKey = @c_CurrentStorer
-         AND LOTxLOCxID.SKU = @c_CurrentSku
-         AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= @n_FilterQty    
-         AND LOTxLOCxID.QtyExpected = 0 
-         AND LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')
-         AND LOC.LocationType NOT IN (CASE WHEN @c_ReplGrp = 'CASE' THEN '' ELSE 'PALLET' END   
-                                    , CASE WHEN @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y' THEN '' ELSE 'CASE' END  
-                                    ,'PICK')
-         AND LOC.LocationType = CASE WHEN @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y' THEN 'CASE' ELSE LOC.LocationType END  
-         AND LOC.Status     <> 'HOLD'
-         AND LOC.Facility   = @c_Zone01
-         AND(LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11)
-         OR  @c_zone02 = 'ALL')
-         AND LOT.Status= 'OK'
-         AND (@c_NoMixLottable02= '0' OR 
-             (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02))
-         AND (@c_ReplFreshStock = 'N' OR                                                                 
-             (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_ShelfLife, @d_today))) 
-         ORDER BY ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01')   
-               ,  ISNULL(LOTATTRIBUTE.LOTTABLE05, '1900-01-01')
-               ,  CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet 
-                       THEN 1 
-                       ELSE 2
-                       END
-               ,  (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked)
-               ,  LOTxLOCxID.LOT
-               ,  LOTxLOCxID.ID
+
+         IF EXISTS(SELECT 1
+                   FROM CODELKUP CL (NOLOCK)
+                   WHERE CL.Listname = 'REPORTCFG'
+                   AND CL.Code = 'UNISORT'
+                   AND CL.Long = 'r_replenishment_report_pc27'
+                   AND CL.Storerkey = @c_Storerkey
+                   AND ISNULL(CL.Short,'') <> 'N') --NJOW01
+         BEGIN                   	    
+            SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT LOTxLOCxID.LOT
+                  ,LOTxLOCxID.Loc
+                  ,LOTxLOCxID.ID
+                  ,LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen  
+                  ,LOTxLOCxID.QtyAllocated
+                  ,LOTxLOCxID.QtyPicked
+                  ,LOTATTRIBUTE.Lottable02
+            FROM LOT          WITH (NOLOCK)
+            JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)
+            JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)
+            JOIN LOC          WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)
+            WHERE LOTxLOCxID.LOC <> @c_CurrentLoc
+            AND LOTxLOCxID.StorerKey = @c_CurrentStorer
+            AND LOTxLOCxID.SKU = @c_CurrentSku
+            AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= @n_FilterQty    
+            AND LOTxLOCxID.QtyExpected = 0 
+            AND LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')
+            AND LOC.LocationType NOT IN (CASE WHEN @c_ReplGrp = 'CASE' THEN '' ELSE 'PALLET' END   
+                                       , CASE WHEN @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y' THEN '' ELSE 'CASE' END  
+                                       ,'PICK')
+            AND LOC.LocationType = CASE WHEN @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y' THEN 'CASE' ELSE LOC.LocationType END  
+            AND LOC.Status     <> 'HOLD'
+            AND LOC.Facility   = @c_Zone01
+            AND(LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11)
+            OR  @c_zone02 = 'ALL')
+            AND LOT.Status= 'OK'
+            AND (@c_NoMixLottable02= '0' OR 
+                (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02))
+            AND (@c_ReplFreshStock = 'N' OR                                                                 
+                (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_ShelfLife, @d_today))) 
+            ORDER BY ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01')   
+                  ,  LOTATTRIBUTE.LOTTABLE02
+                  ,  CASE WHEN ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01') = '1900-01-01' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END
+                  ,  CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet 
+                          THEN 1 
+                          ELSE 2
+                          END
+                  ,  (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked)
+                  ,  LOC.LogicalLocation
+                  ,  LOC.Loc
+                  ,  LOTxLOCxID.LOT
+                  ,  LOTxLOCxID.ID
+         END
+         ELSE
+         BEGIN
+           SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT LOTxLOCxID.LOT
+                  ,LOTxLOCxID.Loc
+                  ,LOTxLOCxID.ID
+                  ,LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen  
+                  ,LOTxLOCxID.QtyAllocated
+                  ,LOTxLOCxID.QtyPicked
+                  ,LOTATTRIBUTE.Lottable02
+            FROM LOT          WITH (NOLOCK)
+            JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)
+            JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)
+            JOIN LOC          WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)
+            WHERE LOTxLOCxID.LOC <> @c_CurrentLoc
+            AND LOTxLOCxID.StorerKey = @c_CurrentStorer
+            AND LOTxLOCxID.SKU = @c_CurrentSku
+            AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= @n_FilterQty    
+            AND LOTxLOCxID.QtyExpected = 0 
+            AND LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')
+            AND LOC.LocationType NOT IN (CASE WHEN @c_ReplGrp = 'CASE' THEN '' ELSE 'PALLET' END   
+                                       , CASE WHEN @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y' THEN '' ELSE 'CASE' END  
+                                       ,'PICK')
+            AND LOC.LocationType = CASE WHEN @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y' THEN 'CASE' ELSE LOC.LocationType END  
+            AND LOC.Status     <> 'HOLD'
+            AND LOC.Facility   = @c_Zone01
+            AND(LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11)
+            OR  @c_zone02 = 'ALL')
+            AND LOT.Status= 'OK'
+            AND (@c_NoMixLottable02= '0' OR 
+                (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02))
+            AND (@c_ReplFreshStock = 'N' OR                                                                 
+                (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_ShelfLife, @d_today))) 
+            ORDER BY ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01')   
+                  ,  ISNULL(LOTATTRIBUTE.LOTTABLE05, '1900-01-01')
+                  ,  CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet 
+                          THEN 1 
+                          ELSE 2
+                          END
+                  ,  (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked)
+                  ,  LOTxLOCxID.LOT
+                  ,  LOTxLOCxID.ID
+         END
+               
          OPEN @CUR_REPL
 
          FETCH NEXT FROM @CUR_REPL INTO   @c_FromLot

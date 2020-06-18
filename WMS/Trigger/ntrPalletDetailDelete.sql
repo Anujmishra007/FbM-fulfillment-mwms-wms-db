@@ -7,13 +7,14 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
+
 /***************************************************************************/
-/* Trigger:  ntrPalletHeaderUpdate                                         */
+/* Trigger:  ntrPalletDetailDelete                                         */
 /* Creation Date:                                                          */
 /* Copyright: IDS                                                          */
 /* Written by:                                                             */
 /*                                                                         */
-/* Purpose:  Trigger point upon any Update on the Container                */
+/* Purpose:  Trigger point upon any Delete on the Container                */
 /*                                                                         */
 /* Return Status:  None                                                    */
 /*                                                                         */
@@ -21,7 +22,7 @@ GO
 /*                                                                         */
 /* Local Variables:                                                        */
 /*                                                                         */
-/* Called By: When records updated                                         */
+/* Called By: When records Deleted                                         */
 /*                                                                         */
 /* PVCS Version: 1.2                                                       */
 /*                                                                         */
@@ -33,10 +34,11 @@ GO
 /* Date         Author    Ver.  Purposes                                   */
 /* 09-Oct-2012  KHLim     1.0   Insert Delete log (KH01)                   */
 /* 12-Dec-2018  NJOW01    1.1   WMS-7187 allow supervisor delete carton    */
+/* 15-Jun-2020  TLTING01  1.2   bug fix archive skip check                 */
 /***************************************************************************/
 
-CREATE TRIGGER ntrPalletDetailDelete
- ON PALLETDETAIL
+CREATE TRIGGER [dbo].[ntrPalletDetailDelete]
+ ON [dbo].[PALLETDETAIL]
  FOR DELETE
  AS
  BEGIN
@@ -45,6 +47,7 @@ CREATE TRIGGER ntrPalletDetailDelete
  RETURN
  END 
    SET NOCOUNT ON
+   SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
@@ -65,30 +68,33 @@ CREATE TRIGGER ntrPalletDetailDelete
  SELECT @n_continue = 4
  END
       /* #INCLUDE <TRPALDD1.SQL> */     
-   
-   --NJOW01
-   SET @c_issupervisor = 'N'
-   SET @c_username = SUSER_SNAME()
-   EXEC isp_CheckSupervisorRole
-        @c_username  = @c_username
-       ,@c_Flag     = @c_issupervisor OUTPUT
-       ,@b_Success  = @b_success      OUTPUT  
-       ,@n_Err      = @n_err          OUTPUT  
-       ,@c_ErrMsg   = @c_errmsg       OUTPUT
-         
+ 
    IF @n_continue=1 or @n_continue=2
-   BEGIN	        	
-     IF EXISTS (SELECT * FROM PALLET, DELETED
-                WHERE PALLET.PalletKey = DELETED.PalletKey
-                AND PALLET.Status = "9")
-        AND ISNULL(@c_issupervisor,'N') <> 'Y'  --NJOW01
-     BEGIN
-        SELECT @n_continue = 3
-        SELECT @n_err=67800
-        SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": PALLET.Status = 'SHIPPED'. DELETE rejected. (ntrPalletDetailDelete)"
-     END
-   END
-    
+   BEGIN
+      --NJOW01
+      SET @c_issupervisor = 'N'
+      SET @c_username = SUSER_SNAME()
+      EXEC isp_CheckSupervisorRole
+           @c_username  = @c_username
+          ,@c_Flag     = @c_issupervisor OUTPUT
+          ,@b_Success  = @b_success      OUTPUT  
+          ,@n_Err      = @n_err          OUTPUT  
+          ,@c_ErrMsg   = @c_errmsg       OUTPUT
+         
+      IF @n_continue=1 or @n_continue=2
+      BEGIN	        	
+        IF EXISTS (SELECT * FROM PALLET, DELETED
+                   WHERE PALLET.PalletKey = DELETED.PalletKey
+                   AND PALLET.Status = "9")
+           AND ISNULL(@c_issupervisor,'N') <> 'Y'  --NJOW01
+        BEGIN
+           SELECT @n_continue = 3
+           SELECT @n_err=67800
+           SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": PALLET.Status = 'SHIPPED'. DELETE rejected. (ntrPalletDetailDelete)"
+        END
+      END
+   END 
+   
    IF @n_continue=1 or @n_continue=2
    BEGIN
       IF EXISTS (SELECT * FROM DELETED
@@ -161,8 +167,3 @@ CREATE TRIGGER ntrPalletDetailDelete
  END
 
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-

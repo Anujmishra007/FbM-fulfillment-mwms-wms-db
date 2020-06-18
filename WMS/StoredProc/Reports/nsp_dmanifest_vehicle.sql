@@ -34,7 +34,9 @@ GO
 /* 15-Aug-2011 YTWan     1.6   SOS#222245 - Standard getting report logo*/
 /*                             (Wan01)                                  */
 /* 28-May-2012 NJOW02    1.7   KFMY-Add 2D barcode for ePOD - encrypt   */
-/* 24-Mar-2014  TLTING   1.8   SQL2012 Bug                              */
+/* 24-Mar-2014 TLTING    1.8   SQL2012 Bug                              */
+/* 05-Jun-2020 WLChooi   1.9   WMS-13660 - Use Codelkup to show facility*/
+/*                             info (WL01)                              */
 /************************************************************************/
 
 CREATE PROC nsp_dmanifest_vehicle (
@@ -61,6 +63,45 @@ CREATE PROC nsp_dmanifest_vehicle (
      @n_each     int,
      @n_totaleach   int,
      @dc_m3             decimal(7,2)  -- Added By NickYeo on 14-June-2007 (Aquarius Project)
+
+     --WL01 START
+   DECLARE
+   @c_FacilityAddr         NVARCHAR(255),
+   @c_FacilityPhone        NVARCHAR(255),
+   @c_FacilityFax          NVARCHAR(255),
+   @c_Company              NVARCHAR(255)
+   
+   SELECT @c_FacilityAddr  = CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN
+                                 (LTRIM(RTRIM(ISNULL(F.Address1,''))) + ' ' + LTRIM(RTRIM(ISNULL(F.Address2,''))) + ' ' + 
+                                 LTRIM(RTRIM(ISNULL(F.Address3,''))) + ' ' + LTRIM(RTRIM(ISNULL(F.Address4,''))) + ' ' + LTRIM(RTRIM(ISNULL(F.Country,''))))
+                             ELSE
+                                 'IDS Logistics Services (M) Sdn Bhd . Lot 23, Jalan Batu Arang, Rawang Integrated Industrial Park, 48000 Rawang, Selangor Darul Ehsan.'
+                             END
+        , @c_FacilityPhone = CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN
+                                LTRIM(RTRIM(ISNULL(F.Phone1,'')))
+                             ELSE
+                                '603-60925581'
+                             END
+        , @c_FacilityFax   = CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN
+                                LTRIM(RTRIM(ISNULL(F.Fax1,'')))
+                             ELSE
+                                '603-60925681'
+                             END
+        , @c_Company       = CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN
+                                N'LF Logistics Services (M) Sdn Bhd  · A Li & Fung Company'
+                             ELSE
+                                ''
+                             END
+   FROM Facility F (NOLOCK)
+   JOIN MBOL MB (NOLOCK) ON F.Facility = MB.Facility
+   JOIN MBOLDETAIL MD (NOLOCK) ON MB.MbolKey = MD.MbolKey
+   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = MD.OrderKey
+   LEFT OUTER JOIN CODELKUP CL WITH (NOLOCK) ON CL.ListName = 'REPORTCFG' 
+                                            AND CL.Code = 'ShowFacilityInfo' 
+                                            AND CL.Storerkey = OH.Storerkey
+                                            AND CL.Long = 'r_dw_dmanifest_vehicle'
+   WHERE MB.MbolKey = @c_mbolkey
+   --WL01 END
      
    --NJOW02 Start 
    DECLARE @c_epodweburl NVARCHAR(120),
@@ -107,7 +148,11 @@ CREATE PROC nsp_dmanifest_vehicle (
     m3 = 99999999.99,
     STORER.Logo,  --NJOW01
     ORDERS.Storerkey,  --(Wan01)
-    @c_epodweburlparam AS epodfullurl  --NJOW02
+    @c_epodweburlparam AS epodfullurl,  --NJOW02
+    @c_FacilityAddr  AS FacilityAddr,   --WL01
+    @c_FacilityPhone AS FacilityPhone,  --WL01
+    @c_FacilityFax   AS FacilityFax,    --WL01  
+    @c_Company       AS Company         --WL01
    INTO #RESULT
    FROM MBOL WITH (NOLOCK)
    INNER JOIN MBOLDETAIL WITH (NOLOCK) ON MBOL.mbolkey = MBOLDETAIL.mbolkey
