@@ -15,17 +15,19 @@ GO
 /*                                                                       */  
 /* Purpose: LFWM-1052 - Stored procedure - Supervisor Alerts -           */
 /*          Release Cycle Count Tasks                                    */  
-/*        : LFWM-1273 - Stored Procedures for Feature ¨C Release Cycle    */
+/*        : LFWM-1273 - Stored Procedures for Feature - Release Cycle    */
 /*          Count                                                        */  
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2020-06-04  Wan01    1.1   LFWM-2113- UAT  Release cycle count  should*/
+/*                            enable Release cycle count task action button*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
    @c_CountType            NVARCHAR(10)  
@@ -261,7 +263,7 @@ BEGIN
 
    IF @c_CountType = 'SKU'
    BEGIN
-      IF @c_Storerkey = @c_Storerkey_Prev AND @c_Sku = @c_Sku_Prev
+      IF @c_Storerkey = @c_Storerkey_Prev AND @c_Sku = @c_Sku_Prev AND @c_Loc = @c_Loc_Prev  --(Wan01)
       BEGIN
          GOTO EXIT_SP
       END
