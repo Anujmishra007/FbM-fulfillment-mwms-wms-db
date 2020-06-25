@@ -24,6 +24,9 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2020-01-28   Wan01    1.1  Fixed Global Cursor Issue.Use Local Cursor*/
+/*                            Cur_SPCode_TD instead                     */  
+/* 11-Jun-2020  NJOW01   1.0  WMS-13705 Support configure multiple sp   */
 /************************************************************************/  
 
 CREATE PROCEDURE [dbo].[isp_TaskDetailTrigger_Wrapper]  
@@ -87,6 +90,7 @@ BEGIN
          , @c_Storerkey     NVARCHAR(15)
          , @c_SQL           NVARCHAR(MAX)
          , @c_configkey     NVARCHAR(30)
+         , @c_option5_splist  NVARCHAR(2000) --NJOW01
 
    SET @n_err        = 0
    SET @b_success    = 1
@@ -109,8 +113,9 @@ BEGIN
    
    IF @c_Action IN('DELETE','UPDATE')
    BEGIN   
-      DECLARE Cur_SPCode CURSOR FAST_FORWARD READ_ONLY FOR
+      DECLARE Cur_SPCode_TD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT DISTINCT D.Storerkey, S.Svalue
+                 , S.Option5 --NJOW01
           FROM #DELETED D
           JOIN STORERCONFIG S WITH (NOLOCK) ON  D.Storerkey = S.Storerkey    
           JOIN sys.objects sys ON sys.type = 'P' AND sys.name = S.Svalue
@@ -118,17 +123,19 @@ BEGIN
    END
    ELSE
    BEGIN
-      DECLARE Cur_SPCode CURSOR FAST_FORWARD READ_ONLY FOR
+      DECLARE Cur_SPCode_TD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT DISTINCT I.Storerkey, S.Svalue
+                 , S.Option5 --NJOW01          
           FROM #INSERTED I
           JOIN STORERCONFIG S WITH (NOLOCK) ON  I.Storerkey = S.Storerkey    
           JOIN sys.objects sys ON sys.type = 'P' AND sys.name = S.Svalue
           WHERE S.Configkey = @c_Configkey 
    END
       
-   OPEN Cur_SPCode
+   OPEN Cur_SPCode_TD
 	
-	 FETCH NEXT FROM Cur_SPCode INTO @c_StorerKey, @c_SPCode
+	 FETCH NEXT FROM Cur_SPCode_TD INTO @c_StorerKey, @c_SPCode,
+	                                 @c_option5_splist --NJOW01
 
    BEGIN TRAN
 
@@ -150,15 +157,65 @@ BEGIN
       IF @b_Success <> 1
       BEGIN
           SELECT @n_Continue = 3  
-          GOTO QUIT_SP
+          --GOTO QUIT_SP
       END
+      
+      --NJOW01 Start
+      IF ISNULL(@c_option5_splist,'') <> '' AND (@n_continue = 1 or @n_continue = 2)              
+      BEGIN
+	       DECLARE Cur_SPCodeList CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+	          SELECT colvalue FROM dbo.fnc_DelimSplit(',', @c_option5_splist) ORDER BY SeqNo
 
-   	 FETCH NEXT FROM Cur_SPCode INTO @c_StorerKey, @c_SPCode
+         OPEN Cur_SPCodeList
+	
+	       FETCH NEXT FROM Cur_SPCodeList INTO @c_SPCode
+	       
+	       WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 or @n_continue = 2)
+	       BEGIN
+         	  IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')
+         	  BEGIN
+               SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Action, @c_Storerkey '  
+                          + ',@b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
+               
+               EXEC sp_executesql @c_SQL 
+                  , N'@c_Action NVARCHAR(10), @c_Storerkey NVARCHAR(15)
+                  , @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT' 
+                  , @c_Action
+                  , @c_StorerKey
+                  , @b_Success         OUTPUT                       
+                  , @n_Err             OUTPUT  
+                  , @c_ErrMsg          OUTPUT
+                    
+               IF @b_Success <> 1
+               BEGIN
+                   SELECT @n_Continue = 3  
+                   --GOTO QUIT_SP
+               END         	  	
+         	  END
+
+	          FETCH NEXT FROM Cur_SPCodeList INTO @c_SPCode 	       	
+	       END   
+         CLOSE Cur_SPCodeList
+         DEALLOCATE Cur_SPCodeList	          
+      END
+      --NJOW01 End      
+
+   	 FETCH NEXT FROM Cur_SPCode_TD INTO @c_StorerKey, @c_SPCode,
+	                                   @c_option5_splist --NJOW01
 	 END
- 	 CLOSE Cur_SPCode
-	 DEALLOCATE Cur_SPCode
+ 	 CLOSE Cur_SPCode_TD
+	 DEALLOCATE Cur_SPCode_TD
 
    QUIT_SP:
+   
+   --( Wan01 ) - START
+   IF CURSOR_STATUS( 'LOCAL', 'Cur_SPCode_TD') in (0 , 1)  
+   BEGIN
+      CLOSE Cur_SPCode_TD 
+      DEALLOCATE Cur_SPCode_TD 
+   END
+   --( Wan01 ) - END
+
    
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN

@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 -- 2020-05-08  KHLim    1.1  Include get session & view report URL
+-- 2020-06-05  KHLim    1.2  ReturnURLStorer
 /************************************************************************/
 CREATE  PROC  WM.lsp_WM_Get_JReport_URL
      @c_CountryName        NVARCHAR(50)  =''
@@ -34,6 +35,8 @@ CREATE  PROC  WM.lsp_WM_Get_JReport_URL
    , @n_err                INT = 0              OUTPUT                                                                                                             
    , @c_ErrMsg             NVARCHAR(255) = ''   OUTPUT
    , @c_ReturnURL          NVARCHAR(1000)= ''   OUTPUT  
+   , @c_ReturnURLStorer    NVARCHAR(1000)= ''   OUTPUT  
+   , @b_Debug              INT = 0
 AS
 BEGIN
    SET NOCOUNT ON
@@ -55,6 +58,11 @@ BEGIN
    SET @n_Err = 0 
    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
    
+   IF @b_Debug <> 0
+   BEGIN
+      SELECT @n_Err, @c_ErrMsg
+   END
+
    IF @n_Err <> 0 
    BEGIN
       GOTO EXIT_SP
@@ -90,6 +98,13 @@ BEGIN
       END
    END
 
+   IF @b_Debug <> 0
+   BEGIN
+      SELECT TOP 1 *
+      FROM JREPORTFOLDER WITH (NOLOCK)
+      WHERE Storerkey = @c_Storerkey
+   END
+
    SELECT TOP 1 @c_FolderPath = FolderPath
                ,@c_SecondLvl  = SecondLvl
    FROM JREPORTFOLDER WITH (NOLOCK)
@@ -97,14 +112,16 @@ BEGIN
    --AND   SecondLvl = @c_Application
 
    SET @c_ReturnURL = ''
-   IF @c_FolderPath = ''
-   BEGIN
-      SET @c_ReturnURL = @c_URLTemplate + '/' + @c_CountryName + '/' + @c_Application + '/' + @c_Storerkey  -- default to this format if no JReportFolder config
-   END
-   ELSE
+   --BEGIN
+   --   SET @c_ReturnURL = @c_URLTemplate + '/' + @c_CountryName + '/' + @c_Application + '/' + @c_Storerkey  -- default to this format if no JReportFolder config
+   --END
+   --ELSE
+   IF ISNULL(@c_FolderPath,'') <> ''
    BEGIN
       SET @c_ReturnURL = @c_URLTemplate + '/' + @c_CountryName + '/' + @c_SecondLvl   + '/' + @c_FolderPath -- follow JReportFolder format if config found
    END 
+
+   SET @c_ReturnURLStorer=@c_URLTemplate+ '/' + @c_CountryName + '/' + @c_Application + '/' + @c_Storerkey  -- default to this format if no JReportFolder config
 
    EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return

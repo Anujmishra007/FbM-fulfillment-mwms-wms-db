@@ -40,6 +40,7 @@ GO
 /*                              to NVARCHAR(75) (MC01)                   */ 
 /*                              Comment off unnecessary code (MC02)      */
 /* 28-Oct-2013  TLTING    1.3   Review Editdate column update            */
+/* 12-Dec-2018  NJOW01    1.4   WMS-7187 allow supervisor to reverse status*/
 /*************************************************************************/
 
 CREATE TRIGGER ntrPalletHeaderUpdate
@@ -58,7 +59,10 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @b_debug int
+   DECLARE @b_debug int,
+           @c_issupervisor NVARCHAR(10), --NJOW01
+           @c_Username NVARCHAR(18) --NJOW01
+           
    SELECT @b_debug = 0
 
    IF @b_debug = 1
@@ -97,12 +101,28 @@ BEGIN
       BEGIN
          PRINT 'Reject UPDATE when PALLET.Status already ''SHIPPED'''
       END
-
-      IF EXISTS(SELECT * FROM DELETED WHERE Status = '9')
+      
+      IF EXISTS(SELECT * FROM DELETED WHERE Status = '9')          
       BEGIN
-         SELECT @n_continue=3
-         SELECT @n_err=67400
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': UPDATE rejected. PALLET.Status = ''SHIPPED''. (ntrPalletHeaderUpdate)'
+         --NJOW01
+         SET @c_issupervisor = 'N'
+         IF UPDATE(Status)
+         BEGIN
+            SET @c_username = SUSER_SNAME()
+            EXEC isp_CheckSupervisorRole
+                 @c_username  = @c_username
+                ,@c_Flag     = @c_issupervisor OUTPUT
+                ,@b_Success  = @b_success      OUTPUT  
+                ,@n_Err      = @n_err          OUTPUT  
+                ,@c_ErrMsg   = @c_errmsg       OUTPUT
+         END    
+
+      	 IF @c_issupervisor <> 'Y' --NJOW01      	
+      	 BEGIN
+            SELECT @n_continue=3
+            SELECT @n_err=67400
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': UPDATE rejected. PALLET.Status = ''SHIPPED''. (ntrPalletHeaderUpdate)'
+         END
       END
    END
 

@@ -160,9 +160,13 @@ GO
 /* 23-JUL-2019  Wan03     4.4   ChannelInventoryMgmt use fnc_SelectGetRight*/
 /* 12-Dec-2019  James     4.5   WMS-11215 Add config to bypass receiptserial*/
 /*                              checking (james02)                          */
+/* 13-Jan-2020  NJOW07    4.6   WMS-11719 add storerconfig to copy receiptkey*/
+/*                              to lottable when finalize ASN               */
 /* 26-Mar-2020  NJOW09    4.8   WMS-12665 add config to copy receiptdetail  */
 /*                              field to lottable when finalize asn         */
 /* 15-Apr-2020  NJOW10    4.9   WMS-12880 add offset to ReturnDefaultLottable05*/ 
+/* 09-Jun-2020  NJOW11    5.0   WMS-13612 add new column support for        */
+/*                              CopyRecDetValueToLottable.                  */
 /****************************************************************************/ 
  
 CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -245,7 +249,10 @@ DECLARE @c_PODLottable01       NVARCHAR(18)
       , @c_DelToID             NVARCHAR(10)     --TK02 
       , @c_SerialNoCapture     NVARCHAR(1) 
       , @c_loseUCC             NVARCHAR(1) -- (ChewKP01)  
-	    , @c_ASNNoCheckSerialNoCapture NVARCHAR(1)   --CS02   
+	    , @c_ASNNoCheckSerialNoCapture NVARCHAR(1)   --CS02 
+      , @c_CopyReceiptkeyToLottable      NVARCHAR(30)  --NJOW07
+	    , @c_CopyReceiptkeyToLottable_opt1 NVARCHAR(50) --NJOW07
+	    , @c_CopyReceiptkeyToLottable_opt2 NVARCHAR(50) --NJOW07
  	    , @c_CopyRecDetValueToLottable      NVARCHAR(30) --NJOW09
 	    , @c_CopyRecDetValueToLottable_opt1 NVARCHAR(50) --NJOW09
 	    , @c_CopyRecDetValueToLottable_opt2 NVARCHAR(50) --NJOW09
@@ -264,6 +271,11 @@ DECLARE @c_PODLottable01       NVARCHAR(18)
       , @c_Userdefine09                   NVARCHAR(30) --NJOW09
       , @c_Userdefine10                   NVARCHAR(30) --NJOW09
 
+--NJOW11      
+DECLARE @c_AltSku                         NVARCHAR(20)
+      , @c_ContainerKey                   NVARCHAR(18)
+      , @c_ExternPoKey                    NVARCHAR(20)
+      , @c_POLineNumber                   NVARCHAR(5)
  
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT 
  
@@ -931,7 +943,12 @@ BEGIN
             RECEIPTDETAIL.Userdefine07, --NJOW09
             RECEIPTDETAIL.Userdefine08, --NJOW09
             RECEIPTDETAIL.Userdefine09, --NJOW09
-            RECEIPTDETAIL.Userdefine10  --NJOW09                        
+            RECEIPTDETAIL.Userdefine10,  --NJOW09                        
+            RECEIPTDETAIL.ExternReceiptKey, --NJOW11 
+            RECEIPTDETAIL.AltSku, --NJOW11
+            RECEIPTDETAIL.ContainerKey, --NJOW11
+            RECEIPTDETAIL.ExternPoKey, --NJOW11
+            RECEIPTDETAIL.POLineNumber --NJOW11                              
       FROM INSERTED 
       JOIN DELETED ON (INSERTED.ReceiptKey  = DELETED.ReceiptKey AND INSERTED.ReceiptLineNumber = DELETED.ReceiptLineNumber) 
       JOIN SKU WITH (NOLOCK) ON (INSERTED.SKU = SKU.SKU AND INSERTED.StorerKey = SKU.StorerKey) 
@@ -971,6 +988,7 @@ BEGIN
       ,@c_SerialNoCapture         ,@c_Channel  -- (SWT02) 
       ,@c_Userdefine01, @c_Userdefine02, @c_Userdefine03, @c_Userdefine04, @c_Userdefine05  --NJOW09       
       ,@d_Userdefine06, @d_Userdefine07, @c_Userdefine08, @c_Userdefine09, @c_Userdefine10  --NJOW09
+      ,@c_ExternReceiptKey, @c_AltSku, @c_ContainerKey, @c_ExternPoKey, @c_POLineNumber --NJOW11             
  
    WHILE (@@FETCH_STATUS <> -1) AND (@n_continue = 1 or @n_continue=2) 
    BEGIN 
@@ -1158,7 +1176,54 @@ BEGIN
                END 
             END 
          END 
+
+         --NJOW07 S         
+         SELECT @b_success = 0 
+         EXECUTE nspGetRight 
+                 @c_Facility = NULL,  -- facility 
+                 @c_Storerkey = @c_StorerKey,      -- Storerkey 
+                 @c_Sku = @c_Sku,            -- Sku 
+                 @c_configkey = 'CopyReceiptkeyToLottable',  -- Configkey 
+                 @b_Success = @b_success     output, 
+                 @c_Authority = @c_CopyReceiptkeyToLottable  output, 
+                 @n_err = @n_err2        output, 
+                 @c_errmsg = @c_errmsg      OUTPUT,
+                 @c_Option1 = @c_CopyReceiptkeyToLottable_opt1 OUTPUT,
+                 @c_Option2 = @c_CopyReceiptkeyToLottable_opt2 OUTPUT
  
+         IF @b_success <> 1 
+         BEGIN 
+            SELECT @n_err = 60071 -- @n_err2 
+            SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptDetailUpdate' + dbo.fnc_RTrim(@c_errmsg) 
+         END 
+         ELSE IF @c_CopyReceiptkeyToLottable IN('01','02','03','06','07','08','09','10','11','12')
+         BEGIN         	         	   
+            SELECT @c_SQL = N'SELECT @c_Lottable' + LTRIM(RTRIM(@c_CopyReceiptkeyToLottable)) + ' = RTRIM(@c_Receiptkey) + ''' + RTRIM(LTRIM(ISNULL(@c_CopyReceiptkeyToLottable_opt1,'')))  + '''' +
+                   CASE WHEN @c_CopyReceiptkeyToLottable_opt2 = 'RECEIPTLINENUMBER' THEN ' LTRIM(RTRIM(@c_ReceiptLineNumber)) '
+                        WHEN @c_CopyReceiptkeyToLottable_opt2 = 'EXTERNLINENO' THEN ' LTRIM(RTRIM(ISNULL(@c_ExternLineNo,''''))) '
+                   ELSE ''
+                   END
+                                                                                            
+            EXEC sp_executesql @c_SQL,
+            N'@c_Lottable01 NVARCHAR(18) OUTPUT, @c_Lottable02 NVARCHAR(18) OUTPUT, @c_Lottable03 NVARCHAR(18) OUTPUT, @c_Lottable06 NVARCHAR(30) OUTPUT, @c_Lottable07 NVARCHAR(30) OUTPUT,  
+              @c_Lottable08 NVARCHAR(30) OUTPUT, @c_Lottable09 NVARCHAR(30) OUTPUT, @c_Lottable10 NVARCHAR(30) OUTPUT, @c_Lottable11 NVARCHAR(30) OUTPUT, @c_Lottable12 NVARCHAR(30) OUTPUT,
+              @c_Receiptkey NVARCHAR(10), @c_ReceiptLineNumber NVARCHAR(5), @c_ExternLineNo NVARCHAR(20) ',
+              @c_Lottable01 OUTPUT,                             
+              @c_Lottable02 OUTPUT,                             
+              @c_Lottable03 OUTPUT,                             
+              @c_Lottable06 OUTPUT,                             
+              @c_Lottable07 OUTPUT,                             
+              @c_Lottable08 OUTPUT,                             
+              @c_Lottable09 OUTPUT,                             
+              @c_Lottable10 OUTPUT,                             
+              @c_Lottable11 OUTPUT,                             
+              @c_Lottable12 OUTPUT,                             
+              @c_Receiptkey,
+              @c_ReceiptLineNumber,
+              @c_ExternLineNo
+         END 
+         --NJOW07 E
+          
          --NJOW09 S         
          SELECT @b_success = 0 
          EXECUTE nspGetRight 
@@ -1254,6 +1319,20 @@ BEGIN
          	            @c_DocType
          	          WHEN @c_FromColValue = 'EXTERNLINENO' THEN
          	            @c_ExternLineNo
+         	          WHEN @c_FromColValue = 'EXTERNRECEIPTKEY' THEN --NJOW11           
+         	            @c_ExternReceiptkey
+         	          WHEN @c_FromColValue = 'ALTSKU' THEN --NJOW11           
+         	            @c_AltSku
+         	          WHEN @c_FromColValue = 'CONTAINERKEY' THEN --NJOW11           
+         	            @c_Containerkey
+         	          WHEN @c_FromColValue = 'EXTERNPOKEY' THEN --NJOW11           
+         	            @c_ExternPoKey
+         	          WHEN @c_FromColValue = 'POLINENUMBER' THEN --NJOW11           
+         	            @c_POLineNumber         	            
+         	          WHEN @c_FromColValue = 'STORERKEY' THEN --NJOW11                    	          
+         	            @c_Storerkey
+         	          WHEN @c_FromColValue = 'SKU' THEN --NJOW11                    	          
+         	            @c_Sku
          	          WHEN @c_FromColValue = '<EMPTY>' THEN
          	            ''
          	          ELSE 'INVALID'
@@ -2349,6 +2428,7 @@ BEGIN
                      ,@c_SerialNoCapture         ,@c_Channel  -- (SWT02) 
                      ,@c_Userdefine01, @c_Userdefine02, @c_Userdefine03, @c_Userdefine04, @c_Userdefine05  --NJOW09       
                      ,@d_Userdefine06, @d_Userdefine07, @c_Userdefine08, @c_Userdefine09, @c_Userdefine10  --NJOW09                     
+                     ,@c_ExternReceiptKey, @c_AltSku, @c_ContainerKey, @c_ExternPoKey, @c_POLineNumber --NJOW11                                  
    END -- While 
 END -- @n_continue = 1 or @n_continue=2 
  

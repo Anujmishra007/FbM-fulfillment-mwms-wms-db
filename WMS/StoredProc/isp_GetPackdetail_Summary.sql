@@ -17,7 +17,7 @@ GO
 /*        : Change DW Select to Store Procedure                         */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-05-22  Wan01    1.1   Fixed. Conso pack Allocation Qty incorrect*/
 /************************************************************************/
 CREATE PROC isp_GetPackdetail_Summary
            @c_PickslipNo      NVARCHAR(10)
@@ -130,8 +131,8 @@ BEGIN
       )
       SELECT OD.Orderkey
             ,OD.StorerKey   
-	         ,Sku        = UPPER(OD.Sku)    
-	         ,PickedQty  = ISNULL(SUM(PD.Qty),0)    
+            ,Sku        = UPPER(OD.Sku)    
+            ,PickedQty  = ISNULL(SUM(PD.Qty),0)    
             ,Orddetlot1 = ISNULL(MAX(OD.Lottable01),0)
       FROM #TMP_ORDERS  O
       JOIN ORDERDETAIL  OD WITH (NOLOCK) ON OD.Orderkey = O.Orderkey
@@ -165,15 +166,15 @@ BEGIN
       ,  PickedQty
       ,  Orddetlot1
       )
-      SELECT OD.Orderkey
+      SELECT Orderkey = MIN(OD.Orderkey)     --(Wan01)
             ,OD.StorerKey   
-	         ,Sku        = UPPER(OD.Sku)    
-	         ,PickedQty  = ISNULL(SUM(OD.QtyAllocated+OD.QtyPicked+OD.ShippedQty),0)    
+            ,Sku        = UPPER(OD.Sku)    
+            ,PickedQty  = ISNULL(SUM(OD.QtyAllocated+OD.QtyPicked+OD.ShippedQty),0)    
             ,Orddetlot1 = ISNULL(MAX(OD.Lottable01),0)
       FROM #TMP_ORDERS  O
       JOIN ORDERDETAIL  OD WITH (NOLOCK) ON OD.Orderkey = O.Orderkey
-      GROUP BY OD.Orderkey
-            ,  OD.StorerKey
+      --GROUP BY OD.Orderkey                 --(Wan01)
+      GROUP BY OD.StorerKey                 --(Wan01)
             ,  OD.Sku
       HAVING SUM(OD.QtyAllocated+OD.QtyPicked+OD.ShippedQty) > 0
 
@@ -192,10 +193,10 @@ BEGIN
    END
 
    SELECT OS.StorerKey   
-	   ,  OS.Sku    
-	   ,  OS.PickedQty
-	   ,  PackedQty = ISNULL(P.PackedQty,0) 
-	   ,  OtherQty   = 0
+      ,  OS.Sku    
+      ,  OS.PickedQty
+      ,  PackedQty = ISNULL(P.PackedQty,0) 
+      ,  OtherQty   = 0
       ,  Orddetlot1 = CASE WHEN @c_Orderkey = '' THEN '' ELSE OS.Orddetlot1 END
       ,  ScanAsPack = @c_ScanAsPack 
       ,  PACK.Casecnt

@@ -27,6 +27,8 @@ GO
 /* Date         Author    Ver Purposes                                  */  
 /* 2020-02-17   WLChooi   1.1 WMS-12047 - Modify logic of SDescr (WL01) */
 /* 2020-04-15   WLChooi   1.2 Fix Pickdetail Table Linkage (WL02)       */
+/* 2020-03-25   WLChooi   1.3 WMS-12621 - Add QRCode, modify layout and */
+/*                            logic (WL03)                              */
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_71  
@@ -56,6 +58,7 @@ BEGIN
          , @n_MaxRec          INT
          , @n_CurrentRec      INT
          , @c_recgroup        INT
+         , @c_QRCode          NVARCHAR(250)   --WL03
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue  = 1  
@@ -93,6 +96,7 @@ BEGIN
       , Notes2            NVARCHAR(800)  NULL
       , ReferenceId       NVARCHAR(20) NULL
       , SSIZE             NVARCHAR(10) NULL
+      , QRCode            NVARCHAR(250) NULL    --WL03
       )
 
      IF( @n_Continue = 1 OR @n_Continue = 2)
@@ -108,7 +112,8 @@ BEGIN
 
       IF( @n_Continue = 1 OR @n_Continue = 2)
       BEGIN
-         SELECT TOP 1 @c_RptLogo = ISNULL(CL2.Long,'')   
+         SELECT TOP 1 @c_RptLogo = ISNULL(CL2.Long,'') 
+                    , @c_QRCode  = ISNULL(CL2.UDF01,'')   --WL03  
          FROM ORDERS ORD (NOLOCK)
          JOIN PACKHEADER PH (NOLOCK) ON PH.ORDERKEY = ORD.ORDERKEY
          JOIN CODELKUP CL2 WITH (NOLOCK) ON CL2.LISTNAME='RPTLogo' AND CL2.Storerkey=ORD.storerkey AND CL2.Code=ORD.OrderGroup
@@ -140,6 +145,7 @@ BEGIN
                      , notes2
                      , ReferenceId
                      , SSIZE
+                     , QRCode    --WL03
                     )  
          SELECT  OS.ORDERKEY 
                , OS.OrderDate 
@@ -149,7 +155,7 @@ BEGIN
                , OS.C_CONTACT1  
                , (SKU.STYLE + SKU.COLOR)
               -- , SKU.RetailSKU
-               , OD.Userdefine03
+               , OD.Userdefine01 --OD.Userdefine03   --WL03
                , ISNULL(CL3.NOTES,'') 
                , PD.Qty
                , ISNULL(CL1.UDF01,'')
@@ -165,14 +171,15 @@ BEGIN
                , ISNULL(CL4.NOTES,'')
                , ISNULL(OI.ReferenceId,'')
                , SKU.Size
+               , ISNULL(@c_QRCode,'') AS QRCode   --WL03
          FROM ORDERS OS (NOLOCK)
          LEFT JOIN ORDERINFO OI (NOLOCK) ON OS.ORDERKEY = OI.ORDERKEY
          JOIN ORDERDETAIL OD(NOLOCK) ON OD.ORDERKEY = OS.ORDERKEY
          JOIN SKU (NOLOCK) ON OD.SKU = SKU.SKU AND OD.STORERKEY = SKU.STORERKEY
          JOIN PACKHEADER PH (NOLOCK) ON PH.ORDERKEY =OS.ORDERKEY AND PH.STORERKEY = OS.STORERKEY
          JOIN PACKDETAIL PD (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO AND PD.SKU = OD.SKU
-         JOIN PICKDETAIL PID (NOLOCK) ON PID.Orderkey = OD.Orderkey AND PID.SKU = OD.SKU AND PID.OrderLineNumber = OD.OrderLineNumber  --WL02
-         LEFT JOIN CODELKUP CL1 (NOLOCK) ON OS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECDLMODE' and CL1.Code = OS.Shipperkey
+         JOIN PICKDETAIL PID (NOLOCK) ON PID.Orderkey = OD.Orderkey AND PID.SKU = OD.SKU AND PID.OrderLineNumber = OD.OrderLineNumber   --WL02
+         LEFT JOIN CODELKUP CL1 (NOLOCK) ON OS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECDLMODE' and CL1.Code = OS.Shipperkey and CL1.Code2 = ''   --WL03
          LEFT JOIN CODELKUP CL2 (NOLOCK) ON OS.STORERKEY = CL2.STORERKEY AND CL2.LISTNAME ='PLATFORM' and CL2.Code = OI.Platform
          LEFT JOIN CODELKUP CL3 (NOLOCK) ON OS.STORERKEY = CL3.STORERKEY AND CL3.LISTNAME ='REPORTCFG' and CL3.Code = '01'
          LEFT JOIN CODELKUP CL4 (NOLOCK) ON OS.STORERKEY = CL4.STORERKEY AND CL4.LISTNAME ='REPORTCFG' and CL4.Code = '02'
@@ -186,7 +193,7 @@ BEGIN
               -- , PD.SKU
                , (SKU.STYLE + SKU.COLOR)
               -- , SKU.RetailSKU
-               , OD.Userdefine03
+               , OD.Userdefine01 --OD.Userdefine03   --WL03
                , ISNULL(CL3.NOTES,'')
                , PD.Qty
                , ISNULL(CL1.UDF01,'')
@@ -246,6 +253,7 @@ QUIT_SP:
         , Notes2    
         , ReferenceId
         , SSIZE 
+        , QRCode   --WL01
   FROM #TMP_PACK_71
   ORDER BY ROWID
          , Orderkey  

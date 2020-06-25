@@ -23,6 +23,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 20-MAY-2020 CSCHONG  1.1   WMS-13423 - fix duplicate qty (CS01)      */
+/* 27-MAY-2020 CSCHONG  1.1   WMS-13423 - Fix qty issue (CS02)          */
 /************************************************************************/
 CREATE PROC isp_PackListBySku15
            @c_PickSlipNo        NVARCHAR(10)
@@ -112,44 +114,48 @@ BEGIN
          ,ISNULL(O.C_Address4,'')
          ,ISNULL(O.C_City,'')
          ,LTRIM(RTRIM(S.DESCR))
-         ,SUM(PID.QTY)
+         ,(PID.QTY)                            --CS01
          ,OD.ExtendedPrice
-         ,OD.USERDEFINE05
+         ,ISNULL(OD.USERDEFINE05,'')
          ,PH.PickSlipNo
-         ,S.SKU
+        -- ,S.SKU                              --CS01
+         , ''                                  --CS01
          ,ISNULL(CLR.short,'N') as ShowField  
          ,O.ExternOrderkey          
    FROM ORDERS     O  WITH (NOLOCK)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=O.OrderKey
    JOIN PACKHEADER PH WITH (NOLOCK) ON (O.Orderkey = PH.Orderkey AND O.Storerkey = PH.Storerkey)
-   JOIN PACKDETAIL PD WITH (NOLOCK) ON (PD.PickSlipNo = PH.PickSlipNo and PD.SKU = OD.SKU)
-   JOIN SKU         S WITH (NOLOCK) ON (S.Storerkey = PD.Storerkey)
-                                    AND(S.Sku = PD.Sku)
+  -- JOIN PACKDETAIL PD WITH (NOLOCK) ON (PD.PickSlipNo = PH.PickSlipNo and PD.SKU = OD.SKU)        --CS02 START
+   
     JOIN PICKDETAIL PID WITH (NOLOCK) ON (OD.Orderkey    = PID.Orderkey      
                                      AND PID.OrderLineNumber = OD.OrderLineNumber)  
+   JOIN SKU         S WITH (NOLOCK) ON (S.Storerkey = PID.Storerkey)
+                                    AND(S.Sku = PID.Sku)                                           --CS02 END
    LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (o.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFIELD'  
                 AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_packing_list_by_Sku15' AND ISNULL(CLR.Short,'') <> 'N'
                 AND CLR.code2 = UPPER(O.shipperkey)) 
    WHERE  PH.PickSlipNo = @c_PickSlipNo AND O.OrderGroup = 'ECOM'
-   GROUP BY  ISNULL(O.B_contact1,'')
-         ,ISNULL(O.B_Address1,'')
-         ,ISNULL(O.B_Address2,'')
-         ,ISNULL(O.B_Address3,'')
-         ,ISNULL(O.B_Address4,'')
-         ,ISNULL(O.C_contact1,'')
-         ,ISNULL(O.C_Address1,'')
-         ,ISNULL(O.C_Address2,'')
-         ,ISNULL(O.C_Address3,'')
-         ,ISNULL(O.C_Address4,'')
-         ,ISNULL(O.C_City,'')
-         ,LTRIM(RTRIM(S.DESCR))
-         ,OD.ExtendedPrice
-         ,OD.USERDEFINE05
-         ,PH.PickSlipNo
-         ,S.SKU
-         ,ISNULL(CLR.short,'N') 
-         ,O.ExternOrderkey
-
+   --GROUP BY  ISNULL(O.B_contact1,'')                                                                --CS02 START
+   --      ,ISNULL(O.B_Address1,'')
+   --      ,ISNULL(O.B_Address2,'')
+   --      ,ISNULL(O.B_Address3,'')
+   --      ,ISNULL(O.B_Address4,'')
+   --      ,ISNULL(O.C_contact1,'')
+   --      ,ISNULL(O.C_Address1,'')
+   --      ,ISNULL(O.C_Address2,'')
+   --      ,ISNULL(O.C_Address3,'')
+   --      ,ISNULL(O.C_Address4,'')
+   --      ,ISNULL(O.C_City,'')
+   --      ,LTRIM(RTRIM(S.DESCR))
+   --      ,OD.ExtendedPrice
+   --      ,OD.USERDEFINE05
+   --      ,PH.PickSlipNo
+   --   --   ,S.SKU                                   --CS01
+   --      ,ISNULL(CLR.short,'N') 
+   --      ,O.ExternOrderkey
+   --      ,(PID.QTY)                                 --CS01                           --CS02 END
+--CS01 START
+/*
    DECLARE CUR_QTY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT B_Contact1
    ,B_Address1
@@ -194,7 +200,8 @@ BEGIN
    END
    CLOSE CUR_QTY
    DEALLOCATE CUR_QTY
-
+ */
+--CS01 End
    SELECT B_Contact1
    ,B_Address1
    ,B_Address2
@@ -207,28 +214,28 @@ BEGIN
    ,C_Address4
    ,C_City
    ,Descr
-   ,SUM(Qty)
+   ,Qty
    ,ExtPrice
    ,UserDefine05 
    ,showfield    
    ,ExtOrdKey
-   from #PLISTBYSKU15_Final
-   GROUP BY B_Contact1
-   ,B_Address1
-   ,B_Address2
-   ,B_Address3
-   ,B_Address4
-   ,C_Contact1
-   ,C_Address1
-   ,C_Address2
-   ,C_Address3
-   ,C_Address4
-   ,C_City
-   ,Descr
-   ,ExtPrice
-   ,UserDefine05
-   ,ShowField           
-   ,ExtOrdKey
+   from #PLISTBYSKU15           --CS01
+   --GROUP BY B_Contact1
+   --,B_Address1
+   --,B_Address2
+   --,B_Address3
+   --,B_Address4
+   --,C_Contact1
+   --,C_Address1
+   --,C_Address2
+   --,C_Address3
+   --,C_Address4
+   --,C_City
+   --,Descr
+   --,ExtPrice
+   --,UserDefine05
+   --,ShowField           
+   --,ExtOrdKey
 
 
 END -- procedure

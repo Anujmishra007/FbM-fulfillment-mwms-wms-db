@@ -30,6 +30,8 @@ GO
 /*11/03/2019  CSCHONG   1.3   Fix EcomPacking Print issue CCS           */
 /*10/06/2019  WLCHOOI   1.4   WMS-9371 - Add New Fields (WL02)          */
 /*18/12/2019  WLChooi   1.5   WMS-11444 - Limit SKU per page (WL03)     */
+/*20/02/2020  WLChooi   1.6   WMS-12107 - Modify column logic (WL01)    */
+/*05/05/2020  CSCHONG   1.7   WMS-12994 - modify column logic (CS02)    */
 /************************************************************************/
 CREATE PROC isp_Packing_List_42
             (@c_Orderkey NVARCHAR(10),
@@ -47,11 +49,26 @@ BEGIN
          , @c_isOrdKey        NVARCHAR(5)
          , @c_getOrdKey       NVARCHAR(20) 
          , @n_CntRec          INT               --CCS
-         , @n_MaxLine         INT = 8 --WL03
+         , @n_MaxLine         INT = 8 --WL03 
+         , @c_ODNotes2        NVARCHAR(500)   --CS02
+         , @c_DelimiterSign   NVARCHAR(5)     --CS02
+         , @c_ordudf05        NVARCHAR(20)    --CS02
+         , @c_ordudf02        NVARCHAR(20)    --CS02
+         , @c_ordudf01        NVARCHAR(20)    --CS02
+         , @c_ordudf10        NVARCHAR(20)    --CS02
+         , @c_ordudf06        NVARCHAR(20)    --CS02
+         , @n_OHInvAmt        FLOAT           --CS02
+         , @c_ordudf03        NVARCHAR(20)    --CS02
+         , @c_ExtConsoOrdKey  NVARCHAR(30)    --CS02
+         , @c_GetCSOrdkey     NVARCHAR(20)    --CS02
+         , @c_getsku          NVARCHAR(20)    --CS02
+         , @n_SeqNo           INT             --CS02
+         , @c_ColValue        NVARCHAR(70)    --CS02 
 
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
+   SET @c_DelimiterSign = '|'              --CS02
 
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -129,7 +146,10 @@ BEGIN
    --G7               NVARCHAR(200)  NULL,  --WL01
    G8               NVARCHAR(200)  NULL,  
    G9               NVARCHAR(200)  NULL, --WL02 
-   G10              NVARCHAR(200)  NULL  --WL02 
+   G10              NVARCHAR(200)  NULL, --WL02 
+   A15              NVARCHAR(200)  NULL, --CS02
+   ExtrnPOKEY       NVARCHAR(20)   NULL, --CS02
+   ExtrnConsoOrdKey NVARCHAR(30)   NULL  --CS02
    )
    
    
@@ -264,23 +284,29 @@ BEGIN
                --G7,  -WL01
                G8,
                G9,  --WL02
-               G10  --WL02  
+               G10, --WL02
+               A15,              --CS02
+               ExtrnPOKEY,       --CS02
+               ExtrnConsoOrdKey  --CS02   
             )
    
             SELECT  Contact1   =  ISNULL(RTRIM(o.c_Contact1), '')
               ,   c_addresses = ( ISNULL(RTRIM(o.c_state), '')+ ISNULL(RTRIM(o.c_city), '') + ISNULL(RTRIM(o.c_Address1), '') 
                              +  ISNULL(RTRIM(o.c_Address2), '') +  ISNULL(RTRIM(o.c_Address3), '') +  ISNULL(RTRIM(o.c_Address4), '') )
-              ,   C_Phone1 = ISNULL(RTRIM(O.C_Phone1), '') 
-              ,   C_Phone2 = ISNULL(RTRIM(O.C_Phone2), '') 
-              ,   OHNotes2 = ISNULL(RTRIM(O.c_company), '') 
+              ,   C_Phone1    = ISNULL(RTRIM(O.C_Phone1), '') 
+              ,   C_Phone2    = ISNULL(RTRIM(O.C_Phone2), '') 
+              ,   OHNotes2    = ISNULL(RTRIM(O.c_company), '') 
               ,   MCompany    =  ISNULL(RTRIM(O.m_Company), '')
               ,   ExternOrderKey = ISNULL(RTRIM(o.ExternOrderkey), '') 
               ,   Salesman       =  ISNULL(RTRIM(o.Salesman), '')                                
-              ,   ORDDate        =  O.Orderdate  
-              ,   OHGRP          =  ISNULL(RTRIM(o.PmtTerm), '')                              
+              ,   ORDDate        =  CASE WHEN ISDATE(OD.userdefine10) = 1 AND ISNULL(OD.userdefine10,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> ''
+                                    THEN CAST(OD.userdefine10 as DATETIME) ELSE O.Orderdate END         --CS02
+              ,   OHGRP          =  CASE WHEN ISNULL(OD.userdefine03,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> '' THEN OD.userdefine03
+                                    ELSE ISNULL(RTRIM(o.PmtTerm), '') END               --CS02                        
               ,   ODNotes        =  ISNULL(RTRIM(OD.notes), '')                            
               ,   ordudef01      = ISNULL(RTRIM(O.userdefine02), '')                            
-              ,   orddetudef01   = ISNULL(RTRIM(S.notes1), '')--ISNULL(RTRIM(OD.userdefine01), '')                        
+              --,   orddetudef01   = ISNULL(RTRIM(S.notes1), '')--ISNULL(RTRIM(OD.userdefine01), '')    
+              ,   orddetudef01   = ISNULL(LTRIM(RTRIM(S.DESCR)), '') + ' ' + ISNULL(LTRIM(RTRIM(S.notes1)), '')   --WL04                    
               ,   SKU            = OD.Sku
               ,   ODQty          = sum(OD.originalQty)                       
               ,   ODUnitPrice    = (OD.Unitprice) 
@@ -293,9 +319,11 @@ BEGIN
               ,   OHInvAmt       = O.invoiceamount
               ,   orddetudef02   = ISNULL(RTRIM(OD.userdefine02), '')     
               ,   orddetudef05   = ISNULL(RTRIM(OD.userdefine05), '')
-              ,   orddetudef06   = CAST(ISNULL(RTRIM(OD.userdefine06), '') AS DECIMAL(10,2))
+              ,   orddetudef06   = CASE WHEN ISNULL(RTRIM(OD.userdefine06), '') <> '' THEN CAST(ISNULL(RTRIM(OD.userdefine06), '0.00') AS DECIMAL(10,2)) 
+                                   ELSE '0.00' END --CS02
               ,   orddetudef08   = ISNULL(RTRIM(OD.userdefine08), '')
-              ,   orddetudef09   = CAST(ISNULL(RTRIM(OD.userdefine09), '') AS DECIMAL(10,2))                  
+              ,   orddetudef09   = CASE WHEN ISNULL(RTRIM(OD.userdefine09), '') <> '' THEN CAST(ISNULL(RTRIM(OD.userdefine09), '0.00') AS DECIMAL(10,2)) 
+                                   ELSE '0.00' END --CS02                 
               ,   OHNotes        = ISNULL(RTRIM(O.Notes), '')   --NJOW01                     
               ,   A1 = lbl.A1                                   
               ,   A2 = lbl.A2
@@ -337,6 +365,9 @@ BEGIN
               ,   G8 = lbl.G8
               ,   G9 = lbl.G9    --WL02
               ,   G10 = lbl.G10  --WL02
+              ,   A15 = lbl.A15  --CS02
+              ,   ExtPOKEY = O.ExternPOKEy --CS02
+              ,   ExtConsoOrdkey = OD.ExternConsoOrderkey --CS02
             FROM ORDERS     O  WITH (NOLOCK)
             JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=O.OrderKey
             LEFT JOIN ORDERINFO OI WITH (NOLOCK) ON OI.OrderKey=O.OrderKey 
@@ -356,10 +387,15 @@ BEGIN
                  ,ISNULL(RTRIM(O.c_company), '') 
                  ,ISNULL(RTRIM(O.m_Company), ''),ISNULL(RTRIM(o.ExternOrderkey), '') 
                  ,ISNULL(RTRIM(O.Salesman), '')
-                 ,O.Orderdate 
-                 ,ISNULL(RTRIM(o.PmtTerm), '')        
+                 --,O.Orderdate                --CS02
+                 ,CASE WHEN ISDATE(OD.userdefine10) = 1 AND ISNULL(OD.userdefine10,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> ''
+                                    THEN CAST(OD.userdefine10 as DATETIME) ELSE O.Orderdate END                      --CS02
+                 --,ISNULL(RTRIM(o.PmtTerm), '')    --CS02 
+                 ,CASE WHEN ISNULL(OD.userdefine03,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> '' THEN OD.userdefine03
+                                    ELSE ISNULL(RTRIM(o.PmtTerm), '') END               --CS02      
                  ,ISNULL(RTRIM(OD.notes), '')        
-                 ,ISNULL(RTRIM(O.userdefine02), '') , ISNULL(RTRIM(S.notes1), '')--ISNULL(RTRIM(OD.userdefine01), '')   
+                 ,ISNULL(RTRIM(O.userdefine02), '') --, ISNULL(RTRIM(S.notes1), '')--ISNULL(RTRIM(OD.userdefine01), '')   
+                 ,ISNULL(LTRIM(RTRIM(S.DESCR)), '') + ' ' + ISNULL(LTRIM(RTRIM(S.notes1)), '')   --WL04
                  ,OD.Sku
                  ,OD.Unitprice
                  ,ISNULL(RTRIM(OI.orderinfo03), '')
@@ -370,9 +406,9 @@ BEGIN
                  ,O.invoiceamount
                  ,ISNULL(RTRIM(OD.userdefine02), '')   
                  ,ISNULL(RTRIM(OD.userdefine05), '')   
-                 ,ISNULL(RTRIM(OD.userdefine06), '')   
+                 ,CASE WHEN ISNULL(RTRIM(OD.userdefine06), '') <> '' THEN CAST(ISNULL(RTRIM(OD.userdefine06), '0.00') AS DECIMAL(10,2)) ELSE '0.00' END    --CS02
                  ,ISNULL(RTRIM(OD.userdefine08), '')   
-                 ,ISNULL(RTRIM(OD.userdefine09), '')   
+                 ,CASE WHEN ISNULL(RTRIM(OD.userdefine09), '') <> '' THEN CAST(ISNULL(RTRIM(OD.userdefine09), '0.00') AS DECIMAL(10,2)) ELSE '0.00' END     --CS02
                  ,ISNULL(RTRIM(O.Notes), '')   --NJOW01
                  ,lbl.A1
                  ,lbl.A2
@@ -414,11 +450,108 @@ BEGIN
                  ,lbl.G8     
                  ,lbl.G9  --WL02
                  ,lbl.G10 --WL02
+                 ,lbl.A15  --CS02
+                 ,O.ExternPOKEy --CS02
+                 ,OD.ExternConsoOrderkey --CS02
        
       FETCH NEXT FROM CUR_ORDKEY INTO @c_getOrdKey
       END
-      
-      
+/*CS02 START*/
+ DECLARE CUR_ExtConsoORDKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT Orderkey,sku,ExtrnConsoOrdKey
+      FROM #TEMPPACKLIST42
+      WHERE ISNULL(ExtrnConsoOrdKey,'') <> ''
+      ORDER BY Orderkey,sku,ExtrnConsoOrdKey
+
+     OPEN CUR_ExtConsoORDKEY
+
+      FETCH NEXT FROM CUR_ExtConsoORDKEY INTO @c_GetCSOrdkey,@c_getsku,@c_extconsoordkey
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+
+          SET    @c_ordudf05  = ''
+          SET    @c_ordudf02  = ''
+          SET    @c_ordudf01  = ''
+          SET    @c_ordudf10  = ''
+          SET    @c_ordudf06  = ''
+          SET    @n_OHInvAmt  = 0
+          SET    @c_ordudf03  = ''
+          SET    @c_ODNotes2 = ''
+
+          SELECT @c_ODNotes2 = OD.notes2
+          FROM ORDERDETAIL OD (nolock)
+          where OD.orderkey = @c_GetCSOrdkey
+          AND OD.ExternConsoOrderKey = @c_extconsoordkey
+          AND OD.sku =@c_getsku
+        
+   -- select @c_ODNotes2 '@c_ODNotes2'
+
+       DECLARE C_DelimSplit CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+	     SELECT SeqNo, ColValue 
+         FROM dbo.fnc_DelimSplit(@c_DelimiterSign,@c_ODNotes2)
+
+         OPEN C_DelimSplit
+         FETCH NEXT FROM C_DelimSplit INTO @n_SeqNo, @c_ColValue
+
+        WHILE (@@FETCH_STATUS=0) 
+        BEGIN
+           
+            IF @n_SeqNo = 1
+            BEGIN
+              SET @c_ordudf05 = @c_ColValue
+            END
+            ELSE IF @n_SeqNo = 2
+            BEGIN
+              SET @c_ordudf02 = @c_ColValue
+            END
+            ELSE IF @n_SeqNo = 3
+            BEGIN
+              SET @c_ordudf01 = @c_ColValue
+            END
+            ELSE IF @n_SeqNo = 4
+            BEGIN
+              SET @c_ordudf10 = @c_ColValue
+            END
+            ELSE IF @n_SeqNo = 5
+            BEGIN
+              SET @c_ordudf06 = @c_ColValue
+            END
+            ELSE IF @n_SeqNo = 6
+            BEGIN
+              SET @n_OHInvAmt = CAST(@c_ColValue AS FLOAT)
+            END
+            ELSE IF @n_SeqNo = 7
+            BEGIN
+              SET @c_ordudf03 = @c_ColValue
+            END    
+       
+
+         FETCH NEXT FROM C_DelimSplit INTO @n_SeqNo, @c_ColValue
+         END -- WHILE (@@FETCH_STATUS <> -1) AND @n_Continue <> 3
+
+         CLOSE C_DelimSplit
+         DEALLOCATE C_DelimSplit
+     
+
+         UPDATE #TEMPPACKLIST42
+         SET ordudef05 = @c_ordudf05
+            ,ordudef02 = @c_ordudf02
+            ,ordudef01 = @c_ordudf01
+            ,ordudef10 = @c_ordudf10 
+            ,ordudef06 = @c_ordudf06
+            ,OHInvAmt = @n_OHInvAmt
+            ,ordudef03 = @c_ordudf03
+         WHERE Orderkey = @c_GetCSOrdkey 
+         AND   SKU = @c_getsku
+         AND ExtrnConsoOrdKey = @c_extconsoordkey
+    
+     FETCH NEXT FROM CUR_ExtConsoORDKEY INTO @c_GetCSOrdkey,@c_getsku,@c_extconsoordkey
+     END
+
+     CLOSE CUR_ExtConsoORDKEY
+     DEALLOCATE CUR_ExtConsoORDKEY
+
+/*CS02 END*/     
       SELECT
          t.Contact1,
          t.c_addresses,
@@ -426,7 +559,7 @@ BEGIN
          t.C_Phone2,
          t.OHNotes2,
          t.MCompany,
-         t.ExternOrderKey,
+         t.ExternOrderKey ,   
          t.Salesman,
          t.ORDDate,
          t.OHGRP,
@@ -489,7 +622,10 @@ BEGIN
          t.G8,
          t.G9, --WL02
          t.G10, --WL02
-         (Row_Number() OVER (PARTITION BY Orderkey Order By Orderkey Asc) - 1 ) / @n_MaxLine AS PageNo --WL03
+         (Row_Number() OVER (PARTITION BY ExtrnConsoOrdKey Order By ExtrnConsoOrdKey Asc) ) / @n_MaxLine AS PageNo --WL03  --CS02
+        ,t.A15                   --CS02
+        ,t.ExtrnPOKEY            --CS02
+        ,t.ExtrnConsoOrdKey      --CS02
       FROM
          #TEMPPACKLIST42 AS t
       ORDER BY orderkey

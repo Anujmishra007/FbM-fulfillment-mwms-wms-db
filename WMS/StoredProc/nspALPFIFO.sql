@@ -37,6 +37,7 @@ GO
 /* 01-Aug-2018  NJOW06  1.5   WMS-9967 allocate full case for specific  */
 /*                            consignee only                            */
 /* 17-Oct-2019  NJOW07  1.6   WMS-10923 Support sort by qty by config   */
+/* 06-May-2020  NJOW08  1.7   WMS-6226 skip UOM 1 allocation by condition*/
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPFIFO]        
    @c_Orderkey    NVARCHAR(10),  
@@ -94,7 +95,8 @@ BEGIN
            @c_UDF01            NVARCHAR(30), --NJOW06
            @c_SORTBYQTY        NVARCHAR(30), --NJOW07
            @c_SORTUOM1         NVARCHAR(1000), --NJOW07
-           @c_SORTNOTUOM1      NVARCHAR(1000) --NJOW07
+           @c_SORTNOTUOM1      NVARCHAR(1000), --NJOW07
+           @c_UOM2NOCONSCHK    NVARCHAR(10) --NJOW08
 
    SET @b_debug = 0
    SET @n_QtyAvailable = 0          
@@ -102,6 +104,16 @@ BEGIN
    SET @n_QtyToTake = 0
    SET @c_Conditions = '' --NJOW04
    SET @n_RestrictDays = 0 --NJOW04   
+   SET @c_UOM2NOCONSCHK = 'N'
+   
+   --NJOW08
+   IF LEFT(@c_Lottable07,4) = '2016' AND EXISTS(SELECT 1 FROM SKU(NOLOCK) WHERE Storerkey = @c_Storerkey AND Sku = @c_Sku AND ItemClass = '001')
+   BEGIN    
+   	  IF @c_UOM = '1'  
+         GOTO EXIT_SP
+      ELSE
+         SET @c_UOM2NOCONSCHK = 'Y'      
+   END
    
    --NJOW04 Start
    IF LEN(@c_OtherParms) > 0 
@@ -147,7 +159,7 @@ BEGIN
 
    IF @c_UOM = '2'
    BEGIN      
-      IF ISNULL(@C_UDF01,'') <> '' 
+      IF ISNULL(@C_UDF01,'') <> '' AND @c_UOM2NOCONSCHK = 'N'
       BEGIN       
          IF NOT EXISTS (SELECT 1
                         FROM ORDERS (NOLOCK)
@@ -157,10 +169,10 @@ BEGIN
             GOTO EXIT_SP      
          END             
       END
-      ELSE
-      BEGIN
-         GOTO EXIT_SP           
-      END           	     
+      --ELSE
+      --BEGIN
+      --   GOTO EXIT_SP           
+      --END           	     
    END   
 
    IF @c_UOM IN('1','6')

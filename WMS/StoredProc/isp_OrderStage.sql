@@ -37,12 +37,12 @@ BEGIN
 TRUNCATE TABLE BI.OrderStage;
 WITH O AS (
    SELECT O.OrderKey, O.StorerKey, O.ExternOrderKey, DeliveryDate=CAST(O.DeliveryDate AS date), O.ConsigneeKey, C_City=ISNULL(O.C_City,'')
-   ,O.Status, O.Type, O.OrderGroup, AddDate=CAST(O.AddDate AS smalldatetime), EditDate=CAST(O.EditDate AS smalldatetime)
+   ,O.Status, O.Type, O.OrderGroup, AddDate=CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), EditDate=CAST(O.EditDate AS smalldatetime)
    ,MBOLKey=ISNULL(O.MBOLKey,''), LoadKey=ISNULL(O.LoadKey,''), O.Facility
    ,ShipperKey=ISNULL(ShipperKey,''), DocType, TrackingNo=ISNULL(TrackingNo,''), ECOM_PRESALE_FLAG=ISNULL(O.ECOM_PRESALE_FLAG,''), ECOM_SINGLE_FLAG=ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,UserDefine01=ISNULL(O.UserDefine01,'') ,UserDefine02=ISNULL(O.UserDefine02,'') ,UserDefine03=ISNULL(O.UserDefine03,'') 
    ,Lines     = COUNT(1)
-   ,OpenQty   = SUM(O.OpenQty)
+   ,OpenQty   = SUM(OD.OpenQty)
    ,QtyAPS    = SUM(OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty)
    ,EnteredQTY= SUM(OD.EnteredQTY)
    FROM dbo.ORDERS        O  WITH (NOLOCK)
@@ -51,7 +51,7 @@ WITH O AS (
    LEFT JOIN STORER   S WITH (NOLOCK) ON O.ShipperKey = S.StorerKey
    WHERE O.EditDate >= CONVERT(NVARCHAR(23),@d_StartDate,121)
    GROUP BY O.OrderKey, O.StorerKey, O.ExternOrderKey, CAST(O.DeliveryDate AS date), O.ConsigneeKey, ISNULL(O.C_City,'')
-   ,O.Status, O.Type, O.OrderGroup, CAST(O.AddDate AS smalldatetime), CAST(O.EditDate AS smalldatetime)
+   ,O.Status, O.Type, O.OrderGroup, CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), CAST(O.EditDate AS smalldatetime)
    ,ISNULL(O.MBOLKey,''), ISNULL(O.LoadKey,''), O.Facility
    ,ISNULL(ShipperKey,''), DocType, ISNULL(TrackingNo,'') , ISNULL(O.ECOM_PRESALE_FLAG,''), ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,ISNULL(O.UserDefine01,'') ,ISNULL(O.UserDefine02,'') ,ISNULL(O.UserDefine03,'') 
@@ -148,12 +148,12 @@ FROM BI.OrderStage AS O WITH (NOLOCK) JOIN l ON O.OrderKey = l.OrderKey;
    IF @b_debug=1 SELECT 'Join LoadPlan', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
 
 WITH m AS (
-   SELECT o.Orderkey, ShipDate=CAST(MIN(m.ShipDate) AS smalldatetime)
+   SELECT o.Orderkey, ShipDate = CASE WHEN m.Status = '9' THEN CAST(MIN(m.ShipDate) AS smalldatetime) ELSE NULL END
    ,MBOL_NotValid =ISNULL(SUM(CASE WHEN m.status = '5' AND m.ValidatedFlag = 'E' THEN 1 ELSE 0 END),0)
    FROM BI.OrderStage AS O WITH (NOLOCK)
    LEFT JOIN dbo.MBOLDETAIL d WITH (NOLOCK) ON O.OrderKey = d.OrderKey --AND O.Status='9'
    LEFT JOIN dbo.MBOL       m WITH (NOLOCK) ON m.MbolKey  = d.MbolKey
-   GROUP BY O.OrderKey
+   GROUP BY O.OrderKey, m.Status
 )
 UPDATE O SET ShipDate = m.ShipDate
       ,MBOL_NotValid = m.MBOL_NotValid
@@ -187,7 +187,8 @@ DECLARE @SummaryOfChanges TABLE(Change VARCHAR(20));
   
 MERGE BI.OrderSum AS t
 USING BI.OrderStage AS s ON t.OrderKey = s.OrderKey
-WHEN MATCHED AND t.Status NOT IN ('9','CANC') THEN
+WHEN MATCHED --AND t.Status NOT IN ('9','CANC') 
+THEN
    UPDATE SET ModifyDate=GETDATE() ,StorerKey=s.StorerKey, ExternOrderKey=s.ExternOrderKey,DeliveryDate=s.DeliveryDate,ConsigneeKey=s.ConsigneeKey,C_City=s.C_City
    , Status=s.Status, Type=s.Type, OrderGroup=s.OrderGroup, AddDate=s.AddDate, EditDate=s.EditDate
    ,MBOLKey=s.MBOLKey,LoadKey=s.LoadKey, Facility=s.Facility, ShipperKey=s.ShipperKey, DocType=s.DocType, TrackingNo=s.TrackingNo ,ECOM_PRESALE_FLAG=s.ECOM_PRESALE_FLAG

@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrContainerDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrContainerDetailDelete]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRDTGenCountSheet]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[ispRDTGenCountSheet]
 GO
 
 SET QUOTED_IDENTIFIER OFF 
@@ -9,9 +9,10 @@ GO
 
 /* 08-Oct-2012  KHLim      Insert Delete log (KH01)                          */
 /* 22-Aug-2016  TLTING     add NOLOCK - deadlock                             */
+/* 20-May-2020  TLTING02   Cursor loop by row - deadlock                     */
 
-CREATE TRIGGER ntrContainerDetailDelete
- ON CONTAINERDETAIL
+CREATE TRIGGER [dbo].[ntrContainerDetailDelete]
+ ON [dbo].[CONTAINERDETAIL]
  FOR DELETE
  AS
  BEGIN
@@ -31,6 +32,9 @@ CREATE TRIGGER ntrContainerDetailDelete
  @n_starttcnt        int,       -- Holds the current transaction count
  @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
 ,@c_authority        nvarchar(1)  -- KH01
+
+DECLARE @c_MbolKey NVARCHAR(10) = ''
+, @c_MbolLineNumber NVARCHAR(5) = ''
 
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
  if (select count(*) from DELETED) =
@@ -85,18 +89,39 @@ CREATE TRIGGER ntrContainerDetailDelete
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- DELETE MbolDetail
- FROM MbolDetail, Mbol with (NOLOCK), DELETED
- WHERE MbolDetail.ContainerKey = DELETED.ContainerKey
- AND Mbol.MbolKey = MbolDetail.MbolKey
- AND Mbol.Status <> "9"
- SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
- IF @n_err <> 0
- BEGIN
- SELECT @n_continue = 3
- SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68402   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
- SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Cascade Delete ON Table MbolDetail Failed. (ntrContainerDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
- END
+   -- TLTING02
+   IF EXISTS (	SELECT 1   FROM MbolDetail  with (NOLOCK), Mbol with (NOLOCK), DELETED
+             WHERE MbolDetail.ContainerKey = DELETED.ContainerKey
+             AND Mbol.MbolKey = MbolDetail.MbolKey
+             AND Mbol.Status <> '9'	 )
+   Begin 
+	   DECLARE MBOLItem_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+		   Select MbolDetail.MbolKey, MbolDetail.MbolLineNumber
+		   FROM MbolDetail  with (NOLOCK), Mbol with (NOLOCK), DELETED
+         WHERE MbolDetail.ContainerKey = DELETED.ContainerKey
+         AND Mbol.MbolKey = MbolDetail.MbolKey
+         AND Mbol.Status <> '9'	 
+
+	   OPEN MBOLItem_cur 
+	   FETCH NEXT FROM MBOLItem_cur INTO @c_MbolKey, @c_MbolLineNumber
+	   WHILE @@FETCH_STATUS = 0 
+	   BEGIN 
+
+		   DELETE MbolDetail
+         WHERE MbolKey = @c_MbolKey
+         AND MbolLineNumber = @c_MbolLineNumber
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+          SELECT @n_continue = 3
+          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68402   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Cascade Delete ON Table MbolDetail Failed. (ntrContainerDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+          END		
+		   FETCH NEXT FROM MBOLItem_cur INTO @c_MbolKey, @c_MbolLineNumber
+	   END
+	   CLOSE MBOLItem_cur 
+	   DEALLOCATE MBOLItem_cur
+   End
  END
       /* #INCLUDE <TRCONDD2.SQL> */
  IF @n_continue=3  -- Error Occured - Process And Return
@@ -127,8 +152,3 @@ CREATE TRIGGER ntrContainerDetailDelete
  END
 
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-

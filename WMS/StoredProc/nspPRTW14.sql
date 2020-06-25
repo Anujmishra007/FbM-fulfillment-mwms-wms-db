@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
 /* 03-Dec-2018  NJOW01   1.0  WMS-7167 Sort by expiry date (lottable04)  */
+/* 31-Mar-2020  NJOW02   1.1  WMS-12742 fitler Hostwhcode                */
 /*************************************************************************/   
 CREATE  PROC [dbo].[nspPRTW14]    
    @c_StorerKey NVARCHAR(15) ,    
@@ -139,10 +140,26 @@ BEGIN
 
         IF ISNULL(RTRIM(@c_Lottable01), '') <> ''  
         BEGIN  
-            SELECT @c_Condition = RTRIM(@c_Condition) + " AND LOC.HostWhCode = N'" + RTRIM(@c_Lottable01) + "' "  
+            SELECT @c_Condition = RTRIM(@c_Condition) + " AND ISNULL(LOC.HostWhCode,'') = N'" + RTRIM(@c_Lottable01) + "' "  
         END    
         ELSE
         BEGIN
+        	  --NJOW02
+        	  IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)  
+					             WHERE CL.Storerkey = @c_Storerkey  
+					             AND CL.Code = 'NOFILTERHWCODE'  
+					             AND CL.Listname = 'PKCODECFG'  
+					             AND CL.Long = 'nspPRTW14'  
+					             AND ISNULL(CL.Short,'') = 'N') 
+					  BEGIN
+               SELECT @c_Condition = RTRIM(@c_Condition) + " AND ISNULL(LOC.HostWhCode,'') = N'" + RTRIM(@c_Lottable01) + "' "  					  	
+					  END					     
+					  ELSE
+            BEGIN
+               SELECT @c_Condition = RTRIM(@c_Condition) + ' AND LOTTABLE01 = '''' '
+            END   
+         	  
+         	  /*
          	  IF NOT EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
          	                 WHERE CL.Storerkey = @c_Storerkey
          	                 AND CL.Code = 'NOFILTEREMPTYLOT1'
@@ -151,7 +168,8 @@ BEGIN
          	                 AND ISNULL(CL.Short,'') <> 'N') 
          	  BEGIN              
                SELECT @c_Condition = RTRIM(@c_Condition) + ' AND LOTTABLE01 = '''' '
-            END        		
+            END
+            */        		
         END
 
         IF ISNULL(RTRIM(@c_Lottable02), '') <> ''  
