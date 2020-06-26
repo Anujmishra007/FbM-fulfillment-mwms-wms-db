@@ -19,7 +19,7 @@ GO
 /* Called By:                                                           */
 /*          :                                                           */
 /*        :                                                             */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,6 +30,7 @@ GO
 /*31-JUL-2019  CSCHONG  1.0   Fix get wrong PDF (CS01)                  */  
 /*30-SEP-2019  WLChooi  1.1   WMS-10365 - Print Bartender for certain   */ 
 /*                                        Facility only (WL01)          */
+/*25-JUN-2020  WLChooi  1.2   WMS-13052 - Print SKU Label (WL02)        */ 
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPKBT03]
    @c_printerid  NVARCHAR(50) = '',  
@@ -92,6 +93,7 @@ BEGIN
          , @c_JobID           NVARCHAR(10) 
          , @c_PrintData       NVARCHAR(MAX)    
          , @c_GetFacility     NVARCHAR(15)   --WL01      
+         , @c_IsConso         NVARCHAR(1) = ''   --WL02
                                                                                                                
    SET @n_err = 0
    SET @b_success = 1
@@ -116,6 +118,7 @@ BEGIN
         , @c_ExtOrderkey = ORDERS.ExternOrderKey
         , @c_Shipperkey  = ORDERS.ShipperKey
         , @c_GetFacility = ORDERS.Facility
+        , @c_IsConso     = 'N'   --WL02
    FROM PACKHEADER (NOLOCK)
    JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
    WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
@@ -129,12 +132,45 @@ BEGIN
            , @c_ExtOrderkey = ORDERS.ExternOrderKey
            , @c_Shipperkey  = ORDERS.ShipperKey
            , @c_GetFacility = ORDERS.Facility
+           , @c_IsConso     = 'Y'   --WL02
       FROM PACKHEADER (NOLOCK)
       JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Loadkey = PACKHEADER.LoadKey
       JOIN ORDERS (NOLOCK) ON LPD.Orderkey = ORDERS.Orderkey
       WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
    END
    --WL01 End
+
+   --WL02 START
+   DECLARE @c_UserDefine05 NVARCHAR(18) = ''
+
+   IF @c_labeltype = 'SKULBLSKE'
+   BEGIN
+      IF @c_IsConso = 'Y'
+      BEGIN
+         SELECT @c_UserDefine05 = MAX(ISNULL(OD.Userdefine05,''))
+         FROM PACKHEADER PH (NOLOCK)
+         JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Loadkey = PH.Loadkey
+         JOIN ORDERS OH (NOLOCK) ON OH.Orderkey = LPD.Orderkey
+         JOIN ORDERDETAIL OD (NOLOCK) ON OD.Orderkey = OH.Orderkey
+         WHERE PH.Pickslipno = @c_PickSlipNo AND OD.SKU = @c_Parm02
+      END
+      ELSE
+      BEGIN
+         SELECT @c_UserDefine05 = MAX(ISNULL(OD.Userdefine05,''))
+         FROM PACKHEADER PH (NOLOCK)
+         JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Orderkey = PH.Orderkey
+         JOIN ORDERS OH (NOLOCK) ON OH.Orderkey = LPD.Orderkey
+         JOIN ORDERDETAIL OD (NOLOCK) ON OD.Orderkey = OH.Orderkey
+         WHERE PH.Pickslipno = @c_PickSlipNo AND OD.SKU = @c_Parm02
+      END
+
+      IF ISNULL(@c_UserDefine05,'') = ''   --If blank or NULL, do not print
+      BEGIN
+         SET @n_continue = 1
+         GOTO QUIT_SP  
+      END
+   END
+   --WL02 END
 
    IF @c_OrdType <> 'VIP' --@c_DocType = 'E'  
    BEGIN 
