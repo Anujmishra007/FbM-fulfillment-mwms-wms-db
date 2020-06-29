@@ -110,7 +110,7 @@ GO
 /*                                  Search Empty Loc Consider PendingMoveIn   */
 /*                                  (ChewKP07)                                */
 /* 06-Feb-2014  James         3.3   Bug fix (james01)                         */
-/* 05-May-2014  ChewKP        3.4   Include Multiple Putawayzone Search in    */
+/* 05-May-2014  ChewKP        3.4   Include Multiple PutawayZone Search in    */
 /*                                  PAType = '19', '21' (ChewKP08)            */
 /* 02-Dec-2013  Ung           3.5   SOS257227 Fix PAType 61 infinite loop     */
 /* 30-May-2014  Ung           3.2   SOS322241 Add custom putaway strategy key */
@@ -131,6 +131,8 @@ GO
 /* 05-Jun-2017  ChewKP        4.3   WMS-1956 - Add Fit by Aisle Multi Case    */
 /*                                  Count (ChewKP11)                          */
 /* 19-Dec-2017  Leong         4.4   INC0075406 - Revise PAType 07 checking.   */
+/* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic */
+/*                                  SQL Statement                             */  
 /******************************************************************************/
 
 CREATE PROCEDURE [dbo].[nspRDTPASTD]
@@ -163,7 +165,7 @@ BEGIN
 
    DECLARE @n_Err                      INT,
            @c_ErrMsg                   NVARCHAR(255),
-           @b_debug                    INT,
+           @b_Debug                    INT,
            @cSQL                       NVARCHAR(2000),
            @cSQLParam                  NVARCHAR(1000)
 
@@ -198,12 +200,12 @@ BEGIN
            @c_LastPnDLocZone  NVARCHAR(10), --(ung04)
            @c_NextPnDLocZone  NVARCHAR(10), --(ung04)
            @n_LoopAllAisle    INT,
-           @cpa_PutAwayZone01 NVARCHAR(10),
-           @cpa_PutAwayZone02 NVARCHAR(10),
-           @cpa_PutAwayZone03 NVARCHAR(10),
-           @cpa_PutAwayZone04 NVARCHAR(10),
-           @cpa_PutAwayZone05 NVARCHAR(10),
-           @cpa_PutAwayZoneExt NVARCHAR(1000),
+           @cpa_PutawayZone01 NVARCHAR(10),
+           @cpa_PutawayZone02 NVARCHAR(10),
+           @cpa_PutawayZone03 NVARCHAR(10),
+           @cpa_PutawayZone04 NVARCHAR(10),
+           @cpa_PutawayZone05 NVARCHAR(10),
+           @cpa_PutawayZoneExt NVARCHAR(1000),
            @c_MaxAisle        NVARCHAR(10), -- (Vicky02)
            @c_NextPnDLocCat   NVARCHAR(10), -- (SHONG02)
            @n_PrevPutLineNum  INT,  -- (Vicky03)
@@ -219,6 +221,8 @@ BEGIN
           ,@c_PA_Decription    NVARCHAR(60)
           ,@b_CheckCube        INT
           ,@b_PutawayBySKU     NVARCHAR(1)
+          ,@n_InvBOMCube       FLOAT
+          ,@c_SQLParms         NVARCHAR(MAX) = N'' 
 
    SELECT @c_ToLoc          = SPACE(10),
           @n_IdCnt          = 0,
@@ -229,6 +233,7 @@ BEGIN
           @c_LastPndAisle   ='',
           @c_MaxAisle       = '', -- (Vicky02)
           @n_PrevPutLineNum = 0   -- (Vicky03)
+          
 
    SET @c_Final_ToLoc = ''
 
@@ -269,7 +274,16 @@ BEGIN
    END
    --(ChewKP10) - END
 
+   IF OBJECT_ID('tempdb..#t_PutawayZone') IS NOT NULL
+      DROP TABLE #t_PutawayZone
+   
+   CREATE TABLE #t_PutawayZone (PutawayZone NVARCHAR(10))
 
+   IF OBJECT_ID('tempdb..#t_LocationFlagInclude') IS NOT NULL
+      DROP TABLE #t_LocationFlagInclude
+   
+   CREATE TABLE #t_LocationFlagInclude (LocationFlagInclude NVARCHAR(10))
+      
    DECLARE @t_SKUList TABLE (StorerKey NVARCHAR(15), SKU NVARCHAR(20))
 
    DECLARE @n_IsRDT Int
@@ -682,13 +696,11 @@ BEGIN
                                   / @n_CaseCnt)
                                   * @f_STDCUBE)   --(ChewKP03)
 
-               --SET @f_TotalCube = @f_TotalCube + ((@n_LOQTY / (@n_TotalBOMQTY * @n_CaseCnt)) * @f_STDCUBE)
                SET @f_TotalGROSSWGT  =  @f_STDGROSSWGT * @n_CaseCnt
             END
             ELSE
             BEGIN
                SET @f_CSTDCUBE = ISNULL(@f_Length,0) * ISNULL(@f_Width,0) *  ISNULL(@f_Height,0)
-               --SET @f_TotalCube = @f_TotalCube + ((@n_LOQTY / (@n_TotalBOMQTY * @n_CaseCnt)) * @f_CSTDCUBE)
                SET @f_TotalCube = @f_TotalCube + (
                                   ( (@n_LOQTY/@n_TotalBOMQTY) -- Component SKU Qty
                                   / @n_CaseCnt)
@@ -774,20 +786,26 @@ BEGIN
       FROM   @t_SKUList t
    END
 
-   --SET @b_debug = 2
-   SELECT @b_debug = CONVERT(INT, NSQLValue)
+   --SET @b_Debug = 2
+   SELECT @b_Debug = CONVERT(INT, NSQLValue)
    FROM   NSQLCONFIG WITH (NOLOCK)
    WHERE  ConfigKey = 'PutawayTraceReport'
 
    IF @c_userid='TEST'
-      SET @b_debug = 2
-
-   IF @b_debug IS NULL
    BEGIN
-      SELECT @b_debug = 0
+      SET @b_Debug = 2
+      PRINT '---- Debug On ----'
+      PRINT ' Putaway StrategyKey : ' + @c_PutawayStrategyKey
+      PRINT ' Facility: ' + @c_Facility 
+   END
+      
+
+   IF @b_Debug IS NULL
+   BEGIN
+      SELECT @b_Debug = 0
    END
 
-   IF @b_debug = 1
+   IF @b_Debug = 1
    BEGIN
       -- insert records into PTRACEHEAD table
       EXEC nspPTH @c_PTraceType,
@@ -867,7 +885,10 @@ BEGIN
            @cpa_CheckEquipmentProfileKey   NVARCHAR(5),
            @cpa_CheckRestrictions          NVARCHAR(5),
            @cpa_PutCode                    NVARCHAR(30),  --(ung06)
-           @cpa_PutCodeSQL                 NVARCHAR(1000) --(ung06)
+           @cpa_PutCodeSQL                 NVARCHAR(1000), --(ung06)
+           @npa_TotalCube                  FLOAT,
+           @npa_TotalWeight                FLOAT
+           
 
    DECLARE @c_Loc_Type                     NVARCHAR(10),
            @c_loc_zone                     NVARCHAR(10),
@@ -913,6 +934,7 @@ BEGIN
            @c_searchlogicalloc             NVARCHAR(18),
            @n_CurrLocMultiSku              INT, -- Current Location/Putaway Pallet is Commingled Sku
            @n_CurrLocMultiLot              INT    -- Current Location/Putaway Pallet is Commingled Lot
+
    -- For Checking Maximum Pallet
    -- Added by DLIM September 2001
    DECLARE @n_PendingPalletQty             INT,
@@ -963,24 +985,31 @@ BEGIN
            @c_loc_NoMixLottable14          NVARCHAR(1), -- (ChewKP09)
            @c_loc_NoMixLottable15          NVARCHAR(1)  -- (ChewKP09)
 
-
+   DECLARE @c_SQL_LocationTypeExclude      NVARCHAR(1000) = N'',
+           @c_SQL_LocationCategoryInclude  NVARCHAR(1000) = N'',
+           @c_SQL_LocationCategoryExclude  NVARCHAR(1000) = N'',
+           @c_SQL_LocationHandlingInclude  NVARCHAR(1000) = N'',
+           @c_SQL_LocationHandlingExclude  NVARCHAR(1000) = N'',
+           @c_SQL_LocationFlagInclude      NVARCHAR(1000) = N'',
+           @c_SQL_LocationFlagExclude      NVARCHAR(1000) = N'',
+           @c_SQL_LocLevelInclude          NVARCHAR(1000) = N'',
+           @c_SQL_LocLevelExclude          NVARCHAR(1000) = N'',
+           @c_SQL_LocAisleInclude          NVARCHAR(1000) = N'',
+           @c_SQL_LocAisleExclude          NVARCHAR(1000) = N'', 
+           @c_SQL_LocTypeRestriction       NVARCHAR(1000) = N'' 
+           
+   
    SELECT @c_PutawayStrategyLineNumber = SPACE(5),
           @b_GotLoc = 0
 
    WHILE (1=1)
    BEGIN
-      -- (Vicky02) - Start
-      -- IF @c_MaxAisle = @c_LastPndAisle
-      -- BEGIN
-      --    SET @c_StartAisle = ''
-      -- END
-      -- (Vicky02) - End
       SET @n_PrevPutLineNum = CAST(@c_PutawayStrategyLineNumber AS INT) -- (Vicky03)
 
       SELECT TOP 1 @c_PutawayStrategyLineNumber = putawaystrategylinenumber,
              @cpa_PAType = PAType,
              @cpa_FromLoc = FROMLOC,
-             @cpa_ToLoc = TOLOC,
+             @cpa_ToLoc = ISNULL(TOLOC,''),
              @cpa_AreaKey = AreaKey,
              @cpa_Zone = Zone,
              @cpa_LocType = LocType,
@@ -1055,12 +1084,12 @@ BEGIN
              @cpa_LocAisleExclude04 = LocAisleExclude04,
              @cpa_LocAisleExclude05 = LocAisleExclude05,
              @cpa_LocAisleExclude06 = LocAisleExclude06,
-             @cpa_PutAwayZone01     = PutAwayZone01,
-             @cpa_PutAwayZone02     = PutAwayZone02,
-             @cpa_PutAwayZone03     = PutAwayZone03,
-             @cpa_PutAwayZone04     = PutAwayZone04,
-             @cpa_PutAwayZone05     = PutAwayZone05,
-             @cpa_PutAwayZoneExt    = '',
+             @cpa_PutawayZone01     = PutawayZone01,
+             @cpa_PutawayZone02     = PutawayZone02,
+             @cpa_PutawayZone03     = PutawayZone03,
+             @cpa_PutawayZone04     = PutawayZone04,
+             @cpa_PutawayZone05     = PutawayZone05,
+             @cpa_PutawayZoneExt    = '',
              @cpa_PutCode           = PutCode, --(ung06)
              @cpa_PutCodeSQL        = ''       --(ung06)
        FROM  PUTAWAYSTRATEGYDETAIL WITH (NOLOCK)
@@ -1073,79 +1102,302 @@ BEGIN
          BREAK
       END
 
-
       -- Construct MultiPutawayZone SQL for later use (ChewKP08)
       SET @nPutawayZoneCount = 0
       SET @c_MultiPutawayZone = ''
 
-      WHILE @nPutawayZoneCount < 5
-      BEGIN
+      IF ISNULL(RTRIM(@cpa_PutawayZone01),'' )  <> ''
+         INSERT INTO #t_PutawayZone(PutawayZone) VALUES (@cpa_PutawayZone01)
+         
+      IF ISNULL(RTRIM(@cpa_PutawayZone02),'' )  <> '' 
+         INSERT INTO #t_PutawayZone(PutawayZone) VALUES (@cpa_PutawayZone02)
+ 
+      IF ISNULL(RTRIM(@cpa_PutawayZone03),'' )  <> '' 
+         INSERT INTO #t_PutawayZone(PutawayZone) VALUES (@cpa_PutawayZone03)
 
+      IF ISNULL(RTRIM(@cpa_PutawayZone04),'' )  <> '' 
+         INSERT INTO #t_PutawayZone(PutawayZone) VALUES (@cpa_PutawayZone04)
 
-         IF @nPutawayZoneCount = 0
-         BEGIN
-            IF ISNULL(RTRIM(@cpa_PutAwayZone01),'' )  <> ''
-            BEGIN
+      IF ISNULL(RTRIM(@cpa_PutawayZone05),'' )  <> ''
+         INSERT INTO #t_PutawayZone(PutawayZone) VALUES (@cpa_PutawayZone05)
 
-               SET @c_MultiPutawayZone = ',' + '''' + @cpa_PutAwayZone01 + ''''
-            END
-            ELSE
-            BEGIN
-               SET @c_MultiPutawayZone = ''
-            END
-         END
-         ELSE IF @nPutawayZoneCount = 1
-         BEGIN
-            IF ISNULL(RTRIM(@c_MultiPutawayZone),'' )  <> ''
-            BEGIN
-                  SET @c_MultiPutawayZone = @c_MultiPutawayZone + CASE WHEN @cpa_PutAwayZone02 <> '' THEN ' , ' + '''' + @cpa_PutAwayZone02 + '''' ELSE '' END
-            END
-            ELSE
-            BEGIN
-               SET @c_MultiPutawayZone = @cpa_PutAwayZone02
-            END
-         END IF @nPutawayZoneCount = 2
-         BEGIN
-            IF ISNULL(RTRIM(@c_MultiPutawayZone),'' )  <> ''
-            BEGIN
-                  SET @c_MultiPutawayZone = @c_MultiPutawayZone + CASE WHEN @cpa_PutAwayZone03 <> '' THEN ' , ' + '''' + @cpa_PutAwayZone03 + '''' ELSE '' END
-            END
-            ELSE
-            BEGIN
-               SET @c_MultiPutawayZone = @cpa_PutAwayZone03
-            END
-         END IF @nPutawayZoneCount = 3
-         BEGIN
-            IF ISNULL(RTRIM(@c_MultiPutawayZone),'' )  <> ''
-            BEGIN
-                  SET @c_MultiPutawayZone = @c_MultiPutawayZone + CASE WHEN @cpa_PutAwayZone04 <> '' THEN ' , ' + '''' + @cpa_PutAwayZone04 + '''' ELSE '' END
-            END
-            ELSE
-            BEGIN
-               SET @c_MultiPutawayZone = @cpa_PutAwayZone04
-            END
-         END IF @nPutawayZoneCount = 4
-         BEGIN
-            IF ISNULL(RTRIM(@c_MultiPutawayZone),'' )  <> ''
-            BEGIN
-                  SET @c_MultiPutawayZone = @c_MultiPutawayZone + CASE WHEN @cpa_PutAwayZone05 <> '' THEN ' , ' + '''' + @cpa_PutAwayZone05 + '''' ELSE '' END
-            END
-            ELSE
-            BEGIN
-               SET @c_MultiPutawayZone = @cpa_PutAwayZone05
-            END
-         END
-
-         SET @nPutawayZoneCount = @nPutawayZoneCount + 1
-      END
-
-      --(Vicky03) - Start
       IF CAST(@c_PutawayStrategyLineNumber as INT) > @n_PrevPutLineNum
       BEGIN
          SET @c_StartAisle = ''
       END
-      -- (Vicky03) - End
 
+      SET @c_SQLParms = N'@c_StorerKey NVARCHAR(15) ' +
+                        ',@c_Facility  NVARCHAR(5)  ' +
+                        ',@c_SKU       NVARCHAR(20) ' +
+                        ',@c_LOT       NVARCHAR(10) ' +
+                        ',@c_FromLoc   NVARCHAR(10) ' +
+                        ',@c_ID        NVARCHAR(18) ' +
+                        ',@n_Qty       INT      ' +
+                        ',@n_StdGrossWgt FLOAT(8) ' + 
+                        ',@cpa_LocationTypeExclude01  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationTypeExclude02  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationTypeExclude03  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationTypeExclude04  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationTypeExclude05  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationCategoryExclude01  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationCategoryExclude02  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationCategoryExclude03  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationCategoryInclude01  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationCategoryInclude02  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationCategoryInclude03  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationHandlingInclude01  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationHandlingInclude02  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationHandlingInclude03  NVARCHAR(10)= ''''' +
+                        ',@cpa_LocationHandlingExclude01  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationHandlingExclude02  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationHandlingExclude03  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationFlagInclude01     NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationFlagInclude02     NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationFlagInclude03     NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationFlagExclude01     NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationFlagExclude02     NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationFlagExclude03     NVARCHAR(10) = ''''' +
+                        ',@npa_LocLevelInclude01   INT = 0' +
+                        ',@npa_LocLevelInclude02   INT = 0' +
+                        ',@npa_LocLevelInclude03   INT = 0' +
+                        ',@npa_LocLevelInclude04   INT = 0' +
+                        ',@npa_LocLevelInclude05   INT = 0' +
+                        ',@npa_LocLevelInclude06   INT = 0' +
+                        ',@npa_LocLevelExclude01   INT = 0' +
+                        ',@npa_LocLevelExclude02   INT = 0' +
+                        ',@npa_LocLevelExclude03   INT = 0' +
+                        ',@npa_LocLevelExclude04   INT = 0' +
+                        ',@npa_LocLevelExclude05   INT = 0' +
+                        ',@npa_LocLevelExclude06   INT = 0' +
+                        ',@cpa_LocAisleInclude01  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleInclude02  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleInclude03  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleInclude04  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleInclude05  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleInclude06  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleExclude01  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleExclude02  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleExclude03  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleExclude04  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleExclude05  NVARCHAR(10) = ''''' +
+                        ',@cpa_LocAisleExclude06  NVARCHAR(10) = ''''' +
+                        ',@npa_TotalCube          FLOAT = 0 '+
+                        ',@npa_TotalWeight        FLOAT = 0 ' + 
+                        ',@cpa_LocationTypeRestriction01 NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationTypeRestriction02 NVARCHAR(10) = ''''' +
+                        ',@cpa_LocationTypeRestriction03 NVARCHAR(10) = ''''' 
+                         
+      SELECT @c_SQL_LocationTypeExclude      = ''      
+            , @c_SQL_LocationCategoryInclude = '' 
+            , @c_SQL_LocationCategoryExclude = '' 
+            , @c_SQL_LocationHandlingInclude = '' 
+            , @c_SQL_LocationHandlingExclude = '' 
+            , @c_SQL_LocationFlagInclude     = '' 
+            , @c_SQL_LocationFlagExclude     = '' 
+            , @c_SQL_LocLevelInclude         = '' 
+            , @c_SQL_LocLevelExclude         = '' 
+            , @c_SQL_LocAisleInclude         = '' 
+            , @c_SQL_LocAisleExclude         = ''   
+            , @c_SQL_LocTypeRestriction      = ''          
+
+      SET @c_SQL_LocationTypeExclude  = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeExclude01, '@cpa_LocationTypeExclude01', @c_SQL_LocationTypeExclude)
+      SET @c_SQL_LocationTypeExclude  = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeExclude02, '@cpa_LocationTypeExclude02', @c_SQL_LocationTypeExclude)
+      SET @c_SQL_LocationTypeExclude  = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeExclude03, '@cpa_LocationTypeExclude03', @c_SQL_LocationTypeExclude)
+      SET @c_SQL_LocationTypeExclude  = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeExclude04, '@cpa_LocationTypeExclude04', @c_SQL_LocationTypeExclude)
+      SET @c_SQL_LocationTypeExclude  = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeExclude05, '@cpa_LocationTypeExclude05', @c_SQL_LocationTypeExclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationTypeExclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationTypeExclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationTypeExclude  = ' AND LOC.LocationType NOT IN ('+ @c_SQL_LocationTypeExclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationTypeExclude  = ' AND LOC.LocationType <> ' + @c_SQL_LocationTypeExclude 
+         END         
+      END
+      
+      SET @c_SQL_LocationCategoryExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationCategoryExclude01, '@cpa_LocationCategoryExclude01', @c_SQL_LocationCategoryExclude)
+      SET @c_SQL_LocationCategoryExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationCategoryExclude02, '@cpa_LocationCategoryExclude02', @c_SQL_LocationCategoryExclude)
+      SET @c_SQL_LocationCategoryExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationCategoryExclude03, '@cpa_LocationCategoryExclude03', @c_SQL_LocationCategoryExclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationCategoryExclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationCategoryExclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationCategoryExclude = ' AND LOC.LocationCategory NOT IN ('+ @c_SQL_LocationCategoryExclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationCategoryExclude = ' AND LOC.LocationCategory <> ' + @c_SQL_LocationCategoryExclude 
+         END               
+      END 
+      
+      SET @c_SQL_LocationCategoryInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationCategoryInclude01, '@cpa_LocationCategoryInclude01', @c_SQL_LocationCategoryInclude)
+      SET @c_SQL_LocationCategoryInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationCategoryInclude02, '@cpa_LocationCategoryInclude02', @c_SQL_LocationCategoryInclude)
+      SET @c_SQL_LocationCategoryInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationCategoryInclude03, '@cpa_LocationCategoryInclude03', @c_SQL_LocationCategoryInclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationCategoryInclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationCategoryInclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationCategoryInclude = ' AND LOC.LocationCategory IN ('+ @c_SQL_LocationCategoryInclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationCategoryInclude = ' AND LOC.LocationCategory = ' + @c_SQL_LocationCategoryInclude 
+         END                 
+      END
+      
+      SET @c_SQL_LocationHandlingInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationHandlingInclude01, '@cpa_LocationHandlingInclude01', @c_SQL_LocationHandlingInclude)     
+      SET @c_SQL_LocationHandlingInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationHandlingInclude02, '@cpa_LocationHandlingInclude02', @c_SQL_LocationHandlingInclude)
+      SET @c_SQL_LocationHandlingInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationHandlingInclude03, '@cpa_LocationHandlingInclude03', @c_SQL_LocationHandlingInclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationHandlingInclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationHandlingInclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationHandlingInclude = ' AND LOC.LocationHandling IN ('+ @c_SQL_LocationHandlingInclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationHandlingInclude = ' AND LOC.LocationHandling = ' + @c_SQL_LocationHandlingInclude 
+         END                
+      END
+  
+
+      SET @c_SQL_LocationHandlingExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationHandlingExclude01, '@cpa_LocationHandlingExclude01', @c_SQL_LocationHandlingExclude)     
+      SET @c_SQL_LocationHandlingExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationHandlingExclude02, '@cpa_LocationHandlingExclude02', @c_SQL_LocationHandlingExclude)
+      SET @c_SQL_LocationHandlingExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationHandlingExclude03, '@cpa_LocationHandlingExclude03', @c_SQL_LocationHandlingExclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationHandlingExclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationHandlingExclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationHandlingExclude = ' AND LOC.LocationHandling NOT IN ('+ @c_SQL_LocationHandlingExclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationHandlingExclude = ' AND LOC.LocationHandling <> ' + @c_SQL_LocationHandlingExclude 
+         END           
+      END
+
+
+      SET @c_SQL_LocationFlagInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationFlagInclude01, '@cpa_LocationFlagInclude01', @c_SQL_LocationFlagInclude)     
+      SET @c_SQL_LocationFlagInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationFlagInclude02, '@cpa_LocationFlagInclude02', @c_SQL_LocationFlagInclude)
+      SET @c_SQL_LocationFlagInclude = [dbo].[fnc_BuildVariableString](@cpa_LocationFlagInclude03, '@cpa_LocationFlagInclude03', @c_SQL_LocationFlagInclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationFlagInclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationFlagInclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationFlagInclude = ' AND LOC.LocationFlag IN ('+ @c_SQL_LocationFlagInclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationFlagInclude = ' AND LOC.LocationFlag = ' + @c_SQL_LocationFlagInclude 
+         END               
+      END
+      
+      SET @c_SQL_LocationFlagExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationFlagExclude01, '@cpa_LocationFlagExclude01', @c_SQL_LocationFlagExclude)     
+      SET @c_SQL_LocationFlagExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationFlagExclude02, '@cpa_LocationFlagExclude02', @c_SQL_LocationFlagExclude)
+      SET @c_SQL_LocationFlagExclude = [dbo].[fnc_BuildVariableString](@cpa_LocationFlagExclude03, '@cpa_LocationFlagExclude03', @c_SQL_LocationFlagExclude)
+      IF ISNULL(RTRIM(@c_SQL_LocationFlagExclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocationFlagExclude) > 0 
+         BEGIN
+            SET @c_SQL_LocationFlagExclude = ' AND LOC.LocationFlag NOT IN ('+ @c_SQL_LocationFlagExclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocationFlagExclude = ' AND LOC.LocationFlag <> ' + @c_SQL_LocationFlagExclude 
+         END           
+      END
+                                  
+      SET @c_SQL_LocLevelInclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelInclude01, '@npa_LocLevelInclude01', @c_SQL_LocLevelInclude)   
+      SET @c_SQL_LocLevelInclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelInclude02, '@npa_LocLevelInclude02', @c_SQL_LocLevelInclude)
+      SET @c_SQL_LocLevelInclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelInclude03, '@npa_LocLevelInclude03', @c_SQL_LocLevelInclude)
+      SET @c_SQL_LocLevelInclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelInclude04, '@npa_LocLevelInclude04', @c_SQL_LocLevelInclude)
+      SET @c_SQL_LocLevelInclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelInclude05, '@npa_LocLevelInclude05', @c_SQL_LocLevelInclude)
+      SET @c_SQL_LocLevelInclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelInclude06, '@npa_LocLevelInclude06', @c_SQL_LocLevelInclude)
+      IF ISNULL(RTRIM(@c_SQL_LocLevelInclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocLevelInclude) > 0 
+         BEGIN
+            SET @c_SQL_LocLevelInclude = ' AND LOC.LocLevel IN ('+ @c_SQL_LocLevelInclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocLevelInclude = ' AND LOC.LocLevel = ' + @c_SQL_LocLevelInclude 
+         END              
+      END
+
+      SET @c_SQL_LocLevelExclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelExclude01, '@npa_LocLevelExclude01', @c_SQL_LocLevelExclude)   
+      SET @c_SQL_LocLevelExclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelExclude02, '@npa_LocLevelExclude02', @c_SQL_LocLevelExclude)
+      SET @c_SQL_LocLevelExclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelExclude03, '@npa_LocLevelExclude03', @c_SQL_LocLevelExclude)
+      SET @c_SQL_LocLevelExclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelExclude04, '@npa_LocLevelExclude04', @c_SQL_LocLevelExclude)
+      SET @c_SQL_LocLevelExclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelExclude05, '@npa_LocLevelExclude05', @c_SQL_LocLevelExclude)
+      SET @c_SQL_LocLevelExclude = [dbo].[fnc_BuildVariableString](@npa_LocLevelExclude06, '@npa_LocLevelExclude06', @c_SQL_LocLevelExclude)
+      IF ISNULL(RTRIM(@c_SQL_LocLevelExclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocLevelExclude) > 0 
+         BEGIN
+            SET @c_SQL_LocLevelExclude = ' AND LOC.LocLevel NOT IN ('+ @c_SQL_LocLevelExclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocLevelExclude = ' AND LOC.LocLevel <> ' + @c_SQL_LocLevelExclude 
+         END          
+      END
+
+
+      SET @c_SQL_LocAisleInclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleInclude01, '@cpa_LocAisleInclude01', @c_SQL_LocAisleInclude)   
+      SET @c_SQL_LocAisleInclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleInclude02, '@cpa_LocAisleInclude02', @c_SQL_LocAisleInclude)
+      SET @c_SQL_LocAisleInclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleInclude03, '@cpa_LocAisleInclude03', @c_SQL_LocAisleInclude)
+      SET @c_SQL_LocAisleInclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleInclude04, '@cpa_LocAisleInclude04', @c_SQL_LocAisleInclude)
+      SET @c_SQL_LocAisleInclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleInclude05, '@cpa_LocAisleInclude05', @c_SQL_LocAisleInclude)
+      SET @c_SQL_LocAisleInclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleInclude06, '@cpa_LocAisleInclude06', @c_SQL_LocAisleInclude)
+      IF ISNULL(RTRIM(@c_SQL_LocAisleInclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocAisleInclude) > 0 
+         BEGIN
+            SET @c_SQL_LocAisleInclude = ' AND LOC.LocAisle IN ('+ @c_SQL_LocAisleInclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocAisleInclude = ' AND LOC.LocAisle = ' + @c_SQL_LocAisleInclude 
+         END              
+      END
+
+
+      SET @c_SQL_LocAisleExclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleExclude01, '@cpa_LocAisleExclude01', @c_SQL_LocAisleExclude)   
+      SET @c_SQL_LocAisleExclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleExclude02, '@cpa_LocAisleExclude02', @c_SQL_LocAisleExclude)
+      SET @c_SQL_LocAisleExclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleExclude03, '@cpa_LocAisleExclude03', @c_SQL_LocAisleExclude)
+      SET @c_SQL_LocAisleExclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleExclude04, '@cpa_LocAisleExclude04', @c_SQL_LocAisleExclude)
+      SET @c_SQL_LocAisleExclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleExclude05, '@cpa_LocAisleExclude05', @c_SQL_LocAisleExclude)
+      SET @c_SQL_LocAisleExclude = [dbo].[fnc_BuildVariableString](@cpa_LocAisleExclude06, '@cpa_LocAisleExclude06', @c_SQL_LocAisleExclude)
+      IF ISNULL(RTRIM(@c_SQL_LocAisleExclude),'') <> ''
+      BEGIN
+         IF CHARINDEX(',', @c_SQL_LocAisleExclude) > 0 
+         BEGIN
+            SET @c_SQL_LocAisleExclude = ' AND LOC.LocAisle NOT IN ('+ @c_SQL_LocAisleExclude + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocAisleExclude = ' AND LOC.LocAisle <> ' + @c_SQL_LocAisleExclude 
+         END          
+      END
+                           
+      SET @c_SQL_LocTypeRestriction = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeRestriction01, '@cpa_LocationTypeRestriction01', @c_SQL_LocTypeRestriction)     
+      SET @c_SQL_LocTypeRestriction = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeRestriction02, '@cpa_LocationTypeRestriction02', @c_SQL_LocTypeRestriction)
+      SET @c_SQL_LocTypeRestriction = [dbo].[fnc_BuildVariableString](@cpa_LocationTypeRestriction03, '@cpa_LocationTypeRestriction03', @c_SQL_LocTypeRestriction)
+      IF ISNULL(RTRIM(@c_SQL_LocTypeRestriction),'') <> ''
+      BEGIN         
+         IF CHARINDEX(',', @c_SQL_LocTypeRestriction) > 0 
+         BEGIN
+            SET @c_SQL_LocTypeRestriction = ' AND LOC.LocationType IN ('+ @c_SQL_LocTypeRestriction + ') '
+         END
+         ELSE 
+         BEGIN
+            SET @c_SQL_LocTypeRestriction = ' AND LOC.LocationType = ' + @c_SQL_LocTypeRestriction 
+         END           
+      END
+                 
       -- PutCode (ung06)
       IF @cpa_PutCode <> ''
       BEGIN
@@ -1165,7 +1417,7 @@ BEGIN
                ' ,@c_Param3   ' +
                ' ,@c_Param4   ' +
                ' ,@c_Param5   ' +
-               ' ,@b_debug    ' +
+               ' ,@b_Debug    ' +
                ' ,@c_SQL      OUTPUT' +
                ' ,@b_RestrictionsPassed OUTPUT'
             SET @cSQLParam = '@n_pTraceHeadKey NVARCHAR(10), @n_PtraceDetailKey NVARCHAR(10), @c_PutawayStrategyKey NVARCHAR(10), @c_PutawayStrategyLineNumber NVARCHAR(5) ' +
@@ -1181,11 +1433,12 @@ BEGIN
                ' ,@c_Param3    NVARCHAR(20) ' +
                ' ,@c_Param4    NVARCHAR(20) ' +
                ' ,@c_Param5    NVARCHAR(20) ' +
-               ' ,@b_debug     INT      ' +
+               ' ,@b_Debug     INT      ' +
                ' ,@c_SQL       NVARCHAR(1000) OUTPUT' +
                ' ,@b_RestrictionsPassed INT  OUTPUT'
+            
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @n_pTraceHeadKey, @n_PtraceDetailKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber
+            EXEC sp_ExecuteSql @cSQL, @cSQLParam, @n_pTraceHeadKey, @n_PtraceDetailKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber
                ,@c_StorerKey
                ,@c_SKU
                ,@c_LOT
@@ -1198,16 +1451,23 @@ BEGIN
                ,@c_Param3
                ,@c_Param4
                ,@c_Param5
-               ,@b_debug
+               ,@b_Debug
                ,@cpa_PutCodeSQL       OUTPUT
                ,@b_RestrictionsPassed OUTPUT
+               
+            IF @b_Debug=2
+            BEGIN
+               PRINT '>> @cpa_PutCode: ' + @cpa_PutCode
+               PRINT '>> @cpa_PutCodeSQL: ' + @cpa_PutCodeSQL 
+            END
+                         
          END
       END
 
       SET @c_PickAndDropLoc = '' -- (ung04)
       SET @c_FitCasesInAisle = ''
 
-      IF @b_debug = 1
+      IF @b_Debug = 1
       BEGIN
          -- Insert records into PTRACEDETAIL table
          SELECT @c_Reason = 'CHANGE of Putaway Type to '+@cpa_PAType
@@ -1220,9 +1480,10 @@ BEGIN
                      @c_Reason
       END
 
-      IF @b_debug = 2
+      IF @b_Debug = 2
       BEGIN
-         SELECT @c_PutawayStrategyKey '@c_PutawayStrategyKey' , @c_PutawayStrategyLineNumber '@c_PutawayStrategyLineNumber'
+         PRINT '> @c_PutawayStrategyKey: ' + @c_PutawayStrategyKey  +  '@c_PutawayStrategyLineNumber: ' + @c_PutawayStrategyLineNumber 
+         PRINT '> CHANGE of Putaway Type to '+ @cpa_PAType
       END
 -----------------------------------------------------------
       IF @cpa_PAType='01' -- If Source=FROMLOCATION, Putaway to TOLOCATION
@@ -1242,7 +1503,7 @@ BEGIN
                   IF @b_RestrictionsPassed=1
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=01: FROM location '
                                          + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
@@ -1260,7 +1521,7 @@ BEGIN
                ELSE
                BEGIN
                   SELECT @b_GotLoc = 1
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FOUND PAType=01: FROM location '
                                       + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
@@ -1278,7 +1539,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED PAType=01: FROM location '
                                 + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
@@ -1319,7 +1580,7 @@ BEGIN
                   IF @b_RestrictionsPassed = 1
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=03: FROM location ' + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
                         EXEC nspPTD 'nspASNPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -1332,7 +1593,7 @@ BEGIN
                ELSE
                BEGIN
                   SELECT @b_GotLoc = 1
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FOUND PAType=03: FROM location ' + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
                      EXEC nspPTD 'nspASNPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -1344,7 +1605,7 @@ BEGIN
             END -- LTRIM(RTRIM(@cpa_ToLoc),'') <> ''
             ELSE
             BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED PAType=03: FROM location ' + RTRIM(@c_FromLoc) + ', PICK Location NOT Setup'
                EXEC nspPTD 'nspASNPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -1355,7 +1616,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED PAType=03: FROM location ' + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
                EXEC nspPTD 'nspASNPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -1368,7 +1629,7 @@ BEGIN
 -----------------------------------------------------------
       IF @cpa_PAType='05' -- If Source=ZONE, Putaway to TOLOCATION (ung09)
       BEGIN
-         -- Get from putawayzone
+         -- Get from PutawayZone
          DECLARE @c_FromPutawayZone NVARCHAR( 10)
          SELECT @c_FromPutawayZone = PutawayZone FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @c_FromLoc
 
@@ -1387,9 +1648,9 @@ BEGIN
                   IF @b_RestrictionsPassed=1
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
-                        SELECT @c_Reason = 'FOUND PAType=05: FROM putawayzone '
+                        SELECT @c_Reason = 'FOUND PAType=05: FROM PutawayZone '
                         + RTRIM(@cpa_zone) + ' to loc ' + RTRIM(@cpa_ToLoc)
                         EXEC nspPTD 'nspRDTPASTD',
                                     @n_pTraceHeadKey,
@@ -1405,9 +1666,9 @@ BEGIN
                ELSE
                BEGIN
                   SELECT @b_GotLoc = 1
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
-                     SELECT @c_Reason = 'FOUND PAType=01: FROM putawayzone '
+                     SELECT @c_Reason = 'FOUND PAType=01: FROM PutawayZone '
                                       + RTRIM(@cpa_zone) + ' to loc ' + RTRIM(@cpa_ToLoc)
                      EXEC nspPTD 'nspRDTPASTD',
                                  @n_pTraceHeadKey,
@@ -1423,7 +1684,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED PAType=05: FROM putaway zone '
                                 + RTRIM(@c_FromPutawayZone) + ' <> ' + RTRIM(@cpa_zone)
@@ -1450,19 +1711,19 @@ BEGIN
                   STATUS = 'OK'
                   )
          BEGIN
-            IF @b_debug = 1
-               BEGIN
-                  SELECT @c_Reason = 'FAILED PAType=' + RTRIM(@cpa_PAType)
-                                   + ': Pallet ID NOT On-Hold OR Blank '
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED PAType=' + RTRIM(@cpa_PAType)
+                                + ': Pallet ID NOT On-Hold OR Blank '
 
-         EXEC nspPTD 'nspRDTPASTD',
+               EXEC nspPTD 'nspRDTPASTD',
                               @n_pTraceHeadKey,
                               @c_PutawayStrategyKey,
                               @c_PutawayStrategyLineNumber,
                               @n_PtraceDetailKey,
                               @c_ToLoc,
                               @c_Reason
-               END
+            END
             CONTINUE
          END
 
@@ -1481,7 +1742,7 @@ BEGIN
                   IF @b_RestrictionsPassed=1
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=60: Held ID ' + RTRIM(@c_ID)
                                          + ' Putaway to specified location ' + RTRIM(@cpa_ToLoc)
@@ -1499,7 +1760,7 @@ BEGIN
 
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=60: Held ID ' + RTRIM(@c_ID)
                                          + ' Putaway to specified location ' + RTRIM(@cpa_ToLoc)
@@ -1557,6 +1818,9 @@ BEGIN
             IF @c_FromLoc = @cpa_FromLoc
             BEGIN
                SELECT @c_SearchZone = @cpa_Zone
+                              
+               IF ISNULL(RTRIM(@cpa_Zone),'') <> ''
+                  INSERT INTO #t_PutawayZone( PutawayZone ) VALUES (@cpa_Zone)
             END
          END
          IF @cpa_PAType = '04' OR
@@ -1571,7 +1835,10 @@ BEGIN
             @cpa_PAType = '59' OR
             @cpa_PAType = '61'    -- SOS157089 TITAN Project - Search Specified Zone with Empty Pick & Drop Location
          BEGIN
-            SELECT @c_SearchZone = @cpa_zone
+            SELECT @c_SearchZone = @cpa_Zone
+            
+            IF ISNULL(RTRIM(@cpa_Zone),'') <> ''
+               INSERT INTO #t_PutawayZone( PutawayZone ) VALUES (@cpa_Zone)
          END
          IF @cpa_PAType = '12' OR
             @cpa_PAType = '16' OR -- IDSV5 - Leo - SOS# 3553 - Search Location With the same Sku Within Sku Zone
@@ -1586,10 +1853,13 @@ BEGIN
          BEGIN
             IF ISNULL(RTRIM(@c_SKU),'') <> '' AND NOT (@b_MultiProductID = 1)
             BEGIN
-               SELECT @c_SearchZone = Putawayzone
+               SELECT @c_SearchZone = PutawayZone
                FROM SKU (NOLOCK)
                WHERE StorerKey = @c_StorerKey
                AND SKU = @c_SKU
+               
+               IF ISNULL(RTRIM(@c_SearchZone),'') <> ''
+                  INSERT INTO #t_PutawayZone( PutawayZone ) VALUES (@c_SearchZone)
             END
             ELSE
             BEGIN
@@ -1597,7 +1867,7 @@ BEGIN
                     FROM @t_SKUList t
                     JOIN SKU s WITH (NOLOCK) ON t.StorerKey = S.StorerKey AND t.SKU = S.Sku ) > 1
                BEGIN
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FAILED PAType=' + RTRIM(@cpa_PAType) + ': Commodity AND Storer combination NOT found'
                      EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -1608,32 +1878,35 @@ BEGIN
                END
                ELSE
                BEGIN
-                  SELECT TOP 1 @c_SearchZone = S.Putawayzone
+                  SELECT TOP 1 @c_SearchZone = S.PutawayZone
                   FROM @t_SKUList t
                   JOIN SKU s WITH (NOLOCK) ON t.StorerKey = S.StorerKey AND t.SKU = S.Sku
+                  
+                  IF ISNULL(RTRIM(@c_SearchZone),'') <> ''
+                     INSERT INTO #t_PutawayZone( PutawayZone ) VALUES (@c_SearchZone)
                END
             END
          END
 
          -- Chekcing
-         IF @b_debug = 2
+         IF @b_Debug = 2
          BEGIN
-            SELECT 'PAType is ' + @cpa_PAType + ', SearchZone is ' + @c_SearchZone +
-                   ISNULL(RTRIM(@cpa_PutAwayZone01),'') + ',' +
-                   ISNULL(RTRIM(@cpa_PutAwayZone02),'') + ',' +
-                   ISNULL(RTRIM(@cpa_PutAwayZone03),'') + ',' +
-                   ISNULL(RTRIM(@cpa_PutAwayZone04),'') + ',' +
-                   ISNULL(RTRIM(@cpa_PutAwayZone05),'') + ',' +
-                   ISNULL(RTRIM(@cpa_PutAwayZoneExt),'')
+            PRINT 'PATyp : ' + @cpa_PAType + ', SearchZone: ' + RTRIM(@c_SearchZone) +
+                   ISNULL(RTRIM(@cpa_PutawayZone01),'') + ',' +
+                   ISNULL(RTRIM(@cpa_PutawayZone02),'') + ',' +
+                   ISNULL(RTRIM(@cpa_PutawayZone03),'') + ',' +
+                   ISNULL(RTRIM(@cpa_PutawayZone04),'') + ',' +
+                   ISNULL(RTRIM(@cpa_PutawayZone05),'') + ',' +
+                   ISNULL(RTRIM(@cpa_PutawayZoneExt),'')
          END
 
          IF ISNULL(RTRIM(@c_SearchZone),'') <> '' OR
-            ( ISNULL(RTRIM(@cpa_PutAwayZone01),'') <> '' OR
-              ISNULL(RTRIM(@cpa_PutAwayZone02),'') <> '' OR
-              ISNULL(RTRIM(@cpa_PutAwayZone03),'') <> '' OR
-              ISNULL(RTRIM(@cpa_PutAwayZone04),'') <> '' OR
-              ISNULL(RTRIM(@cpa_PutAwayZone05),'') <> '' OR
-              ISNULL(RTRIM(@cpa_PutAwayZoneExt),'') <> '')
+            ( ISNULL(RTRIM(@cpa_PutawayZone01),'') <> '' OR
+              ISNULL(RTRIM(@cpa_PutawayZone02),'') <> '' OR
+              ISNULL(RTRIM(@cpa_PutawayZone03),'') <> '' OR
+              ISNULL(RTRIM(@cpa_PutawayZone04),'') <> '' OR
+              ISNULL(RTRIM(@cpa_PutawayZone05),'') <> '' OR
+              ISNULL(RTRIM(@cpa_PutawayZoneExt),'') <> '')
          BEGIN
             IF @cpa_LocSearchType = '1' -- Search Zone By Location Code
             BEGIN
@@ -1644,330 +1917,30 @@ BEGIN
                BEGIN
                   DECLARE @n_StdCube                float
                         , @c_SelectSQL              nvarchar(4000)
-                        , @c_LocFlagRestriction     nvarchar(1000)
-                        , @c_LocTypeRestriction     nvarchar(1000)
-                        , @c_LocCategoryRestriction nvarchar(1000)
                         , @n_NoOfInclude            int
                         , @c_DimRestSQL             nvarchar(3000)
-                        , @c_LocLevelRestriction    nvarchar(2000)
-                        , @c_LocAisleRestriction    nvarchar(2000)
-                        , @c_LocHandlingRestriction NVARCHAR(2000)
 
                   -- Build Location Flag Restriction SQL
                   SELECT @n_NoOfInclude = 0
-                  SELECT @c_LocFlagRestriction = ''
 
-                  IF ISNULL(RTRIM(@cpa_LocationFlagInclude01),'') <> ''
+                  IF  @cpa_PAType = '61' 
                   BEGIN
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocFlagRestriction = RTRIM(@c_LocFlagRestriction) + '''' + RTRIM(@cpa_LocationFlagInclude01) + ''''
-                     SELECT @cpa_LocationFlagInclude01 = ''
+                     IF ISNULL(RTRIM(@cpa_PutawayZone01), '') <> ''
+                        INSERT INTO #t_PutawayZone ( PutawayZone ) VALUES ( @cpa_PutawayZone01 )
+                        
+                     IF ISNULL(RTRIM(@cpa_PutawayZone02), '') <> ''
+                        INSERT INTO #t_PutawayZone ( PutawayZone ) VALUES ( @cpa_PutawayZone02 )
+
+                     IF ISNULL(RTRIM(@cpa_PutawayZone03), '') <> ''
+                        INSERT INTO #t_PutawayZone ( PutawayZone ) VALUES ( @cpa_PutawayZone03 )
+
+                     IF ISNULL(RTRIM(@cpa_PutawayZone04), '') <> ''
+                        INSERT INTO #t_PutawayZone ( PutawayZone ) VALUES ( @cpa_PutawayZone04 )
+
+                     IF ISNULL(RTRIM(@cpa_PutawayZone05), '') <> ''
+                        INSERT INTO #t_PutawayZone ( PutawayZone ) VALUES ( @cpa_PutawayZone05 )
+                        
                   END
-                  IF ISNULL(RTRIM(@cpa_LocationFlagInclude02),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocFlagRestriction = RTRIM(@c_LocFlagRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocFlagRestriction = RTRIM(@c_LocFlagRestriction) + '''' + RTRIM(@cpa_LocationFlagInclude02) + ''''
-                     SELECT @cpa_LocationFlagInclude02 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationFlagInclude03),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocFlagRestriction = RTRIM(@c_LocFlagRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocFlagRestriction = RTRIM(@c_LocFlagRestriction) + '''' + RTRIM(@cpa_LocationFlagInclude03) + ''''
-                     SELECT @cpa_LocationFlagInclude03 = ''
-                  END
-
-                  IF @n_NoOfInclude = 1
-                     SELECT @c_LocFlagRestriction = ' AND LOC.LocationFlag = ' + RTRIM(@c_LocFlagRestriction)
-                  ELSE IF @n_NoOfInclude > 1
-                     SELECT @c_LocFlagRestriction = ' AND LOC.LocationFlag IN (' + RTRIM(@c_LocFlagRestriction) + ') '
-                  ELSE
-                     SELECT @c_LocFlagRestriction = ''
-                  -- END Build Location Flag
-
-                  SET @c_LocLevelRestriction = ''
-
-                  IF ISNULL(@npa_LocLevelInclude01,0) <> 0 OR
-                     ISNULL(@npa_LocLevelInclude02,0) <> 0 OR
-                     ISNULL(@npa_LocLevelInclude03,0) <> 0 OR
-                     ISNULL(@npa_LocLevelInclude04,0) <> 0 OR
-                     ISNULL(@npa_LocLevelInclude05,0) <> 0 OR
-                     ISNULL(@npa_LocLevelInclude06,0) <> 0
-                  BEGIN
-                     SET @c_LocLevelRestriction = ' AND LOC.LocLevel IN ('
-
-                     IF ISNULL(@npa_LocLevelInclude01,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction) + RTRIM(CAST(@npa_LocLevelInclude01 AS NVARCHAR(10)))
-
-                     IF ISNULL(@npa_LocLevelInclude02,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelInclude02 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelInclude03,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelInclude03 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelInclude04,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelInclude04 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelInclude05,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelInclude05 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelInclude06,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelInclude06 AS NVARCHAR(10)))
-
-                     SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction) + ')' + master.dbo.fnc_GetCharASCII(13)
-                  END
-
-                  IF ISNULL(@npa_LocLevelExclude01,0) <> 0 OR
-                     ISNULL(@npa_LocLevelExclude02,0) <> 0 OR
-                     ISNULL(@npa_LocLevelExclude03,0) <> 0 OR
-                     ISNULL(@npa_LocLevelExclude04,0) <> 0 OR
-                     ISNULL(@npa_LocLevelExclude05,0) <> 0 OR
-                     ISNULL(@npa_LocLevelExclude06,0) <> 0
-                  BEGIN
-                     SET @c_LocLevelRestriction = @c_LocLevelRestriction + ' AND LOC.LocLevel NOT IN ('
-
-                     IF ISNULL(@npa_LocLevelExclude01,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction) + RTRIM(CAST(@npa_LocLevelExclude01 AS NVARCHAR(10)))
-
-                     IF ISNULL(@npa_LocLevelExclude02,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelExclude02 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelExclude03,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelExclude03 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelExclude04,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelExclude04 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelExclude05,0) <> 0
-     SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelExclude05 AS NVARCHAR(10)))
-                     IF ISNULL(@npa_LocLevelExclude06,0) <> 0
-                        SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocLevelRestriction,1) = '(' THEN '' ELSE ',' END
-                                                   + RTRIM(CAST(@npa_LocLevelExclude06 AS NVARCHAR(10)))
-
-                     SET @c_LocLevelRestriction = RTRIM(@c_LocLevelRestriction) + ')'  + master.dbo.fnc_GetCharASCII(13)
-                  END
-
-                  SET @c_LocAisleRestriction = ''
-
-                  IF ISNULL(RTRIM(@cpa_LocAisleInclude01),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleInclude02),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleInclude03),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleInclude04),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleInclude05),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleInclude06),'') <> ''
-                  BEGIN
-                     SET @c_LocAisleRestriction = ' AND LOC.LocAisle IN ('
-
-                     IF ISNULL(RTRIM(@cpa_LocAisleInclude01),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction) + '''' + ISNULL(RTRIM(@cpa_LocAisleInclude01), '')
-                                                   + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleInclude02),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleInclude02), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleInclude03),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleInclude03), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleInclude04),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleInclude04), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleInclude05),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleInclude05), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleInclude06),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleInclude06), '') + ''''
-
-                     SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction) + ')' + master.dbo.fnc_GetCharASCII(13)
-                  END
-
-                  IF ISNULL(RTRIM(@cpa_LocAisleExclude01),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleExclude02),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleExclude03),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleExclude04),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleExclude05),'') <> '' OR
-                     ISNULL(RTRIM(@cpa_LocAisleExclude06),'') <> ''
-                  BEGIN
-                     SET @c_LocAisleRestriction = @c_LocAisleRestriction + ' AND LOC.LocAisle NOT IN ('
-
-                     IF ISNULL(RTRIM(@cpa_LocAisleExclude01),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction) + '''' + ISNULL(RTRIM(@cpa_LocAisleExclude01), '')
-                                                   + ''''
-
-                     IF ISNULL(RTRIM(@cpa_LocAisleExclude02),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleExclude02), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleExclude03),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleExclude03), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleExclude04),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleExclude04), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleExclude05),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleExclude05), '') + ''''
-                     IF ISNULL(RTRIM(@cpa_LocAisleExclude06),'') <> ''
-                        SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction)
-                                                   + CASE WHEN RIGHT(@c_LocAisleRestriction,1) = '(' THEN '''' ELSE ',N''' END
-                                                   + ISNULL(RTRIM(@cpa_LocAisleExclude06), '') + ''''
-
-                     SET @c_LocAisleRestriction = RTRIM(@c_LocAisleRestriction) + ')' + master.dbo.fnc_GetCharASCII(13)
-                  END
-
-                  ---- Build Location LocationHandling Restriction SQL XXXX
-                  SELECT @n_NoOfInclude = 0
-                  SELECT @c_LocHandlingRestriction = ''
-
-                  IF ISNULL(RTRIM(@cpa_LocationHandlingInclude01),'') <> ''
-                  BEGIN
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocHandlingRestriction = RTRIM(@c_LocHandlingRestriction) + '''' + RTRIM(@cpa_LocationHandlingInclude01) + ''''
-                     --SELECT @cpa_LocationHandlingInclude01 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationHandlingInclude02),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocHandlingRestriction = RTRIM(@c_LocHandlingRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocHandlingRestriction = RTRIM(@c_LocHandlingRestriction) + '''' + RTRIM(@cpa_LocationHandlingInclude02) + ''''
-                     --SELECT @cpa_LocationHandlingInclude02 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationHandlingInclude03),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocHandlingRestriction = RTRIM(@c_LocHandlingRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocHandlingRestriction = RTRIM(@c_LocHandlingRestriction) + '''' + RTRIM(@cpa_LocationHandlingInclude03) + ''''
-                     --SELECT @cpa_LocationHandlingInclude03 = ''
-                  END
-
-                  IF @n_NoOfInclude = 1
-                     SELECT @c_LocHandlingRestriction = ' AND LOC.LocationHandling = ' + RTRIM(@c_LocHandlingRestriction)
-                  ELSE IF @n_NoOfInclude > 1
-                     SELECT @c_LocHandlingRestriction = ' AND LOC.LocationHandling IN (' + RTRIM(@c_LocHandlingRestriction) + ') '
-                  ELSE
-                     SELECT @c_LocHandlingRestriction = ''
-
-                  -- Build Location LocationHandling Restriction
-                  -- Build Location Category Restriction SQL
-                  SELECT @n_NoOfInclude = 0
-                  SELECT @c_LocCategoryRestriction = ''
-
-                  IF ISNULL(RTRIM(@cpa_LocationCategoryInclude01),'') <> ''
-                  BEGIN
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocCategoryRestriction = RTRIM(@c_LocCategoryRestriction) + '''' + RTRIM(@cpa_LocationCategoryInclude01) + ''''
-                     --SELECT @cpa_LocationCategoryInclude01 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationCategoryInclude02),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocCategoryRestriction = RTRIM(@c_LocCategoryRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocCategoryRestriction = RTRIM(@c_LocCategoryRestriction) + '''' + RTRIM(@cpa_LocationCategoryInclude02) + ''''
-                     --SELECT @cpa_LocationCategoryInclude02 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationCategoryInclude03),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocCategoryRestriction = RTRIM(@c_LocCategoryRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocCategoryRestriction = RTRIM(@c_LocCategoryRestriction) + '''' + RTRIM(@cpa_LocationCategoryInclude03) + ''''
-                     --SELECT @cpa_LocationCategoryInclude03 = ''
-                  END
-
-                  IF @n_NoOfInclude = 1
-                     SELECT @c_LocCategoryRestriction = ' AND LOC.LocationCategory = ' + RTRIM(@c_LocCategoryRestriction)
-                  ELSE IF @n_NoOfInclude > 1
-                     SELECT @c_LocCategoryRestriction = ' AND LOC.LocationCategory IN (' + RTRIM(@c_LocCategoryRestriction) + ') '
-                  ELSE
-                     SELECT @c_LocCategoryRestriction = ''
-                  -- END Build Location Category
-                  -------------------
-
-                  -- BEGIN Build Location Type Restriction
-                  SELECT @n_NoOfInclude = 0
-                  SELECT @c_LocTypeRestriction = ''
-
-                  IF ISNULL(RTRIM(@cpa_LocationTypeExclude01),'') <> ''
-                  BEGIN
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + '''' + RTRIM(@cpa_LocationTypeExclude01) + ''''
-                     SELECT @cpa_LocationTypeExclude01 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationTypeExclude02),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + '''' + RTRIM(@cpa_LocationTypeExclude02) + ''''
-                     SELECT @cpa_LocationTypeExclude02 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationTypeExclude03),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + '''' + RTRIM(@cpa_LocationTypeExclude03) + ''''
-                     SELECT @cpa_LocationTypeExclude03 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationTypeExclude04),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + '''' + RTRIM(@cpa_LocationTypeExclude04) + ''''
-                     SELECT @cpa_LocationTypeExclude04 = ''
-                  END
-                  IF ISNULL(RTRIM(@cpa_LocationTypeExclude05),'') <> ''
-                  BEGIN
-                     IF @n_NoOfInclude > 0
-                        SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + ','
-
-                     SELECT @n_NoOfInclude = @n_NoOfInclude + 1
-                     SELECT @c_LocTypeRestriction = RTRIM(@c_LocTypeRestriction) + '''' + RTRIM(@cpa_LocationTypeExclude05) + ''''
-                     SELECT @cpa_LocationTypeExclude05 = ''
-                  END
-
-                  IF @n_NoOfInclude = 1
-                     SELECT @c_LocTypeRestriction = ' AND LOC.LOCATIONTYPE <> ' + RTRIM(@c_LocTypeRestriction)
-                  ELSE IF @n_NoOfInclude > 1
-                     SELECT @c_LocTypeRestriction = ' AND LOC.LOCATIONTYPE NOT IN (' + RTRIM(@c_LocTypeRestriction) + ') '
-                  ELSE
-                     SELECT @c_LocTypeRestriction = ''
-                  -- END Build Location Type
 
                   -- Fit by Aisle -- (ung07)
                   SELECT @c_DimRestSQL = ''
@@ -1988,6 +1961,7 @@ BEGIN
                         '''' + @cpa_DimensionRestriction05  + ''', ' +
                         '''' + @cpa_DimensionRestriction06  + ''', ' +
                         '''' + @c_ID                        + ''') = 1'
+                        
                      SET @c_FitCasesInAisle = 'Y'
                   END
                   ELSE IF '19'  IN (@cpa_DimensionRestriction01, @cpa_DimensionRestriction02, @cpa_DimensionRestriction03,
@@ -2012,8 +1986,6 @@ BEGIN
                   ELSE
                      SET @c_FitCasesInAisle = ''
 
-
-
                   -- Extended putaway strategy for zone
                   IF EXISTS( SELECT TOP 1 1 FROM CodeLKUP WITH (NOLOCK)
                            JOIN LOC WITH (NOLOCK) ON (LOC.PutawayZone = CodeLkup.Short)
@@ -2024,11 +1996,11 @@ BEGIN
                      DECLARE @cPutawayZone NVARCHAR(10)
                      DECLARE @curPA CURSOR
 
-                     SET @cpa_PutAwayZoneExt = ''
+                     SET @cpa_PutawayZoneExt = ''
                      SET @cPutawayZone = ''
 
                      -- Loop each ext zone
-                     SET @curPA = CURSOR FOR
+                     SET @curPA = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                         SELECT Short
                         FROM CodeLKUP WITH (NOLOCK)
                         WHERE ListName = 'PAStgLnExt'
@@ -2039,68 +2011,52 @@ BEGIN
                      WHILE @@FETCH_STATUS = 0
                      BEGIN
                         -- Concat each ext zone
-                        SET @cpa_PutAwayZoneExt = @cpa_PutAwayZoneExt + 'N''' + @cPutawayZone + ''','
+                        IF ISNULL(RTRIM(@cPutawayZone),'') <> ''
+                           INSERT INTO #t_PutawayZone ( PutawayZone ) VALUES (@cPutawayZone)
+                        
                         FETCH NEXT FROM @curPA INTO @cPutawayZone
                      END
 
                      -- Remove last comma
-                     IF LEN( @cpa_PutAwayZoneExt) > 0
-                        SET @cpa_PutAwayZoneExt = LEFT( @cpa_PutAwayZoneExt, LEN( @cpa_PutAwayZoneExt) - 1)
+                     --IF LEN( @cpa_PutawayZoneExt) > 0
+                     --   SET @cpa_PutawayZoneExt = LEFT( @cpa_PutawayZoneExt, LEN( @cpa_PutawayZoneExt) - 1)
 
                      CLOSE @curPA
                      DEALLOCATE @curPA
                   END
+                  
+                  IF @b_Debug=2
+                  BEGIN
+                     IF ISNULL(RTRIM(@c_DimRestSQL),'') <> ''
+                        PRINT '>>> @c_DimRestSQL: ' + @c_DimRestSQL
+                  END
 
                   IF '1' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
                   BEGIN -- loc must be empty
+                  
                      SELECT @c_SelectSQL =
-                                       --' SELECT TOP 1 @c_Loc = LOC.LOC ' +
                                        ' DECLARE Cur_PutawayLocation CURSOR FAST_FORWARD READ_ONLY FOR ' +
                                        ' SELECT LOC.LOC ' +
                                        ' FROM  LOC WITH (NOLOCK) ' +
                                        ' LEFT OUTER JOIN LOTxLOCxID WITH (NOLOCK) ON ( LOC.loc = LOTxLOCxID.LOC ) ' +
                                        ' LEFT OUTER JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = LOTxLOCxID.StorerKey AND SKU.SKU = LOTxLOCxID.SKU ' +
-                                       CASE WHEN @cpa_PAType = '61' THEN
-                                          ' WHERE LOC.Putawayzone IN (N''' + @cpa_PutAwayZone01 + '''' +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone02), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone02 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone03), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone03 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone04), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone04 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone05), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone05 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZoneExt), '') <> '' THEN
-                                             ',' + @cpa_PutAwayZoneExt
-                                             ELSE ''
-                                          END +
-                                       ') '
-                                          ELSE
-                                             ' WHERE LOC.Putawayzone = N''' + RTRIM(@c_SearchZone) + ''' '
-                                       END +
-                                       ' AND   LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
-                                       --' AND   LOC.LOC > @c_LastLoc ' +
-                                       ISNULL( RTRIM(@c_LocFlagRestriction), '') +
-                                       ISNULL( RTRIM(@c_LocTypeRestriction), '') +
-                                       ISNULL( RTRIM(@c_LocLevelRestriction), '') +
-                                       ISNULL( RTRIM(@c_LocAisleRestriction), '') +
-                                       ISNULL( RTRIM(@c_LocHandlingRestriction),'') +
-                                       ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
-                                       ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
-                                       -- ' GROUP BY LOC.LOC ' +
-                                       ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
-                                     --' HAVING (SUM(LOTxLOCxID.Qty) = 0 OR SUM(LOTxLOCxID.Qty) IS NULL) ' +
-                                       ' HAVING (( SUM(LOTxLOCxID.Qty) - SUM(LOTxLOCxID.QtyPicked)) = 0 OR (SUM(LOTxLOCxID.Qty) - SUM(LOTxLOCxID.QtyPicked))  IS NULL )' + -- (ChewKP01)
-                                       ' AND (SUM(LOTxLOCxID.PendingMoveIn) = 0 OR SUM(LOTxLOCxID.PendingMoveIn) IS NULL) '
+                                       ' JOIN #t_PutawayZone PZ ON LOC.PutawayZone = PZ.PutawayZone '
+                  +
+                  ' WHERE   LOC.Facility = @c_Facility' +
+                  CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
+                  ISNULL( RTRIM(@c_SQL_LocationFlagInclude), '') +
+                  ISNULL( RTRIM(@c_SQL_LocationFlagExclude), '') +
+                  ISNULL( RTRIM(@c_SQL_LocationTypeExclude), '') +
+                  ISNULL( RTRIM(@c_SQL_LocLevelInclude    ), '') +
+                  ISNULL( RTRIM(@c_SQL_LocLevelExclude    ), '') +
+                  ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
+                  ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
+                  ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
+                  ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
+                  ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
+                  ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
+                  ' HAVING (( SUM(LOTxLOCxID.Qty) - SUM(LOTxLOCxID.QtyPicked)) = 0 OR (SUM(LOTxLOCxID.Qty) - SUM(LOTxLOCxID.QtyPicked))  IS NULL )' + 
+                  ' AND (SUM(LOTxLOCxID.PendingMoveIn) = 0 OR SUM(LOTxLOCxID.PendingMoveIn) IS NULL) '
 
                      SELECT @c_DimRestSQL = ''
 
@@ -2113,15 +2069,17 @@ BEGIN
                                @cpa_LocationStateRestriction3 = ''
                      END
 
+                     
                      -- Fit by Cube
                      IF '1' IN (@cpa_DimensionRestriction01, @cpa_DimensionRestriction02, @cpa_DimensionRestriction03,
                                 @cpa_DimensionRestriction04, @cpa_DimensionRestriction05, @cpa_DimensionRestriction06)
                      BEGIN
                         SELECT @c_DimRestSQL = ''
+                        SET @npa_TotalCube = @n_PalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
                                              ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             CAST(@n_PalletTotStdCube AS NVARCHAR(20))
+                                             ' @npa_TotalCube '
                      END
 
                      -- Fit by BOMSKU Cube -- (ChewKP02)
@@ -2129,38 +2087,41 @@ BEGIN
                                  @cpa_DimensionRestriction04, @cpa_DimensionRestriction05, @cpa_DimensionRestriction06)
                      BEGIN
                         SELECT @c_DimRestSQL = ''
+                        SELECT @n_InvBOMCube = 0
+                        SET @npa_TotalCube = @f_PPalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-                                             --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPalletTotStdCube AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >=  @npa_TotalCube '
                      END
 
+                     
+                     
                      -- Fit by Weight
                      IF '3' IN (@cpa_DimensionRestriction01, @cpa_DimensionRestriction02, @cpa_DimensionRestriction03,
                                 @cpa_DimensionRestriction04, @cpa_DimensionRestriction05, @cpa_DimensionRestriction06)
                      BEGIN
                         SELECT @c_DimRestSQL = ''
+                        SET @npa_TotalWeight = @n_PalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
                                              ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDGROSSWGT,1)) >= ' +
-                                             CAST(@n_PalletTotStdGrossWgt AS NVARCHAR(20))
+                                             ' @npa_TotalWeight '
                      END
 
+
+                     
                      -- Fit by BOMSKU Weight -- (ChewKP02)
                      IF '12' IN (@cpa_DimensionRestriction01, @cpa_DimensionRestriction02, @cpa_DimensionRestriction03,
                                  @cpa_DimensionRestriction04, @cpa_DimensionRestriction05, @cpa_DimensionRestriction06)
                      BEGIN
                         SELECT @c_DimRestSQL = ''
+                        SET @npa_TotalWeight = @n_PalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
-                                             --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) )* ISNULL(SKU.STDGROSSWGT,1)) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPPalletTotStdGrossWgt AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >= @npa_TotalWeight '
                      END
 
                      SELECT @c_SelectSQL = RTRIM(@c_SelectSQL) + @c_DimRestSQL +
-                                         --' ORDER BY LOC.LOC '
                                          ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
 
                      -- to disable further checking of DimensionRestriction
@@ -2181,49 +2142,25 @@ BEGIN
                   ELSE IF '3' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
                   BEGIN -- do NOT mix lot
                      SELECT @c_SelectSQL =
-                                       --' SELECT TOP 1 @c_Loc = LOC.LOC ' +
                                        ' DECLARE Cur_PutawayLocation CURSOR FAST_FORWARD READ_ONLY FOR ' +
                                        ' SELECT LOC.LOC ' +
                                        ' FROM LOC WITH (NOLOCK) LEFT OUTER JOIN LOTxLOCxID WITH (NOLOCK) ON ( LOC.loc = LOTxLOCxID.LOC ) ' +
+                                       ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' +
                                        ' LEFT OUTER JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = LOTxLOCxID.StorerKey AND SKU.SKU = LOTxLOCxID.SKU ' +
-                                       CASE WHEN @cpa_PAType = '61' THEN
-                                             ' WHERE LOC.Putawayzone IN (N''' + @cpa_PutAwayZone01 + '''' +
-                                             CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone02), '') <> '' THEN
-                                                ',N''' + @cpa_PutAwayZone02 + ''''
-                                                ELSE ''
-                                             END +
-                                             CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone03), '') <> '' THEN
-                                                ',N''' + @cpa_PutAwayZone03 + ''''
-                                                ELSE ''
-                                             END +
-                                             CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone04), '') <> '' THEN
-                                                ',N''' + @cpa_PutAwayZone04 + ''''
-                                                ELSE ''
-                                             END +
-                                             CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone05), '') <> '' THEN
-                                                ',N''' + @cpa_PutAwayZone05 + ''''
-                                                ELSE ''
-                                             END +
-                                             CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZoneExt), '') <> '' THEN
-                                                ',' + @cpa_PutAwayZoneExt
-                                                ELSE ''
-                                             END +
-                                       ') '
-                                       ELSE
-                                          ' WHERE LOC.Putawayzone = N''' + RTRIM(@c_SearchZone) + ''' '
-                                       END +
-                                       --' AND LOC.LOC > @c_LastLoc ' +
-                                          ISNULL( RTRIM(@c_LocFlagRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocTypeRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocLevelRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocAisleRestriction), '') +
+                                       ' WHERE LOC.Facility = @c_Facility ' +
+                                       ' AND (LOTxLOCxID.LOT = @c_LOT '  +
+                                       ' OR LOTxLOCxID.Lot IS NULL) ' +                                       
+                                          ISNULL( RTRIM(@c_SQL_LocationFlagInclude), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocationFlagExclude), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocationTypeExclude), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocLevelInclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocLevelExclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
                                           ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
                                           ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
                                        CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
-                                       ' AND  LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       ' AND (LOTxLOCxID.LOT = N''' + RTRIM(@c_LOT) + ''''  +
-                                       ' OR LOTxLOCxID.Lot IS NULL) ' +
-                                       --' GROUP BY LOC.LOC '
                                        ' GROUP BY LOC.PALogicalLOC, LOC.LOC '
 
 
@@ -2238,10 +2175,12 @@ BEGIN
                            SELECT @c_DimRestSQL = ' HAVING '
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
-
+                        
+                        SET @npa_TotalCube = @n_PalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0)) * ISNULL(SKU.STDCUBE,1)) >= ' +
-                        CAST(@n_PalletTotStdCube AS NVARCHAR(20))
+                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0)) * ISNULL(SKU.STDCUBE,1)) ' + 
+                                             ' >= @npa_TotalCube' 
+                        
                      END
 
                      -- Fit by BOMSKU Cube -- (ChewKP02)
@@ -2253,11 +2192,10 @@ BEGIN
                            SELECT @c_DimRestSQL = ' HAVING '
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
-
+                        
+                        SET @npa_TotalCube = @n_PalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-               --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPalletTotStdCube AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >= @npa_TotalCube' 
                      END
 
                      -- Fit by Weight
@@ -2269,10 +2207,11 @@ BEGIN
                            SELECT @c_DimRestSQL = ' HAVING '
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
-
+                        
+                        SET @npa_TotalWeight = @n_PalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
-                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0)) * SKU.STDGROSSWGT) >= ' +
-                                             CAST(@n_PalletTotStdGrossWgt AS NVARCHAR(20))
+                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0)) * SKU.STDGROSSWGT) ' + 
+                                             ' >= @npa_TotalWeight' 
                      END
 
                      -- Fit by BOMSKU Weight -- (ChewKP02)
@@ -2285,14 +2224,12 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalWeight = @f_PPPalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
-                                             --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* SKU.STDGROSSWGT) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPPalletTotStdGrossWgt AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >= @npa_TotalWeight'  
                      END
 
                      SELECT @c_SelectSQL = RTRIM(@c_SelectSQL) + @c_DimRestSQL +
-                       -- ' ORDER BY LOC.LOC '
                        ' ORDER BY LOC.PALogicalLOC, LOC.LOC '
 
                      -- to disable further checking of locationstaterestriction = '2'
@@ -2316,55 +2253,30 @@ BEGIN
                      IF @cpa_DimensionRestriction06 IN ('1', '3')
                         SELECT @cpa_DimensionRestriction06 = '0'
 
-        END   -- do NOT mix Lot
-
+                  END   -- do NOT mix Lot
                   ELSE IF '2' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
                   BEGIN -- do NOT mix skus
                      SELECT @c_SelectSQL =
-                                       --' SELECT TOP 1 @c_Loc = LOC.LOC ' +
-                                       ' DECLARE Cur_PutawayLocation CURSOR FAST_FORWARD READ_ONLY FOR ' +
-                                       ' SELECT LOC.LOC ' +
-                                       ' FROM LOC (NOLOCK) LEFT OUTER JOIN LOTxLOCxID (NOLOCK) ON ( LOC.loc = LOTxLOCxID.LOC ) ' +
-                                       ' LEFT OUTER JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = LOTxLOCxID.StorerKey AND SKU.SKU = LOTxLOCxID.SKU ' +
-                                       CASE WHEN @cpa_PAType = '61' THEN
-                                          ' WHERE LOC.Putawayzone IN (N''' + @cpa_PutAwayZone01 + '''' +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone02), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone02 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone03), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone03 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone04), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone04 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone05), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone05 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZoneExt), '') <> '' THEN
-                                             ',' + @cpa_PutAwayZoneExt
-                                             ELSE ''
-                                          END +
-                                          ') '
-                                       ELSE
-                                          ' WHERE LOC.Putawayzone = N''' + RTRIM(@c_SearchZone) + ''' '
-                                       END +
-                                       --' AND   LOC.LOC > @c_LastLoc ' +
-                                          ISNULL( RTRIM(@c_LocFlagRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocTypeRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocLevelRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocAisleRestriction), '') +
-                                          ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
-                                          ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
-                                       CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
-                                       ' AND  LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       ' AND (LOTxLOCxID.StorerKey = N''' + RTRIM(@c_StorerKey) + '''  OR LOTxLOCxID.StorerKey IS NULL) ' +
-                                       ' AND (LOTxLOCxID.sku = N''' + RTRIM(@c_SKU) + ''' OR LOTxLOCxID.sku IS NULL) ' +
-                                       --' GROUP BY LOC.LOC '
-                                       ' GROUP BY LOC.PALogicalLOC, LOC.LOC '
+                        ' DECLARE Cur_PutawayLocation CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                        ' SELECT LOC.LOC ' +
+                        ' FROM LOC (NOLOCK) LEFT OUTER JOIN LOTxLOCxID (NOLOCK) ON ( LOC.loc = LOTxLOCxID.LOC ) ' +
+                        ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' +
+                        ' LEFT OUTER JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = LOTxLOCxID.StorerKey AND SKU.SKU = LOTxLOCxID.SKU ' +
+                        ' WHERE LOC.Facility = @c_Facility ' +
+                        ' AND (LOTxLOCxID.StorerKey = @c_StorerKey OR LOTxLOCxID.StorerKey IS NULL) ' +
+                        ' AND (LOTxLOCxID.sku = @c_SKU OR LOTxLOCxID.SKU IS NULL) ' +                        
+                           ISNULL( RTRIM(@c_SQL_LocationFlagInclude), '') +
+                           ISNULL( RTRIM(@c_SQL_LocationFlagExclude), '') +
+                           ISNULL( RTRIM(@c_SQL_LocationTypeExclude), '') +
+                           ISNULL( RTRIM(@c_SQL_LocLevelInclude    ), '') +
+                           ISNULL( RTRIM(@c_SQL_LocLevelExclude    ), '') +
+                           ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
+                           ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
+                           ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
+                           ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
+                           ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
+                        CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
+                        ' GROUP BY LOC.PALogicalLOC, LOC.LOC '
 
                      SELECT @c_DimRestSQL = ''
 
@@ -2378,9 +2290,10 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalCube = @n_PalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             CAST(@n_PalletTotStdCube AS NVARCHAR(20))
+                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) ' + 
+                                             ' >= @npa_TotalCube '  
                      END
 
                      -- Fit by BOMSKU Cube -- (ChewKP02)
@@ -2393,10 +2306,9 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalCube = @f_PPalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-                                             --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPalletTotStdCube AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >= @npa_TotalCube'  
                      END
 
                      -- Fit by Weight
@@ -2408,10 +2320,10 @@ BEGIN
                            SELECT @c_DimRestSQL = ' HAVING '
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
-
+                           
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
                                              '( ( SUM(ISNULL(LOTxLOCxID.Qty, 0)) - SUM(ISNULL(LOTxLOCxID.QtyPicked,0)) + SUM(ISNULL(LOTxLOCxID.PendingMoveIn,0))) ' +
-                                             '* ' + RTRIM(CAST(@n_StdGrossWgt AS NVARCHAR(20))) + ') >= (' + RTRIM(CAST(@n_StdGrossWgt AS NVARCHAR(20))) + ' * ' + RTRIM(CAST(@n_Qty AS NVARCHAR(10))) + ')'
+                                             '* @n_StdGrossWgt ) >= (@n_StdGrossWgt * @n_Qty )'
                      END
 
                      -- Fit by BOMSKU Weight -- (ChewKP02)
@@ -2424,14 +2336,12 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalWeight = @f_PPPalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
-                                             --'( ( SUM(ISNULL(LOTxLOCxID.Qty, 0)) - SUM(ISNULL(LOTxLOCxID.QtyPicked,0)) + SUM(ISNULL(LOTxLOCxID.PendingMoveIn,0))) ' +
-                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             '* ' + RTRIM(CAST(@f_PPPalletTotStdGrossWgt AS NVARCHAR(20))) + ') >= (' + RTRIM(CAST(@f_PPPalletTotStdGrossWgt AS NVARCHAR(20))) + ' * ' + RTRIM(CAST(@n_Qty AS NVARCHAR(10))) + ')'
+                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >= @npa_TotalWeight' 
                      END
 
                      SELECT @c_SelectSQL = RTRIM(@c_SelectSQL) + @c_DimRestSQL +
-                                         --' ORDER BY LOC.LOC '
                                          ' ORDER BY LOC.PALogicalLOC, LOC.LOC '
 
                      -- to disable further checking of locationstaterestriction = '2'
@@ -2459,48 +2369,24 @@ BEGIN
                   ELSE -- no location state restrictions
                   BEGIN
                      SELECT @c_SelectSQL =
-                                       --' SELECT TOP 1 @c_Loc = LOC.LOC ' +
                                        ' DECLARE Cur_PutawayLocation CURSOR FAST_FORWARD READ_ONLY FOR ' +
                                        ' SELECT LOC.LOC ' +
                                        ' FROM LOC (NOLOCK)  ' +
+                                       ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' +
                                        ' LEFT OUTER JOIN LOTxLOCxID WITH (NOLOCK) ON ( LOC.loc = LOTxLOCxID.LOC ) ' +
                                        ' LEFT OUTER JOIN SKU WITH (NOLOCK) ON (SKU.StorerKey = LOTxLOCxID.StorerKey AND SKU.SKU = LOTxLOCxID.SKU) ' +
-                                       CASE WHEN @cpa_PAType = '61' THEN
-                                          ' WHERE LOC.Putawayzone IN (N''' + @cpa_PutAwayZone01 + '''' +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone02), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone02 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone03), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone03 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone04), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone04 + ''''
-                                             ELSE ''
-                                          END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZone05), '') <> '' THEN
-                                             ',N''' + @cpa_PutAwayZone05 + ''''
-                                             ELSE ''
-                              END +
-                                          CASE WHEN ISNULL(RTRIM(@cpa_PutAwayZoneExt), '') <> '' THEN
-                                             ',' + @cpa_PutAwayZoneExt
-                                             ELSE ''
-                                          END +
-                                          ') '
-                                       ELSE
-                                          ' WHERE LOC.Putawayzone = N''' + RTRIM(@c_SearchZone) + ''' '
-                                       END +
-                                       --' AND   LOC.LOC > @c_LastLoc ' +
-                                          ISNULL( RTRIM(@c_LocFlagRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocTypeRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocLevelRestriction), '') +
-                                          ISNULL( RTRIM(@c_LocAisleRestriction), '') +
+                                       ' WHERE  LOC.Facility = @c_Facility ' +                                       
+                                          ISNULL( RTRIM(@c_SQL_LocationFlagInclude), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocationFlagExclude), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocationTypeExclude), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocLevelInclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocLevelExclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
                                           ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
                                           ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
                                        CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
-                                       ' AND  LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       --' GROUP BY LOC.LOC '
                                        ' GROUP BY LOC.PALogicalLOC, LOC.LOC '
 
                      SELECT @c_DimRestSQL = ''
@@ -2515,9 +2401,10 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalCube = @n_PalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             CAST(@n_PalletTotStdCube AS NVARCHAR(20))
+                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) ' +
+                                             ' >= @npa_TotalCube'
                      END
 
                      -- Fit by BOMSKU Cube -- (ChewKP02)
@@ -2530,10 +2417,9 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalCube = @f_PPalletTotStdCube
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
-                                             --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDCUBE,1)) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPalletTotStdCube AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(1,LOC.LOC,'''') >=  @npa_TotalCube'
                      END
 
                      -- Fit by Weight
@@ -2546,9 +2432,10 @@ BEGIN
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
 
+                        SET @npa_TotalWeight = @n_PalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
-                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* SKU.STDGROSSWGT) >= ' +
-                                             CAST(@n_PalletTotStdGrossWgt AS NVARCHAR(20))
+                                             ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ' + 
+                                             ' ISNULL(LOTxLOCxID.PendingMoveIn,0))* SKU.STDGROSSWGT) >=  @npa_TotalWeight'
                      END
 
                      -- Fit by BOMSKU Weight -- (ChewKP02)
@@ -2560,15 +2447,13 @@ BEGIN
                            SELECT @c_DimRestSQL = ' HAVING '
                         ELSE
                            SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' AND '
-
+                        
+                        SET @npa_TotalWeight = @f_PPPalletTotStdGrossWgt
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
-                                             --' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* SKU.STDGROSSWGT) >= ' +
-                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >=' + -- (ChewKP03)
-                                             CAST(@f_PPPalletTotStdGrossWgt AS NVARCHAR(20))
+                                             ' dbo.fnc_GetInvBOMCube(2,LOC.LOC,'''') >= @npa_TotalWeight '
                      END
 
                      SELECT @c_SelectSQL = RTRIM(@c_SelectSQL) + @c_DimRestSQL +
-                                         --' ORDER BY LOC.LOC '
                                          ' ORDER BY LOC.PALogicalLOC, LOC.LOC '
 
                      -- to disable further checking of locationstaterestriction = '2'
@@ -2611,28 +2496,16 @@ BEGIN
                      DECLARE @t_ZoneAisle TABLE (LocAisle NVARCHAR(10) PRIMARY KEY CLUSTERED)
                      DELETE @t_ZoneAisle -- This is required. Table can exist and contain last run data (ung04)
 
-                     /* Remark for performance tuning
                      INSERT INTO @t_ZoneAisle
-                     SELECT DISTINCT LocAisle
-                     FROM   LOC WITH (NOLOCK)
-                     WHERE  LOC.PutawayZone IN (@cpa_PutAwayZone01
-                                               ,@cpa_PutAwayZone02
-                                               ,@cpa_PutAwayZone03
-                                               ,@cpa_PutAwayZone04
-                                               ,@cpa_PutAwayZone05)
-                     AND ISNULL(RTRIM(LOC.PutawayZone),'') <> '' -- (Vicky04)
-                     */
-
-                     INSERT INTO @t_ZoneAisle
-                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutAwayZone01 AND @cpa_PutAwayZone01 <> ''
+                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutawayZone01 AND @cpa_PutawayZone01 <> ''
                      UNION
-                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutAwayZone02 AND @cpa_PutAwayZone02 <> ''
+                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutawayZone02 AND @cpa_PutawayZone02 <> ''
                      UNION
-                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutAwayZone03 AND @cpa_PutAwayZone03 <> ''
+                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutawayZone03 AND @cpa_PutawayZone03 <> ''
                      UNION
-                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutAwayZone04 AND @cpa_PutAwayZone04 <> ''
+                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutawayZone04 AND @cpa_PutawayZone04 <> ''
                      UNION
-                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutAwayZone05 AND @cpa_PutAwayZone05 <> ''
+                     SELECT DISTINCT LocAisle FROM LOC WITH (NOLOCK) WHERE PutawayZone = @cpa_PutawayZone05 AND @cpa_PutawayZone05 <> ''
                      UNION
                         SELECT DISTINCT LOC.LOCAisle
                         FROM CodeLKUP WITH (NOLOCK)
@@ -2641,10 +2514,8 @@ BEGIN
                            AND Code LIKE RTRIM( @c_PutawayStrategyKey) + @c_PutawayStrategyLineNumber + '%'
                            AND Long = 'PutawayZone'
 
-                     -- (Vicky02) - Start
                      SELECT @c_MaxAisle = ISNULL(MAX(LocAisle), '')
                      FROM @t_ZoneAisle
-                     -- (Vicky02) - END
 
                      -- Get last PND aisle used from TaskDetail
                      IF @c_LastPndAisle = ''
@@ -2670,7 +2541,7 @@ BEGIN
                            SET @c_LastPnDLocZone = '' --(ung04)
                         END
 
-                        IF @b_debug = 1
+                        IF @b_Debug = 1
                         BEGIN
                            IF @c_LastPndAisle = ''
                            BEGIN
@@ -2692,13 +2563,13 @@ BEGIN
                         SET @c_NextPnDLocCat   = ''
                         SET @c_NextPnDLocZone  = '' --(ung04)
 
-                        IF @b_debug = 2
+                        IF @b_Debug = 2
                         BEGIN
-                           SELECT 'Find next aisle starts'
-                                 ,@c_LastPndAisle  '@c_LastPndAisle'
-                                 ,@c_LastPnDLocCat '@c_LastPnDLocCat'
-                                 ,@c_LastPnDLocZone '@c_LastPnDLocZone' --(ung04)
-                                 ,@c_MaxAisle '@c_MaxAisle'
+                           PRINT 'Find next aisle starts..'
+                           PRINT '  > @c_LastPndAisle: ' + @c_LastPndAisle    
+                                 + ', @c_LastPnDLocCat: ' + @c_LastPnDLocCat 
+                                 + ', @c_LastPnDLocZone: ' + @c_LastPnDLocZone 
+                                 + '@c_MaxAisle: ' + @c_MaxAisle 
                         END
 
                         IF @c_LastPnDLocCat IN (N'PnD_In', N'PnD') --(ung08)
@@ -2709,7 +2580,6 @@ BEGIN
                                  ,@c_NextPnDLocCat = L.LocationCategory
                            FROM   LOC L WITH (NOLOCK)
                            JOIN @t_ZoneAisle ZoneAisle ON (ZoneAisle.LocAisle = L.LocAisle)
-                           --       LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.Loc = L.Loc AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)) --(ung03)
                            WHERE  L.LocationCategory IN (N'PnD_Ctr' ,N'PnD_In', N'PnD') --(ung08)
                               AND L.Facility = @c_Facility
                               AND (
@@ -2722,18 +2592,6 @@ BEGIN
                                    FROM LOTxLOCxID LLI WITH (NOLOCK)
                                    WHERE LLI.Loc = L.Loc
                                    AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)) < L.MaxPallet
-                           --GROUP BY
-                           --       CASE
-                           --          WHEN L.LocationCategory IN (N'PnD_In', N'PnD') THEN 1 --(ung08)
-                           --          ELSE 2
-                           --       END
-                           --      ,L.LOC
-                           --      ,L.LogicalLocation
-                           --      ,L.LocAisle
-                           --      ,L.LocationCategory
-                           --      ,L.MaxPallet
-                           --HAVING SUM(ISNULL(LLI.Qty ,0)+ISNULL(LLI.PendingMoveIN ,0))=0
-                           --HAVING COUNT( DISTINCT LLI.ID) < L.MaxPallet --(ung03)
                            ORDER BY
                                   L.LocAisle
                                  ,CASE
@@ -2751,7 +2609,6 @@ BEGIN
                                  ,@c_NextPnDLocCat = L.LocationCategory
                            FROM   LOC L WITH (NOLOCK)
                                   JOIN @t_ZoneAisle ZoneAisle ON (ZoneAisle.LocAisle = L.LocAisle)
-                           --       LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.Loc = L.Loc AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)) --(ung03)
                            WHERE  L.LocationCategory IN (N'PnD_Ctr' ,N'PnD_In', N'PnD') --(ung08)
                                   AND L.Facility = @c_Facility
                                   AND L.LocAisle > @c_LastPndAisle
@@ -2760,18 +2617,6 @@ BEGIN
                                        FROM LOTxLOCxID LLI WITH (NOLOCK)
                                        WHERE LLI.Loc = L.Loc
                                        AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)) < L.MaxPallet
---                           GROUP BY
---                                 CASE
---                                    WHEN L.LocationCategory IN (N'PnD_In', N'PnD') THEN 1 --(ung08)
---                                    ELSE 2
---                                 END
---                                 ,L.LOC
---                                 ,L.LogicalLocation
---                                 ,L.LocAisle
---                                 ,L.LocationCategory
---                                 ,L.MaxPallet
-                           --HAVING SUM(ISNULL(LLI.Qty ,0)+ISNULL(LLI.PendingMoveIN ,0))=0
---                           HAVING COUNT( DISTINCT LLI.ID) < L.MaxPallet --(ung03)
                            ORDER BY
                                   L.LocAisle
                                  ,CASE
@@ -2782,7 +2627,7 @@ BEGIN
                                  ,L.LOC
                         END
 
-                        IF @b_debug = 1
+                        IF @b_Debug = 1
                         BEGIN
                            IF @c_NextPnDLocation = ''
                            BEGIN
@@ -2796,13 +2641,13 @@ BEGIN
                            END
                         END
 
-                        IF @b_debug = 2
-                        BEGIN
-                           SELECT 'Find next aisle after last task aisle'
-                                 ,@c_NextPnDAisle '@c_NextPnDAisle'
-                                 ,@c_NextPnDLocation '@c_NextPnDLocation'
-                                 ,@c_NextPnDLocCat '@c_NextPnDLocCat'
-                                 ,@c_StartAisle '@c_StartAisle'
+                        IF @b_Debug = 2
+                        BEGIN                        
+                           PRINT 'Find next aisle after last task aisle' 
+                           PRINT + '@c_NextPnDAisle: ' + @c_NextPnDAisle    
+                                 + ' , @c_NextPnDLocation: ' + @c_NextPnDLocation 
+                                 + ' , @c_NextPnDLocCat: ' + @c_NextPnDLocCat   
+                                 + ' , @c_StartAisle: ' + @c_StartAisle      
                         END
 
                         -- If not found, find all aisle
@@ -2815,26 +2660,13 @@ BEGIN
                                  ,@c_NextPnDAisle = L.LocAisle
                                  ,@c_NextPnDLocCat = L.LocationCategory
                            FROM   LOC L WITH (NOLOCK)
-                                  JOIN @t_ZoneAisle ZoneAisle ON (ZoneAisle.LocAisle = L.LocAisle)
-                           --       LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.Loc = L.Loc AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)) --(ung03)
+                           JOIN @t_ZoneAisle ZoneAisle ON (ZoneAisle.LocAisle = L.LocAisle)
                            WHERE  L.LocationCategory IN (N'PnD_Ctr' ,N'PnD_In', N'PnD') --(ung08)
                               AND L.Facility = @c_Facility
                               AND (SELECT COUNT(DISTINCT LLI.Id)
                                    FROM LOTxLOCxID LLI WITH (NOLOCK)
                                    WHERE LLI.Loc = L.Loc
                                    AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)) < L.MaxPallet
---                           GROUP BY
---                                  CASE
---                                    WHEN L.LocationCategory IN (N'PnD_In', N'PnD') THEN 1 --(ung08)
---                                    ELSE 2
---                                  END
---                                 ,L.LOC
---                                 ,L.LogicalLocation
---                                 ,L.LocAisle
---                                 ,L.LocationCategory
---                                 ,L.MaxPallet
-                           --HAVING SUM(ISNULL(LLI.Qty ,0) + ISNULL(LLI.PendingMoveIN ,0)) = 0
-                           --HAVING COUNT( DISTINCT LLI.ID) < L.MaxPallet --(ung03)
                            ORDER BY
                                   L.LocAisle
                                  ,CASE
@@ -2844,7 +2676,7 @@ BEGIN
                                  ,L.LogicalLocation
                                  ,L.LOC
 
-                           IF @b_debug = 1
+                           IF @b_Debug = 1
                            BEGIN
                               IF @c_NextPnDLocation = ''
                               BEGIN
@@ -2861,23 +2693,22 @@ BEGIN
                      END
 
                      SET @c_PickAndDropLoc = @c_NextPnDLocation
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
-                        SELECT 'Find next aisle in all aisle'
-                           ,@c_NextPnDAisle '@c_NextPnDAisle'
-                           ,@c_NextPnDLocation '@c_NextPnDLocation'
-                           ,@c_NextPnDLocCat '@c_NextPnDLocCat'
-                           ,@c_StartAisle '@c_StartAisle'
+                           PRINT 'Find next aisle in all aisle..'
+                           PRINT '  > @c_NextPnDAisle: ' + @c_NextPnDAisle    
+                                 + ', @c_NextPnDLocation: ' + @c_NextPnDLocation 
+                                 + ', @c_NextPnDLocCat: ' + @c_NextPnDLocCat 
+                                 + ', @c_StartAisle: ' + @c_StartAisle 
+                        
                      END
 
-                     -- XXXXXXSHONG
-                     --IF LEN(@c_NextPnDAisle) = 0
 
                      IF LEN(@c_NextPnDAisle) = 0 OR
                         (@c_StartAisle = @c_NextPnDAisle AND LEN(@c_NextPnDAisle) > 0)
                      BEGIN
-               SET @b_GotLoc = 0
-                        IF @b_debug = 1
+                        SET @b_GotLoc = 0
+                        IF @b_Debug = 1
                         BEGIN
                            SELECT @c_Reason = 'FAILED PAType=61: Pick AND Drop Location NOT Available'
                            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
@@ -2893,8 +2724,82 @@ BEGIN
                      SET @c_FitCasesInAisle = ''
                   END
 
-                  EXEC sp_ExecuteSql @c_SelectSQL, N'@c_NextPnDAisle NVARCHAR(10)', @c_NextPnDAisle
+                  IF CHARINDEX('@c_NextPnDAisle', @c_SQLParms) = 0
+                  BEGIN
+                     SET @c_SQLParms = @c_SQLParms 
+                                     + N',@c_NextPnDAisle NVARCHAR(10)'                     
+                  END
 
+                  IF @b_Debug = 2
+                  BEGIN
+                     PRINT '>>> 4 ' + @c_SelectSQL
+                  END
+                                                      
+                  EXEC sp_ExecuteSql @c_SelectSQL
+                     , @c_SQLParms
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty       
+                     , @n_StdGrossWgt
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06  
+                     , @npa_TotalCube    
+                     , @npa_TotalWeight                       
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     -- Add Extra Paramaters Here                     
+                     , @c_NextPnDAisle
+                     
                   SELECT @c_ToLoc = ''
                   OPEN Cur_PutawayLocation
 
@@ -2902,10 +2807,10 @@ BEGIN
                   WHILE @@FETCH_STATUS <> -1
                   BEGIN
 
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
                         PRINT @c_SelectSQL
-                        SELECT @cpa_ToLoc 'Last Loc', @c_ToLoc '@c_ToLoc'
+                        PRINT '>> Last Loc:' + @cpa_ToLoc +  ', @c_ToLoc: ' + @c_ToLoc 
                      END
 
                      IF ISNULL(RTRIM(@c_ToLoc),'') = ''
@@ -2914,9 +2819,9 @@ BEGIN
                         BEGIN
                            IF @c_NextPnDAisle <> @c_StartAisle
                            BEGIN
-                              IF @b_debug = 2
+                              IF @b_Debug = 2
                               BEGIN
-                                 SELECT @c_StartAisle '@c_StartAisle', @c_NextPnDAisle '@c_NextPnDAisle'
+                                 PRINT '> @c_StartAisle: ' + @c_StartAisle + ', @c_NextPnDAisle: ' + @c_NextPnDAisle 
                               END
 
                               --(Vicky03) - Start
@@ -2938,12 +2843,12 @@ BEGIN
                               --SET @c_LastPnDLocCat = ''
                               SET @cpa_ToLoc = ''
 
-                              IF @b_debug = 2
+                              IF @b_Debug = 2
                               BEGIN
-                                 SELECT @c_StartAisle '@c_StartAisle'
-                                      , @c_LastPndAisle '@c_LastPndAisle'
-                                      , @c_LastPnDLocCat '@c_LastPnDLocCat'
-                                      , @cpa_ToLoc '@cpa_ToLoc'
+                                 PRINT '> @c_StartAisle: ' + @c_StartAisle  
+                                       + ', @c_LastPndAisle: ' + @c_LastPndAisle  
+                                       + ', @c_LastPnDLocCat: ' + @c_LastPnDLocCat 
+                                       + ', @cpa_ToLoc: ' + @cpa_ToLoc       
                               END
                               GOTO GET_NEXT_AISLE_61
                            END
@@ -2966,9 +2871,9 @@ BEGIN
                         GOTO PA_CHECKRESTRICTIONS
 
                         PATYPE02_BYLOC_A:
-                        IF @b_debug = 2
+                        IF @b_Debug = 2
                         BEGIN
-                           SELECT @b_RestrictionsPassed 'b_RestrictionsPassed'
+                           PRINT '> @b_RestrictionsPassed: ' + CAST(@b_RestrictionsPassed AS VARCHAR) 
                         END
 
                         IF @b_RestrictionsPassed = 1
@@ -2990,13 +2895,14 @@ BEGIN
 
                   IF @b_GotLoc = 1
                   BEGIN
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=' + @cpa_PAType + ': Search Type by Location'
                         EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                     @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                     @c_ToLoc, @c_Reason
-                     END
+                        
+                     END                     
                      BREAK
                   END
                   BEGIN
@@ -3005,9 +2911,10 @@ BEGIN
                         -- StartAisle condition might changed (by another user) and never become next aisle, so @n_LoopAllAisle control all aisle only loop once
                         IF (@c_NextPnDAisle <> @c_StartAisle) AND (@n_LoopAllAisle < 2)
                         BEGIN
-                           IF @b_debug = 2
+                           IF @b_Debug = 2
                            BEGIN
-                              SELECT @c_StartAisle '@c_StartAisle', @c_NextPnDAisle '@c_NextPnDAisle'
+                              PRINT '> @c_StartAisle: ' + @c_StartAisle 
+                                 + ', @c_NextPnDAisle: ' + @c_NextPnDAisle 
                            END
 
                            --(Vicky03) - Start
@@ -3029,12 +2936,12 @@ BEGIN
                            --SET @c_LastPnDLocCat = ''
                            SET @cpa_ToLoc = ''
 
-                           IF @b_debug = 2
+                           IF @b_Debug = 2
                            BEGIN
-                              SELECT @c_StartAisle '@c_StartAisle'
-                                   , @c_LastPndAisle '@c_LastPndAisle'
-                                   , @c_LastPnDLocCat '@c_LastPnDLocCat'
-                                   , @cpa_ToLoc '@cpa_ToLoc'
+                              PRINT '> @c_StartAisle: ' + @c_StartAisle  
+                                    + ', @c_LastPndAisle: ' + @c_LastPndAisle  
+                                    + ', @c_LastPnDLocCat: ' + @c_LastPnDLocCat 
+                                    + ', @cpa_ToLoc: ' + @cpa_ToLoc                                     
                            END
                            GOTO GET_NEXT_AISLE_61
                         END
@@ -3051,137 +2958,43 @@ BEGIN
                   SELECT @n_RowCount = 0
 
                   IF @cpa_PAType IN ('16', '18', '21')
-                  BEGIN
-                     SELECT @c_SelectSQL =  ' DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                  BEGIN                     
+                     SELECT @c_SelectSQL = N' DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
                                        ' SELECT LOC.loc, '''' AS HostWhCode    ' +
                                        ' FROM LOTxLOCxID (NOLOCK) ' +
                                        ' JOIN LOC (NOLOCK) on LOTxLOCxID.loc = LOC.loc ' +
-                                       ' JOIN LotAttribute (NOLOCK) ON LotAttribute.LOT = LOTxLOCxID.LOT ' +
+                                       ' JOIN #t_PutawayZone PZ on PZ.PutawayZone = LOC.PutawayZone ' + 
+                                       ' JOIN LotAttribute (NOLOCK) ON LotAttribute.LOT = LOTxLOCxID.LOT ' + 
                                        CASE WHEN @cpa_PAType = '21'
                                           THEN ' WHERE (Qty > 0 OR PendingMoveIn > 0) '
                                           ELSE ' WHERE Qty > 0 '
                                        END +
-                                       ' AND LOC.putawayzone IN ( N''' + RTRIM(@c_SearchZone) + ''' ' + @c_MultiPutawayZone + ')' + -- (ChewKP08)
-                                       ' AND LOTxLOCxID.sku = N''' + RTRIM(@c_SKU) + ''' ' +
-                                       ' AND LOTxLOCxID.StorerKey = N''' + RTRIM(@c_StorerKey) + ''' ' +
-                                       ' AND LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       CASE WHEN LEN(@cpa_LocationCategoryExclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryExclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryExclude03) > 0 THEN
-                                          'AND LOC.LocationCategory NOT IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationCategoryexclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryexclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryexclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryexclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryexclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          'AND LOC.LocationCategory IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationCategoryInclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryInclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryInclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- @cpa_LocationFlagInclude01
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                       'AND LOC.LocationFlag IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationFlagInclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagInclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagInclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- @cpa_LocationFlagExclude01
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          'AND LOC.LocationFlag NOT IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationFlagExclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagExclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagExclude03) + ''''
-                                       ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- SHONG, Wayne, Manny, Vicky
+                                       ' AND LOTxLOCxID.sku = @c_SKU ' +
+                                       ' AND LOTxLOCxID.StorerKey = @c_StorerKey' +
+                                       ' AND LOC.Facility = @c_Facility' +
+                                       @c_SQL_LocationCategoryExclude + 
+                                       @c_SQL_LocationCategoryInclude + 
+                                       @c_SQL_LocationFlagInclude     + 
+                                       @c_SQL_LocationFlagExclude     +
+                                       @c_SQL_LocationTypeExclude     +
+                                       ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +   
                                        CASE WHEN 'DRIVEIN' IN (@cpa_LocationCategoryInclude01, @cpa_LocationCategoryInclude02,
                                                                @cpa_LocationCategoryInclude03)
                                                            AND @c_LOT <> '' AND @c_LOT IS NOT NULL
-                                             THEN ' AND LotAttribute.Lottable02 = N''' + @c_Lottable02 + ''' AND ' +
-                                                  ' LotAttribute.Lottable01 = N''' + @c_Lottable01 + ''' '
+                                             THEN ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                                  ' AND LotAttribute.Lottable01 = @c_Lottable01 '
                                           ELSE ''
                                        END +
                                        CASE WHEN 'DOUBLEDEEP' IN (@cpa_LocationCategoryInclude01,
                                                                   @cpa_LocationCategoryInclude02,
                                                                   @cpa_LocationCategoryInclude03)
                                                               AND @c_LOT <> '' AND @c_LOT IS NOT NULL
-                                             THEN ' AND LotAttribute.Lottable02 = N''' + @c_Lottable02 + ''' AND ' +
-                                                  ' LotAttribute.Lottable04 = N''' + CONVERT(char(8), @d_Lottable04, 112) + ''' '
+                                             THEN ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                                  ' AND LotAttribute.Lottable04 = @d_Lottable04 '
                                           ELSE ''
                                        END +
                                        CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' --(ung06)
                                        END +
-                                       --' GROUP BY LOTxLOCxID.LOC, LOC.MaxPallet ' +
                                        ' GROUP BY LOC.PALogicalLoc, LOC.LOC, LOC.MaxPallet ' +
                                        CASE WHEN '4' IN (@cpa_LocationStateRestriction1,
                                                          @cpa_LocationStateRestriction2,
@@ -3190,23 +3003,92 @@ BEGIN
                                           ELSE ''
                                        END +
                                        ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
-                                       --' ORDER BY LOTxLOCxID.LOC ' +
-                                       --' SELECT @n_RowCount = @@ROWCOUNT '
 
-                     IF @b_debug = 2
+                     SET @c_SQLParms = RTRIM(@c_SQLParms) + 
+                                        ', @c_Lottable01 NVARCHAR(18)' +
+                                        ', @c_Lottable02 NVARCHAR(18)' +
+                                        ', @d_Lottable04 DATETIME '
+
+                     IF @b_Debug = 2
                      BEGIN
-                        PRINT @c_SelectSQL
+                        PRINT 'PA Type: ' + @cpa_PAType 
+                        PRINT '>> SQL: ' + @c_SelectSQL
+                        PRINT '>> Parm: ' + @c_SQLParms 
                      END
-
-                     EXEC sp_executesql @c_SelectSQL
-                          -- N'@cpa_ToLoc NVARCHAR(10) OUTPUT, @c_ToLoc NVARCHAR(10) OUTPUT, @n_RowCount int OUTPUT',
-                          -- @cpa_ToLoc OUTPUT, @c_ToLoc OUTPUT, @n_RowCount OUTPUT
+                                                          
+                     EXEC sp_ExecuteSql @c_SelectSQL
+                     , @c_SQLParms
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty       
+                     , @n_StdGrossWgt
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06  
+                     , @npa_TotalCube 
+                     , @npa_TotalWeight 
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     -- Add Extra Paramaters Here                       
+                     , @c_Lottable01 
+                     , @c_Lottable02 
+                     , @d_Lottable04  
 
                      -- Chekcing
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
-                        SELECT 'Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_SKU + ', Facility is ' + @c_Facility
-                        SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT '>> Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_SKU + ', Facility is ' + @c_Facility
+                        PRINT '>> PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT '>> PutCodeSQL: ' + @cpa_PutCodeSQL
                      END
                   END -- END of @cpa_PAType = 16, 18, 21
 
@@ -3216,29 +3098,105 @@ BEGIN
                   BEGIN
                       SELECT @c_SelectSQL = +
                         ' DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
-                        ' SELECT LOC.loc, '''' AS HostWhCode    ' +
+                        ' SELECT LOC.loc, '''' AS HostWhCode ' +
                         ' FROM LOC WITH (NOLOCK) ' +
+                        ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' +
                         ' LEFT OUTER JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.LOC = LOC.LOC) ' +
-                        ' WHERE LOC.LOC > ''' + RTRIM( @cpa_ToLoc) + '''' +
-                        --' AND   LOC.Putawayzone = ''' + RTRIM( @c_SearchZone) + '''' +
-                        ' AND LOC.putawayzone IN ( N''' + RTRIM(@c_SearchZone) + ''' ' + @c_MultiPutawayZone + ')' + -- (ChewKP08)
-                        ' AND   LOC.Facility = N''' + RTRIM( @c_Facility) + '''' +
+                        ' WHERE LOC.LOC >  @cpa_ToLoc ' +
+                        ' AND LOC.Facility = @c_Facility' +
+                        ISNULL( RTRIM(@c_SQL_LocationCategoryExclude ), '') + 
+                        ISNULL( RTRIM(@c_SQL_LocationCategoryInclude ), '') + 
+                        ISNULL( RTRIM(@c_SQL_LocationFlagInclude ), '')     + 
+                        ISNULL( RTRIM(@c_SQL_LocationFlagExclude ), '')     +
+                        ISNULL( RTRIM(@c_SQL_LocationTypeExclude ), '')     +
+                        ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
                         CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) END + --(ung06)
                         ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
                         ' HAVING SUM(SKUxLOC.Qty - SKUxLOC.QtyPicked) = 0 OR SUM(SKUxLOC.Qty - SKUxLOC.QtyPicked) IS NULL ' +
                         ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
 
-                        --' SELECT @n_RowCount = @@ROWCOUNT '
-
-                     EXEC sp_executesql @c_SelectSQL
-                           --N'@cpa_ToLoc NVARCHAR(10) OUTPUT, @c_ToLoc NVARCHAR(10) OUTPUT, @n_RowCount int OUTPUT',
-                           --@cpa_ToLoc OUTPUT, @c_ToLoc OUTPUT, @n_RowCount OUTPUT
-
-                     -- Chekcing
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
-                        SELECT 'SearchZone is ' + @c_SearchZone + ', Facility is ' + @c_Facility
-                        SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_SelectSQL
+                     END
+
+                     IF CHARINDEX('@cpa_ToLoc', @c_SQLParms) = 0
+                     BEGIN
+                        SET @c_SQLParms = @c_SQLParms + N', @cpa_ToLoc NVARCHAR(10)'
+                     END
+                     
+                     EXEC sp_ExecuteSql @c_SelectSQL
+                     , @c_SQLParms 
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty       
+                     , @n_StdGrossWgt
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06
+                     , @npa_TotalCube 
+                     , @npa_TotalWeight                       
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     , @cpa_ToLoc
+                     
+                     -- Chekcing
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT '> @c_SearchZone: ' + @c_SearchZone  
+                        + ', @c_Facility: ' + @c_Facility  
+                        + ', @cpa_PAType: ' + @cpa_PAType 
+                        + ', @cpa_ToLoc: ' + @cpa_ToLoc       
+                                       
                      END
                   END -- @cpa_PAType = '17' OR @cpa_PAType = '19'
 
@@ -3251,44 +3209,38 @@ BEGIN
                         ' DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
                         ' SELECT LOC.loc, '''' AS HostWhCode    ' +
                         ' FROM LOC WITH (NOLOCK) ' +
-                        --' LEFT OUTER JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.LOC = LOC.LOC) ' +
+                        ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' +
                         ' LEFT OUTER JOIN LotxLocxID WITH (NOLOCK, INDEX=IDX_LOTxLOCxID_LOC) ON (LotxLocxID.Loc = Loc.Loc) ' +
-                        ' WHERE LOC.LOC > ''' + RTRIM( @cpa_ToLoc) + '''' +
-                        --' AND   LOC.Putawayzone = ''' + RTRIM( @c_SearchZone) + '''' +
-                        ' AND   LOC.putawayzone IN ( N''' + RTRIM(@c_SearchZone) + ''' ' + @c_MultiPutawayZone + ')' + -- (james02)
-                        ' AND   LOC.Facility = N''' + RTRIM( @c_Facility) + '''' +
+                        ' WHERE LOC.LOC > @cpa_ToLoc ' +
+                        ' AND   LOC.Facility = @c_Facility' +
                         CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) END + --(ung06)
                         ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
-                        -- (ChewKP10)
-                        --' HAVING SUM(LotxLocxID.Qty - LotxLocxID.QtyPicked) = 0 OR SUM(LotxLocxID.Qty - LotxLocxID.QtyPicked) IS NULL ' +
-                        --' AND SUM(LotxLocxID.PendingMoveIn) = 0 OR SUM(LotxLocxID.PendingMoveIn) IS NULL' +
-                        --' AND SUM(LotxLocxID.QtyExpected) = 0 OR SUM(LotxLocxID.QtyExpected) IS NULL' +
                         ' HAVING SUM( ISNULL(LotxLocxID.Qty,0) - ISNULL(LotxLocxID.QtyPicked,0))= 0 ' +
                         ' AND SUM(ISNULL(LotxLocxID.PendingMoveIn,0) ) = 0' +
                         ' AND SUM(ISNULL(LotxLocxID.QtyExpected,0)) = 0' +
                         ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
 
-                        --' SELECT @n_RowCount = @@ROWCOUNT '
 
-                     PRINT @c_SelectSQL
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_SelectSQL
+                     END
 
-                     EXEC sp_executesql @c_SelectSQL
-                           --N'@cpa_ToLoc NVARCHAR(10) OUTPUT, @c_ToLoc NVARCHAR(10) OUTPUT, @n_RowCount int OUTPUT',
-                           --@cpa_ToLoc OUTPUT, @c_ToLoc OUTPUT, @n_RowCount OUTPUT
+                     EXEC sp_ExecuteSql @c_SelectSQL, N'@c_Facility NVARCHAR(5), @cpa_ToLoc NVARCHAR(10) ', @c_Facility, @cpa_ToLoc
 
                      -- Chekcing
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
-                        SELECT 'SearchZone is ' + @c_SearchZone + ', Facility is ' + @c_Facility
-                        SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT '> @c_SearchZone: ' + @c_SearchZone  
+                        + ', @c_Facility: ' + @c_Facility  
+                        + ', @cpa_PAType: ' + @cpa_PAType 
+                        + ', @cpa_ToLoc: ' + @cpa_ToLoc                               
                      END
                   END -- @cpa_PAType = '62'
 
                   -- Added by MaryVong on 16-Jun-2005 (SOS36712 KCPI) -END(1)
                   IF @cpa_PAType = '22' OR @cpa_PAType = '24'
                   BEGIN
-                     --SELECT @cpa_ToLoc = LOC.LOC,
-                     --       @c_ToLoc = LOC.LOC
                      DECLARE CUR_PUTAWAYLOCATION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT LOC.LOC, '' AS HostWhCode
                      FROM LOC WITH (NOLOCK)
@@ -3297,8 +3249,7 @@ BEGIN
                                                  AND CODELKUP.LISTNAME = 'LOCCATEGRY'
                                                  AND CODELKUP.SHORT = 'S')
                      WHERE
-                     --LOC.LOC > @cpa_ToLoc AND
-                     LOC.Putawayzone = @c_SearchZone
+                     LOC.PutawayZone = @c_SearchZone
                      AND LOC.Facility = @c_Facility -- CDC Migration
                      GROUP BY LOC.PALogicalLoc, LOC.LOC
                      HAVING SUM(SKUxLOC.Qty) = 0 OR SUM(SKUxLOC.Qty) IS NULL
@@ -3321,7 +3272,7 @@ BEGIN
                                                 AND SKUxLOC.Qty - SKUxLOC.QtyPicked  > 0)
                            WHERE SKUxLOC.StorerKey = @c_StorerKey
                            AND   SKUxLOC.SKU = @c_SKU
-                           AND   LOC.Putawayzone = @c_SearchZone
+                           AND   LOC.PutawayZone = @c_SearchZone
                            AND   LOC.Facility = @c_Facility -- CDC Migration
                            GROUP BY LOC.PALogicalLoc, LOC.LOC
                            HAVING COUNT(LOC.LOC) = 1) AS SINGLE_SKU ON (SKUxLOC.LOC = SINGLE_SKU.LOC)
@@ -3333,19 +3284,6 @@ BEGIN
 
                   IF @cpa_PAType = '42' OR @cpa_PAType = '44'
                   BEGIN
-                     --SELECT @cpa_ToLoc = LOC.LOC,
-                     --       @c_ToLoc = LOC.LOC
-                     --FROM LOC (NOLOCK)
-                     --LEFT OUTER JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.LOC = LOC.LOC)
-                     --JOIN CODELKUP WITH (NOLOCK) ON (LOC.LocationCategory = CODELKUP.CODE
-                     --                            AND CODELKUP.LISTNAME = 'LOCCATEGRY'
-                     --                            AND CODELKUP.SHORT = 'M')
-                     --WHERE LOC.LOC > @cpa_ToLoc
-                     --AND   LOC.Putawayzone = @c_SearchZone
-                     --AND   LOC.Facility = @c_Facility -- CDC Migration
-                     --GROUP BY LOC.LOC
-                     --HAVING SUM(SKUxLOC.Qty - SKUxLOC.QtyPicked) = 0 OR SUM(SKUxLOC.Qty - SKUxLOC.QtyPicked) IS NULL
-                     --ORDER BY LOC.LOC
 
                      --SELECT @n_RowCount = @@ROWCOUNT
                      DECLARE CUR_PUTAWAYLOCATION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -3355,7 +3293,7 @@ BEGIN
                      JOIN CODELKUP WITH (NOLOCK) ON (LOC.LocationCategory = CODELKUP.CODE
                                                  AND CODELKUP.LISTNAME = 'LOCCATEGRY'
                                                  AND CODELKUP.SHORT = 'M')
-                     WHERE LOC.Putawayzone = @c_SearchZone
+                     WHERE LOC.PutawayZone = @c_SearchZone
                      AND   LOC.Facility = @c_Facility -- CDC Migration
                      GROUP BY LOC.PALogicalLoc, LOC.LOC
                      HAVING SUM(SKUxLOC.Qty - SKUxLOC.QtyPicked) = 0 OR SUM(SKUxLOC.Qty - SKUxLOC.QtyPicked) IS NULL
@@ -3430,12 +3368,12 @@ BEGIN
                      JOIN (SELECT LOC.HostWhCode
                            FROM LOC WITH (NOLOCK)
                            LEFT OUTER JOIN SKUxLOC WITH(NOLOCK) ON (SKUxLOC.LOC = LOC.LOC)
-                           WHERE LOC.Putawayzone = @c_SearchZone
+                           WHERE LOC.PutawayZone = @c_SearchZone
                            GROUP BY LOC.HostWhCode
                            HAVING SUM(SKUxLOC.Qty - SKUxLOC.QtyAllocated - SKUxLOC.QtyPicked) = 0 OR
                            SUM(SKUxLOC.Qty - SKUxLOC.QtyAllocated - SKUxLOC.QtyPicked) IS NULL) AS HWC
                            ON (HWC.HostWhCode = LOC.HostWhCode)
-                     WHERE LOC.Putawayzone = @c_SearchZone
+                     WHERE LOC.PutawayZone = @c_SearchZone
                      GROUP BY LOC.PALogicalLoc, LOC.LOC, LOC.HostWhCode
                      ORDER BY LOC.PALogicalLoc, LOC.LOC, LOC.HostWhCode
                   END -- @cpa_PAType = '56'
@@ -3449,11 +3387,11 @@ BEGIN
                      FROM LOC WITH (NOLOCK)
                      JOIN (SELECT LOC.HostWhCode FROM LOC WITH (NOLOCK)
                            JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.LOC = LOC.LOC)
-                           WHERE LOC.Putawayzone = @c_SearchZone
+                           WHERE LOC.PutawayZone = @c_SearchZone
                            GROUP BY LOC.HostWhCode
                            HAVING SUM(SKUxLOC.Qty - SKUxLOC.QtyAllocated - SKUxLOC.QtyPicked) > 0 ) AS MIXED_SKU
                            ON (LOC.HostWhCode = MIXED_SKU.HostWhCode)
-                     WHERE LOC.Putawayzone = @c_SearchZone
+                     WHERE LOC.PutawayZone = @c_SearchZone
                      ORDER BY LOC.HostWhCode, LOC.PALogicalLoc, LOC.LOC
 
                   END -- @cpa_PAType = '57'
@@ -3469,11 +3407,11 @@ BEGIN
                            JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.LOC = LOC.LOC)
                            WHERE SKUxLOC.StorerKey = @c_storerkey
                            AND   SKUxLOC.SKU = @c_SKU
-                           AND   LOC.Putawayzone = @c_SearchZone
+                           AND   LOC.PutawayZone = @c_SearchZone
                            GROUP BY LOC.HostWhCode
                            HAVING SUM(SKUxLOC.Qty - SKUxLOC.QtyAllocated - SKUxLOC.QtyPicked) > 0 ) AS SINGLE_SKU
                            ON (LOC.HostWhCode = SINGLE_SKU.HostWhCode)
-                     WHERE LOC.Putawayzone = @c_SearchZone
+                     WHERE LOC.PutawayZone = @c_SearchZone
                      ORDER BY LOC.HostWhCode, LOC.PALogicalLoc, LOC.LOC
 
                   END -- @cpa_PAType = '58'
@@ -3488,128 +3426,32 @@ BEGIN
                                        ' FROM LOTxLOCxID (NOLOCK) ' +
                                        ' JOIN LOC (NOLOCK) on LOTxLOCxID.loc = LOC.loc ' +
                                        ' JOIN LotAttribute (NOLOCK) ON LotAttribute.LOT = LOTxLOCxID.LOT ' +
+                                       ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' + 
                                        ' WHERE ( (Qty - QtyPicked) > 0 OR PendingMoveIn > 0) '  +
-                                       ' AND LOC.putawayzone IN ( N''' + RTRIM(@c_SearchZone) + ''' ' + @c_MultiPutawayZone + ')' + -- (ChewKP08)
-                                       ' AND LOTxLOCxID.sku = N''' + RTRIM(@c_SKU) + ''' ' +
-                                       ' AND LOTxLOCxID.StorerKey = N''' + RTRIM(@c_StorerKey) + ''' ' +
-                                       ' AND LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       CASE WHEN LEN(@cpa_LocationCategoryExclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryExclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryExclude03) > 0 THEN
-                                          'AND LOC.LocationCategory NOT IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationCategoryexclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryexclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryexclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryexclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryexclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          'AND LOC.LocationCategory IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationCategoryInclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryInclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryInclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- @cpa_LocationFlagInclude01
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                       'AND LOC.LocationFlag IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationFlagInclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagInclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagInclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- @cpa_LocationFlagExclude01
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          'AND LOC.LocationFlag NOT IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationFlagExclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagExclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagExclude03) + ''''
-                                       ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- SHONG, Wayne, Manny, Vicky
+                                       ' AND LOTxLOCxID.sku = @c_SKU' +
+                                       ' AND LOTxLOCxID.StorerKey = @c_StorerKey' +
+                                       ' AND LOC.Facility = @c_Facility ' +
+                                       ISNULL( RTRIM(@c_SQL_LocationCategoryExclude ), '') + 
+                                       ISNULL( RTRIM(@c_SQL_LocationCategoryInclude ), '') + 
+                                       ISNULL( RTRIM(@c_SQL_LocationFlagInclude ), '')     + 
+                                       ISNULL( RTRIM(@c_SQL_LocationFlagExclude ), '')     + 
+                                       ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
                                        CASE WHEN 'DRIVEIN' IN (@cpa_LocationCategoryInclude01, @cpa_LocationCategoryInclude02,
                                                                @cpa_LocationCategoryInclude03)
                                                            AND @c_LOT <> '' AND @c_LOT IS NOT NULL
-                                             THEN ' AND LotAttribute.Lottable02 = N''' + @c_Lottable02 + ''' AND ' +
-                                                  ' LotAttribute.Lottable01 = N''' + @c_Lottable01 + ''' '
+                                             THEN ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                                  ' AND LotAttribute.Lottable01 = @c_Lottable01 '
                                           ELSE ''
                                        END +
                                        CASE WHEN 'DOUBLEDEEP' IN (@cpa_LocationCategoryInclude01,
                                                                   @cpa_LocationCategoryInclude02,
                                                                   @cpa_LocationCategoryInclude03)
                                                               AND @c_LOT <> '' AND @c_LOT IS NOT NULL
-                                             THEN ' AND LotAttribute.Lottable02 = N''' + @c_Lottable02 + ''' AND ' +
-                                                  ' LotAttribute.Lottable04 = N''' + CONVERT(char(8), @d_Lottable04, 112) + ''' '
+                                             THEN ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                                  ' AND LotAttribute.Lottable04 = @d_Lottable04 '
                                           ELSE ''
                                        END +
-                                       CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' --(ung06)
-                                       END +
-                                       --' GROUP BY LOTxLOCxID.LOC, LOC.MaxPallet ' +
+                                       CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' END +
                                        ' GROUP BY LOC.PALogicalLoc, LOC.LOC, LOC.MaxPallet ' +
                                        CASE WHEN '4' IN (@cpa_LocationStateRestriction1,
                                                          @cpa_LocationStateRestriction2,
@@ -3618,23 +3460,102 @@ BEGIN
                                           ELSE ''
                                        END +
                                        ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
-                                       --' ORDER BY LOTxLOCxID.LOC ' +
-                                       --' SELECT @n_RowCount = @@ROWCOUNT '
 
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
                         PRINT @c_SelectSQL
                      END
 
-                     EXEC sp_executesql @c_SelectSQL
-                          -- N'@cpa_ToLoc NVARCHAR(10) OUTPUT, @c_ToLoc NVARCHAR(10) OUTPUT, @n_RowCount int OUTPUT',
-                          -- @cpa_ToLoc OUTPUT, @c_ToLoc OUTPUT, @n_RowCount OUTPUT
+                     SET @c_SQLParms = @c_SQLParms +  
+                                       N', @cpa_ToLoc NVARCHAR(10) OUTPUT' + 
+                                        ', @c_Lottable01 NVARCHAR(18)' +
+                                        ', @c_Lottable02 NVARCHAR(18)' +
+                                        ', @d_Lottable04 DATETIME '
+                     
+                     SET @d_Lottable04 = CONVERT(char(8), @d_Lottable04, 112)
+
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_SelectSQL
+                     END
+                                          
+                     EXEC sp_ExecuteSql @c_SelectSQL
+                     , @c_SQLParms
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty       
+                     , @n_StdGrossWgt
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06
+                     , @npa_TotalCube 
+                     , @npa_TotalWeight  
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     -- Add Extra Paramaters Here                     
+                     , @cpa_ToLoc OUTPUT
+                     , @c_Lottable01
+                     , @c_Lottable02  
+                     , @d_Lottable04
 
                      -- Chekcing
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
-                        SELECT 'Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_SKU + ', Facility is ' + @c_Facility
-                        SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT '> @c_Storerkey: ' + @c_Storerkey  
+                        + ', @c_SKU: ' + @c_SKU  
+                        + ', @c_Facility: ' + @c_Facility 
+                        + ', @cpa_PAType: ' + @cpa_PAType
+                        + ', @cpa_ToLoc: ' + @cpa_ToLoc       
+                                                
                      END
                   END -- END of @cpa_PAType = 16, 18, 21
                   IF @cpa_PAType = '30'
@@ -3645,126 +3566,30 @@ BEGIN
                                        ' FROM LOTxLOCxID (NOLOCK) ' +
                                        ' JOIN LOC (NOLOCK) on LOTxLOCxID.loc = LOC.loc ' +
                                        ' JOIN LotAttribute (NOLOCK) ON LotAttribute.LOT = LOTxLOCxID.LOT ' +
+                                       ' JOIN #t_PutawayZone AS tpz WITH(NOLOCK) ON tpz.PutawayZone = LOC.PutawayZone ' + 
                                        ' WHERE ( (Qty - QtyPicked) > 0 OR PendingMoveIn > 0) '  +
-                                       ' AND LOC.putawayzone IN ( N''' + RTRIM(@c_SearchZone) + ''' ' + @c_MultiPutawayZone + ')' + -- (ChewKP08)
-                                       ' AND LOC.Facility = N''' + RTRIM(@c_Facility) + ''' ' +
-                                       CASE WHEN LEN(@cpa_LocationCategoryExclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryExclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryExclude03) > 0 THEN
-                                          'AND LOC.LocationCategory NOT IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationCategoryexclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryexclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryexclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryexclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryexclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryexclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          'AND LOC.LocationCategory IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationCategoryInclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryInclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationCategoryInclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationCategoryInclude01) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude02) > 0 OR
-                                                 LEN(@cpa_LocationCategoryInclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- @cpa_LocationFlagInclude01
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                       'AND LOC.LocationFlag IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationFlagInclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagInclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagInclude03) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagInclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagInclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- @cpa_LocationFlagExclude01
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          'AND LOC.LocationFlag NOT IN ('
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 THEN
-                                          'N''' + RTRIM(@cpa_LocationFlagExclude01) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude02) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagExclude02) + ''''
-                                          ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          ',N''' + RTRIM(@cpa_LocationFlagExclude03) + ''''
-                                       ELSE ''
-                                       END +
-                                       CASE WHEN LEN(@cpa_LocationFlagExclude01) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude02) > 0 OR
-                                                 LEN(@cpa_LocationFlagExclude03) > 0 THEN
-                                          ')'
-                                          ELSE ''
-                                       END +
-                                       -- SHONG, Wayne, Manny, Vicky
+                                       ' AND LOC.Facility = @c_Facility ' +
+                                       @c_SQL_LocationCategoryInclude + 
+                                       @c_SQL_LocationCategoryExclude +
+                                       @c_SQL_LocationFlagInclude + 
+                                       @c_SQL_LocationFlagExclude + 
+                                       ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
                                        CASE WHEN 'DRIVEIN' IN (@cpa_LocationCategoryInclude01, @cpa_LocationCategoryInclude02,
                                                                @cpa_LocationCategoryInclude03)
                                                            AND @c_LOT <> '' AND @c_LOT IS NOT NULL
-                                             THEN ' AND LotAttribute.Lottable02 = N''' + @c_Lottable02 + ''' AND ' +
-                                                  ' LotAttribute.Lottable01 = N''' + @c_Lottable01 + ''' '
+                                             THEN ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                                  ' AND LotAttribute.Lottable01 = @c_Lottable01 '
                                           ELSE ''
                                        END +
                                        CASE WHEN 'DOUBLEDEEP' IN (@cpa_LocationCategoryInclude01,
                                                                   @cpa_LocationCategoryInclude02,
                                                                   @cpa_LocationCategoryInclude03)
                                                               AND @c_LOT <> '' AND @c_LOT IS NOT NULL
-                                             THEN ' AND LotAttribute.Lottable02 = N''' + @c_Lottable02 + ''' AND ' +
-                                                  ' LotAttribute.Lottable04 = N''' + CONVERT(char(8), @d_Lottable04, 112) + ''' '
+                                             THEN ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                                  ' AND LotAttribute.Lottable04 = @d_Lottable04 '
                                           ELSE ''
                                        END +
-                                       CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' --(ung06)
-                                       END +
-                                       --' GROUP BY LOTxLOCxID.LOC, LOC.MaxPallet ' +
+                                       CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' END +                                        
                                        ' GROUP BY LOC.PALogicalLoc, LOC.LOC, LOC.MaxPallet ' +
                                        CASE WHEN '4' IN (@cpa_LocationStateRestriction1,
                                                          @cpa_LocationStateRestriction2,
@@ -3773,30 +3598,106 @@ BEGIN
                                           ELSE ''
                                        END +
                                        ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
-                                       --' ORDER BY LOTxLOCxID.LOC ' +
-                                       --' SELECT @n_RowCount = @@ROWCOUNT '
 
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
                         PRINT @c_SelectSQL
                      END
 
-                     EXEC sp_executesql @c_SelectSQL
-                          -- N'@cpa_ToLoc NVARCHAR(10) OUTPUT, @c_ToLoc NVARCHAR(10) OUTPUT, @n_RowCount int OUTPUT',
-                          -- @cpa_ToLoc OUTPUT, @c_ToLoc OUTPUT, @n_RowCount OUTPUT
+                     SET @c_SQLParms = @c_SQLParms +                         
+                        ', @c_Lottable01 NVARCHAR(18)' +
+                        ', @c_Lottable02 NVARCHAR(18)' +
+                        ', @d_Lottable04 DATETIME '
+                     
+                     SET @d_Lottable04 = CONVERT(char(8), @d_Lottable04, 112)
 
-                     -- Chekcing
-                     IF @b_debug = 2
+                     IF @b_Debug = 2
                      BEGIN
-                        SELECT 'Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_SKU + ', Facility is ' + @c_Facility
-                        SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_SelectSQL
+                     END
+                                                                
+                     EXEC sp_ExecuteSql @c_SelectSQL, @c_SQLParms
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty  
+                     , @n_StdGrossWgt     
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06  
+                     , @npa_TotalCube 
+                     , @npa_TotalWeight
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     -- Add Extra Paramaters Here
+                     ,@c_Lottable01
+                     ,@c_Lottable02   
+                     ,@d_Lottable04 
+                     
+                     -- Chekcing
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT '> @c_Storerkey: ' + @c_Storerkey  
+                        + ', @c_SKU: ' + @c_SKU  
+                        + ', @c_Facility: ' + @c_Facility 
+                        + ', @cpa_PAType: ' + @cpa_PAType
+                        + ', @cpa_ToLoc: ' + @cpa_ToLoc                               
                      END
                   END -- END of @cpa_PAType = 16, 18, 21
 
-                  IF @b_debug = 2
+                  IF @b_Debug = 2
                   BEGIN
-                     SELECT 'PAType= ' + @cpa_PAType + ', SearchZone= ' + @c_SearchZone +
-                            ', ToHostWhCode= ' + @c_ToHostWhCode + ', ToLoc= ' + @cpa_ToLoc + ', @c_LOT= ' + @c_LOT
+                        PRINT '> @c_SearchZone: ' + @c_SearchZone  
+                        + ', @c_LOT: ' + @c_LOT 
+                        + ', @cpa_PAType: ' + @cpa_PAType                            
                   END
 
                   OPEN CUR_PUTAWAYLOCATION
@@ -3804,8 +3705,14 @@ BEGIN
 
                   WHILE @@FETCH_STATUS <> -1
                   BEGIN
-                     SET @c_ToLoc = @cpa_ToLoc
+                     SET @c_ToLoc = ISNULL(@cpa_ToLoc,'')
 
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT '>>> @c_ToLoc: ' + @c_ToLoc          
+                            + ', @c_ToHostWhCode: ' + @c_ToHostWhCode                    
+                     END
+                  
                      SELECT @n_LocsReviewed = @n_LocsReviewed + 1
 
                      IF @cpa_CheckRestrictions = 'Y'
@@ -3832,12 +3739,13 @@ BEGIN
 
                   IF @b_GotLoc = 1
                   BEGIN
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=' + @cpa_PAType + ': Search Type by Location'
                         EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                     @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                     @c_ToLoc, @c_Reason
+                                    
                      END
                      BREAK
                   END -- @b_GotLoc = 1
@@ -3855,7 +3763,7 @@ BEGIN
                          @c_searchlogicalloc = LogicalLocation
                   FROM LOC WITH (NOLOCK)
                   WHERE LOGICALLOCATION > @c_searchlogicalloc
-                  AND Putawayzone = @c_SearchZone
+                  AND PutawayZone = @c_SearchZone
                   AND Facility = @c_Facility -- CDC Migration
                   ORDER BY LOGICALLOCATION
 
@@ -3887,7 +3795,7 @@ BEGIN
 
                IF @b_GotLoc = 1
                BEGIN
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FOUND PAType=' + @cpa_PAType + ': Search Type by Route Sequence'
                      EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -3915,7 +3823,7 @@ BEGIN
                IF @b_RestrictionsPassed = 1
                BEGIN
                   SELECT @b_GotLoc = 1
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FOUND PAType=06: Putaway Into To Location'
                      EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -3928,7 +3836,7 @@ BEGIN
             ELSE
             BEGIN
                SELECT @b_GotLoc = 1
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FOUND PAType=06: Putaway Into To Location'
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -3977,56 +3885,6 @@ BEGIN
                   ORDER BY LOC.PALogicalLoc, LOC.Loc
                END
 
-               -- INC0075406 (Start)
-               -- IF @cpa_PAType = '07'
-               -- BEGIN
-               --    IF ( SELECT ISNULL( SUM(Qty - QtyPicked), 0)
-               --          FROM SKUxLOC WITH (NOLOCK)
-               --          JOIN LOC WITH (NOLOCK) ON SKUxLOC.loc = LOC.LOC
-               --          WHERE SKU = @c_SKU
-               --          AND StorerKey = @c_StorerKey
-               --          AND Facility = @c_Facility -- CDC Migration
-               --          AND LocationFlag = 'NONE'
-               --          AND LocationCategory <> 'VIRTUAL'
-               --          AND SKUxLOC.LOC <> @c_FromLoc) > 0 -- vicky
-               --    BEGIN
-               --       SELECT @c_ToLoc = ''
-               --       IF @b_debug = 1
-               --       BEGIN
-               --          SELECT @c_Reason = 'FAILED PAType=07: Commodity has balance-on-hand qty'
-               --          EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-               --                      @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-               --                      @c_ToLoc, @c_Reason
-               --       END
-               --       --BREAK (james01)
-               --    END
-               -- END
-               -- 
-               -- /* Added By Vicky 10 Apr 2003 - CDC Migration */
-               -- IF @cpa_PAType = '88'
-               -- BEGIN
-               --    IF ( SELECT ISNULL( SUM(qty-qtypicked), 0)
-               --          FROM SKUxLOC WITH (NOLOCK)
-               --          JOIN LOC WITH (NOLOCK) ON (SKUxLOC.loc = LOC.loc)
-               --          WHERE sku = @c_SKU
-               --          AND StorerKey = @c_StorerKey
-               --          AND LOC.Facility = @c_Facility      -- wally 23.oct.2002
-               --          AND LocationFlag = 'NONE') > 0
-               --    BEGIN
-               --       SELECT @c_ToLoc = ''
-               --       IF @b_debug = 1
-               --       BEGIN
-               --          SELECT @c_Reason = 'FAILED PAType=88: Commodity has balance-on-hand qty'
-               --          EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-               --                      @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-               --                      @c_ToLoc, @c_Reason
-               --       END
-               --       --BREAK (james01)
-               --    END
-               -- END
-               -- INC0075406 (End)
-               /* CDC Migration END*/
-
             OPEN CUR_PUTAWAYLOCATION
             FETCH NEXT FROM CUR_PUTAWAYLOCATION INTO @c_ToLoc
 
@@ -4045,13 +3903,16 @@ BEGIN
                         AND LocationCategory <> 'VIRTUAL'
                         AND SKUxLOC.LOC <> @c_FromLoc) > 0 -- vicky
                   BEGIN
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FAILED PAType=07: Commodity has balance-on-hand qty'
                         EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                     @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                     @c_ToLoc, @c_Reason
                      END
+                     IF @b_Debug = 2
+                           PRINT '>> Reason: ' + 'FAILED PAType=07: Commodity has balance-on-hand qty'
+                                                
                      SELECT @c_ToLoc = ''
                      --BREAK (james01)
                   END
@@ -4068,13 +3929,15 @@ BEGIN
                         AND LOC.Facility = @c_Facility      -- wally 23.oct.2002
                         AND LocationFlag = 'NONE') > 0
                   BEGIN
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FAILED PAType=88: Commodity has balance-on-hand qty'
                         EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                     @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                     @c_ToLoc, @c_Reason
                      END
+                     IF @b_Debug = 2
+                           PRINT '>> Reason: ' +  'FAILED PAType=88: Commodity has balance-on-hand qty'                   
                      SELECT @c_ToLoc = ''
                      --BREAK (james01)
                   END
@@ -4108,13 +3971,16 @@ BEGIN
 
             IF @b_GotLoc = 1
             BEGIN
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FOUND PAType=' + @cpa_PAType + ': Putaway to Assigned Piece Pick'
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                               @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                               @c_ToLoc, @c_Reason
                END
+               IF @b_Debug = 2
+                  PRINT '>> Reason: ' + 'FOUND PAType=' + @cpa_PAType + ': Putaway to Assigned Piece Pick'
+               
                BREAK
             END
          END -- IF @b_MultiProductID = 0
@@ -4141,38 +4007,44 @@ BEGIN
                   IF @b_RestrictionsPassed = 1
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=09: Putaway to location specified on Commodity'
                         EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                     @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                     @c_ToLoc, @c_Reason
                      END
+                     IF @b_Debug = 2
+                        PRINT '>> Reason: ' +  'FOUND PAType=09: Putaway to location specified on Commodity'                  
                      BREAK
                   END
                END
                ELSE
                BEGIN
                   SELECT @b_GotLoc = 1
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FOUND PAType=09: Putaway to location specified on Commodity'
                      EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                  @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                  @c_ToLoc, @c_Reason
                   END
+                  IF @b_Debug = 2
+                     PRINT '>> Reason: ' + 'FOUND PAType=09: Putaway to location specified on Commodity'
                   BREAK
                END
             END
             ELSE
             BEGIN
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FAILED PAType=09: Commodity has no putaway location specified'
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                   @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                   @c_ToLoc, @c_Reason
                END
+               IF @b_Debug = 2
+                     PRINT '>> Reason: ' + 'FAILED PAType=09: Commodity has no putaway location specified'
             END
          END -- IF @b_MultiProductID = 0
          CONTINUE
@@ -4223,13 +4095,15 @@ BEGIN
 
             IF @b_GotLoc = 1
             BEGIN
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FOUND PAType=20: Putaway to SKU pickface location'
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                               @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                               @c_ToLoc, @c_Reason
                END
+               IF @b_Debug = 2
+                  PRINT '>> Reason: ' + 'FOUND PAType=20: Putaway to SKU pickface location'
                BREAK
             END
          END -- IF @b_MultiProductID = 0
@@ -4284,13 +4158,16 @@ BEGIN
 
             IF @b_GotLoc = 1
             BEGIN
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FOUND PAType=15: Putaway to Assogned Case Pick'
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                               @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                               @c_ToLoc, @c_Reason
+                              
                END
+               IF @b_Debug = 2
+                  PRINT '>> Reason: ' + 'FOUND PAType=15: Putaway to Assogned Case Pick'
                BREAK
             END
          END -- IF @b_MultiProductID = 0
@@ -4313,10 +4190,10 @@ BEGIN
                   GOTO PA_CHECKRESTRICTIONS
 
                   PATYPE25:
-          IF @b_RestrictionsPassed=1
+                  IF @b_RestrictionsPassed=1
                   BEGIN
                      SELECT @b_GotLoc = 1
-                     IF @b_debug = 1
+                     IF @b_Debug = 1
                      BEGIN
                         SELECT @c_Reason = 'FOUND PAType=25: Specified Zone '
                                          + RTRIM(@cpa_Zone) + ' Putaway to ' + RTRIM(@cpa_ToLoc)
@@ -4328,13 +4205,16 @@ BEGIN
                                     @c_ToLoc,
                                     @c_Reason
                      END
+                     IF @b_Debug = 2
+                        PRINT '>> Reason: ' + 'FOUND PAType=25: Specified Zone '
+                                         + RTRIM(@cpa_Zone) + ' Putaway to ' + RTRIM(@cpa_ToLoc)
                      BREAK
                   END
                END
                ELSE
                BEGIN
                   SELECT @b_GotLoc = 1
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FOUND PAType=25: Specified Zone '
                                          + RTRIM(@cpa_Zone) + ' Putaway to ' + RTRIM(@cpa_ToLoc)
@@ -4352,7 +4232,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED PAType=25: Specified Zone '
                                 + RTRIM(@cpa_Zone) + ' <> ' + RTRIM(@cpa_FromLoc) + ' Zone'
@@ -4364,6 +4244,10 @@ BEGIN
                            @c_ToLoc,
                            @c_Reason
             END
+            IF @b_Debug = 2
+               PRINT '>> Reason: ' + 'FOUND PAType=25: Specified Zone '
+                                    + RTRIM(@cpa_Zone) + ' Putaway to ' + RTRIM(@cpa_ToLoc)
+            
          END
          CONTINUE
       END -- PAType = '25'
@@ -4495,29 +4379,36 @@ BEGIN
        BEGIN
         IF @c_PalletType <> 'Mixed_Lot_CartonSize' AND @cpa_PAType = '28'
         BEGIN
-               IF @b_debug = 1
-               BEGIN
-                  SELECT @c_Reason = 'FAILED PAType=28: Pallet must be Mixed SKU/Lottable02/Pack Size'
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED PAType=28: Pallet must be Mixed SKU/Lottable02/Pack Size'
 
-                  EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-                              @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                              @c_ToLoc, @c_Reason
-               END
-               GOTO PATYPE25_29_QUIT
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason                           
+            END
+            IF @b_Debug = 2
+               PRINT '>> Reason: ' + 'FAILED PAType=28: Pallet must be Mixed SKU/Lottable02/Pack Size'                  
+            GOTO PATYPE25_29_QUIT
         END
 
-            SELECT @c_ToLoc = ''
-            SET @c_SelectSQL =
-                   N'DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
-                   N'SELECT LOC.LOC ' +
-                    'FROM LOC WITH (NOLOCK) ' +
-                    'WHERE LOC.Facility = N''' + RTRIM(@c_Facility) + '''' +
-                     [dbo].[fnc_BuildPutawayRestriction] (@c_PutawayStrategyKey, @c_PutawayStrategyLineNumber,'Y', @n_FromCube, @c_StorerKey, @c_SKU, @c_LOT) +
-                     CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' END + --(ung06)
-                 ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
-                 ' ORDER BY LOC.PALogicalLoc,LOC.LOC '
+         SELECT @c_ToLoc = ''
+         SET @c_SelectSQL =
+                  N'DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                  N'SELECT LOC.LOC ' +
+                  'FROM LOC WITH (NOLOCK) ' +
+                  'WHERE LOC.Facility = @c_Facility' +
+                  [dbo].[fnc_BuildPutawayRestriction] (@c_PutawayStrategyKey, @c_PutawayStrategyLineNumber,'Y', @n_FromCube, @c_StorerKey, @c_SKU, @c_LOT) +
+                  CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' END + --(ung06)
+               ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
+               ' ORDER BY LOC.PALogicalLoc,LOC.LOC '
 
-            EXEC sp_executesql @c_SelectSQL
+            IF @b_Debug = 2
+            BEGIN
+               PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_SelectSQL
+            END
+            
+            EXEC sp_ExecuteSql @c_SelectSQL, N'Facility NVARCHAR(5)', @c_Facility
 
             OPEN CUR_PUTAWAYLOCATION
             FETCH NEXT FROM CUR_PUTAWAYLOCATION INTO @c_ToLoc
@@ -4549,13 +4440,15 @@ BEGIN
 
             IF @b_GotLoc = 1
             BEGIN
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FOUND PAType=' + @cpa_PAType + ': ' + @c_PA_Decription
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                               @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                              @c_ToLoc, @c_Reason
+                              @c_ToLoc, @c_Reason                              
                END
+               IF @b_Debug = 2
+                  PRINT '>> Reason: ' + 'FOUND PAType=' + @cpa_PAType + ': ' + @c_PA_Decription               
                BREAK
             END
        END -- IF @cpa_PAType = '28'
@@ -4565,47 +4458,56 @@ BEGIN
        BEGIN
         IF @c_PalletType <> '1_Lot_CartonSize' AND @cpa_PAType = '26'
         BEGIN
-               IF @b_debug = 1
-               BEGIN
-                  SELECT @c_Reason = 'FAILED PAType=26: Pallet must be Single SKU/Lottable02/Pack Size'
-                  EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-                              @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                              @c_ToLoc, @c_Reason
-               END
-               GOTO PATYPE25_29_QUIT
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED PAType=26: Pallet must be Single SKU/Lottable02/Pack Size'
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+            IF @b_Debug = 2
+               PRINT '>> Reason: ' + 'FAILED PAType=26: Pallet must be Single SKU/Lottable02/Pack Size'               
+            GOTO PATYPE25_29_QUIT
         END
         IF @c_PalletType <> '1_Lot_2CartonSize' AND @cpa_PAType = '27'
         BEGIN
-               IF @b_debug = 1
-               BEGIN
-                  SELECT @c_Reason = 'FAILED PAType=27: Pallet must be Single SKU/Lottable02 with 2 Pack Size'
-                  EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-                              @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                              @c_ToLoc, @c_Reason
-               END
-               GOTO PATYPE25_29_QUIT
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED PAType=27: Pallet must be Single SKU/Lottable02 with 2 Pack Size'
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+            IF @b_Debug = 2
+               PRINT '>> Reason: ' + 'FAILED PAType=27: Pallet must be Single SKU/Lottable02 with 2 Pack Size'            
+            GOTO PATYPE25_29_QUIT
         END
-         IF @c_PalletType <> 'Mixed_Lot_CartonSize' AND @cpa_PAType = '28'
+        IF @c_PalletType <> 'Mixed_Lot_CartonSize' AND @cpa_PAType = '28'
         BEGIN
-               IF @b_debug = 1
-               BEGIN
-                  SELECT @c_Reason = 'FAILED PAType=28: Pallet Not with Mixed SKU/Lottable02/Pack Size'
-                  EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-                              @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                              @c_ToLoc, @c_Reason
-               END
-               GOTO PATYPE25_29_QUIT
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED PAType=28: Pallet Not with Mixed SKU/Lottable02/Pack Size'
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+            IF @b_Debug = 2
+               PRINT '>> Reason: ' + 'FAILED PAType=28: Pallet Not with Mixed SKU/Lottable02/Pack Size'            
+            GOTO PATYPE25_29_QUIT
         END
         IF @cpa_PAType = '29' AND @c_FromLoc <> @cpa_FromLoc
         BEGIN
-               IF @b_debug = 1
-               BEGIN
-                  SELECT @c_Reason = 'FAILED PAType=29: From Loc Not Match'
-                  EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
-                              @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                              @c_ToLoc, @c_Reason
-               END
-               GOTO PATYPE25_29_QUIT
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED PAType=29: From Loc Not Match'
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+            IF @b_Debug = 2
+               PRINT '>> Reason: ' + 'FAILED PAType=29: From Loc Not Match'
+            
+            GOTO PATYPE25_29_QUIT
         END
 
         IF @cpa_PAType = '29'
@@ -4624,13 +4526,18 @@ BEGIN
              N'DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
              N'SELECT LOC.LOC ' +
               'FROM LOC WITH (NOLOCK) ' +
-              'WHERE LOC.Facility = N''' + RTRIM(@c_Facility) + '''' +
+              'WHERE LOC.Facility = @c_Facility ' +
                [dbo].[fnc_BuildPutawayRestriction] (@c_PutawayStrategyKey, @c_PutawayStrategyLineNumber,'Y', @n_FromCube, @c_StorerKey, @c_SKU, @c_LOT) +
                CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' END +  --(ung06)
               'GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
               'ORDER BY LOC.PALogicalLoc, LOC.LOC '
 
-            EXEC sp_executesql @c_SelectSQL
+            IF @b_Debug = 2
+            BEGIN
+               PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_SelectSQL
+            END
+                     
+            EXEC sp_ExecuteSql @c_SelectSQL, N'@c_Facility NVARCHAR(5)', @c_Facility
 
          END
          ELSE
@@ -4651,13 +4558,15 @@ BEGIN
                         AND   LLI.LOC > @c_ToLoc
                         AND   LOC.CubicCapacity >= @n_FromCube)
                      BEGIN
-                        IF @b_debug = 1
+                        IF @b_Debug = 1
                         BEGIN
                            SELECT @c_Reason = 'FAILED Cube Fit: CubeRequired = ' + RTRIM(Convert(char(10),(@n_FromCube)))
                            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                        @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                        '', @c_Reason
                         END
+                           IF @b_Debug = 2
+                              PRINT '>> Reason: ' + 'FAILED Cube Fit: CubeRequired = ' + RTRIM(Convert(char(10),(@n_FromCube)))                        
                         GOTO PATYPE25_29_QUIT
                      END
                 END
@@ -4720,13 +4629,16 @@ BEGIN
             PATYPE25_29_QUIT:
             IF @b_GotLoc = 1
             BEGIN
-               IF @b_debug = 1
+               IF @b_Debug = 1
                BEGIN
                   SELECT @c_Reason = 'FOUND PAType=' + @cpa_PAType + ': ' + @c_PA_Decription
                   EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                               @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                               @c_ToLoc, @c_Reason
                END
+               IF @b_Debug = 2
+                  PRINT '>> Reason: ' + 'FOUND PAType=' + @cpa_PAType + ': ' + @c_PA_Decription     
+                            
                BREAK
             END
        END -- IF @cpa_PAType = '26'
@@ -4740,7 +4652,7 @@ BEGIN
       SELECT @c_ToLoc= ''
    END
 
-   IF @b_debug = 1
+   IF @b_Debug = 1
    BEGIN
       UPDATE PTRACEHEAD SET EndTime = GetDate(), PA_locFound = @c_ToLoc, PA_LocsReviewed = @n_LocsReviewed
       WHERE PTRACEHEADKey = @n_pTraceHeadKey
@@ -4752,7 +4664,7 @@ BEGIN
           @c_loc_flag     = LocationFlag ,
           @c_loc_handling = LOCATIONHANDLING,
           @c_loc_category = LocationCategory,
-          @c_loc_zone     = PUTAWAYZONE ,
+          @c_loc_zone     = PutawayZone ,
           @c_Loc_CommingleSku = comminglesku,
           @c_loc_comminglelot = comminglelot,
           @n_Loc_Width  = WIDTH ,
@@ -4777,7 +4689,6 @@ BEGIN
           @c_loc_NoMixLottable13 = LOC.NoMixLottable13, -- (ChewKP09)
           @c_loc_NoMixLottable14 = LOC.NoMixLottable14, -- (ChewKP09)
           @c_loc_NoMixLottable15 = LOC.NoMixLottable15  -- (ChewKP09)
-
    FROM LOC WITH (NOLOCK)
    WHERE LOC = @c_ToLoc
    SELECT @c_movableunittype = @c_movableunittype
@@ -4787,26 +4698,32 @@ BEGIN
    IF ISNULL(RTRIM(@c_Loc_Type),'') <> ''
    BEGIN
       IF @c_Loc_Type IN (@cpa_LocationTypeExclude01,@cpa_LocationTypeExclude02,@cpa_LocationTypeExclude03,@cpa_LocationTypeExclude04,@cpa_LocationTypeExclude05)
-      BEGIN
-         IF @b_debug = 1
+      BEGIN         
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location type ' + RTRIM(@c_Loc_Type) + ' was one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location type ' + RTRIM(@c_Loc_Type) + ' was one of the excluded values'         
+            
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location type ' + RTRIM(@c_Loc_Type) + ' was NOT one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
+
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location type ' + RTRIM(@c_Loc_Type) + ' was NOT one of the excluded values'         
       END
    END
 
@@ -4816,25 +4733,30 @@ BEGIN
    BEGIN
       IF @c_Loc_Type NOT IN (@cpa_LocationTypeRestriction01,@cpa_LocationTypeRestriction02,@cpa_LocationTypeRestriction03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location type ' + RTRIM(@c_Loc_Type) + ' was NOT one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
-                        @c_ToLoc, @c_Reason
+                        @c_ToLoc, @c_Reason   
          END
-      SELECT @b_RestrictionsPassed = 0
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location type ' + RTRIM(@c_Loc_Type) + ' was NOT one of the specified values'
+                           
+         SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location type ' + RTRIM(@c_Loc_Type) + ' was one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location type ' + RTRIM(@c_Loc_Type) + ' was one of the specified values'         
       END
    END
 
@@ -4844,25 +4766,30 @@ BEGIN
    BEGIN
       IF @c_loc_flag IN (@cpa_LocationFlagexclude01,@cpa_LocationFlagexclude02,@cpa_LocationFlagexclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location flag ' + RTRIM(@c_loc_flag) + ' was one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location flag ' + RTRIM(@c_loc_flag) + ' was one of the excluded values'
+                     
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location flag ' + RTRIM(@c_loc_flag) + ' was NOT one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location flag ' + RTRIM(@c_loc_flag) + ' was NOT one of the excluded values'         
       END
    END
 
@@ -4872,25 +4799,30 @@ BEGIN
    BEGIN
       IF @c_loc_flag NOT IN (@cpa_LocationFlagInclude01,@cpa_LocationFlagInclude02,@cpa_LocationFlagInclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location flag ' + RTRIM(@c_loc_flag) + ' was NOT one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location flag ' + RTRIM(@c_loc_flag) + ' was NOT one of the specified values'
+                     
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location flag ' + RTRIM(@c_loc_flag) + ' was one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location flag ' + RTRIM(@c_loc_flag) + ' was one of the specified values'         
       END
    END
 
@@ -4900,25 +4832,30 @@ BEGIN
    BEGIN
       IF @c_loc_category IN (@cpa_LocationCategoryexclude01,@cpa_LocationCategoryexclude02,@cpa_LocationCategoryexclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location category ' + RTRIM(@c_loc_category) + ' was one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location category ' + RTRIM(@c_loc_category) + ' was one of the excluded values'    
+                 
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location category ' + RTRIM(@c_loc_category) + ' was NOT one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location category ' + RTRIM(@c_loc_category) + ' was NOT one of the excluded values'         
       END
    END
 
@@ -4928,13 +4865,16 @@ BEGIN
    BEGIN
       IF @c_loc_category NOT IN (@cpa_LocationCategoryInclude01,@cpa_LocationCategoryInclude02,@cpa_LocationCategoryInclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location category ' + RTRIM(@c_loc_category) + ' was NOT one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location category ' + RTRIM(@c_loc_category) + ' was NOT one of the specified values'
+                     
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
@@ -4952,13 +4892,16 @@ BEGIN
             BEGIN
                IF (SELECT ISNULL( SUM(Qty), 0) FROM SKUxLOC WITH (NOLOCK) WHERE Loc = @c_ToLoc) > 0
                BEGIN
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FAILED Location category DRIVEIN ' + RTRIM(@c_loc_category) + ' Contain Different LOT AttributeS.'
                      EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                  @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                  @c_ToLoc, @c_Reason
                   END
+                  IF @b_Debug = 2
+                     PRINT '>> Reason: ' + 'FAILED Location category DRIVEIN ' + RTRIM(@c_loc_category) + ' Contain Different LOT AttributeS.'
+                                          
                   SELECT @b_RestrictionsPassed = 0
                   GOTO RESTRICTIONCHECKDONE
                END
@@ -4980,13 +4923,16 @@ BEGIN
             BEGIN
                IF (SELECT ISNULL( SUM(Qty), 0) FROM SKUxLOC WITH (NOLOCK) WHERE Loc = @c_ToLoc) > 0
                BEGIN
-                  IF @b_debug = 1
+                  IF @b_Debug = 1
                   BEGIN
                      SELECT @c_Reason = 'FAILED Location category DOUBLEDEEP ' + RTRIM(@c_loc_category) + ' Contain Different LOT AttributeS.'
                      EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                                  @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                                  @c_ToLoc, @c_Reason
                   END
+                  IF @b_Debug = 2
+                     PRINT '>> Reason: ' + 'FAILED Location category DOUBLEDEEP ' + RTRIM(@c_loc_category) + ' Contain Different LOT AttributeS.'
+                  
                   SELECT @b_RestrictionsPassed = 0
                   GOTO RESTRICTIONCHECKDONE
                END
@@ -4994,13 +4940,15 @@ BEGIN
          END
          -- END : by Shong 22.Jul.2002
          /* CDC Migration END */
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
-     SELECT @c_Reason = 'PASSED Location category ' + RTRIM(@c_loc_category) + ' was one of the specified values'
+            SELECT @c_Reason = 'PASSED Location category ' + RTRIM(@c_loc_category) + ' was one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location category ' + RTRIM(@c_loc_category) + ' was one of the specified values'         
       END
    END -- LocationCategory Checkign
 
@@ -5011,25 +4959,30 @@ BEGIN
    BEGIN
       IF @c_loc_handling IN (@cpa_LocationHandlingExclude01,@cpa_LocationHandlingExclude02,@cpa_LocationHandlingExclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
            SELECT @c_Reason = 'FAILED Location handling ' + RTRIM(@c_loc_handling) + ' was one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location handling ' + RTRIM(@c_loc_handling) + ' was one of the excluded values'   
+                  
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
    ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location handling ' + RTRIM(@c_loc_handling) + ' was NOT one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location handling ' + RTRIM(@c_loc_handling) + ' was NOT one of the excluded values'         
       END
    END
 
@@ -5039,32 +4992,37 @@ BEGIN
    BEGIN
       IF @c_loc_handling NOT IN (@cpa_LocationHandlingInclude01,@cpa_LocationHandlingInclude02,@cpa_LocationHandlingInclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location handling ' + RTRIM(@c_loc_handling) + ' was NOT one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Location handling ' + RTRIM(@c_loc_handling) + ' was NOT one of the specified values'
+                     
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location handling ' + RTRIM(@c_loc_handling) + ' was one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'PASSED Location handling ' + RTRIM(@c_loc_handling) + ' was one of the specified values'         
       END
    END
 
    IF @b_MultiProductID = 1
    BEGIN
       SELECT @n_CurrLocMultiSku = 1
-      IF @b_debug = 1
+      IF @b_Debug = 1
       BEGIN
          SELECT @c_Reason = 'INFO   Commingled Sku Putaway Pallet Situation'
          EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5077,7 +5035,7 @@ BEGIN
       IF EXISTS(SELECT 1 FROM LOTxLOCxID WITH (NOLOCK) WHERE LOC = @c_ToLoc AND (QTY-QTYPicked > 0 OR PendingMoveIN > 0) --(ung02)
                 AND (StorerKey <> @c_StorerKey OR SKU <> @c_SKU))
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'INFO   Commingled Sku Current Loc/Putaway Pallet Situation'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5095,10 +5053,10 @@ BEGIN
    IF @b_MultiLotID = 1
    BEGIN
       SELECT @n_CurrLocMultiLot = 1
-      IF @b_debug = 1
+      IF @b_Debug = 1
       BEGIN
          SELECT @c_Reason = 'INFO   Commingled Lot Putaway Pallet Situation'
-        EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+         EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                      @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                      @c_ToLoc, @c_Reason
       END
@@ -5107,7 +5065,7 @@ BEGIN
    BEGIN
       IF EXISTS(SELECT 1 FROM LOTxLOCxID WITH (NOLOCK) WHERE LOC = @c_ToLoc AND (QTY-QTYPicked > 0 OR PendingMoveIN > 0) AND LOT <> @c_LOT) --(ung02)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'INFO   Commingled Lot Current Loc/Putaway Pallet Situation'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5127,19 +5085,22 @@ BEGIN
    BEGIN
       IF @n_CurrLocMultiSku = 1
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Do NOT mix commodities but ptwy pallet is commingled. Location commingle flag = ' + RTRIM(@c_Loc_CommingleSku)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Do NOT mix commodities but ptwy pallet is commingled. Location commingle flag = ' + RTRIM(@c_Loc_CommingleSku)
+         
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Do NOT mix commodities and ptwy pallet is NOT commingled.  Location commingle flag = ' + RTRIM(@c_Loc_CommingleSku)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5154,19 +5115,22 @@ BEGIN
    BEGIN
       IF @n_CurrLocMultiLot = 1
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Do NOT mix lots and ptwy pallet is commingled. Location mix lots flag = ' + RTRIM(@c_loc_comminglelot)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
+         IF @b_Debug = 2
+            PRINT '>> Reason: ' + 'FAILED Do NOT mix lots and ptwy pallet is commingled. Location mix lots flag = ' + RTRIM(@c_loc_comminglelot)
+         
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Do NOT mix lots and ptwy pallet is NOT commingled. Location mix lots flag = ' + RTRIM(@c_loc_comminglelot)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5175,9 +5139,6 @@ BEGIN
          END
       END
    END
-
-
-
 
    -- Check NoMixLottable but commingleSKU (ung05)
    IF @c_loc_NoMixLottable01 = '1' OR @c_loc_NoMixLottable02 = '1' OR @c_loc_NoMixLottable03 = '1' OR @c_loc_NoMixLottable04 = '1'
@@ -5223,7 +5184,7 @@ BEGIN
          -- (ChewKP10)
          IF @c_ChkLocByCommingleSkuFlag = '0'
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Do NOT mix lottables. CommingleSKU' +
                   '. From=' + RTRIM( @c_SKU) +
@@ -5242,15 +5203,14 @@ BEGIN
       RowRef  INT IDENTITY(1,1) NOT NULL,
       LottableNo INT  NULL )
 
-   DECLARE   @c_from_lottable      NVARCHAR( 18)
-           , @c_to_lottable        NVARCHAR( 18)
+   DECLARE   @c_From_Lottable      NVARCHAR( 30)
+           , @c_To_Lottable        NVARCHAR( 30)
            , @c_SKU_MixLottable    NVARCHAR( 20)
            , @c_Storer_MixLottable NVARCHAR( 15)
            , @c_ExecStatements     NVARCHAR(4000)
            , @c_ExecArguments      NVARCHAR(4000)
-           , @nLottableNo          INT
-           , @cTempLottable        NVARCHAR(10)
-
+           , @n_LottableNo         INT
+           , @c_TempLottable       NVARCHAR(10)
 
 
    IF @c_loc_NoMixLottable01 = '1'
@@ -5264,9 +5224,6 @@ BEGIN
 
    IF @c_loc_NoMixLottable04 = '1'
       INSERT INTO @NotMixLottable (LottableNo ) VALUES (4)
-
---   IF @c_loc_NoMixLottable05 = '5'
---      INSERT INTO @NotMixLottable (LottableNo ) VALUES (1)
 
    IF @c_loc_NoMixLottable06 = '1'
       INSERT INTO @NotMixLottable (LottableNo ) VALUES (6)
@@ -5298,9 +5255,6 @@ BEGIN
    IF @c_loc_NoMixLottable15 = '1'
       INSERT INTO @NotMixLottable (LottableNo ) VALUES (15)
 
-
-
-
    DECLARE CurNotMixLottable CURSOR FAST_FORWARD READ_ONLY FOR
    SELECT LottableNo
    FROM @NotMixLottable
@@ -5308,16 +5262,16 @@ BEGIN
 
    OPEN CurNotMixLottable
 
-   FETCH NEXT FROM CurNotMixLottable INTO @nLottableNo
+   FETCH NEXT FROM CurNotMixLottable INTO @n_LottableNo
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
 
-      SET @c_from_lottable      = ''
-      SET @c_to_lottable        = ''
+      SET @c_From_Lottable      = ''
+      SET @c_To_Lottable        = ''
       SET @c_SKU_MixLottable    = ''
       SET @c_Storer_MixLottable = ''
-      SET @cTempLottable = 'Lottable' + RIGHT('00' + CONVERT(varchar, @nLottableNo) , 2)
+      SET @c_TempLottable = 'Lottable' + RIGHT('00' + CONVERT(varchar, @n_LottableNo) , 2)
       SET @c_ExecStatements     = ''
       SET @c_ExecArguments      = ''
 
@@ -5334,7 +5288,7 @@ BEGIN
 
          IF @c_ToLOCSKU <> ''
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Do NOT mix lottables. CommingleSKU' +
                   '. From=' + RTRIM( @c_SKU) +
@@ -5350,72 +5304,96 @@ BEGIN
       SET @c_ExecStatements = N' SELECT TOP 1                                                             '+
                                + '    @c_Storer_MixLottable = LOTxLOCxID.StorerKey,                           '+
                                + '    @c_SKU_MixLottable = LOTxLOCxID.SKU,                                    '+
-                               + '    @c_from_lottable = LOTAttribute.' + @cTempLottable
+                               + '    @c_From_Lottable = LOTAttribute.' + @c_TempLottable
                                + ' FROM LOTxLOCxID WITH (NOLOCK)                                              '+
-                               + '    JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)  '+
-                               + ' WHERE LOTxLOCxID.LOC = ''' + @c_FromLoc + '''                              '+
-                               + '    AND LOTxLOCxID.ID = ''' + @c_ID      + '''                              '+
-                               + '    AND LOTxLOCxID.StorerKey = ''' + @c_StorerKey + '''                     '+
-                               + '    AND LOTxLOCxID.SKU = ''' + @c_SKU + '''                                 '+
-                               + '    AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)                           '+
-                               + '    AND EXISTS (SELECT TOP 1 1                                              '+
-                               + '       FROM LOTxLOCxID ToLLI WITH (NOLOCK)                                  '+
-                               + '          JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)    '+
-                               + '       WHERE ToLLI.LOC = ''' + @c_ToLoc + '''                               '+
-                               + '          AND ToLLI.StorerKey = ''' + @c_StorerKey + '''                    '+
-                               + '          AND ToLLI.SKU = ''' + @c_SKU + '''                                '+
-                               + '          AND ToLA.' + @cTempLottable + ' <> LOTAttribute.' + @cTempLottable
-                               + '          AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))   '
+                               + ' JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)  '+
+                               + ' WHERE LOTxLOCxID.LOC = @c_FromLoc '+
+                               + ' AND LOTxLOCxID.ID = @c_ID '+
+                               + ' AND LOTxLOCxID.StorerKey = @c_StorerKey '+
+                               + ' AND LOTxLOCxID.SKU = @c_SKU '+
+                               + ' AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)                           '+
+                               + ' AND EXISTS (SELECT TOP 1 1                                              '+
+                               + '     FROM LOTxLOCxID ToLLI WITH (NOLOCK)                                  '+
+                               + '     JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)    '+
+                               + '     WHERE ToLLI.LOC = @c_ToLoc '+
+                               + '     AND ToLLI.StorerKey = @c_StorerKey '+
+                               + '     AND ToLLI.SKU = @c_SKU ' +
+                               + '     AND ToLA.' + @c_TempLottable + ' <> LOTAttribute.' + @c_TempLottable
+                               + '     AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))   '
 
 
 
        --SELECT @c_ExecStatements
-      SET @c_ExecArguments = N'@c_Storer_MixLottable NVARCHAR(15) OUTPUT
-                                 ,@c_SKU_MixLottable NVARCHAR(20) OUTPUT
-                                 ,@c_from_lottable    NVARCHAR(18) OUTPUT'
+      SET @c_ExecArguments = N'@c_FromLoc NVARCHAR(10)' +
+                              ',@c_ID  NVARCHAR(18) ' +
+                              ',@c_StorerKey NVARCHAR(15)' +
+                              ',@c_SKU NVARCHAR(20)' +
+                              ',@c_ToLoc NVARCHAR(10)' +
+                              ',@c_Storer_MixLottable NVARCHAR(15) OUTPUT' +
+                              ',@c_SKU_MixLottable  NVARCHAR(20) OUTPUT  ' +
+                              ',@c_From_Lottable    NVARCHAR(30) OUTPUT'
 
-
+      IF @b_Debug = 2
+      BEGIN
+         PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_ExecStatements
+      END
+                     
       EXECUTE sp_ExecuteSql  @c_ExecStatements
                               , @c_ExecArguments
+                              , @c_FromLoc
+                              , @c_ID
+                              , @c_StorerKey
+                              , @c_SKU
+                              , @c_ToLoc
                               , @c_Storer_MixLottable OUTPUT
                               , @c_SKU_MixLottable    OUTPUT
-                              , @c_from_lottable      OUTPUT
+                              , @c_From_Lottable      OUTPUT
 
 
 
       IF @c_SKU_MixLottable <> ''
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SET @c_ExecStatements = ''
             SET @c_ExecArguments = ''
-            SET @c_to_lottable   = ''
+            SET @c_To_Lottable   = ''
 
-            SET @c_ExecStatements = N' SELECT TOP 1                                                       '+
-                                       +'    @c_to_lottable = ToLA.' + @cTempLottable
+            SET @c_ExecStatements = N' SELECT TOP 1 @c_To_Lottable = ToLA.' + @c_TempLottable
                                        +' FROM LOTxLOCxID ToLLI WITH (NOLOCK)                                '+
-                                       +'    JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)  '+
-                                       +' WHERE ToLLI.LOC = ''' + @c_ToLoc + '''                             '+
-                                       +'    AND ToLLI.StorerKey = ''' +  @c_Storer_MixLottable + '''        '+
-                                       +'    AND ToLLI.SKU = ''' + @c_SKU_MixLottable + '''                  '+
-                                       +'    AND ToLA.' + @cTempLottable + ' <> ''' + @c_from_lottable + ''' '
+                                       +' JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)  '+
+                                       +' WHERE ToLLI.LOC = @c_ToLoc '+
+                                       +'    AND ToLLI.StorerKey = @c_Storer_MixLottable '+
+                                       +'    AND ToLLI.SKU = @c_SKU_MixLottable '+
+                                       +'    AND ToLA.' + @c_TempLottable + ' <> @c_From_Lottable '
                                        +'    AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0)  '
 
 
 
             --SELECT @c_ExecStatements
-            SET @c_ExecArguments = N'@c_to_lottable NVARCHAR(15) OUTPUT'
+            SET @c_ExecArguments = N' @c_To_Lottable NVARCHAR(15) OUTPUT' +
+                                    ',@c_ToLoc NVARCHAR(10)' +
+                                    ',@c_Storer_MixLottable NVARCHAR(15)'+
+                                    ',@c_SKU_MixLottable  NVARCHAR(20)'+
+                                    ',@c_From_Lottable    NVARCHAR(30)'
 
-
+            IF @b_Debug = 2
+            BEGIN
+               PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @c_ExecStatements
+            END
+                     
             EXECUTE sp_ExecuteSql  @c_ExecStatements
-                                    , @c_ExecArguments
-                                    , @c_to_lottable OUTPUT
+                                 , @c_ExecArguments
+                                 , @c_To_Lottable OUTPUT
+                                 , @c_ToLoc
+                                 , @c_Storer_MixLottable
+                                 , @c_SKU_MixLottable
+                                 , @c_From_Lottable
 
 
-
-            SELECT @c_Reason = 'FAILED Do NOT mix ' + @cTempLottable +
-               '. ' + @cTempLottable + '=' + RTRIM( @c_from_lottable) +
-               ', To=' + RTRIM( @c_to_lottable) +
+            SELECT @c_Reason = 'FAILED Do NOT mix ' + @c_TempLottable +
+               '. ' + @c_TempLottable + '=' + RTRIM( @c_From_Lottable) +
+               ', To=' + RTRIM( @c_To_Lottable) +
                ', SKU=' + RTRIM( @c_SKU_MixLottable)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
          END
@@ -5426,47 +5404,15 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
-            SELECT @c_Reason = 'PASSED Do NOT mix ' + @cTempLottable --+ '. Location NoMixLottable01 flag = ' +
+            SELECT @c_Reason = 'PASSED Do NOT mix ' + @c_TempLottable --+ '. Location NoMixLottable01 flag = ' +
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
          END
 
       END
 
-
-
-
---      ELSE
---      BEGIN
---
---
---         SET @c_ExecStatements = N'SELECT TOP 1                                                                   '+
---                                 + '   @c_Storer_MixLottable = LOTxLOCxID.StorerKey,                              '+
---                                 + '   @c_SKU_MixLottable = LOTxLOCxID.SKU,                                       '+
---                                 + '   @c_from_lottable = LOTAttribute.' + @cTempLottable
---                                 + ' FROM LOTxLOCxID WITH (NOLOCK)                                                '+
---                                 + '   JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)     '+
---                                 + ' WHERE LOTxLOCxID.LOC = ''' + @c_FromLoc + '''                                '+
---                                 + '   AND LOTxLOCxID.ID = ''' + @c_ID      + '''                                 '+
---                                 + '   AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)                              '+
---                                 + '   AND EXISTS (SELECT TOP 1 1                                                 '+
---                                 + '      FROM LOTxLOCxID ToLLI WITH (NOLOCK)                                     '+
---                                 + '         JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)       '+
---                                 + '      WHERE ToLLI.LOC = ''' + @c_ToLoc + '''                                  '+
---                                 + '         AND ToLLI.StorerKey = LOTxLOCxID.StorerKey                           '+
---                                 + '         AND ToLLI.SKU = LOTxLOCxID.SKU                                       '+
---                                 + '         AND ToLA.' + @cTempLottable + ' <> LOTAttribute.' + @cTempLottable
---                                 + '         AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))      '
---
---
---
---      END
-
-
-
-
-      FETCH NEXT FROM CurNotMixLottable INTO @nLottableNo
+      FETCH NEXT FROM CurNotMixLottable INTO @n_LottableNo
    END
    CLOSE CurNotMixLottable
    DEALLOCATE CurNotMixLottable
@@ -5476,353 +5422,15 @@ BEGIN
       GOTO RESTRICTIONCHECKDONE
    END
 
-/*
-   -- No mix lottable01 (ung05)
-   IF @c_loc_NoMixLottable01 = '1'
-   BEGIN
-      DECLARE @c_from_lottable01   NVARCHAR( 18)
-      DECLARE @c_to_lottable01     NVARCHAR( 18)
-      DECLARE @c_SKU_MixLottable01 NVARCHAR( 20)
-      DECLARE @c_Storer_MixLottable01 NVARCHAR( 15)
-
-      SET @c_Storer_MixLottable01 = ''
-      SET @c_SKU_MixLottable01 = ''
-      SET @c_from_lottable01 = ''
-
-      IF @b_PutawayBySKU = 'Y'
-         SELECT TOP 1
-            @c_Storer_MixLottable01 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable01 = LOTxLOCxID.SKU,
-            @c_from_lottable01 = LOTAttribute.Lottable01
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND LOTxLOCxID.StorerKey = @c_StorerKey
-            AND LOTxLOCxID.SKU = @c_SKU
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = @c_StorerKey
-                  AND ToLLI.SKU = @c_SKU
-                  AND ToLA.Lottable01 <> LOTAttribute.Lottable01
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-      ELSE
-         SELECT TOP 1
-            @c_Storer_MixLottable01 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable01 = LOTxLOCxID.SKU,
-            @c_from_lottable01 = LOTAttribute.Lottable01
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = LOTxLOCxID.StorerKey
-                  AND ToLLI.SKU = LOTxLOCxID.SKU  28/05/2015 14:20
-                  AND ToLA.Lottable01 <> LOTAttribute.Lottable01
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-
-      IF @c_SKU_MixLottable01 <> ''
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT TOP 1
-               @c_to_lottable01 = ToLA.Lottable01
-            FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-               JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-            WHERE ToLLI.LOC = @c_ToLoc
-               AND ToLLI.StorerKey = @c_Storer_MixLottable01
-               AND ToLLI.SKU = @c_SKU_MixLottable01
-               AND ToLA.Lottable01 <> @c_from_lottable01
-               AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0)
-
-            SELECT @c_Reason = 'FAILED Do NOT mix lottable01' +
-               '. L1=' + RTRIM( @c_from_lottable01) +
-               ', To=' + RTRIM( @c_to_lottable01) +
-               ', SKU=' + RTRIM( @c_SKU_MixLottable01)
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-         SELECT @b_RestrictionsPassed = 0
-         GOTO RESTRICTIONCHECKDONE
-      END
-      ELSE
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT @c_Reason = 'PASSED Do NOT mix lottable01. Location NoMixLottable01 flag = ' + @c_loc_NoMixLottable01
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-      END
-   END
-
-   -- No mix lottable02 (ung05)
-   IF @c_loc_NoMixLottable02 = '1'
-   BEGIN
-      DECLARE @c_from_lottable02   NVARCHAR( 18)
-      DECLARE @c_to_lottable02     NVARCHAR( 18)
-      DECLARE @c_SKU_MixLottable02 NVARCHAR( 20)
-      DECLARE @c_Storer_MixLottable02 NVARCHAR( 15)
-
-      SET @c_Storer_MixLottable02 = ''
-      SET @c_SKU_MixLottable02 = ''
-      SET @c_from_lottable02 = ''
-
-      IF @b_PutawayBySKU = 'Y'
-         SELECT TOP 1
-            @c_Storer_MixLottable02 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable02 = LOTxLOCxID.SKU,
-            @c_from_lottable02 = LOTAttribute.Lottable02
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND LOTxLOCxID.StorerKey = @c_StorerKey
-            AND LOTxLOCxID.SKU = @c_SKU
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = @c_StorerKey
-                  AND ToLLI.SKU = @c_SKU
-                  AND ToLA.Lottable02 <> LOTAttribute.Lottable02
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-      ELSE
-         SELECT TOP 1
-            @c_Storer_MixLottable02 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable02 = LOTxLOCxID.SKU,
-            @c_from_lottable02 = LOTAttribute.Lottable02
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = LOTxLOCxID.StorerKey
-                  AND ToLLI.SKU = LOTxLOCxID.SKU
-                  AND ToLA.Lottable02 <> LOTAttribute.Lottable02
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-
-      IF @c_SKU_MixLottable02 <> ''
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT TOP 1
-               @c_to_lottable02 = ToLA.Lottable02
-            FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-               JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-            WHERE ToLLI.LOC = @c_ToLoc
-               AND ToLLI.StorerKey = @c_Storer_MixLottable02
-               AND ToLLI.SKU = @c_SKU_MixLottable02
-               AND ToLA.Lottable02 <> @c_from_lottable02
-               AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0)
-
-            SELECT @c_Reason = 'FAILED Do NOT mix lottable02' +
-               '. L1=' + RTRIM( @c_from_lottable02) +
-               ', To=' + RTRIM( @c_to_lottable02) +
-               ', SKU=' + RTRIM( @c_SKU_MixLottable02)
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-         SELECT @b_RestrictionsPassed = 0
-         GOTO RESTRICTIONCHECKDONE
-      END
-      ELSE
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT @c_Reason = 'PASSED Do NOT mix lottable02. Location NoMixLottable02 flag = ' + @c_loc_NoMixLottable02
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-      END
-   END
-
-   -- No mix lottable03 (ung05)
-   IF @c_loc_NoMixLottable03 = '1'
-   BEGIN
-      DECLARE @c_from_lottable03   NVARCHAR( 18)
-      DECLARE @c_to_lottable03     NVARCHAR( 18)
-      DECLARE @c_SKU_MixLottable03 NVARCHAR( 20)
-      DECLARE @c_Storer_MixLottable03 NVARCHAR( 15)
-
-      SET @c_Storer_MixLottable03 = ''
-      SET @c_SKU_MixLottable03 = ''
-      SET @c_from_lottable03 = ''
-
-      IF @b_PutawayBySKU = 'Y'
-         SELECT TOP 1
-            @c_Storer_MixLottable03 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable03 = LOTxLOCxID.SKU,
-            @c_from_lottable03 = LOTAttribute.Lottable03
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND LOTxLOCxID.StorerKey = @c_StorerKey
-            AND LOTxLOCxID.SKU = @c_SKU
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = @c_StorerKey
-                  AND ToLLI.SKU = @c_SKU
-                  AND ToLA.Lottable03 <> LOTAttribute.Lottable03
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-      ELSE
-         SELECT TOP 1
-            @c_Storer_MixLottable03 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable03 = LOTxLOCxID.SKU,
-            @c_from_lottable03 = LOTAttribute.Lottable03
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-            JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = LOTxLOCxID.StorerKey
-                  AND ToLLI.SKU = LOTxLOCxID.SKU
-                  AND ToLA.Lottable03 <> LOTAttribute.Lottable03
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-
-      IF @c_SKU_MixLottable03 <> ''
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT TOP 1
-               @c_to_lottable03 = ToLA.Lottable03
-            FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-               JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-            WHERE ToLLI.LOC = @c_ToLoc
-               AND ToLLI.StorerKey = @c_Storer_MixLottable03
-               AND ToLLI.SKU = @c_SKU_MixLottable03
-               AND ToLA.Lottable03 <> @c_from_lottable03
-               AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0)
-
-            SELECT @c_Reason = 'FAILED Do NOT mix lottable03' +
-               '. L1=' + RTRIM( @c_from_lottable03) +
-               ', To=' + RTRIM( @c_to_lottable03) +
-               ', SKU=' + RTRIM( @c_SKU_MixLottable03)
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-         SELECT @b_RestrictionsPassed = 0
-         GOTO RESTRICTIONCHECKDONE
-      END
-      ELSE
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT @c_Reason = 'PASSED Do NOT mix lottable03. Location NoMixLottable03 flag = ' + @c_loc_NoMixLottable03
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-      END
-   END
-
-   -- No mix lottable04 (ung05)
-   IF @c_loc_NoMixLottable04 = '1'
-   BEGIN
-      DECLARE @d_from_lottable04   DATETIME
-      DECLARE @d_to_lottable04     DATETIME
-      DECLARE @c_SKU_MixLottable04 NVARCHAR( 20)
-      DECLARE @c_Storer_MixLottable04 NVARCHAR( 15)
-
-      SET @c_Storer_MixLottable04 = ''
-      SET @c_SKU_MixLottable04 = ''
-      SET @d_from_lottable04 = ''
-
-      IF @b_PutawayBySKU = 'Y'
-         SELECT TOP 1
-            @c_Storer_MixLottable04 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable04 = LOTxLOCxID.SKU,
-            @d_from_lottable04 = LOTAttribute.Lottable04
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND LOTxLOCxID.StorerKey = @c_StorerKey
-            AND LOTxLOCxID.SKU = @c_SKU
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-                  AND ToLLI.StorerKey = @c_StorerKey
-                  AND ToLLI.SKU = @c_SKU
-                  AND ToLA.Lottable04 <> LOTAttribute.Lottable04
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-      ELSE
-         SELECT TOP 1
-            @c_Storer_MixLottable04 = LOTxLOCxID.StorerKey,
-            @c_SKU_MixLottable04 = LOTxLOCxID.SKU,
-            @d_from_lottable04 = LOTAttribute.Lottable04
-         FROM LOTxLOCxID WITH (NOLOCK)
-            JOIN LOTAttribute WITH (NOLOCK) ON (LOTxLOCxID.LOT = LOTAttribute.LOT)
-         WHERE LOTxLOCxID.LOC = @c_FromLoc
-            AND LOTxLOCxID.ID = @c_ID
-            AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
-            AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-                  JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-               WHERE ToLLI.LOC = @c_ToLoc
-              AND ToLLI.StorerKey = LOTxLOCxID.StorerKey
-                  AND ToLLI.SKU = LOTxLOCxID.SKU
-                  AND ToLA.Lottable04 <> LOTAttribute.Lottable04
-                  AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
-
-      IF @c_SKU_MixLottable04 <> ''
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT TOP 1
-               @d_to_lottable04 = ToLA.Lottable04
-            FROM LOTxLOCxID ToLLI WITH (NOLOCK)
-               JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-            WHERE ToLLI.LOC = @c_ToLoc
-               AND ToLLI.StorerKey = @c_Storer_MixLottable04
-               AND ToLLI.SKU = @c_SKU_MixLottable04
-               AND ToLA.Lottable04 <> @d_from_lottable04
-               AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0)
-
-            SELECT @c_Reason = 'FAILED Do NOT mix lottable04' +
-               '. L4=' + CONVERT( NVARCHAR(10), @d_from_lottable04, 120) +
-               ', To=' + CONVERT( NVARCHAR(10), @d_to_lottable04, 120) +
-               ', SKU=' + RTRIM( @c_SKU_MixLottable04)
-
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-         SELECT @b_RestrictionsPassed = 0
-         GOTO RESTRICTIONCHECKDONE
-      END
-      ELSE
-      BEGIN
-         IF @b_debug = 1
-         BEGIN
-            SELECT @c_Reason = 'PASSED Do NOT mix lottable04. Location NoMixLottable04 flag = ' + @c_loc_NoMixLottable04
-            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
-         END
-      END
-   END
-*/
    -- Added By SHONG - Check Max Pallet
    -- END Check Pallet
    SELECT @cpa_AreaTypeExclude01 = LTRIM(@cpa_AreaTypeExclude01)
 
    IF ISNULL(RTRIM(@cpa_AreaTypeExclude01),'') <> ''
    BEGIN
-      IF EXISTS(SELECT * FROM AREADETAIL WITH (NOLOCK) WHERE PUTAWAYZONE = @c_loc_zone AND AREAKEY = @cpa_AreaTypeExclude01)
+      IF EXISTS(SELECT * FROM AREADETAIL WITH (NOLOCK) WHERE PutawayZone = @c_loc_zone AND AREAKEY = @cpa_AreaTypeExclude01)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Zone: ' + RTRIM(@c_loc_zone) + ' falls in excluded Area1: ' +  RTRIM(@cpa_AreaTypeExclude01)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5834,7 +5442,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Zone1 ' + RTRIM(@c_loc_zone) + ' is NOT excluded'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5848,9 +5456,9 @@ BEGIN
 
    IF ISNULL(RTRIM(@cpa_AreaTypeExclude02),'') <> ''
    BEGIN
-      IF EXISTS(SELECT 1 FROM AREADETAIL (NOLOCK) WHERE PUTAWAYZONE = @c_loc_zone AND AREAKEY = @cpa_AreaTypeExclude02)
+      IF EXISTS(SELECT 1 FROM AREADETAIL (NOLOCK) WHERE PutawayZone = @c_loc_zone AND AREAKEY = @cpa_AreaTypeExclude02)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Zone: ' + RTRIM(@c_loc_zone) + ' falls in excluded Area2: ' +  RTRIM(@cpa_AreaTypeExclude02)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5862,7 +5470,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Zone2 ' + RTRIM(@c_loc_zone) + ' is NOT excluded'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5876,9 +5484,9 @@ BEGIN
 
    IF ISNULL(RTRIM(@cpa_AreaTypeExclude03),'') <> ''
    BEGIN
-      IF EXISTS(SELECT 1 FROM AREADETAIL WITH (NOLOCK) WHERE PUTAWAYZONE = @c_loc_zone AND AREAKEY = @cpa_AreaTypeExclude03)
+      IF EXISTS(SELECT 1 FROM AREADETAIL WITH (NOLOCK) WHERE PutawayZone = @c_loc_zone AND AREAKEY = @cpa_AreaTypeExclude03)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Zone: ' + RTRIM(@c_loc_zone) + ' falls in excluded Area3:' +  RTRIM(@cpa_AreaTypeExclude03)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5890,7 +5498,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Zone3 ' + RTRIM(@c_loc_zone) + ' is NOT excluded'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5904,7 +5512,7 @@ BEGIN
    BEGIN
       IF EXISTS(SELECT 1 FROM LOTxLOCxID WITH (NOLOCK) WHERE LOC = @c_ToLoc AND ((QTY - QtyPicked) > 0 OR PendingMoveIN > 0))  -- (ChewKP05)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location state says Location must be empty, but its NOT'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5916,7 +5524,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location state says Location must be empty, and it is'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5931,7 +5539,7 @@ BEGIN
    BEGIN
       IF @n_CurrLocMultiSku = 1
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
     SELECT @c_Reason = 'FAILED Do NOT mix commodities'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5943,7 +5551,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED do NOT mix commodities'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
@@ -5957,7 +5565,7 @@ BEGIN
    BEGIN
       IF @n_CurrLocMultiLot = 1
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Do NOT mix lots'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5969,7 +5577,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
       SELECT @c_Reason = 'PASSED Do NOT mix lots'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -5995,7 +5603,7 @@ BEGIN
 
          IF @n_PalletQty >= @n_MaxPallet
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED - Fit By Max Pallet, Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6008,7 +5616,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED - Fit By Max Pallet, Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6028,10 +5636,10 @@ BEGIN
       SELECT @n_StackFactor = (CASE StackFactor WHEN NULL THEN 0 ELSE StackFactor END) FROM SKU WITH (NOLOCK) WHERE Storerkey = @c_StorerKey AND Sku = @c_SKU
       SELECT @n_MaxPalletStackFactor = @n_MaxPallet * @n_StackFactor
 
-      IF @b_debug = 2
+      IF @b_Debug = 2
       BEGIN
-         SELECT 'MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
-         SELECT 'MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
+         PRINT '> MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
+         PRINT '> MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
       END
 
       IF @n_MaxPalletStackFactor > 0
@@ -6046,7 +5654,7 @@ BEGIN
          IF @n_PalletQty >= @n_MaxPalletStackFactor
          BEGIN
             -- error
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED - Fit By Max Pallet (Stack Factor), Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6059,7 +5667,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED - Fit By Max Pallet (Stack Factor), Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6095,7 +5703,7 @@ BEGIN
 
          IF @n_PalletQty >= @n_MaxPallet
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED - 6 - Fit By Max Pallet, Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6108,7 +5716,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED - 6 - Fit By Max Pallet, Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6127,10 +5735,10 @@ BEGIN
       SELECT @n_StackFactor = (CASE StackFactor WHEN NULL THEN 0 ELSE StackFactor END) FROM SKU WITH (NOLOCK) WHERE Storerkey = @c_StorerKey AND Sku = @c_SKU
       SELECT @n_MaxPalletStackFactor = @n_MaxPallet * @n_StackFactor
 
-      IF @b_debug = 2
+      IF @b_Debug = 2
       BEGIN
-         SELECT '7 - MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
-         SELECT '7 - MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
+         PRINT '7 - MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
+         PRINT '7 - MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
       END
 
       IF @n_MaxPalletStackFactor > 0
@@ -6146,7 +5754,7 @@ BEGIN
          IF @n_PalletQty >= @n_MaxPalletStackFactor
          BEGIN
             -- error
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED - 7 - Fit By Max Pallet (Stack Factor), Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6159,7 +5767,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED - 7 - Fit By Max Pallet (Stack Factor), Max Pallet: ' + RTRIM(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                   ' Pallet Required: ' +  RTRIM( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
@@ -6185,7 +5793,7 @@ BEGIN
 
       IF @d_CurrentLottable05 IS NOT NULL AND @d_CurrentLottable05 <> @d_Lottable05
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Do NOT Mix Lottable05, Location Already Contain Lottable05 = ' + CONVERT(varchar(20), @d_CurrentLottable05)
             EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey,
@@ -6196,7 +5804,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Do NOT Mix Lottable05'
             EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey, @c_putawaystrategylinenumber, @n_PtraceDetailKey,
@@ -6221,7 +5829,7 @@ BEGIN
 
       IF @n_UCC_CartonSize <> ISNULL(@n_Qty,0) AND @n_UCC_CartonSize > 0
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Do NOT Mix UCC Ctn Sz, Loc Ctn Sz= ' + CONVERT(varchar(20), @n_UCC_CartonSize) +
                                '. UCC Ctn Size = ' + CONVERT(varchar(20), @n_Qty)
@@ -6233,7 +5841,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Do NOT Mix UCC Ctn Sz, Loc Ctn Sz= ' + CONVERT(varchar(20), @n_UCC_CartonSize) +
                                '. UCC Ctn Size = ' + CONVERT(varchar(20), @n_Qty)
@@ -6250,7 +5858,7 @@ BEGIN
    BEGIN
       IF @c_loc_ABC < @c_SKU_ABC
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED ABC descending. LOC ABC = ' + RTRIM( @c_loc_ABC) + '. SKU ABC = ' + RTRIM( @c_SKU_ABC)
             EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey,
@@ -6261,7 +5869,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED ABC descending. LOC ABC = ' + RTRIM( @c_loc_ABC) + '. SKU ABC = ' + RTRIM( @c_SKU_ABC)
             EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey, @c_putawaystrategylinenumber, @n_PtraceDetailKey,
@@ -6276,7 +5884,7 @@ BEGIN
    BEGIN
       IF @c_loc_ABC <> @c_SKU_ABC
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED ABC Exact. LOC ABC = ' + RTRIM( @c_loc_ABC) + '. SKU ABC = ' + RTRIM( @c_SKU_ABC)
             EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey,
@@ -6287,7 +5895,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED ABC Exact. LOC ABC = ' + RTRIM( @c_loc_ABC) + '. SKU ABC = ' + RTRIM( @c_SKU_ABC)
             EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey, @c_putawaystrategylinenumber, @n_PtraceDetailKey,
@@ -6307,7 +5915,7 @@ BEGIN
       IF @c_Loc_Aisle NOT IN (@cpa_LocAisleInclude01,@cpa_LocAisleInclude02,@cpa_LocAisleInclude03,
                               @cpa_LocAisleInclude04,@cpa_LocAisleInclude05,@cpa_LocAisleInclude06)
       BEGIN
-   IF @b_debug = 1
+   IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location Aisle ' + RTRIM(@c_Loc_Aisle) + ' was NOT one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6319,7 +5927,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location Aisle ' + RTRIM(@c_Loc_Aisle) + ' was one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6339,7 +5947,7 @@ BEGIN
       IF @c_Loc_Aisle IN (@cpa_LocAisleExclude01,@cpa_LocAisleExclude02,@cpa_LocAisleExclude03,
                  @cpa_LocAisleExclude04,@cpa_LocAisleExclude05,@cpa_LocAisleExclude06)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
       SELECT @c_Reason = 'FAILED Location Aisle ' + RTRIM(@c_Loc_Aisle) + ' was one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6351,7 +5959,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location Aisle ' + RTRIM(@c_Loc_Aisle) + ' was NOT one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6371,7 +5979,7 @@ BEGIN
       IF @n_Loc_Level NOT IN (@npa_LocLevelInclude01,@npa_LocLevelInclude02,@npa_LocLevelInclude03,
                               @npa_LocLevelInclude04,@npa_LocLevelInclude05,@npa_LocLevelInclude06)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location Level ' + RTRIM(CAST(@n_Loc_Level as NVARCHAR(10))) + ' was NOT one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6383,7 +5991,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location Level ' + RTRIM(CAST(@n_Loc_Level as NVARCHAR(10))) + ' was one of the specified values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6404,7 +6012,7 @@ BEGIN
       IF @n_Loc_Level IN (@npa_LocLevelExclude01,@npa_LocLevelExclude02,@npa_LocLevelExclude03,
                           @npa_LocLevelExclude04,@npa_LocLevelExclude05,@npa_LocLevelExclude06)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Location Level ' + RTRIM(CAST(@n_Loc_Level as NVARCHAR(10))) + ' was NOT one of the excluded values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6416,7 +6024,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Location Level ' + RTRIM(CAST(@n_Loc_Level as NVARCHAR(10))) + ' was NOT one of the exclude values'
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6489,7 +6097,7 @@ BEGIN
 
          IF (@n_ToQty + @n_Qty ) > @n_QuantityCapacity AND @n_QuantityCapacity > 0
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Qty Fit: QtyCapacity = ' + RTRIM(CONVERT(char(10),@n_QuantityCapacity)) + '  QtyRequired = ' + RTRIM(Convert(char(10),(@n_ToQty + @n_Qty)))
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6501,7 +6109,7 @@ BEGIN
          END
         ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED Qty Fit: QtyCapacity = ' + RTRIM(CONVERT(char(10),@n_QuantityCapacity)) + '  QtyRequired = ' + RTRIM(Convert(char(10),(@n_ToQty + @n_Qty)))
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6548,7 +6156,7 @@ BEGIN
 
          IF @n_Loc_CubicCapacity < (@n_ToCube + @n_FromCube)
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Cube Fit: CubeCapacity = ' + RTRIM(CONVERT(char(10),@n_Loc_CubicCapacity)) + '  CubeRequired = ' + RTRIM(Convert(char(10),(@n_ToCube + @n_FromCube)))
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6560,7 +6168,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED Cube Fit: CubeCapacity = ' + RTRIM(CONVERT(char(10),@n_Loc_CubicCapacity)) + '  CubeRequired = ' + RTRIM(Convert(char(10),(@n_ToCube + @n_FromCube)))
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6593,7 +6201,7 @@ BEGIN
       IF (@n_PalletWoodWidth > @n_Loc_Width OR @n_PalletWoodLength > @n_Loc_Length) AND
          (@n_PalletWoodWidth > @n_Loc_Length OR @n_PalletWoodLength > @n_Loc_Width)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED LxWxH Fit: Wood/LocWidth=' + CONVERT(char(4),@n_PalletWoodWidth) + ' / ' + CONVERT(char(4),@n_Loc_Width) + '  Wood/locLength=' + CONVERT(char(4),@n_PalletWoodLength) + ' / ' + CONVERT(char(4),@n_Loc_Length)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6605,7 +6213,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
       BEGIN
             SELECT @c_Reason = 'PASSED LxWxH Fit: Wood/LocWidth=' + CONVERT(char(4),@n_PalletWoodWidth) + ' / ' + CONVERT(char(4),@n_Loc_Width) + '  Wood/locLength=' + CONVERT(char(4),@n_PalletWoodLength) + ' / ' + CONVERT(char(4),@n_Loc_Length)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6647,7 +6255,7 @@ BEGIN
 
       IF @n_ExistingHeight + @n_PalletHeight > @n_Loc_Height
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED LxWxH Fit: LocHeight = ' + RTRIM(CONVERT(char(20),@n_Loc_Height)) + '  ExistingHeight = ' + RTRIM(CONVERT(char(20),@n_ExistingHeight)) + '  AdditionalHeight = ' + RTRIM(CONVERT(char(20),(@n_PalletHeight)))
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6659,7 +6267,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED LxWxH Fit: LocHeight = ' + RTRIM(CONVERT(char(20),@n_Loc_Height)) + '  ExistingHeight = ' + RTRIM(CONVERT(char(20),@n_ExistingHeight)) + '  AdditionalHeight = ' + RTRIM(CONVERT(char(20),(@n_PalletHeight)))
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6707,7 +6315,7 @@ BEGIN
       END
       IF @n_Loc_WeightCapacity < ( @n_ToWeight + @n_FromWeight )
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Weight Fit: LocWeight = ' + RTRIM(CONVERT(char(20),@n_Loc_WeightCapacity)) + '  ExistingWeight = ' + RTRIM(CONVERT(char(20),@n_ToWeight)) + '  AdditionalWeight = ' + RTRIM(CONVERT(char(20),(@n_FromWeight)))
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6719,7 +6327,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Weight Fit: LocWeight = ' + RTRIM(CONVERT(char(20),@n_Loc_WeightCapacity)) + '  ExistingWeight = ' + RTRIM(CONVERT(char(20),@n_ToWeight)) + '  AdditionalWeight = ' + RTRIM(CONVERT(char(20),(@n_FromWeight)))
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6760,7 +6368,7 @@ BEGIN
 
          IF @n_QtylocationLimit < (@n_Qty + @n_ExistingQuantity)
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Qty Capacity: LocCapacity = ' + RTRIM(CONVERT(char(20),@n_QtylocationLimit)) + '  Required = ' + RTRIM(CONVERT(char(20),(@n_Qty + @n_ExistingQuantity)))
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6772,7 +6380,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED Qty Capacity: LocCapacity = ' + RTRIM(CONVERT(char(20),@n_QtylocationLimit)) + '  Required = ' + RTRIM(CONVERT(char(20),(@n_Qty + @n_ExistingQuantity)))
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6795,7 +6403,7 @@ BEGIN
    BEGIN
       IF ((@n_CaseHeight * @n_PutawayHI) + @n_PalletWoodHeight) > @n_Loc_Height
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Height Restriction: Loc Height = ' + RTRIM(CONVERT(char(20), @n_Loc_Height)) + '. Pallet Build Height = ' +
             RTRIM(CONVERT(char(20), ((@n_CaseHeight * @n_PutawayHI) + @n_PalletWoodHeight)))
@@ -6809,7 +6417,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Height Restriction: Loc Height = ' + RTRIM(CONVERT(char(20), @n_Loc_Height)) + '. Pallet Build Height = ' +
             RTRIM(CONVERT(char(20), ((@n_CaseHeight * @n_PutawayHI) + @n_PalletWoodHeight)))
@@ -6898,7 +6506,7 @@ BEGIN
          END
          IF @c_FoundLOC <> ''
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED Cube Fit: Location With Same BatchNo/Empty for SKU '+ RTRIM(@ucc_SKU)
                + ' LOC: ' + @c_FoundLOC
@@ -6911,7 +6519,7 @@ BEGIN
         END
         ELSE
         BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Cube Fit: Location With Same BatchNo/Empty for SKU '+ RTRIM(@ucc_SKU)
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6999,7 +6607,7 @@ BEGIN
 
       IF @n_Loc_CubicCapacity < (@n_ToCube + @n_FromCube)
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Fit by UCC Cube: CubeCapacity = ' + RTRIM(CONVERT(char(10),@n_Loc_CubicCapacity)) + '  CubeRequired = ' + RTRIM(Convert(char(10),(@n_ToCube + @n_FromCube)))
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -7011,7 +6619,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
+         IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Fit by UCC Cube : CubeCapacity = ' + RTRIM(CONVERT(char(10),@n_Loc_CubicCapacity)) + '  CubeRequired = ' + RTRIM(Convert(char(10),(@n_ToCube + @n_FromCube)))
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -7039,9 +6647,10 @@ BEGIN
             ' ,@c_Param3   ' +
             ' ,@c_Param4   ' +
             ' ,@c_Param5   ' +
-            ' ,@b_debug    ' +
+            ' ,@b_Debug    ' +
             ' ,@c_SQL      OUTPUT' +
             ' ,@b_RestrictionsPassed OUTPUT'
+            
          SET @cSQLParam = '@n_pTraceHeadKey NVARCHAR(10), @n_PtraceDetailKey NVARCHAR(10), @c_PutawayStrategyKey NVARCHAR(10), @c_PutawayStrategyLineNumber NVARCHAR(5) ' +
             ' ,@c_StorerKey NVARCHAR(15) ' +
             ' ,@c_SKU       NVARCHAR(20) ' +
@@ -7055,11 +6664,16 @@ BEGIN
             ' ,@c_Param3    NVARCHAR(20) ' +
             ' ,@c_Param4    NVARCHAR(20) ' +
             ' ,@c_Param5    NVARCHAR(20) ' +
-            ' ,@b_debug     INT      ' +
+            ' ,@b_Debug     INT      ' +
             ' ,@c_SQL       NVARCHAR(1000) OUTPUT' +
             ' ,@b_RestrictionsPassed INT  OUTPUT'
 
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @n_pTraceHeadKey, @n_PtraceDetailKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber
+         IF @b_Debug = 2
+         BEGIN
+            PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @cSQL
+         END
+            
+         EXEC sp_ExecuteSql @cSQL, @cSQLParam, @n_pTraceHeadKey, @n_PtraceDetailKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber
           ,@c_StorerKey
             ,@c_SKU
             ,@c_LOT
@@ -7072,10 +6686,15 @@ BEGIN
             ,@c_Param3
             ,@c_Param4
             ,@c_Param5
-            ,@b_debug
+            ,@b_Debug
             ,@cpa_PutCodeSQL       OUTPUT
             ,@b_RestrictionsPassed OUTPUT
 
+         IF @b_Debug = 2
+         BEGIN
+            PRINT '@cpa_PutCodeSQL: ' + @cpa_PutCodeSQL 
+         END
+         
          IF @b_RestrictionsPassed = 0
             GOTO RESTRICTIONCHECKDONE
       END
@@ -7116,7 +6735,6 @@ BEGIN
    DECLARE @nPendingMoveInIDCnt INT
    DECLARE @cSuggestedLOC       NVARCHAR( 10)
 
-   DECLARE @cSQLLocationCategoryInclude NVARCHAR( 100)
    DECLARE @nTranCount INT
    -- Reject If not all UCC on pallet can Putaway
    IF '18' IN (@cpa_DimensionRestriction01,
@@ -7126,69 +6744,6 @@ BEGIN
               @cpa_DimensionRestriction05,
               @cpa_DimensionRestriction06)
    BEGIN
-      --IF OBJECT_ID(N'tempdb..#tLOCPendingMoveIn') IS NOT NULL
-      --   DROP TABLE #tLOCPendingMoveIn
-      --IF OBJECT_ID(N'tempdb..#tUCCPendingMoveIn') IS NOT NULL
-      --   DROP TABLE #tUCCPendingMoveIn
-
-      --CREATE TABLE #tLOCPendingMoveIn
-      --(
-      --   LOC                NVARCHAR( 10) NOT NULL,
-      --   LOCIDCnt           INT           NOT NULL,
-      --   PendingMoveInIDCnt INT           NOT NULL
-      --)
-
-      --CREATE TABLE #tUCCPendingMoveIn
-      --(
-      --   LOC    NVARCHAR( 10) NOT NULL,
-      --   UCCNo  NVARCHAR( 20) NOT NULL,
-      --   SKU    NVARCHAR( 20) NOT NULL,
-      --   QTY    INT           NOT NULL
-      --)
-
-      --DECLARE @cUCC     NVARCHAR( 20)
-      --DECLARE @cLOT     NVARCHAR( 10)
-      --DECLARE @cLOC     NVARCHAR( 10)
-      --DECLARE @cID      NVARCHAR( 18)
-      --DECLARE @cPrevID  NVARCHAR( 18)
-      --DECLARE @cToID    NVARCHAR( 18)
-      --DECLARE @cSKU     NVARCHAR( 20)
-      --DECLARE @nQTY     INT
-      --DECLARE @cUCCSKU  NVARCHAR( 20)
-      --DECLARE @nUCCQTY  INT
-      --DECLARE @nMaxPallet          INT
-      --DECLARE @nLOCIDCnt           INT
-      --DECLARE @nPendingMoveInIDCnt INT
-      --DECLARE @cSuggestedLOC       NVARCHAR( 10)
-
-      --DECLARE @cSQLLocationCategoryInclude NVARCHAR( 100)
-      SET @cSQLLocationCategoryInclude = ''
-      IF @cpa_LocationCategoryInclude01 <> '' OR
-         @cpa_LocationCategoryInclude02 <> '' OR
-         @cpa_LocationCategoryInclude03 <> ''
-      BEGIN
-         SET @cSQLLocationCategoryInclude = ' AND LOC.LocationCategory IN (' +
-              CASE WHEN @cpa_LocationCategoryInclude01 <> '' THEN '''' + @cpa_LocationCategoryInclude01 + ''',' END +
-              CASE WHEN @cpa_LocationCategoryInclude02 <> '' THEN '''' + @cpa_LocationCategoryInclude02 + ''',' END +
-              CASE WHEN @cpa_LocationCategoryInclude03 <> '' THEN '''' + @cpa_LocationCategoryInclude03 + ''',' END
-         SET @cSQLLocationCategoryInclude = LEFT( @cSQLLocationCategoryInclude, LEN( @cSQLLocationCategoryInclude) - 1) + ') ' -- Remove last comma, then add close bracket
-      END
-
-      DECLARE @cSQLLocationHandlingInclude NVARCHAR( 100)
-      SET @cSQLLocationHandlingInclude = ''
-      IF @cpa_LocationHandlingInclude01 <> '' OR
-         @cpa_LocationHandlingInclude02 <> '' OR
-         @cpa_LocationHandlingInclude03 <> ''
-      BEGIN
-         SET @cSQLLocationHandlingInclude = ' AND LOC.LocationHandling IN (' +
-              CASE WHEN @cpa_LocationHandlingInclude01 <> '' THEN '''' + @cpa_LocationHandlingInclude01 + ''',' END +
-              CASE WHEN @cpa_LocationHandlingInclude02 <> '' THEN '''' + @cpa_LocationHandlingInclude02 + ''',' END +
-              CASE WHEN @cpa_LocationHandlingInclude03 <> '' THEN '''' + @cpa_LocationHandlingInclude03 + ''',' END
-         SET @cSQLLocationHandlingInclude = LEFT( @cSQLLocationHandlingInclude, LEN( @cSQLLocationHandlingInclude) - 1) + ') ' -- Remove last comma, then add close bracket
-      END
-
-
-
       SET @cSQL =
          ' SELECT TOP 1 ' +
          '    @cLOC = LOC.LOC, ' +
@@ -7203,8 +6758,8 @@ BEGIN
          '    LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LOC.LOC = LLI.LOC AND (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0)) ' +
          '    LEFT JOIN UCC WITH (NOLOCK) ON (LLI.LOT = UCC.LOT AND LLI.LOC = UCC.LOC AND LLI.ID = UCC.ID AND UCC.Status IN (''1'', ''3'')) ' +
          '    LEFT JOIN #tLOCPendingMoveIn t ON (t.LOC = LOC.LOC) ' +
-         ' WHERE LOC.Facility = ''' + @c_Facility + '''' +
-         '    AND LOC.LOCAisle = ''' + @c_NextPnDAisle + '''' +
+         ' WHERE LOC.Facility = @c_Facility ' +
+         '    AND LOC.LOCAisle = @c_NextPnDAisle ' +
          '    AND NOT EXISTS( ' +
          '        SELECT 1 ' +
          '        FROM dbo.UCC WITH (NOLOCK) ' +
@@ -7219,26 +6774,33 @@ BEGIN
          '        WHERE SKU = @cUCCSKU ' +
          '           AND QTY <> @nUCCQTY ' +
          '           AND LOC = LOC.LOC) ' +
-         @cSQLLocationCategoryInclude +
-         @cSQLLocationHandlingInclude +
+         @c_SQL_LocationCategoryInclude +
+         @c_SQL_LocationHandlingInclude +
          ' GROUP BY LOC.LogicalLocation, LOC.LOC, LOC.MaxPallet, t.PendingMoveInIDCnt ' +
          ' HAVING ISNULL( COUNT( DISTINCT ' +
          '        CASE WHEN UCC.UCCNo IS NOT NULL THEN UCC.UCCNO ' +
          '             WHEN LLI.ID    IS NOT NULL THEN LLI.ID ' +
          '             ELSE NULL ' +
          '        END), 0) ' +
-         '     + ISNULL( t.PendingMoveInIDCnt, 0) + 1 <= LOC.MaxPallet ' +  --LOC ID Cnt + PendingMoveInIDCnt + UCC (1)
+         '     + ISNULL( t.PendingMoveInIDCnt, 0) + 1 <= LOC.MaxPallet ' +  
          ' ORDER BY LOC.LogicalLocation, LOC.LOC '
-      SET @cSQLParam =
-         ' @c_StorerKey NVARCHAR( 15), ' +
+         
+      SET @cSQLParam = N'@c_Facility NVARCHAR(5), ' +
+         ' @c_StorerKey nvarchar(15), ' +
          ' @cUCCSKU     NVARCHAR( 20), ' +
          ' @nUCCQTY     INT, ' +
          ' @cLOC        NVARCHAR( 10) OUTPUT, ' +
          ' @nMaxPallet  INT           OUTPUT, ' +
          ' @nLOCIDCnt   INT           OUTPUT, ' +
-         ' @nPendingMoveInIDCnt INT   OUTPUT '
-
-
+         ' @nPendingMoveInIDCnt INT   OUTPUT '  +
+         ',@c_NextPnDAisle NVARCHAR(10) ' +
+         ',@cpa_LocationCategoryInclude01  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationCategoryInclude02  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationCategoryInclude03  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationHandlingInclude01  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationHandlingInclude02  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationHandlingInclude03  NVARCHAR(10)= '''''
+         
 
       DECLARE @curUCC CURSOR
       SET @curUCC = CURSOR FOR
@@ -7254,6 +6816,7 @@ BEGIN
          -- Get UCC info
          SET @cUCCSKU = ''
          SET @nUCCQTY =  0
+         
          SELECT
             @cUCCSKU = SKU,
             @nUCCQTY = QTY
@@ -7263,7 +6826,14 @@ BEGIN
 
          -- Find LOC in aisle that fit the UCC
          SET @cLOC = ''
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+
+         IF @b_Debug = 2
+         BEGIN
+            PRINT 'PA Type: ' + @cpa_PAType + ' >>> ' + @cSQL
+         END
+                  
+         EXEC sp_ExecuteSql @cSQL, @cSQLParam
+            ,@c_Facility
             ,@c_StorerKey
             ,@cUCCSKU
             ,@nUCCQTY
@@ -7271,6 +6841,13 @@ BEGIN
             ,@nMaxPallet  OUTPUT
             ,@nLOCIDCnt   OUTPUT
             ,@nPendingMoveInIDCnt OUTPUT
+            ,@c_NextPnDAisle  
+            ,@cpa_LocationCategoryInclude01
+            ,@cpa_LocationCategoryInclude02
+            ,@cpa_LocationCategoryInclude03
+            ,@cpa_LocationHandlingInclude01
+            ,@cpa_LocationHandlingInclude02
+            ,@cpa_LocationHandlingInclude03
 
          -- Save
          IF @cLOC <> ''
@@ -7286,7 +6863,7 @@ BEGIN
 
             SET @c_FitCasesInAisle = 'Y'
 
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED Fit in aisle:' + RTRIM( @c_NextPnDAisle) +
                   '  UCCNo=' + RTRIM(@cUCC) +
@@ -7298,7 +6875,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Fit in aisle:' + RTRIM( @c_NextPnDAisle) + '  UCC=' + RTRIM(@cUCC)
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @cLOC, @c_Reason
@@ -7340,36 +6917,6 @@ BEGIN
          FROM dbo.UCC WITH (NOLOCK)
          WHERE UCCNo = @cUCC
 
-/*
-         -- Get SuggestedLOC ID count
-         SELECT @nLOCIDCnt = ISNULL( COUNT( DISTINCT
-            CASE WHEN UCC.UCCNo IS NOT NULL THEN UCC.UCCNO
-                 WHEN LLI.ID    IS NOT NULL THEN LLI.ID
-                 ELSE NULL
-            END), 0)
-         FROM dbo.LOC
-            LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LOC.LOC = LLI.LOC AND (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0))
-            LEFT JOIN UCC WITH (NOLOCK) ON (LLI.LOT = UCC.LOT AND LLI.LOC = UCC.LOC AND LLI.ID = UCC.ID AND UCC.Status = '1')
-         WHERE LOC.LOC = @cSuggestedLOC
-
-         -- Check if SuggestedLOC ID changed
-         IF @nLOCIDCnt <> (SELECT LOCIDCnt FROM #tLOCPendingMoveIn WHERE LOC = @cSuggestedLOC)
-         BEGIN
-            ROLLBACK TRAN nspRDTPASTD_FitByAisle
-            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-               COMMIT TRAN
-
-            IF @b_debug = 1
-            BEGIN
-               SELECT @c_Reason = 'FAILED Fit in aisle:' + RTRIM( @c_NextPnDAisle) + '  LOC updated by others'
-               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @cSuggestedLOC, @c_Reason
-            END
-
-            SET @c_FitCasesInAisle = ''
-            SELECT @b_RestrictionsPassed = 0
-            GOTO RESTRICTIONCHECKDONE
-         END
-*/
          -- Use UCCNo as ID for booking
          SET @cToID = RIGHT( RTRIM( @cUCC), 18)
 
@@ -7405,7 +6952,7 @@ BEGIN
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN
 
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Fit in aisle:' + RTRIM( @c_NextPnDAisle) + '  LOC updated by others'
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @cSuggestedLOC, @c_Reason
@@ -7416,13 +6963,6 @@ BEGIN
             GOTO RESTRICTIONCHECKDONE
          END
 
-/*
-         -- Update ID count
-         IF @cPrevID <> @cToID
-            UPDATE #tLOCPendingMoveIn SET LOCIDCnt = LOCIDCnt + 1 WHERE LOC = @cSuggestedLOC
-
-         SET @cPrevID = @cToID
-*/
          FETCH NEXT FROM @curUCC INTO @cUCC, @cSuggestedLOC
       END
       CLOSE @curUCC
@@ -7440,32 +6980,6 @@ BEGIN
               @cpa_DimensionRestriction06)
    BEGIN
 
-      SET @cSQLLocationCategoryInclude = ''
-      IF @cpa_LocationCategoryInclude01 <> '' OR
-         @cpa_LocationCategoryInclude02 <> '' OR
-         @cpa_LocationCategoryInclude03 <> ''
-      BEGIN
-         SET @cSQLLocationCategoryInclude = ' AND LOC.LocationCategory IN (' +
-              CASE WHEN @cpa_LocationCategoryInclude01 <> '' THEN '''' + @cpa_LocationCategoryInclude01 + ''',' END +
-              CASE WHEN @cpa_LocationCategoryInclude02 <> '' THEN '''' + @cpa_LocationCategoryInclude02 + ''',' END +
-              CASE WHEN @cpa_LocationCategoryInclude03 <> '' THEN '''' + @cpa_LocationCategoryInclude03 + ''',' END
-         SET @cSQLLocationCategoryInclude = LEFT( @cSQLLocationCategoryInclude, LEN( @cSQLLocationCategoryInclude) - 1) + ') ' -- Remove last comma, then add close bracket
-      END
-
-
-      SET @cSQLLocationHandlingInclude = ''
-      IF @cpa_LocationHandlingInclude01 <> '' OR
-         @cpa_LocationHandlingInclude02 <> '' OR
-         @cpa_LocationHandlingInclude03 <> ''
-      BEGIN
-         SET @cSQLLocationHandlingInclude = ' AND LOC.LocationHandling IN (' +
-              CASE WHEN @cpa_LocationHandlingInclude01 <> '' THEN '''' + @cpa_LocationHandlingInclude01 + ''',' END +
-              CASE WHEN @cpa_LocationHandlingInclude02 <> '' THEN '''' + @cpa_LocationHandlingInclude02 + ''',' END +
-              CASE WHEN @cpa_LocationHandlingInclude03 <> '' THEN '''' + @cpa_LocationHandlingInclude03 + ''',' END
-         SET @cSQLLocationHandlingInclude = LEFT( @cSQLLocationHandlingInclude, LEN( @cSQLLocationHandlingInclude) - 1) + ') ' -- Remove last comma, then add close bracket
-      END
-
-
       SET @cSQL =
          ' SELECT TOP 1 ' +
          '    @cLOC = LOC.LOC, ' +
@@ -7480,10 +6994,10 @@ BEGIN
          '    LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LOC.LOC = LLI.LOC AND (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0)) ' +
          '    LEFT JOIN UCC WITH (NOLOCK) ON (LLI.LOT = UCC.LOT AND LLI.LOC = UCC.LOC AND LLI.ID = UCC.ID AND UCC.Status IN (''1'', ''3'')) ' +
          '    LEFT JOIN #tLOCPendingMoveIn t ON (t.LOC = LOC.LOC) ' +
-         ' WHERE LOC.Facility = ''' + @c_Facility + '''' +
-         '    AND LOC.LOCAisle = ''' + @c_NextPnDAisle + '''' +
-         @cSQLLocationCategoryInclude +
-         @cSQLLocationHandlingInclude +
+         ' WHERE LOC.Facility = @c_Facility ' +
+         '    AND LOC.LOCAisle = @c_NextPnDAisle ' +
+         @c_SQL_LocationCategoryInclude +
+         @c_SQL_LocationHandlingInclude +
          ' GROUP BY LOC.LogicalLocation, LOC.LOC, LOC.MaxPallet, t.PendingMoveInIDCnt ' +
          ' HAVING ISNULL( COUNT( DISTINCT ' +
          '        CASE WHEN UCC.UCCNo IS NOT NULL THEN UCC.UCCNO ' +
@@ -7492,16 +7006,23 @@ BEGIN
          '        END), 0) ' +
          '     + ISNULL( t.PendingMoveInIDCnt, 0) + 1 <= LOC.MaxPallet ' +  --LOC ID Cnt + PendingMoveInIDCnt + UCC (1)
          ' ORDER BY LOC.LogicalLocation, LOC.LOC '
-      SET @cSQLParam =
-         ' @c_StorerKey NVARCHAR( 15), ' +
+         
+      SET @cSQLParam = N'@c_Facility NVARCHAR(5), ' +
+         ' @c_StorerKey nvarchar(15), ' +
          ' @cUCCSKU     NVARCHAR( 20), ' +
          ' @nUCCQTY     INT, ' +
          ' @cLOC        NVARCHAR( 10) OUTPUT, ' +
          ' @nMaxPallet  INT           OUTPUT, ' +
          ' @nLOCIDCnt   INT           OUTPUT, ' +
-         ' @nPendingMoveInIDCnt INT   OUTPUT '
-
-
+         ' @nPendingMoveInIDCnt INT   OUTPUT '  +
+         ',@c_NextPnDAisle NVARCHAR(10) ' +
+         ',@cpa_LocationCategoryInclude01  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationCategoryInclude02  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationCategoryInclude03  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationHandlingInclude01  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationHandlingInclude02  NVARCHAR(10)= ''''' +
+         ',@cpa_LocationHandlingInclude03  NVARCHAR(10)= '''''
+                  
 
       DECLARE @curUCC19 CURSOR
       SET @curUCC19 = CURSOR FOR
@@ -7526,7 +7047,8 @@ BEGIN
 
          -- Find LOC in aisle that fit the UCC
          SET @cLOC = ''
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+         EXEC sp_ExecuteSql @cSQL, @cSQLParam
+            ,@c_Facility
             ,@c_StorerKey
             ,@cUCCSKU
             ,@nUCCQTY
@@ -7534,7 +7056,14 @@ BEGIN
             ,@nMaxPallet  OUTPUT
             ,@nLOCIDCnt   OUTPUT
             ,@nPendingMoveInIDCnt OUTPUT
-
+            ,@c_NextPnDAisle  
+            ,@cpa_LocationCategoryInclude01
+            ,@cpa_LocationCategoryInclude02
+            ,@cpa_LocationCategoryInclude03
+            ,@cpa_LocationHandlingInclude01
+            ,@cpa_LocationHandlingInclude02
+            ,@cpa_LocationHandlingInclude03
+             
          -- Save
          IF @cLOC <> ''  AND @cLoc = @c_ToLoc
          BEGIN
@@ -7549,7 +7078,7 @@ BEGIN
 
             SET @c_FitCasesInAisle = 'Y'
 
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'PASSED Fit in aisle:' + RTRIM( @c_NextPnDAisle) +
                   '  UCCNo=' + RTRIM(@cUCC) +
@@ -7561,7 +7090,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Fit in aisle:' + RTRIM( @c_NextPnDAisle) + '  UCC=' + RTRIM(@cUCC)
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @cLOC, @c_Reason
@@ -7638,7 +7167,7 @@ BEGIN
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN
 
-            IF @b_debug = 1
+            IF @b_Debug = 1
             BEGIN
                SELECT @c_Reason = 'FAILED Fit in aisle:' + RTRIM( @c_NextPnDAisle) + '  LOC updated by others'
                EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @cSuggestedLOC, @c_Reason
@@ -7666,7 +7195,7 @@ BEGIN
 
    IF @c_FromLoc = @c_Toloc
    BEGIN
-      IF @b_debug = 1
+      IF @b_Debug = 1
       BEGIN
          SELECT @c_Reason = 'FAILED: From Location = Putaway Location '+ RTRIM(@c_FromLoc)
          EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -7677,7 +7206,7 @@ BEGIN
 
    END
 
-   RESTRICTIONCHECKDONE:
+   RESTRICTIONCHECKDONE:   
    IF @cpa_PAType = '01'
    BEGIN
       GOTO PATYPE01
@@ -7793,9 +7322,12 @@ BEGIN
    IF @b_GotLoc = 1
    BEGIN
       SELECT @c_Final_ToLoc = @c_ToLoc
-      IF @b_debug = 2
+      IF @b_Debug = 2
       BEGIN
-         SELECT 'Final Location is ' + @c_Final_ToLoc
+         PRINT 'Final Location is ' + @c_Final_ToLoc
+         
+         PRINT 'Putaway Zone'
+         SELECT * FROM #t_PutawayZone AS tpz WITH(NOLOCK)
       END
    END
    ELSE
