@@ -1,4 +1,3 @@
-
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_QCmd_BackendPickConfirm]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
    DROP PROCEDURE [dbo].[nsp_QCmd_BackendPickConfirm]
@@ -17,6 +16,7 @@ GO
 /* Called By: SQL Schedule Job BEJ - Backend Pick (All Storers)         */  
 /* Updates:                                                             */  
 /* Date         Author       Purposes                                   */  
+/* 08-Jun-2020  Shong        Bug Fix, Adding Module name to Error Log   */
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[nsp_QCmd_BackendPickConfirm] 
    @c_PickDetailKey  NVARCHAR (10)  
@@ -44,7 +44,9 @@ BEGIN
            ,@c_SQL               NVARCHAR(4000)
            ,@c_Value             NVARCHAR(30)
     
-   SELECT @n_continue = 1 
+   SELECT @n_continue = 1
+   SET @c_Module = 'nsp_QCmd_BackendPickConfirm' 
+   SET @c_Host = @@SERVERNAME
 
    SELECT @c_ErrMsg = '', @n_Err = 0, @n_cnt = 0, @n_ErrSeverity=0   --KH01
    BEGIN TRY
@@ -101,8 +103,19 @@ BEGIN
       IF @c_Value = '1' OR @n_err <> 0      
       BEGIN
          EXECUTE nspg_getkey 'LogEvent', 18, @c_AlertKey OUTPUT, '', '', ''
-         INSERT ALERT(AlertKey,ModuleName,AlertMessage,Severity,NotifyId,Status,ResolveDate,Resolution,Storerkey,Qty, Lot,Loc,ID,TaskDetailKey) 
-         VALUES (@c_AlertKey,@c_Module,@c_ErrMsg,@n_ErrSeverity,@c_Host,@n_err,@d_Begin,@c_SQL,'',@n_cnt,'','','',@c_PickDetailKey)
+         INSERT ALERT
+           (
+             AlertKey       ,ModuleName     ,AlertMessage
+            ,Severity       ,NotifyId       ,STATUS
+            ,ResolveDate    ,Resolution     ,Storerkey
+            ,Qty            ,Lot            ,Loc
+            ,ID             ,TaskDetailKey  )
+         VALUES (
+             @c_AlertKey       ,@c_Module        ,@c_ErrMsg
+            ,@n_ErrSeverity    ,@c_Host          ,@n_err
+            ,@d_Begin          ,@c_SQL           ,''
+            ,@n_cnt            ,''               ,''
+            ,''                ,@c_PickDetailKey )
       END
    END
   
@@ -110,7 +123,8 @@ BEGIN
     /* #INCLUDE <SPTPA01_2.SQL> */  
     IF @n_continue=3 -- Error Occured - Process And Return
     BEGIN
-        SELECT @b_success = 0  
+        SELECT @b_success = 0           
+        
         EXECUTE nsp_logerror @n_err,
              @c_errmsg,
              @c_Module
