@@ -12,7 +12,7 @@ GO
 /* Copyright: LFL                                                       */  
 /* Written by:                                                          */  
 /*                                                                      */  
-/* Purpose: WMS-13601 PH Unilever allocation                             */  
+/* Purpose: WMS-13601 PH Unilever allocation                            */  
 /*          Notes: Turn on configkey 'OrderInfo4Preallocation'          */  
 /*                                                                      */  
 /* Called By: nspPrealLOCateOrderProcessing                             */  
@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author     Purposes                                     */  
+/* Date         Author  Ver. Purposes                                   */  
+/* 16-Jun-2020  NJOW01  1.0  Fix sorting and grouping                   */
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspPR_PH09]  
@@ -217,9 +218,9 @@ BEGIN
           --SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN(''PICK'') THEN 1 ELSE 2 END, LOTATTRIBUTE.LOTTABLE04 DESC, LOTATTRIBUTE.Lottable05, LOT.Lot '  -- ZG01
           SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN(''CASE'',''PICK'') THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04 DESC, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc '  --ZG01
          ELSE IF @c_UOM = '2'  
-          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''CASE'' THEN 1 WHEN LOC.LocationType = ''PICK'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04 DESC, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc '  
+          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''CASE'' THEN 1 WHEN LOC.LocationType = ''PICK'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04 DESC, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, MIN(Loc.LogicalLocation), LOT.Lot '  
          ELSE --uom 6  
-          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04 DESC, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOT.Lot, LOC.LogicalLocation, LOC.Loc '              
+          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04 DESC, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, MIN(Loc.LogicalLocation), LOT.Lot '              
       END     
       ELSE --FEFO  
       BEGIN  
@@ -227,9 +228,9 @@ BEGIN
           --SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN(''PICK'') THEN 1 ELSE 2 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.Lottable05, LOT.Lot '  -- ZG01
           SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN(''CASE'',''PICK'') THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc '  -- ZG01
          ELSE IF @c_UOM = '2'  
-          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''CASE'' THEN 1 WHEN LOC.LocationType = ''PICK'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc'  
+          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''CASE'' THEN 1 WHEN LOC.LocationType = ''PICK'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, MIN(Loc.LogicalLocation), LOT.Lot '  
          ELSE --uom 6  
-          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc '              
+          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, MIN(Loc.LogicalLocation), LOT.Lot '              
       END  
          
       --Shelflife    
@@ -295,7 +296,11 @@ BEGIN
       ' AND ID.Status = ''OK'' ' +     
        RTRIM(@c_Where) +  ' ' +  
        RTRIM(@c_LimitString) + ' ' +  
-      ' GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LocationType, LOC.LogicalLocation, LOC.Loc ' +   
+       CASE WHEN @c_UOM = '1' THEN
+         ' GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LocationType, LOC.LogicalLocation, LOC.Loc ' 
+       ELSE    
+         ' GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LocationType ' 
+       END +  
       ' HAVING SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked ) - MIN(ISNULL(P.QtyPreallocated, 0)) >= @n_uombase ' +  
       RTRIM(@c_OrderBy)  
       
