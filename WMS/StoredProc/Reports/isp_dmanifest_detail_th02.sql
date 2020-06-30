@@ -34,11 +34,12 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */  
+/* 12-MAY-2020  CSCHONG       WMS-13144 revised field mapping (CS01)    */
 /************************************************************************/    
 CREATE PROC [dbo].[isp_dmanifest_detail_th02] (    
      @c_mbolkey   NVARCHAR(10),
      @c_Type      NVARCHAR(5) = '',
-	 @c_Orderkey  NVARCHAR(10) = ''
+	  @c_Orderkey  NVARCHAR(10) = ''
 	   
 )    
  AS    
@@ -284,12 +285,14 @@ BEGIN
 		FROM orders oh (nolock)
 		JOIN orderdetail od (nolock) on od.orderkey=oh.orderkey
 		WHERE oh.mbolkey =@c_mbolkey
+      AND od.sku<>'DELIVERYCHARGES'    --CS01
 
       SELECT C_Company,C_Address1,C_Address2,C_City,C_Zip,C_COUNTRY,ExternOrderkey,MbolKey,trackingno,Deliverydate,
 	         SKU,SDESCR,busr10,ShipQty,Extendedprice,UnitPrice,seqno,recgrp,A1,A2,A10,B,D,F1,F2,F3,F4,F5,F6,G,I1,
-			 I2,I3,J,K,L,M,N,P,Q,labelprice,@n_InvAmt as InvoiceAmount,OHNotes2,OHNotes2_1,OHNotes2_2
+			 I2,I3,J,K,L,M,N,P,Q,labelprice,( @n_InvAmt + @n_DELCHRSHIPQTY) as InvoiceAmount,OHNotes2,OHNotes2_1,OHNotes2_2   --CS01
 			 --,rowid/@n_maxline as chkseq
-			 ,K2,Orddate,cast ((cast(@c_K2S as float) * @n_InvAmt) as decimal(10,2))  as M_VAT,OHUDF03,@n_DELCHRSHIPQTY as DelChgQty,C,c_address3
+			 ,K2,Orddate,cast ((cast(@c_K2S as float) * ( @n_InvAmt + @n_DELCHRSHIPQTY)) as decimal(10,2)) as M_VAT,      --CS01
+           OHUDF03,@n_DELCHRSHIPQTY as DelChgQty,C,c_address3
       FROM #TEMPDMLBLth02
 	  where MbolKey=@c_mbolkey
 	  Order by rowid
