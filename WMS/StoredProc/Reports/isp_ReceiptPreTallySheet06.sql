@@ -1,6 +1,6 @@
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_ReceiptPreTallySheet06]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_ReceiptPreTallySheet06]
+   DROP PROCEDURE [dbo].[isp_ReceiptPreTallySheet06]
 GO
 
 SET ANSI_NULLS OFF
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
 /* 09-Jun-2020  WLChooi   1.1 Remove group by ExternPOKey (WL01)        */
+/* 30-Jun-2020  WLChooi   1.2 LEFT JOIN UCC table and bug fix (WL02)    */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptPreTallySheet06]  
@@ -53,6 +54,7 @@ BEGIN
            , @c_PalletPos           NVARCHAR(20)
            , @n_PrevPalletPosCnt    INT = 0
            , @c_PrevItemClass       NVARCHAR(20)
+           , @n_CountUCC            INT = 0   --WL02
 
    CREATE TABLE #ITEMCLASS(
    RECEIPTKEY         NVARCHAR(10),
@@ -66,25 +68,25 @@ BEGIN
    INSERT INTO #ITEMCLASS
    SELECT RECEIPT.RECEIPTKEY,
           RECEIPTDETAIL.SKU,
-          UCC.Qty,
+          ISNULL(UCC.Qty,0) AS Qty,   --WL02   --UCC.Qty,
           SKU.ItemClass,
-          UCC.UCCNo,
+          ISNULL(UCC.UCCNo,'') AS UCCNo,   --WL02   --UCC.UCCNo,
           PalletPosition = CASE WHEN UCC.Userdefined06 = '1' THEN 'F'
                                 WHEN UCC.Userdefined07 = '1' THEN 'M'
                                 WHEN UCC.Userdefined08 = '1' THEN 'QA'
-                                WHEN UCC.Qty < ISNULL(SKU.SUSR1,0) THEN 'S'
+                                WHEN ISNULL(UCC.Qty,0) > 0  AND ISNULL(UCC.Qty,0) < ISNULL(SKU.SUSR1,0) THEN 'S'   --WL02
                                 --ELSE 'N' + CAST(COUNT(DISTINCT SKU.ITEMCLASS) + 4 AS NVARCHAR(10)) END
                                 ELSE '' END,
           CountPallet = COUNT(DISTINCT SKU.ITEMCLASS) + 4 
    FROM RECEIPT (NOLOCK)
    JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
    JOIN SKU (NOLOCK) ON RECEIPTDETAIL.SKU = SKU.SKU AND RECEIPT.STORERKEY = SKU.STORERKEY
-   JOIN UCC (NOLOCK) ON UCC.UCCNo = RECEIPTDETAIL.Lottable10 AND UCC.Storerkey = RECEIPT.Storerkey AND UCC.SKU = RECEIPTDETAIL.SKU
+   LEFT JOIN UCC (NOLOCK) ON UCC.UCCNo = RECEIPTDETAIL.Lottable10 AND UCC.Storerkey = RECEIPT.Storerkey AND UCC.SKU = RECEIPTDETAIL.SKU  --WL02
    WHERE ( RECEIPT.ReceiptKey >= @c_ReceiptStart ) AND  
          ( RECEIPT.ReceiptKey <= @c_ReceiptEnd   ) AND  
          ( RECEIPT.Storerkey  >= @c_StorerStart  ) AND 
          ( RECEIPT.Storerkey  <= @c_StorerEnd    ) 
-   GROUP BY RECEIPT.RECEIPTKEY, RECEIPTDETAIL.SKU, UCC.Qty, UCC.UCCNo,
+   GROUP BY RECEIPT.RECEIPTKEY, RECEIPTDETAIL.SKU, ISNULL(UCC.Qty,0), ISNULL(UCC.UCCNo,''),   --WL02
             UCC.Userdefined06,
             UCC.Userdefined07,
             UCC.Userdefined08, SKU.ItemClass, ISNULL(SKU.SUSR1,0)
@@ -153,7 +155,9 @@ BEGIN
 
       --SELECT PalletPosition, SKU, COUNT(DISTINCT UCCNo) AS UCCNoCnt, SUM(Qty) AS QtyExpected FROM #ITEMCLASS
       --GROUP BY PalletPosition, SKU
-        
+
+   SELECT @n_CountUCC = COUNT(DISTINCT t.UCCNo) FROM #ITEMCLASS T WHERE t.UCCNo <> ''   --WL02
+      
    SELECT RECEIPT.ReceiptKey,   
           '',--RECEIPTDETAIL.ExternPOKey,   --WL01
           t.Sku,  
@@ -186,7 +190,7 @@ BEGIN
           RECEIPTDETAIL.Lottable04,
           t.ItemClass,
           t.PalletPosition,
-          COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,
+          @n_CountUCC AS UCCNoCnt,   --WL02   --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,
           t.CountPallet,
           (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc
     FROM RECEIPT (NOLOCK)
