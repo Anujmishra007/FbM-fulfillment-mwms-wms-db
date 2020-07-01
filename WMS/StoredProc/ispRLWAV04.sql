@@ -31,7 +31,8 @@ GO
 /* 27-Feb-2017  TLTING   1.3  Variable Nvarchar                          */
 /* 13-Mar-2019  NJOW01   1.4  WMS-7940 add RPF task (Cancelled)          */
 /* 27-Nov-2019  NJOW02   1.5  WMS-11212 generate replenishment record for*/
-/*                            specific zone to replenish by paper based  */ 
+/*                            specific zone to replenish by paper based  */
+/* 04-Jun-2020  NJOW03   1.6  WMS-11212 Add validation                   */ 
 /*************************************************************************/       
 
 CREATE PROCEDURE [dbo].[ispRLWAV04]          
@@ -167,6 +168,18 @@ BEGIN
           SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid Putawayzone Parameters Passed at userdefine01 (ispRLWAV04)'     
           GOTO RETURN_SP     
    	   END         	 
+   	   
+   	   --NJOW03
+   	   IF EXISTS(SELECT 1 
+   	             FROM REPLENISHMENT (NOLOCK) 
+   	             WHERE Wavekey = @c_Wavekey
+   	             AND OriginalFromLoc = 'ispRLWAV04')
+       BEGIN    
+          SET @n_continue = 3      
+          SET @n_err = 81006      
+          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has beed released for Paper based replenishment. (ispRLWAV04)'      
+          GOTO RETURN_SP         
+       END                      	   
    END
     
    -----Wave Validation-----    
