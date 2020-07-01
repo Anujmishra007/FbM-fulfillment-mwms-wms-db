@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Output Parameters:                                                   */
 /*                                                                      */
-/* PVCS Version: 1.7                                                    */
+/* PVCS Version: 1.8                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -39,6 +39,7 @@ GO
 /* 01-MAR-2018  Wan06   1.7  WM-Printing: Add Parm11-Parm20,Reportlineno*/  
 /*                           WM-DEFAULT QCOMMANDER                      */   
 /*                           WM-Fixed                                   */
+/* 25-JUN-2020  Wan07   1.8  WMS-13491 - SG - PMI - Packing [CR]        */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_PrintToRDTSpooler] ( 
@@ -109,6 +110,8 @@ BEGIN
 
    ,  @c_Application       NVARCHAR(30)      --(Wan05) = ''
    ,  @c_JobID             NVARCHAR(10)      --(Wan05) = ''
+
+   ,  @n_Retry             INT = 1           --(Wan07) 
 
    SET @n_starttcnt = @@TRANCOUNT
    SET @n_continue = 1
@@ -220,13 +223,33 @@ BEGIN
 
    IF NOT EXISTS (SELECT 1 FROM RDT.RDTMOBREC (NOLOCK) WHERE UserName = @c_UserName)  
    BEGIN
-      SELECT @n_Mobile = ISNULL(MAX(Mobile),0) + 1
-      FROM RDT.RDTMOBREC (NOLOCK)
-              
-      INSERT INTO RDT.RDTMOBREC (Mobile, UserName, Storerkey, Facility, Printer, ErrMsg, Inputkey)
-      VALUES (@n_Mobile, @c_UserName, @c_Storerkey, ISNULL(@c_Facility,''), ISNULL(@c_PrinterID,''),'WMS',0)
-      
-      IF @@ERROR <> 0 
+      --(Wan07) - START -- Handle Multiuser Insert at the same that hit primary key error
+      SET @n_Retry = 1
+
+      WHILE @n_Retry <= 3 
+      BEGIN
+         SELECT @n_Mobile = ISNULL(MAX(Mobile),0) + 1
+         FROM RDT.RDTMOBREC (NOLOCK)
+          
+         BEGIN TRY     
+            INSERT INTO RDT.RDTMOBREC (Mobile, UserName, Storerkey, Facility, Printer, ErrMsg, Inputkey)
+            VALUES (@n_Mobile, @c_UserName, @c_Storerkey, ISNULL(@c_Facility,''), ISNULL(@c_PrinterID,''),'WMS',0)
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Err = @@ERROR
+         END CATCH
+
+         IF @n_Err = 0
+         BEGIN 
+            BREAK
+         END
+
+         SET @n_Retry = @n_Retry + 1
+      END
+      --(Wan07) - END -- Handle Multiuser Insert at the same that hit primary key error
+
+      IF @n_Err <> 0    --(Wan07)
       BEGIN  
          SELECT @n_Continue = 3    
          SELECT @n_Err = 63520    

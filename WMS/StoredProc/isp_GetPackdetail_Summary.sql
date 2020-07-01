@@ -17,7 +17,7 @@ GO
 /*        : Change DW Select to Store Procedure                         */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-05-22  Wan01    1.1   Fixed. Conso pack Allocation Qty incorrect*/
+/* 2020-06-03  Wan02    1.2   WMS-13491 - SG - PMI - Packing [CR]       */
 /************************************************************************/
 CREATE PROC isp_GetPackdetail_Summary
            @c_PickslipNo      NVARCHAR(10)
@@ -44,7 +45,24 @@ BEGIN
          , @c_Facility           NVARCHAR(5)    = ''
 
          , @c_ScanAsPack         NVARCHAR(30)   = '0'
-         , @c_PackByDropID       NVARCHAR(30)   = '0'   
+         , @c_PackByDropID       NVARCHAR(30)   = '0'  
+         
+   --(Wan02) - START
+   DECLARE @t_PACKSUMMARY TABLE
+         ( RowID        INT     NOT NULL IDENTITY(1,1)  PRIMARY KEY
+         , RecType      NVARCHAR(10)  NOT NULL DEFAULT('')  
+         , Storerkey    NVARCHAR(15)  NOT NULL DEFAULT('')
+         , Sku          NVARCHAR(20)  NOT NULL DEFAULT('') 
+         , PickedQty    INT           NOT NULL DEFAULT(0) 
+         , PackedQty    INT           NOT NULL DEFAULT(0) 
+         , OtherQty     INT           NULL
+         , Orddetlot1   NVARCHAR(15)  NOT NULL DEFAULT('')
+         , ScanAsPack   NVARCHAR(30)  NOT NULL DEFAULT('')
+         , Casecnt      FLOAT         NULL 
+         , AltSku       NVARCHAR(20)  NOT NULL DEFAULT('') 
+         , SkuDescr     NVARCHAR(60)  NOT NULL DEFAULT('') 
+         )
+   --(Wan02) - END
 
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -129,7 +147,7 @@ BEGIN
       ,  PickedQty
       ,  Orddetlot1
       )
-      SELECT OD.Orderkey
+      SELECT Orderkey = MIN(OD.Orderkey)     --(Wan02)
             ,OD.StorerKey   
             ,Sku        = UPPER(OD.Sku)    
             ,PickedQty  = ISNULL(SUM(PD.Qty),0)    
@@ -138,8 +156,8 @@ BEGIN
       JOIN ORDERDETAIL  OD WITH (NOLOCK) ON OD.Orderkey = O.Orderkey
       JOIN PICKDETAIL   PD WITH (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
       WHERE PD.DropID = @c_DropID
-      GROUP BY OD.Orderkey
-            ,  OD.StorerKey
+      --GROUP BY OD.Orderkey
+      GROUP BY OD.StorerKey                  --(Wan02) -- Do not group by orderkey, error if it a consolidated pack by dropid 
             ,  OD.Sku
       HAVING SUM(PD.Qty) > 0
 
@@ -192,19 +210,80 @@ BEGIN
             ,  PD.Sku
    END
 
-   SELECT OS.StorerKey   
+   --(Wan02) - START
+   INSERT INTO @t_PACKSUMMARY
+      (  RecType
+      ,  Storerkey    
+      ,  Sku          
+      ,  PickedQty    
+      ,  PackedQty    
+      ,  OtherQty     
+      ,  Orddetlot1   
+      ,  ScanAsPack   
+      ,  Casecnt      
+      ,  AltSku       
+      ,  SkuDescr     
+      )
+   SELECT RecType = 'data'
+      ,  OS.StorerKey   
       ,  OS.Sku    
       ,  OS.PickedQty
-      ,  PackedQty = ISNULL(P.PackedQty,0) 
+      ,  PackedQty  = ISNULL(P.PackedQty,0) 
       ,  OtherQty   = 0
       ,  Orddetlot1 = CASE WHEN @c_Orderkey = '' THEN '' ELSE OS.Orddetlot1 END
       ,  ScanAsPack = @c_ScanAsPack 
       ,  PACK.Casecnt
-      ,  AltSku = ISNULL(SKU.AltSku,'') 
+      ,  AltSku  = ISNULL(SKU.AltSku,'') 
+      ,  SkuDescr= ISNULL(SKU.Descr,'')               --(Wan02)
+
    FROM #TMP_ORDERSKU  OS
    JOIN SKU         WITH (NOLOCK) ON OS.Storerkey = SKU.Storerkey AND OS.Sku = SKU.Sku 
    JOIN PACK        WITH (NOLOCK) ON SKU.Packkey = PACK.Packkey
    LEFT JOIN #TMP_PACK P ON OS.Storerkey = P.Storerkey AND OS.Sku = P.Sku
+   ORDER BY OS.Storerkey
+         ,  OS.Sku
+
+   INSERT INTO @t_PACKSUMMARY
+      (  RecType
+      ,  Storerkey    
+      ,  Sku          
+      ,  PickedQty    
+      ,  PackedQty    
+      ,  OtherQty     
+      ,  Orddetlot1   
+      ,  ScanAsPack   
+      ,  Casecnt      
+      ,  AltSku       
+      ,  SkuDescr     
+      )
+   SELECT RecType = 'summary'
+         ,Storerkey = ''
+         ,Sku = 'Total: '
+         ,TotalPickedQty = ISNULL(SUM(OS.PickedQty),0)
+         ,TotolPackedQty = ISNULL(SUM(P.PackedQty),0) 
+         ,OtherQty   = NULL
+         ,Orddetlot1 = ''
+         ,ScanAsPack = ''
+         ,Casecnt    = NULL
+         ,AltSku     = ''
+         ,SkuDescr   = ''
+   FROM #TMP_ORDERSKU  OS
+   LEFT JOIN #TMP_PACK P ON OS.Storerkey = P.Storerkey AND OS.Sku = P.Sku
+   
+   SELECT Storerkey    
+         ,Sku          
+         ,PickedQty    
+         ,PackedQty    
+         ,OtherQty     
+         ,Orddetlot1   
+         ,ScanAsPack   
+         ,Casecnt      
+         ,AltSku       
+         ,SkuDescr 
+         ,RecType
+   FROM @t_PACKSUMMARY
+   ORDER BY RowID
+   --(Wan02) - END
    
 QUIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt
