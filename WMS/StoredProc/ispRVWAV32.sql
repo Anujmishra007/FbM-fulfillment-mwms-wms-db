@@ -15,14 +15,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 02-07-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[ispRVWAV32]        
   @c_wavekey      NVARCHAR(10)    
@@ -207,19 +208,21 @@ CREATE PROCEDURE [dbo].[ispRVWAV32]
                       
     -----Reverse wave status------  
     IF @n_continue = 1 or @n_continue = 2    
-    BEGIN    
-       UPDATE WAVE   
-          SET STATUS = '0' -- Normal  
-       WHERE WAVEKEY = @c_wavekey 
+    BEGIN  
+       --(Wan01) - START
+       --UPDATE WAVE   
+       --   SET STATUS = '0' -- Normal  
+       --WHERE WAVEKEY = @c_wavekey 
       
-       /*
+       
        UPDATE WAVE
           SET TMReleaseFlag = 'N'               
            ,  TrafficCop = NULL                 
            ,  EditWho = SUSER_SNAME()          
            ,  EditDate= GETDATE()               
        WHERE WAVEKEY = @c_wavekey
-       */  
+       --(Wan01) - END
+         
                  
        SELECT @n_err = @@ERROR    
        IF @n_err <> 0    
