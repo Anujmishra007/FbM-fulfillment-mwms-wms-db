@@ -39,6 +39,8 @@ GO
 /*                           Selection Summary Report CR                */
 /* 09-01-2020  NJOW02  1.3   WMS-11479 - CN IKEA support group by       */
 /*                           loc.descr instead of pickzone              */ 
+/* 11-06-2020  WLChooi 1.4   WMS-13654 - Add ReportCFG to show Salesman */
+/*                           (WL01)                                     */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_batching_task_summary] (
@@ -201,12 +203,16 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
               CASE WHEN ISNULL(CL.Long,'') <> '' THEN
                    CL.Long
               ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
-              COUNT(DISTINCT PD.Orderkey) AS NoOfOrder
+              COUNT(DISTINCT PD.Orderkey) AS NoOfOrder,
+              ISNULL(CL1.Short,'N') AS ShowSalesman,   --WL01
+              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman   --WL01
        FROM LOADPLANDETAIL LP (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
        JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
        JOIN PACKTASK PT (NOLOCK) ON PD.Orderkey = PT.Orderkey
        LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
+       LEFT JOIN Codelkup CL1 (NOLOCK) ON (PD.Storerkey = CL1.Storerkey AND CL1.Code = 'ShowSalesman' 
+                                       AND CL1.Listname = 'REPORTCFG' AND CL1.Long = 'r_dw_batching_task_summary' AND ISNULL(CL1.Short,'') <> 'N')  --WL01
        WHERE LP.Loadkey = @c_Loadkey
        AND L.Descr IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
@@ -216,7 +222,8 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
                 L.Descr,
                 CASE WHEN ISNULL(CL.Long,'') <> '' THEN
                    CL.Long
-                ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END 
+                ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END,
+                ISNULL(CL1.Short,'N')   --WL01
        ORDER BY L.Descr, PD.NOTES    
     END               
     ELSE
@@ -230,12 +237,16 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
               CASE WHEN ISNULL(CL.Long,'') <> '' THEN
                    CL.Long
               ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
-              COUNT(DISTINCT PD.Orderkey) AS NoOfOrder
+              COUNT(DISTINCT PD.Orderkey) AS NoOfOrder,
+              ISNULL(CL1.Short,'N') AS ShowSalesman,   --WL01
+              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman   --WL01
        FROM LOADPLANDETAIL LP (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
        JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
        JOIN PACKTASK PT (NOLOCK) ON PD.Orderkey = PT.Orderkey
        LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
+       LEFT JOIN Codelkup CL1 (NOLOCK) ON (PD.Storerkey = CL1.Storerkey AND CL1.Code = 'ShowSalesman' 
+                                       AND CL1.Listname = 'REPORTCFG' AND CL1.Long = 'r_dw_batching_task_summary' AND ISNULL(CL1.Short,'') <> 'N')  --WL01
        WHERE LP.Loadkey = @c_Loadkey
        AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
@@ -245,7 +256,8 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
                 L.PickZone,
                 CASE WHEN ISNULL(CL.Long,'') <> '' THEN
                    CL.Long
-                ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END 
+                ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END,
+                ISNULL(CL1.Short,'N')   --WL01
        ORDER BY L.PickZone, PD.NOTES    
     END
         
