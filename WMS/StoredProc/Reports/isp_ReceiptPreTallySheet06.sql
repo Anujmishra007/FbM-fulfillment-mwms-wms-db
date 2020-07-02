@@ -28,6 +28,7 @@ GO
 /* Date         Author    Ver Purposes                                  */  
 /* 09-Jun-2020  WLChooi   1.1 Remove group by ExternPOKey (WL01)        */
 /* 30-Jun-2020  WLChooi   1.2 LEFT JOIN UCC table and bug fix (WL02)    */
+/* 02-Jul-2020  WLChooi   1.3 Bug fix (WL03)                            */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptPreTallySheet06]  
@@ -156,7 +157,7 @@ BEGIN
       --SELECT PalletPosition, SKU, COUNT(DISTINCT UCCNo) AS UCCNoCnt, SUM(Qty) AS QtyExpected FROM #ITEMCLASS
       --GROUP BY PalletPosition, SKU
 
-   SELECT @n_CountUCC = COUNT(DISTINCT t.UCCNo) FROM #ITEMCLASS T WHERE t.UCCNo <> ''   --WL02
+   --SELECT @n_CountUCC = COUNT(DISTINCT t.UCCNo) FROM #ITEMCLASS T WHERE t.UCCNo <> ''   --WL02   --WL03
       
    SELECT RECEIPT.ReceiptKey,   
           '',--RECEIPTDETAIL.ExternPOKey,   --WL01
@@ -190,7 +191,7 @@ BEGIN
           RECEIPTDETAIL.Lottable04,
           t.ItemClass,
           t.PalletPosition,
-          @n_CountUCC AS UCCNoCnt,   --WL02   --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,
+          COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,   --WL03   --@n_CountUCC AS UCCNoCnt,   --WL02   --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,
           t.CountPallet,
           (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc
     FROM RECEIPT (NOLOCK)
@@ -199,7 +200,7 @@ BEGIN
     JOIN STORER (NOLOCK) ON RECEIPT.Storerkey = STORER.Storerkey
     JOIN PACK (NOLOCK) ON PACK.PackKey = SKU.PackKey
     LEFT OUTER JOIN CODELKUP (NOLOCK) ON SKU.SUSR3 = CODELKUP.CODE AND CODELKUP.LISTNAME = 'PRINCIPAL'
-    JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey AND t.SKU = RECEIPTDETAIL.SKU
+    JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey AND t.SKU = RECEIPTDETAIL.SKU AND ISNULL(t.UCCNo,'') <> ''   --WL03
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable01' AND Code = 'Lottable01' AND Storerkey = RECEIPT.StorerKey) AS CL1
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable02' AND Code = 'Lottable02' AND Storerkey = RECEIPT.StorerKey) AS CL2
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable12' AND Code = 'Lottable12' AND Storerkey = RECEIPT.StorerKey) AS CL3
