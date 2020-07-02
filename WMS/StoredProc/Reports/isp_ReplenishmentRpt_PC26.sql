@@ -28,6 +28,8 @@ GO
 /* 18-JAN-2019  Wan01   1.1  WM - Add @c_ReplGrp                           */   
 /* 31-JUL-2019  NJOW01  1.2  WMS-10028 change loc filter and qtyexpected   */
 /* 30-OCT-2019  NJOW02  1.3  WMS-11038 handle over allocation qty by LLI   */
+/* 04-Jun-2020  WLChooi 1.4  WMS-13581 Modify replenQty logic, filter by   */
+/*                           HostWHCode when finding inventory (WL01)      */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC26]    
                @c_Zone01           NVARCHAR(10)    
@@ -202,13 +204,17 @@ BEGIN
       SELECT SKUxLOC.Storerkey, SKUxLOC.Sku, SKUxLOC.Loc, LOC.Facility,
              (SKUxLOC.Qty - SKUxLOC.QtyPicked) AS BalQty,  
              CASE WHEN ISNULL(EXT.QtyExpected,0) = 0 AND(SKUxLOC.Qty - SKUxLOC.QtyAllocated) + ISNULL(EXT.PendingMoveIn,0) < SKUxLOC.QtyLocationMinimum THEN --No overallocate and below min, just replen to loc max
-                     SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) 
+                     CASE WHEN PACK.Casecnt = 0 THEN SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)                                                  --WL01
+                                                ELSE (CEILING((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)) / PACK.Casecnt) * PACK.Casecnt) END   --WL01 
                   WHEN ISNULL(EXT.QtyExpected,0) > 0 AND SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) < ISNULL(EXT.QtyExpected,0) THEN --Overallocte qty more than loc max, just replen overalocate qty
-                      ISNULL(EXT.QtyExpected,0)
+                     CASE WHEN PACK.Casecnt = 0 THEN ISNULL(EXT.QtyExpected,0)                                                  --WL01
+                                                ELSE (CEILING((ISNULL(EXT.QtyExpected,0) / PACK.Casecnt)) * PACK.Casecnt) END   --WL01
                   WHEN ISNULL(EXT.QtyExpected,0) > 0 AND SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) >= ISNULL(EXT.QtyExpected,0) THEN --Overallocte qty less than loc max, just replen max qty
-                      SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) 
+                     CASE WHEN PACK.Casecnt = 0 THEN SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)                                                   --WL01
+                                                ELSE (CEILING((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)) / PACK.Casecnt) * PACK.Casecnt) END    --WL01 
                   ELSE
-                     SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) + SKUXLOC.QtyExpected  --NJOW01 
+                     CASE WHEN PACK.Casecnt = 0 THEN PACK.Qty   --WL01
+                                                ELSE (CEILING(((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) + SKUXLOC.QtyExpected ) / PACK.Casecnt)) * PACK.Casecnt) END  --NJOW01   --WL01
              END AS ReplenQty,  --NJOW02                                 
              SKUxLOC.QtyLocationMinimum,
              SKUxLOC.QtyLocationLimit,      
@@ -416,6 +422,7 @@ BEGIN
             AND LOC.LocationType NOT IN(''PICK'')  --NJOW01
             AND LOC.Facility = @c_Zone01    
             AND LOT.Status     = ''OK''     
+            AND LOC.HostWHCode = @c_HostWHCode   --WL01
             AND ISNULL(ID.Status ,'''') <> ''HOLD'' ' + 
             CASE WHEN @n_BalQty + @n_OverAllocateQty > 0 AND @c_NoMixLottable01 = '1' THEN ' AND LOTATTRIBUTE.Lottable01 = @c_currLottable01 ' ELSE '' END +          
             CASE WHEN @n_BalQty + @n_OverAllocateQty > 0 AND @c_NoMixLottable02 = '1' THEN ' AND LOTATTRIBUTE.Lottable02 = @c_currLottable02 ' ELSE '' END +          
@@ -525,6 +532,7 @@ BEGIN
             AND LOC.Locationtype NOT IN(''PICK'') --NJOW01
             AND LOC.Facility = @c_Zone01    
             AND LOT.Status     = ''OK''     
+            AND LOC.HostWHCode = @c_HostWHCode   --WL01
             AND ISNULL(ID.Status ,'''') <> ''HOLD'' ' + @c_LotFilter + CHAR(13) + 
             CASE WHEN @c_NoMixLottable01 = '1' OR CHARINDEX('Lottable01',@c_LotGroup,1) > 0 THEN ' AND LOTATTRIBUTE.Lottable01 = @c_Lottable01 ' ELSE '' END +          
             CASE WHEN @c_NoMixLottable02 = '1' OR CHARINDEX('Lottable02',@c_LotGroup,1) > 0 THEN ' AND LOTATTRIBUTE.Lottable02 = @c_Lottable02 ' ELSE '' END +          
