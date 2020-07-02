@@ -15,15 +15,16 @@ GO
 /*                                                                          */  
 /* Called By: wave                                                          */  
 /*                                                                          */  
-/* PVCS Version: 1.0                                                        */  
+/* PVCS Version: 1.1                                                        */  
 /*                                                                          */  
 /* Version: 7.0                                                             */  
 /*                                                                          */  
 /* Data Modifications:                                                      */  
 /*                                                                          */  
 /* Updates:                                                                 */  
-/* Date         Author   Ver  Purposes                                      */  
-/* 17-Jun-2020  NJOW01   1.0  Fix filter by facility                        */
+/* Date        Author   Ver  Purposes                                       */  
+/* 17-Jun-2020 NJOW01   1.0  Fix filter by facility                         */
+/* 02-07-2020  Wan01    1.1   Sync Exceed & SCE                             */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV32]      
@@ -1214,18 +1215,19 @@ CREATE PROCEDURE [dbo].[ispRLWAV32]
     -----Update Wave Status-----
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
-       UPDATE WAVE 
-          SET STATUS = '1' -- Released  
-       WHERE WAVEKEY = @c_wavekey  
+      -- (Wan01) - START
+       --UPDATE WAVE 
+       --   SET STATUS = '1' -- Released  
+       --WHERE WAVEKEY = @c_wavekey  
        
-      /*
+      
       UPDATE WAVE   
           SET TMReleaseFlag = 'Y'
            ,  TrafficCop = NULL  
            ,  EditWho = SUSER_SNAME() 
            ,  EditDate= GETDATE()     
        WHERE WAVEKEY = @c_wavekey    
-       */       
+      -- (Wan01) - END       
               
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
