@@ -15,14 +15,15 @@ GO
 /*                                                                          */  
 /* Called By: wave                                                          */  
 /*                                                                          */  
-/* PVCS Version: 1.0                                                        */  
+/* PVCS Version: 1.1                                                        */  
 /*                                                                          */  
 /* Version: 7.0                                                             */  
 /*                                                                          */  
 /* Data Modifications:                                                      */  
 /*                                                                          */  
 /* Updates:                                                                 */  
-/* Date         Author   Ver  Purposes                                      */  
+/* Date        Author   Ver  Purposes                                       */  
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                             */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV31]      
@@ -191,7 +192,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
           [Notes] [nvarchar](4000) NULL,
           [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))    	
+          [Channel_ID] [bigint] NULL DEFAULT ((0)))      
     END
     
     --Initialize Pickdetail work in progress staging table
@@ -217,19 +218,19 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
     --Get batch number and update to pickdetail for B2B 
     IF (@n_continue = 1 or @n_continue = 2) 
     BEGIN
-    	 --Cleare notes
-    	 UPDATE #PickDetail_WIP
-    	 SET Notes = ''
-    	     --Pickslipno = ''
-    	     
-    	 
-       DECLARE CUR_PICK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      	 
-    	    SELECT PD.Pickdetailkey, CL.Short
-    	    FROM #PickDetail_WIP PD
-    	    JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
-    	    JOIN STORER S (NOLOCK) ON S.Storerkey = 'PVH-' + O.Billtokey AND S.Consigneefor = O.Storerkey
-    	    JOIN SKUCONFIG SKC (NOLOCK) ON  PD.Storerkey = SKC.Storerkey AND PD.Sku = SKC.Sku AND SKC.ConfigType = 'HTSCODE-PVH'    	 
-    	    JOIN CODELKUP CL (NOLOCK) ON PD.Storerkey = CL.Storerkey AND LEFT(SKC.Data,4) = CL.Long AND CL.Listname = 'PVHHTSCODE' AND S.ISOCntryCode = CL.UDF01
+       --Cleare notes
+       UPDATE #PickDetail_WIP
+       SET Notes = ''
+           --Pickslipno = ''
+           
+       
+       DECLARE CUR_PICK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR          
+          SELECT PD.Pickdetailkey, CL.Short
+          FROM #PickDetail_WIP PD
+          JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
+          JOIN STORER S (NOLOCK) ON S.Storerkey = 'PVH-' + O.Billtokey AND S.Consigneefor = O.Storerkey
+          JOIN SKUCONFIG SKC (NOLOCK) ON  PD.Storerkey = SKC.Storerkey AND PD.Sku = SKC.Sku AND SKC.ConfigType = 'HTSCODE-PVH'       
+          JOIN CODELKUP CL (NOLOCK) ON PD.Storerkey = CL.Storerkey AND LEFT(SKC.Data,4) = CL.Long AND CL.Listname = 'PVHHTSCODE' AND S.ISOCntryCode = CL.UDF01
 
        OPEN CUR_PICK  
          
@@ -237,33 +238,33 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
          
        WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
        BEGIN  
-       	  UPDATE #PickDetail_WIP
-       	  SET Notes = @c_Short_group
-       	  WHERE Pickdetailkey = @c_Pickdetailkey
+           UPDATE #PickDetail_WIP
+           SET Notes = @c_Short_group
+           WHERE Pickdetailkey = @c_Pickdetailkey
 
           FETCH NEXT FROM CUR_PICK INTO @c_Pickdetailkey, @c_Short_group
        END
        CLOSE CUR_PICK
        DEALLOCATE CUR_PICK
 
-       DECLARE CUR_PICK2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      	 
-    	    SELECT PD.Pickdetailkey, CL.Short
-    	    FROM #PickDetail_WIP PD
+       DECLARE CUR_PICK2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR         
+          SELECT PD.Pickdetailkey, CL.Short
+          FROM #PickDetail_WIP PD
           JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
           JOIN CODELKUP CL (NOLOCK) ON SKU.Storerkey = CL.Storerkey AND SUBSTRING(SKU.Busr2,15,4) = CL.Code AND CL.Listname = 'PVHITEMGRP'
           AND PD.Notes = ''
-             	    
+                   
        OPEN CUR_PICK2  
                 
        FETCH NEXT FROM CUR_PICK2 INTO @c_Pickdetailkey, @c_Short_group  
          
        WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
-       BEGIN         	 
-       	  UPDATE #PickDetail_WIP
-       	  SET Notes = @c_Short_group
-       	  WHERE Pickdetailkey = @c_Pickdetailkey
+       BEGIN             
+           UPDATE #PickDetail_WIP
+           SET Notes = @c_Short_group
+           WHERE Pickdetailkey = @c_Pickdetailkey
 
-          FETCH NEXT FROM CUR_PICK2 INTO @c_Pickdetailkey, @c_Short_group      	
+          FETCH NEXT FROM CUR_PICK2 INTO @c_Pickdetailkey, @c_Short_group        
        END
        CLOSE CUR_PICK2
        DEALLOCATE CUR_PICK2
@@ -293,7 +294,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
     -----Generate Pickslip No------    
     IF @n_continue = 1 or @n_continue = 2 
     BEGIN
-    	 IF @c_OrderGroup = 'W'  --Wholesale
+       IF @c_OrderGroup = 'W'  --Wholesale
        BEGIN    
           EXEC isp_CreatePickSlip
                @c_Wavekey = @c_Wavekey
@@ -301,13 +302,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
               ,@c_ConsolidateByLoad = 'N'
               ,@b_Success = @b_Success OUTPUT
               ,@n_Err = @n_err OUTPUT 
-              ,@c_ErrMsg = @c_errmsg OUTPUT       	
+              ,@c_ErrMsg = @c_errmsg OUTPUT        
           
           IF @b_Success = 0
              SELECT @n_continue = 3
        END       
 
-    	 IF @c_OrderGroup = 'R'  --Retail
+       IF @c_OrderGroup = 'R'  --Retail
        BEGIN    
           EXEC isp_CreatePickSlip
                @c_Wavekey = @c_Wavekey
@@ -315,7 +316,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
               ,@c_ConsolidateByLoad = 'Y'
               ,@b_Success = @b_Success OUTPUT
               ,@n_Err = @n_err OUTPUT 
-              ,@c_ErrMsg = @c_errmsg OUTPUT       	
+              ,@c_ErrMsg = @c_errmsg OUTPUT        
           
           IF @b_Success = 0
              SELECT @n_continue = 3
@@ -326,7 +327,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

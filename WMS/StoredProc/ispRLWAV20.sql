@@ -20,28 +20,29 @@ GO
 /*                                                                      */
 /* Called By: ReleaseWave_SP                                            */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Ver   Purposes                                  */
-/* 2019-02-18   Wan08   1.0   DP Large Location for UOM = '6'           */
-/* 2019-08-06   Wan09   1.1   WMS-10158 - NIKE - PH Wave Release Task   */
+/* Date        Author   Ver   Purposes                                  */
+/* 2019-02-18  Wan08    1.0   DP Large Location for UOM = '6'           */
+/* 2019-08-06  Wan09    1.1   WMS-10158 - NIKE - PH Wave Release Task   */
 /*                            Enhancement                               */
-/* 2019-09-30   Wan10   1.1   Fixed not Update Pickdetail.Wavekey to    */ 
+/* 2019-09-30  Wan10    1.1   Fixed not Update Pickdetail.Wavekey to    */ 
 /*                            Release Wavekey                           */
-/* 2019-10-03   Wan11   1.1   Fixed not Generate PickSlipNo for UCC UOM=*/
+/* 2019-10-03  Wan11    1.1   Fixed not Generate PickSlipNo for UCC UOM=*/
 /*                            '7' with taskdetailkey                    */ 
-/* 2019-10-12   Wan12   1.2   Fixed not getting DP after getting from   */              
+/* 2019-10-12  Wan12    1.2   Fixed not getting DP after getting from   */              
 /*                            first logicallocation again               */     
-/* 2019-10-03   Wan13   1.2   Fixed get Empty Loc & Show exact DP Needed*/ 
-/* 2019-12-12   CheeMun 1.3   INC0924060 - Gen PickSlipNo in PickDetail */        
+/* 2019-10-03  Wan13    1.2   Fixed get Empty Loc & Show exact DP Needed*/ 
+/* 2019-12-12  CheeMun  1.3   INC0924060 - Gen PickSlipNo in PickDetail */        
 /*                            which TaskDetailkey <> ''                 */  
-/* 2020-01-07   LZG     1.4   INC0984561 - Check for PickZone of        */  
+/* 2020-01-07  LZG      1.4   INC0984561 - Check for PickZone of        */  
 /*                            previous Loc (ZG01)                       */ 
-/* 2019-11-21   Wan14   1.5   Change Genaral Repl Task Sourcetype to    */   
-/*                            ispRLWAV20-REPLEN                         */       
+/* 2019-11-21  Wan14    1.5   Change Genaral Repl Task Sourcetype to    */   
+/*                            ispRLWAV20-REPLEN                         */ 
+/* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */      
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV20]
         @c_wavekey      NVARCHAR(10)  
@@ -1981,10 +1982,11 @@ BEGIN
    --(Wan12) - END       
    
    UPDATE WAVE WITH (ROWLOCK)
-   SET Status = '1' -- Released  
-      ,Trafficcop = NULL
-      ,EditWho = SUSER_SNAME()
-      ,EditDate= GETDATE()
+    --SET STATUS = '1' -- Released        --(Wan01) 
+    SET TMReleaseFlag = 'Y'               --(Wan01) 
+     ,  TrafficCop = NULL                 
+     ,  EditWho = SUSER_SNAME()           
+     ,  EditDate= GETDATE()               
    WHERE Wavekey = @c_Wavekey 
    
    SET @n_err = @@ERROR

@@ -16,14 +16,15 @@ GO
 /*                                                                       */  
 /* Called By: Wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
+/* Date        Author   Ver  Purposes                                    */  
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV23]      
@@ -153,7 +154,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
           [Notes] [nvarchar](4000) NULL,
           [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))    	
+          [Channel_ID] [bigint] NULL DEFAULT ((0)))      
     END
           
     IF @@TRANCOUNT = 0
@@ -215,15 +216,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
     --Create full pallet pick task for modulized & none modulized sku
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 SET @c_Message01 = ''
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''1'' AND LOC.LocationType = ''OTHER'' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'         
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.Loadkey = @c_Loadkey '
-    	 SET @c_PickMethod = 'FP'
+       SET @c_Message01 = ''
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''1'' AND LOC.LocationType = ''OTHER'' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'         
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.Loadkey = @c_Loadkey '
+       SET @c_PickMethod = 'FP'
        SET @c_Priority = '8'
        SET @c_SourcePriority = '8'
        SET @c_TaskType = 'FPK'
        SET @c_ToLoc = @c_Toloc_P
-    	     	 
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -261,10 +262,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
     --Create full case pick for modulized sku (non-modulize sku will not have case allocation)
     IF @n_continue IN(1,2) 
     BEGIN
-    	 SET @c_SQL = '
+       SET @c_SQL = '
        DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR  
-    	    SELECT PD.Storerkey, PD.Sku, MAX(PD.Lot), PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
-    	           PD.UOM, SUM(PD.UOMQty) AS UOMQty, ISNULL(UCC.Qty,0), LA.Lottable02, ISNULL(O.Loadkey,'''')
+          SELECT PD.Storerkey, PD.Sku, MAX(PD.Lot), PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
+                 PD.UOM, SUM(PD.UOMQty) AS UOMQty, ISNULL(UCC.Qty,0), LA.Lottable02, ISNULL(O.Loadkey,'''')
           FROM WAVEDETAIL WD (NOLOCK)
           JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -293,32 +294,32 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @n_UCCQty, @c_Lottable02, @c_Loadkey
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN          	        	                      
+       BEGIN                                           
            IF @c_UOM = '2'
            BEGIN
-           	  IF ISNULL(@n_UCCQty,0) = 0
-           	  BEGIN          
-           	     SELECT @n_continue = 3  
+              IF ISNULL(@n_UCCQty,0) = 0
+              BEGIN          
+                 SELECT @n_continue = 3  
                  SELECT @n_err = 83010    
                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UCC Qty not found for Sku: ' + RTRIM(@c_Sku) + ' Loc: ' + RTRIM(@c_FromLoc) + ' Lottable02: ' + RTRIM(@c_Lottable02) + '. (ispRLWAV23)'
                  GOTO NEXT_REC
               END       
 
-           	  SET @c_TaskType = 'FCP'
-           	  SET @c_PickMethod = 'PP'
- 	            SET @c_Message01 = ''
-    	        SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ISNULL(ORDERS.Loadkey,'''') = @c_Loadkey '
+              SET @c_TaskType = 'FCP'
+              SET @c_PickMethod = 'PP'
+               SET @c_Message01 = ''
+              SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ISNULL(ORDERS.Loadkey,'''') = @c_Loadkey '
               SET @c_Priority = '9'
               SET @c_SourcePriority = '9'
-          	  SET @n_UOMQty = @n_UCCQty          	  
+              SET @n_UOMQty = @n_UCCQty              
               SET @c_ToLoc = @c_Toloc_C
-          	  
-          	  SET @n_LastPartial_Ctn = @n_Qty % @n_UCCQty
-          	  
-          	  IF @n_LastPartial_Ctn > 0
-          	     SET @n_Qty = @n_Qty - @n_LastPartial_Ctn 
-    	     	            	  
-       	      EXEC isp_InsertTaskDetail   
+              
+              SET @n_LastPartial_Ctn = @n_Qty % @n_UCCQty
+              
+              IF @n_LastPartial_Ctn > 0
+                 SET @n_Qty = @n_Qty - @n_LastPartial_Ctn 
+                             
+               EXEC isp_InsertTaskDetail   
                   @c_TaskType              = @c_TaskType             
                  ,@c_Storerkey             = @c_Storerkey
                  ,@c_Sku                   = @c_Sku
@@ -348,18 +349,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
                  ,@c_WIP_RefNo             = @c_SourceType
                  ,@b_Success               = @b_Success OUTPUT
                  ,@n_Err                   = @n_err OUTPUT 
-                 ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                 ,@c_ErrMsg                = @c_errmsg OUTPUT        
               
               IF @b_Success <> 1 
               BEGIN
                  SELECT @n_continue = 3  
               END
               ELSE IF @n_LastPartial_Ctn > 0                                                
-              BEGIN              	  
-              	 --last partial carton split to different task. every lottable02 could have last carton with partial qty. 
-       	         --1 pallet will not mix lottable02 but might have more than 1 lot due to diffrent receive date. only last pallet of the batch have last partial carton.
-       	         --every batch should have same UCC qty except last carton.                                                                    
-       	         EXEC isp_InsertTaskDetail   
+              BEGIN                   
+                --last partial carton split to different task. every lottable02 could have last carton with partial qty. 
+                  --1 pallet will not mix lottable02 but might have more than 1 lot due to diffrent receive date. only last pallet of the batch have last partial carton.
+                  --every batch should have same UCC qty except last carton.                                                                    
+                  EXEC isp_InsertTaskDetail   
                      @c_TaskType              = @c_TaskType             
                     ,@c_Storerkey             = @c_Storerkey
                     ,@c_Sku                   = @c_Sku
@@ -389,13 +390,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
                     ,@c_WIP_RefNo             = @c_SourceType
                     ,@b_Success               = @b_Success OUTPUT
                     ,@n_Err                   = @n_err OUTPUT 
-                    ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                    ,@c_ErrMsg                = @c_errmsg OUTPUT        
                  
                  IF @b_Success <> 1 
                  BEGIN
                     SELECT @n_continue = 3  
-                 END              	 
-              END           	           	
+                 END                 
+              END                         
            END
           
           NEXT_REC: 
@@ -403,16 +404,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @n_UCCQty, @c_Lottable02, @c_Loadkey
        END
        CLOSE cur_pick
-       DEALLOCATE cur_pick    	
+       DEALLOCATE cur_pick       
     END
 
     --Create loose pick for none-modulized sku (modulized sku will not have loose allocation)
     IF @n_continue IN(1,2) 
     BEGIN
-    	 SET @c_SQL = '
+       SET @c_SQL = '
        DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR  
-    	    SELECT PD.Storerkey, PD.Sku, MAX(PD.Lot), PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
-    	           PD.UOM, CASE WHEN PD.UOM = ''3'' THEN MAX(PACK.InnerPack) ELSE SUM(PD.UOMQty) END AS UOMQty, ISNULL(O.Loadkey,'''')
+          SELECT PD.Storerkey, PD.Sku, MAX(PD.Lot), PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
+                 PD.UOM, CASE WHEN PD.UOM = ''3'' THEN MAX(PACK.InnerPack) ELSE SUM(PD.UOMQty) END AS UOMQty, ISNULL(O.Loadkey,'''')
           FROM WAVEDETAIL WD (NOLOCK)
           JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -439,19 +440,19 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_Loadkey
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN          	        	                      
+       BEGIN                                           
            IF @c_UOM = '6'
            BEGIN
-           	  SET @c_TaskType = 'FCP'
-           	  SET @c_PickMethod = 'PP'
- 	            SET @c_Message01 = ''
-    	        SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ISNULL(ORDERS.Loadkey,'''') = @c_Loadkey '
+              SET @c_TaskType = 'FCP'
+              SET @c_PickMethod = 'PP'
+               SET @c_Message01 = ''
+              SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ISNULL(ORDERS.Loadkey,'''') = @c_Loadkey '
               SET @c_Priority = '9'
               SET @c_SourcePriority = '9'
-          	  SET @n_UOMQty = 0          	  
-              SET @c_ToLoc = @c_Toloc_E          	  
-          	      	     	            	  
-       	      EXEC isp_InsertTaskDetail   
+              SET @n_UOMQty = 0             
+              SET @c_ToLoc = @c_Toloc_E              
+                                            
+               EXEC isp_InsertTaskDetail   
                   @c_TaskType              = @c_TaskType             
                  ,@c_Storerkey             = @c_Storerkey
                  ,@c_Sku                   = @c_Sku
@@ -481,18 +482,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
                  ,@c_WIP_RefNo             = @c_SourceType
                  ,@b_Success               = @b_Success OUTPUT
                  ,@n_Err                   = @n_err OUTPUT 
-                 ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                 ,@c_ErrMsg                = @c_errmsg OUTPUT        
               
               IF @b_Success <> 1 
               BEGIN
                  SELECT @n_continue = 3  
-              END            	
+              END             
            END
                          
            FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_Loadkey
        END
        CLOSE cur_pick
-       DEALLOCATE cur_pick    	
+       DEALLOCATE cur_pick       
     END
     
                      
@@ -519,7 +520,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
     -----Generate Pickslip No------    
     /*IF @n_continue = 1 or @n_continue = 2 
     BEGIN
-    	 IF dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoScanIn') = '1' 
+       IF dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoScanIn') = '1' 
        BEGIN    
           EXEC isp_CreatePickSlip
                @c_Wavekey = @c_Wavekey
@@ -528,7 +529,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
               ,@c_AutoScanIn = 'Y'   --Y=Auto scan in the pickslip N=Not auto scan in   
               ,@b_Success = @b_Success OUTPUT
               ,@n_Err = @n_err OUTPUT 
-              ,@c_ErrMsg = @c_errmsg OUTPUT       	
+              ,@c_ErrMsg = @c_errmsg OUTPUT        
           
           IF @b_Success = 0
              SELECT @n_continue = 3
@@ -539,7 +540,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV23]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        
        SELECT @n_err = @@ERROR  

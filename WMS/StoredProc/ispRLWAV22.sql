@@ -16,15 +16,16 @@ GO
 /*                                                                       */  
 /* Called By: Wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 31-Jul-2019  NJOW01   1.0  WMS-10032 change task sequence and groupkey*/
+/* Date        Author   Ver   Purposes                                   */  
+/* 31-Jul-2019 NJOW01   1.0   WMS-10032 change task sequence and groupkey*/
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV22]      
@@ -158,7 +159,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
           [Notes] [nvarchar](4000) NULL,
           [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))    	
+          [Channel_ID] [bigint] NULL DEFAULT ((0)))      
     END
           
     IF @@TRANCOUNT = 0
@@ -212,24 +213,24 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
     
     IF @n_continue IN(1,2) 
     BEGIN
-     	 SELECT @c_DefaultLoc = CL.Long
+       SELECT @c_DefaultLoc = CL.Long
        FROM CODELKUP CL (NOLOCK)
        JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc
        WHERE CL.Listname = 'TM_TOLOC'
        AND CL.Storerkey = @c_Storerkey
        AND CL.Code = 'DEFAULT'
-    	
-    	 SET @c_SQL = '
+      
+       SET @c_SQL = '
        DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR  
-    	    SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
-    	           PD.UOM, SUM(PD.UOMQty) AS UOMQty,
-    	           O.Route,
-    	           O.Orderkey,
-    	           --CASE WHEN PD.UOM NOT IN(''1'',''2'') THEN
-    	           --   O.Orderkey ELSE '''' END AS Orderkey, 
-    	           TOLOC.Loc AS ToLoc,
-    	           ISNULL(CL.Code,''9'') AS Priority,
-    	           O.DeliveryDate  --NJOW01
+          SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
+                 PD.UOM, SUM(PD.UOMQty) AS UOMQty,
+                 O.Route,
+                 O.Orderkey,
+                 --CASE WHEN PD.UOM NOT IN(''1'',''2'') THEN
+                 --   O.Orderkey ELSE '''' END AS Orderkey, 
+                 TOLOC.Loc AS ToLoc,
+                 ISNULL(CL.Code,''9'') AS Priority,
+                 O.DeliveryDate  --NJOW01
           FROM WAVEDETAIL WD (NOLOCK)
           JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -268,31 +269,31 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN          	        	
-  	  	 	 SET @c_LinkTaskToPick_SQL = '' 
-      	   --SET @n_UOMQty = 0
-        	 SET @c_Groupkey = ''        	         	         	 
-        	 
-        	 IF ISNULL(@c_DefaultLoc,'') <> ''
-        	    SET @c_ToLoc = @c_DefaultLoc
-            	         	    
-    	     IF ISNULL(@c_Toloc,'') = ''
-    	     BEGIN    	 	 
+       BEGIN                     
+          SET @c_LinkTaskToPick_SQL = '' 
+            --SET @n_UOMQty = 0
+          SET @c_Groupkey = ''                                  
+          
+          IF ISNULL(@c_DefaultLoc,'') <> ''
+             SET @c_ToLoc = @c_DefaultLoc
+                               
+           IF ISNULL(@c_Toloc,'') = ''
+           BEGIN         
               SELECT @n_continue = 3  
               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Loc setup at ROUTE. (ispRLWAV15)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-           END        	     
+           END               
 
            IF @c_UOM = '1'
            BEGIN 
-           	  SET @c_Taskdetailkey = ''
-           	  SET @c_TaskType = 'FPK'
-           	  SET @c_PickMethod = 'FP'
-           	  SET @c_GroupKey = ''        
-           	  SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
-           	  
-       	      EXEC isp_InsertTaskDetail   
-       	          @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
+              SET @c_Taskdetailkey = ''
+              SET @c_TaskType = 'FPK'
+              SET @c_PickMethod = 'FP'
+              SET @c_GroupKey = ''        
+              SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
+              
+               EXEC isp_InsertTaskDetail   
+                   @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
                  ,@c_TaskType              = @c_TaskType             
                  ,@c_Storerkey             = @c_Storerkey
                  ,@c_Sku                   = @c_Sku
@@ -321,32 +322,32 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
                  ,@c_WIP_RefNo             = @c_SourceType
                  ,@b_Success               = @b_Success OUTPUT
                  ,@n_Err                   = @n_err OUTPUT 
-                 ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                 ,@c_ErrMsg                = @c_errmsg OUTPUT        
               
               IF @b_Success <> 1 
               BEGIN
                  SELECT @n_continue = 3  
-              END           	
+              END             
               ELSE
               BEGIN
                  UPDATE TASKDETAIL WITH (ROWLOCK)
                  SET Groupkey = @c_Taskdetailkey
-                 WHERE TaskDetailKey = @c_Taskdetailkey	
+                 WHERE TaskDetailKey = @c_Taskdetailkey  
               END
            END
            ELSE IF @c_UOM = '2'
            BEGIN
-           	  SET @c_TaskType = 'FCP'
-           	  SET @c_PickMethod = '?'
-           	  
-           	  IF @dt_deliverydate IS NOT NULL
-           	    SET @c_Groupkey = RTRIM(@c_Route) + SUBSTRING(CONVERT(NVARCHAR(8), @dt_deliverydate, 112),5,4)   --NJOW01
-           	  ELSE
-           	    SET @c_GroupKey = @c_Route
-           	            
-           	  SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
-           	  
-       	      EXEC isp_InsertTaskDetail   
+              SET @c_TaskType = 'FCP'
+              SET @c_PickMethod = '?'
+              
+              IF @dt_deliverydate IS NOT NULL
+                SET @c_Groupkey = RTRIM(@c_Route) + SUBSTRING(CONVERT(NVARCHAR(8), @dt_deliverydate, 112),5,4)   --NJOW01
+              ELSE
+                SET @c_GroupKey = @c_Route
+                        
+              SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
+              
+               EXEC isp_InsertTaskDetail   
                   @c_TaskType              = @c_TaskType             
                  ,@c_Storerkey             = @c_Storerkey
                  ,@c_Sku                   = @c_Sku
@@ -376,21 +377,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
                  ,@c_WIP_RefNo             = @c_SourceType
                  ,@b_Success               = @b_Success OUTPUT
                  ,@n_Err                   = @n_err OUTPUT 
-                 ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                 ,@c_ErrMsg                = @c_errmsg OUTPUT        
               
               IF @b_Success <> 1 
               BEGIN
                  SELECT @n_continue = 3  
-              END           	           	
+              END                         
            END
            ELSE
-           BEGIN  --UOM 6              	    
-           	  SET @c_TaskType = 'FPP'
-           	  SET @c_PickMethod = 'PP'
-           	  SET @c_GroupKey = @c_Orderkey        
-           	  SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
-           	  
-       	      EXEC isp_InsertTaskDetail   
+           BEGIN  --UOM 6                     
+              SET @c_TaskType = 'FPP'
+              SET @c_PickMethod = 'PP'
+              SET @c_GroupKey = @c_Orderkey        
+              SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
+              
+               EXEC isp_InsertTaskDetail   
                   @c_TaskType              = @c_TaskType             
                  ,@c_Storerkey             = @c_Storerkey
                  ,@c_Sku                   = @c_Sku
@@ -419,7 +420,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
                  ,@c_WIP_RefNo             = @c_SourceType
                  ,@b_Success               = @b_Success OUTPUT
                  ,@n_Err                   = @n_err OUTPUT 
-                 ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                 ,@c_ErrMsg                = @c_errmsg OUTPUT        
               
               IF @b_Success <> 1 
               BEGIN
@@ -430,7 +431,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
        END
        CLOSE cur_pick
-       DEALLOCATE cur_pick    	
+       DEALLOCATE cur_pick       
     END
                      
     -----Update pickdetail_WIP work in progress staging table back to pickdetail 
@@ -456,8 +457,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
     -----Generate Pickslip No------    
     IF @n_continue = 1 or @n_continue = 2 
     BEGIN
-    	 IF dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoScanIn') = '1' 
-       BEGIN           	
+       IF dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoScanIn') = '1' 
+       BEGIN            
           EXEC isp_CreatePickSlip
                @c_Wavekey = @c_Wavekey
               ,@c_LinkPickSlipToPick = 'N'  --Y=Update pickslipno to pickdetail.pickslipno 
@@ -466,7 +467,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
               ,@c_PickslipType = '8'
               ,@b_Success = @b_Success OUTPUT
               ,@n_Err = @n_err OUTPUT 
-              ,@c_ErrMsg = @c_errmsg OUTPUT       	
+              ,@c_ErrMsg = @c_errmsg OUTPUT        
           
           IF @b_Success = 0
              SELECT @n_continue = 3
@@ -482,13 +483,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
          FETCH NEXT FROM cur_waveord INTO @c_Orderkey
          
          WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-         BEGIN          	        	
-         	  UPDATE PICKHEADER WITH (ROWLOCK)
-         	  SET PICKHEADER.Wavekey = @c_Wavekey,
-         	      PICKHEADER.Trafficcop = NULL
-         	  FROM PICKHEADER
-         	  JOIN ORDERS (NOLOCK) ON PICKHEADER.Orderkey = ORDERS.Orderkey
-         	  WHERE PICKHEADER.Orderkey = @c_Orderkey
+         BEGIN                      
+              UPDATE PICKHEADER WITH (ROWLOCK)
+              SET PICKHEADER.Wavekey = @c_Wavekey,
+                  PICKHEADER.Trafficcop = NULL
+              FROM PICKHEADER
+              JOIN ORDERS (NOLOCK) ON PICKHEADER.Orderkey = ORDERS.Orderkey
+              WHERE PICKHEADER.Orderkey = @c_Orderkey
                                       
             FETCH NEXT FROM cur_waveord INTO @c_Orderkey
          END       
@@ -501,7 +502,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        
        SELECT @n_err = @@ERROR  

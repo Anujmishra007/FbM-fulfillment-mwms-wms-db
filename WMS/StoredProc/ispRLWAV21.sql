@@ -28,7 +28,8 @@ GO
 /*                                                                      */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author   Ver  Purposes                                  */
+/* Date        Author   Ver   Purposes                                  */
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                         */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV21] 
@@ -56,16 +57,16 @@ BEGIN
     ------Validation--------
     IF @n_continue=1 or @n_continue=2  
     BEGIN          
-    	 SET @c_Sku = ''
-    	 SELECT TOP 1 @c_Sku = PD.Sku
-    	 FROM WAVEDETAIL WD (NOLOCK)
-    	 JOIN PICKDETAIL PD (NOLOCK) ON  WD.Orderkey = PD.Orderkey
-    	 LEFT JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku and SL.LocationType = 'PICK'
-    	 WHERE SL.Sku IS NULL
-    	 AND WD.Wavekey = @c_Wavekey
-    	 ORDER BY PD.Sku
-    	 
-    	 IF ISNULL(@c_Sku,'') <> ''    	              
+       SET @c_Sku = ''
+       SELECT TOP 1 @c_Sku = PD.Sku
+       FROM WAVEDETAIL WD (NOLOCK)
+       JOIN PICKDETAIL PD (NOLOCK) ON  WD.Orderkey = PD.Orderkey
+       LEFT JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku and SL.LocationType = 'PICK'
+       WHERE SL.Sku IS NULL
+       AND WD.Wavekey = @c_Wavekey
+       ORDER BY PD.Sku
+       
+       IF ISNULL(@c_Sku,'') <> ''                    
        BEGIN
           SELECT @n_continue = 3  
           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 82000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
@@ -83,7 +84,7 @@ BEGIN
            ,@c_AutoScanIn = 'Y'
            ,@b_Success = @b_Success OUTPUT
            ,@n_Err = @n_err OUTPUT 
-           ,@c_ErrMsg = @c_errmsg OUTPUT       	
+           ,@c_ErrMsg = @c_errmsg OUTPUT        
        
        IF @b_Success = 0
           SELECT @n_continue = 3    
@@ -93,7 +94,11 @@ BEGIN
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        
        SELECT @n_err = @@ERROR  

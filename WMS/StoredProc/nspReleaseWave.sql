@@ -1,13 +1,34 @@
 IF EXISTS (SELECT name 
-	   FROM   dbo.sysobjects 
-	   WHERE  name = N'nspReleaseWave' 
-	   AND 	  type = 'P')
+      FROM   dbo.sysobjects 
+      WHERE  name = N'nspReleaseWave' 
+      AND     type = 'P')
     DROP PROCEDURE nspReleaseWave
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+/*************************************************************************/  
+/* Stored Procedure: nspReleaseWave                                      */  
+/* Creation Date: 24-Sep-2012                                            */  
+/* Copyright: IDS                                                        */  
+/* Written by:                                                           */  
+/*                                                                       */  
+/* Purpose: Standard SP that called by isp_ReleaseWave_Wrapper if custom */  
+/*          SP not setup                                                 */
+/*                                                                       */  
+/* Called By: wave                                                       */  
+/*                                                                       */  
+/* PVCS Version: 1.1                                                     */  
+/*                                                                       */  
+/* Version: 5.4                                                          */  
+/*                                                                       */  
+/* Data Modifications:                                                   */  
+/*                                                                       */  
+/* Updates:                                                              */  
+/* Date        Author   Ver   Purposes                                   */  
+/* 01-04-2020  Wan08    1.1   Sync Exceed & SCE                          */
+/*************************************************************************/   
 CREATE PROC    nspReleaseWave  
  @c_wavekey      NVARCHAR(10)  
  ,              @b_Success      int        OUTPUT  
@@ -15,8 +36,8 @@ CREATE PROC    nspReleaseWave
  ,              @c_errmsg       NVARCHAR(250)  OUTPUT  
  AS  
  BEGIN  
-	 SET NOCOUNT ON
-	 SET QUOTED_IDENTIFIER OFF	
+    SET NOCOUNT ON
+    SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
 --  SET NOCOUNT ON
  DECLARE        @n_continue int        ,    
@@ -364,7 +385,11 @@ CREATE PROC    nspReleaseWave
  IF @n_continue = 1 or @n_continue = 2  
  BEGIN  
     UPDATE WAVE 
-       SET STATUS = "1" -- Released  
+       --SET STATUS = "1" -- Released     --(Wan01)  
+      SET TMReleaseFlag = 'Y'             --(Wan01)   
+         ,Trafficcop = NULL               --(Wan01) 
+         ,EditWho = SUSER_SNAME()         --(Wan01)  
+         ,EditDate= GETDATE()             --(Wan01) 
     WHERE WAVEKEY = @c_wavekey  
     SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
     IF @n_err <> 0  

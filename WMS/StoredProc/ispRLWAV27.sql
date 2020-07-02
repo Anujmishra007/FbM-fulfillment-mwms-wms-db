@@ -17,17 +17,18 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.2                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/*13/08/2019    WLChooi  1.1  Change validation - In case user forgot to */
+/* Date        Author   Ver   Purposes                                   */  
+/*13/08/2019   WLChooi  1.1   Change validation - In case user forgot to */
 /*                            release wave, user can still release wave  */
 /*                            before packing takes place (WL01)          */
+/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV27]      
@@ -287,7 +288,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV27]
     IF @n_continue IN(1,2) AND @c_OrdGrp = 'MULTI'
     BEGIN
        DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR  
-    	 SELECT O.Orderkey, P.LOC
+       SELECT O.Orderkey, P.LOC
        FROM #OrdKey O
        JOIN #PTLLOC P (NOLOCK) ON P.ID = O.ID
        GROUP BY O.Orderkey, P.LOC
@@ -313,7 +314,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV27]
           FETCH NEXT FROM cur_pick INTO @c_Orderkey, @c_Loc
        END
        CLOSE cur_pick
-       DEALLOCATE cur_pick    	
+       DEALLOCATE cur_pick       
     END
     --Single will not do the following part END
   
@@ -331,7 +332,7 @@ GENPICKSLIP:
        --       ,@c_AutoScanIn = 'N'  --Y=Auto scan in the pickslip N=Not auto scan in     
        --       ,@b_Success = @b_Success OUTPUT
        --       ,@n_Err = @n_err OUTPUT 
-       --       ,@c_ErrMsg = @c_errmsg OUTPUT       	
+       --       ,@c_ErrMsg = @c_errmsg OUTPUT         
        --   IF @b_Success = 0
        --      SELECT @n_continue = 3  
        --END  --Load Conso
@@ -423,7 +424,11 @@ GENPICKSLIP:
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE WITH (ROWLOCK)
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

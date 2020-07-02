@@ -17,51 +17,41 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 2.6                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 01-Nov-2013  NJOW01   1.0  Validate location cube include facility    */
-/* 05-Nov-2013  Chee01   1.1  Insert RefKeyLookUp, Remove task generation*/
+/* Date        Author   Ver   Purposes                                   */  
+/* 01-Nov-2013 NJOW01   1.0   Validate location cube include facility    */
+/* 05-Nov-2013 Chee01   1.1   Insert RefKeyLookUp, Remove task generation*/
 /*                            for Loc.LocationCategory = RESALE          */ 
-/* 16-Dec-2013  NJOW02   1.2  DPP Loc with PICK Location type not allow  */
+/* 16-Dec-2013 NJOW02   1.2   DPP Loc with PICK Location type not allow  */
 /*                            assign with other SKU                      */
-/* 24-Jan-2014  Chee02   1.3  REMOVE filter SL.LocationType NOT IN       */
+/* 24-Jan-2014 Chee02   1.3   REMOVE filter SL.LocationType NOT IN       */
 /*                            ('PICK','CASE') for Launch order           */ 
-/* 24-Mar-2014  TLTING   1.4  SQL2012 Bug                                */
-/* 28-Apr-2014  NJOW03   1.5  309316-Add release XDOCK staging to        */
+/* 24-Mar-2014 TLTING   1.4   SQL2012 Bug                                */
+/* 28-Apr-2014 NJOW03   1.5   309316-Add release XDOCK staging to        */
 /*                            induction move task                        */
-/* 06-May-2014  NJOW04   1.6  Change listkey to message02                */
-/* 29-May-2014  SPChin   1.7  SOS# 312500 - verify Sku.StdCube.          */
-/* 15-Jan-2015  NJOW05   1.8  Fix empty location assign to include cube  */
+/* 06-May-2014 NJOW04   1.6   Change listkey to message02                */
+/* 29-May-2014 SPChin   1.7   SOS# 312500 - verify Sku.StdCube.          */
+/* 15-Jan-2015 NJOW05   1.8   Fix empty location assign to include cube  */
 /*                            occupied checking for those stock in       */
 /*                            conveyer. (Retail/Wholesale)               */
-/* 09-Jul-2015  NJOW06   1.9  343964-amend the logic                     */
-/* 07-Sep-2015  NJOW07   2.0  343964-amend the logic to determine launch */
+/* 09-Jul-2015 NJOW06   1.9   343964-amend the logic                     */
+/* 07-Sep-2015 NJOW07   2.0   343964-amend the logic to determine launch */
+/*                             order pickmethod.                         */
+/* 28-Mar-2016 NJOW08   2.1   367050-amend the logic to determine launch */
 /*                            order pickmethod.                          */
-/* 28-Mar-2016  NJOW08   2.1  367050-amend the logic to determine launch */
-/*                            order pickmethod.                          */
-/* 11-Aug-2016  TLTING01 2.2  Remove SET ROWCOUNT, Performance tune      */ 
-/* 24-Aug-2016  NJOW09   2.3  Check Valid Loc when insert locxlocxid.    */
+/* 11-Aug-2016 TLTING01 2.2   Remove SET ROWCOUNT, Performance tune      */ 
+/* 24-Aug-2016 NJOW09   2.3   Check Valid Loc when insert locxlocxid.    */
 /*                            performance tuning.                        */
-/* 13-Feb-2017  TLTING02 2.4  Performance tune                           */ 
-/* 03-Oct-2019  NJOW10   2.5  WMS-9533 Add Ecom order handling           */
+/* 13-Feb-2017 TLTING02 2.4   Performance tune                           */ 
+/* 03-Oct-2019 NJOW10   2.5   WMS-9533 Add Ecom order handling           */
+/* 01-04-2020  Wan01    2.6   Sync Exceed & SCE                          */
 /*************************************************************************/   
-/*
-declare @b_Success      int          
- ,@n_err          int          
- ,@c_errmsg       NVARCHAR(250)
-exec ispRLWAV01    
-  '0000003572'  
- ,@b_Success OUTPUT  
- ,@n_err  OUTPUT  
- ,@c_errmsg  OUTPUT
-select @b_success, @n_err, @c_errmsg*/
-
 CREATE PROCEDURE [dbo].[ispRLWAV01]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
@@ -223,11 +213,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
         END 
         ELSE
         BEGIN
-        	 --NJOW03
-        	 IF @c_Userdefine01 = 'X'
-        	    SELECT @c_TaskType = 'MVF'
-        	 ELSE
-        	    SELECT @c_TaskType = 'RPF'        	    
+          --NJOW03
+          IF @c_Userdefine01 = 'X'
+             SELECT @c_TaskType = 'MVF'
+          ELSE
+             SELECT @c_TaskType = 'RPF'             
         END
     END
 
@@ -330,7 +320,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
         JOIN ORDERDETAIL OD(NOLOCK) ON O.Orderkey = OD.Orderkey
         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.sku
         WHERE O.Userdefine09 = @c_Wavekey
-    	
+      
         --Permanent pick location 
         SELECT DISTINCT L.Loc, SL.LocationType --NJOW02
         INTO #TMP_PP_LOC
@@ -344,7 +334,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
  
     -----Generate Retail/Wholesale, ECOM Temporary Ref Data-----
     IF (@n_continue = 1 OR @n_continue = 2) AND @c_Userdefine01 IN('N','R','E')
-    BEGIN            	
+    BEGIN               
         --Get DP expected cube from replenishment tasks from other wave. Physical stock not reach destination yet
         /*SELECT TD.ToLoc, SUM(TD.Qty * SKU.Stdcube) AS CubeOccupy
         INTO #TMP_TASKCUBE
@@ -440,15 +430,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
         -- tlting01
         SET @c_curPickdetailkey = ''
          DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		      SELECT Pickdetailkey
+            SELECT Pickdetailkey
                FROM WAVEDETAIL WITH (NOLOCK)  
                JOIN PICKDETAIL WITH (NOLOCK)  ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey
                WHERE WAVEDETAIL.Wavekey = @c_Wavekey 
 
-	      OPEN Orders_Pickdet_cur 
-	      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey 
-	      WHILE @@FETCH_STATUS = 0 
-	      BEGIN 
+         OPEN Orders_Pickdet_cur 
+         FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey 
+         WHILE @@FETCH_STATUS = 0 
+         BEGIN 
                UPDATE PICKDETAIL WITH (ROWLOCK) 
                 SET PICKDETAIL.TaskdetailKey = '',
                     PICKDETAIL.Wavekey = @c_Wavekey, 
@@ -459,16 +449,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
               SELECT @n_err = @@ERROR
                IF @n_err <> 0 
                BEGIN
-         	      CLOSE Orders_Pickdet_cur 
-         	      DEALLOCATE Orders_Pickdet_cur                  
+                  CLOSE Orders_Pickdet_cur 
+                  DEALLOCATE Orders_Pickdet_cur                  
                  SELECT @n_continue = 3  
                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81005   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV01)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-               END 		
-		      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
-	      END
-	      CLOSE Orders_Pickdet_cur 
-	      DEALLOCATE Orders_Pickdet_cur
+               END      
+            FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+         END
+         CLOSE Orders_Pickdet_cur 
+         DEALLOCATE Orders_Pickdet_cur
     END
      
     -----Generate Retail/Wholesale, ECOM Order Tasks-----
@@ -666,7 +656,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
                    -- If no location with same sku found, then assign the empty location
                    IF ISNULL(@c_NextDynPickLoc,'')=''
                    BEGIN
-                   	   SELECT TOP 1 @c_NextDynPickLoc = L.LOC,
+                        SELECT TOP 1 @c_NextDynPickLoc = L.LOC,
                                     @n_LocCubeAvailable = CONVERT(DECIMAL(13,5), L.LocCubeAvailable) 
                        FROM   #TMP_LOCCUBE L (NOLOCK) 
                        WHERE  L.LocationType IN ('DYNPICKP') 
@@ -852,7 +842,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
                 
                 -- Assign empty loc that near to same style
                 IF ISNULL(@c_NextDynPickLoc,'')=''
-                BEGIN                                                                  	   
+                BEGIN                                                                        
                     SELECT @c_SameStyleLoc = MAX(LLI.LOC)
                     FROM LOTXLOCXID LLI (NOLOCK)
                     JOIN LOC L (NOLOCK) ON  LLI.LOC = L.LOC
@@ -1094,9 +1084,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
                    LI.LotCount,
                    SKU.Putawayzone, --NJOW06
                    LOC.LocationCategory, --NJOW06
-									 LI.UOM2Count, --NJOW7
-									 LI.UOM6Count, --NJOW7
-									 LI.UOM7Count  --NJOW7
+                            LI.UOM2Count, --NJOW7
+                            LI.UOM6Count, --NJOW7
+                            LI.UOM7Count  --NJOW7
           ORDER BY PD.Storerkey, SKU.Style, PD.Sku, 
                    CASE WHEN ISNULL(LI.LOCXID_QTYAVAILABLE,0) <= 0 AND LOC.LocationHandling = '1' AND LOC.LocationType <> 'DYNPPICK'  --NJOW08
                         AND LI.SkuCount = 1 AND LI.LotCount = 1 
@@ -1116,10 +1106,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
           IF @n_debug=1
              SELECT '@c_Sku', @c_Sku, '@c_Lot', @c_Lot, '@c_FromLoc', @c_FromLoc, '@c_Id', @c_Id, '@c_PickMethond', @c_PickMethod, '@n_UCCQty', @n_UCCQty, '@c_Uom', @c_Uom, '@c_LocationCategory ',@c_LocationCategory  
 
-       	   --NJOW06 Start
+            --NJOW06 Start
            SELECT @c_DynamicLoc_Zone = 'LAUNCH'
-       	   
-       	   IF @c_uom = '2' --full carton for an order send to direct out inducton
+            
+            IF @c_uom = '2' --full carton for an order send to direct out inducton
            BEGIN
               SELECT @c_DestinationType = 'DIRECT_LAUNCH'
               SELECT @c_ToLoc = 'IND1001'
@@ -1546,8 +1536,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
        BEGIN    
           GOTO INSERT_TASKS
           XDOCK:            
-       	
-          FETCH NEXT FROM cur_Xdock INTO @c_Storerkey, @c_FromLoc, @c_ID, @n_Qty     	
+         
+          FETCH NEXT FROM cur_Xdock INTO @c_Storerkey, @c_FromLoc, @c_ID, @n_Qty       
        END
        CLOSE cur_Xdock  
        DEALLOCATE cur_Xdock                                           
@@ -1599,14 +1589,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
          -- tlting01
          SET @c_curPickdetailkey = ''
          DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		      SELECT Pickdetailkey
+            SELECT Pickdetailkey
             FROM PICKDETAIL WITH (NOLOCK)  
             WHERE  OrderKey = @c_OrderKey  
 
-	      OPEN Orders_Pickdet_cur 
-	      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey 
-	      WHILE @@FETCH_STATUS = 0 
-	      BEGIN 
+         OPEN Orders_Pickdet_cur 
+         FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey 
+         WHILE @@FETCH_STATUS = 0 
+         BEGIN 
 
                 UPDATE PICKDETAIL WITH (ROWLOCK)  
                 SET    PickSlipNo = @c_PickSlipNo    
@@ -1617,16 +1607,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
                 SELECT @n_err = @@ERROR  
                 IF @n_err <> 0  
                 BEGIN  
-         	       CLOSE Orders_Pickdet_cur 
-         	       DEALLOCATE Orders_Pickdet_cur                  
+                   CLOSE Orders_Pickdet_cur 
+                   DEALLOCATE Orders_Pickdet_cur                  
                    SELECT @n_continue = 3  
                    SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81012   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                    SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert PICKDETAIL Failed (ispRLWAV01)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-                END  		
-		      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
-	      END
-	      CLOSE Orders_Pickdet_cur 
-	      DEALLOCATE Orders_Pickdet_cur
+                END        
+            FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+         END
+         CLOSE Orders_Pickdet_cur 
+         DEALLOCATE Orders_Pickdet_cur
 
           -- Chee01
           IF NOT EXISTS (SELECT 1 FROM dbo.RefKeyLookUp WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo)
@@ -1654,7 +1644,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -1789,16 +1783,16 @@ RETURN_SP:
                    AND LLI.Lot = @c_Lot
                    AND LLI.Loc = @c_Toloc
                    AND LLI.Id = @c_ID)
-     BEGIN     	  
-     	 IF NOT EXISTS (SELECT 1 FROM LOC(NOLOCK) WHERE Loc = @c_Toloc) --NJOW09
-     	 BEGIN
+     BEGIN          
+       IF NOT EXISTS (SELECT 1 FROM LOC(NOLOCK) WHERE Loc = @c_Toloc) --NJOW09
+       BEGIN
           SELECT @n_continue = 3  
           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81015   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
           SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Location ''' + RTRIM(@c_ToLoc) + ''' (ispRLWAV01)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-          GOTO RETURN_SP     	 	
-     	 END
-     	 ELSE     	
-     	 BEGIN
+          GOTO RETURN_SP         
+       END
+       ELSE       
+       BEGIN
           INSERT INTO LOTXLOCXID (Storerkey, Sku, Lot, Loc, ID, Qty, PendingMoveIN)          
                          VALUES (@c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, 0, @n_Qty)
        END

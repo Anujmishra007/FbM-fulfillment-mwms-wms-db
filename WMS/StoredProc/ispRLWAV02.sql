@@ -17,43 +17,44 @@ GO
 /*                                                                       */
 /* Called By: wave                                                       */
 /*                                                                       */
-/* PVCS Version: 1.4                                                     */
+/* PVCS Version: 2.1                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
 /* Updates:                                                              */
-/* Date         Author   Ver  Purposes                                   */
-/* 09-MAY-2014  YTWan    1.0  Fixed to Handle print pickslip Report and  */
+/* Date        Author   Ver   Purposes                                   */
+/* 09-MAY-2014 YTWan    1.0   Fixed to Handle print pickslip Report and  */
 /*                            then release wave (Wan01)                  */
-/* 18-MAY-2014  Chee     1.1  Add validation to make sure make sure      */
+/* 18-MAY-2014 Chee     1.1   Add validation to make sure make sure      */
 /*                            loadkey not exists in multiple wave        */
 /*                            Add validation to make sure all allocation */
 /*                            from BULK location have UCCNo stamped in   */
 /*                            PickDetail.DropID                          */
 /*                            Add validation to make sure all pickdetail */
 /*                            have taskdetailkey stamped (Chee01)        */
-/* 23-05-2014   Shong    1.2  Generate Replen Task by UCC Level          */
-/* 22-May-2014  YTWan    1.3  Add Validation, Different loadkey with same*/
+/* 23-05-2014  Shong    1.2   Generate Replen Task by UCC Level          */
+/* 22-May-2014 YTWan    1.3   Add Validation, Different loadkey with same*/
 /*                            loadplan group not allow. (Wan02)          */
-/* 01-06-2014   ChewKP   1.4  Add UCC to TaskDetail.CaseID for RPF task  */
+/* 01-06-2014  ChewKP   1.4   Add UCC to TaskDetail.CaseID for RPF task  */
 /*                            (ChewKP01)                                 */
-/* 18-06-2014   ChewKP   1.5  Prevent Wrong LoadPlan Mode being selected */
+/* 18-06-2014  ChewKP   1.5   Prevent Wrong LoadPlan Mode being selected */
 /*                            (ChewKP02)                                 */
-/* 19-06-2014   ChewKP   1.6  Allow Release when Orders.Status = '3'     */
+/* 19-06-2014  ChewKP   1.6   Allow Release when Orders.Status = '3'     */
 /*                            (ChewKP03)                                 */
-/* 23-07-2014   ChewKP   1.7  Add Validation for DctoDc Cannot > 1 Orders*/
+/* 23-07-2014  ChewKP   1.7   Add Validation for DctoDc Cannot > 1 Orders*/
 /*                            for same SKU in a Wave (ChewKP04)          */
-/* 17-JUN-2014  YTWan    1.4  SOS#313140 - DTC Pick Task Release Strategy*/
+/* 17-JUN-2014 YTWan    1.4   SOS#313140 - DTC Pick Task Release Strategy*/
 /*                            (Wan03)                                    */
-/* 01-AUG-2014  ChewKP   1.5  Add OrderKey for DTC -- (ChewKP05)         */
-/* 12-AUG-2014  YTWan    1.6  SOS#318252 - ANF - Retail RPF Task Priority*/
+/* 01-AUG-2014 ChewKP   1.5   Add OrderKey for DTC -- (ChewKP05)         */
+/* 12-AUG-2014 YTWan    1.6   SOS#318252 - ANF - Retail RPF Task Priority*/
 /*                            Update (Wan04)                             */
-/* 11-Aug-2016  TLTING01 1.7  Performance tune                           */
-/* 18-JAN-2017  CheeMun  1.8  IN00245886 - Additional PickHeader check.  */
-/* 27-Feb-2017  TLTING   1.9  Variable Nvarchar                          */
-/* 10-Jul-2017  JHTAN    2.0  IN00390534 Task Manager error (JH01)       */
+/* 11-Aug-2016 TLTING01 1.7   Performance tune                           */
+/* 18-JAN-2017 CheeMun  1.8   IN00245886 - Additional PickHeader check.  */
+/* 27-Feb-2017 TLTING   1.9   Variable Nvarchar                          */
+/* 10-Jul-2017 JHTAN    2.0   IN00390534 Task Manager error (JH01)       */
+/* 01-04-2020  Wan01    2.1   Sync Exceed & SCE                          */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispRLWAV02]
@@ -972,9 +973,12 @@ BEGIN
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       UPDATE WAVE WITH (ROWLOCK)
-       SET STATUS = '1' -- Released
-         , EditWho = SUSER_NAME()
-         , EditDate= GETDATE()
+          --SET STATUS = '1' -- Released        --(Wan01)
+          --, EditWho = SUSER_NAME()            --(Wan01)
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               
       WHERE WAVEKEY = @c_wavekey
 
       SET @n_err = @@ERROR

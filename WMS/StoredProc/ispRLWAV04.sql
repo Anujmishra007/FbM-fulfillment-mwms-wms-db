@@ -17,22 +17,23 @@ GO
 /*                                                                       */      
 /* Called By: wave                                                       */      
 /*                                                                       */      
-/* PVCS Version: 1.2                                                     */      
+/* PVCS Version: 1.7                                                     */      
 /*                                                                       */      
 /* Version: 5.4                                                          */      
 /*                                                                       */      
 /* Data Modifications:                                                   */      
 /*                                                                       */      
 /* Updates:                                                              */      
-/* Date         Author   Ver  Purposes                                   */  
-/* 13-Aug-2016  TLTING01 1.1  Performance tune                           */ 
-/* 19-Dec-2016  Wan01    1.2  WMS-821 - HKCPI - lulu- re-release TM Task */
+/* Date        Author   Ver   Purposes                                   */  
+/* 13-Aug-2016 TLTING01 1.1   Performance tune                           */ 
+/* 19-Dec-2016 Wan01    1.2   WMS-821 - HKCPI - lulu- re-release TM Task */
 /*                            after pickdetail re-allocate               */
-/* 27-Feb-2017  TLTING   1.3  Variable Nvarchar                          */
-/* 13-Mar-2019  NJOW01   1.4  WMS-7940 add RPF task (Cancelled)          */
-/* 27-Nov-2019  NJOW02   1.5  WMS-11212 generate replenishment record for*/
-/*                            specific zone to replenish by paper based  */
-/* 04-Jun-2020  NJOW03   1.6  WMS-11212 Add validation                   */ 
+/* 27-Feb-2017 TLTING   1.3   Variable Nvarchar                          */
+/* 13-Mar-2019 NJOW01   1.4   WMS-7940 add RPF task (Cancelled)          */
+/* 27-Nov-2019 NJOW02   1.5   WMS-11212 generate replenishment record for*/
+/*                            specific zone to replenish by paper based  */ 
+/* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                          */
+/* 04-Jun-2020 NJOW03   1.6  WMS-11212 Add validation                   */ 
 /*************************************************************************/       
 
 CREATE PROCEDURE [dbo].[ispRLWAV04]          
@@ -103,25 +104,25 @@ BEGIN
          , @n_TotalLocCBM           DECIMAL(12,6)                      
          , @n_StdCube               DECIMAL(12,6)                      
          , @n_QtyRemain             INT                                
-      	 , @n_taskQty               INT 
-      	 , @n_CubicCapacity_Bal     DECIMAL(12,6)    
-      	 , @n_QtyCanFit             INT
-      	 , @c_Groupkey              NVARCHAR(10)
-      	 */
-      	 
-      	 --NJOW02
-      	 DECLARE 
+          , @n_taskQty               INT 
+          , @n_CubicCapacity_Bal     DECIMAL(12,6)    
+          , @n_QtyCanFit             INT
+          , @c_Groupkey              NVARCHAR(10)
+          */
+          
+          --NJOW02
+          DECLARE 
            @c_Userdefine01          NVARCHAR(20)                       
-      	 , @c_ReplenishmentKey      NVARCHAR(10)                       
-      	 , @C_ToID                  NVARCHAR(18)                       
-      	 , @c_DropID                NVARCHAR(20)                       
-      	 , @c_OLDID                 NVARCHAR(20)                       
-      	 , @n_ReplenSeq             INT                                
-      	 , @n_zonecnt1              INT                                
-      	 , @n_zonecnt2              INT                                
-      	 , @c_authority             NVARCHAR(30)                       
-      	 , @c_option1               NVARCHAR(50)                       
-      	 	  
+          , @c_ReplenishmentKey      NVARCHAR(10)                       
+          , @C_ToID                  NVARCHAR(18)                       
+          , @c_DropID                NVARCHAR(20)                       
+          , @c_OLDID                 NVARCHAR(20)                       
+          , @n_ReplenSeq             INT                                
+          , @n_zonecnt1              INT                                
+          , @n_zonecnt2              INT                                
+          , @c_authority             NVARCHAR(30)                       
+          , @c_option1               NVARCHAR(50)                       
+              
    SET @c_Areakey         = ''    
    SET @c_Orderkey        = ''                  
    SET @c_Priority        = '9'                     
@@ -155,21 +156,21 @@ BEGIN
    
    IF ISNULL(@c_Userdefine01,'') <> ''
    BEGIN
-   	   SELECT @n_zonecnt1 = COUNT(DISTINCT colvalue) FROM dbo.fnc_DelimSplit(',', @c_Userdefine01) WHERE ISNULL(colvalue,'') <> ''   	  
-   	  
-   	   SELECT @n_zonecnt2 = COUNT(DISTINCT Putawayzone)  
-   	   FROM PUTAWAYZONE (NOLOCK)
-   	   WHERE Putawayzone IN (SELECT colvalue FROM dbo.fnc_DelimSplit(',', @c_Userdefine01))
-   	   
-   	   IF ISNULL(@n_zonecnt1,0) <> ISNULL(@n_zonecnt2,0) 
-   	   BEGIN
+         SELECT @n_zonecnt1 = COUNT(DISTINCT colvalue) FROM dbo.fnc_DelimSplit(',', @c_Userdefine01) WHERE ISNULL(colvalue,'') <> ''        
+        
+         SELECT @n_zonecnt2 = COUNT(DISTINCT Putawayzone)  
+         FROM PUTAWAYZONE (NOLOCK)
+         WHERE Putawayzone IN (SELECT colvalue FROM dbo.fnc_DelimSplit(',', @c_Userdefine01))
+         
+         IF ISNULL(@n_zonecnt1,0) <> ISNULL(@n_zonecnt2,0) 
+         BEGIN
           SET @n_continue = 3      
           SET @n_err = 81005      
           SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid Putawayzone Parameters Passed at userdefine01 (ispRLWAV04)'     
           GOTO RETURN_SP     
-   	   END         	 
-   	   
-   	   --NJOW03
+         END 
+         
+       --NJOW03
    	   IF EXISTS(SELECT 1 
    	             FROM REPLENISHMENT (NOLOCK) 
    	             WHERE Wavekey = @c_Wavekey
@@ -179,7 +180,7 @@ BEGIN
           SET @n_err = 81006      
           SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has beed released for Paper based replenishment. (ispRLWAV04)'      
           GOTO RETURN_SP         
-       END                      	   
+       END               
    END
     
    -----Wave Validation-----    
@@ -236,19 +237,19 @@ BEGIN
    --NJOW01
    /*IF @c_Door = 'ALLOC'
    BEGIN
-   	  CREATE TABLE #TMP_EMPTYDPP (LOC NVARCHAR(10) NULL, 
-   	                              LogicalLocation NVARCHAR(30) NULL,
-   	                              CubicCapacity DECIMAL(12,6) Default(0.00),
-   	                              Sku NVARCHAR(20) NULL)
-   	     	  
-   	  IF ISNULL(@c_Userdefine02,'') = '' OR ISNULL(@c_Userdefine03,'') = ''
-   	  BEGIN
+        CREATE TABLE #TMP_EMPTYDPP (LOC NVARCHAR(10) NULL, 
+                                    LogicalLocation NVARCHAR(30) NULL,
+                                    CubicCapacity DECIMAL(12,6) Default(0.00),
+                                    Sku NVARCHAR(20) NULL)
+              
+        IF ISNULL(@c_Userdefine02,'') = '' OR ISNULL(@c_Userdefine03,'') = ''
+        BEGIN
          SET @n_continue = 3      
          SET @n_err = 81000      
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': DPP Location range must key-in at userdefine02 and userdefine03. (ispRLWAV04)'           
-         GOTO RETURN_SP       	  	  
-   	  END
-   	
+         GOTO RETURN_SP               
+        END
+      
       SET @c_Sku = ''
       SELECT TOP 1 @c_Sku = SKU.SKU
       FROM WAVEDETAIL WD WITH (NOLOCK)    
@@ -397,7 +398,7 @@ BEGIN
       -- tlting01
       SET @c_curPickdetailkey = ''
       DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		   SELECT Pickdetailkey 
+         SELECT Pickdetailkey 
                ,TaskDetailKey = ISNULL(RTRIM(TaskDetailKey),'')         --(Wan01)         
          FROM WAVEDETAIL WITH (NOLOCK)      
          JOIN PICKDETAIL WITH (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey    
@@ -406,11 +407,11 @@ BEGIN
          AND PICKDETAIL.Status = '0'                                    --(Wan01)
          AND LOC.Putawayzone NOT IN (SELECT colvalue FROM dbo.fnc_DelimSplit(',', @c_Userdefine01))   --NJOW02
 
-	   OPEN Orders_Pickdet_cur 
-	   FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+      OPEN Orders_Pickdet_cur 
+      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
                                              ,@c_TaskDetailKey          --(Wan01)
-	   WHILE @@FETCH_STATUS = 0  
-	   BEGIN 
+      WHILE @@FETCH_STATUS = 0  
+      BEGIN 
          --(Wan01) - START
          IF @c_TaskDetailKey <> ''
          BEGIN
@@ -441,8 +442,8 @@ BEGIN
          SET @n_err = @@ERROR    
          IF @n_err <> 0     
          BEGIN    
-	         CLOSE Orders_Pickdet_cur 
-	         DEALLOCATE Orders_Pickdet_cur
+            CLOSE Orders_Pickdet_cur 
+            DEALLOCATE Orders_Pickdet_cur
             SET @n_continue = 3      
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
             SET @n_err = 81040   -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
@@ -450,12 +451,12 @@ BEGIN
             GOTO RETURN_SP    
          END     
          
-         NEXT_REC:                                                      --(Wan01)  	
-		   FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+         NEXT_REC:                                                      --(Wan01)   
+         FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
                                                , @c_TaskDetailKey       --(Wan01)
-	   END
-	   CLOSE Orders_Pickdet_cur 
-	   DEALLOCATE Orders_Pickdet_cur
+      END
+      CLOSE Orders_Pickdet_cur 
+      DEALLOCATE Orders_Pickdet_cur
    END    
    SET @c_TaskDetailKey = ''                                            --(Wan01)
 
@@ -464,7 +465,7 @@ BEGIN
    BEGIN    
       SET @c_curPickdetailkey = ''
       DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		   SELECT PD.Pickdetailkey
+         SELECT PD.Pickdetailkey
          FROM WAVEDETAIL WD (NOLOCK)      
          JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey    
          JOIN LOC WITH (NOLOCK) ON PD.Loc = LOC.Loc
@@ -475,11 +476,11 @@ BEGIN
          AND R.ReplenishmentKey IS NULL
          AND LOC.Putawayzone IN (SELECT colvalue FROM dbo.fnc_DelimSplit(',', @c_Userdefine01))
 
-	   OPEN Orders_Pickdet_cur 
-	   FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+      OPEN Orders_Pickdet_cur 
+      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
 
-	   WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)
-	   BEGIN         
+      WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)
+      BEGIN         
         UPDATE PICKDETAIL WITH (ROWLOCK)     
            SET ToLoc      = '',
                DropId     = '',
@@ -499,10 +500,10 @@ BEGIN
            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '      
         END     
          
- 		    FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
-	   END
-	   CLOSE Orders_Pickdet_cur 
-	   DEALLOCATE Orders_Pickdet_cur
+          FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+      END
+      CLOSE Orders_Pickdet_cur 
+      DEALLOCATE Orders_Pickdet_cur
    END    
 
         
@@ -721,57 +722,57 @@ BEGIN
       -- Create Replenishment tasks    
       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)   
       BEGIN              
-      	
-      	 SET @n_QtyRemain = @n_Qty
-      	    
-      	 WHILE @n_QtyRemain > 0 AND @n_continue IN(1,2)
-      	 BEGIN      	       	
-      	 	  SET @c_ToLoc = ''
-      	 	  SET @n_taskQty = 0
-      	 	  SET @n_CubicCapacity_Bal = 0.00
-      	 	  
-      	 	  --Search available DPP of same sku
-      	 	  SELECT TOP 1 @c_ToLoc = Loc, 
-      	 	              @n_CubicCapacity_Bal = CubicCapacity
-      	 	  FROM #TMP_EMPTYDPP
-      	 	  WHERE Sku = @c_SKU
-      	 	  AND CubicCapacity >= @n_StdCube      	 	    
-      	 	  ORDER BY LogicalLocation, Loc
-      	 	        	 	  
-      	 	  --Search empty DPP
-      	 	  IF ISNULL(@c_ToLoc,'') = ''
-      	 	  BEGIN      	 	  	 
-      	 	     SELECT TOP 1 @c_ToLoc = Loc, 
-      	 	                  @n_CubicCapacity_Bal = CubicCapacity
-      	 	     FROM #TMP_EMPTYDPP
-      	 	     WHERE Sku = ''
-      	 	     AND CubicCapacity >= @n_StdCube      	 	    
-      	 	     ORDER BY LogicalLocation, Loc      	 	        	 	  
-      	 	  END
-      	 	  
-      	 	  --No more DPP available
-      	 	  IF  ISNULL(@c_ToLoc,'') = ''
-      	 	  BEGIN
+         
+          SET @n_QtyRemain = @n_Qty
+             
+          WHILE @n_QtyRemain > 0 AND @n_continue IN(1,2)
+          BEGIN                  
+              SET @c_ToLoc = ''
+              SET @n_taskQty = 0
+              SET @n_CubicCapacity_Bal = 0.00
+              
+              --Search available DPP of same sku
+              SELECT TOP 1 @c_ToLoc = Loc, 
+                          @n_CubicCapacity_Bal = CubicCapacity
+              FROM #TMP_EMPTYDPP
+              WHERE Sku = @c_SKU
+              AND CubicCapacity >= @n_StdCube                
+              ORDER BY LogicalLocation, Loc
+                          
+              --Search empty DPP
+              IF ISNULL(@c_ToLoc,'') = ''
+              BEGIN               
+                 SELECT TOP 1 @c_ToLoc = Loc, 
+                              @n_CubicCapacity_Bal = CubicCapacity
+                 FROM #TMP_EMPTYDPP
+                 WHERE Sku = ''
+                 AND CubicCapacity >= @n_StdCube                
+                 ORDER BY LogicalLocation, Loc                         
+              END
+              
+              --No more DPP available
+              IF  ISNULL(@c_ToLoc,'') = ''
+              BEGIN
                SET @n_continue = 3      
                SET @n_err = 81060      
-               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Unable find available DPP Location. (ispRLWAV04)'                 	 	  	 
-      	 	  END
-      	 	  
-      	 	  SET @n_QtyCanFit = FLOOR(@n_CubicCapacity_Bal / @n_StdCube)
-      	 	  
-      	 	  IF @n_QtyCanFit >= @n_QtyRemain
-      	 	     SET @n_TaskQty = @n_QtyRemain
-      	 	  ELSE 
-      	 	     SET @n_TaskQty = @n_QtyCanFit    
-      	 	     
-      	 	  SET @n_QtyRemain = @n_QtyRemain - @n_TaskQty
-      	 	  
-      	 	  UPDATE #TMP_EMPTYDPP
-      	 	  SET CubicCapacity = CubicCapacity - (@n_TaskQty * @n_StdCube),
-      	 	      SKU = @c_Sku
-      	 	  WHERE Loc = @c_ToLoc
-      	 	        	 	        	 	
-  	        EXEC isp_InsertTaskDetail   
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Unable find available DPP Location. (ispRLWAV04)'                          
+              END
+              
+              SET @n_QtyCanFit = FLOOR(@n_CubicCapacity_Bal / @n_StdCube)
+              
+              IF @n_QtyCanFit >= @n_QtyRemain
+                 SET @n_TaskQty = @n_QtyRemain
+              ELSE 
+                 SET @n_TaskQty = @n_QtyCanFit    
+                 
+              SET @n_QtyRemain = @n_QtyRemain - @n_TaskQty
+              
+              UPDATE #TMP_EMPTYDPP
+              SET CubicCapacity = CubicCapacity - (@n_TaskQty * @n_StdCube),
+                  SKU = @c_Sku
+              WHERE Loc = @c_ToLoc
+                                    
+           EXEC isp_InsertTaskDetail   
                         @c_TaskType              = @c_TaskType             
                        ,@c_Storerkey             = @c_Storerkey
                        ,@c_Sku                   = @c_Sku
@@ -799,7 +800,7 @@ BEGIN
                        ,@c_WIP_RefNo             = ''
                        ,@b_Success               = @b_Success OUTPUT
                        ,@n_Err                   = @n_err OUTPUT 
-                       ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                       ,@c_ErrMsg                = @c_errmsg OUTPUT        
                     
             IF @b_Success <> 1 
             BEGIN
@@ -810,17 +811,17 @@ BEGIN
          FETCH NEXT FROM cur_alloc INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_PickMethod, @c_Packkey, @c_UOM, @n_StdCube
       END    
       CLOSE cur_alloc    
-      DEALLOCATE cur_alloc       	           
+      DEALLOCATE cur_alloc                     
       
       --Assign group key to task
       IF @n_continue IN(1,2)
       BEGIN
-      	 DECLARE CUR_TASKGROUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      	   SELECT TD.Storerkey, TD.Sku, TD.FromLoc, TD.FromID
-      	   FROM TASKDETAIL TD (NOLOCK)
-      	   WHERE Wavekey = @c_Wavekey
-      	   AND TaskType = 'RPF'
-      	   AND SourceType = @c_SourceType
+          DECLARE CUR_TASKGROUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+            SELECT TD.Storerkey, TD.Sku, TD.FromLoc, TD.FromID
+            FROM TASKDETAIL TD (NOLOCK)
+            WHERE Wavekey = @c_Wavekey
+            AND TaskType = 'RPF'
+            AND SourceType = @c_SourceType
  
          OPEN CUR_TASKGROUP      
     
@@ -828,9 +829,9 @@ BEGIN
     
          WHILE @@FETCH_STATUS <> -1      
          BEGIN      
-         	  SET @c_GroupKey = ''
-         	  
-         	  EXECUTE nspg_GetKey       
+              SET @c_GroupKey = ''
+              
+              EXECUTE nspg_GetKey       
                'WAV04GRPKEY'    
             ,  10    
             ,  @c_Groupkey   OUTPUT    
@@ -840,16 +841,16 @@ BEGIN
             
             IF @b_success <> 1
                SET @n_continue = 3                    
-         	  
-         	  UPDATE TASKDETAIL WITH (ROWLOCK)
-         	  SET Groupkey = @c_Groupkey
-         	  WHERE Wavekey = @c_Wavekey
-      	    AND TaskType = 'RPF'
-      	    AND SourceType = @c_SourceType
-      	    AND Storerkey = @c_Storerkey
-      	    AND Sku = @c_Sku
-      	    AND FromLoc = @c_FromLoc
-      	    AND FromID = @c_ID
+              
+              UPDATE TASKDETAIL WITH (ROWLOCK)
+              SET Groupkey = @c_Groupkey
+              WHERE Wavekey = @c_Wavekey
+             AND TaskType = 'RPF'
+             AND SourceType = @c_SourceType
+             AND Storerkey = @c_Storerkey
+             AND Sku = @c_Sku
+             AND FromLoc = @c_FromLoc
+             AND FromID = @c_ID
 
             SET @n_err = @@ERROR
                   
@@ -859,12 +860,12 @@ BEGIN
                SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
                SET @n_err = 81050 -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TASKDETAIL Failed (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '        
-            END          	    
+            END                
 
-            FETCH NEXT FROM CUR_TASKGROUP INTO @c_Storerkey, @c_Sku, @c_FromLoc, @c_ID                    	
+            FETCH NEXT FROM CUR_TASKGROUP INTO @c_Storerkey, @c_Sku, @c_FromLoc, @c_ID                      
          END
          CLOSE CUR_TASKGROUP
-         DEALLOCATE CUR_TASKGROUP      	         	    
+         DEALLOCATE CUR_TASKGROUP                         
       END
    END
    */
@@ -873,21 +874,21 @@ BEGIN
    -----Generate replenishment record for specific zone to replenish by paper based. 
    IF (@n_continue = 1 OR @n_continue = 2) AND ISNULL(@c_Userdefine01,'') <> ''  --AND  @c_Door <> 'ALLOC'
    BEGIN
-   	  SET @n_ReplenSeq = 0
-   	  
-   	  SELECT @n_ReplenSeq = ISNULL(COUNT(DISTINCT PD.DropID),0)
-   	  FROM WAVEDETAIL WD (NOLOCK)
-   	  JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
-   	  JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
-   	  WHERE WD.Wavekey = @c_Wavekey
-   	  AND ISNULL(PD.DropID,'') <> ''
-   	  AND ISNULL(PD.ToLoc,'') <> ''
+        SET @n_ReplenSeq = 0
+        
+        SELECT @n_ReplenSeq = ISNULL(COUNT(DISTINCT PD.DropID),0)
+        FROM WAVEDETAIL WD (NOLOCK)
+        JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
+        JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
+        WHERE WD.Wavekey = @c_Wavekey
+        AND ISNULL(PD.DropID,'') <> ''
+        AND ISNULL(PD.ToLoc,'') <> ''
       AND LOC.Putawayzone IN (SELECT colvalue FROM dbo.fnc_DelimSplit(',', @c_Userdefine01))   
-   	    	  
+              
       SELECT @c_ToLoc = Code  
       FROM CODELKUP (NOLOCK)
       WHERE Listname = 'LUREPLEN' 
-   	
+      
       DECLARE cur_PickReplen CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
       SELECT PD.Storerkey     
            , PD.Sku     
@@ -924,7 +925,7 @@ BEGIN
       -- Create Replenishment records
       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)   
       BEGIN                 
-      	 SET @n_ReplenSeq = @n_ReplenSeq + 1
+          SET @n_ReplenSeq = @n_ReplenSeq + 1
 
          EXECUTE nspg_getkey
             'REPLENISHKEY'
@@ -938,26 +939,26 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
          END
-      	 
-      	 IF @c_Option1 = 'ORIGINALID'
-      	 BEGIN
-      	 	  SET @c_ToId = @c_ID
-      	 END   	
-      	 ELSE
-      	 BEGIN       	 	 
+          
+          IF @c_Option1 = 'ORIGINALID'
+          BEGIN
+              SET @c_ToId = @c_ID
+          END     
+          ELSE
+          BEGIN             
             SET @c_OldID = ''         
             IF SUBSTRING(@c_ID, 8,1) = '*'  --The ID was converted before.
             BEGIN
-            	 SELECT TOP 1 @c_OldID = PalletFlag
-            	 FROM ID (NOLOCK)
-            	 WHERE ID = @c_ID
+                SELECT TOP 1 @c_OldID = PalletFlag
+                FROM ID (NOLOCK)
+                WHERE ID = @c_ID
             END
             
             IF ISNULL(@c_OldId,'') <> ''
                SET @c_ToID = SUBSTRING(@c_ReplenishmentKey,4,7) + '*' + SUBSTRING(@C_OldID,1,10)
             ELSE
-               SET @c_ToID = SUBSTRING(@c_ReplenishmentKey,4,7) + '*' + SUBSTRING(@C_ID,1,10)      	 	
-      	 END
+               SET @c_ToID = SUBSTRING(@c_ReplenishmentKey,4,7) + '*' + SUBSTRING(@C_ID,1,10)            
+          END
                   
          SET @c_DropID = @c_Wavekey + '-V' + RIGHT('0000' + RTRIM(LTRIM(CAST(@n_ReplenSeq AS NVARCHAR))),4)
 
@@ -980,15 +981,15 @@ BEGIN
                        
          WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)               
          BEGIN   
-         	  IF @c_Option1 = 'ORIGINALID' 
-         	  BEGIN
-          	   UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = @n_PickQty,
-         	         ToLoc = @c_ToLoc,
-         	         DropId = @c_DropID,
-         	         Notes = @c_DropID
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
-         	     
+              IF @c_Option1 = 'ORIGINALID' 
+              BEGIN
+               UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = @n_PickQty,
+                     ToLoc = @c_ToLoc,
+                     DropId = @c_DropID,
+                     Notes = @c_DropID
+                 WHERE Pickdetailkey = @c_Pickdetailkey
+                 
                SET @n_err = @@ERROR
                
                IF @n_err <> 0
@@ -996,15 +997,15 @@ BEGIN
                   SET @n_continue = 3      
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
                   SET @n_err = 81070  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Pickdetail Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '               	
-               END                                 	           	  	
-         	  END
-         	  ELSE
-         	  BEGIN         	       	           	  
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = 0
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
-         	     
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Pickdetail Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                
+               END                                                   
+              END
+              ELSE
+              BEGIN                                  
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = 0
+                 WHERE Pickdetailkey = @c_Pickdetailkey
+                 
                SET @n_err = @@ERROR
                
                IF @n_err <> 0
@@ -1012,9 +1013,9 @@ BEGIN
                   SET @n_continue = 3      
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
                   SET @n_err = 81060  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Pickdetail Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '               	
-               END                                 	           	  
-         	              	           	           	  
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Pickdetail Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                
+               END                                                  
+                                                     
                /*EXEC dbo.nspItrnAddMove
                         @n_ItrnSysId      = NULL
                      ,  @c_StorerKey      = @c_Storerkey
@@ -1050,67 +1051,67 @@ BEGIN
                      ,  @n_err            = @n_err          OUTPUT
                      ,  @c_errmsg         = @c_errmsg       OUTPUT  
                      ,  @c_MoveRefKey     = NULL  
-                */              	  
-                              	  
-         	     EXEC nspItrnAddMove
-	                @n_ItrnSysId = null,
-	                @c_StorerKey = @c_Storerkey,
-	                @c_Sku = @c_Sku,
-	                @c_Lot = @c_Lot,
-	                @c_FromLoc = @c_FromLoc,
-	                @c_FromID = @c_ID,
-	                @c_ToLoc = @c_FromLoc,
-	                @c_ToID = @c_ToID,
-	                @c_Status = 'OK',
-	                @c_lottable01 = '',
-	                @c_lottable02 = '',
-	                @c_lottable03 = '',
-	                @d_lottable04 = null,
-	                @d_lottable05 = null,
-	                @c_lottable06 = '',
-	                @c_lottable07 = '',
-	                @c_lottable08 = '',
-	                @c_lottable09 = '',
-	                @c_lottable10 = '',
-	                @c_lottable11 = '',
-	                @c_lottable12 = '',
-	                @d_lottable13 = null,
-	                @d_lottable14 = null,
-	                @d_lottable15 = null,
-	                @n_casecnt = 0,
-	                @n_innerpack = 0,
-	                @n_qty = @n_PickQty,
-	                @n_pallet = 0,
-	                @f_cube = 0,
-	                @f_grosswgt = 0,
-	                @f_netwgt = 0,
-	                @f_otherunit1 = 0,
-	                @f_otherunit2 = 0,
-	                @c_SourceKey = null,
-	                @c_SourceType = 'ispRLWAV04',
-	                @c_PackKey = @c_Packkey,
-	                @c_UOM = @c_UOM,
-	                @b_UOMCalc = null,
-	                @d_EffectiveDate = null,
-	                @c_itrnkey = null,
-	                @b_Success = @b_Success OUTPUT,
-	                @n_err = @n_err OUTPUT,
-	                @c_errmsg = @c_errmsg OUTPUT,
-	                @c_MoveRefKey = null
-	                --@c_Channel = null,
-	                --@n_Channel_ID = null
-	                
-	                IF @b_success <> 1
-	                   SET @n_continue = 3
-	                 
-          	   UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = @n_PickQty,
-         	         ID = @c_ToID,
-         	         ToLoc = @c_ToLoc,
-         	         DropId = @c_DropID,
-         	         Notes = @c_DropID
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
-         	     
+                */                 
+                                   
+                 EXEC nspItrnAddMove
+                   @n_ItrnSysId = null,
+                   @c_StorerKey = @c_Storerkey,
+                   @c_Sku = @c_Sku,
+                   @c_Lot = @c_Lot,
+                   @c_FromLoc = @c_FromLoc,
+                   @c_FromID = @c_ID,
+                   @c_ToLoc = @c_FromLoc,
+                   @c_ToID = @c_ToID,
+                   @c_Status = 'OK',
+                   @c_lottable01 = '',
+                   @c_lottable02 = '',
+                   @c_lottable03 = '',
+                   @d_lottable04 = null,
+                   @d_lottable05 = null,
+                   @c_lottable06 = '',
+                   @c_lottable07 = '',
+                   @c_lottable08 = '',
+                   @c_lottable09 = '',
+                   @c_lottable10 = '',
+                   @c_lottable11 = '',
+                   @c_lottable12 = '',
+                   @d_lottable13 = null,
+                   @d_lottable14 = null,
+                   @d_lottable15 = null,
+                   @n_casecnt = 0,
+                   @n_innerpack = 0,
+                   @n_qty = @n_PickQty,
+                   @n_pallet = 0,
+                   @f_cube = 0,
+                   @f_grosswgt = 0,
+                   @f_netwgt = 0,
+                   @f_otherunit1 = 0,
+                   @f_otherunit2 = 0,
+                   @c_SourceKey = null,
+                   @c_SourceType = 'ispRLWAV04',
+                   @c_PackKey = @c_Packkey,
+                   @c_UOM = @c_UOM,
+                   @b_UOMCalc = null,
+                   @d_EffectiveDate = null,
+                   @c_itrnkey = null,
+                   @b_Success = @b_Success OUTPUT,
+                   @n_err = @n_err OUTPUT,
+                   @c_errmsg = @c_errmsg OUTPUT,
+                   @c_MoveRefKey = null
+                   --@c_Channel = null,
+                   --@n_Channel_ID = null
+                   
+                   IF @b_success <> 1
+                      SET @n_continue = 3
+                    
+               UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = @n_PickQty,
+                     ID = @c_ToID,
+                     ToLoc = @c_ToLoc,
+                     DropId = @c_DropID,
+                     Notes = @c_DropID
+                 WHERE Pickdetailkey = @c_Pickdetailkey
+                 
                SET @n_err = @@ERROR
                
                IF @n_err <> 0
@@ -1118,21 +1119,21 @@ BEGIN
                   SET @n_continue = 3      
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
                   SET @n_err = 81070  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Pickdetail Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '               	
-               END                                 	  
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Pickdetail Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                
+               END                                      
                
-    	         IF ISNULL(@c_OldId,'') <> ''
-    	         BEGIN    	      
-         	        UPDATE ID WITH (ROWLOCK)
-         	        SET PalletFlag = @c_OldID
-         	        WHERE ID = @c_ToID
-         	     END
-         	     ELSE
-         	     BEGIN
-        	        UPDATE ID WITH (ROWLOCK)
-         	        SET PalletFlag = @c_ID
-         	        WHERE ID = @c_ToID
-         	     END   
+               IF ISNULL(@c_OldId,'') <> ''
+               BEGIN             
+                    UPDATE ID WITH (ROWLOCK)
+                    SET PalletFlag = @c_OldID
+                    WHERE ID = @c_ToID
+                 END
+                 ELSE
+                 BEGIN
+                 UPDATE ID WITH (ROWLOCK)
+                    SET PalletFlag = @c_ID
+                    WHERE ID = @c_ToID
+                 END   
                
                SET @n_err = @@ERROR          
                
@@ -1141,10 +1142,10 @@ BEGIN
                   SET @n_continue = 3      
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
                   SET @n_err = 81080  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update ID Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '               	
-               END                                 	           	              
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update ID Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
+               END                                                              
             END
-                	               	
+                                    
             FETCH NEXT FROM cur_PickDet INTO @c_Pickdetailkey, @n_PickQty
          END
          CLOSE cur_PickDet
@@ -1163,9 +1164,9 @@ BEGIN
                         @c_ReplenishmentKey,         '',
                         @c_StorerKey,   @c_Sku,      @c_FromLoc,      @c_ToLoc,
                         @c_Lot,         @c_ToId,       @n_Qty,          @c_UOM,
-                        @c_Packkey,     '5',					0,               0,
+                        @c_Packkey,     '5',             0,               0,
                         @c_DropID,      'N',         @c_Wavekey,    @c_WaveKey,
-                        '',      			  @n_Qty,      'ispRLWAV04',    @c_ToId)
+                        '',                 @n_Qty,      'ispRLWAV04',    @c_ToId)
          
          SET @n_err = @@ERROR
          
@@ -1174,13 +1175,13 @@ BEGIN
             SET @n_continue = 3      
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
             SET @n_err = 81090  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Insert Replenishment Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '               	
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Insert Replenishment Table. (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                
          END                        
                 
          FETCH NEXT FROM cur_PickReplen INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_Packkey, @c_UOM
       END    
       CLOSE cur_PickReplen    
-      DEALLOCATE cur_PickReplen             	
+      DEALLOCATE cur_PickReplen              
    END
          
    -----Generate Pickslip No-------    
@@ -1290,22 +1291,22 @@ BEGIN
          IF @c_Orderkey <> ''    
          BEGIN    
             DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		         SELECT Pickdetailkey          
+               SELECT Pickdetailkey          
                FROM PICKDETAIL WITH (NOLOCK)       
                WHERE  OrderKey = @c_OrderKey   
          END    
          ELSE    
          BEGIN   
-		      SELECT PD.Pickdetailkey          
+            SELECT PD.Pickdetailkey          
             FROM ORDERS     OH WITH (NOLOCK)    
             JOIN PICKDETAIL PD WITH (NOLOCK) ON (OH.Orderkey = PD.Orderkey)      
             WHERE  OH.Loadkey = @c_Loadkey   
          END   
 
-	      OPEN Orders_Pickdet_cur 
-	      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey 
-	      WHILE @@FETCH_STATUS = 0 AND (@n_continue = 1 or @n_continue = 2)
-	      BEGIN 
+         OPEN Orders_Pickdet_cur 
+         FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey 
+         WHILE @@FETCH_STATUS = 0 AND (@n_continue = 1 or @n_continue = 2)
+         BEGIN 
                UPDATE PICKDETAIL WITH (ROWLOCK)      
                SET  PickSlipNo = @c_PickSlipNo     
                    ,EditWho = SUSER_SNAME()    
@@ -1315,17 +1316,17 @@ BEGIN
                SET @n_err = @@ERROR    
                IF @n_err <> 0     
                BEGIN    
-	               CLOSE Orders_Pickdet_cur 
-	               DEALLOCATE Orders_Pickdet_cur
+                  CLOSE Orders_Pickdet_cur 
+                  DEALLOCATE Orders_Pickdet_cur
                   SET @n_continue = 3      
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
                   SET @n_err = 81100 -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE Pickdetail Failed (ispRLWAV04)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '      
-               END       	
-		      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
-	      END
-	      CLOSE Orders_Pickdet_cur 
-	      DEALLOCATE Orders_Pickdet_cur             
+               END         
+            FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey
+         END
+         CLOSE Orders_Pickdet_cur 
+         DEALLOCATE Orders_Pickdet_cur             
     
          IF NOT EXISTS (SELECT 1 FROM REFKEYLOOKUP WITH (NOLOCK)       
                         WHERE PickSlipNo = @c_PickSlipNo    
@@ -1382,9 +1383,11 @@ BEGIN
     
    -----Update Wave Status-----    
    IF @n_continue = 1 or @n_continue = 2      
-   BEGIN         	
+   BEGIN          
       UPDATE WAVE WITH (ROWLOCK)    
-       SET STATUS = '1' -- Released     
+       --SET STATUS = '1' -- Released        --(Wan01) 
+       SET TMReleaseFlag = 'Y'               --(Wan01) 
+        ,  TrafficCop = NULL                 --(Wan01)    
          , EditWho = SUSER_SNAME()    
          , EditDate= GETDATE()     
       WHERE WAVEKEY = @c_wavekey      

@@ -18,7 +18,7 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.2                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
@@ -29,12 +29,13 @@ GO
 /* 17-Oct-2014  NJOW01   1.0  314930-Update wave status and order        */
 /*                            sostatus to release                        */ 
 /* 17-Sep-2017  TLTING   1.1  NOLOCK                                     */
+/* 22-Oct-2019  Wan01    1.2  Update TMReleaseFlag, Sync Exceed & SCE    */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_ReleaseWave_Wrapper]  
       @c_WaveKey    NVARCHAR(10) 
    ,  @b_Success    INT OUTPUT    
    ,  @n_Err        INT OUTPUT
-   ,	@c_Errmsg     NVARCHAR(255) OUTPUT
+   ,  @c_Errmsg     NVARCHAR(255) OUTPUT
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -71,7 +72,7 @@ BEGIN
 
    IF ISNULL(RTRIM(@c_SPCode),'') = ''
    BEGIN  
-   	  SET @c_SPCode = 'nspReleaseWave'
+        SET @c_SPCode = 'nspReleaseWave'
    END
    
    IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = RTRIM(@c_SPCode) AND type = 'P')
@@ -91,7 +92,7 @@ BEGIN
       ,  @c_Wavekey
       ,  @b_Success OUTPUT   
       ,  @n_Err OUTPUT
-      ,	 @c_ErrMsg OUTPUT
+      ,   @c_ErrMsg OUTPUT
                         
    IF @b_Success <> 1
    BEGIN
@@ -100,15 +101,16 @@ BEGIN
    END
    ELSE
    BEGIN 
-   	   --NJOW01
-   	   UPDATE WAVE WITH (ROWLOCK)
-   	   SET Status = '1',
-   	       TrafficCop = NULL,
-   	       EditWho = SUSER_SNAME(),
-   	       EditDate = GETDATE()   	       
-   	   WHERE Wavekey = @c_Wavekey
-   	   
-   	   EXECUTE nspGetRight 
+         --NJOW01
+         UPDATE WAVE WITH (ROWLOCK)
+         --SET Status = '1',              --Wan01
+         SET TMReleaseFlag = 'Y',         --Wan01
+             TrafficCop = NULL,
+             EditWho = SUSER_SNAME(),
+             EditDate = GETDATE()             
+         WHERE Wavekey = @c_Wavekey
+         
+         EXECUTE nspGetRight 
           @c_facility,  
           @c_StorerKey,              
           '', --sku
@@ -120,12 +122,12 @@ BEGIN
        
        IF @b_success = 1 AND @c_authority = '1' 
        BEGIN
-       	  UPDATE ORDERS WITH (ROWLOCK)
-       	  SET SOStatus = 'TSRELEASED',
-       	      TrafficCop = NULL,
-       	      EditWho = SUSER_SNAME(),
-       	      EditDate = GETDATE()
-       	  WHERE Userdefine09 = @c_Wavekey       	  
+           UPDATE ORDERS WITH (ROWLOCK)
+           SET SOStatus = 'TSRELEASED',
+               TrafficCop = NULL,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+           WHERE Userdefine09 = @c_Wavekey           
        END          
    END
                     

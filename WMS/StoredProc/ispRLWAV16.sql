@@ -15,22 +15,23 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.4                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 08-Apr-2019  NJOW01   1.0  Fix - make sure uom 2 converted to uom 6   */
+/* Date        Author   Ver   Purposes                                   */  
+/* 08-Apr-2019 NJOW01   1.0   Fix - make sure uom 2 converted to uom 6   */
 /*                            for conso carton                           */ 
-/* 15-May-2019  NJOW02   1.1  WNMS-8924 Change PTS assign logic.         */
+/* 15-May-2019 NJOW02   1.1   WNMS-8924 Change PTS assign logic.         */
 /*                            Replenish addition carton if the           */
 /*                            location no more available qty after pick. */
-/* 15-Aug-2019  NJOW03   1.2  WMS-9825 create replenishment records by   */
+/* 15-Aug-2019 NJOW03   1.2   WMS-9825 create replenishment records by   */
 /*                            ucc for manual replenshment as backup plan */
-/* 23-Oct-2019  NJOW04   1.3  Fix split pickdetail issue                 */
+/* 23-Oct-2019 NJOW04   1.3   Fix split pickdetail issue                 */
+/* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                          */ 
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV16]      
@@ -198,7 +199,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
 
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 IF EXISTS (SELECT 1
+       IF EXISTS (SELECT 1
                   FROM WAVEDETAIL WD (NOLOCK)            
                   JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey                                                 
                   WHERE WD.Wavekey = @c_Wavekey
@@ -215,7 +216,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     BEGIN
         SELECT TOP 1 @c_Storerkey = O.Storerkey, 
                      @c_Facility = O.Facility,
-       	             @c_Userdefine02 = W.UserDefine02,
+                      @c_Userdefine02 = W.UserDefine02,
                      @c_Userdefine03 = W.UserDefine03,
                      @c_WaveType = W.WaveType --NJOW03                      
         FROM WAVE W (NOLOCK)
@@ -240,7 +241,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
         SELECT @c_WCS= dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WCS')           
         
         IF (ISNULL(@c_Userdefine02,'') = '' OR ISNULL(@c_Userdefine03,'') = '') AND @c_WaveConsoAllocation = '1'
-        BEGIN       	 
+        BEGIN         
            SELECT @n_continue = 3  
            SELECT @n_err = 83040    
            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Must key-in PTS Station at userdefine02&03. (ispRLWAV16)'       
@@ -280,7 +281,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     --Make sure UOM 2 Have converted to UOM 6 for conso carton --NJOW01
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 IF EXISTS (SELECT 1
+       IF EXISTS (SELECT 1
                   FROM WAVEDETAIL WD (NOLOCK) 
                   JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
                   JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
@@ -288,7 +289,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                   WHERE PD.UOM = '2'
                   AND WD.Wavekey = @c_Wavekey
                   GROUP BY PD.Orderkey, PD.Sku, PACK.Casecnt
-                  HAVING SUM(PD.qty) % CASE WHEN PACK.Casecnt > 0 THEN CAST(PACK.Casecnt AS INT) ELSE 1 END <> 0)    	
+                  HAVING SUM(PD.qty) % CASE WHEN PACK.Casecnt > 0 THEN CAST(PACK.Casecnt AS INT) ELSE 1 END <> 0)       
        BEGIN
           EXEC ispPOA03    
               @c_OrderKey = '' 
@@ -348,7 +349,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
           [Channel_ID] [bigint] NULL DEFAULT ((0)))    
           
-          CREATE INDEX PDWIP_Order ON #PickDetail_WIP (Orderkey)           	
+          CREATE INDEX PDWIP_Order ON #PickDetail_WIP (Orderkey)              
           
           CREATE TABLE #ONESKUPERCTNORDER (
            [Orderkey] [nvarchar](10) NULL)
@@ -359,8 +360,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
            
     IF (@n_continue = 1 OR @n_continue = 2) AND @c_WCS = '1'
     BEGIN
-    	 SET @c_Loadkey = ''
-    	 SELECT TOP 1 @c_Loadkey = O.Loadkey 
+       SET @c_Loadkey = ''
+       SELECT TOP 1 @c_Loadkey = O.Loadkey 
        FROM WAVEDETAIL WD (NOLOCK)            
        JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey                                                 
        LEFT JOIN LOADPLANLANEDETAIL LPL (NOLOCK) ON O.Loadkey = LPL.Loadkey AND LPL.Status = '0'
@@ -395,52 +396,52 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
         IF @b_Success <> 1
         BEGIN
            SET @n_continue = 3
-        END              	   
+        END                   
     END
         
-  	--Get pack statation location for full carton and PTS Staging for multi order conso carton
+   --Get pack statation location for full carton and PTS Staging for multi order conso carton
     IF @n_continue = 1 OR @n_continue = 2 
-    BEGIN    	       
-    	 SELECT @c_PackStation = CL.Long
-    	 FROM CODELKUP CL (NOLOCK)
-    	 JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc
-    	 WHERE CL.Listname = 'UALOC'
-    	 AND CL.Storerkey = @c_Storerkey
-    	 AND CL.Code =  '1'
-    	 
-    	 IF ISNULL(@c_PackStation,'') = ''
-    	 BEGIN
+    BEGIN             
+       SELECT @c_PackStation = CL.Long
+       FROM CODELKUP CL (NOLOCK)
+       JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc
+       WHERE CL.Listname = 'UALOC'
+       AND CL.Storerkey = @c_Storerkey
+       AND CL.Code =  '1'
+       
+       IF ISNULL(@c_PackStation,'') = ''
+       BEGIN
           SELECT @n_continue = 3  
           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83070  -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
           SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid Pack Station setup. (ispRLWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-    	 END
-    	 ELSE IF @c_WaveConsoAllocation = '1'
-    	 BEGIN    	     	 
-    	    SELECT @c_PTSStaging = CL.Long
-    	    FROM CODELKUP CL (NOLOCK)
-    	    JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc
-    	    WHERE CL.Listname = 'UALOC'
-    	    AND CL.Storerkey = @c_Storerkey
-    	    AND CL.Code =  '2'
-    	    
-    	    IF ISNULL(@c_PTSStaging,'') = ''
-    	    BEGIN
+       END
+       ELSE IF @c_WaveConsoAllocation = '1'
+       BEGIN             
+          SELECT @c_PTSStaging = CL.Long
+          FROM CODELKUP CL (NOLOCK)
+          JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc
+          WHERE CL.Listname = 'UALOC'
+          AND CL.Storerkey = @c_Storerkey
+          AND CL.Code =  '2'
+          
+          IF ISNULL(@c_PTSStaging,'') = ''
+          BEGIN
             SELECT @n_continue = 3  
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83080  -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid PTS Staging setup. (ispRLWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-    	    END
-    	 END
-    END	    	     	
+          END
+       END
+    END              
 
     --PTS reservation Conso(UOM 6) 
     IF (@n_continue = 1 OR @n_continue = 2) AND @c_WaveConsoAllocation = '1'
     BEGIN
-    	 --Get One sku per carton order
-    	 IF @c_WaveConsoAllocation_OPTION1 = 'SKUPERCTNSKIPPTS'
-    	 BEGIN
-    	    INSERT INTO #ONESKUPERCTNORDER (Orderkey)
-    	    SELECT DISTINCT PD.Orderkey    	
-    	    FROM WAVEDETAIL WD (NOLOCK)                                                             
+       --Get One sku per carton order
+       IF @c_WaveConsoAllocation_OPTION1 = 'SKUPERCTNSKIPPTS'
+       BEGIN
+          INSERT INTO #ONESKUPERCTNORDER (Orderkey)
+          SELECT DISTINCT PD.Orderkey     
+          FROM WAVEDETAIL WD (NOLOCK)                                                             
           JOIN #PICKDETAIL_WIP PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
           --JOIN ORDERDETAIL OD (NOLOCK) ON PD.Orderkey = OD.Orderkey AND PD.OrderLineNumber = OD.OrderLineNumber
           JOIN DOCINFO DI (NOLOCK) ON DI.TableName = 'ORDERDETAIL' AND PD.Storerkey = DI.Storerkey AND PD.Orderkey = DI.Key1 
@@ -453,17 +454,17 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
           
           IF @n_debug = 1
              SELECT * FROM #ONESKUPERCTNORDER
-    	 END    	     	 
-    	     	 
-    	 --Get PTS station empty loc Count
+       END            
+             
+       --Get PTS station empty loc Count
        SELECT @n_PTSCount = COUNT(DP.Loc)                
        FROM LOC (NOLOCK) 
        JOIN DEVICEPROFILE DP (NOLOCK) ON LOC.Loc = DP.Loc        
        LEFT JOIN RDT.rdtPTLStationLog PTL (NOLOCK) ON LOC.Loc = PTL.Loc
-       WHERE DP.DeviceID BETWEEN @c_Userdefine02 AND @c_Userdefine03                	 
+       WHERE DP.DeviceID BETWEEN @c_Userdefine02 AND @c_Userdefine03                    
        AND LOC.Facility = @c_Facility
        --AND LOC.LocationCategory = 'PTS'
-       AND DP.DeviceType = 'STATION'     	 
+       AND DP.DeviceType = 'STATION'       
        AND DP.Storerkey = @c_Storerkey
        AND DP.Status = '0'
        AND PTL.RowRef IS NULL
@@ -484,21 +485,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
        BEGIN
           SELECT @n_continue = 3  
           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83090 -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Not enough PTS Location. (ispRLWAV16)'         	
-       END                                                                                                    	
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Not enough PTS Location. (ispRLWAV16)'           
+       END                                                                                                     
     END
           
     IF (@n_continue = 1 OR @n_continue = 2) AND @c_WaveConsoAllocation = '1'
     BEGIN
-    	 IF @n_debug = 1
-    	 BEGIN
-    	 	  PRINT 'Assign PTS location'
-    	 END
-    	 
-    	 --NJOW02
-    	 SELECT IDENTITY(INT,1,1) AS DeviceNo, DP.DeviceID    	 
-    	 INTO #TMP_DEVICE
-    	 FROM DEVICEPROFILE DP (NOLOCK) 
+       IF @n_debug = 1
+       BEGIN
+           PRINT 'Assign PTS location'
+       END
+       
+       --NJOW02
+       SELECT IDENTITY(INT,1,1) AS DeviceNo, DP.DeviceID        
+       INTO #TMP_DEVICE
+       FROM DEVICEPROFILE DP (NOLOCK) 
        JOIN LOC (NOLOCK) ON DP.Loc = LOC.Loc 
        LEFT JOIN RDT.rdtPTLStationLog PTL (NOLOCK) ON LOC.Loc = PTL.Loc 
        WHERE DP.DeviceID BETWEEN @c_Userdefine02 AND @c_Userdefine03      
@@ -514,10 +515,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
        SELECT @n_TotalDevice = COUNT(1)
        FROM #TMP_DEVICE              
        --NJOW02 End
-    	 
-    	 --Assign PTS loc sorting by load                                        
+       
+       --Assign PTS loc sorting by load                                        
        DECLARE cur_Order CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-    	    SELECT  O.Orderkey, O.Loadkey, ISNULL(CL.Short,'')
+          SELECT  O.Orderkey, O.Loadkey, ISNULL(CL.Short,'')
           FROM WAVEDETAIL WD (NOLOCK)
           JOIN #PICKDETAIL_WIP PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
           JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
@@ -540,102 +541,102 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
           
           SET @c_PrevOrderkey = '' --NJOW02
           WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-          BEGIN          	           	
-          	 
-          	 --NJOW02
-          	 IF @c_PrevOrderkey <> @c_Orderkey
-          	 BEGIN
-          	 	  IF @c_PrevOrderkey = ''  --Frist order
-          	 	  BEGIN          	 	  	        
-          	 	  	 SET @n_PrevDeviceNo = 0  	 	     
-          	 	     SET @n_CurrDeviceNo = 1          	 	     
-          	 	  END
-          	 	  ELSE
-          	 	  BEGIN
-          	 	  	 --logic to construct S sharp rounting to assign order to multiple devices
-          	 	  	 IF @n_TotalDevice = 1  --only one device 
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = 1           	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = 1           	 	  	 	  
-          	 	  	 END
-          	 	  	 ELSE IF @n_CurrDeviceNo = @n_TotalDevice AND @n_PrevDeviceno < @n_currDeviceNo --assign same device if previous order is at last device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo 
-          	 	  	 END
-          	 	  	 ELSE IF @n_currDeviceNo = @n_TotalDevice AND @n_PrevDeviceno = @n_currDeviceNo  --assign prevous device if last two orders are at last device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
-          	 	  	 END
-          	 	  	 ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno > @n_currDeviceNo --assign same device if previouse order is at first device 
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo 
-          	 	  	 END
-          	 	  	 ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno = @n_currDeviceNo  --assign next device if last two orders are at first device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo  + 1
-          	 	  	 END
-          	 	  	 ELSE IF @n_PrevDeviceNo < @n_CurrDeviceNo  -- assign next device if current device greater than previous device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo + 1
-          	 	  	 END
-          	 	  	 ELSE IF @n_PrevDeviceNo > @n_CurrDeviceNo --assign previous device if current device smaller than previous device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
-          	 	  	 END          	 	  	             	 	  	 
-          	 	  END          	 	  
-          	 END         	 
-          	
-          	 SET @n_cnt = 0  --NJOW02
-          	 SET @c_DeviceID = ''  --NJOW02      	
-          	 ---Search available device 
-          	 WHILE @n_cnt < (@n_TotalDevice + 1) AND @n_TotalDevice > 0  AND ISNULL(@c_DeviceId,'') = '' --NJOW02
-          	 BEGIN
+          BEGIN                        
+             
+             --NJOW02
+             IF @c_PrevOrderkey <> @c_Orderkey
+             BEGIN
+                 IF @c_PrevOrderkey = ''  --Frist order
+                 BEGIN                         
+                   SET @n_PrevDeviceNo = 0           
+                    SET @n_CurrDeviceNo = 1                   
+                 END
+                 ELSE
+                 BEGIN
+                   --logic to construct S sharp rounting to assign order to multiple devices
+                   IF @n_TotalDevice = 1  --only one device 
+                   BEGIN
+                        SET @n_PrevDeviceNo = 1                                        
+                     SET @n_CurrdeviceNo = 1                        
+                   END
+                   ELSE IF @n_CurrDeviceNo = @n_TotalDevice AND @n_PrevDeviceno < @n_currDeviceNo --assign same device if previous order is at last device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo 
+                   END
+                   ELSE IF @n_currDeviceNo = @n_TotalDevice AND @n_PrevDeviceno = @n_currDeviceNo  --assign prevous device if last two orders are at last device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
+                   END
+                   ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno > @n_currDeviceNo --assign same device if previouse order is at first device 
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo 
+                   END
+                   ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno = @n_currDeviceNo  --assign next device if last two orders are at first device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo  + 1
+                   END
+                   ELSE IF @n_PrevDeviceNo < @n_CurrDeviceNo  -- assign next device if current device greater than previous device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo + 1
+                   END
+                   ELSE IF @n_PrevDeviceNo > @n_CurrDeviceNo --assign previous device if current device smaller than previous device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
+                   END                                       
+                 END                  
+             END            
+            
+             SET @n_cnt = 0  --NJOW02
+             SET @c_DeviceID = ''  --NJOW02        
+             ---Search available device 
+             WHILE @n_cnt < (@n_TotalDevice + 1) AND @n_TotalDevice > 0  AND ISNULL(@c_DeviceId,'') = '' --NJOW02
+             BEGIN
                 SELECT @c_DeviceId = '', @c_IPAddress = '', @c_PortNo = '', @c_DevicePosition = '', @c_PTSLOC = ''
                 --
                 IF @n_cnt > 0  --if cannot find loc from the assigned device, try other devices
                 BEGIN   
-          	 	  	 IF @n_TotalDevice = 1  --only one device 
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = 1           	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = 1           	 	  	 	  
-          	 	  	 END
+                   IF @n_TotalDevice = 1  --only one device 
+                   BEGIN
+                        SET @n_PrevDeviceNo = 1                                        
+                     SET @n_CurrdeviceNo = 1                        
+                   END
                    ELSE IF @n_CurrDeviceNo = @n_TotalDevice AND @n_PrevDeviceno < @n_currDeviceNo --assign same device if previous order is at last device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo 
-          	 	  	 END
-          	 	  	 ELSE IF @n_currDeviceNo = @n_TotalDevice AND @n_PrevDeviceno = @n_currDeviceNo  --assign prevous device if last two orders are at last device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
-          	 	  	 END
-          	 	  	 ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno > @n_currDeviceNo --assign same device if previouse order is at first device 
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo 
-          	 	  	 END
-          	 	  	 ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno = @n_currDeviceNo  --assign next device if last two orders are at first device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo  + 1
-          	 	  	 END
-          	 	  	 ELSE IF @n_PrevDeviceNo < @n_CurrDeviceNo  -- assign next device if current device greater than previous device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo + 1
-          	 	  	 END
-          	 	  	 ELSE IF @n_PrevDeviceNo > @n_CurrDeviceNo --assign previous device if current device smaller than previous device
-          	 	  	 BEGIN
-               	 	   SET @n_PrevDeviceNo = @n_CurrDeviceNo             	 	             	 	  	 	
-          	 	  	   SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
-          	 	  	 END          	 	 
-          	 	  END 	  	             	 	  	 
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo 
+                   END
+                   ELSE IF @n_currDeviceNo = @n_TotalDevice AND @n_PrevDeviceno = @n_currDeviceNo  --assign prevous device if last two orders are at last device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
+                   END
+                   ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno > @n_currDeviceNo --assign same device if previouse order is at first device 
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo 
+                   END
+                   ELSE IF @n_CurrDeviceNo = 1 AND @n_PrevDeviceno = @n_currDeviceNo  --assign next device if last two orders are at first device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo  + 1
+                   END
+                   ELSE IF @n_PrevDeviceNo < @n_CurrDeviceNo  -- assign next device if current device greater than previous device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo + 1
+                   END
+                   ELSE IF @n_PrevDeviceNo > @n_CurrDeviceNo --assign previous device if current device smaller than previous device
+                   BEGIN
+                        SET @n_PrevDeviceNo = @n_CurrDeviceNo                                         
+                     SET @n_CurrdeviceNo = @n_CurrDeviceNo - 1
+                   END               
+                 END                             
                 
                --Get same location group already assigned for the same order
                SELECT TOP 1 @c_DeviceId = DP.DeviceID, 
@@ -697,7 +698,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                
                SET @n_cnt = @n_cnt + 1
              END
-                                            	 
+                                              
              IF ISNULL(@c_PTSLOC,'')=''
              BEGIN
                 SELECT @n_continue = 3  
@@ -719,7 +720,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
              END
              
              SET @c_PrevOrderkey = @c_Orderkey --NJOW02
-          	
+            
              FETCH NEXT FROM cur_Order INTO @c_Orderkey, @c_Loadkey, @c_SkuGroup
           END
           CLOSE cur_Order
@@ -729,11 +730,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     -----Create full carton pick task(RPF) from BULK to pack statation
     -----Create multi order conso carton pick task(RPF) from BULK to PTS Staging. if @c_WaveConsoAllocation_OPTION1 = 'SKUPERCTNSKIPPTS' Conso carton pick task from BULK to Pick location.
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	       
-     	 IF @n_debug = 1
-    	 BEGIN
-    	 	  PRINT 'Create full/Conso carton task'
-    	 END
+    BEGIN             
+       IF @n_debug = 1
+       BEGIN
+           PRINT 'Create full/Conso carton task'
+       END
 
        DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
           SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM, SUM(PD.UOMQty) AS UOMQty, 
@@ -764,56 +765,56 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @n_CaseCnt, @c_OneSkuPerCarton, @c_Packkey, @c_PackUOM
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN          	 
-       	  --Full carton to pack station.  (UOM2)
-       	  --Multi order conso carton to PTS Staging (UOM6)
-       	  IF @c_UOM IN('2','6')
-       	  BEGIN
-       	  	 SET @c_Message01 = ''
-       	  	 SET @c_Message03 = '' 
+       BEGIN             
+           --Full carton to pack station.  (UOM2)
+           --Multi order conso carton to PTS Staging (UOM6)
+           IF @c_UOM IN('2','6')
+           BEGIN
+             SET @c_Message01 = ''
+             SET @c_Message03 = '' 
 
-       	  	 IF @c_UOM = '2'       	  	 
-       	  	 BEGIN
-     	  	      SET @c_ToLoc = @c_PackStation
-  	  	        SET @c_Message03 = 'PACKSTATION'
-       	  	 END       	  	
+             IF @c_UOM = '2'            
+             BEGIN
+               SET @c_ToLoc = @c_PackStation
+              SET @c_Message03 = 'PACKSTATION'
+             END           
 
-       	  	 IF @c_UOM = '6'
-       	  	 BEGIN       	  	 
-       	  	    IF @c_OneSkuPerCarton = 'Y' AND  (@c_WaveConsoAllocation_OPTION1 = 'SKUPERCTNSKIPPTS')-- OR @c_WaveConsoAllocation = '0')  --sku/carton order go to pick face
-       	  	    BEGIN
-       	  	    	 SET @c_ToLoc = ''
-       	  	       SET @c_Message03 = 'PICKLOC'
-       	  	       
-       	  	       SELECT TOP 1 @c_ToLoc = Loc
-       	  	       FROM SKUXLOC (NOLOCK)
-       	  	       WHERE Storerkey = @c_Storerkey
-       	  	       AND Sku = @c_Sku
-       	  	       AND LocationType = 'PICK'
+             IF @c_UOM = '6'
+             BEGIN             
+                IF @c_OneSkuPerCarton = 'Y' AND  (@c_WaveConsoAllocation_OPTION1 = 'SKUPERCTNSKIPPTS')-- OR @c_WaveConsoAllocation = '0')  --sku/carton order go to pick face
+                BEGIN
+                   SET @c_ToLoc = ''
+                   SET @c_Message03 = 'PICKLOC'
+                   
+                   SELECT TOP 1 @c_ToLoc = Loc
+                   FROM SKUXLOC (NOLOCK)
+                   WHERE Storerkey = @c_Storerkey
+                   AND Sku = @c_Sku
+                   AND LocationType = 'PICK'
 
                    IF ISNULL(@c_ToLoc,'') = ''
                    BEGIN
                       SELECT @n_continue = 3  
                       SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83145   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                       SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': SKU/Carton replenisment Unable find pick loc for sku ' + RTRIM(@c_SKU) + ' (ispRLWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
-   		             END   		          	 	         	  	             	  	       
-       	  	    END 
-       	  	    ELSE
-       	  	    BEGIN
-       	  	       SET @c_ToLoc = @c_PTSStaging
-       	  	       SET @c_Message03 = 'PTS'
-       	  	    END 
-       	  	 END          	  	
-       	  	 
-       	  	 SELECT TOP 1 @c_Message01 = ISNULL(Short,'')
-       	  	 FROM CODELKUP (NOLOCK) 
-       	  	 WHERE ListName = 'UATASKSQ'
-       	  	 AND Code = @c_Message03
-       	  	 AND Storerkey = @c_Storerkey       	  	 
-       	  	 
-       	  	 IF @c_WaveType = 'PAPER' --NJOW03
-       	  	 BEGIN
-      	        --Get ucc available
+                      END                                                               
+                END 
+                ELSE
+                BEGIN
+                   SET @c_ToLoc = @c_PTSStaging
+                   SET @c_Message03 = 'PTS'
+                END 
+             END              
+             
+             SELECT TOP 1 @c_Message01 = ISNULL(Short,'')
+             FROM CODELKUP (NOLOCK) 
+             WHERE ListName = 'UATASKSQ'
+             AND Code = @c_Message03
+             AND Storerkey = @c_Storerkey              
+             
+             IF @c_WaveType = 'PAPER' --NJOW03
+             BEGIN
+                 --Get ucc available
                 DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                    SELECT UCCNo, Qty
                    FROM UCC WITH (NOLOCK)
@@ -831,14 +832,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                 FETCH NEXT FROM CUR_UCC INTO @c_UCCNo, @n_UCCQty         
                    
                 WHILE @@FETCH_STATUS = 0 AND @n_Qty > 0 AND @n_continue IN(1,2)
-                BEGIN         	
-                	  SET @n_QtyToTake = @n_UCCQty
-                	  SET @c_MoveRefKey = RIGHT(RTRIM(@c_UCCNo),10)   
-                	  SET @c_ReplenishmentGroup = @c_Message03
-                	  SET @c_ReplenNo = @c_Message01
-                	  
-                	  IF @n_Qty < @n_UCCQty
-                	     BREAK
+                BEGIN            
+                    SET @n_QtyToTake = @n_UCCQty
+                    SET @c_MoveRefKey = RIGHT(RTRIM(@c_UCCNo),10)   
+                    SET @c_ReplenishmentGroup = @c_Message03
+                    SET @c_ReplenNo = @c_Message01
+                    
+                    IF @n_Qty < @n_UCCQty
+                       BREAK
                 
                    --Assing UCC to pick
                    DECLARE CUR_UCCPick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -850,20 +851,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                       AND UCC.UCCNo IS NULL
                       AND P.Lot = @c_Lot
                       AND P.Loc = @c_FromLoc
-                      AND P.Id = @c_ID         	   
-                	  
+                      AND P.Id = @c_ID             
+                    
                    OPEN CUR_UCCPick
                 
                    FETCH NEXT FROM CUR_UCCPick INTO @c_Pickdetailkey, @n_PickQty         
                    
                    WHILE @@FETCH_STATUS = 0 AND @n_UCCQty > 0 AND @n_continue IN(1,2)
-                   BEGIN            	  
-                   	 IF @n_UCCQty >= @n_PickQty
-                   	 BEGIN
-                   	 	  UPDATE #PICKDETAIL_WIP 
-                   	 	  SET DropID = @c_UCCNo,
-                   	 	      MoveRefKey = @c_MoveRefKey
-                   	 	  WHERE Pickdetailkey = @c_Pickdetailkey
+                   BEGIN                 
+                      IF @n_UCCQty >= @n_PickQty
+                      BEGIN
+                          UPDATE #PICKDETAIL_WIP 
+                          SET DropID = @c_UCCNo,
+                              MoveRefKey = @c_MoveRefKey
+                          WHERE Pickdetailkey = @c_Pickdetailkey
                 
                          IF @@ERROR <> 0 
                          BEGIN
@@ -871,12 +872,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                             SELECT @n_err = 78315
                             SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Update PickDetail Failed! (ispRLWAV16)'
                          END 
-                   	 	  
-                   	 	  SET @n_UCCQty = @n_UCCQty - @n_PickQty               	 	                            	 	              	 	      
-                     	  SET @n_Qty =  @n_Qty - @n_PickQty 
-                   	 END
-                   	 ELSE
-                   	 BEGIN
+                          
+                          SET @n_UCCQty = @n_UCCQty - @n_PickQty                                                                             
+                          SET @n_Qty =  @n_Qty - @n_PickQty 
+                      END
+                      ELSE
+                      BEGIN
                          SET @c_NewPickDetailKey = ''
                                               
                          EXECUTE dbo.nspg_GetKey  
@@ -917,11 +918,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                                ,Sku              ,AltSku           ,@c_UOM
                                ,UOMQty           ,@n_SplitQty
                                ,QtyMoved         ,[STATUS]         ,DropID       
-                               ,Loc   		        ,ID               ,PackKey      
+                               ,Loc               ,ID               ,PackKey      
                                ,UpdateSource     ,CartonGroup      ,CartonType      
-                               ,@c_PickDetailKey ,DoReplenish	     ,ReplenishZone='SplitToUCC'      
+                               ,@c_PickDetailKey ,DoReplenish       ,ReplenishZone='SplitToUCC'      
                                ,DoCartonize      ,PickMethod       ,WaveKey      
-                               ,EffectiveDate    ,TrafficCop   		,ArchiveCop      
+                               ,EffectiveDate    ,TrafficCop         ,ArchiveCop      
                                ,'9'              ,ShipFlag         ,PickSlipNo
                                ,@c_SourceType  --NJOW04
                          FROM   #PICKDETAIL_WIP WITH (NOLOCK)  --NJOW04
@@ -951,8 +952,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                           
                          SET @n_Qty = @n_Qty - @n_UCCQty 
                          SET @n_UCCQty = 0                   
-                   	 END
-                   	             	 
+                      END
+                                     
                       FETCH NEXT FROM CUR_UCCPick INTO @c_Pickdetailkey, @n_PickQty         
                    END
                    CLOSE CUR_UCCPick
@@ -984,14 +985,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                             UOM,                PackKey,          Confirmed, 
                             MoveRefKey,         ToID,             PendingMoveIn, 
                             QtyReplen,          QtyInPickLoc,     RefNo,
-                            Wavekey,						Remark,						ReplenNo)
+                            Wavekey,                  Remark,                 ReplenNo)
                       VALUES (@c_ReplenishmentGroup, @c_ReplenishmentKey, @c_StorerKey, 
                                @c_SKU,                @c_FromLOC,          @c_ToLoc, 
                                @c_Lot,                @c_ID,               @n_QtyToTake, 
                                @c_PackUOM,            @c_PackKey,          'N', 
                                @c_MoveRefKey,         @c_ID,               @n_QtyToTake, 
-                               0,        						  @n_QtyToTake,   		 @c_UCCNo,
-                               @c_Wavekey,						'',									 @c_ReplenNo)  
+                               0,                          @n_QtyToTake,          @c_UCCNo,
+                               @c_Wavekey,                  '',                            @c_ReplenNo)  
                                
                       IF @@ERROR <> 0 
                       BEGIN
@@ -999,7 +1000,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                          SELECT @n_err = 83110
                          SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Insert into Replenishment Failed! (isp_GenEOrder_Replenishment)'
                       END                         
-                   	  
+                       
                       UPDATE UCC WITH (ROWLOCK)
                       SET Status = '5',
                           Userdefined10 = @c_ReplenishmentKey      
@@ -1013,30 +1014,30 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                          SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Update UCC Failed! (ispRLWAV16)'
                       END                               
                    END
-                	         	              	           	  
+                                                           
                    FETCH NEXT FROM CUR_UCC INTO @c_UCCNo, @n_UCCQty         
                 END
                 CLOSE CUR_UCC
                 DEALLOCATE CUR_UCC
                 
-                --if n_qty > 0 mean can't find ucc   	 
+                --if n_qty > 0 mean can't find ucc     
                 IF @n_Qty > 0
                 BEGIN
                    SELECT @n_continue = 3
                    SELECT @n_err = 83130
                    SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Unable to find UCC from Loc: ' + RTRIM(@c_FromLoc) + ' Lot: ' + RTRIM(@c_Lot) + '. (ispRLWAV16)'
-                END                         	                   	    
-       	  	 END
-       	  	 ELSE
-       	  	 BEGIN
-       	  	    SET @n_TotCtn = FLOOR(@n_Qty / @n_CaseCnt)       	  	 
+                END                                                   
+             END
+             ELSE
+             BEGIN
+                SET @n_TotCtn = FLOOR(@n_Qty / @n_CaseCnt)            
                 
-       	  	    --additional condition to search pickdetail
-     	  	 	    SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM' 
-       	  	           	  	 
-       	  	    WHILE @n_TotCtn > 0 AND @n_continue IN(1,2)       	  	
-       	  	    BEGIN
-       	  	       EXEC isp_InsertTaskDetail   
+                --additional condition to search pickdetail
+                SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM' 
+                            
+                WHILE @n_TotCtn > 0 AND @n_continue IN(1,2)             
+                BEGIN
+                   EXEC isp_InsertTaskDetail   
                        @c_TaskType              = @c_TaskType             
                       ,@c_Storerkey             = @c_Storerkey
                       ,@c_Sku                   = @c_Sku
@@ -1065,18 +1066,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                       ,@c_WIP_RefNo             = @c_SourceType
                       ,@b_Success               = @b_Success OUTPUT
                       ,@n_Err                   = @n_err OUTPUT 
-                      ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+                      ,@c_ErrMsg                = @c_errmsg OUTPUT         
                    
                    IF @b_Success <> 1 
                    BEGIN
                       SELECT @n_continue = 3  
                    END
-       	  	    	
-       	  	    	  SET @n_TotCtn = @n_TotCtn - 1       	  	 	  
-       	  	    END  
-       	  	 END     	  	
-       	  END       
-       	  	  
+                  
+                    SET @n_TotCtn = @n_TotCtn - 1                
+                END  
+             END           
+           END       
+              
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @n_CaseCnt, @c_OneSkuPerCarton, @c_Packkey, @c_PackUOM
        END 
        CLOSE cur_pick  
@@ -1086,27 +1087,27 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     -----Create replenishment task    
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 IF @n_debug = 1
-    	 BEGIN
-    	 	  PRINT 'Create replenishment task'
-    	 END
+       IF @n_debug = 1
+       BEGIN
+           PRINT 'Create replenishment task'
+       END
 
-    	 SET @c_Priority = '8'
-    	 SET @c_Message03 = 'PICKLOC'
-    	 SET @c_Message01 = ''
-    	 
- 	  	 SELECT TOP 1 @c_Message01 = ISNULL(Short,'')
- 	  	 FROM CODELKUP (NOLOCK) 
- 	  	 WHERE ListName = 'UATASKSQ'
- 	  	 AND Code = @c_Message03
- 	  	 AND Storerkey = @c_Storerkey       	  	 
- 	  	 
- 	  	 --NJOW03
+       SET @c_Priority = '8'
+       SET @c_Message03 = 'PICKLOC'
+       SET @c_Message01 = ''
+       
+       SELECT TOP 1 @c_Message01 = ISNULL(Short,'')
+       FROM CODELKUP (NOLOCK) 
+       WHERE ListName = 'UATASKSQ'
+       AND Code = @c_Message03
+       AND Storerkey = @c_Storerkey              
+       
+       --NJOW03
        SET @c_MoveRefKey = ''
        SET @c_ReplenishmentGroup = @c_Message03
-       SET @c_ReplenNo = @c_Message01	  	 
-    	 
-    	 --Retrieve all lot of the wave from pick loc
+       SET @c_ReplenNo = @c_Message01      
+       
+       --Retrieve all lot of the wave from pick loc
        SELECT DISTINCT LLI.Lot             
        INTO #TMP_WAVEPICKLOT
        FROM PICKDETAIL PD (NOLOCK)
@@ -1115,10 +1116,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
        JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
        JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey
        WHERE WD.Wavekey = @c_Wavekey
-       AND SXL.LocationType IN('PICK','CASE')    	 
+       AND SXL.LocationType IN('PICK','CASE')       
        AND LLI.QtyExpected > 0
                           
-    	 --Retreive pick loc with overallocated
+       --Retreive pick loc with overallocated
        DECLARE cur_PickLoc CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT LLI.Storerkey, LLI.Sku, LLI.Lot, LLI.Loc, LLI.Id, SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) AS Qty,
                  PACK.CaseCnt, PACK.Packkey, PACK.PACKUOM3
@@ -1151,20 +1152,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
        FETCH FROM cur_PickLoc INTO @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ToID, @n_QtyShort, @n_CaseCnt, @c_Packkey, @c_PackUOM
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN       	      
-       	  
-       	  IF @n_QtyShort < 0
-       	     SET @n_QtyShort = @n_QtyShort * -1
-       	     
-       	  SET @n_QtyReplen = @n_QtyShort   
+       BEGIN               
+           
+           IF @n_QtyShort < 0
+              SET @n_QtyShort = @n_QtyShort * -1
+              
+           SET @n_QtyReplen = @n_QtyShort   
          
           IF @c_WaveType = 'PAPER' --NJOW03
           BEGIN
              WHILE @n_QtyReplen > 0 AND @n_continue IN(1,2) 
-             BEGIN                    	
+             BEGIN                     
                 SET @c_FromLOC = ''
                 SET @c_FromID  = ''
-                SET @n_UCCQty = 0          	
+                SET @n_UCCQty = 0            
                 SET @c_UCCNo = ''
                 
                 SELECT TOP 1  
@@ -1224,14 +1225,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                             UOM,                PackKey,          Confirmed, 
                             MoveRefKey,         ToID,             PendingMoveIn, 
                             QtyReplen,          QtyInPickLoc,     RefNo, 
-                            Wavekey,						Remark,						ReplenNo)
+                            Wavekey,                  Remark,                 ReplenNo)
                       VALUES (@c_ReplenishmentGroup, @c_ReplenishmentKey, @c_StorerKey, 
                                @c_SKU,                @c_FromLOC,          @c_ToLOC, 
-                               @c_LOT,           			@c_FromID,           @n_QtyToTake, 
+                               @c_LOT,                   @c_FromID,           @n_QtyToTake, 
                                @c_PackUOM,            @c_PackKey,          'N', 
                                @c_MoveRefKey,         @c_ToID,             @n_QtyToTake, 
                                @n_QtyToTake,          @n_QtyInPickLoc,     @c_UCCNo,
-                               @c_Wavekey,						'',									 @c_ReplenNo )  
+                               @c_Wavekey,                  '',                            @c_ReplenNo )  
                                                                                 
                       IF @@ERROR <> 0 
                       BEGIN
@@ -1265,14 +1266,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
           END
           ELSE
           BEGIN
-      	     --NJOW02
-      	     IF @n_Casecnt > 0
-      	     BEGIN
-      	        IF @n_QtyShort % @n_Casecnt = 0  OR @n_QtyShort = 0
-      	           SET @n_QtyReplen = @n_QtyReplen + @n_Casecnt
-      	     END
-       	     
-       	     --retrieve stock from bulk 
+              --NJOW02
+              IF @n_Casecnt > 0
+              BEGIN
+                 IF @n_QtyShort % @n_Casecnt = 0  OR @n_QtyShort = 0
+                    SET @n_QtyReplen = @n_QtyReplen + @n_Casecnt
+              END
+              
+              --retrieve stock from bulk 
              DECLARE cur_Bulk CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                 SELECT LLI.Lot, LLI.Loc, LLI.Id, (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) AS QtyAvailable
                 FROM LOTXLOCXID LLI (NOLOCK)          
@@ -1298,23 +1299,23 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
              
              FETCH FROM cur_Bulk INTO @c_Lot, @c_FromLoc, @c_ID, @n_QtyAvailable
              
-             WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2) AND @n_QtyReplen > 0          	 
+             WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2) AND @n_QtyReplen > 0            
              BEGIN          
                 IF @n_QtyAvailable >= @n_QtyReplen             
                    SET @n_TotCtn = CEILING(@n_QtyReplen / (@n_CaseCnt * 1.00))
                 ELSE
                    SET @n_TotCtn = FLOOR(@n_QtyAvailable / (@n_CaseCnt * 1.00))
                 
-       	     	 WHILE @n_TotCtn > 0 AND @n_QtyReplen > 0 AND @n_continue IN(1,2)       	  	
-       	     	 BEGIN
-       	     	 	  IF @n_QtyReplen >= @n_CaseCnt
-       	     	 	     SET @n_InsertQty = @n_CaseCnt
-       	     	 	  ELSE
-       	     	 	     SET @n_InsertQty = @n_QtyReplen
-       	     	 	         	  	 	     
-       	     	 	  SET @n_QtyReplen = @n_QtyReplen - @n_InsertQty
-       	     	 	            
-       	     	    EXEC isp_InsertTaskDetail   
+                WHILE @n_TotCtn > 0 AND @n_QtyReplen > 0 AND @n_continue IN(1,2)             
+                BEGIN
+                    IF @n_QtyReplen >= @n_CaseCnt
+                       SET @n_InsertQty = @n_CaseCnt
+                    ELSE
+                       SET @n_InsertQty = @n_QtyReplen
+                                         
+                    SET @n_QtyReplen = @n_QtyReplen - @n_InsertQty
+                              
+                   EXEC isp_InsertTaskDetail   
                        @c_TaskType              = @c_TaskType             
                       ,@c_Storerkey             = @c_Storerkey
                       ,@c_Sku                   = @c_Sku
@@ -1344,16 +1345,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                       ,@c_ReservePendingMoveIn  =  'Y'      -- Y=Update @n_qty to @n_PendingMoveIn
                       ,@b_Success               = @b_Success OUTPUT
                       ,@n_Err                   = @n_err OUTPUT 
-                      ,@c_ErrMsg                = @c_errmsg OUTPUT       	
-             	              	 
+                      ,@c_ErrMsg                = @c_errmsg OUTPUT         
+                               
                    IF @b_Success <> 1 
                    BEGIN
                       SELECT @n_continue = 3  
                    END
              
-       	     	 	  SET @n_TotCtn = @n_TotCtn - 1                
+                    SET @n_TotCtn = @n_TotCtn - 1                
                 END
-             	 
+                
                 FETCH FROM cur_Bulk INTO @c_Lot, @c_FromLoc, @c_ID, @n_QtyAvailable
              END
              CLOSE cur_Bulk
@@ -1369,11 +1370,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     -----Update pickdetail_WIP work in progress staging table back to pickdetail 
     IF @n_continue = 1 or @n_continue = 2
     BEGIN
-    	 IF @n_debug = 1
-    	 BEGIN
-    	 	  PRINT 'Update Pickdetail'
-    	 END
-    	 
+       IF @n_debug = 1
+       BEGIN
+           PRINT 'Update Pickdetail'
+       END
+       
        EXEC isp_CreatePickdetail_WIP
              @c_Loadkey               = ''
             ,@c_Wavekey               = @c_wavekey  
@@ -1394,16 +1395,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     -----Generate Pickslip No------
     IF @n_continue = 1 or @n_continue = 2 
     BEGIN
-    	 IF @n_debug = 1
-    	 BEGIN
-    	 	  PRINT 'Create Pickslip'
-    	 END  
+       IF @n_debug = 1
+       BEGIN
+           PRINT 'Create Pickslip'
+       END  
           EXEC isp_CreatePickSlip
                @c_Wavekey = @c_Wavekey
               ,@c_LinkPickSlipToPick = 'Y'  --Y=Update pickslipno to pickdetail.pickslipno 
               ,@b_Success = @b_Success OUTPUT
               ,@n_Err = @n_err OUTPUT 
-              ,@c_ErrMsg = @c_errmsg OUTPUT       	
+              ,@c_ErrMsg = @c_errmsg OUTPUT        
           
           IF @b_Success = 0
              SELECT @n_continue = 3
@@ -1411,8 +1412,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     
     -----Update loadplanlane--------
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN   	  
-    	 DECLARE cur_LPLane CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+    BEGIN        
+       DECLARE cur_LPLane CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
           SELECT LPD.Loadkey, MAX(LLD.Loc) 
             FROM WAVEDETAIL WD (NOLOCK)
             JOIN LOADPLANDETAIL LPD (NOLOCK) ON WD.Orderkey = LPD.Orderkey
@@ -1426,24 +1427,24 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
           FETCH NEXT FROM cur_LPLane INTO @c_Loadkey, @c_Door
           
           WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-          BEGIN          	
-          	 DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          	    SELECT ORDERS.Orderkey 
-          	    FROM ORDERS (NOLOCK)
-          	    JOIN LOADPLANDETAIL (NOLOCK) ON ORDERS.Orderkey = LOADPLANDETAIL.Orderkey
-          	    WHERE LOADPLANDETAIL.Loadkey = @c_Loadkey
-          	    
-          	 OPEN CUR_ORD    
-          	 
-          	 FETCH NEXT FROM CUR_ORD INTO @c_Orderkey
-          	 
-          	 WHILE @@FETCH_STATUS = 0
-          	 BEGIN          	 	
-          	 	  UPDATE ORDERS WITH (ROWLOCK)
-          	 	  SET Door = @c_Door,
-          	 	      Trafficcop = NULL
-          	 	  WHERE Orderkey = @c_Orderkey
-          	 	  
+          BEGIN            
+             DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                SELECT ORDERS.Orderkey 
+                FROM ORDERS (NOLOCK)
+                JOIN LOADPLANDETAIL (NOLOCK) ON ORDERS.Orderkey = LOADPLANDETAIL.Orderkey
+                WHERE LOADPLANDETAIL.Loadkey = @c_Loadkey
+                
+             OPEN CUR_ORD    
+             
+             FETCH NEXT FROM CUR_ORD INTO @c_Orderkey
+             
+             WHILE @@FETCH_STATUS = 0
+             BEGIN               
+                 UPDATE ORDERS WITH (ROWLOCK)
+                 SET Door = @c_Door,
+                     Trafficcop = NULL
+                 WHERE Orderkey = @c_Orderkey
+                 
                 SELECT @n_err = @@ERROR
                 
                 IF @n_err <> 0
@@ -1451,13 +1452,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                    SELECT @n_continue = 3  
                    SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83170   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                    SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update ORDERS Table Failed. (ispRLWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
-   		          END   		          	 	  
-          	 	   
+                   END                         
+                  
                 FETCH NEXT FROM CUR_ORD INTO @c_Orderkey
-          	 END
-          	 CLOSE CUR_ORD
-          	 DEALLOCATE CUR_ORD
-          	              	  
+             END
+             CLOSE CUR_ORD
+             DEALLOCATE CUR_ORD
+                             
              FETCH NEXT FROM cur_LPLane INTO @c_Loadkey, @c_Door
           END
           CLOSE cur_LPLane
@@ -1468,7 +1469,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

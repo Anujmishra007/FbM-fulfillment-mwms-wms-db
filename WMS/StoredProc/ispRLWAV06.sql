@@ -22,20 +22,9 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
+/* Date        Author   Ver  Purposes                                    */ 
+/* 01-04-2020  Wan01    2.1   Sync Exceed & SCE                          */ 
 /*************************************************************************/   
-/*
-declare @b_Success      int          
- ,@n_err          int          
- ,@c_errmsg       NVARCHAR(250)
-exec ispRLWAV06    
-  '0000003572'  
- ,@b_Success OUTPUT  
- ,@n_err  OUTPUT  
- ,@c_errmsg  OUTPUT
-select @b_success, @n_err, @c_errmsg
-*/
-
 CREATE PROCEDURE [dbo].[ispRLWAV06]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
@@ -163,12 +152,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV06]
     */
         
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	
-       --Tasktype	PickMethod	UOM	    From Area	To area	Description
-       --RPF	    FP	        1	      Bulk	    VAS	    Full pallet pick for single order(Pickdetail.Pickmethod='P')
-       --RPF	    FP	        1(1,7)	Bulk	    Sort	  Full pallet pick for (multi orders(1)/residual(7))					
-       --RPF	    PP	        2(2,7)	Case	    Sort	  Full Carton pick (single or multi orders(2) /residual(7))										
-       --RPF	    PP	        6	      Pick	    Sort	  Loose pick from PP location
+    BEGIN      
+       --Tasktype PickMethod  UOM       From Area  To area  Description
+       --RPF       FP           1         Bulk      VAS      Full pallet pick for single order(Pickdetail.Pickmethod='P')
+       --RPF       FP           1(1,7) Bulk      Sort   Full pallet pick for (multi orders(1)/residual(7))              
+       --RPF       PP           2(2,7) Case      Sort   Full Carton pick (single or multi orders(2) /residual(7))                            
+       --RPF       PP           6         Pick      Sort   Loose pick from PP location
        
        SELECT @c_FPVASLoc = Long
        FROM CODELKUP(NOLOCK)
@@ -191,7 +180,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV06]
        SET @c_SourceType = 'ispRLWAV06'    
        SET @c_TaskType = 'RPF'
 
-    	 SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM,
+       SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM,
               CASE WHEN PD.UOM = '1' OR (LOC.LocationType IN('BULK','OTHER') AND PD.UOM IN('7','6')) THEN --if partail allocate from bulk loc take full pallet
                         'FP'                          
                    ELSE 'PP' END AS PickMethod,
@@ -261,25 +250,25 @@ CREATE PROCEDURE [dbo].[ispRLWAV06]
        
        WHILE @@FETCH_STATUS = 0  
        BEGIN   
-       	  IF @c_DestinationType = 'VAS' 
-       	  BEGIN
-       	     SET @c_ToLoc = @c_FPVASLoc
-       	     SET @c_Priority = '4'
-          	 SET @c_Areakey = 'VAS'
-          	 SET @c_Groupkey = ''
-       	  END
-       	  
-       	  IF @c_DestinationType = 'SORTATION'
-       	  BEGIN
-       	     SET @c_ToLoc = @c_PPSortLoc
-       	     SET @c_Priority = '5'
-          	 SET @c_Areakey = 'SORTATION'
-          	 SET @c_GroupKey = @c_Lot
-       	  END
-       	  
+           IF @c_DestinationType = 'VAS' 
+           BEGIN
+              SET @c_ToLoc = @c_FPVASLoc
+              SET @c_Priority = '4'
+             SET @c_Areakey = 'VAS'
+             SET @c_Groupkey = ''
+           END
+           
+           IF @c_DestinationType = 'SORTATION'
+           BEGIN
+              SET @c_ToLoc = @c_PPSortLoc
+              SET @c_Priority = '5'
+             SET @c_Areakey = 'SORTATION'
+             SET @c_GroupKey = @c_Lot
+           END
+           
           GOTO INSERT_TASKS
           RTN_INSERT_TASKS:
-          	   
+               
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, 
                                         @c_PickMethod, @c_DestinationType, @n_TakeQty, @n_CaseCnt, @c_Message03
        END 
@@ -370,7 +359,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV06]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -500,13 +493,13 @@ RETURN_SP:
  --Update qty replen to lotxlocxid
  IF @n_continue = 1 OR @n_continue = 2
  BEGIN
- 	  IF @n_Qty < @n_TakeQty 
- 	  BEGIN
- 	  	 UPDATE LOTXLOCXID WITH (ROWLOCK)
- 	  	 SET QtyReplen = QtyReplen + (@n_TakeQty - @n_Qty)
- 	  	 WHERE Lot = @c_Lot
- 	  	 AND Loc = @c_FromLoc
- 	  	 AND Id = @c_ID
+     IF @n_Qty < @n_TakeQty 
+     BEGIN
+       UPDATE LOTXLOCXID WITH (ROWLOCK)
+       SET QtyReplen = QtyReplen + (@n_TakeQty - @n_Qty)
+       WHERE Lot = @c_Lot
+       AND Loc = @c_FromLoc
+       AND Id = @c_ID
 
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -516,7 +509,7 @@ RETURN_SP:
            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Taskdetail Failed. (ispRLWAV06)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
            GOTO RETURN_SP
        END   
- 	  END
+     END
  END 
  
  --Update taskdetailkey/wavekey to pickdetail

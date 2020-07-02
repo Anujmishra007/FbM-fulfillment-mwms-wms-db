@@ -15,16 +15,17 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.2                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 05-Jul-2017  NJOW01   1.0  WMS-1578 Release by UCC                    */
-/* 08-Mar-2018  NJOW02   1.1  WMS-4020 Add UOM 2 for B2B. Remove UCC#    */
+/* Date        Author   Ver   Purposes                                   */  
+/* 05-Jul-2017 NJOW01   1.0   WMS-1578 Release by UCC                    */
+/* 08-Mar-2018 NJOW02   1.1   WMS-4020 Add UOM 2 for B2B. Remove UCC#    */
+/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV09]      
@@ -84,9 +85,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
 
     SET @c_SourceType = 'ispRLWAV09'    
     SET @c_Priority = '9'
-  	SET @c_Areakey = ''
-   	SET @c_TaskType = 'RPF'
-   	
+   SET @c_Areakey = ''
+      SET @c_TaskType = 'RPF'
+      
     -----Wave Validation-----            
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN 
@@ -144,7 +145,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
         JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
         AND W.Wavekey = @c_Wavekey 
         
-        --NJOW02          	 
+        --NJOW02            
         EXEC nspGetRight
           @c_Facility  = NULL,
           @c_StorerKey = @c_StorerKey,
@@ -162,39 +163,39 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
        IF EXISTS(SELECT 1 FROM PickDetail_WIP WITH (NOLOCK)
                  WHERE WaveKey = @c_Wavekey)
        BEGIN
-       	  DELETE PickDetail_WIP 
+           DELETE PickDetail_WIP 
           WHERE WaveKey = @c_Wavekey 
        END 
        
        INSERT INTO PickDetail_WIP 
        (
-       	PickDetailKey,      CaseID,      		 PickHeaderKey,
-       	OrderKey,           OrderLineNumber, Lot,
-       	Storerkey,          Sku,      	   	 AltSku,     UOM,
-       	UOMQty,      	      Qty,      	   	 QtyMoved,   [Status],
-       	DropID,      	      Loc,      	     ID,      	 PackKey,
-       	UpdateSource,       CartonGroup,     CartonType,
-       	ToLoc,      	      DoReplenish,     ReplenishZone,
-       	DoCartonize,        PickMethod,      WaveKey,
-       	EffectiveDate,      AddDate,      	 AddWho,
-       	EditDate,           EditWho,      	 TrafficCop,
-       	ArchiveCop,         OptimizeCop,     ShipFlag,
-       	PickSlipNo,         TaskDetailKey,   TaskManagerReasonKey,
-       	Notes,      	      MoveRefKey 
+         PickDetailKey,      CaseID,             PickHeaderKey,
+         OrderKey,           OrderLineNumber, Lot,
+         Storerkey,          Sku,                AltSku,     UOM,
+         UOMQty,              Qty,               QtyMoved,   [Status],
+         DropID,              Loc,             ID,        PackKey,
+         UpdateSource,       CartonGroup,     CartonType,
+         ToLoc,               DoReplenish,     ReplenishZone,
+         DoCartonize,        PickMethod,      WaveKey,
+         EffectiveDate,      AddDate,         AddWho,
+         EditDate,           EditWho,         TrafficCop,
+         ArchiveCop,         OptimizeCop,     ShipFlag,
+         PickSlipNo,         TaskDetailKey,   TaskManagerReasonKey,
+         Notes,               MoveRefKey 
        )
-       SELECT PD.PickDetailKey,  CaseID,   						PD.PickHeaderKey, 
-       	PD.OrderKey,         		 PD.OrderLineNumber,  PD.Lot,
-       	PD.Storerkey,        		 PD.Sku,      	      PD.AltSku,        PD.UOM,
-       	PD.UOMQty,      	   		 PD.Qty,      	      PD.QtyMoved,      PD.[Status],
-       	PD.DropID,      	   		 PD.Loc,      	      PD.ID,      	    PD.PackKey,
-       	PD.UpdateSource,     		 PD.CartonGroup,      PD.CartonType,
-       	PD.ToLoc,      	     		 PD.DoReplenish,      PD.ReplenishZone,
-       	PD.DoCartonize,      		 PD.PickMethod,       WD.Wavekey,
-       	PD.EffectiveDate,    		 PD.AddDate,      	  PD.AddWho,
-       	PD.EditDate,         		 PD.EditWho,      	  PD.TrafficCop,
-       	PD.ArchiveCop,       		 PD.OptimizeCop,      PD.ShipFlag,
-       	PD.PickSlipNo,       		 PD.TaskDetailKey,    PD.TaskManagerReasonKey,
-       	PD.Notes,      	     		 PD.MoveRefKey 
+       SELECT PD.PickDetailKey,  CaseID,                    PD.PickHeaderKey, 
+         PD.OrderKey,                PD.OrderLineNumber,  PD.Lot,
+         PD.Storerkey,               PD.Sku,             PD.AltSku,        PD.UOM,
+         PD.UOMQty,                  PD.Qty,             PD.QtyMoved,      PD.[Status],
+         PD.DropID,                  PD.Loc,             PD.ID,             PD.PackKey,
+         PD.UpdateSource,            PD.CartonGroup,      PD.CartonType,
+         PD.ToLoc,                   PD.DoReplenish,      PD.ReplenishZone,
+         PD.DoCartonize,             PD.PickMethod,       WD.Wavekey,
+         PD.EffectiveDate,           PD.AddDate,           PD.AddWho,
+         PD.EditDate,                PD.EditWho,           PD.TrafficCop,
+         PD.ArchiveCop,              PD.OptimizeCop,      PD.ShipFlag,
+         PD.PickSlipNo,              PD.TaskDetailKey,    PD.TaskManagerReasonKey,
+         PD.Notes,                   PD.MoveRefKey 
        FROM WAVEDETAIL WD (NOLOCK) 
        JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
        WHERE WD.Wavekey = @c_Wavekey
@@ -229,7 +230,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
     
     -----Create data temporary table 
     IF (@n_continue = 1 OR @n_continue = 2) 
-    BEGIN    	
+    BEGIN      
        --Current wave assigned MEZZANINE pick location
        CREATE TABLE #MEZZANINE_LOCASSIGNED (RowId BIGINT Identity(1,1) PRIMARY KEY
                                          ,STORERKEY NVARCHAR(15) NULL
@@ -271,22 +272,22 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
      
     -----Create replenishment task from VNA to DPP, 1 UCC 1 task
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	           	   
-    	 --NJOW02  	
-    	 SELECT PD.Lot, PD.Loc, PD.ID, MAX(ISNULL(UCC.Qty,0)) AS UCCQty
-    	 INTO #TMP_UCC
-    	 FROM PICKDETAIL PD(NOLOCK)
-    	 JOIN WAVEDETAIL WD (NOLOCK) ON PD.Orderkey = WD.Orderkey
+    BEGIN                     
+       --NJOW02   
+       SELECT PD.Lot, PD.Loc, PD.ID, MAX(ISNULL(UCC.Qty,0)) AS UCCQty
+       INTO #TMP_UCC
+       FROM PICKDETAIL PD(NOLOCK)
+       JOIN WAVEDETAIL WD (NOLOCK) ON PD.Orderkey = WD.Orderkey
        LEFT JOIN UCC (NOLOCK) ON UCC.StorerKey = PD.StorerKey AND UCC.SKU = PD.SKU AND 
                                UCC.LOT = PD.LOT AND UCC.LOC = PD.LOC AND UCC.ID = PD.ID AND UCC.Status < '3' 
        WHERE WD.Wavekey = @c_Wavekey
        AND PD.Status = '0'
        AND PD.UOM IN('7','2')
-    	 GROUP BY PD.Lot, PD.Loc, PD.ID     	 
-    	 
+       GROUP BY PD.Lot, PD.Loc, PD.ID         
+       
        DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-    	    SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM, 'PP' AS PickMethod, LA.Lottable04, ISNULL(UCC.UCCQty,0)
-    	    FROM WAVEDETAIL WD (NOLOCK)
+          SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM, 'PP' AS PickMethod, LA.Lottable04, ISNULL(UCC.UCCQty,0)
+          FROM WAVEDETAIL WD (NOLOCK)
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
           JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey
           JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot
@@ -303,30 +304,30 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @c_PickMethod, @dt_Lottable04, @n_UCCQty
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN          	
-       	  SET @c_ToLoc = ''
-      		SET @n_noofcarton = 1
-       	  SET @n_UOMQty = @n_UCCQty
-       	  
-       	  IF @c_UOM = '2'
-       	  BEGIN       	  	 
-       	     SELECT @c_Toloc = Loc
+       BEGIN            
+           SET @c_ToLoc = ''
+            SET @n_noofcarton = 1
+           SET @n_UOMQty = @n_UCCQty
+           
+           IF @c_UOM = '2'
+           BEGIN            
+              SELECT @c_Toloc = Loc
              FROM LOC (NOLOCK)
              WHERE LocationType = 'RPLTMP'
              AND Loc = @c_ReplenFullCaseToTMPLoc
              
              IF ISNULL(@c_ToLoc,'') <> ''
-             BEGIN             	  
-             	  IF @n_UCCQty > 0 
-             	     SET @n_noofcarton = CEILING(@n_Qty / (@n_UCCQty * 1.00)) 
-             	  
+             BEGIN                 
+                 IF @n_UCCQty > 0 
+                    SET @n_noofcarton = CEILING(@n_Qty / (@n_UCCQty * 1.00)) 
+                 
                 WHILE @n_noofcarton > 0 AND @n_continue IN(1,2)
-                BEGIN                	 
-                	 IF @n_Qty >= @n_UCCQty AND @n_UCCQty > 0
-                	    SET @n_InsertQty = @n_UCCQty
-                	 ELSE 
-                	    SET @n_InsertQty = @n_Qty
-                	 
+                BEGIN                   
+                   IF @n_Qty >= @n_UCCQty AND @n_UCCQty > 0
+                      SET @n_InsertQty = @n_UCCQty
+                   ELSE 
+                      SET @n_InsertQty = @n_Qty
+                   
                    EXEC isp_InsertTaskDetail   
                     @c_TaskType              = @c_TaskType             
                    ,@c_Storerkey             = @c_Storerkey
@@ -362,16 +363,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
                    
                    SET @n_Qty = @n_Qty - @n_InsertQty   
                    SET @n_noofcarton = @n_noofcarton - 1                                 
-                END  	 
-                GOTO NEXT_REC  	                                                                     	  
-             END             	              	  
+                END      
+                GOTO NEXT_REC                                                                              
+             END                               
           END      
-          	 
-        	GOTO FIND_MEZ_LOC
+             
+         GOTO FIND_MEZ_LOC
           RTN_FIND_MEZ_LOC:
                                     
-   	      SET @c_ToLoc = @c_MEZLoc
-   	      
+            SET @c_ToLoc = @c_MEZLoc
+            
 
           IF @n_UCCQty > 0
           BEGIN 
@@ -386,12 +387,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
           END
           
           WHILE @n_noofcarton > 0 AND @n_continue IN(1,2)
-          BEGIN                	 
-          	 IF @n_Qty >= @n_UCCQty AND @n_UCCQty > 0
-          	    SET @n_InsertQty = @n_UCCQty
-          	 ELSE 
-          	    SET @n_InsertQty = @n_Qty
-          	    
+          BEGIN                   
+             IF @n_Qty >= @n_UCCQty AND @n_UCCQty > 0
+                SET @n_InsertQty = @n_UCCQty
+             ELSE 
+                SET @n_InsertQty = @n_Qty
+                
              EXEC isp_InsertTaskDetail   
                  @c_TaskType              = @c_TaskType             
                 ,@c_Storerkey             = @c_Storerkey
@@ -431,10 +432,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
     
               SET @n_Qty = @n_Qty - @n_InsertQty   
               SET @n_noofcarton = @n_noofcarton - 1                                                    
-          END              	   	                                        
+          END                                                               
                                  
           NEXT_REC:
-                           	  	   
+                                    
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @c_PickMethod, @dt_Lottable04, @n_UCCQty
        END 
        CLOSE cur_pick  
@@ -459,14 +460,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
           IF EXISTS(SELECT 1 FROM PICKDETAIL WITH (NOLOCK) 
                     WHERE PickDetailKey = @c_PickDetailKey)
           BEGIN
-          	 UPDATE PICKDETAIL WITH (ROWLOCK) 
-          	 SET Qty = @n_Qty, 
-          	     UOMQty = @n_UOMQty, 
-          	     TaskDetailKey = @c_TaskDetailKey,
-          	     WaveKey = @c_Wavekey,
-          	     EditDate = GETDATE(),   	   		        	       
-          	     TrafficCop = NULL
-          	 WHERE PickDetailKey = @c_PickDetailKey  
+             UPDATE PICKDETAIL WITH (ROWLOCK) 
+             SET Qty = @n_Qty, 
+                 UOMQty = @n_UOMQty, 
+                 TaskDetailKey = @c_TaskDetailKey,
+                 WaveKey = @c_Wavekey,
+                 EditDate = GETDATE(),                             
+                 TrafficCop = NULL
+             WHERE PickDetailKey = @c_PickDetailKey  
              
              SELECT @n_err = @@ERROR
              
@@ -475,10 +476,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
                 SELECT @n_continue = 3  
                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 82060   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV09)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
-   		       END   		
+                END        
           END
           ELSE 
-          BEGIN          	
+          BEGIN            
              INSERT INTO PICKDETAIL 
                   (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
                    Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
@@ -502,10 +503,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
                 SELECT @n_continue = 3  
                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 82070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Table Failed. (ispRLWAV09)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
-   		       END         
+                END         
           END
        
-       	  FETCH FROM cur_PickDetailKey INTO @c_PickDetailKey, @n_Qty, @n_UOMQty, @c_TaskDetailkey
+           FETCH FROM cur_PickDetailKey INTO @c_PickDetailKey, @n_Qty, @n_UOMQty, @c_TaskDetailkey
        END   
        CLOSE cur_PickDetailKey
        DEALLOCATE cur_PickDetailKey      
@@ -513,8 +514,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
        IF EXISTS(SELECT 1 FROM PickDetail_WIP WITH (NOLOCK)
                  WHERE WaveKey = @c_Wavekey)
        BEGIN
-       	 DELETE PickDetail_WIP 
-       	 WHERE WaveKey = @c_Wavekey 
+          DELETE PickDetail_WIP 
+          WHERE WaveKey = @c_Wavekey 
        END               
     END
     
@@ -522,7 +523,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV09]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -776,8 +781,8 @@ RETURN_SP:
   -- Assign loc with same sku & lottable04 already assigned in other wave replenishment 
  /* --NJOW01
  IF ISNULL(@c_MEZLoc,'')=''
- BEGIN 	
- 	   SELECT TOP 1 @c_MEZLoc = TD.ToLoc 
+ BEGIN   
+      SELECT TOP 1 @c_MEZLoc = TD.ToLoc 
      FROM TASKDETAIL TD (NOLOCK)
      JOIN LOTATTRIBUTE LA (NOLOCK) ON TD.Lot = LA.Lot
      JOIN LOC L (NOLOCK) ON TD.Toloc = L.Loc

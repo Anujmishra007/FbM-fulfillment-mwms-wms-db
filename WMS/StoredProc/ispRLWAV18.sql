@@ -17,17 +17,18 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.3                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 04/10/2018   NJOW01   1.0  Change replenishment priority to 9         */
-/* 08/10/2018   NJOW02   1.1  Conso carton(uom6) to pick loc             */
-/* 09/10/2018   NJOW03   1.2  Conso remove update pendingmovein & qtyreplen*/ 
+/* Date        Author   Ver   Purposes                                   */  
+/* 04/10/2018  NJOW01   1.0   Change replenishment priority to 9         */
+/* 08/10/2018  NJOW02   1.1   Conso carton(uom6) to pick loc             */
+/* 09/10/2018  NJOW03   1.2   Conso remove update pendingmovein & qtyreplen*/ 
+/* 01-04-2020  Wan01    1.3   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV18]      
@@ -152,28 +153,28 @@ CREATE PROCEDURE [dbo].[ispRLWAV18]
     --Full carton to packstation    
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 SET @c_ToLoc = ''
-    	 SET @c_ToLoc_Strategy = '' 
-    	 SET @c_Message03 = 'PACKSTATION'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'''         
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
-    	 
-    	 SELECT TOP 1 @c_ToLoc = CL.Short
-    	 FROM CODELKUP CL (NOLOCK)
-    	 JOIN LOC (NOLOCK) ON CL.Short = LOC.Loc
-    	 WHERE CL.Listname = 'LEVISLOC'
-    	 AND CL.Storerkey = @c_Storerkey
-    	 AND CL.Code = 'PACK'
-    	 AND CL.Code2 = @c_WaveType
-    	 
-    	 IF ISNULL(@c_Toloc,'') = ''
-    	 BEGIN
+       SET @c_ToLoc = ''
+       SET @c_ToLoc_Strategy = '' 
+       SET @c_Message03 = 'PACKSTATION'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'''         
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
+       
+       SELECT TOP 1 @c_ToLoc = CL.Short
+       FROM CODELKUP CL (NOLOCK)
+       JOIN LOC (NOLOCK) ON CL.Short = LOC.Loc
+       WHERE CL.Listname = 'LEVISLOC'
+       AND CL.Storerkey = @c_Storerkey
+       AND CL.Code = 'PACK'
+       AND CL.Code2 = @c_WaveType
+       
+       IF ISNULL(@c_Toloc,'') = ''
+       BEGIN
           SELECT @n_continue = 3  
           SELECT @n_err = 83030    
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid pack station setup at codelkup ''LEVISLOC''. (ispRLWAV18)'           	
-    	 END
-    	 ELSE
-    	 BEGIN    	     	 
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid pack station setup at codelkup ''LEVISLOC''. (ispRLWAV18)'             
+       END
+       ELSE
+       BEGIN             
           EXEC isp_CreateTaskByPick
                @c_TaskType              = @c_TaskType
               ,@c_Wavekey               = @c_Wavekey  
@@ -208,14 +209,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV18]
 
     --Conso carton (6) from bulk to Pick.
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	 
-    	 SET @c_ToLoc = ''
-    	 SET @c_ToLoc_Strategy = 'PICK'  --'ispToLoc_DynamicLoc' 
-    	 SET @c_ToLoc_StrategyParam = '' --'@c_CaseCntByLocUCC=Y'
-     	 SET @c_Message03 = 'PICKLOC'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM IN(''6'') AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'''         
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
-     	     	 
+    BEGIN       
+       SET @c_ToLoc = ''
+       SET @c_ToLoc_Strategy = 'PICK'  --'ispToLoc_DynamicLoc' 
+       SET @c_ToLoc_StrategyParam = '' --'@c_CaseCntByLocUCC=Y'
+       SET @c_Message03 = 'PICKLOC'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM IN(''6'') AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'''         
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -279,7 +280,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV18]
            ,@c_PickMethod              = 'PP'
            ,@b_Success                 = @b_Success OUTPUT
            ,@n_Err                     = @n_Err     OUTPUT 
-           ,@c_ErrMsg                  = @c_ErrMsg  OUTPUT    	
+           ,@c_ErrMsg                  = @c_ErrMsg  OUTPUT     
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
@@ -315,7 +316,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV18]
            ,@c_ConsolidateByLoad = 'Y'
            ,@b_Success = @b_Success OUTPUT
            ,@n_Err = @n_err OUTPUT 
-           ,@c_ErrMsg = @c_errmsg OUTPUT       	
+           ,@c_ErrMsg = @c_errmsg OUTPUT        
        
        IF @b_Success = 0
           SELECT @n_continue = 3    
@@ -325,7 +326,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV18]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

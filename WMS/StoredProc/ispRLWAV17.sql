@@ -15,16 +15,17 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 13-Mar-2019  NJOW01   1.0  WMS-8274 sku not pick face skip generate   */
+/* Date        Author   Ver   Purposes                                   */  
+/* 13-Mar-2019 NJOW01   1.0   WMS-8274 sku not pick face skip generate   */
 /*                            task                                       */
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV17]      
@@ -156,7 +157,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
           [Notes] [nvarchar](4000) NULL,
           [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))    	
+          [Channel_ID] [bigint] NULL DEFAULT ((0)))      
 
        CREATE INDEX PDWIP_Pickdetailkey ON #PickDetail_WIP (Pickdetailkey) 
        CREATE INDEX PDWIP_SKU ON #PickDetail_WIP (Storerkey, Sku)    
@@ -187,20 +188,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
     --Full carton to packstation
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 SET @c_ToLoc = ''
-    	 SET @c_ToLoc_Strategy = '' 
-    	 SET @c_Message03 = 'PACKSTATION'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'' AND ISNULL(SKU.Busr7,'''') <> ''NOPICKLOC'' ' --NJOW01         
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
-    	 
-    	 SELECT TOP 1 @c_ToLoc = Short
-    	 FROM CODELKUP (NOLOCK)
-    	 WHERE Listname = 'SKEB2B'
-    	 AND Code = @c_Facility
-    	 
-    	 IF ISNULL(@c_Toloc,'') = ''
-    	    SET @c_ToLoc = 'SKEPKSTG'
-    	 
+       SET @c_ToLoc = ''
+       SET @c_ToLoc_Strategy = '' 
+       SET @c_Message03 = 'PACKSTATION'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'' AND ISNULL(SKU.Busr7,'''') <> ''NOPICKLOC'' ' --NJOW01         
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
+       
+       SELECT TOP 1 @c_ToLoc = Short
+       FROM CODELKUP (NOLOCK)
+       WHERE Listname = 'SKEB2B'
+       AND Code = @c_Facility
+       
+       IF ISNULL(@c_Toloc,'') = ''
+          SET @c_ToLoc = 'SKEPKSTG'
+       
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -233,13 +234,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
 
     --piece from bulk to pick. pick as full carton.
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	 
-    	 SET @c_ToLoc = ''
-    	 SET @c_ToLoc_Strategy = 'PICK' -- PICK=Auto get the pick location of the sku.
-     	 SET @c_Message03 = 'PICKLOC'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''7'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'' AND ISNULL(SKU.Busr7,'''') <> ''NOPICKLOC'' '     --NJOW01
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
-     	     	 
+    BEGIN       
+       SET @c_ToLoc = ''
+       SET @c_ToLoc_Strategy = 'PICK' -- PICK=Auto get the pick location of the sku.
+       SET @c_Message03 = 'PICKLOC'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''7'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'' AND ISNULL(SKU.Busr7,'''') <> ''NOPICKLOC'' '     --NJOW01
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -272,14 +273,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
     
     --conso carton from bulk to DPP. 
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	 
-    	 SET @c_ToLoc = ''
-    	 SET @c_ToLoc_Strategy = 'ispToLoc_DynamicLoc' 
-    	 SET @c_ToLoc_StrategyParam = '@c_MaxCasePerLoc=3' 
-     	 SET @c_Message03 = 'DP'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''6'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'' AND ISNULL(SKU.Busr7,'''') <> ''NOPICKLOC'' ' --NJOW01          
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
-     	     	 
+    BEGIN       
+       SET @c_ToLoc = ''
+       SET @c_ToLoc_Strategy = 'ispToLoc_DynamicLoc' 
+       SET @c_ToLoc_StrategyParam = '@c_MaxCasePerLoc=3' 
+       SET @c_Message03 = 'DP'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''6'' AND LOC.LocationType NOT IN(''PICK'',''DYNPPICK'') AND SKUXLOC.LocationType <> ''PICK'' AND ISNULL(SKU.Busr7,'''') <> ''NOPICKLOC'' ' --NJOW01          
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM'
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -341,7 +342,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
            ,@c_AutoScanIn = 'Y'  --Y=Auto scan in the pickslip N=Not auto scan in     
            ,@b_Success = @b_Success OUTPUT
            ,@n_Err = @n_err OUTPUT 
-           ,@c_ErrMsg = @c_errmsg OUTPUT       	
+           ,@c_ErrMsg = @c_errmsg OUTPUT        
        
        IF @b_Success = 0
           SELECT @n_continue = 3    
@@ -351,7 +352,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE WITH (ROWLOCK)
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

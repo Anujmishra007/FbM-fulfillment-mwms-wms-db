@@ -15,17 +15,18 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.2                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 26-Jul-2019  NJOW01   1.0  WMS-9845 Full pallet order replen to       */
+/* Date        Author   Ver   Purposes                                   */  
+/* 26-Jul-2019 NJOW01   1.0   WMS-9845 Full pallet order replen to       */
 /*                            different location                         */
-/* 17-Jan-2020  CHEEMUN  1.1  INC0968280 - Filter Qty>0 for Replenishment*/
+/* 17-Jan-2020 CHEEMUN  1.1   INC0968280 - Filter Qty>0 for Replenishment*/
+/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV25]      
@@ -65,8 +66,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
     --Get sku,loc,id of the wave not in replenishment
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN 
-    	 SELECT PD.Storerkey, PD.Sku, PD.Loc, PD.ID, MIN(PD.UOM) AS PICKUOM
-    	 INTO #TMP_PLTREPLEN
+       SELECT PD.Storerkey, PD.Sku, PD.Loc, PD.ID, MIN(PD.UOM) AS PICKUOM
+       INTO #TMP_PLTREPLEN
        FROM WAVEDETAIL WD (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
        JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
@@ -77,7 +78,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
        AND RP.Replenishmentkey IS NULL
        --AND LOC.LocationType <> 'PICK'
        AND LOC.LocationType IN('BULK','OTHER')
-    	 GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID
+       GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID
     END   
 
     --NJOW01
@@ -89,7 +90,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
            ,@c_ConsolidateByLoad = 'N'
            ,@b_Success = @b_Success OUTPUT
            ,@n_Err = @n_err OUTPUT 
-           ,@c_ErrMsg = @c_errmsg OUTPUT       	
+           ,@c_ErrMsg = @c_errmsg OUTPUT        
        
        IF @b_Success = 0
           SELECT @n_continue = 3    
@@ -119,7 +120,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
           JOIN SKU (NOLOCK) ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku
           JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
           JOIN #TMP_PLTREPLEN PRP ON LLI.Storerkey = PRP.Storerkey AND LLI.Sku = PRP.Sku AND LLI.Loc = PRP.Loc AND LLI.Id = PRP.Id
-          WHERE LLI.Qty > 0 	--INC0968280
+          WHERE LLI.Qty > 0   --INC0968280
           ORDER BY LLI.Sku, LLI.Loc                    
        
        OPEN CUR_PICKDET
@@ -128,23 +129,23 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
        
        WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)
        BEGIN   
-       	  IF @c_PickUOM = '1'
-       	  BEGIN
-       	  	 SET @c_PLTToloc = ''
-       	  	 SELECT TOP 1 @c_PLTToloc = Long 
-       	  	 FROM CODELKUP (NOLOCK)
-       	  	 WHERE ListName = 'RDTREPLEN'
-       	  	 AND Short = 'RPLTMP'
-       	  	 AND Storerkey = @c_Storerkey
-       	  	 
-       	  	 IF ISNULL(@c_PLTToLoc,'') <> ''
-       	  	    SET @c_ToLoc = @c_PLTToLoc
-       	  	 
-       	     SET @c_ReplenishmentGroup = 'RPLTMP'
-       	  END   
-       	  ELSE
-       	     SET @c_ReplenishmentGroup = 'RPL'       	      
-       	
+           IF @c_PickUOM = '1'
+           BEGIN
+             SET @c_PLTToloc = ''
+             SELECT TOP 1 @c_PLTToloc = Long 
+             FROM CODELKUP (NOLOCK)
+             WHERE ListName = 'RDTREPLEN'
+             AND Short = 'RPLTMP'
+             AND Storerkey = @c_Storerkey
+             
+             IF ISNULL(@c_PLTToLoc,'') <> ''
+                SET @c_ToLoc = @c_PLTToLoc
+             
+              SET @c_ReplenishmentGroup = 'RPLTMP'
+           END   
+           ELSE
+              SET @c_ReplenishmentGroup = 'RPL'                
+         
           EXECUTE nspg_getkey
              'REPLENISHKEY'
              , 10
@@ -168,9 +169,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
                          @c_ReplenishmentKey,         @c_ReplenishmentGroup,
                          @c_StorerKey,   @c_Sku,      @c_FromLoc,      @c_ToLoc,
                          @c_Lot,         @c_Id,       @n_Qty,          @c_UOM,
-                         @c_Packkey,     '5',					0,               0,
-                         '', 				     'N',          '',   					 @c_WaveKey,
-                         '',      			 @n_Qty,      'ispRLWAV25',    '')
+                         @c_Packkey,     '5',               0,               0,
+                         '',                'N',          '',                  @c_WaveKey,
+                         '',               @n_Qty,      'ispRLWAV25',    '')
           
           SET @n_err = @@ERROR
           
@@ -191,7 +192,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV25]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

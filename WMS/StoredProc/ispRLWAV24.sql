@@ -15,19 +15,20 @@ GO
 /*                                                                          */  
 /* Called By: wave                                                          */  
 /*                                                                          */  
-/* PVCS Version: 1.0                                                        */  
+/* PVCS Version: 1.4                                                        */  
 /*                                                                          */  
 /* Version: 7.0                                                             */  
 /*                                                                          */  
 /* Data Modifications:                                                      */  
 /*                                                                          */  
 /* Updates:                                                                 */  
-/* Date         Author   Ver  Purposes                                      */  
-/* 09-May-2019  NJOW01   1.0  Fix condition                                 */
-/* 09-May-2019  NJOW02   1.1  Userdefine01 allow more value                 */
-/* 03-Jun-2019  NJOW03   1.2  WMS-9196 Enhancement on task priority and     */
+/* Date        Author   Ver   Purposes                                      */  
+/* 09-May-2019 NJOW01   1.0   Fix condition                                 */
+/* 09-May-2019 NJOW02   1.1   Userdefine01 allow more value                 */
+/* 03-Jun-2019 NJOW03   1.2   WMS-9196 Enhancement on task priority and     */
 /*                            include single order full case to packstation */
-/* 21-Jun-2019  NJOW04   1.3  Fix null value filtering for ECOM_SINGLE_FLAG */
+/* 21-Jun-2019 NJOW04   1.3   Fix null value filtering for ECOM_SINGLE_FLAG */
+/* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                             */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV24]      
@@ -205,8 +206,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     --Validate wave field for B2B
     IF (@n_continue = 1 OR @n_continue = 2) AND @c_DocType <> 'E'
     BEGIN
-    	 --IF ISNULL(@c_Userdefine01,'') NOT IN ('1','2')           
-    	 IF NOT EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) WHERE Listname = 'MASTGROUP' AND Short = @c_Userdefine01 AND Storerkey = @c_Storerkey) --NJOW02
+       --IF ISNULL(@c_Userdefine01,'') NOT IN ('1','2')           
+       IF NOT EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) WHERE Listname = 'MASTGROUP' AND Short = @c_Userdefine01 AND Storerkey = @c_Storerkey) --NJOW02
        BEGIN
           SELECT @n_continue = 3  
           SELECT @n_err = 83030    
@@ -222,7 +223,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        BEGIN
           SELECT @n_continue = 3  
           SELECT @n_err = 83050    
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Total tote for each batch value in userdefine02 must be between 1-50 for B2B. (ispRLWAV24)'              	
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Total tote for each batch value in userdefine02 must be between 1-50 for B2B. (ispRLWAV24)'               
        END                     
     END   
     
@@ -232,23 +233,23 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        IF ISNULL(@c_Userdefine03,'') IN ('1','2','3','4','5','6','7','8','9')
        BEGIN
           SET @c_Priority = @c_Userdefine03
-          SET @c_SourcePriority = @c_Userdefine03  	
+          SET @c_SourcePriority = @c_Userdefine03     
        END
        ELSE
        BEGIN
-       	  SET @c_CLPriority = ''
-       	  
-       	  SELECT TOP 1 @c_CLPriority = Long
-       	  FROM CODELKUP (NOLOCK)
-       	  WHERE Listname = 'MASTPRIOR'
-       	  AND Short = CASE WHEN ISNULL(@c_DocType, '') = '' THEN 'N' ELSE @c_DocType END 
-       	  AND Storerkey = @c_Storerkey
-       	  
-       	  IF ISNULL(@c_CLPriority,'') <> ''
-       	  BEGIN
+           SET @c_CLPriority = ''
+           
+           SELECT TOP 1 @c_CLPriority = Long
+           FROM CODELKUP (NOLOCK)
+           WHERE Listname = 'MASTPRIOR'
+           AND Short = CASE WHEN ISNULL(@c_DocType, '') = '' THEN 'N' ELSE @c_DocType END 
+           AND Storerkey = @c_Storerkey
+           
+           IF ISNULL(@c_CLPriority,'') <> ''
+           BEGIN
              SET @c_Priority = @c_CLPriority
-             SET @c_SourcePriority = @c_CLPriority  	
-       	  END       	  
+             SET @c_SourcePriority = @c_CLPriority    
+           END            
        END
     END
         
@@ -298,7 +299,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           [Notes] [nvarchar](4000) NULL,
           [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))    	
+          [Channel_ID] [bigint] NULL DEFAULT ((0)))      
     END
         
     WHILE @@TRANCOUNT > 0
@@ -310,8 +311,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     ----Reallocate VNA pickdetail to Mezzanine----
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	--Get available qty from Mezzanine that can swap from pickdetail at VNA
-    	DECLARE cur_pickloc CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      --Get available qty from Mezzanine that can swap from pickdetail at VNA
+      DECLARE cur_pickloc CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT LOTxLOCxID.Storerkey, LOTxLOCxID.Sku, LOTxLOCxID.Lot, LOTxLOCxID.Loc, LOTxLOCxID.Id,
              LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen,
              LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
@@ -325,21 +326,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
       JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID  
       JOIN (SELECT DISTINCT PD.Storerkey, PD.Sku    
             FROM ORDERS O (NOLOCK) 
-    	      JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
-    	      JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey
-    	      JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
-    	      AND WD.Wavekey = @c_Wavekey
-    	      AND PD.UOM IN ('7')
-    	      AND LOC.LocationCategory = 'VNA') AS BulkSku ON LOTxLOCxID.Storerkey = BulkSku.Storerkey AND LOTxLOCxID.Sku = BulkSku.Sku  
+            JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+            JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey
+            JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
+            AND WD.Wavekey = @c_Wavekey
+            AND PD.UOM IN ('7')
+            AND LOC.LocationCategory = 'VNA') AS BulkSku ON LOTxLOCxID.Storerkey = BulkSku.Storerkey AND LOTxLOCxID.Sku = BulkSku.Sku  
       WHERE LOT.STATUS = 'OK' 
       AND LOC.STATUS = 'OK' 
       AND ID.STATUS = 'OK'   
       AND LOC.LocationFlag = 'NONE' 
-    	AND LOC.Facility = @c_facility  
-    	AND LOC.LocationCategory = 'Mezzanine'
-    	AND LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen > 0
-    	ORDER BY LOTxLOCxID.Storerkey, LOTxLOCxID.Sku, LA.Lottable05,  LOC.LogicalLocation, LOC.Loc      
-    	
+      AND LOC.Facility = @c_facility  
+      AND LOC.LocationCategory = 'Mezzanine'
+      AND LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen > 0
+      ORDER BY LOTxLOCxID.Storerkey, LOTxLOCxID.Sku, LA.Lottable05,  LOC.LogicalLocation, LOC.Loc      
+      
       OPEN cur_pickloc  
        
       FETCH NEXT FROM cur_pickloc INTO @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, @n_Qty,
@@ -349,9 +350,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
       BEGIN
-      	 --get pickdetail from VNA which can swap to available at Mezzanine
+          --get pickdetail from VNA which can swap to available at Mezzanine
          SELECT @C_SQL = N'
-        	   DECLARE cur_Bulkloc CURSOR FAST_FORWARD READ_ONLY FOR  
+            DECLARE cur_Bulkloc CURSOR FAST_FORWARD READ_ONLY FOR  
                 SELECT PD.Pickdetailkey, PD.Lot, PD.Qty           
                 FROM WAVEDETAIL WD (NOLOCK)
                 JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -398,12 +399,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           
          WHILE @@FETCH_STATUS = 0 AND @n_Qty > 0 AND @n_continue IN(1,2)
          BEGIN
-         	  IF @n_Qty >= @n_PickQty
-         	  BEGIN
-         	  	 --swap pickdetail to pick include swap to different lot
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = 0
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
+              IF @n_Qty >= @n_PickQty
+              BEGIN
+                --swap pickdetail to pick include swap to different lot
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = 0
+                 WHERE Pickdetailkey = @c_Pickdetailkey
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
@@ -412,15 +413,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83060     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update PickDetail Table. (ispRLWAV24)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
                END      
-         	     
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Lot = @c_Lot,
-         	         Loc = @c_ToLoc,
-         	         Id = @c_ID,
-         	         Qty = @n_PickQty,
-         	         Notes = 'Swap from VNA',
-         	         UOM = '6'
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
+                 
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Lot = @c_Lot,
+                     Loc = @c_ToLoc,
+                     Id = @c_ID,
+                     Qty = @n_PickQty,
+                     Notes = 'Swap from VNA',
+                     UOM = '6'
+                 WHERE Pickdetailkey = @c_Pickdetailkey
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
@@ -431,14 +432,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                END  
                
                SET @n_Qty = @n_Qty - @n_PickQty    
-         	  END              
-         	  ELSE
-         	  BEGIN
-         	  	 --split pickdetail to pick
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = Qty - @n_Qty
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
-         	     
+              END              
+              ELSE
+              BEGIN
+                --split pickdetail to pick
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = Qty - @n_Qty
+                 WHERE Pickdetailkey = @c_Pickdetailkey
+                 
                EXECUTE nspg_GetKey      
                   'PICKDETAILKEY',      
                   10,      
@@ -451,8 +452,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                BEGIN
                   SELECT @n_continue = 3      
                END                  
-         	
-         	     INSERT INTO PICKDETAIL
+            
+                 INSERT INTO PICKDETAIL
                            (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, 
                             Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],         
                             DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,      
@@ -477,20 +478,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                END      
                
                SET @n_Qty = 0    
-         	  END
-         	
+              END
+            
             FETCH NEXT FROM cur_Bulkloc INTO @c_Pickdetailkey, @c_PickLot, @n_Pickqty
          END
          CLOSE cur_Bulkloc
          DEALLOCATE cur_Bulkloc
-                                                       	     
+                                                              
          FETCH NEXT FROM cur_pickloc INTO @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, @n_Qty,
                                           @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, 
                                           @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, 
                                           @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15          
       END
       CLOSE cur_pickloc
-      DEALLOCATE cur_pickloc     	    	
+      DEALLOCATE cur_pickloc              
     END
 
     IF @n_continue = 3
@@ -502,7 +503,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     ----Reallocate VNA pickdetail to VAN and PnD in replenish----
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	--Get available qty from replenish task include PND that can merge from pickdetail at VNA
+      --Get available qty from replenish task include PND that can merge from pickdetail at VNA
       SELECT TD.Storerkey, TD.Sku, TD.Lot, TD.FromLoc AS Loc, TD.FromID AS ID, 
              CASE WHEN (TD.Qty - TD.SystemQty) > (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) THEN
                   (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)  ELSE (TD.Qty - TD.SystemQty) END AS TaskBalQty,  --NJOW01
@@ -511,15 +512,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
              LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
              LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15 
       INTO #TMP_REPLEN       
-    	FROM TASKDETAIL TD (NOLOCK)
-    	JOIN LOTATTRIBUTE LA (NOLOCK) ON TD.Lot = LA.Lot
-    	JOIN LOTXLOCXID LLI (NOLOCK) ON TD.Lot = LLI.Lot AND TD.FromLoc = LLI.Loc AND TD.FromID = LLI.ID
-    	WHERE TD.TaskType = 'RPF' 
-    	AND TD.Status = '0' 
-    	AND TD.SourceType = @c_SourceType
-    	AND TD.Qty > TD.SystemQty
-    	AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
-    	UNION ALL    
+      FROM TASKDETAIL TD (NOLOCK)
+      JOIN LOTATTRIBUTE LA (NOLOCK) ON TD.Lot = LA.Lot
+      JOIN LOTXLOCXID LLI (NOLOCK) ON TD.Lot = LLI.Lot AND TD.FromLoc = LLI.Loc AND TD.FromID = LLI.ID
+      WHERE TD.TaskType = 'RPF' 
+      AND TD.Status = '0' 
+      AND TD.SourceType = @c_SourceType
+      AND TD.Qty > TD.SystemQty
+      AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
+      UNION ALL    
       SELECT TD.Storerkey, TD.Sku, PND.Lot, PND.FromLoc AS Loc, PND.FromID AS ID, 
              CASE WHEN (TD.Qty - TD.SystemQty) > (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) THEN
                   (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)  ELSE (TD.Qty - TD.SystemQty) END AS TaskBalQty,  --NJOW01
@@ -527,20 +528,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
              LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
              LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
              LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15 
-    	FROM TASKDETAIL TD (NOLOCK)
-    	JOIN TASKDETAIL PND ON TD.Taskdetailkey = PND.Sourcekey AND TD.Storerkey = PND.Storerkey AND TD.Sku = PND.Sku
-    	JOIN LOTATTRIBUTE LA (NOLOCK) ON PND.Lot = LA.Lot
-    	JOIN LOTXLOCXID LLI (NOLOCK) ON PND.Lot = LLI.Lot AND PND.FromLoc = LLI.Loc AND PND.FromID = LLI.ID
+      FROM TASKDETAIL TD (NOLOCK)
+      JOIN TASKDETAIL PND ON TD.Taskdetailkey = PND.Sourcekey AND TD.Storerkey = PND.Storerkey AND TD.Sku = PND.Sku
+      JOIN LOTATTRIBUTE LA (NOLOCK) ON PND.Lot = LA.Lot
+      JOIN LOTXLOCXID LLI (NOLOCK) ON PND.Lot = LLI.Lot AND PND.FromLoc = LLI.Loc AND PND.FromID = LLI.ID
       WHERE TD.TaskType = 'RPF' 
-    	AND PND.TaskType = 'RPT' 
-    	AND TD.Status = '9'  
-    	AND PND.Taskdetailkey IS NOT NULL
-    	AND PND.Status NOT IN('9','X')
-    	AND TD.SourceType = @c_SourceType
-    	AND TD.Qty > TD.SystemQty
-    	AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
+      AND PND.TaskType = 'RPT' 
+      AND TD.Status = '9'  
+      AND PND.Taskdetailkey IS NOT NULL
+      AND PND.Status NOT IN('9','X')
+      AND TD.SourceType = @c_SourceType
+      AND TD.Qty > TD.SystemQty
+      AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
 
-    	DECLARE cur_replen CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      DECLARE cur_replen CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT REP.Storerkey, REP.Sku, REP.Lot, REP.Loc, REP.ID, SUM(REP.TaskBalQty), SUM(REP.LocBalQty),
              REP.Lottable01, REP.Lottable02, REP.Lottable03, REP.Lottable04, REP.Lottable05, 
              REP.Lottable06, REP.Lottable07, REP.Lottable08, REP.Lottable09, REP.Lottable10, 
@@ -552,9 +553,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                REP.Lottable01, REP.Lottable02, REP.Lottable03, REP.Lottable04, REP.Lottable05, 
                REP.Lottable06, REP.Lottable07, REP.Lottable08, REP.Lottable09, REP.Lottable10, 
                REP.Lottable11, REP.Lottable12, REP.Lottable13, REP.Lottable14, REP.Lottable15        
-    	ORDER BY REP.Storerkey, REP.Sku, CASE WHEN LOC.LocationCategory = 'VNA' THEN 1 ELSE 2 END, 
-    	         REP.Lottable04, LOC.LogicalLocation, REP.Loc      
-    	
+      ORDER BY REP.Storerkey, REP.Sku, CASE WHEN LOC.LocationCategory = 'VNA' THEN 1 ELSE 2 END, 
+               REP.Lottable04, LOC.LogicalLocation, REP.Loc      
+      
       OPEN cur_replen  
        
       FETCH NEXT FROM cur_replen INTO @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, @n_TaskBalQty, @n_LocBalQty,
@@ -569,11 +570,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
          ELSE 
             SET @n_Qty = @n_LocBalQty
         
-        --print  '@c_Sku ' + @c_sku + ' @c_Lot ' + @c_lot + ' @c_ToLoc ' + @c_toloc + ' @c_ID ' + @c_id +  ' @n_TaskBalQty ' + cast(@n_taskbalqty as nvarchar) + ' @n_LocBalQty ' + cast(@n_LocBalQty as nvarchar) 	
-      	
-      	 --get pickdetail from VNA which can swap to replen at VNA and PND
+        --print  '@c_Sku ' + @c_sku + ' @c_Lot ' + @c_lot + ' @c_ToLoc ' + @c_toloc + ' @c_ID ' + @c_id +  ' @n_TaskBalQty ' + cast(@n_taskbalqty as nvarchar) + ' @n_LocBalQty ' + cast(@n_LocBalQty as nvarchar)   
+         
+          --get pickdetail from VNA which can swap to replen at VNA and PND
          SELECT @C_SQL = N'
-        	   DECLARE cur_BulklocRep CURSOR FAST_FORWARD READ_ONLY FOR  
+            DECLARE cur_BulklocRep CURSOR FAST_FORWARD READ_ONLY FOR  
                 SELECT PD.Pickdetailkey, PD.Lot, PD.Qty           
                 FROM WAVEDETAIL WD (NOLOCK)
                 JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -622,15 +623,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
          FETCH NEXT FROM cur_BulklocRep INTO @c_Pickdetailkey, @c_PickLot, @n_Pickqty
           
          WHILE @@FETCH_STATUS = 0 AND @n_Qty > 0 AND @n_continue IN(1,2)
-         BEGIN         	  
-            --print  '@c_Pickdetailkey ' + @c_Pickdetailkey + ' @c_PickLot ' + @c_PickLot + ' @n_Pickqty ' + cast(@n_Pickqty as nvarchar)+  ' @n_Qty ' + cast(@n_Qty as nvarchar) 	
+         BEGIN            
+            --print  '@c_Pickdetailkey ' + @c_Pickdetailkey + ' @c_PickLot ' + @c_PickLot + ' @n_Pickqty ' + cast(@n_Pickqty as nvarchar)+  ' @n_Qty ' + cast(@n_Qty as nvarchar)   
 
-         	  IF @n_Qty >= @n_PickQty
-         	  BEGIN
-         	  	 --swap pickdetail to pick include swap to different lot
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = 0
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
+              IF @n_Qty >= @n_PickQty
+              BEGIN
+                --swap pickdetail to pick include swap to different lot
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = 0
+                 WHERE Pickdetailkey = @c_Pickdetailkey
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
@@ -639,14 +640,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83080     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update PickDetail Table. (ispRLWAV24)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
                END      
-         	     
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Lot = @c_Lot,
-         	         Loc = @c_ToLoc,
-         	         Id = @c_ID,
-         	         Qty = @n_PickQty,
-         	         Notes = 'Swap from VNA'
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
+                 
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Lot = @c_Lot,
+                     Loc = @c_ToLoc,
+                     Id = @c_ID,
+                     Qty = @n_PickQty,
+                     Notes = 'Swap from VNA'
+                 WHERE Pickdetailkey = @c_Pickdetailkey
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
@@ -657,14 +658,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                END  
                
                SET @n_Qty = @n_Qty - @n_PickQty    
-         	  END              
-         	  ELSE
-         	  BEGIN
-         	  	 --split pickdetail to pick
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = Qty - @n_Qty
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
-         	     
+              END              
+              ELSE
+              BEGIN
+                --split pickdetail to pick
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = Qty - @n_Qty
+                 WHERE Pickdetailkey = @c_Pickdetailkey
+                 
                EXECUTE nspg_GetKey      
                   'PICKDETAILKEY',      
                   10,      
@@ -677,8 +678,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                BEGIN
                   SELECT @n_continue = 3      
                END                  
-         	
-         	     INSERT INTO PICKDETAIL
+            
+                 INSERT INTO PICKDETAIL
                            (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, 
                             Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],         
                             DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,      
@@ -703,20 +704,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                END      
                
                SET @n_Qty = 0    
-         	  END
-         	
+              END
+            
             FETCH NEXT FROM cur_BulklocRep INTO @c_Pickdetailkey, @c_PickLot, @n_Pickqty
          END
          CLOSE cur_BulklocRep
          DEALLOCATE cur_BulklocRep
-                                                       	     
+                                                              
          FETCH NEXT FROM cur_replen INTO @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, @n_TaskBalQty, @n_LocBalQty,
                                          @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, 
                                          @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, 
                                          @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15 
       END
       CLOSE cur_replen
-      DEALLOCATE cur_replen     	    	
+      DEALLOCATE cur_replen            
     END
     IF @n_continue = 3
        ROLLBACK
@@ -727,43 +728,43 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     ----Combine VNA and PnD pickdetail to existing replen task----
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	--Get available qty from replenish task include PND that can merge from pickdetail of same loc
-    	DECLARE cur_combinereplen CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      --Get available qty from replenish task include PND that can merge from pickdetail of same loc
+      DECLARE cur_combinereplen CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT TD.Taskdetailkey, TD.Storerkey, TD.Sku, TD.Lot, TD.FromLoc AS Loc, TD.FromID AS ID, 
                 TD.Qty - TD.SystemQty AS TaskBalQty, 
                 --CASE WHEN (TD.Qty - TD.SystemQty) > (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) THEN
                 --  (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)  ELSE (TD.Qty - TD.SystemQty) END AS TaskBalQty,  --NJOW01
                 'REP', '' AS Taskdetailkey_PND, TD.CaseID
-    	   FROM TASKDETAIL TD (NOLOCK)
-    	   JOIN LOTXLOCXID LLI (NOLOCK) ON TD.Lot = LLI.Lot AND TD.FromLoc = LLI.Loc AND TD.FromID = LLI.ID --NJOW01    	   
-    	   WHERE TD.TaskType = 'RPF' 
-    	   AND TD.Status = '0'
-    	   AND TD.SourceType = @c_SourceType
-    	   AND TD.Qty > TD.SystemQty
-    	   UNION ALL    
+         FROM TASKDETAIL TD (NOLOCK)
+         JOIN LOTXLOCXID LLI (NOLOCK) ON TD.Lot = LLI.Lot AND TD.FromLoc = LLI.Loc AND TD.FromID = LLI.ID --NJOW01         
+         WHERE TD.TaskType = 'RPF' 
+         AND TD.Status = '0'
+         AND TD.SourceType = @c_SourceType
+         AND TD.Qty > TD.SystemQty
+         UNION ALL    
          SELECT TD.Taskdetailkey, TD.Storerkey, TD.Sku, PND.Lot, PND.FromLoc AS Loc, PND.FromID AS ID, 
                 TD.Qty - TD.SystemQty AS TaskBalQty, 
                 --CASE WHEN (TD.Qty - TD.SystemQty) > (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) THEN
                 --  (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)  ELSE (TD.Qty - TD.SystemQty) END AS TaskBalQty,  --NJOW01
                 'PND', PND.TaskDetailKey, PND.CaseID 
-    	   FROM TASKDETAIL TD (NOLOCK)
-    	   JOIN TASKDETAIL PND ON TD.Taskdetailkey = PND.Sourcekey AND TD.Storerkey = PND.Storerkey AND TD.Sku = PND.Sku
-    	   JOIN LOTXLOCXID LLI (NOLOCK) ON PND.Lot = LLI.Lot AND PND.FromLoc = LLI.Loc AND PND.FromID = LLI.ID --NJOW01    	   
-    	   WHERE TD.TaskType = 'RPF' 
-    	   AND PND.TaskType = 'RPT' 
-    	   AND TD.Status = '9'  
-    	   AND PND.Taskdetailkey IS NOT NULL
-    	   AND PND.Status NOT IN('9','X')
-    	   AND TD.SourceType = @c_SourceType
-    	   AND TD.Qty > TD.SystemQty
-    	    	
+         FROM TASKDETAIL TD (NOLOCK)
+         JOIN TASKDETAIL PND ON TD.Taskdetailkey = PND.Sourcekey AND TD.Storerkey = PND.Storerkey AND TD.Sku = PND.Sku
+         JOIN LOTXLOCXID LLI (NOLOCK) ON PND.Lot = LLI.Lot AND PND.FromLoc = LLI.Loc AND PND.FromID = LLI.ID --NJOW01         
+         WHERE TD.TaskType = 'RPF' 
+         AND PND.TaskType = 'RPT' 
+         AND TD.Status = '9'  
+         AND PND.Taskdetailkey IS NOT NULL
+         AND PND.Status NOT IN('9','X')
+         AND TD.SourceType = @c_SourceType
+         AND TD.Qty > TD.SystemQty
+            
       OPEN cur_combinereplen  
        
       FETCH NEXT FROM cur_combinereplen INTO @c_Taskdetailkey, @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, @n_Qty, @c_TaskState, @c_Taskdetailkey_PND, @c_CaseID
        
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-      BEGIN      	
-      	 --get pickdetail from replen which can merge to replen task at vna and PND
+      BEGIN       
+          --get pickdetail from replen which can merge to replen task at vna and PND
          DECLARE cur_RepLocPickDet CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
             SELECT DISTINCT PD.Pickdetailkey, PD.Qty           
             FROM WAVEDETAIL WD (NOLOCK)
@@ -784,16 +785,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
          FETCH NEXT FROM cur_RepLocPickDet INTO @c_Pickdetailkey, @n_Pickqty
           
          WHILE @@FETCH_STATUS = 0 AND @n_Qty > 0 AND @n_continue IN(1,2)
-         BEGIN         	  
-         	  IF @n_Qty >= @n_PickQty
-         	  BEGIN
-         	  	 --Assign pickdetail to the task
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET TaskDetailkey = CASE WHEN @c_TaskState = 'PND' THEN @c_Taskdetailkey_PND ELSE @c_Taskdetailkey END,
-         	         DropID =  CASE WHEN @c_TaskState = 'PND' THEN @c_CaseID ELSE DropID END,
-         	         TrafficCop = NULL
-         	     WHERE Pickdetailkey = @c_Pickdetailkey  
-         	                                                                                                                        
+         BEGIN            
+              IF @n_Qty >= @n_PickQty
+              BEGIN
+                --Assign pickdetail to the task
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET TaskDetailkey = CASE WHEN @c_TaskState = 'PND' THEN @c_Taskdetailkey_PND ELSE @c_Taskdetailkey END,
+                     DropID =  CASE WHEN @c_TaskState = 'PND' THEN @c_CaseID ELSE DropID END,
+                     TrafficCop = NULL
+                 WHERE Pickdetailkey = @c_Pickdetailkey  
+                                                                                                                                    
                SET @n_err = @@ERROR
                IF @n_err <> 0
                BEGIN
@@ -801,10 +802,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83110     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update PickDetail Table. (ispRLWAV24)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
                END
-         	  	
+               
                IF @c_TaskState = 'PND'  
                BEGIN
-               	  --Pick and drop loc no need update qty replen
+                    --Pick and drop loc no need update qty replen
                   UPDATE TASKDETAIL WITH (ROWLOCK)
                   SET Message03 = CASE WHEN ISNULL(Message03,'') = '' THEN 'WV:' + @c_Wavekey ELSE Message03 END,
                       SystemQty = SystemQty + @n_PickQty,
@@ -818,7 +819,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                   WHERE Taskdetailkey = @c_Taskdetailkey_PND
                END
                ELSE
-               BEGIN               	
+               BEGIN                
                   UPDATE TASKDETAIL WITH (ROWLOCK)
                   SET Message03 = CASE WHEN ISNULL(Message03,'') = '' THEN 'WV:' + @c_Wavekey ELSE Message03 END,
                       SystemQty = SystemQty + @n_PickQty,
@@ -834,16 +835,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83120     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update Taskdetail Table. (ispRLWAV24)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
                END      
-                                       	                          
+                                                                    
                SET @n_Qty = @n_Qty - @n_PickQty    
-         	  END              
-         	  ELSE
-         	  BEGIN
-         	  	 --split pickdetail to pick
-         	     UPDATE PICKDETAIL WITH (ROWLOCK)
-         	     SET Qty = Qty - @n_Qty
-         	     WHERE Pickdetailkey = @c_Pickdetailkey
-         	     
+              END              
+              ELSE
+              BEGIN
+                --split pickdetail to pick
+                 UPDATE PICKDETAIL WITH (ROWLOCK)
+                 SET Qty = Qty - @n_Qty
+                 WHERE Pickdetailkey = @c_Pickdetailkey
+                 
                EXECUTE nspg_GetKey      
                   'PICKDETAILKEY',      
                   10,      
@@ -856,8 +857,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                BEGIN
                   SELECT @n_continue = 3      
                END                  
-         	
-         	     INSERT INTO PICKDETAIL
+            
+                 INSERT INTO PICKDETAIL
                            (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, 
                             Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],         
                             DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,      
@@ -883,7 +884,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                
                IF @c_TaskState = 'PND'  
                BEGIN
-               	  --Pick and drop loc no need update qty replen
+                    --Pick and drop loc no need update qty replen
                   UPDATE TASKDETAIL WITH (ROWLOCK)
                   SET Message03 = CASE WHEN ISNULL(Message03,'') = '' THEN 'WV:' + @c_Wavekey ELSE Message03 END,
                       SystemQty = SystemQty + @n_PickQty,
@@ -909,17 +910,17 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
                END      
                
                SET @n_Qty = 0    
-         	  END
-         	
+              END
+            
             FETCH NEXT FROM cur_RepLocPickDet INTO @c_Pickdetailkey, @n_Pickqty
          END
          CLOSE cur_RepLocPickDet
          DEALLOCATE cur_RepLocPickDet
-                                                       	     
+                                                              
          FETCH NEXT FROM cur_combinereplen INTO @c_Taskdetailkey, @c_Storerkey, @c_Sku, @c_Lot, @c_ToLoc, @c_ID, @n_Qty, @c_TaskState, @c_Taskdetailkey_PND, @c_CaseID
       END
       CLOSE cur_combinereplen
-      DEALLOCATE cur_combinereplen     	    	
+      DEALLOCATE cur_combinereplen              
     END
     IF @n_continue = 3
        ROLLBACK
@@ -957,11 +958,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     -----Create full case task from VNA to Pack station for B2C (Single order) NJOW03
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
- 	     SET @c_Message01 = 'PACKSTATION-EC'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType = ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') = ''S'' '         
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType = ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') = ''S'' '
+        SET @c_Message01 = 'PACKSTATION-EC'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType = ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') = ''S'' '         
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType = ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') = ''S'' '
        SET @c_ToLoc = 'DTCPACKST'
-    	     	 
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -997,17 +998,17 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
-       END                                    	
+       END                                      
     END
          
     -----Create full case task from VNA to Pack station for B2B
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
- 	     SET @c_Message01 = 'PACKSTATION'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'''  --NJOW03       
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'' ' --NJOW03
+        SET @c_Message01 = 'PACKSTATION'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'''  --NJOW03       
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'' ' --NJOW03
        SET @c_ToLoc = 'MASTPACKST'
-    	     	 
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -1043,17 +1044,17 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
-       END                                    	
+       END                                      
     END
     
     -----Create Replenishment from bulk to pick with full case based on pickdetail
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	    	
- 	     SET @c_Message01 = 'PICKLOC'
-    	 SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''7'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' '         
-    	 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = ''7'' '
+    BEGIN            
+        SET @c_Message01 = 'PICKLOC'
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''7'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' '         
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = ''7'' '
        SET @c_ToLoc = 'MASTDPP'
-    	     	 
+             
        EXEC isp_CreateTaskByPick
             @c_TaskType              = @c_TaskType
            ,@c_Wavekey               = @c_Wavekey  
@@ -1090,18 +1091,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
-       END                                    	
+       END                                      
     END
     
     --Generate NON-BEAUTY batch number and update to pickdetail for B2B only
     IF (@n_continue = 1 or @n_continue = 2) AND @c_DocType <> 'E'  --NJOW01
     BEGIN
-    	 --Cleare caseid, pickslipno and notes
-    	 UPDATE #PickDetail_WIP
-    	 SET Caseid = '',
-    	     Pickslipno = '',
-    	     Notes = ''
-    	         	 
+       --Cleare caseid, pickslipno and notes
+       UPDATE #PickDetail_WIP
+       SET Caseid = '',
+           Pickslipno = '',
+           Notes = ''
+                   
        DECLARE CUR_CODELKUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
           SELECT TOP 10 Long   
           FROM CODELKUP WITH (NOLOCK)  
@@ -1230,13 +1231,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        SET @c_BatchNo = ''
        SET @c_PrevLoadkey = ''
 
-       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)   	
-    	 BEGIN
-    	 	  IF @n_cnt > @n_NoofTotePerBatch OR @c_PrevLoadkey <> @c_Loadkey 
-    	 	     SET @n_cnt = 1
-    	 	  
-    	 	  IF @n_cnt = 1
-    	 	  BEGIN
+       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)    
+       BEGIN
+           IF @n_cnt > @n_NoofTotePerBatch OR @c_PrevLoadkey <> @c_Loadkey 
+              SET @n_cnt = 1
+           
+           IF @n_cnt = 1
+           BEGIN
              SELECT @b_success = 0  
              EXECUTE nspg_GetKey  
                 'RLWAV24',  
@@ -1249,8 +1250,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
              IF @b_success <> 1  
              BEGIN  
                 SELECT @n_continue = 3  
-             END      	 	  	
-    	 	  END   
+             END              
+           END   
   
           SELECT @c_SQLDYN02 = 'DECLARE cur_pickbatch CURSOR FAST_FORWARD READ_ONLY FOR '  
           + ' SELECT PICKDETAIL.Pickdetailkey '  
@@ -1283,24 +1284,24 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
            FETCH NEXT FROM cur_pickbatch INTO @c_Pickdetailkey 
            WHILE @@FETCH_STATUS = 0  
            BEGIN          
-           	  UPDATE #PickDetail_WIP
-           	  SET Pickslipno = 'M' + @c_BatchNo,
-           	      Notes = 'M' + RTRIM(@c_BatchNo) + '-' + RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2),
-           	      CaseID = RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2)           	      
-           	  WHERE Pickdetailkey = @c_Pickdetailkey    
-           	      
+              UPDATE #PickDetail_WIP
+              SET Pickslipno = 'M' + @c_BatchNo,
+                  Notes = 'M' + RTRIM(@c_BatchNo) + '-' + RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2),
+                  CaseID = RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2)                   
+              WHERE Pickdetailkey = @c_Pickdetailkey    
+                  
               FETCH NEXT FROM cur_pickbatch INTO @c_Pickdetailkey 
            END                
            CLOSE cur_pickbatch
-           DEALLOCATE cur_pickbatch     	 	      	 	   
+           DEALLOCATE cur_pickbatch                         
           
            SET @n_cnt = @n_cnt + 1
            SET @c_PrevLoadkey = @c_Loadkey 
            FETCH NEXT FROM cur_Group INTO @c_Loadkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,   
-                                         @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10      		
-    	 END
-    	 CLOSE cur_Group
-    	 DEALLOCATE cur_Group
+                                         @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10            
+       END
+       CLOSE cur_Group
+       DEALLOCATE cur_Group
     END
 
     --Generate BEAUTY batch number and update to pickdetail for B2B only
@@ -1434,13 +1435,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        SET @c_BatchNo = ''
        SET @c_PrevLoadkey = ''
               
-       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)   	
-    	 BEGIN
-    	 	  IF @n_cnt > @n_NoofTotePerBatch OR @c_PrevLoadkey <> @c_Loadkey 
-    	 	     SET @n_cnt = 1
-    	 	  
-    	 	  IF @n_cnt = 1
-    	 	  BEGIN
+       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)    
+       BEGIN
+           IF @n_cnt > @n_NoofTotePerBatch OR @c_PrevLoadkey <> @c_Loadkey 
+              SET @n_cnt = 1
+           
+           IF @n_cnt = 1
+           BEGIN
              SELECT @b_success = 0  
              EXECUTE nspg_GetKey  
                 'RLWAV24',  
@@ -1453,8 +1454,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
              IF @b_success <> 1  
              BEGIN  
                 SELECT @n_continue = 3  
-             END      	 	  	
-    	 	  END   
+             END              
+           END   
   
           SELECT @c_SQLDYN02 = 'DECLARE cur_pickbatch CURSOR FAST_FORWARD READ_ONLY FOR '  
           + ' SELECT PICKDETAIL.Pickdetailkey '  
@@ -1487,24 +1488,24 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
            FETCH NEXT FROM cur_pickbatch INTO @c_Pickdetailkey 
            WHILE @@FETCH_STATUS = 0  
            BEGIN          
-           	  UPDATE #PickDetail_WIP
-           	  SET Pickslipno = 'M' + @c_BatchNo,
-           	      Notes = 'M' + RTRIM(@c_BatchNo) + '-' + RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2),
-           	      CaseID = RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2)
-           	  WHERE Pickdetailkey = @c_Pickdetailkey
-           	      
+              UPDATE #PickDetail_WIP
+              SET Pickslipno = 'M' + @c_BatchNo,
+                  Notes = 'M' + RTRIM(@c_BatchNo) + '-' + RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2),
+                  CaseID = RIGHT('00'+CAST(@n_cnt AS NVARCHAR),2)
+              WHERE Pickdetailkey = @c_Pickdetailkey
+                  
               FETCH NEXT FROM cur_pickbatch INTO @c_Pickdetailkey 
            END                
            CLOSE cur_pickbatch
-           DEALLOCATE cur_pickbatch     	 	      	 	   
+           DEALLOCATE cur_pickbatch                         
           
            SET @n_cnt = @n_cnt + 1
            SET @c_PrevLoadkey = @c_Loadkey 
            FETCH NEXT FROM cur_Group INTO @c_Loadkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,   
-                                         @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10      		
-    	 END
-    	 CLOSE cur_Group
-    	 DEALLOCATE cur_Group
+                                         @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10            
+       END
+       CLOSE cur_Group
+       DEALLOCATE cur_Group
     END
                                  
     -----Update pickdetail_WIP work in progress staging table back to pickdetail 
@@ -1530,7 +1531,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     -----Generate Pickslip No------    
     IF @n_continue = 1 or @n_continue = 2 
     BEGIN
-    	 IF @c_DocType <> 'E'  
+       IF @c_DocType <> 'E'  
        BEGIN    
           EXEC isp_CreatePickSlip
                @c_Wavekey = @c_Wavekey
@@ -1539,7 +1540,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
               ,@c_PickslipType = '7'  --change to same as pickslip report to avoid duplicate
               ,@b_Success = @b_Success OUTPUT
               ,@n_Err = @n_err OUTPUT 
-              ,@c_ErrMsg = @c_errmsg OUTPUT       	
+              ,@c_ErrMsg = @c_errmsg OUTPUT        
           
           IF @b_Success = 0
              SELECT @n_continue = 3
@@ -1550,7 +1551,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01)  
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

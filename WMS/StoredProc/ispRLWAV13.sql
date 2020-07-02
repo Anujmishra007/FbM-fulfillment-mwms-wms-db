@@ -16,14 +16,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */ 
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV13]      
@@ -112,7 +113,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
            ,@c_LinkPickSlipToPick = 'Y'  --Y=Update pickslipno to pickdetail.pickslipno 
            ,@b_Success = @b_Success OUTPUT
            ,@n_Err = @n_err OUTPUT 
-           ,@c_ErrMsg = @c_errmsg OUTPUT       	
+           ,@c_ErrMsg = @c_errmsg OUTPUT        
        
        IF @b_Success = 0
           SELECT @n_continue = 3    
@@ -127,42 +128,42 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
                  WHERE O.Userdefine09 = @c_Wavekey
                  AND PD.WIP_RefNo = @c_SourceType)
        BEGIN
-       	  DELETE PickDetail_WIP 
-       	  FROM PickDetail_WIP (NOLOCK)
-       	  JOIN ORDERS (NOLOCK) ON PickDetail_WIP.Orderkey = ORDERS.Orderkey         	  
+           DELETE PickDetail_WIP 
+           FROM PickDetail_WIP (NOLOCK)
+           JOIN ORDERS (NOLOCK) ON PickDetail_WIP.Orderkey = ORDERS.Orderkey             
           WHERE ORDERS.Userdefine09 = @c_Wavekey 
           AND PickDetail_WIP.WIP_RefNo = @c_SourceType
        END 
        
        INSERT INTO PickDetail_WIP 
        (
-       	PickDetailKey,      CaseID,      		 PickHeaderKey,
-       	OrderKey,           OrderLineNumber, Lot,
-       	Storerkey,          Sku,      	   	 AltSku,     UOM,
-       	UOMQty,      	      Qty,      	   	 QtyMoved,   [Status],
-       	DropID,      	      Loc,      	     ID,      	 PackKey,
-       	UpdateSource,       CartonGroup,     CartonType,
-       	ToLoc,      	      DoReplenish,     ReplenishZone,
-       	DoCartonize,        PickMethod,      WaveKey,
-       	EffectiveDate,      AddDate,      	 AddWho,
-       	EditDate,           EditWho,      	 TrafficCop,
-       	ArchiveCop,         OptimizeCop,     ShipFlag,
-       	PickSlipNo,         TaskDetailKey,   TaskManagerReasonKey,
-       	Notes,      	      MoveRefKey,			 WIP_RefNo 
+         PickDetailKey,      CaseID,             PickHeaderKey,
+         OrderKey,           OrderLineNumber, Lot,
+         Storerkey,          Sku,                AltSku,     UOM,
+         UOMQty,              Qty,               QtyMoved,   [Status],
+         DropID,              Loc,             ID,        PackKey,
+         UpdateSource,       CartonGroup,     CartonType,
+         ToLoc,               DoReplenish,     ReplenishZone,
+         DoCartonize,        PickMethod,      WaveKey,
+         EffectiveDate,      AddDate,         AddWho,
+         EditDate,           EditWho,         TrafficCop,
+         ArchiveCop,         OptimizeCop,     ShipFlag,
+         PickSlipNo,         TaskDetailKey,   TaskManagerReasonKey,
+         Notes,               MoveRefKey,        WIP_RefNo 
        )
-       SELECT PD.PickDetailKey,  CaseID,   						PD.PickHeaderKey, 
-       	PD.OrderKey,         		 PD.OrderLineNumber,  PD.Lot,
-       	PD.Storerkey,        		 PD.Sku,      	      PD.AltSku,        PD.UOM,
-       	PD.UOMQty,      	   		 PD.Qty,      	      PD.QtyMoved,      PD.[Status],
-       	PD.DropID,      	   		 PD.Loc,      	      PD.ID,      	    PD.PackKey,
-       	PD.UpdateSource,     		 PD.CartonGroup,      PD.CartonType,
-       	PD.ToLoc,      	     		 PD.DoReplenish,      PD.ReplenishZone,
-       	PD.DoCartonize,      		 PD.PickMethod,       WD.Wavekey,
-       	PD.EffectiveDate,    		 PD.AddDate,      	  PD.AddWho,
-       	PD.EditDate,         		 PD.EditWho,      	  PD.TrafficCop,
-       	PD.ArchiveCop,       		 PD.OptimizeCop,      PD.ShipFlag,
-       	PD.PickSlipNo,       		 PD.TaskDetailKey,    PD.TaskManagerReasonKey,
-       	PD.Notes,      	     		 PD.MoveRefKey,				@c_SourceType 
+       SELECT PD.PickDetailKey,  CaseID,                    PD.PickHeaderKey, 
+         PD.OrderKey,                PD.OrderLineNumber,  PD.Lot,
+         PD.Storerkey,               PD.Sku,             PD.AltSku,        PD.UOM,
+         PD.UOMQty,                  PD.Qty,             PD.QtyMoved,      PD.[Status],
+         PD.DropID,                  PD.Loc,             PD.ID,             PD.PackKey,
+         PD.UpdateSource,            PD.CartonGroup,      PD.CartonType,
+         PD.ToLoc,                   PD.DoReplenish,      PD.ReplenishZone,
+         PD.DoCartonize,             PD.PickMethod,       WD.Wavekey,
+         PD.EffectiveDate,           PD.AddDate,           PD.AddWho,
+         PD.EditDate,                PD.EditWho,           PD.TrafficCop,
+         PD.ArchiveCop,              PD.OptimizeCop,      PD.ShipFlag,
+         PD.PickSlipNo,              PD.TaskDetailKey,    PD.TaskManagerReasonKey,
+         PD.Notes,                   PD.MoveRefKey,            @c_SourceType 
        FROM WAVEDETAIL WD (NOLOCK) 
        JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
        WHERE WD.Wavekey = @c_Wavekey
@@ -198,9 +199,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
                    
     -----Create Replenishment task to rack pick loc (sku.putawayloc)
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	       
+    BEGIN             
        DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-    	    SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, MAX(PD.UOM), SUM(PD.UOMQty) AS UOMQty, SKU.PutawayLoc    	           
+          SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, MAX(PD.UOM), SUM(PD.UOMQty) AS UOMQty, SKU.PutawayLoc                 
           FROM WAVEDETAIL WD (NOLOCK)
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
           JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey 
@@ -221,11 +222,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_ToLoc
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN          	 
-     	  	SET @c_LinkTaskToPick_SQL = ''--'AND PICKDETAIL.UOM = @c_UOM' --additional condition to search pickdetail     	  	
- 	  	    SET @c_PickMethod = 'FP'
+       BEGIN             
+         SET @c_LinkTaskToPick_SQL = ''--'AND PICKDETAIL.UOM = @c_UOM' --additional condition to search pickdetail         
+          SET @c_PickMethod = 'FP'
 
-       	  EXEC isp_InsertTaskDetail   
+           EXEC isp_InsertTaskDetail   
               @c_TaskType              = @c_TaskType             
              ,@c_Storerkey             = @c_Storerkey
              ,@c_Sku                   = @c_Sku
@@ -255,13 +256,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
              ,@c_WIP_RefNo             = @c_SourceType
              ,@b_Success               = @b_Success OUTPUT
              ,@n_Err                   = @n_err OUTPUT 
-             ,@c_ErrMsg                = @c_errmsg OUTPUT       	
+             ,@c_ErrMsg                = @c_errmsg OUTPUT         
           
              IF @b_Success <> 1 
              BEGIN
                 SELECT @n_continue = 3  
              END
-                	                             	  	   
+                                                      
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_ToLoc
        END 
        CLOSE cur_pick  
@@ -289,15 +290,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
           IF EXISTS(SELECT 1 FROM PICKDETAIL WITH (NOLOCK) 
                     WHERE PickDetailKey = @c_PickDetailKey)
           BEGIN
-          	 UPDATE PICKDETAIL WITH (ROWLOCK) 
-          	 SET Qty = @n_Qty, 
-          	     UOMQty = @n_UOMQty, 
-          	     TaskDetailKey = @c_TaskDetailKey,
-          	     PickslipNo = @c_Pickslipno,
-          	     WaveKey = @c_Wavekey,
-          	     EditDate = GETDATE(),   	   		        	       
-          	     TrafficCop = NULL
-          	 WHERE PickDetailKey = @c_PickDetailKey  
+             UPDATE PICKDETAIL WITH (ROWLOCK) 
+             SET Qty = @n_Qty, 
+                 UOMQty = @n_UOMQty, 
+                 TaskDetailKey = @c_TaskDetailKey,
+                 PickslipNo = @c_Pickslipno,
+                 WaveKey = @c_Wavekey,
+                 EditDate = GETDATE(),                             
+                 TrafficCop = NULL
+             WHERE PickDetailKey = @c_PickDetailKey  
              
              SELECT @n_err = @@ERROR
              
@@ -306,10 +307,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
                 SELECT @n_continue = 3  
                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
-   		       END   		
+                END        
           END
           ELSE 
-          BEGIN          	
+          BEGIN            
              INSERT INTO PICKDETAIL 
                   (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
                    Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
@@ -333,10 +334,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
                 SELECT @n_continue = 3  
                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Table Failed. (ispRLWAV13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
-   		       END         
+                END         
           END
        
-       	  FETCH FROM cur_PickDetailKey INTO @c_PickDetailKey, @n_Qty, @n_UOMQty, @c_TaskDetailkey, @c_Pickslipno
+           FETCH FROM cur_PickDetailKey INTO @c_PickDetailKey, @n_Qty, @n_UOMQty, @c_TaskDetailkey, @c_Pickslipno
        END   
        CLOSE cur_PickDetailKey
        DEALLOCATE cur_PickDetailKey             
@@ -355,7 +356,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
        BEGIN
           SELECT @n_continue = 3  
           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Taskdetailkey To Pickdetail Failed. (ispRLWAV13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                         	  
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Taskdetailkey To Pickdetail Failed. (ispRLWAV13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                             
        END          
     END*/
             
@@ -363,7 +364,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV13]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '1' -- Released  
+          --SET STATUS = '1' -- Released        --(Wan01) 
+          SET TMReleaseFlag = 'Y'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -381,9 +386,9 @@ RETURN_SP:
               WHERE O.Userdefine09 = @c_Wavekey
               AND PD.WIP_RefNo = @c_SourceType)
     BEGIN
-    	 DELETE PickDetail_WIP 
-    	 FROM PickDetail_WIP (NOLOCK)
-    	 JOIN ORDERS (NOLOCK) ON PickDetail_WIP.Orderkey = ORDERS.Orderkey         	  
+       DELETE PickDetail_WIP 
+       FROM PickDetail_WIP (NOLOCK)
+       JOIN ORDERS (NOLOCK) ON PickDetail_WIP.Orderkey = ORDERS.Orderkey              
        WHERE ORDERS.Userdefine09 = @c_Wavekey 
        AND PickDetail_WIP.WIP_RefNo = @c_SourceType       
     END        
