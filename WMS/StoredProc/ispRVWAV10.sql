@@ -15,14 +15,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV10]      
@@ -92,7 +93,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV10]
     ----Unlock pending move in for replenishment task
     /*
     IF @n_continue = 1 OR @n_continue = 2 
-    BEGIN    	
+    BEGIN      
        DECLARE cur_RepTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
            SELECT TD.Taskdetailkey, TD.Storerkey, TD.Sku
            FROM TASKDETAIL TD (NOLOCK) 
@@ -108,7 +109,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV10]
           
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2) 
        BEGIN      
-             	
+               
         EXEC rdt.rdt_Putaway_PendingMoveIn 
           @cUserName = @c_UserName, 
           @cType = 'UNLOCK'
@@ -135,10 +136,10 @@ CREATE PROCEDURE [dbo].[ispRVWAV10]
          FETCH FROM cur_RepTask INTO @c_Taskdetailkey, @c_Storerkey, @c_Sku         
        END
        CLOSE cur_RepTask
-       DEALLOCATE cur_RepTask     	
+       DEALLOCATE cur_RepTask       
     END
     */
-    	    
+          
     ----delete tasks
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
@@ -180,7 +181,11 @@ CREATE PROCEDURE [dbo].[ispRVWAV10]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -202,17 +207,17 @@ CREATE PROCEDURE [dbo].[ispRVWAV10]
           @b_success    OUTPUT,
           @c_authority  OUTPUT,
           @n_err        OUTPUT,
-          @c_errmsg     OUTPUT    	
+          @c_errmsg     OUTPUT      
 
        IF @b_success = 1 AND @c_authority = '1' 
        BEGIN
-       	  UPDATE ORDERS WITH (ROWLOCK)
-       	  SET SOStatus = '0',
-       	      TrafficCop = NULL,
-       	      EditWho = SUSER_SNAME(),
-       	      EditDate = GETDATE()
-       	  WHERE Userdefine09 = @c_Wavekey
-       	  AND SOStatus = 'TSRELEASED'
+           UPDATE ORDERS WITH (ROWLOCK)
+           SET SOStatus = '0',
+               TrafficCop = NULL,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+           WHERE Userdefine09 = @c_Wavekey
+           AND SOStatus = 'TSRELEASED'
        END          
     END
                    

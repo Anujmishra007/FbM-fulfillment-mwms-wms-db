@@ -15,14 +15,15 @@ GO
 /*                                                                       */
 /* Called By: wave                                                       */
 /*                                                                       */
-/* PVCS Version: 1.0                                                     */
+/* PVCS Version: 1.1                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
 /* Updates:                                                              */
-/* Date         Author   Ver  Purposes                                   */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispRVWAV04]
@@ -330,9 +331,12 @@ BEGIN
       END
 
       UPDATE WAVE
-       SET STATUS = '0' -- Normal
-          ,EditWho = SUSER_NAME()
-          ,EditDate= GETDATE()
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          --   ,EditWho = SUSER_NAME()          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01)
+           ,  EditDate= GETDATE()               
       WHERE WAVEKEY = @c_wavekey
 
       SET @n_err = @@ERROR

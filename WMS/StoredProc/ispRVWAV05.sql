@@ -15,29 +15,18 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.2                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 12/02/2018   NJOW01   1.0  WMS-4039 Add Asia Ecom strategy            */
-/* 22/01/2020   NJOW02   1.1  WMS-11884 Include skip hop task            */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 12/02/2018  NJOW01   1.0   WMS-4039 Add Asia Ecom strategy            */
+/* 22/01/2020  NJOW02   1.1   WMS-11884 Include skip hop task            */
+/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                          */
 /*************************************************************************/   
-/*
-declare @b_Success      int          
- ,@n_err          int          
- ,@c_errmsg       NVARCHAR(250)
-exec ispRVWAV05    
-  '0000003572'  
- ,''
- ,@b_Success OUTPUT  
- ,@n_err  OUTPUT  
- ,@c_errmsg  OUTPUT
-select @b_success, @n_err, @c_errmsg*/
-
 CREATE PROCEDURE [dbo].[ispRVWAV05]      
   @c_wavekey      NVARCHAR(10)  
  ,@c_Orderkey     NVARCHAR(10) = ''
@@ -152,7 +141,11 @@ CREATE PROCEDURE [dbo].[ispRVWAV05]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

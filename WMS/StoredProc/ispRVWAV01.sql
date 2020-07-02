@@ -15,31 +15,21 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.4                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 05-Nov-2013  Chee01   1.0  Delete RefKeyLookUp                        */  
-/* 28-Apr-2014  NJOW01   1.1  309316-Reverse XDOCK staging to            */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 05-Nov-2013 Chee01   1.0   Delete RefKeyLookUp                        */  
+/* 28-Apr-2014 NJOW01   1.1   309316-Reverse XDOCK staging to            */
 /*                            induction move task                        */
-/* 09-Jul-2015  NJOW06   1.2  343964-amend the logic                     */
-/* 03-Oct-2019  NJOW17   1.3  WMS-9533 Add Ecom order handlig            */
+/* 09-Jul-2015 NJOW06   1.2   343964-amend the logic                     */
+/* 03-Oct-2019 NJOW17   1.3   WMS-9533 Add Ecom order handlig            */
+/* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                          */
 /*************************************************************************/   
-/*
-declare @b_Success      int          
- ,@n_err          int          
- ,@c_errmsg       NVARCHAR(250)
-exec ispRVWAV01    
-  '0000003572'  
- ,@b_Success OUTPUT  
- ,@n_err  OUTPUT  
- ,@c_errmsg  OUTPUT
-select @b_success, @n_err, @c_errmsg*/
-
 CREATE PROCEDURE [dbo].[ispRVWAV01]      
   @c_wavekey      NVARCHAR(10)  
  ,@c_Orderkey     NVARCHAR(10) = ''
@@ -193,7 +183,11 @@ CREATE PROCEDURE [dbo].[ispRVWAV01]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

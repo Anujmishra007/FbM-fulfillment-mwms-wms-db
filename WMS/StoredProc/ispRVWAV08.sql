@@ -15,14 +15,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV08]      
@@ -55,11 +56,11 @@ CREATE PROCEDURE [dbo].[ispRVWAV08]
            ,@c_Taskdetailkey NVARCHAR(10)
            ,@c_facility NVARCHAR(5)  
            ,@c_authority NVARCHAR(10)
-    	     ,@c_FromLoc nvarchar(10)
-    	     ,@c_FromID  nvarchar(18)     	             	            
-    	     ,@c_PickDetailKey NVARCHAR(10)
-    	     ,@c_PickToloc NVARCHAR(10)         	
-    	     ,@c_PickReplenishZone NVARCHAR(10)         	                	                 
+           ,@c_FromLoc nvarchar(10)
+           ,@c_FromID  nvarchar(18)                                  
+           ,@c_PickDetailKey NVARCHAR(10)
+           ,@c_PickToloc NVARCHAR(10)           
+           ,@c_PickReplenishZone NVARCHAR(10)                                               
 
     SELECT TOP 1 @c_StorerKey = O.Storerkey,
                  @c_Facility = O.Facility 
@@ -100,36 +101,36 @@ CREATE PROCEDURE [dbo].[ispRVWAV08]
     --deduct qty replen from pickdetail
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 DECLARE CUR_REPLENTASKS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-    	 SELECT TD.Lot, TD.FromLoc, TD.FromID, TD.Qty --TD.Qty - TD.SystemQty
-    	 FROM TaskDetail TD WITH (NOLOCK) 
-    	 JOIN LOC WITH (NOLOCK) ON TD.ToLoc = LOC.Loc
-    	 WHERE TD.Wavekey = @c_Wavekey 
+       DECLARE CUR_REPLENTASKS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+       SELECT TD.Lot, TD.FromLoc, TD.FromID, TD.Qty --TD.Qty - TD.SystemQty
+       FROM TaskDetail TD WITH (NOLOCK) 
+       JOIN LOC WITH (NOLOCK) ON TD.ToLoc = LOC.Loc
+       WHERE TD.Wavekey = @c_Wavekey 
          AND TD.Sourcetype = 'ispRLWAV08'
          AND TD.[Status] = '0'
          AND TD.TaskType = 'RPF'
          AND (LOC.LocationType = 'DYNPPICK' OR LOC.LocationCategory = 'DYNPPICK')
-    	 
-    	 OPEN CUR_REPLENTASKS
-    	 
-    	 FETCH FROM CUR_REPLENTASKS INTO @c_Lot, @c_FromLoc, @c_FromID, @n_Qty
-    	 
-    	 WHILE @@FETCH_STATUS = 0
-    	 BEGIN
-    	 	UPDATE LOTxLOCxID WITH (ROWLOCK)
-    	 	   SET QtyReplen = QtyReplen - CASE WHEN QtyReplen < @n_Qty THEN QtyReplen ELSE @n_Qty END, 
-    	 	       TrafficCop = NULL,
-    	 	       EditWho = SUSER_SNAME(),
-    	 	       EditDate = GETDATE() 
-    	 	WHERE Lot = @c_Lot
-    	 	AND   LOC = @c_FromLoc 
-    	 	AND   ID  = @c_FromID  
-    	 
-    	 	FETCH FROM CUR_REPLENTASKS INTO @c_Lot, @c_FromLoc, @c_FromID, @n_Qty
-    	 END
-    	 
-    	 CLOSE CUR_REPLENTASKS
-    	 DEALLOCATE CUR_REPLENTASKS    	     	  
+       
+       OPEN CUR_REPLENTASKS
+       
+       FETCH FROM CUR_REPLENTASKS INTO @c_Lot, @c_FromLoc, @c_FromID, @n_Qty
+       
+       WHILE @@FETCH_STATUS = 0
+       BEGIN
+         UPDATE LOTxLOCxID WITH (ROWLOCK)
+            SET QtyReplen = QtyReplen - CASE WHEN QtyReplen < @n_Qty THEN QtyReplen ELSE @n_Qty END, 
+                TrafficCop = NULL,
+                EditWho = SUSER_SNAME(),
+                EditDate = GETDATE() 
+         WHERE Lot = @c_Lot
+         AND   LOC = @c_FromLoc 
+         AND   ID  = @c_FromID  
+       
+         FETCH FROM CUR_REPLENTASKS INTO @c_Lot, @c_FromLoc, @c_FromID, @n_Qty
+       END
+       
+       CLOSE CUR_REPLENTASKS
+       DEALLOCATE CUR_REPLENTASKS              
     END     
     
     ----delete tasks
@@ -188,22 +189,22 @@ CREATE PROCEDURE [dbo].[ispRVWAV08]
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN
-       	
-       	  SELECT TOP 1 @c_ToId = ID
-       	  FROM LOTXLOCXID (NOLOCK)
-       	  WHERE LOT = @c_Lot
-       	  AND Loc = @c_picktoloc
-       	  ORDER BY CASE WHEN RIGHT(RTRIM(ID),10) = @c_PickReplenishZone THEN 1 ELSE 2 END, ID
-       	  
-       	  IF @@ROWCOUNT = 0
-       	     SET @c_ToId = @c_PickReplenishZone
-       	
-       	  UPDATE PICKDETAIL WITH (ROWLOCK)
-       	  SET Loc = @c_PickToloc,
-       	      ID = @c_ToId,
-       	      Toloc = '',
-       	      ReplenishZone = ''
-       	  WHERE Pickdetailkey = @c_Pickdetailkey
+         
+           SELECT TOP 1 @c_ToId = ID
+           FROM LOTXLOCXID (NOLOCK)
+           WHERE LOT = @c_Lot
+           AND Loc = @c_picktoloc
+           ORDER BY CASE WHEN RIGHT(RTRIM(ID),10) = @c_PickReplenishZone THEN 1 ELSE 2 END, ID
+           
+           IF @@ROWCOUNT = 0
+              SET @c_ToId = @c_PickReplenishZone
+         
+           UPDATE PICKDETAIL WITH (ROWLOCK)
+           SET Loc = @c_PickToloc,
+               ID = @c_ToId,
+               Toloc = '',
+               ReplenishZone = ''
+           WHERE Pickdetailkey = @c_Pickdetailkey
 
           SELECT @n_err = @@ERROR  
           IF @n_err <> 0  
@@ -212,8 +213,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV08]
              SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81058   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
              SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on Pickdetail Failed (ispRVWAV08_TEST)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
           END  
-       	  
-          FETCH FROM cur_PickDetail INTO @c_PickDetailKey, @c_PickToloc, @c_PickReplenishZone, @c_Lot       	
+           
+          FETCH FROM cur_PickDetail INTO @c_PickDetailKey, @c_PickToloc, @c_PickReplenishZone, @c_Lot          
        END
        CLOSE cur_PickDetail
        DEALLOCATE cur_PickDetail              
@@ -223,7 +224,11 @@ CREATE PROCEDURE [dbo].[ispRVWAV08]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -245,17 +250,17 @@ CREATE PROCEDURE [dbo].[ispRVWAV08]
           @b_success    OUTPUT,
           @c_authority  OUTPUT,
           @n_err        OUTPUT,
-          @c_errmsg     OUTPUT    	
+          @c_errmsg     OUTPUT      
 
        IF @b_success = 1 AND @c_authority = '1' 
        BEGIN
-       	  UPDATE ORDERS WITH (ROWLOCK)
-       	  SET SOStatus = '0',
-       	      TrafficCop = NULL,
-       	      EditWho = SUSER_SNAME(),
-       	      EditDate = GETDATE()
-       	  WHERE Userdefine09 = @c_Wavekey
-       	  AND SOStatus = 'TSRELEASED'
+           UPDATE ORDERS WITH (ROWLOCK)
+           SET SOStatus = '0',
+               TrafficCop = NULL,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+           WHERE Userdefine09 = @c_Wavekey
+           AND SOStatus = 'TSRELEASED'
        END          
     END
                    

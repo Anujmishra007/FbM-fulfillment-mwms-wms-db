@@ -15,14 +15,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV25]      
@@ -57,9 +58,14 @@ CREATE PROCEDURE [dbo].[ispRVWAV25]
            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released. (ispRVWAV25)'
 
            UPDATE WAVE 
-           SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
            WHERE WAVEKEY = @c_wavekey
-           AND STATUS = '1'                      
+           --AND STATUS = '1'                   --(Wan01)
+           AND TMReleaseFlag = 'Y'              --(Wan01)                    
         END                 
     END
 
@@ -78,14 +84,14 @@ CREATE PROCEDURE [dbo].[ispRVWAV25]
                                     
     ----delete tasks
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN    	
-  	   DECLARE cur_task CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-  	      SELECT RP.Replenishmentkey
-  	      FROM REPLENISHMENT RP (NOLOCK) 
-  	      WHERE RP.Wavekey = @c_Wavekey 
-  	      AND RP.OriginalFromLoc = 'ispRLWAV25' 
-  	      AND RP.Confirmed = 'N'
-  	      
+    BEGIN      
+      DECLARE cur_task CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT RP.Replenishmentkey
+         FROM REPLENISHMENT RP (NOLOCK) 
+         WHERE RP.Wavekey = @c_Wavekey 
+         AND RP.OriginalFromLoc = 'ispRLWAV25' 
+         AND RP.Confirmed = 'N'
+         
        OPEN cur_task  
           
        FETCH NEXT FROM cur_task INTO @c_Replenishmentkey
@@ -102,7 +108,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV25]
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Replenishment Table Failed. (ispRVWAV25)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
           END               
-       	  
+           
           FETCH NEXT FROM cur_task INTO @c_Replenishmentkey
        END
        CLOSE cur_task

@@ -22,7 +22,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date        Author   Ver   Purposes                                  */
+/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                         */   
 /************************************************************************/
 CREATE PROC ispRVWAV07
         @c_Wavekey      NVARCHAR(10)  
@@ -185,10 +186,14 @@ BEGIN
    DEALLOCATE CUR_DEL
 
    UPDATE WAVE WITH (ROWLOCK)
-   SET Status = '0' -- Released  
-      ,Trafficcop = NULL
-      ,EditWho = SUSER_NAME()
-      ,EditDate= GETDATE()
+   
+   --SET Status = '0' -- Released      --(Wan01)
+   --   ,Trafficcop = NULL             --(Wan01)
+   --   ,EditWho = SUSER_NAME()        --(Wan01)
+   SET TMReleaseFlag = 'N'             --(Wan01) 
+   ,  TrafficCop = NULL                --(Wan01) 
+   ,  EditWho = SUSER_SNAME()          --(Wan01) 
+   ,  EditDate= GETDATE()              --(Wan01)      
    WHERE Wavekey = @c_Wavekey 
    
    SET @n_err = @@ERROR

@@ -15,14 +15,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV31]      
@@ -63,9 +64,14 @@ CREATE PROCEDURE [dbo].[ispRVWAV31]
            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released. (ispRVWAV31)'
 
            UPDATE WAVE 
-           SET STATUS = '0' -- Normal
+            --SET STATUS = '0' -- Normal        --(Wan01)
+            SET TMReleaseFlag = 'N'             --(Wan01) 
+            ,  TrafficCop = NULL                --(Wan01) 
+            ,  EditWho = SUSER_SNAME()          --(Wan01) 
+            ,  EditDate= GETDATE()              --(Wan01) 
            WHERE WAVEKEY = @c_wavekey
-           AND STATUS = '1'                      
+           --AND STATUS = '1'                   --(Wan01) 
+           AND TMReleaseFlag = 'Y'              --(Wan01)     
         END                 
     END
 
@@ -91,8 +97,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV31]
     ----Remove taskdetailkey from pickdetail of the wave
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-  	   DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-  	      SELECT PICKDETAIL.Pickdetailkey
+      DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT PICKDETAIL.Pickdetailkey
           FROM WAVEDETAIL (NOLOCK)  
           JOIN PICKDETAIL ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey
           WHERE WAVEDETAIL.Wavekey = @c_Wavekey
@@ -103,10 +109,10 @@ CREATE PROCEDURE [dbo].[ispRVWAV31]
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN
-       	  UPDATE PICKDETAIL WITH (ROWLOCK)
-       	  SET Notes = '',
-       	      Trafficcop = NULL
-       	  WHERE Pickdetailkey = @c_Pickdetailkey    
+           UPDATE PICKDETAIL WITH (ROWLOCK)
+           SET Notes = '',
+               Trafficcop = NULL
+           WHERE Pickdetailkey = @c_Pickdetailkey    
        
           SELECT @n_err = @@ERROR
           
@@ -116,18 +122,22 @@ CREATE PROCEDURE [dbo].[ispRVWAV31]
              SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81030   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
              SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRVWAV31)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
           END          
-       	      
+               
           FETCH NEXT FROM cur_pick INTO @c_Pickdetailkey
-       END         	  
+       END             
        CLOSE cur_pick
-       DEALLOCATE cur_pick    	
+       DEALLOCATE cur_pick       
     END        
     
     -----Reverse wave status------
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+            SET TMReleaseFlag = 'N'             --(Wan01) 
+            ,  TrafficCop = NULL                --(Wan01) 
+            ,  EditWho = SUSER_SNAME()          --(Wan01) 
+            ,  EditDate= GETDATE()              --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

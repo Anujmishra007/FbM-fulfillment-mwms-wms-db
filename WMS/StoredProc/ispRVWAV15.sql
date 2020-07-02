@@ -15,14 +15,15 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV15]      
@@ -56,8 +57,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV15]
            ,@c_Taskdetailkey NVARCHAR(10)
            ,@c_facility NVARCHAR(5)  
            ,@c_authority NVARCHAR(10)
-    	     ,@c_FromLoc nvarchar(10)
-    	     ,@c_FromID  nvarchar(18)     	             	            
+           ,@c_FromLoc nvarchar(10)
+           ,@c_FromID  nvarchar(18)                                  
 
     SELECT TOP 1 @c_StorerKey = O.Storerkey,
                  @c_Facility = O.Facility 
@@ -94,7 +95,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV15]
     END
     
     BEGIN TRAN
-    	    
+          
     ----delete tasks
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
@@ -136,7 +137,11 @@ CREATE PROCEDURE [dbo].[ispRVWAV15]
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01) 
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  
@@ -158,17 +163,17 @@ CREATE PROCEDURE [dbo].[ispRVWAV15]
           @b_success    OUTPUT,
           @c_authority  OUTPUT,
           @n_err        OUTPUT,
-          @c_errmsg     OUTPUT    	
+          @c_errmsg     OUTPUT      
 
        IF @b_success = 1 AND @c_authority = '1' 
        BEGIN
-       	  UPDATE ORDERS WITH (ROWLOCK)
-       	  SET SOStatus = '0',
-       	      TrafficCop = NULL,
-       	      EditWho = SUSER_SNAME(),
-       	      EditDate = GETDATE()
-       	  WHERE Userdefine09 = @c_Wavekey
-       	  AND SOStatus = 'TSRELEASED'
+           UPDATE ORDERS WITH (ROWLOCK)
+           SET SOStatus = '0',
+               TrafficCop = NULL,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+           WHERE Userdefine09 = @c_Wavekey
+           AND SOStatus = 'TSRELEASED'
        END          
     END
                    

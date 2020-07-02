@@ -15,7 +15,7 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -25,6 +25,7 @@ GO
 /* Date         Author   Ver  Purposes                                   */ 
 /* 15-Aug-2019  NJOW01   1.0  WMS-9825 reverse replenishment records by  */
 /*                            ucc for manual replenshment as backup plan */
+/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV16]      
@@ -74,27 +75,27 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
     ----reject if wave not yet release      
     IF (@n_continue = 1 OR @n_continue = 2) 
     BEGIN
-    	  IF @c_WaveType = 'PAPER' --NJOW01
-    	  BEGIN
-    	  	 IF NOT EXISTS(SELECT 1 FROM REPLENISHMENT (NOLOCK) 
-    	  	               WHERE Wavekey = @c_Wavekey
-    	  	               AND Storerkey = @c_Storerkey
-    	  	               AND Confirmed = 'N')
+        IF @c_WaveType = 'PAPER' --NJOW01
+        BEGIN
+          IF NOT EXISTS(SELECT 1 FROM REPLENISHMENT (NOLOCK) 
+                        WHERE Wavekey = @c_Wavekey
+                        AND Storerkey = @c_Storerkey
+                        AND Confirmed = 'N')
            BEGIN               
               SELECT @n_continue = 3  
               SELECT @n_err = 81010  
               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released for paper replenishment. (ispRVWAV16)'    
-           END         	  	                
-    	  END
-    	  ELSE
-    	  BEGIN
+           END                             
+        END
+        ELSE
+        BEGIN
            IF NOT EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
                       WHERE TD.Wavekey = @c_Wavekey
                       AND TD.Sourcetype IN ('ispRLWAV16') 
                       AND TD.Tasktype IN ('RPF')) 
            BEGIN
-           	  IF NOT EXISTS (SELECT 1
-           	                 FROM RDT.rdtPTLStationLog (NOLOCK)
+              IF NOT EXISTS (SELECT 1
+                             FROM RDT.rdtPTLStationLog (NOLOCK)
                              WHERE RDT.rdtPTLStationLog.Wavekey = @c_Wavekey 
                              AND RDT.rdtPTLStationLog.SourceType = 'ispRLWAV16') AND @c_WaveConsoAllocation = '1' 
               BEGIN               
@@ -109,20 +110,20 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
     ----reject if any task was started
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 IF @c_WaveType = 'PAPER' --NJOW01
-    	 BEGIN
-    	  	IF EXISTS(SELECT 1 FROM REPLENISHMENT (NOLOCK) 
-    	  	          WHERE Wavekey = @c_Wavekey
-    	  	          AND Storerkey = @c_Storerkey
-    	  	          AND Confirmed <> 'N')
+       IF @c_WaveType = 'PAPER' --NJOW01
+       BEGIN
+         IF EXISTS(SELECT 1 FROM REPLENISHMENT (NOLOCK) 
+                   WHERE Wavekey = @c_Wavekey
+                   AND Storerkey = @c_Storerkey
+                   AND Confirmed <> 'N')
           BEGIN               
              SELECT @n_continue = 3  
              SELECT @n_err = 81030  
              SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Some replenishment have been started. Not allow to Reverse (ispRVWAV16)'       
-          END         	  	                    	 	
-    	 END
-    	 ELSE
-    	 BEGIN    	
+          END                                      
+       END
+       ELSE
+       BEGIN      
           IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
                      WHERE TD.Wavekey = @c_Wavekey
                      AND TD.Sourcetype IN ('ispRLWAV16')
@@ -141,28 +142,28 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
     ----delete replenishment
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-    	 IF @c_WaveType = 'PAPER' --NJOW01
-    	 BEGIN
+       IF @c_WaveType = 'PAPER' --NJOW01
+       BEGIN
           DECLARE cur_Repl CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
              SELECT Replenishmentkey, Sku
              FROM REPLENISHMENT (NOLOCK) 
-    	  	   WHERE Wavekey = @c_Wavekey
-    	  	   AND Storerkey = @c_Storerkey
-    	  	   AND Confirmed = 'N'
-    	  	   ORDER BY Replenishmentkey    	 	  
+            WHERE Wavekey = @c_Wavekey
+            AND Storerkey = @c_Storerkey
+            AND Confirmed = 'N'
+            ORDER BY Replenishmentkey          
 
           OPEN cur_Repl 
           
           FETCH NEXT FROM cur_Repl INTO @c_Replenishmentkey, @c_Sku
           
           WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-    	 	  BEGIN
-    	 	  	 UPDATE UCC WITH (ROWLOCK)
-    	 	  	 SET Status = '1',
-    	 	  	     userdefined10 = ''
-    	 	  	 WHERE Userdefined10 = @c_Replenishmentkey
-    	 	  	 AND Storerkey = @c_Storerkey 
-    	 	  	 AND Sku = @c_Sku
+           BEGIN
+             UPDATE UCC WITH (ROWLOCK)
+             SET Status = '1',
+                 userdefined10 = ''
+             WHERE Userdefined10 = @c_Replenishmentkey
+             AND Storerkey = @c_Storerkey 
+             AND Sku = @c_Sku
 
              SELECT @n_err = @@ERROR
              IF @n_err <> 0 
@@ -171,10 +172,10 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81050   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update UCC Table Failed. (ispRVWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
              END 
-    	 	  	 
+             
              DELETE REPLENISHMENT 
-    	  	   WHERE Replenishmentkey = @c_Replenishmentkey
-    	  	   
+            WHERE Replenishmentkey = @c_Replenishmentkey
+            
              SELECT @n_err = @@ERROR
              IF @n_err <> 0 
              BEGIN
@@ -183,13 +184,13 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Replenishment Table Failed. (ispRVWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
              END 
 
-             FETCH NEXT FROM cur_Repl INTO @c_Replenishmentkey, @c_Sku         	 	  	
-    	 	  END
-    	 	  CLOSE cur_Repl
-    	 	  DEALLOCATE cur_Repl
-    	 END
-    	 ELSE
-    	 BEGIN    	 	    	
+             FETCH NEXT FROM cur_Repl INTO @c_Replenishmentkey, @c_Sku                 
+           END
+           CLOSE cur_Repl
+           DEALLOCATE cur_Repl
+       END
+       ELSE
+       BEGIN               
           DELETE TASKDETAIL
           WHERE TASKDETAIL.Wavekey = @c_Wavekey 
           AND TASKDETAIL.Sourcetype IN ('ispRLWAV16')
@@ -236,7 +237,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
          FETCH NEXT FROM cur_PICK INTO @c_Pickdetailkey, @c_UCCNo
           
          WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-    	 	 BEGIN
+          BEGIN
             UPDATE PICKDETAIL WITH (ROWLOCK) 
              SET PICKDETAIL.TaskdetailKey = '',     
                  MoveRefkey = '',
@@ -251,18 +252,22 @@ CREATE PROCEDURE [dbo].[ispRVWAV16]
               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRVWAV16)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
             END          
-    	 	 	
+            
             FETCH NEXT FROM cur_PICK INTO @c_Pickdetailkey, @c_UCCNo
-    	 	 END
-    	 	 CLOSE cur_PICK
-    	 	 DEALLOCATE cur_PICK    	 	                   
+          END
+          CLOSE cur_PICK
+          DEALLOCATE cur_PICK                             
     END        
     
     -----Reverse wave status------
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  
        UPDATE WAVE 
-          SET STATUS = '0' -- Normal
+          --SET STATUS = '0' -- Normal          --(Wan01)
+          SET TMReleaseFlag = 'N'               --(Wan01) 
+           ,  TrafficCop = NULL                 --(Wan01) 
+           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditDate= GETDATE()               --(Wan01) 
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

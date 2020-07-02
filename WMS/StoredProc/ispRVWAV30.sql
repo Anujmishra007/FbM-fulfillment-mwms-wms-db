@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: ReverseWave_SP                                            */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2019-10-16  Wan01    1.1   Delete Taskdetail Handling at Custom SP   */
 /*                            ispTSKD05 Call from Delete Trigger        */
+/* 2020-04-01  Wan04    1.3   Sync Exceed & SCE                         */   
 /************************************************************************/
 CREATE PROC ispRVWAV30
         @c_Wavekey      NVARCHAR(10)  
@@ -302,10 +303,13 @@ BEGIN
    ---Wan01 (END) ---*/
 
    UPDATE WAVE WITH (ROWLOCK)
-   SET Status = '0' -- Released  
-      ,Trafficcop = NULL
-      ,EditWho = SUSER_NAME()
-      ,EditDate= GETDATE()
+      --SET Status = '0' -- Released      --(Wan04) 
+      --,Trafficcop = NULL                --(Wan04) 
+      --,EditWho = SUSER_NAME()           --(Wan04) 
+      SET TMReleaseFlag = 'N'             --(Wan04) 
+      ,  TrafficCop = NULL                --(Wan04) 
+      ,  EditWho = SUSER_SNAME()          --(Wan04) 
+      ,  EditDate= GETDATE()              --(Wan04)       
    WHERE Wavekey = @c_Wavekey 
    
    SET @n_err = @@ERROR
