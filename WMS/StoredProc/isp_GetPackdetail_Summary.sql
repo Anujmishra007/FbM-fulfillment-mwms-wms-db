@@ -17,7 +17,7 @@ GO
 /*        : Change DW Select to Store Procedure                         */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-05-22  Wan01    1.1   Fixed. Conso pack Allocation Qty incorrect*/
 /* 2020-06-03  Wan02    1.2   WMS-13491 - SG - PMI - Packing [CR]       */
+/* 2020-07-02  Wan03    1.3   Fixed. Not to show Total for storerconfig */ 
+/*                            'PackbyDropID' not turn on                */
 /************************************************************************/
 CREATE PROC isp_GetPackdetail_Summary
            @c_PickslipNo      NVARCHAR(10)
@@ -243,32 +245,37 @@ BEGIN
    ORDER BY OS.Storerkey
          ,  OS.Sku
 
-   INSERT INTO @t_PACKSUMMARY
-      (  RecType
-      ,  Storerkey    
-      ,  Sku          
-      ,  PickedQty    
-      ,  PackedQty    
-      ,  OtherQty     
-      ,  Orddetlot1   
-      ,  ScanAsPack   
-      ,  Casecnt      
-      ,  AltSku       
-      ,  SkuDescr     
-      )
-   SELECT RecType = 'summary'
-         ,Storerkey = ''
-         ,Sku = 'Total: '
-         ,TotalPickedQty = ISNULL(SUM(OS.PickedQty),0)
-         ,TotolPackedQty = ISNULL(SUM(P.PackedQty),0) 
-         ,OtherQty   = NULL
-         ,Orddetlot1 = ''
-         ,ScanAsPack = ''
-         ,Casecnt    = NULL
-         ,AltSku     = ''
-         ,SkuDescr   = ''
-   FROM #TMP_ORDERSKU  OS
-   LEFT JOIN #TMP_PACK P ON OS.Storerkey = P.Storerkey AND OS.Sku = P.Sku
+   --(Wan03) - START
+   IF @c_PackByDropID = '1' AND @c_DropID <> ''
+   BEGIN
+      INSERT INTO @t_PACKSUMMARY
+         (  RecType
+         ,  Storerkey    
+         ,  Sku          
+         ,  PickedQty    
+         ,  PackedQty    
+         ,  OtherQty     
+         ,  Orddetlot1   
+         ,  ScanAsPack   
+         ,  Casecnt      
+         ,  AltSku       
+         ,  SkuDescr     
+         )
+      SELECT RecType = 'summary'
+            ,Storerkey = ''
+            ,Sku = 'Total: '
+            ,TotalPickedQty = ISNULL(SUM(OS.PickedQty),0)
+            ,TotolPackedQty = ISNULL(SUM(P.PackedQty),0) 
+            ,OtherQty   = NULL
+            ,Orddetlot1 = ''
+            ,ScanAsPack = ''
+            ,Casecnt    = NULL
+            ,AltSku     = ''
+            ,SkuDescr   = ''
+      FROM #TMP_ORDERSKU  OS
+      LEFT JOIN #TMP_PACK P ON OS.Storerkey = P.Storerkey AND OS.Sku = P.Sku
+   END 
+   --(Wan03) - END
    
    SELECT Storerkey    
          ,Sku          
