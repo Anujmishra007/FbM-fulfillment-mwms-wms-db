@@ -32,6 +32,7 @@ GO
 /*18/12/2019  WLChooi   1.5   WMS-11444 - Limit SKU per page (WL03)     */
 /*20/02/2020  WLChooi   1.6   WMS-12107 - Modify column logic (WL01)    */
 /*05/05/2020  CSCHONG   1.7   WMS-12994 - modify column logic (CS02)    */
+/*02/07/2020  WLChooi   1.8   Bug Fix (WL05)                            */
 /************************************************************************/
 CREATE PROC isp_Packing_List_42
             (@c_Orderkey NVARCHAR(10),
@@ -622,7 +623,7 @@ BEGIN
          t.G8,
          t.G9, --WL02
          t.G10, --WL02
-         (Row_Number() OVER (PARTITION BY ExtrnConsoOrdKey Order By ExtrnConsoOrdKey Asc) ) / @n_MaxLine AS PageNo --WL03  --CS02
+         (Row_Number() OVER (PARTITION BY ExtrnConsoOrdKey, Orderkey Order By ExtrnConsoOrdKey, Orderkey Asc) ) / @n_MaxLine AS PageNo --WL03  --CS02   --WL05
         ,t.A15                   --CS02
         ,t.ExtrnPOKEY            --CS02
         ,t.ExtrnConsoOrdKey      --CS02
