@@ -83,6 +83,8 @@ GO
 /*                                 ASN Auto Create Orders when finalized*/
 /* 03-May-2019  WLCHOOI   WMS-8866 - ASNAUTOHOLD - Hold multiple        */
 /*                                   combination of lottables (WL02)    */
+/* 07-Jul-2020  WLChooi   WMS-14045 - Add Option5 for StorerConfig =    */ 
+/*                        CloseASNStatus (WL03)                         */ 
 /************************************************************************/  
   
 CREATE PROC    [dbo].[ispFinalizeReceipt]  
@@ -202,6 +204,13 @@ BEGIN
         ,  @c_LottableValue             NVARCHAR(30) --NJOW10  
       
         ,  @c_Lottables                 NVARCHAR(10) --WL02
+
+        , @c_Option1                   NVARCHAR(100) = ''    --WL03
+        , @c_Option2                   NVARCHAR(100) = ''    --WL03
+        , @c_Option3                   NVARCHAR(100) = ''    --WL03
+        , @c_Option4                   NVARCHAR(100) = ''    --WL03
+        , @c_Option5                   NVARCHAR(4000) = ''   --WL03
+        , @c_IncludeReceiptGroup       NVARCHAR(4000) = ''   --WL03
   
    SET @c_debug = 0  
   
@@ -1645,13 +1654,33 @@ BEGIN
                @b_Success        OUTPUT,  
                @c_CloseASNStatus OUTPUT,  
                @n_err2           OUTPUT,  
-               @c_ErrMsg         OUTPUT  
+               @c_ErrMsg         OUTPUT,
+               @c_Option1        OUTPUT,   --WL03 
+               @c_Option2        OUTPUT,   --WL03
+               @c_Option3        OUTPUT,   --WL03
+               @c_Option4        OUTPUT,   --WL03
+               @c_Option5        OUTPUT    --WL03
   
          IF @b_Success <> 1  
          BEGIN  
             SELECT @n_err = 60070 -- @n_err2  
             SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'  
          END  
+
+         --WL03 START
+         IF ISNULL(@c_Option5,'') <> ''
+         BEGIN
+            SELECT @c_IncludeReceiptGroup = dbo.fnc_GetParamValueFromString('@c_IncludeReceiptGroup', @c_Option5, @c_IncludeReceiptGroup) 
+         END
+
+         IF @c_CloseASNStatus = '1' AND ISNULL(@c_IncludeReceiptGroup,'') <> ''
+         BEGIN
+            IF NOT EXISTS (SELECT 1 FROM RECEIPT (NOLOCK) WHERE Receiptkey = @c_Receiptkey AND ReceiptGroup IN (SELECT ColValue from dbo.fnc_delimsplit (',',@c_IncludeReceiptGroup)) )
+            BEGIN
+               SET @c_CloseASNStatus = '0'
+            END
+         END
+         --WL03 END
   
          SELECT @b_Success = 0  
          Execute nspGetRight  
