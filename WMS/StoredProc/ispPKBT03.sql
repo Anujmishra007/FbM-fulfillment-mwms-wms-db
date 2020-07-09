@@ -31,6 +31,8 @@ GO
 /*30-SEP-2019  WLChooi  1.1   WMS-10365 - Print Bartender for certain   */ 
 /*                                        Facility only (WL01)          */
 /*25-JUN-2020  WLChooi  1.2   WMS-13052 - Print SKU Label (WL02)        */ 
+/*02-JUL-2020  WLChooi  1.3   WMS-13052 - Print SKU Label to paper      */ 
+/*                            printer (WL03)                            */ 
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPKBT03]
    @c_printerid  NVARCHAR(50) = '',  
@@ -169,6 +171,12 @@ BEGIN
          SET @n_continue = 1
          GOTO QUIT_SP  
       END
+      
+      --WL03 START (Override @c_PrinterID)
+      SELECT @c_PrinterID = u.DefaultPrinter_Paper
+      FROM RDT.RDTUSER u (NOLOCK) 
+      WHERE u.UserName = @c_UserId
+      --WL03 END
    END
    --WL02 END
 
