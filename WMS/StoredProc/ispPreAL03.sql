@@ -32,6 +32,7 @@ GO
 /*                            or DMGALLOC at staging                    */
 /* 25/03/2020  NJOW06   1.5   WMS-12622 add sku brand and skugroup FEFO */
 /*                            shelflife by consignee                    */
+/* 28/05/2020  NJOW07   1.6   WMS-13544 Change FIFO to use lottable04   */
 /************************************************************************/    
 CREATE  PROC [dbo].[ispPreAL03]        
            @c_OrderKey NVARCHAR(10) 
@@ -356,12 +357,14 @@ BEGIN
       IF @n_ConMinShelfLife > 0 AND @c_Strategy = 'FIFO' --NJOW01
       BEGIN
          --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable05 >= CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife * -1, GETDATE()), 112))'   --NJOW02         
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
+         --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW07
          SET @n_MinShelfLife = @n_ConMinShelfLife
       END 	  
       ELSE IF @n_SkuOGShelfLife > 0 AND @c_Strategy = 'FIFO' --NJOW03
       BEGIN
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
+         --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW07
          SET @n_MinShelfLife = @n_SkuOGShelfLife        
       END
       ELSE IF CONVERT(NVARCHAR(8), @dt_Lottable05, 112) <> '19000101'
