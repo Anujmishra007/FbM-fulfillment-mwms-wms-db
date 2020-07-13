@@ -14,7 +14,7 @@ GO
 /* Copyright: LF Logistics                                              */  
 /* Written by:                                                          */  
 /*                                                                      */  
-/* Purpose: WMS-10604 - NIKE_PH_WMS_PreTallySheet                       */   
+/* Purpose: WMS-12105 - NIKE_PH_WMS_PreTallySheet                       */   
 /*        :                                                             */  
 /* Called By: r_receipt_pre_tallysheet06                                */
 /*          :                                                           */  
@@ -29,6 +29,7 @@ GO
 /* 09-Jun-2020  WLChooi   1.1 Remove group by ExternPOKey (WL01)        */
 /* 30-Jun-2020  WLChooi   1.2 LEFT JOIN UCC table and bug fix (WL02)    */
 /* 02-Jul-2020  WLChooi   1.3 Bug fix (WL03)                            */
+/* 13-Jul-2020  WLChooi   1.4 Bug fix when UCCNo is blank (WL04)        */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptPreTallySheet06]  
@@ -69,7 +70,8 @@ BEGIN
    INSERT INTO #ITEMCLASS
    SELECT RECEIPT.RECEIPTKEY,
           RECEIPTDETAIL.SKU,
-          ISNULL(UCC.Qty,0) AS Qty,   --WL02   --UCC.Qty,
+          --ISNULL(UCC.Qty,0) AS Qty,   --WL02   --UCC.Qty,   --WL04
+          CASE WHEN ISNULL(UCC.Qty,0) = 0 THEN SUM(RECEIPTDETAIL.QtyExpected) ELSE ISNULL(UCC.Qty,0) END AS Qty,   --WL04
           SKU.ItemClass,
           ISNULL(UCC.UCCNo,'') AS UCCNo,   --WL02   --UCC.UCCNo,
           PalletPosition = CASE WHEN UCC.Userdefined06 = '1' THEN 'F'
@@ -191,7 +193,8 @@ BEGIN
           RECEIPTDETAIL.Lottable04,
           t.ItemClass,
           t.PalletPosition,
-          COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,   --WL03   --@n_CountUCC AS UCCNoCnt,   --WL02   --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,
+          --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,   --WL03   --@n_CountUCC AS UCCNoCnt,   --WL02   --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,   --WL04
+          ISNULL(t1.CountUCCNo,0) AS UCCNoCnt,   --WL04
           t.CountPallet,
           (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc
     FROM RECEIPT (NOLOCK)
@@ -200,10 +203,17 @@ BEGIN
     JOIN STORER (NOLOCK) ON RECEIPT.Storerkey = STORER.Storerkey
     JOIN PACK (NOLOCK) ON PACK.PackKey = SKU.PackKey
     LEFT OUTER JOIN CODELKUP (NOLOCK) ON SKU.SUSR3 = CODELKUP.CODE AND CODELKUP.LISTNAME = 'PRINCIPAL'
-    JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey AND t.SKU = RECEIPTDETAIL.SKU AND ISNULL(t.UCCNo,'') <> ''   --WL03
+    JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey AND t.SKU = RECEIPTDETAIL.SKU --AND ISNULL(t.UCCNo,'') <> ''   --WL04   --WL03
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable01' AND Code = 'Lottable01' AND Storerkey = RECEIPT.StorerKey) AS CL1
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable02' AND Code = 'Lottable02' AND Storerkey = RECEIPT.StorerKey) AS CL2
     OUTER APPLY (SELECT TOP 1 ISNULL(Short,'') AS Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'Lottable12' AND Code = 'Lottable12' AND Storerkey = RECEIPT.StorerKey) AS CL3
+    --WL04 START
+    LEFT JOIN (SELECT ReceiptKey, SKU, ItemClass, PalletPosition, CountPallet, COUNT(DISTINCT UCCNo) AS CountUCCNo
+                 FROM #ITEMCLASS WHERE UCCNo <> ''
+                 GROUP BY ReceiptKey, SKU, ItemClass, PalletPosition, CountPallet) AS t1 ON t1.ReceiptKey = RECEIPT.Receiptkey AND t1.SKU = RECEIPTDETAIL.SKU
+                                                                                        AND t1.ItemClass = t.ItemClass AND t1.PalletPosition = t.PalletPosition 
+                                                                                        AND t1.CountPallet = t.CountPallet
+    --WL04 END
     GROUP BY RECEIPT.ReceiptKey,   
              --RECEIPTDETAIL.ExternPOKey,   --WL01
              t.Sku,  
@@ -231,8 +241,9 @@ BEGIN
              RECEIPTDETAIL.Lottable04,
              t.ItemClass,
              t.PalletPosition,
-             t.CountPallet
-   ORDER BY RECEIPT.Receiptkey, t.PalletPosition
+             t.CountPallet,
+             ISNULL(t1.CountUCCNo,0)   --WL04
+   ORDER BY RECEIPT.Receiptkey, t.PalletPosition, t.SKU   --WL04
     
    IF CURSOR_STATUS('LOCAL' , 'cur_Loop') in (0 , 1)
    BEGIN
