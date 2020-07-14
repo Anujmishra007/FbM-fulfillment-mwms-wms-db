@@ -24,8 +24,9 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 26-Jun-2020  CSCHONG   1.1 WMS-12589 revised field mapping (CS01)    */
 /************************************************************************/  
-CREATE PROC isp_GetPickSlipOrders110  
+CREATE PROC isp_GetPickSlipOrders110
             @c_Sourcekey   NVARCHAR(10)  
          ,  @c_Sourcetype  NVARCHAR(10) = ''  
 AS  
@@ -78,7 +79,8 @@ BEGIN
          , @n_PQty            INT
          , @n_lliqty          INT
          , @n_CntPLOC         INT
-         , @n_Cntlliloc       INT               
+         , @n_Cntlliloc       INT      
+         , @n_qtypicked       INT           --(CS01)         
   
          , @c_PrintedFlag     CHAR(1)  
   
@@ -126,7 +128,8 @@ BEGIN
       , ID              NVARCHAR(18)   NOT NULL DEFAULT('')   
       , LocationType    NVARCHAR(10)   NOT NULL DEFAULT('') 
       , Lottable01      NVARCHAR(18)   NOT NULL DEFAULT(0)     
-      , Lottable10      NVARCHAR(30)       NULL   
+      , Lottable10      NVARCHAR(30)       NULL  
+      , QtyPicked       INT                                --(CS01) 
       )  
   
   
@@ -171,6 +174,7 @@ BEGIN
             ,Lottable10 =ISNULL(RTRIM(LA.Lottable10),'') 
             ,ISNULL(OH.c_company,'')
             ,OH.ExternOrderkey
+            ,SUM(PD.qty)                                          --CS01
       FROM ORDERS       OH    WITH (NOLOCK)   
       JOIN PICKDETAIL   PD    WITH (NOLOCK) ON (OH.Orderkey = PD.Orderkey)  
       JOIN LOC          LOC   WITH (NOLOCK) ON (PD.Loc = LOC.Loc)  
@@ -209,7 +213,8 @@ BEGIN
                                     , @c_Lottable01  
                                     , @c_Lottable10  
                                     , @c_CCompany  
-                                    , @c_ExtOrderkey                         
+                                    , @c_ExtOrderkey  
+                                    , @n_qtypicked                       --CS01                       
       WHILE @@FETCH_STATUS <> -1  
       BEGIN  
 
@@ -269,7 +274,8 @@ BEGIN
                , Loc  
                , ID                             
                , Lottable01  
-               , Lottable10      
+               , Lottable10  
+               , QtyPicked                    --CS01    
                )  
             VALUES   
                ( @c_Loadkey    
@@ -285,7 +291,8 @@ BEGIN
                , @c_Loc  
                , @c_ID                              
                , @c_Lottable01  
-               , @c_Lottable10        
+               , @c_Lottable10    
+               , @n_qtypicked                    --CS01       
                )  
 
          FETCH NEXT FROM CUR_PICK INTO    @c_LogicalLocation  
@@ -298,6 +305,7 @@ BEGIN
                                         , @c_Lottable10  
                                         , @c_CCompany  
                                         , @c_ExtOrderkey  
+                                        , @n_qtypicked                       --CS01  
       END                              
       CLOSE CUR_PICK  
       DEALLOCATE CUR_PICK  
@@ -306,7 +314,7 @@ BEGIN
    END  
    CLOSE CUR_LOADORD  
    DEALLOCATE CUR_LOADORD  
-  
+
    IF NOT EXISTS (SELECT 1  
                   FROM #TMP_PCK110 
                )  
@@ -579,8 +587,7 @@ QUIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt     BEGIN  
       BEGIN TRAN  
    END  
-  
-  
+
    SELECT        PickSlipNo
                , PrintedFlag
                , Loadkey   
@@ -596,7 +603,8 @@ QUIT_SP:
                , ID        
                , LocationType                      
                , Lottable01  
-               , Lottable10   
+               , Lottable10
+               , sum(QtyPicked)                    --CS01    
    FROM  #TMP_PCK110
    group by PickSlipNo
                , PrintedFlag 
@@ -614,6 +622,7 @@ QUIT_SP:
                , ID                             
                , Lottable01  
                , Lottable10
+              -- , QtyPicked                    --CS01
    order by pickslipno,LogicalLocation,loc
 END -- procedure  
 GO

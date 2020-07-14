@@ -26,6 +26,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 12-Jun-2020  CSCHONG   WMS-13713 add new field (CS01)                */
 /************************************************************************/  
   
 CREATE PROC isp_LoadSheet11
@@ -90,7 +91,8 @@ BEGIN
          SKU.Descr as sdescr,
          PAC.CaseCnt as casecnt,
          LOADPLAN.CarrierKey as carrierkey,
-         OH.Notes as OHNotes
+         OH.Notes as OHNotes,
+         ISNULL(SKU.Altsku,'') as Altsku         --CS01
       INTO #Temp_LoadSheet11
       FROM LOADPLANDETAIL LPD WITH (NOLOCK) 
       INNER JOIN ORDERS OH WITH (NOLOCK) 
@@ -123,7 +125,8 @@ BEGIN
          SKU.Descr,
          PAC.CaseCnt,
          LOADPLAN.CarrierKey,
-         OH.Notes 
+         OH.Notes,
+         ISNULL(SKU.Altsku,'')     --CS01   
       ORDER BY LPD.LoadKey,OH.Externorderkey,OH.Salesman,OH.c_company, PD.SKU
    END
        

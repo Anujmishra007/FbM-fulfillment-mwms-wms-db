@@ -15,7 +15,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.8                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -34,10 +34,11 @@ GO
 /* 26-SEP-2019  Wan02     1.7 WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for */
 /*                            Channel                                   */
 /* 26-Sep-2019  Leong     1.7 INC0871401 - Revise error message.        */ 
+/* 10-Jun-2020  Wan03     1.8 WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/ 
 /************************************************************************/
 
 CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
- @c_itrnkey      NVARCHAR(10)
+                @c_itrnkey      NVARCHAR(10)
  ,              @c_StorerKey    NVARCHAR(15)
  ,              @c_SKU          NVARCHAR(20)
  ,              @c_LOT          NVARCHAR(10)
@@ -209,7 +210,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Default SKU Is Not Allowed And SKU Passed Is Blank! (nspItrnAddWithdrawalCheck)"
          END
      END
-     END
+ END
  IF @n_continue=1 or @n_continue=2
  BEGIN
      IF ISNULL(RTRIM(@c_LOT),'') = ''
@@ -287,8 +288,6 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"                    
      END
  END
- 
-
   
  IF @n_continue=1 or @n_continue=2          
  BEGIN
@@ -445,11 +444,11 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                  SELECT @n_Err = 61934 --61337   
                  SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
              END                    
-         END
-     END   
+     END
+ END   
     -- (SWT02) Channel Management
-    IF @n_continue=1 or @n_continue=2          
-    BEGIN
+   IF @n_continue=1 or @n_continue=2          
+   BEGIN
       IF @c_ChannelInventoryMgmt = '1'
       BEGIN
          IF ISNULL(RTRIM(@c_Channel), '') <> ''  AND
@@ -742,40 +741,115 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
       BEGIN
          SET @n_Channel_ID = 0 
       END                  
-    END
+   END
              
-     IF @n_continue=1 or @n_continue=2        
-     BEGIN
-        UPDATE Itrn WITH (ROWLOCK)  
-         SET TrafficCop = NULL, 
-             StorerKey = @c_StorerKey, 
-             Sku = @c_SKU, 
-             Lot = @c_Lot, 
-             ToId = @c_ToId, 
-             ToLoc = @c_ToLoc,
-             Lottable04 = @d_Lottable04, 
-             Lottable05 = @d_Lottable05, 
-             Status = @c_Status,
-             Channel_ID = @n_Channel_ID, -- (SWT02)
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()             
-         WHERE ItrnKey = @c_itrnkey
-     END
-     IF @n_continue = 1 or @n_continue = 2
-     BEGIN
-         IF (SELECT NSQLValue FROM NSQLConfig (NOLOCK) WHERE ConfigKey = "WAREHOUSEBILLING") = "1"
+   IF @n_continue=1 or @n_continue=2        
+   BEGIN
+      UPDATE Itrn WITH (ROWLOCK)  
+      SET TrafficCop = NULL, 
+            StorerKey = @c_StorerKey, 
+            Sku = @c_SKU, 
+            Lot = @c_Lot, 
+            ToId = @c_ToId, 
+            ToLoc = @c_ToLoc,
+            Lottable04 = @d_Lottable04, 
+            Lottable05 = @d_Lottable05, 
+            Status = @c_Status,
+            Channel_ID = @n_Channel_ID, -- (SWT02)
+            EditDate = GETDATE(),
+            EditWho = SUSER_SNAME()             
+      WHERE ItrnKey = @c_itrnkey
+   END
+   --(Wan03) - START
+   IF @n_continue IN (1,2) AND @c_SourceType IN ('ntrPickDetailAdd', 'ntrPickDetailUpdate')
+   BEGIN
+      DECLARE @c_UCC          NVARCHAR(30) = ''
+            , @c_UCCTracking  NVARCHAR(30) = ''
+
+      SET @b_success = 0
+      SET @c_UCC = ''
+      Execute nspGetRight 
+         @c_facility = @c_facility
+      ,  @c_StorerKey= @c_StorerKey                   -- Storer
+      ,  @c_Sku      = ''                             -- Sku
+      ,  @c_ConfigKey= 'UCC'                          -- ConfigKey
+      ,  @b_success  = @b_success         OUTPUT
+      ,  @c_authority= @c_UCC             OUTPUT
+      ,  @n_err      = @n_err             OUTPUT
+      ,  @c_ErrMsg   = @c_ErrMsg          OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+         SET @n_continue = 3
+         SET @n_Err = 62710
+         SET @c_ErrMsg = 'nspItrnAddWithdrawalCheck:' + ISNULL(RTRIM(@c_ErrMsg),'')
+      END
+
+      IF @n_continue IN (1,2)
+      BEGIN
+         SET @b_success = 0
+         SET @c_UCCTracking = ''
+         Execute nspGetRight 
+            @c_facility = @c_facility
+         ,  @c_StorerKey= @c_StorerKey                   -- Storer
+         ,  @c_Sku      = ''                             -- Sku
+         ,  @c_ConfigKey= 'UCCTracking'                  -- ConfigKey
+         ,  @b_success  = @b_success         OUTPUT
+         ,  @c_authority= @c_UCCTracking     OUTPUT
+         ,  @n_err      = @n_err             OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg          OUTPUT
+
+         IF @b_success <> 1
          BEGIN
-             EXECUTE nspItrnAddDWBill "W",  @c_itrnkey,  @c_StorerKey,  @c_SKU,  @c_Lot,  @c_ToLoc,  @c_ToID,  @c_Status,  @n_CaseCnt,
-                @n_InnerPack,  @n_Qty,  @n_Pallet,  @f_cube,  @f_GrossWgt,  @f_NetWgt,  @f_otherunit1,  @f_otherunit2,  @c_Lottable01,
-                @c_Lottable02,  @c_Lottable03,  @d_Lottable04,  @d_Lottable05,  @c_sourcekey,  @c_sourcetype,
-                @b_Success OUTPUT,    @n_Err OUTPUT,    @c_ErrMsg OUTPUT
+            SET @n_continue = 3
+            SET @n_Err = 62711
+            SET @c_ErrMsg = 'nspItrnAddWithdrawalCheck:' + ISNULL(RTRIM(@c_ErrMsg),'')
+         END
+      END
+
+      IF @n_continue IN (1,2) AND (@c_UCC = '1' OR @c_UCCTracking = '1')
+      BEGIN
+         EXEC isp_ItrnUCCAdd
+           @c_Storerkey       = @c_StorerKey 
+         , @c_UCCNo           = ''     
+         , @c_Sku             = @c_Sku  
+         , @c_UCCStatus       = ''            
+         , @c_SourceKey       = @c_Sourcekey         
+         , @c_ItrnSourceType  = @c_SourceType 
+         , @c_ToStorerkey     = '' 
+         , @c_ToUCCNo         = ''     
+         , @c_ToSku           = ''  
+         , @c_ToUCCStatus     = ''                         
+         , @b_Success         = @b_Success          OUTPUT
+         , @n_Err             = @n_Err              OUTPUT
+         , @c_ErrMsg          = @c_ErrMsg           OUTPUT
+
+         IF @b_Success <> 1  
+         BEGIN
+            SET @n_continue = 3     
+            SET @n_err = 62712
+            SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (isp_FinalizeADJ)' 
+                           + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
+         END 
+      END                
+   END
+   --(Wan03) - END
+
+   IF @n_continue = 1 or @n_continue = 2
+   BEGIN
+      IF (SELECT NSQLValue FROM NSQLConfig (NOLOCK) WHERE ConfigKey = "WAREHOUSEBILLING") = "1"
+      BEGIN
+         EXECUTE nspItrnAddDWBill "W",  @c_itrnkey,  @c_StorerKey,  @c_SKU,  @c_Lot,  @c_ToLoc,  @c_ToID,  @c_Status,  @n_CaseCnt,
+            @n_InnerPack,  @n_Qty,  @n_Pallet,  @f_cube,  @f_GrossWgt,  @f_NetWgt,  @f_otherunit1,  @f_otherunit2,  @c_Lottable01,
+            @c_Lottable02,  @c_Lottable03,  @d_Lottable04,  @d_Lottable05,  @c_sourcekey,  @c_sourcetype,
+            @b_Success OUTPUT,    @n_Err OUTPUT,    @c_ErrMsg OUTPUT
          IF @b_Success = 0
          BEGIN
             SELECT @n_continue = 3
          END
-     END 
- END
- END 
+      END 
+   END
+END 
 
 /* #INCLUDE <SPIAWC2.SQL> */
 IF @n_continue = 3  -- Error Occured - Process And Return

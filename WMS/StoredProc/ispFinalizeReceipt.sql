@@ -83,6 +83,9 @@ GO
 /*                                 ASN Auto Create Orders when finalized*/
 /* 03-May-2019  WLCHOOI   WMS-8866 - ASNAUTOHOLD - Hold multiple        */
 /*                                   combination of lottables (WL02)    */
+/* 07-Jul-2020  WLChooi   WMS-14045 - Add Option5 for StorerConfig =    */ 
+/*                        CloseASNStatus (WL03)                         */ 
+/* 29-May-2020  Wan07     WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR  */
 /************************************************************************/  
   
 CREATE PROC    [dbo].[ispFinalizeReceipt]  
@@ -202,6 +205,19 @@ BEGIN
         ,  @c_LottableValue             NVARCHAR(30) --NJOW10  
       
         ,  @c_Lottables                 NVARCHAR(10) --WL02
+        
+        , @c_UCCNo                     NVARCHAR(20) = ''       --(Wan07)
+        , @c_UCCStatus                 NVARCHAR(20) = ''       --(Wan07)
+        , @c_UCC                       NVARCHAR(30) = ''       --(Wan07)     
+        , @c_UCCTracking               NVARCHAR(30) = ''       --(Wan07)
+        , @c_AddUCCFromColUDF01        NVARCHAR(30) = ''       --(Wan07) 
+
+        , @c_Option1                   NVARCHAR(100) = ''    --WL03
+        , @c_Option2                   NVARCHAR(100) = ''    --WL03
+        , @c_Option3                   NVARCHAR(100) = ''    --WL03
+        , @c_Option4                   NVARCHAR(100) = ''    --WL03
+        , @c_Option5                   NVARCHAR(4000) = ''   --WL03
+        , @c_IncludeReceiptGroup       NVARCHAR(4000) = ''   --WL03
   
    SET @c_debug = 0  
   
@@ -454,9 +470,80 @@ BEGIN
       END  
    END  
    --(Wan04) - END  
+
+   --(Wan07) - START
+   IF @n_continue=1 or @n_continue=2  
+   BEGIN  
+      SET @b_success = 0  
+      Execute nspGetRight   
+              @c_facility   
+            , @c_StorerKey                -- Storer  
+            , @c_Sku                      -- Sku  
+            , 'UCC'                       -- ConfigKey  
+            , @b_success                  OUTPUT   
+            , @c_UCC                      OUTPUT   
+            , @n_err                      OUTPUT   
+            , @c_errmsg                   OUTPUT  
+        
+      IF @b_success <> 1  
+      BEGIN  
+         SET @n_continue = 3  
+         SET @n_err = 62131 
+         SET @c_errmsg = 'ispFinalizeReceipt:' + RTRIM(@c_errmsg)  
+      END  
+   END  
+
+   IF @n_continue=1 or @n_continue=2  
+   BEGIN  
+      SET @b_success = 0  
+      Execute nspGetRight   
+              @c_facility   
+            , @c_StorerKey                -- Storer  
+            , @c_Sku                      -- Sku  
+            , 'UCCTracking'               -- ConfigKey  
+            , @b_success                  OUTPUT   
+            , @c_UCCTracking              OUTPUT   
+            , @n_err                      OUTPUT   
+            , @c_errmsg                   OUTPUT  
+        
+      IF @b_success <> 1  
+      BEGIN  
+         SET @n_continue = 3  
+         SET @n_err = 62132  
+         SET @c_errmsg = 'ispFinalizeReceipt:' + RTRIM(@c_errmsg)  
+      END  
+   END  
+
+   IF @n_continue=1 or @n_continue=2  
+   BEGIN  
+      SET @b_success = 0  
+      Execute nspGetRight   
+              @c_facility   
+            , @c_StorerKey                -- Storer  
+            , @c_Sku                      -- Sku  
+            , 'AddUCCFromColUDF01'        -- ConfigKey  
+            , @b_success                  OUTPUT   
+            , @c_AddUCCFromColUDF01       OUTPUT   
+            , @n_err                      OUTPUT   
+            , @c_errmsg                   OUTPUT  
+        
+      IF @b_success <> 1  
+      BEGIN  
+         SET @n_continue = 3  
+         SET @n_err = 62133  
+         SET @c_errmsg = 'ispFinalizeReceipt:' + RTRIM(@c_errmsg)  
+      END  
+   END 
+
+   --(Wan07) - END
      
    DECLARE Cur_ReceiptDetail CURSOR FAST_FORWARD READ_ONLY FOR  
       SELECT RD.ReceiptLineNumber, RD.BeforeReceivedQty, RD.Sku  
+            ,UCCNo = CASE WHEN @c_UCCTracking = '1' THEN RD.ExternLineNo               --(Wan07)
+                    WHEN @c_AddUCCFromColUDF01 = '1' THEN RD.UserDefine01              --(Wan07)
+                    ELSE ''                                                            --(Wan07)
+                    END                                                                
+
       FROM  ReceiptDetail RD (NOLOCK)  
       WHERE RD.ReceiptKey = @c_ReceiptKey  
       AND   RD.FinalizeFlag <> 'Y'  
@@ -467,7 +554,7 @@ BEGIN
   
    OPEN Cur_ReceiptDetail  
   
-   FETCH NEXT FROM Cur_ReceiptDetail INTO @c_ReceiptLineNo, @c_QtyReceived, @c_SKU  
+   FETCH NEXT FROM Cur_ReceiptDetail INTO @c_ReceiptLineNo, @c_QtyReceived, @c_SKU, @c_UCCNo --(Wan07)  
   
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
@@ -734,27 +821,29 @@ BEGIN
          END --While  
       END  
   
-      UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
-         SET QtyReceived = BeforeReceivedQty,  
-             FinalizeFlag = 'Y',  
-             SplitPalletFlag = 'n',  
-             ToLoc = CASE WHEN @c_RCPTSTATStatus = '1' AND LEN(ISNULL(RTRIM(@c_ToLoc), '')) > 0  
-                     THEN ISNULL(RTRIM(ToLoc), '') + @c_ToLoc  
-                     ELSE ToLoc END,        -- tlting    
-             EditDate = GETDATE(),   
-             EditWho = SUSER_SNAME()    
-      WHERE ReceiptKey = @c_ReceiptKey  
-        AND ReceiptLineNumber = @c_ReceiptLineNo  
+      --(Wan07) - START  Move Down - Update FinalizeFlag after NoMixLottables Validation
+      --UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+      --   SET QtyReceived = BeforeReceivedQty,  
+      --       FinalizeFlag = 'Y',  
+      --       SplitPalletFlag = 'n',  
+      --       ToLoc = CASE WHEN @c_RCPTSTATStatus = '1' AND LEN(ISNULL(RTRIM(@c_ToLoc), '')) > 0  
+      --               THEN ISNULL(RTRIM(ToLoc), '') + @c_ToLoc  
+      --               ELSE ToLoc END,        -- tlting    
+      --       EditDate = GETDATE(),   
+      --       EditWho = SUSER_SNAME()    
+      --WHERE ReceiptKey = @c_ReceiptKey  
+      --  AND ReceiptLineNumber = @c_ReceiptLineNo  
   
-      SELECT @n_err = @@ERROR  
-      IF @n_err <> 0  
-      BEGIN  
-         SELECT @n_continue = 3  
-         SELECT @c_ErrMsg = CONVERT(char(250),@n_err) --, @n_err=62100  
-         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
-         GOTO RollbackTran    -- CM01  
-      END  
-  
+      --SELECT @n_err = @@ERROR  
+      --IF @n_err <> 0  
+      --BEGIN  
+      --   SELECT @n_continue = 3  
+      --   SELECT @c_ErrMsg = CONVERT(char(250),@n_err) --, @n_err=62100  
+      --   SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
+      --   GOTO RollbackTran    -- CM01  
+      --END  
+      --(Wan07) - END  Move Down
+      
       --(Wan04) - START  
       IF @n_continue=1 or @n_continue=2  
       BEGIN  
@@ -1048,7 +1137,84 @@ BEGIN
       END  
       --(Wan04) - END  
   
-  
+      --(Wan07) - START
+      IF (@c_UCC = '1' OR @c_UCCTracking = '1' OR @c_AddUCCFromColUDF01 = '1')
+      BEGIN
+         SET @c_UCCStatus = ''
+         SELECT TOP 1 @c_UCCStatus = UCC.[Status]
+               ,  @c_UCCNo = CASE WHEN UCCNo = @c_UCCNo THEN @c_UCCNo ELSE UCCNo END
+         FROM UCC WITH (NOLOCK)
+         WHERE Storerkey = @c_Storerkey
+         AND   Sku = @c_Sku
+         AND   ReceiptKey= @c_ReceiptKey
+         AND   ReceiptLineNumber = @c_ReceiptLineNo
+         AND   [Status] < '2'
+         ORDER BY CASE WHEN UCCNo = @c_UCCNo THEN 1 ELSE 9 END
+
+         IF @@ROWCOUNT = 0 AND @c_UCCNo <> ''
+         BEGIN
+            SET @c_UCCStatus = ''
+            SELECT TOP 1 @c_UCCStatus = UCC.[Status]
+            FROM UCC WITH (NOLOCK)
+            WHERE Storerkey = @c_Storerkey
+            AND   UCCNo = @c_UCCNo
+            AND   Sku = @c_Sku
+            AND   [Status] = '1'
+         END
+      END
+
+      UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+         SET QtyReceived = BeforeReceivedQty,  
+               FinalizeFlag = 'Y',  
+               SplitPalletFlag = 'n',  
+               ToLoc = CASE WHEN @c_RCPTSTATStatus = '1' AND LEN(ISNULL(RTRIM(@c_ToLoc), '')) > 0  
+                     THEN ISNULL(RTRIM(ToLoc), '') + @c_ToLoc  
+                     ELSE ToLoc END,        -- tlting    
+               EditDate = GETDATE(),   
+               EditWho = SUSER_SNAME()    
+      WHERE ReceiptKey = @c_ReceiptKey  
+         AND ReceiptLineNumber = @c_ReceiptLineNo  
+
+      SET @n_err = @@ERROR  
+      IF @n_err <> 0  
+      BEGIN  
+         SET @n_continue = 3  
+         SET @c_ErrMsg = CONVERT(char(250),@n_err) --, @n_err=62100  
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (ispFinalizeReceipt)' 
+                        + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
+         GOTO RollbackTran    -- CM01  
+      END  
+
+      IF (@c_UCC = '1' OR @c_UCCTracking = '1' OR @c_AddUCCFromColUDF01 = '1') AND @c_UCCNo <> ''
+      BEGIN
+         SET @c_Sourcekey = RTRIM(@c_ReceiptKey) + RTRIM(@c_ReceiptLineNo)  
+
+         EXEC isp_ItrnUCCAdd
+              @c_Storerkey       = @c_StorerKey 
+            , @c_UCCNo           = @c_UCCNo     
+            , @c_Sku             = @c_Sku  
+            , @c_UCCStatus       = @c_UCCStatus            
+            , @c_SourceKey       = @c_Sourcekey         
+            , @c_ItrnSourceType  = 'ntrReceiptDetailUpdate' 
+            , @c_ToStorerkey     = '' 
+            , @c_ToUCCNo         = ''     
+            , @c_ToSku           = ''  
+            , @c_ToUCCStatus     = ''                         
+            , @b_Success         = @b_Success          OUTPUT
+            , @n_Err             = @n_Err              OUTPUT
+            , @c_ErrMsg          = @c_ErrMsg           OUTPUT
+
+         IF @b_Success <> 1  
+         BEGIN 
+            SET @n_continue = 3    
+            SET @n_err = 62134 
+            SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (ispFinalizeReceipt)' 
+                           + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
+            GOTO RollbackTran    -- CM01  
+         END  
+      END
+      --(Wan07) - END
+
       --(Wan02) - START  
       IF @c_FinalizeSplitReceiptLine = '1'  
       BEGIN  
@@ -1187,7 +1353,8 @@ BEGIN
          END  
       END  
       --(Wan02) - END  
-      FETCH NEXT FROM Cur_ReceiptDetail INTO @c_ReceiptLineNo, @c_QtyReceived, @c_SKU  
+      FETCH NEXT FROM Cur_ReceiptDetail INTO @c_ReceiptLineNo, @c_QtyReceived, @c_SKU, @c_UCCNo --(Wan07) 
+
    END -- @@FETCH_STATUS <> -1  
   
    CLOSE Cur_ReceiptDetail  
@@ -1645,13 +1812,33 @@ BEGIN
                @b_Success        OUTPUT,  
                @c_CloseASNStatus OUTPUT,  
                @n_err2           OUTPUT,  
-               @c_ErrMsg         OUTPUT  
+               @c_ErrMsg         OUTPUT,
+               @c_Option1        OUTPUT,   --WL03 
+               @c_Option2        OUTPUT,   --WL03
+               @c_Option3        OUTPUT,   --WL03
+               @c_Option4        OUTPUT,   --WL03
+               @c_Option5        OUTPUT    --WL03
   
          IF @b_Success <> 1  
          BEGIN  
             SELECT @n_err = 60070 -- @n_err2  
             SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'  
          END  
+
+         --WL03 START
+         IF ISNULL(@c_Option5,'') <> ''
+         BEGIN
+            SELECT @c_IncludeReceiptGroup = dbo.fnc_GetParamValueFromString('@c_IncludeReceiptGroup', @c_Option5, @c_IncludeReceiptGroup) 
+         END
+
+         IF @c_CloseASNStatus = '1' AND ISNULL(@c_IncludeReceiptGroup,'') <> ''
+         BEGIN
+            IF NOT EXISTS (SELECT 1 FROM RECEIPT (NOLOCK) WHERE Receiptkey = @c_Receiptkey AND ReceiptGroup IN (SELECT ColValue from dbo.fnc_delimsplit (',',@c_IncludeReceiptGroup)) )
+            BEGIN
+               SET @c_CloseASNStatus = '0'
+            END
+         END
+         --WL03 END
   
          SELECT @b_Success = 0  
          Execute nspGetRight  

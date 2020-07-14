@@ -32,6 +32,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 18-Jun-2020  CSCHONG   1.1   Fix recgrp sorting (CS01)               */
+/* 01-Jul-2020  CSCHONG   1.2   WMS-14015 revised field mapping (CS02)  */
 /************************************************************************/
 
 CREATE PROC isp_GetPickSlipWave20 (@a_s_LoadKey NVARCHAR(10) )
@@ -121,7 +122,7 @@ CREATE PROC isp_GetPickSlipWave20 (@a_s_LoadKey NVARCHAR(10) )
    IF NOT EXISTS(SELECT PickHeaderKey 
                    FROM PICKHEADER WITH (NOLOCK) 
                   WHERE ExternOrderKey = @a_s_LoadKey 
-                    AND  Zone = '7') 
+                    AND  Zone = '5')                                    --CS02 
    BEGIN
       SET @b_success = 0
 
@@ -143,7 +144,7 @@ CREATE PROC isp_GetPickSlipWave20 (@a_s_LoadKey NVARCHAR(10) )
          SET @c_PickHeaderKey = 'P' + @c_PickHeaderKey
 
          INSERT INTO PICKHEADER (PickHeaderKey,  ExternOrderKey, PickType, Zone)
-         VALUES (@c_PickHeaderKey, @a_s_LoadKey, '1', '7')
+         VALUES (@c_PickHeaderKey, @a_s_LoadKey, '1', '5')                                --CS02
           
          SET @n_err = @@ERROR
    
@@ -160,7 +161,7 @@ ELSE
         SELECT @c_PickHeaderKey = PickHeaderKey
         FROM PickHeader WITH (NOLOCK)  
         WHERE ExternOrderKey = @a_s_LoadKey 
-        AND Zone = '7'
+        AND Zone = '5'
    END
 
    IF @n_continue = 1 or @n_continue = 2
@@ -208,10 +209,15 @@ ELSE
                ISNULL(LTRIM(RTRIM(SKU.PrePackIndicator)),'') As PrePackIndicator, 
                (SKU.PackQtyIndicator) As PackQtyIndicator,
                SKU.Size,
-               CASE WHEN SKUxLOC.LocationType <> 'PICK' 
-                    THEN 'BULK' 
-                    ELSE 'PICK'
-                    END AS LocationType,
+               --CASE WHEN LOC.LocationType <> 'PICK'              --CS02  START
+               --     THEN 'BULK' 
+               --     ELSE 'PICK'
+               --     END AS LocationType,
+              CASE WHEN LOC.LocationType='OTHER' THEN '0'
+                            WHEN  LOC.LocationType='PICK' THEN '1'
+                            WHEN LOC.LocationType='DYNPPICK' THEN '2'
+              ELSE LOC.LocationType END AS LocationType,
+              --CS02 END  
               ISNULL(SKU.Busr6,''), 
               CASE WHEN ISNULL(CLR.CODE,'') <> '' THEN
                   LOC.LogicalLocation ELSE LOC.Loc END, 
@@ -261,10 +267,14 @@ ELSE
                   ISNULL(LTRIM(RTRIM(SKU.PrePackIndicator)),''), 
                   SKU.PackQtyIndicator,
                   SKU.Size,
-             CASE WHEN SKUxLOC.LocationType <> 'PICK' 
-                     THEN 'BULK' 
-                  ELSE 'PICK'
-                   END,
+             --CASE WHEN LOC.LocationType <> 'PICK'             --CS02 START
+             --        THEN 'BULK' 
+             --     ELSE 'PICK'
+             --      END,
+               CASE WHEN LOC.LocationType='OTHER' THEN '0'
+                            WHEN  LOC.LocationType='PICK' THEN '1'
+                            WHEN LOC.LocationType='DYNPPICK' THEN '2'
+              ELSE LOC.LocationType END ,                         --CS02 END
                  ISNULL(SKU.Busr6,''),
                  CASE WHEN ISNULL(CLR.CODE,'') <> '' THEN
                      LOC.LogicalLocation ELSE LOC.Loc END, 

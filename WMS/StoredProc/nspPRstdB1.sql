@@ -31,6 +31,7 @@ GO
 /* 06-Aug-2018 NJOW02   1.3   Fix FIFO Shelflife                        */
 /* 09-Nov-2018 NJOW03   1.4   WMS-6892 change FIFO shelflife filter     */
 /* 24-Jul-2019 NJOW04   1.5   WMS-9509 SG Prestige lottable03 filter    */
+/* 28-May-2020 NJOW05   1.6   WMS-13544 Change FIFO to use lottable04   */
 /************************************************************************/  
 
 CREATE PROC  nspPRstdB1  -- Rename from IDSSG:nspPRstd01
@@ -152,9 +153,11 @@ BEGIN
         
         --NJOW03
         IF ISNULL(@n_ConMinShelfLife,0) > 0
-           SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable05 + SKU.ShelfLife) >= " + CAST(@n_ConMinShelfLife AS NVARCHAR)   
+           --SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable05 + SKU.ShelfLife) >= " + CAST(@n_ConMinShelfLife AS NVARCHAR)   
+           SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= " + CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW05   
         ELSE   
-           SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable05 + SKU.ShelfLife) >= " + CAST(@n_SkuOGShelfLife AS NVARCHAR)   
+           --SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable05 + SKU.ShelfLife) >= " + CAST(@n_SkuOGShelfLife AS NVARCHAR)   
+           SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= " + CAST(@n_SkuOGShelfLife AS NVARCHAR)   --NJOW05
    END --NJOW01 End
    ELSE IF CONVERT(CHAR(10), @d_Lottable05, 103) <> '01/01/1900'
    BEGIN

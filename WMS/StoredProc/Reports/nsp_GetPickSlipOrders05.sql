@@ -27,7 +27,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.4                                                   */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -47,7 +47,8 @@ GO
 /* 22-Sep-2017 TLTING    1.6   Dynamic SQL revise - avoid cache refresh */
 /* 27-Feb-2018 CSCHONG   1.7   WMS-4061-add report config (CS01)        */
 /* 21-AUG-2018 CSCHONG   1.8   WMS-5975-add report config (CS02)        */
-/* 28-Jan-2019  TLTING_ext 1.9  enlarge externorderkey field length      */
+/* 28-Jan-2019 TLTING_ext 1.9  enlarge externorderkey field length      */
+/* 07-Jul-2020 WLChooi   2.0   WMS-13930 - Add Report Config (WL01)     */
 /************************************************************************/
 
 CREATE PROC [dbo].[nsp_GetPickSlipOrders05] (@c_loadkey NVARCHAR(10)) 
@@ -293,7 +294,8 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders05] (@c_loadkey NVARCHAR(10))
        ,showbarcode       NVARCHAR(1)   --CS01
 		 ,showcontactphone  NVARCHAR(1)   --CS02
 		 ,c_contact1        NVARCHAR(45)  --CS02
-		 ,c_phone1          NVARCHAR(45) --CS02
+		 ,c_phone1          NVARCHAR(45)  --CS02
+       ,ShowLottable02    NVARCHAR(10)  --WL01
                          )
        INSERT INTO #TEMP_PICK
             (PickSlipNo,          LoadKey,         OrderKey,         ConsigneeKey,
@@ -309,7 +311,7 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders05] (@c_loadkey NVARCHAR(10))
              Pallet_cal,          Cartons_cal,     inner_cal,     Each_cal,         Total_cal,  
              DeliveryDate  ,Lottable01 ,Lottable03 ,Lottable05 ,     -- ONG01
              DischargePlace ,InvoiceNo , Addr4, City 
-            ,Storerkey,showbarcode,showcontactphone,c_contact1,c_phone1 )    --(Wan01)  --CS01  --CS02
+            ,Storerkey,showbarcode,showcontactphone,c_contact1,c_phone1, ShowLottable02 )    --(Wan01)  --CS01  --CS02   --WL01
         SELECT
         (SELECT PICKHEADERKEY FROM PICKHEADER WITH (NOLOCK)
             WHERE ExternOrderKey = @c_LoadKey 
@@ -380,6 +382,7 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders05] (@c_loadkey NVARCHAR(10))
 		 , CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Showcontactphone           --CS02
        ,isnull(orders.c_contact1,'') as c_contact1
 		 ,isnull(orders.c_phone1,'')  as c_phone1
+       ,ISNULL(CLR2.Short,'N') AS ShowLottable02   --WL02
 		FROM pickdetail WITH (NOLOCK)
       JOIN ORDERS WITH (NOLOCK) ON pickdetail.orderkey = orders.orderkey
       JOIN lotattribute WITH (NOLOCK) ON pickdetail.lot = lotattribute.lot
@@ -401,6 +404,10 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders05] (@c_loadkey NVARCHAR(10))
       LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (ORDERS.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWCONTACTPHONE'
                                        AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_print_pickorder05' AND ISNULL(CLR1.Short,'') <> 'N')
       --CS02 End
+      --WL01 START
+      LEFT OUTER JOIN Codelkup CLR2 (NOLOCK) ON (ORDERS.Storerkey = CLR2.Storerkey AND CLR2.Code = 'ShowLottable02'
+                                       AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_print_pickorder05' AND ISNULL(CLR2.Short,'') <> 'N')
+      --WL01 END
      WHERE PickDetail.Status < '5'  
        AND LoadPlanDetail.LoadKey = @c_LoadKey
      GROUP BY PickDetail.OrderKey,                            
@@ -450,6 +457,7 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders05] (@c_loadkey NVARCHAR(10))
 		 , CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END                     --CS02
        ,isnull(orders.c_contact1,'')                                                    --CS02
 		 ,isnull(orders.c_phone1,'')                                                      --CS02 
+       ,ISNULL(CLR2.Short,'N')   --WL01
       -- SOS 7236
       -- wally 16.aug.2002
       -- commented the cursor below and instead update directly the temp table

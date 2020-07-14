@@ -17,7 +17,7 @@ GO
 /*                                                                             */
 /* Called By: When records add into AdjustmentDetail                           */
 /*                                                                             */
-/* PVCS Version: 1.8                                                           */
+/* PVCS Version: 1.9                                                           */
 /*                                                                             */
 /* Version: 5.4                                                                */
 /*                                                                             */
@@ -41,6 +41,7 @@ GO
 /* 27-Jul-2017  TLTING       1.6    Remove SETROWCOUNT                         */
 /* 06-Feb-2018  SWT02        1.7    Added Channel Management Logic             */
 /* 23-JUL-2019  Wan02        1.8    WMS-9872 - CN_NIKESDC_Exceed_Channel       */
+/* 01-Jun-2020  Wan03        1.9    WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
 /*******************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrAdjustmentDetailAdd]
@@ -66,6 +67,8 @@ BEGIN
    DECLARE @c_authority_OWITF    NVARCHAR(1)   -- (YokeBeen01)
          , @c_authority_OWADJWO  NVARCHAR(1)   -- (YokeBeen01)
          , @c_cckey              NVARCHAR(10)  -- NJOW01
+
+   DECLARE @c_UCCStatus          NVARCHAR(10) = '' --(Wan03)
 
    SELECT @n_continue=1, @n_starttcnt = @@TRANCOUNT
    /* #INCLUDE <TRADA1.SQL> */
@@ -287,6 +290,21 @@ BEGIN
                    BREAK                                 
                END
             END   
+
+            --(Wan03) - START
+            IF @c_ADJ_UCCNo <> ''
+            BEGIN
+               SET @c_UCCStatus = ''
+               SELECT TOP 1 @c_UCCStatus = UCC.[Status]
+               FROM UCC WITH (NOLOCK)
+               WHERE UCC.Storerkey = @c_ADJ_Storerkey
+               AND   UCC.UCCNo = @c_ADJ_UCCNo
+               AND   UCC.Sku = @c_ADJ_Sku
+               AND   UCC.Lot = @c_ADJ_lot
+               AND   UCC.Loc = @c_ADJ_loc
+               AND   UCC.ID  = @c_ADJ_ID
+            END
+            --(Wan03) - END
             
             SELECT   @c_lottable01 = lottable01
                   ,  @c_lottable02 = lottable02
@@ -410,6 +428,31 @@ BEGIN
                            BREAK
                         END
                      END
+                  END
+
+                  EXEC isp_ItrnUCCAdd
+                       @c_Storerkey       = @c_ADJ_StorerKey 
+                     , @c_UCCNo           = @c_ADJ_UCCNo     
+                     , @c_Sku             = @c_ADJ_Sku  
+                     , @c_UCCStatus       = @c_UCCStatus            
+                     , @c_SourceKey       = @c_Sourcekey         
+                     , @c_ItrnSourceType  = 'ntrAdjustmentDetailAdd' 
+                     , @c_ToStorerkey     = '' 
+                     , @c_ToUCCNo         = ''     
+                     , @c_ToSku           = ''  
+                     , @c_ToUCCStatus     = ''                         
+                     , @b_Success         = @b_Success          OUTPUT
+                     , @n_Err             = @n_Err              OUTPUT
+                     , @c_ErrMsg          = @c_ErrMsg           OUTPUT
+
+                  IF @b_Success <> 1  
+                  BEGIN
+                     SET @n_continue = 3     
+                     SET @n_err = 62709 
+                     SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (isp_FinalizeADJ)' 
+                                    + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
+                     ROLLBACK TRAN
+                     BREAK
                   END
                END -- IF @c_ADJ_UCCNo <> ''
             END -- IF @b_success = 1

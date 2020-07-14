@@ -30,9 +30,10 @@ GO
 /*11/03/2019  CSCHONG   1.3   Fix EcomPacking Print issue CCS           */
 /*10/06/2019  WLCHOOI   1.4   WMS-9371 - Add New Fields (WL02)          */
 /*18/12/2019  WLChooi   1.5   WMS-11444 - Limit SKU per page (WL03)     */
-/*20/02/2020  WLChooi   1.6   WMS-12107 - Modify column logic (WL01)    */
+/*20/02/2020  WLChooi   1.6   WMS-12107 - Modify column logic (WL04)    */
 /*05/05/2020  CSCHONG   1.7   WMS-12994 - modify column logic (CS02)    */
 /*02/07/2020  WLChooi   1.8   Bug Fix (WL05)                            */
+/*02/07/2020  WLChooi   1.9   WMS-14034 - Modify column logic (WL06)    */
 /************************************************************************/
 CREATE PROC isp_Packing_List_42
             (@c_Orderkey NVARCHAR(10),
@@ -299,9 +300,12 @@ BEGIN
               ,   OHNotes2    = ISNULL(RTRIM(O.c_company), '') 
               ,   MCompany    =  ISNULL(RTRIM(O.m_Company), '')
               ,   ExternOrderKey = ISNULL(RTRIM(o.ExternOrderkey), '') 
-              ,   Salesman       =  ISNULL(RTRIM(o.Salesman), '')                                
-              ,   ORDDate        =  CASE WHEN ISDATE(OD.userdefine10) = 1 AND ISNULL(OD.userdefine10,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> ''
-                                    THEN CAST(OD.userdefine10 as DATETIME) ELSE O.Orderdate END         --CS02
+              ,   Salesman       =  ISNULL(RTRIM(o.Salesman), '')     
+              --WL05 START
+              ,   ORDDate        = O.Orderdate                        
+              --,   ORDDate        =  CASE WHEN ISDATE(OD.userdefine10) = 1 AND ISNULL(OD.userdefine10,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> ''
+              --                      THEN CAST(OD.userdefine10 as DATETIME) ELSE O.Orderdate END         --CS02
+              --WL05 END
               ,   OHGRP          =  CASE WHEN ISNULL(OD.userdefine03,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> '' THEN OD.userdefine03
                                     ELSE ISNULL(RTRIM(o.PmtTerm), '') END               --CS02                        
               ,   ODNotes        =  ISNULL(RTRIM(OD.notes), '')                            
@@ -388,9 +392,11 @@ BEGIN
                  ,ISNULL(RTRIM(O.c_company), '') 
                  ,ISNULL(RTRIM(O.m_Company), ''),ISNULL(RTRIM(o.ExternOrderkey), '') 
                  ,ISNULL(RTRIM(O.Salesman), '')
-                 --,O.Orderdate                --CS02
-                 ,CASE WHEN ISDATE(OD.userdefine10) = 1 AND ISNULL(OD.userdefine10,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> ''
-                                    THEN CAST(OD.userdefine10 as DATETIME) ELSE O.Orderdate END                      --CS02
+                 --WL05 START
+                 ,O.Orderdate                --CS02
+                 --,CASE WHEN ISDATE(OD.userdefine10) = 1 AND ISNULL(OD.userdefine10,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> ''
+                                    --THEN CAST(OD.userdefine10 as DATETIME) ELSE O.Orderdate END                      --CS02
+                 --WL05 END
                  --,ISNULL(RTRIM(o.PmtTerm), '')    --CS02 
                  ,CASE WHEN ISNULL(OD.userdefine03,'') <> '' AND ISNULL(OD.externconsoorderkey,'') <> '' THEN OD.userdefine03
                                     ELSE ISNULL(RTRIM(o.PmtTerm), '') END               --CS02      

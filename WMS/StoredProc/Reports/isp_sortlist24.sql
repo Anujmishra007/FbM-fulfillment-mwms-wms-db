@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
+/* 26-JUN-2020 CSCHONG  1.1   WMS-12630 add new field (CS01)            */
 /************************************************************************/  
 CREATE PROC isp_sortlist24  
            @c_Loadkey         NVARCHAR(10)  
@@ -84,7 +85,8 @@ BEGIN
         ,   LPuserdefDate01   DATETIME
         ,   CopyName          NVARCHAR(18)     
         ,   Copycode          NVARCHAR(30)     
-        ,   Copyshowcolumn    NVARCHAR(18)                     
+        ,   Copyshowcolumn    NVARCHAR(18)   
+        ,   QtyPick           INT                      --(CS01)                  
         )  
   
     
@@ -118,6 +120,7 @@ BEGIN
       ,   CopyName           
       ,   Copycode          
       ,   Copyshowcolumn      
+      ,   QtyPick                               --(CS01)
       )  
       SELECT  LOADPLAN.Loadkey
          ,  LOADPLAN.Facility
@@ -144,10 +147,11 @@ BEGIN
          ,  ReportType = ''
          ,  LEXTLoadKey      = Loadplan.Externloadkey 
          ,  LPriority        = Loadplan.Priority 
-         ,  LPuserdefDate01  = Loadplan.LPuserdefDate01
+         ,  LPuserdefDate01  = ISNULL(Loadplan.LPuserdefDate01,'')
          ,  CL2.Description AS Copyname
          ,  CL2.Code AS Copycode
          ,  CL2.Short AS Copyshowcolumn
+         , QtyPicked = SUM(PICKDETAIL.qty)                                   --(CS01)
    FROM LOADPLAN WITH (NOLOCK)
    JOIN LOADPLANDETAIL WITH (NOLOCK) ON (LOADPLAN.LoadKey = LOADPLANDETAIL.LoadKey)
    JOIN ORDERS WITH (NOLOCK) ON (LOADPLANDETAIL.orderkey = ORDERS.OrderKey) 
@@ -185,11 +189,11 @@ BEGIN
          ,  LOTATTRIBUTE.Lottable10
          ,  Loadplan.Externloadkey 
          ,  Loadplan.Priority 
-         ,  Loadplan.LPuserdefDate01   
+         ,  ISNULL(Loadplan.LPuserdefDate01,'')
          ,  CL2.Description
          ,  CL2.Code 
          ,  CL2.Short                  
-   ORDER BY ICKHEADER.PickHeaderKey
+   ORDER BY PICKHEADER.PickHeaderKey
          ,  ORDERS.ExternOrderkey
          ,  PICKDETAIL.Storerkey
          ,  PICKDETAIL.Sku 
@@ -225,6 +229,7 @@ QUIT_SP:
       ,   CopyName           
       ,   Copycode          
       ,   Copyshowcolumn  
+      ,   sum(QtyPick) as QtyPick                     --(CS01)
    FROM #TMP_SORTLIST24 SL24     
    WHERE loadkey = @c_Loadkey    
    GROUP BY Loadkey           
@@ -255,7 +260,8 @@ QUIT_SP:
       ,   LPuserdefDate01      
       ,   CopyName           
       ,   Copycode          
-      ,   Copyshowcolumn                
+      ,   Copyshowcolumn     
+     -- ,   QtyPick                          --(CS01)            
    ORDER BY PickHeaderKey  
          ,  ISNULL(Externorderkey,'')  
          ,  Storerkey  
