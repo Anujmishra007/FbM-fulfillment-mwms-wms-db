@@ -16,7 +16,7 @@ GO
 /*                                                                      */
 /* Called By: n_cst_transfer.Event ue_finalizeall                       */
 /*                                                                      */
-/* PVCS Version: 2.7                                                    */
+/* PVCS Version: 3.2                                                    */
 /*                                                                      */
 /* Version: 6.0                                                         */
 /*                                                                      */
@@ -59,6 +59,7 @@ GO
 /* 24-Jul-2018  NJOW03    3.0 WMS-5839 CN-IKEA Pre-finalize             */
 /* 29-APR-2019  WAN09     3.1 Validation Check from/to UCC if turn on   */
 /*                            Storeroconfig UCCTracking & AllocUCCTransfer*/
+/* 01-Jun-2020  Wan10     3.2 WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
 /************************************************************************/
 
 CREATE PROC ispFinalizeTransfer
@@ -303,6 +304,9 @@ BEGIN
          , @c_AllowTRFZeroQty          NVARCHAR(10)            --(Wan05)
          , @c_PreFinalizeTransferSP    NVARCHAR(10)            --NJOW03
 
+         , @c_FromUCCStatus            NVARCHAR(10)            --(Wan10)
+         , @c_ToUCCStatus              NVARCHAR(10)            --(Wan10)
+
 
    --1 XXXXXXX--
    BEGIN TRAN
@@ -350,8 +354,6 @@ BEGIN
                     + ' Retrieve of Right (ScanInLog) Failed (ispFinalizeTransfer) ( '
                     + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(RTRIM(@c_errmsg)),'') + ' ) '
    End
-
-
 
    /* KC01 - start */
    EXECUTE dbo.nspGetRight
@@ -1293,6 +1295,21 @@ BEGIN
          END
          --(CS01) -End
 
+         --(Wan10) - START
+         IF (@cUCCTracking = '1' OR @c_AllowTransferUCC = '1') AND @cFromUCC <> ''
+         BEGIN
+            SET @c_FromUCCStatus = '0'
+            SELECT @c_FromUCCStatus = UCC.[Status]
+            FROM UCC WITH (NOLOCK)
+            WHERE UCC.Storerkey = @cFromStorerkey
+            AND   UCC.UCCNo = @cFromUCC
+            AND   UCC.Sku = @cFromSku
+            AND   UCC.Lot = @cFromLot
+            AND   UCC.Loc = @cFromLoc
+            AND   UCC.ID  = @cFromID
+         END
+         --(Wan10) - END
+
          --(Wan05) - START
          IF @c_AllowTRFZeroQty = '1' AND @nFromQty = 0 AND @nToQty = 0
          BEGIN
@@ -1842,7 +1859,6 @@ BEGIN
                AND   StorerKey = @cFromStorerKey
                AND   Sku       = @cFromSKU                        --(Wan03)
 
-
                --Wan09 - START
                SET @c_LoseUCC_from = ''
                SELECT @c_LoseUCC_from = ISNULL(LoseUCC,'')
@@ -1902,7 +1918,7 @@ BEGIN
                      BEGIN
                         SELECT @nContinue = 3
                         SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80001
-                        SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (''ispFinalizeTransfer'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                        SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
                         GOTO Quit_Proc
                      END
                   END                                                --(Wan09) 
@@ -1942,7 +1958,7 @@ BEGIN
                         BEGIN
                            SELECT @nContinue = 3
                            SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80002
-                           SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Into UCC Fail. (''ispFinalizeTransfer'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                           SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Into UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
                            GOTO Quit_Proc
                         END
                      ENd
@@ -1951,10 +1967,45 @@ BEGIN
                   BEGIN
                      SELECT @nContinue = 3
                      SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80003
-                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (''ispFinalizeTransfer'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
                      GOTO Quit_Proc
                   END
                END
+
+               --(Wan10) - START
+               SET @c_ToUCCStatus = ''
+               IF @cFromUCC = @cToUCC
+               BEGIN
+                  SET @c_ToUCCStatus = @c_FromUCCStatus
+               END
+
+               SET @c_Sourcekey = RTRIM(@c_TransferKey) + RTRIM(@cTransferLineNumber)  
+
+               EXEC isp_ItrnUCCAdd
+                    @c_Storerkey       = @cFromStorerKey 
+                  , @c_UCCNo           = @cFromUCC     
+                  , @c_Sku             = @cFromSku  
+                  , @c_UCCStatus       = @c_FromUCCStatus            
+                  , @c_SourceKey       = @c_Sourcekey         
+                  , @c_ItrnSourceType  = 'ntrTransferDetailUpdate' 
+                  , @c_ToStorerkey     = @cToStorerKey 
+                  , @c_ToUCCNo         = @cToUCC     
+                  , @c_ToSku           = @cToSku  
+                  , @c_ToUCCStatus     = @c_ToUCCStatus                         
+                  , @b_Success         = @b_Success          OUTPUT
+                  , @n_Err             = @n_Err              OUTPUT
+                  , @c_ErrMsg          = @c_ErrMsg           OUTPUT
+
+               IF @b_Success <> 1  
+               BEGIN  
+                  SET @nContinue = 3  
+                  SET @n_err = 80023 
+                  SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (ispFinalizeTransfer)' 
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
+                  GOTO Quit_Proc      
+               END  
+               --(Wan10) - END
+  
             END -- @cUCCTracking = 1
 
             /* KC01 - start */
