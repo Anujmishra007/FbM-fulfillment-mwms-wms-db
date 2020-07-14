@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 07-JUL-2020  WLChooi   1.1 WMS-13926 - Add Report Config (WL01)      */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipOrders69  
             @c_Loadkey   NVARCHAR(10)
@@ -337,7 +338,8 @@ QUIT_SP:
       ,  StdCube = ISNULL(RTRIM(SKU.StdCube),0.00)   
       ,  CaseCnt = ISNULL(PACK.CaseCnt,0)                       
       ,  QtyInCS = CASE WHEN ISNULL(PACK.CaseCnt,0) > 0 THEN SUM(PICKDETAIL.Qty) / ISNULL(PACK.CaseCnt,0) ELSE 0 END        
-      ,  QtyInEA = SUM(PICKDETAIL.Qty)      
+      ,  QtyInEA = SUM(PICKDETAIL.Qty)     
+      ,  ShowSKUBarcode = ISNULL(CL.Short,'N')   --WL01 
    FROM #TMP_PCK TPK 
    JOIN LOADPLAN   WITH (NOLOCK) ON (TPK.Loadkey = LOADPLAN.Loadkey)
    JOIN ORDERS     WITH (NOLOCK) ON (TPK.Orderkey= ORDERS.Orderkey)
@@ -347,6 +349,8 @@ QUIT_SP:
    JOIN SKU        WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey)
                                  AND(PICKDETAIL.Sku = SKU.Sku)
    JOIN PACK       WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
+   LEFT OUTER JOIN Codelkup CL (NOLOCK) ON (ORDERS.Storerkey = CL.Storerkey AND CL.Code = 'ShowSKUBarcode'
+                                        AND CL.Listname = 'REPORTCFG' AND CL.Long = 'r_dw_print_pickorder69' AND ISNULL(CL.Short,'') <> 'N')
    GROUP BY TPK.PickSlipNo      
          ,  TPK.PrintedFlag
          ,  TPK.LoadKey   
@@ -369,6 +373,7 @@ QUIT_SP:
          ,  ISNULL(RTRIM(SKU.StdGrossWgt),0.00) 
          ,  ISNULL(RTRIM(SKU.StdCube),0.00)   
          ,  ISNULL(PACK.CaseCnt,0)  
+         ,  ISNULL(CL.Short,'N')   --WL01
    ORDER BY TPK.PickSlipNo
       ,  TPK.LocLevel
       ,  PICKDETAIL.Loc  
