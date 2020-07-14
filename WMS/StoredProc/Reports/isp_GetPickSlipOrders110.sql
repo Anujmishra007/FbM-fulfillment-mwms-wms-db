@@ -26,7 +26,7 @@ GO
 /* Date         Author    Ver Purposes                                  */  
 /* 26-Jun-2020  CSCHONG   1.1 WMS-12589 revised field mapping (CS01)    */
 /************************************************************************/  
-CREATE PROC isp_GetPickSlipOrders110  
+CREATE PROC isp_GetPickSlipOrders110
             @c_Sourcekey   NVARCHAR(10)  
          ,  @c_Sourcetype  NVARCHAR(10) = ''  
 AS  
@@ -314,7 +314,7 @@ BEGIN
    END  
    CLOSE CUR_LOADORD  
    DEALLOCATE CUR_LOADORD  
-  
+
    IF NOT EXISTS (SELECT 1  
                   FROM #TMP_PCK110 
                )  
@@ -587,8 +587,7 @@ QUIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt     BEGIN  
       BEGIN TRAN  
    END  
-  
-  
+
    SELECT        PickSlipNo
                , PrintedFlag
                , Loadkey   
@@ -605,7 +604,7 @@ QUIT_SP:
                , LocationType                      
                , Lottable01  
                , Lottable10
-               , QtyPicked                    --CS01    
+               , sum(QtyPicked)                    --CS01    
    FROM  #TMP_PCK110
    group by PickSlipNo
                , PrintedFlag 
@@ -623,7 +622,7 @@ QUIT_SP:
                , ID                             
                , Lottable01  
                , Lottable10
-               , QtyPicked                    --CS01
+              -- , QtyPicked                    --CS01
    order by pickslipno,LogicalLocation,loc
 END -- procedure  
 GO
