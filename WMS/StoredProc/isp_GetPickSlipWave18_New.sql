@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date        Author   Ver   Purposes                                  */  
+/* Date        Author   Ver   Purposes                                  */ 
+/* 05-Jun-2020 LZG      1.1   INC1161388 - Revise PickSlipNo generation */
+/*                                         logic (ZG01)                 */ 
 /* 16-Jun-2020 CSCHONG  1.1   WMS-13625 revised grouping (CS01)         */  
 /************************************************************************/  
 CREATE PROC [dbo].[isp_GetPickSlipWave18_New]  
@@ -301,7 +303,7 @@ BEGIN
    FROM #TMP_DET D  
    JOIN ORDER_SUM S ON D.Orderkey = S.Orderkey  
   
-   SET @n_Batch = 0  
+   /*SET @n_Batch = 0                       -- ZG01
    SELECT @n_Batch = COUNT(1)  
    FROM #TMP_HDR H  
    WHERE H.PickSlipNo = ''  
@@ -358,7 +360,70 @@ BEGIN
          SET @c_ErrMsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err) + ': Error Insert Into PICKHEADER table.(isp_GetPickSlipWave18_New)'  
          GOTO QUIT_SP  
       END  
-   END  
+   END*/                        -- ZG01
+  
+   -- ZG01 (Start)
+   DECLARE CUR_HDR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+   SELECT DISTINCT OrderKey 
+   FROM #TMP_HDR H  
+   WHERE H.PickSlipNo = ''  
+   
+   OPEN CUR_HDR    
+   FETCH NEXT FROM CUR_HDR INTO @c_Orderkey   
+    
+   WHILE @@FETCH_STATUS <> -1   
+   BEGIN    
+      SET @c_Pickslipno = ''
+      EXECUTE nspg_GetKey           
+            @keyname   = 'PICKSLIP'        
+         ,  @fieldlength= 9        
+         ,  @keystring = @n_Pickslipno OUTPUT        
+         ,  @b_Success = @b_Success    OUTPUT        
+         ,  @n_err     = @n_err        OUTPUT        
+         ,  @c_errmsg  = @c_errmsg     OUTPUT   
+                                 
+      SET @c_Pickslipno = 'P' + RIGHT('000000000' + CONVERT(NVARCHAR(9), @n_Pickslipno),9) 
+    
+      UPDATE H  
+         SET PickSlipNo = @c_Pickslipno
+      FROM #TMP_HDR H  
+      WHERE H.OrderKey = @c_Orderkey
+
+      INSERT INTO PICKHEADER   
+         (  PickHeaderKey  
+         ,  Wavekey  
+         ,  Orderkey  
+         ,  PickType  
+         ,  [Zone]  
+         ,  ExternOrderKey  
+         ,  LoadKey  
+         ,  ConsoOrderKey  
+         )  
+      SELECT H.Pickslipno  
+         ,  H.Wavekey  
+         ,  H.Orderkey  
+         ,  '0'  
+         ,  '3'  
+         ,  ''  
+         ,  ''  
+         ,  ''  
+      FROM #TMP_HDR H  
+      WHERE H.Reprint = 'N'  
+      AND H.OrderKey = @c_Orderkey
+  
+      IF @@ERROR <> 0   
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err = 67100  
+         SET @c_ErrMsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err) + ': Error Insert Into PICKHEADER table.(isp_GetPickSlipWave18_New)'  
+         GOTO QUIT_SP  
+      END  
+      
+   FETCH NEXT FROM CUR_HDR INTO @c_Orderkey 
+   END    
+   CLOSE CUR_HDR    
+   DEALLOCATE CUR_HDR   
+   -- ZG01 (End)
   
    SET @CUR_PICK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT PD.PickDetailKey  
