@@ -1,6 +1,6 @@
---IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrSKUAdd' AND type = 'TR')
---   DROP TRIGGER ntrSKUAdd
---GO
+IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrSKUAdd' AND type = 'TR')
+   DROP TRIGGER ntrSKUAdd
+GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -41,8 +41,11 @@ GO
 /* 28-Mar-2016  Shong     1.3   SOS#366725 Default OTM SKU Group (Shong02) */
 /* 30-Jun-2017  KHChan    1.4   FBR#WMS-1455 Add trigger point for         */
 /*                              WSSKUADDLOG (KH01)                         */
+/* 23-NOV-2017  TLTING    1.5   Skip trigger with archiveCop               */
+/* 06-Jul-2020  WLChooi   1.6   WMS-13990 - New Storerconfig               */
+/*                              DefaultSkuLottableCode (WL01)              */
 /***************************************************************************/
-ALTER TRIGGER ntrSKUAdd ON SKU 
+CREATE TRIGGER ntrSKUAdd ON SKU 
 FOR INSERT
 AS
 BEGIN
@@ -59,21 +62,22 @@ BEGIN
       PRINT @profiler    
    END    
 
-   DECLARE @b_Success               int       -- Populated by calls to stored procedures - was the proc successful?    
-         , @n_err                   int       -- Error number returned by stored procedure or this trigger    
-         , @n_err2                  int       -- For Additional Error Detection    
-         , @c_errmsg                NVARCHAR(250) -- Error message returned by stored procedure or this trigger    
-         , @n_continue              int                     
-         , @n_starttcnt             int       -- Holds the current transaction count    
-         , @c_preprocess            NVARCHAR(250) -- preprocess    
-         , @c_pstprocess            NVARCHAR(250) -- post process    
-         , @n_cnt                   int 
-         , @c_StorerKey             NVARCHAR(15)  -- (YokeBeen01) 
-         , @c_Sku                   NVARCHAR(20)  -- (YokeBeen01) 
-         , @c_authority_skuitf      NVARCHAR(1)   -- (YokeBeen01) 
-         , @c_transmitlog3key       NVARCHAR(10)  -- (YokeBeen01) 
-         , @c_authority_wtnskuitf   NVARCHAR(1)   -- (YokeBeen02) 
-         , @c_default_otm_skugroup  NVARCHAR(20)  -- (Shong02)
+   DECLARE @b_Success                int       -- Populated by calls to stored procedures - was the proc successful?    
+         , @n_err                    int       -- Error number returned by stored procedure or this trigger    
+         , @n_err2                   int       -- For Additional Error Detection    
+         , @c_errmsg                 NVARCHAR(250) -- Error message returned by stored procedure or this trigger    
+         , @n_continue               int                     
+         , @n_starttcnt              int       -- Holds the current transaction count    
+         , @c_preprocess             NVARCHAR(250) -- preprocess    
+         , @c_pstprocess             NVARCHAR(250) -- post process    
+         , @n_cnt                    int 
+         , @c_StorerKey              NVARCHAR(15)  -- (YokeBeen01) 
+         , @c_Sku                    NVARCHAR(20)  -- (YokeBeen01) 
+         , @c_authority_skuitf       NVARCHAR(1)   -- (YokeBeen01) 
+         , @c_transmitlog3key        NVARCHAR(10)  -- (YokeBeen01) 
+         , @c_authority_wtnskuitf    NVARCHAR(1)   -- (YokeBeen02) 
+         , @c_default_otm_skugroup   NVARCHAR(20)  -- (Shong02)
+         , @c_DefaultSkuLottableCode NVARCHAR(30)  -- (WL01)
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT     
 
@@ -118,6 +122,11 @@ BEGIN
                AND INSERTED.DESCR LIKE '%`%'
          END
       END 
+   END
+
+   IF (SELECT COUNT(*) FROM Inserted) = (SELECT COUNT(*) FROM Inserted WHERE Inserted.ArchiveCop = '9') -- KHLim03
+   BEGIN
+	   SELECT @n_continue = 4
    END
 
    -- (YokeBeen01) - Start
@@ -267,6 +276,40 @@ BEGIN
          	AND   Sku = @c_Sku
          END                           
          -- (Shong02) - End
+
+         --WL01 START
+         SET @b_success = 0
+         SET @c_DefaultSkuLottableCode = ''
+
+         EXECUTE dbo.nspGetRight  '',         -- Facility
+                  @c_StorerKey,               -- Storer
+                  '',                         -- Sku
+                  'DefaultSkuLottableCode',   -- ConfigKey
+                  @b_success                  OUTPUT,
+                  @c_DefaultSkuLottableCode   OUTPUT,
+                  @n_err                      OUTPUT,
+                  @c_errmsg                   OUTPUT
+
+         IF @b_success <> 1 
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63802  
+            SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) 
+                             + ': Retrieve of Right (DefaultSkuLottableCode) Failed (ntrSKUAdd) ( SQLSvr MESSAGE=' 
+                             + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+         END
+
+         IF @c_DefaultSkuLottableCode <> '0' AND @c_DefaultSkuLottableCode <> ''
+         BEGIN
+            UPDATE SKU WITH (ROWLOCK)
+            SET LottableCode = @c_DefaultSkuLottableCode, 
+                TrafficCop = NULL, 
+                EditDate = GETDATE(),
+                EditWho = SUSER_SNAME()  
+            WHERE StorerKey = @c_StorerKey 
+            AND   Sku = @c_Sku
+         END
+         --WL01 END
    	
    		FETCH FROM CUR_SKU_INSERTED INTO @c_StorerKey, @c_Sku
    	END
