@@ -53,6 +53,7 @@ GO
 /* 11/11/2018   NJOW10   2.9  D11 fix commit                             */
 /* 17/07/2019   NJOW11   3.0  WMS-9678 KR change find DPP logic and      */
 /*                            generate replen logic                      */
+/* 03/06/2020   CheeMun  3.1  INC1158387-group by codelkup udf01,udf02   */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispRLWAV03]
@@ -608,9 +609,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                             WHEN PD.UOM = '2' AND @c_AllocateGetCasecntFrLottable <> '10' THEN
                               CASE WHEN PD.Qty % CAST(PACK.Casecnt AS INT) = 0 THEN PD.Pickdetailkey ELSE '' END
                        ELSE PD.Pickdetailkey END,
-                       LOC.LocationType, O.type, CL.Long,
+                       LOC.LocationType, 
+                       MAX(O.type),  --INC1158387 
+                       CL.Long,
                        PACK.CaseCnt, --NJOW03
-                       COUNT(DISTINCT O.Orderkey)
+                       COUNT(DISTINCT O.Orderkey), 
+                       ISNULL(CLK.UDF01,''), ISNULL(CLK.UDF02,'') --INC1158387   
                 FROM WAVE W (NOLOCK)
                 JOIN WAVEDETAIL WD (NOLOCK) ON W.Wavekey = WD.Wavekey
                 JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -621,6 +625,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                 JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
                 JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
                 LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'REPLSWAP' AND LA.Lottable02 = CL.Short AND LLI.Storerkey = CL.Storerkey
+                OUTER APPLY (SELECT TOP 1 CL.UDF01, CL.UDF02 FROM CODELKUP CL(NOLOCK) WHERE CL.Listname = 'UASOTYPE' AND CL.Short = O.Type) AS CLK  --INC1158387
                 WHERE W.Wavekey = @c_Wavekey
                 --AND (LOC.Locationtype NOT IN('DYNPPICK','DYNPICKR','PICK','CASE')
                 --    OR (LOC.Locationtype = 'DYNPICKR' AND LII.QtyExpected > 0))
@@ -630,14 +635,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                          LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable06, LA.Lottable07,
                          LA.Lottable08, LA.Lottable09, LA.Lottable10, LA.Lottable11,
                          LOC.LocationType, CL.Long,
-                         PACK.CaseCnt, O.Type,
+                         PACK.CaseCnt, 
+                         --O.Type,  --INC1158387
                          CASE WHEN PD.UOM = '2' AND @c_AllocateGetCasecntFrLottable = '10' THEN
                                 CASE WHEN PD.Qty % CAST(LA.Lottable10 AS INT) = 0 THEN PD.Pickdetailkey ELSE '' END
                               WHEN PD.UOM = '2' AND @c_AllocateGetCasecntFrLottable <> '10' THEN
                                 CASE WHEN PD.Qty % CAST(PACK.Casecnt AS INT) = 0 THEN PD.Pickdetailkey ELSE '' END
                          ELSE PD.Pickdetailkey END,
-                         LOC.LocationGroup, LOC.LocLevel, LOC.LogicalLocation --NJOW06
-                ORDER BY PD.Storerkey, O.Type, PD.UOM,
+                         LOC.LocationGroup, LOC.LocLevel, LOC.LogicalLocation, --NJOW06
+                         ISNULL(CLK.UDF01,''), ISNULL(CLK.UDF02,'')  --INC1158387
+                ORDER BY PD.Storerkey, 
+                         --O.Type,  --INC1158387
+                         PD.UOM,
                          LOC.LocationGroup, LOC.LocLevel, LOC.LogicalLocation, PD.Loc --NJOW06
           END
           ELSE
@@ -649,7 +658,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                        LA.Lottable08, LA.Lottable09, LA.Lottable10, LA.Lottable11, PD.Pickdetailkey,
                        LOC.LocationType, O.type, CL.Long,
                        PACK.CaseCnt, --NJOW03
-                       1 AS OrderCnt --NJOW04
+                       1 AS OrderCnt, --NJOW04
+                       ISNULL(CLK.UDF01,''), ISNULL(CLK.UDF02,'') --Fix 
                 FROM WAVE W (NOLOCK)
                 JOIN WAVEDETAIL WD (NOLOCK) ON W.Wavekey = WD.Wavekey
                 JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -660,6 +670,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                 JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
                 JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
                 LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'REPLSWAP' AND LA.Lottable02 = CL.Short AND LLI.Storerkey = CL.Storerkey
+                OUTER APPLY (SELECT TOP 1 CL.UDF01, CL.UDF02 FROM CODELKUP CL(NOLOCK) WHERE CL.Listname = 'UASOTYPE' AND CL.Short = O.Type) AS CLK  --INC1158387                
                 WHERE W.Wavekey = @c_Wavekey
                 --AND (LOC.Locationtype NOT IN('DYNPPICK','DYNPICKR','PICK','CASE')
                 --    OR (LOC.Locationtype = 'DYNPICKR' AND LII.QtyExpected > 0))
@@ -673,7 +684,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
           FETCH NEXT FROM CUR_PICK INTO @c_StorerKey, @c_Sku, @c_UOM, @c_Loc, @c_Putawayzone, @n_Qty, @c_Packkey, @c_PackUOM,
                                         @c_Lot, @c_ID, @n_UOMQty, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03, @c_Lottable06,
                                         @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11,
-                                        @c_Pickdetailkey, @c_LocationType, @c_Type, @c_Long, @n_CaseCnt, @n_OrderCnt --NJOW03 NJOW04
+                                        @c_Pickdetailkey, @c_LocationType, @c_Type, @c_Long, @n_CaseCnt, @n_OrderCnt, --NJOW03 NJOW04
+                                        @c_UDF01, @C_UDF02 --INC1158387
           SET @c_PrevStorerkey = ''
           SET @c_PrevType = ''
           WHILE @@FETCH_STATUS <> -1
@@ -734,6 +746,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                 END
              END
 
+             /*  --INC1158387
              IF @c_PrevType <> @c_Type
              BEGIN
                  SELECT @c_UDF01 = ISNULL(UDF01,''), -- CICO indicator to stamp lottable11 to replenishment.refno
@@ -742,6 +755,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
                  WHERE Listname = 'UASOTYPE'
                  AND Short = @c_Type
              END
+             */
 
              IF ISNULL(@c_UDF02,'') = ''
                 SET @c_UDF02 = 'QC01'
@@ -876,12 +890,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
              END -- UOM <> 2
 
              SELECT @c_PrevStorerkey = @c_Storerkey
-             SELECT @c_PrevType = @c_Type
+             --SELECT @c_PrevType = @c_Type  --INC1158387
 
              FETCH NEXT FROM CUR_PICK INTO @c_StorerKey, @c_Sku, @c_UOM, @c_Loc, @c_Putawayzone, @n_Qty, @c_Packkey, @c_PackUOM,
                                            @c_Lot, @c_ID, @n_UOMQty, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03, @c_Lottable06,
                                            @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11,
-                                           @c_Pickdetailkey, @c_LocationType, @c_Type, @c_Long, @n_CaseCnt, @n_OrderCnt --NJOW03 NJOW04
+                                           @c_Pickdetailkey, @c_LocationType, @c_Type, @c_Long, @n_CaseCnt, @n_OrderCnt, --NJOW03 NJOW04
+                                           @c_UDF01, @C_UDF02 --INC1158387
           END
           CLOSE CUR_PICK
           DEALLOCATE CUR_PICK
@@ -1803,7 +1818,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
          END
 
          ------------------------------------------------
-         IF @n_QtyExpected > 0 --AND EXISTS(SELECT 1 FROM #BULK_STOCK WHERE LooseCaseQty > 0)
+         IF @n_QtyExpected > 0 AND @c_Country NOT IN('KR','KOR')--AND EXISTS(SELECT 1 FROM #BULK_STOCK WHERE LooseCaseQty > 0)
          BEGIN
             IF @c_Country = 'CN'
             BEGIN
