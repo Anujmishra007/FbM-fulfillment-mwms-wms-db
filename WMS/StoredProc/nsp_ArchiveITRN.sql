@@ -52,9 +52,10 @@ GO
 /* 03-May-2017  TLTING03   Filter editdate                              */
 /* 29-Jun-2017  TLTING04   Add parameter to skip Pickdetail check in    */
 /*                          Lotxlocxid housekeep                        */
+/* 21-Jul-2020  TLTING05   Add ITRNUCC                                  */
 /************************************************************************/  
   
-CREATE PROC    nsp_ArchiveITRN  
+CREATE   PROC    nsp_ArchiveITRN  
  @c_archivekey  NVARCHAR(10),  
  @b_Success      int        OUTPUT,      
  @n_err          int        OUTPUT,     
@@ -86,7 +87,8 @@ BEGIN
     @d_Itrndate  DATETIME     , -- Itrn Date FROM Itrn header table  
     @d_result  DATETIME     , -- date Itrn_date - (GETDATE() - noofdaystoretain  
     @c_datetype NVARCHAR(10),      -- 1=ItrnDATE, 2=EditDate, 3=AddDate  
-    @n_archive_Itrn_records   int -- # of Itrn records to be archived  
+    @n_archive_Itrn_records   int, -- # of Itrn records to be archived  
+    @n_archive_ItrnUCC_records   int -- # of Itrn records to be archived  
   
  DECLARE @c_CopyFrom_DB NVARCHAR(55),  
     @c_CopyTo_DB NVARCHAR(55),  
@@ -196,6 +198,32 @@ BEGIN
       COMMIT TRAN  
   
   
+  -- TLTING05
+  BEGIN TRAN         
+  IF ((@n_continue = 1 OR @n_continue = 2) AND @CopyRowsToArchiveDatabase = 'Y')  
+  BEGIN  
+  SELECT @b_success = 1  
+  EXEC dbo.nsp_BUILD_ARCHIVE_TABLE  -- (YokeBeen01)  
+   @c_CopyFrom_DB,   
+   @c_CopyTo_DB,   
+   'ItrnUCC',  
+   @b_success OUTPUT,   
+   @n_err OUTPUT,  
+   @c_errmsg OUTPUT  
+     
+  IF @b_success <> 1  
+  BEGIN  
+   SELECT @n_continue = 3  
+   SELECT @local_n_err = 77303  
+   SELECT @local_c_errmsg = CONVERT(CHAR(5),@local_n_err)  
+   SELECT @local_c_errmsg = ': Execution of nsp_BUILD_ARCHIVE_TABLE failed - (nsp_ArchiveITRN) ' + ' ( ' +  
+       ' SQLSvr MESSAGE = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'     
+  END  
+ END  
+   WHILE @@TRANCOUNT > 0   
+      COMMIT TRAN  
+      
+  
    BEGIN TRAN  
  IF ((@n_continue = 1 OR @n_continue = 2) AND @copyrowstoarchivedatabase = 'y')  
  BEGIN  
@@ -222,9 +250,39 @@ BEGIN
  END  
    WHILE @@TRANCOUNT > 0   
       COMMIT TRAN  
-        
+
+
+ -- TLTING05      
+ BEGIN TRAN  
+ IF ((@n_continue = 1 OR @n_continue = 2) AND @copyrowstoarchivedatabase = 'y')  
+ BEGIN  
+  IF (@b_debug =1 )  
+  BEGIN  
+   PRINT 'building alter table string for ItrnUCC...'  
+  END  
+  
+  EXECUTE dbo.nspBuildAlterTableString  -- (YokeBeen01)  
+   @c_CopyTo_DB,  
+   'ItrnUCC',  
+   @b_success output,  
+   @n_err output,   
+   @c_errmsg output  
+  
+  IF NOT @b_success = 1  
+  BEGIN  
+   SELECT @n_continue = 3  
+   SELECT @local_n_err = 77303  
+   SELECT @local_c_errmsg = CONVERT(CHAR(5),@local_n_err)  
+   SELECT @local_c_errmsg = ': Execution of nspBuildAlterTableString failed - (nsp_ArchiveITRN) ' + ' ( ' +  
+       ' SQLSvr MESSAGE = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'   
+  END  
+ END  
+   WHILE @@TRANCOUNT > 0   
+      COMMIT TRAN  
+              
  DECLARE @cItrnKey  NVARCHAR(10)  
-    
+  SET @n_archive_Itrn_records  = 0  
+  SET @n_archive_ItrnUCC_records  = 0  
  IF (@n_continue = 1 OR @n_continue = 2)  
  BEGIN  
       SET @n_archive_Itrn_records = 0   
@@ -248,6 +306,32 @@ BEGIN
       
     WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 OR @n_continue = 2)  
     BEGIN  
+      
+      -- TLTING05
+       IF exists ( Select 1 from ItrnUCC (NOLOCK) Where  ItrnKey = @cItrnKey )
+       BEGIN 
+      
+          BEGIN TRAN   
+          UPDATE ItrnUCC WITH (ROWLOCK)   
+               SET ArchiveCop = '9'   
+          WHERE ItrnKey = @cItrnKey   
+         
+           IF @@error <> 0  
+           BEGIN   
+            SELECT @n_continue = 3  
+            SELECT @local_n_err = 77313  
+            SELECT @local_c_errmsg = CONVERT(char(5),@local_n_err)  
+            SELECT @local_c_errmsg = ': Update of Archivecop failed - ItrnUCC. (nsp_ArchiveITRN) ' + ' ( ' +  
+                ' SQLSvr MESSAGE = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'  
+               ROLLBACK   
+               GOTO QUIT   
+           END  
+           ELSE   
+              COMMIT TRAN  
+          
+           SET @n_archive_ItrnUCC_records = @n_archive_ItrnUCC_records + 1  
+       END
+             
        BEGIN TRAN   
             
        UPDATE ITRN WITH (ROWLOCK)   
@@ -279,7 +363,8 @@ BEGIN
    if ((@n_continue = 1 or @n_continue = 2)  and @copyrowstoarchivedatabase = 'y')  
    begin  
       select @c_temp = 'attempting to archive ' + dbo.fnc_RTrim(convert(char(6),@n_archive_Itrn_records )) +  
-         ' ITRN records.'  
+         ' ITRN records, archive '  + RTrim(convert(nvarchar(10),@n_archive_ItrnUCC_records )) +
+          ' ITRNUCC records '
       execute dbo.nsplogalert  
          @c_modulename   = 'nsp_ArchiveITRN',  
          @c_alertmessage = @c_temp ,  
@@ -333,7 +418,36 @@ BEGIN
     CLOSE C_UPD_SKU  
     DEALLOCATE C_UPD_SKU  
  END  
-   
+
+
+
+ -- TLTING05
+IF ((@n_continue = 1 OR @n_continue = 2) AND @copyrowstoarchivedatabase = 'y')  
+ BEGIN     
+  IF (@b_debug =1 )  
+  BEGIN  
+   PRINT 'building insert for ITRNUCC ...'  
+  END  
+  
+  SELECT @b_success = 1  
+  EXEC dbo.nsp_build_insert  -- (YokeBeen01)  
+   @c_CopyTo_DB,   
+   'ITRNUCC',  
+   1,  
+   @b_success output ,   
+   @n_err output,   
+   @c_errmsg output  
+  
+  IF NOT @b_success = 1  
+  BEGIN  
+   SELECT @n_continue = 3  
+   SELECT @local_n_err = 77315  
+   SELECT @local_c_errmsg = CONVERT(CHAR(5),@local_n_err)  
+   SELECT @local_c_errmsg = ': Execution of nsp_build_insert failed - ITRNUCC. (nsp_ArchiveITRN) ' + ' ( ' +  
+       ' SQLSvr MESSAGE = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'  
+  END  
+ END  
+    
  IF ((@n_continue = 1 OR @n_continue = 2) AND @copyrowstoarchivedatabase = 'y')  
  BEGIN     
   IF (@b_debug =1 )  
