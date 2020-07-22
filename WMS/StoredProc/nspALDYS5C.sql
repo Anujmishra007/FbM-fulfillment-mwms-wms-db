@@ -30,7 +30,8 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */    
+/* Date         Author  Ver.  Purposes                                  */   
+/* 2020-07-21   WLChooi 1.1   Add condition (WL01)                      */    
 /************************************************************************/    
 CREATE PROC [dbo].[nspALDYS5C]        
    @c_DocumentNo NVARCHAR(10),  
@@ -261,7 +262,7 @@ BEGIN
       AND LOC.LocationGroup IN (''E'',''N'')
       --AND LOC.LocationCategory IN (''PICK'') ' + CHAR(13) + 
       CASE WHEN @c_IsValid = 'Y' THEN @c_Conditions ELSE '' END + CHAR(13) +
-      CASE WHEN @c_UOM = 6 THEN 'AND LOC.LocationGroup = @c_Doctype AND LOC.LocationCategory IN (''PICK'') ' ELSE '' END +
+      CASE WHEN @c_UOM = 6 THEN 'AND LOC.LocationGroup = @c_Doctype AND LOC.LocationCategory IN (''PICK'') AND SL.LocationType = ''PICK'' ' ELSE '' END +   --WL01
       CASE WHEN @c_UOM = 7 THEN 'AND SL.LocationType <> ''PICK'' ' ELSE '' END +
       CASE WHEN @c_UOM = 7 AND ISNULL(@n_PackPallet,0) > 0 THEN 'AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) = @n_PackPallet ' ELSE '' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
