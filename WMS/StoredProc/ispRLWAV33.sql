@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV33]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV33]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
    drop procedure [dbo].[ispRLWAV33]
 GO
 SET QUOTED_IDENTIFIER OFF 
@@ -23,6 +23,8 @@ GO
 /*                                                                          */  
 /* Updates:                                                                 */  
 /* Date         Author   Ver  Purposes                                      */  
+/* 2020-07-21   WLChooi  1.1  Fix Taskdetailkey not updating to Pickdetail  */
+/*                            (WL01)                                        */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV33]      
@@ -573,13 +575,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV33]
                   @c_TaskType              = @c_TaskType               
                  ,@c_Storerkey             = @c_Storerkey  
                  ,@c_Sku                   = @c_Sku  
-                 ,@c_Lot                   = '' --@c_Lot  
+                 --,@c_Lot                   = @c_Lot  --WL01
                  ,@c_UOM                   = @c_UOM        
                  ,@n_UOMQty                = @n_UOMQty       
                  ,@n_Qty                   = @n_Qty        
                  ,@c_FromLoc               = @c_Fromloc        
                  ,@c_LogicalFromLoc        = @c_FromLoc   
-                 ,@c_FromID                = '' --@c_ID       
+                 ,@c_FromID                = @c_ID     --WL01     
                  ,@c_ToLoc                 = @c_ToLoc_P         
                  ,@c_LogicalToLoc          = @c_ToLoc_P   
                  --,@c_ToID                  = @c_ID         
@@ -661,13 +663,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV33]
                   @c_TaskType              = @c_TaskType               
                  ,@c_Storerkey             = @c_Storerkey  
                  ,@c_Sku                   = @c_Sku  
-                 ,@c_Lot                   = '' --@c_Lot  
+                 --,@c_Lot                   = @c_Lot  --WL01
                  ,@c_UOM                   = @c_UOM        
                  ,@n_UOMQty                = @n_UOMQty       
                  ,@n_Qty                   = @n_Qty        
                  ,@c_FromLoc               = @c_Fromloc        
                  ,@c_LogicalFromLoc        = @c_FromLoc   
-                 ,@c_FromID                = '' --@c_ID       
+                 ,@c_FromID                = @c_ID     --WL01  
                  ,@c_ToLoc                 = @c_ToLoc_P         
                  ,@c_LogicalToLoc          = @c_ToLoc_P   
                  --,@c_ToID                  = @c_ID         
