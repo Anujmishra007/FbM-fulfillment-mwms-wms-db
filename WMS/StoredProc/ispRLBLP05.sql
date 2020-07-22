@@ -5,27 +5,30 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-/*************************************************************************/  
-/* Stored Procedure: ispRLBLP05                                          */  
-/* Creation Date: 31-Mar-2020                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: WLChooi                                                   */  
-/*                                                                       */  
-/* Purpose: WMS-12529 - CN DYSON Release Build Load                      */
-/*                                                                       */
-/* Config Key = 'BuildLoadReleaseTask_SP'                                */  
-/*                                                                       */  
-/* Called By: isp_BuildLoadReleaseTask_Wrapper                           */  
-/*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
-/*                                                                       */  
-/* Version: 7.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/*************************************************************************/   
+/****************************************************************************/  
+/* Stored Procedure: ispRLBLP05                                             */  
+/* Creation Date: 31-Mar-2020                                               */  
+/* Copyright: LFL                                                           */  
+/* Written by: WLChooi                                                      */  
+/*                                                                          */  
+/* Purpose: WMS-12529 - CN DYSON Release Build Load                         */
+/*                                                                          */
+/* Config Key = 'BuildLoadReleaseTask_SP'                                   */  
+/*                                                                          */  
+/* Called By: isp_BuildLoadReleaseTask_Wrapper                              */  
+/*                                                                          */  
+/* PVCS Version: 1.0                                                        */  
+/*                                                                          */  
+/* Version: 7.0                                                             */  
+/*                                                                          */  
+/* Data Modifications:                                                      */  
+/*                                                                          */  
+/* Updates:                                                                 */  
+/* Date         Author   Ver  Purposes                                      */
+/* 2020-07-21   WLChooi  1.1  Fix Taskdetailkey not updating to Pickdetail  */
+/*                            (WL02)                                        */  
+/* 2020-07-21   WLChooi  1.2  Add Message02 = Orderkey for FCP (WL02)       */
+/****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLBLP05]      
   @c_Loadkey      NVARCHAR(10)  
@@ -668,7 +671,7 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
           DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR    
             SELECT PD.Storerkey, PD.Sku, MAX(PD.Lot), PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,    
                    PD.UOM, SUM(PD.UOMQty) AS UOMQty, ISNULL(O.Loadkey,''''),
-                   ''''
+                   O.Orderkey   --WL02
              FROM LOADPLANDETAIL LPD (NOLOCK)  
              JOIN LOADPLAN L (NOLOCK) ON LPD.Loadkey = L.Loadkey  
              JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey  
@@ -682,7 +685,7 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
              AND PD.WIP_RefNo = @c_SourceType  
              AND PD.UOM = ''6''          
              AND LOC.LocationGroup = CASE WHEN LOC.LocationCategory = ''PICK'' THEN O.DocType ELSE LOC.LocationGroup END
-             GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, ISNULL(O.Loadkey,'''')
+             GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, ISNULL(O.Loadkey,''''), O.Orderkey   --WL02
              ORDER BY MAX(LA.Lottable05), Loc.LogicalLocation, PD.Loc '         
       
           EXEC sp_executesql @c_SQL,  
@@ -708,13 +711,13 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
                   @c_TaskType              = @c_TaskType               
                  ,@c_Storerkey             = @c_Storerkey  
                  ,@c_Sku                   = @c_Sku  
-                 ,@c_Lot                   = '' --@c_Lot  
+                 --,@c_Lot                   = @c_Lot  --WL01
                  ,@c_UOM                   = @c_UOM        
                  ,@n_UOMQty                = @n_UOMQty       
                  ,@n_Qty                   = @n_Qty        
                  ,@c_FromLoc               = @c_Fromloc        
                  ,@c_LogicalFromLoc        = @c_FromLoc   
-                 ,@c_FromID                = '' --@c_ID       
+                 ,@c_FromID                = @c_ID     --WL01       
                  ,@c_ToLoc                 = @c_ToLoc_P         
                  ,@c_LogicalToLoc          = @c_ToLoc_P   
                  --,@c_ToID                  = @c_ID         
@@ -726,10 +729,11 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
                  ,@c_OrderKey              = ''       
                  ,@c_WaveKey               = ''        
                  ,@c_Loadkey               = @c_Loadkey  
-                 ,@c_Groupkey              = @c_Loadkey
+                 ,@c_Groupkey              = @c_Orderkey   --@c_Loadkey   --WL02
                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
                  ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-                 ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+                 ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL   
+                 ,@c_Message02             = @c_Orderkey   --WL02 
                  ,@c_WIP_RefNo             = @c_SourceType  
                  ,@b_Success               = @b_Success OUTPUT  
                  ,@n_Err                   = @n_err OUTPUT   
@@ -754,7 +758,7 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
           DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR    
             SELECT PD.Storerkey, PD.Sku, MAX(PD.Lot), PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,    
                    PD.UOM, SUM(PD.UOMQty) AS UOMQty, ISNULL(O.Loadkey,''''),
-                   ''''
+                   O.Orderkey   --WL02
              FROM LOADPLANDETAIL LPD (NOLOCK)  
              JOIN LOADPLAN L (NOLOCK) ON LPD.Loadkey = L.Loadkey  
              JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey  
@@ -769,7 +773,7 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
              AND PD.UOM = ''7''    
              --AND LOC.LocationGroup = CASE WHEN LOC.LocationCategory = ''PICK'' THEN O.DocType ELSE LOC.LocationGroup END      
              AND LOC.LocationGroup = O.DocType
-             GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, ISNULL(O.Loadkey,'''')
+             GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, ISNULL(O.Loadkey,''''), O.Orderkey   --WL02
              ORDER BY MAX(LA.Lottable05), Loc.LogicalLocation, PD.Loc '         
       
           EXEC sp_executesql @c_SQL,  
@@ -795,13 +799,13 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
                   @c_TaskType              = @c_TaskType               
                  ,@c_Storerkey             = @c_Storerkey  
                  ,@c_Sku                   = @c_Sku  
-                 ,@c_Lot                   = '' --@c_Lot  
+                 --,@c_Lot                   = @c_Lot  --WL01
                  ,@c_UOM                   = @c_UOM        
                  ,@n_UOMQty                = @n_UOMQty       
                  ,@n_Qty                   = @n_Qty        
                  ,@c_FromLoc               = @c_Fromloc        
                  ,@c_LogicalFromLoc        = @c_FromLoc   
-                 ,@c_FromID                = '' --@c_ID       
+                 ,@c_FromID                = @c_ID     --WL01        
                  ,@c_ToLoc                 = @c_ToLoc_P         
                  ,@c_LogicalToLoc          = @c_ToLoc_P   
                  --,@c_ToID                  = @c_ID         
@@ -813,10 +817,11 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
                  ,@c_OrderKey              = ''       
                  ,@c_WaveKey               = ''        
                  ,@c_Loadkey               = @c_Loadkey  
-                 ,@c_Groupkey              = @c_Loadkey
+                 ,@c_Groupkey              = @c_Orderkey   --@c_Loadkey   --WL02
                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
                  ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-                 ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+                 ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL   
+                 ,@c_Message02             = @c_Orderkey   --WL02  
                  ,@c_WIP_RefNo             = @c_SourceType  
                  ,@b_Success               = @b_Success OUTPUT  
                  ,@n_Err                   = @n_err OUTPUT   
