@@ -30,6 +30,7 @@ GO
 /* Updates:                                                                */  
 /* Date        Author  Ver   Purposes                                      */  
 /* 06/06/2015  NJOW01  1.0   349528 - CC Finalize update last cc date      */
+/* 09/07/2020  NJOW02  1.1   WMS-13685 CC Finalize Extended validation     */
 /***************************************************************************/  
 
 CREATE PROCEDURE ispFinalizeStkTakeCount
@@ -52,7 +53,10 @@ AS
            @c_Storer_SCSQL             NVARCHAR(800), 
            @c_Storer_SCSQL2            NVARCHAR(800),
            @b_success                  INT,
-           @c_CCFinalizeUpdLastCntDate NVARCHAR(10)
+           @c_ErrMsg                   NVARCHAR(250),
+           @n_err                      INT,
+           @c_CCFinalizeUpdLastCntDate NVARCHAR(10),
+           @c_CCValidationRules        NVARCHAR(30) --NJOW02
   
    CREATE TABLE #STORER_CONFIG 
    (
@@ -76,7 +80,7 @@ AS
    
    SELECT @c_SQL = N'SELECT STORER.Storerkey, STORERCONFIG.Configkey, STORERCONFIG.Svalue '
          +  'FROM STORER (NOLOCK) '
-         +  'LEFT JOIN STORERCONFIG (NOLOCK) ON STORER.Storerkey = STORERCONFIG.Storerkey AND STORERCONFIG.Svalue=''1'' '
+         +  'LEFT JOIN STORERCONFIG (NOLOCK) ON STORER.Storerkey = STORERCONFIG.Storerkey AND (STORERCONFIG.Svalue=''1'' OR LEN(STORERCONFIG.Svalue) >= 5) '
          +  '                                AND (ISNULL(STORERCONFIG.Facility,'''')='''' OR STORERCONFIG.Facility = ''' + ISNULL(RTRIM(@c_facility), '') + ''') '
          +  'WHERE 1=1 '
          +  ISNULL(RTRIM(@c_Storer_SCSQL), '') + ' ' + ISNULL(RTRIM(@c_Storer_SCSQL2), '') + ' '
@@ -95,56 +99,123 @@ AS
    	  SELECT @c_CCFinalizeUpdLastCntDate = '0'
    END      
    --NJOW01 End
-
-   IF @n_CountNo = 1 
+      
+   --NJOW02 S
+   IF @n_continue IN(1,2)
+   BEGIN          
+        SELECT TOP 1 @c_CCValidationRules = SC.sValue  
+        FROM   #STORER_CONFIG SC(NOLOCK)  
+               JOIN CODELKUP CL(NOLOCK)  
+                    ON  SC.sValue = CL.Listname  
+        WHERE SC.Configkey = 'StockTakeExtendedValidation'  
+                  
+        IF ISNULL(@c_CCValidationRules ,'')<>''  
+        BEGIN  
+            EXEC isp_StockTake_ExtendedValidation @cStockTakeKey=@c_StockTakeKey  
+                ,@nCountNo=@n_CountNo
+                ,@cCCValidationRules=@c_CCValidationRules  
+                ,@nSuccess=@b_Success OUTPUT  
+                ,@cErrorMsg=@c_ErrMsg OUTPUT  
+            
+            IF @b_Success<>1  
+            BEGIN  
+                SELECT @n_Continue = 3  
+                --SELECT @n_err = 72810  
+            END  
+        END  
+        ELSE  
+        BEGIN  
+            SELECT TOP 1 @c_CCValidationRules = SC.sValue  
+            FROM   #STORER_CONFIG SC(NOLOCK)  
+            WHERE  SC.Configkey = 'StockTakeExtendedValidation'      
+              
+            IF EXISTS (  
+                   SELECT 1  
+                   FROM   dbo.sysobjects  
+                   WHERE  NAME = RTRIM(@c_CCValidationRules)  
+                   AND TYPE = 'P'  
+               )  
+            BEGIN  
+                SET @c_SQL = 'EXEC '+@c_CCValidationRules+  
+                    ' @c_StockTakeKey, @n_CountNo INT, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '  
+                  
+                EXEC sp_executesql @c_SQL  
+                    ,  
+                     N'@c_StockTakeKey NVARCHAR(10), @n_CountNo INT, @b_Success Int OUTPUT, @n_Err Int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT'  
+                    ,@c_StockTakekey
+                    ,@n_CountNo  
+                    ,@b_Success OUTPUT  
+                    ,@n_Err OUTPUT  
+                    ,@c_ErrMsg OUTPUT  
+                  
+                IF @b_Success<>1  
+                BEGIN  
+                    SELECT @n_Continue = 3      
+                    --SELECT @n_err = 72811  
+                END  
+            END  
+        END  
+        
+        IF @n_continue = 3
+        BEGIN 
+           RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR 
+     	     RETURN
+   	    END 
+    END --    IF @n_Continue = 1 OR @n_Continue = 2  
+    --NJOW02 E
+   
+   IF @n_continue IN(1,2)
    BEGIN
-      BEGIN TRAN
-
-   	UPDATE CCDETAIL
-         SET FinalizeFlag = 'Y'
-      WHERE CCKEY = @c_StockTakeKey
-   	IF @@ERROR <> 0
-   	BEGIN
-   	   SELECT @n_continue = 3
-   		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
-   	   ROLLBACK TRAN
-   	   RETURN
-   	END
-   	ELSE
-   	  COMMIT TRAN
-   END
-   ELSE IF @n_CountNo = 2 
-   BEGIN
-      BEGIN TRAN
-
-   	UPDATE CCDETAIL
-         SET FinalizeFlag_Cnt2 = 'Y'
-      WHERE CCKEY = @c_StockTakeKey
-   	IF @@ERROR <> 0
-   	BEGIN
-   	   SELECT @n_continue = 3
-   		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
-   	   ROLLBACK TRAN
-   	   RETURN
-   	END
-   	ELSE
-   	  COMMIT TRAN
-   END IF @n_CountNo = 3 
-   BEGIN
-      BEGIN TRAN
-
-   	UPDATE CCDETAIL
-         SET FinalizeFlag_Cnt3 = 'Y'
-      WHERE CCKEY = @c_StockTakeKey
-   	IF @@ERROR <> 0
-   	BEGIN
-   	   SELECT @n_continue = 3
-   		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
-   	   ROLLBACK TRAN
-   	   RETURN
-   	END
-   	ELSE
-   	  COMMIT TRAN
+      IF @n_CountNo = 1 
+      BEGIN
+         BEGIN TRAN
+      
+      	UPDATE CCDETAIL
+            SET FinalizeFlag = 'Y'
+         WHERE CCKEY = @c_StockTakeKey
+      	IF @@ERROR <> 0
+      	BEGIN
+      	   SELECT @n_continue = 3
+      		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
+      	   ROLLBACK TRAN
+      	   RETURN
+      	END
+      	ELSE
+      	  COMMIT TRAN
+      END
+      ELSE IF @n_CountNo = 2 
+      BEGIN
+         BEGIN TRAN
+      
+      	UPDATE CCDETAIL
+            SET FinalizeFlag_Cnt2 = 'Y'
+         WHERE CCKEY = @c_StockTakeKey
+      	IF @@ERROR <> 0
+      	BEGIN
+      	   SELECT @n_continue = 3
+      		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
+      	   ROLLBACK TRAN
+      	   RETURN
+      	END
+      	ELSE
+      	  COMMIT TRAN
+      END IF @n_CountNo = 3 
+      BEGIN
+         BEGIN TRAN
+      
+      	UPDATE CCDETAIL
+            SET FinalizeFlag_Cnt3 = 'Y'
+         WHERE CCKEY = @c_StockTakeKey
+      	IF @@ERROR <> 0
+      	BEGIN
+      	   SELECT @n_continue = 3
+      		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
+      	   ROLLBACK TRAN
+      	   RETURN
+      	END
+      	ELSE
+      	  COMMIT TRAN
+      END
    END
 
    IF @n_continue = 1 OR @n_continue = 2
