@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2020-07-24   WLChooi  1.1  Add leading zero if count < 10 (WL01)     */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispWAVPK10]   
@@ -251,7 +252,8 @@ BEGIN
             END
 
             UPDATE #PickDetail_WIP
-            SET CaseID = 'PK' + CAST(@n_Count AS NVARCHAR(5))
+            --SET CaseID = 'PK' + CAST(@n_Count AS NVARCHAR(5))   --WL01
+            SET CaseID = 'PK' + RIGHT('00' + CAST(@n_Count AS NVARCHAR(5)), 2)   --WL01
             WHERE Orderkey = @c_Orderkey
 
             SET @n_PKCount = @n_PKCount + 1
