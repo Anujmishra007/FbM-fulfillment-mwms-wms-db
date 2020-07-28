@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */  
+/* 08-Jul-2020  NJOW01   1.0  WMS-14142 copy lottable07 to to-kit        */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLKIT04]      
@@ -371,7 +372,7 @@ CREATE PROCEDURE [dbo].[ispRLKIT04]
          	INSERT INTO KITDETAIL (KitKey, KitLineNumber, Type, Storerkey, Sku, Lot, loc, id, ExpectedQty, Qty, Packkey, UOM, ExternKitkey, ExternLineNo, Lottable01, Lottable02,
          	                       Lottable03, Lottable04, Lottable05, Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
           SELECT TOP 1 @c_NewKitkey, @c_NewKitLineNumber, Type, Storerkey, Sku, Lot, @c_FinalLoc, id, @n_MainQty, @n_MainQty, Packkey, UOM, ExternKitkey, ExternLineNo, @c_ExternKitKey, @c_Lottable02,
-                 Lottable03, Lottable04, @d_Lottable05, Lottable06, Lottable07, Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, Lottable12, Lottable13, Lottable14, Lottable15
+                 Lottable03, Lottable04, @d_Lottable05, Lottable06, @c_Lottable07, Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, Lottable12, Lottable13, Lottable14, Lottable15  --NJOW01
           FROM KITDETAIL (NOLOCK)
           WHERE Kitkey = @c_Kitkey
           AND Type = 'T'
