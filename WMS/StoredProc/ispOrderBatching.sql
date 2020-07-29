@@ -81,6 +81,9 @@ GO
 /* 24-04-2018   NJOW07  2.7   WMS-4775 remove deviceposition and        */
 /*                            replenishmentgroup when Re-Generate       */
 /* 18-07-2018   TLTING  2.8   Performance Tune (tlting03)               */
+/* 29-JUL-2019  CSCHONG 2.9   WMS-9278 - add new parameter (CS01)       */
+/* 19-Dec-2019  NJOW08  3.0   WMS-11479 - CN IKEA support group by      */
+/*                            loc.descr instead of pickzone             */ 
 /************************************************************************/
 
 CREATE PROC [dbo].[ispOrderBatching]  
@@ -95,6 +98,7 @@ CREATE PROC [dbo].[ispOrderBatching]
    , @c_WaveKey     NVARCHAR(10) = ''     --(Wan01) 
    , @c_UOM         NVARCHAR(500)= ''     --(Wan01) 
    , @c_updatepick  NCHAR(1)     = 'N'    --(Wan03)
+   , @c_rptprocess  NVARCHAR(10) = ''     --(CS01)
 
 AS  
 BEGIN  
@@ -124,18 +128,19 @@ BEGIN
       @n_RowRef     BIGINT            -- tlting01 
    ,  @c_Sourcekey   NVARCHAR(10)            --(Wan01)  
    ,  @c_BatchSource NVARCHAR(2)             --(Wan01) 'LP'- Loadkey, 'WP'- Wavekey
-   ,  @c_ZoneList    NVARCHAR(4000)          --(Wan01)	--INC0152000 
+   ,  @c_ZoneList    NVARCHAR(4000)          --(Wan01)   --INC0152000 
    ,  @c_SQL         NVARCHAR(4000)          --(Wan01) 
    ,  @c_SQLArgument  NVARCHAR(4000)         --(Wan01) 
-
    ,  @n_RecCnt                  INT         --(Wan01)
    ,  @c_BatchOrderZoneFromTask  NVARCHAR(30)--(Wan01)  
    ,  @c_ExcludeLocType          NVARCHAR(50)--(Wan01) 
-   
+   ,  @c_replenishrequire        NVARCHAR(1) --(CS01)
+   ,  @c_OrderBatchBylocdescr    NVARCHAR(10)--NJOW08   
+   ,  @c_OrderBatchByLocDescr_OPT1 NVARCHAR(50) --NJOW08
 
-  SET @c_ZoneList = @c_PickZones             --(Wan01)
+  SET @c_ZoneList = @c_PickZones         --(Wan01)
+  SET @c_replenishrequire = ''               --(CS01)
          
-  
   CREATE TABLE #OrderTable
    ( rowref    INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
       OrderKey  NVARCHAR(10),
@@ -167,18 +172,18 @@ BEGIN
    -- Shong001
    CREATE TABLE #OrderAvgScore 
    (
-	   rowref    INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
-	   OrderKey  NVARCHAR(10),
-	   Score     INT NULL DEFAULT (0), --(Wan02) Fixed to default 0
-	   )
+      rowref    INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+      OrderKey  NVARCHAR(10),
+      Score     INT NULL DEFAULT (0), --(Wan02) Fixed to default 0
+      )
    
    Create index IDX_OrderAvgScore_Ord ON #OrderAvgScore  (OrderKey)
 
    --(Wan01) - START
    CREATE TABLE #TMP_ORDAVGSCORE
-   (	RowRef    INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
-	   OrderKey  NVARCHAR(10),
-	   AVgScore  INT
+   ( RowRef    INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+      OrderKey  NVARCHAR(10),
+      AVgScore  INT
    )
 
    -- CREATE #TMP_PICKLOC if not calling Function not create it
@@ -191,7 +196,7 @@ BEGIN
          )
       CREATE INDEX #IDX_PICKLOC_LOC ON #TMP_PICKLOC (Loc)
    END
-	--(Wan01) - END   
+   --(Wan01) - END   
 
    --DECLARE @t_OrderTable TABLE (
    --   OrderKey  NVARCHAR(10),
@@ -259,7 +264,7 @@ BEGIN
    BEGIN
       SELECT @n_Continue = 3  
       SELECT @n_Err = 63500  
-      SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadkey is empty. (ispOrderBatching)'                
+      SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadkey is empty. (ispOrderBatching)'               
       GOTO Quit
    END
 
@@ -286,7 +291,7 @@ BEGIN
       END
    END
 
-   IF ISNULL(@c_UOM,'') <> '' AND @c_Mode <> '9'
+   IF ISNULL(@c_UOM,'') <> '' AND @c_Mode <> '9' AND ISNULL(@c_rptprocess,'') <> 'byuom' --CS01
    BEGIN
       SET @n_Continue = 3  
       SET @n_Err = 63521 
@@ -294,6 +299,22 @@ BEGIN
       GOTO QUIT 
    END
    --(Wan01) - END
+
+   --(CS01) START
+
+   IF ISNULL(@c_rptprocess,'') = 'byuom'
+   BEGIN
+      IF @c_UOM = '6'
+       BEGIN
+          SET @c_replenishrequire = 'N'
+       END
+       ELSE
+       BEGIN
+          SET  @c_replenishrequire = 'Y'
+       END
+   END
+
+   --(CS01) END
 
    IF ISNULL(@n_OrderCount, 0) <= 0
    BEGIN
@@ -314,25 +335,55 @@ BEGIN
    
    IF ISNULL(@c_UDF01,'') <> '' AND ISNUMERIC(@c_UDF01) = 1
    BEGIN
-   	  IF ISNULL(@n_OrderCount, 0) > CAST(@c_UDF01 AS INT)
-   	  BEGIN
+        IF ISNULL(@n_OrderCount, 0) > CAST(@c_UDF01 AS INT)
+        BEGIN
          SELECT @n_Continue = 3  
          SELECT @n_Err = 63503 
          SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Order count cannot larger than maximum limit ' + RTRIM(@c_UDF01) + ' (ispOrderBatching)' 
          GOTO Quit
-   	  END
+        END
    END
 
    IF ISNULL(@c_UDF02,'') <> '' AND NOT EXISTS (SELECT 1 FROM dbo.fnc_DelimSplit(',', @c_UDF02) AS VAL WHERE ISNUMERIC(Colvalue) = 0) 
    BEGIN
-   	  IF NOT EXISTS(SELECT 1 FROM dbo.fnc_DelimSplit(',', @c_UDF02) AS VAL 
-   	                WHERE CAST(colvalue AS INT) = @n_Ordercount) 
-   	  BEGIN
+        IF NOT EXISTS(SELECT 1 FROM dbo.fnc_DelimSplit(',', @c_UDF02) AS VAL 
+                      WHERE CAST(colvalue AS INT) = @n_Ordercount) 
+        BEGIN
          SELECT @n_Continue = 3  
          SELECT @n_Err = 63504 
          SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Order count value must be in ' + RTRIM(@c_UDF02) + ' (ispOrderBatching)' 
          GOTO Quit
-   	  END
+        END
+   END
+   
+   --NJOW08
+   SET @c_OrderBatchBylocdescr = ''
+   EXEC nspGetRight  
+        @c_Facility  = @c_Facility   
+      , @c_StorerKey = @c_StorerKey  
+      , @c_sku       = NULL 
+      , @c_ConfigKey = 'OrderBatchByLocDescr' 
+      , @b_Success   = @b_Success         OUTPUT  
+      , @c_authority = @c_OrderBatchBylocdescr   OUTPUT    
+      , @n_err       = @n_err             OUTPUT    
+      , @c_errmsg    = @c_errmsg          OUTPUT  
+      , @c_Option1   = @c_OrderBatchByLocDescr_OPT1  OUTPUT
+      
+   IF @c_OrderBatchBylocdescr = '1'
+   BEGIN
+        IF @c_OrderBatchByLocDescr_OPT1 = 'TMALL' AND ISNULL(@c_Loadkey,'') <> ''
+        BEGIN
+           IF NOT EXISTS(SELECT 1 
+                         FROM LOADPLANDETAIL LPD (NOLOCK)
+                         JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+                         JOIN ORDERINFO OI (NOLOCK) ON O.Orderkey = OI.Orderkey
+                         WHERE LPD.Loadkey = @c_Loadkey 
+                         AND OI.StoreName = '618'
+                         AND O.Shipperkey = 'SN')                        
+           BEGIN
+              SET @c_OrderBatchBylocdescr = '0'
+           END             
+        END
    END
 
    --(Wan01) - START
@@ -357,7 +408,7 @@ BEGIN
              + CASE WHEN @c_BatchOrderZoneFromTask = '1' 
                     THEN ',TaskDetailKey=ISNULL(TD.TaskDetailKey,'''')'
                     ELSE ',TaskDetailKey='''''
-                    END             
+                    END    
              + ' FROM ORDERS O WITH (NOLOCK)'
              + ' JOIN PICKDETAIL PD WITH (NOLOCK) ON O.Orderkey = PD.Orderkey'
              + CASE WHEN @c_BatchOrderZoneFromTask = '1' 
@@ -429,11 +480,25 @@ BEGIN
    IF @c_PickZones = 'ALL' 
    BEGIN
       SET @c_ZoneList = ''
-      SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
-      FROM #TMP_PICKLOC PL           
-      JOIN LOC WITH (NOLOCK) ON  PL.Loc = LOC.Loc
-      GROUP BY LOC.PickZone
-      ORDER BY LOC.PickZone
+      
+      IF @c_OrderBatchBylocdescr = '1'  --NJOW08
+      BEGIN       
+         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','
+         FROM #TMP_PICKLOC PL           
+         JOIN LOC WITH (NOLOCK) ON  PL.Loc = LOC.Loc
+         WHERE LOC.Descr <> ''
+         AND LOC.Descr IS NOT NULL
+         GROUP BY LOC.Descr
+         ORDER BY LOC.Descr
+      END
+      ELSE
+      BEGIN
+         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
+         FROM #TMP_PICKLOC PL           
+         JOIN LOC WITH (NOLOCK) ON  PL.Loc = LOC.Loc
+         GROUP BY LOC.PickZone
+         ORDER BY LOC.PickZone
+      END
       
       IF ISNULL(@c_ZoneList,'') <> ''
       BEGIN
@@ -472,7 +537,7 @@ BEGIN
       END
       ELSE
       BEGIN
-   	     --not split by pickzone so create 1 dummy record
+           --not split by pickzone so create 1 dummy record
          DECLARE C_PICKZONE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT loadkey FROM LOADPLAN(NOLOCK) WHERE Loadkey = @c_Loadkey
       END
@@ -498,7 +563,7 @@ BEGIN
               JOIN WAVEDETAIL WPD (NOLOCK) ON (WPD.OrderKey = PD.OrderKey)
               JOIN #TMP_PICKLOC PL  ON (PD.PickDetailKey = PL.PickDetailkey)         
               JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      
-     WHERE WPD.WaveKey = @c_WaveKey
+              WHERE WPD.WaveKey = @c_WaveKey
               AND L.Score> 0
               GROUP BY PD.OrderKey, L.LOC, L.Score
   ) AS OS
@@ -554,7 +619,7 @@ BEGIN
       ELSE
       BEGIN 
          SET @c_Sourcekey = @c_LoadKey 
-	   	  
+           
          INSERT INTO #OrderTable (OrderKey, Loc, Score, Qty)
          SELECT PD.OrderKey, L.LOC, 
                 CASE WHEN L.Score = 0 THEN
@@ -594,51 +659,94 @@ BEGIN
          ELSE
          BEGIN
             DELETE FROM #OrderTable
-          WHERE OrderKey IN (SELECT OrderKey 
+            WHERE OrderKey IN (SELECT OrderKey 
                                FROM #OrderTable 
-         GROUP BY OrderKey 
+                               GROUP BY OrderKey 
                                HAVING SUM(Qty) <= 1)
          END
     
          IF @c_Mode = '1'
          BEGIN
             -- Exclude orders with multi pickzone
-            DELETE FROM #OrderTable
-            WHERE EXISTS  (SELECT 1 -- O.OrderKey
-                               FROM #OrderTable O 
-                               JOIN PickDetail   PD (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-                               JOIN #TMP_PICKLOC PL          ON (PD.PickDetailKey = PL.PickDetailkey) --(Wan01)
-                               JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      --(Wan01)
-                               WHERE ISNULL(L.PickZone, '') <> ''
-                                 AND L.Score > 0
-                                 AND PD.OrderKey =  #OrderTable.OrderKey
-                               GROUP BY PD.OrderKey 
-                               HAVING COUNT(DISTINCT L.PickZone) > 1)
+            IF @c_OrderBatchBylocdescr = '1' --NJOW08
+            BEGIN
+               DELETE FROM #OrderTable
+               WHERE EXISTS  (SELECT 1 -- O.OrderKey
+                                  FROM #OrderTable O 
+                                  JOIN PickDetail   PD (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                                  JOIN #TMP_PICKLOC PL          ON (PD.PickDetailKey = PL.PickDetailkey) --(Wan01)
+                                  JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      --(Wan01)
+                                  WHERE ISNULL(L.Descr, '') <> ''
+                                    AND L.Score > 0
+                                    AND PD.OrderKey =  #OrderTable.OrderKey
+                                  GROUP BY PD.OrderKey 
+                                  HAVING COUNT(DISTINCT L.Descr) > 1)                                  
+            END
+            ELSE
+            BEGIN
+               DELETE FROM #OrderTable
+               WHERE EXISTS  (SELECT 1 -- O.OrderKey
+                                  FROM #OrderTable O 
+                                  JOIN PickDetail   PD (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                                  JOIN #TMP_PICKLOC PL          ON (PD.PickDetailKey = PL.PickDetailkey) --(Wan01)
+                                  JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      --(Wan01)
+                                  WHERE ISNULL(L.PickZone, '') <> ''
+                                    AND L.Score > 0
+                                    AND PD.OrderKey =  #OrderTable.OrderKey
+                                  GROUP BY PD.OrderKey 
+                                  HAVING COUNT(DISTINCT L.PickZone) > 1)
+            END                   
          END
          ELSE IF @c_Mode = '2' 
                  OR @c_Mode = '4' --NJOW04
          BEGIN
             -- Exclude orders with single pickzone
-            DELETE FROM #OrderTable
-            WHERE OrderKey IN (SELECT O.OrderKey
-                               FROM #OrderTable O 
-                               JOIN PickDetail PD (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-                               JOIN #TMP_PICKLOC PL          ON (PD.PickDetailKey = PL.PickDetailkey) --(Wan01)
-                               JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      --(Wan01)
-                               WHERE ISNULL(L.PickZone, '') <> ''
-                                 AND L.Score > 0
-                               GROUP BY O.OrderKey 
-                               HAVING COUNT(DISTINCT L.PickZone) = 1)
+            IF @c_OrderBatchBylocdescr = '1' --NJOW08
+            BEGIN
+               DELETE FROM #OrderTable
+               WHERE OrderKey IN (SELECT O.OrderKey
+                                  FROM #OrderTable O 
+                                  JOIN PickDetail PD (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                                  JOIN #TMP_PICKLOC PL          ON (PD.PickDetailKey = PL.PickDetailkey) --(Wan01)
+                                  JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      --(Wan01)
+                                  WHERE ISNULL(L.Descr, '') <> ''
+                                    AND L.Score > 0
+                                  GROUP BY O.OrderKey 
+                                  HAVING COUNT(DISTINCT L.Descr) = 1)
+            END         
+            ELSE
+            BEGIN
+               DELETE FROM #OrderTable
+               WHERE OrderKey IN (SELECT O.OrderKey
+                                  FROM #OrderTable O 
+                                  JOIN PickDetail PD (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                                  JOIN #TMP_PICKLOC PL          ON (PD.PickDetailKey = PL.PickDetailkey) --(Wan01)
+                                  JOIN LOC          L  (NOLOCK) ON (PL.Loc = L.Loc)                      --(Wan01)
+                                  WHERE ISNULL(L.PickZone, '') <> ''
+                                    AND L.Score > 0
+                                  GROUP BY O.OrderKey 
+                                  HAVING COUNT(DISTINCT L.PickZone) = 1)
+            END          
          END
       END -- IF @c_Mode IN ('1', '2', '3')
 
       -- (Chee02)
       IF @c_Mode NOT IN ('4','5') --NJOW04
       BEGIN
-         DELETE #OrderTable
-         FROM #OrderTable O
-         JOIN LOC L  (NOLOCK) ON (L.LOC = O.LOC)                       
-         WHERE L.PickZone <> @c_PickZone
+          IF @c_OrderBatchBylocdescr = '1' --NJOW08
+          BEGIN
+            DELETE #OrderTable
+            FROM #OrderTable O
+            JOIN LOC L  (NOLOCK) ON (L.LOC = O.LOC)                       
+            WHERE L.Descr <> @c_PickZone
+         END
+         ELSE
+         BEGIN
+            DELETE #OrderTable
+            FROM #OrderTable O
+            JOIN LOC L  (NOLOCK) ON (L.LOC = O.LOC)                       
+            WHERE L.PickZone <> @c_PickZone           
+         END
       END
 
       SELECT 
@@ -661,27 +769,27 @@ BEGIN
       --NJOW04
       IF @n_Count > 0 
       BEGIN
-        EXECUTE nspg_getkey
-            'ORDBATCHNO'
-            , 9
-            , @c_BatchCode   OUTPUT
-            , @b_Success OUTPUT
-            , @n_Err     OUTPUT
-            , @c_ErrMsg  OUTPUT
-
-        SET @c_BatchCode = 'B' + @c_BatchCode
+         EXECUTE nspg_getkey
+             'ORDBATCHNO'
+             , 9
+             , @c_BatchCode   OUTPUT
+             , @b_Success OUTPUT
+             , @n_Err     OUTPUT
+             , @c_ErrMsg  OUTPUT
+         
+         SET @c_BatchCode = 'B' + @c_BatchCode
       END
       
       WHILE (@n_Count > 0)
       BEGIN
-      	 IF @c_Mode = '9' --NJOW04
-      	 BEGIN
+          IF @c_Mode = '9' --NJOW04
+          BEGIN
             SELECT TOP 1 
-              @c_OrderKey = OrderKey
-              FROM #OrderTable O
-              GROUP BY Orderkey
-              ORDER BY MIN(O.Loc), O.OrderKey            	
-      	 END
+                   @c_OrderKey = OrderKey
+            FROM #OrderTable O
+            GROUP BY Orderkey
+            ORDER BY MIN(O.Loc), O.OrderKey              
+          END
          ELSE IF @n_Counter = 1
          BEGIN
             -- Clear Diff field for each new batch (Chee01)
@@ -702,7 +810,7 @@ BEGIN
             IF (SELECT COUNT(1) FROM #OrderAvgScore) > 0
             BEGIN
               SELECT TOP 1  
-                @c_OrderKey = OrderKey
+                     @c_OrderKey = OrderKey
               FROM #OrderAvgScore O
               GROUP BY OrderKey 
               ORDER BY AVG(CAST(Score AS FLOAT))
@@ -710,15 +818,14 @@ BEGIN
             ELSE
             BEGIN
               SELECT TOP 1 
-                @c_OrderKey = OrderKey
+                     @c_OrderKey = OrderKey
               FROM #OrderTable O
               GROUP BY Orderkey
-              ORDER BY AVG(CAST(O.Score AS FLOAT)), O.OrderKey            	
-            END            	
+              ORDER BY AVG(CAST(O.Score AS FLOAT)), O.OrderKey             
+            END               
          END
          ELSE
          BEGIN
-
             UPDATE #OrderTable
             SET Diff = B.Diff
             FROM #OrderTable O
@@ -792,79 +899,82 @@ BEGIN
             SET @c_Pickdetailkey = ''
             SET @c_BatchNo = ''
             DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-   		      SELECT PD.Pickdetailkey, R.BatchNo
+                  SELECT PD.Pickdetailkey, R.BatchNo
                FROM PickDetail PD with (NOLOCK)                                         
                JOIN #TMP_PICKLOC PL ON(PD.PickDetailKey = PL.PickDetailKey)            --(Wan01)
                JOIN #BatchResultTable R ON PD.OrderKey = R.OrderKey AND PL.Loc = R.Loc --(Wan01)
    
    
-   	      OPEN Orders_Pickdet_cur 
-   	      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo 
-   	      WHILE @@FETCH_STATUS = 0 
-   	      BEGIN 
-               UPDATE PickDetail WITH (ROWLOCK)
-               SET Notes = CASE WHEN @c_Mode IN('4','5') THEN
-                              --@c_LoadKey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   --NJOW04          --(Wan01)
-                              @c_Sourcekey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode                     --(Wan01)
-                           ELSE
-                              --@c_LoadKey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   -- (Chee03, Chee04)
-                              @c_Sourcekey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode  --(Wan01)
-                           END
-                 , TrafficCop = NULL
-                 , PickSlipNo = @c_BatchCode  --NJOW04
-                 , [Status]   = CASE WHEN @c_updatepick = 'Y' THEN '3' ELSE [Status] END  --(Wan03) 
-                 , EditWho    = SUSER_SNAME()
-                 , EditDate   = GETDATE()
-                   WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
-                 SELECT @n_err = @@ERROR
-                  IF @n_err <> 0 
-                  BEGIN
-            	      CLOSE Orders_Pickdet_cur 
-            	      DEALLOCATE Orders_Pickdet_cur                  
-                     SELECT @n_Continue = 3  
-                     SELECT @n_Err = 63505  
-                     SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PickDetail. (ispOrderBatching)'
-                     GOTO Quit 
-                  END 		
-   		      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo
-   	      END
-   	      CLOSE Orders_Pickdet_cur 
-   	      DEALLOCATE Orders_Pickdet_cur   
-          
-            --NJOW04 Start              
-            -- tlting01
+              OPEN Orders_Pickdet_cur 
+              FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo 
+              WHILE @@FETCH_STATUS = 0 
+              BEGIN 
+                UPDATE PickDetail WITH (ROWLOCK)
+                SET Notes = CASE WHEN @c_Mode IN('4','5') THEN
+                               --@c_LoadKey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   --NJOW04          --(Wan01)
+                               @c_Sourcekey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode + @c_replenishrequire --(Wan01)  --CS01
+                            ELSE
+                               --@c_LoadKey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   -- (Chee03, Chee04)
+                               @c_Sourcekey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode  + @c_replenishrequire --(Wan01) --CS01
+                            END
+                  , TrafficCop = NULL
+                  , PickSlipNo = @c_BatchCode  --NJOW04
+                  , [Status]   = CASE WHEN @c_updatepick = 'Y' THEN '3' ELSE [Status] END  --(Wan03) 
+                  , EditWho    = SUSER_SNAME()
+                  , EditDate   = GETDATE()
+                    WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
+                    
+                SELECT @n_err = @@ERROR
+                
+                IF @n_err <> 0 
+                BEGIN
+                  CLOSE Orders_Pickdet_cur 
+                  DEALLOCATE Orders_Pickdet_cur                  
+                   SELECT @n_Continue = 3  
+                   SELECT @n_Err = 63505  
+                   SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PickDetail. (ispOrderBatching)'
+                   GOTO Quit 
+                END  
+                  
+                   FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo
+              END
+              CLOSE Orders_Pickdet_cur 
+              DEALLOCATE Orders_Pickdet_cur   
+            
+              --NJOW04 Start              
+              -- tlting01
             SET @n_RowRef = 0
             DECLARE PackTask_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-   		      SELECT PT.RowRef
+                  SELECT PT.RowRef
                FROM PACKTASK PT with (NOLOCK)
                JOIN #BatchResultTable R ON PT.OrderKey = R.OrderKey  
-   
-   	      OPEN PackTask_cur 
-   	      FETCH NEXT FROM PackTask_cur INTO @n_RowRef 
-   	      WHILE @@FETCH_STATUS = 0 
-   	      BEGIN 
-               UPDATE PACKTASK WITH (ROWLOCK)
-               SET TaskBatchNo = @c_BatchCode,
-                   OrderMode = @c_OrderMode, 
-                   EditDate   = GETDATE(),
-                   DevicePosition = '', --NJOW07
-                   ReplenishmentGroup = '' --NJOW07
-               WHERE RowRef = @n_RowRef
-               SELECT @n_err = @@ERROR
-               IF @n_err <> 0 
-               BEGIN
-         	      CLOSE PackTask_cur 
-            	   DEALLOCATE PackTask_cur       	      
-                  SELECT @n_Continue = 3  
-                  SELECT @n_Err = 63506  
-                  SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PackTask. (ispOrderBatching)'
-                  GOTO Quit 
-               END 		
-   		      FETCH NEXT FROM PackTask_cur INTO @n_RowRef
-   	      END
-   	      CLOSE PackTask_cur 
-   	      DEALLOCATE PackTask_cur
-   	      -- tlting01 end     
+            
+              OPEN PackTask_cur 
+              FETCH NEXT FROM PackTask_cur INTO @n_RowRef 
+              WHILE @@FETCH_STATUS = 0 
+              BEGIN 
+                 UPDATE PACKTASK WITH (ROWLOCK)
+                 SET TaskBatchNo = @c_BatchCode,
+                     OrderMode = @c_OrderMode, 
+                     EditDate   = GETDATE(),
+                     DevicePosition = '', --NJOW07
+                     ReplenishmentGroup = '' --NJOW07
+                 WHERE RowRef = @n_RowRef
+                 SELECT @n_err = @@ERROR
+                 IF @n_err <> 0 
+                 BEGIN
+                    CLOSE PackTask_cur 
+                  DEALLOCATE PackTask_cur                
+                    SELECT @n_Continue = 3  
+                    SELECT @n_Err = 63506  
+                    SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PackTask. (ispOrderBatching)'
+                    GOTO Quit 
+                 END       
+                 FETCH NEXT FROM PackTask_cur INTO @n_RowRef
+              END
+              CLOSE PackTask_cur 
+              DEALLOCATE PackTask_cur
+              -- tlting01 end     
             
             INSERT INTO PACKTASK (Orderkey, TaskBatchNo, OrderMode)
             SELECT BT.Orderkey, @c_BatchCode, @c_OrderMode
@@ -900,8 +1010,8 @@ BEGIN
                COMMIT TRAN;
                
             TRUNCATE TABLE #BatchResultTable  -- Performance Tune Truncate Instead of Delete
-         END
-      END
+         END  --@n_Counter > @n_OrderCount
+      END --(@n_Count > 0)
 
       IF EXISTS(SELECT 1 FROM #BatchResultTable)
       BEGIN
@@ -917,79 +1027,88 @@ BEGIN
          SET @c_Pickdetailkey = ''
          SET @c_BatchNo = ''
          DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		      SELECT PD.Pickdetailkey, R.BatchNo
+              SELECT PD.Pickdetailkey, R.BatchNo
             FROM PickDetail PD with (NOLOCK)                                         
             JOIN #TMP_PICKLOC PL ON(PD.PickDetailKey = PL.PickDetailKey)            --(Wan01)
             JOIN #BatchResultTable R ON PD.OrderKey = R.OrderKey AND PL.Loc = R.Loc --(Wan01)
 
-	      OPEN Orders_Pickdet_cur 
-	      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo 
-	      WHILE @@FETCH_STATUS = 0 
-	      BEGIN 
-            UPDATE PickDetail WITH (ROWLOCK)
-            SET Notes = CASE WHEN @c_Mode IN('4','5') THEN
-                           --@c_LoadKey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   --NJOW04
-                           @c_SourceKey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode                     --Wan01
-                        ELSE
-                           --@c_LoadKey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   -- (Chee03, Chee04)
-                           @c_SourceKey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode  --(Wan01)
-                        END
-              , TrafficCop = NULL
-              , PickSlipNo = @c_BatchCode  --NJOW04
-              , [Status]   = CASE WHEN @c_updatepick = 'Y' THEN '3' ELSE [Status] END  --(Wan03) 
-              , EditWho    = SUSER_SNAME()
-              , EditDate   = GETDATE()
-              WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
-              SELECT @n_err = @@ERROR
-               IF @n_err <> 0 
-               BEGIN
-         	      CLOSE Orders_Pickdet_cur 
-         	      DEALLOCATE Orders_Pickdet_cur                  
-                  SELECT @n_Continue = 3  
-                  SELECT @n_Err = 63508 
-                  SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PickDetail. (ispOrderBatching)' 
-                  GOTO Quit
-               END 		
-		      FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo
-	      END
-	      CLOSE Orders_Pickdet_cur 
-	      DEALLOCATE Orders_Pickdet_cur
-	      
-         
+          OPEN Orders_Pickdet_cur 
+          
+          FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo 
+          WHILE @@FETCH_STATUS = 0 
+          BEGIN 
+             UPDATE PickDetail WITH (ROWLOCK)
+             SET Notes = CASE WHEN @c_Mode IN('4','5') THEN
+                            --@c_LoadKey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   --NJOW04
+                            @c_SourceKey + '--' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode + @c_replenishrequire   --Wan01   --CS01
+                         ELSE
+                            --@c_LoadKey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode   -- (Chee03, Chee04)
+                            @c_SourceKey + '-' + @c_PickZone + '-' + RIGHT('000' + @c_BatchNo, 3) + '-' + @c_Mode  + @c_replenishrequire --(Wan01)--(CS01)
+                         END
+               , TrafficCop = NULL
+               , PickSlipNo = @c_BatchCode  --NJOW04
+               , [Status]   = CASE WHEN @c_updatepick = 'Y' THEN '3' ELSE [Status] END  --(Wan03) 
+               , EditWho    = SUSER_SNAME()
+               , EditDate   = GETDATE()
+               WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
+               
+             SELECT @n_err = @@ERROR
+             
+             IF @n_err <> 0 
+             BEGIN
+                 CLOSE Orders_Pickdet_cur 
+                 DEALLOCATE Orders_Pickdet_cur                  
+                SELECT @n_Continue = 3  
+                SELECT @n_Err = 63508 
+                SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PickDetail. (ispOrderBatching)' 
+                GOTO Quit
+             END     
+             
+               FETCH NEXT FROM Orders_Pickdet_cur INTO @c_Pickdetailkey, @c_BatchNo
+          END
+          CLOSE Orders_Pickdet_cur 
+          DEALLOCATE Orders_Pickdet_cur
+          
+          
          --NJOW04 Start  
          -- tlting01
          SET @n_RowRef = 0
          DECLARE PackTask_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-		      SELECT PT.RowRef
+              SELECT PT.RowRef
             FROM PACKTASK PT with (NOLOCK)
             JOIN #BatchResultTable R ON PT.OrderKey = R.OrderKey  
-
-	      OPEN PackTask_cur 
-	      FETCH NEXT FROM PackTask_cur INTO @n_RowRef 
-	      WHILE @@FETCH_STATUS = 0 
-	      BEGIN 
-            UPDATE PACKTASK WITH (ROWLOCK)
-            SET TaskBatchNo = @c_BatchCode,
-                OrderMode = @c_OrderMode, 
-                EditDate   = GETDATE(),
-                DevicePosition = '', --NJOW07
-                ReplenishmentGroup = '' --NJOW07
-            WHERE RowRef = @n_RowRef
-            SELECT @n_err = @@ERROR
-            IF @n_err <> 0 
-            BEGIN
-      	      CLOSE PackTask_cur 
-         	   DEALLOCATE PackTask_cur       	      
-               SELECT @n_Continue = 3  
-               SELECT @n_Err = 63509  
-               SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PackTask. (ispOrderBatching)'
-               GOTO Quit
-            END 		
-		      FETCH NEXT FROM PackTask_cur INTO @n_RowRef
-	      END
-	      CLOSE PackTask_cur 
-	      DEALLOCATE PackTask_cur
-	      -- tlting 01 end    
+         
+          OPEN PackTask_cur 
+          
+          FETCH NEXT FROM PackTask_cur INTO @n_RowRef 
+          
+          WHILE @@FETCH_STATUS = 0 
+          BEGIN 
+             UPDATE PACKTASK WITH (ROWLOCK)
+             SET TaskBatchNo = @c_BatchCode,
+                 OrderMode = @c_OrderMode, 
+                 EditDate   = GETDATE(),
+                 DevicePosition = '', --NJOW07
+                 ReplenishmentGroup = '' --NJOW07
+             WHERE RowRef = @n_RowRef
+             
+             SELECT @n_err = @@ERROR
+             
+             IF @n_err <> 0 
+             BEGIN
+                 CLOSE PackTask_cur 
+                DEALLOCATE PackTask_cur               
+                SELECT @n_Continue = 3  
+                SELECT @n_Err = 63509  
+                SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update PackTask. (ispOrderBatching)'
+                GOTO Quit
+             END  
+               
+               FETCH NEXT FROM PackTask_cur INTO @n_RowRef
+          END
+          CLOSE PackTask_cur 
+          DEALLOCATE PackTask_cur
+          -- tlting 01 end    
          
          INSERT INTO PACKTASK (Orderkey, TaskBatchNo, OrderMode)
          SELECT BT.Orderkey, @c_BatchCode, @c_OrderMode
@@ -1063,8 +1182,8 @@ Quit:
       END  
       RETURN  
    END  
-
 END -- Procedure
+
 GO
 
 
