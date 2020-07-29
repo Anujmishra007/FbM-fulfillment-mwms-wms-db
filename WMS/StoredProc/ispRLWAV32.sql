@@ -24,7 +24,8 @@ GO
 /* Updates:                                                                 */  
 /* Date        Author   Ver  Purposes                                       */  
 /* 17-Jun-2020 NJOW01   1.0  Fix filter by facility                         */
-/* 02-07-2020  Wan01    1.1   Sync Exceed & SCE                             */
+/* 02-Jul-2020 Wan01    1.1  Sync Exceed & SCE                              */
+/* 29-Jul-2020 NJOW02   1.2  Fix loc required calculation                   */ 
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV32]      
@@ -291,10 +292,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV32]
        AND 1 = CASE WHEN @c_UDF01 = '1' AND LOC.LocationType = 'PICK' THEN 2 ELSE 1 END
        GROUP BY PD.Sku, PD.Loc, PACK.CaseCnt, ISNULL(PLOC.LocationRoom,'')             
               
+
+       /*
        SELECT SKU, CEILING(CartonReq / (@n_DPPCartonPerLoc * 1.00)) LocNeed, LocationRoom
        INTO #TMP_SKUREQLOC 
        FROM #TMP_SKULOCREQCTN
-       GROUP BY SKU, CartonReq, LocationRoom
+       */
+
+       --NJOW02
+       SELECT SKU, CEILING(SUM(CartonReq) / (@n_DPPCartonPerLoc * 1.00)) LocNeed, LocationRoom
+       INTO #TMP_SKUREQLOC 
+       FROM #TMP_SKULOCREQCTN
+       GROUP BY SKU, LocationRoom
        
        SELECT @n_DPPLocRequire = SUM(LocNeed) 
        FROM #TMP_SKUREQLOC
