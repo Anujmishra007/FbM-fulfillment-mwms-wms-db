@@ -17,13 +17,14 @@ GO
 /*        :                                                             */
 /* Called By:   ue_sku_rule                                             */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 05-JUL-2017 Wan      1.1   Fixed.Change error message                */
+/* 07-JUL-2020 Wan02    1.2   WMS-13830 - SG- Logitech - Packing [CR]   */
 /************************************************************************/
 CREATE PROC isp_GetPackSku_DropID 
             @c_DropID            NVARCHAR(20)
@@ -177,7 +178,8 @@ BEGIN
          SET @n_Continue = 3
          SET @n_Err = 50100
          SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
-                       + 'Sku not found for DropID #: ' + RTRIM(@c_DropID)
+                       --+ 'Sku not found for DropID #: ' + RTRIM(@c_DropID)  --(Wan02)
+                       + 'Wrong Sku for DropID #: ' + RTRIM(@c_DropID)        --(Wan02)
                        + '.(isp_GetPackSku_DropID)'
          GOTO QUIT_SP
       END 

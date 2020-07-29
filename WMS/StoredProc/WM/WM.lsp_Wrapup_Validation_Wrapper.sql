@@ -23,7 +23,10 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2020-06-16  Wan01    1.1   WMS-2049. Fix not to return correct        */
+/*                            @b_success when error executing            */
+/*                            isp_Wrapup_Validation                      */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
       @c_Module               NVARCHAR(60) = ''
@@ -156,8 +159,10 @@ BEGIN
     
    EXIT_SP:  
 
+   SET @b_success = 0         --(Wan01)
    IF @n_Continue IN (1,2)
    BEGIN
+      SET @b_success = 1      --(Wan01)
       SET @n_WarningNo = 0
    END   
 

@@ -30,6 +30,7 @@ GO
 /* 30-OCT-2019  NJOW02  1.3  WMS-11038 handle over allocation qty by LLI   */
 /* 04-Jun-2020  WLChooi 1.4  WMS-13581 Modify replenQty logic, filter by   */
 /*                           HostWHCode when finding inventory (WL01)      */
+/* 21-Jun-2020  WLChooi 1.5  Fix possible calculation error (WL02)         */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC26]    
                @c_Zone01           NVARCHAR(10)    
@@ -205,16 +206,16 @@ BEGIN
              (SKUxLOC.Qty - SKUxLOC.QtyPicked) AS BalQty,  
              CASE WHEN ISNULL(EXT.QtyExpected,0) = 0 AND(SKUxLOC.Qty - SKUxLOC.QtyAllocated) + ISNULL(EXT.PendingMoveIn,0) < SKUxLOC.QtyLocationMinimum THEN --No overallocate and below min, just replen to loc max
                      CASE WHEN PACK.Casecnt = 0 THEN SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)                                                  --WL01
-                                                ELSE (CEILING((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)) / PACK.Casecnt) * PACK.Casecnt) END   --WL01 
+                                                ELSE (CEILING((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)) / CAST(PACK.Casecnt AS INT)) * CAST(PACK.Casecnt AS INT)) END   --WL01   --WL02 
                   WHEN ISNULL(EXT.QtyExpected,0) > 0 AND SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) < ISNULL(EXT.QtyExpected,0) THEN --Overallocte qty more than loc max, just replen overalocate qty
                      CASE WHEN PACK.Casecnt = 0 THEN ISNULL(EXT.QtyExpected,0)                                                  --WL01
-                                                ELSE (CEILING((ISNULL(EXT.QtyExpected,0) / PACK.Casecnt)) * PACK.Casecnt) END   --WL01
+                                                ELSE (CEILING((ISNULL(EXT.QtyExpected,0) / CAST(PACK.Casecnt AS INT))) * CAST(PACK.Casecnt AS INT)) END   --WL01   --WL02
                   WHEN ISNULL(EXT.QtyExpected,0) > 0 AND SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) >= ISNULL(EXT.QtyExpected,0) THEN --Overallocte qty less than loc max, just replen max qty
-                     CASE WHEN PACK.Casecnt = 0 THEN SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)                                                   --WL01
-                                                ELSE (CEILING((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)) / PACK.Casecnt) * PACK.Casecnt) END    --WL01 
+                     CASE WHEN PACK.Casecnt = 0 THEN SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)                                                   --WL01   --WL02
+                                                ELSE (CEILING((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0)) / CAST(PACK.Casecnt AS INT)) * CAST(PACK.Casecnt AS INT)) END    --WL01   --WL02 
                   ELSE
                      CASE WHEN PACK.Casecnt = 0 THEN PACK.Qty   --WL01
-                                                ELSE (CEILING(((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) + SKUXLOC.QtyExpected ) / PACK.Casecnt)) * PACK.Casecnt) END  --NJOW01   --WL01
+                                                ELSE (CEILING(((SKUxLOC.QtyLocationLimit - (SKUxLOC.Qty - SKUxLOC.QtyPicked) - ISNULL(EXT.PendingMoveIn,0) + SKUXLOC.QtyExpected ) / CAST(PACK.Casecnt AS INT))) * CAST(PACK.Casecnt AS INT)) END  --NJOW01   --WL01   --WL02
              END AS ReplenQty,  --NJOW02                                 
              SKUxLOC.QtyLocationMinimum,
              SKUxLOC.QtyLocationLimit,      

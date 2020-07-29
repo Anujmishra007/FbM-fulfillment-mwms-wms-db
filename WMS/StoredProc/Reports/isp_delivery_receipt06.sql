@@ -34,7 +34,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date        Author  Ver.  Purposes                                   */  
+/* Date        Author  Ver.  Purposes                                   */ 
+/* 23-07-2020  CheeMun 1.0   INC1223718 - Bug Fix                       */ 
 /************************************************************************/  
   
 CREATE PROC isp_delivery_receipt06 (@cMBOLkey NVARCHAR(10) )  
@@ -278,7 +279,8 @@ CREATE PROC isp_delivery_receipt06 (@cMBOLkey NVARCHAR(10) )
             JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.PackKey  
             LEFT JOIN CODELKUP (NOLOCK) ON Orders.Storerkey = CODELKUP.Short AND CODELKUP.Listname = 'DR_NCOUNT' --NJOW01  
             LEFT OUTER JOIN #Temp_Flag ON #Temp_Flag.Orderkey = ORDERS.Orderkey  
-            LEFT OUTER JOIN #Temp_CHKCASES ON #Temp_CHKCASES.Orderkey = Pickdetail.OrderKey AND #Temp_CHKCASES.PID=PICKDETAIL.ID
+            LEFT OUTER JOIN #Temp_CHKCASES ON #Temp_CHKCASES.Orderkey = Pickdetail.OrderKey AND #Temp_CHKCASES.PID=PICKDETAIL.ID 
+                            AND #Temp_CHKCASES.Lott01 = ORDERDETAIL.lottable01 --INC1223718
             WHERE ORDERS.MBOLKEY = @cMBOLKey  
             GROUP BY ORDERS.orderkey,  
                      ORDERS.UserDefine10,  

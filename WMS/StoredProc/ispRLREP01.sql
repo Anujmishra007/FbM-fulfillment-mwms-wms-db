@@ -6,24 +6,27 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/      
-/* Stored Procedure: ispRLREP01                                         */      
-/* Creation Date: 02/06/2017                                            */      
-/* Copyright: LFL                                                       */      
-/* Written by:                                                          */      
-/*                                                                      */      
-/* Purpose: WMS-1986 CN Dyson - Release replenishment task from         */
-/*          replenishment screen                                        */      
-/*                                                                      */      
-/* Called By:                                                           */      
-/*                                                                      */      
-/* Version: 5.5                                                         */      
-/*                                                                      */      
-/* Data Modifications:                                                  */      
-/*                                                                      */      
-/* Updates:                                                             */      
-/* Date         Author   Ver  Purposes                                  */      
-/************************************************************************/      
+/***************************************************************************/      
+/* Stored Procedure: ispRLREP01                                            */      
+/* Creation Date: 02/06/2017                                               */      
+/* Copyright: LFL                                                          */      
+/* Written by:                                                             */      
+/*                                                                         */      
+/* Purpose: WMS-1986 CN Dyson - Release replenishment task from            */
+/*          replenishment screen                                           */      
+/*                                                                         */      
+/* Called By:                                                              */
+/*                                                                         */
+/* GitLab Version: 1.1                                                     */  
+/*                                                                         */      
+/* Version: 5.5                                                            */      
+/*                                                                         */      
+/* Data Modifications:                                                     */      
+/*                                                                         */      
+/* Updates:                                                                */      
+/* Date         Author   Ver  Purposes                                     */     
+/* 01-Jun-2020  WLChooi  1.1  WMS-13541 - Change ToLoc logic (WL01)        */
+/***************************************************************************/      
 CREATE PROC [dbo].[ispRLREP01]     
    @c_Facility NVARCHAR(10)='',
    @c_zone02 NVARCHAR(10)='',
@@ -60,6 +63,8 @@ BEGIN
            ,@c_ReplenishmentGroup     NVARCHAR(10)
            ,@c_PrevReplenishmentGroup NVARCHAR(10)
            ,@c_ReplenGroupList        NVARCHAR(250)
+           ,@c_LocGroup               NVARCHAR(10)   --WL01
+           ,@c_Message03              NVARCHAR(30)   --WL01
 
     SELECT  @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0, @n_err=0, @c_errmsg=''     
     SELECT @c_PrevReplenishmentGroup = '', @c_ReplenGroupList = ''
@@ -92,7 +97,8 @@ BEGIN
     	 
        DECLARE cur_Replen CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT R.StorerKey, R.Sku, R.FromLoc, R.Id, R.ToLoc, R.Qty, R.Lot,
-                 R.ReplenishmentKey, ISNULL(ReplenishmentGroup,'')
+                 R.ReplenishmentKey, ISNULL(ReplenishmentGroup,''),
+                 ISNULL(LOC.LocationGroup,'')   --WL01
           From  REPLENISHMENT R (NOLOCK)   
           JOIN  LOC (NOLOCK) ON (LOC.Loc = R.ToLoc)  
           WHERE (LOC.putawayZone IN (@c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10, @c_Zone11, @c_Zone12)
@@ -107,14 +113,24 @@ BEGIN
        OPEN cur_Replen
        
        FETCH FROM cur_Replen INTO @c_Storerkey, @c_Sku, @c_FromLoc, @c_ID, @c_ToLoc, @n_Qty, @c_Lot, @c_Replenishmentkey, @c_ReplenishmentGroup
+                                , @c_LocGroup   --WL01
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN       	      
-       	  IF @c_ReplenishmentGroup <> @c_PrevReplenishmentGroup
+           IF @c_ReplenishmentGroup <> @c_PrevReplenishmentGroup
        	  BEGIN 
        	  	 SET @c_ReplenGroupList = RTRIM(@c_ReplenGroupList) + RTRIM(@c_ReplenishmentGroup) +','
        	  END
-       	
+
+           --WL01 START
+           SET @c_Message03 = @c_ToLoc
+
+           IF @c_LocGroup = 'E'
+           BEGIN
+              SET @c_ToLoc = 'RYRP'
+           END
+           --WL01 END
+
           EXEC isp_InsertTaskDetail   
               @c_TaskType              = 'RPF'             
              ,@c_Storerkey             = @c_Storerkey
@@ -125,7 +141,7 @@ BEGIN
              ,@n_Qty                   = @n_Qty      
              ,@c_FromLoc               = @c_Fromloc      
              ,@c_FromID                = @c_ID     
-             ,@c_ToLoc                 = @c_ToLoc       
+             ,@c_ToLoc                 = @c_ToLoc
              ,@c_ToID                  = @c_ID       
              ,@c_PickMethod            = 'FP'
              ,@c_Priority              = '9'     
@@ -139,6 +155,7 @@ BEGIN
              ,@n_QtyReplen             = @n_Qty
              ,@n_PendingMoveIn         = @n_Qty
              ,@c_LinkTaskToReplen      = 'Y'
+             ,@c_Message03             = @c_Message03   --WL01
              ,@b_Success               = @b_Success OUTPUT
              ,@n_Err                   = @n_err OUTPUT 
              ,@c_ErrMsg                = @c_errmsg OUTPUT       	
@@ -151,6 +168,7 @@ BEGIN
           SET @c_PrevReplenishmentGroup = @c_ReplenishmentGroup
        	
           FETCH FROM cur_Replen INTO @c_Storerkey, @c_Sku, @c_FromLoc, @c_ID, @c_ToLoc, @n_Qty, @c_Lot, @c_Replenishmentkey, @c_ReplenishmentGroup
+                                   , @c_LocGroup   --WL01
        END
        CLOSE cur_Replen
        DEALLOCATE cur_Replen       

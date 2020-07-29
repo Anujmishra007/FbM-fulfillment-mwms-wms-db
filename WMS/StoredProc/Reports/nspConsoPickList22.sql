@@ -36,6 +36,8 @@ GO
 /* 08-Sep-2016 CSCHONG 1.6  Request by MY LIT for test (CS01/CCS01)     */
 /* 27-Mar-2017 NJOW05  1.7  WMS-1445 Configure no split by line count   */
 /*                          and PA zone                                 */
+/* 16-Jul-2020 WLChooi 1.8  WMS-14236 - Add ReportCFG to show bigger    */
+/*                          font (WL01)                                 */
 /************************************************************************/
 
 CREATE PROC nspConsoPickList22 (@as_LoadKey NVARCHAR(10) )
@@ -192,7 +194,8 @@ BEGIN
        c_state          NVARCHAR(45) NULL,
        c_zip            NVARCHAR(18) NULL,
        c_country        NVARCHAR(30) NULL,
-       Storerkey        NVARCHAR(15) NULL) --NJOW02 NJOW05
+       Storerkey        NVARCHAR(15) NULL,   --NJOW02 NJOW05
+       ShowBiggerFont   NVARCHAR(10) NULL)   --WL01
 
        INSERT INTO #TEMP_PICK
             (PickSlipNo,          LoadKey,         Loc,         ID,
@@ -201,7 +204,7 @@ BEGIN
              LogicalLoc,         Shelflife,        Minshelflife,
              pallet,             casecnt,          pickafterdate, putawayzone,
              c_company,          c_address1,       c_address2,    c_address3,       c_address4,
-             c_city,             c_state,          c_zip,         c_country,	Storerkey )
+             c_city,             c_state,          c_zip,         c_country,	Storerkey, ShowBiggerFont )   --WL01
         --(Kc01) - start
         /*
         SELECT (SELECT PICKHEADERKEY FROM PICKHEADER WITH (NOLOCK)
@@ -251,7 +254,8 @@ BEGIN
            MAX(ISNULL(ORDERS.c_state,'')),
            MAX(ISNULL(ORDERS.c_zip,'')),
            MAX(ISNULL(ORDERS.c_country,'')),
-           SKU.Storerkey --NJOW05
+           SKU.Storerkey, --NJOW05
+           ISNULL(CL.Short,'N') AS ShowBiggerFont   --WL01
          FROM LOADPLANDETAIL WITH (NOLOCK)
          JOIN ORDERS WITH (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey
          JOIN ORDERDETAIL WITH (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey
@@ -264,6 +268,8 @@ BEGIN
          JOIN PACK WITH (NOLOCK) ON Sku.Packkey = PACK.Packkey
          JOIN LOC WITH (NOLOCK) ON PICKDETAIL.Loc = LOC.Loc
          LEFT OUTER JOIN RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey)      --(KC01)
+         LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'REPORTCFG' AND CL.Code = 'ShowBiggerFont' 
+                                       AND CL.Long = 'r_dw_consolidated_pick22' AND CL.Storerkey = ORDERS.Storerkey   --WL01
         WHERE PICKDETAIL.Status < '5'
         AND LOADPLANDETAIL.LoadKey = @as_LoadKey
         GROUP BY RefKeyLookup.PickSlipNo,          --(Kc01)
@@ -285,7 +291,8 @@ BEGIN
            PACK.Pallet,
            PACK.CaseCnt,
            LOC.PickZone,
-           SKU.Storerkey --NJOW05
+           SKU.Storerkey, --NJOW05
+           ISNULL(CL.Short,'N')   --WL01
 
       --(Kc01) - start
       -- Uses PickType as a Printed Flag

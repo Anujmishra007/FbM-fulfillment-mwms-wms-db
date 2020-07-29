@@ -7,49 +7,50 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Procedure: isp_InsertMBOLDetail                               */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:                                                             */
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 19-Aug-2005  June          SOS39592, SOS39659, SOS39660              */
-/*                                     - IDSPH ULP v54 bug fix          */
-/* 30-Mac-2011  AQSKC         SOS209175 - Populate total carton from    */
-/*                            packing info to mboldetail (Kc01)         */
-/* 25-May-2011  Ung           a) SOS216105 Configurable SP to calc      */
-/*                            carton, cube and weight                   */
-/* 20-Dec-2011  SHONG         Adding New Calculation for LCI Total Ctns */  
-/*                            Calculation  (SHONG01)                    */
-/*                            b) SOS209175 Remove                       */
-/* 15-Feb-2012  wtshong       initial Null value                        */
-/* 14-Mar-2012  KHLim01       Update EditDate                           */    
-/* 23-Apr-2012  NJOW01        241032-Calculation by coefficient         */   
-/* 18-Jun-2012  NJOW02        Fix coefficient calculation               */
-/* 23-Sep-2013  NJOW03        2900014-SConfig to update MBOL Departure  */
-/*                            date from order delivery date.            */
-/* 14-Apr-2015  TLTING        Deadlock Tune                             */
-/* 07-Dec-2015  James         Bug fix (james01)                         */
-/* 31-May-2016  CSCHONG       SOS#371052 change field logic (CS01)      */
-/* 10-Aug-2016  CSCHONG       SOS#373477 Add Pre and post insert        */
-/*                            mboldetail wrapper (CS02)                 */ 
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
-/* 27-Nov-2019  WLChooi       WMS-11168 - Update Route from Voyage(WL01)*/
-/* 29-Nov-2019  WLChooi       WMS-11169 - New Storerconfig -            */ 
-/*                                        DefaultCarrierAgent (WL02)    */
-/************************************************************************/
+/****************************************************************************/
+/* Stored Procedure: isp_InsertMBOLDetail                                   */
+/* Creation Date:                                                           */
+/* Copyright: IDS                                                           */
+/* Written by:                                                              */
+/*                                                                          */
+/* Purpose:                                                                 */
+/*                                                                          */
+/* Called By:                                                               */
+/*                                                                          */
+/* PVCS Version: 1.0                                                        */
+/*                                                                          */
+/* Version: 5.4                                                             */
+/*                                                                          */
+/* Data Modifications:                                                      */
+/*                                                                          */
+/* Updates:                                                                 */
+/* Date         Author   Ver.  Purposes                                     */
+/* 19-Aug-2005  June     1.0   SOS39592, SOS39659, SOS39660                 */
+/*                                      - IDSPH ULP v54 bug fix             */
+/* 30-Mac-2011  AQSKC    1.0   SOS209175 - Populate total carton from       */
+/*                             packing info to mboldetail (Kc01)            */
+/* 25-May-2011  Ung      1.1   a) SOS216105 Configurable SP to calc         */
+/*                             carton, cube and weight                      */
+/* 20-Dec-2011  SHONG    1.2   Adding New Calculation for LCI Total Ctns    */  
+/*                             Calculation  (SHONG01)                       */
+/*                             b) SOS209175 Remove                          */
+/* 15-Feb-2012  wtshong  1.3   initial Null value                           */
+/* 14-Mar-2012  KHLim01  1.4   Update EditDate                              */    
+/* 23-Apr-2012  NJOW01   1.5   241032-Calculation by coefficient            */   
+/* 18-Jun-2012  NJOW02   1.6   Fix coefficient calculation                  */
+/* 23-Sep-2013  NJOW03   1.7   2900014-SConfig to update MBOL Departure     */
+/*                             date from order delivery date.               */
+/* 14-Apr-2015  TLTING   1.8   Deadlock Tune                                */
+/* 07-Dec-2015  James    1.9   Bug fix (james01)                            */
+/* 31-May-2016  CSCHONG  2.0   SOS#371052 change field logic (CS01)         */
+/* 10-Aug-2016  CSCHONG  2.1   SOS#373477 Add Pre and post insert           */
+/*                       2.2   mboldetail wrapper (CS02)                    */ 
+/* 28-Jan-2019  TLTING01 2.3   enlarge externorderkey field length          */
+/* 27-Nov-2019  WLChooi  2.4   WMS-11168 - Update Route from Voyage(WL01)   */
+/* 29-Nov-2019  WLChooi  2.5   WMS-11169 - New Storerconfig -               */ 
+/*                                        DefaultCarrierAgent (WL02)        */
+/* 28-May-2020  NJOW04   2.6   WMS-13515 Move post                                     */
+/****************************************************************************/
  
 CREATE PROCEDURE [dbo].[isp_InsertMBOLDetail] 
    @cMBOLKey          NVARCHAR(10),
@@ -58,7 +59,7 @@ CREATE PROCEDURE [dbo].[isp_InsertMBOLDetail]
    @cLoadKey          NVARCHAR(10),        
    @nStdGrossWgt      float = 0 ,      
    @nStdCube          float = 0 ,         
-   @cExternOrderKey   NVARCHAR(50) = '',    --tlting_ext
+   @cExternOrderKey   NVARCHAR(50) = '',    --tlting01
    @dOrderDate        datetime,
    @dDelivery_Date    datetime, 
    @cRoute            NVARCHAR(10) = '', 
@@ -111,8 +112,16 @@ BEGIN -- main
    ,         @c_MBDETLineNo         NVARCHAR(5)          
    ,         @c_ConfigKey           NVARCHAR(30)       
 	 
-
+   
+   
    SELECT @b_success = 0, @n_continue = 1 
+   
+   --NJOW04
+   SELECT @cCustomerName = ISNULL(c_Company, ''), 
+          @cInvoiceNo    = ISNULL(InvoiceNo, ''),
+          @c_Storerkey   = ISNULL(Storerkey, '')      --(Kc01)
+   FROM   ORDERS (NOLOCK)
+   WHERE  OrderKey = @cOrderKey   
    
    EXECUTE nspGetRight null, -- facility
             null,            -- Storerkey
@@ -134,7 +143,7 @@ BEGIN -- main
          SELECT @n_continue=3
          SELECT @n_err=72800
          SELECT @c_errmsg='Facility Mis-match for Order ' + dbo.fnc_RTrim(@cOrderkey) + '.'
-      END
+      END      
    END
 
    IF @n_continue = 1 OR @n_continue = 2
@@ -170,8 +179,7 @@ BEGIN -- main
    BEGIN TRAN 
 
    IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
-      
+   BEGIN      
       IF  EXISTS ( SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                    WHERE OrderKey = @cOrderKey
                      AND   Loadkey = @cLoadKey -- SOS39592
@@ -228,52 +236,46 @@ BEGIN -- main
          SELECT @cMBOLLineNumber = RIGHT('0000' + dbo.fnc_RTrim(CAST(ISNULL(CAST(MAX(MBOLLineNumber) as int), 0) + 1 as NVARCHAR(5))), 5)
          FROM   MBOLDETAIL (NOLOCK)
          WHERE  MBOLKey = @cMBOLKey
-   
-         SELECT @cCustomerName = ISNULL(c_Company, ''), 
-                @cInvoiceNo    = ISNULL(InvoiceNo, ''),
-                @c_Storerkey   = ISNULL(Storerkey, '')      --(Kc01)
-         FROM   ORDERS (NOLOCK)
-         WHERE  OrderKey = @cOrderKey
+            
+         --(CS02) - START 
+         IF @n_continue = 1 OR @n_continue = 2
+         BEGIN
+            SET @b_Success = 0
+            SET @c_PreAddMBOLDETAILSP = ''
+            EXEC nspGetRight  
+                  @c_Facility  = @cFacility
+                , @c_StorerKey = @c_StorerKey 
+                , @c_sku       = NULL
+                , @c_ConfigKey = 'PreAddMBOLDETAILSP'  
+                , @b_Success   = @b_Success                  OUTPUT  
+                , @c_authority = @c_PreAddMBOLDETAILSP        OUTPUT   
+                , @n_err       = @n_err                      OUTPUT   
+                , @c_errmsg    = @c_errmsg                   OUTPUT  
          
-   --(CS02) - START 
-   IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
-      SET @b_Success = 0
-      SET @c_PreAddMBOLDETAILSP = ''
-      EXEC nspGetRight  
-            @c_Facility  = @cFacility
-          , @c_StorerKey = @c_StorerKey 
-          , @c_sku       = NULL
-          , @c_ConfigKey = 'PreAddMBOLDETAILSP'  
-          , @b_Success   = @b_Success                  OUTPUT  
-          , @c_authority = @c_PreAddMBOLDETAILSP        OUTPUT   
-          , @n_err       = @n_err                      OUTPUT   
-          , @c_errmsg    = @c_errmsg                   OUTPUT  
-
-      IF EXISTS (SELECT 1 FROM sys.objects o WHERE NAME = @c_PreAddMBOLDETAILSP AND TYPE = 'P')
-      BEGIN
-         SET @b_Success = 0  
-         EXECUTE dbo.ispPreAddMBOLDETAILWrapper 
-                 @c_mbolkey           = @cMBOLKey
-               , @c_orderkey          = @cOrderKey
-               , @c_loadkey           = @cLoadKey              
-               , @c_PreAddMBOLDETAILSP= @c_PreAddMBOLDETAILSP
-               , @c_MbolDetailLineNumber = @cMBOLLineNumber 
-               , @b_Success = @b_Success     OUTPUT  
-               , @n_Err     = @n_err         OUTPUT   
-               , @c_ErrMsg  = @c_errmsg      OUTPUT  
-               --, @b_debug   = 0 
-
-         IF @n_err <> 0  
-         BEGIN 
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72810   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table MBOL Detail. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
-           -- GOTO RollbackTran
-         END 
-      END 
-   END
-   --(CS02) - End
+            IF EXISTS (SELECT 1 FROM sys.objects o WHERE NAME = @c_PreAddMBOLDETAILSP AND TYPE = 'P')
+            BEGIN
+               SET @b_Success = 0  
+               EXECUTE dbo.ispPreAddMBOLDETAILWrapper 
+                       @c_mbolkey           = @cMBOLKey
+                     , @c_orderkey          = @cOrderKey
+                     , @c_loadkey           = @cLoadKey              
+                     , @c_PreAddMBOLDETAILSP= @c_PreAddMBOLDETAILSP
+                     , @c_MbolDetailLineNumber = @cMBOLLineNumber 
+                     , @b_Success = @b_Success     OUTPUT  
+                     , @n_Err     = @n_err         OUTPUT   
+                     , @c_ErrMsg  = @c_errmsg      OUTPUT  
+                     --, @b_debug   = 0 
+         
+               IF @n_err <> 0  
+               BEGIN 
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72810   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table MBOL Detail. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
+                 -- GOTO RollbackTran
+               END 
+            END 
+         END
+         --(CS02) - End
 
          -- SOS216105 start. Configurable SP to calc carton, cube and weight
          DECLARE @cSValue NVARCHAR( 10)
@@ -539,53 +541,11 @@ BEGIN -- main
             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72807   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table MBOL Detail. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
          END
-      END    
-      
-       --(CS02) - START 
-   IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
-      SET @b_Success = 0
-      SET @c_POSTAddMBOLDETAILSP = ''
-      EXEC nspGetRight  
-            @c_Facility  = @cFacility
-          , @c_StorerKey = @c_StorerKey 
-          , @c_sku       = NULL
-          , @c_ConfigKey = 'POSTAddMBOLDETAILSP'  
-          , @b_Success   = @b_Success                  OUTPUT  
-          , @c_authority = @c_POSTAddMBOLDETAILSP        OUTPUT   
-          , @n_err       = @n_err                      OUTPUT   
-          , @c_errmsg    = @c_errmsg                   OUTPUT  
-
-      IF EXISTS (SELECT 1 FROM sys.objects o WHERE NAME = @c_POSTAddMBOLDETAILSP AND TYPE = 'P')
-      BEGIN
-         SET @b_Success = 0  
-         EXECUTE dbo.ispPOSTAddMBOLDETAILWrapper 
-                 @c_mbolkey           = @cMBOLKey
-               , @c_orderkey          = @cOrderKey
-               , @c_loadkey           = @cLoadKey              
-               , @c_POSTAddMBOLDETAILSP= @c_POSTAddMBOLDETAILSP
-               , @c_MbolDetailLineNumber = @cMBOLLineNumber 
-               , @b_Success = @b_Success     OUTPUT  
-               , @n_Err     = @n_err         OUTPUT   
-               , @c_ErrMsg  = @c_errmsg      OUTPUT  
-              -- , @b_debug   = 0 
-
-         IF @n_err <> 0  
-         BEGIN 
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72811   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table MBOL Detail. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
-           -- GOTO RollbackTran
-         END 
-      END 
-   END
-   --(CS02) - End
-      
+      END          
    END 
 
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
-
       DECLARE @cCarrierKey    NVARCHAR(10), 
               @cVoyageNumber  NVARCHAR(30),
               @cTruckSize     NVARCHAR(10),
@@ -644,28 +604,67 @@ BEGIN -- main
                   @n_err           OUTPUT,    
                   @c_errmsg        OUTPUT    
 
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72808   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error executing nspGetRight. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
-      END
-
-      IF ISNULL(@c_GetAuthority,'') <> '' AND @n_err = 0
-      BEGIN
-         IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'CarrierAgt' AND Code = @c_GetAuthority)
+         IF @n_err <> 0
          BEGIN
-            UPDATE MBOL WITH (ROWLOCK)
-            SET Carrieragent = @c_GetAuthority,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
-            WHERE MBOLKey = @cMbolKey
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72808   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error executing nspGetRight. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
          END
-      END
-      --WL02 End
-   
+         
+         IF ISNULL(@c_GetAuthority,'') <> '' AND @n_err = 0
+         BEGIN
+            IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'CarrierAgt' AND Code = @c_GetAuthority)
+            BEGIN
+               UPDATE MBOL WITH (ROWLOCK)
+               SET Carrieragent = @c_GetAuthority,
+                   EditDate = GETDATE(),
+                   EditWho = SUSER_SNAME()
+               WHERE MBOLKey = @cMbolKey
+            END
+         END
+         --WL02 End   
       END
    END 
+   
+   --(CS02) - START  --NJOW04
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      SET @b_Success = 0
+      SET @c_POSTAddMBOLDETAILSP = ''
+      EXEC nspGetRight  
+            @c_Facility  = @cFacility
+          , @c_StorerKey = @c_StorerKey 
+          , @c_sku       = NULL
+          , @c_ConfigKey = 'POSTAddMBOLDETAILSP'  
+          , @b_Success   = @b_Success                  OUTPUT  
+          , @c_authority = @c_POSTAddMBOLDETAILSP        OUTPUT   
+          , @n_err       = @n_err                      OUTPUT   
+          , @c_errmsg    = @c_errmsg                   OUTPUT  
+   
+      IF EXISTS (SELECT 1 FROM sys.objects o WHERE NAME = @c_POSTAddMBOLDETAILSP AND TYPE = 'P')
+      BEGIN
+         SET @b_Success = 0  
+         EXECUTE dbo.ispPOSTAddMBOLDETAILWrapper 
+                 @c_mbolkey           = @cMBOLKey
+               , @c_orderkey          = @cOrderKey
+               , @c_loadkey           = @cLoadKey              
+               , @c_POSTAddMBOLDETAILSP= @c_POSTAddMBOLDETAILSP
+               , @c_MbolDetailLineNumber = @cMBOLLineNumber 
+               , @b_Success = @b_Success     OUTPUT  
+               , @n_Err     = @n_err         OUTPUT   
+               , @c_ErrMsg  = @c_errmsg      OUTPUT  
+              -- , @b_debug   = 0 
+   
+         IF @n_err <> 0  
+         BEGIN 
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72811   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table MBOL Detail. (isp_InsertMBOLDetail)' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
+           -- GOTO RollbackTran
+         END 
+      END 
+   END
+   --(CS02) - End         
 
    /* #INCLUDE <TRMBOHU2.SQL> */
    
