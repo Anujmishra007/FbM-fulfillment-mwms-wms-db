@@ -37,6 +37,7 @@ GO
 /*07-Feb-2020  CSCHONG     1.4   WMS-11990 - add new field (CS03)          */  
 /*18-MAR-2020  CSCHONG     1.5   WMS-12474 - Add new field (CS04)          */  
 /*20-APR-2020  WLChooi     1.6   INC1118265 - Show Complete LOC (WL03)     */
+/*11-JUN-2020  CSCHONG     1.7   WMS-13626 - revised field mapping (CS05)  */
 /***************************************************************************/      
       
 CREATE PROC [dbo].[isp_GetPickSlipOrders96] (@c_loadkey NVARCHAR(10),   
@@ -129,7 +130,9 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
       LogicalLoc    NVARCHAR(18) NULL,  --WL02    
       ReprintFlag   NVARCHAR(1)  NULL, --CS02    
       Altsku        NVARCHAR(20) NULL,  --CS02    
-      PUOM3         NVARCHAR(10) NULL  --CS03  
+      PUOM3         NVARCHAR(10) NULL,  --CS03 
+      CASEID        NVARCHAR(20) NULL, --CS05
+      Wavekey       NVARCHAR(10) NULL  --CS05
     --PickerID      NVARCHAR(15) NULL  --CS04  
      )       --CS01      
     
@@ -153,9 +156,9 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
   CREATE TABLE #TEMP_PICK96ID     
     ( LoadKey       NVARCHAR(10) NULL,   
       rowid         INT,     
-			OrderKey      NVARCHAR(10) NULL,    
-			PickSlipNo    NVARCHAR(10)  NULL,   
-			PICKERNo      INT )  
+         OrderKey      NVARCHAR(10) NULL,    
+         PickSlipNo    NVARCHAR(10)  NULL,   
+         PICKERNo      INT )  
   
   --CS04 END    
     
@@ -172,7 +175,7 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
             
        INSERT INTO #TEMP_PICK96      
             (LoadKey,PickSlipNo, Storerkey, LOC,SKU,OrderKey,    
-             LocPickZone,Qty, LogicalLoc,ReprintFlag,Altsku,PUOM3) --WL02   --CS02  --CS03   --CS04  
+             LocPickZone,Qty, LogicalLoc,ReprintFlag,Altsku,PUOM3,CASEID,Wavekey) --WL02   --CS02  --CS03   --CS04  --CS05
         SELECT DISTINCT @c_LoadKey as LoadKey,    
          (SELECT PICKHEADERKEY FROM PICKHEADER WITH (NOLOCK)      
                    WHERE ExternOrderKey = @c_LoadKey       
@@ -186,7 +189,9 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
       SUM(PickDetail.qty) as Qty,    
       LOC.LogicalLocation               --WL02        
      ,@c_PrintedFlag,ISNULL(Sku.ALTSKU,'')        --CS02     
-     ,P.PackUOM3                                  --CS03    
+     ,P.PackUOM3                                  --CS03  
+      ,pickdetail.caseid as caseid                --CS05
+      ,(wd.wavekey) as wavekey                    --CS05  
  -- ,'PK' + space(2) + CAST(T96D.PICKERNo as nvarchar(8))                   
   
      FROM pickdetail (nolock)      
@@ -203,6 +208,7 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
      join loc (nolock)      
       on pickdetail.loc = loc.loc   
      join PACK P (NOLOCK) ON P.Packkey = sku.Packkey  --CS03      
+     join wavedetail wd (nolock) on wd.orderkey = orders.orderkey        --CS05 
   -- join #TEMP_PICK96ID T96D ON T96D.LoadKey = LoadPlanDetail.LoadKey and T96D.OrderKey= PickDetail.OrderKey  
      WHERE PickDetail.Status >= '0'        
           AND LoadPlanDetail.LoadKey = @c_LoadKey      
@@ -214,6 +220,8 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
               LOC.LogicalLocation             --WL02       
              ,ISNULL(Sku.ALTSKU,'')           --CS02    
              ,P.PackUOM3                      --CS03    
+             ,pickdetail.caseid               --CS05
+             ,(wd.wavekey)                    --CS05
    -- , CAST(T96D.PICKERNo as nvarchar(8))   --CS04    
       
     --select * from #TEMP_PICK96  
@@ -333,9 +341,12 @@ SUCCESS:
          ,ReprintFlag,Altsku                   --CS02         
          ,PUOM3                                --CS03     
          ,'PK' + space(2) + CAST(t3.PICKERNo as nvarchar(8))  as PickerID    --CS04   
+         ,t1.CASEID as caseid                                                --CS05
+         ,t1.Wavekey as wavekey                                              --CS05
    FROM #TEMP_PICK96 t1    
    JOIN #TEMPTABLELOC t2 ON t2.PickSlipNo = t1.PickSlipNo   
-   JOIN #TEMP_PICK96ID t3 ON t3.rowid = t2.rowid   
+   JOIN #TEMP_PICK96ID t3 ON t3.rowid = t2.rowid
+   WHERE ISNULL(t1.CASEID,'') <> ''   
    --ORDER BY pickslipno,loadkey,orderkey,loc    
   -- ORDER BY t2.rowid, loc         --WL02    
    ORDER BY t2.rowid, t1.LogicalLoc --WL02    
