@@ -36,6 +36,7 @@ GO
 /* 14-MAY-2019  WLChooi 1.5   WMS-9023 - Change logic to determine if need */
 /*                                       replenishment (WL01)              */
 /* 17-Jun-2019  Shong   1.6   Add new column EditDate                      */
+/* 15-Apr-2020  CSCHONG 1.7   WMS-12653 revised logic (CS01)               */
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC22]  
                @c_Zone01           NVARCHAR(10)  --Facility
@@ -81,6 +82,10 @@ BEGIN
           ,@n_MaxReplenkey       INT
           ,@c_Retried            NVARCHAR(1)
           --,@n_QtyAllocated       INT  --NJOW01
+          ,@c_locGrp             NVARCHAR(30)
+          ,@n_qtyPmi            INT
+          ,@n_pltqty            INT
+          ,@n_vlocqty           INT                   --(CS01)
 
    SELECT  @n_StartTranCnt=@@TRANCOUNT , @n_continue=1, @b_success=0, @n_err=0, @c_errmsg=''
    
@@ -113,7 +118,8 @@ BEGIN
         --Retreive pick loc with qty < min pallet * pack.pallet
       DECLARE cur_PickLoc CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT LLI.Storerkey, LLI.Sku, LLI.Loc, SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) AS Qty,
-                PACK.Pallet, LOC.MaxPallet, PACK.Packkey, PACK.PACKUOM3 
+                PACK.Pallet, LOC.MaxPallet, PACK.Packkey, PACK.PACKUOM3 , Loc.LocationGroup,SUM (LLI.Qty+LLI.PendingMoveIn),
+                (CASE WHEN ISNUMERIC(SKU.BUSR6) = 0 THEN 0 ELSE SKU.BUSR6 * PACK.Pallet END)
          FROM LOTXLOCXID LLI (NOLOCK)          
          JOIN SKUXLOC SL (NOLOCK) ON LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc
          JOIN SKU (NOLOCK) ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku
@@ -123,22 +129,62 @@ BEGIN
          AND LLI.Storerkey = CASE WHEN @c_StorerKey = 'ALL' OR @c_StorerKey = '' THEN  
                                     LLI.StorerKey ELSE @c_StorerKey END                        
          --AND (LOC.MaxPallet - 1) > 0  --NJOW01
+         AND (LOC.locationflag = 'NONE')        --CS01 
          AND PACK.Pallet > 0
+         --AND LLI.sku = '389300-01'
          AND (LOC.Facility = @c_zone01 OR ISNULL(@c_Zone01,'') = '')
          AND (LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, 
                                   @c_zone06, @c_zone07, @c_zone08, @c_zone09, 
                                   @c_zone10, @c_zone11, @c_zone12)                     
               OR @c_zone02 = 'ALL' )                    
-         GROUP BY LLI.Storerkey, LLI.Sku, LLI.Loc, PACK.Pallet, LOC.MaxPallet, PACK.Packkey, PACK.PACKUOM3, SKU.BUSR6 --WL01
+         GROUP BY LLI.Storerkey, LLI.Sku, LLI.Loc, PACK.Pallet, LOC.MaxPallet, PACK.Packkey, PACK.PACKUOM3, SKU.BUSR6, Loc.LocationGroup --WL01
          --HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) <= ((LOC.MaxPallet - 1) * PACK.Pallet) 
-         HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) < (CASE WHEN ISNUMERIC(SKU.BUSR6) = 0 THEN 0 ELSE SKU.BUSR6 * PACK.Pallet END)  --WL01  
+         HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) < (CASE WHEN ISNUMERIC(SKU.BUSR6) = 0 THEN 0 ELSE SKU.BUSR6 * PACK.Pallet END)  --WL01 
+           --HAVING CASE 
+           --           WHEN Loc.LocationGroup ='E' AND LLI.Loc = 'RYRP' THEN 
+           --(SUM((LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) + SUM (LLI.Qty+LLI.PendingMoveIn)) < (CASE WHEN ISNUMERIC(SKU.BUSR6) = 0 THEN 0 ELSE SKU.BUSR6 * PACK.Pallet END)) 
+           --       WHEN Loc.LocationGroup ='N' THEN (SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) < (CASE WHEN ISNUMERIC(SKU.BUSR6) = 0 THEN 0 ELSE SKU.BUSR6 * PACK.Pallet END) )
+           -- ELSE 0 END
 
       OPEN cur_PickLoc
       
-      FETCH FROM cur_PickLoc INTO @c_Storerkey, @c_Sku, @c_ToLoc, @n_PickBalQty, @n_Pallet, @n_MaxPallet, @c_Packkey, @c_UOM
+      FETCH FROM cur_PickLoc INTO @c_Storerkey, @c_Sku, @c_ToLoc, @n_PickBalQty, @n_Pallet, @n_MaxPallet, @c_Packkey, @c_UOM,@c_locGrp,@n_qtypmi,@n_pltqty
       
       IF @@FETCH_STATUS = 0
       BEGIN
+         
+           --CS01 START 
+           --SET @c_locGrp = ''
+           --SELECT @c_locGrp = L.LocationGroup
+           --FROM LOC L WITH (NOLOCK)
+           --WHERE L.loc = @c_ToLoc  
+           --CS01 END 
+
+--select @c_ToLoc '@c_ToLoc',@c_locGrp '@c_locGrp', @n_PickBalQty '@n_PickBalQty', @n_MaxPallet '@n_MaxPallet',@n_Pallet '@n_Pallet'
+--select @c_locGrp '@c_locGrp',@c_ToLoc '@c_ToLoc',@n_PickBalQty '@n_PickBalQty',@n_qtypmi '@n_qtypmi', @n_pltqty '@n_pltqty'
+            --IF @c_locGrp = 'E' AND @c_ToLoc ='RYRP'
+            --BEGIN
+            --    IF (@n_PickBalQty + @n_qtypmi) > @n_pltqty
+            --    BEGIN
+            --     GOTO NEXT_Toloc
+            --    END
+            --END
+            --ELSE IF @c_locGrp = 'N'
+            --BEGIN
+            --    IF (@n_PickBalQty + @n_qtypmi) > @n_pltqty
+            --    BEGIN
+            --         GOTO NEXT_Toloc
+            --     END 
+            --END
+            --ELSE IF @c_locGrp = ''
+            --BEGIN
+            --    IF (@n_PickBalQty) > @n_pltqty
+            --    BEGIN
+            --         GOTO NEXT_Toloc
+            --     END 
+            --END
+
+
          EXECUTE nspg_GetKey                                 
             'REPLENGROUP',                                
             9,                                            
@@ -173,7 +219,17 @@ BEGIN
          
          SET @n_PickBalQty = @n_PickBalQty - ISNULL(@n_QtyAllocated,0)  
          */
-                        
+          SET @n_vlocqty = 0
+          SELECT @n_vlocqty = sum(LLI.qty+LLI.PendingMoveIN)
+          FROM lotxlocxid LLI with (nolock)
+          WHERE LLI.sku = @c_Sku
+          AND LLI.loc in('RYRP')
+   
+
+   IF @c_locGrp = 'E'
+   BEGIN
+      SET @n_PickBalQty = @n_PickBalQty + ISNULL(@n_vlocqty,0)
+   END                    
            --retrieve pallet from bulk 
          DECLARE cur_BulkPallet CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
             SELECT LLI.Lot, LLI.Loc, LLI.Id, LLI.Qty 
@@ -185,7 +241,8 @@ BEGIN
             JOIN LOTATTRIBUTE AS LOTAT WITH (NOLOCK) ON LOTAT.lot = LOT.lot                                   --CS01
             WHERE SL.LocationType NOT IN('PICK','CASE')
             AND LOC.LocationFlag = 'NONE' 
-                AND LOT.Status = 'OK'
+            AND LOC.locationcategory in ('SHUTTLE','VNA')                                                --CS01
+            AND LOT.Status = 'OK'
             AND ID.Status = 'OK' 
             AND LOC.Status = 'OK'                         
             AND (LLI.QtyAllocated + LLI.QtyPicked + LLI.QtyReplen) = 0
@@ -193,8 +250,11 @@ BEGIN
             AND LLI.Storerkey = @c_Storerkey
             AND LLI.Sku = @c_Sku
             AND (LOC.Facility = @c_zone01 OR ISNULL(@c_Zone01,'') = '')
-            ORDER BY LOTAT.Lottable05,SL.Qty, LOC.Logicallocation, LOC.Loc                                   --CS01     
-            --ORDER BY SL.Qty, LOC.Logicallocation, LOC.Loc, LLI.Lot                                         --CS01
+            --AND LOC.LocationGroup = @c_locGrp                                                                --CS01
+            ORDER BY CASE WHEN @c_locGrp = 'N' THEN LOC.LocationGroup else '' END desc, 
+                     CASE WHEN @c_locGrp = 'E' THEN LOC.LocationGroup else '' END Asc,
+                     LOTAT.Lottable05,SL.Qty, LOC.Logicallocation,LOC.Loc                                      --CS01     
+            --ORDER BY SL.Qty, LOC.Logicallocation, LOC.Loc, LLI.Lot                                           --CS01
             
          OPEN cur_BulkPallet
         
@@ -202,8 +262,24 @@ BEGIN
          
          WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2) AND @n_PickBalQty <= ((@n_MaxPallet - 1) * @n_Pallet)
          BEGIN
-           SET @c_Retried = 'N'           
-             SET @n_PickBalQty = @n_PickBalQty + @n_Qty
+             SET @c_Retried = 'N'     
+
+                 --IF @c_sku = 'SKU601-001'
+                 -- BEGIN
+                 --    SELECT 'AAA', @n_PickBalQty '@n_PickBalQty',@n_vlocqty '@n_vlocqty'
+                 -- END
+         
+                 SET @n_PickBalQty = @n_PickBalQty + @n_Qty
+   
+                  --IF @c_sku = 'SKU601-001'
+                  --BEGIN
+                  --   SELECT 'bbb', @n_PickBalQty '@n_PickBalQty',((@n_MaxPallet - 1) * @n_Pallet) 'maxplt'
+                  --END
+
+                   --IF @n_PickBalQty > ((@n_MaxPallet - 1) * @n_Pallet)
+                   --BEGIN
+                   --  GOTO NEXT_FROMloc 
+                   --END 
 
            RETRY_KEY:
            EXECUTE nspg_GetKey  
@@ -218,7 +294,7 @@ BEGIN
                 BEGIN  
                    SELECT @n_continue = 3  
                 END  
-                
+
                 IF @b_success = 1  
                 BEGIN  
                    INSERT REPLENISHMENT (replenishmentgroup,  
@@ -270,13 +346,14 @@ BEGIN
                        SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Replenishment Failed. (isp_ReplenishmentRpt_PC22)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
                    END  
                 END
-             
+            NEXT_FROMloc: 
             FETCH FROM cur_BulkPallet INTO @c_Lot, @c_FromLoc, @c_ID, @n_Qty
          END
          CLOSE cur_BulkPallet
          DEALLOCATE cur_BulkPallet 
          
-         FETCH FROM cur_PickLoc INTO @c_Storerkey, @c_Sku, @c_ToLoc, @n_PickBalQty, @n_Pallet, @n_MaxPallet, @c_Packkey, @c_UOM
+      NEXT_Toloc:  
+      FETCH FROM cur_PickLoc INTO @c_Storerkey, @c_Sku, @c_ToLoc, @n_PickBalQty, @n_Pallet, @n_MaxPallet, @c_Packkey, @c_UOM,@c_locGrp,@n_qtypmi,@n_pltqty
       END
       CLOSE cur_PickLoc
       DEALLOCATE cur_PickLoc          
