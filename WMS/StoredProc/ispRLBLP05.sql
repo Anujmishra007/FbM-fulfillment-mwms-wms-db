@@ -26,8 +26,9 @@ GO
 /* Updates:                                                                 */  
 /* Date         Author   Ver  Purposes                                      */
 /* 2020-07-21   WLChooi  1.1  Fix Taskdetailkey not updating to Pickdetail  */
-/*                            (WL02)                                        */  
+/*                            (WL01)                                        */  
 /* 2020-07-21   WLChooi  1.2  Add Message02 = Orderkey for FCP (WL02)       */
+/* 2020-07-29   WLChooi  1.3  Fix Groupkey = Loadkey (WL03)                 */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLBLP05]      
@@ -729,7 +730,7 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
                  ,@c_OrderKey              = ''       
                  ,@c_WaveKey               = ''        
                  ,@c_Loadkey               = @c_Loadkey  
-                 ,@c_Groupkey              = @c_Orderkey   --@c_Loadkey   --WL02
+                 ,@c_Groupkey              = @c_Loadkey   --@c_Orderkey   --WL02   --WL03
                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
                  ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
                  ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL   
@@ -817,7 +818,7 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
                  ,@c_OrderKey              = ''       
                  ,@c_WaveKey               = ''        
                  ,@c_Loadkey               = @c_Loadkey  
-                 ,@c_Groupkey              = @c_Orderkey   --@c_Loadkey   --WL02
+                 ,@c_Groupkey              = @c_Loadkey   --@c_Orderkey   --WL02   --WL03
                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
                  ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
                  ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL   

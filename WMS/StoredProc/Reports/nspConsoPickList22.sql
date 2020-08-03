@@ -38,6 +38,7 @@ GO
 /*                          and PA zone                                 */
 /* 16-Jul-2020 WLChooi 1.8  WMS-14236 - Add ReportCFG to show bigger    */
 /*                          font (WL01)                                 */
+/* 29-Jul-2020 WLChooi 1.9  WMS-14236 Fix show UPPER(LOC) (WL02)        */
 /************************************************************************/
 
 CREATE PROC nspConsoPickList22 (@as_LoadKey NVARCHAR(10) )
@@ -214,7 +215,7 @@ BEGIN
         SELECT RefKeyLookup.PickSlipNo,
         --(Kc01) - end
            @as_LoadKey as LoadKey,
-           PickDetail.loc,
+           CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN UPPER(PickDetail.loc) ELSE PickDetail.loc END,   --WL02
            PickDetail.id,
            PickDetail.sku,
            Sku.Altsku,
@@ -273,7 +274,7 @@ BEGIN
         WHERE PICKDETAIL.Status < '5'
         AND LOADPLANDETAIL.LoadKey = @as_LoadKey
         GROUP BY RefKeyLookup.PickSlipNo,          --(Kc01)
-           PickDetail.loc,
+           CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN UPPER(PickDetail.loc) ELSE PickDetail.loc END,   --WL02
            PickDetail.id,
            PickDetail.sku,
            Sku.Altsku,
