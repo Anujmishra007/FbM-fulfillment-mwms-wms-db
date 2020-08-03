@@ -10,12 +10,13 @@ GO
   
 /******************************************************************************/                   
 /* Copyright: LFL                                                             */                   
-/* Purpose: isp_BT_Bartender_CN_UCCLabelM_Kontoor                            */                   
+/* Purpose: isp_BT_Bartender_CN_UCCLabelM_Kontoor                             */                   
 /*                                                                            */                   
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
 /*20-Mar-2020 1.0  WLChooi	  Created (WMS-12571)                              */  
+/*03-Aug-2020 1.1  WLChooi	  Bug Fix (WL01)                                   */  
 /******************************************************************************/                  
                     
 CREATE PROC [dbo].[isp_BT_Bartender_CN_UCCLabelM_Kontoor]                        
@@ -329,7 +330,7 @@ DECLARE
       AND CartonNo = @c_CartonNo  
 
       SET @n_CntRecAll = @n_CntRecAll - 9
-      SET @n_TTLPageAll = FLOOR(@n_CntRecAll / 17 ) + CASE WHEN @n_CntRec % 17 > 0 THEN 1 ELSE 0 END + 1  
+      SET @n_TTLPageAll = FLOOR(@n_CntRecAll / 17 ) + CASE WHEN @n_CntRecAll % 17 > 0 THEN 1 ELSE 0 END + 1   --WL01  
       --select @n_TTLPageAll
 
       SET @n_TTLpage =  FLOOR(@n_CntRec / @n_MaxLine ) + CASE WHEN @n_CntRec % @n_MaxLine > 0 THEN 1 ELSE 0 END     
