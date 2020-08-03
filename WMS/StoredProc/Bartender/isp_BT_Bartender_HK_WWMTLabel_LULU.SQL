@@ -15,6 +15,7 @@ GO
 /*                                                                            */               
 /* Date       Rev  Author     Purposes                                        */               
 /* 2016-11-18 1.0  CSCHONG    Created(WMS-599)                                */ 
+/* 2020-04-30 1.1  CSCHONG    WMS-13150 - add col58 (CS01)                    */
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_HK_WWMTLabel_LULU]                     
@@ -54,16 +55,17 @@ BEGIN
            @c_seqno            NVARCHAR(5),
            @c_DataField        NVARCHAR(MAX),
            @c_TableName        NVARCHAR (50),
-			  @c_Key1             NVARCHAR (80),
-			  @c_Key2             NVARCHAR (80),  
-			  @c_Key3             NVARCHAR (80),  
-			  @c_Storerkey        NVARCHAR (20),
-			  @c_ColValue         NVARCHAR(MAX) ,
-			  @n_SeqNo            INT,
-			  @c_style            NVARCHAR(20),
-			  @c_sku              NVARCHAR(20),
-			  @c_SCData           NVARCHAR(30) ,
-			  @c_altsku           NVARCHAR(20)  
+           @c_Key1             NVARCHAR (80),
+           @c_Key2             NVARCHAR (80),  
+           @c_Key3             NVARCHAR (80),  
+           @c_Storerkey        NVARCHAR (20),
+           @c_ColValue         NVARCHAR(MAX) ,
+           @n_SeqNo            INT,
+           @c_style            NVARCHAR(20),
+           @c_sku              NVARCHAR(20),
+           @c_SCData           NVARCHAR(30) ,
+           @c_altsku           NVARCHAR(20),
+           @n_Unitprice        FLOAT            --(CS01)  
            
            
   DECLARE @c_field01          NVARCHAR(80),
@@ -90,7 +92,7 @@ BEGIN
           @c_field22          NVARCHAR(80),
           @c_field23          NVARCHAR(80),
           @c_field24          NVARCHAR(80),
-   @c_field25          NVARCHAR(80),
+          @c_field25          NVARCHAR(80),
           @c_field26          NVARCHAR(80),
           @c_field27          NVARCHAR(80),
           @c_field28          NVARCHAR(80),
@@ -133,60 +135,61 @@ BEGIN
     SET @c_style = ''
     
     
+    
    SET @c_field01=''
-	SET @c_field02=''
-	SET @c_field03=''
-	SET @c_field04=''
-	SET @c_field05=''
-	SET @c_field06=''
-	SET @c_field07=''
-	SET @c_field08=''
-	SET @c_field09=''
-	SET @c_field10=''
-	SET @c_field11=''
-	SET @c_field12=''
-	SET @c_field13=''
-	SET @c_field14=''
-	SET @c_field15=''
-	SET @c_field16=''
-	SET @c_field17=''
-	SET @c_field18=''
-	SET @c_field19=''
-	SET @c_field20=''
-	SET @c_field21=''
-	SET @c_field22=''
-	SET @c_field23=''
-	SET @c_field24=''
-	SET @c_field25=''
-	SET @c_field26=''
-	SET @c_field27=''
-	SET @c_field28=''
-	SET @c_field29=''
-	SET @c_field30=''
-	SET @c_field31=''
-	SET @c_field32=''
-	SET @c_field33=''
-	SET @c_field34=''
-	SET @c_field35=''
-	SET @c_field36=''
-	SET @c_field37=''
-	SET @c_field38=''
-	SET @c_field39=''
-	SET @c_field40=''
-	SET @c_field41=''
-	SET @c_field42=''
-	SET @c_field43=''
-	SET @c_field44=''
-	SET @c_field45=''
-	SET @c_field46=''
-	SET @c_field47=''
-	SET @c_field48=''
-	SET @c_field49=''
-	SET @c_field50=''
-	SET @c_field51=''
-	SET @c_field52=''
-	SET @c_field53=''
-	SET @c_field54=''
+   SET @c_field02=''
+   SET @c_field03=''
+   SET @c_field04=''
+   SET @c_field05=''
+   SET @c_field06=''
+   SET @c_field07=''
+   SET @c_field08=''
+   SET @c_field09=''
+   SET @c_field10=''
+   SET @c_field11=''
+   SET @c_field12=''
+   SET @c_field13=''
+   SET @c_field14=''
+   SET @c_field15=''
+   SET @c_field16=''
+   SET @c_field17=''
+   SET @c_field18=''
+   SET @c_field19=''
+   SET @c_field20=''
+   SET @c_field21=''
+   SET @c_field22=''
+   SET @c_field23=''
+   SET @c_field24=''
+   SET @c_field25=''
+   SET @c_field26=''
+   SET @c_field27=''
+   SET @c_field28=''
+   SET @c_field29=''
+   SET @c_field30=''
+   SET @c_field31=''
+   SET @c_field32=''
+   SET @c_field33=''
+   SET @c_field34=''
+   SET @c_field35=''
+   SET @c_field36=''
+   SET @c_field37=''
+   SET @c_field38=''
+   SET @c_field39=''
+   SET @c_field40=''
+   SET @c_field41=''
+   SET @c_field42=''
+   SET @c_field43=''
+   SET @c_field44=''
+   SET @c_field45=''
+   SET @c_field46=''
+   SET @c_field47=''
+   SET @c_field48=''
+   SET @c_field49=''
+   SET @c_field50=''
+   SET @c_field51=''
+   SET @c_field52=''
+   SET @c_field53=''
+   SET @c_field54=''
         
             
     CREATE TABLE [#Result] (           
@@ -340,10 +343,10 @@ BEGIN
   
   IF ISNULL(@c_sku,'') = ''
   BEGIN
-  	SELECT TOP 1 @c_sku = s.SKU
-  	         ,@c_altsku = s.altsku
-  	FROM SKU s (NOLOCK)
-  	WHERE s.ALTSKU=@c_Sparm2
+   SELECT TOP 1 @c_sku = s.SKU
+            ,@c_altsku = s.altsku
+   FROM SKU s (NOLOCK)
+   WHERE s.ALTSKU=@c_Sparm2
      AND s.StorerKey = @c_Sparm4
   END
   
@@ -366,6 +369,17 @@ BEGIN
   AND Key1  = @c_style
   AND Key2 = @c_key2
   AND StorerKey = @c_Sparm4
+
+ --CS01 START
+   SET @n_Unitprice = 0.00   
+    IF ISNULL(@c_Sparm5,'') <> '' AND EXISTS (SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) WHERE Orderkey = @c_Sparm5)
+    BEGIN
+          SELECT @n_Unitprice = MAX(OD.Unitprice)
+          FROM  ORDERDETAIL OD WITH (NOLOCK) 
+          WHERE OD.Orderkey = @c_Sparm5
+    END
+  
+--CS01 END
   
      
   DECLARE C_DelimSplit CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -377,229 +391,229 @@ BEGIN
 
         WHILE (@@FETCH_STATUS=0) 
         BEGIN   
-        	
+         
         IF @n_SeqNo = 1 
-  				BEGIN
-  					SET @c_field01=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 2
-  				BEGIN
-  					SET @c_field02=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 3
-  				BEGIN
-  					SET @c_field03=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 4
-  				BEGIN
-  					SET @c_field04=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 	
-  				ELSE IF @n_SeqNo = 5
-  				BEGIN
-  					SET @c_field05=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 6
-  				BEGIN
-  					SET @c_field06=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 7
-  				BEGIN
-  					SET @c_field07=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 8
-  				BEGIN
-  					SET @c_field08=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 9
-  				BEGIN
-  					SET @c_field09=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 10
-  				BEGIN
-  					SET @c_field10=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-        	   ELSE IF @n_SeqNo = 11
-  				BEGIN
-  					SET @c_field11=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 12
-  				BEGIN
-  					SET @c_field12=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 13
-  				BEGIN
-  					SET @c_field13=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 14
-  				BEGIN
-  					SET @c_field14=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 	
-  				ELSE IF @n_SeqNo = 15
-  				BEGIN
-  					SET @c_field15=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 16
-  				BEGIN
-  					SET @c_field16=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 17
-  				BEGIN
-  					SET @c_field17=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 18
-  				BEGIN
-  					SET @c_field18=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 19
-  				BEGIN
-  					SET @c_field19=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 20
-  				BEGIN
-  					SET @c_field20=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 21
-  				BEGIN
-  					SET @c_field21=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 22
-  				BEGIN
-  					SET @c_field22=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 23
-  				BEGIN
-  					SET @c_field23=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 24
-  				BEGIN
-  					SET @c_field24=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 	
-  				ELSE IF @n_SeqNo = 25
-  				BEGIN
-  					SET @c_field25=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 26
-  				BEGIN
-  					SET @c_field26=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 27
-  				BEGIN
-  					SET @c_field27=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 28
-  				BEGIN
-  					SET @c_field28=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 29
-  				BEGIN
-  					SET @c_field29=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 30
-  				BEGIN
-  					SET @c_field30=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 31
-  				BEGIN
-  					SET @c_field31=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 32
-  				BEGIN
-  					SET @c_field32=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 33
-  				BEGIN
-  					SET @c_field33=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 34
-  				BEGIN
-  					SET @c_field34=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 	
-  				ELSE IF @n_SeqNo = 35
-  				BEGIN
-  					SET @c_field35=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 36
-  				BEGIN
-  					SET @c_field36=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 37
-  				BEGIN
-  					SET @c_field37=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 38
-  				BEGIN
-  					SET @c_field38=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 39
-  				BEGIN
-  					SET @c_field39=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 40
-  				BEGIN
-  					SET @c_field40=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 41
-  				BEGIN
-  					SET @c_field41=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 42
-  				BEGIN
-  					SET @c_field42=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 43
-  				BEGIN
-  					SET @c_field43=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 44
-  				BEGIN
-  					SET @c_field44=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 	
-  				ELSE IF @n_SeqNo = 45
-  				BEGIN
-  					SET @c_field45=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 46
-  				BEGIN
-  					SET @c_field46=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 47
-  				BEGIN
-  					SET @c_field47=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 48
-  				BEGIN
-  					SET @c_field48=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 49
-  				BEGIN
-  					SET @c_field49=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 50
-  				BEGIN
-  					SET @c_field50=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 51
-  				BEGIN
-  					SET @c_field51=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				ELSE IF @n_SeqNo = 52
-  				BEGIN
-  					SET @c_field52=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 53
-  				BEGIN
-  					SET @c_field53=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END 
-  				ELSE IF @n_SeqNo = 54
-  				BEGIN
-  					SET @c_field54=CONVERT(NVARCHAR(80),@c_ColValue)
-  				END
-  				
+            BEGIN
+               SET @c_field01=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 2
+            BEGIN
+               SET @c_field02=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 3
+            BEGIN
+               SET @c_field03=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 4
+            BEGIN
+               SET @c_field04=CONVERT(NVARCHAR(80),@c_ColValue)
+            END   
+            ELSE IF @n_SeqNo = 5
+            BEGIN
+               SET @c_field05=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 6
+            BEGIN
+               SET @c_field06=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 7
+            BEGIN
+               SET @c_field07=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 8
+            BEGIN
+               SET @c_field08=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 9
+            BEGIN
+               SET @c_field09=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 10
+            BEGIN
+               SET @c_field10=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 11
+            BEGIN
+               SET @c_field11=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 12
+            BEGIN
+               SET @c_field12=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 13
+            BEGIN
+               SET @c_field13=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 14
+            BEGIN
+               SET @c_field14=CONVERT(NVARCHAR(80),@c_ColValue)
+            END   
+            ELSE IF @n_SeqNo = 15
+            BEGIN
+               SET @c_field15=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 16
+            BEGIN
+               SET @c_field16=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 17
+            BEGIN
+               SET @c_field17=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 18
+            BEGIN
+               SET @c_field18=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 19
+            BEGIN
+               SET @c_field19=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 20
+            BEGIN
+               SET @c_field20=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 21
+            BEGIN
+               SET @c_field21=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 22
+            BEGIN
+               SET @c_field22=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 23
+            BEGIN
+               SET @c_field23=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 24
+            BEGIN
+               SET @c_field24=CONVERT(NVARCHAR(80),@c_ColValue)
+            END   
+            ELSE IF @n_SeqNo = 25
+            BEGIN
+               SET @c_field25=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 26
+            BEGIN
+               SET @c_field26=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 27
+            BEGIN
+               SET @c_field27=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 28
+            BEGIN
+               SET @c_field28=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 29
+            BEGIN
+               SET @c_field29=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 30
+            BEGIN
+               SET @c_field30=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 31
+            BEGIN
+               SET @c_field31=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 32
+            BEGIN
+               SET @c_field32=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 33
+            BEGIN
+               SET @c_field33=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 34
+            BEGIN
+               SET @c_field34=CONVERT(NVARCHAR(80),@c_ColValue)
+            END   
+            ELSE IF @n_SeqNo = 35
+            BEGIN
+               SET @c_field35=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 36
+            BEGIN
+               SET @c_field36=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 37
+            BEGIN
+               SET @c_field37=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 38
+            BEGIN
+               SET @c_field38=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 39
+            BEGIN
+               SET @c_field39=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 40
+            BEGIN
+               SET @c_field40=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 41
+            BEGIN
+               SET @c_field41=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 42
+            BEGIN
+               SET @c_field42=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 43
+            BEGIN
+               SET @c_field43=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 44
+            BEGIN
+               SET @c_field44=CONVERT(NVARCHAR(80),@c_ColValue)
+            END   
+            ELSE IF @n_SeqNo = 45
+            BEGIN
+               SET @c_field45=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 46
+            BEGIN
+               SET @c_field46=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 47
+            BEGIN
+               SET @c_field47=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 48
+            BEGIN
+               SET @c_field48=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 49
+            BEGIN
+               SET @c_field49=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 50
+            BEGIN
+               SET @c_field50=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 51
+            BEGIN
+               SET @c_field51=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            ELSE IF @n_SeqNo = 52
+            BEGIN
+               SET @c_field52=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 53
+            BEGIN
+               SET @c_field53=CONVERT(NVARCHAR(80),@c_ColValue)
+            END 
+            ELSE IF @n_SeqNo = 54
+            BEGIN
+               SET @c_field54=CONVERT(NVARCHAR(80),@c_ColValue)
+            END
+            
         FETCH NEXT FROM C_DelimSplit INTO @n_SeqNo, @c_ColValue
         END 
 
          CLOSE C_DelimSplit
-         DEALLOCATE C_DelimSplit	                
+         DEALLOCATE C_DelimSplit                 
             
  INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09       
              ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22        
@@ -613,13 +627,13 @@ BEGIN
         ,@c_field23,@c_field24,@c_field25,@c_field26,@c_field27,@c_field28,@c_field29,@c_field30,@c_field31,@c_field32
         ,@c_field33,@c_field34,@c_field35,@c_field36,@c_field37,@c_field38,@c_field39,@c_field40,@c_field41,@c_field42
         ,@c_field43,@c_field44,@c_field45,@c_field46,@c_field47,@c_field48,@c_field49,@c_field50,@c_field51,@c_field52
-        ,@c_field53,@c_field54,@c_style,@c_Sparm1,@c_SCData,@c_altsku,@c_sku,'','','')
+        ,@c_field53,@c_field54,@c_style,@c_Sparm1,@c_SCData,@c_altsku,@c_sku,@n_Unitprice,'','')         --(CS01)
 
 
 
   WHILE @n_copy > 1
   BEGIN   
-  	
+   
      INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09           
             ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22         
             ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34           
@@ -634,8 +648,8 @@ BEGIN
             ,Col55,Col56,Col57,Col58,Col59,Col60
     FROM #RESULT
     WHERE ID = 1
-  	
-  	SET @n_copy = @n_copy - 1
+   
+   SET @n_copy = @n_copy - 1
   END     
       
 IF @b_debug=1      
