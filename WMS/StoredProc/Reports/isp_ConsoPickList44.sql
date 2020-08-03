@@ -34,6 +34,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 08-JUL-20    CSCHONG   1.1   WMS-13542 revised field mapping (CS01)  */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_ConsoPickList44]
@@ -53,6 +54,7 @@ BEGIN
          , @c_PickHeaderKey  NVARCHAR(10)
          , @c_PrintedFlag    NVARCHAR(1)
          , @n_CntConsignee   NVARCHAR(5)
+         , @c_Consigneekey    NVARCHAR(45)          --CS01
 
    SET @n_StartTranCnt  = @@TRANCOUNT  
    SET @n_Continue      = 1 
@@ -126,11 +128,20 @@ BEGIN
    END  
    
   SET @n_CntConsignee = 0
+  SET @c_Consigneekey = ''               --CS01
 
   SELECT @n_CntConsignee = COUNT(DISTINCT OH.consigneekey)
   FROM ORDERS OH WITH (NOLOCK) 
   WHERE OH.loadkey = @c_LoadKey
- 
+
+ --CS01 START
+ IF @n_CntConsignee = 1
+ BEGIN
+   SELECT @c_Consigneekey = MAX(OH.consigneekey)
+  FROM ORDERS OH WITH (NOLOCK) 
+  WHERE OH.loadkey = @c_LoadKey
+ END
+ --CS01 END
   
    SELECT DISTINCT ISNULL(RTRIM(PickHeader.PickHeaderKey),'')
         , @c_PrintedFlag
@@ -142,7 +153,8 @@ BEGIN
         , ISNULL(RTRIM(PickDetail.Sku),'') as sku
         , ISNULL(RTRIM(PickDetail.Loc),'') as loc
         , sum(ISNULL(PickDetail.Qty,0)) as qty
-        , (ISNULL(sl.qty,0)) as slqty
+        , ((ISNULL(sl.qty,0)) - ISNULL(sl.QtyAllocated,0)- ISNULL(sl.QtyPicked,0))  as slqty      --CS01
+        , @c_Consigneekey AS Consigneekey 
    FROM  PickHeader WITH (NOLOCK)
    INNER JOIN LoadPlan WITH (NOLOCK)
     ON  (LoadPlan.LoadKey=PICKHEADER.ExternOrderKey)
@@ -168,7 +180,7 @@ BEGIN
         , ISNULL(RTRIM(PickDetail.Sku),'')
         , ISNULL(RTRIM(PickDetail.Loc),'') 
      --   , SUM(ISNULL(PickDetail.Qty,0)) as qty
-        ,  (ISNULL(sl.qty,0)) 
+        ,  ((ISNULL(sl.qty,0)) - ISNULL(sl.QtyAllocated,0)- ISNULL(sl.QtyPicked,0))      --CS01
    ORDER BY CASE WHEN @n_CntConsignee > 1 THEN ISNULL(RTRIM(LoadPlan.LoadKey),'') ELSE '' END
           , L.PickZone
           , ISNULL(RTRIM(PickDetail.Loc),'')
