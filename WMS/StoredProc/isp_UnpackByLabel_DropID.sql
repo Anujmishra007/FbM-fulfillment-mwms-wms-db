@@ -17,14 +17,16 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date        Author   Ver   Purposes                                  */
+/* 02-JUL-2020 Wan01    1.1   WMS-13254 - [CN]Logitech_Tote ID          */
+/*                            Packing_pallet serialno_CR                */
 /************************************************************************/
 CREATE PROC isp_UnpackByLabel_DropID 
             @c_LabelNo        NVARCHAR(20)
@@ -64,6 +66,13 @@ BEGIN
          , @c_UnallocUnPackSku   NVARCHAR(30)
 
          , @c_LogitechRules      NVARCHAR(30)
+
+   --(Wan01) - START
+   DECLARE @n_TrackingIDKey      BIGINT = 0                           
+         , @c_ParentTrackingID   NVARCHAR(30)= '' 
+         , @c_SerialNo           NVARCHAR(30)= ''       
+         , @CUR_MInP             CURSOR            
+   --(Wan01) - END
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -150,6 +159,7 @@ BEGIN
 
       DECLARE CUR_UNSN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT SerialNoKey
+            ,SerialNo                                          --(Wan01)
       FROM SERIALNO WITH (NOLOCK)
       WHERE PickSlipNo = @c_PickSlipNo
       AND   CartonNo   = @n_CartonNo
@@ -158,6 +168,7 @@ BEGIN
       OPEN CUR_UNSN
    
       FETCH NEXT FROM CUR_UNSN INTO @c_SerialNoKey
+                                 ,  @c_SerialNo                --(Wan01)
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          IF @c_LogitechRules = '1'
@@ -192,9 +203,61 @@ BEGIN
                                                                                                                        
             GOTO QUIT_SP        
          END
-
+         
          NEXT_SN:
+         --(Wan01) - START
+         SET @c_ParentTrackingID = ''  
+         SELECT TOP 1 @c_ParentTrackingID = ParentTrackingID
+         FROM TRACKINGID TID WITH (NOLOCK)
+         WHERE TID.TrackingID= @c_SerialNo
+         AND   TID.Storerkey = @c_Storerkey
+         AND   TID.[Status]  = '9' 
+         AND   TID.PickMethod<>'Loose'
+         ORDER BY TrackingIDKey
+
+         IF @c_ParentTrackingID <> ''
+         BEGIN
+            SET @CUR_MInP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT TID.TrackingIDKey
+            FROM TRACKINGID TID WITH (NOLOCK)
+            WHERE TID.ParentTrackingID = @c_ParentTrackingID
+            AND   TID.Storerkey = @c_Storerkey
+            AND   TID.[Status]  = '9' 
+            AND   TID.PickMethod<>'Loose'  
+            ORDER BY TrackingIDKey
+
+            OPEN @CUR_MInP
+
+            FETCH NEXT FROM @CUR_MInP INTO @n_TrackingIDKey
+
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               UPDATE TRACKINGID
+                  SET PickMethod = 'Loose'
+                     ,EditWho    = SUSER_SNAME()
+                     ,EditDate   = GETDATE()
+                     ,TrafficCop = NULL
+               WHERE TrackingIDKey = @n_TrackingIDKey
+               AND   Status  = '9'
+
+               SET @n_err = @@ERROR
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 60025
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update TRACKINGID Table. (isp_Insert_Packing_DropID)' 
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+                  GOTO QUIT_SP
+               END
+               FETCH NEXT FROM @CUR_MInP INTO @n_TrackingIDKey
+            END
+            CLOSE @CUR_MInP
+            DEALLOCATE @CUR_MInP
+         END
+         --(Wan01) - END
+
          FETCH NEXT FROM CUR_UNSN INTO @c_SerialNoKey
+                                    ,  @c_SerialNo                 --(Wan01)
       END
       CLOSE CUR_UNSN
       DEALLOCATE CUR_UNSN
