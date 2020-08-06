@@ -148,6 +148,8 @@ GO
 /* 27-Jul-2018  MCTang       1.11   Enhance Generaic Trigger Interface (MC03)  */
 /* 26-JUL-2019  Wan02        1.12   WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for  */
 /*                                  Channel                                    */
+/* 27-JUL-2020  WLChooi      1.13   WMS-14433 - New Extended Validation:       */
+/*                                  ASNCloseExtendedValidation (WL01)          */
 /*******************************************************************************/
 
 CREATE TRIGGER ntrReceiptHeaderUpdate
@@ -168,7 +170,7 @@ BEGIN
    DECLARE @b_Success            int            -- Populated by calls to stored procedures - was the proc successful?
          , @n_err                int            -- Error number returned by stored procedure or this trigger
          , @n_err2               int            -- For Additional Error Detection
-         , @c_errmsg             NVARCHAR(250)  -- Error message returned by stored procedure or this trigger
+         , @c_errmsg             NVARCHAR(4000) -- Error message returned by stored procedure or this trigger   --WL01 Increase to NVARCHAR(4000) 
          , @n_continue           int
          , @n_starttcnt          int            -- Holds the current transaction count
          , @c_preprocess         NVARCHAR(250)  -- preprocess
@@ -2084,6 +2086,63 @@ BEGIN
                   END -- While loop 2
                END -- IF Tablename = 'RECEIPT' or....
             END -- SOS34204
+
+            --WL01 START
+            IF @n_continue = 1 OR @n_continue = 2
+            BEGIN
+               DECLARE @c_ASNCloseValidationRules  NVARCHAR(30)
+                     , @c_SQL                      NVARCHAR(4000)
+                     , @c_ReceiptLineNumber        NVARCHAR(5) = ''  
+  
+               SELECT @c_ASNCloseValidationRules = SC.sValue  
+               FROM STORERCONFIG SC (NOLOCK)  
+               JOIN CODELKUP CL (NOLOCK) ON SC.sValue = CL.Listname  
+               WHERE SC.StorerKey = @c_StorerKey  
+               AND SC.Configkey = 'ASNCloseExtendedValidation'  
+  
+               IF ISNULL(@c_ASNCloseValidationRules,'') <> ''  
+               BEGIN  
+                  EXEC isp_ASN_ExtendedValidation @cReceiptKey = @c_ReceiptKey,  
+                                                  @cASNValidationRules=@c_ASNCloseValidationRules,  
+                                                  @nSuccess=@b_Success OUTPUT, @cErrorMsg=@c_ErrMsg OUTPUT,  
+                                                  @c_ReceiptLineNumber = @c_ReceiptLineNumber
+  
+                  IF @b_Success <> 1  
+                  BEGIN  
+                     SELECT @n_continue = 3
+                     --SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=60253   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                     --SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Unable to EXEC isp_ASN_ExtendedValidation. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                  END  
+               END  
+               ELSE     
+               BEGIN  
+                  SELECT @c_ASNCloseValidationRules = SC.sValue      
+                  FROM STORERCONFIG SC (NOLOCK)   
+                  WHERE SC.StorerKey = @c_StorerKey   
+                  AND SC.Configkey = 'ASNCloseExtendedValidation'      
+              
+                  IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_ASNCloseValidationRules) AND type = 'P')            
+                  BEGIN            
+                     SET @c_SQL = 'EXEC ' + @c_ASNCloseValidationRules + ' @c_ReceiptKey, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '            
+                                + ',@c_ReceiptLineNumber '                         
+                     EXEC sp_executesql @c_SQL,            
+                              N'@c_ReceiptKey NVARCHAR(10), @b_Success Int OUTPUT, @n_Err Int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT  
+                              ,@c_ReceiptLineNumber NVARCHAR(5)',                          
+                              @c_ReceiptKey,            
+                              @b_Success OUTPUT,            
+                              @n_Err OUTPUT,            
+                              @c_ErrMsg OUTPUT,  
+                              @c_ReceiptLineNumber                                        
+  
+                     IF @b_Success <> 1       
+                     BEGIN      
+                        SELECT @n_continue = 3
+                        --SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=60254   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                        --SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Unable to EXEC ' + @c_ASNCloseValidationRules + '. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                     END           
+                  END    
+               END--ISNULL(@cASNValidationRules,'') <> ''              
+            END--WL01 END
          END -- While Loop 1
       END -- ASNStatus = '9'
 
