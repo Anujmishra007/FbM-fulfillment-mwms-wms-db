@@ -17,7 +17,7 @@ GO
 /*        : To Tradenet                                                 */
 /* Called By: BTBShipment RCM                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-06-16  Wan01    1.1   WMS-13409 - SG - Logitech - Back to Back  */
+/*                            Declaration for Form DE                   */
 /************************************************************************/
 CREATE PROC isp_BTB_Shipment_ITF
            @c_BTB_ShipmentKey    NVARCHAR(10)
@@ -107,6 +109,23 @@ BEGIN
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Generating Transmitlog3 Interface record. (isp_BTB_Shipment_ITF)'
          GOTO QUIT_SP
       END
+
+      --(Wan01) - START
+      UPDATE BTB_SHIPMENT
+         SET [Status] = '9'
+         ,  EditWho = SUSER_SNAME()
+         ,  EditDate= GETDATE()
+         ,  Trafficcop = NULL
+      WHERE BTB_ShipmentKey = @c_BTB_ShipmentKey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 60035
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Update BTB_SHIPMENT Status. (isp_BTB_Shipment_ITF)'
+         GOTO QUIT_SP
+      END
+      --(Wan01) - END
    END
 
 QUIT_SP:

@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: nep_n_cst_btb_shipmentdetail.ue_populatefrombusobj        */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -25,7 +25,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 08-NOV-2017 Wan01    1.1   WMS-3321 - Triple - Back to Back FTA Entry*/
 /* 09-NOV-2018 Wan02    1.2   Fixed. Create New List if                 */
-/*                            MaxDetailPerCOO >= 50                     */         
+/*                            MaxDetailPerCOO >= 50                     */ 
+/* 2020-06-16  Wan03    1.3   WMS-13409 - SG - Logitech - Back to Back  */
+/*                            Declaration for Form DE                   */        
 /************************************************************************/
 CREATE PROC isp_INSERT_BTB_ShipmentDetail
            @c_Wavekey         NVARCHAR(10)
@@ -57,6 +59,7 @@ BEGIN
          , @n_UnitPrice          FLOAT
          , @c_Currency           NVARCHAR(10)
          , @n_QtyExported        INT
+         , @n_TotalQtyExported   INT         = 0   --(Wan03)
 
          --(Wan01) - START
          , @c_BTBShipItem        NVARCHAR(50)
@@ -87,11 +90,29 @@ BEGIN
          , @n_MaxDetailPerCOO    INT
    --(Wan01) - END
 
+   --(Wan03) - START
+   IF OBJECT_ID('tempdb..#BTBSHIPSKU','U') IS NOT NULL
+   BEGIN
+      DROP TABLE #BTBSHIPSKU;
+   END
+
+   CREATE TABLE #BTBSHIPSKU
+      (  Wavekey           NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Storerkey         NVARCHAR(15)   NOT NULL DEFAULT('')
+      ,  Sku               NVARCHAR(20)   NOT NULL DEFAULT('')
+      ,  HSCode            NVARCHAR(20)   NOT NULL DEFAULT('')
+      ,  COO               NVARCHAR(20)   NOT NULL DEFAULT('')
+      ,  BTBShipItem       NVARCHAR(50)   NOT NULL DEFAULT('')
+      ,  TotalQtyExported  INT            NOT NULL DEFAULT(0)
+      )
+   CREATE INDEX IX_TMP_BTBSHIPSKU on #BTBSHIPSKU ( Wavekey, Storerkey, Sku, HSCode, COO, BTBShipItem )
+
+   --(Wan03) - END
+
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
-
 
    --(Wan01) - START
    SET @c_SQLSku      = ''
@@ -303,6 +324,38 @@ BEGIN
                                  ,  @c_FrColName 
    END
 
+   --(Wan03) - START
+   INSERT INTO #BTBSHIPSKU
+      (  Wavekey
+      ,  Storerkey
+      ,  Sku
+      ,  COO
+      ,  HSCode
+      ,  BTBShipItem
+      ,  TotalQtyExported
+      )
+   SELECT BSD.Wavekey
+         ,BSD.Storerkey
+         ,SKU = CASE WHEN @c_BTBShipmentByItem = '1' THEN '' ELSE BSD.Sku END
+         ,BSL.COO
+         ,BSD.HSCode
+         ,BSD.BTBShipItem
+         ,TotalQtyExported = ISNULL(SUM(BSD.QtyExported),0)
+   FROM BTB_SHIPMENTDETAIL BSD WITH (NOLOCK)
+   JOIN BTB_SHIPMENT       BSH WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSH.BTB_ShipmentKey
+   JOIN BTB_SHIPMENTLIST   BSL WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSL.BTB_ShipmentKey
+                                            AND BSD.BTB_ShipmentListNo = BSL.BTB_ShipmentListNo
+   WHERE BSD.Wavekey = @c_Wavekey
+   AND BSH.[Status] = '9'
+   GROUP BY BSD.Wavekey
+         ,  BSD.Storerkey
+         ,  CASE WHEN @c_BTBShipmentByItem = '1' THEN '' ELSE BSD.Sku END
+         ,  BSL.COO
+         ,  BSD.HSCode
+         ,  BSD.BTBShipItem
+
+   --(Wan03) - END
+
    SET @c_SQLSKU     = CASE WHEN @c_BTBShipmentByItem = '1' THEN '' ELSE ' SKU.Sku' END
    SET @c_SQLSKUDescr= CASE WHEN @c_BTBShipmentByItem = '1' THEN '' ELSE ' ISNULL(RTRIM(SKU.Descr),'''')' END
 
@@ -312,7 +365,7 @@ BEGIN
    IF @c_SQLCurrency = '' SET @c_SQLCurrency = ' ISNULL(RTRIM(ORDERDETAIL.UserDefine03),'''')'
 
    SET @c_SQL =
-         N'DECLARE CUR_SHIP CURSOR FAST_FORWARD READ_ONLY FOR'
+         N'DECLARE CUR_BTB_SHIP CURSOR FAST_FORWARD READ_ONLY FOR'
       +  ' SELECT ListGroup = DENSE_RANK() OVER ( ORDER BY'
       +                                 @c_SQLCOO + ' )'
       +  ' ,  COO      = ' + @c_SQLCOO 
@@ -354,16 +407,14 @@ BEGIN
    SET @c_SQLParms =
          N'@c_Wavekey   NVARCHAR(10)'
    
-
-
    EXEC sp_executesql   @c_SQL
                      ,  @c_SQLParms   
                      ,  @c_Wavekey   
 
    --(Wan01) - END
-   OPEN CUR_SHIP
+   OPEN CUR_BTB_SHIP
    
-   FETCH NEXT FROM CUR_SHIP INTO @c_ListGroup             
+   FETCH NEXT FROM CUR_BTB_SHIP INTO @c_ListGroup             
                               ,  @c_COO                   
                               ,  @c_HSCode                
                               ,  @c_Storerkey             
@@ -377,6 +428,25 @@ BEGIN
    BEGIN TRAN
    WHILE @@FETCH_STATUS <> -1
    BEGIN
+      --(Wan03) - START
+      SET @n_TotalQtyExported = 0
+      SELECT @n_TotalQtyExported = T.TotalQtyExported
+      FROM #BTBSHIPSKU T WITH (NOLOCK)
+      WHERE T.Wavekey = @c_Wavekey
+      AND   T.Storerkey = @c_Storerkey
+      AND   T.Sku = @c_Sku
+      AND   T.COO = @c_COO
+      AND   T.HSCode = @c_HSCode
+      AND   T.BTBShipItem = @c_BTBShipItem 
+
+      IF @n_QtyExported <= @n_TotalQtyExported
+      BEGIN
+         GOTO NEXT_REC
+      END
+
+      SET @n_QtyExported = @n_QtyExported - @n_TotalQtyExported
+      --(Wan03) - END
+
       --(Wan01) - START
       IF  @c_ListGroup_Prev <> @c_ListGroup OR @n_MaxDetailPerCOO >= 50  
       BEGIN 
@@ -434,11 +504,11 @@ BEGIN
       SET @n_MaxDetailPerCOO = @n_MaxDetailPerCOO + 1                      --(Wan01)
       --SET @c_BTB_ShipmentLineNo = '00001'
 
-      SELECT @c_BTB_ShipmentLineNo = RIGHT('00000' + CONVERT(NVARCHAR(5),(ISNULL(MAX(BTB_ShipmentLineNo),0) + 1)),5)
-      FROM BTB_SHIPMENTDETAIL WITH (NOLOCK)
-      WHERE BTB_ShipmentKey = @c_BTB_ShipmentKey
-      AND   BTB_ShipmentListNo = @c_BTB_ShipmentListNo
-
+      SELECT @c_BTB_ShipmentLineNo = RIGHT('00000' + CONVERT(NVARCHAR(5),(ISNULL(MAX(BTB_ShipmentLineNo),0) + 1)),5)  
+      FROM BTB_SHIPMENTDETAIL WITH (NOLOCK)  
+      WHERE BTB_ShipmentKey = @c_BTB_ShipmentKey  
+      AND   BTB_ShipmentListNo = @c_BTB_ShipmentListNo  
+   
       INSERT INTO BTB_SHIPMENTDETAIL 
             (  BTB_ShipmentKey
             ,  BTB_ShipmentListNo
@@ -471,19 +541,20 @@ BEGIN
             ,  @c_Wavekey                                            --(Wan01)              
             )
 
-         SET @n_err = @@ERROR 
-         IF @n_err <> 0
-         BEGIN
-            SET @n_Continue = 3
-            SET @c_errmsg = CONVERT(CHAR(5),@n_err)
-            SET @n_err=80020
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed Onto Table BTB_SHIPMENTDETAIL. (isp_INSERT_BTB_ShipmentDetail)' 
-                         + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-            GOTO QUIT_SP
-         END
+      SET @n_err = @@ERROR 
+      IF @n_err <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @c_errmsg = CONVERT(CHAR(5),@n_err)
+         SET @n_err=80020
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed Onto Table BTB_SHIPMENTDETAIL. (isp_INSERT_BTB_ShipmentDetail)' 
+                        + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+         GOTO QUIT_SP
+      END
 
       SET @c_ListGroup_Prev = @c_ListGroup
-      FETCH NEXT FROM CUR_SHIP INTO @c_ListGroup             
+      NEXT_REC:                                                      --(Wan03)
+      FETCH NEXT FROM CUR_BTB_SHIP INTO @c_ListGroup             
                                  ,  @c_COO                   
                                  ,  @c_HSCode                
                                  ,  @c_Storerkey             
@@ -495,14 +566,14 @@ BEGIN
                                  ,  @n_QtyExported 
                                  ,  @c_BTBShipItem                   --(Wan01)    
    END
-   CLOSE CUR_SHIP
-   DEALLOCATE CUR_SHIP 
+   CLOSE CUR_BTB_SHIP
+   DEALLOCATE CUR_BTB_SHIP 
 QUIT_SP:
 
-   IF CURSOR_STATUS( 'LOCAL', 'CUR_SHIP') in (0 , 1)  
+   IF CURSOR_STATUS( 'GLOBAL', 'CUR_BTB_SHIP') in (0 , 1)  
    BEGIN
-      CLOSE CUR_SHIP
-      DEALLOCATE CUR_SHIP
+      CLOSE CUR_BTB_SHIP
+      DEALLOCATE CUR_BTB_SHIP
    END
 
    IF CURSOR_STATUS( 'VARIABLE', '@CUR_COL') in (0 , 1)  
