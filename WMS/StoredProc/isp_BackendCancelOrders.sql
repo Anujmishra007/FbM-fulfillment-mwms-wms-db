@@ -44,6 +44,7 @@ GO
 /* 2020-01-16   kocy04        1.4   Added delete WaveDetail records based on OrderKey              */
 /* 2020-02-17   kocy05        1.5   Comment out Delete WaveDetail record first                     */
 /* 2020-04-14   NJOW01        1.6   WMS-12785 Lululemon move stock logic                           */
+/* 2020-07-29   NJOW02        1.7   Fix temploc bug follow isp0000P_WSIML_GENERIC_WMS_CancOrd_Import*/
 /***************************************************************************************************/        
         
 CREATE PROC [dbo].[isp_BackendCancelOrders] (        
@@ -149,6 +150,8 @@ BEGIN
          , @n_OverAllocationFlag_Exist  INT
          , @c_LLI_QtyExpected           INT
          , @c_WaveKey                   NVARCHAR(25)          
+         , @c_PD_PickDetailKey         NVARCHAR(18)   --NJOW02
+         , @c_Temp_PickDetailKey       NVARCHAR(18)   --NJOW02
         
         
    SET @n_StartTCnt = @@TRANCOUNT        
@@ -234,10 +237,12 @@ BEGIN
       FromID NVARCHAR(18) NULL,        
       ToLoc NVARCHAR(10) NULL,        
       ToID NVARCHAR(18) NULL,        
-      Qty INT        
+      Qty INT,
+      PickDetailKey NVARCHAR(18) NOT NULL  --NJOW02              
    )        
            
-   CREATE UNIQUE INDEX IX_1 on #TempMoveRecord (OrderLineNumber, SKU, Lot, FromLoc)        
+   --CREATE UNIQUE INDEX IX_1 on #TempMoveRecord (OrderLineNumber, SKU, Lot, FromLoc)        
+   CREATE UNIQUE INDEX IX_Pdet on #TempMoveRecord (PickDetailKey)  --NJOW02
                
    SELECT  @n_Exists = (1)        
          , @c_OH_Status = ISNULL(RTRIM(O.STATUS),'')        
@@ -606,6 +611,7 @@ BEGIN
                                  + ', ISNULL(RTRIM(PD.Loc), '''')'        
                                  + ', ISNULL(RTRIM(PD.ID), '''')'        
                                  + ', ISNULL(RTRIM(PD.Qty), '''')'        
+                                 + ', ISNULL(RTRIM(PD.PickDetailKey), '''')' --NJOW01                                 
                                  + ' FROM  ORDERDETAIL OD WITH (NOLOCK)'        
                                  + ' INNER JOIN  PickDetail PD WITH (NOLOCK)'        
                                  + ' ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber )'        
@@ -647,7 +653,9 @@ BEGIN
                                           ,@c_PD_Lot        
                                           ,@c_PD_Loc        
                                           ,@c_PD_ID        
-                                          ,@n_PD_Qty        
+                                          ,@n_PD_Qty
+                                          ,@c_PD_PickDetailKey --NJOW02
+        
          WHILE @@FETCH_STATUS <> -1        
          BEGIN                  
             SET @c_From_Loc = @c_PD_Loc        
@@ -810,11 +818,14 @@ BEGIN
             BEGIN        
                INSERT INTO #TempMoveRecord        
                (        
-                  OrderLineNumber, SKU, Lot, FromLoc, FromID, ToLoc, ToID, Qty        
+                  OrderLineNumber, SKU, Lot, FromLoc, FromID, ToLoc, ToID, Qty,
+                  PickDetailKey --NJOW02
                )        
                VALUES        
                (        
-                  @c_OD_OrderLineNumber, @c_PD_SKU, @c_PD_Lot, @c_From_Loc, @c_From_ID, @c_To_Loc, @c_To_ID, @n_PD_Qty        
+                  @c_OD_OrderLineNumber, @c_PD_SKU, @c_PD_Lot, @c_From_Loc, @c_From_ID, @c_To_Loc, @c_To_ID, @n_PD_Qty,
+                  @c_PD_PickDetailKey  --NJOW02
+                         
                )        
             END --IF @c_To_Loc <> ''        
         
@@ -825,7 +836,9 @@ BEGIN
                                              ,@c_PD_Lot        
                                              ,@c_PD_Loc        
                                              ,@c_PD_ID        
-                                             ,@n_PD_Qty        
+                                             ,@n_PD_Qty
+                                             ,@c_PD_PickDetailKey --NJOW02
+                                                     
          END -- WHILE @@FETCH_STATUS <> -1           
          CLOSE C_TempInsert          
          DEALLOCATE C_TempInsert        
@@ -1062,11 +1075,17 @@ BEGIN
       IF EXISTS(SELECT 1 FROM #TempMoveRecord WITH (NOLOCK))        
       BEGIN        
          DECLARE C_TempMoveRecord_Loop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
-         SELECT DISTINCT OrderLineNumber        
-         FROM #TempMoveRecord WITH (NOLOCK)        
-         ORDER BY OrderLineNumber        
+         SELECT DISTINCT PickDetailKey --NJOW02 
+         FROM #TempMoveRecord WITH (NOLOCK)
+         ORDER BY PickDetailKey
+         --SELECT DISTINCT OrderLineNumber        
+         --FROM #TempMoveRecord WITH (NOLOCK)        
+         --ORDER BY OrderLineNumber        
+
+         
          OPEN C_TempMoveRecord_Loop          
-         FETCH NEXT FROM C_TempMoveRecord_Loop INTO @c_Temp_OrderLineNumber        
+         FETCH NEXT FROM C_TempMoveRecord_Loop INTO @c_Temp_PickDetailKey  --NJOW02
+         --FETCH NEXT FROM C_TempMoveRecord_Loop INTO @c_Temp_OrderLineNumber        
          WHILE @@FETCH_STATUS <> -1           
          BEGIN        
             BEGIN TRAN        
@@ -1085,7 +1104,8 @@ BEGIN
                   ,@c_Temp_ToID = ISNULL(RTRIM(ToID), '')        
                   ,@n_Temp_Qty = Qty        
             FROM #TempMoveRecord WITH (NOLOCK)        
-            WHERE OrderLineNumber = @c_Temp_OrderLineNumber        
+            WHERE PickDetailKey = @c_Temp_PickDetailKey    --NJOW02
+            --WHERE OrderLineNumber = @c_Temp_OrderLineNumber        
         
             EXEC  nspItrnAddMove         
                NULL        
@@ -1139,8 +1159,9 @@ BEGIN
                END        
         
                COMMIT TRAN        
-        
-            FETCH NEXT FROM C_TempMoveRecord_Loop INTO @c_Temp_OrderLineNumber        
+               
+            FETCH NEXT FROM C_TempMoveRecord_Loop INTO @c_Temp_PickDetailKey  --NJOW02     
+            --FETCH NEXT FROM C_TempMoveRecord_Loop INTO @c_Temp_OrderLineNumber                    
          END -- WHILE @@FETCH_STATUS <> -1           
          CLOSE C_TempMoveRecord_Loop          
          DEALLOCATE C_TempMoveRecord_Loop         
