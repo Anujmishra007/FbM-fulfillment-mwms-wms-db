@@ -35,6 +35,8 @@ GO
 /* 10-Sep-2019  WLChooi       WMS-10537 - Break by putawayzone and      */  
 /*                                        Add RetailSKU (WL02)          */  
 /* 24-Sep-2019  WLChooi       WMS-10537 - PageNo by Orderkey (WL03)     */  
+/* 03-Aug-2019  WLChooi       WMS-14529 - Modify Logic using ReportCFG  */
+/*                            (WL04)                                    */  
 /************************************************************************/  
   
 CREATE PROC dbo.nsp_GetPickSlipOrders10 (@c_loadkey NVARCHAR(10)) -- 0000365810  
@@ -137,7 +139,8 @@ BEGIN
             @n_GetTotalPage           INT = 0,                     --(WL03)  
             @n_CurrentCnt             INT = 1,                     --(WL03)  
             @c_ShowPageNoByOrderkey   NVARCHAR(10),                --(WL03)  
-            @b_flag                   INT = 0                      --(WL03)  
+            @b_flag                   INT = 0,                     --(WL03)  
+            @c_ShowEachInInnerCol     NVARCHAR(10)                 --(WL04)  
   
    /*CS02 Start*/  
    DECLARE @c_LRoute        NVARCHAR(10),  
@@ -206,18 +209,18 @@ BEGIN
    Zone          NVARCHAR(1),  
    PgGroup       int,  
    RowNum         int,  
-   Lot          NVARCHAR(10),  
-   Carrierkey          NVARCHAR(60),  
-   VehicleNo          NVARCHAR(10),  
-   Lottable01          NVARCHAR(18),  
-   Lottable02          NVARCHAR(18),  
-   Lottable03          NVARCHAR(18),  
-   Lottable04          datetime,  
-   LabelPrice          NVARCHAR(5),  
-   storerkey          NVARCHAR(18),  
-   invoiceno          NVARCHAR(10),  
-   deliverydate         Datetime,  
-   ordertype          NVARCHAR(250),  
+   Lot                  NVARCHAR(10),  
+   Carrierkey           NVARCHAR(60),  
+   VehicleNo            NVARCHAR(10),  
+   Lottable01           NVARCHAR(18),  
+   Lottable02           NVARCHAR(18),  
+   Lottable03           NVARCHAR(18),  
+   Lottable04           datetime,  
+   LabelPrice           NVARCHAR(5)  NULL,   --WL04  
+   storerkey            NVARCHAR(18),
+   invoiceno            NVARCHAR(10) NULL,   --WL04    
+   deliverydate         Datetime  NULL,   --WL04
+   ordertype            NVARCHAR(250) NULL,   --WL04  
    qtyorder             int NULL DEFAULT 0,  
    qtyallocated         int NULL DEFAULT 0,  
    logicallocation      NVARCHAR(18),  
@@ -243,7 +246,8 @@ BEGIN
    RetailSKU            NVARCHAR(20) NULL,     --(WL02)  
    CurrentPage          INT NULL,              --(WL03)  
    TotalPage            INT NULL,              --(WL03)  
-   ShowPageNoByOrderkey NVARCHAR(10) NULL      --(WL03)  
+   ShowPageNoByOrderkey NVARCHAR(10) NULL,     --(WL03)  
+   ShowEachInInnerCol   NVARCHAR(10) NULL      --(WL04)  
   
     )   
   
@@ -419,6 +423,7 @@ BEGIN
                ,@c_ShowFullLoc = CASE WHEN (CL2.Short IS NULL OR CL2.Short = 'N') THEN 'N' ELSE 'Y' END  
                ,@c_showordtype = CASE WHEN (CL3.Short IS NULL OR CL3.Short = 'N') THEN 'N' ELSE 'Y' END                        --(CS05)  
                ,@c_Showcitystate = CASE WHEN (CL4.Short IS NULL OR CL4.Short = 'N') THEN 'N' ELSE 'Y' END                        --(CS05)  
+               ,@c_ShowEachInInnerCol = CASE WHEN (CL5.Short IS NULL OR CL5.Short = 'N') THEN 'N' ELSE 'Y' END   --WL04  
          FROM sku s WITH (NOLOCK)  
          LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.ListName = 'RPTCFGPICK' AND CL.Long = 'r_dw_print_pickorder10'    
                                         AND CL.Storerkey = s.Storerkey and CL.Code=s.susr3)   
@@ -432,7 +437,11 @@ BEGIN
                                               AND CL3.Code = 'ShowOrdType' AND CL3.Storerkey = s.StorerKey   
          LEFT JOIN CODELKUP CL4 WITH (NOLOCK) ON CL4.ListName = 'REPORTCFG' AND CL4.Long = 'r_dw_print_pickorder10'  
                                               AND CL4.Code = 'ShowCityState' AND CL4.Storerkey = s.StorerKey                                             
-         --CS05 End                                                                                                          
+         --CS05 End                                                                     
+         --WL04 START
+         LEFT JOIN CODELKUP CL5 WITH (NOLOCK) ON CL5.ListName = 'REPORTCFG' AND CL5.Long = 'r_dw_print_pickorder10'  
+                                             AND CL5.Code = 'ShowEachInInnerCol' AND CL5.Storerkey = s.StorerKey   
+         --WL04 END                                     
          WHERE s.storerkey= @c_storerkey    
          AND s.sku = @c_SKU  
   
@@ -489,19 +498,33 @@ BEGIN
          SELECT @n_UOMQty = 0  
   
          SELECT @n_UOMQty = CASE @c_UOM  
-         WHEN '1' THEN PACK.Pallet  
-         WHEN '2' THEN PACK.CaseCnt  
-         WHEN '3' THEN PACK.InnerPack  
-      ELSE 1  
-      END,  
-      @c_UOM_master = PACK.PackUOM3,  
-      @n_pallets = pack.pallet,  
-      @n_cartons = pack.casecnt,  
-      @n_inner = pack.innerpack  
-      FROM   PACK, SKU  
-      WHERE  SKU.SKU = @c_SKU  
-      AND    SKU.Storerkey = @c_storerkey -- Add by June 09.Dec.03 (SOS18183)  
-      AND    PACK.PackKey = SKU.PackKey  
+                            WHEN '1' THEN PACK.Pallet  
+                            WHEN '2' THEN PACK.CaseCnt  
+                            WHEN '3' THEN PACK.InnerPack  
+                            ELSE 1  
+                            END,  
+                @c_UOM_master = PACK.PackUOM3,  
+                @n_pallets = pack.pallet,  
+                @n_cartons = pack.casecnt,  
+                @n_inner = pack.innerpack  
+         FROM   PACK, SKU  
+         WHERE  SKU.SKU = @c_SKU  
+         AND    SKU.Storerkey = @c_storerkey -- Add by June 09.Dec.03 (SOS18183)  
+         AND    PACK.PackKey = SKU.PackKey  
+
+         --WL04 START
+         IF @c_ShowEachInInnerCol = 'Y'
+         BEGIN
+            SELECT @c_ShowEachInInnerCol = CASE WHEN ISNULL(PACK.PackUOM9,'') <> '' AND
+                                                     ISNULL(PACK.PackUOM9,'') NOT IN (SELECT DISTINCT Code 
+                                                                                      FROM Codelkup (NOLOCK) 
+                                                                                      WHERE Storerkey = SKU.Storerkey AND LISTNAME = 'ELANCO_UOM') AND
+                                                     PACK.OtherUnit2 > 0 THEN 'Y' ELSE 'N' END
+            FROM SKU (NOLOCK) 
+            JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+            WHERE SKU.SKU = @c_SKU AND SKU.Storerkey = @c_storerkey
+         END
+         --WL04 END
   
       INSERT INTO #Temp_Pick  
       (PickSlipNo,    LoadKey,          OrderKey,  Externorderkey, ConsigneeKey,  
@@ -516,7 +539,8 @@ BEGIN
       storerkey,  invoiceno,   deliverydate,  
       ordertype,  qtyorder,   qtyallocated, logicallocation, casecnt, pallet, innerpack,skuindicator , LRoute   --(CS02)  
       , LEXTLoadKey , LPriority,LUdef01,SUSR5,ShowSusr5,ShowFullLoc --(CS01)   --(CS02)  --(CS03) --(CS04)   
-      ,Showordtype,ShowCityState,OHTypeDesc,NewPostcode,ShowPickdetailID,ID, Putawayzone, BreakByPAZone, RetailSKU, ShowPageNoByOrderkey )  --(CS05)  --(WL01) --(WL02)--(WL03)  
+      ,Showordtype,ShowCityState,OHTypeDesc,NewPostcode,ShowPickdetailID,ID, Putawayzone, BreakByPAZone, RetailSKU, ShowPageNoByOrderkey,   --(CS05)  --(WL01) --(WL02)--(WL03)
+      ShowEachInInnerCol)   --WL04
       VALUES  
       (@c_pickheaderkey, @c_LoadKey,      @c_OrderKey,  @c_Externorderkey, @c_ConsigneeKey,  
       @c_Company,     @c_Addr1,        @c_Addr2,     0,  
@@ -531,7 +555,7 @@ BEGIN
       @c_ordertype,    @n_qtyorder,     @n_qtyallocated,@c_logicalloc, @n_cartons, @n_pallets,  
       @n_inner,          @c_skuindicator, @c_LRoute , @c_LEXTLoadKey, @c_LPriority,@c_LUDef01,@c_susr5,@c_ShowSusr5,@c_ShowFullLoc,--(CS01) --(CS02) --(CS03)   --(CS04)  
       @c_showordtype,    @c_showcitystate,@c_OHTypeDesc,@c_NewPostCode,@c_ShowPickdetailID,@c_ID, @c_PAZone, @c_BreakByPAZone, @c_RetailSKU,  --(CS05) --(WL01) --(WL02)  
-      @c_ShowPageNoByOrderkey) --(WL03)  
+      @c_ShowPageNoByOrderkey, @c_ShowEachInInnerCol) --(WL03)   --WL04  
   
       SELECT @c_PrevOrderKey = @c_OrderKey  
   
