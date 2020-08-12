@@ -1,0 +1,1353 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveAllocation]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [WM].[lsp_WaveAllocation] 
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO   
+/************************************************************************/                                                                                  
+/* Store Procedure: lsp_WaveAllocation                                  */                                                                                  
+/* Creation Date: 2019-03-20                                            */                                                                                  
+/* Copyright: LFL                                                       */                                                                                  
+/* Written by: Wan                                                      */                                                                                  
+/*                                                                      */                                                                                  
+/* Purpose: LFWM-1645 Wave Creation - Wave Summary - Allocate Wave      */
+/*                                                                      */                                                                                  
+/* Called By: SCE                                                       */                                                                                  
+/*          :                                                           */                                                                                  
+/* PVCS Version: 1.0                                                    */                                                                                  
+/*                                                                      */                                                                                  
+/* Version: 8.0                                                         */                                                                                  
+/*                                                                      */                                                                                  
+/* Data Modifications:                                                  */                                                                                  
+/*                                                                      */                                                                                  
+/* Updates:                                                             */                                                                                  
+/* Date        Author   Ver.  Purposes                                  */  
+/************************************************************************/                                                                                  
+CREATE PROC [WM].[lsp_WaveAllocation]                                                                                                                     
+      @c_WaveKey              NVARCHAR(10)
+   ,  @c_Loadkey              NVARCHAR(10) = ''
+   ,  @c_AllocateType         NVARCHAR(15) = ''
+   ,  @c_allocatemode         NVARCHAR(10) = '' OUTPUT
+   ,  @b_Success              INT = 1           OUTPUT  
+   ,  @n_err                  INT = 0           OUTPUT                                                                                                             
+   ,  @c_ErrMsg               NVARCHAR(255)     OUTPUT   
+   ,  @c_UserName             NVARCHAR(128)= '' 
+   ,  @n_ErrGroupKey          INT          = 0  OUTPUT   -- Capture Warnings/Questions/Errors/Meassage into WMS_ERROR_LIST Table
+AS  
+BEGIN                                                                                                                                                        
+   SET NOCOUNT ON                                                                                                                                           
+   SET ANSI_NULLS OFF                                                                                                                                       
+   SET QUOTED_IDENTIFIER OFF                                                                                                                                
+   SET CONCAT_NULL_YIELDS_NULL OFF       
+
+   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT  
+         ,  @n_Continue                   INT = 1
+         ,  @n_Cnt                        INT = 0
+            
+         ,  @n_SortLoad                   INT = 0
+
+         ,  @c_Facility                   NVARCHAR(5)  = ''
+         ,  @c_Storerkey                  NVARCHAR(15) = ''
+         ,  @c_Orderkey                   NVARCHAR(10) = ''
+         ,  @c_ReflineNo                  NVARCHAR(10) = ''
+
+         ,  @c_FinalizeFlag               NVARCHAR(10) = ''
+         ,  @c_SuperOrderFlag             NVARCHAR(10) = ''
+         ,  @c_Source                     NVARCHAR(10) = ''
+
+         ,  @c_FinalizeLP                 NVARCHAR(10) = ''
+
+         ,  @c_WaveConsoAllocation        NVARCHAR(10) = ''
+         ,  @c_LoadConsoAllocation        NVARCHAR(10) = ''
+         ,  @c_ContinueAllocUnLoadSO      NVARCHAR(10) = ''
+         ,  @c_ValidateCancelDate         NVARCHAR(10) = ''
+         ,  @c_AllowLPAlloc4DiscreteOrd   NVARCHAR(10) = ''
+         ,  @c_AllocateValidationRules    NVARCHAR(30) = ''
+
+         ,  @c_SPName                     NVARCHAR(30) = ''
+         ,  @c_SQL                        NVARCHAR(1000)=''
+         ,  @c_SQLParms                   NVARCHAR(500) =''
+         ,  @c_ExecCmd                    NVARCHAR(1024)= ''
+
+         ,  @c_ValidateOrderkey           NVARCHAR(10) =''
+         ,  @c_ValidateLoadkey            NVARCHAR(10) =''
+         ,  @c_ValidateWavekey            NVARCHAR(10) =''
+         ,  @c_SQLVLD                     NVARCHAR(1000)=''
+         ,  @c_SQLVLDParms                NVARCHAR(500) =''
+
+         ,  @c_DynamicPickLocStart        NVARCHAR(20)  =''
+
+         ,  @c_TableName                  NVARCHAR(50)   = 'WAVE'
+         ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_WaveAllocation'
+
+         ,  @CUR_WAVELOAD                 CURSOR
+         ,  @CUR_ORD                      CURSOR
+
+   SET @b_Success = 1
+   SET @n_Err     = 0
+           
+   SET @n_Err = 0 
+   EXEC [WM].[lsp_SetUser] 
+         @c_UserName = @c_UserName  OUTPUT
+      ,  @n_Err      = @n_Err       OUTPUT
+      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+   EXECUTE AS LOGIN = @c_UserName
+
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END 
+                  
+   IF @n_ErrGroupKey IS NULL
+   BEGIN
+      SET @n_ErrGroupKey = 0
+   END
+
+   SET @c_AllocateType = ISNULL(@c_AllocateType,'')
+   SET @c_Loadkey = ISNULL(@c_Loadkey,'')
+
+   IF @c_AllocateType = ''
+   BEGIN
+      IF @c_Loadkey = '' 
+      BEGIN 
+         SET @c_AllocateType = 'WAVE'
+      END
+
+      IF @c_Loadkey <> ''
+      BEGIN 
+         SET @c_AllocateType = 'LOAD'
+         SET @c_TableName    = 'LOADPLAN'
+      END
+   END
+
+   IF @c_AllocateType IN ( 'WAVE', 'UCC', 'DYNAMICPICK') 
+   BEGIN
+      SELECT TOP 1 
+              @c_Facility = OH.Facility
+            , @c_Storerkey= OH.Storerkey
+      FROM WAVEDETAIL WD WITH (NOLOCK)
+      JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+      WHERE WD.Wavekey =  @c_Wavekey
+      ORDER BY WD.Wavedetailkey
+   END 
+
+   IF @c_AllocateType = 'WAVE'
+   BEGIN
+      IF NOT EXISTS( SELECT 1 FROM WAVEDETAIL WITH (NOLOCK)
+                     WHERE WaveKey = @c_WaveKey )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 555753
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                        + ': No Orders to allocate by Wave. (lsp_WaveAllocation)'
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Loadkey
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT 
+      END
+
+      SET @c_Facility = ''
+      SET @c_Storerkey= ''
+      SELECT TOP 1 
+              @c_Facility = OH.Facility
+            , @c_Storerkey= OH.Storerkey
+      FROM WAVEDETAIL WD WITH (NOLOCK)
+      JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+      WHERE WD.Wavekey =  @c_Wavekey
+      ORDER BY WD.Wavedetailkey
+
+      SELECT @c_WaveConsoAllocation  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WaveConsoAllocation')
+      SELECT @c_LoadConsoAllocation  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'LoadConsoAllocation')
+      SELECT @c_ContinueAllocUnLoadSO= dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ContinueAllocUnLoadSO')
+      SELECT @c_ValidateCancelDate   = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateCancelDate')
+
+      BEGIN TRY
+         EXEC  [dbo].[isp_WaveCheckAllocateMode_Wrapper]  
+              @c_WaveKey      = @c_WaveKey   
+            , @c_allocatemode = @c_allocatemode OUTPUT  
+            , @b_Success      = @b_Success      OUTPUT
+            , @n_Err          = @n_Err          OUTPUT 
+            , @c_ErrMsg       = @c_ErrMsg       OUTPUT 
+      END TRY
+      BEGIN CATCH
+         SET @n_Err = 555754
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_WaveCheckAllocateMode_Wrapper. (lsp_WaveAllocation)'   
+                        + '(' + @c_ErrMsg + ')' 
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT                                  
+      END CATCH
+         
+      IF @b_Success = 0 OR @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+      END
+
+      IF @c_WaveConsoAllocation <> '1' AND @c_LoadConsoAllocation <> '1'
+      BEGIN
+         SET @c_allocatemode = '#DC'
+      END
+
+      IF @c_LoadConsoAllocation = '1' AND @c_allocatemode <> '#DC'
+      BEGIN
+         SET @c_allocatemode = '#LC'
+      END
+
+      IF @c_WaveConsoAllocation = '1' OR @c_allocatemode = '#WC'
+      BEGIN
+         SET @c_allocatemode = '#WC'
+      END
+
+      IF @c_allocatemode = '#LC' 
+      BEGIN
+         IF @c_ContinueAllocUnLoadSO <> '1' AND
+            NOT EXISTS (   SELECT 1
+                              FROM WAVEDETAIL WD WITH (NOLOCK)
+                              JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON (WD.Orderkey = LPD.Orderkey)
+                              WHERE WD.WaveKey = @c_WaveKey
+                           )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 555755
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': No Load # found for Wave: ' + @c_WaveKey
+                           + '. Generate loadPlan before Wave Allocation. (lsp_WaveAllocation)'  
+                           + '|' + @c_WaveKey
+
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT                                                        
+         END
+
+         --IF @c_ContinueAllocUnLoadSO <> '1'
+         --BEGIN
+         --   IF EXISTS ( SELECT 1
+         --               FROM WAVEDETAIL WD WITH (NOLOCK)
+         --               JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+         --               WHERE WD.Wavekey =  @c_Wavekey
+         --               AND  (OH.Loadkey = '' OR OH.Loadkey IS NULL)
+         --               )
+         --   BEGIN
+         --      SET @n_Continue = 3
+         --      SET @n_Err = 555756
+         --      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Missing Loadkey for Load Conso Allocation. (lsp_WaveAllocation)' 
+                
+         --      EXEC [WM].[lsp_WriteError_List] 
+         --            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+         --         ,  @c_TableName   = @c_TableName
+         --         ,  @c_SourceType  = @c_SourceType
+         --         ,  @c_Refkey1     = @c_WaveKey
+         --         ,  @c_Refkey2     = @c_Loadkey
+         --         ,  @c_Refkey3     = ''
+         --         ,  @c_WriteType   = 'ERROR' 
+         --         ,  @n_err2        = @n_err 
+         --         ,  @c_errmsg2     = @c_errmsg 
+         --         ,  @b_Success     = @b_Success   OUTPUT 
+         --         ,  @n_err         = @n_err       OUTPUT 
+         --         ,  @c_errmsg      = @c_errmsg    OUTPUT  
+         --   END
+         --END
+
+         IF @c_ValidateCancelDate = '1'
+         BEGIN
+            IF EXISTS ( SELECT 1
+                        FROM WAVEDETAIL WD WITH (NOLOCK)
+                        JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+                        WHERE WD.Wavekey =  @c_Wavekey
+                        AND   OH.DeliveryDate < CONVERT(DATE, GETDATE())
+                        )
+            BEGIN
+               SET @c_ErrMsg = 'Order Cancelled date < today date found.'
+                
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_Loadkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'WARNING' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT                   
+            END
+         END
+      END
+   END
+
+   IF @c_AllocateType = 'LOAD' 
+   BEGIN 
+      IF NOT EXISTS( SELECT 1 FROM LOADPLANDETAIL LPD WITH (NOLOCK)
+                     WHERE Loadkey = @c_LoadKey )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 555757
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                       + ': No Orders to allocate By Load. (lsp_WaveAllocation)'
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Loadkey
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT  
+      END
+
+      SET @c_Facility = ''
+      SET @c_Storerkey= ''
+      SELECT TOP 1 
+              @c_Facility = OH.Facility
+            , @c_Storerkey= OH.Storerkey
+            , @c_FinalizeFlag = ISNULL(LP.FinalizeFlag,'')
+            , @c_SuperOrderFlag=ISNULL(LP.SuperOrderFlag,'')
+      FROM LOADPLAN LP WITH (NOLOCK)
+      JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON LP.Loadkey = LPD.Loadkey
+      JOIN ORDERS OH WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+      WHERE LPD.Loadkey =  @c_Loadkey
+      ORDER BY LPD.LoadLineNumber
+
+      SELECT @c_FinalizeLP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeLP')
+      SELECT @c_ValidateCancelDate = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateCancelDate')
+
+      IF @c_FinalizeLP = '1' AND @c_FinalizeFlag <> 'Y'
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 555758
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                        + ': Please Finalize Loadplan before proceeding to allocate by Load. (lsp_WaveAllocation)'
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Loadkey
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT    
+         GOTO EXIT_SP
+      END
+
+      SET @c_allocatemode = '#DC'
+      IF @c_SuperOrderFlag = 'Y'
+      BEGIN
+         SET @c_allocatemode = '#LC'
+      END
+
+      IF @c_ValidateCancelDate = '1'
+      BEGIN
+         IF EXISTS ( SELECT 1
+                     FROM LOADPLANDETAIL LPD WITH (NOLOCK)
+                     JOIN ORDERS OH WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+                     WHERE LPD.Loadkey =  @c_Loadkey
+                     AND   OH.DeliveryDate < CONVERT(DATE, GETDATE())
+                     )
+         BEGIN
+            SET @c_ErrMsg = 'Order Cancelled date < today date found.'
+            
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'WARNING' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT               
+         END
+      END
+   END  
+      
+   IF @c_AllocateType = 'DYNAMICPICK'
+   BEGIN
+      IF NOT EXISTS( SELECT 1 FROM WAVEDETAIL WD WITH (NOLOCK)
+                     JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON (WD.Orderkey = LPD.Orderkey)
+                     WHERE Wavekey = @c_Wavekey )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_Err = 555759
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                       + ': Loadplan is required to process Dynamic Pick Allocation. (lsp_WaveAllocation)'
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Loadkey
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT       
+      END
+   END 
+   
+   IF @n_continue = 3
+   BEGIN
+      GOTO EXIT_SP
+   END       
+   
+   ------------------------------------------
+   -- PreAllocate Validation For Wave - START
+   ------------------------------------------
+   SELECT @c_AllocateValidationRules = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PreAllocateExtendedValidation') 
+
+   IF @c_AllocateValidationRules <> ''
+   BEGIN
+      IF EXISTS ( SELECT 1
+                  FROM CODELKUP CL WITH (NOLOCK)  
+                  WHERE CL.ListName = @c_AllocateValidationRules
+                )
+      BEGIN
+         SET @c_AllocateValidationRules = 'isp_Allocate_ExtendedValidation'
+         SET @c_SQLVLD = N'EXEC isp_Allocate_ExtendedValidation @c_Orderkey = @c_ValidateOrderKey'
+                         + ', @c_Loadkey = @c_ValidateLoadkey'
+                         + ', @c_Wavekey = @c_ValidateWaveKey'
+                         + ', @c_Mode = ''PRE'''  
+                         + ', @c_AllocateValidationRules=@c_AllocateValidationRules'
+                         + ', @b_Success = @b_Success OUTPUT'
+                         + ', @n_Err = @n_Err OUTPUT'
+                         + ', @c_ErrMsg = @c_ErrMsg OUTPUT ' 
+      END
+      ELSE
+      BEGIN
+         IF EXISTS (SELECT 1 FROM sys.objects WHERE name = RTRIM(@c_AllocateValidationRules) AND type = 'P')            
+         BEGIN  
+            SET @c_SQLVLD = N'EXEC ' + @c_AllocateValidationRules 
+                           + ' @c_Orderkey = @c_ValidateOrderKey'
+                           + ', @c_Loadkey = @c_ValidateLoadkey'
+                           + ', @c_Wavekey = @c_ValidateWaveKey'
+                           + ', @b_Success = @b_Success OUTPUT'
+                           + ', @n_Err = @n_Err OUTPUT'
+                           + ', @c_ErrMsg = @c_ErrMsg OUTPUT ' 
+         END
+         ELSE 
+         BEGIN 
+            SET @c_AllocateValidationRules = ''
+         END   
+      END
+   END
+
+   IF @c_AllocateType IN ( 'UCC', 'DYNAMICPICK' ) OR (@c_AllocateType = 'WAVE' AND @c_allocatemode = '#WC')
+   BEGIN
+      IF @c_AllocateValidationRules <> ''
+      BEGIN
+         SET @c_ValidateOrderKey = ''
+         SET @c_ValidateLoadkey  = ''
+         SET @c_ValidateWaveKey  = @c_WaveKey
+         SET @c_SQLVLDParms = N'@c_ValidateOrderKey   NVARCHAR(10)'
+                            + ',@c_ValidateLoadkey    NVARCHAR(10)'
+                            + ',@c_ValidateWaveKey    NVARCHAR(10)'
+                            + ',@c_AllocateValidationRules NVARCHAR(30)'
+                            + ',@b_Success            INT OUTPUT'
+                            + ',@n_Err                INT OUTPUT'
+                            + ',@c_ErrMsg             NVARCHAR(255) OUTPUT' 
+         EXEC sp_ExecuteSql @c_SQLVLD
+                           ,@c_SQLVLDParms
+                           ,@c_ValidateOrderKey   
+                           ,@c_ValidateLoadkey
+                           ,@c_ValidateWaveKey    
+                           ,@c_AllocateValidationRules
+                           ,@b_Success    OUTPUT          
+                           ,@n_Err        OUTPUT                                     
+                           ,@c_ErrMsg     OUTPUT
+         IF @b_Success = 0
+         BEGIN
+            SET @n_continue = 3
+            SET @n_Err = 555751
+            SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                          + ': Pre Allocate Validate Fail - Wave #: ' + @c_WaveKey
+                          + '. (lsp_WaveAllocation)'
+                          + '|' + @c_WaveKey
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT       
+            GOTO EXIT_SP
+         END
+      END                                        
+   END
+   ------------------------------------------
+   -- PreAllocate Validation For Wave - END
+   ------------------------------------------          
+
+   WAVE_ALLOCATION:
+      IF @c_AllocateType = 'WAVE' 
+      BEGIN
+         IF @c_allocatemode = '#WC'
+         BEGIN
+            SET @n_Cnt = 0 
+            SELECT @n_Cnt = 1 
+            FROM IDSAllocationPool WITH (NOLOCK)
+            WHERE Sourcekey = @c_WaveKey
+            AND SourceType = 'WP'
+            AND Status IN ('0', '1')
+
+            IF @n_Cnt = 1 
+            BEGIN
+               SET @c_ErrMsg = 'WP - Wave #: ' + @c_WaveKey
+                             + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_Loadkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'MESSAGE' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT  
+               GOTO EXIT_SP
+            END
+
+            SET @c_ExecCmd = '[dbo].[ispWaveProcessing] @c_WaveKey=''' + @c_WaveKey + ''',@b_Success=1,@n_Err=0,@c_ErrMsg='''''
+            BEGIN TRY
+               INSERT INTO IDSAllocationPool
+                  (
+                     Sourcekey
+                  ,  SourceType
+                  ,  Wavekey
+                  ,  AllocateCmd
+                  ,  WinComputerName
+                  )
+               VALUES
+                  (
+                     @c_WaveKey
+                  ,  'WP'
+                  ,  @c_WaveKey
+                  ,  @c_ExecCmd
+                  , ''
+                  )
+            END TRY
+            BEGIN CATCH
+               SET @n_Err = 555760
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Wave #: ' + @c_WaveKey
+                              + ' to IDSAllocationPool Fail - Wave Consolidate. (lsp_WaveAllocation)'   
+                              + '(' + @c_ErrMsg + ')' 
+                              + '|' + @c_WaveKey
+                                
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_Loadkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT    
+               GOTO EXIT_SP                                     
+            END CATCH
+            GOTO EXIT_SP
+         END
+
+         CREATE TABLE #tWAVEDETAIL
+            (  RowRef      INT            NOT NULL IDENTITY(1,1)
+            ,  Orderkey    NVARCHAR(10)   NOT NULL DEFAULT ('')
+            )
+
+         SET @c_Facility = ''
+         SET @c_Storerkey= ''
+         SELECT TOP 1 
+                 @c_Facility = OH.Facility
+               , @c_Storerkey= OH.Storerkey
+         FROM WAVEDETAIL WD WITH (NOLOCK)
+         JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+         WHERE WD.Wavekey =  @c_Wavekey
+         ORDER BY WD.Wavedetailkey
+
+         SELECT @c_SPName = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WaveALOrderSort_SP')
+
+         IF @c_SPName <> ''
+         BEGIN
+            IF EXISTS (SELECT 1 FROM sys.objects WHERE name = RTRIM(@c_SPName) AND type = 'P')
+            BEGIN
+               SET @c_SQL = N'EXEC ' + @c_SPName + ' @c_WaveKey = @c_Wavekey'
+               SET @c_SQLParms = N'@c_WaveKey   NVARCHAR(10)'
+
+               INSERT INTO #tWAVEDETAIL (Orderkey)
+               EXEC sp_ExecuteSQL @c_SQL
+                                 ,@c_SQLParms
+                                 ,@c_Wavekey            
+
+            END
+         END
+
+         IF NOT EXISTS (SELECT 1 FROM #tWAVEDETAIL)
+         BEGIN
+            INSERT INTO #tWAVEDETAIL (Orderkey)      
+            SELECT WD.Orderkey
+            FROM WAVEDETAIL WD WITH (NOLOCK)
+            WHERE WD.WaveKey = @c_WaveKey
+            ORDER BY WD.WaveDetailKey
+         END
+
+         IF @c_allocatemode = '#LC'
+         BEGIN
+            SET @CUR_WAVELOAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT DISTINCT 
+                  Loadkey  = CASE WHEN LPD.Loadkey IS NULL THEN '' ELSE LPD.Loadkey END
+               ,  Orderkey = CASE WHEN LPD.Loadkey IS NULL THEN WD.Orderkey ELSE '' END
+               ,  SortLoad = CASE WHEN LPD.Loadkey IS NULL THEN 9 ELSE 1 END 
+            FROM WAVEDETAIL WD WITH (NOLOCK)
+            JOIN #tWAVEDETAIL T WITH (NOLOCK) ON (WD.Orderkey = T.Orderkey)
+            LEFT JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON (WD.Orderkey = LPD.Orderkey)
+            WHERE WD.WaveKey = @c_WaveKey
+            ORDER BY SortLoad
+                  ,  Orderkey               
+
+            OPEN @CUR_WAVELOAD
+   
+            FETCH NEXT FROM @CUR_WAVELOAD INTO @c_Loadkey
+                                             , @c_Orderkey
+                                             , @n_SortLoad                                                                                   
+                                    
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               IF @c_AllocateValidationRules <> ''
+               BEGIN
+                  SET @c_ValidateOrderKey= CASE WHEN @c_OrderKey = '' THEN '' ELSE @c_OrderKey END
+                  SET @c_ValidateLoadkey = CASE WHEN @c_Loadkey  = '' THEN '' ELSE @c_Loadkey END
+                  SET @c_ValidateWaveKey = ''
+
+                  SET @c_SQLVLDParms = N'@c_ValidateOrderKey   NVARCHAR(10)'
+                                     + ',@c_ValidateLoadkey    NVARCHAR(10)'
+                                     + ',@c_ValidateWaveKey    NVARCHAR(10)'
+                                     + ',@c_AllocateValidationRules NVARCHAR(30)'
+                                     + ',@b_Success            INT OUTPUT'
+                                     + ',@n_Err                INT OUTPUT'
+                                     + ',@c_ErrMsg             NVARCHAR(255) OUTPUT' 
+                  EXEC sp_ExecuteSql @c_SQLVLD
+                                    ,@c_SQLVLDParms
+                                    ,@c_ValidateOrderKey   
+                                    ,@c_ValidateLoadkey
+                                    ,@c_ValidateWaveKey    
+                                    ,@c_AllocateValidationRules
+                                    ,@b_Success    OUTPUT          
+                                    ,@n_Err        OUTPUT                                     
+                                    ,@c_ErrMsg     OUTPUT
+                  IF @b_Success = 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @n_Err = 555752
+                     SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                                   + ': Pre Allocate Validate Fail - ' 
+                                   + CASE WHEN @c_Loadkey  = '' THEN 'Order #: ' + @c_Orderkey ELSE 'Load #: ' + @c_Loadkey END
+                                   + '. (lsp_WaveAllocation)'
+                                   + '|' + CASE WHEN @c_Loadkey  = '' THEN 'Order #: ' + @c_Orderkey ELSE 'Load #: ' + @c_Loadkey END
+              
+                     EXEC [WM].[lsp_WriteError_List] 
+                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        ,  @c_TableName   = @c_TableName
+                        ,  @c_SourceType  = @c_SourceType
+                        ,  @c_Refkey1     = @c_WaveKey
+                        ,  @c_Refkey2     = @c_Loadkey
+                        ,  @c_Refkey3     = ''
+                        ,  @c_WriteType   = 'ERROR' 
+                        ,  @n_err2        = @n_err 
+                        ,  @c_errmsg2     = @c_errmsg 
+                        ,  @b_Success     = @b_Success   OUTPUT 
+                        ,  @n_err         = @n_err       OUTPUT 
+                        ,  @c_errmsg      = @c_errmsg    OUTPUT       
+                     GOTO NEXT_WAVELOAD
+                  END
+               END                      
+
+               SET @n_Cnt = 0
+               IF @c_Loadkey = ''
+               BEGIN
+                  SELECT @n_Cnt = 1 
+                  FROM IDSAllocationPool WITH (NOLOCK)
+                  WHERE Sourcekey = @c_Orderkey
+                  AND SourceType = 'O'
+                  AND Status IN ('0', '1')
+               END
+               ELSE
+               BEGIN
+                  SELECT @n_Cnt = 1 
+                  FROM IDSAllocationPool WITH (NOLOCK)
+                  WHERE Sourcekey = @c_Loadkey
+                  AND SourceType = 'LP'
+                  AND Status IN ('0', '1')
+               END
+
+               IF @n_Cnt = 0
+               BEGIN
+                  SET @c_ExecCmd = '[dbo].[nsp_OrderProcessing_Wrapper] @c_orderkey=''' + @c_orderkey + ''''
+                                 + ',@c_oskey=''' + @c_Loadkey + ''''
+                                 + ',@c_docarton=''N'''
+                                 + ',@c_doroute=''N'''
+                                 + ',@c_tblprefix=''XX'''
+                                 + ',@c_extendparms=''WP'''
+                  BEGIN TRY
+                     INSERT INTO IDSAllocationPool
+                        (
+                           Sourcekey
+                        ,  SourceType
+                        ,  Wavekey
+                        ,  AllocateCmd
+                        ,  WinComputerName
+                        )
+                     VALUES
+                        (
+                           CASE WHEN @c_Loadkey = '' THEN @c_Orderkey ELSE @c_Loadkey END
+                        ,  CASE WHEN @c_Loadkey = '' THEN 'O' ELSE 'LP' END
+                        ,  @c_WaveKey
+                        ,  @c_ExecCmd
+                        ,  ''
+                        )
+                  END TRY
+
+                  BEGIN CATCH
+                     SET @n_Continue = 3
+                     SET @n_Err = 555761
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit '
+                                    + CASE WHEN @c_Orderkey = '' THEN 'Load #: ' +  @c_Loadkey ELSE 'Order #: '  + @c_Orderkey END
+                                    + ' to IDSAllocationPool Fail - Load Consolidate. (lsp_WaveAllocation)'   
+                                    + '(' + @c_ErrMsg + ')'  
+                                   + '|' + CASE WHEN @c_Orderkey = '' THEN 'Load #: ' +  @c_Loadkey ELSE 'Order #: ' + @c_Orderkey END
+
+                     EXEC [WM].[lsp_WriteError_List] 
+                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        ,  @c_TableName   = @c_TableName
+                        ,  @c_SourceType  = @c_SourceType
+                        ,  @c_Refkey1     = @c_WaveKey
+                        ,  @c_Refkey2     = @c_Loadkey
+                        ,  @c_Refkey3     = ''
+                        ,  @c_WriteType   = 'ERROR' 
+                        ,  @n_err2        = @n_err 
+                        ,  @c_errmsg2     = @c_errmsg 
+                        ,  @b_Success     = @b_Success   OUTPUT 
+                        ,  @n_err         = @n_err       OUTPUT 
+                        ,  @c_errmsg      = @c_errmsg    OUTPUT                                       
+                  END CATCH
+               END
+               ELSE
+               BEGIN
+                  SET @c_ErrMsg = CASE WHEN @c_Orderkey = '' THEN 'LP - Load #: ' +  @c_Loadkey ELSE 'O - Order #: '  + @c_Orderkey END
+                                 + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                                 + '(' + @c_ErrMsg + ')' 
+ 
+                  EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_Loadkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'MESSAGE' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT  
+               END
+               NEXT_WAVELOAD:
+               FETCH NEXT FROM @CUR_WAVELOAD INTO @c_Loadkey
+                                                , @c_Orderkey 
+                                                , @n_SortLoad                                               
+            END
+
+            CLOSE @CUR_WAVELOAD
+            DEALLOCATE @CUR_WAVELOAD
+
+            GOTO EXIT_SP 
+         END
+
+         SET @c_Source = 'WP'
+
+         SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT RefLineNo= T.RowRef 
+              , Orderkey = WD.Orderkey 
+         FROM WAVEDETAIL WD WITH (NOLOCK)
+         JOIN #tWAVEDETAIL T WITH (NOLOCK) ON (WD.Orderkey = T.Orderkey)
+         WHERE WD.WaveKey = @c_WaveKey
+         ORDER BY T.RowRef
+               ,  WD.Orderkey 
+                    
+         GOTO DC_ALLOCATION
+      END
+
+   LOAD_ALLOCATION:
+      IF @c_AllocateType = 'LOAD' 
+      BEGIN
+         IF @c_allocatemode = '#LC'  
+         BEGIN
+            IF @c_AllocateValidationRules <> ''
+            BEGIN
+               SET @c_ValidateOrderKey = ''
+               SET @c_ValidateLoadkey  = @c_Loadkey  
+               SET @c_ValidateWaveKey  = ''
+
+               SET @c_SQLVLDParms= N'@c_ValidateOrderKey   NVARCHAR(10)'
+                                 + ',@c_ValidateLoadkey    NVARCHAR(10)'
+                                 + ',@c_ValidateWaveKey    NVARCHAR(10)'
+                                 + ',@c_AllocateValidationRules NVARCHAR(30)'
+                                 + ',@b_Success            INT OUTPUT'
+                                 + ',@n_Err                INT OUTPUT'
+                                 + ',@c_ErrMsg             NVARCHAR(255) OUTPUT'
+                                  
+               EXEC sp_ExecuteSql @c_SQLVLD
+                                 ,@c_SQLVLDParms
+                                 ,@c_ValidateOrderKey   
+                                 ,@c_ValidateLoadkey
+                                 ,@c_ValidateWaveKey    
+                                 ,@c_AllocateValidationRules
+                                 ,@b_Success    OUTPUT          
+                                 ,@n_Err        OUTPUT                                     
+                                 ,@c_ErrMsg     OUTPUT
+               IF @b_Success = 0
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_Err = 555766
+                  SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                                + ': Pre Allocate Validate Fail - Load #: ' + @c_Loadkey
+                                + '. (lsp_WaveAllocation)'
+                                + '|' + @c_Loadkey
+                  EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_Loadkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT       
+                  GOTO EXIT_SP
+               END
+            END 
+                
+            SET @n_Cnt = 0 
+            SELECT @n_Cnt = 1 
+            FROM IDSAllocationPool WITH (NOLOCK)
+            WHERE Sourcekey = @c_Loadkey
+            AND SourceType = 'LP'
+            AND Status IN ('0', '1')
+
+            IF @n_Cnt = 1 
+            BEGIN
+               SET @c_ErrMsg = 'LP - Loadkey #: ' + @c_Loadkey
+                              + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                              + '(' + @c_ErrMsg + ')' 
+
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_Loadkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'MESSAGE' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT  
+               GOTO EXIT_SP
+            END
+
+            SET @c_ExecCmd = '[dbo].[nsp_OrderProcessing_Wrapper] @c_orderkey='''''
+                           + ',@c_oskey=''' + @c_Loadkey + ''''
+                           + ',@c_docarton=''N'''
+                           + ',@c_doroute=''N'''
+                           + ',@c_tblprefix=''XX'''
+                           + ',@c_extendparms='''''
+            BEGIN TRY
+               INSERT INTO IDSAllocationPool
+                  (
+                     Sourcekey
+                  ,  SourceType
+                  ,  Wavekey
+                  ,  AllocateCmd
+                  ,  WinComputerName
+                  )
+               VALUES
+                  (
+                     @c_Loadkey
+                  ,  'LP'
+                  ,  @c_WaveKey
+                  ,  @c_ExecCmd
+                  ,  ''
+                  )
+            END TRY
+
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @n_Err = 555762
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Load #: ' + @c_Loadkey
+                              + ' to IDSAllocationPool Fail - Load Consolidate. (lsp_WaveAllocation)'
+                              + '(' + @c_ErrMsg + ')'  
+                              + '|' + @c_Loadkey                                
+                             
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_Loadkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT                                             
+               GOTO EXIT_SP  
+            END CATCH
+
+            GOTO EXIT_SP 
+         END
+
+         SET @c_Source = 'LP'
+         SET @c_Facility = ''
+         SET @c_Storerkey= ''
+         SELECT TOP 1 
+                 @c_Facility = OH.Facility
+               , @c_Storerkey= OH.Storerkey
+               , @c_FinalizeFlag = LP.FinalizeFlag
+               , @c_SuperOrderFlag=LP.SuperOrderFlag
+         FROM LOADPLAN LP WITH (NOLOCK)
+         JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON LP.Loadkey = LPD.Loadkey
+         JOIN ORDERS OH WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+         WHERE LPD.Loadkey =  @c_Loadkey
+         ORDER BY LPD.LoadLineNumber
+
+         SELECT @c_AllowLPAlloc4DiscreteOrd  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AllowLPAlloc4DiscreteOrd')
+
+         SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT RefLineNo= LPD.LoadLineNumber  
+              , Orderkey = LPD.Orderkey 
+         FROM LOADPLANDETAIL LPD WITH (NOLOCK)
+         JOIN ORDERS OH WITH (NOLOCK) ON (LPD.Orderkey = OH.Orderkey)
+         WHERE LPD.Loadkey = @c_Loadkey
+         AND (@c_AllowLPAlloc4DiscreteOrd = '1' OR 
+             (@c_AllowLPAlloc4DiscreteOrd <> '1' AND OH.[Type] NOT IN ('I','M') AND ISNULL(OH.UserDefine08,'') <> 'Y')
+             )
+         ORDER BY LPD.LoadLineNumber  
+
+         GOTO DC_ALLOCATION
+      END
+
+   DC_ALLOCATION:
+      IF @c_AllocateType NOT IN ( 'UCC', 'DYNAMICPICK' )
+      BEGIN
+         IF @c_allocatemode = '#DC'
+         BEGIN
+            OPEN @CUR_ORD
+   
+            FETCH NEXT FROM @CUR_ORD INTO @c_ReflineNo, @c_Orderkey                                                                                   
+                                    
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               IF @c_AllocateValidationRules <> ''
+               BEGIN
+                  SET @c_ValidateOrderKey = ''
+                  SET @c_ValidateLoadkey  = @c_Orderkey  
+                  SET @c_ValidateWaveKey  = ''
+
+                  SET @c_SQLVLDParms= N'@c_ValidateOrderKey    NVARCHAR(10)'
+                                    + ',@c_ValidateLoadkey     NVARCHAR(10)'
+                                    + ',@c_ValidateWaveKey     NVARCHAR(10)'
+                                    + ',@c_AllocateValidationRules NVARCHAR(30)'
+                                    + ',@b_Success             INT OUTPUT'
+                                    + ',@n_Err                 INT OUTPUT'
+                                    + ',@c_ErrMsg              NVARCHAR(255) OUTPUT' 
+                  EXEC sp_ExecuteSql @c_SQLVLD
+                                    ,@c_SQLVLDParms
+                                    ,@c_ValidateOrderKey   
+                                    ,@c_ValidateLoadkey 
+                                    ,@c_ValidateWaveKey    
+                                    ,@c_AllocateValidationRules
+                                    ,@b_Success    OUTPUT          
+                                    ,@n_Err        OUTPUT                                     
+                                    ,@c_ErrMsg     OUTPUT
+                  IF @b_Success = 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @n_Err = 555767
+                     SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                                   + ': Pre Allocate Validate Fail - Order #: ' + @c_Orderkey
+                                   + '. (lsp_WaveAllocation)'
+                                   + '|' + @c_Orderkey
+                     EXEC [WM].[lsp_WriteError_List] 
+                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        ,  @c_TableName   = @c_TableName
+                        ,  @c_SourceType  = @c_SourceType
+                        ,  @c_Refkey1     = @c_WaveKey
+                        ,  @c_Refkey2     = @c_Loadkey
+                        ,  @c_Refkey3     = ''
+                        ,  @c_WriteType   = 'ERROR' 
+                        ,  @n_err2        = @n_err 
+                        ,  @c_errmsg2     = @c_errmsg 
+                        ,  @b_Success     = @b_Success   OUTPUT 
+                        ,  @n_err         = @n_err       OUTPUT 
+                        ,  @c_errmsg      = @c_errmsg    OUTPUT       
+                     GOTO EXIT_SP
+                  END
+               END 
+
+               SET @n_Cnt = 0 
+               SELECT @n_Cnt = 1 
+               FROM IDSAllocationPool WITH (NOLOCK)
+               WHERE Sourcekey = @c_Orderkey
+               AND SourceType = 'DC'
+               AND Status IN ('0', '1')
+
+               IF @n_Cnt = 0 
+               BEGIN
+                  SET @c_ExecCmd = '[dbo].[nsp_OrderProcessing_Wrapper] @c_orderkey='''+ @c_Orderkey +''''
+                                 + ',@c_oskey='''''
+                                 + ',@c_docarton=''N'''
+                                 + ',@c_doroute=''N'''
+                                 + ',@c_tblprefix=''XX'''
+                                 + ',@c_extendparms='''+ @c_Source +''''
+                  BEGIN TRY
+                     INSERT INTO IDSAllocationPool
+                        (
+                           Sourcekey
+                        ,  SourceType
+                        ,  Wavekey
+                        ,  AllocateCmd
+                        ,  WinComputerName
+                        )
+                     VALUES
+                        (
+                           @c_Orderkey
+                        ,  'DC'
+                        ,  @c_WaveKey
+                        ,  @c_ExecCmd
+                        ,  ''
+                        )
+                  END TRY
+
+                  BEGIN CATCH
+                     SET @n_Err = 555768
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Order #: ' + @c_Orderkey 
+                                   + ' to IDSAllocationPool Fail - Order. (lsp_WaveAllocation)'
+                                   + '(' + @c_ErrMsg + ')'  
+                                   + '|' + @c_Orderkey                                    
+                  EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_Loadkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT                                     
+
+                  END CATCH
+               END
+               ELSE
+               BEGIN
+                  SET @c_ErrMsg = 'DC - Order #: ' + @c_Orderkey
+                                 + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                                 + '(' + @c_ErrMsg + ')' 
+
+                  EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_Loadkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'MESSAGE' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT  
+               END
+               NEXT_ORD:
+               FETCH NEXT FROM @CUR_ORD INTO @c_ReflineNo, @c_Orderkey 
+            END
+            CLOSE @CUR_ORD
+            DEALLOCATE @CUR_ORD
+
+            GOTO EXIT_SP 
+         END
+      END
+
+   UCC_ALLOCATION:
+      IF @c_AllocateType = 'UCC'
+      BEGIN
+         SET @n_Cnt = 0 
+         SELECT @n_Cnt = 1 
+         FROM IDSAllocationPool WITH (NOLOCK)
+         WHERE Sourcekey = @c_WaveKey
+         AND SourceType = 'UCC'
+         AND Status IN ('0', '1')
+
+         IF @n_Cnt = 1 
+         BEGIN
+            SET @c_ErrMsg = 'UCC - Wave #: ' + @c_WaveKey
+                           + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                           + '(' + @c_ErrMsg + ')' 
+
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'MESSAGE' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT  
+            GOTO EXIT_SP
+         END
+
+         SET @c_ExecCmd = '[dbo].[ispWaveReplenUCCAlloc] @c_WaveKey=''' + @c_WaveKey + ''',@b_Success=1,@n_Err=0,@c_ErrMsg='''''
+         BEGIN TRY
+            INSERT INTO IDSAllocationPool
+               (
+                  Sourcekey
+               ,  SourceType
+               ,  Wavekey
+               ,  AllocateCmd
+               ,  WinComputerName
+               )
+            VALUES
+               (
+                  @c_WaveKey
+               ,  'UCC'
+               ,  @c_WaveKey
+               ,  @c_ExecCmd
+               ,  ''
+               )
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_Err = 555764
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Wave #: ' + @c_WaveKey
+                           + ' to IDSAllocationPool Fail - UCC. (lsp_WaveAllocation)'   
+                           + '(' + @c_ErrMsg + ')'
+                           + '|' + @c_WaveKey
+                                                         
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT    
+            GOTO EXIT_SP                                    
+         END CATCH
+              
+         GOTO EXIT_SP 
+      END
+
+   DYNAMICPICK_ALLOCATION:
+      IF @c_AllocateType = 'DYNAMICPICK'
+      BEGIN
+         SET @n_Cnt = 0 
+         SELECT @n_Cnt = 1 
+         FROM IDSAllocationPool WITH (NOLOCK)
+         WHERE Sourcekey = @c_WaveKey
+         AND SourceType = 'DYNAMICPICK'
+         AND Status IN ('0', '1')
+
+         IF @n_Cnt = 1 
+         BEGIN
+            SET @c_ErrMsg = 'DYNAMICPICK - Wave #: ' + @c_WaveKey
+                           + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                           + '(' + @c_ErrMsg + ')'
+
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'MESSAGE' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT  
+            GOTO EXIT_SP
+         END
+          
+         SET @c_DynamicPickLocStart = ''
+         SELECT @c_DynamicPickLocStart = ISNULL(WH.Userdefine01,'')
+         FROM WAVE WH WITH (NOLOCK) 
+         WHERE WH.Wavekey = @c_Wavekey
+
+         SET @c_ExecCmd = '[dbo].[ispWaveDynamicPickUCCAlloc] @c_WaveKey=''' + @c_WaveKey + ''''
+                        + ',@c_DPLoc_Start=''' + @c_DynamicPickLocStart + ''''
+                        + ',@b_Success=1'
+                        + ',@n_Err=0'
+                        + ',@c_ErrMsg='''''
+         BEGIN TRY
+            INSERT INTO IDSAllocationPool
+               (
+                  Sourcekey
+               ,  SourceType
+               ,  Wavekey
+               ,  AllocateCmd
+               ,  WinComputerName
+               )
+            VALUES
+               (
+                  @c_WaveKey
+               ,  'DYNAMICPICK'
+               ,  @c_WaveKey
+               ,  @c_ExecCmd
+               ,  ''
+               )
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_Err = 555765
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Wave #: ' + @c_WaveKey
+                           + ' to IDSAllocationPool Fail - DYNAMICPICK . (lsp_WaveAllocation)'   
+                           + '(' + @c_ErrMsg + ')'
+                           + '|' + @c_WaveKey                            
+
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_Loadkey
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT                                
+            GOTO EXIT_SP                                    
+         END CATCH
+
+         GOTO EXIT_SP 
+      END
+EXIT_SP:
+   IF OBJECT_ID('tempdb..#tWAVEDETAIL','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #tWAVEDETAIL
+   END 
+
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SET @b_Success = 0
+      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_WaveAllocation'
+   END
+   ELSE
+   BEGIN
+      SET @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+      
+   REVERT
+END
+GO
+GRANT EXECUTE ON [WM].[lsp_WaveAllocation] TO nSQL 
+GO  
