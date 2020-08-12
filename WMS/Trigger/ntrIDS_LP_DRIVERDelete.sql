@@ -8,7 +8,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Trigger: ntrIDS_LP_DRIVERDelete                                        */
+/* Trigger: ntrIDS_LP_DRIVERDelete                                      */
 /* Creation Date: 20 Feb 2012                                           */
 /* Copyright: IDS                                                       */
 /* Written by: KHLim                                                    */
@@ -17,15 +17,15 @@ GO
 /*                                                                      */
 /* Usage:                                                               */
 /*                                                                      */
-/* Called By: When records removed from IDS_LP_DRIVER                     */
+/* Called By: When records removed from IDS_LP_DRIVER                   */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
 /* Modifications:                                                       */
-/* Date         Author   Ver  Purposes                                  */
-/*                                                                      */
+/* Date        Author   Ver  Purposes                                   */
+/* 2019-08-22  Wan01    1.1  Fixed. MBOLkey Not insert to DELLOG        */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrIDS_LP_DRIVERDelete]
@@ -72,8 +72,8 @@ BEGIN
       IF @c_authority = '1'
       BEGIN
          INSERT INTO dbo.IDS_LP_DRIVER_DELLOG 
-               ( Loadkey,DriverCode )
-         SELECT  Loadkey,DriverCode FROM DELETED
+               ( Loadkey,DriverCode, MBOLKey )              --(Wan01)
+         SELECT  Loadkey,DriverCode, MBOLKey FROM DELETED   --(Wan01)
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
