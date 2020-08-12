@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,8 +22,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2019-12-03  Wan01    1.4   WMS-11029 - Mbol_Outbound_OTM_Add new     */
 /*                            paratype                                  */
+/* 2019-12-03  Wan02    1.5   SCE - WM 1) Add 'Max_Qty_Per_Load'        */
+/*                            2) Add 'BUILDWAVEPARM'                    */
 /************************************************************************/
-
 CREATE VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
       ,CondType  = 'CONDITION' 
@@ -45,6 +46,10 @@ SELECT BuildParmType = 'BUILDLOADPARM'
       ,FieldName= 'Max_Orders_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'BUILDLOADPARM'
+      ,CondType = 'RESTRICT' 
+      ,FieldName= 'Max_Qty_Per_Load'
+UNION ALL
+SELECT BuildParmType = 'BUILDLOADPARM'
       ,CondType  = 'SORT' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
 FROM INFORMATION_SCHEMA.COLUMNS Col     
@@ -80,6 +85,10 @@ SELECT BuildParmType = 'BACKENDALLOC'
       ,FieldName= 'Max_Orders_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'BACKENDALLOC'
+      ,CondType = 'RESTRICT' 
+      ,FieldName= 'Max_Qty_Per_Load'
+UNION ALL
+SELECT BuildParmType = 'BACKENDALLOC'
       ,CondType  = 'SORT' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
 FROM INFORMATION_SCHEMA.COLUMNS Col     
@@ -115,6 +124,10 @@ SELECT BuildParmType = 'RELEASEORD'
       ,FieldName= 'Max_Orders_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
+      ,CondType = 'RESTRICT' 
+      ,FieldName= 'Max_Qty_Per_Load'                      
+UNION ALL
+SELECT BuildParmType = 'RELEASEORD'
       ,CondType  = 'SORT' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
 FROM INFORMATION_SCHEMA.COLUMNS Col     
@@ -122,6 +135,37 @@ WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
 AND Col.COLUMN_NAME IN ('SKU')   
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
+      ,CondType  = 'GROUP' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+UNION ALL
+SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType  = 'CONDITION' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+UNION ALL   
+SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType = 'CONDITION' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)     
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
+AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')  
+UNION ALL
+SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType  = 'SORT' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
+AND Col.COLUMN_NAME IN ('SKU')   
+UNION ALL
+SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'GROUP' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
 FROM INFORMATION_SCHEMA.COLUMNS Col     
@@ -257,7 +301,7 @@ SELECT BuildParmType = 'OTM-MBL'
 FROM INFORMATION_SCHEMA.COLUMNS Col     
 WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime') 
 UNION ALL
 SELECT BuildParmType = 'OTM-MBLUPD'
       ,CondType  = 'CONDITION' 
@@ -278,7 +322,7 @@ SELECT BuildParmType = 'OTM-MBLUPD'
 FROM INFORMATION_SCHEMA.COLUMNS Col     
 WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')   
 GO
 
 GRANT SELECT ON V_BuildParm_Columns TO nSQL
