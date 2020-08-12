@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: When records removed from IDS_LP_VEHICLE                  */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /*                            vehicle number & vehicle type to loadplan */
 /*                            if configkey 'LPUPDVHCINFO' turn on       */     
 /*  3-DEC-2015 JayLim   1.2   DELLOG for datamart                       */
+/* 2019-09-25  Wan02    1.3   Fixed. MBOLkey Not insert to DELLOG       */
 /************************************************************************/
 
 CREATE TRIGGER ntrIDS_LP_VehicleDelete
@@ -86,8 +87,8 @@ CREATE TRIGGER ntrIDS_LP_VehicleDelete
       IF @c_authority = '1'
       BEGIN
          INSERT INTO dbo.IDS_LP_VEHICLE_DELLOG 
-               ( Loadkey,VehicleNumber )
-         SELECT  Loadkey,VehicleNumber FROM DELETED
+               ( Loadkey,VehicleNumber,MBOLKey )               --Wan02
+         SELECT  Loadkey,VehicleNumber,MBOLKey FROM DELETED    --Wan02
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
