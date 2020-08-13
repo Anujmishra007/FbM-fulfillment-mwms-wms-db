@@ -30,7 +30,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 09-Oct-2019 Shong    1.1   Enhancement and Performance Tuning			  */
+/* 09-Oct-2019 Shong    1.1   Enhancement and Performance Tuning			*/
+/* 04-AUG-2020 CSCHONG  1.2   WMS-14454 - add storerkey filter (CS01)   */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispCTNLBLITF01]
@@ -119,7 +120,8 @@ BEGIN
           @c_PrintFilePath = Notes,
           @c_ReportType = Code2
    FROM dbo.CODELKUP WITH (NOLOCK)      
-   WHERE LISTNAME = 'PrtbyShipK'      
+   WHERE LISTNAME = 'PrtbyShipK'  
+   AND Storerkey = @c_Storerkey                  --CS01    
    --AND   Code = @c_ShipperKey 
 
 
