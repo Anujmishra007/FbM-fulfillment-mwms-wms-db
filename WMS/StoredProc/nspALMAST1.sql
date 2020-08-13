@@ -33,6 +33,7 @@ GO
 /* 03-JUN-2019  NJOW01  1.0   WMS-9198 enable full case allocation for  */
 /*                            B2C Single Order                          */
 /* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */  
+/* 13-JUL-2020 CSCHONG  1.2   WMS-14154 - revised sorting (CS01)        */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALMAST1]        
    @c_DocumentNo NVARCHAR(10),  
@@ -80,11 +81,14 @@ BEGIN
            @n_StorerMinShelfLife INT,
            @n_LotQtyAvailable    INT,
            @c_DocType            NVARCHAR(1),
-           @c_ECOM_SINGLE_Flag   NVARCHAR(1)  --NJOW01
+           @c_ECOM_SINGLE_Flag   NVARCHAR(1),  --NJOW01
+           @n_ReorderPoint       INT           --CS01
+          
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
    SET @n_QtyToTake = 0
+   SET @n_ReorderPoint   = 0                    --CS01 
    
    IF @n_UOMBase = 0
      SET @n_UOMBase = 1
@@ -132,6 +136,17 @@ BEGIN
       IF @c_UOM = '2' AND @c_DocType = 'E' AND @c_ECOM_SINGLE_Flag <> 'S' --No case allocation for B2C Multi  --NJOW01
          GOTO EXIT_SP         
    END
+
+   --CS01 START
+      SELECT @n_ReorderPoint = S.ReorderPoint
+      FROM SKU S WITH (NOLOCK) 
+      WHERE S.sku = @c_sku
+
+     IF @n_ReorderPoint = 1
+     BEGIN
+        GOTO EXIT_SP
+     END      
+   --CS01 END
       
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
@@ -184,7 +199,7 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
       ' ORDER BY CASE WHEN LOC.LocationCategory = ''Mezzanine'' THEN 1 WHEN LOC.LocationCategory = ''PND'' THEN 2 WHEN LOC.LocationCategory = ''VNA'' THEN 3 ELSE 4 END, ' +   
                       CASE WHEN @c_UOM = '7' THEN ' CASE WHEN LOTxLOCxID.QtyReplen > 0 THEN 1 ELSE 2 END, ' ELSE '' END  +   --if VNA or PND allocate loc with qtyreplen first
-                      ' LA.Lottable04, LA.Lottable05, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
+                      ' LA.Lottable04, QTYAVAILABLE, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '                           --CS01
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
