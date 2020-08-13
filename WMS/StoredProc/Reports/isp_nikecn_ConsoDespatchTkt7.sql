@@ -30,6 +30,7 @@ GO
 /* 08-FRB-2017  CSCHONG 1.1   WMS-3941 - Add new field (CS02)           */
 /* 21-Aug-2018  CSCHONG 1.2   WMS-5448 group by caseid (CS03)           */
 /* 26-Jun-2019  CSCHONG 1.3   Remove traceinfo (CS04)                   */
+/* 17-Jul-2020  CSCHONG 1.4   WMS-14206 - revised field logic (CS04)    */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_nikecn_ConsoDespatchTkt7]
@@ -88,34 +89,6 @@ BEGIN
    FROM PICKDETAIL (NOLOCK)
    WHERE Pickslipno = @c_Pickslipno
 
-
-   --SELECT @c_ShowQty_Cfg = ISNULL(RTRIM(SValue),'')
-   --FROM STORERCONFIG WITH (NOLOCK)
-   --WHERE Storerkey = @c_Storerkey
-   --AND Configkey = 'DPTkt_NKCN3_CTNQty'
- 
-   --SELECT @c_ShowOrdType_Cfg = ISNULL(RTRIM(SValue),'')
-   --FROM STORERCONFIG WITH (NOLOCK)
-   --WHERE Storerkey = @c_Storerkey
-   --AND Configkey = 'DPTkt_NKCN3_ORDType'
-
-   --SELECT @c_susr4 = ISNULL(RTRIM(SUSR4),'')
-   --FROM STORER WITH (NOLOCK)
-   --WHERE Storerkey = @c_Storerkey
-   
-   --SELECT @c_susr4 = ISNULL(RTRIM(F.UserDefine03),'')
-   --FROM ORDERS ORD WITH (NOLOCK)
-   --JOIN FACILITY AS F WITH (NOLOCK) ON F.Facility = ORD.Facility
-   --WHERE Ord.OrderKey = @c_Orderkey
-   --AND ORD.StorerKey = @c_Storerkey
-
-   --SELECT @c_showField = CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END
-   --FROM Codelkup CLR (NOLOCK)
-   --WHERE CLR.Storerkey = @c_Storerkey
-   --AND CLR.Code = 'SHOWFIELD'
-   --AND CLR.Listname = 'REPORTCFG'
-   --AND CLR.Long = 'r_dw_despatch_ticket_nikecn7' AND ISNULL(CLR.Short,'') <> 'N'
-
    CREATE TABLE #RESULT (
        ROWREF INT NOT NULL IDENTITY(1,1) Primary Key,
        PickSlipNo NVARCHAR(10) NULL,
@@ -170,7 +143,7 @@ BEGIN
             SUM(PD.Qty) AS TotalPcs,      
             MaxCarton = ''--(COUNT(DISTINCT PD.CaseID))      
          ,  Plant = F.UserDefine03
-         ,   CRD = ISNULL(MAX(OIF.OrderInfo07),'')
+         ,  CRD = ISNULL(ORDERS.DeliveryNote,'')--ISNULL(MAX(OIF.OrderInfo07),'')   --CS04
          , BU = MIN(C.UDF02)
          , Gender = ISNULL(MIN(C1.UDF02),'')
          , ORDERS.orderkey
@@ -211,6 +184,7 @@ BEGIN
             CL.Seqno,
             F.UserDefine03,ISNULL(OIF.OrderInfo07,''), ORDERS.orderkey,OIF.OrderInfo10              --CS01
             ,ISNULL(OD.PickCode,'')              --CS02 
+            ,ISNULL(ORDERS.DeliveryNote,'')      --CS04 
 
    DECLARE @nCartonIndex int
 
@@ -244,7 +218,7 @@ BEGIN
             SUM(DISTINCT PD.Qty) AS TotalPcs,      
             MaxCarton = ''--(COUNT(DISTINCT PD.CaseID))      
          ,  Plant = F.UserDefine03
-         ,   CRD = ISNULL(MAX(OIF.OrderInfo07),'')
+         ,  CRD = ISNULL(ORDERS.DeliveryNote,'') --ISNULL(MAX(OIF.OrderInfo07),'')   --CS04
          , BU = MIN(C.UDF02)
          , Gender = ISNULL(MIN(C1.UDF02),'')
          , ORDERS.orderkey
@@ -287,6 +261,7 @@ BEGIN
             CL.Seqno,
             F.UserDefine03,ISNULL(OIF.OrderInfo07,''), ORDERS.orderkey,OIF.OrderInfo10              --CS01
             ,ISNULL(OD.PickCode,'')              --CS02 
+            ,ISNULL(ORDERS.DeliveryNote,'')      --CS04 
               
             SET ROWCOUNT 0
          END
@@ -295,38 +270,6 @@ BEGIN
          SET @nCartonIndex = @nCartonIndex + 1
       END
    END -- If start carton and end carton <> 0
-
-    /* DECLARE Ext_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT O.Orderkey, O.Loadkey
-      FROM   ORDERS O (NOLOCK)
-      JOIN   Pickdetail Pd (NOLOCK) ON O.Orderkey = Pd.Orderkey
-      WHERE  Pd.Pickslipno = @c_PickSlipNo
-      ORDER BY O.Orderkey
-
-   OPEN Ext_cur
-
-   SELECT @i_ExtCnt  = 1
-   SELECT @i_LineCnt = 0
-
-   FETCH NEXT FROM Ext_cur INTO @c_getOrderkey, @c_LoadKey
-
-   WHILE @@FETCH_STATUS = 0
-   BEGIN
-      IF @i_ExtCnt = 10  
-      BREAK
-
-       SELECT @i_ExtCnt  = @i_ExtCnt + 1
-      SELECT @i_LineCnt = @i_LineCnt + 1
-
-         SELECT @SQL = "UPDATE #RESULT SET Orderkey" + RTRIM(LTRIM(@i_LineCnt)) + " = '" + RTRIM(LTRIM(@c_getOrderkey)) + "' "
-                     + "WHERE Pickslipno = '" + RTRIM(@c_pickslipno) + "' AND Loadkey = '" + RTRIM(@c_LoadKey) + "'"
-
-      EXEC (@SQL)
-
-      FETCH NEXT FROM Ext_cur INTO @c_getOrderkey, @c_LoadKey
-   END
-   CLOSE Ext_cur
-   DEALLOCATE Ext_cur*/
 
    SET @nSumPackQty = 0
    SET @nSumPickQty = 0
@@ -351,20 +294,6 @@ BEGIN
       SET @c_BU = ''
       SET @c_Gender = ''
       
-      --SELECT TOP 1 @c_BU = ISNULL(c.UDF02,'')
-      --FROM packdetail pd (NOLOCK)
-      --JOIN sku s (NOLOCK) ON s.storerkey=pd.StorerKey AND s.sku = pd.SKU
-      -- JOIN CODELKUP AS c WITH (NOLOCK) ON c.listname = 'SKUGROUP' AND c.Code=s.BUSR7
-      -- WHERE pickslipno=@c_PickSlipNo
-      -- AND CartonNo = @nCartonNo
-      
-        --SELECT TOP 1 @c_Gender = ISNULL(c.UDF02,'')
-      --FROM packdetail pd (NOLOCK)
-      --JOIN sku s (NOLOCK) ON s.storerkey=pd.StorerKey AND s.sku = pd.SKU
-      -- JOIN CODELKUP AS c WITH (NOLOCK) ON c.listname = 'NKSGenger' AND c.Code=s.BUSR5
-      -- WHERE pickslipno=@c_PickSlipNo
-      -- AND CartonNo = @nCartonNo
-      
      -- IF @nCartonNo = @nMaxCartonNo
      -- BEGIN
          SET @nSumPackQty = 0
@@ -386,75 +315,12 @@ BEGIN
            -- ,BU = @c_BU
            -- ,Gender = @c_Gender
             WHERE PickSlipNo = @c_PickSlipNo AND CartonNo = @nCartonNo
-      --   END
-      --   ELSE
-      --   BEGIN
-      --      UPDATE #RESULT 
-      --      SET MaxCarton = @nCartonNo
-      --     -- ,BU = @c_BU
-      --     -- ,Gender = @c_Gender
-      --      WHERE PickSlipNo = @c_PickSlipNo AND CartonNo = @nCartonNo
-      --   END
-      --END
-      --ELSE
-      --BEGIN
-      --   UPDATE #RESULT 
-      --   SET MaxCarton = @nCartonNo
-      --  -- ,BU = @c_BU
-      --  -- ,Gender = @c_Gender
-      --   WHERE PickSlipNo = @c_PickSlipNo AND CartonNo = @nCartonNo
-      --END
-     --  END
       
       FETCH NEXT FROM CTN_CUR INTO @nCartonNo
    END
    CLOSE CTN_CUR
    DEALLOCATE CTN_CUR
 
-  /* IF ISNULL(@c_Orderkey,'') = '' 
-   BEGIN
-      
-      SET @c_LoadKey      = ''
-      SET @c_ConsigneeKey = ''
-      SET @c_Company      = ''
-      SET @c_Address1     = ''
-      SET @c_Address2     = ''
-      SET @c_Address3     = ''
-      SET @c_Address4     = ''
-      SET @c_City         = ''
-      SET @d_DeliveryDate = ''
-      SET @c_Stop         = ''
-
-      SELECT @c_LoadKey = LoadKey
-        FROM PackHeader WITH (NOLOCK)
-       WHERE PickSlipNo = @c_PickSlipNo
-
-      SELECT  @c_ConsigneeKey = MAX(ISNULL(RTRIM(ConsigneeKey),''))
-            , @c_Company      = MAX(ISNULL(RTRIM(C_Company),''))
-            , @c_Address1     = MAX(ISNULL(RTRIM(C_Address1),''))
-            , @c_Address2     = MAX(ISNULL(RTRIM(C_Address2),''))
-            , @c_Address3     = MAX(ISNULL(RTRIM(C_Address3),''))
-            , @c_Address4     = MAX(ISNULL(RTRIM(C_Address4),''))
-            , @c_City         = MAX(ISNULL(RTRIM(C_City),''))
-            , @d_DeliveryDate = MAX(ISNULL(RTRIM(DeliveryDate),''))
-            , @c_Stop         = MAX(ISNULL(RTRIM(Stop),''))
-      FROM ORDERS WITH (NOLOCK)
-      WHERE LoadKey = @c_LoadKey
-
-      UPDATE #RESULT SET
-              ConsigneeKey = @c_ConsigneeKey
-            , C_Company    = @c_Company
-            , C_Address1   = @c_Address1
-            , C_Address2   = @c_Address2
-            , C_Address3   = @c_Address3
-            , C_Address4   = @c_Address4
-            , C_City       = @c_City
-            , DeliveryDate = @d_DeliveryDate
-            , LoadKey      = @c_LoadKey
-            , Stop         = @c_Stop
-      WHERE PickSlipNo     = @c_pickslipno
-  
-   END */
    --CS03 Start
    SELECT DISTINCT PickSlipNo, LoadKey, ConsigneeKey,C_Company, C_Address1,  C_Address2,  
                              C_Address3,C_Address4,C_City,caseid,  CartonNo, sum(TotalPcs) as TotalPcs,
