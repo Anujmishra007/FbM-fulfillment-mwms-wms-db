@@ -39,7 +39,9 @@ GO
 /* 05-AUG-2019  CSCHONG   2.2   WMS-9970 revised field logic (CS07)     */      
 /* 30-JAN-2020  CSCHONG   2.3   WMS-11894 revised field logic (CS08)    */    
 /* 23-APR-2020  WLChooi   2.4   WMS-13021 - ShowModelNumber by ReportCFG*/
-/*                              (WL02)                                  */                                          
+/*                              (WL02)                                  */ 
+/* 23-JUL-2020  WLChooi   2.5   WMS-14384 - Add new condition to show   */
+/*                              remark for CN only (WL03)               */                                           
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_Packing_List_37] (  
@@ -146,10 +148,16 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@c_UPDATECCOM          NVARCHAR(1)                     --CS05 
        ,@c_dest                NVARCHAR(100)                   --CS06
        ,@c_PLTNo               NVARCHAR(80)                    --CS06               
-    -- ,@C_getCLKUPUDF01   NVARCHAR(15)                            
-        
-                 
-       
+    -- ,@C_getCLKUPUDF01   NVARCHAR(15)                    
+       ,@c_NSQLCountry         NVARCHAR(10)                    --WL03
+       ,@c_ShowRemark          NVARCHAR(10)                    --WL03
+          
+   --WL03 START
+   SELECT @c_NSQLCountry = NSQLValue
+   FROM NSQLCONFIG (NOLOCK)
+   WHERE ConfigKey = 'Country'
+   --WL03 END   
+     
    CREATE TABLE #TEMP_PackList37  
          (  Rowid            INT IDENTITY(1,1),  
             MBOLKey          NVARCHAR(20) NULL,  
@@ -213,7 +221,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             Orderkey         NVARCHAR(20)  NULL,                            --CS05      
             lott11           NVARCHAR(250) NULL,                            --CS05   
             Dest             NVARCHAR(250) NULL,                            --CS05                                                                                                          
-            PltNo            NVARCHAR(250) NULL                             --CS05   
+            PltNo            NVARCHAR(250) NULL,                            --CS05   
+            ShowRemark       NVARCHAR(1)   NULL                             --WL03
          )  
            
            
@@ -409,6 +418,11 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                       ELSE '' END AS CON_Address4  
                 ,ORDERS.OrderGroup AS OrdGrp  
                 /*CS04 end*/                                                      --CS02  
+                --WL03 START
+                , ShowRemark = CASE WHEN ORDERS.C_Country IN ('TW') AND ORDERS.Facility IN ('WGQAP','BULIM')
+                                     AND ORDERS.ConsigneeKey IN ('4925968') AND @c_NSQLCountry = 'CN'
+                                    THEN 'Y' ELSE 'N' END
+                --WL03 END
               FROM MBOL WITH (NOLOCK)  
               INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)  
               INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)  
@@ -445,7 +459,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                  @c_From_Country, @c_StorerKey,   
                                  @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,    --CS03a  
                                  @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                  --CS04  
-                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp                         --CS04  
+                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,                        --CS04  
+                                 @c_ShowRemark   --WL03
           
         WHILE @@FETCH_STATUS = 0  
         BEGIN  
@@ -765,7 +780,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                ,Orderkey              --CS05  
                ,Lott11                --CS05
                ,Dest                  --CS06
-               ,PltNo                 --CS06   
+               ,PltNo                 --CS06 
+               ,ShowRemark            --WL03  
               )  
               VALUES  
               (  
@@ -824,6 +840,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
               ,@n_EPWGT_Value,@n_EPCBM_Value            --CS04  
               ,@C_CLKUPUDF01,@c_orderkey,''             --CS05  
               ,@c_dest,@c_PLTNo                         --CS06
+              ,@c_ShowRemark                            --WL03
               )  
                    
            SET @c_PreOrderKey = @c_OrderKey  
@@ -852,7 +869,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                        @c_From_Country, @c_StorerKey,   
                                        @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,    --CS03a  
                                        @c_Con_Company, @c_Con_Address1, @c_Con_Address2,               --CS04  
-                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp                       --CS04  
+                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,                     --CS04  
+                                       @c_ShowRemark   --WL03
         END  
           
         CLOSE CS_ORDERS_INFO  
@@ -1021,16 +1039,18 @@ DECLARE @c_OrderKey            NVARCHAR(10)
   , PCubeUom3          
   , PNetWgt    
   , shiptitle                            --CS02     
-  ,TTLPLT                                --CS03   
-  ,CON_Company, CON_Address1             --CS04  
-  ,CON_Address2,CON_Address3             --CS04  
-  ,CON_Address4,ORDGRP                   --CS04  
-  ,EPWGT,EPCBM                           --CS04  
-  ,CLKUPUDF01                            --CS05  
+  , TTLPLT                               --CS03   
+  , CON_Company, CON_Address1            --CS04  
+  , CON_Address2,CON_Address3            --CS04  
+  , CON_Address4,ORDGRP                  --CS04  
+  , EPWGT,EPCBM                          --CS04  
+  , CLKUPUDF01                           --CS05  
   --,orderkey  
-  ,lott11                                --CS05  
-  ,Dest                                  --CS06
-  ,PltNo                                 --CS06
+  , lott11                               --CS05  
+  , Dest                                 --CS06
+  , PltNo                                --CS06
+  , ShowRemark                           --WL03
+  , @c_NSQLCountry                       --WL03
   FROM #TEMP_PackList37  
   ORDER BY mbolkey,ExternOrdKey, Rowid, sku, CTNCOUNT DESC   
     
@@ -1067,7 +1087,9 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address2     ,   
     CON_Address3     ,  
     CON_Address4     ,   
-    ORDGRP      
+    ORDGRP           ,
+    ShowRemark       ,                   --WL03
+    @c_NSQLCountry                       --WL03
   FROM #TEMP_PackList37  
   WHERE MBOLKey = @c_MBOLKey  
   AND ORDGRP = 'S01'  
@@ -1103,7 +1125,9 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address2     ,   
     CON_Address3     ,  
     CON_Address4     ,   
-    ORDGRP      
+    ORDGRP           ,
+    ShowRemark       ,                   --WL03
+    @c_NSQLCountry                       --WL03
   FROM #TEMP_PackList37  
   WHERE MBOLKey = @c_MBOLKey  
   AND ORDGRP <> 'S01'  
