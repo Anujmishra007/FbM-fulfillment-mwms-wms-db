@@ -84,6 +84,8 @@ GO
 /* 29-JUL-2019  CSCHONG 2.9   WMS-9278 - add new parameter (CS01)       */
 /* 19-Dec-2019  NJOW08  3.0   WMS-11479 - CN IKEA support group by      */
 /*                            loc.descr instead of pickzone             */ 
+/* 19-Aug-2020  NJOW10  3.2   WMS-14811 determine single/multi order    */
+/*                            by ECOM_SINGLE_Flag                       */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispOrderBatching]  
@@ -137,6 +139,7 @@ BEGIN
    ,  @c_replenishrequire        NVARCHAR(1) --(CS01)
    ,  @c_OrderBatchBylocdescr    NVARCHAR(10)--NJOW08   
    ,  @c_OrderBatchByLocDescr_OPT1 NVARCHAR(50) --NJOW08
+   ,  @c_OrdBatchBySingleFlag      NVARCHAR(10) --NJOW10
 
   SET @c_ZoneList = @c_PickZones         --(Wan01)
   SET @c_replenishrequire = ''               --(CS01)
@@ -385,6 +388,18 @@ BEGIN
            END             
         END
    END
+
+ --NJOW10
+   SET @c_OrdBatchBySingleFlag = ''
+   EXEC nspGetRight  
+        @c_Facility  = @c_Facility   
+      , @c_StorerKey = @c_StorerKey  
+      , @c_sku       = NULL 
+      , @c_ConfigKey = 'OrdBatchBySingleFlag' 
+      , @b_Success   = @b_Success         OUTPUT  
+      , @c_authority = @c_OrdBatchBySingleFlag   OUTPUT    
+      , @n_err       = @n_err             OUTPUT    
+      , @c_errmsg    = @c_errmsg          OUTPUT     
 
    --(Wan01) - START
    SET @c_BatchOrderZoneFromTask = ''
@@ -646,23 +661,42 @@ BEGIN
       --(Wan01) - END
       IF @c_Mode IN ('1', '2', '3', '4', '5', '9')
       BEGIN
-         -- Exclude orders with total qty <= 1
+         -- Exclude orders with total qty <= 1         
          IF @c_Mode = '9'  --NJOW04
-         BEGIN
-            DELETE FROM #OrderTable
-            WHERE OrderKey IN (SELECT OrderKey 
-                               FROM #OrderTable 
-                               GROUP BY OrderKey 
-                               HAVING SUM(Qty) > 1)
-
+         BEGIN         	  
+         	  IF @c_OrdBatchBySingleFlag = '1' --NJOW10
+         	  BEGIN
+               DELETE #OrderTable 
+               FROM #OrderTable
+               JOIN ORDERS O (NOLOCK) ON #OrderTable.Orderkey = O.Orderkey
+               WHERE O.ECOM_SINGLE_Flag <> 'S'                   
+            END
+            ELSE
+            BEGIN
+               DELETE FROM #OrderTable
+               WHERE OrderKey IN (SELECT OrderKey 
+                                  FROM #OrderTable 
+                                  GROUP BY OrderKey 
+                                  HAVING SUM(Qty) > 1)
+            END                      
          END
          ELSE
          BEGIN
-            DELETE FROM #OrderTable
-            WHERE OrderKey IN (SELECT OrderKey 
-                               FROM #OrderTable 
-                               GROUP BY OrderKey 
-                               HAVING SUM(Qty) <= 1)
+         	  IF @c_OrdBatchBySingleFlag = '1' --NJOW10
+         	  BEGIN
+               DELETE #OrderTable 
+               FROM #OrderTable
+               JOIN ORDERS O (NOLOCK) ON #OrderTable.Orderkey = O.Orderkey
+               WHERE O.ECOM_SINGLE_Flag = 'S'                   
+         	  END
+         	  ELSE
+         	  BEGIN
+               DELETE FROM #OrderTable
+               WHERE OrderKey IN (SELECT OrderKey 
+                                  FROM #OrderTable 
+                                  GROUP BY OrderKey 
+                                  HAVING SUM(Qty) <= 1)
+            END                   
          END
     
          IF @c_Mode = '1'
