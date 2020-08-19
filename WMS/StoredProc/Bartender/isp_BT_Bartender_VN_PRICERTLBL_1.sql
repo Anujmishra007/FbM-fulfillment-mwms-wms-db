@@ -18,7 +18,8 @@ GO
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
 /* 2020-07-10 1.0  WLChooi    Created (WMS-14217)                             */     
-/* 2020-07-21 1.1  WLChooi    WMS-14217 - Change BUSR7 to Notes1 (WL01)       */              
+/* 2020-07-21 1.1  WLChooi    WMS-14217 - Change BUSR7 to Notes1 (WL01)       */    
+/* 2020-08-06 1.2  WLChooi    WMS-14217 - Add Col08 = Notes2 (WL02)           */            
 /******************************************************************************/                 
                     
 CREATE PROC [dbo].[isp_BT_Bartender_VN_PRICERTLBL_1]                        
@@ -135,7 +136,7 @@ BEGIN
                 
    SET @c_SQLJOIN = +N'SELECT DISTINCT ISNULL(S.BUSR3,''''), S.SKU, SUBSTRING(ISNULL(S.DESCR,''''),1,80), S.COUNTRYOFORIGIN, SUBSTRING(ISNULL(S.Notes1,''''), 1, 80),'   --5   --WL01     
                     + CHAR(13) +     
-                    +N'S.AltSKU, ISNULL(S.BUSR5,''''), '''','''','''','    
+                    +N'S.AltSKU, ISNULL(S.BUSR5,''''), SUBSTRING(ISNULL(S.Notes2,''''),1,80),'''','''','   --WL02    
                     + CHAR(13) +    
                     +' '''','''','''','''','  
                     + ' '''','''','''','''','''','''', '     
