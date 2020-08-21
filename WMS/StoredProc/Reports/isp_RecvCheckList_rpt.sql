@@ -31,6 +31,7 @@ GO
 /* 2019-Nov-29  Grick   1.3   INC0952954 - Cater for HMCOS  (G01)        */
 /* 2020-Aug-10  WLChooi 1.4   WMS-14520 - Modify input parameter for     */
 /*                            range printing (WL01)                      */
+/* 2020-Aug-21  WLChooi 1.5   Fix Qty issue (WL02)                       */
 /*************************************************************************/
 
 CREATE PROC isp_RecvCheckList_rpt 
@@ -77,7 +78,8 @@ BEGIN
    CNTSMCTN      INT,
    SQty          INT,
    SMQty         INT,
-   RecLineNo     NVARCHAR(10)            --CS01
+   RecLineNo     NVARCHAR(10),           --CS01
+   ReceiptQtyExp INT NULL   --WL01
    --B8            NVARCHAR(200) NULL,
    --B9            NVARCHAR(200) NULL,
    --B10           NVARCHAR(200) NULL,
@@ -267,6 +269,31 @@ BEGIN
    FETCH NEXT FROM CUR_RESULT INTO  @c_Reckey,@c_signatory   
    END   
 
+   --WL02 START
+   DECLARE @n_Qty INT = 0
+
+   DECLARE CUR_Qty CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+   SELECT DISTINCT t.reckey   
+   FROM #TEMPRCVCHKLIST AS t
+  
+   OPEN CUR_Qty   
+     
+   FETCH NEXT FROM CUR_Qty INTO @c_Reckey
+     
+   WHILE @@FETCH_STATUS <> -1  
+   BEGIN         
+      SELECT @n_Qty = SUM(qtyexp)
+      FROM #TEMPRCVCHKLIST
+      WHERE reckey = @c_Reckey
+
+      UPDATE #TEMPRCVCHKLIST
+      SET ReceiptQtyExp = @n_Qty
+      WHERE reckey = @c_Reckey
+      
+      FETCH NEXT FROM CUR_Qty INTO @c_Reckey   
+   END   
+   --WL02 END
+
    SELECT t.*
          ,ISNULL(MAX(CASE WHEN C.Code = '00008' THEN RTRIM(C.Description) ELSE '' END),'') AS B8
          ,ISNULL(MAX(CASE WHEN C.Code = '00009' THEN RTRIM(C.Description) ELSE '' END),'') AS B9
@@ -313,10 +340,31 @@ BEGIN
       CNTSMCTN,
       SQty,
       SMQty
-      ,RecLineNo             --(CS01)
+     ,RecLineNo             --(CS01)
+     ,ReceiptQtyExp   --WL02
    ORDER BY t.reckey, t.[LineNo]   --WL01
    
 QUIT_SP:
+   --WL02 START
+   IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_LOOP
+      DEALLOCATE CUR_LOOP   
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_RESULT') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_RESULT
+      DEALLOCATE CUR_RESULT   
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_Qty') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_Qty
+      DEALLOCATE CUR_Qty   
+   END
+
+   --WL02 END
     
 END
 
