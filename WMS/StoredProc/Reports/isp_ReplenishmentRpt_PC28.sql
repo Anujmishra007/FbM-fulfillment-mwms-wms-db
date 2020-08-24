@@ -36,7 +36,7 @@ CREATE PROC [dbo].[isp_ReplenishmentRpt_PC28]
 ,              @c_zone06           NVARCHAR(10)
 ,              @c_zone07           NVARCHAR(10)
 ,              @c_zone08           NVARCHAR(10)
-,              @c_zone09           NVARCHAR(10)
+,              @c_zone09           NVARCHAR(10) 
 ,              @c_zone10           NVARCHAR(10)
 ,              @c_zone11           NVARCHAR(10)
 ,              @c_zone12           NVARCHAR(10)
@@ -89,8 +89,9 @@ BEGIN
            @c_UCCNo                     NVARCHAR(20),
            @c_Priority                  NVARCHAR(5),
            @n_QtyinPickLoc              INT,
-           @n_OriginalQty               INT
-
+           @n_OriginalQty               INT,
+           @c_codelottable08            NVARCHAR(30)
+           
    SET @n_continue = 1
 
    IF RTRIM(@c_ReplGrp) = '' 
@@ -198,7 +199,13 @@ BEGIN
       	 SET @n_NetQtyExpected = 0
       	 
     	   SET @c_Priority = @c_ReplenishmentPriority
-      	       	       	          	          
+    	   
+    	   SET @c_CodeLottable08 = ''
+    	   SELECT TOP 1 @c_CodeLottable08 = ISNULL(Code,'')
+    	   FROM CODELKUP (NOLOCK)
+    	   WHERE Listname = 'SEPREPLOT8'
+    	   AND Storerkey = @c_CurrentStorerkey
+    	         	       	       	          	          
          DELETE #LOT_SORT
          
          --Get overallocated lots
@@ -287,9 +294,11 @@ BEGIN
 
          --retrieve lots to replenish
 			   DECLARE cur_REPLENLOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-			   SELECT DISTINCT LOT, SortColumn
-			   FROM #LOT_SORT
-			   ORDER BY SortColumn, Lot
+			   SELECT DISTINCT L.LOT, L.SortColumn
+			   FROM #LOT_SORT L
+			   JOIN LOTATTRIBUTE LA (NOLOCK) ON L.Lot = LA.Lot
+			   WHERE LA.Lottable08 = CASE WHEN L.SortColumn <> '' AND ISNULL(@c_CodeLottable08,'') <> '' THEN @c_CodeLottable08 ELSE LA.Lottable08 END
+			   ORDER BY L.SortColumn, L.Lot
          
 			   OPEN cur_REPLENLOT
          
@@ -329,8 +338,9 @@ BEGIN
             BEGIN                          	
                IF @n_UCCQty > @n_RemainingQty
                BEGIN
-               	  SET @n_RemainingQty = 0
-               	  BREAK
+               	  --SET @n_RemainingQty = 0
+               	  --BREAK
+               	  GOTO NEXT_UCC
                END
                   
             	 INSERT #REPLENISHMENT
@@ -367,6 +377,8 @@ BEGIN
                )
             	
             	 SET @n_RemainingQty = @n_RemainingQty - @n_UCCQty
+            	 
+            	 NEXT_UCC:
             	 
                FETCH NEXT FROM CUR_LLI_REPLEN INTO  @c_FromLoc, @c_FromID, @n_UCCQty, @c_UCCNo
             END
