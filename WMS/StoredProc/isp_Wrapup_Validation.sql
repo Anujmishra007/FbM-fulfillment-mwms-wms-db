@@ -37,6 +37,7 @@ GO
 /* 02-OCT-2019  NJOW01   1.4  Remove TempDB.INFORMATION_SCHEMA.Columns   */
 /* 20-DEC-2018  Wan04    1.4  WM-Move FrontEnd Record Not Found validate */
 /*                            to SP For'w_userdefine_extended_validation'*/
+/* 21-AUG-2020  NJOW02   1.5  Fix invalid column error                   */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_Wrapup_Validation]  
       @c_Window            NVARCHAR(60) = ''
@@ -329,11 +330,23 @@ BEGIN
          GOTO QUIT_SP
       END
 
+      --NJOW02 S
+      IF CHARINDEX('.', @c_CfgValSourceCol) > 0 
+      BEGIN
+      	 SET @c_TableName  = LEFT(@c_CfgValSourceCol, CHARINDEX('.', @c_CfgValSourceCol))
+         SET @c_ColumnName = RIGHT(@c_CfgValSourceCol, LEN(@c_CfgValSourceCol) -LEN(@c_TableName))
+      END
+      ELSE
+      	 SET @c_ColumnName = @c_CfgValSourceCol
+
+      IF NOT EXISTS(SELECT 1 FROM #SCHEMA WHERE Column_Name = @c_ColumnName)
+         GOTO QUIT_SP
+      --NJOW02 E
+
       SET @c_Facility = ''
       SET @c_Storerkey = ''
       IF @c_ValidateBy = 'Storer' 
-      BEGIN
-      
+      BEGIN         	         
          SET @c_SQL = N'SELECT TOP 1 @c_Storerkey = ' + @c_CfgValSourceCol
                     + ' FROM #VALDN ' +  @c_UpdateTable
                     + @c_SQLJoin
@@ -348,7 +361,7 @@ BEGIN
          END
       END
       ELSE
-      BEGIN
+      BEGIN      	
          SET @c_SQL = N'SELECT TOP 1 @c_facility = ' + @c_CfgValSourceCol
                     + ' FROM #VALDN ' +  @c_UpdateTable
                     + @c_SQLJoin
@@ -408,8 +421,7 @@ BEGIN
                 + ' FROM #VALDN ' + @c_UpdateTable 
                 + @c_SQLJoin
                 + ' WHERE 1 = 1'
-   
-     
+        
       -- Get Column Type
       SET @c_TableName = LEFT(@c_ColumnName, CharIndex('.', @c_ColumnName) - 1)
       SET @c_ColName   = SUBSTRING(@c_ColumnName, 
