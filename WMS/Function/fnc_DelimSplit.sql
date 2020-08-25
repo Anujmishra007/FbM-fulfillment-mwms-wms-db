@@ -21,15 +21,16 @@ GO
 /* 2010-04-29   1.0  SHONG    Created                                   */
 /* 2014-03-21   1.1  TLTING   SQL2012 Bug fix                           */
 /* 2017-08-08   1.2  MLAM(HK) Fix Maximum recursion limit 100 error     */
+/* 2020-08-13   1.3  WLChooi  Set to NVARCHAR(MAX) (WL01)               */
 /************************************************************************/
 CREATE FUNCTION [dbo].[fnc_DelimSplit]
 (
     @c_Delim   NVARCHAR(1)
-   ,@c_String  NVARCHAR(4000)
+   ,@c_String  NVARCHAR(MAX)   --WL01
 )
 RETURNS @result TABLE (
     SeqNo    INT IDENTITY (1, 1) NOT NULL
-  , ColValue NVARCHAR(4000)
+  , ColValue NVARCHAR(MAX)   --WL01
 )
 AS
 BEGIN
