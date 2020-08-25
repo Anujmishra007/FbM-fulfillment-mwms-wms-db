@@ -22,6 +22,7 @@ GO
 /* 2014-03-21   1.1  TLTING   SQL2012 Bug fix                           */
 /* 2017-08-08   1.2  MLAM(HK) Fix Maximum recursion limit 100 error     */
 /* 2020-08-13   1.3  WLChooi  Set to NVARCHAR(MAX) (WL01)               */
+/* 2020-08-25   1.4  WLChooi  Grant SELECT Permission (WL02)            */
 /************************************************************************/
 CREATE FUNCTION [dbo].[fnc_DelimSplit]
 (
@@ -72,4 +73,8 @@ RETURN (
 )
 */
 END
+--WL02 START
 GO
+GRANT EXECUTE ON fnc_DelimSplit TO NSQL
+GO
+--WL02 END
