@@ -26,6 +26,7 @@ GO
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
 /* 05-MAR-2018 Wan01    1.1   WM - Add Functype                            */
+/* 04-AUG-2020 WLChooi  1.2   WMS-14531 - Add Flag if Qty < 0 (WL01)       */
 /***************************************************************************/
 CREATE PROC isp_ReplenishmentRpt_PC19
                @c_zone01      NVARCHAR(10)
@@ -86,7 +87,7 @@ BEGIN
 
    DECLARE @c_priority  NVARCHAR(5)
    SELECT StorerKey, SKU, LOC FromLOC, LOC ToLOC, Lot, Id, Qty, Qty QtyMoved, Qty QtyInPickLOC,
-   @c_priority Priority, Lot UOM, Lot PackKey
+   @c_priority Priority, Lot UOM, Lot PackKey, '0' RefNo   --WL01 (Use RefNo as Flag to show @)
    INTO #REPLENISHMENT
    FROM LOTXLOCXID (NOLOCK)
    WHERE 1 = 2
@@ -563,7 +564,8 @@ BEGIN
                            PackKey,
                            Priority,
                            QtyMoved,
-                           QtyInPickLOC)
+                           QtyInPickLOC,
+                           Refno)   --WL01
                            VALUES (
                            @c_CurrentStorer,
                            @c_CurrentSKU,
@@ -575,7 +577,8 @@ BEGIN
                            @c_UOM,
                            @c_Packkey,
                            @c_CurrentPriority,
-                           0,0)
+                           0,0,
+                           'N')   --WL01
                         END 
                      END
                      SELECT @n_numberofrecs = @n_numberofrecs + 1
@@ -629,15 +632,46 @@ BEGIN
          #REPLENISHMENT.toLOC = SKUxLOC.LOC
       END
    END
+
+   --WL01 START
+   DECLARE @n_QtyFlag INT
+   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey, R.Priority, R.UOM
+   FROM #REPLENISHMENT R
+
+   OPEN CUR_LOOP
+
+   FETCH NEXT FROM CUR_LOOP INTO @c_FromLOC, @c_FromID, @c_CurrentLoc, @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey, @c_Priority, @c_UOM
+   
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      SELECT @n_QtyFlag = (SKUxLOC.Qty - (SKUxLOC.QtyPicked + SKUxLOC.QtyAllocated))
+      FROM SKUxLOC (NOLOCK)
+      WHERE SKUxLOC.StorerKey = @c_CurrentStorer
+      AND SKUxLOC.SKU = @c_CurrentSKU
+      AND SKUxLOC.Loc = @c_CurrentLoc
+
+      UPDATE #REPLENISHMENT
+      SET RefNo = CAST(CASE WHEN @n_QtyFlag < 0 THEN 1 ELSE 0 END AS NVARCHAR(1))
+      WHERE StorerKey = @c_CurrentStorer
+      AND SKU = @c_CurrentSKU
+      AND ToLoc = @c_CurrentLoc
+
+      FETCH NEXT FROM CUR_LOOP INTO @c_FromLOC, @c_FromID, @c_CurrentLoc, @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey, @c_Priority, @c_UOM
+   END
+   CLOSE CUR_LOOP
+   DEALLOCATE CUR_LOOP
+   --WL01 END
+
    /* Insert Into Replenishment Table Now */
    DECLARE @b_success int,
    @n_err     int,
    @c_errmsg  NVARCHAR(255)
    DECLARE CUR1 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-   SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey, R.Priority, R.UOM
+   SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey, R.Priority, R.UOM, R.RefNo   --WL01
    FROM #REPLENISHMENT R
    OPEN CUR1
-   FETCH NEXT FROM CUR1 INTO @c_FromLOC, @c_FromID, @c_CurrentLoc, @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey, @c_Priority, @c_UOM
+   FETCH NEXT FROM CUR1 INTO @c_FromLOC, @c_FromID, @c_CurrentLoc, @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey, @c_Priority, @c_UOM, @n_QtyFlag   --WL01
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       EXECUTE nspg_GetKey
@@ -665,7 +699,8 @@ BEGIN
          Qty,
          UOM,
          PackKey,
-         Confirmed)
+         Confirmed,
+         RefNo)   --WL01
          VALUES ('IDS',
          @c_ReplenishmentKey,
          @c_CurrentStorer,
@@ -677,11 +712,12 @@ BEGIN
          @n_FromQty,
          @c_UOM,
          @c_PackKey,
-         'N')
+         'N',
+         @n_QtyFlag)   --WL01
          SELECT @n_err = @@ERROR
 
       END -- IF @b_success = 1
-      FETCH NEXT FROM CUR1 INTO @c_FromLOC, @c_FromID, @c_CurrentLoc, @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey, @c_Priority, @c_UOM
+      FETCH NEXT FROM CUR1 INTO @c_FromLOC, @c_FromID, @c_CurrentLoc, @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey, @c_Priority, @c_UOM, @n_QtyFlag   --WL01
    END -- While
    CLOSE CUR1 
    DEALLOCATE CUR1
@@ -699,7 +735,7 @@ QUIT_SP:
    BEGIN
       SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey,
       SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
-      ,LA.Lottable04 --GOH01
+      ,LA.Lottable04, R.RefNo --GOH01   --WL01
       FROM  REPLENISHMENT R (NOLOCK) 
       JOIN  SKU (NOLOCK) ON (SKU.Sku = R.Sku AND  SKU.StorerKey = R.StorerKey)
       JOIN  LOC (NOLOCK) ON (LOC.Loc = R.FromLoc)
@@ -715,7 +751,7 @@ QUIT_SP:
    BEGIN
       SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey,
       SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
-      ,LA.Lottable04    --GOH01
+      ,LA.Lottable04, R.RefNo    --GOH01   --WL01
       FROM  REPLENISHMENT R (NOLOCK), SKU (NOLOCK), LOC (NOLOCK), PACK (NOLOCK) -- Pack table added by Jacob. Date: Jan 03, 2001
       , LOTATTRIBUTE LA (NOLOCK)    --GOH01
       WHERE SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey

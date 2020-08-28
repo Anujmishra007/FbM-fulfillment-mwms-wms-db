@@ -41,6 +41,7 @@ GO
 /* 16-Nov-2015  Leong     1.5   SOS# 356792 - Include missing column.   */
 /* 10-May-2016	 CSCHONG   1.6   SOS# 369615 - add report config (CS01)  */
 /* 05-Oct-2016  CSCHONG   1.7   WMS-393 - Add new field (CS02)          */
+/* 11-Aug-2020  WLChooi   1.8   WMS-14653 - Modify layout for KR (WL01) */
 /************************************************************************/
 
 CREATE PROC [dbo].[nspConsoPickList18] (@as_LoadKey NVARCHAR(10) )
@@ -216,20 +217,25 @@ BEGIN
          --(Wan01) - END
          ISNULL(Storer.ConsigneeFor,'') AS ConsigneeFor, --NJOW01
          CASE WHEN ISNULL(C.Code,'') <> '' THEN 'Y' ELSE 'N' END AS 'ShowSubReport',
-         S1.SUSR2                                                                    --(CS02)
+         S1.SUSR2,                                                                   --(CS02)
+         ISNULL(CL.Short,'N') AS ShowCols,   --WL01
+         SUBSTRING(ISNULL(ORD.Notes,''),1,255) AS Notes   --WL01
       FROM LoadPlan WITH (NOLOCK)
       INNER JOIN LoadPlanDetail WITH (NOLOCK) ON (LoadPlan.LoadKey = LoadPlanDetail.LoadKey)
      --(Wan01) - START
       INNER JOIN PickHeader WITH (NOLOCK) ON (PickHeader.ExternOrderKey = LoadPlan.LoadKey)
                                           AND(PickHeader.Orderkey = LoadPlanDetail.Orderkey)
-        INNER JOIN PickDetail WITH (NOLOCK) ON (PickDetail.OrderKey = PickHeader.OrderKey)
-        INNER JOIN Loc        WITH (NOLOCK) ON (Loc.Loc             = PickDetail.Loc)
-        INNER JOIN Storer     WITH (NOLOCK) ON (PickDetail.Storerkey = Storer.Storerkey)  --NJOW01
-        LEFT JOIN CODELKUP C WITH (nolock) ON C.storerkey= PickDetail.Storerkey               
-               AND listname = 'REPORTCFG' and code ='ShowSubReport'                            
-	            AND long='r_dw_consolidated_pick18'  
-	     JOIN Orders ORD WITH (NOLOCK) ON ord.OrderKey=pickheader.OrderKey                  -- (CS02)
-	     JOIN Storer S1 WITH (NOLOCK) ON S1.StorerKey=ord.ConsigneeKey                      ---  (CS02)      
+      INNER JOIN PickDetail WITH (NOLOCK) ON (PickDetail.OrderKey = PickHeader.OrderKey)
+      INNER JOIN Loc        WITH (NOLOCK) ON (Loc.Loc             = PickDetail.Loc)
+      INNER JOIN Storer     WITH (NOLOCK) ON (PickDetail.Storerkey = Storer.Storerkey)  --NJOW01
+      LEFT JOIN CODELKUP C WITH (nolock) ON C.storerkey= PickDetail.Storerkey               
+                                        AND listname = 'REPORTCFG' and code ='ShowSubReport'                            
+                                        AND long='r_dw_consolidated_pick18'  
+      JOIN Orders ORD WITH (NOLOCK) ON ord.OrderKey=pickheader.OrderKey                  -- (CS02)
+      JOIN Storer S1 WITH (NOLOCK) ON S1.StorerKey=ord.ConsigneeKey                      ---  (CS02)     
+      LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.Listname = 'REPORTCFG' AND CL.Code = 'ShowCols'   --WL01
+                                         AND CL.Storerkey = PickDetail.Storerkey   --WL01
+                                         AND CL.Long = 'r_dw_consolidated_pick18'  --WL01
       WHERE LoadPlan.LoadKey = @as_LoadKey
       --(Wan01) - END
    END

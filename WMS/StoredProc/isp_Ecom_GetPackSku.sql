@@ -27,6 +27,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 25-Jan-2019 Wan01    1.0   WMS-7669 - [CN] Doterra - Doterra ECOM    */
 /*                            Packing_CR                                */
+/* 25-Aug-2020 WLChooi  1.1   INC1266552 - Fix not to show Orderkey in  */
+/*                            ErrMsg due to Exceed detect deadlock if   */
+/*                            Orderkey in ErrMsg contains '1205', it    */
+/*                            will cause Exceed to hang and stuck in    */
+/*                            infinite loop (WL01)                      */
 /************************************************************************/
 CREATE PROC isp_Ecom_GetPackSku 
             @c_OrderKey    NVARCHAR(10)
@@ -173,7 +178,8 @@ BEGIN
          SET @n_Continue = 3
          SET @n_Err = 50100
          SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
-                       + 'Sku not found for Order #: ' + RTRIM(@c_Orderkey)
+                       --+ 'Sku not found for Order #: ' + RTRIM(@c_Orderkey)   --WL01
+                       + 'Sku not found for this Order #'   --WL01
                        + '.(isp_Ecom_GetPackSku)'
          GOTO QUIT
       END 

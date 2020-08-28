@@ -32,6 +32,7 @@ GO
 /* 04-JUL-2017 Wan02    1.2   WMS-5011 - [CR] - SG Logitech - MRP Label */
 /* 17-JUN-2018 JimmyTan 1.3   WMS-5437 - [CR] - SG Logitech - MRP Label */
 /* 23-Aug-2019 CSCHONG  1.2   WMS-10266 revised field logic (CS01)      */
+/* 12-Aug-2020 WLChooi  1.5   WMS-14716 - Modify Logic (WL01)           */
 /************************************************************************/
 CREATE PROC [dbo].[isp_MRPLabel01]
            @c_PickSlipNo         NVARCHAR(10)
@@ -112,7 +113,7 @@ BEGIN
       ,  Sku            NVARCHAR(10)
       ,  MaxSurface     FLOAT
       ,  Qty            INT
-	  ,  COO			NVARCHAR(150)
+      ,  COO			   NVARCHAR(150)
       ,  SI_ExtFld03    MONEY           NULL  DEFAULT(0.00)
       ,  SI_ExtFld21    NVARCHAR(4000)  NULL  DEFAULT('')
       ,  SI_ExtFld22    NVARCHAR(4000)  NULL  DEFAULT('')
@@ -151,7 +152,7 @@ BEGIN
       ,  Sku
       ,  MaxSurface
       ,  Qty
-	  ,	 COO
+      ,	COO
       )
    SELECT DISTINCT   
          PACKHEADER.Orderkey
@@ -168,7 +169,7 @@ BEGIN
                            ELSE (PACK.LengthUOM3* PACK.HeightUOM3)
                            END
       ,  Qty = SUM(PACKDETAIL.Qty)
-	  ,  COO = IsNull((Select MAX(CL.Description)
+      ,  COO = IsNull((Select MAX(CL.Description)
 				From dbo.PickDetail PD with (nolock) Inner Join dbo.LotAttribute LA with (nolock) 
 						ON LA.StorerKey = PD.StorerKey and LA.SKU = PD.SKU and LA.Lot = PD.Lot
 						Inner Join dbo.CodeLkUp CL with (nolock) on CL.Code = LA.Lottable11 AND CL.Storerkey = PD.Storerkey   --(CS01)
@@ -286,7 +287,7 @@ BEGIN
                         + ISNULL(RTRIM(B_Address1),'') + ' ' 
                         + ISNULL(RTRIM(B_Address2),'') + ' ' 
                         + ISNULL(RTRIM(B_Address3),'') + ' ' 
-   + ISNULL(RTRIM(B_Address4),'') + ' ' 
+                        + ISNULL(RTRIM(B_Address4),'') + ' ' 
                         + ISNULL(RTRIM(B_City),'') + ' ' 
                         + ISNULL(RTRIM(B_State),'') + ' ' 
                         + ISNULL(RTRIM(B_Zip),'') + ' ' 
@@ -362,7 +363,7 @@ QUIT_SP:
                      + ISNULL(@c_LGTRGST_Addr,'')
       ,  ExtFld21 = 'Generic Name: ' + TMP.SI_ExtFld21
       ,  Qty = 'Net Quantity: 1N'
-	  ,  COO = 'Country of Origin: ' + TMP.COO
+      ,  COO = 'Country of Origin: ' + TMP.COO
       ,  ExtFld22 = 'Package Contains: ' + TMP.SI_ExtFld22 
       --,  N'MRP ' + FORMAT(CONVERT(FLOAT,TMP.SI_ExtFld03), 'C', 'ta-IN') + ' (inclusive of all taxes)'
       ,  SI_ExtFld03 = N'MRP ' + NCHAR(8377) + ' ' + FORMAT(TMP.SI_ExtFld03, '###,###,##0.00') + ' (Inclusive of all taxes)'  --(Wan02)
@@ -371,19 +372,25 @@ QUIT_SP:
       ,  ComplainTo  = @c_LGTCC_Company               + ' '
                      + @c_LGTCC_Address1              + ' '
                      + @c_LGTCC_Address2              + ' '
-                     + @c_LGTCC_Address3              + ' '
-                     + @c_LGTCC_Address4              + ' '
-                     + @c_LGTCC_City                  + ' '
-                     + @c_LGTCC_State                 + ' '
-                     + @c_LGTCC_Zip                   + ' '
-                     + @c_LGTCC_Country  
+                     --+ @c_LGTCC_Address3              + ' '   --WL01
+                     --+ @c_LGTCC_Address4              + ' '   --WL01
+                     --+ @c_LGTCC_City                  + ' '   --WL01
+                     --+ @c_LGTCC_State                 + ' '   --WL01
+                     --+ @c_LGTCC_Zip                   + ' '   --WL01
+                     --+ @c_LGTCC_Country  
       ,  LGTCC_Phone1   = 'Tel: ' + @c_LGTCC_Phone1   
-      ,  LGTCC_Email1   = 'Email ID: ' + @c_LGTCC_Email1   
+      ,  LGTCC_Email1   = 'Web: ' + @c_LGTCC_Email1   --WL01   
       ,  LGTCC_Contact1 = 'For customer complaint, please contact: ' + @c_LGTCC_Contact1 
       ,  LGTCC_Notes1 = CASE WHEN OH.Consigneekey = '218793' THEN  'Value for customs purposes. ' + @c_LGTCC_Notes1 ELSE ' ' END 
       ,  MFGBy_UL = '_________'
       ,  IMPBy_UL = '______________________________'
       ,  RGSTBy_UL= '____________________'
+      ,  ComplainTo2 = @c_LGTCC_Address3              + ' '   --WL01
+                     + @c_LGTCC_Address4              + ' '   --WL01
+                     + @c_LGTCC_City                  + ' '   --WL01
+                     + @c_LGTCC_State                 + ' '   --WL01
+                     + @c_LGTCC_Zip                   + ' '   --WL01
+                     + @c_LGTCC_Country                       --WL01
    FROM #TMP_PACKSKU TMP
    JOIN #TMP_PRNCOPY TMP_PRN ON (TMP.RowRef = TMP_PRN.RowRef)   
    JOIN ORDERS     OH  WITH (NOLOCK) ON (TMP.Orderkey = OH.Orderkey)
