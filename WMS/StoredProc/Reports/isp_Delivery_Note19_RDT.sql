@@ -32,6 +32,7 @@ GO
 /* 28-Nov-2016  CSCHONG  1.3   WMS-681 Change sorting by Conditon (CS04) */
 /* 05-Feb-2018  CSCHONG  1.4   WMS-3165 -revise A1 field by country(CS05)*/
 /* 10-MAY-2018  CSCHONG  1.5   WMS-4849 - revised field logic (CS06)     */
+/* 27-Jul-2020  WLChooi  1.6   WMS-14388 - Modify sorting for INDIA(WL01)*/
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_Delivery_Note19_RDT] 
@@ -83,7 +84,9 @@ BEGIN
             ,@c_sql              NVARCHAR(MAX)         --CS05
             ,@c_insertsql        NVARCHAR(MAX)         --Cs05
             ,@c_chkCancelitem    NVARCHAR(5)           --CS06
-            ,@c_OHORDkey         NVARCHAR(10)           --CS06
+            ,@c_OHORDkey         NVARCHAR(10)          --CS06
+            ,@c_SortByLoc        NVARCHAR(1)           --WL01
+            ,@c_ExecOrderByLoc   NVARCHAR(4000)        --WL01
 
    DECLARE @c_ExecStatements NVARCHAR(MAX)
    DECLARE @c_ExecStatements2 NVARCHAR(MAX)
@@ -128,6 +131,19 @@ BEGIN
    --CS05 End
 
    HEADER:
+      --WL01 START
+      SET @c_SortByLoc = 'N'
+      SET @c_ExecOrderByLoc = ''
+
+      SELECT TOP 1 @c_storerkey = Storerkey
+      FROM ORDERS (NOLOCK)       
+      WHERE Loadkey = @c_Loadkey
+      
+      SELECT @c_SortByLoc = ISNULL(CODELKUP.Short,'N')
+      FROM CODELKUP (NOLOCK)
+      WHERE CODELKUP.LISTNAME = 'REPORTCFG' AND CODELKUP.Code = 'SortByLoc' AND CODELKUP.code2 = 'r_dw_delivery_note19_rdt'
+      AND CODELKUP.Long = 'r_dw_delivery_note19_rdt' AND CODELKUP.Storerkey = @c_Storerkey
+      --WL01 END
 
       CREATE TABLE #TMP_ORDH
             (  SeqNo          INT NOT NULL IDENTITY (1,1) PRIMARY KEY 
@@ -174,6 +190,16 @@ BEGIN
       	END	
       END	
       /*CS04 End*/
+
+      --WL01 START
+      IF ISNULL(@c_SortByLoc,'N') = 'Y'
+      BEGIN
+         SELECT @c_ExecOrderByLoc = ' LOC.[Floor], LOC.Pickzone,LOC.LocAisle, LOC.LogicalLocation, ' + CHAR(13) + @c_ExecOrderBy
+         SELECT @c_ExecOrderBy = @c_ExecOrderByLoc
+         SET @c_ExecHaving = ', LOC.[Floor], LOC.Pickzone,LOC.LocAisle, LOC.LogicalLocation ' + @c_ExecHaving
+         --SELECT @c_ExecOrderBy
+      END
+      --WL01 END
 
       SET @c_ExecStatements = 'SELECT PD.Orderkey,'''' ' +
                 --  ',PD.SKU ' +
@@ -351,7 +377,7 @@ BEGIN
             ',ISNULL(RTRIM(C_Address3),'''') ' +  
             ',ISNULL(RTRIM(C_Address4),'''') ' +  
             ',ISNULL(PD.notes,'''') ' + 
-             ' ORDER BY TMP.Seqno '
+            'ORDER BY TMP.Seqno '
             --' ORDER BY ISNULL(PD.notes,''''), OH.Orderkey '  
 
   
@@ -398,9 +424,9 @@ BEGIN
            ',  A26       '+   --(CS02)                
            ',  A27       '+   --(CS02)                
            ',  A28       '+   --(CS02)                
-           ', C1         '+                           
-           ', C2         '+                           
-           ', C3         '+                           
+           ',  C1        '+                           
+           ',  C2        '+                           
+           ',  C3        '+                           
            ')            '                          
                
                                   
@@ -427,13 +453,13 @@ BEGIN
                       
       --CS05 END
 
-IF @b_debug = 1
-BEGIN
-   INSERT INTO TRACEINFO (TraceName, timeIn, Step1, Step2, step3, step4, step5)
-   VALUES ('isp_Delivery_Note19_RDT', getdate(), @c_DWCategory, @c_Loadkey, @c_orderkey, '', suser_name())
-END
-
-/*CS06 Start*/
+   IF @b_debug = 1
+   BEGIN
+      INSERT INTO TRACEINFO (TraceName, timeIn, Step1, Step2, step3, step4, step5)
+      VALUES ('isp_Delivery_Note19_RDT', getdate(), @c_DWCategory, @c_Loadkey, @c_orderkey, '', suser_name())
+   END
+   
+   /*CS06 Start*/
 
  DECLARE CUR_OrderLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT Orderkey   
@@ -525,9 +551,9 @@ INSERT INTO #TMP_HDR(Orderkey
             ,  A26           --(CS02)  
             ,  A27           --(CS02)  
             ,  A28           --(CS02)  
-            , C1
-            , C2
-            , C3    
+            ,  C1
+            ,  C2
+            ,  C3    
              )
 SELECT Orderkey  
             ,  A1            
@@ -570,9 +596,9 @@ SELECT Orderkey
             ,  A26           --(CS02)  
             ,  A27           --(CS02)  
             ,  A28           --(CS02)  
-            , C1
-            , C2
-            , C3  
+            ,  C1
+            ,  C2
+            ,  C3  
   FROM #TMP_HDR
  WHERE seqno = 1
 
@@ -658,9 +684,9 @@ END
             ,  A26           --(CS02)  
             ,  A27           --(CS02)  
             ,  A28           --(CS02)  
-            , C1
-            , C2
-            , C3  
+            ,  C1
+            ,  C2
+            ,  C3  
             )
          SELECT Orderkey  
             ,  A1            
@@ -703,9 +729,9 @@ END
             ,  A26           --(CS02)  
             ,  A27           --(CS02)  
             ,  A28           --(CS02)  
-            , C1
-            , C2
-            , C3  
+            ,  C1
+            ,  C2
+            ,  C3  
             FROM #TMP_HDR 
             WHERE ORDERKEY = @c_GetOrderkey 
             AND Ordgrp = 1       
@@ -724,7 +750,9 @@ END
    
       SELECT * FROM #TMP_HDR
       --ORDER BY pnotes,orderkey,OrdGrp 
-      ORDER BY seqno
+      --ORDER BY seqno   --WL01
+      ORDER BY CASE WHEN ISNULL(@c_SortByLoc,'N') = 'Y' THEN SeqNo END DESC,   --WL01
+               CASE WHEN ISNULL(@c_SortByLoc,'N') = 'N' THEN Seqno END ASC     --WL01
    
       GOTO QUIT_SP
 
@@ -783,8 +811,8 @@ END
 					 ,@c_B18        = ISNULL(MAX(CASE WHEN CL.Code = 'B18' THEN RTRIM(CL.Description) ELSE '' END),'') 
 					 ,@c_B19        = ISNULL(MAX(CASE WHEN CL.Code = 'B19' THEN RTRIM(CL.Description) ELSE '' END),'')
 					 ,@c_B20        = ISNULL(MAX(CASE WHEN CL.Code = 'B20' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_B21       = ISNULL(MAX(CASE WHEN CL.Code = 'B21' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_B22       = ISNULL(MAX(CASE WHEN CL.Code = 'B22' THEN RTRIM(CL.Description) ELSE '' END),'')
+					 ,@c_B21        = ISNULL(MAX(CASE WHEN CL.Code = 'B21' THEN RTRIM(CL.Description) ELSE '' END),'')
+					 ,@c_B22        = ISNULL(MAX(CASE WHEN CL.Code = 'B22' THEN RTRIM(CL.Description) ELSE '' END),'')
          FROM CODELKUP CL WITH (NOLOCK) 
          WHERE (CL.ListName = 'HMDN' AND CL.Storerkey = @c_Storerkey)
     
@@ -905,8 +933,6 @@ END
       FROM #TMP_ORDDET
       WHERE #TMP_ORDDET.RecGroup = @n_RecGroup
 
-    
-
       IF @n_NoOfLine > @n_TotDetail
       BEGIN
          SET @n_LineNeed = @n_NoOfLine - ( @n_SerialNo % @n_NoOfLine )
@@ -921,17 +947,24 @@ END
          END
       END 
 
- SELECT * FROM #TMP_ORDDET
- WHERE RecGroup = @n_RecGroup
- Order by serialno
+   SELECT * FROM #TMP_ORDDET
+   WHERE RecGroup = @n_RecGroup
+   Order by serialno
      
-  GOTO QUIT_SP
+   --WL01 START
+   --GOTO QUIT_SP
 
-  DROP TABLE #TMP_ORD
-  DROP TABLE #TMP_HDR
-  DROP TABLE #TMP_ORDH
+   IF OBJECT_ID('tempdb..#TMP_ORDDET') IS NOT NULL
+      DROP TABLE #TMP_ORDDET
 
-   QUIT_SP:
+   IF OBJECT_ID('tempdb..#TMP_HDR') IS NOT NULL
+      DROP TABLE #TMP_HDR
+
+   IF OBJECT_ID('tempdb..#TMP_ORDH') IS NOT NULL
+      DROP TABLE #TMP_ORDH
+   --WL01 END
+
+QUIT_SP:
 END       
       
 GO
@@ -942,3 +975,4 @@ GO
        
 GRANT EXECUTE ON isp_Delivery_Note19_RDT TO NSQL
 GO     
+
