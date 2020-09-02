@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRDTGenCountSheet]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRDTGenCountSheet]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrContainerDetailDelete]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[ntrContainerDetailDelete]
 GO
 
 SET QUOTED_IDENTIFIER OFF 
