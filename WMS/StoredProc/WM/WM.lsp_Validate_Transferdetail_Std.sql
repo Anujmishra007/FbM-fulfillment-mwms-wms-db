@@ -430,7 +430,7 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 557506
-         SET @c_errmsg = 'Please Empty Lottable01 (' + @c_LottableLabel + ') for SKU: ' + @c_ToSku + ' (lsp_Validate_TransferDetail_Std)'
+         SET @c_errmsg = 'Please Empty To Lottable01 (' + @c_LottableLabel + ') for SKU: ' + @c_ToSku + ' (lsp_Validate_TransferDetail_Std)'
                         + '|' + @c_LottableLabel + '|' + @c_ToSku
          GOTO EXIT_SP
       END   
@@ -444,7 +444,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 557507
-            SET @c_errmsg = 'Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_TransferDetail_Std)'
+            SET @c_errmsg = 'To Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_TransferDetail_Std)'
                           + '|' + @c_Cnt + '|' + @c_LottableLabel
             GOTO EXIT_SP
          END
@@ -465,16 +465,20 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 557508
-            SET @c_errmsg = 'Lottable' + @c_Cnt + ' value does not match in List Name:' + @c_MatchCfgValue + '. (lsp_Validate_TransferDetail_Std)'
+            SET @c_errmsg = 'To Lottable' + @c_Cnt + ' value does not match in List Name:' + @c_MatchCfgValue + '. (lsp_Validate_TransferDetail_Std)'
                            + '|' + @c_Cnt + '|' + @c_MatchCfgValue
             GOTO EXIT_SP
          END
       
-         IF @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND ISNULL(@c_LottableValue,'') <> ''
+         IF @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND
+            (
+             ( @n_Cnt NOT IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '' ) OR
+             ( @n_Cnt IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '19000101' )
+            )
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 557509
-            SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_ToSku + '. Edit disallow. (lsp_Validate_TransferDetail_Std)'
+            SET @c_errmsg = 'To Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_ToSku + '. Edit disallow. (lsp_Validate_TransferDetail_Std)'
                            + '|' + @c_Cnt + '|' + @c_ToSku
             GOTO EXIT_SP
          END
