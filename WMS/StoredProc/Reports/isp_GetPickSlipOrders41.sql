@@ -1,6 +1,6 @@
---IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GetPickSlipOrders41' AND type = 'P')
---   DROP PROC isp_GetPickSlipOrders41
---GO
+IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GetPickSlipOrders41' AND type = 'P')
+   DROP PROC isp_GetPickSlipOrders41
+GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 

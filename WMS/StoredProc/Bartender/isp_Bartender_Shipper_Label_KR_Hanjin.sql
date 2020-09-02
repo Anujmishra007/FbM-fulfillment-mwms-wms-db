@@ -1,4 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[[isp_Bartender_Shipper_Label_KR_Hanjin]]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Bartender_Shipper_Label_KR_Hanjin]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_Bartender_Shipper_Label_KR_Hanjin]
 GO

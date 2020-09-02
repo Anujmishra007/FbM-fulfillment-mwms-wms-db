@@ -37,7 +37,7 @@ GO
 /* 17-Mar-2016  CSCHONG    -366296 - Change Sorting  (CS02)             */  
 /************************************************************************/  
   
-ALTER PROC nsp_NikePickPackList (@c_wavekey_start NVARCHAR(10), @c_wavekey_end NVARCHAR(10),   
+CREATE PROC nsp_NikePickPackList (@c_wavekey_start NVARCHAR(10), @c_wavekey_end NVARCHAR(10),   
                                   @c_storerkey_start NVARCHAR(10), @c_storerkey_end NVARCHAR(10),   
                                   @c_externorderkey_start NVARCHAR(10), @c_externorderkey_end NVARCHAR(10),   
                                   @c_invoiceno_start NVARCHAR(10), @c_invoiceno_end NVARCHAR(10))  

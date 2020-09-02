@@ -1,6 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSummary_01]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSummary01]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetPickSummary_01]
+DROP PROCEDURE [dbo].[isp_GetPickSummary01]
 GO
 
 SET ANSI_NULLS OFF

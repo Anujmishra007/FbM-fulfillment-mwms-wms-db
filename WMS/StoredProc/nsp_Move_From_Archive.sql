@@ -1,3 +1,7 @@
+if (objectProperty(object_id('dbo.nsp_Move_From_Archive'), 'IsPRocedure') is not null)
+	drop procedure dbo.nsp_Move_From_Archive 
+GO
+
 /************************************************************************/
 /* Stored Proc : nsp_Move_From_Archive                                  */
 /* Creation Date:                                                       */

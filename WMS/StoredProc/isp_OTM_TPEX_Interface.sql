@@ -44,7 +44,7 @@ GO
 /* 11-Feb-2020  CSCHONG 1.0  WMS-12015 revised field logic (CS01)       */
 /************************************************************************/
 
-CREARE  PROC   isp_OTM_TPEX_Interface
+CREATE  PROC   isp_OTM_TPEX_Interface
                @c_TableName      NVARCHAR(30)
 ,              @c_Key1           NVARCHAR(10)
 ,              @c_Key2           NVARCHAR(5)

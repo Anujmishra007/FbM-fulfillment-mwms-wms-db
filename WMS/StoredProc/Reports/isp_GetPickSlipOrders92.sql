@@ -1,5 +1,5 @@
 IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GetPickSlipOrders92' AND type = 'P')
-   DROP PROC isp_GetPickSlipOrders928
+   DROP PROC isp_GetPickSlipOrders92
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO

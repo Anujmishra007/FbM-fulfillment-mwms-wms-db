@@ -47,7 +47,7 @@ VALUES ('WS_TEMP_TRACELOG','dbo.WS_TEMP_TRACELOG','Purge WS_TEMP_TRACELOG', 90,'
   
 */  
        
-ALTER PROC [dbo].[isp_GenericTBLPurging]      
+CREATE PROC [dbo].[isp_GenericTBLPurging]      
 ( @cPurgeGroup    Nvarchar(30) = '',  
   @b_debug         INT         = 0   
           )           

@@ -1,5 +1,7 @@
+if (objectProperty(object_id('dbo.nsp_BUILD_ARCHIVE_TABLE'), 'IsPRocedure') is not null)
+	drop procedure dbo.nsp_BUILD_ARCHIVE_TABLE 
+GO
 
-/****** Object:  StoredProcedure [dbo].[nsp_BUILD_ARCHIVE_TABLE]    Script Date: 11/25/2015 11:36:44 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF

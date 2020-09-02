@@ -1,4 +1,10 @@
-  
+ IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_Bartender_Shipper_Label_JP_HMCOS]') AND OBJECTPROPERTY(Id,N'IsProcedure') = 1 )
+   DROP PROCEDURE [dbo].[isp_Bartender_Shipper_Label_JP_HMCOS]
+GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO 
 /********************************************************************************/                   
 /* Copyright: IDS                                                               */                   
 /* Purpose: isp_Bartender_Shipper_Label_JP_HMCOS                                */                   
