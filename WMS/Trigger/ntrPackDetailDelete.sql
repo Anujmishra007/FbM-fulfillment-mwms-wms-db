@@ -38,6 +38,7 @@ GO
 /*                              packinfo.qty                            */
 /* 2017-May-29  Ung       1.8   WMS-1919 Add serial no                  */
 /* 2019-Mar-13  Ung       1.9   WMS-8134 Add PackDetailInfo             */
+/* 2020-Sep-01  NJOW02    1.10  WMS-15009 - call custom stored proc     */
 /************************************************************************/        
 CREATE TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
 FOR  DELETE      
@@ -78,6 +79,48 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  BEGIN      
      SELECT @n_continue = 4      
  END       
+
+   --NJOW02
+   IF @n_continue=1 or @n_continue=2          
+   BEGIN
+      IF EXISTS (SELECT 1 FROM DELETED d  
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'PackdetailTrigger_SP')  
+      BEGIN        	  
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+      	 SELECT * 
+      	 INTO #INSERTED
+      	 FROM INSERTED
+            
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+   
+      	 SELECT * 
+      	 INTO #DELETED
+      	 FROM DELETED
+   
+         EXECUTE dbo.isp_PackdetailTrigger_Wrapper
+                   'DELETE'  --@c_Action
+                 , @b_Success  OUTPUT  
+                 , @n_Err      OUTPUT   
+                 , @c_ErrMsg   OUTPUT  
+   
+         IF @b_success <> 1  
+         BEGIN  
+            SELECT @n_continue = 3  
+                  ,@c_errmsg = 'ntrPackDetailDelete ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END  
+         
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END   
 
    --(Kc01) - start
    IF @n_continue = 1 OR @n_continue = 2
