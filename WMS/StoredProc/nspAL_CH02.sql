@@ -26,6 +26,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 06-SEP-2020  NJOW01  1.0   Fix - include isp_Init_Allocate_Candidates*/
 /************************************************************************/    
 CREATE  PROC [dbo].[nspAL_CH02]        
    @c_DocumentNo NVARCHAR(10),  
@@ -83,6 +84,8 @@ BEGIN
    
    IF @n_UOMBase = 0
      SET @n_UOMBase = 1
+
+   EXEC isp_Init_Allocate_Candidates       
 
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0))
