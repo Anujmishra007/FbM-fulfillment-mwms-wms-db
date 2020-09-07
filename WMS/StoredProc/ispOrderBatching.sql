@@ -83,7 +83,9 @@ GO
 /* 18-07-2018   TLTING  2.8   Performance Tune (tlting03)               */
 /* 29-JUL-2019  CSCHONG 2.9   WMS-9278 - add new parameter (CS01)       */
 /* 19-Dec-2019  NJOW08  3.0   WMS-11479 - CN IKEA support group by      */
-/*                            loc.descr instead of pickzone             */ 
+/*                            loc.descr instead of pickzone             */  
+/* 03-Aug-2020  NJOW09  3.1   WMS-14563 Avoid split single order(mode 9)*/
+/*                            loc into two batch by config. Sort by loc */
 /* 19-Aug-2020  NJOW10  3.2   WMS-14811 determine single/multi order    */
 /*                            by ECOM_SINGLE_Flag                       */
 /************************************************************************/
@@ -139,6 +141,11 @@ BEGIN
    ,  @c_replenishrequire        NVARCHAR(1) --(CS01)
    ,  @c_OrderBatchBylocdescr    NVARCHAR(10)--NJOW08   
    ,  @c_OrderBatchByLocDescr_OPT1 NVARCHAR(50) --NJOW08
+   ,  @c_CurrLoc                   NVARCHAR(10) --NJOW09
+   ,  @c_NextLoc                   NVARCHAR(10) --NJOW09
+   --,  @c_CurrLocType               NVARCHAR(10) --NJOW09
+   ,  @c_OrdBatchM9LocNotSplitBth  NVARCHAR(30) --NJOW09
+   ,  @n_NextLocOrdCnt             INT          --NJOW09
    ,  @c_OrdBatchBySingleFlag      NVARCHAR(10) --NJOW10
 
   SET @c_ZoneList = @c_PickZones         --(Wan01)
@@ -388,6 +395,18 @@ BEGIN
            END             
         END
    END
+   
+   --NJOW09
+   SET @c_OrdBatchM9LocNotSplitBth = ''
+   EXEC nspGetRight  
+        @c_Facility  = @c_Facility   
+      , @c_StorerKey = @c_StorerKey  
+      , @c_sku       = NULL 
+      , @c_ConfigKey = 'OrdBatchM9LocNotSplitBth' 
+      , @b_Success   = @b_Success         OUTPUT  
+      , @c_authority = @c_OrdBatchM9LocNotSplitBth   OUTPUT    
+      , @n_err       = @n_err             OUTPUT    
+      , @c_errmsg    = @c_errmsg          OUTPUT     
 
  --NJOW10
    SET @c_OrdBatchBySingleFlag = ''
@@ -400,7 +419,7 @@ BEGIN
       , @c_authority = @c_OrdBatchBySingleFlag   OUTPUT    
       , @n_err       = @n_err             OUTPUT    
       , @c_errmsg    = @c_errmsg          OUTPUT     
-
+      
    --(Wan01) - START
    SET @c_BatchOrderZoneFromTask = ''
    EXEC nspGetRight  
@@ -661,7 +680,7 @@ BEGIN
       --(Wan01) - END
       IF @c_Mode IN ('1', '2', '3', '4', '5', '9')
       BEGIN
-         -- Exclude orders with total qty <= 1         
+         -- Exclude orders with total qty <= 1
          IF @c_Mode = '9'  --NJOW04
          BEGIN         	  
          	  IF @c_OrdBatchBySingleFlag = '1' --NJOW10
@@ -816,13 +835,41 @@ BEGIN
       
       WHILE (@n_Count > 0)
       BEGIN
-          IF @c_Mode = '9' --NJOW04
+          IF @c_Mode = '9' --NJOW04  single order
           BEGIN
-            SELECT TOP 1 
-                   @c_OrderKey = OrderKey
-            FROM #OrderTable O
-            GROUP BY Orderkey
-            ORDER BY MIN(O.Loc), O.OrderKey              
+          	IF @c_OrdBatchM9LocNotSplitBth = '1'
+          	BEGIN
+               --NJOW09              
+               SET @c_CurrLoc = ''
+               SELECT TOP 1 
+                      @c_OrderKey = O.OrderKey,
+                      @c_CurrLoc = MIN(O.Loc)
+               FROM #OrderTable O
+               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+               GROUP BY O.Orderkey
+               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey                        		
+
+               /*SET @c_CurrLocType = ''
+               SELECT TOP 1 
+                      @c_OrderKey = O.OrderKey,
+                      @c_CurrLoc = MIN(O.Loc),
+                      @c_CurrLocType = MIN(ISNULL(SL.LocationType,''))
+               FROM #OrderTable O
+               JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+               LEFT JOIN SKUXLOC SL (NOLOCK) ON L.Loc = SL.Loc AND PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')
+               GROUP BY O.Orderkey
+               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/                        		
+          	END
+          	ELSE
+          	BEGIN
+               SELECT TOP 1 
+                      @c_OrderKey = O.OrderKey
+               FROM #OrderTable O
+               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+               GROUP BY O.Orderkey
+               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey --NJOW09
+            END            
           END
          ELSE IF @n_Counter = 1
          BEGIN
@@ -905,14 +952,36 @@ BEGIN
          --NJOW02
          DELETE FROM #OrderAvgScore
          WHERE Orderkey = @c_Orderkey
+         
+         IF @c_Mode = '9' AND @c_OrdBatchM9LocNotSplitBth = '1' --NJOW09
+         BEGIN
+         	  SET @c_NextLoc = ''
+         	  SET @n_NextLocOrdCnt = 0
+            SELECT TOP 1 
+                   @c_NextLoc = MIN(O.Loc)
+            FROM #OrderTable O
+            JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+            GROUP BY O.Orderkey
+            ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey              
+
+            IF @c_Currloc <> @c_NextLoc
+            BEGIN
+            	  SELECT @n_NextLocOrdCnt = COUNT(1)
+            	  FROM  #OrderTable 
+            	  WHERE Loc = @c_NextLoc
+            END
+         END
 
          SET @n_Counter = @n_Counter + 1
 
          SELECT @n_Count = COUNT(1) 
          FROM #OrderTable
-
-         IF @n_Counter > @n_OrderCount
+         
+         IF @n_Counter > @n_OrderCount 
+            OR (@c_Mode = '9' AND  @c_OrdBatchM9LocNotSplitBth = '1' AND (@n_Counter - 1) + @n_NextLocOrdCnt > @n_OrderCount AND @c_Currloc <> @c_NextLoc) --NJOW09 if next loc ord cnt can't fit curr batch create new batch
+            --AND NOT (@c_Mode = '9' AND @c_CurrLoc = @c_NextLoc AND @c_CurrLocType NOT IN('PICK','CASE') AND @c_OrdBatchM9LocNotSplitBth = '1')  --NJOW09
          BEGIN
+         	  print 'close group'
             IF @b_debug = 1
             BEGIN
                SELECT 'DONE BatchNo: ' + CAST(@n_BatchNo AS NVARCHAR)
