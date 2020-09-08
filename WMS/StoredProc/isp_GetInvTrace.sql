@@ -1,13 +1,12 @@
-IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_GetInvTrace]')
-              and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_GetInvTrace]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetInvTrace]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_GetInvTrace]
 GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Stored Procedure: isp_GetInvTrace                                    */
 /* Creation Date: 17-Mar-2010                                           */
@@ -35,6 +34,14 @@ GO
 /* 2020-02-28   TLTING02  TraceInfo                                     */
 /* 2020-02-28   TLTING03  Performance tune                              */
 /************************************************************************/
+
+/*
+
+   INSERT INTO CodeLKUP (LISTNAME,Code,Description,Short, Long)
+   Select 'TraceInfo', 'GetInvTrace','isp_GetInvTrace log', 1 , ''
+
+   */
+
 CREATE  PROCEDURE [dbo].[isp_GetInvTrace]
         @dt_date_start datetime,
         @dt_date_end datetime,
@@ -91,7 +98,7 @@ CREATE  PROCEDURE [dbo].[isp_GetInvTrace]
         @c_lottable15_end NVARCHAR(30),
 		  /*CS01 end*/
         @c_trantype NVARCHAR(10),
-        @n_CutOffMonth   int  = 3   
+        @n_CutOffMonth   int  = 12   
 AS
 BEGIN
    SET NOCOUNT ON
@@ -124,8 +131,15 @@ BEGIN
    
    SET @d_CutofDate = dateadd(month, 0 - @n_CutOffMonth, getdate())
     
-   SET @d_CutofDate = convert(datetime, cast( year(@d_CutofDate ) as varchar) + '0' +  cast( MONTH(@d_CutofDate ) as varchar)   + '01' )
-    
+  --  Select dateadd(month, 0 - @n_CutOffMonth, getdate())
+
+  --  Select convert(datetime, left('0000'+ cast( year(@d_CutofDate ) as varchar), 4) + left('00' +  cast( MONTH(@d_CutofDate ) as varchar) , 2)  + '01' )
+
+  -- SET @d_CutofDate = DATEADD(month, DATEDIFF(month, 0, @d_CutofDate), 0)   -- 1st day of month
+   
+   SET @d_CutofDate = DATEADD(DAY,1,EOMONTH(@d_CutofDate,-1))
+ 
+
   DECLARE  @d_Trace_StartTime   DATETIME,     
            @d_Trace_EndTime    DATETIME,    
            @c_Trace_ModuleName NVARCHAR(20),     
@@ -255,11 +269,12 @@ BEGIN
      IF ISNULL(RTRIM(@c_arcdbname),'') <> ''
      BEGIN
         SELECT @sql = 'INSERT INTO #COMBINE_ITRN ' +     
-        + ' SELECT ITRN.Storerkey, ITRN.adddate, ITRN.SourceType, ITRN.Trantype, ITRN.Sku, '     
+        + ' SELECT TOP 1000000 ITRN.Storerkey, ITRN.adddate, ITRN.SourceType, ITRN.Trantype, ITRN.Sku, '     
         + '        ITRN.FromLoc, ITRN.ToLoc, ITRN.FromID, ITRN.ToID, ITRN.Lot, ITRN.Qty, ITRN.UOM, '     
         + '        ITRN.AddWho, ITRN.AddDate, ITRN.EditWho, ITRN.EditDate, ITRN.Sourcekey, ITRN.Itrnkey '     
         + ' FROM '+RTRIM(@c_arcdbname)+'.dbo.ITRN ITRN (NOLOCK) '     
-        + ' WHERE (ITRN.Storerkey BETWEEN RTRIM(@c_storerkey_start) AND RTRIM(@c_storerkey_end) ) '
+        + ' WHERE ( ITRN.adddate >=  @d_CutofDate )  ' --tlting03 
+        + ' AND (ITRN.Storerkey BETWEEN RTRIM(@c_storerkey_start) AND RTRIM(@c_storerkey_end) ) '
         + ' AND (ITRN.Sku BETWEEN RTRIM(@c_sku_start)  AND RTRIM(@c_sku_end) ) '
         + ' AND (ITRN.Lot BETWEEN RTRIM(@c_lot_start)  AND  RTRIM(@c_lot_end) )'
         + ' AND ((ITRN.FromLoc BETWEEN RTRIM(@c_loc_start)  AND  RTRIM(@c_loc_end) ) '
@@ -268,6 +283,7 @@ BEGIN
         + ' OR (ITRN.ToID BETWEEN RTRIM(@c_id_start)  AND RTRIM(@c_id_end) )) '
 		  + ' AND (ITRN.Adddate BETWEEN @dt_date_start AND @dt_date_end ) '
         + ' AND (ITRN.Trantype = RTRIM(@c_trantype) OR RTRIM(@c_trantype)=N''ALL'') '
+        + ' ORDER BY ITRN.adddate DESC '
         + ' OPTION(RECOMPILE) '  --tlting02
   
   
@@ -284,12 +300,13 @@ BEGIN
                                  ', @c_id_end nvarchar(18) ' +
                                  ', @dt_date_start datetime ' +
                                  ', @dt_date_end datetime ' +
-                                 ', @c_trantype nvarchar(18) '  
+                                 ', @c_trantype nvarchar(18) '  +
+                                 ', @d_CutofDate datetime ' 
 
          EXEC sp_executesql @sql, @c_SQLArgument, @c_storerkey_start, @c_storerkey_end
                , @c_sku_start, @c_sku_end, @c_lot_start, @c_lot_end
                , @c_loc_start, @c_loc_end, @c_id_start, @c_id_end
-               , @dt_date_start, @dt_date_end, @c_trantype 
+               , @dt_date_start, @dt_date_end, @c_trantype, @d_CutofDate  
          SET @c_cnt2 = @@ROWCOUNT
         --EXEC(@sql)         	  
      END
@@ -701,6 +718,5 @@ BEGIN
    END      
 END
 GO
-
-GRANT EXECUTE ON [dbo].[isp_GetInvTrace] TO NSQL 
+GRANT EXECUTE ON [dbo].[isp_GetInvTrace] TO nSQL 
 GO
