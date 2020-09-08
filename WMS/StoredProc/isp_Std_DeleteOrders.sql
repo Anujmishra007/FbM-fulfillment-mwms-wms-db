@@ -1,9 +1,12 @@
-IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Std_DeleteOrders]')
-              and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_Std_DeleteOrders]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Std_DeleteOrders]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_Std_DeleteOrders]
 GO
 
-
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /******************************************************************************/                 
 /* Copyright: LFL                                                             */                 
 /* Purpose: Delete Order and related records in other table                   */                 
@@ -55,7 +58,7 @@ BEGIN
    IF @c_StorerKey=''
    BEGIN
       SET @n_Error = 65007
-      SET @c_ErrMsg = 'OrderKey is Exists'
+      SET @c_ErrMsg = 'StorerKey is Exists'
       GOTO EXIT_SP            
    END
 
@@ -183,6 +186,5 @@ BEGIN
    END     
 END
 GO
-
-GRANT EXECUTE ON [dbo].[isp_Std_DeleteOrders] TO NSQL 
+GRANT EXECUTE ON [dbo].[isp_Std_DeleteOrders] TO nSQL 
 GO
