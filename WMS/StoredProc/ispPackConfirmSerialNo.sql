@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2019-03-14  Ung      1.1   WMS-8134 Add SKU.SerialNoCapture = 3      */
 /* 2019-08-29  NJOW01   1.2   Fix-Skip checking for PackSerialNoCapture */
+/* 2020-02-27  WLChooi  1.3   WMS-10615 - Add PACKNoCheckSerialNoCapture*/
+/*                            to skip check on PackSerialNo table (WL01)*/
 /************************************************************************/
 CREATE PROC [dbo].[ispPackConfirmSerialNo] 
             @c_PickSlipNo  NVARCHAR(10)               
@@ -41,15 +43,16 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE  
-           @n_StartTCnt       INT
-         , @n_Continue        INT    
-         
-         , @n_CartonNo        INT
-         , @c_Storerkey       NVARCHAR(15)
-         , @c_Facility        NVARCHAR(5)
-         , @c_Orderkey        NVARCHAR(10)
-         , @c_Loadkey         NVARCHAR(10)  
-         , @c_PackStatus      NVARCHAR(10)  
+           @n_StartTCnt                   INT
+         , @n_Continue                    INT    
+                                          
+         , @n_CartonNo                    INT
+         , @c_Storerkey                   NVARCHAR(15)
+         , @c_Facility                    NVARCHAR(5)
+         , @c_Orderkey                    NVARCHAR(10)
+         , @c_Loadkey                     NVARCHAR(10)  
+         , @c_PackStatus                  NVARCHAR(10)  
+         , @c_PACKNoCheckSerialNoCapture  NVARCHAR(1)   --WL01
             
    DECLARE @c_LabelNo NVARCHAR( 20), @c_LabelLine NVARCHAR(5), @n_QTY INT
    DECLARE @c_SerialNoKey NVARCHAR( 10), @c_SKU NVARCHAR(20), @c_SerialNo NVARCHAR(30), @n_SerialQTY INT, @c_Status NVARCHAR( 10)
@@ -84,9 +87,10 @@ BEGIN
       WHERE PH.Pickslipno = @c_Pickslipno   	    	 
    END
    
+   SELECT @c_PACKNoCheckSerialNoCapture = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PACKNoCheckSerialNoCapture')   --WL01
    SELECT @c_PackSerialNoCapture = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PackSerialNoCapture') 
    
-   IF @c_PackSerialNoCapture = '1'
+   IF @c_PackSerialNoCapture = '1' OR @c_PACKNoCheckSerialNoCapture = '1' --WL01
    BEGIN
    	  IF NOT EXISTS(SELECT 1
                     FROM PackSerialNo WITH (NOLOCK) 
