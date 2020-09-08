@@ -24,6 +24,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 2020-09-02   WLChooi   1.1   WMS-14919 - Modify Sorting & Logic(WL01)*/
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_70 (  
@@ -117,20 +118,20 @@ BEGIN
       sku.color as [scolor], 
       SKU.Measurement as measurement ,
       OD.SKU as sku,
-      ST.Secondary,
+      ISNULL(ST.[Secondary],''),   --WL01
       ORDERS.ConsigneeKey,
       SUM(PACKDETAIL.qty) as Pqty
-      FROM ORDERS WITH (NOLOCK) --ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)  
-      LEFT JOIN ORDERDETAIL OD (NOLOCK) ON (ORDERS.OrderKey = OD.OrderKey)  
-      INNER JOIN SKU WITH (NOLOCK) ON (OD.StorerKey = SKU.StorerKey AND OD.Sku = SKU.Sku)  
-      INNER JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)  
-      INNER JOIN PACKHEADER WITH (NOLOCK) ON ( ORDERS.Loadkey = PACKHEADER.Loadkey)  
-      INNER JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo AND  
-                                               OD.Storerkey = PACKDETAIL.Storerkey AND  
-                                                OD.Sku = PACKDETAIL.Sku)  
+   FROM ORDERS WITH (NOLOCK) --ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)  
+   LEFT JOIN ORDERDETAIL OD (NOLOCK) ON (ORDERS.OrderKey = OD.OrderKey)  
+   INNER JOIN SKU WITH (NOLOCK) ON (OD.StorerKey = SKU.StorerKey AND OD.Sku = SKU.Sku)  
+   INNER JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)  
+   INNER JOIN PACKHEADER WITH (NOLOCK) ON ( ORDERS.Loadkey = PACKHEADER.Loadkey)  
+   INNER JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo AND  
+                                            OD.Storerkey = PACKDETAIL.Storerkey AND  
+                                             OD.Sku = PACKDETAIL.Sku)  
    LEFT JOIN STORER ST (NOLOCK) ON ST.Storerkey = 'PVH-' + ORDERS.consigneekey
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'PVHRPTNAME' AND C.storerkey = ORDERS.storerkey 
-                                      AND C.code = ORDERS.c_country
+                                   AND C.code = ORDERS.c_country
    LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.listname = 'PVHQHW' and C1.code = ORDERS.Facility
    WHERE ORDERS.MBOLKey = @cMBOLKey
    group by CASE WHEN LEFT(ORDERS.Ordergroup,1) = 'R' THEN ISNULL(C.notes,'') ELSE ST.company END ,
@@ -147,10 +148,10 @@ BEGIN
       ORDERS.StorerKey,
       sku.susr1,SKU.[size],SKU.style,
       sku.color,SKU.Measurement,OD.sku,
-      ST.Secondary,
+      ISNULL(ST.[Secondary],''),   --WL01
       ORDERS.ConsigneeKey 
      ,ISNULL(C1.Notes,'')    
-   ORDER BY ORDERS.MBOLKey, PACKDETAIL.labelno,OD.sku ,Case When SKU.[size] = 'XS' then '0'
+   ORDER BY ORDERS.MBOLKey, ISNULL(ST.[Secondary],'') + SPACE(2) + ORDERS.ConsigneeKey, PACKDETAIL.labelno, OD.sku, Case When SKU.[size] = 'XS' then '0'   --WL01
      When SKU.[size] = 'S' then '1'
      When SKU.[size] = 'M' then '2'
      When SKU.[size] = 'L' then '3'
@@ -167,105 +168,113 @@ BEGIN
    WHILE @@FETCH_STATUS <> -1  
    BEGIN 
 
-   SET @c_ExtOrderkey = ''
-   SET @c_Loadkey = ''
-   SET @c_Getmeasurement = ''
-   SET @c_FullAddress = ''
-   SET @c_storeCode = ''
-   SET @c_GetStyle = ''
-   SET @c_GetSize  = ''  
+      SET @c_ExtOrderkey = ''
+      SET @c_Loadkey = ''
+      SET @c_Getmeasurement = ''
+      SET @c_FullAddress = ''
+      SET @c_storeCode = ''
+      SET @c_GetStyle = ''
+      SET @c_GetSize  = ''  
+      
+      SET @c_FullAddress = @c_CAddress1 + SPACE(2) +  @c_CAddress2 + SPACE(2) + @c_CAddress3 + SPACE(2) + @c_CAddress4 + SPACE(2) + @c_Ccity + SPACE(2) +  @c_Ccountry 
+      SET @c_storeCode = ISNULL(@c_ST_Secondary,'') + SPACE(2) + @c_Consigneekey   --WL01
+      SET @c_GetStyle = @c_style + @c_susr1
 
-   SET @c_FullAddress = @c_CAddress1 + SPACE(2) +  @c_CAddress2 + SPACE(2) + @c_CAddress3 + SPACE(2) + @c_CAddress4 + SPACE(2) + @c_Ccity + SPACE(2) +  @c_Ccountry 
-   SET @c_storeCode = @c_ST_Secondary + SPACE(2) + @c_Consigneekey
-   SET @c_GetStyle = @c_style + @c_susr1
+      IF @n_cntLoadkey = 1
+      BEGIN
+         SELECT TOP 1 @c_Loadkey = Loadkey 
+         FROM ORDERS (NOLOCK)
+         WHERE ORDERS.MBOLKey = @cMBOLKey
+      END
+      ELSE
+      BEGIN
+         SET @c_Loadkey = '*'
+      END
 
-   IF @n_cntLoadkey = 1
-   BEGIN
-     SELECT TOP 1 @c_Loadkey = Loadkey 
-    FROM ORDERS (NOLOCK)
-    WHERE ORDERS.MBOLKey = @cMBOLKey
-   END
-   ELSE
-   BEGIN
-     SET @c_Loadkey = '*'
-   END
-
-   IF @n_cntExtOrdkey = 1
-   BEGIN
-     SELECT TOP 1 @c_ExtOrderkey = ExternOrderKey 
-    FROM ORDERS (NOLOCK)
-    WHERE ORDERS.MBOLKey = @cMBOLKey
-   END
-   ELSE
-   BEGIN
-     SET @c_ExtOrderkey = '*'
-   END
-
-   IF @c_measurement IN ('0','00') 
-   BEGIN
-     SET @c_Getmeasurement =''
-   END
-   ELSE 
-   BEGIN
-      IF LEFT(@c_measurement,1) = '0'
-     BEGIN
-     --   SELECT @c_Getmeasurement = SUBSTRING(S.dim,2,10)
-       --FROM SKU S WITH (NOLOCK)
-       --WHERE S.Sku = @c_sku AND S.StorerKey = @c_storerkey
-       SET @c_Getmeasurement = SUBSTRING(@c_measurement,2,10)
-     END
-     ELSE
-     BEGIN
-       SET @c_Getmeasurement = @c_measurement
-     END
-    END
-
-   SET @c_GetSize = @c_ssize + @c_Getmeasurement
-   --END
-
-   INSERT INTO #PACKLIST70(companyName      
-                   , C_Addresses      
-                   , RptName          
-                   , StoreCode        
-                   , mbolkey          
-                   , CCompany         
-                   , Externorderkey   
-                   , Salesman         
-                   , labelno       
-                   , SKUSize          
-                   , Scolor           
-                   , Style            
-                   , SKU              
-                   , PQty             
-                   , Loadkey          
-                                   )
-VALUES (@c_CompanyName,@c_FullAddress,@c_RptName,@c_storeCode,@c_mbolkey,@c_CCompany,@c_ExtOrderkey,@c_salesman,
-        @c_labelno,@c_GetSize,@c_color,@c_GetStyle,@c_sku,@n_Pqty,@c_Loadkey)
+      --WL01 S
+      /*IF @n_cntExtOrdkey = 1
+      BEGIN
+         SELECT TOP 1 @c_ExtOrderkey = ExternOrderKey 
+         FROM ORDERS (NOLOCK)
+         WHERE ORDERS.MBOLKey = @cMBOLKey
+      END
+      ELSE
+      BEGIN
+         SET @c_ExtOrderkey = '*'
+      END*/
+      
+      SELECT @c_ExtOrderkey = MIN(ExternOrderKey)
+      FROM ORDERS (NOLOCK)
+      LEFT JOIN STORER ST (NOLOCK) ON ST.Storerkey = 'PVH-' + ORDERS.consigneekey
+      WHERE ORDERS.MBOLKey = @cMBOLKey
+      AND ISNULL(ST.[Secondary],'') + SPACE(2) + ORDERS.Consigneekey = @c_storeCode
+      --WL01 E
+      
+      IF @c_measurement IN ('0','00') 
+      BEGIN
+         SET @c_Getmeasurement =''
+      END
+      ELSE 
+      BEGIN
+         IF LEFT(@c_measurement,1) = '0'
+         BEGIN
+            -- SELECT @c_Getmeasurement = SUBSTRING(S.dim,2,10)
+            --FROM SKU S WITH (NOLOCK)
+            --WHERE S.Sku = @c_sku AND S.StorerKey = @c_storerkey
+            SET @c_Getmeasurement = SUBSTRING(@c_measurement,2,10)
+         END
+         ELSE
+         BEGIN
+            SET @c_Getmeasurement = @c_measurement
+         END
+      END
+      
+      SET @c_GetSize = @c_ssize + @c_Getmeasurement
+      --END
+      
+      INSERT INTO #PACKLIST70(companyName      
+                            , C_Addresses      
+                            , RptName          
+                            , StoreCode        
+                            , mbolkey          
+                            , CCompany         
+                            , Externorderkey   
+                            , Salesman         
+                            , labelno       
+                            , SKUSize          
+                            , Scolor           
+                            , Style            
+                            , SKU              
+                            , PQty             
+                            , Loadkey          
+      )
+      VALUES (@c_CompanyName,@c_FullAddress,@c_RptName,@c_storeCode,@c_mbolkey,@c_CCompany,@c_ExtOrderkey,@c_salesman,
+              @c_labelno,@c_GetSize,@c_color,@c_GetStyle,@c_sku,@n_Pqty,@c_Loadkey)
 
 
-  FETCH NEXT FROM CUR_RESULT INTO  @c_CompanyName ,@c_RptName , @c_CCompany , @c_CAddress1, @c_CAddress2 , @c_CAddress3 ,@c_CAddress4 ,@c_Ccity ,
-                                   @c_Ccountry , @n_cntExtOrdkey,@n_cntloadkey,@c_mbolkey , @c_salesman , @c_storerkey, @c_labelno , 
-                                   @c_susr1 ,@c_ssize ,@c_style , @c_color ,  @c_measurement , @c_sku ,@c_ST_Secondary , @c_Consigneekey, @n_Pqty 
+      FETCH NEXT FROM CUR_RESULT INTO  @c_CompanyName ,@c_RptName , @c_CCompany , @c_CAddress1, @c_CAddress2 , @c_CAddress3 ,@c_CAddress4 ,@c_Ccity ,
+                                       @c_Ccountry , @n_cntExtOrdkey,@n_cntloadkey,@c_mbolkey , @c_salesman , @c_storerkey, @c_labelno , 
+                                       @c_susr1 ,@c_ssize ,@c_style , @c_color ,  @c_measurement , @c_sku ,@c_ST_Secondary , @c_Consigneekey, @n_Pqty 
   
-END  
+   END  
 
-       SELECT companyName   
-           , Externorderkey     
-           , C_Addresses 
-           , CCompany     
-           , RptName          
-           , StoreCode        
-           , mbolkey          
-           , Salesman         
-           , '(' + substring(labelno,1,2) + ')' + substring(labelno,3,18)  as labelno                 
-           , Scolor           
-           , Style            
-           , SKU              
-           , PQty             
-           , Loadkey
-           , SKUSize
-    FROM #PACKLIST70 (nolock)
-    ORDER BY ROWID
+   SELECT companyName   
+        , Externorderkey     
+        , C_Addresses 
+        , CCompany     
+        , RptName          
+        , StoreCode        
+        , mbolkey          
+        , Salesman         
+        , '(' + substring(labelno,1,2) + ')' + substring(labelno,3,18)  as labelno                 
+        , Scolor           
+        , Style            
+        , SKU              
+        , PQty             
+        , Loadkey
+        , SKUSize
+   FROM #PACKLIST70 (nolock)
+   ORDER BY ROWID
 
 END
 GO
