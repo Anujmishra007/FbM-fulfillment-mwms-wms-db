@@ -62,6 +62,7 @@ GO
 /* 15-Apr-2014  TLTING        SQL2012 Bug fix                           */
 /* 21-Aug-2014  TLTING        remove Orders.Type filtering              */
 /* 20-Jul-2015  TLTING        Delete Preallocatepickdetail              */
+/* 02-Aug-2018  TLTING        Archive Caretontrack                      */
 /************************************************************************/
 
 CREATE PROC [dbo].[nspArchiveShippingOrder]
@@ -91,6 +92,7 @@ BEGIN -- main
          , @n_archive_load_detail_records int      -- # of loadplandetail records to be archived
          , @n_archive_mbol_records        int      -- # of MBOL records to be archived
          , @n_archive_mbol_detail_records int      -- # of MBOLDetail records to be archived
+         , @n_archive_carton_track_records   int =0-- khlim01
          , @n_default_id                  int
          , @n_strlen                      int
          , @local_n_err                   int
@@ -417,6 +419,25 @@ BEGIN -- main
          END
       END
       -- END : June01
+      if ((@n_continue = 1 or @n_continue = 2) and @copyrowstoarchivedatabase = 'y')  
+      begin    
+         if (@b_debug =1 )  
+         begin  
+            print 'starting table existence check for CartonTrack...'  
+         end  
+         select @b_success = 1  
+         exec nsp_build_archive_table   
+            @c_copyfrom_db,   
+            @c_copyto_db,   
+            'CartonTrack',  
+            @b_success output ,   
+            @n_err output,   
+            @c_errmsg output  
+         if not @b_success = 1  
+         begin  
+            select @n_continue = 3  
+         end  
+      end 
 
       IF ((@n_continue = 1 OR @n_continue = 2) AND @CopyRowsToArchiveDatabase = 'y')
       BEGIN
@@ -527,6 +548,25 @@ BEGIN -- main
          END
       END
       -- END : June01
+      IF ((@n_continue=1 OR @n_continue=2)
+         AND @copyrowstoarchivedatabase='y')
+      BEGIN
+          IF (@b_debug=1)
+          BEGIN
+              PRINT 'building alter table string for CartonTrack...'
+          END
+       
+          EXECUTE nspbuildaltertablestring 
+          @c_copyto_db, 
+          'CartonTrack', 
+          @b_success OUTPUT, 
+          @n_err OUTPUT, 
+          @c_errmsg OUTPUT 
+          IF NOT @b_success=1
+          BEGIN
+              SELECT @n_continue = 3
+          END
+      END 
 
 
       -- DECLARE Cursor
@@ -660,7 +700,6 @@ BEGIN -- main
                   COMMIT TRAN
                END
             END
-
 
             IF EXISTS ( SELECT 1 FROM Preallocatepickdetail WITH (NOLOCK)
                   WHERE OrderKey = @cOrderKey AND OrderLineNumber = @cOrderLineNumber
@@ -815,6 +854,33 @@ BEGIN -- main
             COMMIT TRAN
          END
 
+         IF EXISTS ( Select 1 from CartonTrack (NOLOCK) WHERE  archivecop IS NULL AND    LabelNo<>''
+                     AND    LabelNo = @cOrderKey   )
+         BEGIN                     
+            UPDATE CartonTrack WITH (ROWLOCK) -- (KHLim01)
+            SET    CartonTrack.archivecop = '9'
+            WHERE  archivecop IS NULL
+            AND    LabelNo<>''
+            AND    LabelNo = @cOrderKey
+                   
+            SELECT @local_n_err = @@error
+                  ,@n_cnt = @@rowcount
+                   
+            SELECT @n_archive_carton_track_records = @n_archive_carton_track_records + @n_cnt 
+                   
+            IF @local_n_err<>0
+            BEGIN
+               SELECT @n_continue = 3 
+               SELECT @local_n_err = 77307 
+               SELECT @local_c_errmsg = CONVERT(CHAR(5) ,@local_n_err) 
+               SELECT @local_c_errmsg = 
+                     ': update of archivecop failed - CartonTrack. (nspArchiveShippingOrder) ' 
+                     +' ( '+
+                     ' sqlsvr message = '+LTRIM(RTRIM(@local_c_errmsg))+
+                     ')'
+            END 
+         END
+
          IF @n_continue = 3
          BEGIN
             IF @@TRANCOUNT > 0
@@ -834,9 +900,10 @@ BEGIN -- main
 
       IF ((@n_continue = 1 OR @n_continue = 2)  AND @CopyRowsToArchiveDatabase = 'y')
       BEGIN
-         SELECT @c_temp = 'attempting to archive ' + dbo.fnc_RTrim(convert(char(6),@n_archive_ship_records )) +
-            ' Orders records AND ' + dbo.fnc_RTrim(convert(char(6),@n_archive_ship_detail_records )) + ' OrderDetail records'
-            + ' AND ' +  dbo.fnc_RTrim(convert(char(6),@n_archive_pick_detail_records )) + ' of PickDetail records'
+         SELECT @c_temp = 'attempting to archive ' + rtrim(convert(char(6),@n_archive_ship_records )) +
+            ' Orders records AND ' + rtrim(convert(char(6),@n_archive_ship_detail_records )) + ' OrderDetail records'
+            + ' AND ' +  rtrim(convert(char(6),@n_archive_pick_detail_records )) + ' of PickDetail records'+ 
+            + ' AND ' + rtrim(convert(varchar(6),@n_archive_carton_track_records )) +' of cartontrack records '
          EXECUTE dbo.nspLogAlert
                   @c_modulename   = 'nspArchiveShippingOrder',
                   @c_alertmessage = @c_temp ,
@@ -1029,6 +1096,25 @@ BEGIN -- main
          END
       END
 
+      if ((@n_continue = 1 or @n_continue = 2) and @copyrowstoarchivedatabase = 'y')
+      begin   
+         if (@b_debug =1 )
+         begin
+            print 'building insert for CartonTrack...'
+         end
+         select @b_success = 1
+         exec nsp_build_insert  
+            @c_copyto_db, 
+            'CartonTrack',
+            1,
+            @b_success output , 
+            @n_err output, 
+            @c_errmsg output
+         if not @b_success = 1
+         begin
+            select @n_continue = 3
+         end
+      end
 
       IF ((@n_continue = 1 OR @n_continue = 2) AND @CopyRowsToArchiveDatabase = 'y')
       BEGIN
