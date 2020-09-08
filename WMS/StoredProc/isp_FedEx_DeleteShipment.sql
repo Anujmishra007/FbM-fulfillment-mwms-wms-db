@@ -4,7 +4,7 @@ DROP PROCEDURE [dbo].[isp_FedEx_DeleteShipment]
 GO
 
 SET ANSI_NULLS OFF
-Go
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
@@ -241,7 +241,6 @@ BEGIN
 QUIT:
    RETURN;
 END
-
-
+GO
 GRANT EXECUTE ON [dbo].[isp_FedEx_DeleteShipment] TO nSQL 
 GO
