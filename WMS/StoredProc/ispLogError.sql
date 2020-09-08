@@ -1,13 +1,17 @@
-IF OBJECT_ID('dbo.ispLogError','P') IS NOT NULL
-   DROP PROC  dbo.ispLogError
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispLogError]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[ispLogError]
 GO
-SET ANSI_NULLS ON       ;   SET QUOTED_IDENTIFIER OFF;
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 -- 2018-01-01 created ===============================================
 -- Author   : KHLim
 -- Date       Author   Ver Purpose
 -- ==================================================================
-CREATE  PROC  dbo.ispLogError
+CREATE  PROC  [dbo].[ispLogError]
    @ErrDb        NVARCHAR(128) = ''
   ,@ErrSchema    NVARCHAR(128) = ''
   ,@ErrProc      NVARCHAR(128) = ''
@@ -20,7 +24,7 @@ CREATE  PROC  dbo.ispLogError
   ,@SourceTable  NVARCHAR(128) = ''
 AS    
 BEGIN    
-   SET NOCOUNT ON       ;   SET ANSI_DEFAULTS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
+   SET NOCOUNT ON       ;   SET ANSI_NULLS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
 
    DECLARE @ErrLine INT
    SET     @ErrLine         =      ISNULL(ERROR_LINE()    ,0)
@@ -45,4 +49,6 @@ IF ISNULL(@ErrProc,'') = '' SET @ErrProc   = ERROR_PROCEDURE() -- if '' or NULL,
       INSERT INTO dbo.LogError ( ErrDb, ErrSchema, ErrProc, ErrLine, ErrMsg, ErrNo, ErrSeverity, ErrState, Success, SourceKey, SourceTable)
                        VALUES  (@ErrDb,@ErrSchema,@ErrProc,@ErrLine,@ErrMsg,@ErrNo,@ErrSeverity,@ErrState,@Success,@SourceKey,@SourceTable)
 END
+GO
+GRANT EXECUTE ON [dbo].[ispLogError] TO nSQL 
 GO

@@ -1,13 +1,17 @@
-IF OBJECT_ID('dbo.ispLogQuery','P') IS NOT NULL
-   DROP PROC  dbo.ispLogQuery
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispLogQuery]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[ispLogQuery]
 GO
-SET ANSI_NULLS ON       ;   SET QUOTED_IDENTIFIER OFF;
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 -- 2018-01-01 created ===============================================
 -- Author   : KHLim
 -- Date       Author   Ver Purpose
 -- ==================================================================
-CREATE  PROC  dbo.ispLogQuery
+CREATE  PROC  [dbo].[ispLogQuery]
    @SQLDb        NVARCHAR(128) = ''
   ,@SQLSchema    NVARCHAR(128) = ''
   ,@SQLProc      NVARCHAR(128) = ''
@@ -19,7 +23,7 @@ CREATE  PROC  dbo.ispLogQuery
   ,@SQLId        INT      OUTPUT
 AS    
 BEGIN    
-   SET NOCOUNT ON       ;   SET ANSI_DEFAULTS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
+   SET NOCOUNT ON       ;   SET ANSI_NULLS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
 
       IF OBJECT_ID('tempdb..#tId','u') IS NOT NULL
          DROP TABLE #tId;
@@ -42,4 +46,6 @@ BEGIN
       SELECT @SQLId = Id FROM #tId
    END
 END
+GO
+GRANT EXECUTE ON [dbo].[ispLogQuery] TO nSQL 
 GO
