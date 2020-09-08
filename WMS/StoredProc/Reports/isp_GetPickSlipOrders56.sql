@@ -1,11 +1,12 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GetPickSlipOrders56' AND type = 'P')
-   DROP PROC isp_GetPickSlipOrders56
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipOrders56]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_GetPickSlipOrders56]
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-    
 /***************************************************************************/    
 /* Stored Proc : isp_GetPickSlipOrders56                                   */    
 /* Creation Date:                                                          */    
@@ -878,7 +879,7 @@ BEGIN
   BEGIN  
      BEGIN TRAN  
   END          
-END      
-
-GRANT EXECUTE ON isp_GetPickSlipOrders56 TO NSQL
+END
+GO
+GRANT EXECUTE ON [dbo].[isp_GetPickSlipOrders56] TO nSQL 
 GO
