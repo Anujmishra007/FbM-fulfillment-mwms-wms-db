@@ -1,12 +1,12 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[isp_inv_status_rpt]') AND type in (N'P', N'PC'))
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_inv_status_rpt]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_inv_status_rpt]
 GO
-/****** Object:  StoredProcedure [dbo].[isp_inv_status_rpt]    Script Date: 01/08/2013 09:52:52 ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO 
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Trigger: isp_inv_status_rpt                                          */  
 /* Creation Date: 18-FEB-20156                                          */  
@@ -26,7 +26,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
 /************************************************************************/  
-CREATE PROC isp_inv_status_rpt  
+CREATE PROC [dbo].[isp_inv_status_rpt]  
             @c_storerKey      NVARCHAR(15)  
          ,  @b_Success        INT = 1  OUTPUT   
          ,  @n_err            INT = 0  OUTPUT   
@@ -161,9 +161,7 @@ QUIT_SP:
          COMMIT TRAN  
       END  
    END  
-END -- procedure  
-
+END -- procedure
 GO
-GRANT EXECUTE ON isp_inv_status_rpt TO nsql
-GO             
-     
+GRANT EXECUTE ON [dbo].[isp_inv_status_rpt] TO nSQL 
+GO
