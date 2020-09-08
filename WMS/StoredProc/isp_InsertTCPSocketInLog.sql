@@ -1,11 +1,11 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID('[dbo].[isp_InsertTCPSocketInLog]') 
-AND OBJECTPROPERTY(id ,'IsProcedure') = 1 ) 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_InsertTCPSocketInLog]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_InsertTCPSocketInLog]
 GO
 
 SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Stored Procedure: isp_InsertTCPSocketInLog                           */
@@ -50,6 +50,5 @@ BEGIN
 	COMMIT TRAN;
 END -- Procedure
 GO
-
 GRANT EXECUTE ON [dbo].[isp_InsertTCPSocketInLog] TO nSQL 
 GO
