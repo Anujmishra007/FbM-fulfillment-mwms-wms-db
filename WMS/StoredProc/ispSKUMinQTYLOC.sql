@@ -1,12 +1,12 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'dbo.ispSKUMinQTYLOC') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE dbo.ispSKUMinQTYLOC
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispSKUMinQTYLOC]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[ispSKUMinQTYLOC]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Store procedure: ispSKUMinQTYLOC                                     */
 /* Copyright: LF Logistic                                               */
@@ -16,6 +16,7 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* 2014-04-17   Ung       1.0   SOS309951 Min QTY LOC                   */
+/* 2015-05-11   ChewKP    1.1   SOS#340776 - Order By Loc (ChewKP01)    */
 /************************************************************************/
 
 CREATE PROCEDURE dbo.ispSKUMinQTYLOC
@@ -68,7 +69,10 @@ BEGIN
          AND SL.SKU = @c_SKU
          AND (SL.QTY - SL.QTYPicked) > 0
          AND LOC.PutawayZone = @cZone
-      ORDER BY QTY - QTYPicked
+         AND Loc.Loc <> @c_FromLoc
+         AND LOC.LocationFlag <> 'HOLD'
+      --ORDER BY QTY - QTYPicked
+      ORDER BY LOC.Loc -- (ChewKP02)
       
    -- Generate T-SQL
    IF @c_ToLoc = ''
@@ -122,11 +126,5 @@ BEGIN
    END
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
-GO
-
-GRANT EXECUTE ON dbo.ispSKUMinQTYLOC TO NSQL
+GRANT EXECUTE ON [dbo].[ispSKUMinQTYLOC] TO nSQL 
 GO
