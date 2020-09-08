@@ -35,7 +35,8 @@ BEGIN
    SET NOCOUNT ON                 
    SET ANSI_NULLS OFF                
    SET QUOTED_IDENTIFIER OFF                 
-   SET CONCAT_NULL_YIELDS_NULL OFF                                   
+   SET CONCAT_NULL_YIELDS_NULL OFF                
+   SET ANSI_WARNINGS OFF                      
                               
    DECLARE                  
       @n_intFlag         INT,     
