@@ -30,8 +30,9 @@ GO
 /* 08-Apr-2016  Wan03   1.2 Fixed - commit line by line                 */
 /* 11-Apr-2016  Wan04   1.2 Fixed - update full pallet task status to Q */
 /*                          After Finalized                             */
+/* 27-JUL-2016  Barnett 1.4 FBR - 373411 ASRS Picking Priority (BL01)   */
 /************************************************************************/
-CREATE PROC ispRLTRF01 
+CREATE PROC [dbo].[ispRLTRF01] 
             @c_TransferKey NVARCHAR(10)
          ,  @b_Success     INT = 0  OUTPUT 
          ,  @n_err         INT = 0  OUTPUT 
@@ -70,7 +71,7 @@ BEGIN
          , @c_PickMethod         NVARCHAR(10)         --(Wan02)
 
          , @b_callout            INT                  --(Wan03)
-
+		 , @c_Priority           NVARCHAR(10)		  --(BL01)
                       
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -433,6 +434,7 @@ BEGIN
       END
       --(Wan03) - END
 
+
       -- Create Taskdetail
 
       SET @b_success = 1    
@@ -492,6 +494,20 @@ BEGIN
       END
       --(Wan02) - END
 
+		--(BL01 BEGIN)
+		SELECT @c_Priority = Short
+		FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = @c_TaskType
+
+
+		IF ISNULL(@c_Priority,'') =''
+		BEGIN
+		SELECT @c_Priority = Short
+		FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = 'DEFAULT'
+
+		IF ISNULL(@c_Priority,'') ='' SET @c_Priority = 5
+		END 
+		--(BL01 END)
+
       INSERT INTO TASKDETAIL    
          (    
             TaskDetailKey    
@@ -539,7 +555,7 @@ BEGIN
          ,  'ispRLTRF01'         -- Sourcetype    
          ,  @c_Transferkey       -- Sourcekey
          ,  @c_PickMethod        --(Wan02)   
-         ,  '4'                  -- Priority    
+         ,  @c_Priority          -- Priority    --(BL01)
          ,  '0'                  -- Status
          ,  @c_ReasonCode        -- ReasonCode
          ,  @c_Remarks           -- Remarks
@@ -571,7 +587,7 @@ BEGIN
             ,  @c_PalletID     = @c_FromID
             ,  @c_FromLoc      = @c_FromLoc
             ,  @c_ToLoc	       = @c_ToLoc
-            ,  @c_Priority	    = '4'
+            ,  @c_Priority	   = @c_Priority  --(BL01)
             ,  @c_TaskDetailKey= @c_Taskdetailkey
             ,  @b_Success      = @b_Success  OUTPUT
             ,  @n_Err          = @n_Err      OUTPUT
