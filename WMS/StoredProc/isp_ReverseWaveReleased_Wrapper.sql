@@ -27,6 +27,7 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 04-AUG-2014  YTWan    1.1  SOS#313850 - Wave Enhancement - Delete     */
 /*                            Orders. (Wan01)                            */
+/* 22-Oct-2019  Wan02    1.2  Update TMReleaseFlag, Sync Exceed & SCE    */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_ReverseWaveReleased_Wrapper]  
       @c_WaveKey    NVARCHAR(10) 
@@ -95,7 +96,7 @@ BEGIN
       ,  @c_Orderkey                                  
       ,  @b_Success OUTPUT   
       ,  @n_Err OUTPUT
-      ,	 @c_ErrMsg OUTPUT
+      ,   @c_ErrMsg OUTPUT
               
    --(Wan01) - Add Orderkey (END)
           
@@ -104,7 +105,27 @@ BEGIN
        SELECT @n_Continue = 3  
        GOTO QUIT_SP
    END
-                    
+         
+   --Wan02
+   UPDATE WAVE WITH (ROWLOCK)
+   SET TMReleaseFlag = 'N'         
+      ,TrafficCop = NULL 
+      ,EditWho  = SUSER_SNAME() 
+      ,EditDate = GETDATE()             
+   WHERE Wavekey= @c_Wavekey
+
+   SET @n_Err = @@ERROR 
+   IF @n_Err <> 0
+   BEGIN
+      SET @n_Continue = 3  
+      SET @c_ErrMsg  = CONVERT(NVARCHAR(5), @n_Err)
+      SET @n_Err = 31212
+      SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)  
+                     + ': Update Wave TMReleasFlag fail'
+                     + '. (isp_ReverseWaveReleased_Wrapper) ( SQLSvr MESSAGE=' + @c_ErrMsg + ')'  
+      GOTO QUIT_SP
+   END
+                             
    QUIT_SP:
    IF @n_Continue = 3
    BEGIN
