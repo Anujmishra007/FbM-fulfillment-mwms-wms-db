@@ -1,15 +1,15 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Print_SSCC_CartonLabel_07]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Print_SSCC_CartonLabel_07]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Print_SSCC_CartonLabel_07a]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_Print_SSCC_CartonLabel_07a]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 /************************************************************************/
-/* Store Procedure: isp_Print_SSCC_CartonLabel_07               		   */
-/* Creation Date: 21-Mar-2016                                    			*/
+/* Store Procedure: isp_Print_SSCC_CartonLabel_07                       */
+/* Creation Date: 21-Mar-2016                                           */
 /* Copyright: IDS                                                       */
-/* Written by: CSCHONG                                   				   */
+/* Written by: CSCHONG                                                  */
 /*                                                                      */
 /* Purpose:  SG MHAP Print SSCC Label (SOS366109)                       */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 19-May-2016  CSCHONG   1.0   Change mapping (CS01)                   */
+/* 02-Aug-2016  CSCHONG   1.1   total Cnt by palletid (CS02)            */
 /************************************************************************/
 
 CREATE PROC isp_Print_SSCC_CartonLabel_07 ( 
@@ -66,10 +67,14 @@ BEGIN
       @n_Casecnt                 float,
       @c_lottable01              NVARCHAR(18),
       @n_Caseqty                 INT,
-      @n_NoOfLine                INT             --CS01
+      @n_NoOfLine                INT,             --CS01
+      @n_TTLCnt                  INT,
+      @n_MaxGrp                  INT
       
       
       SET @n_NoOfLine = 6               --CS01
+      SET @n_TTLCnt = 0
+      SET @n_MaxGrp = 1
 
 
    IF @c_DWCategory = 'D'
@@ -85,6 +90,7 @@ BEGIN
             ,  SKU            NVARCHAR(20)
             ,  Lottable01     NVARCHAR( 18) NULL
             ,  RecGrp         INT
+            ,  casecnt        INT         --(CS02)
             )
    
    DECLARE @Temp_SSCCTBLH TABLE (
@@ -109,20 +115,30 @@ BEGIN
          )
          
          
-         INSERT INTO @Temp_SSCCTBLGRP (PLTDUdef01,sku,lottable01,RecGrp)
+         INSERT INTO @Temp_SSCCTBLGRP (PLTDUdef01,sku,lottable01,RecGrp,casecnt)   --(CS02)
          
-			SELECT DISTINCT PLTDET.UserDefine01,PLTDET.Sku,'',--LOTT.Lottable01,
-			(Row_Number() OVER (PARTITION BY PLTDET.UserDefine01 ORDER BY PLTDET.UserDefine01 Asc)-1)/6
-			from PICKDETAIL PD WITH (NOLOCK)
-			JOIN PALLETDETAIL PLTDET WITH (NOLOCK) ON PLTDET.Userdefine02 = PD.Pickdetailkey
-			JOIN PALLET PL WITH (NOLOCK) ON PL.PALLETKEY = PLTDET.PALLETKEY
-			JOIN ORDERS ORD WITH (NOLOCK) ON ORD.ORDERKEY = PLTDET.Userdefine04 
-			JOIN Lotattribute LOTT WITH (NOLOCK) ON LOTT.LOT = PD.LOT
-			JOIN SKU S WITH (NOLOCK) ON S.Sku = PLTDET.SKU AND S.Storerkey = PLTDET.Storerkey
-			JOIN PACK P WITH (NOLOCK) ON P.Packkey = S.Packkey
-			WHERE ISNULL(PLTDET.UserDefine01,'') = @c_ID  
-			GROUP BY PLTDET.UserDefine01,PLTDET.Sku--,LOTT.Lottable01
-
+         SELECT DISTINCT PLTDET.UserDefine01,PLTDET.Sku,LOTT.Lottable01,
+         (Row_Number() OVER (PARTITION BY PLTDET.UserDefine01 ORDER BY PLTDET.UserDefine01 Asc)-1)/@n_NoOfLine
+         ,sum(PLTDET.qty/nullif(p.CaseCnt,0))                                         --(CS02)
+         from PICKDETAIL PD WITH (NOLOCK)
+         JOIN PALLETDETAIL PLTDET WITH (NOLOCK) ON PLTDET.Userdefine02 = PD.Pickdetailkey
+         JOIN PALLET PL WITH (NOLOCK) ON PL.PALLETKEY = PLTDET.PALLETKEY
+         JOIN ORDERS ORD WITH (NOLOCK) ON ORD.ORDERKEY = PLTDET.Userdefine04 
+         JOIN Lotattribute LOTT WITH (NOLOCK) ON LOTT.LOT = PD.LOT
+         JOIN SKU S WITH (NOLOCK) ON S.Sku = PLTDET.SKU AND S.Storerkey = PLTDET.Storerkey
+         JOIN PACK P WITH (NOLOCK) ON P.Packkey = S.Packkey
+         WHERE ISNULL(PLTDET.UserDefine01,'') = @c_ID  
+         GROUP BY PLTDET.UserDefine01,PLTDET.Sku,LOTT.Lottable01
+         
+         --CS02 Start
+         SELECT @n_TTLCnt = SUM(casecnt)
+               ,@n_MaxGrp = MAX(RecGrp)
+         FROM @Temp_SSCCTBLGRP
+         WHERE PLTDUdef01 = @c_ID 
+         --CS02 End
+         
+      WHILE @n_MaxGrp >= 0
+      BEGIN
          INSERT INTO @Temp_SSCCTBLH
             (   ShipTo_StorerKey,
                 ShipTo_Company,
@@ -145,7 +161,8 @@ BEGIN
          SELECT DISTINCT ORD.Storerkey,ORD.c_company,ORD.C_Address1,ISNULL(ORD.C_Address2,''),ISNULL(ORD.C_Address3,''),ISNULL(ORD.C_Address4,''),
          ISNULL(ORD.C_City,''),ISNULL(ORD.C_zip,''),ISNULL(c_Country,''),ORD.ExternOrderkey,ORD.BuyerPO,ISNULL(RTRIM(PL.PalletKey),''), ('00' + PL.PalletKey) AS'SSCC_Labelno',
          --count(PDET.Caseid),ROUND(SUM(S.grosswgt/nullif(p.casecnt,0)),0),PD.ID,0,PDET.UserDefine01                                  --CS01
-         sum(PLTDET.qty/nullif(p.CaseCnt,0)),SUM(S.grosswgt*PLTDET.qty),PD.ID,TGRP.RecGrp,PLTDET.UserDefine01                           --CS01
+         @n_TTLCnt,--sum(PLTDET.qty/nullif(p.CaseCnt,0)),                                           --CS02
+         SUM(S.grosswgt*PLTDET.qty),PD.ID,@n_MaxGrp,PLTDET.UserDefine01                           --CS01
          FROM PICKDETAIL PD WITH (NOLOCK)
          JOIN PALLETDETAIL PLTDET WITH (NOLOCK) ON PLTDET.Userdefine02 = PD.Pickdetailkey
          JOIN PALLET PL WITH (NOLOCK) ON PL.PALLETKEY = PLTDET.PALLETKEY
@@ -153,12 +170,15 @@ BEGIN
        --  JOIN Lotattribute LOTT WITH (NOLOCK) ON LOTT.LOT = PD.LOT
          JOIN SKU S WITH (NOLOCK) ON S.Sku = PD.SKU AND S.Storerkey = PD.Storerkey
          JOIN PACK P WITH (NOLOCK) ON P.Packkey = S.Packkey 
-         JOIN @Temp_SSCCTBLGRP TGRP ON TGRP.PLTDUdef01=PLTDET.UserDefine01 AND TGRP.sku=PLTDET.sku
+       --  JOIN @Temp_SSCCTBLGRP TGRP ON TGRP.PLTDUdef01=PLTDET.UserDefine01 AND TGRP.sku=PLTDET.sku
          WHERE PLTDET.UserDefine01 = @c_ID                                                                                    --CS01
          GROUP BY ORD.Storerkey,ORD.c_company,ORD.C_Address1,ORD.C_Address2,ORD.C_Address3,ORD.C_Address4,
-         ORD.C_City,ORD.C_zip,c_Country,ORD.ExternOrderkey,ORD.BuyerPO,PL.PalletKey,PD.ID,PLTDET.UserDefine01 ,TGRP.RecGrp
+         ORD.C_City,ORD.C_zip,c_Country,ORD.ExternOrderkey,ORD.BuyerPO,PL.PalletKey,PD.ID,PLTDET.UserDefine01 --,TGRP.RecGrp
 
-
+         SET @n_MaxGrp = @n_MaxGrp - 1
+      END
+      
+      
   SELECT * FROM @Temp_SSCCTBLH 
   ORDER BY ExternOrderkey,RecGrp
   
@@ -205,8 +225,8 @@ BEGIN
 
    GOTO QUIT_SP
 
-	--DROP TABLE @Temp_SSCCTBLH
-	
+   --DROP TABLE @Temp_SSCCTBLH
+   
  --  DROP TABLE @Temp_SSCCTBLDET
 
    

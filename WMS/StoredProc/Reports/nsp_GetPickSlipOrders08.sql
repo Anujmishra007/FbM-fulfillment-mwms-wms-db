@@ -41,8 +41,8 @@ GO
 /* 12-Feb-2019 CSCHONG     1.7   WMS-7959 - New field&report config (CS02) */
 /* 16-Jul-2020 WLChooi     1.8   WMS-14268 - Add ReportCFG to show Pallet  */
 /*                               ID (WL01)                                 */
+/* 26-Aug-2020 CSCHONG     1.9   WMS-14805 add report config (CS03)        */
 /***************************************************************************/
-
 CREATE PROC [dbo].[nsp_GetPickSlipOrders08] (@c_loadkey NVARCHAR(10))
 AS
 BEGIN
@@ -179,7 +179,8 @@ BEGIN TRAN
          ShowLot06        NVARCHAR(1)  NULL,   --CS01
          ShowSKUBusr10    NVARCHAR(1)  NULL,                --CS02
          SKUBusr10        NVARCHAR(30) NULL,    --CS02
-         ShowPickdetailID NVARCHAR(10) NULL     --WL01
+         ShowPickdetailID NVARCHAR(10) NULL,    --WL01
+         BatchNameField   NVARCHAR(25) NULL     --CS03
          )
    INSERT INTO #TEMP_PICK
         (PickSlipNo,    LoadKey,          OrderKey,     ConsigneeKey,
@@ -195,7 +196,7 @@ BEGIN TRAN
          Pallet_cal,    Cartons_cal,      inner_cal,    Each_cal,   Total_cal,
          DeliveryDate,  RetailSku,        BuyerPO,      InvoiceNo,  OrderDate,
          Susr4,         Vat,              OVAS,         SKUGROUP,Lottable06,
-         ShowLot06,ShowSKUBusr10,SKUBusr10, ShowPickdetailID) -- SOS144415   --CS01       --CS02   --WL01
+         ShowLot06,ShowSKUBusr10,SKUBusr10, ShowPickdetailID,BatchNameField) -- SOS144415   --CS01       --CS02   --WL01 --CS03
    SELECT
          (SELECT PICKHEADERKEY FROM PICKHEADER
           WHERE ExternOrderKey = @c_LoadKey
@@ -266,7 +267,8 @@ BEGIN TRAN
         CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS ShowLot06,       --CS01
         CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS ShowSkuBusr10,   --CS02
         ISNULL(sku.busr10,'') as SKUBusr10,                                            --CS02
-        ISNULL(CLR2.Short,'N') AS ShowPickdetailID   --WL01
+        ISNULL(CLR2.Short,'N') AS ShowPickdetailID,   --WL01
+        CASE WHEN ISNULL(CLR3.Code,'') <> '' THEN 'Custom Lot' ELSE 'Batch No' END as BatchNameField  --CS01
    FROM pickdetail (NOLOCK)
    JOIN orders (NOLOCK)
    ON pickdetail.orderkey = orders.orderkey
@@ -305,6 +307,11 @@ BEGIN TRAN
    ON (Orders.Storerkey = CLR2.Storerkey AND CLR2.Code = 'ShowPickdetailID' AND CLR2.Code2 = 'r_dw_print_pickorder08'                                            
    AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_print_pickorder08' AND ISNULL(CLR2.Short,'') <> 'N')  
    --WL01 END 
+   /*CS03 Start*/
+   LEFT OUTER JOIN Codelkup CLR3 (NOLOCK) 
+   ON (Orders.Storerkey = CLR1.Storerkey AND CLR3.Code = 'RPTCOLUMNNAME'                                            
+   AND CLR3.Listname = 'REPORTCFG' AND CLR3.Long = 'r_dw_print_pickorder08' AND ISNULL(CLR3.Short,'') <> 'N')   
+   /*CS03 End*/ 
    WHERE PickDetail.Status < '5'
    AND LoadPlanDetail.LoadKey = @c_LoadKey
    GROUP BY PickDetail.OrderKey,
@@ -353,7 +360,8 @@ BEGIN TRAN
    CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END,    --CS01
    CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END,   --CS02
    ISNULL(sku.busr10,''),
-   ISNULL(CLR2.Short,'N')   --WL01        
+   ISNULL(CLR2.Short,'N')   --WL01       
+   ,CASE WHEN ISNULL(CLR3.Code,'') <> '' THEN 'Custom Lot' ELSE 'Batch No' END   --CS03 
 
    -- SOS 7236
    -- wally 16.aug.2002

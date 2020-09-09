@@ -32,6 +32,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 14-JUN-2018  CSCHONG  1.1  WMS-5362 - Add new field (CS01)           */
 /* 23-Oct-2019  WLChooi  1.2  WMS-10950 - Add new field (WL01)          */
+/* 12-AUG-2020  CSCHONG  1.3  WMS-14624 - revised field mapping (CS02)  */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_UCC_Carton_Label_67] (
@@ -104,7 +105,7 @@ BEGIN
           PDLabelNo          NVARCHAR(20) NULL,
           SortCode           NVARCHAR(30) NULL,
           SKUStyle           NVARCHAR(20) NULL,
-          SKUSize            NVARCHAR(10) NULL,
+          SKUSize            NVARCHAR(50) NULL,
           PDQty              INT,
           Consigneekey       NVARCHAR(20) NULL,
           CADD1              NVARCHAR(45) NULL,
@@ -212,8 +213,8 @@ BEGIN
                ,  PADET.CartonNo
                ,  ISNULL(RIGHT(RTRIM(PADET.Labelno),10),'')                        
                ,  @c_sortcode
-               ,  ISNULL(RTRIM(S.Style),'')
-               ,  ISNULL(RTRIM(S.Size),'')
+               ,  ISNULL(RTRIM(S.Style),'') 
+               ,  CASE WHEN ISNULL(c.code2,'') = '' THEN ISNULL(RTRIM(S.Style),'') + '-' + S.busr10 ELSE  S.busr6 END      --CS02
                ,  SUM(PADET.qty)
                ,  @c_consigneekey
                ,  @c_Address1
@@ -245,12 +246,22 @@ BEGIN
          AND PD.PickSlipNo = @c_PickSlipNo
          GROUP BY PD.StorerKey, PD.PickSlipNo, PD.SKU
          HAVING Count(Distinct LA.Lottable08) >= 1) LA ON LA.StorerKey = PADET.StorerKey and LA.PickSlipNo = PADET.PickSlipNo and LA.SKU = PADET.SKU
-         
+         /*CS02 START*/
+         --LEFT JOIN (SELECT PH.Pickslipno, max(OH.consigneekey) as consigneekey
+         -- From PACKHEADER PH WITH (NoLOCK) Join ORDERS OH WITH (NOLOCK)
+         --				ON PH.StorerKey = OH.StorerKey and PH.loadkey = OH.Loadkey
+         --Where OH.StorerKey = @c_StorerKey
+         --AND PH.PickSlipNo = @c_PickSlipNo
+         --GROUP BY PH.Pickslipno) CON ON CON.Pickslipno = PAH.Pickslipno 
+         JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = PAH.Orderkey
+         LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CUSTSKU' AND C.storerkey = PAH.Storerkey AND C.code2 = OH.consigneekey
+         /*Cs02 END*/
          WHERE PAH.Pickslipno = @c_PickSlipNo
          AND   PAH.Storerkey = @c_StorerKey
          AND PADET.CartonNo between CONVERT(INT,@c_StartCartonNo) AND CONVERT(INT,@c_EndCartonNo)
          GROUP BY PAH.Pickslipno,PADET.CartonNo,ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),
-                  ISNULL(RTRIM(S.Style),''),ISNULL(RTRIM(S.Size),''),PADET.SKU, LA.Lottable08
+                 ISNULL(RTRIM(S.Style),'') ,CASE WHEN ISNULL(c.code2,'') = '' THEN ISNULL(RTRIM(S.Style),'') + '-' +(S.busr10) ELSE (S.busr6) END ,  --CS02
+                  PADET.SKU, LA.Lottable08
 
    /*
    UNION ALL

@@ -31,11 +31,13 @@ GO
 /* Data Modifications:                                                     */  
 /*                                                                         */  
 /* Updates:                                                                */  
-/* Date			   Ver	 Author   Purposes                                     */  
+/* Date           Ver    Author   Purposes                                 */  
 /* 08-JAN-2019 1.1   SWT01    For immediate trigger label extract web      */
 /*                            service                                      */ 
 /* 05-Jul-2019 1.1   NJOW01   WMS-9396 SG THG support custom sp            */
 /*                            (ispCTNLBLITF??)                             */
+/* 20-SEP-2019 1.2   CSCHONG  WMS-10640 (CS01)                             */
+/* 31-OCT-2019 1.3   CSCHONG  Fix error for THGSG (CS02)                   */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_PrintCartonLabel_Interface]    
 (     @c_Pickslipno   NVARCHAR(10)     
@@ -68,10 +70,10 @@ BEGIN
          , @c_RefNo                 NVARCHAR(20)
          , @c_LabelNo               NVARCHAR(20)
          , @c_trmlogkey             NVARCHAR(10)
-		   	 , @c_RDTDefaultPrinter	  	NVARCHAR(128)
-		     , @c_RDTWinPrinter			    NVARCHAR(128)
-		     , @c_SPCode                NVARCHAR(50)
-		     , @c_SQL                   NVARCHAR(MAX)
+         , @c_RDTDefaultPrinter     NVARCHAR(128)
+         , @c_RDTWinPrinter         NVARCHAR(128)
+         , @c_SPCode                NVARCHAR(50)
+         , @c_SQL                   NVARCHAR(MAX)
 
    SET @b_Success= 1   
    SET @n_Err    = 0    
@@ -105,10 +107,10 @@ BEGIN
    BEGIN
       IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')  
       BEGIN  
-			   SET @n_Continue = 3
-			   SET @n_err      = 83000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-		     SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+
-			   ': Storerconfig PrintCartonLabelByITF.Option3 - Stored Proc name invalid (isp_PrintCartonLabel_Interface)'        
+            SET @n_Continue = 3
+            SET @n_err      = 83000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+            SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+
+            ': Storerconfig PrintCartonLabelByITF.Option3 - Stored Proc name invalid (isp_PrintCartonLabel_Interface)'        
          GOTO QUIT_SP  
       END        
             
@@ -124,25 +126,37 @@ BEGIN
           ,@c_ErrMsg       OUTPUT           
 
        IF @b_Success <> 1
-   	   BEGIN
-			   SET @n_Continue = 3
+       BEGIN
+         SET @n_Continue = 3
        END                    
 
-       GOTO QUIT_SP             
+      --CS01 Start
+      IF @n_Continue > 1 
+      BEGIN
+         GOTO QUIT_SP             
+      END
+      ELSE
+      BEGIN  --CS02 START
+         IF @c_ErrMsg = '' OR @c_ErrMsg <> 'CONTINUE'
+         BEGIN
+            GOTO QUIT_SP
+         END
+      END --CS02 END
+      --CS01 END
    END      
    --NJOW01 End
       
    IF @c_PrintCartonLabelByITF = '1'
    BEGIN
-	    IF ISNULL(@c_Option1,'') = ''
+      IF ISNULL(@c_Option1,'') = ''
       BEGIN
-	    	SET @n_Continue = 3
-	    	SET @n_err      = 83000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-	    	SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+
-	    	   ': Please setup table name at option1 of storerconfig ''PrintCartonLabelByITF'' (isp_PrintCartonLabel_Interface)'
-	    	GOTO QUIT_SP
+         SET @n_Continue = 3
+         SET @n_err      = 83000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+
+            ': Please setup table name at option1 of storerconfig ''PrintCartonLabelByITF'' (isp_PrintCartonLabel_Interface)'
+         GOTO QUIT_SP
       END
-   	  
+        
       DECLARE cur_Carton CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT RTRIM(LTRIM(CAST(PACKDETAIL.CartonNo AS NVARCHAR))), MAX(PACKDETAIL.AddWho), 
              ORDERS.Facility, ORDERS.Orderkey, MAX(PACKDETAIL.Refno), PACKDETAIL.LabelNo
@@ -159,42 +173,42 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
       BEGIN     
-			   /*      	  
-			   SET @c_PrintData = ''
-         	 
-   	     IF NOT EXISTS ( SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = @c_Option1 
-			   			           AND Key1 = @c_Pickslipno AND Key2 = @c_CartonNo AND Key3 = @c_Storerkey 
-			   			           AND transmitflag IN('0','1','9'))
-			   BEGIN	            
-			   	SELECT @b_success = 1
-		         EXECUTE nspg_getkey
-		         'TransmitlogKey2'
-		         , 10
-		         , @c_trmlogkey OUTPUT
-		         , @b_success   OUTPUT
-		         , @n_err       OUTPUT
-		         , @c_errmsg    OUTPUT
-		         
-		         IF @b_success <> 1
-		         BEGIN
-			   		SELECT @n_continue = 3
-		         END
-		         ELSE
-		         BEGIN
-    	   			INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
-			   		VALUES (@c_trmlogkey, @c_Option1, @c_Pickslipno, @c_CartonNo, @c_Storerkey, '0', '')
-			   	END
+            /*         
+            SET @c_PrintData = ''
+             
+           IF NOT EXISTS ( SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = @c_Option1 
+                                AND Key1 = @c_Pickslipno AND Key2 = @c_CartonNo AND Key3 = @c_Storerkey 
+                                AND transmitflag IN('0','1','9'))
+            BEGIN             
+               SELECT @b_success = 1
+               EXECUTE nspg_getkey
+               'TransmitlogKey2'
+               , 10
+               , @c_trmlogkey OUTPUT
+               , @b_success   OUTPUT
+               , @n_err       OUTPUT
+               , @c_errmsg    OUTPUT
+               
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+               ELSE
+               BEGIN
+                  INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
+                  VALUES (@c_trmlogkey, @c_Option1, @c_Pickslipno, @c_CartonNo, @c_Storerkey, '0', '')
+               END
             END
             ELSE
             BEGIN
-			   	--SELECT TOP 1 @c_PrintData = PrintData 
-			   	--FROM CARTONTRACK (NOLOCK)
-			   	--WHERE LabelNo = @c_LabelNo
-			   	--AND TrackingNo = @c_RefNo
+               --SELECT TOP 1 @c_PrintData = PrintData 
+               --FROM CARTONTRACK (NOLOCK)
+               --WHERE LabelNo = @c_LabelNo
+               --AND TrackingNo = @c_RefNo
               
-			   	--IF ISNULL(@c_PrintData,'') <> ''
-			   	--BEGIN   
-			   	--	EXEC isp_PrintToRDTSpooler 
+               --IF ISNULL(@c_PrintData,'') <> ''
+               --BEGIN   
+               -- EXEC isp_PrintToRDTSpooler 
           --    @c_reporttype = ''
           --   ,@c_Storerkey = @c_Storerkey
           --   ,@b_success = @b_success  OUTPUT
@@ -207,62 +221,62 @@ BEGIN
           --   ,@c_JobType = 'DIRECTPRN'
           --   ,@c_PrintData = @c_PrintData
                       
-			   	--	IF @b_Success <> 1
-			   	--		SELECT @n_continue = 3
-			   	--END 
-			   	
-			   	--Get Default Printer
-			   	SET @c_RDTDefaultPrinter = ''
-			   	SELECT @c_RDTDefaultPrinter = ISNULL(RTRIM(DefaultPrinter), '')
-			   	FROM rdt.rdtUser WITH (NOLOCK)
-			   	WHERE UserName = @c_UserName
-			   	
-			   	--Get WinPrinter
-			   	SET @c_RDTWinPrinter = ''
-			   	SELECT @c_RDTWinPrinter = ISNULL(RTRIM(WinPrinter), '')
-			   	FROM rdt.rdtPrinter WITH (NOLOCK)
-			   	WHERE PrinterID = @c_RDTDefaultPrinter
+               -- IF @b_Success <> 1
+               --    SELECT @n_continue = 3
+               --END 
+               
+               --Get Default Printer
+               SET @c_RDTDefaultPrinter = ''
+               SELECT @c_RDTDefaultPrinter = ISNULL(RTRIM(DefaultPrinter), '')
+               FROM rdt.rdtUser WITH (NOLOCK)
+               WHERE UserName = @c_UserName
+               
+               --Get WinPrinter
+               SET @c_RDTWinPrinter = ''
+               SELECT @c_RDTWinPrinter = ISNULL(RTRIM(WinPrinter), '')
+               FROM rdt.rdtPrinter WITH (NOLOCK)
+               WHERE PrinterID = @c_RDTDefaultPrinter
          
-			   	SET @c_RDTDefaultPrinter = SUBSTRING(@c_RDTWinPrinter, 1, CHARINDEX(',winspool',@c_RDTWinPrinter) - 1) 
-			   	
-			   	--Excute Print Label SP
-			   	EXEC dbo.isp_PrintZplLabel 
-			   	@c_StorerKey
-			   	, '' --@cLabelNo
-			   	, @c_RefNo
-			   	, @c_RDTDefaultPrinter
-			   	, @n_Err OUTPUT
-			   	, @c_ErrMsg OUTPUT                       	   
+               SET @c_RDTDefaultPrinter = SUBSTRING(@c_RDTWinPrinter, 1, CHARINDEX(',winspool',@c_RDTWinPrinter) - 1) 
+               
+               --Excute Print Label SP
+               EXEC dbo.isp_PrintZplLabel 
+               @c_StorerKey
+               , '' --@cLabelNo
+               , @c_RefNo
+               , @c_RDTDefaultPrinter
+               , @n_Err OUTPUT
+               , @c_ErrMsg OUTPUT                           
             END
-         	*/
+            */
 
-			   SELECT @b_success = 1
-		     EXECUTE nspg_getkey
-		     'TransmitlogKey2'
-		     , 10
-		     , @c_trmlogkey OUTPUT
-		     , @b_success   OUTPUT
-		     , @n_err       OUTPUT
-		     , @c_errmsg    OUTPUT
-		     
-		     IF @b_success <> 1
-		     BEGIN
-			      SELECT @n_continue = 3
-		     END
-		     ELSE
-		     BEGIN
-    		  	INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
-				    VALUES (@c_trmlogkey, @c_Option1, @c_Pickslipno, @c_CartonNo, @c_Storerkey, '0', '')
-				  
-				    -- Added by SWT01 for immediate trigger label extract web service 
-				    IF EXISTS(SELECT 1 FROM QCmd_TransmitlogConfig AS qtc WITH(NOLOCK)
-				              WHERE qtc.PhysicalTableName='TRANSMITLOG2' 
-				              AND qtc.TableName = @c_Option1 
-				              AND qtc.StorerKey = @c_Storerkey
-				              AND qtc.QCmdClass = 'FRONTEND')
-				    BEGIN
-				    	 SET @n_err = 0 
-				    	 EXEC  [dbo].[isp_QCmd_WSTransmitLogInsertAlert] 
+            SELECT @b_success = 1
+           EXECUTE nspg_getkey
+           'TransmitlogKey2'
+           , 10
+           , @c_trmlogkey OUTPUT
+           , @b_success   OUTPUT
+           , @n_err       OUTPUT
+           , @c_errmsg    OUTPUT
+           
+           IF @b_success <> 1
+           BEGIN
+               SELECT @n_continue = 3
+           END
+           ELSE
+           BEGIN
+            INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
+            VALUES (@c_trmlogkey, @c_Option1, @c_Pickslipno, @c_CartonNo, @c_Storerkey, '0', '')
+              
+                -- Added by SWT01 for immediate trigger label extract web service 
+                IF EXISTS(SELECT 1 FROM QCmd_TransmitlogConfig AS qtc WITH(NOLOCK)
+                          WHERE qtc.PhysicalTableName='TRANSMITLOG2' 
+                          AND qtc.TableName = @c_Option1 
+                          AND qtc.StorerKey = @c_Storerkey
+                          AND qtc.QCmdClass = 'FRONTEND')
+                BEGIN
+                   SET @n_err = 0 
+                   EXEC  [dbo].[isp_QCmd_WSTransmitLogInsertAlert] 
                           @c_QCmdClass            = 'FRONTEND'      
                         , @c_FrmTransmitlogKey    = @c_trmlogkey 
                         , @c_ToTransmitlogKey     = @c_trmlogkey                
@@ -271,18 +285,18 @@ BEGIN
                         , @n_Err                  = @n_err     OUTPUT
                         , @c_ErrMsg               = @c_errmsg  OUTPUT
                    
-               IF @n_err <> 0
-   	           BEGIN
-			           SET @n_Continue = 3
-			           GOTO QUIT_SP
-   	           END                    
-				    END
-		     END
-		   
-         FETCH NEXT FROM cur_Carton INTO @c_CartonNo, @c_UserName, @c_Facility, @c_Orderkey, @c_Refno, @c_LabelNo
+                 IF @n_err <> 0
+                 BEGIN
+                    SET @n_Continue = 3
+                    GOTO QUIT_SP
+                 END                    
+                END
+           END
+         
+      FETCH NEXT FROM cur_Carton INTO @c_CartonNo, @c_UserName, @c_Facility, @c_Orderkey, @c_Refno, @c_LabelNo
       END
       CLOSE cur_Carton  
-      DEALLOCATE cur_Carton                                            	     	    	
+      DEALLOCATE cur_Carton                                                         
    END
                  
    QUIT_SP:  
