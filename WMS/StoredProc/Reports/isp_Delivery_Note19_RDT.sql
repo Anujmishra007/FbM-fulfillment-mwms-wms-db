@@ -33,6 +33,8 @@ GO
 /* 05-Feb-2018  CSCHONG  1.4   WMS-3165 -revise A1 field by country(CS05)*/
 /* 10-MAY-2018  CSCHONG  1.5   WMS-4849 - revised field logic (CS06)     */
 /* 27-Jul-2020  WLChooi  1.6   WMS-14388 - Modify sorting for INDIA(WL01)*/
+/* 08-Sep-2020  WLChooi  1.7   WMS-14388 - Sorting only for Single PCS   */
+/*                             Order (WL02)                              */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_Delivery_Note19_RDT] 
@@ -87,6 +89,7 @@ BEGIN
             ,@c_OHORDkey         NVARCHAR(10)          --CS06
             ,@c_SortByLoc        NVARCHAR(1)           --WL01
             ,@c_ExecOrderByLoc   NVARCHAR(4000)        --WL01
+            ,@c_ECOMFlag         NVARCHAR(1)           --WL02
 
    DECLARE @c_ExecStatements NVARCHAR(MAX)
    DECLARE @c_ExecStatements2 NVARCHAR(MAX)
@@ -135,7 +138,8 @@ BEGIN
       SET @c_SortByLoc = 'N'
       SET @c_ExecOrderByLoc = ''
 
-      SELECT TOP 1 @c_storerkey = Storerkey
+      SELECT TOP 1 @c_storerkey = Storerkey,
+                   @c_ECOMFlag  = ECOM_SINGLE_Flag   --WL02
       FROM ORDERS (NOLOCK)       
       WHERE Loadkey = @c_Loadkey
       
@@ -192,7 +196,7 @@ BEGIN
       /*CS04 End*/
 
       --WL01 START
-      IF ISNULL(@c_SortByLoc,'N') = 'Y'
+      IF ISNULL(@c_SortByLoc,'N') = 'Y' AND @c_ECOMFlag = 'S'   --WL02
       BEGIN
          SELECT @c_ExecOrderByLoc = ' LOC.[Floor], LOC.Pickzone,LOC.LocAisle, LOC.LogicalLocation, ' + CHAR(13) + @c_ExecOrderBy
          SELECT @c_ExecOrderBy = @c_ExecOrderByLoc
@@ -751,8 +755,9 @@ END
       SELECT * FROM #TMP_HDR
       --ORDER BY pnotes,orderkey,OrdGrp 
       --ORDER BY seqno   --WL01
-      ORDER BY CASE WHEN ISNULL(@c_SortByLoc,'N') = 'Y' THEN SeqNo END DESC,   --WL01
-               CASE WHEN ISNULL(@c_SortByLoc,'N') = 'N' THEN Seqno END ASC     --WL01
+      ORDER BY CASE WHEN ISNULL(@c_SortByLoc,'N') = 'Y' AND @c_ECOMFlag = 'S' THEN SeqNo END DESC,   --WL01   --WL02
+               CASE WHEN ISNULL(@c_SortByLoc,'N') = 'N' THEN Seqno END ASC,     --WL01
+               CASE WHEN ISNULL(@c_SortByLoc,'N') = 'Y' AND @c_ECOMFlag <> 'S' THEN Seqno END ASC    --WL02
    
       GOTO QUIT_SP
 
