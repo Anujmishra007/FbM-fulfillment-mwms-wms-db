@@ -1,11 +1,12 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_WithdrawVirtualStock]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_WithdrawVirtualStock]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_WithdrawVirtualStock]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_WithdrawVirtualStock]
+GO
+
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO
-
 /************************************************************************/
 /* Stored Procedure: isp_WithdrawVirtualStock                           */
 /* Creation Date:                                                       */
@@ -27,12 +28,13 @@ GO
 /* 21-May-2014  TKLIM    Added Lottables 06-15                          */
 /* 08-Feb-2018  SWT01    Adding Paramater Variable to Calling SP        */
 /************************************************************************/
-CREATE PROC isp_WithdrawVirtualStock
+CREATE PROC [dbo].[isp_WithdrawVirtualStock]
             @c_StorerKey         NVARCHAR(10)
          ,  @c_LocationCategory  NVARCHAR(10) = ''
 AS
 BEGIN
    SET NOCOUNT ON 
+   SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF   
 
@@ -260,12 +262,6 @@ BEGIN
    CLOSE Cur_Inv
    DEALLOCATE Cur_Inv
 END
-
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
-GRANT EXECUTE ON isp_WithdrawVirtualStock to nSQL
+GRANT EXECUTE ON [dbo].[isp_WithdrawVirtualStock] TO nSQL 
 GO

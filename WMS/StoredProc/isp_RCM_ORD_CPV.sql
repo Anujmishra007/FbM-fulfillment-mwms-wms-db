@@ -1,12 +1,12 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[isp_RCM_ORD_CPV]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [dbo].[isp_RCM_ORD_CPV]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RCM_ORD_CPV]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_RCM_ORD_CPV]
 GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-  
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Store procedure: isp_RCM_ORD_CPV                                     */  
 /* Copyright      : LFLogistics                                         */  
@@ -14,6 +14,7 @@ GO
 /* Date       Rev  Author    Purposes                                   */  
 /* 12-06-2018 1.0  Ung       WMS-5368 Created                           */  
 /* 07-03-2019 1.1  ChewKP    Changes                                    */
+/* 11-03-2019 1.2  ChewKP    Fixes                                      */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_RCM_ORD_CPV] (  
@@ -224,7 +225,8 @@ BEGIN
                -- Log error  
                UPDATE rdt.rdtCPVOrderLog SET  
                   Remark = @cErrMsg  
-               WHERE RowRef = @nRowRef    
+               WHERE RowRef = @nRowRef   
+               
                     
                SET @nQTY_Log = 0  
             END  
@@ -239,32 +241,48 @@ BEGIN
             AND OpenQTY > 0  
             AND OpenQTY <> QTYAllocated)  
       BEGIN  
-         -- Pick confirm  
-         SET @curPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-            SELECT PickDetailKey  
-            FROM PickDetail WITH (NOLOCK)  
-            WHERE OrderKey = @c_OrderKey  
-         OPEN @curPD   
-         FETCH NEXT FROM @curPD INTO @cPickDetailKey  
-         WHILE @@FETCH_STATUS = 0  
-         BEGIN  
-            UPDATE PickDetail SET  
-               Status = '5',   
-               EditDate = GETDATE(),   
-               EditWho = SUSER_SNAME()  
-            WHERE PickDetailKey = @cPickDetailKey  
-            IF @@ERROR <> 0  
-               SET @cErrMsg = 'UPDATE PickDetail Fail'  
+         
+         IF NOT EXISTS ( SELECT TOP 1 1  
+                        FROM OrderDetail WITH (NOLOCK)  
+                        WHERE OrderKey = @c_OrderKey  
+                           AND OriginalQty <> QTYAllocated)  
+         BEGIN
+            -- Pick confirm  
+            SET @curPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+               SELECT PickDetailKey  
+               FROM PickDetail WITH (NOLOCK)  
+               WHERE OrderKey = @c_OrderKey  
+            OPEN @curPD   
             FETCH NEXT FROM @curPD INTO @cPickDetailKey  
-         END  
-  
-         -- Reset flag  
+            WHILE @@FETCH_STATUS = 0  
+            BEGIN  
+               UPDATE PickDetail SET  
+                  Status = '5',   
+                  EditDate = GETDATE(),   
+                  EditWho = SUSER_SNAME()  
+               WHERE PickDetailKey = @cPickDetailKey  
+               IF @@ERROR <> 0  
+                  SET @cErrMsg = 'UPDATE PickDetail Fail'  
+               FETCH NEXT FROM @curPD INTO @cPickDetailKey  
+            END  
+     
+            -- Reset flag  
+            UPDATE Orders SET   
+               UserDefine10 = '',    
+               EditWho = SUSER_SNAME(),   
+               EditDate = GETDATE()   
+            WHERE OrderKey = @c_OrderKey  
+         END
+      END  
+      ELSE
+      BEGIN
+          -- Reset flag  
          UPDATE Orders SET   
-            UserDefine10 = '',    
+            UserDefine10 = 'PARTIALALLOC',    
             EditWho = SUSER_SNAME(),   
             EditDate = GETDATE()   
-         WHERE OrderKey = @c_OrderKey  
-      END  
+         WHERE OrderKey = @c_OrderKey 
+      END
    END  
    ELSE  
    BEGIN  
@@ -303,13 +321,7 @@ QUIT_SP:
       END    
    END    
   
-END  
+END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [dbo].[isp_RCM_ORD_CPV] TO NSQL
+GRANT EXECUTE ON [dbo].[isp_RCM_ORD_CPV] TO nSQL 
 GO

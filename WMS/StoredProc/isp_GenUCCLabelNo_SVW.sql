@@ -1,11 +1,11 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID('[dbo].[isp_GenUCCLabelNo_SVW]') 
-AND OBJECTPROPERTY(id ,'IsProcedure') = 1 ) 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GenUCCLabelNo_SVW]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_GenUCCLabelNo_SVW]
 GO
 
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
 /* Stored Procedure: isp_GenUCCLabelNo_SVW                              */  

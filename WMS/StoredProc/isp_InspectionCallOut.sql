@@ -28,8 +28,9 @@ GO
 /* 20-Nov-2015  YTWan     1.1 Fixed module name(Wan01)                  */
 /* 04-Mar-2016  Wan02     1.2 SOS#363833 - Merlion_Multiple QC task     */
 /*                            release for same pallet                   */
+/* 27-JUL-2016  Barnett   1.4 FBR - 373411 ASRS Picking Priority (BL01) */
 /************************************************************************/
-CREATE PROC isp_InspectionCallOut 
+CREATE PROC [dbo].[isp_InspectionCallOut] 
             @c_ID          NVARCHAR(18) 
          ,  @c_Finalloc    NVARCHAR(18) 
          ,  @c_Reasoncode  NVARCHAR(30) 
@@ -60,6 +61,7 @@ BEGIN
          , @c_MessageType     NVARCHAR(10)
 
          , @c_PickMethod      NVARCHAR(10)
+		 , @c_Priority        NVARCHAR(10)		  --(BL01)
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -137,6 +139,25 @@ BEGIN
       SET @c_PickMethod = ''
    END
 
+	--(BL01 BEGIN)
+	--If ToLoc is go GTM
+	If @c_PickMethod = ''
+	BEGIN
+			SELECT @c_Priority = Short
+			FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = 'ASRSQC'
+	END
+
+
+	IF ISNULL(@c_Priority,'') =''  
+	BEGIN
+		SELECT @c_Priority = Short
+		FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = 'DEFAULT'
+
+		IF ISNULL(@c_Priority,'') ='' SET @c_Priority = 5
+	END 
+	--(BL01 END)
+
+
    -- Create Taskdetail
    BEGIN TRAN
    SET @b_success = 1    
@@ -200,7 +221,7 @@ BEGIN
       ,  @c_LogicalToLoc      -- Logical to loc 
       ,  @c_FinalLoc   
       ,  'isp_InspectionCallOut'         -- Sourcetype    
-      ,  '5'                  -- Priority    
+      ,  @c_Priority          -- Priority    --(BL01)
       ,  '0'                  -- Status
       ,  @c_ReasonCode        -- ReasonCode
       ,  @c_Remarks           -- Remarks
@@ -226,8 +247,8 @@ BEGIN
          ,  @c_MessageType  = @c_MessageType
          ,  @c_PalletID     = @c_ID
          ,  @c_FromLoc      = @c_FromLoc
-         ,  @c_ToLoc	       = @c_ToLoc
-         ,  @c_Priority	    = '5'
+         ,  @c_ToLoc	    = @c_ToLoc
+         ,  @c_Priority	    = @c_Priority		--(BL01)
          ,  @c_TaskDetailKey= @c_Taskdetailkey
          ,  @b_Success      = @b_Success  OUTPUT
          ,  @n_Err          = @n_Err      OUTPUT

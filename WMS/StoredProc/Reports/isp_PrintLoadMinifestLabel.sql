@@ -1,12 +1,12 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_PrintLoadMinifestLabel]') AND type in (N'P', N'PC'))
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PrintLoadMinifestLabel]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_PrintLoadMinifestLabel]
 GO
 
-set ANSI_NULLS ON
-set QUOTED_IDENTIFIER ON
-go
-
-
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/
 /* Stored Procedure: isp_PrintLoadMinifestLabel                          */
 /* Creation Date: 17-March-2007                                           */
@@ -255,11 +255,6 @@ Order by loadkey, dropid, CountID, pageno
 
 
 END
-
 GO
-SET QUOTED_IDENTIFIER OFF 
+GRANT EXECUTE ON [dbo].[isp_PrintLoadMinifestLabel] TO nSQL 
 GO
-SET ANSI_NULLS ON 
-GO
-
-GRANT EXEC ON isp_PrintLoadMinifestLabel TO NSQL

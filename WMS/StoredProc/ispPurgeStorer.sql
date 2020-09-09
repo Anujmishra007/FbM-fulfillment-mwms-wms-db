@@ -1,5 +1,5 @@
-/****** Object:  StoredProcedure [dbo].[ispPurgeStorer]    Script Date: 01/07/2009 09:53:36 ******/
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ispPurgeStorer]') AND type in (N'P', N'PC'))
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPurgeStorer]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[ispPurgeStorer]
 GO
 
@@ -31,6 +31,7 @@ GO
 /* 04-Jan-2011  SHONG     1.3  Purge Consignee for type <> '1'          */
 /* 18-Jan-2012  KHLim01   1.4  Update ArchiveCop before purging         */
 /* 16-Feb-2012  KHLim02   1.5  prevent updating wrong InventoryHold     */
+/* 10-Jul-2019  TLTING    1.6  TLog ful tune                            */
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[ispPurgeStorer]  
     @c_Storer NVARCHAR(15)  
@@ -938,15 +939,22 @@ CREATE PROCEDURE [dbo].[ispPurgeStorer]
     IF @n_Continue = 1  
     BEGIN  
        Print 'Purging LotAttribute...'  
-       DELETE FROM LOTATTRIBUTE  
-       WHERE STORERKEY = @c_Storer  
-       SELECT @n_err = @@ERROR  
-       IF @n_err <> 0  
-       BEGIN  
-          SELECT @n_continue = 3  
-          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=62100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
-       END  
+       WHILE 1=1
+       BEGIN
+          SET @n_cnt = 0
+          DELETE top (10000) FROM LOTATTRIBUTE  
+          WHERE STORERKEY = @c_Storer  
+          AND ArchiveCop = '9' 
+          SELECT @n_err = @@ERROR  , @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0  
+          BEGIN  
+             SELECT @n_continue = 3  
+             SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=62100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
+          END  
+          IF @n_cnt = 0
+            Break
+       END
     END  
     IF @n_Continue = 1  -- KHLim01
     BEGIN  
@@ -992,30 +1000,49 @@ CREATE PROCEDURE [dbo].[ispPurgeStorer]
     IF @n_Continue = 1  -- KHLim01
     BEGIN  
        Print 'Updating SKU...'  
-       UPDATE SKU  
-       Set ArchiveCop = '9'  
-       WHERE STORERKEY = @c_Storer  
-       SELECT @n_err = @@ERROR  
-       IF @n_err <> 0  
-       BEGIN  
-          SELECT @n_continue = 3  
-          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=62100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
-       END  
+
+       WHILE 1 = 1
+       BEGIN
+          SET @n_cnt = 0
+          UPDATE TOP (100000) SKU  
+          Set ArchiveCop = '9'  
+          WHERE STORERKEY = @c_Storer  
+          AND ( ArchiveCop <> '9' OR ArchiveCop is NULL)
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT   
+          IF @n_err <> 0  
+          BEGIN  
+             SELECT @n_continue = 3  
+             SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=62100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
+          END  
+
+          IF @n_cnt = 0
+             BREAK
+       END
     END  
     IF @n_Continue = 1  
     BEGIN  
        Print 'Purging SKU...'  
-       DELETE FROM SKU  
-       WHERE STORERKEY = @c_Storer  
-       SELECT @n_err = @@ERROR  
-       IF @n_err <> 0  
-       BEGIN  
-          SELECT @n_continue = 3  
-          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=62100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
-       END  
-    END  
+
+       WHILE 1 = 1
+       BEGIN
+          SET @n_cnt = 0
+          DELETE TOP (100000) FROM SKU  
+          WHERE STORERKEY = @c_Storer  
+          AND ArchiveCop = '9'
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT   
+          IF @n_err <> 0  
+          BEGIN  
+             SELECT @n_continue = 3  
+             SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=62100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
+          END  
+
+          IF @n_cnt = 0
+             BREAK
+        END
+
+     END  
   
     IF @n_Continue = 1  
     BEGIN  
@@ -1157,10 +1184,7 @@ CREATE PROCEDURE [dbo].[ispPurgeStorer]
       END  
    END  
    Print 'Purge Storer '+RTrim(@c_storer)+' ends at ' + convert(char(20), getdate(), 120)  
-END -- procedure  
-
+END -- procedure
 GO
-
-GRANT EXECUTE ON ispPurgeStorer to nSQL
+GRANT EXECUTE ON [dbo].[ispPurgeStorer] TO nSQL 
 GO
-

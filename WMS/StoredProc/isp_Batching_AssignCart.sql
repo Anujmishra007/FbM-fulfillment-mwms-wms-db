@@ -66,7 +66,7 @@ BEGIN
    AND Priority = 'M' 
    AND Storerkey = @c_Storerkey
    
-   IF (SELECT COUNT (DevicePosition) FROM #TMP_CartPosition) < @n_ordcnt
+   IF (SELECT COUNT(DISTINCT DevicePosition) FROM #TMP_CartPosition) < @n_ordcnt
    BEGIN
       SET @n_continue = 3      
       SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    

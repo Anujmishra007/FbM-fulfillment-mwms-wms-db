@@ -2,9 +2,9 @@ IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[ispPRADJ02]
 DROP PROCEDURE [dbo].[ispPRADJ02]
 GO
 /****** Object:  StoredProcedure [dbo].[ispPRADJ02]    Script Date: 01/08/2013 09:52:52 ******/
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO 
 
 /************************************************************************/  
