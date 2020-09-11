@@ -2,6 +2,7 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrQcmd_Tr
               and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
 drop trigger [dbo].[ntrQcmd_TransmitlogConfigUpdate]
 GO
+ 
 
 /************************************************************************/  
 /* Trigger: ntrQcmd_TransmitlogConfigUpdate                             */  
@@ -28,7 +29,7 @@ GO
 /************************************************************************/  
   
 CREATE TRIGGER [dbo].[ntrQcmd_TransmitlogConfigUpdate]  
-ON  [dbo].[Qcmd_TransmitlogConfig]  
+ON  [dbo].[QCmd_TransmitlogConfig]  
 FOR UPDATE  
 AS  
 BEGIN   
@@ -38,6 +39,7 @@ BEGIN
    END  
   
    SET NOCOUNT ON  
+   SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
