@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                     
 /*                                                                            */                     
 /* Date       Rev  Author     Purposes                                        */     
-/* 2019-09-03 1.0  WLChooi    Created (WMS-10365)                             */                              
+/* 2019-09-03 1.0  WLChooi    Created (WMS-10365)                             */    
+/* 2020-09-01 1.1  WLChooi    WMS-14927 - Add Key05 (WL01)                    */                          
 /******************************************************************************/                    
                       
 CREATE PROC [dbo].[isp_Bartender_SHIPUCCLBLSKE_GetParm]                          
@@ -60,8 +61,10 @@ BEGIN
            @c_UserName         NVARCHAR(20),    
            @c_ExecStatements   NVARCHAR(4000),        
            @c_ExecArguments    NVARCHAR(4000),  
-           @c_Storerkey        NVARCHAR(15),      --WL02                       
-           @c_Key03            NVARCHAR(50) = ''  --WL02         
+           @c_Storerkey        NVARCHAR(15),                             
+           @c_Key03            NVARCHAR(50) = '',       
+           @c_Facility         NVARCHAR(5) = '',   --WL01 
+           @c_PrintNewLayout   NVARCHAR(10) = 'NONTJ'   --WL01
   
     SET @d_Trace_StartTime = GETDATE()      
     SET @c_Trace_ModuleName = ''      
@@ -76,13 +79,13 @@ BEGIN
     SET @c_ExecStatements = ''    
     SET @c_ExecArguments = ''    
     SET @c_Key03 = 'NONSA'  
-  
-    --WL02 Start  
+   
     SELECT @c_Storerkey = Storerkey  
     FROM PACKHEADER (NOLOCK)  
     WHERE Pickslipno = @parm01  
   
-    SELECT @c_ExternOrderKey = MAX(ORD.ExternOrderkey)  
+    SELECT @c_ExternOrderKey = MAX(ORD.ExternOrderkey)
+         , @c_Facility = MAX(ORD.Facility)   --WL01  
     FROM ORDERS ORD (NOLOCK)  
     JOIN PACKHEADER PH (NOLOCK) ON ORD.ORDERKEY = PH.ORDERKEY  
     WHERE PH.Pickslipno = @parm01  
@@ -90,6 +93,7 @@ BEGIN
     IF ISNULL(@c_ExternOrderKey,'') = ''  
     BEGIN  
        SELECT @c_ExternOrderKey = MAX(ORD.ExternOrderkey)  
+            , @c_Facility = MAX(ORD.Facility)   --WL01  
        FROM PACKHEADER PH (NOLOCK)  
        JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.LOADKEY = PH.LOADKEY  
        JOIN ORDERS ORD (NOLOCK) ON ORD.ORDERKEY = LPD.ORDERKEY  
@@ -101,36 +105,43 @@ BEGIN
        IF LTRIM(RTRIM(ISNULL(@c_ExternOrderKey,''))) LIKE 'SA%'   
           SET @c_Key03 = 'SA'  
     END  
-  
-    --WL02 End  
-      
-    IF ISNULL(RTRIM(@parm03),'') = ''  --INC0648102  
+
+    --WL01 START
+    SELECT @c_PrintNewLayout = CASE WHEN ISNULL(CL.Long,'') = '' THEN 'NONTJ' ELSE 'TJ' END
+    FROM CODELKUP CL (NOLOCK)
+    WHERE CL.LISTNAME = 'BTConfig'
+    AND CL.Storerkey = @c_Storerkey
+    AND CL.Long = 'TJ'
+    AND CL.Code = @c_Facility
+    --WL01 END
+
+    IF ISNULL(RTRIM(@parm03),'') = ''    
     BEGIN  
        SET @c_SQLJOIN = 'SELECT DISTINCT PARM1= PD.Pickslipno,PARM2=PD.Cartonno,PARM3= PD.Cartonno ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+    
-       'PARM8='''',PARM9='''',PARM10='''',Key1=''Pickslipno'',Key2=''Cartonno'',Key3=@c_Key03,' +  --WL02  
+       'PARM8='''',PARM9='''',PARM10='''',Key1=''Pickslipno'',Key2=''Cartonno'',Key3=@c_Key03,' +    
        ' Key4=''1_NONBARCODE'','+    
-       ' Key5= '''' '  +      
+       ' Key5= @c_PrintNewLayout '  +   --WL01
        ' FROM PACKHEADER PH WITH (NOLOCK) ' +    
        ' JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo'+      
        ' WHERE PH.Pickslipno = @Parm01 ' +    
-       ' AND (PD.CartonNo = CONVERT(INT,@Parm02) OR PD.LabelNo = @Parm02) ' --WL01  
+       ' AND (PD.CartonNo = CONVERT(INT,@Parm02) OR PD.LabelNo = @Parm02) '   
         --AND PD.CartonNo <= CONVERT(INT,@Parm03)  '      
     END      
     ELSE  
     BEGIN  
        SET @c_SQLJOIN = 'SELECT DISTINCT PARM1= PD.Pickslipno,PARM2=PD.Cartonno,PARM3= PD.Cartonno ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+    
-        'PARM8='''',PARM9='''',PARM10='''',Key1=''Pickslipno'',Key2=''Cartonno'',Key3=@c_Key03,' +  --WL02  
+        'PARM8='''',PARM9='''',PARM10='''',Key1=''Pickslipno'',Key2=''Cartonno'',Key3=@c_Key03,' +    
        ' Key4=''1_NONBARCODE'','+    
-       ' Key5= '''' '  +      
+       ' Key5= @c_PrintNewLayout '  +   --WL01      
        ' FROM PACKHEADER PH WITH (NOLOCK) ' +    
        ' JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo'+      
        ' WHERE PH.Pickslipno = @Parm01 ' +    
        ' AND PD.CartonNo >= CONVERT(INT,@Parm02) ' + --AND PD.CartonNo <= CONVERT(INT,@Parm03)  '    
-       ' AND PD.CartonNo <= CONVERT(INT,@Parm03) ' --INC0648102     
+       ' AND PD.CartonNo <= CONVERT(INT,@Parm03) '      
     END  
       
     SET @c_SQLJOIN1 = 'SELECT DISTINCT PARM1= PD.Pickslipno,PARM2=PD.Cartonno,PARM3= PD.Cartonno ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+    
-                      ' PARM8='''',PARM9='''',PARM10=''BARCODE'',Key1=''Pickslipno'',Key2=''Cartonno'',Key3=@c_Key03,' +  --WL02  
+                      ' PARM8='''',PARM9='''',PARM10=''BARCODE'',Key1=''Pickslipno'',Key2=''Cartonno'',Key3=@c_Key03,' +    
                       ' Key4=''2_BARCODE'','+    
                       ' Key5= '''' '  +      
                       ' FROM PACKHEADER PH WITH (NOLOCK) ' +    
@@ -143,17 +154,19 @@ BEGIN
    SET @c_SQL = @c_SQL + @c_SQLJOIN  + ' UNION ALL ' + @c_SQLJOIN1  
     
         
-   SET @c_ExecArguments = N'   @parm01           NVARCHAR(80)'        
-                          + ', @parm02           NVARCHAR(80)'        
-                          + ', @parm03           NVARCHAR(80)'      
-                          + ', @c_Key03          NVARCHAR(80)'  --WL02             
+   SET @c_ExecArguments = N'  @parm01            NVARCHAR(80)'        
+                          +', @parm02            NVARCHAR(80)'        
+                          +', @parm03            NVARCHAR(80)'      
+                          +', @c_Key03           NVARCHAR(80)'
+                          +', @c_PrintNewLayout  NVARCHAR(80)'   --WL01               
                              
    EXEC sp_ExecuteSql     @c_SQL         
                         , @c_ExecArguments        
                         , @parm01        
                         , @parm02       
                         , @parm03    
-                        , @c_Key03  --WL02      
+                        , @c_Key03 
+                        , @c_PrintNewLayout   --WL01    
    EXIT_SP:        
       
       SET @d_Trace_EndTime = GETDATE()      
