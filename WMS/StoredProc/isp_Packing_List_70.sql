@@ -16,7 +16,7 @@ GO
 /*                                                                      */  
 /* Called By: report dw = r_dw_packing_list_70                          */  
 /*                                                                      */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 2020-09-02   WLChooi   1.1   WMS-14919 - Modify Sorting & Logic(WL01)*/
+/* 2020-09-10   WLChooi   1.2  WMS-14919 - Add ISNULL (WL02)            */
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_70 (  
@@ -112,7 +113,7 @@ BEGIN
       ORDERS.Salesman AS Salesman, 
       ORDERS.StorerKey,
       PACKDETAIL.labelno AS Labelno,  
-      SKU.susr1 AS susr1,    
+      ISNULL(SKU.susr1,'') AS susr1,   --WL02
       SKU.[size] AS [ssize],   
       SKU.style AS [sstyle],  
       sku.color as [scolor], 
@@ -146,7 +147,7 @@ BEGIN
       ORDERS.Salesman ,
       PACKDETAIL.labelno,
       ORDERS.StorerKey,
-      sku.susr1,SKU.[size],SKU.style,
+      ISNULL(SKU.susr1,''),SKU.[size],SKU.style,   --WL02
       sku.color,SKU.Measurement,OD.sku,
       ISNULL(ST.[Secondary],''),   --WL01
       ORDERS.ConsigneeKey 
