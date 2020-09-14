@@ -38,8 +38,11 @@ GO
 /*                              packinfo.qty                            */
 /* 2017-May-29  Ung       1.8   WMS-1919 Add serial no                  */
 /* 2019-Mar-13  Ung       1.9   WMS-8134 Add PackDetailInfo             */
-/* 2020-Sep-01  NJOW02    1.10  WMS-15009 - call custom stored proc     */  
+/* 2020-Sep-01  NJOW04    1.10  WMS-15009 - call custom stored proc     */  
 /* 2020-AUG-06  Wan01     2.0   WMS-14315 - [CN] NIKE_O2_Ecom Packing_CR*/
+/* 2020-SEP-12  NJOW05    2.1   WMS-15001 - reverse serial# when del for*/
+/*                              config ADAllowInsertExistingSerialNo and*/
+/*                              Option1=NotAllowInsertNewSerialNo       */
 /************************************************************************/        
 CREATE TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
 FOR  DELETE      
@@ -83,7 +86,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  BEGIN      
      SELECT @n_continue = 4      
  END       
-   --NJOW02  
+   --NJOW04  
    IF @n_continue=1 or @n_continue=2            
    BEGIN  
       IF EXISTS (SELECT 1 FROM DELETED d    
@@ -388,9 +391,11 @@ END
      JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
      JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                     AND SerialNo.Sku = DELETED.Sku 
-                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))
+                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))                    
      JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+     LEFT JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --NJOW05
      WHERE SKU.Susr4 = 'AD'     
+     AND SC.SValue IS NULL  --NJOW05
            
     SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
     IF @n_err <> 0
@@ -399,6 +404,29 @@ END
        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61816
        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
     END        
+    
+    --NJOW05
+    UPDATE SERIALNO WITH (ROWLOCK)
+    SET SERIALNO.Orderkey = '',
+        SERIALNO.OrderLineNumber = '',
+        SERIALNO.Status = '1',
+        SERIALNO.Trafficcop = NULL
+    FROM SERIALNO 
+    JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
+    JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
+                    AND SerialNo.Sku = DELETED.Sku 
+                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))                    
+    JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+    JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
+    WHERE SKU.Susr4 = 'AD'     
+
+    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+    IF @n_err <> 0
+    BEGIN
+       SELECT @n_continue = 3
+       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
+       SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+    END             
  END      
 
  --NJOW02
