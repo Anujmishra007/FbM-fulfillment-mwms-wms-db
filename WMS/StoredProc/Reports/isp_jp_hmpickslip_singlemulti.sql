@@ -1,4 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_jp_hmpickslip_singlemulti]') 
+﻿IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_jp_hmpickslip_singlemulti]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
    DROP PROCEDURE [dbo].[isp_jp_hmpickslip_singlemulti]
 GO
@@ -26,7 +26,8 @@ GO
 /* Data Modifications:                                                        */                    
 /*                                                                            */                    
 /* Updates:                                                                   */                    
-/* Date         Author    Ver.  Purposes                                      */                   
+/* Date         Author    Ver.  Purposes                                      */  
+/* 2020-09-14   WLChooi   1.1   Bug Fix (WL01)                                */                 
 /******************************************************************************/                    
                     
 CREATE PROC [dbo].[isp_jp_hmpickslip_singlemulti] (                    
@@ -160,7 +161,8 @@ MULTI:
               @n_ASCII           INT = 65, --Alphabet A
               @c_Alphabet        NVARCHAR(1) = '',
               @n_Count           INT = 40,
-              @n_CurrCount       INT = 1
+              @n_CurrCount       INT = 1,
+              @c_PrevOrderkey    NVARCHAR(10)   --WL01
 
       CREATE TABLE #LOADSPLIT (                              
          ORDERNO         INT,                                                          
@@ -281,6 +283,7 @@ MULTI:
       DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT OrderNo, Orderkey, LogicalLocation, SKU, [Route], Qty, Loc, Loadkey, ExternLineNo, LineNumber, TotalLines, SKUDESCR
       FROM #LOADSPLIT
+      ORDER BY OrderNo   --WL01
       
       OPEN CUR_LOOP
       
@@ -299,6 +302,17 @@ MULTI:
                                   
       WHILE @@FETCH_STATUS <> -1
       BEGIN
+      	--WL01 START
+      	IF @c_PrevOrderkey = NULL
+      	BEGIN
+      		SET @c_PrevOrderkey = @c_Orderkey
+      	END
+      	ELSE IF @c_PrevOrderkey = @c_Orderkey
+      	BEGIN
+      		GOTO NEXT_LOOP
+      	END
+      	--WL01 END
+      	
          SET @c_Alphabet = CHAR(@n_ASCII)
 
          IF @n_OrderSort % @n_Count = 0
@@ -332,14 +346,16 @@ MULTI:
               , @n_LineNumber
               , @n_TotalLines
               , @c_SKUDESCR  
-
+         
+         SET @c_PrevOrderkey = @c_Orderkey   --WL01
          SET @n_CurrCount = @n_CurrCount + 1
 
          IF @n_OrderSort >= @n_Count
          BEGIN
             SET @n_ASCII = @n_ASCII + 1
          END
-
+         
+NEXT_LOOP:   --WL01
          FETCH NEXT FROM CUR_LOOP INTO @n_OrderSort                   
                                   , @c_Orderkey       
                                   , @c_LogicalLocation
@@ -404,7 +420,7 @@ MULTI:
       --,TOTALLINES                                 
       --,SKUDESCR FROM #LOADSPLIT WITH (NOLOCK)                                               
             
-      SELECT *, @c_Mode AS Mode FROM #LOADSPLIT2 (NOLOCK)  ORDER BY LOADKEY , LINENUMBER          
+      SELECT *, @c_Mode AS Mode FROM #LOADSPLIT2 (NOLOCK)  ORDER BY LOADKEY, LINENUMBER          
 
       IF OBJECT_ID('tempdb..#LOADSPLIT') IS NOT NULL
          DROP TABLE #LOADSPLIT
