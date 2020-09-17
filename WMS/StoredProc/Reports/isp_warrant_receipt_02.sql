@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: r_dw_warrant_receipt_02                                   */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
+/* 2020-09-17   WLChooi 1.1   Bug Fix - Get RD.ExternReceiptkey (WL01)  */
 /************************************************************************/
 
 CREATE PROC isp_warrant_receipt_02 (
@@ -161,7 +162,7 @@ CREATE PROC isp_warrant_receipt_02 (
           CAST(RECEIPT.Notes as varchar(215)) as Notes, 
           RECEIPT.RecType, 
           RECEIPT.CarrierKey,
-          RECEIPT.ExternReceiptKey,    
+          RECEIPTDETAIL.ExternReceiptKey,   --RECEIPT.ExternReceiptKey   --WL01    
           RECEIPT.CarrierReference,
           RECEIPT.WarehouseReference,
           RECEIPT.ContainerKey, 
@@ -211,7 +212,7 @@ CREATE PROC isp_warrant_receipt_02 (
             CAST(RECEIPT.Notes as varchar(215)), 
             RECEIPT.RecType, 
             RECEIPT.CarrierKey,
-            RECEIPT.ExternReceiptKey, 
+            --RECEIPT.ExternReceiptKey,   --WL01 
             RECEIPT.CarrierReference,
             RECEIPT.WarehouseReference,
             RECEIPT.ContainerKey, 
