@@ -41,14 +41,18 @@ GO
 /* 2020-01-07  LZG      1.4   INC0984561 - Check for PickZone of        */  
 /*                            previous Loc (ZG01)                       */ 
 /* 2019-11-21  Wan14    1.5   Change Genaral Repl Task Sourcetype to    */   
-/*                            ispRLWAV20-REPLEN                         */ 
-/* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */      
+/*                            ispRLWAV20-REPLEN                         */   
+/* 2020-03-23  Wan15    1.6   WMS-12136 - NIKE - PH Cartonization       */  
+/* 2020-03-30  Wan16    1.6   WMS-12269 - [PH] - NIKE - Picking Task    */
+/*                            Dispatch                                  */  
+/* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */        
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV20]
         @c_wavekey      NVARCHAR(10)  
        ,@b_Success      INT            OUTPUT  
        ,@n_err          INT            OUTPUT  
        ,@c_errmsg       NVARCHAR(250)  OUTPUT  
+       ,@b_debug        INT = 0        
 AS
 BEGIN
    SET NOCOUNT ON
@@ -112,7 +116,7 @@ BEGIN
          , @c_PackOrderkey       NVARCHAR(10)              
          , @c_Zone               NVARCHAR(10)              
 
-         , @c_ExternOrderkey     NVARCHAR(30)              
+         , @c_ExternOrderkey     NVARCHAR(50)              
 
          , @c_MinPalletCarton    NVARCHAR(30)              
          , @n_TotatCartonInID    INT                       
@@ -176,7 +180,19 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 81010
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has been released. (ispRLWAV20)'
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has been released - RPF. (ispRLWAV20)'
+      GOTO QUIT_SP
+   END
+
+   IF EXISTS ( SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
+               WHERE TD.Wavekey = @c_Wavekey
+               AND TD.Sourcetype IN('ispRLWAV20-CPK')--Wan14 
+               AND TD.Tasktype IN ('CPK')
+               AND TD.Status <> 'X') 
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 81011
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has been released -CPK. (ispRLWAV20)'
       GOTO QUIT_SP
    END
 
@@ -292,7 +308,6 @@ BEGIN
   
    
    --(Wan09) - START
-
    DECLARE @t_UPDPICK TABLE
    (  RowRef            INT   IDENTITY(1,1) PRIMARY KEY
    ,  PickDetailKey     NVARCHAR(10)   NOT NULL DEFAULT ('')
@@ -495,10 +510,39 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 81033
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No Allocated Pick record found to release. '
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No Allocated Pick record found to release.  (ispRLWAV20)'
       GOTO QUIT_SP
    END   
-   --(Wan09) - END                                                          
+   --(Wan09) - END     
+  
+   --(Wan15) - START
+   IF EXISTS ( SELECT 1 FROM #TMP_PICK TP 
+               JOIN SKU WITH (NOLOCK) ON  TP.Storerkey = SKU.Storerkey
+                                    AND TP.Sku = SKU.Sku
+               WHERE (SKU.StdCube = 0.00 OR SKU.StdGrossWgt = 0.00)
+             )
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 81215
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Sku not setup either StdCube or StdGrossWgt in sku master found.  (ispRLWAV20)'
+      GOTO QUIT_SP
+   END   
+   --(Wan15) - END    
+
+   --(Wan16) - START --2020-07-10
+   IF EXISTS ( SELECT 1
+               FROM #TMP_PICK TP
+               JOIN LOC L (NOLOCK) ON TP.Loc = L.Loc
+               LEFT JOIN AREADETAIL AD WITH (NOLOCK) ON L.PickZone = AD.PutawayZone
+               WHERE AD.Areakey IS NULL
+               )
+   BEGIN
+      SET @n_continue = 3  
+      SET @n_Err = 81216
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Missing Loc areakey. (ispRLWAV20)' 
+      GOTO QUIT_SP
+   END
+   --(Wan16) - END --2020-07-10
 
    IF EXISTS ( SELECT 1 FROM #TMP_PICK TP WITH (NOLOCK) 
                WHERE UOM = '6'
@@ -1771,6 +1815,7 @@ BEGIN
             )   CS ON LLI.Lot = CS.Lot AND LLI.Loc = CS.Loc AND LLI.ID = CS.ID
       WHERE LLI.Storerkey = @c_Storerkey
       AND   LLI.Sku = @c_Sku
+      AND   LOC.Facility = @c_Facility             --2020-07-09 Fixed
       AND   LOC.LocationType = 'OTHER'
       AND   LOC.LocationCategory = 'BULK'
       AND   (( @c_LocationHandling = '3' AND LA.Lottable01 IN ( 'A','' ) ) OR
@@ -1980,13 +2025,96 @@ BEGIN
    CLOSE @CUR_DP        
    DEALLOCATE @CUR_DP             
    --(Wan12) - END       
+
+   ---------------------------------------------
+   --(Wan15) Precartonization - START
+   ---------------------------------------------
+
+   IF OBJECT_ID('tempdb..#PICKDETAIL_WIP','U') IS NOT NULL
+   BEGIN
+      DROP  TABLE #PICKDETAIL_WIP
+   END
+
+   CREATE TABLE #PICKDETAIL_WIP  
+      (  RowRef            INT         IDENTITY(1,1)     PRIMARY KEY
+      ,  Wavekey           NVARCHAR(10) DEFAULT('') 
+      ,  Loadkey           NVARCHAR(10) DEFAULT('')
+      ,  Orderkey          NVARCHAR(10) DEFAULT('')
+      ,  [Route]           NVARCHAR(10) DEFAULT('')
+      ,  ExternOrderkey    NVARCHAR(50) DEFAULT('')      --2020-08-11
+      ,  Pickdetailkey     NVARCHAR(10) DEFAULT('')   
+      ,  Busr7             NVARCHAR(30) DEFAULT('')      -- Product engine
+      ,  Storerkey         NVARCHAR(15) DEFAULT('')
+      ,  Sku               NVARCHAR(20) DEFAULT('')
+      ,  UOM               NVARCHAR(10) DEFAULT('')
+      ,  UOMQty            INT          DEFAULT(0)
+      ,  Qty               INT          DEFAULT(0)
+      ,  Lot               NVARCHAR(10) DEFAULT('')
+      ,  ToLoc             NVARCHAR(10) DEFAULT('')
+      ,  PickStdCube       FLOAT        DEFAULT(0.00)
+      ,  PickStdGrossWgt   FLOAT        DEFAULT(0.00)
+      ,  StdCube           FLOAT        DEFAULT(0.00)
+      ,  StdGrossWgt       FLOAT        DEFAULT(0.00)
+      ,  SkuStdCube        FLOAT        DEFAULT(0.00)    --2020-08-27  
+      ,  CubeTolerance     FLOAT        DEFAULT(0.00)    --2020-08-27  
+      ,  [Length]          FLOAT        DEFAULT(0.00)    --2020-08-07  
+      ,  Width             FLOAT        DEFAULT(0.00)    --2020-08-07  
+      ,  Height            FLOAT        DEFAULT(0.00)    --2020-08-07 
+      ,  DropID            NVARCHAR(20) DEFAULT('')
+      ,  LocLevel          NVARCHAR(10) DEFAULT('')
+      ,  Logicallocation   NVARCHAR(10) DEFAULT('')
+      ,  PickSlipNo        NVARCHAR(10) DEFAULT('')
+      ,  CartonType        NVARCHAR(10) DEFAULT('')
+      ,  CaseID            NVARCHAR(20) DEFAULT('')
+      ,  CartonSeqNo       INT          DEFAULT(0)
+      ,  CartonCube        FLOAT        DEFAULT(0.00)
+      ,  [Status]          INT          DEFAULT(0)
+      )
+
+   EXEC ispRLWAV20_PACK
+        @c_Wavekey = @c_Wavekey      
+      , @b_Success = @b_Success  OUTPUT
+      , @n_Err     = @n_Err      OUTPUT
+      , @c_ErrMsg  = @c_ErrMsg   OUTPUT
+
+   IF @b_Success = 0
+   BEGIN
+      SET @n_continue = 3
+      SET @n_err = 81210 
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Pre-Cartonization Failed. (ispRLWAV20)' 
+      GOTO QUIT_SP
+   END
+   ---------------------------------------------
+   --(Wan15)  Precartonization - END
+   ---------------------------------------------
+
+   ---------------------------------------------
+   --(Wan16) Release Pick Task - START 
+   ---------------------------------------------
+   EXEC ispRLWAV20_CPK
+        @c_Wavekey = @c_Wavekey      
+      , @b_Success = @b_Success  OUTPUT
+      , @n_Err     = @n_Err      OUTPUT
+      , @c_ErrMsg  = @c_ErrMsg   OUTPUT
+      , @b_debug   = @b_debug
+
+   IF @b_Success = 0
+   BEGIN
+      SET @n_continue = 3
+      SET @n_err = 81310
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+':Release Pick Task Failed. (ispRLWAV20)' 
+      GOTO QUIT_SP
+   END
+   ---------------------------------------------
+   --(Wan16) Release Pick Task  - END
+   ---------------------------------------------
    
    UPDATE WAVE WITH (ROWLOCK)
     --SET STATUS = '1' -- Released        --(Wan01) 
-    SET TMReleaseFlag = 'Y'               --(Wan01) 
-     ,  TrafficCop = NULL                 
-     ,  EditWho = SUSER_SNAME()           
-     ,  EditDate= GETDATE()               
+    SET TMReleaseFlag = 'Y'               --(Wan01)
+      ,Trafficcop = NULL
+      ,EditWho = SUSER_SNAME()
+      ,EditDate= GETDATE()
    WHERE Wavekey = @c_Wavekey 
    
    SET @n_err = @@ERROR
