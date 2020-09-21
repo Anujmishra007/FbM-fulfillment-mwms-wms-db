@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-09-08  Wan01    1.1   Ver 1.3 - Allocate from Full DPP, BULK,   */
+/*                            Loose DPP & AVG                           */
 /************************************************************************/
 CREATE PROC ispSEPB2C
      @c_WaveKey                     NVARCHAR(10)
@@ -592,7 +594,7 @@ BEGIN
             GOTO NEXT_INVLOT04
          END
 
-         EXEC ispSEPConsoLQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi
+         EXEC ispSEPConsoFQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi, Get DPP <= @n_QtyLeftToFullfill   --(Wan01)
            @c_WaveKey          = @c_WaveKey 
          , @c_WaveType         = @c_WaveType                      
          , @c_Facility         = @c_Facility         
@@ -672,6 +674,51 @@ BEGIN
                           + '(ispSEPB2C)' + ' (' + @c_ErrMsg + ')'
             GOTO QUIT_SP
          END
+
+         --(Wan01) - START
+         IF @n_QtyLeftToFullfill <= 0
+         BEGIN
+            GOTO NEXT_INVLOT04
+         END
+
+         EXEC ispSEPConsoLQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi, Get DPP >= 0   
+           @c_WaveKey          = @c_WaveKey 
+         , @c_WaveType         = @c_WaveType                      
+         , @c_Facility         = @c_Facility         
+         , @c_Storerkey        = @c_Storerkey        
+         , @c_Sku              = @c_Sku              
+         , @c_Lottable01       = @c_Lottable01       
+         , @c_Lottable02       = @c_Lottable02       
+         , @c_Lottable03       = @c_Lottable03       
+         , @dt_Lottable04      = @dt_Lottable04      
+         , @dt_Lottable05      = @dt_Lottable05      
+         , @c_Lottable06       = @c_Lottable06       
+         , @c_Lottable07       = @c_Lottable07       
+         , @c_Lottable08       = @c_Lottable08       
+         , @c_Lottable09       = @c_Lottable09       
+         , @c_Lottable10       = @c_Lottable10       
+         , @c_Lottable11       = @c_Lottable11       
+         , @c_Lottable12       = @c_Lottable12       
+         , @dt_Lottable13      = @dt_Lottable13      
+         , @dt_Lottable14      = @dt_Lottable14      
+         , @dt_Lottable15      = @dt_Lottable15      
+         , @dt_InvLot04        = @dt_InvLot04         
+         , @n_QtyLeftToFullfill= @n_QtyLeftToFullfill OUTPUT
+         , @b_Success          = @b_Success           OUTPUT  
+         , @n_Err              = @n_Err               OUTPUT  
+         , @c_ErrMsg           = @c_ErrMsg            OUTPUT
+         , @b_Debug            = @b_Debug 
+
+         IF @b_Success = 0 
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 82095
+            SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPConsoLQ7.'
+                          + '(ispSEPB2C)' + ' (' + @c_ErrMsg + ')'
+            GOTO QUIT_SP
+         END
+         --(Wan01) - END
 
          IF @b_debug IN (1,9)
          BEGIN
