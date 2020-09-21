@@ -1,5 +1,5 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_UnpickpackORD_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_UnpickpackORD_Wrapper]
+DROP PROCEDURE [dbo].[isp_UnpickpackORD_Wrapper]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -17,14 +17,15 @@ GO
 /*                                                                      */  
 /* Called By: RCM Unpickpack Orders At Unpickpack Orders screen         */    
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date        Author   Ver   Purposes                                  */  
+/* 2020-06-04  Wan01    1.1   WMS-13120 - [PH] NIKE - WMS UnPacking Module*/
 /************************************************************************/  
 
 CREATE PROCEDURE [dbo].[isp_UnpickpackORD_Wrapper]  
@@ -32,9 +33,12 @@ CREATE PROCEDURE [dbo].[isp_UnpickpackORD_Wrapper]
    ,  @c_ConsoOrderkey  NVARCHAR(30)  
    ,  @c_UPPLoc         NVARCHAR(10)
    ,  @c_UnpickMoveKey  NVARCHAR(10)  OUTPUT  
-   ,  @b_Success        INT          OUTPUT 
-   ,  @n_Err            INT          OUTPUT 
+   ,  @b_Success        INT           OUTPUT 
+   ,  @n_Err            INT           OUTPUT 
    ,  @c_ErrMsg         NVARCHAR(250) OUTPUT
+   ,  @c_Loadkey        NVARCHAR(10) = ''    --(Wan01)
+   ,  @c_MBOLKey        NVARCHAR(10) = ''    --(Wan01) Ready for future if request to unpickpack by MBOL
+   ,  @c_WaveKey        NVARCHAR(10) = ''    --(Wan01)
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -45,8 +49,8 @@ BEGIN
    DECLARE @n_Continue      INT
          , @n_StartTCnt     INT
          , @c_SPCode        NVARCHAR(10)
-         , @c_StorerKey     NVARCHAR(15)
-         , @c_Loadkey       NVARCHAR(10)
+         , @c_StorerKey     NVARCHAR(15)  = ''  --(Wan01)
+         --, @c_Loadkey       NVARCHAR(10)      --(Wan01)
          , @c_SQL           NVARCHAR(MAX)
 
    SET @n_err        = 0
@@ -57,7 +61,7 @@ BEGIN
    SET @n_StartTCnt  = @@TRANCOUNT
    SET @c_SPCode     = ''
    SET @c_StorerKey  = ''
-   SET @c_Loadkey    = ''
+   --SET @c_Loadkey    = ''      --(Wan01)
    SET @c_SQL        = ''
    
    WHILE @@TRANCOUNT > 0
@@ -65,10 +69,33 @@ BEGIN
       COMMIT TRAN
    END
 
-   SELECT @c_Storerkey = ISNULL(RTRIM(ORDERS.Storerkey),'')
-         ,@c_Loadkey   = ISNULL(RTRIM(ORDERS.Loadkey),'') 
-   FROM ORDERS WITH (NOLOCK)
-   WHERE ORDERS.Orderkey = @c_OrderKey
+   IF @c_Orderkey <> ''
+   BEGIN
+      SET @c_Loadkey = ''
+      SELECT @c_Storerkey = ISNULL(RTRIM(ORDERS.Storerkey),'')
+            ,@c_Loadkey   = ISNULL(RTRIM(ORDERS.Loadkey),'') 
+      FROM ORDERS WITH (NOLOCK)
+      WHERE ORDERS.Orderkey = @c_OrderKey
+   END
+   ELSE IF @c_LoadKey <> ''
+   BEGIN
+      SELECT TOP 1 @c_Storerkey = ORDERS.Storerkey
+      FROM ORDERS WITH (NOLOCK)
+      WHERE ORDERS.Loadkey = @c_Loadkey
+   END
+   ELSE IF @c_MBOLKey <> ''
+   BEGIN
+      SELECT TOP 1 @c_Storerkey = ORDERS.Storerkey
+      FROM ORDERS WITH (NOLOCK)
+      WHERE ORDERS.MBOLKey = @c_MBOLKey
+   END 
+   ELSE IF @c_WaveKey <> ''
+   BEGIN
+      SELECT TOP 1 @c_Storerkey = OH.Storerkey
+      FROM WAVEDETAIL WD WITH (NOLOCK) 
+      JOIN ORDERS     OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+      WHERE WD.Wavekey = @c_WaveKey
+   END
 
    SELECT @c_SPCode = sVALUE 
    FROM   StorerConfig WITH (NOLOCK) 
@@ -96,12 +123,15 @@ BEGIN
    END
 
    BEGIN TRAN
-   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Orderkey, @c_Loadkey, @c_ConsoOrderkey, @c_UPPLoc, @c_UnpickMoveKey OUTPUT'  
-              + ',@b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
+   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Orderkey = @c_Orderkey, @c_Loadkey = @c_Loadkey, @c_ConsoOrderkey = @c_ConsoOrderkey'
+              + ', @c_UPPLoc = @c_UPPLoc, @c_UnpickMoveKey = @c_UnpickMoveKey OUTPUT'  
+              + ', @b_Success= @b_Success OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT '
+              + ', @c_MBOLKey= @c_MBOLKey, @c_WaveKey = @c_Wavekey'
 
    EXEC sp_executesql @c_SQL 
       , N'@c_Orderkey NVARCHAR(10), @c_Loadkey NVARCHAR(10), @c_ConsoOrderkey NVARCHAR(30), @c_UPPLoc NVARCHAR(10)
-        , @c_UnpickMoveKey NVARCHAR(10) OUTPUT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT' 
+        , @c_UnpickMoveKey NVARCHAR(10) OUTPUT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT
+        , @c_MBOLKey NVARCHAR(10), @c_Wavekey NVARCHAR(10)' 
       , @c_OrderKey
       , @c_Loadkey
       , @c_ConsoOrderkey
@@ -110,6 +140,8 @@ BEGIN
       , @b_Success         OUTPUT                       
       , @n_Err             OUTPUT  
       , @c_ErrMsg          OUTPUT
+      , @c_MBOLKey                  --(Wan01)
+      , @c_Wavekey                  --(Wan01)
 
         
    IF @b_Success <> 1
@@ -130,6 +162,13 @@ BEGIN
       IF @@TRANCOUNT > @n_StartTCnt
       BEGIN
          ROLLBACK TRAN
+
+         --(Wan01) - START
+         WHILE @@TRANCOUNT < @n_StartTCnt
+         BEGIN
+            BEGIN TRAN
+         END
+         --(Wan01) - END
       END
       ELSE
       BEGIN

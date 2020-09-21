@@ -17,15 +17,17 @@ GO
 /*                                                                      */  
 /* Called By: RCM Unpickpack Orders At Unpickpack Orders screen         */    
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */ 
-/* 2015-05-07   CSCHONG  1.0  add new parameter for nspItrnAddMove(CS01)*/ 
+/* Date        Author   Ver  Purposes                                   */ 
+/* 2015-05-07  CSCHONG  1.0  add new parameter for nspItrnAddMove(CS01) */
+/* 25-JAN-2017  JayLim   1.1  SQL2012 compatibility modification (Jay01)*/
+/* 2020-06-04  Wan      1.1  WMS-13120 - [PH] NIKE - WMS UnPacking Module*/ 
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[ispUPPSO01]  
       @c_OrderKey       NVARCHAR(10) 
@@ -36,6 +38,8 @@ CREATE PROCEDURE [dbo].[ispUPPSO01]
    ,  @b_Success        INT          OUTPUT 
    ,  @n_Err            INT          OUTPUT 
    ,  @c_ErrMsg         NVARCHAR(250) OUTPUT
+   ,  @c_MBOLKey        NVARCHAR(10) = ''    --(Wan01) Add Default New Parameter
+   ,  @c_WaveKey        NVARCHAR(10) = ''    --(Wan01) Add Default New Parameter
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -45,9 +49,9 @@ BEGIN
   
    DECLARE @n_Continue        INT
          , @c_Facility        NVARCHAR(5)
-         , @c_MBOLKey         NVARCHAR(10)
-         , @c_ExternMBOLKey   NVARCHAR(10)
-         , @c_Wavekey         NVARCHAR(10)
+         --, @c_MBOLKey         NVARCHAR(10) --(Wan01)
+         , @c_ExternMBOLKey   NVARCHAR(10) 
+         --, @c_Wavekey         NVARCHAR(10) --(Wan01)
          
          , @c_PickSlipNo      NVARCHAR(10)
          , @c_PickDetailKey   NVARCHAR(10)
@@ -126,6 +130,13 @@ BEGIN
    SET @n_Cube          = 0.00
    SET @c_CartonType    = ''
 
+   --(Wan01) - START -- SP only unpickpack by orderkey, If unpickpack by mbolkey or wavekey, quit
+   IF @c_Orderkey = ''                                
+   BEGIN
+      GOTO QUIT_SP
+   END
+   --(Wan01) - END
+   
    CREATE TABLE #TMPORD
       (  Facility       NVARCHAR(5)  NOT NULL DEFAULT('')
       ,  Orderkey       NVARCHAR(10) NOT NULL DEFAULT('')
@@ -795,7 +806,7 @@ BEGIN
       SET Status = @c_PackStatus
          ,TTLCnts =  ISNULL((SELECT COUNT(DISTINCT CartonNo) FROM PACKDETAIL WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo),0)
          ,TotCtnWeight = ISNULL((SELECT SUM(Weight) FROM PACKINFO WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo),0)
-         ,TotCtnCube   = ISNULL((SELECT SUM(Cube) FROM PACKINFO WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo),0)
+         ,TotCtnCube   = ISNULL((SELECT SUM([Cube]) FROM PACKINFO WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo),0)
          ,ArchiveCop = NULL
          ,EditWho = SUSER_NAME()
          ,EditDate= GETDATE()
@@ -874,7 +885,7 @@ BEGIN
 
 
          SET @n_Cube = 0
-         SELECT @n_Cube = ISNULL(C.Cube,0)  
+         SELECT @n_Cube = ISNULL(C.[Cube],0)  
          FROM dbo.Cartonization C WITH (NOLOCK)  
          JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
          WHERE C.CartonType = @c_CartonType  
@@ -894,7 +905,7 @@ BEGIN
 
       UPDATE LOADPLANDETAIL
       SET Weight = @n_TotWeight
-         ,Cube   = @n_TotCube
+         ,[Cube]   = @n_TotCube
          ,Trafficcop = NULL
          ,EditWho = SUSER_NAME() 
          ,EditDate= GETDATE()
@@ -911,7 +922,7 @@ BEGIN
                                                    
       UPDATE MBOLDETAIL WITH (ROWLOCK)
       SET TotalCartons = @n_TotCartons
-         ,Cube    = @n_TotCube
+         ,[Cube]    = @n_TotCube
          ,Weight  = @n_TotWeight
          ,Trafficcop = NULL
          ,EditWho = SUSER_NAME() 
@@ -995,13 +1006,13 @@ BEGIN
 
       UPDATE MBOL WITH (ROWLOCK)
          SET [Weight]     = PK.WEIGHT,  
-             MBOL.[Cube]  = PK.Cube,  
+             MBOL.[Cube]  = PK.[Cube],  
              MBOL.CaseCnt = PK.CaseCnt,  
              EditWho = SUSER_NAME(),  
              EditDate= GETDATE(), 
              TrafficCop=NULL  
       FROM MBOL  
-      JOIN (SELECT @c_MBOLKey AS MBOLKEY, SUM(WEIGHT) AS Weight, SUM(CUBE) AS Cube, COUNT(1) AS CaseCnt  
+      JOIN (SELECT @c_MBOLKey AS MBOLKEY, SUM(WEIGHT) AS Weight, SUM([CUBE]) AS 'Cube', COUNT(1) AS CaseCnt  
             FROM #TMPPACK) AS PK ON MBOL.MbolKey = PK.MbolKey  
       IF @@ERROR <> 0
       BEGIN
