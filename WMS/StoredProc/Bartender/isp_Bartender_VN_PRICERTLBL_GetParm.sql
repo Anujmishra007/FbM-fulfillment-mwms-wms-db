@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
-/* 2020-07-10 1.0  WLChooi    Created (WMS-14217)                             */                 
+/* 2020-07-10 1.0  WLChooi    Created (WMS-14217)                             */    
+/* 2020-09-17 1.1  WLChooi    WMS-15163 Remove Table Linkage to Receipt (WL01)*/            
 /******************************************************************************/                  
                     
 CREATE PROC [dbo].[isp_Bartender_VN_PRICERTLBL_GetParm]                        
@@ -105,14 +106,21 @@ BEGIN
    END  
    ELSE IF EXISTS(SELECT 1 FROM STORER ST WITH (NOLOCK) WHERE ST.storerkey = @Parm01)   
    BEGIN  
-      SET @c_SQLJOIN = ' SELECT DISTINCT TOP 1 PARM1=RH.Receiptkey,PARM2=RD.SKU,PARM3=RH.Storerkey,PARM4='''',PARM5='''',' + CHAR(13) +  
+   	--WL01 START
+      --SET @c_SQLJOIN = ' SELECT DISTINCT TOP 1 PARM1=RH.Receiptkey,PARM2=RD.SKU,PARM3=RH.Storerkey,PARM4='''',PARM5='''',' + CHAR(13) +  
+      --                 ' PARM6= '''',PARM7='''',PARM8='''',PARM9='''',PARM10='''',Key1=''Receiptkey'',Key2=''SKU'',Key3='''',Key4='''',Key5='''' ' + CHAR(13) +  
+      --                 ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +  
+      --                 ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey)' + CHAR(13) +  
+      --                 ' WHERE RH.storerkey = @Parm01 '+ CHAR(13) +  
+      --                 ' AND RD.SKU = @Parm02 ' + CHAR(13) +  
+      --                 ' AND RH.Doctype <> ''R'' '  + CHAR(13) +  
+      --                 ' ORDER BY RH.receiptkey desc'  
+      SET @c_SQLJOIN = ' SELECT DISTINCT TOP 1 PARM1=S.Storerkey,PARM2=S.SKU,PARM3='''',PARM4='''',PARM5='''',' + CHAR(13) +  
                        ' PARM6= '''',PARM7='''',PARM8='''',PARM9='''',PARM10='''',Key1=''Receiptkey'',Key2=''SKU'',Key3='''',Key4='''',Key5='''' ' + CHAR(13) +  
-                       ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +  
-                       ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey)' + CHAR(13) +  
-                       ' WHERE RH.storerkey = @Parm01 '+ CHAR(13) +  
-                       ' AND RD.SKU = @Parm02 ' + CHAR(13) +  
-                       ' AND RH.Doctype <> ''R'' '  + CHAR(13) +  
-                       ' ORDER BY RH.receiptkey desc'  
+                       ' FROM SKU S WITH (NOLOCK)  ' + CHAR(13) +  
+                       ' WHERE S.storerkey = @Parm01 '+ CHAR(13) +  
+                       ' AND S.SKU = @Parm02 '
+      --WL01 END
    END 
    
    SET @c_ExecArguments = N' @parm01          NVARCHAR(80),'  
