@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
 /* 06-SEP-2020  NJOW01  1.0   Fix - include isp_Init_Allocate_Candidates*/
+/* 23-SEP-2020  NJOW02  1.1   Fix - Sort by lottable04                  */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspAL_CH02]        
    @c_DocumentNo NVARCHAR(10),  
@@ -188,9 +189,9 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
       CASE WHEN @c_UOM = '2' THEN
-         ' ORDER BY CASE WHEN LOC.LocLevel = 2 THEN 1 ELSE 2 END, LA.Lottable04, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
+         ' ORDER BY CASE WHEN LA.Lottable04, LOC.LocLevel = 2 THEN 1 ELSE 2 END, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
       ELSE
-         ' ORDER BY CASE WHEN LOC.LocLevel = 1 THEN 1 WHEN LOC.LocLevel = 2 THEN 2 ELSE 3 END, LA.Lottable04, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
+         ' ORDER BY CASE WHEN LA.Lottable04, LOC.LocLevel = 1 THEN 1 WHEN LOC.LocLevel = 2 THEN 2 ELSE 3 END, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
       END      
       --' ORDER BY LA.Lottable04, LA.Lottable05, ' + CASE WHEN @c_UOM IN('6','7') THEN ' CASE WHEN LOC.LocationType = ''DYNPPICK'' THEN 1 ELSE 2 END, ' ELSE ' CASE WHEN LOC.LocationType = ''OTHER'' THEN 1 ELSE 2 END, ' END  +   
       --                'LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
