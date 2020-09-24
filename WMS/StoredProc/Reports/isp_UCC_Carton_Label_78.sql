@@ -38,6 +38,7 @@ GO
 /* 2019-11-07   WLChooi  1.2  Fixed barcode not showing completely when */
 /*                            labelno with mixed char and number (WL02) */
 /* 2020-03-24   WLChooi  1.3  WMS-12359 - Modify logic (WL03)           */
+/* 2020-09-24   WLChooi  1.4  Max(userkeyoverride) (WL04)               */
 /************************************************************************/
 
 CREATE PROC dbo.isp_UCC_Carton_Label_78 (
@@ -234,7 +235,7 @@ BEGIN
                           ,S.BUSR7
                           ,P.PACKUOM3
                           ,UPPER(PD.LABELNO) --WL02
-                          ,ISNULL(TD.UserkeyOverride,'''')   --WL03
+                          ,MAX(ISNULL(TD.UserkeyOverride,''''))   --WL03   --WL04
                           ,''''
                           ,PD.CartonNo
                           ,ISNULL(L.Descr,'''') --WL01
@@ -264,7 +265,7 @@ BEGIN
                             ,ISNULL(L.LOC,'''')   --WL01
                             ,PIF.CartonType     --WL03
                             ,ISNULL(TD.DeviceID,'''')   --WL03
-                            ,ISNULL(TD.UserkeyOverride,'''')   --WL03
+                            --,ISNULL(TD.UserkeyOverride,'''')   --WL03   --WL04
                             ,ISNULL(TD.TaskType,'''')   --WL03
                     ORDER BY PD.Pickslipno, PD.CartonNo --WL01'
 
