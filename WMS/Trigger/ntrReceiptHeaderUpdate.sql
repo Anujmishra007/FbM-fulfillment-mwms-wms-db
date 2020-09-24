@@ -150,6 +150,8 @@ GO
 /*                                  Channel                                    */
 /* 27-JUL-2020  WLChooi      1.13   WMS-14433 - New Extended Validation:       */
 /*                                  ASNCloseExtendedValidation (WL01)          */
+/* 26-AUG-2020  NJOW02       1.24   WMS-14941 update finalizedate upon close   */
+/*                                  ASN by config                              */
 /*******************************************************************************/
 
 CREATE TRIGGER ntrReceiptHeaderUpdate
@@ -218,6 +220,8 @@ BEGIN
           , @c_City              NVARCHAR(45)      -- TLTING03
 
           , @c_HoldChannel       NVARCHAR(1)       = '0' --(Wan02) 
+          , @c_CloseASNStatusUpdFinalizeDate NVARCHAR(30) --NJOW02
+          
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    SET @c_StatusUpdated = 'N'                      -- (MC02)
@@ -2143,6 +2147,45 @@ BEGIN
                   END    
                END--ISNULL(@cASNValidationRules,'') <> ''              
             END--WL01 END
+            
+            --NJOW02
+            IF @n_continue = 1 OR @n_continue = 2
+            BEGIN
+               SELECT @b_success = 0, @c_CloseASNStatusUpdFinalizeDate = ''
+               Execute nspGetRight @c_Facility,  -- facility
+                     @c_StorerKey,  -- Storerkey
+                     null,          -- Sku
+                     'CloseASNStatusUpdFinalizeDate',     -- Configkey
+                     @b_success     output,
+                     @c_CloseASNStatusUpdFinalizeDate  output,
+                     @n_err         output,
+                     @c_errmsg      output
+   
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptHeaderUpdate' + dbo.fnc_RTrim(@c_errmsg)
+                  SELECT @n_err = 60250 
+                  BREAK
+               END
+               ELSE
+               BEGIN -- else BEGIN
+                  IF @c_CloseASNStatusUpdFinalizeDate = '1' 
+                  BEGIN
+                     UPDATE RECEIPT WITH (ROWLOCK)
+                     SET  FinalizeDate = GETDATE(),
+                          TrafficCop   = NULL
+                     WHERE Receiptkey = @c_receiptkey
+                     SELECT @n_err = @@ERROR
+                     IF @n_err <> 0
+                     BEGIN
+                        SELECT @n_continue = 3
+                        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63805   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                        BREAK
+                     END                  	 
+                  END
+               END           	
+            END                        
          END -- While Loop 1
       END -- ASNStatus = '9'
 
