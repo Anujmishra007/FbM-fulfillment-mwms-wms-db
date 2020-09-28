@@ -31,6 +31,7 @@ GO
 /*                            Orders.Userdefine01 = Y                   */
 /* 24-Feb-2016  CSCHONG 1.2   Revise Field logic (CS01)                 */
 /* 22-Mar-2018  CSCHONG 1.3   WMS-4311 - add lottable01 group by (CS02) */
+/* 17-SEP-2020  CSCHONG 1.4   WMS-15207 revised field logic (CS03)      */
 /************************************************************************/    
     
 CREATE PROC isp_importer_label (    
@@ -67,11 +68,14 @@ CREATE PROC isp_importer_label (
    
    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT  SUM(PD.Qty), 
-           CASE WHEN ISNULL(SKU.ShelfLife,0)=0 THEN NULL ELSE 
-          	             CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN MAX(LA.Lottable04 ) - ISNULL(SKU.ShelfLife,0)
-          	             	ELSE MAX(LA.Lottable05) + ISNULL(SKU.ShelfLife,0) END END  --(CS01)
-          , CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN 'MFG Date:' ELSE 'EXP Date: ' END  --(CS01)
-   FROM ORDERS O (NOLOCK)
+          --CS03 START
+          -- CASE WHEN ISNULL(SKU.ShelfLife,0)=0 THEN NULL ELSE 
+          --	             CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN MAX(LA.Lottable04 ) - ISNULL(SKU.ShelfLife,0)
+          --	             	ELSE MAX(LA.Lottable05) + ISNULL(SKU.ShelfLife,0) END END  --(CS01)
+          --, CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN 'MFG Date:' ELSE 'EXP Date: ' END  --(CS01)
+         MAX(LA.Lottable04 ), 'EXP Date: '
+        --CS03 END
+   FROM  ORDERS O (NOLOCK)
    JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
    JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
    JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot 
