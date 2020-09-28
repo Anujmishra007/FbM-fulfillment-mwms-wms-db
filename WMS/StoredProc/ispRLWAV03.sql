@@ -54,6 +54,9 @@ GO
 /* 17/07/2019   NJOW11   3.0  WMS-9678 KR change find DPP logic and      */
 /*                            generate replen logic                      */
 /* 03/06/2020   CheeMun  3.1  INC1158387-group by codelkup udf01,udf02   */
+/* 13/08/2020   CHONGCS  3.2  WMS-14640 - add transmitlog3 trigger (CS01)*/
+/* 14/09/2020   CHONGCS  3.3  WMS-14640 -add insert packtask trigger(CS02)*/
+/* 25/09/2020   CSCHONG  3.4  WMS-14640 - revised logic (CS03)            */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispRLWAV03]
@@ -136,7 +139,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
            ,@c_OrderKey                     NVARCHAR(10)
            ,@c_Pickslipno                   NVARCHAR(10)
            ,@c_Type                         NVARCHAR(10)
-           ,@c_PrevType          NVARCHAR(10)
+           ,@c_PrevType                     NVARCHAR(10)
            ,@c_UDF01                        NVARCHAR(60)
            ,@c_UDF02                        NVARCHAR(60)
            ,@c_NoMixLottableList            NVARCHAR(500)
@@ -155,6 +158,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
            ,@n_QtyExpectedByOther           INT          --NJOW08
            ,@c_logmsg                       NVARCHAR(2000) --NJOW08
            ,@c_doctype                      NCHAR(1) --NJOW11
+           ,@c_trmlogkey                    NVARCHAR(10)    --CS01 
+           ,@c_tablename                    NVARCHAR(30)    --CS01
+           ,@c_key01                        NVARCHAR(10)    --CS01  
+           ,@c_key02                        NVARCHAR(30)    --CS01              
+           ,@c_key03                        NVARCHAR(20)    --CS01  
+           ,@c_OHUDF03                      NVARCHAR(30)    --CS02
+           ,@c_Consigneekey                 NVARCHAR(45)    --CS02
+           ,@n_PQTY                         INT             --CS02
+           ,@n_seqno                        INT             --CS02 
+           ,@c_GetOrderKey                  NVARCHAR(10)    --CS02          
+           ,@c_GetStorerKey                 NVARCHAR(15)    --CS02 
+           ,@n_PrePQTY                      INT             --CS02
+           ,@n_cntrec                       INT             --CS02
+           ,@c_getconsigneekey              NVARCHAR(45)    --CS02
+           ,@n_maxseqno                     int             --CS02 
            --,@n_TotalPickQty                 INT          --NJOW08
 
    --(Wan01) - START
@@ -566,6 +584,233 @@ CREATE PROCEDURE [dbo].[ispRLWAV03]
           SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found pickslip missing for the wave. (ispRLWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
           GOTO RETURN_SP
        END
+
+     /*CS01 START*/
+
+      IF @c_Country IN('KR','KOR') 
+      BEGIN
+             
+            SET @c_tablename = ''
+            SET @c_key01 = ''
+            SET @c_key02 = ''
+            SET @c_key03 = ''
+
+          SELECT DISTINCT @c_tablename= 'WVERCMLOG',
+                          @c_key01 = ORDERS.userdefine09,
+                          @c_key02 = WV.userdefine01,
+                          @c_key03 = ORDERS.Storerkey
+                        --  @c_OHUDF03 = ORDERS.userdefine03,             --CS02
+                        --  @c_GetOrderkey = ORDERS.Orderkey                --CS02
+                         -- @c_GetStorerKey = ORDERS.StorerKey            --CS02
+          FROM WAVE WV WITH (NOLOCK) 
+			 JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.Wavekey = WV.Wavekey
+          JOIN ORDERS WITH (NOLOCK) ON  (WAVEDETAIL.OrderKey = ORDERS.OrderKey)
+          WHERE WAVEDETAIL.WaveKey = @c_WaveKey
+
+
+          SELECT @n_Continue = 1, @b_success = 1
+    
+     --EXEC dbo.ispGenTransmitLog3 @c_tablename, @c_key01, @c_key02, @c_key03, ''    
+     --   , @b_success OUTPUT    
+     --   , @n_err OUTPUT    
+     --   , @c_errmsg OUTPUT    
+    IF NOT EXISTS ( SELECT 1 FROM TransmitLog3 (NOLOCK) WHERE TableName = @c_TableName  
+                      AND Key1 = @c_Key01 AND Key2 = @c_Key02 AND Key3 = @c_Key03)  
+    BEGIN  
+        
+       BEGIN TRAN
+       SELECT @b_success = 0
+       EXECUTE nspg_getkey  
+         -- Change by June 15.Jun.2004  
+         -- To standardize name use in generating transmitlog3..transmitlogkey  
+         -- 'Transmitlog3Key'  
+         'TransmitlogKey3'  
+         , 10  
+         , @c_trmlogkey OUTPUT  
+         , @b_success   OUTPUT  
+         , @n_err       OUTPUT  
+         , @c_errmsg    OUTPUT  
+     
+       --IF @b_success = 0  
+       --SELECT @n_continue = 3, @n_err = 60098, @c_errmsg = 'isp_RCM_LP_KewillFlagship: ' + rtrim(@c_errmsg)  
+       -- print @c_trmlogkey + ' @c_trmlogkey'   
+
+              IF @b_success = 1
+               BEGIN
+                  --SELECT @c_trmlogkey = 'P' + RTRIM(@c_PickSlipNo)
+                  COMMIT TRAN
+               END
+               ELSE
+               BEGIN
+                   SELECT @n_continue = 3
+                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81033
+                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Get transmitlogkey Failed. (ispRLWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                   GOTO RETURN_SP
+                   --BREAK
+               END
+
+            --CS02    START
+              SET @n_seqno = 1
+              
+      IF @c_key02 = 'PTL'   --CS03
+      BEGIN
+         BEGIN TRAN 
+              IF NOT EXISTS (SELECT 1 FROM PackTask WITH (NOLOCK) WHERE Orderkey = @c_GetOrderkey AND TaskBatchNo = @c_wavekey)  
+              BEGIN
+                   --IF  @c_OHUDF03 = 'NC'
+                   --BEGIN
+                       SET @n_seqno = 1
+                      
+                       INSERT INTO PackTask ( DevicePosition,  TaskBatchNo,  Orderkey) 
+                       SELECT  @n_seqno, @c_Wavekey,OH.Orderkey
+                       FROM ORDERS OH WITH (NOLOCK)
+                       WHERE OH.userdefine09 =  @c_Wavekey
+                       AND OH.userdefine03 = 'NC' 
+                       ORDER BY OH.Orderkey
+                   --END
+                   --ELSE IF  @c_OHUDF03 = 'SC'
+                   --BEGIN
+                       SET @n_seqno = 2
+                      
+                       INSERT INTO PackTask ( DevicePosition,  TaskBatchNo,  Orderkey) 
+                       SELECT  @n_seqno, @c_Wavekey,OH.Orderkey
+                       FROM ORDERS OH WITH (NOLOCK)
+                       WHERE OH.userdefine09 =  @c_Wavekey
+                       AND OH.userdefine03 = 'SC' 
+                       ORDER BY OH.Orderkey    
+                   --END
+                   --ELSE
+                   --BEGIN
+                     SET @n_seqno = 3
+                     SET @n_PrePQTY = 0
+
+                     DECLARE C_ChkSeq CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+                     SELECT distinct OH.consigneekey, sum(PD.qty)
+                     FROM orders OH WITH (NOLOCK) 
+                     JOIN pickdetail PD WITH (NOLOCK) on OH.orderkey = PD.orderkey and OH.storerkey = PD.storerkey
+                     WHERE OH.userdefine09 =  @c_Wavekey
+                     --AND OH.StorerKey = @c_GetStorerKey
+                     AND OH.userdefine03 NOT IN ('NC','SC')
+                     group by OH.consigneekey
+                     order by sum(PD.qty) desc
+
+                      OPEN C_ChkSeq   
+                      FETCH NEXT FROM C_ChkSeq INTO @c_consigneekey,@n_pqty
+
+                        WHILE @@FETCH_STATUS=0      
+                         BEGIN 
+                           SET @n_cntrec = 0
+                           SELECT @n_cntrec = COUNT(OH.consigneekey)
+                           FROM orders OH WITH (NOLOCK)
+                           WHERE OH.userdefine09 = @c_Wavekey
+                           AND OH.consigneekey = @c_consigneekey
+
+                           IF @n_cntrec >1
+                           BEGIN
+ 
+                              DECLARE C_ChkOHSeq CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+                              SELECT distinct OH.consigneekey, oh.orderkey
+                              FROM orders OH WITH (NOLOCK) 
+                              JOIN pickdetail PD WITH (NOLOCK) on OH.orderkey = PD.orderkey and OH.storerkey = PD.storerkey
+                              WHERE OH.userdefine09 =  @c_Wavekey
+                              AND OH.consigneekey = @c_consigneekey
+                              AND OH.userdefine03 NOT IN ('NC','SC')
+
+                              OPEN C_ChkOHSeq   
+                              FETCH NEXT FROM C_ChkOHSeq INTO @c_getconsigneekey,@c_getorderkey
+
+                              WHILE @@FETCH_STATUS=0      
+                              BEGIN  
+
+                                INSERT INTO PackTask ( DevicePosition,  TaskBatchNo,  Orderkey) 
+                                VALUES ( CAST(@n_seqno as NVARCHAR(5)),  @c_Wavekey,  @c_GetOrderKey)  
+                              
+                              FETCH NEXT FROM C_ChkOHSeq INTO @c_getconsigneekey,@c_getorderkey
+                              END            
+
+                              CLOSE C_ChkOHSeq  
+                              DEALLOCATE C_ChkOHSeq 
+
+                              SET  @n_seqno = @n_seqno + 1 
+                           END 
+                           ELSE
+                           BEGIN 
+                          -- SET  @n_seqno = @n_seqno + 1 
+                           SELECT TOP 1 @n_maxseqno = cast(deviceposition as int)
+                           FROM  PackTask WITH (NOLOCK)
+                           where TaskBatchNo =  @c_Wavekey
+                           order by rowref desc 
+               
+
+                            IF @n_maxseqno < @n_seqno
+                            BEGIN
+                             SET @n_seqno = @n_seqno 
+                            END
+                            ELSE IF @n_maxseqno = @n_seqno
+                            BEGIN
+                              SET @n_seqno = @n_seqno  +1
+                            END  
+
+                           INSERT INTO PackTask ( DevicePosition,  TaskBatchNo,  Orderkey) 
+                           --VALUES ( CAST(@n_seqno as NVARCHAR(5)),  @c_Wavekey,  @c_GetOrderKey)  
+                           SELECT  @n_seqno, @c_Wavekey,OH.Orderkey
+                           FROM ORDERS OH WITH (NOLOCK)
+                           WHERE OH.userdefine09 =  @c_Wavekey
+                           AND OH.consigneekey = @c_consigneekey
+                           ORDER BY OH.Orderkey        
+                          END 
+ 
+                      FETCH NEXT FROM C_ChkSeq INTO @c_consigneekey,@n_pqty
+                      END            
+
+                      CLOSE C_ChkSeq  
+                      DEALLOCATE C_ChkSeq    
+
+                 --  END 
+
+                    SELECT @n_err = @@ERROR
+              --print '@n_err : ' + cast(@n_err as nvarchar(5))
+
+              IF @n_err <> 0
+              BEGIN
+                SELECT @n_continue = 3
+                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81054
+                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert PackTask Failed. (ispRLWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+              --  ROLLBACK TRAN
+
+                GOTO RETURN_SP
+              END
+              ELSE    
+                  COMMIT TRAN
+                   
+              END
+         
+            --CS02 END
+        
+             BEGIN TRAN
+
+             INSERT INTO Transmitlog3 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)  
+             VALUES (@c_trmlogkey, @c_TableName, @c_Key01, ISNULL(@c_Key02,''), @c_Key03, '0', '')  
+              
+              SELECT @n_err = @@ERROR
+              --print '@n_err : ' + cast(@n_err as nvarchar(5))
+
+              IF @n_err <> 0
+              BEGIN
+                SELECT @n_continue = 3
+                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81053
+                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Transmitlog3 Failed. (ispRLWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+              --  ROLLBACK TRAN
+
+                GOTO RETURN_SP
+              END
+              ELSE    
+                  COMMIT TRAN
+         END
+       END  
+    END --CS03
+     /*CS01 END*/
+
        SET @c_Step1_Time  = CONVERT (NVARCHAR(12), GETDATE() -  @d_Trace_Step1,114)    --(Wan01)
     END
 
@@ -1989,6 +2234,7 @@ RETURN_SP:
     BEGIN
        SELECT @b_success = 1
        SET @n_currtrancnt = @@TRANCOUNT
+
        WHILE @n_currtrancnt > 0
        BEGIN
           COMMIT TRAN
@@ -2000,6 +2246,7 @@ RETURN_SP:
        --   COMMIT TRAN
        --END
        RETURN
+
     END
 
 INSERT_REPLEN:
