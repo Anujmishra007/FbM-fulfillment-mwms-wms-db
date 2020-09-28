@@ -23,6 +23,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 03-AUG-2020  CSCHONG  1.1  WMS-14196 extend the SP code length (CS01)*/
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[ispLoadReversePickTask_Wrapper]  
    @c_LoadKey    NVARCHAR(10),    
@@ -38,7 +39,7 @@ BEGIN
    
    DECLARE @n_continue      INT,
            @c_StorerKey     NVARCHAR(15),
-           @c_SPCode        NVARCHAR(10),
+           @c_SPCode        NVARCHAR(30),            --CS01
            @c_SQL           NVARCHAR(MAX)
                                                       
    SELECT @c_SPCode = '', @n_err=0, @b_success=1, @c_errmsg=''
