@@ -17,7 +17,7 @@ GO
 /*                                                                       */  
 /* Called By: isp_CombineOrderByMultiBatchSP_Wrapper                     */  
 /*                                                                       */  
-/* GitLab Version: 1.0                                                   */  
+/* GitLab Version: 1.1                                                   */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
@@ -25,6 +25,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */  
+/* 2020-09-14   WLChooi  1.1  Bug Fix - Change to BIGINT (WL01)          */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[ispCBORDBTH01]  
       @c_OrderList          NVARCHAR(MAX) 
@@ -125,11 +126,11 @@ BEGIN
    ELSE
    BEGIN
       INSERT INTO #TMP_Orders (MinBuyerPO, ConsigneeKey, UserDefine05, ToOrderkey, OrderkeyList)
-      SELECT MIN(CAST(ORD.BuyerPO AS INT)) AS MinBuyerPO, ORD.Consigneekey, ORD.UserDefine05
+      SELECT MIN(CAST(ORD.BuyerPO AS BIGINT)) AS MinBuyerPO, ORD.Consigneekey, ORD.UserDefine05   --WL01
          , (SELECT MAX(Orderkey) FROM ORDERS (NOLOCK) 
             WHERE Orderkey IN (SELECT DISTINCT ColValue 
                                FROM fnc_DelimSplit(',',@c_OrderList)) 
-            AND BuyerPO = MIN(CAST(ORD.BuyerPO AS INT))
+            AND BuyerPO = MIN(CAST(ORD.BuyerPO AS BIGINT))   --WL01
             AND ConsigneeKey = ORD.ConsigneeKey) AS ToOrderkey
          , (STUFF((SELECT ',' + RTRIM(Orderkey) 
                    FROM ORDERS (NOLOCK) WHERE Orderkey IN (SELECT DISTINCT ColValue 

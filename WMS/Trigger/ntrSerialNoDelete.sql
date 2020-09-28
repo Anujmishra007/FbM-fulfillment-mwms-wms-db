@@ -1,10 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrSerialNoDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrSerialNoDelete]') 
+              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
 drop trigger [dbo].[ntrSerialNoDelete]
-GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
 GO
 /************************************************************************/        
 /* Trigger: ntrSerialNoDelete                                           */        
@@ -25,6 +21,7 @@ GO
 /* Modifications:                                                       */        
 /* Date         Author     Ver.  Purposes                               */    
 /* 21-Oct-2014  KHLim      1.1   Insert Delete log  (KH01)              */
+/* 03-Aug-2018  TLTING     1.2   ArchiveCop                             */
 /************************************************************************/        
 CREATE TRIGGER [ntrSerialNoDelete] ON [SerialNo]      
 FOR  DELETE      
@@ -53,9 +50,15 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  
  DECLARE @c_Pickdetailkey     NVARCHAR(10)    --(Kc01)
          ,@n_ShortPackQty     INT            --(Kc01)
-       
+        
  SELECT @n_continue = 1      
        ,@n_starttcnt = @@TRANCOUNT      
+
+ IF (select count(*) from DELETED) =
+ (select count(*) from DELETED where DELETED.ArchiveCop = '9')
+ BEGIN
+ SELECT @n_continue = 4
+ END
                          
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
@@ -120,8 +123,3 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  END      
 END 
 
-GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO

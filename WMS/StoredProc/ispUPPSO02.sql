@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */ 
+/* Date        Author   Ver  Purposes                                   */ 
+/* 2020-06-04  Wan      1.1  WMS-13120 - [PH] NIKE - WMS UnPacking Module*/ 
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[ispUPPSO02]  
       @c_OrderKey       NVARCHAR(10) 
@@ -35,6 +36,8 @@ CREATE PROCEDURE [dbo].[ispUPPSO02]
    ,  @b_Success        INT          OUTPUT 
    ,  @n_Err            INT          OUTPUT 
    ,  @c_ErrMsg         NVARCHAR(250) OUTPUT
+   ,  @c_MBOLKey        NVARCHAR(10) = ''    --(Wan01) Add Default New Parameter
+   ,  @c_WaveKey        NVARCHAR(10) = ''    --(Wan01) Add Default New Parameter
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -44,9 +47,9 @@ BEGIN
   
    DECLARE @n_Continue        INT
          , @c_Facility        NVARCHAR(5)
-         , @c_MBOLKey         NVARCHAR(10)
+         --, @c_MBOLKey         NVARCHAR(10) --(Wan01)
          , @c_ExternMBOLKey   NVARCHAR(10)
-         , @c_Wavekey         NVARCHAR(10)
+         --, @c_Wavekey         NVARCHAR(10) --(Wan01)
          
          , @c_PickSlipNo      NVARCHAR(10)
          , @c_PickDetailKey   NVARCHAR(10)
@@ -123,6 +126,13 @@ BEGIN
    SET @n_Weight        = 0.00
    SET @n_Cube          = 0.00
    SET @c_CartonType    = ''
+
+   --(Wan01) - START -- SP only unpickpack by orderkey, If unpickpack by mbolkey or wavekey, quit
+   IF @c_Orderkey = ''                                
+   BEGIN
+      GOTO QUIT_SP
+   END
+   --(Wan01) - END
 
    CREATE TABLE #UCC 
       (  UCCNo NVARCHAR(20) NOT NULL DEFAULT('') )

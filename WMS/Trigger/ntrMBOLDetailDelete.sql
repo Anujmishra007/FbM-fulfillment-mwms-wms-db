@@ -1,6 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrMBOLDetailDelete]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrMBOLDetailDelete]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrMBOLDetailDelete]') 
+              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
+drop trigger [dbo].[ntrMBOLDetailDelete]
 GO
+ 
 /*************************************************************************/
 /* Trigger: ntrMBOLDetailDelete                                          */
 /* Creation Date:                                                        */
@@ -64,6 +66,7 @@ BEGIN
    END
 
    SET NOCOUNT ON
+   SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 

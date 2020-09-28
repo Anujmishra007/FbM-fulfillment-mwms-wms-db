@@ -16,6 +16,7 @@ GO
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
 /*28-May-2020 1.0  WLChooi    Created (WMS-13522)                             */  
+/*10-Jul-2020 1.1  WLChooi    WMS-13522 - Change Storer table linkage (WL01)  */
 /******************************************************************************/                  
                     
 CREATE PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_03]                        
@@ -157,7 +158,8 @@ BEGIN
                   +  ' FROM PACKDETAIL PD (NOLOCK) ' + CHAR(13)
                   +  ' JOIN PACKHEADER PH (NOLOCK) ON PH.Pickslipno = PD.Pickslipno ' + CHAR(13)
                   +  @c_TableLinkage + CHAR(13)
-                  +  ' LEFT JOIN STORER ST (NOLOCK) ON ST.Storerkey = ORD.Consigneekey ' + CHAR(13)
+                  --+  ' LEFT JOIN STORER ST (NOLOCK) ON ST.Storerkey = ORD.Consigneekey ' + CHAR(13)   --WL01
+                  +  ' LEFT JOIN STORER ST (NOLOCK) ON SUBSTRING(ST.Storerkey,4,15) = ORD.Consigneekey ' + CHAR(13)   --WL01
                   +  ' LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = ''SortLoc'' AND CL.Storerkey = PH.Storerkey ' + CHAR(13)
                   +  '                               AND CL.Code = ORD.Consigneekey ' + CHAR(13)
                   +  ' WHERE PH.Pickslipno = @c_Sparm01 '           + CHAR(13)

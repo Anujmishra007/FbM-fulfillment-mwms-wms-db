@@ -1,13 +1,17 @@
-IF OBJECT_ID('dbo.isp_GetCodeLkup','P') IS NOT NULL
-   DROP PROC  dbo.isp_GetCodeLkup
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetCodeLkup]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_GetCodeLkup]
 GO
-SET ANSI_NULLS ON       ;   SET QUOTED_IDENTIFIER OFF;
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 -- 2018-08-06 created ===============================================
 -- Author   : KHLim
 -- Date       Author   Ver Purpose
 -- ==================================================================
-CREATE  PROC  dbo.isp_GetCodeLkup
+CREATE  PROC  [dbo].[isp_GetCodeLkup]
    @LISTNAME  NVARCHAR(30) ,@StorerKey NVARCHAR(15)
   ,@Code      NVARCHAR(30) ,@code2     NVARCHAR(30) 
   ,@ErrMsg    NVARCHAR(250) = '' OUTPUT  ,@Err       INT = 0 OUTPUT ,@Description NVARCHAR(250) OUTPUT
@@ -16,7 +20,7 @@ CREATE  PROC  dbo.isp_GetCodeLkup
   ,@UDF01     NVARCHAR(60)  = '' OUTPUT  ,@UDF02     NVARCHAR(60)  = '' OUTPUT ,@UDF03   NVARCHAR(60) = '' OUTPUT ,@UDF04 NVARCHAR(60) = '' OUTPUT ,@UDF05 NVARCHAR(60) = '' OUTPUT
 AS    
 BEGIN    
-   SET NOCOUNT ON       ;   SET ANSI_DEFAULTS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
+   SET NOCOUNT ON       ;   SET ANSI_NULLS OFF  ;   SET QUOTED_IDENTIFIER OFF;   SET CONCAT_NULL_YIELDS_NULL OFF;
 
    DECLARE @Proc  NVARCHAR(128)  , @Start DATETIME   , @Duration INT, @Stmt NVARCHAR(max)
    --BEGIN TRY
@@ -51,3 +55,6 @@ ORDER BY EditDate DESC
       , @UDF01=ISNULL(@UDF01, ''), @UDF02=ISNULL(@UDF02, ''), @UDF03=ISNULL(@UDF03, ''), @UDF04=ISNULL(@UDF04, ''), @UDF05=ISNULL(@UDF05, '')
 
 END
+GO
+GRANT EXECUTE ON [dbo].[isp_GetCodeLkup] TO nSQL 
+GO

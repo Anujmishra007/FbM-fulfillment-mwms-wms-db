@@ -3,9 +3,9 @@ AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
 DROP PROCEDURE [dbo].[isp_ArchiveLoad]
 GO
 
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Stored Proc : isp_ArchiveLoad                                        */

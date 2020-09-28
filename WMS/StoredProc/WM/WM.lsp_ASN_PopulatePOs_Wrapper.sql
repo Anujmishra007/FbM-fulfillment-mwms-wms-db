@@ -17,14 +17,16 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
 /* Data Modifications:                                                  */                                                                                  
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/* Date        Author   Ver.  Purposes                                  */ 
+/* 2020-09-14  Wan01    1.1   Fixed Lottables Nullable                  */ 
+/* 2020-09-15  Wan01    1.1   Fixed Nullable column insert into detail  */ 
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -146,6 +148,7 @@ BEGIN
          ,  @c_ExternPOKey             NVARCHAR(30)   = ''
          ,  @c_ExternLineNo            NVARCHAR(20)   = ''
          ,  @c_Sku                     NVARCHAR(20)   = ''
+         ,  @c_Altsku                  NVARCHAR(20)   = ''  --2020-08-13
 
          ,  @c_Code                    NVARCHAR(30)   = ''
          ,  @c_Code2                   NVARCHAR(30)   = ''
@@ -391,9 +394,9 @@ BEGIN
             ,  @c_WriteType   = 'WARNING' 
             ,  @n_err2        = @n_err 
             ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
+            ,  @b_Success     = @b_Success   --2020-09-15 
+            ,  @n_err         = @n_err       --2020-09-15 
+            ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
          FETCH NEXT FROM @CUR_INVALIDPO INTO @c_pokey       
       END
@@ -404,6 +407,7 @@ BEGIN
       BEGIN
          SET @c_ErrMsg = 'Do you want to proceed Populate PO that Matches ASN Facility ?' 
       END
+
       EXEC [WM].[lsp_WriteError_List] 
             @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
          ,  @c_TableName   = @c_TableName
@@ -414,15 +418,15 @@ BEGIN
          ,  @c_WriteType   = 'QUESTION' 
          ,  @n_err2        = @n_err 
          ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
+         ,  @b_Success     = @b_Success   --2020-09-15 
+         ,  @n_err         = @n_err       --2020-09-15 
+         ,  @c_errmsg      = @c_errmsg    --2020-09-15
         
       GOTO EXIT_SP  
    END
 
    SET @c_POKeyList = ''
-   SET @c_POKeyList = RTRIM(ISNULL(CONVERT(VARCHAR(250),
+   SET @c_POKeyList = RTRIM(ISNULL(CONVERT(VARCHAR(4000),            --2020-09-21
                                        (  SELECT RTRIM(T.PORefKey) + '/ ' 
                                           FROM #tPOs T 
                                           ORDER BY T.RowRef
@@ -470,9 +474,9 @@ BEGIN
          ,  @c_WriteType   = 'ERROR' 
          ,  @n_err2        = @n_err 
          ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
+         ,  @b_Success     = @b_Success   --2020-09-15 
+         ,  @n_err         = @n_err       --2020-09-15 
+         ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
       GOTO EXIT_SP
    END
@@ -574,10 +578,10 @@ BEGIN
          , Storerkey = @c_Storerkey
          , Facility  = @c_Facility
          , ExternReceiptkey = @c_ExternReceiptkey
-         , RecType = ISNULL(CL.Short,'')
+         , RecType = CASE WHEN ISNULL(CL.Short,'') <> '' THEN ISNULL(CL.Short,'') ELSE @c_Rectype END --2020-08-13
          , DocType = @c_Doctype
          , WarehouseReference = @c_WarehouseReference 
-         , PO.SellerName            
+         , SellerName = LEFT(PO.SellerName,15)                                                        --2020-08-13            
          , PO.SellerAddress1 
          , PO.SellerAddress2 
          , PO.SellerName 
@@ -667,9 +671,9 @@ BEGIN
                ,  @c_WriteType   = 'ERROR' 
                ,  @n_err2        = @n_err 
                ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
+               ,  @b_Success     = @b_Success   --2020-09-15 
+               ,  @n_err         = @n_err       --2020-09-15 
+               ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
             GOTO EXIT_SP                                            
          END CATCH
@@ -747,9 +751,9 @@ BEGIN
                ,  @c_WriteType   = 'ERROR' 
                ,  @n_err2        = @n_err 
                ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
+               ,  @b_Success     = @b_Success   --2020-09-15 
+               ,  @n_err         = @n_err       --2020-09-15 
+               ,  @c_errmsg      = @c_errmsg    --2020-09-15
                             
             GOTO EXIT_SP
          END 
@@ -842,6 +846,15 @@ BEGIN
             WHERE T.RowRef = @n_RowRef_RH
          END TRY
          BEGIN CATCH
+            --2020-09-15 - START
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+            --2020-09-15 - END
+
             SET @n_Continue = 3
             SET @n_Err = 556804
             SET @c_ErrMsg = ERROR_MESSAGE()
@@ -858,19 +871,21 @@ BEGIN
                ,  @c_WriteType   = 'ERROR' 
                ,  @n_err2        = @n_err 
                ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
+               ,  @b_Success     = @b_Success   --2020-09-15 
+               ,  @n_err         = @n_err       --2020-09-15 
+               ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
-            IF (XACT_STATE()) = -1  
-            BEGIN
-               ROLLBACK TRAN
+            --2020-09-15 - START
+            --IF (XACT_STATE()) = -1  
+            --BEGIN
+            --   ROLLBACK TRAN
 
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END  
+            --   WHILE @@TRANCOUNT < @n_StartTCnt
+            --   BEGIN
+            --      BEGIN TRAN
+            --   END
+            --END 
+            --2020-09-15 - END 
          END CATCH
 
       END  
@@ -917,6 +932,15 @@ BEGIN
             WHERE T.RowRef = @n_RowRef_RH
          END TRY
          BEGIN CATCH
+            --2020-09-15 - START
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+            --2020-09-15 - END
+
             SET @n_Continue = 3
             SET @n_Err = 556805
             SET @c_ErrMsg = ERROR_MESSAGE()
@@ -933,19 +957,21 @@ BEGIN
                ,  @c_WriteType   = 'ERROR' 
                ,  @n_err2        = @n_err 
                ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
+               ,  @b_Success     = @b_Success   --2020-09-15 
+               ,  @n_err         = @n_err       --2020-09-15 
+               ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
-            IF (XACT_STATE()) = -1  
-            BEGIN
-               ROLLBACK TRAN
+            --2020-09-15 - START         
+            --IF (XACT_STATE()) = -1  
+            --BEGIN
+            --   ROLLBACK TRAN
 
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END  
+            --   WHILE @@TRANCOUNT < @n_StartTCnt
+            --   BEGIN
+            --      BEGIN TRAN
+            --   END
+            --END 
+            --2020-09-15 - END 
          END CATCH
 
       END
@@ -962,6 +988,7 @@ BEGIN
          SET @c_POLineNumber = ''
          SET @c_ExternLineNo = ''
          SET @c_Sku          = ''
+         SET @c_AltSku       = ''                        --2020-08-13
          SET @c_Lottable01 = ''  
          SET @c_Lottable02 = ''  
          SET @c_Lottable03 = ''  
@@ -1053,6 +1080,7 @@ BEGIN
                ,@c_Lottable13Label = Lottable13Label
                ,@c_Lottable14Label = Lottable14Label
                ,@c_Lottable15Label = Lottable15Label
+               ,@c_AltSku          = AltSku                       --2020-08-13
          FROM SKU WITH (NOLOCK)
          WHERE Storerkey = @c_Storerkey
          AND Sku = @c_Sku
@@ -1236,7 +1264,7 @@ BEGIN
                      ,  @n_err               = @n_err                      OUTPUT                                                                                                             
                      ,  @c_ErrMsg            = @c_ErrMsg                   OUTPUT 
                      ,  @c_SourceKey         = @c_SourceKey                  
-                     ,  @c_SourceType        = @c_SourceType                 
+                     ,  @c_SourceType        = @c_SourceType_LARule        --2020-08-26 - fixed                 
 
                END TRY
                BEGIN CATCH
@@ -1260,9 +1288,9 @@ BEGIN
                      ,  @c_WriteType   = 'ERROR' 
                      ,  @n_err2        = @n_err 
                      ,  @c_errmsg2     = @c_errmsg 
-                     ,  @b_Success     = @b_Success   OUTPUT 
-                     ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT
+                     ,  @b_Success     = @b_Success   --2020-09-15 
+                     ,  @n_err         = @n_err       --2020-09-15 
+                     ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
                   GOTO EXIT_SP
                END
@@ -1303,6 +1331,20 @@ BEGIN
             SET @n_Cnt = @n_Cnt + 1 
          END
          
+         SET @c_Lottable01   = ISNULL(@c_Lottable01,'')  --2020-09-14 
+         SET @c_Lottable02   = ISNULL(@c_Lottable02,'')  --2020-09-14
+         SET @c_Lottable03   = ISNULL(@c_Lottable03,'')  --2020-09-14
+         SET @c_Lottable06   = ISNULL(@c_Lottable06,'')  --2020-09-14 
+         SET @c_Lottable07   = ISNULL(@c_Lottable07,'')  --2020-09-14 
+         SET @c_Lottable08   = ISNULL(@c_Lottable08,'')  --2020-09-14 
+         SET @c_Lottable09   = ISNULL(@c_Lottable09,'')  --2020-09-14 
+         SET @c_Lottable10   = ISNULL(@c_Lottable10,'')  --2020-09-14 
+         SET @c_Lottable11   = ISNULL(@c_Lottable11,'')  --2020-09-14 
+         SET @c_Lottable12   = ISNULL(@c_Lottable12,'')  --2020-09-14 
+         SET @c_Altsku       = ISNULL(@c_Altsku,'')      --2020-08-13
+         SET @c_ToLoc        = ISNULL(@c_ToLoc,'')       --2020-09-15
+         SET @c_ExternLineNo = ISNULL(@c_ExternLineNo,'')--2020-09-15
+
          INSERT INTO #tRECEIPTDETAIL
             (  ReceiptKey
             ,  ReceiptLineNumber
@@ -1356,17 +1398,17 @@ BEGIN
             ,  @c_ReceiptLineNumber 
             ,  PD.Storerkey  
             ,  PD.Sku
-            ,  PD.AltSku
-            ,  PD.Packkey  
-            ,  PD.UOM
+            ,  @c_AltSku                        --2020-08-13
+            ,  ISNULL(PD.Packkey,'')            --2020-09-15
+            ,  ISNULL(PD.UOM,'')                --2020-09-15
             ,  QtyExpected = CASE WHEN @c_POType = 'FREEDGOODS' THEN 0 ELSE PD.QtyOrdered - PD.QtyReceived END
             ,  FreeGoodQtyExpected = CASE WHEN @c_POType = 'FREEDGOODS' THEN PD.QtyOrdered - PD.QtyReceived ELSE 0 END
             ,  ToLoc = @c_ToLoc
             ,  PD.ToID
             ,  PutawayLoc = @c_Putawayloc
-            ,  PD.ExternPOKey
-            ,  PD.POKey
-            ,  PD.POLineNumber
+            ,  ISNULL(PD.ExternPOKey,'')        --2020-09-15
+            ,  ISNULL(PD.POKey,'')              --2020-09-15
+            ,  ISNULL(PD.POLineNumber,'')       --2020-09-15
             ,  ExternPOKey = CASE WHEN @c_ExternLineNo <> '' THEN PD.ExternPOKey ELSE '' END
             ,  ExternLineNo= @c_ExternLineNo
             ,  Vesselkey = @c_Vesselkey
@@ -1454,9 +1496,9 @@ BEGIN
                   ,  @c_WriteType   = 'ERROR' 
                   ,  @n_err2        = @n_err 
                   ,  @c_errmsg2     = @c_errmsg 
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+                  ,  @b_Success     = @b_Success   --2020-09-15 
+                  ,  @n_err         = @n_err       --2020-09-15 
+                  ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
                GOTO EXIT_SP                                            
             END CATCH 
@@ -1600,35 +1642,47 @@ BEGIN
             WHERE RowRef = @n_RowRef_RD
          END TRY
          BEGIN CATCH
+            --2020-09-15 - START            
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+            --2020-09-15 - END
+
             SET @n_Continue = 3
             SET @n_Err = 556808
             SET @c_ErrMsg = ERROR_MESSAGE()
+
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': INSERT RECEIPTDETAIL Table Fail. (lsp_ASN_PopulatePOs_Wrapper)'   
                            + '(' + @c_ErrMsg + ')' 
 
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_Receiptkey
-               ,  @c_Refkey2     = @c_POKey
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
+            --EXEC [WM].[lsp_WriteError_List] 
+            --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            --   ,  @c_TableName   = @c_TableName
+            --   ,  @c_SourceType  = @c_SourceType
+            --   ,  @c_Refkey1     = @c_Receiptkey
+            --   ,  @c_Refkey2     = @c_POKey
+            --   ,  @c_Refkey3     = ''
+            --   ,  @c_WriteType   = 'ERROR' 
+            --   ,  @n_err2        = @n_err 
+            --   ,  @c_errmsg2     = @c_errmsg 
+            --   ,  @b_Success     = @b_Success   --2020-09-15 
+            --   ,  @n_err         = @n_err       --2020-09-15 
+            --   ,  @c_errmsg      = @c_errmsg    --2020-09-15
 
-            IF (XACT_STATE()) = -1  
-            BEGIN
-               ROLLBACK TRAN
+            --2020-09-15 - START            
+            --IF (XACT_STATE()) = -1  
+            --BEGIN
+            --   ROLLBACK TRAN
 
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END  
+            --   WHILE @@TRANCOUNT < @n_StartTCnt
+            --   BEGIN
+            --      BEGIN TRAN
+            --   END
+            --END
+            --2020-09-15 - END  
             GOTO EXIT_SP
          END CATCH
       END
@@ -1643,7 +1697,6 @@ BEGIN
          COMMIT TRAN
       END
    END
-   
 EXIT_SP:
    IF OBJECT_ID('tempdb..#tPOs', 'U') IS NOT NULL
    BEGIN

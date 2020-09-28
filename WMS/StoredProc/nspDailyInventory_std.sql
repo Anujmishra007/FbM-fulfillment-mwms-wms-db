@@ -27,9 +27,12 @@ GO
 /* Date         Author  ver    Purposes                                 */
 /* 10-08-2009   tlting  1.1    direct from LotxLocxid.qty					*/
 /*										 storerconfig turn off	(tlting01)SOS51750*/								
+/* 23-12-2017   tlting  1.2    Storerkey parameter       					*/
+/* 03-01-2018   tlting  1.2    Lottable06 - lottable15    					*/
 /************************************************************************/
 
-CREATE PROCEDURE nspDailyInventory_std  AS
+CREATE PROCEDURE nspDailyInventory_std  @c_storerkey NVARCHAR(15) = '%', @b_debug NVARCHAR(1) = 0
+AS
 BEGIN
 
    SET NOCOUNT ON
@@ -38,29 +41,52 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
    
    DECLARE  @d_inventorydate datetime
-			  ,@c_Storerkey   NVARCHAR(15)
 			  ,@b_success     NVARCHAR(1)
 			  ,@c_authority NVARCHAR(1)
 			  ,@n_err			int
 			  ,@c_errmsg	 NVARCHAR(60)
-			  ,@b_debug		 NVARCHAR(1)
-
+			 
    SET @d_inventorydate = CONVERT(smalldatetime, CONVERT(char(8), GETDATE() - 1, 112), 112)
-	SET @b_debug = 0
+	-- SET @b_debug = 0
    
-   /* Just in case this sp have been run twice, so have to delete first before insert */
-	IF @b_debug = 1
-	BEGIN	
-	   PRINT 'Delete FROM DailyInventory'
-	END
-   DELETE FROM DailyInventory WHERE datediff (day, getdate() - 1, inventorydate) = 0
+   IF RTRIM(@c_storerkey) IS NULL       
+      SET @c_storerkey = '%' 
+   
+   IF @c_storerkey = '%'
+   BEGIN
 
-	/* Get Storerkey & Check DailyInventory Storer CONfigkey Setting */
-	DECLARE Storer_cur CURSOR FAST_FORWARD READ_ONLY FOR
-		SELECT Storerkey
-		FROM   STORER (NOLOCK)
-		WHERE  Type = '1'
-		Order by Storerkey
+      /* Just in case this sp have been run twice, so have to delete first before insert */
+	   IF @b_debug = 1
+	   BEGIN	
+	      PRINT 'Delete FROM DailyInventory'
+	   END
+      DELETE FROM DailyInventory WHERE datediff (day, getdate() - 1, inventorydate) = 0
+
+	   /* Get Storerkey & Check DailyInventory Storer CONfigkey Setting */
+	   DECLARE Storer_cur CURSOR FAST_FORWARD READ_ONLY FOR
+		   SELECT Storerkey
+		   FROM   STORER (NOLOCK)
+		   WHERE  Type = '1'
+         AND EXISTS ( SELECT 1 FROM lotxlocxid (NOLOCK) WHERE  lotxlocxid.Storerkey = STORER.Storerkey )
+		   Order by Storerkey
+    END
+    ELSE
+    BEGIN
+      /* Just in case this sp have been run twice, so have to delete first before insert */
+	   IF @b_debug = 1
+	   BEGIN	
+	      PRINT 'Delete FROM DailyInventory WHERE Storerkey = ''' + @c_storerkey + ''''
+	   END
+      DELETE FROM DailyInventory WHERE datediff (day, getdate() - 1, inventorydate) = 0 AND Storerkey = @c_storerkey
+
+	   /* Get Storerkey & Check DailyInventory Storer CONfigkey Setting */
+	   DECLARE Storer_cur CURSOR FAST_FORWARD READ_ONLY FOR
+		   SELECT Storerkey
+		   FROM   STORER (NOLOCK)
+		   WHERE  Type = '1'
+         AND Storerkey = @c_storerkey
+		   Order by Storerkey
+    END
 	
 	OPEN Storer_cur
 	FETCH NEXT FROM Storer_cur INTO @c_Storerkey
@@ -93,8 +119,12 @@ BEGIN
 			   PRINT 'Insert into  DailyInventory - Use nspDailyInventory2 calculation !'
 			END
 
-		   INSERT INTO DailyInventory (Storerkey, Sku, Loc, Id, Qty, InventoryDate, Lot, QtyAllocated, QtyPicked, Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, QtyONhold)
-		   SELECT storerkey, sku, loc, ' ', sum(qty - qtypicked), @d_inventorydate, ' ', SUM(QtyAllocated), SUM(QtyPicked), '', '', '', '', '', 0
+		   INSERT INTO DailyInventory (Storerkey, Sku, Loc, Id, Qty, InventoryDate, Lot, QtyAllocated, QtyPicked, 
+		                              Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, QtyONhold,
+		                              Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+		                              Lottable11, Lottable12, Lottable13, Lottable14, Lottable15 )
+		   SELECT storerkey, sku, loc, ' ', sum(qty - qtypicked), @d_inventorydate, ' ', SUM(QtyAllocated), SUM(QtyPicked), 
+		                              '', '', '', '', '', 0,'', '', '', '', '','', '', '', '', ''
 		   FROM   lotxlocxid (NOLOCK)
 			WHERE  Storerkey = @c_Storerkey
 		   GROUP BY storerkey, sku, loc
@@ -190,7 +220,7 @@ BEGIN
 			AND   DailyInventory.Storerkey = @c_Storerkey
 		
 		   PRINT 'Update Sku ChargingPallet in DailyInventory'		
-		   SELECT di.inventorydate, di.storerkey, di.sku, di.loc, di.id,
+		 SELECT di.inventorydate, di.storerkey, di.sku, di.loc, di.id,
 				   LocInventoryCBM = di.inventorycbm,
 				   LocInventoryPallet = di.inventorypallet,
 				   l.cubiccapacity,
@@ -295,12 +325,17 @@ BEGIN
 							InventoryCBM, InventoryPallet, CommingleSKU, SKUInventoryPallet, SKUChargingPallet,				
 							Lot, QtyAllocated, QtyPicked, Pallet, StdCube,
 							Facility, HostWhCode, LocatiONFlag, 
-							Lottable01, Lottable02, Lottable03, Lottable04, Lottable05)			
+							Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
+							Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+		               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15 
+							)			
 		   SELECT lll.storerkey, lll.sku, lll.loc, lll.ID, sum(lll.qty), @d_inventorydate,      -- tlting01   sum(lll.qty - lll.qtypicked)
 							0, 0, '', 0, 0, 
 							lll.Lot, SUM(lll.QtyAllocated), SUM(lll.QtyPicked), p.Pallet, s.StdCube, 
 							ISNULL(l.Facility, ' '), l.HostWhCode, l.LocatiONFlag, 
-							la.Lottable01, la.Lottable02, la.Lottable03, la.Lottable04, la.Lottable05
+							la.Lottable01, la.Lottable02, la.Lottable03, la.Lottable04, la.Lottable05,
+							la.Lottable06, la.Lottable07, la.Lottable08, la.Lottable09, la.Lottable10,
+		               la.Lottable11, la.Lottable12, la.Lottable13, la.Lottable14, la.Lottable15 
 		   FROM   lotxlocxid lll (NOLOCK), loc l (NOLOCK), sku s (NOLOCK), pack p (NOLOCK), lotattribute la (NOLOCK)		
 			WHERE lll.loc = l.loc
 			AND   lll.Storerkey = s.storerkey
@@ -310,11 +345,14 @@ BEGIN
 			AND   lll.Storerkey   = @c_Storerkey			
 		   GROUP BY lll.storerkey, lll.sku, lll.loc, lll.ID, lll.Lot, p.Pallet, s.StdCube, 
 							l.Facility, l.HostWhCode, l.LocatiONFlag, 
-							la.Lottable01, la.Lottable02, la.Lottable03, la.Lottable04, la.Lottable05
+							la.Lottable01, la.Lottable02, la.Lottable03, la.Lottable04, la.Lottable05,
+							la.Lottable06, la.Lottable07, la.Lottable08, la.Lottable09, la.Lottable10,
+		               la.Lottable11, la.Lottable12, la.Lottable13, la.Lottable14, la.Lottable15 
 		 HAVING sum(lll.qty) > 0					-- tlting01		   --HAVING sum(lll.qty - lll.qtypicked) > 0
 
 			-- Start : Find QtyONhold 
-			SELECT lot.storerkey, lot.sku, lotxlocxid.loc, lotxlocxid.id, la.lottable01, la.lottable02, la.lottable03, la.lottable04, la.lottable05, sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) as QtyONHold
+			SELECT lot.storerkey, lot.sku, lotxlocxid.loc, lotxlocxid.id, lot.LOT,
+			       sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) as QtyONHold 
 			INTO   #QtyOnhold
 			FROM lot (NOLOCK)
 			JOIN lotxlocxid (NOLOCK) ON lotxlocxid.lot = lot.lot 
@@ -322,11 +360,13 @@ BEGIN
 			JOIN lotattribute la (NOLOCK) ON la.lot = lotxlocxid.lot
 			WHERE lot.status = 'HOLD'
 			AND   lotxlocxid.Storerkey = @c_Storerkey
-			GROUP BY lot.storerkey, lot.sku, lotxlocxid.loc, lotxlocxid.id, la.lottable01, la.lottable02, la.lottable03, la.lottable04, la.lottable05 
+			GROUP BY lot.storerkey, lot.sku, lotxlocxid.loc, lotxlocxid.id,  lot.LOT
 			HAVING sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) <> 0 
 
 			UNION ALL			
-			SELECT lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id,  la.lottable01, la.lottable02, la.lottable03, la.lottable04, la.lottable05, sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) + sum( ISNULL(OA_LLL.qty,0) - ISNULL(OA_LLL.qtyallocated,0) - ISNULL(OA_LLL.qtypicked,0)) as QtyONHold
+			SELECT lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, lot.LOT,
+			 sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) + 
+			sum( ISNULL(OA_LLL.qty,0) - ISNULL(OA_LLL.qtyallocated,0) - ISNULL(OA_LLL.qtypicked,0)) as QtyONHold 
 			FROM lotxlocxid (NOLOCK)
 			JOIN lot (NOLOCK) ON lot.lot = lotxlocxid.lot 
 			JOIN loc (NOLOCK) ON lotxlocxid.loc = loc.loc
@@ -341,11 +381,12 @@ BEGIN
 			AND (LOC.STATUS = "HOLD" OR LOC.LocatiONFlag = "HOLD" OR LOC.LocatiONFlag = "DAMAGE")
 			AND id.status = 'OK' 
 			AND la.Storerkey = @c_Storerkey
-			GROUP BY lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, la.lottable01, la.lottable02, la.lottable03, la.lottable04, la.lottable05
+			GROUP BY lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, lot.LOT
 			HAVING sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) <> 0 
 
 			UNION ALL
-			SELECT lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, la.lottable01, la.lottable02, la.lottable03, la.lottable04, la.lottable05, sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) as QtyONHold
+			SELECT lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, lot.LOT, 
+			       sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) as QtyONHold 
 			FROM lotxlocxid (NOLOCK)
 			JOIN lot (NOLOCK) ON lot.lot = lotxlocxid.lot 
 			JOIN loc (NOLOCK) ON lotxlocxid.loc = loc.loc
@@ -355,7 +396,7 @@ BEGIN
 			AND (loc.locatiONFlag <> 'HOLD' AND LOC.LocatiONFlag <> "DAMAGE" AND loc.Status <> 'HOLD')
 			AND id.status = 'HOLD' 
 			AND lotxlocxid.storerkey = @c_storerkey
-			GROUP BY lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, la.lottable01, la.lottable02, la.lottable03, la.lottable04, la.lottable05 
+			GROUP BY lotxlocxid.storerkey, lotxlocxid.sku, lotxlocxid.loc, lotxlocxid.id, lot.LOT
 			HAVING sum(lotxlocxid.qty - lotxlocxid.qtyallocated - lotxlocxid.qtypicked) <> 0 
 			-- End : Find QtyONhold 
 
@@ -367,11 +408,7 @@ BEGIN
 			AND   DailyInventory.Sku = #QtyOnhold.Sku 
 			AND   DailyInventory.Loc = #QtyOnhold.Loc
 			AND   DailyInventory.Id = #QtyOnhold.Id
-			AND   DailyInventory.Lottable01 = #QtyOnhold.Lottable01
-			AND   DailyInventory.Lottable02 = #QtyOnhold.Lottable02
-			AND   DailyInventory.Lottable03 = #QtyOnhold.Lottable03
-			AND   ISNULL(DailyInventory.Lottable04, '19000101') = ISNULL(#QtyOnhold.Lottable04, '19000101')
-			AND   ISNULL(DailyInventory.Lottable05, '19000101') = ISNULL(#QtyOnhold.Lottable05, '19000101')
+			AND   DailyInventory.lot = #QtyOnhold.lot
 			AND	  DailyInventory.InventoryDate = @d_inventorydate
 			AND   DailyInventory.Storerkey = @c_Storerkey
 

@@ -45,6 +45,7 @@ GO
 /* 2020-02-17   kocy05        1.5   Comment out Delete WaveDetail record first                     */
 /* 2020-04-14   NJOW01        1.6   WMS-12785 Lululemon move stock logic                           */
 /* 2020-07-29   NJOW02        1.7   Fix temploc bug follow isp0000P_WSIML_GENERIC_WMS_CancOrd_Import*/
+/* 2020-09-14   NJOW03        1.8   WMS-14932 Move to TempLoc Logic Update                         */
 /***************************************************************************************************/        
         
 CREATE PROC [dbo].[isp_BackendCancelOrders] (        
@@ -152,6 +153,7 @@ BEGIN
          , @c_WaveKey                   NVARCHAR(25)          
          , @c_PD_PickDetailKey         NVARCHAR(18)   --NJOW02
          , @c_Temp_PickDetailKey       NVARCHAR(18)   --NJOW02
+         , @c_WSOrdCancMoveToLoc_Opt2  NVARCHAR(50)   --NJOW03
         
         
    SET @n_StartTCnt = @@TRANCOUNT        
@@ -221,6 +223,7 @@ BEGIN
    SET @c_ConsoOrderKey            = ''     
    SET @n_BackendCancelOrders_Exist = 0     
    SET @n_OverAllocationFlag_Exist =  0
+   SET @c_WSOrdCancMoveToLoc_Opt2  = '' --NJOW03
         
         
    IF OBJECT_ID('tempdb..#TempMoveRecord') IS NOT NULL         
@@ -553,6 +556,7 @@ BEGIN
    BEGIN           	  
       SET @c_SC_SValue1 = ''        
       SELECT @c_SC_SValue1 = SValue         
+            ,@c_WSOrdCancMoveToLoc_Opt2 = Option2  --NJOW03
       FROM StorerConfig WITH (NOLOCK)        
       WHERE StorerKey = @c_Storerkey        
       AND ConfigKey = 'WSOrdCancMoveToLoc'    
@@ -735,6 +739,7 @@ BEGIN
             /* Verify Based On Location Type (Start)    */        
             /*********************************************/ 
 
+            /*
             IF @c_SL_LocationType IN ('CASE', 'PICK')  AND @n_OverAllocationFlag_Exist = 1
             BEGIN        
                GOTO NEXT_PICKDETAIL_RECORD        
@@ -743,7 +748,26 @@ BEGIN
             BEGIN        
                IF @c_Loc_LocationType IN ('DYNPICKP', 'DYNPICKR') AND @c_LLI_QtyExpected > 0
                   GOTO NEXT_PICKDETAIL_RECORD        
-            END        
+            END*/
+            
+            --NJOW03
+            IF @c_WSOrdCancMoveToLoc_Opt2 = '' OR @c_SL_LocationType <> @c_WSOrdCancMoveToLoc_Opt2
+            BEGIN                                             
+               IF @c_SL_LocationType IN ('CASE', 'PICK') AND @n_OverAllocationFlag_Exist = 1  --(CY09)
+               BEGIN
+                  GOTO NEXT_PICKDETAIL_RECORD
+               END
+               ELSE
+               BEGIN
+                  IF @c_Loc_LocationType IN ('DYNPICKP', 'DYNPICKR') AND @c_LLI_QtyExpected > 0  --(CY09)
+                     GOTO NEXT_PICKDETAIL_RECORD
+               END
+            END
+            ELSE IF @c_LLI_QtyExpected > 0
+            BEGIN
+               GOTO NEXT_PICKDETAIL_RECORD    
+            END                        
+                    
             /*********************************************/        
             /* Verify Based On Location Type (End)      */        
             /*********************************************/           

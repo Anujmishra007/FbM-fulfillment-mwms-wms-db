@@ -1,14 +1,12 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_PickDetailAlert]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [dbo].[isp_PickDetailAlert]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PickDetailAlert]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_PickDetailAlert]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_WARNINGS ON
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON 
-GO
-
 /************************************************************************/
 /* Stored Procedure: dbo.isp_PickDetailAlert                            */
 /* Creation Date: 21-Dec-2010                                           */
@@ -32,7 +30,7 @@ GO
 /* 21-Sept-2012 SWYep     1.1  Add Inactive SKU check                   */  
 /*  2-May-2013  KHLim     1.1  Check active SKU only                    */  
 /************************************************************************/
-CREATE  PROCEDURE dbo.isp_PickDetailAlert
+CREATE  PROCEDURE [dbo].[isp_PickDetailAlert]
 (
   @cListTo NVARCHAR(max),
   @cListCc NVARCHAR(max)
@@ -40,7 +38,7 @@ CREATE  PROCEDURE dbo.isp_PickDetailAlert
 AS
 BEGIN
    SET NOCOUNT ON
-   SET ANSI_DEFAULTS OFF  
+   SET ANSI_NULLS OFF  
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
@@ -146,13 +144,6 @@ BEGIN
    END
 
 END /* main procedure */
-        
-Go			
--- This is to end the script
-SET QUOTED_IDENTIFIER OFF 	
--- To avoid re-compile on runtime
 GO
-SET ANSI_NULLS OFF
-GO
-Grant Execute on dbo.isp_PickDetailAlert TO NSQL
+GRANT EXECUTE ON [dbo].[isp_PickDetailAlert] TO nSQL 
 GO

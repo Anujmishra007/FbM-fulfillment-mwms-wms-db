@@ -19,7 +19,7 @@ GO
 /*                                                                      */        
 /* Called By: When records delete from PackDetail                       */        
 /*                                                                      */        
-/* PVCS Version: 1.0                                                    */        
+/* PVCS Version: 2.0                                                    */        
 /*                                                                      */        
 /* Version: 5.4                                                         */        
 /*                                                                      */        
@@ -38,7 +38,11 @@ GO
 /*                              packinfo.qty                            */
 /* 2017-May-29  Ung       1.8   WMS-1919 Add serial no                  */
 /* 2019-Mar-13  Ung       1.9   WMS-8134 Add PackDetailInfo             */
-/* 2020-Sep-01  NJOW02    1.10  WMS-15009 - call custom stored proc     */
+/* 2020-Sep-01  NJOW04    1.10  WMS-15009 - call custom stored proc     */  
+/* 2020-AUG-06  Wan01     2.0   WMS-14315 - [CN] NIKE_O2_Ecom Packing_CR*/
+/* 2020-SEP-12  NJOW05    2.1   WMS-15001 - reverse serial# when del for*/
+/*                              config ADAllowInsertExistingSerialNo and*/
+/*                              Option1=NotAllowInsertNewSerialNo       */
 /************************************************************************/        
 CREATE TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
 FOR  DELETE      
@@ -71,6 +75,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  DECLARE @c_Pickdetailkey     NVARCHAR(10)    --(Kc01)
          ,@n_ShortPackQty     INT            --(Kc01)
        
+   DECLARE @n_PackQRFKey      BIGINT         --(Wan01)
+         , @cur_PQRF          CURSOR         --(Wan01)
+
  SELECT @n_continue = 1      
        ,@n_starttcnt = @@TRANCOUNT      
                   
@@ -79,53 +86,52 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  BEGIN      
      SELECT @n_continue = 4      
  END       
-
-   --NJOW02
-   IF @n_continue=1 or @n_continue=2          
-   BEGIN
-      IF EXISTS (SELECT 1 FROM DELETED d  
-                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
-                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
-                 WHERE  s.configkey = 'PackdetailTrigger_SP')  
-      BEGIN        	  
-         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
-            DROP TABLE #INSERTED
-   
-      	 SELECT * 
-      	 INTO #INSERTED
-      	 FROM INSERTED
-            
-         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
-            DROP TABLE #DELETED
-   
-      	 SELECT * 
-      	 INTO #DELETED
-      	 FROM DELETED
-   
-         EXECUTE dbo.isp_PackdetailTrigger_Wrapper
-                   'DELETE'  --@c_Action
-                 , @b_Success  OUTPUT  
-                 , @n_Err      OUTPUT   
-                 , @c_ErrMsg   OUTPUT  
-   
-         IF @b_success <> 1  
-         BEGIN  
-            SELECT @n_continue = 3  
-                  ,@c_errmsg = 'ntrPackDetailDelete ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
-         END  
-         
-         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
-            DROP TABLE #INSERTED
-   
-         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
-            DROP TABLE #DELETED
-      END
-   END   
+   --NJOW04  
+   IF @n_continue=1 or @n_continue=2            
+   BEGIN  
+      IF EXISTS (SELECT 1 FROM DELETED d    
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey      
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue  
+                 WHERE  s.configkey = 'PackdetailTrigger_SP')    
+      BEGIN             
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL  
+            DROP TABLE #INSERTED  
+     
+        SELECT *   
+        INTO #INSERTED  
+        FROM INSERTED  
+              
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL  
+            DROP TABLE #DELETED  
+     
+        SELECT *   
+        INTO #DELETED  
+        FROM DELETED  
+     
+         EXECUTE dbo.isp_PackdetailTrigger_Wrapper  
+                   'DELETE'  --@c_Action  
+                 , @b_Success  OUTPUT    
+                 , @n_Err      OUTPUT     
+                 , @c_ErrMsg   OUTPUT    
+     
+         IF @b_success <> 1    
+         BEGIN    
+            SELECT @n_continue = 3    
+                  ,@c_errmsg = 'ntrPackDetailDelete ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))  
+         END    
+           
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL  
+            DROP TABLE #INSERTED  
+     
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL  
+            DROP TABLE #DELETED  
+      END  
+   END     
 
    --(Kc01) - start
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN  
-   	  IF EXISTS(SELECT 1 FROM DELETED WHERE Qty > 0 OR ExpQty > 0) 
+        IF EXISTS(SELECT 1 FROM DELETED WHERE Qty > 0 OR ExpQty > 0) 
       BEGIN
          SELECT TOP 1 @c_Storerkey = Storerkey FROM DELETED   
          SELECT @b_success = 0       
@@ -255,6 +261,51 @@ BEGIN
    END
 END
 
+--(Wan01) - START PackQRF
+IF @n_continue=1 OR @n_continue=2   
+BEGIN
+   IF EXISTS(  SELECT TOP 1 1 
+               FROM DELETED D
+               JOIN PackQRF PQRF ON D.PickSlipNo = PQRF.PickSlipNo
+                                AND D.CartonNo  = PQRF.CartonNo 
+                                AND D.LabelLine = PQRF.LabelLine
+            )
+   BEGIN
+      SET @cur_PQRF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
+      SELECT PQRF.PackQRFKey
+      FROM DELETED D
+      JOIN PackQRF PQRF ON D.PickSlipNo = PQRF.PickSlipNo 
+                        AND D.CartonNo  = PQRF.CartonNo 
+                        AND D.LabelLine = PQRF.LabelLine
+      ORDER BY PQRF.PackQRFKey
+
+      OPEN @cur_PQRF  
+          
+      FETCH NEXT FROM @cur_PQRF INTO @n_PackQRFKey  
+        
+      WHILE @@FETCH_STATUS = 0 
+      BEGIN
+         DELETE PackQRF WHERE PackQRFKey = @n_PackQRFKey
+
+         SET @n_err = @@ERROR      
+         
+         IF @n_err <> 0      
+         BEGIN      
+            SET @n_continue = 3      
+            SET @c_errmsg = CONVERT(char(250),@n_err)
+            SET @n_err = 61819
+            SET @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table PackQRF. (ntrPackDetailDelete)' 
+                         + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+            BREAK
+         END  
+         FETCH NEXT FROM @cur_PQRF INTO @n_PackQRFKey
+      END
+      CLOSE @cur_PQRF
+      DEALLOCATE @cur_PQRF
+   END
+END
+--(Wan01) - END PackQRF
+
  IF @n_continue=1 OR @n_continue=2   
  BEGIN      
      SELECT TOP 1 @c_Storerkey = Storerkey FROM DELETED   
@@ -335,15 +386,17 @@ END
  --NJOW01
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- 	  DELETE SerialNo 
- 	  FROM SerialNo
- 	  JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
- 	  JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
- 	                 AND SerialNo.Sku = DELETED.Sku 
- 	                 AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))
- 	  JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
- 	  WHERE SKU.Susr4 = 'AD' 	  
- 	   	  
+     DELETE SerialNo 
+     FROM SerialNo
+     JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
+     JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
+                    AND SerialNo.Sku = DELETED.Sku 
+                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))                    
+     JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+     LEFT JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --NJOW05
+     WHERE SKU.Susr4 = 'AD'     
+     AND SC.SValue IS NULL  --NJOW05
+           
     SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
     IF @n_err <> 0
     BEGIN
@@ -351,16 +404,39 @@ END
        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61816
        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
     END        
+    
+    --NJOW05
+    UPDATE SERIALNO WITH (ROWLOCK)
+    SET SERIALNO.Orderkey = '',
+        SERIALNO.OrderLineNumber = '',
+        SERIALNO.Status = '1',
+        SERIALNO.Trafficcop = NULL
+    FROM SERIALNO 
+    JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
+    JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
+                    AND SerialNo.Sku = DELETED.Sku 
+                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))                    
+    JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+    JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
+    WHERE SKU.Susr4 = 'AD'     
+
+    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+    IF @n_err <> 0
+    BEGIN
+       SELECT @n_continue = 3
+       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
+       SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+    END             
  END      
 
  --NJOW02
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- 	  DELETE PACKINFO
- 	  FROM PACKINFO
- 	  JOIN DELETED ON PACKINFO.Pickslipno = DELETED.Pickslipno AND PACKINFO.Cartonno = DELETED.Cartonno
- 	  LEFT JOIN PACKDETAIL (NOLOCK) ON PACKINFO.Pickslipno = PACKDETAIL.Pickslipno AND PACKINFO.Cartonno = PACKDETAIL.Cartonno
- 	  WHERE PACKDETAIL.Cartonno IS NULL
+     DELETE PACKINFO
+     FROM PACKINFO
+     JOIN DELETED ON PACKINFO.Pickslipno = DELETED.Pickslipno AND PACKINFO.Cartonno = DELETED.Cartonno
+     LEFT JOIN PACKDETAIL (NOLOCK) ON PACKINFO.Pickslipno = PACKDETAIL.Pickslipno AND PACKINFO.Cartonno = PACKDETAIL.Cartonno
+     WHERE PACKDETAIL.Cartonno IS NULL
 
     SELECT @n_err = @@ERROR
     IF @n_err <> 0
@@ -380,9 +456,9 @@ END
     JOIN PACKINFO ON DELETED.Pickslipno = PACKINFO.Pickslipno
                   AND DELETED.CartonNo = PACKINFO.CartonNo                         
 
- 	  IF EXISTS(SELECT 1
- 	            FROM DELETED
- 	            JOIN STORERCONFIG (NOLOCK) ON DELETED.StorerKey = STORERCONFIG.StorerKey     
+     IF EXISTS(SELECT 1
+               FROM DELETED
+               JOIN STORERCONFIG (NOLOCK) ON DELETED.StorerKey = STORERCONFIG.StorerKey     
                                          AND STORERCONFIG.ConfigKey = 'Default_PackInfo' AND STORERCONFIG.SValue='1')
     BEGIN
        UPDATE PACKINFO WITH (ROWLOCK)
@@ -393,9 +469,9 @@ END
                      AND DELETED.CartonNo = PACKINFO.CartonNo                         
        JOIN STORERCONFIG (NOLOCK) ON DELETED.StorerKey = STORERCONFIG.StorerKey     
                                    AND STORERCONFIG.ConfigKey = 'Default_PackInfo' AND STORERCONFIG.SValue='1'
-   	   JOIN STORER (NOLOCK) ON (DELETED.StorerKey = STORER.StorerKey)
+         JOIN STORER (NOLOCK) ON (DELETED.StorerKey = STORER.StorerKey)
        JOIN SKU (NOLOCK) ON (DELETED.Storerkey = SKU.Storerkey AND DELETED.SKU = SKU.Sku)
-   	   LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = PACKINFO.CartonType) 
+         LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = PACKINFO.CartonType) 
     END
  END 
  
