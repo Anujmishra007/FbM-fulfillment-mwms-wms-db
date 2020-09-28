@@ -28,6 +28,7 @@ GO
 /************************************************************************/
 CREATE PROC isp_packing_list_81
          @c_PickSlipNo     NVARCHAR(10)
+        ,@c_type           NVARCHAR(5) = 'H'
 AS
 BEGIN
    SET NOCOUNT ON
@@ -41,16 +42,78 @@ BEGIN
 
          , @n_MaxCartonNo     INT
 		   , @n_NoOfLine        INT
+         , @c_orderkey        NVARCHAR(20)
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_NoOfLine = 8
+
+  CREATE Table #TempPackList81 (
+                 Facility           NVARCHAR(50) NULL 
+               , STR_Company        NVARCHAR(45) NULL 
+               , ExternOrderkey     NVARCHAR(50) NULL 
+               , Loadkey            NVARCHAR(10) NULL
+               , consigneekey       NVARCHAR(15) NULL 
+             --  , SKU                NVARCHAR(20) NULL
+               , c_company          NVARCHAR(45) NULL 
+               , c_address1         NVARCHAR(45) NULL
+               , c_address2         NVARCHAR(45) NULL
+               , c_address3         NVARCHAR(45) NULL    
+               , c_address4         NVARCHAR(20) NULL 
+               , InterModalVehicle  NVARCHAR(30) NULL 
+               , PickSlipNo         NVARCHAR(10) NULL
+               , CartonNo           INT
+               , sku                NVARCHAR(20) NULL
+               , skudescr           NVARCHAR(60) NULL
+               , qty                INT
+               , unitprice          FLOAT
+               , Notes2_1           NVARCHAR(41) NULL
+               , Notes2_2           NVARCHAR(41) NULL
+               , Notes2_3           NVARCHAR(41) NULL
+               , Notes2_4           NVARCHAR(41) NULL
+               , Notes2_5           NVARCHAR(41) NULL 
+               , sku_notes1         NVARCHAR(4000) NULL  
+               , sku_busr5          NVARCHAR(30) NULL  
+               , misspqty           NVARCHAR(5)  NULL 
+               , c_zip              NVARCHAR(45) NULL
+               , Orderkey           NVARCHAR(20) NULL
+               , showsubrpt         NVARCHAR(5)  NULL
+    )  
 
    SET @n_MaxCartonNo = 0
    SELECT TOP 1 @n_MaxCartonNo = PD.CartonNo
    FROM PACKDETAIL PD WITH (NOLOCK) 
    WHERE PD.PickSlipNo = @c_PickSlipNo
    ORDER BY PD.CartonNo DESC
-
+   
+   INSERT INTO #TempPackList81 (                  
+                 Facility             
+               , STR_Company          
+               , ExternOrderkey       
+               , Loadkey              
+               , consigneekey                           
+               , c_company            
+               , c_address1           
+               , c_address2           
+               , c_address3           
+               , c_address4           
+               , InterModalVehicle    
+               , PickSlipNo           
+               , CartonNo             
+               , sku                  
+               , skudescr             
+               , qty                  
+               , unitprice            
+               , Notes2_1             
+               , Notes2_2             
+               , Notes2_3             
+               , Notes2_4             
+               , Notes2_5             
+               , sku_notes1           
+               , sku_busr5            
+               , misspqty             
+               , c_zip                
+               , Orderkey             
+               , showsubrpt              )
    SELECT Facility      = ISNULL(RTRIM(FACILITY.Descr),'')
 		,STR_Company		= ISNULL(RTRIM(STORER.Company),'')
 		,ExternOrderkey   = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
@@ -90,6 +153,7 @@ BEGIN
 									  AND   ORDERDETAIL.Sku      = ISNULL(RTRIM(PACKDETAIL.Sku),''))
      ,C_Zip               = ISNULL(RTRIM(ORDERS.C_Zip),'')
      ,Orderkey   = ISNULL(RTRIM(ORDERS.Orderkey),'')
+     ,showsubrpt = 'N'
 	FROM PACKHEADER WITH (NOLOCK)
 	JOIN ORDERS     WITH (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
 	JOIN FACILITY   WITH (NOLOCK) ON (ORDERS.Facility = FACILITY.Facility)
@@ -128,8 +192,51 @@ BEGIN
     ORDER BY ISNULL(PACKDETAIL.CartonNo,0)
 			,  ISNULL(RTRIM(PACKDETAIL.Sku),'')
 
+   IF EXISTS (SELECT 1 FROM #TempPackList81 WHERE MissPQty = 'Y')
+   BEGIN
+        UPDATE #TempPackList81
+        SET showsubrpt ='Y'
+        WHERE PickSlipNo = @c_PickSlipNo
+   END
 
+    IF @c_type = 'H' GOTO TYPE_H
+    IF @c_type = 'D' GOTO TYPE_D
+
+   TYPE_H:
+   SELECT * FROM #TempPackList81
+   Order by cartonno,sku
+  
+  --DROP TABLE #TEMPMNFTBLH06
+  GOTO QUIT;
+
+   TYPE_D:
+   
+   SET @c_orderkey = ''
+   SELECT @c_orderkey = Orderkey
+   FROM #TempPackList81
+   Where Pickslipno = @c_pickslipno
+
+   SELECT DISTINCT OD.Orderkey as Orderkey,
+                   OD.sku as SKU,
+                   S.descr as descr,
+                   OD.OriginalQty as Originalqty 
+                  , QtyPicked = OD.QtyPicked
+                  , UnitPrice = OD.UnitPrice 
+                  ,QtyDiff = ( od.qtypicked - od.originalqty )
+                  ,qtyprice = OD.UnitPrice * ( od.qtypicked - od.originalqty )
+   --FROM #TempPackList81 T81
+   --FULL JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = T81.ORderkey AND OD.sku = T81.sku 
+  FROM ORDERDETAIL OD WITH (nolock)
+  JOIN SKU S WITH (NOLOCK) ON S.storerkey = OD.Storerkey AND S.sku = OD.sku
+  --LEFT OUTER JOIN #TempPackList81 T81 ON OD.OrderKey = T81.ORderkey AND OD.sku = T81.sku 
+   WHERE OD.orderkey = @c_orderkey
+   AND ( od.qtypicked - od.originalqty ) <> 0
+   --AND T81.misspqty = 'Y'
+   Order by OD.Orderkey,OD.sku
+   GOTO QUIT;
+  
 END -- procedure
+QUIT:
 GO
 GRANT EXECUTE ON [dbo].[isp_packing_list_81] TO nSQL 
 GO
