@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */ 
-/* 2020-03-19 1.0  WLChooi    WMS-12551 (Created)                             */         
+/* 2020-03-19 1.0  WLChooi    WMS-12551 (Created)                             */    
+/* 2020-08-06 1.1  WLChooi    WMS-14614 - Modify Col04 Logic (WL01)           */    
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_17]                       
@@ -226,7 +227,13 @@ BEGIN
    	SET @c_condition2 = 'AND ORD.ShipperKey =RTRIM(@c_Sparm3)'
    END      
          
-   SET @c_SQLJOIN = +' SELECT DISTINCT ORD.loadkey,ORD.orderkey,ORD.externorderkey,ORD.type,buyerpo,salesman,ORD.facility,STO.Secondary,'    --8        
+   SET @c_SQLJOIN = +' SELECT DISTINCT ORD.loadkey,ORD.orderkey,ORD.externorderkey, '
+                --WL01 START
+                +N'CASE WHEN ISNULL(CLR.Notes,'''') <> '''' AND ISNULL(ORD.CountryOfOrigin,'''') <> '''' 
+                   THEN SUBSTRING(LTRIM(RTRIM(ISNULL(ORD.CountryOfOrigin,''''))) + SPACE(10) + LTRIM(RTRIM(ISNULL(CLR.Notes,''''))),1,80)
+                   ELSE LTRIM(RTRIM(ISNULL(ORD.Salesman,''''))) + N''发货仓'' END, '
+                --WL01 END
+                +' buyerpo,salesman,ORD.facility,STO.Secondary,'    --8    
                 + CHAR(13) +           
                 +' STO.Company,STO.SUSR1,STO.SUSR2,(STO.Address1+STO.Address2+STO.Address3),ORD.Notes,'''',ORD.Storerkey,STO.State,'  --8         
                 + CHAR(13) +          
@@ -244,7 +251,12 @@ BEGIN
                 +' INNER JOIN STORER STO WITH (NOLOCK) ON STO.STORERKEY = ORD.STORERKEY '
                 +' INNER JOIN PACKHEADER PH WITH (NOLOCK) ON PH.OrderKey = ORD.OrderKey'      
                 +' INNER JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.Pickslipno = PH.Pickslipno'    
-                +' LEFT JOIN ORDERINFO OI WITH (NOLOCK) ON OI.Orderkey = ORD.Orderkey '          
+                +' LEFT JOIN ORDERINFO OI WITH (NOLOCK) ON OI.Orderkey = ORD.Orderkey '  
+                --WL01 START   
+                +' OUTER APPLY (SELECT TOP 1 ISNULL(CL.Notes,'''') AS Notes
+                                FROM CODELKUP CL (NOLOCK) 
+                                WHERE CL.LISTNAME = ''NKSCSCSF'' AND ORD.CountryofOrigin = CL.Code) AS CLR '
+                --WL01 END
                 +' WHERE ORD.LoadKey = @c_Sparm1 AND ORD.DocType = ''E'' '                
               
          
