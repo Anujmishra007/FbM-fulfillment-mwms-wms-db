@@ -35,7 +35,9 @@ GO
 /* 26Sep2011    NJOW01    1.3  225760 - POD add notes                   */
 /* 23Dec2011    NJOW02    1.4  232490 - Add transport mode              */
 /* 18Mar2013    NJOW03    1.5  272816 - Trinity POD enhancements        */
-/* 28-Jan-2019  TLTING_ext 1.6  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.6  enlarge externorderkey field length     */
+/* 07-Sep-2020  WLChooi   1.7  WMS-15063 - Codelkup to remove some      */
+/*                             columns (WL01)                           */
 /************************************************************************/
 CREATE  PROCEDURE isp_pod_01
         @c_mbolkey NVARCHAR(10), 
@@ -78,7 +80,8 @@ BEGIN
     Domain          NVARCHAR(10)  null, --GOH01
     Notes1          NVARCHAR(250) NULL,  --NJOW01
     Transportmode   NVARCHAR(100) NULL,  --NJOW02 
-    SUSR1           NVARCHAR(20) NULL) --NJOW03
+    SUSR1           NVARCHAR(20)  NULL,  --NJOW03
+    RemoveCol       NVARCHAR(10)  NULL)  --WL01
      
    IF ISNULL(@c_storerkey,'') = ''
    BEGIN
@@ -96,7 +99,7 @@ BEGIN
            Type,               EditDate,                 C_Company,                  C_Contact,                
            C_Address,          C_Phone,                  CaseCnt,                    Qty,                      
            TotalCaseCnt,       TotalQty,                 Address,				          Phone,							
-           Fax,					 Contact, 	               leadtime,                   Domain, 					notes1, Transportmode, SUSR1) --GOH01
+           Fax,					 Contact, 	               leadtime,                   Domain,     notes1, Transportmode, SUSR1, RemoveCol) --GOH01   --WL01
          SELECT 
            a.mbolkey,           b.MbolLineNumber,         b.ExternOrderKey,  				b.Orderkey,         
            c.type,                     a.editdate,
@@ -108,10 +111,13 @@ BEGIN
            isnull(f.Short,''), --GOH01
            CONVERT(NVARCHAR(250), g.notes1), --NJOW01
            CONVERT(NVARCHAR(100), h.notes), --NJOW02
-           i.SUSR1 
+           i.SUSR1,
+           ISNULL(CL.Short,'N') AS RemoveCol   --WL01
          FROM MBOL a (nolock) JOIN MBOLDETAIL b (nolock) ON a.mbolkey = b.mbolkey
          JOIN ORDERS c (nolock) ON b.orderkey = c.orderkey
-         LEFT JOIN STORER d (nolock) ON c.storerkey = d.consigneefor AND d.type = '9'
+         LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'REPORTCFG' AND CL.Code = 'RemoveCol' AND CL.Storerkey = c.StorerKey
+                                       AND CL.Long = 'r_dw_pod_01'   --WL01
+         LEFT JOIN STORER d (nolock) ON c.storerkey = d.consigneefor AND d.type = '9' AND d.Facility = CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN c.Facility ELSE d.Facility END   --WL01
          --LEFT JOIN Codelkup e (nolock) ON c.Consigneekey = e.Code and c.Storerkey = e.Long and e.listname ='CityLdTime'
          LEFT JOIN Codelkup e (nolock) ON c.Consigneekey = e.Description AND c.Storerkey = CONVERT(NVARCHAR(15),e.Notes) --NJOW02
                    AND c.IntermodalVehicle = CONVERT(NVARCHAR(15),e.Notes2) and e.listname ='CityLdTime' 
