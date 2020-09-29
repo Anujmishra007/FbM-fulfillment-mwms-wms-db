@@ -39,6 +39,7 @@ GO
 /* 18-Oct-2018 NJOW02   1.3      WMS-6774 stamp labelno to pickdetail by*/
 /*                               id for full case                       */
 /* 22-Feb-2019 NJOW03   1.4      WMS-7945 Enhancements                  */
+/* 15-Sep-2020 NJOW04   1.5      WMS-15237 Enhancements                 */
 /************************************************************************/
 CREATE PROC [dbo].[ispWAVPK03](
     @c_WaveKey       NVARCHAR(20)
@@ -113,6 +114,7 @@ BEGIN
          , @c_ItemGroup1      NVARCHAR(30)
          , @c_ItemGroup2      NVARCHAR(30)
          , @c_ItemGroup3      NVARCHAR(75)
+         , @c_ItemGroup4      NVARCHAR(30) --NJOW04
       
          , @c_MinPickSlipNo   NVARCHAR(10)
          , @c_MaxCaseID       NVARCHAR(20)
@@ -126,6 +128,7 @@ BEGIN
          , @c_ItemGroup1_Prev NVARCHAR(30)   --(Wan03)   
          , @c_ItemGroup2_Prev NVARCHAR(30)   --(Wan03)
          , @c_ItemGroup3_Prev NVARCHAR(75)   --(Wan03)
+         , @c_ItemGroup4_Prev NVARCHAR(30)   --NJOW04
    
    SELECT @b_success = 1 --Preset to success
    SET @n_Debug = 0
@@ -198,7 +201,8 @@ BEGIN
          , Qty             INT            NULL  
          , ItemGroup1      NVARCHAR(30)   NULL  
          , ItemGroup2      NVARCHAR(30)   NULL
-         , ItemGroup3      NVARCHAR(75)   NULL     
+         , ItemGroup3      NVARCHAR(75)   NULL
+         , ItemGroup4      NVARCHAR(30)   NULL  --NJOW04     
          , ItemStyle       NVARCHAR(20)   NULL
          , ItemBUSR1       NVARCHAR(60)   NULL
          , ItemColor       NVARCHAR(10)   NULL
@@ -226,6 +230,7 @@ BEGIN
       ,  ItemGroup1  NVARCHAR(30)   NULL 
       ,  ItemGroup2  NVARCHAR(30)   NULL
       ,  ItemGroup3  NVARCHAR(75)   NULL
+      ,  ItemGroup4  NVARCHAR(30)   NULL --NJOW04
       ,  ID          NVARCHAR(18)   NULL --NJOW02       
       ,  FullCase    NVARCHAR(5)    NULL --NJOW03
    )
@@ -268,16 +273,18 @@ BEGIN
          CartonType     NVARCHAR(10)   NULL,
          ItemGroup1     NVARCHAR(30)   NULL,
          TariffLookup   CHAR(1) DEFAULT ('N'),
-         ID             NVARCHAR(18)   NULL  --NJOW01
+         ID             NVARCHAR(18)   NULL,  --NJOW01
+         B_Country      NVARCHAR(30)   NULL   --NJOW04
    )
    
    INSERT #PickDetail (PickDetailKey, OrderKey, OrderGroup, Route,  BillToKey
                      , SKU, Qty, PackQty, Storerkey, UOM, Sts, DropID, PickSlipNo
-                     , ItemGroup1, TariffLookup, ID)
+                     , ItemGroup1, TariffLookup, ID, B_Country)
    SELECT PD.PickDetailKey, PD.OrderKey, OH.OrderGroup, OH.Route, ISNULL(RTRIM(OH.BillToKey),'')
                      ,PD.Sku, PD.Qty, 0, PD.Storerkey, PD.UOM, '0', PD.DropID, PD.PickSlipNo
                      , '', 'N', 
-                     PD.ID --NJOW01
+                     PD.ID, --NJOW01
+                     OH.B_Country --NJOW04
    FROM WAVE        WH WITH (NOLOCK)      
    JOIN WaveDetail  WD WITH (NOLOCK) ON WH.Wavekey = WD.WaveKey
    JOIN ORDERS      OH WITH (NOLOCK) ON WD.OrderKey= OH.OrderKey
@@ -290,14 +297,16 @@ BEGIN
          , PD.Sku, PD.Qty, 0, PD.Storerkey, PD.UOM, '0', PD.DropID, PD.PickSlipNo
          --, CASE WHEN OH.BillToKey = 'AI008' THEN LA.Lottable01 ELSE '' END
          ,CASE WHEN CLAI008.Code IS NOT NULL THEN LA.Lottable01 ELSE '' END --NJOW03
-         , CASE WHEN OH.OrderGroup ='R_L' OR OH.B_Country = 'TW' THEN 'Y' ELSE 'N' END  -- Change to OR, only R_L
+         , CASE WHEN OH.OrderGroup ='R_L' OR OH.B_Country = 'TW' OR CL2.Code IS NOT NULL THEN 'Y' ELSE 'N' END  -- Change to OR, only R_L  --NJOW04
          , PD.ID --NJOW01
+         , OH.B_Country --NJOW04
    FROM WAVE         WH WITH (NOLOCK)      
    JOIN WaveDetail   WD WITH (NOLOCK) ON WH.Wavekey = WD.WaveKey
    JOIN ORDERS       OH WITH (NOLOCK) ON WD.OrderKey= OH.OrderKey 
    JOIN PickDetail   PD WITH (NOLOCK) ON OH.OrderKey= PD.OrderKey 
    JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON PD.Lot = LA.Lot
    LEFT JOIN CODELKUP CLAI008 WITH (NOLOCK) ON OH.BillToKey = CLAI008.Code AND CLAI008.Listname = 'PVHCONSO' AND CLAI008.Long = '1' --NJOW03
+   LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON OH.BillToKey = CL2.Code AND CL2.ListName = 'PVHCONSO' AND CL2.UDF01 = '1'  --NJOW04                                  
    WHERE WD.WaveKey = @c_WaveKey
    AND   PD.UOM     IN ('6', '7') 
    AND  (PD.CaseID = '' OR PD.CaseID IS NULL)  --NJOW03
@@ -657,6 +666,7 @@ NEXT_CartonType:
          , ItemGroup1
          , ItemGroup2 
          , ItemGroup3 
+         , ItemGroup4  --NJOW04
          , ItemStyle  
          , ItemBUSR1  
          , ItemColor  
@@ -666,11 +676,12 @@ NEXT_CartonType:
          )
    SELECT a.PickDetailKey, a.PickSlipNo, a.Storerkey, a.SKU, a.Qty
          , a.ItemGroup1 
-         , ItemGroup2 = CASE WHEN CL.Code IS NULL THEN 'NON-BRAS' ELSE 'BRAS' END
+         , ItemGroup2 = CASE WHEN CL.Code IS NULL      
+                             THEN 'NON-BRAS' ELSE 'BRAS' END
          , ItemGroup3 = CASE WHEN a.OrderGroup = 'R_L'    
                              OR  (a.OrderGroup = 'R_R' AND a.BillToKey IN ('HKRETAIL', 'MORETAIL')) 
                              --OR   a.BillToKey  = 'AI008'  
-                             OR CLAI008.Code IS NOT NULL  --NJOW03
+                             OR CLAI008.Code IS NOT NULL  --NJOW03                             
                              THEN ISNULL(RTRIM(b.Style),'') 
                                  +ISNULL(RTRIM(b.Busr1),'') 
                                  +ISNULL(RTRIM(b.Color),'')
@@ -678,6 +689,13 @@ NEXT_CartonType:
                                  +ISNULL(RTRIM(b.Measurement),'')
                              ELSE ''
                              END
+         , ItemGroup4 = CASE WHEN a.OrderGroup = 'R_L'    
+                             OR  (a.OrderGroup = 'R_R' AND a.BillToKey IN ('HKRETAIL', 'MORETAIL')) 
+                             --OR   a.BillToKey  = 'AI008'  
+                             OR CLAI008.Code IS NOT NULL  --NJOW03                             
+                             THEN ISNULL(RTRIM(b.Busr9),'') 
+                             ELSE SUBSTRING(b.Busr2,3,2)
+                             END  --NJOW04
          , ItemStyle = b.Style
          , ItemBUSR1 = b.Busr1
          , ItemColor = b.Color
@@ -708,26 +726,27 @@ NEXT_CartonType:
    SET @c_ItemGroup1_Prev = ''                   --(Wan03)
    SET @c_ItemGroup2_Prev = ''                   --(Wan03)
    SET @c_ItemGroup3_Prev = ''                   --(Wan03)
+   SET @c_ItemGroup4_Prev = ''                   --NJOW04
 
    --Start handle UOM in 6, 7
    --Prepare the possible grouping line
    DECLARE CUR_OrderList2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 
       SELECT a.SKU, a.Storerkey, Sum(a.Qty) 'Qty', a.PickSlipNo, a.PickDetailKey
-           , a.ItemGroup1, a.ItemGroup2, a.ItemGroup3, a.BillToKey
+           , a.ItemGroup1, a.ItemGroup2, a.ItemGroup3, a.ItemGroup4, a.BillToKey  --NJOW04
       FROM #PICK_PIECE a (NOLOCK)
       GROUP By a.PickDetailKey, a.PickSlipNo, a.Storerkey, a.SKU
          , a.Qty     
          , a.ItemGroup2, a.ItemGroup3,  a.ItemGroup1
          , a.ItemStyle,  a.ItemBusr1,   a.ItemColor
-         , a.ItemSize,   a.ItemMeasure, a.BillToKey
+         , a.ItemSize,   a.ItemMeasure, a.BillToKey, a.ItemGroup4 --NJOW04
       Order by a.PickSlipNo, a.ItemGroup2
          , a.ItemStyle, a.ItemBusr1, a.ItemColor
-         , a.ItemSize, a.ItemMeasure, a.ItemGroup3, a.ItemGroup1
+         , a.ItemSize, a.ItemMeasure, a.ItemGroup3, a.ItemGroup1, a.ItemGroup4  --NJOW04
               
    OPEN CUR_OrderList2  
    FETCH NEXT FROM CUR_OrderList2 INTO @SKU, @c_StorerKey, @Qty, @c_PickSlipNo, @c_PickDetailKey
-                                     , @c_ItemGroup1, @c_ItemGroup2, @c_ItemGroup3, @c_BillToKey
+                                     , @c_ItemGroup1, @c_ItemGroup2, @c_ItemGroup3, @c_ItemGroup4, @c_BillToKey
       
    WHILE (@@FETCH_STATUS <> -1)     
    BEGIN   
@@ -864,6 +883,7 @@ NEXT_CartonType:
          IF (@c_ItemGroup1 <> @c_ItemGroup1_Prev)
          OR (@c_ItemGroup2 <> @c_ItemGroup2_Prev)
          OR (@c_ItemGroup3 <> @c_ItemGroup3_Prev)
+         OR (@c_ItemGroup4 <> @c_ItemGroup4_Prev) --NJOW04
          BEGIN
             SET @n_TotalSkuQty = 0
             SET @n_TotalSkuCube = 0
@@ -878,6 +898,7 @@ NEXT_CartonType:
             AND   a.ItemGroup1 = @c_ItemGroup1
             AND   a.ItemGroup2 = @c_ItemGroup2
             AND   a.ItemGroup3 = @c_ItemGroup3
+            AND   a.ItemGroup4 = @c_ItemGroup4 --NJOW04
 
             SET @n_TotalSkuCube = @SKUCUBE * @n_TotalSkuQty
             SET @n_SkuCapacityLimit = CASE WHEN @n_PreCTNCapacityTol = 0 THEN 0
@@ -929,7 +950,8 @@ NEXT_CartonType:
          IF EXISTS (SELECT 1 FROM #OpenCarton WHERE Sts = 0 AND CartonType = @c_CartonType 
                     and PickSlipno = @c_PickSlipno 
                     AND ItemGroup1 = @c_ItemGroup1 
-                    AND ItemGroup2 = @c_ItemGroup2)
+                    AND ItemGroup2 = @c_ItemGroup2
+                    AND ItemGroup4 = @c_ItemGroup4)  --NJOW04
                     --AND ItemGroup3 = @c_ItemGroup3) --(Wan02)
          BEGIN
             --SELECT 'Got Open carton, Get The Current Carton Info'
@@ -941,6 +963,7 @@ NEXT_CartonType:
             FROM #OpenCarton 
             WHERE Sts = 0 and CartonType = @c_CartonType and PickSlipno = @c_PickSlipno
             AND ItemGroup1 = @c_ItemGroup1 AND ItemGroup2 = @c_ItemGroup2
+            AND ItemGroup4 = @c_ItemGroup4  --NJOW04
             --AND ItemGroup3 = @c_ItemGroup3          --(Wan02)
          END
          ELSE
@@ -972,8 +995,8 @@ NEXT_CartonType:
             SET @CurrCube = 0
             SET @CurrCount =0 
 
-            INSERT #OpenCarton (OrderKey, CartonNo, CartonType, CartonGroup, CurrWeight, CurrCube, CurrCount, Sts, PickSlipno, ItemGroup1, ItemGroup2, ItemGroup3) 
-            SELECt @c_Orderkey, @CartonNo, @c_CartonType, @c_CartonGroup, @CurrWeight, @CurrCube, @CurrCount, '0', @c_PickSlipno, @c_ItemGroup1, @c_ItemGroup2, @c_ItemGroup3
+            INSERT #OpenCarton (OrderKey, CartonNo, CartonType, CartonGroup, CurrWeight, CurrCube, CurrCount, Sts, PickSlipno, ItemGroup1, ItemGroup2, ItemGroup3, ItemGroup4) 
+            SELECt @c_Orderkey, @CartonNo, @c_CartonType, @c_CartonGroup, @CurrWeight, @CurrCube, @CurrCount, '0', @c_PickSlipno, @c_ItemGroup1, @c_ItemGroup2, @c_ItemGroup3, @c_ItemGroup4 --NJOW04
          END
 
          IF @n_Debug = 4 --and @c_pickslipno = 'P000027436'  and @SKU = '011531534469'
@@ -1066,9 +1089,10 @@ NEXT_CartonType:
       SET @c_ItemGroup1_Prev = @c_ItemGroup1       --(Wan03)
       SET @c_ItemGroup2_Prev = @c_ItemGroup2       --(Wan03)
       SET @c_ItemGroup3_Prev = @c_ItemGroup3       --(Wan03)
+      SET @c_ItemGroup4_Prev = @c_ItemGroup4       --NJOW04
       
       FETCH NEXT FROM CUR_OrderList2 INTO @SKU, @c_StorerKey, @Qty, @c_PickSlipNo, @c_PickDetailKey
-                                        , @c_ItemGroup1, @c_ItemGroup2, @c_ItemGroup3, @c_BillToKey
+                                        , @c_ItemGroup1, @c_ItemGroup2, @c_ItemGroup3, @c_ItemGroup4, @c_BillToKey
 
    END --end of while
    CLOSE CUR_OrderList2
@@ -1253,6 +1277,18 @@ NEXT_CartonType:
          WHERE PICKDETAIL.Id = @c_ID
          AND PICKDETAIL.PickslipNo = @c_PickslipNo
          AND WAVEDETAIL.Wavekey = @c_Wavekey
+      END
+      ELSE
+      BEGIN  --NJOW04
+         UPDATE PICKDETAIL WITH (ROWLOCK)
+         SET PICKDETAIL.CaseId = @cLabelNo,         
+             PICKDETAIL.TrafficCop = NULL
+         FROM PICKDETAIL 
+         JOIN WAVEDETAIL (NOLOCK) ON PICKDETAIL.Orderkey = WAVEDETAIL.Orderkey
+         JOIN #OpenCartonDetail OPD (NOLOCK) ON PICKDETAIL.Pickdetailkey = OPD.Pickdetailkey 
+         WHERE PICKDETAIL.PickslipNo = @c_PickslipNo
+         AND WAVEDETAIL.Wavekey = @c_Wavekey      	 
+         AND OPD.CartonNo = @CartonNo
       END
 
       UPDATE #OpenCartonDetail
