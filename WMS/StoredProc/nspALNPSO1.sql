@@ -29,7 +29,9 @@ GO
 /* 29-Aug-2019  NJOW01  1.0   WMS-9366 add allocation logic for order   */
 /*                            type BQ and HOME                          */
 /* 02-OCT-2019  NJOW02  1.1   WMS-9366 add NESCOFEEB filtering          */
+/* 05-FEB-2020  NJOW03  1.2   WMS-11812 add shelflife filtering(cancel) */
 /* 05-MAR-2020  NJOW04  1.3   WMS-12734 Order not allocate cross PAZONE */
+/* 26-AUG-2020  NJOW05  1.4   WMS-14924 add zone in filtering           */
 /************************************************************************/      
 CREATE  PROC [dbo].[nspALNPSO1]          
    @c_DocumentNo NVARCHAR(10),    
@@ -211,16 +213,24 @@ BEGIN
    ELSE IF @C_OrderType IN('HOME','OOH') 
       SET @c_PAZones = ' AND Loc.Putawayzone IN ( ''PTLB2CZON2'', ''PTLB2BZONE'', ''PTLB2CZONE'') '
    ELSE
-      SET @c_PAZones = ' AND Loc.Putawayzone IN ( ''AIRCON'', ''PTLB2BZONE'', ''PTLB2CZONE'') '
+      SET @c_PAZones = ' AND Loc.Putawayzone IN ( ''AIRCON'', ''PTLB2BZONE'', ''PTLB2CZONE'',''PICK2PLTZ1'') '   --NJOW05
   
-   SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
+   SELECT --@n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1),
+          @n_SkuMinShelfLife = CASE WHEN ISNUMERIC(Sku.Susr2) = 1 THEN CAST(Sku.Susr2 AS INT) ELSE 0 END,  --NJOW03
+          @n_SkuShelfLife = Sku.Shelflife                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     --NJOW03
    FROM Sku (nolock)  
    JOIN Storer (nolock) ON Sku.Storerkey = Storer.Storerkey  
    WHERE Sku.Sku = @c_sku  
    AND Sku.Storerkey = @c_storerkey     
      
-   IF @n_StorerMinShelfLife IS NULL  
+   --IF @n_StorerMinShelfLife IS NULL  
       SELECT @n_StorerMinShelfLife = 0  
+
+   IF @n_SkuMinShelfLife IS NULL  
+      SELECT @n_SkuMinShelfLife = 0  
+
+   IF @n_SkuShelfLife IS NULL  
+      SELECT @n_SkuShelfLife = 0  
   
    SET @c_SQL = N'     
       DECLARE CURSOR_AVAILABLE CURSOR FAST_FORWARD READ_ONLY FOR  
@@ -246,17 +256,22 @@ BEGIN
       CASE WHEN @c_SkuGroup = 'NESMACH' AND @c_Doctype = 'N' THEN ' AND Loc.LocationType = ''RESERVE'' '  
            WHEN @c_SkuGroup = 'NESCOFEE' THEN ' AND Loc.LocationType = ''PICK'' '--'IN (''OTHER'',''CASE'',''PICK'') '             
            ELSE ' AND LOC.LocationType = ''PICK'' ' END +
-      CASE WHEN @C_OrderType = 'BQ' THEN ' AND Loc.Putawayzone IN(''AMZONE'',''AIRCON'') '
-           WHEN @C_OrderType = 'HOME' AND @c_UserDefine02 = 'H3' THEN ' AND Loc.Putawayzone IN(''AMZONE'',''AIRCON'') '
+      CASE WHEN @C_OrderType = 'BQ' THEN ' AND Loc.Putawayzone IN(''AMZONE'',''AIRCON'',''PICK2PLTZ1'') ' --NJOW05
+           WHEN @C_OrderType = 'HOME' AND @c_UserDefine02 = 'H3' THEN ' AND Loc.Putawayzone IN(''AMZONE'',''AIRCON'',''PICK2PLTZ1'') '  --NJOW05
            WHEN @c_SkuGroup = 'NESCOFEE' THEN RTRIM(@c_PAZones) --' AND Loc.Putawayzone IN ( ''AIRCON'', ''PTLB2BZONE'', ''PTLB2CZONE'') '  
            WHEN @c_SkuGroup = 'NESMACH' AND @c_Doctype = 'N' THEN ' AND Loc.Putawayzone = ''VIRTUAL'' '  
-           WHEN @c_SkuGroup = 'NESCOFEEB' THEN ' AND Loc.Putawayzone = ''AIRCON'' '  --NJOW02
+           WHEN @c_SkuGroup = 'NESCOFEEB' THEN ' AND Loc.Putawayzone IN(''AIRCON'',''PICK2PLTZ1'') '  --NJOW02 NJOW05
            ELSE ' AND LOC.Putawayzone = ''AMZONE'' ' END  +
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +  
       CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +  
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +  
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL THEN ' AND LA.Lottable04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +  
-      CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', LA.Lottable04) > GetDate() ' ELSE ' ' END +   
+      ----CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', LA.Lottable04) > GetDate() '
+        --CASE WHEN @n_SkuMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_SkuMinShelfLife AS NVARCHAR(10)) + 
+        --            ', CASE WHEN ISDATE(SUBSTRING(LA.Lottable03,7,4) +  SUBSTRING(LA.Lottable03,4,2) + LEFT(LA.Lottable03,2))=1 THEN CONVERT(DATETIME,SUBSTRING(LA.Lottable03,7,4) +  SUBSTRING(LA.Lottable03,4,2) + LEFT(LA.Lottable03,2)) ELSE GETDATE() END) > GetDate() '--NJOW03
+        --     WHEN @n_SkuShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_SkuShelfLife AS NVARCHAR(10)) + 
+        --            ', CASE WHEN ISDATE(SUBSTRING(LA.Lottable03,7,4) +  SUBSTRING(LA.Lottable03,4,2) + LEFT(LA.Lottable03,2))=1 THEN CONVERT(DATETIME,SUBSTRING(LA.Lottable03,7,4) +  SUBSTRING(LA.Lottable03,4,2) + LEFT(LA.Lottable03,2)) ELSE GETDATE() END) > GetDate() '--NJOW03
+        --     ELSE ' ' END +   
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND LA.Lottable05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +  
       CASE WHEN ISNULL(RTRIM(@c_Lottable06),'') = '' THEN '' ELSE ' AND LA.Lottable06 = @c_Lottable06 ' END +  
       CASE WHEN ISNULL(RTRIM(@c_Lottable07),'') = '' THEN '' ELSE ' AND LA.Lottable07 = @c_Lottable07 ' END +  
