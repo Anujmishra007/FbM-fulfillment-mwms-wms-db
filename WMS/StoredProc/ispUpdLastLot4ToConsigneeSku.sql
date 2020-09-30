@@ -29,6 +29,7 @@ GO
 /* 22-Mar-2017  NJOW02   1.3  WMS-1110 allow all status for LOR           */
 /* 03-Jul-2018  NJOW03   1.4  WMS-4940 allow ENG for any order type       */
 /* 16-Jan-2020  WLChooi  1.5  WMS-11784 Check UDF01 before updating (WL01)*/
+/* 14-Sep-2020  NJOW04   1.6  WMS-15160 use codelkup to filter order type */
 /**************************************************************************/
 CREATE PROCEDURE [dbo].[ispUpdLastLot4ToConsigneeSku]
    @c_Storerkey  NVARCHAR(15)
@@ -48,7 +49,16 @@ BEGIN
            @c_Sku          NVARCHAR(20),
            @c_Consigneekey NVARCHAR(15),
            @dt_lottable04  DATETIME,
-           @c_UDF01        NVARCHAR(10) = ''   --WL01
+           @c_UDF01        NVARCHAR(10) = '',   --WL01
+           @c_Code         NVARCHAR(30)
+   
+   --NJOW04        
+   SELECT TOP 1 @c_Code = Code 
+   FROM CODELKUP (NOLOCK) 
+   WHERE Storerkey = @c_Storerkey 
+   AND Listname = 'UPDCSSKU' 
+   AND Long = 'ispUpdLastLot4ToConsigneeSku'
+   ORDER BY CASE WHEN CHARINDEX('%', Code) > 0 THEN 1 ELSE 2 END, Code
 
    SELECT @n_starttcnt=@@TRANCOUNT, @n_Err=0, @b_Success=1, @c_ErrMsg='', @n_Continue = 1
    BEGIN TRAN
@@ -65,9 +75,11 @@ BEGIN
       JOIN LOTATTRIBUTE AR (NOLOCK) ON AR.Lot = PD.Lot
       WHERE O.Storerkey = @c_Storerkey 
       AND O.Status = '9' 
-      AND O.Type LIKE CASE WHEN @c_Storerkey = 'HHT' THEN 'NORMAL%' 
-                           WHEN @c_Storerkey IN ('LOR','ENG') THEN '%' --NJOW02 NJOW03
-                           ELSE 'Z%' END --NJOW01
+      --AND O.Type LIKE CASE WHEN @c_Storerkey = 'HHT' THEN 'NORMAL%' 
+      --                     WHEN @c_Storerkey IN ('LOR','ENG') THEN '%' --NJOW02 NJOW03
+      --                     ELSE 'Z%' END --NJOW01
+      AND (O.Type IN (SELECT Code FROM CODELKUP (NOLOCK) WHERE Storerkey = @c_Storerkey AND Listname = 'UPDCSSKU' AND Long = 'ispUpdLastLot4ToConsigneeSku') --NJOW04
+          OR O.Type LIKE @c_Code)
       AND LK.Userdefine01 = CASE WHEN @c_Storerkey = 'HHT' THEN 'HHT' ELSE LK.Userdefine01 END  --NJOW01
       AND LK.Userdefine02 = 'CONSIGNEESKU'
       AND O.Editdate > CONVERT( NVARCHAR(8), GETDATE()-1, 112)
