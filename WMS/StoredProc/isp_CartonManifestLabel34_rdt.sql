@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: Normal Packing CTNMNFLBL                                  */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-09-25  WLChooi  1.1   WMS-15214 - Get Descr using ALTSKU (WL01) */
 /************************************************************************/
 CREATE PROC isp_CartonManifestLabel34_rdt
            @c_PickslipNo         NVARCHAR(10)
@@ -229,7 +230,7 @@ BEGIN
          ,OD.Orderkey
          ,AltSku   = ISNULL(RTRIM(OD.AltSku),'')
          ,Sku      = OD.Sku
-         ,SkuDesc  = ISNULL(S.Descr,'')
+         ,SkuDesc  = (SELECT TOP 1 ISNULL(SKU.Descr,'') FROM SKU (NOLOCK) WHERE SKU.StorerKey = OD.Storerkey AND SKU.ALTSKU = ISNULL(RTRIM(OD.AltSku),'')) --ISNULL(S.Descr,'')   --WL01
          ,ODCSQty  = FLOOR(SUM(OD.OriginalQty) / ISNULL(P.OtherUnit1,0))
          ,ODEAQty  = SUM(OD.OriginalQty) % CONVERT(INT, ISNULL(P.OtherUnit1,0))
          ,OOSCSQty = FLOOR(SUM(OD.OutOfStock) / ISNULL(P.OtherUnit1,0))
@@ -243,7 +244,7 @@ BEGIN
          ,  OD.Orderkey
          ,  ISNULL(RTRIM(OD.AltSku),'')
          ,  OD.Sku
-         ,  ISNULL(S.Descr,'')
+         --,  ISNULL(S.Descr,'')   --WL01
          ,  ISNULL(P.OtherUnit1,0)
   
    QUIT:
