@@ -40,6 +40,7 @@ GO
 /*11-JUN-2020  CSCHONG     1.7   WMS-13626 - revised field mapping (CS05)  */    
 /*24-JUL-2020  CSCHONG     1.8   WMS-13626 - fix sorting (CS06)            */   
 /*25-SEP-2020  WLChooi     1.9   WMS-15300 - Show Pick Location only (WL04)*/     
+/*01-Oct-2020  WLChooi     2.0   WMS-15300 - Fix sorting (WL05)            */     
 /***************************************************************************/          
           
 CREATE PROC [dbo].[isp_GetPickSlipOrders96] (@c_loadkey NVARCHAR(10),       
@@ -389,9 +390,9 @@ SUCCESS:
             PUOM3,                            
             'PK' + space(2) + CAST(t3.PICKERNo as nvarchar(8)),
             t1.CASEID,
-            t1.Wavekey                        
+            t1.Wavekey, t1.LocPickZone, t1.LogicalLoc   --WL05   
    --WL04 END     
-   ORDER BY t1.caseid --WL02   --CS06   --WL04
+   ORDER BY t1.caseid, t1.OrderKey, t1.LocPickZone, T1.LogicalLoc --WL02   --CS06   --WL04   --WL05
    --WL01 End      
    
    DROP Table #TEMP_PICK96         
