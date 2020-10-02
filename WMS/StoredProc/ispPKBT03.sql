@@ -33,6 +33,8 @@ GO
 /*25-JUN-2020  WLChooi  1.2   WMS-13052 - Print SKU Label (WL02)        */ 
 /*02-JUL-2020  WLChooi  1.3   WMS-13052 - Print SKU Label to paper      */ 
 /*                            printer (WL03)                            */ 
+/*11-Sep-2020  WLChooi  1.4   WMS-15133 - JITX Print ShipLabel and      */
+/*                            remove PDF printing (WL04)                */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPKBT03]
    @c_printerid  NVARCHAR(50) = '',  
@@ -252,26 +254,51 @@ BEGIN
       
          GOTO QUIT_SP  
       END --WL01 
-   END
-   ELSE IF @c_OrdType = 'VIP'  AND @c_DocType = 'E'
+   END   --WL04 START
+   ELSE IF @c_OrdType = 'VIP'  AND @c_DocType = 'E' AND @c_LabelType = 'SHIPUCCLBLVIP'
    BEGIN
-
+   	EXEC isp_BT_GenBartenderCommand       
+            @cPrinterID = @c_PrinterID
+         ,  @c_LabelType = @c_LabelType
+         ,  @c_userid = @c_UserId
+         ,  @c_Parm01 = @c_Parm01 --pickslipno
+         ,  @c_Parm02 = @c_Parm02 --carton from
+         ,  @c_Parm03 = @c_Parm03 --carton to
+         ,  @c_Parm04 = @c_Parm04 --template code
+         ,  @c_Parm05 = @c_Parm05
+         ,  @c_Parm06 = @c_Parm06
+         ,  @c_Parm07 = @c_Parm07
+         ,  @c_Parm08 = @c_Parm08
+         ,  @c_Parm09 = @c_Parm09
+         ,  @c_Parm10 = @c_Parm10
+         ,  @c_Storerkey = @c_Storerkey
+         ,  @c_NoCopy = @c_NoOfCopy
+         ,  @c_Returnresult = 'N' 
+         ,  @n_err = @n_Err OUTPUT
+         ,  @c_errmsg = @c_ErrMsg OUTPUT     
+                                  
+      IF @n_Err <> 0 
+      BEGIN
+         SET @n_continue = 3
+      END 
+      
+      /*
       SELECT @c_FilePath = Long, 
              @c_PrintFilePath = Notes,
              @c_ReportType = Code2
-   FROM dbo.CODELKUP WITH (NOLOCK)      
-   WHERE LISTNAME = 'PrtbyShipK'      
-   AND   Code = @c_ShipperKey 
+      FROM dbo.CODELKUP WITH (NOLOCK)      
+      WHERE LISTNAME = 'PrtbyShipK'      
+      AND   Code = @c_ShipperKey 
 
 
-     IF ISNULL(@c_FilePath,'') = '' --OR @c_NSQLValue <> '1'
-    BEGIN
-      SELECT @n_continue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60011   
-      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': PDF Image Server Not Yet Setup/Enable In Codelkup Config. (ispPKBT03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+      IF ISNULL(@c_FilePath,'') = '' --OR @c_NSQLValue <> '1'
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60011   
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': PDF Image Server Not Yet Setup/Enable In Codelkup Config. (ispPKBT03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
       END
 
-     IF OBJECT_ID('tempdb..#DirPDFTree') IS NULL
+      IF OBJECT_ID('tempdb..#DirPDFTree') IS NULL
       BEGIN      
          CREATE TABLE #DirPDFTree (
            Id int identity(1,1),
@@ -435,20 +462,21 @@ BEGIN
       -- Call Qcommander 
 
    --  select @c_PrintData '@c_PrintData'
-
-      EXEC isp_QCmd_SendTCPSocketMsg  
-            @cApplication  = 'QCOMMANDER'  
-         ,  @cStorerKey    = @c_StorerKey   
-         ,  @cMessageNum   = @c_JobID  
-         ,  @cData         = @c_PrintData  
-         ,  @cIP           = @c_IPAddress   
-         ,  @cPORT         = @c_PortNo   
-         ,  @cIniFilePath  = @c_IniFilePath   
-         ,  @cDataReceived = @c_DataReceived OUTPUT  
-         ,  @bSuccess      = @b_Success      OUTPUT   
-         ,  @nErr          = @n_err          OUTPUT   
-         ,  @cErrMsg       = @c_ErrMsg       OUTPUT  
-
+      IF @c_errmsg = ''   --WL04 If there is error msg, do not send tcpsocket msg
+      BEGIN
+         EXEC isp_QCmd_SendTCPSocketMsg  
+               @cApplication  = 'QCOMMANDER'  
+            ,  @cStorerKey    = @c_StorerKey   
+            ,  @cMessageNum   = @c_JobID  
+            ,  @cData         = @c_PrintData  
+            ,  @cIP           = @c_IPAddress   
+            ,  @cPORT         = @c_PortNo   
+            ,  @cIniFilePath  = @c_IniFilePath   
+            ,  @cDataReceived = @c_DataReceived OUTPUT  
+            ,  @bSuccess      = @b_Success      OUTPUT   
+            ,  @nErr          = @n_err          OUTPUT   
+            ,  @cErrMsg       = @c_ErrMsg       OUTPUT  
+      END   --WL04
 
       -- select @n_err '@n_err'
   
@@ -499,14 +527,14 @@ BEGIN
    --   GOTO QUIT_SP 
    --END     
       END
-
+      */
    END
-
+   --WL04 END
+   
    SET @b_success = 2
                       
-   QUIT_SP:
-
-      IF OBJECT_ID('tempdb..#DirPDFTree') IS NOT NULL 
+QUIT_SP:
+   IF OBJECT_ID('tempdb..#DirPDFTree') IS NOT NULL 
       DROP TABLE #DirPDFTree
 
   IF @n_continue=3  -- Error Occured - Process And Return
