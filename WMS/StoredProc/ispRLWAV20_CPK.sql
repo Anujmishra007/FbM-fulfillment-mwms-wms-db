@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,12 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-09-25  Wan01    1.1   Fixed to get from Task.LogicaltoLoc due to*/
+/*                            Share UCC. RPF Move UCC->inLoc->RPF.Toloc */
+/*                            RDT Updates inLoc to RPF.Toloc&Pickdetail.loc*/
+/* 2020-09-26  Wan02    1.1   Recalculate CPK.Fromloc = RPF.TologicalLoc*/
+/*                            due to BULK ->IN TRANSIT/InLoc->Final Loc.*/
+/*                            #PICKETAIL_WIP data from ispRLWAV20_PACK  */
 /************************************************************************/
 CREATE PROC ispRLWAV20_CPK
            @c_Wavekey            NVARCHAR(10)
@@ -140,7 +146,7 @@ BEGIN
             , PD.CaseID
             , PD.DropID
             , PD.Lot
-            , ToLoc = CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.ToLoc END
+            , ToLoc = CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.LogicalToLoc END      --(Wan01)
             , PD.PickSlipNo
       FROM WAVEDETAIL WD WITH (NOLOCK)
       JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
@@ -148,7 +154,7 @@ BEGIN
                                  AND PD.Sku = SKU.Sku
       LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON  PD.DropID = TD.CaseID
                                             AND TD.TaskType  = 'RPF'
-                                            AND TD.Sourcetype IN  ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC' )
+                                            AND TD.Sourcetype IN  ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC', 'ispRLWAV20-REPLEN' )--(Wan01)
       LEFT JOIN TASKDETAIL CPK WITH (NOLOCK) ON  PD.CaseID = CPK.CaseID                --2020-09-17
                                             AND CPK.TaskType  = 'CPK'                  --2020-09-17
                                             AND CPK.Sourcetype IN  ( 'ispRLWAV20-CPK' )--2020-09-17
@@ -165,7 +171,7 @@ BEGIN
             ,  PD.CaseID
             ,  PD.DropID
             ,  PD.Lot
-            ,  CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.ToLoc END
+            ,  CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.LogicalToLoc END --(Wan01)
             ,  PD.PickSlipNo
       ORDER BY PD.Orderkey
 
@@ -198,6 +204,23 @@ BEGIN
       JOIN CARTONIZATION CZ WITH (NOLOCK) ON  CZ.CartonizationGroup = ST.CartonGroup
                                           AND CZ.CartonType = PACK.CartonType
    END
+   ELSE
+   BEGIN -- (Wan02) - Recalculate CPK.Fromloc = RPF.TologicalLoc due to BULK -> IN TRANSIT -> Final Loc. 
+      -- Update #PICKDETAIL_WIP Data that inserted FROM ispRLWAV20_PACK
+      UPDATE #PICKDETAIL_WIP 
+         SET ToLoc = TD.LogicalToLoc
+            ,Logicallocation = L.Logicallocation  --PIP.LogicalLoc =>LogicalLoc for PIP.ToLoc
+            ,LocLevel        = L.LocLevel
+      FROM #PICKDETAIL_WIP PIP
+      JOIN PICKDETAIL PD WITH (NOLOCK) ON PIP.PickdetailKey = PD.PickDetailkey
+      JOIN TASKDETAIL TD WITH (NOLOCK) ON  PD.DropID = TD.CaseID
+                                       AND TD.TaskType  = 'RPF'
+                                       AND TD.Sourcetype IN  ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC', 'ispRLWAV20-REPLEN' )
+      JOIN LOC L (NOLOCK) ON TD.LogicalToLoc = L.Loc  -- RPF.LogicalToLoc = RPF.Toloc When Create RPF
+      WHERE PD.UOM IN ( '6', '7' )
+      AND   PD.DropID <> ''
+      AND   PIP.ToLoc <> TD.LogicalToLoc
+   END  -- (Wan01) - Recalculate CPK.Fromloc = RPF.TologicalLoc due to BULK -> IN TRANSIT -> Final Loc
 
    IF @b_debug = 1
    BEGIN

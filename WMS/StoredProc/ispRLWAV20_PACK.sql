@@ -26,6 +26,14 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-09-14  Wan      1.0   FBR Version 3.0                           */
+/* 2020-09-24  Wan01    1.1   Fixed Not to split If qtytopack = 0       */
+/* 2020-09-25  Wan01    1.1   Start Labelline '00001' for each carton   */
+/* 2020-09-26  Wan01    1.1   Fixed to get from Task.LogicaltoLoc due to*/
+/*                            Share UCC. RPF Move UCC->inLoc->RPF.Toloc */
+/*                            RDT Updates inLoc to RPF.Toloc &          */
+/*                            Pickdetail.loc                            */
+/* 2020-10-01  Wan01    1.1   Fixed. Group UOM=2 > Pickdetail line      */
+/*                            Update Pickdetail.Caseid for Dropid       */
 /************************************************************************/
 CREATE PROC ispRLWAV20_PACK
            @c_Wavekey            NVARCHAR(10)
@@ -170,6 +178,91 @@ BEGIN
    END
 
    BEGIN TRAN
+   -- (Wan01) - 2020-10-01 - SPLIT SELECT FOR UOM = '2'
+      INSERT INTO #PICKDETAIL_WIP  
+      (  
+         Wavekey   
+      ,  Loadkey           
+      ,  Orderkey  
+      ,  [Route]
+      ,  ExternOrderkey        
+      ,  Pickdetailkey     
+      ,  Busr7             
+      ,  Storerkey         
+      ,  Sku               
+      ,  UOM
+      ,  UOMQty  
+      ,  Qty  
+      ,  Lot            
+      ,  ToLoc  
+      ,  PickStdCube        
+      ,  PickStdGrossWgt               
+      ,  StdCube        
+      ,  StdGrossWgt 
+      ,  SkuStdCube     
+      ,  CubeTolerance  
+      ,  [Length]   
+      ,  [Width]  
+      ,  [Height] 
+      ,  DropID 
+      )
+      SELECT  WD.Wavekey  
+         , OH.Loadkey  
+         , PD.Orderkey  
+         , OH.[Route]  
+         , OH.ExternOrderkey  
+         , PickDetailKey = MIN (PD.PickDetailKey)  
+         , SKU.Busr7  
+         , PD.Storerkey  
+         , PD.Sku  
+         , PD.UOM  
+         , PD.UOMQty  
+         , Qty = SUM(PD.Qty) 
+         , PD.Lot  
+         , ToLoc = CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.LogicalToLoc END            
+         , PickStdCube = SUM(PD.Qty * SKU.StdCube)   
+         , PickStdWgt  = SUM(PD.Qty * SKU.StdGrossWgt)  
+         , StdCube = SKU.StdCube 
+         , StdWgt  = SKU.StdGrossWgt  
+         , SkuStdCube = SKU.StdCube  
+         , CubeTolerance = CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END    
+         , [Length]= ISNULL(SKU.[Length],0.00)  
+         , Width   = ISNULL(SKU.Width,0.00)    
+         , Height  = ISNULL(SKU.Height,0.00)   
+         , PD.DropID  
+   FROM WAVEDETAIL WD WITH (NOLOCK)  
+   JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey  
+   JOIN ORDERS     OH WITH (NOLOCK) ON PD.Orderkey = OH.Orderkey  
+   JOIN SKU SKU WITH (NOLOCK) ON  PD.Storerkey = SKU.Storerkey  
+                              AND PD.Sku = SKU.Sku  
+   LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON  PD.DropID = TD.CaseID  
+                                         AND TD.TaskType  = 'RPF'  
+                                         AND TD.Sourcetype IN ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC', 'ispRLWAV20-REPLEN' )   
+   WHERE WD.Wavekey = @c_Wavekey
+   AND   PD.UOM = '2'  
+   GROUP BY WD.Wavekey  
+         , OH.Loadkey  
+         , PD.Orderkey  
+         , OH.[Route]  
+         , OH.ExternOrderkey  
+         , SKU.Busr7  
+         , PD.Storerkey  
+         , PD.Sku  
+         , PD.UOM  
+         , PD.UOMQty  
+         , PD.Lot  
+         , CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.LogicalToLoc END           
+         , SKU.StdGrossWgt  
+         , SKU.StdCube  
+         , CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END   
+         , ISNULL(SKU.[Length],0.00)  
+         , ISNULL(SKU.Width,0.00)     
+         , ISNULL(SKU.Height,0.00)    
+         , PD.DropID  
+   ORDER BY PD.Orderkey
+         ,  MIN(PD.PickDetailKey)  
+   --(Wan01) 2020-10-01 - END
+
    INSERT INTO #PICKDETAIL_WIP  
       (  
          Wavekey   
@@ -210,7 +303,7 @@ BEGIN
          , PD.UOMQty
          , PD.Qty
          , PD.Lot
-         , ToLoc = CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.ToLoc END
+         , ToLoc = CASE WHEN TD.TaskDetailKey IS NULL THEN PD.Loc ELSE TD.LogicalToLoc END            --(Wan01)
          , PickStdCube = PD.Qty * (SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube)) --2020-08-27
          , PickStdWgt  = PD.Qty * SKU.StdGrossWgt
          , StdCube = SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube) --2020-08-27
@@ -228,11 +321,11 @@ BEGIN
                               AND PD.Sku = SKU.Sku
    LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON  PD.DropID = TD.CaseID
                                          AND TD.TaskType  = 'RPF'
-                                         AND TD.Sourcetype IN ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC' )
+                                         AND TD.Sourcetype IN ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC', 'ispRLWAV20-REPLEN' )  --(Wan01)
    WHERE WD.Wavekey = @c_WaveKey
-   --AND OH.orderkey IN ('0018126691' ,'0018159854') --'0018126691'
-   AND   PD.UOM IN ('2', '6', '7')
+   AND   PD.UOM IN ('6', '7')             --(Wan01) 2020-10-01
    ORDER BY PD.Orderkey
+
 
    UPDATE #PICKDETAIL_WIP
       SET LocLevel = L.LocLevel
@@ -387,6 +480,7 @@ BEGIN
                PRINT '@c_Sku: ' + @c_Sku
                   + ', @n_StdCube: ' + CAST (@n_StdCube as NVARCHAR)
                   + ', @n_StdGrossWgt: '+ CAST (@n_StdGrossWgt as NVARCHAR)
+                  + ', @n_Qty ' + CAST (@n_Qty AS NVARCHAR) 
             END
    
             IF @b_NewCarton = 0
@@ -499,6 +593,7 @@ BEGIN
                      + ', @n_QtyCubeExceed:' + + CAST (@n_QtyCubeExceed as NVARCHAR)
                      + ', @@n_QtyWgtExceed:' + + CAST (@n_QtyWgtExceed as NVARCHAR)
                      + ', @n_QtyToReduce:' + + CAST (@n_QtyToReduce as NVARCHAR)
+                     + ', @n_Qty ' + CAST (@n_Qty AS NVARCHAR)  
                END
 
                SET @b_NewCarton = 0
@@ -517,7 +612,7 @@ BEGIN
   
             SET @n_Status = 0
             SET @b_SplitPickdetail = 0
-            IF @n_Qty > @n_QtyToPack 
+            IF @n_Qty > @n_QtyToPack AND @n_QtyToPack > 0   --2020-09-24 Wan01
             BEGIN
                SET @b_SplitPickdetail = 1
                INSERT INTO #PICKDETAIL_WIP
@@ -759,6 +854,20 @@ BEGIN
       -------------------------------------------------------
       SET @n_CartonSeqNo_Prev = 0
       SET @CUR_PD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT RowRef = ISNULL(PD.RowRef,0)    -- Wan01 2020-10-01 - START
+            ,P.PickDetailKey
+            ,P.UOM           
+            ,P.DropID        
+            ,Qty = ISNULL(PD.Qty,0)
+            ,CartonSeqNo = ISNULL(PD.CartonSeqNo,0)
+            ,[Status] = ISNULL(PD.[Status],'0')
+      FROM PICKDETAIL P WITH  (NOLOCK) 
+      LEFT OUTER JOIN #PICKDETAIL_WIP PD ON  P.Orderkey = PD.Orderkey
+                                         AND P.DropID   = PD.DropID
+                                         AND P.PickDetailKey = PD.Pickdetailkey
+      WHERE P.Orderkey = @c_Orderkey
+      AND   P.UOM = '2'
+      UNION ALL                              -- Wan01 2020-10-01 - END
       SELECT PD.RowRef
             ,PD.PickDetailKey
             ,PD.UOM           --2020-08-10
@@ -766,14 +875,14 @@ BEGIN
             ,PD.Qty
             ,PD.CartonSeqNo
             ,PD.[Status]
-
       FROM #PICKDETAIL_WIP PD
       WHERE PD.Orderkey = @c_Orderkey
-      AND   PD.UOM IN ('2','6','7')
+      AND   PD.UOM IN ('6','7') -- Wan01 2020-10-01 
       AND   PD.CartonType <> ''
       ORDER BY CartonSeqNo
-            ,  PD.PickDetailKey
-            ,  PD.RowRef
+            ,  PickDetailKey
+            ,  RowRef
+
 
       OPEN @CUR_PD
    
@@ -832,7 +941,7 @@ BEGIN
                GOTO QUIT_SP  
             END  
 
-      	   INSERT INTO PICKDETAIL 
+            INSERT INTO PICKDETAIL 
                   (  PickDetailKey
                   ,  CaseID
                   ,  PickHeaderKey
@@ -935,10 +1044,13 @@ BEGIN
             END 
          END
 
-         Update #PICKDETAIL_WIP
-         SET CaseID = @c_labelNo
-            ,PickSlipNo = @c_PickSlipNo
-         WHERE RowRef = @n_RowRef
+         IF @n_RowRef > 0  -- Wan01 2020-10-01 
+         BEGIN 
+            Update #PICKDETAIL_WIP
+            SET CaseID = @c_labelNo
+               ,PickSlipNo = @c_PickSlipNo
+            WHERE RowRef = @n_RowRef
+         END               -- Wan01 2020-10-01 
 
          SET @n_CartonSeqNo_Prev = @n_CartonSeqNo
          FETCH NEXT FROM @CUR_PD INTO @n_RowRef
@@ -964,7 +1076,7 @@ BEGIN
          SELECT @c_PickSlipNo
                ,CartonNo = PD.CartonSeqNo --+ @n_CartonNo
                ,PD.Caseid
-               ,LabelLine = RIGHT('00000' + CONVERT(NVARCHAR(5), ROW_NUMBER() OVER (ORDER BY PD.CartonSeqNo, PD.Storerkey, PD.Sku)),5)
+               ,LabelLine = RIGHT('00000' + CONVERT(NVARCHAR(5), ROW_NUMBER() OVER (PARTITION BY PD.Caseid ORDER BY PD.CartonSeqNo, PD.Storerkey, PD.Sku)),5)
                ,PD.Storerkey
                ,PD.Sku
                ,Qty = ISNULL(SUM(Qty),0)
@@ -988,7 +1100,7 @@ BEGIN
       SELECT @c_PickSlipNo
             ,CartonNo = PD.CartonSeqNo --+ @n_CartonNo
             ,PD.Caseid
-            ,LabelLine = RIGHT('00000' + CONVERT(NVARCHAR(5), ROW_NUMBER() OVER (ORDER BY PD.CartonSeqNo, PD.Storerkey, PD.Sku)),5)
+            ,LabelLine = RIGHT('00000' + CONVERT(NVARCHAR(5), ROW_NUMBER() OVER (PARTITION BY PD.Caseid ORDER BY PD.CartonSeqNo, PD.Storerkey, PD.Sku)),5)-- 2020-09-25
             ,PD.Storerkey
             ,PD.Sku
             ,Qty = ISNULL(SUM(Qty),0)
