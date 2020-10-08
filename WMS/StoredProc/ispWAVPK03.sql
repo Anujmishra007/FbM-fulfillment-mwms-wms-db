@@ -129,6 +129,9 @@ BEGIN
          , @c_ItemGroup2_Prev NVARCHAR(30)   --(Wan03)
          , @c_ItemGroup3_Prev NVARCHAR(75)   --(Wan03)
          , @c_ItemGroup4_Prev NVARCHAR(30)   --NJOW04
+         , @n_PickQty         INT            --NJOW04
+         , @n_PackQty         INT            --NJOW04
+         , @n_SplitQty        INT            --NJOW04
    
    SELECT @b_success = 1 --Preset to success
    SET @n_Debug = 0
@@ -1280,6 +1283,114 @@ NEXT_CartonType:
       END
       ELSE
       BEGIN  --NJOW04
+      	 DECLARE CUR_PICK CURSOR LOCAL FAST_FORWARD FOR
+      	    SELECT Pickdetailkey, SUM(PackQty)
+      	    FROM #OpenCartonDetail 
+      	    WHERE CartonNo = @CartonNo
+      	    GROUP BY Pickdetailkey
+
+         OPEN CUR_PICK
+         
+         FETCH NEXT FROM CUR_PICK INTO @c_Pickdetailkey, @n_PackQty 
+         
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+         	  SELECT @n_PickQty = Qty
+         	  FROM PICKDETAIL (NOLOCK)
+         	  WHERE Pickdetailkey = @c_Pickdetailkey
+         	  
+         	  IF @n_PackQty >= @n_PickQty
+         	  BEGIN
+         	  	 UPDATE PICKDETAIL WITH (ROWLOCK)
+         	  	 SET CaseId = @cLabelNo,
+         	  	     Trafficcop = NULL
+         	  	 WHERE Pickdetailkey = @c_Pickdetailkey    
+         	  END
+         	  ELSE
+         	  BEGIN
+         	  	 SET @n_SplitQty = @n_PickQty - @n_PackQty
+
+               EXECUTE nspg_GetKey  
+               'PICKDETAILKEY',  
+               10,  
+               @c_newpickdetailkey OUTPUT,  
+               @b_success OUTPUT,  
+               @n_err OUTPUT,  
+               @c_errmsg OUTPUT  
+               
+               IF NOT @b_success = 1  
+               BEGIN  
+                  SELECT @n_continue = 3  
+               END  
+               
+               INSERT PICKDETAIL  
+                      (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                       Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,  
+                       DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                       ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                       WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo   
+                     , TaskDetailKey                                                
+                      )  
+               SELECT @c_newpickdetailkey  
+                    , PICKDETAIL.CaseID                              
+                    , PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                      Storerkey, Sku, AltSku, UOM,  @n_splitqty , @n_splitqty, QtyMoved, Status,  
+                      PICKDETAIL.DropId                                                        
+                    , Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                      ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                      WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo  
+                    , TaskDetailKey                                               
+               FROM PICKDETAIL (NOLOCK)  
+               WHERE PickdetailKey = @c_pickdetailkey           	  	 
+
+               SELECT @n_err = @@ERROR  
+               IF @n_err <> 0  
+               BEGIN  
+                  SELECT @n_continue = 3  
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63332  
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Table Failed. (ispWAVPK03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+               END  
+               
+               INSERT #PickDetail (PickDetailKey, OrderKey, OrderGroup, Route,  BillToKey
+                     , SKU, Qty, PackQty, Storerkey, UOM, Sts, DropID, PickSlipNo
+                     , ItemGroup1, TariffLookup, ID, B_Country)
+               SELECT @c_newpickdetailkey, OrderKey, OrderGroup, Route,  BillToKey
+                     , SKU, @n_SplitQty, 0, Storerkey, UOM, Sts, DropID, PickSlipNo
+                     , ItemGroup1, TariffLookup, ID, B_Country
+               FROM  #PickDetail
+               WHERE Pickdetailkey = @c_Pickdetailkey                           
+
+               UPDATE PICKDETAIL WITH (ROWLOCK)  
+               SET PICKDETAIL.CaseID = @cLabelno  
+                  ,Qty = @n_packqty  
+                  ,UOMQTY = @n_packqty   
+                  ,TrafficCop = NULL  
+               WHERE Pickdetailkey = @c_pickdetailkey  
+               
+               SELECT @n_err = @@ERROR  
+               IF @n_err <> 0  
+               BEGIN  
+                  SELECT @n_continue = 3  
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63333  
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispWAVPK03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+               END  
+               
+               UPDATE #PickDetail
+               SET Qty = @n_PackQty
+               WHERE Pickdetailkey = @c_Pickdetailkey
+                          	  	 
+         	  	 UPDATE #OpenCartonDetail
+         	  	 SET Pickdetailkey  = @c_NewPickdetailkey
+         	  	 WHERE Pickdetailkey = @c_Pickdetailkey
+         	  	 AND CartonNo <> @CartonNo         	  	 
+         	  END
+         	  
+            FETCH NEXT FROM CUR_PICK INTO @c_Pickdetailkey, @n_PackQty 
+         END
+         CLOSE CUR_PICK
+         DEALLOCATE CUR_PICK
+         
+      	 /*         	 
          UPDATE PICKDETAIL WITH (ROWLOCK)
          SET PICKDETAIL.CaseId = @cLabelNo,         
              PICKDETAIL.TrafficCop = NULL
@@ -1289,6 +1400,7 @@ NEXT_CartonType:
          WHERE PICKDETAIL.PickslipNo = @c_PickslipNo
          AND WAVEDETAIL.Wavekey = @c_Wavekey      	 
          AND OPD.CartonNo = @CartonNo
+         */
       END
 
       UPDATE #OpenCartonDetail
@@ -1303,7 +1415,6 @@ NEXT_CartonType:
 
    CLOSE CUR_TempCartonList
    DEALLOCATE CUR_TempCartonList
-
     
    DECLARE @PrevPickSlipno   NVARCHAR(10)
    SET @PrevPickSlipno = ''   
