@@ -51,7 +51,9 @@ GO
 /* 31-MAR-2017  CSCHONG       WMS-1461 revise sorting sequence (CS01)   */
 /* 15-Jun-2017  SPChin        IN00354492 - Add Sorting For Temp Table   */
 /* 22-JAN-2018  Wan03         WMS-3709 - [TW-VF] CR Picking Slip Report */
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
+/* 30-Sep-2020  WLChooi       WMS-15203 - Modify calculate Case, Inner, */
+/*                            EA logic (WL01)                           */
 /************************************************************************/
 
 CREATE PROC dbo.nsp_GetPickSlipOrders06 (@c_loadkey NVARCHAR(10))
@@ -63,59 +65,60 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @c_pickheaderkey  NVARCHAR(10),
-      @n_continue         int,
-      @c_errmsg           NVARCHAR(255),
-      @b_success          int,
-      @n_err              int,
-      @c_sku              NVARCHAR(25),   --(Wan01)
-      @n_qty              int,
-      @c_loc              NVARCHAR(10),
-      @n_cases            int,
-      @n_perpallet        int,
-      @c_storer           NVARCHAR(15),
-      @c_orderkey         NVARCHAR(10),
-      @c_ConsigneeKey     NVARCHAR(15),
-      @c_Company          NVARCHAR(45),
-      @c_Addr1            NVARCHAR(45),
-      @c_Addr2            NVARCHAR(45),
-      @c_Addr3            NVARCHAR(45),
-      @c_PostCode         NVARCHAR(15),
-      @c_Route            NVARCHAR(10),
-      @c_Route_Desc       NVARCHAR(60), -- RouteMaster.Desc
-      @c_TrfRoom          NVARCHAR(5),  -- LoadPlan.TrfRoom
-      @c_Notes1           NVARCHAR(60),
-      @c_Notes2           NVARCHAR(60),
-      @c_SkuDesc          NVARCHAR(60),
-      @n_CaseCnt          int,
-      @n_InnerPack        int,      -- SOS31612 & 31630
-      @n_PalletCnt        int,
-      @c_ReceiptTm        NVARCHAR(20),
-      @c_PrintedFlag      NVARCHAR(1),
-      @c_UOM              NVARCHAR(10),
-      @n_UOM3             int,
-      @c_Lot              NVARCHAR(10),
-      @c_StorerKey        NVARCHAR(15),
-      @c_Zone             NVARCHAR(1),
-      @n_PgGroup          int,
-      @n_TotCases         int,
-      @n_RowNo            int,
-      @c_PrevSKU          NVARCHAR(25),   --(Wan01)
-      @n_SKUCount         int,
-      @c_Carrierkey       NVARCHAR(60),
-      @c_VehicleNo        NVARCHAR(10),
-      @c_firstorderkey    NVARCHAR(10),
-      @c_superorderflag   NVARCHAR(1),
-      @c_firsttime        NVARCHAR(1),
-      @c_logicalloc       NVARCHAR(18),
-      @c_Lottable01       NVARCHAR(10),
-      @d_Lottable04       datetime,
-      @c_labelPrice       NVARCHAR(5),
-      @c_externorderkey   NVARCHAR(50),  --tlting_ext
-      -- SOS59298
-      @c_Facility         NVARCHAR(5),
-      @c_Lottable02       NVARCHAR(18),
-      @c_DeliveryNote     NVARCHAR(10),
-      @d_DeliveryDate     datetime     -- ONG01   
+      @n_continue          int,
+      @c_errmsg            NVARCHAR(255),
+      @b_success           int,
+      @n_err               int,
+      @c_sku               NVARCHAR(25),   --(Wan01)
+      @n_qty               int,
+      @c_loc               NVARCHAR(10),
+      @n_cases             int,
+      @n_perpallet         int,
+      @c_storer            NVARCHAR(15),
+      @c_orderkey          NVARCHAR(10),
+      @c_ConsigneeKey      NVARCHAR(15),
+      @c_Company           NVARCHAR(45),
+      @c_Addr1             NVARCHAR(45),
+      @c_Addr2             NVARCHAR(45),
+      @c_Addr3             NVARCHAR(45),
+      @c_PostCode          NVARCHAR(15),
+      @c_Route             NVARCHAR(10),
+      @c_Route_Desc        NVARCHAR(60), -- RouteMaster.Desc
+      @c_TrfRoom           NVARCHAR(5),  -- LoadPlan.TrfRoom
+      @c_Notes1            NVARCHAR(60),
+      @c_Notes2            NVARCHAR(60),
+      @c_SkuDesc           NVARCHAR(60),
+      @n_CaseCnt           int,
+      @n_InnerPack         int,      -- SOS31612 & 31630
+      @n_PalletCnt         int,
+      @c_ReceiptTm         NVARCHAR(20),
+      @c_PrintedFlag       NVARCHAR(1),
+      @c_UOM               NVARCHAR(10),
+      @n_UOM3              int,
+      @c_Lot               NVARCHAR(10),
+      @c_StorerKey         NVARCHAR(15),
+      @c_Zone              NVARCHAR(1),
+      @n_PgGroup           int,
+      @n_TotCases          int,
+      @n_RowNo             int,
+      @c_PrevSKU           NVARCHAR(25),   --(Wan01)
+      @n_SKUCount          int,
+      @c_Carrierkey        NVARCHAR(60),
+      @c_VehicleNo         NVARCHAR(10),
+      @c_firstorderkey     NVARCHAR(10),
+      @c_superorderflag    NVARCHAR(1),
+      @c_firsttime         NVARCHAR(1),
+      @c_logicalloc        NVARCHAR(18),
+      @c_Lottable01        NVARCHAR(10),
+      @d_Lottable04        datetime,
+      @c_labelPrice        NVARCHAR(5),
+      @c_externorderkey    NVARCHAR(50),  --tlting_ext
+      -- SOS59298          
+      @c_Facility          NVARCHAR(5),
+      @c_Lottable02        NVARCHAR(18),
+      @c_DeliveryNote      NVARCHAR(10),
+      @c_ShowCustomFormula NVARCHAR(10), --WL01
+      @d_DeliveryDate      datetime     -- ONG01   
    
    DECLARE @c_PrevOrderKey     NVARCHAR(10),
       @n_Pallets          int,
@@ -158,52 +161,53 @@ BEGIN
    --(Wan01) - END     
         
    CREATE TABLE #temp_pick
-   (  PickSlipNo       NVARCHAR(10) NULL,
-      LoadKey          NVARCHAR(10),
-      OrderKey         NVARCHAR(10),
-      ConsigneeKey     NVARCHAR(15),
-      Company          NVARCHAR(45),
-      Addr1            NVARCHAR(45),
-      Addr2            NVARCHAR(45),
-      Addr3            NVARCHAR(45),
-      PostCode         NVARCHAR(15),
-      Route            NVARCHAR(10),
-      Route_Desc       NVARCHAR(60), -- RouteMaster.Desc
-      TrfRoom          NVARCHAR(5),  -- LoadPlan.TrfRoom
-      Notes1           NVARCHAR(60),
-      Notes2           NVARCHAR(60),
-      LOC              NVARCHAR(10),
-      SKU              NVARCHAR(25),   --(Wan01)
-      SkuDesc          NVARCHAR(60),
-      Qty              int,
-      TempQty1         int,
-      TempQty2         int,
-      PrintedFlag      NVARCHAR(1),
-      Zone             NVARCHAR(1),
-      PgGroup          int,
-      RowNum           int,
-      Lot              NVARCHAR(10),
-      Carrierkey       NVARCHAR(60),
-      VehicleNo        NVARCHAR(10),
-      Lottable01       NVARCHAR(10),
-      Lottable04       datetime, 
-      LabelPrice       NVARCHAR(5),
-      ExternOrderKey   NVARCHAR(50),  --tlting_ext
-      -- SOS59298
-      Facility         NVARCHAR(5),
-      Lottable02       NVARCHAR(18),
-      DeliveryNote     NVARCHAR(10),
-      DeliveryDate     datetime,
-      SKU2             NVARCHAR(20),
-      Consigneekey2    NVARCHAR(15),
-      WrapSkuDesc      INT             --(Wan02)
-   ,  ShowAltSku       INT             --(Wan03)
-   ,  CustCol01        INT             --(Wan03)
-   ,  CustCol01_Text   NVARCHAR(60)    --(Wan03)
-   ,  CustCol02        INT             --(Wan03)
-   ,  CustCol02_Text   NVARCHAR(60)    --(Wan03)
-   ,  CustCol03        INT             --(Wan03)
-   ,  CustCol03_Text   NVARCHAR(60)    --(Wan03)
+   (  PickSlipNo          NVARCHAR(10) NULL,
+      LoadKey             NVARCHAR(10),
+      OrderKey            NVARCHAR(10),
+      ConsigneeKey        NVARCHAR(15),
+      Company             NVARCHAR(45),
+      Addr1               NVARCHAR(45),
+      Addr2               NVARCHAR(45),
+      Addr3               NVARCHAR(45),
+      PostCode            NVARCHAR(15),
+      Route               NVARCHAR(10),
+      Route_Desc          NVARCHAR(60), -- RouteMaster.Desc
+      TrfRoom             NVARCHAR(5),  -- LoadPlan.TrfRoom
+      Notes1              NVARCHAR(60),
+      Notes2              NVARCHAR(60),
+      LOC                 NVARCHAR(10),
+      SKU                 NVARCHAR(25),   --(Wan01)
+      SkuDesc             NVARCHAR(60),
+      Qty                 int,
+      TempQty1            int,
+      TempQty2            int,
+      PrintedFlag         NVARCHAR(1),
+      Zone                NVARCHAR(1),
+      PgGroup             int,
+      RowNum              int,
+      Lot                 NVARCHAR(10),
+      Carrierkey          NVARCHAR(60),
+      VehicleNo           NVARCHAR(10),
+      Lottable01          NVARCHAR(10),
+      Lottable04          datetime, 
+      LabelPrice          NVARCHAR(5),
+      ExternOrderKey      NVARCHAR(50),  --tlting_ext
+      -- SOS59298         
+      Facility            NVARCHAR(5),
+      Lottable02          NVARCHAR(18),
+      DeliveryNote        NVARCHAR(10),
+      DeliveryDate        datetime,
+      SKU2                NVARCHAR(20),
+      Consigneekey2       NVARCHAR(15),
+      WrapSkuDesc         INT             --(Wan02)
+   ,  ShowAltSku          INT             --(Wan03)
+   ,  CustCol01           INT             --(Wan03)
+   ,  CustCol01_Text      NVARCHAR(60)    --(Wan03)
+   ,  CustCol02           INT             --(Wan03)
+   ,  CustCol02_Text      NVARCHAR(60)    --(Wan03)
+   ,  CustCol03           INT             --(Wan03)
+   ,  CustCol03_Text      NVARCHAR(60)    --(Wan03)
+   ,  ShowCustomFormula   NVARCHAR(10)    --WL01
        )      -- ONG01
        
    SELECT @n_continue = 1 
@@ -478,7 +482,17 @@ BEGIN
          AND   Long = 'r_dw_print_pickorder06'
          AND   ISNULL(Short,'') <> 'N'
          --(Wan02) - END
-
+         
+         --(WL01) - START
+         SET @c_ShowCustomFormula = 'N'
+         SELECT @c_ShowCustomFormula = ISNULL(Short,'N')
+         FROM CODELKUP WITH (NOLOCK) 
+         WHERE ListName = 'REPORTCFG'
+         AND   Code = 'ShowCustomFormula'
+         AND   Storerkey = @c_Storerkey
+         AND   Long = 'r_dw_print_pickorder06'
+         --(WL01) - END
+         
          INSERT INTO #Temp_Pick
             (PickSlipNo,         LoadKey,          OrderKey,         ConsigneeKey,
             Company,             Addr1,            Addr2,            PgGroup,
@@ -495,6 +509,7 @@ BEGIN
           , ShowAltSku,          CustCol01,        CustCol01_Text    --(Wan03)
           , CustCol02,           CustCol02_Text,   CustCol03         --(Wan03)
           , CustCol03_Text                                           --(Wan03)
+          , ShowCustomFormula   --WL01
             )
          VALUES 
             (@c_pickheaderkey,   @c_LoadKey,       @c_OrderKey,     @c_ConsigneeKey,
@@ -515,6 +530,7 @@ BEGIN
           , @n_ShowAltSku,       @n_CustCol01,     @c_CustCol01_Text    --(Wan03)
           , @n_CustCol02,        @c_CustCol02_Text,@n_CustCol03         --(Wan03)
           , @c_CustCol03_Text                                           --(Wan03)
+          , @c_ShowCustomFormula   --WL01
              )
              
          SELECT @c_PrevOrderKey = @c_OrderKey
@@ -688,6 +704,12 @@ BEGIN
          ,  CustCol02_Text             --(Wan03)
          ,  CustCol03                  --(Wan03)
          ,  CustCol03_Text             --(Wan03)
+         ,  CASE WHEN TempQty1 > 0 AND ShowCustomFormula = 'Y' THEN FLOOR(Qty / TempQty1) ELSE 0 END AS CS   --WL01
+         ,  CASE WHEN TempQty2 > 0 AND ShowCustomFormula = 'Y' THEN FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1 ELSE 0 END) ) / TempQty2) ELSE 0 END AS InnerP   --WL01
+         ,  CASE WHEN ShowCustomFormula = 'Y' THEN Qty -   --WL01
+            (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1 ELSE 0 END) -   --WL01
+            (CASE WHEN TempQty2 > 0 THEN FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1 ELSE 0 END) ) / TempQty2) ELSE 0 END * TempQty2) ELSE 0 END AS EA   --WL01
+         ,  ShowCustomFormula   --WL01
      FROM #TEMP_PICK 
      ORDER BY OrderKey, LOC, SKU	--IN00354492 
      DROP Table #TEMP_PICK  
