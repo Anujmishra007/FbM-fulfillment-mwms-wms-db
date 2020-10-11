@@ -41,6 +41,9 @@ GO
 /*                              only update when NoReplenStillGenReplenGroup*/
 /*                              config is enabled.                         */
 /* 31-May-2019  NJOW03    2.5   WMS-8356 Cater for UCC replenishment       */
+/* 13-Dec-2019  NJOW04    2.6   INC0971176 - Fixed last carton not replen  */
+/*                              full case issue                            */
+/* 05-Mar-2020  TLTING02  2.7   Performance tune                           */
 /***************************************************************************/    
 CREATE PROCEDURE [dbo].[isp_GenEOrder_Replenishment]  
    @c_LoadKeyList NVARCHAR(1000),  
@@ -1139,11 +1142,16 @@ BEGIN
       AND   P.UOM IN ('7','6')   
       AND   P.DoReplenish = 'N'
       AND   P.PickDetailKey > @c_PickDetailKey 
-      AND   EXISTS ( SELECT 1 from    PackTask AS PT WITH (NOLOCK)   --tlting
-                        JOIN @tTaskBatchNo AS tbn   ON tbn.TaskBatchNo = PT.TaskBatchNo 
-                        JOIN LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.Orderkey = PT.Orderkey 
-                        JOIN @tloadkey AS lk  ON lk.LoadKey = lpd.LoadKey
-                        WHERE PT.OrderKey = OD.OrderKey   )      
+      AND   EXISTS ( SELECT 1 from  @tTaskBatchNo tbn   --TLTING02  
+                        JOIN PackTask AS PT WITH (NOLOCK) ON tbn.TaskBatchNo = PT.TaskBatchNo   
+                                                         AND PT.OrderKey = OD.OrderKey  
+                        JOIN LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.Orderkey = PT.Orderkey   
+                        JOIN @tloadkey AS lk  ON lk.LoadKey = lpd.LoadKey )  
+      --AND   EXISTS ( SELECT 1 from    PackTask AS PT WITH (NOLOCK)   --tlting
+      --                  JOIN @tTaskBatchNo AS tbn   ON tbn.TaskBatchNo = PT.TaskBatchNo 
+      --                  JOIN LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.Orderkey = PT.Orderkey 
+      --                  JOIN @tloadkey AS lk  ON lk.LoadKey = lpd.LoadKey
+      --                  WHERE PT.OrderKey = OD.OrderKey   )      
       ORDER BY P.PickDetailKey
       IF @@ROWCOUNT = 0 
          BREAK 
@@ -2152,6 +2160,162 @@ BEGIN
                   SET @n_QtyToTake = @n_FullCasePickQty
                ELSE 
                   SET @n_QtyToTake = @n_QtyAvailable  
+
+
+               -- NJOW04 (Start) 
+               SET @c_MoveRefKey = ''  
+                
+               -- If cannot find available Qty with full case, then find missing Qty taken by others
+               IF (@cFastPickLoc = 'Y' AND @n_QtyAvailable < @n_CaseCnt)                           
+               BEGIN                                    
+                   DECLARE @n_QtyLocked INT, @n_QtyLockedToMove INT
+                   SET @n_QtyToTake = @n_QtyAvailable                -- Take all available Qty if last carton is partial 
+                   SET @n_QtyLocked = @n_CaseCnt - @n_QtyAvailable
+                   SET @n_QtyLockedToMove = @n_QtyLocked
+                   
+                   EXECUTE nspg_GetKey  
+                     'ReplMoveRef'  
+                  ,  10  
+                  ,  @c_MoveRefKey        OUTPUT  
+                  ,  @b_Success           OUTPUT   
+                  ,  @n_Err               OUTPUT   
+                  ,  @c_ErrMsg            OUTPUT  
+                  IF @b_Success <> 1   
+                  BEGIN  
+                     SELECT @n_continue = 3  
+                     SELECT @n_err = 78334  
+                     SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': nspg_GetKey Failed! (isp_GenEOrder_Replenishment)'  
+                     GOTO EXIT_SP           
+                  END  
+                  
+                  DECLARE @n_PDQty INT
+                  DECLARE CUR_UPDATE_MOVE_REF CURSOR FAST_FORWARD READ_ONLY FOR  
+                  SELECT P.PickDetailKey, p.Qty
+                  FROM PICKDETAIL AS p WITH (NOLOCK)                    
+                  JOIN Orders O (NOLOCK) ON O.OrderKey = p.OrderKey
+                  WHERE P.[Status] = '0'  
+                  AND   P.UOM IN ('6', '7')
+                  AND   p.Storerkey = @c_StorerKey   
+                  AND   p.Sku = @c_SKU        
+                  AND   p.Loc = @c_FromLOC  
+                  AND   p.Lot = @c_FromLOT
+                  AND   p.ID  = @c_FromID
+                  ORDER BY CASE WHEN ISNULL(O.LoadKey, '') = '' THEN 1 ELSE 2 END, p.Qty, p.AddDate DESC
+                    
+                  OPEN CUR_UPDATE_MOVE_REF  
+                  FETCH NEXT FROM CUR_UPDATE_MOVE_REF INTO @c_PickDetailKey, @n_PDQty
+                  WHILE @@FETCH_STATUS = 0 AND @n_QtyLockedToMove > 0
+                  BEGIN  
+                     IF @n_QtyLockedToMove >= @n_PDQty  
+                     BEGIN  
+                        UPDATE PICKDETAIL WITH (ROWLOCK)  
+                        SET MoveRefKey = @c_MoveRefKey, EditDate = GETDATE(), TrafficCop = NULL    
+                        WHERE PickDetailKey = @c_PickDetailKey  
+                  
+                         IF @@ERROR <> 0   
+                         BEGIN  
+                            SELECT @n_continue = 3  
+                            SELECT @n_err = 78335  
+                            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Update PickDetail Failed! (ispRLWAV16)'  
+                         END   
+                          
+                        SET @n_QtyLockedToMove = @n_QtyLockedToMove - @n_PDQty                                                                        
+                     END  
+                     ELSE  
+                     BEGIN  
+                         SET @c_NewPickDetailKey = ''  
+                                                
+                         EXECUTE dbo.nspg_GetKey    
+                            'PICKDETAILKEY',     
+                            10 ,    
+                            @c_NewPickDetailKey  OUTPUT,    
+                            @b_success        OUTPUT,    
+                            @n_err            OUTPUT,    
+                            @c_errmsg         OUTPUT    
+                           
+                         IF @b_success <> 1    
+                         BEGIN    
+                            SET @n_Err = 78336    
+                            SET @c_ErrMsg = 'Get Pickdetail Key'  
+                            SET @n_Continue = 3  
+                         END   
+                                             
+                         SET @n_SplitQty = @n_PDQty - @n_QtyLockedToMove 
+                  
+                         INSERT INTO PickDetail  
+                         (  
+                             PickDetailKey    ,CaseID           ,PickHeaderKey  
+                            ,OrderKey         ,OrderLineNumber  ,Lot  
+                            ,Storerkey        ,Sku              ,AltSku  
+                            ,UOM              ,UOMQty           ,Qty  
+                            ,QtyMoved         ,STATUS           ,DropID  
+                            ,Loc              ,ID               ,PackKey  
+                            ,UpdateSource     ,CartonGroup      ,CartonType  
+                            ,ToLoc            ,DoReplenish      ,ReplenishZone  
+                            ,DoCartonize      ,PickMethod       ,WaveKey  
+                            ,EffectiveDate    ,TrafficCop       ,ArchiveCop  
+                            ,OptimizeCop      ,ShipFlag         ,PickSlipNo  
+                            )  
+                         SELECT @c_NewPickDetailKey  AS PickDetailKey  
+                               ,CaseID           ,PickHeaderKey    ,OrderKey  
+                               ,OrderLineNumber  ,Lot          ,Storerkey  
+                               ,Sku              ,AltSku           ,UOM
+                               ,UOMQty           ,@n_SplitQty  
+                               ,QtyMoved         ,[STATUS]         ,DropID         
+                               ,Loc             ,ID               ,PackKey        
+                               ,UpdateSource     ,CartonGroup      ,CartonType        
+                               ,@c_PickDetailKey ,DoReplenish      ,ReplenishZone='SplitFrMoveRef'        
+                               ,DoCartonize      ,PickMethod       ,WaveKey        
+                               ,EffectiveDate    ,TrafficCop     ,ArchiveCop        
+                               ,'9'              ,ShipFlag         ,PickSlipNo  
+                         FROM   PICKDETAIL WITH (NOLOCK)  
+                         WHERE  PickDetailKey = @c_PickDetailKey   
+                  
+                         IF @@ERROR <> 0   
+                         BEGIN  
+                            SELECT @n_continue = 3  
+                            SELECT @n_err = 78337  
+                            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': INSERT PickDetail Failed! (ispRLWAV16)'  
+                         END                     
+                                             
+                         UPDATE PICKDETAIL WITH (ROWLOCK)  
+                         SET Qty = @n_QtyLockedToMove, 
+                             MoveRefKey = @c_MoveRefKey,  
+                             TrafficCop = NULL,  
+                             ReplenishZone='Split2MoveRef'  
+                         WHERE PickDetailKey = @c_PickDetailKey  
+                  
+                         IF @@ERROR <> 0   
+                         BEGIN  
+                            SELECT @n_continue = 3  
+                            SELECT @n_err = 78338  
+                            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Update PickDetail Failed! (ispRLWAV16)'  
+                         END   
+                            
+                         SET @n_QtyLockedToMove  = 0                     
+                     END
+                     
+                     IF @@ERROR <> 0   
+                     BEGIN  
+                        SELECT @n_continue = 3  
+                        SELECT @n_err = 78339  
+                        SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Update PickDetail Failed! (isp_GenEOrder_Replenishment)'  
+                        GOTO EXIT_SP           
+                     END     
+                             
+                     FETCH NEXT FROM CUR_UPDATE_MOVE_REF INTO @c_PickDetailKey, @n_PDQty  
+                  END  
+                  CLOSE CUR_UPDATE_MOVE_REF  
+                  DEALLOCATE CUR_UPDATE_MOVE_REF  
+                  
+                  -- Sum @n_QtyToTake with the Qty taken by others  
+                  SET @n_QtyToTake = @n_QtyToTake + (@n_QtyLocked - @n_QtyLockedToMove)
+                  
+                  -- If PickDetail line not found, then reset MoveRefKey 
+                  IF (@n_QtyLocked - @n_QtyLockedToMove) = 0
+                     SET @c_MoveRefKey = ''                  
+               END
+               -- NJOW04 (End)
                
                IF @b_Debug=1
                BEGIN             
@@ -2178,7 +2342,7 @@ BEGIN
                      GOTO EXIT_SP         
                   END
                   
-                  SET @c_MoveRefKey = ''
+                  --SET @c_MoveRefKey = ''
 
                   IF @n_QtyInPickLoc > @n_QtyToTake
                      SET @n_QtyInPickLoc = @n_QtyToTake

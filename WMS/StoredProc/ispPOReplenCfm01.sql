@@ -18,7 +18,7 @@ GO
 /*                                                                      */ 
 /* Called By: ispPostGenEOrderReplenWrapper                             */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-09-09  Wan01    1.1   Performance Tune                          */
 /************************************************************************/
 CREATE PROC ispPOReplenCfm01
            @c_ReplenishmentGroup NVARCHAR(10) 
@@ -46,45 +47,142 @@ BEGIN
 
          , @n_UCC_RowRef         BIGINT    
 
+         , @n_Cnt                INT            = 0   --(Wan01) 
+         , @c_Storerkey          NVARCHAR(15)   = ''  --(Wan01)  
+         , @n_ReplConfirmed      INT   = 0            --(Wan01)
+
          , @cur_UCC              CURSOR
+
+   --(Wan01) - START
+   DECLARE @t_ORDERS TABLE
+      (  Orderkey    NVARCHAR(10) NOT NULL PRIMARY KEY
+      ,  TaskBatchNo NVARCHAR(10) NOT NULL DEFAULT('') )
+   --(Wan01) - END
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
-
-   IF NOT EXISTS (SELECT 1
-                  FROM PACKTASK PT WITH (NOLOCK) 
-                  WHERE PT.ReplenishmentGroup = @c_ReplenishmentGroup
-                  )
-   BEGIN
-      GOTO QUIT_SP
+   
+   --(Wan01) - START
+   SELECT  @c_Storerkey = R.Storerkey
+         , @n_Cnt = 1
+         , @n_ReplConfirmed = ISNULL(SUM(CASE WHEN R.Confirmed = 'Y' THEN 1 ELSE 0 END),0)
+   FROM REPLENISHMENT R (NOLOCK) 
+   WHERE R.ReplenishmentGroup = @c_ReplenishmentGroup
+   --AND   R.Confirmed = 'N'
+   GROUP BY R.Storerkey
+   
+   IF @n_Cnt = 0
+   BEGIN 
+      GOTO QUIT_SP 
    END
 
-   BEGIN TRAN
+   --IF NOT EXISTS (SELECT 1
+   --               FROM PACKTASK PT WITH (NOLOCK) 
+   --               WHERE PT.ReplenishmentGroup = @c_ReplenishmentGroup
+   --               )
+   --BEGIN
+   --   GOTO QUIT_SP
+   --END
 
-   SET @cur_UCC = CURSOR FAST_FORWARD READ_ONLY FOR
-   SELECT UCC.UCC_RowRef  
-   FROM   UCC WITH (NOLOCK)
-   WHERE  UCC.Status < '6'
-   AND    EXISTS( SELECT 1
-                  FROM PICKDETAIL PD WITH (NOLOCK)
-                  JOIN   PACKTASK   PT WITH (NOLOCK) ON (PD.PickSlipNo = PT.TaskBatchNo)
-                                                     AND(PD.Orderkey   = PT.Orderkey)
-                  WHERE  PT.ReplenishmentGroup = @c_ReplenishmentGroup
-                  AND    PD.UOM = '2'
-                  AND    PD.Status < '5'
-                  AND    PD.ShipFlag NOT IN ('P','Y') 
-                  AND    PD.DropID = UCC.UCCNo
-                )
-   UNION
-   SELECT UCC.UCC_RowRef
-   FROM   UCC WITH (NOLOCK)
-   JOIN   REPLENISHMENT RP WITH (NOLOCK) ON (UCC.UserDefined10 = RP.ReplenishmentKey)
-   WHERE  RP.ReplenishmentKey   = @c_ReplenishmentKey
-   AND    RP.ReplenishmentGroup = @c_ReplenishmentGroup
-   AND    UCC.Status < '6'
-   ORDER BY UCC_RowRef
+   SET @n_Cnt = 0
+   IF @n_ReplConfirmed = 1  -- Assume UOM = '2' UCC.Status had been updated to '6' when process the 1st replenishmentkey
+   BEGIN
+      INSERT INTO @t_ORDERS (Orderkey, TaskBatchNo)
+      SELECT DISTINCT PT.Orderkey
+            ,  PT.TaskBatchNo
+      FROM PACKTASK PT WITH (NOLOCK)
+      WHERE PT.ReplenishmentGroup = @c_ReplenishmentGroup
+
+      IF NOT EXISTS (SELECT 1 FROM @t_ORDERS)
+      BEGIN
+         GOTO QUIT_SP
+      END
+   
+      SELECT TOP 1 @n_Cnt = 1 
+      FROM  @t_ORDERS PT
+      JOIN  PICKDETAIL PD WITH (NOLOCK) ON  PD.Orderkey  = PT.Orderkey
+                                        AND PD.PickSlipNo= PT.TaskBatchNo
+      JOIN  UCC           WITH (NOLOCK) ON  UCC.UCCNo = PD.DropID
+      WHERE UCC.Storerkey = @c_Storerkey
+      AND   UCC.[Status] < '6'
+      AND   PD.DropID <> ''
+      AND   PD.UOM    = '2'
+      AND   PD.Status < '5'
+      AND   PD.ShipFlag NOT IN ('P','Y')
+   END 
+   --(Wan01) - END
+   BEGIN TRAN
+   --(Wan01) - START
+   IF @n_Cnt = 1 
+   BEGIN
+      SET @cur_UCC = CURSOR FAST_FORWARD READ_ONLY FOR
+      --SELECT UCC.UCC_RowRef  
+      --FROM   UCC WITH (NOLOCK)
+      --WHERE  UCC.Status < '6'
+      --AND    EXISTS( SELECT 1
+      --               FROM PICKDETAIL PD WITH (NOLOCK)
+      --               JOIN   PACKTASK   PT WITH (NOLOCK) ON (PD.PickSlipNo = PT.TaskBatchNo)
+      --                                                  AND(PD.Orderkey   = PT.Orderkey)
+      --               WHERE  PT.ReplenishmentGroup = @c_ReplenishmentGroup
+      --               AND    PD.UOM = '2'
+      --               AND    PD.Status < '5'
+      --               AND    PD.ShipFlag NOT IN ('P','Y') 
+      --               AND    PD.DropID = UCC.UCCNo
+      --             )
+      SELECT UCC.UCC_RowRef  
+         FROM  @t_ORDERS PT
+         JOIN  PICKDETAIL PD WITH (NOLOCK) ON  PD.Orderkey  = PT.Orderkey
+                                           AND PD.PickSlipNo= PT.TaskBatchNo
+         JOIN  UCC           WITH (NOLOCK) ON  UCC.UCCNo = PD.DropID
+         WHERE UCC.Storerkey = @c_Storerkey
+         AND   UCC.[Status] < '6'
+         AND   PD.DropID <> ''
+         AND   PD.UOM    = '2'
+         AND   PD.Status < '5'
+         AND   PD.ShipFlag NOT IN ('P','Y')
+         GROUP BY UCC.UCC_RowRef
+      UNION
+      SELECT UCC.UCC_RowRef
+      FROM   UCC WITH (NOLOCK)
+      JOIN   REPLENISHMENT RP WITH (NOLOCK) ON (UCC.UserDefined10 = RP.ReplenishmentKey)
+      WHERE  RP.ReplenishmentKey   = @c_ReplenishmentKey
+      AND    RP.ReplenishmentGroup = @c_ReplenishmentGroup
+         --AND    UCC.Status < '6'  
+         AND    UCC.Status = '5'                                           --(Wan01) -- PostGenRepl update UCC status to '5'
+         AND    UCC.Storerkey = @c_Storerkey                               --(Wan01)
+         AND    UCC.UserDefined10 <> '' AND UCC.UserDefined10 IS NOT NULL  --(Wan01)
+         ORDER BY UCC_RowRef
+   END
+   ELSE
+   BEGIN
+      SET @n_Cnt = 0
+      SELECT TOP 1 @n_Cnt = 1 
+      FROM   UCC WITH (NOLOCK)
+      WHERE  UCC.Status = '5'                                           
+      AND    UCC.Storerkey = @c_Storerkey                               
+      AND    UCC.UserDefined10 <> '' AND UCC.UserDefined10 IS NOT NULL 
+
+      IF @n_Cnt = 0
+      BEGIN
+         GOTO QUIT_SP
+      END
+
+      SET @cur_UCC = CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT UCC.UCC_RowRef
+      FROM   UCC WITH (NOLOCK)
+      JOIN   REPLENISHMENT RP WITH (NOLOCK) ON (UCC.UserDefined10 = RP.ReplenishmentKey)
+      WHERE  RP.ReplenishmentKey   = @c_ReplenishmentKey
+      AND    RP.ReplenishmentGroup = @c_ReplenishmentGroup
+      --AND    UCC.Status < '6'  
+      AND    UCC.Status = '5'                                           --(Wan01) -- PostGenRepl update UCC status to '5'
+      AND    UCC.Storerkey = @c_Storerkey                               --(Wan01)
+      AND    UCC.UserDefined10 <> '' AND UCC.UserDefined10 IS NOT NULL  --(Wan01)
+      ORDER BY UCC_RowRef
+   END
+   --(Wan05) - END
+
 
    OPEN @cur_UCC
    

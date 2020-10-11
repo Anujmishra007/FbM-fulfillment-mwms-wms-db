@@ -128,7 +128,7 @@ BEGIN
          --                     ' ' + @c_Condition   -- STATUS = '1'      
 
         SELECT @c_SQLStatement = @c_SQLStatement + ' DECLARE CUR_DELETE_Table CURSOR LOCAL FAST_FORWARD READ_ONLY FOR '  + master.dbo.fnc_GetCharASCII(13)
-        SELECT @c_SQLStatement = @c_SQLStatement + ' SELECT RowRef FROM  ' + RTRIM(LTRIM(@c_TableName)) +  ' ' + @c_Prefix  + ' WITH (NOLOCK) ' 
+        SELECT @c_SQLStatement = @c_SQLStatement + ' SELECT ' + @c_Prefix  + '.RowRef FROM  ' + RTRIM(LTRIM(@c_TableName)) +  ' ' + @c_Prefix  + ' WITH (NOLOCK) ' 
                                                  + ' ' + @c_Condition2 --JOIN
                                                  + ' ' + @c_Condition  --STATUS = '1' 
                                                  + master.dbo.fnc_GetCharASCII(13)

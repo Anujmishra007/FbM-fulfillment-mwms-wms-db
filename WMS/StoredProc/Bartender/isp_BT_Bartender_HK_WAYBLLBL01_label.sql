@@ -16,7 +16,8 @@ GO
 /*                                                                            */               
 /* Date           Rev  Author     Purposes                                    */  
 /* 2019-05-15     1.0  CSCHONG    Created (WMS-8915)                          */   
-/* 2020-05-28     1.1  CSCHONG    WMS-13496 revised field logic (CS01)        */          
+/* 2020-05-28     1.1  CSCHONG    WMS-13496 revised field logic (CS01)        */
+/* 2020-10-05     1.2  CheeMun    INC1315645 - Replace " with '               */          
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_HK_WAYBLLBL01_label]                     
@@ -271,16 +272,23 @@ BEGIN
             
    FETCH NEXT FROM CUR_RowPage INTO @c_getorderkey, @c_sku,@c_getsdescr
    WHILE @@FETCH_STATUS <> -1               
-   BEGIN   
-
-   IF @c_sdesc = ''
-   BEGIN
-      SET @c_sdesc = @c_getsdescr
-   END
-   ELSE
-   BEGIN
-     SET @c_sdesc = @c_sdesc + @c_getsdescr
-   END
+   BEGIN  
+   
+      --INC1315645(START)
+      IF CHARINDEX('"', @c_getsdescr) > 0
+      BEGIN 
+         SET @c_getsdescr = REPLACE(@c_getsdescr, '"','''')
+      END
+      --INC1315645(END)
+      
+      IF @c_sdesc = ''
+      BEGIN
+         SET @c_sdesc = @c_getsdescr
+      END
+      ELSE
+      BEGIN
+         SET @c_sdesc = @c_sdesc + @c_getsdescr
+      END
    
 
    FETCH NEXT FROM CUR_RowPage INTO  @c_getorderkey, @c_sku,@c_getsdescr           

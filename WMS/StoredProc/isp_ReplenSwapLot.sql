@@ -28,7 +28,7 @@ GO
 /*                                                                      */
 /* Called By: Inventory move, copy from nsp_ChangePickDetailByStorer    */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -40,6 +40,7 @@ GO
 /* 20-Oct-2018  NJOW01  1.2   Fix FORCEALLOT checking with orderdetail  */
 /*                            lottable                                  */
 /* 13_DEC-2018  Wan01   1.3   Fixed. Force to get next diff lot         */
+/* 15-SEP-2020  Wan02   1.4   Fixed. PICK_CUR exists issue              */  
 /************************************************************************/
 CREATE PROC [dbo].[isp_ReplenSwapLot]
    @c_LOT            NVARCHAR(10),
@@ -380,11 +381,20 @@ BEGIN
          
             IF @n_FetchStatus = -1
             BEGIN
-               GOTO GET_NEXT_LOT       --(Wan01)
+               --(Wan02) - START  
+               IF CURSOR_STATUS('local','PICK_CUR') = 1    
+                  CLOSE PICK_CUR    
+                       
+               IF CURSOR_STATUS('local','PICK_CUR') = -1    
+                  DEALLOCATE PICK_CUR    
+               --(Wan02) - END 
+               
                IF @b_Debug=1
                BEGIN
             	   PRINT 'No Pick Detail Found!'
                END	
+               
+               GOTO GET_NEXT_LOT       --(Wan01)
             END
          
             WHILE (@n_FetchStatus <> -1)
