@@ -18,7 +18,8 @@ GO
 /* 25-Apr-2018    1.0  CSCHONG    WMS-4647 Created                            */    
 /* 11-JUN-2018    1.1  CSCHONG    WMS-5391 revised field mapping (CS01)       */  
 /* 17-JUL-2018    1.2  CSCHONG    WMS-5610 - add new field (CS02)             */ 
-/* 08-Nov-2018    1.3  CSCHONG    WMS-5610 - reposition field printing (CS03) */         
+/* 08-Nov-2018    1.3  CSCHONG    WMS-5610 - reposition field printing (CS03) */    
+/* 13-AUG-2020    1.4  CSCHONG    WMS-14729 - revised field mapping (CS04)    */     
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_HK_PVHLBL1_label]                     
@@ -150,35 +151,35 @@ BEGIN
     SET @c_condition = ''
     SET @c_billtokey = ''
     SET @c_notes = ''
-	--CS03 start
-	INSERT INTO #Result(Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09,Col10,
-		                     Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
-		                     Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
-		                     Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
-		                     Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
-		                     Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
-		 VALUES('','','','','','','','','','',
-		        @c_Sparm2,'','','','','','','','','',
-		        '','','','','','','','','','',
-		        '','','','','','','','','','',
-		        '','','','','','','','','','', 
-		        '','','','','','','','','','')	
+   --CS03 start
+   INSERT INTO #Result(Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09,Col10,
+                           Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
+                           Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
+                           Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
+                           Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
+                           Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
+       VALUES('','','','','','','','','','',
+              @c_Sparm2,'','','','','','','','','',
+              '','','','','','','','','','',
+              '','','','','','','','','','',
+              '','','','','','','','','','', 
+              '','','','','','','','','','') 
 
     INSERT INTO #Result(Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09,Col10,
-		                     Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
-		                     Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
-		                     Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
-		                     Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
-		                     Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
-	SELECT TOP 1 '',s.style,'',s.color,'', s.size,'','','','',
-		          '',@c_Sparm3,'','','','','','','','',
-		          '','','','','','','','','','',
-			      '','','','','','','','','','',
-				   '','','','','','','','','','', 
-				   '','','','','','','','','',''
-	FROM sku s
-	where s.storerkey = @c_Sparm1 
-	and s.sku=@c_Sparm3
+                           Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,
+                           Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
+                           Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
+                           Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
+                           Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
+   SELECT TOP 1 '',s.style,'',s.color,'', s.size,'','','','',
+                '',@c_Sparm3,'','','','','','','','',
+                '','','','','','','','','','',
+               '','','','','','','','','','',
+               '','','','','','','','','','', 
+               '','','','','','','','','',''
+   FROM sku s
+   where s.storerkey = @c_Sparm1 
+   and s.sku=@c_Sparm3
 
     --CS03 End
 
@@ -201,9 +202,9 @@ BEGIN
     END      
     
   SET @c_SQLJOIN = +'SELECT DISTINCT @c_Sparm4,SKU.Style,SKU.BUSR1,SKU.Color,SKU.Measurement,'
-                   +' SKU.[Size],OD.userdefine08,ISNULL(C1.Short,''''),'                           --CS01
+                   +' SKU.[Size],Right(SKU.class,2) + Right(SKU.Itemclass,3),ISNULL(OD.Userdefine02,''''),'       --CS01  --CS04
                    + ' CASE WHEN orders.B_Country IN (''SG'',''MY'',''CN'',''HK'',''MO'') THEN '
-                   +  ' CONVERT(NVARCHAR(10),CAST(OD.UnitPrice AS Decimal(10,2))) ELSE CONVERT(NVARCHAR(10),CAST(OD.UnitPrice AS Decimal(10,0)))  END,'   --9
+                   +  ' CONVERT(NVARCHAR(10),CAST(OD.tax01 AS Decimal(10,2))) ELSE CONVERT(NVARCHAR(10),CAST(OD.tax01 AS Decimal(10,0)))  END,'   --9 --CS04
                    +' ISNULL(C2.Short,''''),'''','''','''','''','''','        --15
                    +' '''','''','''','''','''','      --20
                   -- +' '''','''','''','''','''','    --25                                                                  
@@ -217,8 +218,8 @@ BEGIN
                    + ' JOIN ORDERDETAIL OD WITH (NOLOCK) ON od.orderkey=PID.orderkey AND od.sku=PID.sku '
                    + ' AND od.OrderLineNumber=PID.OrderLineNumber  '
                    + ' JOIN ORDERS orders WITH (NOLOCK) ON orders.OrderKey=od.OrderKey '
-                   +' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME=''PVHCURR'' ' 
-                   +'                                     AND C1.Storerkey=orders.StorerKey AND C1.Code=orders.B_Country'
+                   --+' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME=''PVHCURR'' '                                                --CS04
+                   --+'                                     AND C1.Storerkey=orders.StorerKey AND C1.Code=orders.B_Country'
                    +' LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME=''PVHPXLBL'' '
                    +'                                     AND C2.Storerkey=orders.StorerKey AND C2.Code=orders.BillToKey '    
                    + ' WHERE PID.StorerKey =  @c_Sparm1 '                                            
@@ -244,9 +245,9 @@ BEGIN
   -- SELECT @c_SQL  '@c_SQL' 
    
    SET @c_ExecArguments = N'  @c_Sparm1         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm2         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm3         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm4         NVARCHAR(80)'  
+                          + ' ,@c_Sparm2         NVARCHAR(80)'  
+                          + ' ,@c_Sparm3         NVARCHAR(80)'  
+                          + ' ,@c_Sparm4         NVARCHAR(80)'  
                          
                                        
    EXEC sp_ExecuteSql     @c_SQL     
@@ -268,135 +269,135 @@ BEGIN
    
    WHILE @n_copy > 1
    BEGIN
-   	INSERT INTO #Result
-   	(
-   		-- ID -- this column value is auto-generated
-   		Col01,
-   		Col02,
-   		Col03,
-   		Col04,
-   		Col05,
-   		Col06,
-   		Col07,
-   		Col08,
-   		Col09,
-   		Col10,
-   		Col11,
-   		Col12,
-   		Col13,
-   		Col14,
-   		Col15,
-   		Col16,
-   		Col17,
-   		Col18,
-   		Col19,
-   		Col20,
-   		Col21,
-   		Col22,
-   		Col23,
-   		Col24,
-   		Col25,
-   		Col26,
-   		Col27,
-   		Col28,
-   		Col29,
-   		Col30,
-   		Col31,
-   		Col32,
-   		Col33,
-   		Col34,
-   		Col35,
-   		Col36,
-   		Col37,
-   		Col38,
-   		Col39,
-   		Col40,
-   		Col41,
-   		Col42,
-   		Col43,
-   		Col44,
-   		Col45,
-   		Col46,
-   		Col47,
-   		Col48,
-   		Col49,
-   		Col50,
-   		Col51,
-   		Col52,
-   		Col53,
-   		Col54,
-   		Col55,
-   		Col56,
-   		Col57,
-   		Col58,
-   		Col59,
-   		Col60
-   	)
-   	SELECT TOP 1 Col01,
-   		Col02,
-   		Col03,
-   		Col04,
-   		Col05,
-   		Col06,
-   		Col07,
-   		Col08,
-   		Col09,
-   		Col10,
-   		Col11,
-   		Col12,
-   		Col13,
-   		Col14,
-   		Col15,
-   		Col16,
-   		Col17,
-   		Col18,
-   		Col19,
-   		Col20,
-   		Col21,
-   		Col22,
-   		Col23,
-   		Col24,
-   		Col25,
-   		Col26,
-   		Col27,
-   		Col28,
-   		Col29,
-   		Col30,
-   		Col31,
-   		Col32,
-   		Col33,
-   		Col34,
-   		Col35,
-   		Col36,
-   		Col37,
-   		Col38,
-   		Col39,
-   		Col40,
-   		Col41,
-   		Col42,
-   		Col43,
-   		Col44,
-   		Col45,
-   		Col46,
-   		Col47,
-   		Col48,
-   		Col49,
-   		Col50,
-   		Col51,
-   		Col52,
-   		Col53,
-   		Col54,
-   		Col55,
-   		Col56,
-   		Col57,
-   		Col58,
-   		Col59,
-   		Col60
-   		FROM #Result AS r
-			where isnull(Col01,'') <> ''
-   	ORDER BY r.ID
-   	
-   	SET @n_copy = @n_copy - 1
+      INSERT INTO #Result
+      (
+         -- ID -- this column value is auto-generated
+         Col01,
+         Col02,
+         Col03,
+         Col04,
+         Col05,
+         Col06,
+         Col07,
+         Col08,
+         Col09,
+         Col10,
+         Col11,
+         Col12,
+         Col13,
+         Col14,
+         Col15,
+         Col16,
+         Col17,
+         Col18,
+         Col19,
+         Col20,
+         Col21,
+         Col22,
+         Col23,
+         Col24,
+         Col25,
+         Col26,
+         Col27,
+         Col28,
+         Col29,
+         Col30,
+         Col31,
+         Col32,
+         Col33,
+         Col34,
+         Col35,
+         Col36,
+         Col37,
+         Col38,
+         Col39,
+         Col40,
+         Col41,
+         Col42,
+         Col43,
+         Col44,
+         Col45,
+         Col46,
+         Col47,
+         Col48,
+         Col49,
+         Col50,
+         Col51,
+         Col52,
+         Col53,
+         Col54,
+         Col55,
+         Col56,
+         Col57,
+         Col58,
+         Col59,
+         Col60
+      )
+      SELECT TOP 1 Col01,
+         Col02,
+         Col03,
+         Col04,
+         Col05,
+         Col06,
+         Col07,
+         Col08,
+         Col09,
+         Col10,
+         Col11,
+         Col12,
+         Col13,
+         Col14,
+         Col15,
+         Col16,
+         Col17,
+         Col18,
+         Col19,
+         Col20,
+         Col21,
+         Col22,
+         Col23,
+         Col24,
+         Col25,
+         Col26,
+         Col27,
+         Col28,
+         Col29,
+         Col30,
+         Col31,
+         Col32,
+         Col33,
+         Col34,
+         Col35,
+         Col36,
+         Col37,
+         Col38,
+         Col39,
+         Col40,
+         Col41,
+         Col42,
+         Col43,
+         Col44,
+         Col45,
+         Col46,
+         Col47,
+         Col48,
+         Col49,
+         Col50,
+         Col51,
+         Col52,
+         Col53,
+         Col54,
+         Col55,
+         Col56,
+         Col57,
+         Col58,
+         Col59,
+         Col60
+         FROM #Result AS r
+         where isnull(Col01,'') <> ''
+      ORDER BY r.ID
+      
+      SET @n_copy = @n_copy - 1
    END
 
 
