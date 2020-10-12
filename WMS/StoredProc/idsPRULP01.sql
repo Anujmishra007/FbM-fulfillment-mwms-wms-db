@@ -6,7 +6,27 @@ GO
 GO
 SET ANSI_NULLS OFF 
 GO
-
+/************************************************************************/  
+/* Stored Procedure: idsPRULP01                                         */  
+/* Creation Date: 04-Jun-2002                                           */  
+/* Copyright: IDS                                                       */  
+/* Written by:                                                          */  
+/*                                                                      */  
+/* Purpose: Pre Allocation Strategy                                     */  
+/*                                                                      */  
+/* Called By: Exceed Allocate Orders                                    */  
+/*                                                                      */  
+/* PVCS Version: 1.3                                                    */  
+/*                                                                      */  
+/* Version: 5.4                                                         */  
+/*                                                                      */  
+/* Data Modifications:                                                  */  
+/*                                                                      */  
+/* Updates:                                                             */  
+/* Date         Author        Purposes                                  */  
+/* 04-Jun-2002            1.0 Initial Version                           */
+/* 31-Mar-2003  Ricky Yee 1.1 Latest Change from IDSPH_CDC              */
+/************************************************************************/  
 CREATE proc idsPRULP01
   	@c_storerkey NVARCHAR(15) ,
   	@c_sku NVARCHAR(20) ,

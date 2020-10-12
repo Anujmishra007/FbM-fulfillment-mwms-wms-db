@@ -8,7 +8,26 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
+/************************************************************************/  
+/* Stored Procedure: idsAL02                                            */  
+/* Creation Date: 19-11-2008                                            */  
+/* Copyright: IDS                                                       */  
+/* Written by: Vanessa                                                  */  
+/*                                                                      */  
+/* Purpose: New Allocation Strategy for GOLD SOS117139                  */  
+/*                                                                      */  
+/* Called By: Exceed Allocate Orders                                    */  
+/*                                                                      */  
+/* PVCS Version: 1.3                                                    */  
+/*                                                                      */  
+/* Version: 5.4                                                         */  
+/*                                                                      */  
+/* Data Modifications:                                                  */  
+/*                                                                      */  
+/* Updates:                                                             */  
+/* Date         Author        Purposes                                  */  
+/* 19-11-2008                 Initial Version                           */
+/************************************************************************/  
 CREATE PROC    idsAL02
  @c_lot NVARCHAR(10) ,
  @c_uom NVARCHAR(10) ,
