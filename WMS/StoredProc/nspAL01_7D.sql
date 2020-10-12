@@ -5,7 +5,28 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
+/************************************************************************/  
+/* Stored Procedure: nspAL01_7D                                         */  
+/* Creation Date:  21-Jul-2008                                          */  
+/* Copyright: IDS                                                       */  
+/* Written by:                                                          */  
+/*                                                                      */  
+/* Purpose: Pre Allocation Strategy                                     */  
+/*                                                                      */  
+/* Called By: Exceed Allocate Orders                                    */  
+/*                                                                      */  
+/* PVCS Version: 1.2                                                    */  
+/*                                                                      */  
+/* Version: 5.4                                                         */  
+/*                                                                      */  
+/* Data Modifications:                                                  */  
+/*                                                                      */  
+/* Updates:                                                             */  
+/* Date         Author        Purposes                                  */  
+/* 21-Jul-2008          1.0   Initial Version                           */
+/* 25-Mar-2009 ang      1.1   SOS131215: Add in Lot.Status <> "Hold"    */
+/* 06-Jul-2012 khlim    1.2   SET ANSI_NULLS OFF                        */     
+/************************************************************************/ 
 CREATE  PROC nspAL01_7D
 @c_lot NVARCHAR(10) ,
 @c_uom NVARCHAR(10) ,
