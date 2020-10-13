@@ -17,7 +17,7 @@ GO
 /*                                                                       */  
 /* Called By: Load                                                       */  
 /*                                                                       */  
-/* GitLab Version: 1.0                                                   */  
+/* GitLab Version: 1.1                                                   */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -25,6 +25,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */  
+/*2020-10-12    WLChooi  1.1  Fix Storerkey (WL01)                       */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[nspLPRTSK11]      
@@ -116,7 +117,7 @@ BEGIN
       FROM  QCmd_TransmitlogConfig WITH (NOLOCK)  
       WHERE TableName  = 'WSPICKVCLOG'  
       AND   [App_Name] = 'WOL_OUT'  
-      AND   StorerKey  = 'ALL' 
+      AND   StorerKey  = @c_Storerkey   --WL01
 
       SET @c_Command = REPLACE(@c_Command, '@c_StorerKey=''ALL''', '@c_StorerKey=''18455''')
       SET @c_OriCommand = @c_Command

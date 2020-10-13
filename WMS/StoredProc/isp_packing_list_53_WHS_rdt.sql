@@ -18,7 +18,7 @@ GO
 /* Called By: r_dw_packing_list_53_WHS_rdt                              */
 /*            copy from r_dw_packing_list_53_rdt                        */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/*2020-10-05   WLChooi  1.1   WMS-15423 - Modify Extended Price Logic   */
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC isp_packing_list_53_WHS_rdt
          @c_PickSlipNo  NVARCHAR(10)
@@ -73,11 +75,11 @@ BEGIN
          , @c_C30             NVARCHAR(30)  
          , @c_C31             NVARCHAR(30)  
          , @c_C32             NVARCHAR(30)
-		 , @c_C46             NVARCHAR(30)
-		 , @c_C47             NVARCHAR(30)
-		 , @c_C48             NVARCHAR(30)
-		 , @c_C49             NVARCHAR(30)
-		 , @c_C50             NVARCHAR(30) 
+         , @c_C46             NVARCHAR(30)
+         , @c_C47             NVARCHAR(30)
+         , @c_C48             NVARCHAR(30)
+         , @c_C49             NVARCHAR(30)
+         , @c_C50             NVARCHAR(30) 
 
    DECLARE @n_MaxLineno       INT = 18
          , @n_MaxRec          INT  
@@ -116,12 +118,12 @@ BEGIN
       ,  Summary           NVARCHAR(30)   NULL 
       ,  TotalQtyShipped   NVARCHAR(18)   NULL
       ,  M_Company         NVARCHAR(45)   NULL 
-	  ,  UDUDF04           NVARCHAR(10)   NULL 
-	  ,  UDUDF05           NVARCHAR(10)   NULL
-	  ,  UnitPrice         FLOAT
-	  ,  ExtendedPrice     FLOAT
-	  ,  TTLExtendedPrice  FLOAT
-	  ,  BuyerPO           NVARCHAR(20)   NULL
+      ,  UDUDF04           NVARCHAR(10)   NULL 
+      ,  UDUDF05           NVARCHAR(10)   NULL
+      ,  UnitPrice         FLOAT
+      ,  ExtendedPrice     FLOAT
+      ,  TTLExtendedPrice  FLOAT
+      ,  BuyerPO           NVARCHAR(20)   NULL
       )  
 
  CREATE TABLE #TMP_INV53WHS_Final
@@ -155,12 +157,12 @@ BEGIN
       ,  TotalQtyShipped   NVARCHAR(18)   NULL
       ,  M_Company         NVARCHAR(45)   NULL 
       ,  RecGroup          INT            NULL
-	  ,  UDUDF04           NVARCHAR(10)   NULL 
-	  ,  UDUDF05           NVARCHAR(10)   NULL
-	  ,  UnitPrice         FLOAT
-	  ,  ExtendedPrice     FLOAT
-	  ,  TTLExtendedPrice  FLOAT
-	  ,  BuyerPO           NVARCHAR(20)   NULL
+      ,  UDUDF04           NVARCHAR(10)   NULL 
+      ,  UDUDF05           NVARCHAR(10)   NULL
+      ,  UnitPrice         FLOAT
+      ,  ExtendedPrice     FLOAT
+      ,  TTLExtendedPrice  FLOAT
+      ,  BuyerPO           NVARCHAR(20)   NULL
       ) 
 
    CREATE TABLE #TMP_ORDERS 
@@ -284,12 +286,12 @@ BEGIN
          ,  Summary        
          ,  TotalQtyShipped
          ,  M_Company 
-		 ,  UDUDF04
-		 ,  UDUDF05
-		 ,  Unitprice
-		 ,  ExtendedPrice
-		 ,  TTLExtendedPrice
-		 ,  BuyerPO
+         ,  UDUDF04
+         ,  UDUDF05
+         ,  Unitprice
+         ,  ExtendedPrice
+         ,  TTLExtendedPrice
+         ,  BuyerPO
          )  
    SELECT  SortBy  = ROW_NUMBER() OVER (ORDER BY LP.Loadkey
                                                 ,OH.Orderkey
@@ -328,17 +330,17 @@ BEGIN
          , Sku    = RTRIM(OD.Sku)
          , Descr  = ISNULL(RTRIM(SKU.Busr4),'') + ' ' + ISNULL(RTRIM(SKU.Descr),'') 
          , OD.UOM
-         , QtyToProcess = CONVERT(NVARCHAR(8),ISNULL(OD.QtyToProcess,0)) + ' ' + OD.UOM
+         , QtyToProcess = CONVERT(NVARCHAR(8),SUM(ISNULL(OD.QtyToProcess,0))) + ' ' + OD.UOM   --WL01
          , QtyShipped   = ISNULL(SUM(OD.QtyToProcess),0) 
          , Summary= ISNULL(RTRIM(SKU.Busr2),'') 
          , TotalQtyShipped = ''
          , M_Company= ISNULL(RTRIM(OH.M_Company),'')  --NJOW01
-		 , UDUDF04 = CASE WHEN ISNUMERIC(OD.userdefine04) = 1 AND CAST(OD.userdefine04 as int) > 0 THEN OD.userdefine04 ELSE '' END 
-		 , UDUDF05 = CASE WHEN ISNUMERIC(OD.userdefine05) = 1 AND CAST(OD.userdefine05 as int) > 0 THEN OD.userdefine05 ELSE '' END 	 
-		 , Unitprice = MAX(OD.UnitPrice)
-		 , ExtendedPrice = MAX(OD.ExtendedPrice)
-		 , TTLExtendedPrice   = 0
-		 , OH.buyerpo
+         , UDUDF04 = CASE WHEN ISNUMERIC(OD.userdefine04) = 1 AND CAST(OD.userdefine04 as int) > 0 THEN OD.userdefine04 ELSE '' END 
+         , UDUDF05 = CASE WHEN ISNUMERIC(OD.userdefine05) = 1 AND CAST(OD.userdefine05 as int) > 0 THEN OD.userdefine05 ELSE '' END 	 
+         , Unitprice = MAX(OD.UnitPrice)
+         , ExtendedPrice = SUM(OD.ExtendedPrice)   --WL01
+         , TTLExtendedPrice   = 0
+         , OH.buyerpo
    FROM #TMP_ORDERS LP
    JOIN ORDERS      OH WITH (NOLOCK) ON (LP.Orderkey = OH.Orderkey)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey)
@@ -370,13 +372,13 @@ BEGIN
          ,  RTRIM(OD.Sku)
          ,  ISNULL(RTRIM(SKU.Busr4),'')
          ,  ISNULL(RTRIM(SKU.Descr),'')
-         ,  CONVERT(NVARCHAR(8),ISNULL(OD.QtyToProcess,0))
+         --,  CONVERT(NVARCHAR(8),ISNULL(OD.QtyToProcess,0))   --WL01
          ,  OD.UOM
          ,  ISNULL(RTRIM(SKU.Busr2),'')
          ,  ISNULL(RTRIM(OH.M_Company),'') --NJOW01
-		 ,  CASE WHEN ISNUMERIC(OD.userdefine04) = 1 AND CAST(OD.userdefine04 as int) > 0 THEN OD.userdefine04 ELSE '' END 
-		 ,  CASE WHEN ISNUMERIC(OD.userdefine05) = 1 AND CAST(OD.userdefine05 as int) > 0 THEN OD.userdefine05 ELSE '' END 
-		 ,  OH.buyerpo
+         ,  CASE WHEN ISNUMERIC(OD.userdefine04) = 1 AND CAST(OD.userdefine04 as int) > 0 THEN OD.userdefine04 ELSE '' END 
+         ,  CASE WHEN ISNUMERIC(OD.userdefine05) = 1 AND CAST(OD.userdefine05 as int) > 0 THEN OD.userdefine05 ELSE '' END 
+         ,  OH.buyerpo
 
    UPDATE INV
       SET Summary = (SELECT TOP 1 TMP.Summary FROM #TMP_INV53WHS TMP WHERE TMP.orderkey = INV.Orderkey) 
@@ -427,12 +429,12 @@ BEGIN
          ,  TotalQtyShipped
          ,  M_Company
          ,  RecGroup
-		 ,  UDUDF04
-		 ,  UDUDF05
-		 ,  Unitprice
-		 ,  ExtendedPrice
-		 ,  TTLExtendedPrice
-		 ,  BuyerPO
+         ,  UDUDF04
+         ,  UDUDF05
+         ,  Unitprice
+         ,  ExtendedPrice
+         ,  TTLExtendedPrice
+         ,  BuyerPO
          )                
       SELECT             
             SortBy         
@@ -464,12 +466,12 @@ BEGIN
          ,  TotalQtyShipped
          ,  M_Company    
          , (Row_Number() OVER (PARTITION BY Loadkey, Orderkey ORDER BY Loadkey, Orderkey Asc)-1)/@n_MaxLineno + 1 AS recgroup 
-		 ,  UDUDF04
-		 ,  UDUDF05
-		 ,  Unitprice
-		 ,  ExtendedPrice 
-		 ,  TTLExtendedPrice 
-		 ,  BuyerPO             
+         ,  UDUDF04
+         ,  UDUDF05
+         ,  Unitprice
+         ,  ExtendedPrice 
+         ,  TTLExtendedPrice 
+         ,  BuyerPO             
       FROM  #TMP_INV53WHS              
       WHERE Loadkey = @c_GetLoadkey                
       AND OrderKey = @c_GetOrderkey                
@@ -513,12 +515,12 @@ BEGIN
          ,  Summary        
          ,  TotalQtyShipped
          ,  M_Company  
-		 ,  UDUDF04
-		 ,  UDUDF05
-		 ,  Unitprice
-		 ,  ExtendedPrice 
-		 ,  TTLExtendedPrice 
-		 ,  BuyerPO
+         ,  UDUDF04
+         ,  UDUDF05
+         ,  Unitprice
+         ,  ExtendedPrice 
+         ,  TTLExtendedPrice 
+         ,  BuyerPO
          )
          SELECT TOP 1            
             SortBy         
@@ -549,12 +551,12 @@ BEGIN
          ,  Summary        
          ,  TotalQtyShipped
          ,  M_Company  
-		 ,  ''
-		 ,  ''
-		 ,  ''
-		 ,  ''
-		 ,  TTLExtendedPrice   
-		 ,  BuyerPO        
+         ,  ''
+         ,  ''
+         ,  ''
+         ,  ''
+         ,  TTLExtendedPrice   
+         ,  BuyerPO        
          FROM #TMP_INV53WHS_Final                 
          WHERE Loadkey = @c_GetLoadkey                
          AND OrderKey = @c_GetOrderkey             
@@ -632,17 +634,17 @@ QUIT_SP:
          ,  Summary        
          ,  TotalQtyShipped 
        --  ,  M_Company
-		 ,  UDUDF04
-		 ,  UDUDF05
-		 ,  Unitprice
-		 ,  ExtendedPrice
-		 ,  TTLExtendedPrice 
-		 ,  C46= @c_C46             
+         ,  UDUDF04
+         ,  UDUDF05
+         ,  Unitprice
+         ,  ExtendedPrice
+         ,  TTLExtendedPrice 
+         ,  C46= @c_C46             
          ,  C47= @c_C47             
          ,  C48= @c_C48             
          ,  C49= @c_C49             
          ,  C50= @c_C50 
-		 ,  BuyerPO	    
+         ,  BuyerPO	    
    FROM #TMP_INV53WHS_Final 
    ORDER BY SortBy, Loadkey, Orderkey, CASE WHEN ISNULL(SKU,'') = '' THEN 1 ELSE 0 END, SKU, SkuDescr 
 

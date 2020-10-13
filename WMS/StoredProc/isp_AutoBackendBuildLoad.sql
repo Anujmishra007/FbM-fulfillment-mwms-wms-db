@@ -7,6 +7,13 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+/************************************************************************/  
+/* Store procedure: isp_AutoBackendBuildLoad                            */  
+/* Copyright      : LFLogistics                                         */  
+/*                                                                      */  
+/* Date         Rev  Author      Purposes                               */  
+/* 14-Nov-2017  1.0  Shong       Initial Version                        */  
+/************************************************************************/  
 CREATE PROC [dbo].[isp_AutoBackendBuildLoad] ( 
      @bSuccess      INT = 1            OUTPUT
    , @nErr          INT = ''           OUTPUT
