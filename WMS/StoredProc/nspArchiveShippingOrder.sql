@@ -7,63 +7,69 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Proc : nspArchiveShippingOrder                                */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: THIS ARCHIVE SCRIPT WILL PURGE THE FOLLOWING TABLES:        */
-/*          Orders, OrderDetail, PickDetail, LOADPLAN, LOADPLANDETAIL,  */
-/*          MBOL, MBOLDetail, PICKINGINFO, PICKHEADER, REFKEYLOOKUP     */
-/*          OrderDetailRef, OrderInfo                                   */
-/*                                                                      */
-/* Input Parameters: NONE                                               */
-/*                                                                      */
-/* OUTPUT Parameters: NONE                                              */
-/*                                                                      */
-/* Return Status: NONE                                                  */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.1                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 15-Aug-2005  Shong         Add nolock when building the insert       */
-/*                            statement.                                */
-/* 2005-Nov-28  Shong         Change COMMIT transaction strategy to row */
-/*                            Level to Reduce Blocking.                 */
-/* 2005-Dec-9   Shong         Delete live records when sucessfully      */
-/*                            inserted into Archive DB                  */
-/*                            AND Calling Archive Pack                  */
-/* 13-APR-2006  June          Add refkeylookup table                    */
-/* 22-SEP-2008  Leong         SOS#116967 - Add Orders.SOStatus check    */
-/*                            AND pass in @d_result to sub scripts      */
-/*                            isp_ArchiveLoad & isp_ArchivePickList     */
-/* 12-FEB-2009  Leong         SOS#128677 - Filter Orders.SOStatus = '9' */
-/*                            AND Orders.Status <> '9'(for ConfigKey    */
-/*                            'WTS-ITF' is turn on)                     */
-/* 04-MAY-2010  Leong         SOS#171555 - Bug Fix                      */
-/* 22-JUL-2011  KHLim01       SOS#216562 - convert date format(yyyymmdd)*/
-/* 05-Mar-2012  TLTING        Pack Archive fail. Merge pack archive to  */
-/*                            Archive Pick script                       */
-/* 25-JUL-2013  KHLim         SOS#284236 - check PICKDETAIL.Status(KH02)*/
-/* 07-Feb-2014  TLTING        Archive OrderDetailRef                    */
-/* 07-Feb-2014  TLTING        Archive OrderInfo                         */
-/* 15-Apr-2014  TLTING        SQL2012 Bug fix                           */
-/* 21-Aug-2014  TLTING        remove Orders.Type filtering              */
-/* 20-Jul-2015  TLTING        Delete Preallocatepickdetail              */
-/* 02-Aug-2018  TLTING        Archive Caretontrack                      */
-/************************************************************************/
+
+
+/***************************************************************************************************/
+/* Stored Proc : nspArchiveShippingOrder                                                           */
+/* Creation Date:                                                                                  */
+/* Copyright: IDS                                                                                  */
+/* Written by:                                                                                     */
+/*                                                                                                 */
+/* Purpose: THIS ARCHIVE SCRIPT WILL PURGE THE FOLLOWING TABLES:                                   */
+/*          Orders, OrderDetail, PickDetail, LOADPLAN, LOADPLANDETAIL,                             */
+/*          MBOL, MBOLDetail, PICKINGINFO, PICKHEADER, REFKEYLOOKUP                                */
+/*          OrderDetailRef, OrderInfo                                                              */
+/*                                                                                                 */
+/* Input Parameters: NONE                                                                          */
+/*                                                                                                 */
+/* OUTPUT Parameters: NONE                                                                         */
+/*                                                                                                 */
+/* Return Status: NONE                                                                             */
+/*                                                                                                 */
+/* Usage:                                                                                          */
+/*                                                                                                 */
+/* Local Variables:                                                                                */
+/*                                                                                                 */
+/* Called By:                                                                                      */
+/*                                                                                                 */
+/* PVCS Version: 1.1                                                                               */
+/*                                                                                                 */
+/* Version: 5.4                                                                                    */
+/*                                                                                                 */
+/* Data Modifications:                                                                             */
+/*                                                                                                 */
+/* Updates:                                                                                        */
+/* Date         Author        Purposes                                                             */
+/* 15-Aug-2005  Shong         Add nolock when building the insert                                  */
+/*                            statement.                                                           */
+/* 2005-Nov-28  Shong         Change COMMIT transaction strategy to row                            */
+/*                            Level to Reduce Blocking.                                            */
+/* 2005-Dec-9   Shong         Delete live records when sucessfully                                 */
+/*                            inserted into Archive DB                                             */
+/*                            AND Calling Archive Pack                                             */
+/* 13-APR-2006  June          Add refkeylookup table                                               */
+/* 22-SEP-2008  Leong         SOS#116967 - Add Orders.SOStatus check                               */
+/*                            AND pass in @d_result to sub scripts                                 */
+/*                            isp_ArchiveLoad & isp_ArchivePickList                                */
+/* 12-FEB-2009  Leong         SOS#128677 - Filter Orders.SOStatus = '9'                            */
+/*                            AND Orders.Status <> '9'(for ConfigKey                               */
+/*                            'WTS-ITF' is turn on)                                                */
+/* 04-MAY-2010  Leong         SOS#171555 - Bug Fix                                                 */
+/* 22-JUL-2011  KHLim01       SOS#216562 - convert date format(yyyymmdd)                           */
+/* 05-Mar-2012  TLTING        Pack Archive fail. Merge pack archive to                             */
+/*                            Archive Pick script                                                  */
+/* 25-JUL-2013  KHLim         SOS#284236 - check PICKDETAIL.Status(KH02)                           */
+/* 07-Feb-2014  TLTING        Archive OrderDetailRef                                               */
+/* 07-Feb-2014  TLTING        Archive OrderInfo                                                    */
+/* 15-Apr-2014  TLTING        SQL2012 Bug fix                                                      */
+/* 21-Aug-2014  TLTING        remove Orders.Type filtering                                         */
+/* 20-Jul-2015  TLTING        Delete Preallocatepickdetail                                         */
+/* 02-Aug-2018  TLTING        Archive Caretontrack                                                 */
+/* 22-Apr-2020  kocy          Change Archive CartonTrack not during Orders archive task,           */
+/*                            but when POD archive https://jiralfl.atlassian.net/browse/WMS-12986  */
+/* 12-Oct-2020  TLTING01      Archive Orders_PI_Encrypted                                          */
+/*                                                                                                 */
+/***************************************************************************************************/
 
 CREATE PROC [dbo].[nspArchiveShippingOrder]
       @c_archivekey   NVARCHAR(10)
@@ -137,8 +143,6 @@ BEGIN -- main
          , @cOrderLineNumber              NVARCHAR(5)
          , @cMBOLKey                      NVARCHAR(10)
          , @cLoadKey                      NVARCHAR(10)
-         , @cWaveKey                      NVARCHAR(10)
-         , @cPrevMBOLKey                  NVARCHAR(10)
          , @cPrevLoadKey                  NVARCHAR(10)
          , @cPrevWaveKey                  NVARCHAR(10)
          , @cPickDetailKey                NVARCHAR(10)
@@ -146,12 +150,17 @@ BEGIN -- main
          , @cWaveDetailKey                NVARCHAR(10)
          , @cLoadLineNumber               NVARCHAR(5)
 
+  DECLARE  @n_DelayArchiveCT_Exist        INT = 0        --kocy01    
+         , @c_StorerKey                   NVARCHAR(15) =''  --kocy01
+         , @c_PrevStorerKey               NVARCHAR(15) =''  --kocy01
 
    SELECT @n_starttcnt=@@trancount , @n_continue=1, @b_success=0, @n_err=0, @c_errmsg='',
           @b_debug = 0, @local_n_err = 0, @local_c_errmsg = ' '
 
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN -- 3
+     
+
       SELECT @c_copyfrom_db             = livedatabasename,
              @c_copyto_db               = archivedatabasename,
              @n_retain_days             = shipnumberofdaystoretain,
@@ -615,10 +624,6 @@ BEGIN -- main
       SET @n_archive_ship_detail_records = 0
       SET @n_archive_pick_detail_records = 0
 
-      SET @cWaveKey = ''
-      SET @cPrevWaveKey = ''
-
-
       DECLARE @nStartTranCount int
       SET @nStartTranCount = @@TRANCOUNT
 
@@ -627,16 +632,45 @@ BEGIN -- main
 
       EXEC (
       ' DECLARE C_Orderkey CURSOR FAST_FORWARD READ_ONLY FOR ' +
-      ' SELECT OrderKey, UserDefine09 AS Wavekey FROM Orders (NOLOCK) ' + @c_WhereClause +
-      ' ORDER BY UserDefine09, OrderKey ' )
-
+      ' SELECT OrderKey, StorerKey FROM Orders (NOLOCK) ' + @c_WhereClause +  --kocy01 add StorerKey
+      ' ORDER BY StorerKey, OrderKey ' )
 
       OPEN C_Orderkey
 
-      FETCH NEXT FROM C_Orderkey INTO @cOrderKey, @cWaveKey
+      FETCH NEXT FROM C_Orderkey INTO @cOrderKey,  @c_StorerKey    -- kocy01 add @cStorerKey
 
       WHILE @@fetch_status <> -1
       BEGIN
+ 
+         IF(@n_continue= 1 OR @n_continue =2)                
+         BEGIN           
+            IF @c_StorerKey <> @c_PrevStorerKey
+            BEGIN  
+               SET @c_PrevStorerKey = @c_StorerKey 
+               SELECT @n_DelayArchiveCT_Exist = 0
+               SELECT @b_success = 1
+               EXECUTE nspGetRight   
+                  NULL,          -- facility  
+                  @c_StorerKey, -- StorerKey  
+                  NULL,          -- Sku  
+                  'DelayArchiveCT', -- Configkey for CartonTrack delay archive 
+                  @b_Success OUTPUT,   
+                  @n_DelayArchiveCT_Exist OUTPUT,     -- this is return result
+                  @n_err OUTPUT,  
+                  @c_errmsg OUTPUT
+    
+               IF (@n_err <> 0)
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = N' FAIL Retrieved.  ConfigKey ''DelayArchive'' for storerkey ''' +@c_StorerKey
+                                    +'''.  Refer StorerConfig Table'
+               END   
+               IF (@b_debug=1)
+               BEGIN
+                  PRINT 'Storerkey...' + @c_StorerKey + ' , DelayArchiveCT -' + Cast(@n_DelayArchiveCT_Exist as nvarchar)
+               END
+            END--END @c_StorerKey <> @c_PrevStorerKey 
+         END  
 
          DECLARE C_OrderLine CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT MBOLKey, LoadKey, OrderLineNumber
@@ -808,6 +842,32 @@ BEGIN -- main
          CLOSE C_OrderLine
          DEALLOCATE C_OrderLine
 
+         -- TLTING01
+         IF EXISTS (SELECT 1 FROM Orders_PI_Encrypted WITH (NOLOCK) WHERE OrderKey = @cOrderKey )
+         BEGIN
+            BEGIN TRAN
+
+            UPDATE Orders_PI_Encrypted WITH (ROWLOCK)
+               SET ArchiveCop = '9'
+            WHERE OrderKey = @cOrderKey
+
+            SELECT @local_n_err = @@error, @n_cnt = @@rowcount
+            IF @local_n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @local_n_err = 77303
+               SELECT @local_c_errmsg = convert(char(5),@local_n_err)
+               SELECT @local_c_errmsg =
+               ': UPDATE of archivecop failed - Orders. (Orders_PI_Encrypted) ' + ' ( ' +
+               ' sqlsvr message = ' + Trim(@local_c_errmsg) + ')'
+               ROLLBACK TRAN
+            END
+            ELSE
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+
          BEGIN TRAN
 
          UPDATE Orders WITH (ROWLOCK)
@@ -854,33 +914,36 @@ BEGIN -- main
             COMMIT TRAN
          END
 
-         IF EXISTS ( Select 1 from CartonTrack (NOLOCK) WHERE  archivecop IS NULL AND    LabelNo<>''
-                     AND    LabelNo = @cOrderKey   )
-         BEGIN                     
-            UPDATE CartonTrack WITH (ROWLOCK) -- (KHLim01)
-            SET    CartonTrack.archivecop = '9'
-            WHERE  archivecop IS NULL
-            AND    LabelNo<>''
-            AND    LabelNo = @cOrderKey
-                   
-            SELECT @local_n_err = @@error
-                  ,@n_cnt = @@rowcount
-                   
-            SELECT @n_archive_carton_track_records = @n_archive_carton_track_records + @n_cnt 
-                   
-            IF @local_n_err<>0
-            BEGIN
-               SELECT @n_continue = 3 
-               SELECT @local_n_err = 77307 
-               SELECT @local_c_errmsg = CONVERT(CHAR(5) ,@local_n_err) 
-               SELECT @local_c_errmsg = 
-                     ': update of archivecop failed - CartonTrack. (nspArchiveShippingOrder) ' 
-                     +' ( '+
-                     ' sqlsvr message = '+LTRIM(RTRIM(@local_c_errmsg))+
-                     ')'
+         IF @n_DelayArchiveCT_Exist <> 1   -- kocy01  
+         BEGIN
+            IF EXISTS ( Select 1 from CartonTrack (NOLOCK) WHERE  archivecop IS NULL AND    LabelNo<>''
+                        AND    LabelNo = @cOrderKey   )    
+            BEGIN                     
+               UPDATE CartonTrack WITH (ROWLOCK) -- (KHLim01)
+               SET    CartonTrack.archivecop = '9'
+               WHERE  archivecop IS NULL
+               AND    LabelNo<>''
+               AND    LabelNo = @cOrderKey
+                      
+               SELECT @local_n_err = @@error
+                     ,@n_cnt = @@rowcount
+                      
+               SELECT @n_archive_carton_track_records = @n_archive_carton_track_records + @n_cnt 
+                      
+               IF @local_n_err<>0
+               BEGIN
+                  SELECT @n_continue = 3 
+                  SELECT @local_n_err = 77307 
+                  SELECT @local_c_errmsg = CONVERT(CHAR(5) ,@local_n_err) 
+                  SELECT @local_c_errmsg = 
+                        ': update of archivecop failed - CartonTrack. (nspArchiveShippingOrder) ' 
+                        +' ( '+
+                        ' sqlsvr message = '+LTRIM(RTRIM(@local_c_errmsg))+
+                        ')'
+               END 
             END 
-         END
-
+         END-- END @n_DelayArchiveCT_Exist = '1'  
+           
          IF @n_continue = 3
          BEGIN
             IF @@TRANCOUNT > 0
@@ -893,7 +956,7 @@ BEGIN -- main
                COMMIT TRAN
             END
          END
-         FETCH NEXT FROM C_Orderkey INTO @cOrderKey, @cWaveKey
+         FETCH NEXT FROM C_Orderkey INTO @cOrderKey, @c_StorerKey     -- kocy01 add @cStorerKey
       END -- while OrderKey
       CLOSE C_Orderkey
       DEALLOCATE C_Orderkey
@@ -986,6 +1049,31 @@ BEGIN -- main
             ' sqlsvr message = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'
          END
       END
+
+      --TLTING01
+      IF (@n_continue = 1 OR @n_continue = 2)
+      BEGIN
+         IF @b_debug = 1
+         BEGIN
+            PRINT 'archiving Orders_PI_Encrypted ...'
+         END
+         SELECT @b_success = 1
+         EXECUTE dbo.isp_Archive_Order_PI_Encrypted
+                  @c_copyfrom_db,
+                  @c_copyto_db,
+                  @CopyRowsToArchiveDatabase,
+                  @b_success OUTPUT
+         IF NOT @b_success = 1
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @local_n_err = 77306
+            SELECT @local_c_errmsg = convert(char(5),@local_n_err)
+            SELECT @local_c_errmsg =
+            ': archiving of MBOL failed - (nspArchiveShippingOrder) ' + ' ( ' +
+            ' sqlsvr message = ' + TRIM(@local_c_errmsg) + ')'
+         END
+      END
+
 -- isp_ArchivePack
 -- Merge Pick and Pack archive script
 /*
@@ -1229,6 +1317,9 @@ BEGIN -- main
    END
 
 END -- main
+
 GO
+
+
 GRANT EXECUTE ON [dbo].[nspArchiveShippingOrder] TO nSQL 
 GO

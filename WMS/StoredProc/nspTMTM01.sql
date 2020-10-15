@@ -79,6 +79,7 @@ GO
 /* 03-12-2019   4.1   James      WMS-11350-Add new param (james04)      */
 /*                               Enable areakey as output param         */
 /*                               Retrieve user default areakey          */
+/* 18-06-2020   4.2   James      WMS-12055 Add CPK task type (james05)  */
 /************************************************************************/
 CREATE  PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
@@ -2013,6 +2014,49 @@ BEGIN
                SELECT @b_success = 0
                SELECT @c_appflag = 'TPPK'
                EXECUTE nspTTMEvaluatePKTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            -- (james05)
+            IF @c_TTMTaskType='CPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='CPK')
+               AND OBJECT_ID('nspTTMEvaluateCPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'CPK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'TCPK'
+               EXECUTE nspTTMEvaluateCPKTasks
                 @c_senddelimiter=@c_senddelimiter
                 , @c_userid=@c_userid
                 , @c_Strategykey=@c_Strategykey

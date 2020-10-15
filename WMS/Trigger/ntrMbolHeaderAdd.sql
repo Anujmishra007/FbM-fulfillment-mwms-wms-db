@@ -8,7 +8,37 @@ SET ANSI_NULLS OFF
 GO
 
 
-/* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
+/***************************************************************************/  
+/* Trigger:  ntrMbolHeaderAdd                                              */  
+/* Creation Date:                                                          */  
+/* Copyright: IDS                                                          */  
+/* Written by:                                                             */  
+/*                                                                         */  
+/* Purpose:  Trigger point upon any insert MBOL                            */  
+/*                                                                         */  
+/* Input Parameters:                                                       */  
+/*                                                                         */  
+/* Output Parameters:  None                                                */  
+/*                                                                         */  
+/* Return Status:  None                                                    */  
+/*                                                                         */  
+/* Usage:                                                                  */  
+/*                                                                         */  
+/* Local Variables:                                                        */  
+/*                                                                         */  
+/* Called By: When records Inserted                                        */  
+/*                                                                         */  
+/* PVCS Version: 1.1                                                       */  
+/*                                                                         */  
+/* Version: 5.4                                                            */  
+/*                                                                         */  
+/* Data Modifications:                                                     */  
+/*                                                                         */  
+/* Updates:                                                                */  
+/* Date         Author Ver.  Purposes                                      */  
+/* 17-Mar-2009  TLTING       Change user_name() to SUSER_SNAME()           */
+/***************************************************************************/  
+
 CREATE TRIGGER ntrMbolHeaderAdd
  ON  MBOL
  FOR INSERT
