@@ -19,7 +19,8 @@ GO
 /* 2015-10-06 1.0  CSCHONG    Created (WMS-2053)                              */ 
 /* 2018-04-20 1.2  CSCHONG    SET ANSI_WARNINGS OFF (CS01)                    */   
 /* 2019-02-20 1.3  CSCHONG    WMS-8029 revised field logic (CS02)             */
-/* 2020-09-23 1.4  WLChooi    WMS-14956 - Add new column (WL01)               */           
+/* 2020-09-23 1.4  WLChooi    WMS-14956 - Add new column (WL01)               */     
+/* 2020-10-14 1.5  WLChooi    Show Qty Per Carton (WL02)                      */        
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_Shipper_Label_KR_Hanjin]                      
@@ -153,7 +154,11 @@ BEGIN
              + ' ISNULL(OIF.EcomOrderID,''''), '   --WL01
              + ' CASE WHEN ISNULL(CL1.Notes,'''') <> '''' THEN SUBSTRING(CL1.Notes,1,LEN(CL1.Notes) - LEN(RIGHT(CL1.Notes, 4))) + ''****'' ELSE '''' END, '   --WL01
              + ' OH.C_Contact1, ' + CHAR(13) +     --40   --WL01       
-             + ' '''','''','''','''','''','''','''','''','''','''', ' + CHAR(13) +    --50       
+             + ' '''',(SELECT SUM(PAD.Qty) 
+                       FROM PACKDETAIL PAD (NOLOCK) 
+                       JOIN PACKHEADER PAH (NOLOCK) ON PAH.Pickslipno = PAD.Pickslipno
+                       WHERE PAH.Orderkey = @c_Sparm01 AND PAD.CartonNo = PD.CartonNo), '   --WL02
+             + ' '''','''','''','''','''','''','''','''', ' + CHAR(13) +    --50            --WL02       
              + ' '''','''','''','''','''','''','''','''','''', '''' '   --60          
              + CHAR(13) +            
              + ' FROM ORDERS OH WITH (NOLOCK)' + CHAR(13) +        
@@ -242,8 +247,8 @@ BEGIN
    WHERE PACKHEADER.OrderKey = @c_Sparm01
                      
    UPDATE #Result
-   SET Col41 = @c_Col41,
-       Col42 = @c_Col42
+   SET Col41 = @c_Col41--,
+       --Col42 = @c_Col42   --WL02
    --WL01 END
 
    IF @b_debug=1        
