@@ -40,6 +40,7 @@ GO
 /*                               id for full case                       */
 /* 22-Feb-2019 NJOW03   1.4      WMS-7945 Enhancements                  */
 /* 15-Sep-2020 NJOW04   1.5      WMS-15237 Enhancements                 */
+/* 15-Oct-2020 NJOW05   1.6      Fix grouping                           */
 /************************************************************************/
 CREATE PROC [dbo].[ispWAVPK03](
     @c_WaveKey       NVARCHAR(20)
@@ -1358,7 +1359,15 @@ NEXT_CartonType:
                      , SKU, @n_SplitQty, 0, Storerkey, UOM, Sts, DropID, PickSlipNo
                      , ItemGroup1, TariffLookup, ID, B_Country
                FROM  #PickDetail
-               WHERE Pickdetailkey = @c_Pickdetailkey                           
+               WHERE Pickdetailkey = @c_Pickdetailkey                 
+                          
+               --NJOW05    
+               INSERT INTO #PICK_PIECE (PickDetailKey, PickSlipNo , Storerkey, SKU, Qty, ItemGroup1, ItemGroup2,ItemGroup3
+                                        ,ItemGroup4, ItemStyle, ItemBUSR1, ItemColor, ItemSize , ItemMeasure, BillToKey)
+               SELECT @c_newpickdetailkey, PickSlipNo , Storerkey, SKU, @n_SplitQty, ItemGroup1, ItemGroup2,ItemGroup3
+                      ,ItemGroup4, ItemStyle, ItemBUSR1, ItemColor, ItemSize , ItemMeasure, BillToKey
+               FROM #PICK_PIECE
+               WHERE Pickdetailkey = @c_Pickdetailkey           
 
                UPDATE PICKDETAIL WITH (ROWLOCK)  
                SET PICKDETAIL.CaseID = @cLabelno  
@@ -1376,6 +1385,11 @@ NEXT_CartonType:
                END  
                
                UPDATE #PickDetail
+               SET Qty = @n_PackQty
+               WHERE Pickdetailkey = @c_Pickdetailkey
+               
+               --NJOW05
+               UPDATE #PICK_PIECE 
                SET Qty = @n_PackQty
                WHERE Pickdetailkey = @c_Pickdetailkey
                           	  	 
@@ -1508,6 +1522,7 @@ NEXT_CartonType:
             ,  CASE WHEN a.uom = '2' THEN a.dropid ELSE '' END
       */            
 
+      /* 
       INSERT INTO PACKDETAIL ( LabelLine, PickSlipNo,CartonNo,LabelNo,StorerKey,SKU, Qty,RefNo,ArchiveCop
                               ,ExpQty,UPC,DropID,RefNo2)        
       SELECT  --+ Convert( NVARCHAR(10), ROW_NUMBER() OVER(ORDER BY a.PickSlipNo)),
@@ -1523,7 +1538,25 @@ NEXT_CartonType:
             , PE.ItemStyle, PE.ItemBusr1, PE.ItemColor, PE.ItemSize, PE.Itemmeasure --NJOW03  
             , a.SKU, a.StorerKey, c.CartonSeq
             , CASE WHEN a.uom = '2' THEN a.dropid ELSE '' END
-      ORDER BY a.PickSlipNo, b.cartonno, PE.ItemStyle, PE.ItemBusr1, PE.ItemColor, PE.ItemSize, PE.Itemmeasure, a.SKU      
+      ORDER BY a.PickSlipNo, b.cartonno, PE.ItemStyle, PE.ItemBusr1, PE.ItemColor, PE.ItemSize, PE.Itemmeasure, a.SKU
+      */      
+
+      --NJOW05
+      INSERT INTO PACKDETAIL ( LabelLine, PickSlipNo,CartonNo,LabelNo,StorerKey,SKU, Qty,RefNo,ArchiveCop
+                              ,ExpQty,UPC,DropID,RefNo2)        
+      SELECT  --+ Convert( NVARCHAR(10), ROW_NUMBER() OVER(ORDER BY a.PickSlipNo)),
+             RIGHT('00000' + Convert( NVARCHAR(10), ROW_NUMBER() OVER(PARTITION BY a.pickslipno,b.cartonno ORDER BY a.PickSlipNo, b.cartonno, MAX(PE.ItemStyle), MAX(PE.ItemBusr1), MAX(PE.ItemColor), MAX(PE.ItemSize), MAX(PE.Itemmeasure))),5), --NJOW03
+             a.PickSlipNo, c.CartonSeq, b.LabelNo, a.StorerKey, a.SKU , sum(b.PackQty), '', null
+            , 0, null, CASE WHEN a.uom = '2' THEN a.dropid ELSE '' END,''
+      from #PickDetail a
+      JOIN #OpenCartonDetail b on b.PickDetailKey = a.PickDetailKey
+      JOIN #OpenCarton c on c.CartonNo = b.CartonNo AND c.PickSlipNo = a.PickSlipNo
+      LEFT JOIN #PICK_PIECE PE ON a.pickdetailkey = PE.Pickdetailkey AND a.Pickslipno = PE.Pickslipno  --NJOW03
+      WHERE a.PickSlipNo = @c_PickSlipno
+      GROUP by a.PickSlipNo, b.CartonNo, b.LabelNo
+            , a.SKU, a.StorerKey, c.CartonSeq
+            , CASE WHEN a.uom = '2' THEN a.dropid ELSE '' END
+      ORDER BY a.PickSlipNo, b.cartonno, MAX(PE.ItemStyle), MAX(PE.ItemBusr1), MAX(PE.ItemColor), MAX(PE.ItemSize), MAX(PE.Itemmeasure), a.SKU
             
       IF @@ERROR <> 0
       BEGIN
