@@ -37,7 +37,9 @@ GO
 /* 1/8/2014     YTWan         Fixed issue update wrong pickslip# (Wan01)*/
 /* 12/5/2015    CSCHONG       SOS337545  (CS01)                         */
 /* 04/8/2017    CSCHONG       WMS-2469 - Add new field (CS02)           */
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
+/* 01/09/2020   WLChooi       WMS-15000 - Modify Get SKU Column Logic   */
+/*                            (WL01)                                    */
 /************************************************************************/
 
 CREATE PROC dbo.isp_GetPickSlipOrders55 (@c_loadkey NVARCHAR(10))
@@ -284,6 +286,32 @@ BEGIN
       FROM   SKU WITH (NOLOCK)
       WHERE  Storerkey = @c_storerkey   
       AND    SKU = @c_SKU
+      
+      --WL01 START
+      DECLARE @c_Column    NVARCHAR(100) = '',
+              @c_Result    NVARCHAR(100) = '',
+              @c_SQL       NVARCHAR(MAX) = ''
+      
+      SELECT @c_Column = LTRIM(RTRIM(ISNULL(CL.UDF02,'')))
+      FROM CODELKUP AS CL (NOLOCK)
+      WHERE CL.LISTNAME = 'REPORTCFG'
+      AND CL.Code = 'Col01'
+      AND CL.Storerkey = @c_storerkey
+      AND CL.Short = 'Y'
+      AND CL.Long = 'r_dw_print_pickorder55'
+      
+      IF ISNULL(@c_Column,'') <> ''
+      BEGIN
+         SET @c_SQL = N'SELECT @c_Result = ' + @c_Column + ' FROM SKU (NOLOCK) WHERE SKU.Storerkey = @c_Storerkey AND SKU.SKU = @c_SKU '
+      
+         EXEC sp_executesql @c_SQL, N'@c_Result NVARCHAR(100) OUTPUT, @c_Storerkey NVARCHAR(15), @c_SKU NVARCHAR(20) ', 
+                            @c_Result OUTPUT,
+                            @c_Storerkey,
+                            @c_SKU
+                            
+         SET @c_SKU = @c_Result
+      END
+      --WL01 END
       
       IF @c_Facility      IS NULL SET @c_Facility = ''
       IF @c_Consigneekey  IS NULL SET @c_Consigneekey  = ''
