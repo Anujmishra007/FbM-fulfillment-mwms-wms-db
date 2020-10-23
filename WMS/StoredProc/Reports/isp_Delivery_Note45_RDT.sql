@@ -7,7 +7,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*************************************************************************/
+/*********************************************************************/
 /* Stored Procedure: isp_Delivery_Note45_RDT                             */
 /* Creation Date: 2020-08-27                                             */
 /* Copyright: IDS                                                        */
@@ -26,6 +26,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver   Purposes                                  */
+/* 20-OCT-2020  CSCHONG  1.1   INC1330177 - Fix over lenght issue (CS01) */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_Delivery_Note45_RDT] 
@@ -146,21 +147,21 @@ BEGIN
      
       ELSE
       BEGIN
-      	IF ISNULL(@c_type,'') <> ''
-      	BEGIN
-         SET	@c_ExecHaving = 'HAVING 1 = CASE WHEN  @c_Type  = ''1'' AND SUM(PD.Qty) = 1  THEN 1' + CHAR(13)
+         IF ISNULL(@c_type,'') <> ''
+         BEGIN
+         SET   @c_ExecHaving = 'HAVING 1 = CASE WHEN  @c_Type  = ''1'' AND SUM(PD.Qty) = 1  THEN 1' + CHAR(13)
                                +' WHEN @c_Type  = ''2'' AND SUM(PD.Qty) > 1 THEN 1 ' + CHAR(13)
                                + 'ELSE 1' + CHAR(13)
                                + 'END '
                                
             SET @c_ExecOrderBy = '  CASE WHEN SUM(PD.Qty) = 1 AND  @c_Type IN (''1'') THEN cast(LEN(CAST(MIN(LOC.Score) AS NVARCHAR(3))) AS NVARCHAR(5))+CAST(MIN(LOC.Score) AS NVARCHAR(3))+MIN(LOC.Logicallocation)+MIN(PD.Loc)+MIN(PD.Orderkey)'  + CHAR(13)                             
-                             + '      WHEN SUM(PD.Qty) > 1 AND  @c_Type  IN (''2'') THEN Max(PD.Notes)+MIN(PD.Orderkey)+ Max(PD.Loc) ELSE '''' END'     + CHAR(1) 
-      	END
-      	ELSE
-      	BEGIN
-      		SET @c_ExecOrderBy = ' PD.Orderkey'
-      	END	
-      END	
+                               + '       WHEN SUM(PD.Qty) > 1 AND  @c_Type  IN (''2'') THEN Max(PD.Notes)+MIN(PD.Orderkey)+ Max(PD.Loc) ELSE '''' END'     + CHAR(1) 
+         END
+         ELSE
+         BEGIN
+            SET @c_ExecOrderBy = ' PD.Orderkey'
+         END   
+      END   
 
       SET @c_ExecStatements = 'SELECT PD.Orderkey,'''' ' +
                               ',SUM(PD.Qty) ' +
@@ -176,12 +177,12 @@ BEGIN
                               'ORDER BY ' + @c_ExecOrderBy
         
      SET @c_insertsql = ' INSERT INTO #TMP_ORDH ' +
-								' (  Orderkey' +
-								' ,  ORDSKU' +
-								' ,  TotalPickQty' +
-								' ,  TotalOrdQty ' +
-								',  RecGrp ) '
-								
+                        ' (  Orderkey' +
+                        ' ,  ORDSKU' +
+                        ' ,  TotalPickQty' +
+                        ' ,  TotalOrdQty ' +
+                        ',  RecGrp ) '
+                        
       SET @c_sql = @c_insertsql + CHAR(13) + @c_ExecStatements 
       
       SET @c_ExecArguments = N'   @c_Loadkey          NVARCHAR(120)'    
@@ -240,13 +241,13 @@ BEGIN
             ,  RecGroup      INT
             ,  PNotes        NVARCHAR(250) 
             ,  OrdGrp        INT
-            ,  A25           NVARCHAR(50)		   
-            ,  A26           NVARCHAR(50)		   
-            ,  A27           NVARCHAR(50)		   
-            ,  A28           NVARCHAR(50)		           
-             ,  C1           NVARCHAR(50)		   
-             ,  C2           NVARCHAR(50)		   
-             ,  C3           NVARCHAR(50)		   
+            ,  A25           NVARCHAR(50)       
+            ,  A26           NVARCHAR(50)       
+            ,  A27           NVARCHAR(50)       
+            ,  A28           NVARCHAR(50)               
+            ,  C1            NVARCHAR(50)       
+            ,  C2            NVARCHAR(50)       
+            ,  C3            NVARCHAR(50)       
             )
 
 --SELECT * FROM #TMP_ORDH
@@ -329,7 +330,7 @@ BEGIN
             ',ISNULL(RTRIM(C_Address3),'''') ' +  
             ',ISNULL(RTRIM(C_Address4),'''') ' +  
             ',ISNULL(PD.notes,''''),ISNULL(CL1.short,''0'') ' + 
-             ' ORDER BY TMP.Seqno '
+            ' ORDER BY TMP.Seqno '
             --' ORDER BY ISNULL(PD.notes,''''), OH.Orderkey '  
 
   
@@ -376,9 +377,9 @@ BEGIN
            ',  A26       '+                    
            ',  A27       '+                    
            ',  A28       '+                    
-           ', C1         '+                           
-           ', C2         '+                           
-           ', C3         '+                           
+           ',  C1         '+                           
+           ',  C2         '+                           
+           ',  C3         '+                           
            ')            '                          
                
       SET @c_sql = @c_insertsql + CHAR(13) + @c_ExecStatements +  @c_ExecStatements2
@@ -414,33 +415,33 @@ END
      
    WHILE @@FETCH_STATUS <> -1  
    BEGIN   
-   	
-   	SET @c_chkCancelitem='N'
-   	
-   	IF EXISTS (SELECT 1
-   	           FROM ORDERS O WITH (NOLOCK)
-   	           JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=O.OrderKey
-   	           WHERE O.[Status] <> 0
-   	           AND OD.OpenQty > 0
-   	           AND OD.QtyAllocated = 0
-   	           AND OD.QtyPicked   = 0
-   	           AND OD.OrderKey=@c_OHORDkey)
+      
+      SET @c_chkCancelitem='N'
+      
+      IF EXISTS (SELECT 1
+                 FROM ORDERS O WITH (NOLOCK)
+                 JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=O.OrderKey
+                 WHERE O.[Status] <> 0
+                 AND OD.OpenQty > 0
+                 AND OD.QtyAllocated = 0
+                 AND OD.QtyPicked   = 0
+                 AND OD.OrderKey=@c_OHORDkey)
        BEGIN
-       	SET @c_chkCancelitem = 'Y'
-       END	
+         SET @c_chkCancelitem = 'Y'
+       END  
        
     IF @c_chkCancelitem='N'
     BEGIN
-    	
-    	UPDATE #TMP_HDR
-    	SET A13 = ''
-    	WHERE Orderkey = @c_OHORDkey	
-    	
+      
+      UPDATE #TMP_HDR
+      SET A13 = ''
+      WHERE Orderkey = @c_OHORDkey  
+      
     END              
 
-   	
+      
    FETCH NEXT FROM CUR_OrderLoop INTO @c_OHORDkey  
-   END	
+   END   
 
       SELECT @n_CntTTLLine = MAX(OrdGrp)
       FROM #TMP_HDR
@@ -490,9 +491,9 @@ INSERT INTO #TMP_HDR(Orderkey
             ,  A26              
             ,  A27              
             ,  A28              
-            , C1
-            , C2
-            , C3    
+            ,  C1
+            ,  C2
+            ,  C3    
              )
 SELECT Orderkey  
             ,  A1            
@@ -535,9 +536,9 @@ SELECT Orderkey
             ,  A26              
             ,  A27              
             ,  A28              
-            , C1
-            , C2
-            , C3  
+            ,  C1
+            ,  C2
+            ,  C3  
   FROM #TMP_HDR
  WHERE seqno = 1
 
@@ -623,9 +624,9 @@ END
             ,  A26              
             ,  A27              
             ,  A28              
-            , C1
-            , C2
-            , C3  
+            ,  C1
+            ,  C2
+            ,  C3  
             )
          SELECT Orderkey  
             ,  A1            
@@ -668,9 +669,9 @@ END
             ,  A26              
             ,  A27              
             ,  A28              
-            , C1
-            , C2
-            , C3  
+            ,  C1
+            ,  C2
+            ,  C3  
             FROM #TMP_HDR 
             WHERE ORDERKEY = @c_GetOrderkey 
             AND Ordgrp = 1       
@@ -701,26 +702,26 @@ END
             ,  Orderkey       NVARCHAR(10) DEFAULT ('')
             ,  sku            NVARCHAR(20) 
             ,  ODNotes        NVARCHAR(200)
-            ,  ODUserDef06    NVARCHAR(17)
+            ,  ODUserDef06    NVARCHAR(36)                    --CS01
             ,  TotalPickQty   INT           NULL   
             ,  TotalOrdQty    INT           NULL
             ,  RecGroup       INT           NULL
             ,  A19           NVARCHAR(50)   NULL     
             ,  A20           NVARCHAR(50)   NULL     
-            ,  A21           NVARCHAR(50)	  NULL	   
-            ,  A22           NVARCHAR(50)	  NULL	   
-            ,  A23           NVARCHAR(50)	  NULL	   
-            ,  A24           NVARCHAR(50)	  NULL	        
-            ,  B17           NVARCHAR(50)	  NULL	   
-            ,  B18           NVARCHAR(50)	  NULL	   
-            ,  B19           NVARCHAR(50)	  NULL	   
-            ,  B20           NVARCHAR(50)	  NULL	   
-            ,  B21           NVARCHAR(50)	  NULL	   
-            ,  B22           NVARCHAR(50)	  NULL	   
+            ,  A21           NVARCHAR(50)   NULL      
+            ,  A22           NVARCHAR(50)   NULL      
+            ,  A23           NVARCHAR(50)   NULL      
+            ,  A24           NVARCHAR(50)   NULL           
+            ,  B17           NVARCHAR(50)   NULL      
+            ,  B18           NVARCHAR(50)   NULL      
+            ,  B19           NVARCHAR(50)   NULL      
+            ,  B20           NVARCHAR(50)   NULL      
+            ,  B21           NVARCHAR(50)   NULL      
+            ,  B22           NVARCHAR(50)   NULL      
             )
 
 
-				SET  @c_A19   = ''
+            SET  @c_A19   = ''
             SET  @c_A20  = ''
             SET  @c_A21  = ''
             SET  @c_A22  = ''
@@ -739,17 +740,17 @@ END
             WHERE Orderkey = CASE WHEN ISNULL(@c_Orderkey,'') <> '' THEN @c_Orderkey ELSE Orderkey END     
             
          SELECT  @c_A19        = ISNULL(MAX(CASE WHEN CL.Code = 'A19' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_A20        = ISNULL(MAX(CASE WHEN CL.Code = 'A20' THEN RTRIM(CL.Description) ELSE '' END),'') 
-					 ,@c_A21        = ISNULL(MAX(CASE WHEN CL.Code = 'A21' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_A22        = ISNULL(MAX(CASE WHEN CL.Code = 'A22' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_A23        = ISNULL(MAX(CASE WHEN CL.Code = 'A23' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_A24        = ISNULL(MAX(CASE WHEN CL.Code = 'A24' THEN RTRIM(CL.Description) ELSE '' END),'') 
-					 ,@c_B17        = ISNULL(MAX(CASE WHEN CL.Code = 'B17' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_B18        = ISNULL(MAX(CASE WHEN CL.Code = 'B18' THEN RTRIM(CL.Description) ELSE '' END),'') 
-					 ,@c_B19        = ISNULL(MAX(CASE WHEN CL.Code = 'B19' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_B20        = ISNULL(MAX(CASE WHEN CL.Code = 'B20' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_B21       = ISNULL(MAX(CASE WHEN CL.Code = 'B21' THEN RTRIM(CL.Description) ELSE '' END),'')
-					 ,@c_B22       = ISNULL(MAX(CASE WHEN CL.Code = 'B22' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_A20        = ISNULL(MAX(CASE WHEN CL.Code = 'A20' THEN RTRIM(CL.Description) ELSE '' END),'') 
+                ,@c_A21        = ISNULL(MAX(CASE WHEN CL.Code = 'A21' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_A22        = ISNULL(MAX(CASE WHEN CL.Code = 'A22' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_A23        = ISNULL(MAX(CASE WHEN CL.Code = 'A23' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_A24        = ISNULL(MAX(CASE WHEN CL.Code = 'A24' THEN RTRIM(CL.Description) ELSE '' END),'') 
+                ,@c_B17        = ISNULL(MAX(CASE WHEN CL.Code = 'B17' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_B18        = ISNULL(MAX(CASE WHEN CL.Code = 'B18' THEN RTRIM(CL.Description) ELSE '' END),'') 
+                ,@c_B19        = ISNULL(MAX(CASE WHEN CL.Code = 'B19' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_B20        = ISNULL(MAX(CASE WHEN CL.Code = 'B20' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_B21        = ISNULL(MAX(CASE WHEN CL.Code = 'B21' THEN RTRIM(CL.Description) ELSE '' END),'')
+                ,@c_B22        = ISNULL(MAX(CASE WHEN CL.Code = 'B22' THEN RTRIM(CL.Description) ELSE '' END),'')
          FROM CODELKUP CL WITH (NOLOCK) 
          WHERE (CL.ListName = 'HMDN' AND CL.Storerkey = @c_Storerkey)
     
@@ -787,18 +788,18 @@ END
                   ,SUM(ISNULL(PD.Qty,0))
                   ,SUM(OD.OriginalQty)
                   ,(Row_Number() OVER (PARTITION BY OD.Orderkey ORDER BY OD.Orderkey Asc)-1)/@n_NoOfLine
-               ,@c_A19
-               ,@c_A20
-               ,@c_A21
-               ,@c_A22
-               ,@c_A23
-               ,@c_A24
-               ,@c_B17
-               ,@c_B18
-               ,@c_B19
-               ,@c_B20
-               ,@c_B21
-               ,@c_B22
+                  ,@c_A19
+                  ,@c_A20
+                  ,@c_A21
+                  ,@c_A22
+                  ,@c_A23
+                  ,@c_A24
+                  ,@c_B17
+                  ,@c_B18
+                  ,@c_B19
+                  ,@c_B20
+                  ,@c_B21
+                  ,@c_B22
             FROM WAVEDETAIL WVD WITH (NOLOCK)
             JOIN ORDERDETAIL OD WITH (NOLOCK)  ON OD.Orderkey = WVD.Orderkey 
             LEFT OUTER JOIN PICKDETAIL  PD  WITH (NOLOCK) ON (OD.Orderkey = PD.Orderkey AND OD.sku = PD.sku 
@@ -842,18 +843,18 @@ END
                   ,SUM(ISNULL(PD.Qty,0))
                   ,SUM(OD.OriginalQty)
                   ,(Row_Number() OVER (PARTITION BY OD.Orderkey ORDER BY OD.Orderkey Asc)-1)/@n_NoOfLine
-               ,@c_A19
-               ,@c_A20
-               ,@c_A21
-               ,@c_A22
-               ,@c_A23
-               ,@c_A24
-               ,@c_B17
-               ,@c_B18
-               ,@c_B19
-               ,@c_B20
-               ,@c_B21
-               ,@c_B22
+                  ,@c_A19
+                  ,@c_A20
+                  ,@c_A21
+                  ,@c_A22
+                  ,@c_A23
+                  ,@c_A24
+                  ,@c_B17
+                  ,@c_B18
+                  ,@c_B19
+                  ,@c_B20
+                  ,@c_B21
+                  ,@c_B22
             FROM WAVEDETAIL WVD WITH (NOLOCK)
             JOIN ORDERDETAIL OD WITH (NOLOCK)  ON OD.Orderkey = WVD.Orderkey 
             LEFT OUTER JOIN PICKDETAIL  PD  WITH (NOLOCK) ON (OD.Orderkey = PD.Orderkey AND OD.sku = PD.sku 
