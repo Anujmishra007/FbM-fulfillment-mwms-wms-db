@@ -1,0 +1,355 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_delivery_note48]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_delivery_note48]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/************************************************************************/
+/* Stored Proc: isp_delivery_note48                                     */
+/* Creation Date: 20-SEP-2020                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by: CSCHONG                                                  */
+/*                                                                      */
+/* Purpose: WMS-15197 - PH_Novateur_DeliveryNote_RCM_CR                 */
+/*        :                                                             */
+/* Called By: r_dw_delivery_note48                                      */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 7.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/************************************************************************/
+CREATE PROC isp_delivery_note48  
+            @c_OrderKey     NVARCHAR(10)  
+           ,@c_RePrint      NVARCHAR(5) = 'N'
+AS  
+BEGIN  
+   SET NOCOUNT ON   
+   SET ANSI_NULLS OFF   
+   SET QUOTED_IDENTIFIER OFF   
+   SET CONCAT_NULL_YIELDS_NULL OFF     
+   DECLARE    
+           @n_StartTCnt       INT  
+         , @n_Continue        INT  
+   
+       --  , @c_Orderkey        NVARCHAR(10)  
+         , @c_Consigneekey    NVARCHAR(15)  
+         , @c_TransMehtod     NVARCHAR(30)  
+         , @d_ShipDate4ETA    DATETIME  
+         , @d_ETA             DATETIME  
+         , @c_Rptsku          NVARCHAR(5)    
+  
+         , @n_Leadtime        INT  
+         , @n_Leadtime1       INT  
+         , @n_Leadtime2       INT 
+         , @n_MaxLine         INT 
+  
+   SET @n_StartTCnt = @@TRANCOUNT  
+   SET @n_Continue = 1  
+     
+   SET @c_Rptsku = ''            
+   SET @n_Maxline = 17        
+  
+  
+   CREATE TABLE #DN48  
+      (  Facility          NVARCHAR(5)      
+      ,  DeliveryNote      NVARCHAR(20)     
+      ,  OHUDF06           NVARCHAR(30)   
+      ,  shipperkey        NVARCHAR(30)   
+     -- ,  ShipDate          DATETIME    NULL  
+      ,  PmtTerm           NVARCHAR(20) NULL  
+      ,  BuyerPO           NVARCHAR(20)     
+      ,  Orderkey          NVARCHAR(10)  
+      ,  ExternOrderkey    NVARCHAR(50)
+      ,  ExternPOkey       NVARCHAR(20)   
+      --,  OrderDate         DATETIME    NULL  
+      --,  DeliveryDate      DATETIME    NULL  
+      ,  OHUDF05           NVARCHAR(50)    
+      ,  C_Company         NVARCHAR(45)   
+      ,  C_Address1        NVARCHAR(45)    
+      ,  C_Address2        NVARCHAR(45)   
+      ,  C_Address3        NVARCHAR(45)   
+      ,  C_Address4        NVARCHAR(45)   
+      ,  C_contact1        NVARCHAR(45)   
+      ,  c_vat             NVARCHAR(30)   
+      ,  Salesman          NVARCHAR(30)    
+      ,  UOM               NVARCHAR(10)     
+      ,  B_Address1        NVARCHAR(45)   
+      ,  B_Address2        NVARCHAR(45)   
+      ,  B_Address3        NVARCHAR(45)   
+      ,  B_Address4        NVARCHAR(45)   
+      ,  ST_VAT            NVARCHAR(36)   
+      ,  ST_Phone1         NVARCHAR(45)   
+      ,  OHNotes           NVARCHAR(4000)   
+      ,  Storerkey         NVARCHAR(15)  
+      ,  Sku               NVARCHAR(20)   
+      ,  SKUDescr          NVARCHAR(60)   
+      ,  UOMQTY            INT  
+      ,  TAXQTY            FLOAT  
+      ,  OHUDF03           FLOAT   
+      ,  PQTY              INT      
+      ,  EcomOrderId       NVARCHAR(45)   
+      ,  ST_Address1       NVARCHAR(45)   
+      ,  ST_Address2       NVARCHAR(45)   
+      ,  ST_Address3       NVARCHAR(45)   
+      ,  Pageno            INT
+      ,  ODlinenumber      NVARCHAR(10)
+      )  
+  
+  INSERT INTO #DN48  
+   (  Facility            
+      ,  DeliveryNote    
+      ,  OHUDF06     
+      ,  shipperkey           
+    --  ,  ShipDate   
+      ,  PmtTerm   
+      ,  BuyerPO             
+      ,  Orderkey            
+      ,  ExternOrderkey      
+      ,  ExternPOkey         
+      --,  OrderDate           
+      --,  DeliveryDate        
+      ,  OHUDF05        
+      ,  C_Company           
+      ,  C_Address1          
+      ,  C_Address2    
+      ,  C_Address3        
+      ,  C_Address4              
+      ,  C_contact1               
+      ,  c_vat            
+      ,  Salesman           
+      ,  UOM           
+      ,  B_Address1          
+      ,  B_Address2     
+      ,  B_Address3       
+      ,  B_Address4              
+      ,  ST_VAT               
+      ,  ST_Phone1            
+      ,  OHNotes              
+      ,  Storerkey           
+      ,  Sku                 
+      ,  SKUDescr            
+      ,  UOMQTY            
+      ,  TAXQTY             
+      ,  OHUDF03     
+      ,  PQTY     
+      ,  EcomOrderId   
+      ,  ST_Address1        
+      ,  ST_Address2         
+      ,  ST_Address3          
+      ,  Pageno    
+      ,  ODlinenumber            
+      )  
+   SELECT ORDERS.Facility  
+  , DeliveryNote = ISNULL(RTRIM(orders.deliverynote),'')  
+  , OHUDF06 = ISNULL(RTRIM(orders.userdefine06),'')  
+  , shipperkey = ISNULL(RTRIM(orders.shipperkey),'')  
+  --    , ShipDate = MBOL.ShipDate    
+  , PmtTerm = ISNULL(orders.PmtTerm,'')  
+  , BuyerPO= ISNULL(RTRIM(orders.BuyerPO),'')  
+  , ORDERS.Orderkey  
+  , ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
+  , ExternPOkey =  ISNULL(RTRIM(ORDERS.ExternPOkey),'')      
+  --, ORDERS.OrderDate  
+  --, ORDERS.DeliveryDate  
+  , OHUDF05 = ISNULL(RTRIM(orders.userdefine05),'')
+  , C_Company = ISNULL(RTRIM(ORDERS.C_Company),'')  
+  , C_Address1 = ISNULL(RTRIM(ORDERS.C_Address1),'')  
+  , C_Address2 = ISNULL(RTRIM(ORDERS.C_Address2),'')  
+  , C_Address3 = ISNULL(RTRIM(ORDERS.C_Address3),'')  
+  , C_Address4= ISNULL(RTRIM(ORDERS.C_Address4),'')  
+  , C_contact1 = ISNULL(RTRIM(ORDERS.C_contact1),'')  
+  , c_vat= ISNULL(RTRIM(ORDERS.c_vat),'')  
+  , Salesman = ISNULL(RTRIM(ORDERS.Salesman),'')  
+  , UOM = ISNULL(RTRIM(ORDERDETAIL.UOM),'')  
+  , B_Address1 = ISNULL(RTRIM(ORDERS.B_Address1),'')  
+  , B_Address2 = ISNULL(RTRIM(ORDERS.B_Address2),'')  
+  , B_Address3 = ISNULL(RTRIM(ORDERS.B_Address3),'')  
+  , B_Address4= ISNULL(RTRIM(ORDERS.B_Address4),'')  
+  , ST_VAT = ISNULL(RTRIM(ST.VAT),'')  
+  , ST_Phone1= ISNULL(RTRIM(ST.Phone1),'')  
+  , OHNotes = ISNULL(RTRIM(ORDERS.Notes),'')  
+  , PICKDETAIL.Storerkey  
+  , PICKDETAIL.Sku AS sku   
+  , SKUDescr = ISNULL(RTRIM(SKU.Descr),'')  
+  , UOMQty = CASE WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM1 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.CASECNT,0) 
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'')= PACK.PACKUOM2 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.INNERPACK,0)  
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM3 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.Qty,0) 
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM4 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.Pallet,0) ELSE 0 END   
+ -- , UOMQty = (ORDERDETAIL.OriginalQty)
+  , TAXQTY  = (PICKDETAIL.Qty)   
+  , OHUDF03 = CASE WHEN ISNUMERIC(ISNULL(RTRIM(ORDERDETAIL.userdefine03),'')) = 1 THEN CAST(ISNULL(RTRIM(ORDERDETAIL.userdefine03),'0') AS decimal(10,2)) ELSE 1 END 
+  , (PICKDETAIL.Qty)
+  , EcomOrderId = ISNULL(OIF.EcomOrderId,'')  
+  , ST_Address1 = ISNULL(RTRIM(ST.Address1),'') 
+  , ST_Address2 = ISNULL(RTRIM(ST.Address2),'')
+  , ST_Address3 = ISNULL(RTRIM(ST.Address3),'')
+  , pageno = 1--(Row_Number() OVER (PARTITION BY ORDERS.Orderkey ORDER BY ORDERS.Orderkey, ORDERDETAIL.orderlinenumber,PICKDETAIL.Sku Asc)-1)/@n_maxLine + 1   
+  , ODlinenumber = ORDERDETAIL.orderlinenumber
+ FROM ORDERS     WITH (NOLOCK) 
+ JOIN PICKDETAIL WITH (NOLOCK) ON (ORDERS.Orderkey = PICKDETAIL.Orderkey)  
+ JOIN ORDERDETAIL (NOLOCK)
+      ON PICKDETAIL.orderkey = ORDERDETAIL.orderkey and
+         PICKDETAIL.orderlinenumber = ORDERDETAIL.orderlinenumber 
+-- JOIN LOTATTRIBUTE WITH (NOLOCK) ON (PICKDETAIL.Lot= LOTATTRIBUTE.Lot)  
+ JOIN SKU        WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey)  
+          AND(PICKDETAIL.Sku = SKU.Sku)  
+ JOIN PACK       WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)   
+ LEFT JOIN  STORER ST WITH (NOLOCK) ON ST.Storerkey = ORDERS.StorerKey   
+ LEFT JOIN ORDERINFO OIF WITH (NOLOCK) ON OIF.orderkey = ORDERS.Orderkey
+ LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON PH.Orderkey = ORDERS.Orderkey
+ WHERE ORDERS.Orderkey = @c_Orderkey  
+ --AND PICKDETAIL.Status >= '5'  
+AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
+ GROUP BY ORDERS.Facility  
+  , ISNULL(RTRIM(orders.deliverynote),'')   
+  , ISNULL(RTRIM(orders.userdefine06),'')
+  , ISNULL(RTRIM(orders.shipperkey),'')  
+    --  , MBOL.ShipDate   
+  , ISNULL(orders.PmtTerm,'')  
+  , ISNULL(RTRIM(orders.BuyerPO),'')  
+  , ORDERS.Orderkey  
+  , ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
+  , ISNULL(RTRIM(ORDERS.ExternPOkey),'')  
+  --, ORDERS.OrderDate  
+  --, ORDERS.DeliveryDate  
+  , ISNULL(RTRIM(orders.userdefine05),'')
+  , ISNULL(RTRIM(ORDERS.C_Company),'')  
+  , ISNULL(RTRIM(ORDERS.C_Address1),'')  
+  , ISNULL(RTRIM(ORDERS.C_Address2),'')  
+  , ISNULL(RTRIM(ORDERS.C_Address3),'')  
+  , ISNULL(RTRIM(ORDERS.C_Address4),'')  
+  , ISNULL(RTRIM(ORDERS.C_contact1),'')  
+  , ISNULL(RTRIM(ORDERS.c_vat),'')  
+  , ISNULL(RTRIM(ORDERS.Salesman),'')  
+  , ISNULL(RTRIM(ORDERDETAIL.UOM),'')
+  , ISNULL(RTRIM(ORDERS.B_Address1),'')  
+  , ISNULL(RTRIM(ORDERS.B_Address2),'')  
+  , ISNULL(RTRIM(ORDERS.B_Address3),'')  
+  , ISNULL(RTRIM(ORDERS.B_Address4),'')  
+  , ISNULL(RTRIM(ST.VAT),'') 
+  , ISNULL(RTRIM(ST.Phone1),'')  
+  , ISNULL(RTRIM(ORDERS.Notes),'')  
+  , PICKDETAIL.Storerkey  
+  --, PICKDETAIL.Sku  
+  , ISNULL(RTRIM(SKU.Descr),'')  
+  , ISNULL(PACK.CaseCnt,0)  
+  , CASE WHEN ISNUMERIC(ISNULL(RTRIM(ORDERDETAIL.userdefine03),'')) = 1 THEN CAST(ISNULL(RTRIM(ORDERDETAIL.userdefine03),'0') AS decimal(10,2)) ELSE 1 END 
+  , ISNULL(OIF.EcomOrderId,'')  
+  , PICKDETAIL.Sku 
+  ,ISNULL(RTRIM(ST.Address1),'') 
+  ,ISNULL(RTRIM(ST.Address2),'') 
+  ,ISNULL(RTRIM(ST.Address3),'')  
+  ,(ORDERDETAIL.OriginalQty)
+  , (PICKDETAIL.Qty)    
+ ,  ORDERDETAIL.orderlinenumber 
+  , PACK.PACKUOM1,PACK.PACKUOM2,PACK.PACKUOM3,PACK.PACKUOM4
+  ,PACK.CASECNT,PACK.INNERPACK,PACK.qty,PACK.Pallet
+ 
+  
+   SELECT DISTINCT   
+         DN48.Facility            
+      ,  DN48.DeliveryNote    
+      ,  convert(nvarchar(10),CAST(DN48.OHUDF06 as DATETIME),101) as OHUDF06     
+      ,  DN48.shipperkey           
+    --  ,  ShipDate   
+      ,  DN48.PmtTerm   
+    --  ,  BuyerPO             
+      ,  DN48.Orderkey            
+      ,  DN48.ExternOrderkey      
+      ,  DN48.ExternPOkey             
+      ,  DN48.OHUDF05        
+      ,  DN48.C_Company           
+      ,  DN48.C_Address1          
+      ,  DN48.C_Address2    
+      ,  DN48.C_Address3        
+      ,  DN48.C_Address4              
+      ,  DN48.C_contact1               
+      ,  DN48.c_vat            
+      ,  DN48.Salesman           
+      ,  DN48.UOM           
+      ,  DN48.B_Address1          
+      ,  DN48.B_Address2     
+      ,  DN48.B_Address3       
+      ,  DN48.B_Address4              
+      ,  DN48.ST_VAT               
+      ,  DN48.ST_Phone1            
+      ,  DN48.OHNotes              
+      ,  DN48.Storerkey           
+      ,  DN48.Sku                 
+      ,  DN48.SKUDescr            
+      ,  DN48.UOMQTY            
+      ,  (DN48.UOMQTY *DN48.OHUDF03) AS TAXQTY             
+      ,  DN48.OHUDF03   
+      ,  sum(DN48.PQTY) as PQTY       
+      ,  DN48.EcomOrderId   
+      ,  DN48.ST_Address1        
+      ,  DN48.ST_Address2         
+      ,  DN48.ST_Address3          
+      ,   (Row_Number() OVER (PARTITION BY DN48.Orderkey ORDER BY DN48.Orderkey, DN48.ODlinenumber,DN48.Sku,ISNULL(SN.serialno,'') Asc)-1)/@n_maxLine + 1 as Pageno  
+      ,  DN48.BuyerPO  
+      ,  DN48.ODlinenumber
+      ,  ISNULL(SN.serialno,'') AS SNUM
+      FROM #DN48  DN48   
+      LEFT JOIN serialno SN WITH (NOLOCK)  ON SN.Orderkey = DN48.Orderkey AND SN.sku = DN48.sku AND SN.Storerkey = DN48.Storerkey
+      group by DN48.Facility            
+      ,  DN48.DeliveryNote    
+      ,  convert(nvarchar(10),CAST(DN48.OHUDF06 as DATETIME),101)     
+      ,  DN48.shipperkey           
+    --  ,  ShipDate   
+      ,  DN48.PmtTerm   
+    --  ,  BuyerPO             
+      ,  DN48.Orderkey            
+      ,  DN48.ExternOrderkey      
+      ,  DN48.ExternPOkey             
+      ,  DN48.OHUDF05        
+      ,  DN48.C_Company           
+      ,  DN48.C_Address1          
+      ,  DN48.C_Address2    
+      ,  DN48.C_Address3        
+      ,  DN48.C_Address4              
+      ,  DN48.C_contact1               
+      ,  DN48.c_vat            
+      ,  DN48.Salesman           
+      ,  DN48.UOM           
+      ,  DN48.B_Address1          
+      ,  DN48.B_Address2     
+      ,  DN48.B_Address3       
+      ,  DN48.B_Address4              
+      ,  DN48.ST_VAT               
+      ,  DN48.ST_Phone1            
+      ,  DN48.OHNotes              
+      ,  DN48.Storerkey           
+      ,  DN48.Sku                 
+      ,  DN48.SKUDescr            
+      ,  DN48.UOMQTY            
+      ,  (DN48.UOMQTY *DN48.OHUDF03)              
+      ,  DN48.OHUDF03   
+     -- ,  PQTY       
+      ,  DN48.EcomOrderId   
+      ,  DN48.ST_Address1        
+      ,  DN48.ST_Address2         
+      ,  DN48.ST_Address3          
+     -- ,  Pageno  
+      ,  DN48.BuyerPO  
+      ,  DN48.ODlinenumber
+      ,  ISNULL(SN.serialno,'')
+      ORDER BY DN48.Orderkey  
+            , DN48.ODLineNumber
+            ,  DN48.Storerkey       
+            ,  DN48.Sku  
+  
+QUIT:  
+  
+END -- procedure  
+
+GO
+GRANT EXECUTE ON [dbo].[isp_delivery_note48] TO nSQL 
+GO
