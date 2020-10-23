@@ -27,6 +27,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 12-OCT-2020  CSCHONG   1.1 WMS-15461 - add new field (CS01)          */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptTallySheet62]  
@@ -34,7 +35,7 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet62]
          ,  @c_ReceiptKeyEnd     NVARCHAR(10)  
          ,  @c_StorerKeyStart    NVARCHAR(15)  
          ,  @c_StorerKeyEnd      NVARCHAR(15) 
-       ,  @c_UserID            NVARCHAR(80) = ''
+         ,  @c_UserID            NVARCHAR(80) = ''
   
 AS  
 BEGIN   
@@ -78,7 +79,8 @@ BEGIN
          ISNULL(SKU.IVAS,'') AS IVAS,
          SKU.BUSR1
          ,SKU.Putawayzone sku_putawayzone  
-         ,RECEIPTDETAIL.AltSku 
+         ,RECEIPTDETAIL.AltSku
+         ,RECEIPT.Userdefine03 as RHUDF03             --(CS01) 
     FROM RECEIPT (nolock)
          JOIN RECEIPTDETAIL (nolock) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
          JOIN STORER (nolock) ON RECEIPTDETAIL.StorerKey = STORER.StorerKey
@@ -121,7 +123,8 @@ BEGIN
          SKU.grosswgt,
          SKU.Length,
          SKU.Width,
-         SKU.Height
+         SKU.Height,
+         RECEIPT.Userdefine03              --(CS01)  
     ORDER BY RECEIPT.ReceiptKey, RECEIPTDETAIL.ReceiptLinenumber
   
 END
