@@ -1,7 +1,6 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_BTBShipment_Wave]')) 
+IF EXISTS (SELECT * FROM sys.views WHERE OBJECT_ID = OBJECT_ID(N'[dbo].[V_BTBShipment_Wave]'))
    DROP VIEW [dbo].[V_BTBShipment_Wave]
 GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -24,20 +23,25 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
+/* 20-Oct-2020 Leong    1.1   INC1325877 - Bug fix.                        */
 /***************************************************************************/
-CREATE VIEW [dbo].[V_BTBShipment_Wave]
-AS 
+
+ALTER VIEW [dbo].[V_BTBShipment_Wave]
+AS
 SELECT WD.WAVEKEY
 FROM WAVEDETAIL WD (NOLOCK)
 JOIN PICKDETAIL PD (NOLOCK) ON PD.Orderkey = WD.Orderkey
+WHERE NOT EXISTS ( SELECT 1 FROM BTB_SHIPMENTDETAIL BSD WITH (NOLOCK) -- INC1325877
+                   JOIN BTB_SHIPMENT BSH WITH (NOLOCK)
+                   ON BSD.BTB_ShipmentKey = BSH.BTB_ShipmentKey
+                   WHERE BSD.Wavekey = WD.Wavekey
+                   AND   BSH.[Status] = '0' )
 GROUP BY WD.Wavekey
 HAVING ISNULL(SUM(PD.Qty),0) > ( SELECT ISNULL(SUM(BSD.QtyExported),0)
-                                 FROM BTB_SHIPMENTDETAIL BSD WITH (NOLOCK) 
+                                 FROM BTB_SHIPMENTDETAIL BSD WITH (NOLOCK)
                                  JOIN BTB_SHIPMENT BSH WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSH.BTB_ShipmentKey
                                  WHERE BSD.Wavekey = WD.Wavekey
-                                 AND   BSH.[Status] = '9')
+                                 AND   BSH.[Status] = '9' )
 GO
 GRANT SELECT ON [dbo].[V_BTBShipment_Wave] TO nSQL
-GO   
-
- 
+GO
