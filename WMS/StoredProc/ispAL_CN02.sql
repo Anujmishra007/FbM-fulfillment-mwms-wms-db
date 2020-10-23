@@ -28,6 +28,9 @@ GO
 /* Date         Author   Ver.  Purposes                                 */
 /* 26-Nov-2018  NJOW01   1.0   WMS-7113 allocate from pick first even   */
 /*                             cannot fulfill all qty                   */
+/* 30-Jul-2020  WLChooi  1.1   WMS-14345 - Filter HostWHCode if         */
+/*                             Codelist.UDF03 has value when build load */
+/*                             (WL01)                                   */
 /************************************************************************/
 CREATE  PROC [dbo].[ispAL_CN02]
    @c_LoadKey    NVARCHAR(10),   
@@ -76,9 +79,58 @@ BEGIN
       RETURN    
    END
 
+   --WL01 START
+   DECLARE @c_key1               NVARCHAR(10),    
+           @c_key2               NVARCHAR(5),    
+           @c_key3               NCHAR(1),
+           @c_Orderkey           NVARCHAR(10),
+           @c_UDF03              NVARCHAR(60)
+
+   IF LEN(@c_OtherParms) > 0 
+   BEGIN
+      SET @c_OrderKey = LEFT(@c_OtherParms,10)  --if call by discrete
+      SET @c_key1 = LEFT(@c_OtherParms, 10) --Orderkey, Loadkey(conso), Wavekey(conso)
+      SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber      	    
+      SET @c_key3 = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave     	    
+      
+      IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='' --call by load conso
+      BEGIN
+         SET @c_Orderkey = ''
+         SELECT TOP 1 @c_Orderkey = O.Orderkey
+         FROM ORDERS O (NOLOCK) 
+         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+         WHERE O.Loadkey = @c_key1
+         AND OD.Sku = @c_SKU
+         ORDER BY O.Orderkey, OD.OrderLineNumber
+      END        	     
+         
+      IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='W' --call by wave conso
+      BEGIN
+         SET @c_Orderkey = ''
+         SELECT TOP 1 @c_Orderkey = O.Orderkey
+         FROM ORDERS O (NOLOCK) 
+         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+         JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey
+         WHERE WD.Wavekey = @c_key1
+         AND OD.Sku = @c_SKU
+         ORDER BY O.Orderkey, OD.OrderLineNumber
+      END        	     
+                 
+      SELECT @c_UDF03 = LTRIM(RTRIM(ISNULL(COL.UDF03,''))) 
+      FROM BuildLoadDetailLog BLDL (NOLOCK)
+      JOIN BuildLoadLog BLL (NOLOCK) ON BLL.BatchNo = BLDL.Batchno
+      JOIN CODELIST COL (NOLOCK) ON COL.Listgroup = BLL.BuildParmGroup AND COL.LISTNAME = BLL.BuildParmCode
+      WHERE BLDL.Loadkey = @c_key1
+
+      IF ISNULL(@c_UDF03,'') = '' SET @c_UDF03 = ''
+   
+   END
+   --WL01 END
+
    SET @c_LocationType = 'PICK'
    SET @c_LocationCategory = 'OTHER'
-   SET @c_SortBy = 'ORDER BY LOC.LocationGroup, LA.Lottable04, LOC.LocLevel, LOC.LogicalLocation, LOC.Loc' 
+   --SET @c_SortBy = 'ORDER BY LOC.LocationGroup, LA.Lottable04, LOC.LocLevel, LOC.LogicalLocation, LOC.Loc' 
+   SET @c_SortBy = 'ORDER BY QtyAvailable, LA.Lottable04, LOC.LogicalLocation, LOC.Loc'   --WL01
    --SET @n_PickBalance = 0
    
    /* --NJOW01 removed
@@ -139,7 +191,7 @@ BEGIN
       SELECT LOTxLOCxID.LOT,    
              LOTxLOCxID.LOC,     
              LOTxLOCxID.ID,    
-             SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen), ''1'' 
+             SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) AS QtyAvailable, ''1''    --WL01
       FROM LOTxLOCxID (NOLOCK)  
       JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)  
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID AND ID.STATUS <> ''HOLD'')  
@@ -167,6 +219,7 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LA.Lottable10 = @c_Lottable10 ' + CHAR(13) END +      
       CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' + CHAR(13) END +         
       CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END + 
+      CASE WHEN ISNULL(RTRIM(@c_UDF03),'') = '' THEN '' ELSE ' AND LOC.HostWHCode IN (SELECT LTRIM(RTRIM(ColValue)) FROM dbo.FNC_Delimsplit ('','',@c_UDF03)) ' + CHAR(13) END +   --WL01   
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
@@ -178,10 +231,10 @@ BEGIN
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +   
                       '@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), ' + 
                       '@c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30), ' + 
-                      '@c_Lottable12 NVARCHAR(30) '  
+                      '@c_Lottable12 NVARCHAR(30), @c_UDF03      NVARCHAR(60)'   --WL01  
 
    EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @n_QtyLeftToFulfill, @c_Lottable01, @c_Lottable02, @c_Lottable03,  
-                      @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12
+                      @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @c_UDF03   --WL01  
 
 END -- Procedure
 GO
