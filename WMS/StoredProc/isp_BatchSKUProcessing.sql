@@ -43,6 +43,7 @@ GO
 /* 25-Mar-2020  Shong   2.2   WMS-12596 TW Add HostWHCOde               */
 /* 12-Feb-2020  Wan04   2.3   SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */    
+/* 22-Oct-2020  Shong   2.4   LWP-193 Performance Tuning                */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -75,7 +76,7 @@ BEGIN
             @c_Lottable02     NVARCHAR(18),  
             @c_Lottable03            NVARCHAR(18),  
             @d_Lottable04            DATETIME,  
-   @d_Lottable05            DATETIME,  
+            @d_Lottable05            DATETIME,  
             @c_OtherParms            NVARCHAR(200),  
             @c_Orderinfo4Allocation  NVARCHAR(1),  
             @c_SkipPreAllocationFlag NVARCHAR(1),    
@@ -2640,9 +2641,18 @@ BEGIN
                     )  
   
                SELECT @n_Err = @@ERROR, @n_cnt_sql = @@ROWCOUNT  
-               SELECT @n_cnt = COUNT(1)   
-               FROM PICKDETAIL WITH (NOLOCK)   
-               WHERE PickDetailKey = @c_PickDetailKey  
+               -- LWP-193 Performance Tuning                
+               --SELECT @n_cnt = COUNT(1)   
+               --FROM PICKDETAIL WITH (NOLOCK)   
+               --WHERE PickDetailKey = @c_PickDetailKey  
+               IF EXISTS (SELECT 1 FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)
+               BEGIN
+                  SET @n_cnt = 1
+               END 
+               ELSE 
+               BEGIN
+                  SET @n_cnt = 0
+               END 
   
                IF (@b_debug = 1 OR @b_debug = 2) AND (@n_cnt_sql <> @n_cnt)  
                BEGIN  

@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: isp_GetPrint2PDFConfig                                    */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-10-23  WLChooi  1.1   WMS-13124 - Fix only print PDF (WL01)     */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispGetUCCLABELPDF03]
@@ -261,7 +262,7 @@ BEGIN
    END
    ELSE
    BEGIN
-      SET @n_PrintAction = 2
+      SET @n_PrintAction = 1   --WL01
    END
            
   --QCMD_END:                  
