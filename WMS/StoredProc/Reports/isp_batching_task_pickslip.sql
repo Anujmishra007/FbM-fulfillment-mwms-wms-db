@@ -51,6 +51,7 @@ GO
 /*                            Userdefine10 (WL02)                       */
 /* 05-06-2020  WLChooi  2.0   WMS-13654 - Add ReportCFG to show Salesman*/
 /*                            (WL03)                                    */
+/* 26-10-2020  NJOW04   2.1   Performance tuning.                       */
 /************************************************************************/
 
 CREATE PROC isp_batching_task_pickslip (
@@ -85,6 +86,15 @@ CREATE PROC isp_batching_task_pickslip (
            ,@c_MultiConsoTaskPick  NVARCHAR(30)
            ,@c_CallSource          NVARCHAR(10)
            ,@n_StyleMaxLen         INT --NJOW01       
+           
+    --NJOW04
+    DECLARE @c_LogicalLocation    NVARCHAR(18)
+           ,@c_SkuBarcode         NVARCHAR(22) 
+           ,@c_Descr              NVARCHAR(60)
+           ,@n_OrderQty           INT
+           ,@c_LogicalName        NVARCHAR(10)
+           ,@c_altsku             NVARCHAR(20)
+           ,@c_Showloadkeybarcode NVARCHAR(10)
           
     SELECT @b_Success = 1, @n_Err = 0, @c_Errmsg = '', @c_ZoneList = '', @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1  
 
@@ -426,30 +436,37 @@ CREATE PROC isp_batching_task_pickslip (
        ORDER BY T.LogicalLocation, T.Loc, T.Sku       
        
        DECLARE Cur_SplitTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          SELECT Orderkey, Sku, Loc, Qty
+          SELECT Orderkey, Sku, Loc, Qty,
+                 TaskBatchNo, LogicalLocation, SkuBarcode, Descr, OrderQty, LogicalName, altsku, Showloadkeybarcode  --NJOW04                 
           FROM #TMP_RESULT
           WHERE Qty > 1           
           ORDER BY Sku, Orderkey
                      
        OPEN Cur_SplitTask
         FETCH NEXT FROM Cur_SplitTask INTO @c_Orderkey, @c_Sku, @c_Loc, @n_Qty
+                                          ,@c_TaskBatchNo, @c_LogicalLocation, @c_SkuBarcode, @c_Descr, @n_OrderQty, @c_LogicalName, @c_altsku, @c_Showloadkeybarcode  --NJOW04
         
         WHILE @@FETCH_STATUS <> -1 
          BEGIN
              WHILE (@n_Qty - 1) > 0
              BEGIN
-                 INSERT INTO #TMP_RESULT (TaskBatchNo, Loc, LogicalLocation, Sku, SkuBarcode, Descr, Orderkey, OrderQty, LogicalName, Qty,altsku,Showloadkeybarcode)--Cs01 --CS02
+                 INSERT INTO #TMP_RESULT (TaskBatchNo, Loc, LogicalLocation, Sku, SkuBarcode, Descr, Orderkey, OrderQty, LogicalName, Qty,altsku,Showloadkeybarcode)--CS01 --CS02
+                              VALUES (@c_TaskBatchNo, @c_Loc, @c_LogicalLocation, @c_Sku, @c_SkuBarcode, @c_Descr, @c_Orderkey, @n_OrderQty, @c_LogicalName, 1, @c_altsku, @c_Showloadkeybarcode)  --NJOW04
+                 /*
                     SELECT TaskBatchNo, Loc, LogicalLocation, Sku, SkuBarcode, Descr, Orderkey, OrderQty, LogicalName, 1,altsku,Showloadkeybarcode  --CS02     --CS01  
                     FROM #TMP_RESULT 
                     WHERE Orderkey = @c_Orderkey
                     AND Sku = @c_Sku
                     AND Loc = @c_Loc
-                    AND Qty > 1                
+                    AND Qty > 1
+                 */                
                  
                  SET @n_Qty = @n_Qty - 1                
              END
              
             FETCH NEXT FROM Cur_SplitTask INTO @c_Orderkey, @c_Sku, @c_Loc, @n_Qty
+                                              ,@c_TaskBatchNo, @c_LogicalLocation, @c_SkuBarcode, @c_Descr, @n_OrderQty, @c_LogicalName, @c_altsku, @c_Showloadkeybarcode  --NJOW04
+            
          END
          CLOSE Cur_SplitTask
         DEALLOCATE Cur_SplitTask                    
