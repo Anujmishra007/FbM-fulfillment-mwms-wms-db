@@ -26,6 +26,7 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 27-Oct-2020 LZG      1.1   Extended @c_UserName length to 128 (ZG01) */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_Delete] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -36,7 +37,7 @@ CREATE PROC [WM].[lsp_Wave_Delete]
    ,  @c_ErrMsg               NVARCHAR(255)= ''       OUTPUT 
    ,  @n_WarningNo            INT          = 0        OUTPUT
    ,  @c_ProceedWithWarning   CHAR(1)      = 'N'                     
-   ,  @c_UserName             NVARCHAR(50) = ''                                                                                                                         
+   ,  @c_UserName             NVARCHAR(128) = ''                  -- ZG01                                                                                                                   
    ,  @n_ErrGroupKey          INT          = 0        OUTPUT
 AS  
 BEGIN                                                                                                                                                        
