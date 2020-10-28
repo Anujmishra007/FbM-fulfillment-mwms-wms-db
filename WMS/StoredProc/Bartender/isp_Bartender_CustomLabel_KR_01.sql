@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2016-05-09 1.0  CSCHONG    Created (WMS-14850)                             */            
+/* 2016-05-09 1.0  CSCHONG    Created (WMS-14850)                             */    
+/* 2020-10-15 1.1  CSCHONG    WMS-14850 revised field logic (CS01)            */        
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CustomLabel_KR_01]                      
@@ -186,7 +187,7 @@ BEGIN
           SET @c_condition  = ' AND U.Uccno = @c_Sparm01  '
        END
       
-          SET @c_GroupBy = ' GROUP BY U.Uccno,C.long,RECDET.SKU,S.MANUFACTURERSKU,Substring(RTRIM(S.Descr),1,80),S.putawayzone'
+          SET @c_GroupBy = ' GROUP BY U.Uccno,C.long,U.SKU,S.MANUFACTURERSKU,Substring(RTRIM(S.Descr),1,80),S.putawayzone'  --CS01
           
    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT SKU   
@@ -200,7 +201,7 @@ BEGIN
    BEGIN         
           
     SET @c_SQLJOIN = +' SELECT DISTINCT U.Uccno,'''',s.putawayzone,'+ CHAR(13)--SUM(RECDET.qtyreceived),RECDET.SKU,'+ CHAR(13)+ --5
-             + ' SUM(RECDET.Qtyreceived),RECDET.SKU,'                      --5   
+             + ' SUM(U.Qty),U.SKU,'                      --5     --CS01
              + ' S.MANUFACTURERSKU,Substring(RTRIM(S.Descr),1,80),C.long,'''','''', '      --10   
              + ' '''','''','''','''','''','     --15       
              + CHAR(13) +      
