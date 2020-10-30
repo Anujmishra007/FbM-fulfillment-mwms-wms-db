@@ -17,14 +17,15 @@ GO
 /*                                                                      */  
 /* Called By: Inventory Move / TM Inventory Move                        */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date        Author   Ver   Purposes                                  */ 
+/* 2020-10-13  Wan01    1.1   Fixed.                                    */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Move_Wrapper]
    @c_Storerkey NVARCHAR(15) 
@@ -105,23 +106,23 @@ BEGIN
     
     IF @n_continue IN(1,2) AND @c_TaskManagerMove = 'Y' 
     BEGIN
-       IF ISNULL(@c_ToID,'') = ''
-          SET @c_ToID = @c_ID 
+      IF ISNULL(@c_ToID,'') = ''
+         SET @c_ToID = @c_ID 
           
-       IF @c_sku = 'MIXED_SKU'
-          SET @c_sku = ''
+      IF @c_sku = 'MIXED_SKU'
+         SET @c_sku = ''
       BEGIN TRY          
-       EXEC dbo.isp_TaskManagerMove 
-              @c_storerkey = @c_Storerkey, 
-              @c_sku = @c_Sku, 
-              @c_fromloc = @c_Loc, 
-              @c_fromid = @c_ID, 
-              @c_toloc = @c_ToLoc, 
-              @c_toid = @c_ToId, 
-              @n_qty = @n_ToQty, 
-              @b_Success = @b_Success OUTPUT,
-              @n_err = @n_err OUTPUT, 
-              @c_errmsg = @c_errmsg OUTPUT
+         EXEC dbo.isp_TaskManagerMove 
+               @c_storerkey = @c_Storerkey, 
+               @c_sku = @c_Sku, 
+               @c_fromloc = @c_Loc, 
+               @c_fromid = @c_ID, 
+               @c_toloc = @c_ToLoc, 
+               @c_toid = @c_ToId, 
+               @n_qty = @n_ToQty, 
+               @b_Success = @b_Success OUTPUT,
+               @n_err = @n_err OUTPUT, 
+               @c_errmsg = @c_errmsg OUTPUT
       END TRY
 
       BEGIN CATCH
@@ -130,6 +131,14 @@ BEGIN
          SET @c_ErrMsg = ERROR_MESSAGE()
          SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing isp_TaskManagerMove. (lsp_Move_Wrapper)'
                         + '( ' + @c_errmsg + ' )'
+
+         IF (XACT_STATE()) = -1     --(Wan01) - START
+         BEGIN
+            IF @@TRANCOUNT > 0 
+            BEGIN
+               ROLLBACK TRAN
+            END
+         END                        --(Wan01) - END
       END CATCH    
                    
       IF @b_success = 0 OR @n_Err <> 0        
@@ -141,62 +150,62 @@ BEGIN
 
     IF @n_continue IN(1,2) AND @c_TaskManagerMove <> 'Y' 
     BEGIN              
-       IF ISNULL(@c_ToPackkey,'') = ''
-       BEGIN
-           SELECT @c_ToPackkey = PACK.Packkey,
-                  @c_ToUOM = PACK.PackUOM3
-           FROM SKU (NOLOCK)
-           JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
-           WHERE SKU.Storerkey = @c_Storerkey
-           AND SKU.Sku = @c_Sku
-       END
+      IF ISNULL(@c_ToPackkey,'') = ''
+      BEGIN
+         SELECT @c_ToPackkey = PACK.Packkey,
+               @c_ToUOM = PACK.PackUOM3
+         FROM SKU (NOLOCK)
+         JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+         WHERE SKU.Storerkey = @c_Storerkey
+         AND SKU.Sku = @c_Sku
+      END
 
       BEGIN TRY         
-       EXEC dbo.nspItrnAddMove
-           @n_itrnsysid      = NULL ,
-           @c_storerkey      = @c_storerkey,
-           @c_sku              = @c_Sku,
-           @c_lot              = @c_Lot,
-           @c_fromid         = @c_ID,
-           @c_fromloc           = @c_Loc ,
-           @c_toloc             = @c_Toloc,
-           @c_toid              = @c_ToID,
-           @c_status         = '',
-           @c_lottable01      = '', 
-           @c_lottable02      = '', 
-           @c_lottable03      = '', 
-           @d_lottable04      = NULL, 
-           @d_lottable05      = NULL, 
-          @c_lottable06    = '',
-          @c_lottable07    = '',
-          @c_lottable08    = '',
-          @c_lottable09    = '',
-          @c_lottable10    = '',
-          @c_lottable11    = '',
-          @c_lottable12    = '',
-          @d_lottable13    = NULL,
-          @d_lottable14    = NULL,
-          @d_lottable15    = NULL,
-           @n_casecnt           = 0 ,
-           @n_innerpack      = 0 ,
-           @n_qty              = @n_ToQty ,
-           @n_pallet         = 0 ,
-           @f_cube              = 0 ,
-           @f_grosswgt       = 0 ,
-           @f_netwgt         = 0 ,
-           @f_otherunit1      = 0 ,
-           @f_otherunit2      = 0 ,
-           @c_sourcetype      = '' ,
-           @c_sourcekey      = '' ,
-           @c_packkey           = @c_ToPackkey,
-           @c_uom            = @c_ToUom ,
-           @b_uomcalc           = 1 ,
-           @d_effectivedate   = NULL,
-           @c_itrnkey           = @c_itrnkey OUTPUT,
-           @b_success           = @b_success OUTPUT,
-           @n_err              = @n_err OUTPUT,
-           @c_errmsg          = @c_errmsg OUTPUT,
-           @c_MoveRefKey    = ''    
+         EXEC dbo.nspItrnAddMove
+         @n_itrnsysid      = NULL ,
+         @c_storerkey      = @c_storerkey,
+         @c_sku            = @c_Sku,
+         @c_lot            = @c_Lot,
+         @c_fromid         = @c_ID,
+         @c_fromloc        = @c_Loc ,
+         @c_toloc          = @c_Toloc,
+         @c_toid           = @c_ToID,
+         @c_status         = '',
+         @c_lottable01     = '', 
+         @c_lottable02     = '', 
+         @c_lottable03     = '', 
+         @d_lottable04     = NULL, 
+         @d_lottable05     = NULL, 
+         @c_lottable06     = '',
+         @c_lottable07     = '',
+         @c_lottable08     = '',
+         @c_lottable09     = '',
+         @c_lottable10     = '',
+         @c_lottable11     = '',
+         @c_lottable12     = '',
+         @d_lottable13     = NULL,
+         @d_lottable14     = NULL,
+         @d_lottable15     = NULL,
+         @n_casecnt        = 0 ,
+         @n_innerpack      = 0 ,
+         @n_qty            = @n_ToQty ,
+         @n_pallet         = 0 ,
+         @f_cube           = 0 ,
+         @f_grosswgt       = 0 ,
+         @f_netwgt         = 0 ,
+         @f_otherunit1     = 0 ,
+         @f_otherunit2     = 0 ,
+         @c_sourcetype     = '' ,
+         @c_sourcekey      = '' ,
+         @c_packkey        = @c_ToPackkey,
+         @c_uom            = @c_ToUom ,
+         @b_uomcalc        = 1 ,
+         @d_effectivedate  = NULL,
+         @c_itrnkey        = @c_itrnkey OUTPUT,
+         @b_success        = @b_success OUTPUT,
+         @n_err            = @n_err OUTPUT,
+         @c_errmsg         = @c_errmsg OUTPUT,
+         @c_MoveRefKey     = ''    
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
@@ -204,6 +213,14 @@ BEGIN
          SET @c_ErrMsg = ERROR_MESSAGE()
          SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing nspItrnAddMove. (lsp_Move_Wrapper)'
                         + '( ' + @c_errmsg + ' )'
+
+         IF (XACT_STATE()) = -1     --(Wan01) - START
+         BEGIN
+            IF @@TRANCOUNT > 0 
+            BEGIN
+               ROLLBACK TRAN
+            END
+         END                        --(Wan01) - END
       END CATCH    
       IF @b_success = 0 OR @n_Err <> 0        
       BEGIN  
@@ -252,8 +269,8 @@ BEGIN
     */
                      
     EXIT_SP: 
-    --REVERT
-   
+    REVERT
+
     IF @n_continue=3  -- Error Occured - Process And Return  
     BEGIN  
        SELECT @b_success = 0  
@@ -285,7 +302,12 @@ BEGIN
           COMMIT TRAN  
        END  
        --RETURN  
-    END     
+    END  
+
+   WHILE @@TRANCOUNT < @n_StartTCnt -- (Wan01) - START
+   BEGIN
+      BEGIN TRAN
+   END                              -- (Wan01) - END  
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Move_Wrapper] TO nSQL 
