@@ -17,6 +17,7 @@ GO
 /* 2018-12-05 1.2  CSCHONG    WMS-6878 - revised col57 logic (CS02)           */  
 /* 2018-12-07 1.3  Leong      Bug Fix (L01).                                  */ 
 /* 2020-04-30 1.4  WLChooi    Remove Traceinfo insertion (WL01)               */
+/* 2020-10-27 1.5  CSCHONG    Performance tunning (CS03)                      */
 /******************************************************************************/  
   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_10]  
@@ -58,7 +59,7 @@ BEGIN
       @c_UOM             NVARCHAR(10),  
       @C_PHeaderKey      NVARCHAR(18),  
       @C_SODestination   NVARCHAR(30),  
-     @c_ecomflag        NVARCHAR(5)           --CS02  
+      @c_ecomflag        NVARCHAR(5)           --CS02  
   
   DECLARE @n_RowNo             INT,  
           @n_SumPickDetQty     INT,  
@@ -96,17 +97,17 @@ BEGIN
           @c_SVAT              NVARCHAR(18),  
           @c_Col39             NVARCHAR(80),  
           @n_Getcol39          FLOAT,  
-     @c_GetStorerKey      NVARCHAR(20),  
+          @c_GetStorerKey      NVARCHAR(20),  
           @c_DocType           NVARCHAR(10),  
           @c_OHUdef01          NVARCHAR(20),  
           @c_Condition1        NVARCHAR(150),  
           @c_Condition2        NVARCHAR(150)  
          ,@n_Id                INT  
-       ,@c_Col45             NVARCHAR(80)  
-       ,@c_col11             NVARCHAR(80)  
-       ,@c_col57             NVARCHAR(80)  
-       ,@c_Str2              NVARCHAR(20)  
-       ,@n_StartLine         INT  
+         ,@c_Col45             NVARCHAR(80)  
+         ,@c_col11             NVARCHAR(80)  
+         ,@c_col57             NVARCHAR(80)  
+         ,@c_Str2              NVARCHAR(20)  
+         ,@n_StartLine         INT  
   
    DECLARE @d_Trace_StartTime   DATETIME,  
            @d_Trace_EndTime    DATETIME,  
@@ -182,7 +183,7 @@ BEGIN
      [Col19]     [NVARCHAR] (80) NULL,  
      [Col20]     [NVARCHAR] (80) NULL,  
      [Col21]     [NVARCHAR] (80) NULL,  
-     [Col22]    [NVARCHAR] (80) NULL,  
+     [Col22]     [NVARCHAR] (80) NULL,  
      [Col23]     [NVARCHAR] (80) NULL,  
      [Col24]     [NVARCHAR] (80) NULL,  
      [Col25]     [NVARCHAR] (80) NULL,  
@@ -200,7 +201,7 @@ BEGIN
      [Col37]     [NVARCHAR] (80) NULL,  
      [Col38]     [NVARCHAR] (80) NULL,  
      [Col39]     [NVARCHAR] (80) NULL,  
-    [Col40]     [NVARCHAR] (80) NULL,  
+     [Col40]     [NVARCHAR] (80) NULL,  
      [Col41]     [NVARCHAR] (80) NULL,  
      [Col42]     [NVARCHAR] (80) NULL,  
      [Col43]     [NVARCHAR] (80) NULL,  
@@ -239,9 +240,17 @@ BEGIN
        PRINT 'start ' +   @c_Sparm4  
    END  
   
-   SELECT TOP 1 @c_StorerKey = ORD.StorerKey  
-   FROM ORDERS ORD WITH (NOLOCK)  
-   WHERE ORD.loadkey = @c_Sparm1  
+   --CS03 START
+   --SELECT TOP 1 @c_StorerKey = ORD.StorerKey
+   --FROM ORDERS ORD WITH (NOLOCK)
+   --WHERE ORD.loadkey = @c_Sparm1
+   
+   SELECT TOP 1 @c_StorerKey = ORD.StorerKey
+   FROM loadplandetail (NOLOCK) 
+   JOIN  ORDERS ORD WITH (NOLOCK) ON ORD.orderkey = loadplandetail.orderkey
+   WHERE loadplandetail.loadkey = @c_Sparm1
+
+   --CS03 END 
   
    IF ISNULL(RTRIM(@c_Sparm2),'') <> ''  
    BEGIN  
@@ -276,7 +285,7 @@ BEGIN
              + CHAR(13) +  
              + ' FROM ORDERS ORD (NOLOCK) JOIN STORER STO (NOLOCK) ON STO.StorerKey = ORD.StorerKey '  
              + ' LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey = ORD.Orderkey '  
-          + ' LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname=''IKEACourier'' AND C.Storerkey = ORD.Storerkey '  
+             + ' LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname=''IKEACourier'' AND C.Storerkey = ORD.Storerkey '  
              + ' WHERE ORD.StorerKey = @c_StorerKey '  
   
   
@@ -287,7 +296,7 @@ BEGIN
   
   SET @c_SQL='INSERT INTO #t_BartenderResult (ID,Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +  
              +',Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22'  + CHAR(13) +  
-           +',Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34' + CHAR(13) +  
+             +',Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34' + CHAR(13) +  
              +',Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44'  + CHAR(13) +  
              +',Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54'+ CHAR(13) +  
              + ',Col55,Col56,Col57,Col58,Col59,Col60) '  
@@ -340,8 +349,8 @@ BEGIN
    BEGIN  
       SET @c_GetStorerKey = ''  
       SET @c_DocType  = ''  
-    SET @c_OHUdef01 = ''  
-   SET @c_ecomflag = ''          --CS02  
+      SET @c_OHUdef01 = ''  
+      SET @c_ecomflag = ''          --CS02  
   
       SELECT @c_GetStorerKey = StorerKey  
             ,@c_DocType  = Type  
@@ -371,9 +380,9 @@ BEGIN
   
        SET @c_Col45 = ''  
        SET @c_col11 = ''  
-      SET @c_col57 = ''  
-      SET @c_Str2 = ''  
-      SET @n_StartLine = 1  
+       SET @c_col57 = ''  
+       SET @c_Str2 = ''  
+       SET @n_StartLine = 1  
   
       SELECT @c_Col45 = PD.dropid  
       FROM PACKDETAIL PD (NOLOCK)  
@@ -411,7 +420,7 @@ BEGIN
   
       --CS02 Start  
       IF UPPER(@c_ecomflag) = 'S'  
- BEGIN  
+      BEGIN  
         SET @c_col57 = '1'  
       END  
       --CS02 End  
@@ -437,10 +446,10 @@ BEGIN
                  @n_SumUnitPrice  = SUM(QTY * ORDDET.Unitprice),  
                  @n_cntPickzone   = COUNT(DISTINCT l.pickzone)  
           FROM   PICKDETAIL PD WITH (NOLOCK)  
-                 JOIN ORDERDETAIL ORDDET WITH (NOLOCK)  
+          JOIN ORDERDETAIL ORDDET WITH (NOLOCK)  
                       ON  PD.OrderKey = ORDDET.OrderKey  
                       AND PD.OrderLineNumber = ORDDET.OrderLineNumber  
-                 JOIN LOC L WITH (NOLOCK)  
+          JOIN LOC L WITH (NOLOCK)  
                       ON  L.LOC = PD.LOC  
           WHERE  PD.OrderKey = @c_OrderKey  
   
@@ -483,9 +492,9 @@ BEGIN
           Col56 = @n_PackInfoWgt,  
           Col35 = @c_Col35,  
           Col39 = CASE WHEN ISNULL(@c_Col39,'') <> '' THEN @c_Col39 ELSE Col39 END,  
-        Col45 = @c_Col45,  
-        Col11 = @c_col11,  
-        Col57 = @c_col57  
+          Col45 = @c_Col45,  
+          Col11 = @c_col11,  
+          Col57 = @c_col57  
       WHERE Col02=@c_OrderKey  
   
      INSERT INTO @t_PICK (OrderKey,TTLPICKQTY,PickZone,picknotes)  
@@ -498,7 +507,7 @@ BEGIN
        FROM @t_PICK  
      END  
   
-      FETCH NEXT FROM CUR_RowNoLoop INTO @c_OrderKey,@c_Udef04  
+   FETCH NEXT FROM CUR_RowNoLoop INTO @c_OrderKey,@c_Udef04  
    END -- While  
    CLOSE CUR_RowNoLoop  
    DEALLOCATE CUR_RowNoLoop  
@@ -557,8 +566,8 @@ BEGIN
                       @c_short = C.short  
          FROM Codelkup C WITH (NOLOCK)  
          WHERE C.short =  @c_GetShipperKey  
-           AND C.Listname='COURIERMAP'  
-           AND C.UDF01='ELABEL'  
+         AND C.Listname='COURIERMAP'  
+         AND C.UDF01='ELABEL'  
   
          SELECT TOP 1  
             @c_CLong = C.Long  
@@ -617,8 +626,8 @@ BEGIN
                          END  
       FROM   Codelkup C WITH (NOLOCK)  
       WHERE C.Short = @c_GetShipperKey  
-        AND C.StorerKey = @c_StorerKey  
-        AND C.Listname = 'WSCourier'  
+      AND C.StorerKey = @c_StorerKey  
+      AND C.Listname = 'WSCourier'  
   
       SET @c_GetCol55 = ''  
   

@@ -17,6 +17,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */         
 /* 2019-08-01 1.0  WLCHOOI    Created (WMS-10039)                             */   
 /* 2020-01-17 1.1  CSCHONG    WMS-11764 revised field mapping (CS01)          */
+/* 2020-10-27 1.2  CSCHONG    Performance tunning (CS02)                      */  
 /******************************************************************************/        
           
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_VIP]               
@@ -204,10 +205,18 @@ BEGIN
       [Size]             NVARCHAR(10),
       [Qty]              INT )  
 
+     --CS02 START
+     --SELECT TOP 1 @c_StorerKey = ORD.StorerKey
+     --FROM ORDERS ORD WITH (NOLOCK)
+     --WHERE ORD.loadkey = @c_Sparm1
      SELECT TOP 1 @c_StorerKey = ORD.StorerKey
-     FROM ORDERS ORD WITH (NOLOCK)
-     WHERE ORD.loadkey = @c_Sparm1
-     
+     FROM loadplandetail (NOLOCK) 
+     JOIN  ORDERS ORD WITH (NOLOCK) ON ORD.orderkey = loadplandetail.orderkey
+     WHERE loadplandetail.loadkey = @c_Sparm1
+
+
+     --CS02 END
+
      IF ISNULL(RTRIM(@c_Sparm2),'') <> ''
      BEGIN
         SET @c_condition1 = ' AND ORD.OrderKey =RTRIM(@c_Sparm2)'

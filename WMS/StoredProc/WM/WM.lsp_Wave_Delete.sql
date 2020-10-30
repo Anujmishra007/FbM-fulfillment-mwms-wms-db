@@ -61,6 +61,21 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
+   -- ZG01 (Start)      
+   SET @n_Err = 0         
+   EXEC [WM].[lsp_SetUser]         
+         @c_UserName = @c_UserName  OUTPUT        
+      ,  @n_Err      = @n_Err       OUTPUT        
+      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT        
+                        
+   EXECUTE AS LOGIN = @c_UserName        
+        
+   IF @n_Err <> 0         
+   BEGIN        
+      GOTO EXIT_SP        
+   END         
+   -- ZG01 (End)                  
+   
    IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
    BEGIN
       SET @n_WarningNo = 1

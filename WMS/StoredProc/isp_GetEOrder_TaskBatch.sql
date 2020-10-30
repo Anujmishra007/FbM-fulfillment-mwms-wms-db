@@ -26,6 +26,7 @@ GO
 /* 26-OCT-2017 Wan01    1.1   Multiple Loadkey Pass in                  */
 /* 08-Apr-2019 NJOW01   1.2   WMS-8705 - add 'No need replen' status if */
 /*                            generated  but no replen record           */
+/* 26-Oct-2020 Wan02    1.3   Performance tune. Add Index               */
 /************************************************************************/
 CREATE PROC isp_GetEOrder_TaskBatch  
            @c_Loadkey   NVARCHAR(1000)	--(Wan01)
@@ -88,7 +89,7 @@ BEGIN
    JOIN LOADPLANDETAIL     LPD WITH (NOLOCK) ON (PT.Orderkey = LPD.Orderkey)
    JOIN ORDERS             OH  WITH (NOLOCK) ON (LPD.Orderkey= OH.Orderkey)
    JOIN #TMP_LOAD          LP  ON (LPD.Loadkey = LP.Loadkey)      --(Wan01)
-   LEFT JOIN REPLENISHMENT RPL WITH (NOLOCK) ON (PT.ReplenishmentGroup = RPL.ReplenishmentGroup)
+   LEFT JOIN REPLENISHMENT RPL WITH (NOLOCK) ON (PT.ReplenishmentGroup = RPL.ReplenishmentGroup AND RPL.storerkey = OH.storerkey)   --(Wan02)
    --WHERE LPD.Loadkey = @c_Loadkey                               --(Wan01)
    GROUP BY OH.Facility
          ,  OH.Storerkey

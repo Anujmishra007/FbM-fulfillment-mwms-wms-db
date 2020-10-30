@@ -14,6 +14,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */  
 /* 2019-11-26 1.0  WLChooi    WMS-11177 (Created)                             */  
 /* 2020-04-30 1.1  WLChooi    Remove Traceinfo Insertion (WL01)               */
+/* 2020-10-27 1.2  CSCHONG    Performance tunning (CS01)                      */
 /******************************************************************************/  
   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_16]  
@@ -234,10 +235,17 @@ BEGIN
    BEGIN  
        PRINT 'start ' +   @c_Sparm4  
    END  
-  
-   SELECT TOP 1 @c_StorerKey = ORD.StorerKey  
-   FROM ORDERS ORD WITH (NOLOCK)  
-   WHERE ORD.loadkey = @c_Sparm1  
+   --CS01 START
+   --SELECT TOP 1 @c_StorerKey = ORD.StorerKey  
+   --FROM ORDERS ORD WITH (NOLOCK)  
+   --WHERE ORD.loadkey = @c_Sparm1  
+
+   SELECT TOP 1 @c_StorerKey = ORD.StorerKey
+   FROM loadplandetail (NOLOCK) 
+   JOIN  ORDERS ORD WITH (NOLOCK) ON ORD.orderkey = loadplandetail.orderkey
+   WHERE loadplandetail.loadkey = @c_Sparm1
+
+   --CS01 END
   
    IF ISNULL(RTRIM(@c_Sparm2),'') <> ''  
    BEGIN  
@@ -501,11 +509,11 @@ BEGIN
      IF @b_Debug = '1'  
      BEGIN  
        SELECT 'Pick'  
-SELECT *  
+       SELECT *  
        FROM @t_PICK  
      END  
   
-      FETCH NEXT FROM CUR_RowNoLoop INTO @c_OrderKey,@c_Udef04  
+   FETCH NEXT FROM CUR_RowNoLoop INTO @c_OrderKey,@c_Udef04  
    END -- While  
    CLOSE CUR_RowNoLoop  
    DEALLOCATE CUR_RowNoLoop  
@@ -562,8 +570,8 @@ SELECT *
                       @c_short = C.short  
          FROM Codelkup C WITH (NOLOCK)  
          WHERE C.short =  @c_GetShipperKey  
-           AND C.Listname='COURIERMAP'  
-           AND C.UDF01='ELABEL'  
+         AND C.Listname='COURIERMAP'  
+         AND C.UDF01='ELABEL'  
   
          SELECT TOP 1  
             @c_CLong = C.Long  
@@ -620,8 +628,8 @@ SELECT *
                          END  
       FROM   Codelkup C WITH (NOLOCK)  
       WHERE C.Short = @c_GetShipperKey  
-        AND C.StorerKey = @c_StorerKey  
-        AND C.Listname = 'WSCourier'  
+      AND C.StorerKey = @c_StorerKey  
+      AND C.Listname = 'WSCourier'  
   
       SET @c_GetCol55 = ''  
   
@@ -672,7 +680,7 @@ SELECT *
              Col55     = @c_Col55  
       WHERE  Col02     = @c_OrderKey  
   
-      FETCH NEXT FROM CUR_UpdateRec INTO @c_OrderKey  
+   FETCH NEXT FROM CUR_UpdateRec INTO @c_OrderKey  
   
    END -- While  
    CLOSE CUR_UpdateRec  
