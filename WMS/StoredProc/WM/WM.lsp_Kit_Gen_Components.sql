@@ -8,8 +8,6 @@ GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-
-
 /*************************************************************************/  
 /* Stored Procedure: lsp_Kit_Gen_Components                              */  
 /* Creation Date: 28-FEB-2018                                            */  
@@ -26,7 +24,9 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */
+/* 2020-10-09  Wan01    1.1   LFWM-2136 - UAT  MY SCE Kitting Get Component*/
+/*                            Error                                      */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Kit_Gen_Components]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -152,12 +152,15 @@ BEGIN
 
       SET @n_BOMQty = (@n_FromExpectedQty * @n_ComponentQty) / @n_ParentQty--@n_FromExpectedQty / (@n_ParentQty/@n_ComponentQty) -- Wna01:Fix
       
-      SELECT @c_NewKitLineNo = RIGHT('0000' + CAST(CAST(MAX(k.KITLineNumber) AS INT) + 1 AS VARCHAR(5))
+      SET @c_NewKitLineNo = '00001'                                                                   --(Wan01)
+      SELECT TOP 1                                                                                    --(Wan01)
+             @c_NewKitLineNo = RIGHT('0000' + CAST(CAST(k.KITLineNumber AS INT) + 1 AS VARCHAR(5))    --(Wan01)
                                      ,5)
       FROM KITDETAIL AS k WITH(NOLOCK)
       WHERE k.KITKey = @c_KitKey 
-      AND k.[Type] = CASE WHEN @c_Type = 'T' THEN 'F' ELSE 'T' END 
-      
+      --AND k.[Type] = CASE WHEN @c_Type = 'T' THEN 'F' ELSE 'T' END                                  --(Wan01)
+      ORDER BY k.KITLineNumber DESC                                                                   --(Wan01)
+           
       INSERT INTO KITDETAIL
       (
          KITKey,     KITLineNumber, [Type],
