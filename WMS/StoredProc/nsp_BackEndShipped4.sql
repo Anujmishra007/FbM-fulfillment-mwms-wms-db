@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[nsp_BackEndShipped4]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[nsp_BackEndShipped4]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -42,8 +39,11 @@ GO
 /*                           Deleted                                    */
 /* 23-Apr-2013  Leong        Include debug mode (Leong01)               */
 /* 24-Feb-2017  TLTING       Performance Tune - Editdate,editwho        */
+/* 19-Nov-2018  TLTING       Remove OD Mbolkey link                     */  
+/* 01-Nov-2020  SHONG        Prevent rollback to pickdetail update      */  
+/*                           and Log Short Qty to ErrLog Table          */  
 /************************************************************************/
-CREATE PROCEDURE [dbo].[nsp_BackEndShipped4]
+CREATE OR ALTER PROCEDURE [dbo].[nsp_BackEndShipped4]
      @cStorerKey NVARCHAR(15),
      @cMBOLKey   NVARCHAR(10) -- For one storer, pass in the Storerkey; For All Storer, pass in '%'
    , @b_debug    INT = 0 -- Leong01
@@ -70,7 +70,7 @@ BEGIN
            @c_PrevMBOLkey    NVARCHAR(10),
            @f_Status         INT,
            @c_TaskDetailKey  NVARCHAR(10)      -- (james01)
-        --,@b_debug          INT    -- KHLim01
+          ,@b_OutofStock     INT = 0   
 
    SELECT @n_continue=1
        --,@b_debug=0 -- KHLim01
@@ -91,7 +91,7 @@ BEGIN
       FROM ORDERDETAIL WITH (NOLOCK)
       JOIN PICKDETAIL WITH (NOLOCK, INDEX(PICKDETAIL_OrderDetStatus)) ON (PICKDETAIL.OrderKey = ORDERDETAIL.OrderKey AND
                                          PICKDETAIL.ORDERLINENUMBER = ORDERDETAIL.ORDERLINENUMBER )
-      JOIN  MBOLDETAIL (NOLOCK) ON MBOLDETAIL.MBOLKey = ORDERDETAIL.MBOLKey AND MBOLDETAIL.OrderKey = ORDERDETAIL.OrderKey
+      JOIN  MBOLDETAIL (NOLOCK) ON MBOLDETAIL.OrderKey = ORDERDETAIL.OrderKey   -- MBOLDETAIL.MBOLKey = ORDERDETAIL.MBOLKey  
       JOIN  MBOL (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)
       WHERE PICKDETAIL.Status < '9'
       and   Mbol.Mbolkey=@cMBOLKey
@@ -115,14 +115,15 @@ BEGIN
 
    SELECT @c_PickDetailKey = SPACE(10),
           @c_MBOLKey       = SPACE(10),
-          @c_PrevMBOLkey   = SPACE(10)
+          @c_PrevMBOLkey   = SPACE(10),  
+          @b_OutofStock    = 0   
 
    FETCH NEXT FROM CUR1 INTO @c_PickDetailKey, @c_MBOLKey, @c_TaskDetailKey
 
    SELECT @f_status = @@FETCH_STATUS
    SELECT @c_PrevMBOLkey = @c_MBOLKey
 
-   WHILE @f_status <> -1
+   WHILE @f_status <> -1 AND @n_continue = 1 
    BEGIN
       IF ISNULL(LTRIM(RTrim(@c_PickDetailKey)), '' ) = ''
          BREAK
@@ -174,32 +175,65 @@ BEGIN
             EXECUTE ispPatchOrdDetailQty @cOrderKey, @cOrderLineNumber
          END
 
-         BEGIN TRAN
-
-         UPDATE PICKDETAIL WITH (ROWLOCK)
-            SET Status = '9',
-               EditWho = SUSER_SNAME(),
-               EditDate = GETDATE()
-         WHERE pickdetailkey = @c_PickDetailKey
-         AND   Status < '9'
-
-         SELECT @n_err = @@ERROR
-         IF @n_err <> 0
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72806   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table PICKDETAIL. (nsp_BackEndShipped4)" + " ( " + " SQLSvr MESSAGE=" + LTrim(RTrim(@c_errmsg)) + " ) "
-            ROLLBACK TRAN
-            BREAK
-         END
-         ELSE
-         BEGIN
-            WHILE @@TRANCOUNT > 0
-            COMMIT TRAN
-            IF @b_debug = 1   -- KHLim01
-            BEGIN
-               PRINT 'Updated MBOL ' + @c_MBOLKey + ' PickDetailKey ' + @c_PickDetailKey + ' Start at ' + CONVERT(CHAR(10), @d_StartTime, 108) + ' End at ' + CONVERT(CHAR(10), Getdate(), 108)
-            END
+         IF EXISTS(SELECT 1 FROM LOTxLOCxID (NOLOCK)   
+                   WHERE LOT = @cLOT   
+                     AND LOC = @cLOC   
+                     AND ID  = @cID  
+                     AND Qty < (@nQtyAllocated + @nQtyPicked) )  
+         BEGIN  
+            SET @n_err=72806   
+            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': (LOTxLOCxID.Qty < PickDetail.Qty) - PickDetailKey: ' + @c_PickDetailKey   
+                        + ', MBOLKey: ' + @c_MBOLKey   
+                        + ', LOC: ' + @cLOC  
+                        + ', LOT: ' + @cLOT  
+                        + ', Qty: ' + CAST( (@nQtyAllocated + @nQtyPicked) AS VARCHAR(5))    
+                        + ' (nsp_BackEndShipped4)'   
+            EXECUTE nsp_LogError @n_err, @c_errmsg, "nsp_BackEndShipped4"  
+            SET @b_OutofStock = 1  
+         END  
+         ELSE   
+         BEGIN  
+            BEGIN TRAN  
+  
+            BEGIN TRY    
+              UPDATE PICKDETAIL WITH (ROWLOCK)  
+                  SET Status = '9',  
+                     EditWho = SUSER_SNAME(),  
+                     EditDate = GETDATE()  
+               WHERE pickdetailkey = @c_PickDetailKey  
+               AND   Status < '9'   
+  
+               SELECT @n_err = @@ERROR  
+               IF @n_err = 0   
+               BEGIN  
+                  WHILE @@TRANCOUNT > 0  
+                  COMMIT TRAN  
+                  IF @b_debug = 1   -- KHLim01  
+                  BEGIN  
+                     PRINT 'Updated MBOL ' + @c_MBOLKey + ' PickDetailKey ' + @c_PickDetailKey + ' Start at ' + CONVERT(CHAR(10), @d_StartTime, 108) + ' End at ' + CONVERT(CHAR(10), Getdate(), 108)  
+                  END  
+               END   
+            END TRY    
+            BEGIN CATCH    
+               SELECT @n_err = ERROR_NUMBER()  
+               IF @n_err <> 0  
+               BEGIN  
+                  SELECT @n_continue = 3  
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72806   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+                  IF @b_debug = 1   
+                  BEGIN  
+                     SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update PickDetail Fail. PickDetailKey = " + @c_PickDetailKey   
+                           + " (nsp_BackEndShipped4)" + " ( " + " SQLSvr Message=" + ERROR_MESSAGE() + " ) "  
+                  END   
+                  ELSE   
+                  BEGIN  
+                     SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update PickDetail Fail. PickDetailKey = " + @c_PickDetailKey   
+                           + " (nsp_BackEndShipped4)"   
+                  END   
+                  ROLLBACK TRAN  
+                  BREAK  
+               END   
+            END CATCH  
          END
       END
       ELSE
@@ -311,7 +345,8 @@ BEGIN
    END
 
    /* #INCLUDE <SPTPA01_2.SQL> */
-   IF @n_continue = 3  -- Error Occured - Process And Return
+   -- Error Occured - Process And Return   
+   IF @n_continue = 3 OR @b_OutofStock = 1    
    BEGIN
       SELECT @b_success = 0
       execute nsp_logerror @n_err, @c_errmsg, "nsp_BackEndShipped4"
