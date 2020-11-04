@@ -35,6 +35,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/*01-NOV-2020   CSCHONG   1.1   WMS-15179 revised sorting (CS01)        */
 /************************************************************************/
 
 CREATE PROC isp_GetPickSlipOrders113 (@c_wavekey NVARCHAR(20))
@@ -368,7 +369,9 @@ SELECT PICKDETAIL.PickSlipNo as Pickslipno,
    END
    -- return result set
    SELECT * FROM #RESULT_113
-   Order by Pickslipno,orderkey
+   Order by Pickslipno,orderkey,
+            CASE WHEN logicallocation <> '' THEN 0 ELSE 1 END,logicallocation,loc
+           -- CASE WHEN logicallocation = '' THEN loc ELSE logicallocation END
    -- drop table
    DROP TABLE #RESULT_113
 
