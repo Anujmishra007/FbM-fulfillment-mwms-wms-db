@@ -26,6 +26,7 @@ GO
 /* Updates:                                                              */    
 /* Date         Author   Ver   Purposes                                  */    
 /* 20-OCT-2020  CSCHONG  1.1   INC1330177 - Fix over lenght issue (CS01) */    
+/* 30-OCT-2020  CSCHONG  1.2   WMS-15624 Revised report filter logic (CS01)*/
 /*************************************************************************/    
     
 CREATE PROC [dbo].[isp_Delivery_Note45_RDT]     
@@ -569,17 +570,17 @@ END
       SELECT @n_NoOfPage = COUNT(DISTINCT caseid)    
       FROM pickdetail (NOLOCK)    
       WHERE orderkey=@c_GetOrderkey    
-    
-      IF @n_cntPNote > 1    
-      BEGIN    
+      --CS02 START --remove this checking
+      --IF @n_cntPNote > 1    
+      --BEGIN    
       
-        DELETE #TMP_HDR    
-        WHERE orderkey=@c_GetOrderkey    
-        AND seqno=@n_seqno    
+      --  DELETE #TMP_HDR    
+      --  WHERE orderkey=@c_GetOrderkey    
+      --  AND seqno=@n_seqno    
     
     
-      END     
-    
+      --END     
+    --CS02 END
        SET @n_totalPage = @n_NoOfPage    
     
        WHILE @n_NoOfPage >= 2    
