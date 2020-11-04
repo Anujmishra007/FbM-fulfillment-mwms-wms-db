@@ -28,9 +28,11 @@ GO
 /* 17-May-2010 1.1  Vanessa  SOS#173070 before MBOL Shipped using       */
 /*                           OrderDetail.QtyPicked.   -- (Vanessa01)    */
 /* 05-Aug-2013 1.2  NJOW01   285805-Add userdefine01 & change sorting   */   
+/* 03-Nov-2020 1.3  WLChooi  WMS-15592 - Add packing requirement column */
+/*                           in Delivery Notes                          */
 /************************************************************************/  
   
-CREATE PROC nsp_print_packslip_sbuxm(@c_mbolkey NVARCHAR(10))  
+CREATE PROC [dbo].[nsp_print_packslip_sbuxm](@c_mbolkey NVARCHAR(10))    
  AS  
 BEGIN
 	SET NOCOUNT ON -- SQL 2005 Standard
@@ -120,7 +122,8 @@ BEGIN
 	       UPPER(PACK.PackUOM3)        AS PackUOM3,
 	       UPPER(SKU.SkuGroup)         AS SkuGroup,
 	       --ORDERDETAIL.OrderLineNumber,
-	       ORDERDETAIL.Userdefine01 AS Userdefine01  --NJOW01
+	       ORDERDETAIL.Userdefine01 AS Userdefine01,  --NJOW01
+	       ISNULL(CL.Short,'N') AS ShowPackRequirement   --WL01
 	       INTO #RESULT
 	FROM   MBOL WITH (NOLOCK)
 	       JOIN MBOLDETAIL WITH (NOLOCK)
@@ -146,6 +149,8 @@ BEGIN
 	       JOIN PACK WITH (NOLOCK)
 	            ON  PACK.PackKey = SKU.PackKey
 	       JOIN LOTATTRIBUTE WITH (NOLOCK) ON PICKDETAIL.Lot = LOTATTRIBUTE.Lot
+	       LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'ShowPackRequirement'               --WL01
+	                                          AND CL.Long = 'r_dw_print_packslip_sbuxm' AND CL.Storerkey = ORDERS.StorerKey   --WL01
 	WHERE  mbol.mbolkey = @c_mbolkey
 	GROUP BY MBOL.mbolkey,
 	         CONVERT(NVARCHAR(30), MBOL.vessel),
@@ -194,7 +199,8 @@ BEGIN
 	         UPPER(PACK.PackUOM1),
 	         UPPER(PACK.PackUOM3),
 	         UPPER(SKU.SkuGroup),
-	         ORDERDETAIL.Userdefine01
+	         ORDERDETAIL.Userdefine01,
+	         ISNULL(CL.Short,'N')   --WL01
 	
 	SELECT @n_totalorders = COUNT(*),
 	       @n_totalcust     = COUNT(DISTINCT DESCRIPTION)
