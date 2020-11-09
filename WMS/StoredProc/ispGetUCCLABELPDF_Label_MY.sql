@@ -15,11 +15,11 @@ GO
 /* Written by: WLChooi                                                  */
 /*                                                                      */
 /* Purpose: WMS-13933 - [MY]-Skechers Selluseller ECOM Print ShipLabel  */
-/*          and Invoice-[CR] & WMS-15553                                */
+/*          and Invoice-[CR]                                            */
 /*                                                                      */
 /* Called By: isp_GetPrint2PDFConfig                                    */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-11-09  WLChooi  1.1   Fix - Get parameters from Option5 in Sub- */
+/*                            SP & Add @n_PrintAction (WL01)            */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispGetUCCLABELPDF_Label_MY]
@@ -47,9 +49,9 @@ CREATE PROCEDURE [dbo].[ispGetUCCLABELPDF_Label_MY]
        @c_Dimension       NVARCHAR(50)    OUTPUT,  --Dimension in mm x mm, eg. 210x297
        @n_NoOfPDFSheet    INT = 1,               --PDF Sheets number (For 1 ReportType print multiple layout)
        --@c_PostPrinting  NVARCHAR(1)   OUTPUT,  --Y - PostPrinting, N - DirectPrint (Need to wait)
-       @c_SubFolder       NVARCHAR(500), 
-       @c_PDFNameFormat   NVARCHAR(4000),
-       @c_Prefix          NVARCHAR(500), 
+       --@c_SubFolder       NVARCHAR(500),   --WL01
+       --@c_PDFNameFormat   NVARCHAR(4000),  --WL01
+       --@c_Prefix          NVARCHAR(500),   --WL01
        @b_Success         INT             OUTPUT,  
        @n_Err             INT             OUTPUT, 
        @c_ErrMsg          NVARCHAR(255)   OUTPUT
@@ -101,11 +103,15 @@ BEGIN
          , @c_GetOrdType      NVARCHAR(250) = ''
          , @c_GetECOMFlag     NVARCHAR(250) = ''
          
-   DECLARE  @c_OrderKey    NVARCHAR(10)
-   	    , @c_DocType     NVARCHAR(10)
-   	    , @c_OrdType     NVARCHAR(50)
-   	    , @c_ExtOrderkey NVARCHAR(50)
-   	    , @c_ECOMFlag    NVARCHAR(1)
+   DECLARE  @c_OrderKey       NVARCHAR(10)
+   	    , @c_DocType        NVARCHAR(10)
+   	    , @c_OrdType        NVARCHAR(50)
+   	    , @c_ExtOrderkey    NVARCHAR(50)
+   	    , @c_ECOMFlag       NVARCHAR(1)
+   	    , @c_PDFNameFormat  NVARCHAR(4000)   --WL01
+   	    , @c_Prefix         NVARCHAR(500)    --WL01
+   	    , @c_SubFolder      NVARCHAR(500)    --WL01
+   	    , @c_GetPrintAction NVARCHAR(1)      --WL01
    	    
    SET @n_err = 0
    SET @b_success = 1
@@ -180,6 +186,19 @@ BEGIN
             GOTO QUIT_SP
       	END
       END
+      
+      --WL01 START
+      IF ISNULL(@c_PDFNameFormat,'') = ''
+         SELECT @c_PDFNameFormat = dbo.fnc_GetParamValueFromString('@c_PDFNameFormat', @c_Option5, @c_PDFNameFormat)   
+
+      IF ISNULL(@c_Prefix,'') = ''
+         SELECT @c_Prefix = dbo.fnc_GetParamValueFromString('@c_Prefix', @c_Option5, @c_Prefix)   
+      
+      IF ISNULL(@c_SubFolder,'') = ''
+         SELECT @c_SubFolder = dbo.fnc_GetParamValueFromString('@c_SubFolder', @c_Option5, @c_SubFolder)   
+         
+      SELECT @c_GetPrintAction = dbo.fnc_GetParamValueFromString('@c_GetPrintAction', @c_Option5, @c_GetPrintAction)  
+      --WL01 END
    END
   
    --@c_FileName = '<Orders.StorerKey>_<PREFIX>_<Orders.Externorderkey>.pdf' @c_Prefix = 'SuS_SHPLBL,SuS_Invoice'
@@ -663,7 +682,14 @@ NEXT_LOOP:
    END
    ELSE
    BEGIN
-      SET @n_PrintAction = 1
+   	SET @n_PrintAction = 1
+
+   	--WL01 START
+   	IF ISNUMERIC(@c_GetPrintAction) = 1
+   	BEGIN
+   		SET @n_PrintAction = CAST(@c_GetPrintAction AS INT)
+   	END
+   	--WL01 END
    END
            
   --QCMD_END:                  
