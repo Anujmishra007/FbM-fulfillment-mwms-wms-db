@@ -1,10 +1,12 @@
-IF OBJECT_ID('dbo.isp_OrderStage','P') IS NOT NULL
-   DROP PROC  dbo.isp_OrderStage
-GO
 SET ANSI_NULLS OFF      ;   SET QUOTED_IDENTIFIER OFF;
 GO
--- 20200419   KHLim   Staging shipment Orders and store in Summary table
-CREATE  PROC  dbo.isp_OrderStage
+/***************************************************************************/
+/* Updates:                                                                */
+/* Date         Author      Ver.  Purposes                                 */
+/* 19-Apr-2020  KHLim   Staging shipment Orders and store in Summary table */
+/* 12-Nov-2020  KHLim       1.1   Get PickDate from DocStatusTrack         */
+/***************************************************************************/
+CREATE OR ALTER PROC  dbo.isp_OrderStage
    @d_StartDate datetime  = NULL -- last Cut Off time
   ,@d_Date  smalldatetime = NULL
   ,@nDaysAgo smallint = 14
@@ -39,7 +41,7 @@ WITH O AS (
    SELECT O.OrderKey, O.StorerKey, O.ExternOrderKey, DeliveryDate=CAST(O.DeliveryDate AS date), O.ConsigneeKey, C_City=ISNULL(O.C_City,'')
    ,O.Status, O.Type, O.OrderGroup, AddDate=CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), EditDate=CAST(O.EditDate AS smalldatetime)
    ,MBOLKey=ISNULL(O.MBOLKey,''), LoadKey=ISNULL(O.LoadKey,''), O.Facility
-   ,ShipperKey=ISNULL(ShipperKey,''), DocType, TrackingNo=ISNULL(TrackingNo,''), ECOM_PRESALE_FLAG=ISNULL(O.ECOM_PRESALE_FLAG,''), ECOM_SINGLE_FLAG=ISNULL(O.ECOM_SINGLE_FLAG,'')
+   ,ShipperKey=ISNULL(ShipperKey,''), DocType=ISNULL(DocType,''), TrackingNo=ISNULL(TrackingNo,''), ECOM_PRESALE_FLAG=ISNULL(O.ECOM_PRESALE_FLAG,''), ECOM_SINGLE_FLAG=ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,UserDefine01=ISNULL(O.UserDefine01,'') ,UserDefine02=ISNULL(O.UserDefine02,'') ,UserDefine03=ISNULL(O.UserDefine03,'') 
    ,Lines     = COUNT(1)
    ,OpenQty   = SUM(OD.OpenQty)
@@ -53,7 +55,7 @@ WITH O AS (
    GROUP BY O.OrderKey, O.StorerKey, O.ExternOrderKey, CAST(O.DeliveryDate AS date), O.ConsigneeKey, ISNULL(O.C_City,'')
    ,O.Status, O.Type, O.OrderGroup, CAST(CONVERT(char(16),O.AddDate,121) AS smalldatetime), CAST(O.EditDate AS smalldatetime)
    ,ISNULL(O.MBOLKey,''), ISNULL(O.LoadKey,''), O.Facility
-   ,ISNULL(ShipperKey,''), DocType, ISNULL(TrackingNo,'') , ISNULL(O.ECOM_PRESALE_FLAG,''), ISNULL(O.ECOM_SINGLE_FLAG,'')
+   ,ISNULL(ShipperKey,''), ISNULL(DocType,''), ISNULL(TrackingNo,'') , ISNULL(O.ECOM_PRESALE_FLAG,''), ISNULL(O.ECOM_SINGLE_FLAG,'')
    ,ISNULL(O.UserDefine01,'') ,ISNULL(O.UserDefine02,'') ,ISNULL(O.UserDefine03,'') 
 ) , H AS (
    SELECT OrderKey,
@@ -161,8 +163,19 @@ FROM BI.OrderStage AS O WITH (NOLOCK) JOIN m ON O.OrderKey = m.OrderKey;
 
    IF @b_debug=1 SELECT 'Join MBOL', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
 
+WITH D AS (
+   SELECT o.Orderkey, D.TransDate
+   FROM BI.OrderStage AS O WITH (NOLOCK)
+   JOIN dbo.DocStatusTrack AS D WITH (NOLOCK) ON D.TableName='STSORDERS' AND D.DocumentNo = O.OrderKey AND D.Key1 = '' AND D.DocStatus = O.[Status]
+   WHERE O.[Status] IN ('3', '5')
+)
+UPDATE O SET PickDate = CAST(D.TransDate AS smalldatetime)
+FROM BI.OrderStage AS O WITH (NOLOCK) JOIN D ON O.OrderKey = D.OrderKey;
+
+   IF @b_debug=1 SELECT 'Join DocStatusTrack', Spent=DATEDIFF(ms,@GetDate,GETDATE()), RowCnt = @@ROWCOUNT; SET @GetDate=GETDATE();
+
 WITH p AS (
-   SELECT o.Orderkey, PickDet_Lines=COUNT(1), AllocDate=CAST(MIN(P.AddDate) AS smalldatetime), PickDate=CAST(MIN(P.EditDate) AS smalldatetime)
+   SELECT o.Orderkey, PickDet_Lines=COUNT(1), AllocDate=CAST(MIN(P.AddDate) AS smalldatetime)
    , Orders_OverRun=SUM(CASE WHEN (P.ShipFlag <> 'Y' OR P.Status <> '9') AND P.AddDate < DATEADD(HOUR,-                      8 ,@d_Date) THEN 1 ELSE 0 END)--Alloc until MarkShip
    , PickDetails_Inserted=SUM(CASE WHEN P.EditDate >= DATEADD(minute,-@FreqInterval,@d_Date) THEN 1 ELSE 0 END)
    FROM BI.OrderStage AS O WITH (NOLOCK)
@@ -173,10 +186,6 @@ WITH p AS (
 )
 UPDATE O SET PickDet_Lines = p.PickDet_Lines
       ,AllocDate               = p.AllocDate
-      ,O.PickDate              = CASE WHEN o.ShipDate IS NOT NULL AND o.ShipDate > p.PickDate THEN p.PickDate 
-                                      WHEN o.ShipDate IS NOT NULL AND p.AllocDate IS NOT NULL THEN p.AllocDate 
-                                      WHEN o.ShipDate IS     NULL AND p.PickDate IS NOT NULL  THEN p.PickDate 
-                                                                                              ELSE O.PickDate END
       ,Orders_OverRun      = p.Orders_OverRun
       ,PickDetails_Inserted= p.PickDetails_Inserted
 FROM BI.OrderStage AS O JOIN p ON O.OrderKey = p.OrderKey;
@@ -203,9 +212,7 @@ THEN
    ,PickDetails_Inserted=s.PickDetails_Inserted ,Orders_OverRun=s.Orders_OverRun ,Orders_PendBuildLoad=s.Orders_PendBuildLoad
    ,MBOL_NotValid=s.MBOL_NotValid 
    ,AllocDate=CASE WHEN t.AllocDate IS NULL THEN s.AllocDate ELSE t.AllocDate END
-   ,PickDate =CASE WHEN t.PickDate  IS NULL THEN s.PickDate  
-                     WHEN s.PickDate IS NOT NULL AND s.ShipDate IS NULL THEN s.PickDate  
-                     WHEN s.PickDate IS NOT NULL AND s.ShipDate IS NOT NULL AND s.PickDate < s.ShipDate THEN s.PickDate ELSE t.PickDate END
+   ,PickDate =CASE WHEN t.PickDate  IS NULL THEN s.PickDate  ELSE t.PickDate END
    ,ShipDate=s.ShipDate 
    ,CancDate=s.CancDate
 WHEN NOT MATCHED THEN
