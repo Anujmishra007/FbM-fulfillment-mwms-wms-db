@@ -40,6 +40,7 @@ GO
 /*                            Picked                                    */  
 /* 18-OCT-2018 NJOW07   2.2   WMS-6774 SKIPSTAMPED cater for conso pack */  
 /* 09-Nov-2018 James    2.3   Add filter storerkey (james01)            */  
+/* 22-Oct-2020 LZG      2.4   INC1332368 - Add Channel_ID column (ZG01) */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_AssignPackLabelToOrderByLoad]  
@@ -408,7 +409,7 @@ BEGIN
                     Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,  
                     DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                     ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
-                    WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo   
+                    WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, Channel_ID    -- ZG01  
                   , TaskDetailKey                                                --(Wan02)  
                    )  
             SELECT @c_newpickdetailkey  
@@ -418,7 +419,7 @@ BEGIN
                    CASE WHEN @c_Option2 = 'CaseID' THEN PICKDETAIL.DropId ELSE '' END                             --(Wan01)                              
                  , Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                    ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
-                   WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo  
+                   WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, Channel_ID             -- ZG01
                  , TaskDetailKey                                                --(Wan02)  
             FROM PICKDETAIL (NOLOCK)  
             WHERE PickdetailKey = @c_pickdetailkey  
