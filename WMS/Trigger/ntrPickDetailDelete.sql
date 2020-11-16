@@ -64,6 +64,7 @@ GO
 /* 04-SEP-2019  Wan06      1.22  WMS-10156 - NIKE - PH Allocation Strategy   */
 /*                               Enhancement.Call SP to delete Taskdetail    */
 /* 03-Sep-2020  Leong      1.23  INC1239001 - Revise PickDet_InsertLog       */
+/* 01-Nov-2020  SHONG05    1.22  Performance Tuning                        */
 /*****************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickDetailDelete]
@@ -568,45 +569,53 @@ BEGIN
             BEGIN
             --(Wan02) - END
                --(Wan05) - START
-
-               SET @CUR_UPDUCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT U.UCC_RowRef
-               FROM DELETED D
-               JOIN UCC U WITH (NOLOCK) ON  D.PickDetailKey = U.PickDetailKey
-               LEFT JOIN StorerConfig s2(NOLOCK) ON  d.StorerKey = s2.StorerKey AND s2.ConfigKey = 'UnAllocUCCPickCode'
-               WHERE  U.Status > '2' AND U.Status < '6'
-               AND   (s2.SVALUE = '' OR s2.SVALUE IS NULL)
-
-               OPEN @CUR_UPDUCC
-
-               FETCH NEXT FROM @CUR_UPDUCC INTO @n_UCC_RowRef
-
-               WHILE @@FETCH_STATUS <> -1 AND @n_continue IN (1 , 2)
+               --(SHONG05) - Start
+               IF NOT EXISTS (SELECT 1 FROM  DELETED d    
+                              JOIN StorerConfig s(NOLOCK) ON  d.StorerKey = s.StorerKey    
+                              WHERE  s.ConfigKey = 'UnAllocUCCPickCode'  
+                              AND    s.SValue <> ''
+                              AND    s.sValue IS NOT NULL)  
                BEGIN
-                  UPDATE UCC
-                  SET STATUS = '1'
-                        ,PickdetailKey = ''
-                        ,OrderKey = ''
-                        ,OrderLineNumber = ''
-                        ,WaveKey = ''
-                  WHERE  UCC_RowRef = @n_UCC_RowRef
-                  AND  Status > '2' AND Status < '6' -- Chee01
+                  SET @CUR_UPDUCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                  SELECT U.UCC_RowRef
+                  FROM DELETED D
+                  JOIN UCC U WITH (NOLOCK) ON  D.PickDetailKey = U.PickDetailKey
+                  --LEFT JOIN StorerConfig s2(NOLOCK) ON  d.StorerKey = s2.StorerKey AND s2.ConfigKey = 'UnAllocUCCPickCode'
+                  WHERE  U.Status > '2' AND U.Status < '6'
+                  --AND   (s2.SVALUE = '' OR s2.SVALUE IS NULL)
 
-                  SELECT @n_err = @@ERROR
-                        ,@n_cnt = @@ROWCOUNT
-                  IF @n_err <> 0
-                  BEGIN
-                      SELECT @n_continue = 3
-                      SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)
-                      SELECT @c_errmsg = "NSQL"+CONVERT(CHAR(5) ,@n_err)+
-                             ": Update on UCC Failed. (ntrPickDetailDelete)" + " ( " +
-                             " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
-                             + " ) "
-                  END
+                  OPEN @CUR_UPDUCC
+
                   FETCH NEXT FROM @CUR_UPDUCC INTO @n_UCC_RowRef
-               END
-               CLOSE @CUR_UPDUCC
-               DEALLOCATE @CUR_UPDUCC
+
+                  WHILE @@FETCH_STATUS <> -1 AND @n_continue IN (1 , 2)
+                  BEGIN
+                     UPDATE UCC
+                     SET STATUS = '1'
+                           ,PickdetailKey = ''
+                           ,OrderKey = ''
+                           ,OrderLineNumber = ''
+                           ,WaveKey = ''
+                     WHERE  UCC_RowRef = @n_UCC_RowRef
+                     AND  Status > '2' AND Status < '6' -- Chee01
+
+                     SELECT @n_err = @@ERROR
+                           ,@n_cnt = @@ROWCOUNT
+                     IF @n_err <> 0
+                     BEGIN
+                         SELECT @n_continue = 3
+                         SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)
+                         SELECT @c_errmsg = "NSQL"+CONVERT(CHAR(5) ,@n_err)+
+                                ": Update on UCC Failed. (ntrPickDetailDelete)" + " ( " +
+                                " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))
+                                + " ) "
+                     END
+                     FETCH NEXT FROM @CUR_UPDUCC INTO @n_UCC_RowRef
+                  END
+                  CLOSE @CUR_UPDUCC
+                  DEALLOCATE @CUR_UPDUCC
+               END -- NOT Exists UnAllocUCCPickCode
+               --(SHONG05) End                
                --(Wan05) - END
             END --(Wan02)
         END
