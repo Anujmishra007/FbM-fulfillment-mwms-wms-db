@@ -125,6 +125,7 @@ GO
 /* 12-NOV-2018  Leong     2.8   Include MBOLKey (L01).                           */
 /* 28-Jan-2019  TLTING_ext 2.9  enlarge externorderkey field length              */
 /* 15-Feb-2019  MCTang    3.0   Remove Rowcount check (MC05)                     */
+/* 05-Nov-2020  TLTING    3.1   Performance Tuning                               */
 /*********************************************************************************/
 
 /********************************************************************************************************
@@ -234,7 +235,7 @@ BEGIN -- main
    DECLARE @b_ColumnsUpdated VARBINARY(1000)       --MC03
    SET @b_ColumnsUpdated = COLUMNS_UPDATED()       --MC03
 
-   IF EXISTS(SELECT * FROM DELETED WHERE Status = '9') AND UPDATE(TransMethod)
+   IF UPDATE(TransMethod) AND EXISTS(SELECT 1 FROM DELETED WHERE Status = '9') 
    BEGIN
       SELECT @n_continue = 4
    END
@@ -248,7 +249,7 @@ BEGIN -- main
       BEGIN
          SELECT 'Reject UPDATE when MBOL.Status already ''SHIPPED'''
       END
-      IF EXISTS(SELECT * FROM DELETED WHERE Status = '9')
+      IF EXISTS(SELECT 1 FROM DELETED WHERE Status = '9')
       BEGIN
          SET @c_MBOLKeyShipped = '' --(L01)
          SELECT TOP 1 @c_MBOLKeyShipped = MBOLKey FROM DELETED WHERE Status = '9'
@@ -363,7 +364,7 @@ BEGIN -- main
               ,O.Door
               ,O.Route
               ,O.Stop
-              ,Notes = CONVERT(CHAR(256) ,O.Notes)
+              ,Notes = CONVERT(NVARCHAR(256) ,O.Notes)
               ,O.EffectiveDate
               ,O.ContainerType
               ,O.ContainerQty
@@ -421,26 +422,26 @@ BEGIN -- main
       )
 
       INSERT INTO #t_OrderDetail   (
-       OrderKey,
-       OrderLineNumber )
+                OrderKey,
+                OrderLineNumber )
       SELECT O.OrderKey, O.OrderLineNumber
       FROM   INSERTED I
       JOIN   #t_MBOLDetail M ON (M.MBOLKey = I.MBOLKey)
       JOIN   OrderDetail O WITH (NOLOCK) ON (O.OrderKey = M.OrderKey)
 
-      CREATE INDEX IX_tt_OrderDetail_key1 ON #t_OrderDetail (OrderKey, OrderLineNumber)
+      CREATE INDEX IX_tt_OrderDetail_key1 ON #t_OrderDetail ( OrderKey, OrderLineNumber )
 
       CREATE TABLE #StorerCfg (
-       StorerKey NVARCHAR(15),
-       ConfigKey NVARCHAR(30),
-         Facility  NVARCHAR(5) )
+          StorerKey NVARCHAR(15),
+          ConfigKey NVARCHAR(30),
+          Facility  NVARCHAR(5) )
 
       INSERT INTO #StorerCfg
-      (
-       StorerKey,
-       ConfigKey,
-       Facility
-      )
+                  (
+                   StorerKey,
+                   ConfigKey,
+                   Facility
+                  )
       SELECT DISTINCT O.StorerKey, S.ConfigKey, ISNULL(S.Facility,'') AS Facility
       FROM   INSERTED I
       JOIN   #t_MBOLDetail M ON (M.MBOLKey = I.MBOLKey)
@@ -647,7 +648,7 @@ BEGIN -- main
             BEGIN
                IF @c_realtmship = '1'
                BEGIN
-                  UPDATE PickDetail WITH (ROWLOCK)
+                  UPDATE PickDetail WITH (ROWLOCK) 
                      SET Status = '9',
                         EditDate = GETDATE(),   --tlting
                         EditWho = SUSER_SNAME()
@@ -660,7 +661,7 @@ BEGIN -- main
                END
                ELSE
                BEGIN
-                  UPDATE PickDetail WITH (ROWLOCK)
+                  UPDATE PickDetail WITH (ROWLOCK) 
                      SET ShipFlag = 'Y',
                            EditDate = GetDate(),
                            EditWho  = sUser_sName(),
@@ -686,9 +687,9 @@ BEGIN -- main
                END
             END -- @n_continue = 1 OR @n_continue = 2
 
-            IF EXISTS ( SELECT OrderKey FROM OrderDetail WITH (NOLOCK)
-                           WHERE OrderDetail.OrderKey = @c_OrderKey
-                           AND OrderDetail.Status < '9')
+            IF EXISTS ( SELECT 1 FROM OrderDetail WITH (NOLOCK)
+                                       WHERE OrderDetail.OrderKey = @c_OrderKey
+                                       AND OrderDetail.Status < '9')
             BEGIN
                UPDATE OrderDetail WITH (ROWLOCK)
                   SET Status = '9',
@@ -711,7 +712,7 @@ BEGIN -- main
                END
             END
 
-            IF EXISTS ( SELECT OrderKey FROM ORDERS WITH (NOLOCK) WHERE ORDERS.OrderKey = @c_OrderKey
+            IF EXISTS ( SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE ORDERS.OrderKey = @c_OrderKey
                            AND (ORDERS.Status < '9' OR ORDERS.SOSTATUS < '9') )
             BEGIN
                UPDATE ORDERS WITH (ROWLOCK)
@@ -841,10 +842,9 @@ BEGIN -- main
                         EditWho = SUSER_SNAME()
                      WHERE MBOLDetail.MBOLKey = @c_Mbolkey
                      AND EXISTS
-                     (SELECT 1 FROM ORDERS (NOLOCK)
-                     Where ORDERS.Mbolkey =  MBOLDetail.MBOLKey
-                     AND ORDERS.OrderKey = MBOLDetail.OrderKey
-                     AND ORDERS.ConsigneeKey = @c_ConsigneeKey)
+                           (SELECT 1 FROM ORDERS (NOLOCK)
+                                    Where ORDERS.OrderKey = MBOLDetail.OrderKey
+                                    AND ORDERS.ConsigneeKey = @c_ConsigneeKey)
                   END
                END
             END -- (tlting03) IF RTRIM(@SMSPODConfig) = '1'
@@ -919,7 +919,7 @@ BEGIN -- main
                            CASE WHEN @c_authority = '1' THEN NULL ELSE GETDATE() END, -- tlting04
                            GETDATE(),
                            ISNULL(MBOLDetail.its,''),  --NJOW05
-                          ORDERS.Storerkey,
+                           ORDERS.Storerkey,
                            ORDERS.SpecialHandling, -- SOS95698
                            @c_SMSRefKey            -- SOS#141842
                     FROM #t_MBOLDetail MBOLDetail
@@ -1759,3 +1759,5 @@ BEGIN -- main
       RETURN
    END
 END -- main
+GO
+
