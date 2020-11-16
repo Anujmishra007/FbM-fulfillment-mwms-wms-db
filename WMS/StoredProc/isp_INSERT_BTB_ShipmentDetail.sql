@@ -28,6 +28,8 @@ GO
 /*                            MaxDetailPerCOO >= 50                     */ 
 /* 2020-06-16  Wan03    1.3   WMS-13409 - SG - Logitech - Back to Back  */
 /*                            Declaration for Form DE                   */        
+/* 2020-OCT-14 NJOW01   1.4   WMS-15167 add externorderkey to           */
+/*                            BTBShipmentdetail                         */
 /************************************************************************/
 CREATE PROC isp_INSERT_BTB_ShipmentDetail
            @c_Wavekey         NVARCHAR(10)
@@ -60,6 +62,7 @@ BEGIN
          , @c_Currency           NVARCHAR(10)
          , @n_QtyExported        INT
          , @n_TotalQtyExported   INT         = 0   --(Wan03)
+         , @c_ExternOrderkey     NVARCHAR(50)  --NJOW01
 
          --(Wan01) - START
          , @c_BTBShipItem        NVARCHAR(50)
@@ -104,6 +107,7 @@ BEGIN
       ,  COO               NVARCHAR(20)   NOT NULL DEFAULT('')
       ,  BTBShipItem       NVARCHAR(50)   NOT NULL DEFAULT('')
       ,  TotalQtyExported  INT            NOT NULL DEFAULT(0)
+      ,  ExternOrderkey    NVARCHAR(50)   NOT NULL DEFAULT('')  --NJOW01
       )
    CREATE INDEX IX_TMP_BTBSHIPSKU on #BTBSHIPSKU ( Wavekey, Storerkey, Sku, HSCode, COO, BTBShipItem )
 
@@ -333,6 +337,7 @@ BEGIN
       ,  HSCode
       ,  BTBShipItem
       ,  TotalQtyExported
+      ,  ExternOrderkey
       )
    SELECT BSD.Wavekey
          ,BSD.Storerkey
@@ -341,6 +346,7 @@ BEGIN
          ,BSD.HSCode
          ,BSD.BTBShipItem
          ,TotalQtyExported = ISNULL(SUM(BSD.QtyExported),0)
+         ,ISNULL(BSD.ExternOrderkey,'') --NJOW01
    FROM BTB_SHIPMENTDETAIL BSD WITH (NOLOCK)
    JOIN BTB_SHIPMENT       BSH WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSH.BTB_ShipmentKey
    JOIN BTB_SHIPMENTLIST   BSL WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSL.BTB_ShipmentKey
@@ -353,6 +359,7 @@ BEGIN
          ,  BSL.COO
          ,  BSD.HSCode
          ,  BSD.BTBShipItem
+         ,  ISNULL(BSD.ExternOrderkey,'')  --NJOW01
 
    --(Wan03) - END
 
@@ -379,6 +386,7 @@ BEGIN
       +  ' ,  Currency = ' + @c_SQLCurrency
       +  ' ,  QtyExported= SUM(PICKDETAIL.Qty)'
       +  CASE WHEN @c_ItemColNames = '' THEN  ' , BTBShipItem = ''''' ELSE ' , BTBShipItem = ' + @c_ItemColNames END
+      +  ' ,  CASE WHEN CONS.Storerkey IS NOT NULL THEN ISNULL(ORDERS.ExternOrderkey,'''') ELSE '''' END ' --NJOW01
       +  ' FROM WAVEDETAIL   WITH (NOLOCK)'
       +  ' JOIN ORDERDETAIL  WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERDETAIL.Orderkey)'
       +  ' JOIN PICKDETAIL   WITH (NOLOCK) ON (ORDERDETAIL.Orderkey = PICKDETAIL.Orderkey)'
@@ -389,6 +397,8 @@ BEGIN
       +  ' LEFT JOIN SKUINFO WITH (NOLOCK) ON (SKU.Storerkey = SKUINFO.Storerkey)'
       +                                  ' AND(SKU.Sku = SKUINFO.Sku)'
       +  ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON (PICKDETAIL.Lot = LOTATTRIBUTE.Lot)'
+      +  ' JOIN ORDERS WITH (NOLOCK) ON (ORDERDETAIL.Orderkey = ORDERS.Orderkey)'  --NJOW01
+      +  ' LEFT JOIN STORER CONS (NOLOCK) ON (ORDERS.Consigneekey = CONS.Storerkey AND (CONS.SUSR1=''B2BDN'' OR CONS.SUSR2=''B2BDN'' OR CONS.SUSR3=''B2BDN'' OR CONS.SUSR4=''B2BDN'' OR CONS.SUSR5=''B2BDN''))' --NJOW01
       +  ' WHERE WAVEDETAIL.Wavekey = @c_Wavekey'
       +  ' GROUP BY '+ @c_SQLCOO 
       +         ' , '+ @c_SQLHSCode
@@ -399,6 +409,7 @@ BEGIN
       +  ' , ' + @c_SQLPrice
       +  ' , ' + @c_SQLCurrency
       +  CASE WHEN @c_ItemColNames = '' THEN  '' ELSE ' , ' + @c_ItemColNames END
+      + ' , CASE WHEN CONS.Storerkey IS NOT NULL THEN ISNULL(ORDERS.ExternOrderkey,'''') ELSE '''' END ' --NJOW01      
       +  ' ORDER BY COO'
       +        ' ,  Storerkey'
       +        ' ,  Sku'
@@ -425,6 +436,7 @@ BEGIN
                               ,  @c_Currency              
                               ,  @n_QtyExported 
                               ,  @c_BTBShipItem                      --(Wan01)          
+                              ,  @c_ExternOrderkey  --NJOW01
    BEGIN TRAN
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -438,6 +450,7 @@ BEGIN
       AND   T.COO = @c_COO
       AND   T.HSCode = @c_HSCode
       AND   T.BTBShipItem = @c_BTBShipItem 
+      AND   T.ExternOrderkey = @c_ExternOrderkey --NJOW01
 
       IF @n_QtyExported <= @n_TotalQtyExported
       BEGIN
@@ -524,6 +537,7 @@ BEGIN
             ,  QtyExported
             ,  BTBShipItem                                           --(Wan01)
             ,  Wavekey                                               --(Wan01)
+            ,  ExternOrderkey  --NJOW01
             )
       VALUES(  @c_BTB_ShipmentKey
             ,  @c_BTB_ShipmentListNo
@@ -538,7 +552,8 @@ BEGIN
             ,  @c_Currency              
             ,  @n_QtyExported 
             ,  @c_BTBShipItem                                        --(Wan01)  
-            ,  @c_Wavekey                                            --(Wan01)              
+            ,  @c_Wavekey                                            --(Wan01)  
+            ,  @c_ExternOrderkey --NJOW01            
             )
 
       SET @n_err = @@ERROR 
@@ -565,6 +580,7 @@ BEGIN
                                  ,  @c_Currency              
                                  ,  @n_QtyExported 
                                  ,  @c_BTBShipItem                   --(Wan01)    
+                                 ,  @c_ExternOrderkey  --NJOW01
    END
    CLOSE CUR_BTB_SHIP
    DEALLOCATE CUR_BTB_SHIP 
