@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-11-13  WLChooi  v1.1  WMS-15688 - Modify Qty Column Logic (WL01)*/
 /************************************************************************/
 CREATE PROC isp_stock_transfer_request_ph_rpt  
             @c_OrderKey     NVARCHAR(10)  
@@ -195,10 +196,10 @@ BEGIN
   , ORDERDETAIL.Storerkey  
   , ORDERDETAIL.Sku AS sku   
   , SKUDescr = ISNULL(RTRIM(SKU.Descr),'')  
-  , UOMQty = CASE WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM1 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.CASECNT,0) 
-           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'')= PACK.PACKUOM2 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.INNERPACK,0)  
-           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM3 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.Qty,0) 
-           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM4 THEN (ORDERDETAIL.OriginalQty)/NULLIF(PACK.Pallet,0) ELSE 0 END   
+  , UOMQty = CASE WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM1 THEN (ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)/NULLIF(PACK.CASECNT,0)      --WL01
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'')= PACK.PACKUOM2 THEN (ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)/NULLIF(PACK.INNERPACK,0)            --WL01  
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM3 THEN (ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)/NULLIF(PACK.Qty,0)                 --WL01 
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM4 THEN (ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)/NULLIF(PACK.Pallet,0) ELSE 0 END   --WL01   
  -- , UNITPRICE  = ORDERDETAIL.unitprice
   --, ODUDF02 = CASE WHEN ISNUMERIC(ISNULL(RTRIM(ORDERDETAIL.userdefine02),'')) = 1 THEN CAST(ISNULL(RTRIM(ORDERDETAIL.userdefine02),'0') AS INT) ELSE 1 END 
   , SUM(ORDERDETAIL.OriginalQty)
@@ -268,7 +269,7 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
   ,ISNULL(RTRIM(ST.Address1),'') 
   ,ISNULL(RTRIM(ST.Address2),'') 
   ,ISNULL(RTRIM(ST.Address3),'')  
-  ,(ORDERDETAIL.OriginalQty) 
+  ,(ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)   --WL01
   --,ORDERDETAIL.unitprice,ORDERDETAIL.ExtendedPrice,ORDERS.InvoiceAmount,ORDERS.EditWho,ISNULL(orders.PmtTerm,'')   
   , PACK.PACKUOM1,PACK.PACKUOM2,PACK.PACKUOM3,PACK.PACKUOM4
   ,PACK.CASECNT,PACK.INNERPACK,PACK.qty,PACK.Pallet,ORDERDETAIL.orderlinenumber
