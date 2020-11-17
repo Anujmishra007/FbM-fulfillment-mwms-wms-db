@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */  
 /* 09-Jun-2002  NJOW01   1.1  Fix to filter by storerkey                 */
+/* 27-Oct-2020  NJOW02   1.2  WMS-15601 Support multi load per booking   */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[nspLPRTSK9]      
@@ -128,6 +129,17 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
         JOIN LOC (NOLOCK) ON BO.Loc = LOC.Loc
         WHERE BO.Loadkey = @c_Loadkey
         ORDER BY BO.Loc
+        
+        --NJOW02
+        IF ISNULL(@c_BookToLoc,'') = ''
+        BEGIN
+        	 SELECT TOP 1 @c_BookToLoc = BO.Loc
+        	 FROM LOADPLAN LP (NOLOCK)
+        	 JOIN BOOKING_OUT BO (NOLOCK) ON LP.BookingNo = BO.BookingNo
+           JOIN LOC (NOLOCK) ON BO.Loc = LOC.Loc
+           WHERE LP.Loadkey = @c_Loadkey
+           ORDER BY BO.Loc
+        END
     END    
         
     --Initialize Pickdetail work in progress staging table
@@ -207,7 +219,7 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
            END   
            
            IF @c_TaskType = 'FCP'
-              SET @c_TransitLOC = @c_BookToLoc 
+              SET @c_TransitLOC = ISNULL(@c_BookToLoc,'') 
            ELSE 
               SET @c_TransitLOC = ''
            
