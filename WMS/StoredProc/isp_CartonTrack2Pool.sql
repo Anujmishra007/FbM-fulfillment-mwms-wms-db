@@ -1,7 +1,6 @@
 
 
-IF EXISTS (SELECT * FROM dbo.SYSOBJECTS WHERE Id = Object_Id(N'[dbo].[isp_CartonTrack2Pool]')
-              ) 
+IF EXISTS (SELECT * FROM dbo.SYSOBJECTS WHERE Id = Object_Id(N'[dbo].[isp_CartonTrack2Pool]')             ) 
 DROP PROCEDURE [dbo].[isp_CartonTrack2Pool]
 GO
 
@@ -37,7 +36,8 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author        Purposes                                  */    
+/* Date         Author        Purposes                                  */ 
+/* 05-Nov-2020  TLTING01  1.1 Extend trackingno field length            */       
 /************************************************************************/    
 CREATE PROCEDURE dbo.isp_CartonTrack2Pool
 @n_CheckLevel int = 10000,
@@ -73,7 +73,7 @@ BEGIN
     
     
    CREATE TABLE #TrackingNo    
-   (  TrackingNo NVARCHAR(20) PRIMARY key)    
+   (  TrackingNo NVARCHAR(40) PRIMARY key)    
     
    IF EXISTS (     
             SELECT 1 FROM dbo.CartonTrack (NOLOCK)

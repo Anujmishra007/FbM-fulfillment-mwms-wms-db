@@ -36,6 +36,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /*01-NOV-2020   CSCHONG   1.1   WMS-15179 revised sorting (CS01)        */
+/*11-Nov-2020   WLChooi   1.2   WMS-15676 - Add new column (WL01)       */
 /************************************************************************/
 
 CREATE PROC isp_GetPickSlipOrders113 (@c_wavekey NVARCHAR(20))
@@ -171,6 +172,10 @@ SELECT PICKDETAIL.PickSlipNo as Pickslipno,
            WHEN ORDERDETAIL.UOM = PACK.PACKUOM3 THEN SUM(PICKDETAIL.Qty)/NULLIF(PACK.Qty,0) 
            WHEN ORDERDETAIL.UOM = PACK.PACKUOM4 THEN SUM(PICKDETAIL.Qty)/NULLIF(PACK.Pallet,0) ELSE 0 END as UOMQTY
     ,ORDERS.userdefine09 as wavekey
+    ,ISNULL(SKU.OVAS,'') AS OVAS   --WL01
+    ,CASE WHEN TRIM(ORDERS.[Type]) IN ('STO','STR') THEN ISNULL(ORDERS.UserDefine03,'') ELSE '' END AS OHUDF03   --WL01
+    ,ISNULL(ORDERS.OrderGroup,'') AS OrderGroup   --WL01
+    ,ISNULL(ORDERS.PmtTerm,'') AS PmtTerm         --WL01
    INTO  #RESULT_113
    FROM  LOC (Nolock) 
    join PICKDETAIL (Nolock)
@@ -270,7 +275,11 @@ SELECT PICKDETAIL.PickSlipNo as Pickslipno,
       ORDERS.type,ORDERS.notes2 ,
       OIF.notes,
       CASE WHEN ISNULL(SKU.SerialNocapture,'') = '1' THEN 'Y' ELSE 'N'  END,
-      ORDERS.Userdefine01,SKU.skuGroup ,ORDERDETAIL.uom       ,ORDERS.userdefine09
+      ORDERS.Userdefine01,SKU.skuGroup ,ORDERDETAIL.uom       ,ORDERS.userdefine09,
+      ISNULL(SKU.OVAS,''),   --WL01
+      CASE WHEN TRIM(ORDERS.[Type]) IN ('STO','STR') THEN ISNULL(ORDERS.UserDefine03,'') ELSE '' END,   --WL01
+      ISNULL(ORDERS.OrderGroup,''),   --WL01
+      ISNULL(ORDERS.PmtTerm,'')      --WL01
 
    DECLARE CUR_PSLIP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT DISTINCT Loadkey, Pickslipno,wavekey,Orderkey,storerkey 
