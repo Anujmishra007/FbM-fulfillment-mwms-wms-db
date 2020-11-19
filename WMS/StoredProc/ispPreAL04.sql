@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 30-SEP-2020 NJOW01   1.0   WMS-15380 Aging zone allocation qty limit */
+/*                            per order and qty limit per sku per day   */
 /************************************************************************/
 CREATE PROC dbo.ispPreAL04                      
            @c_OrderKey NVARCHAR(10) 
@@ -96,8 +98,16 @@ BEGIN
          , @n_Pallet             FLOAT                   --(Wan01)
          , @c_Consigneekey       NVARCHAR(15)            --(Wan01)
          , @n_skucnt             INT
+   
+   --NJOW01
+   DECLARE      
+           @n_AgingQtyPerOrd     INT                     
+         , @n_AgingQtyPerOrdBal  INT                     
+         , @n_SkuQtyPerDay       INT
+         , @n_SkuQtyPerDayBal    INT 
+         , @n_TotQtyAllocated    INT
+         , @n_TotQtyPreAllocated INT         
          
-   --NJOW01 
    DECLARE @c_sku_priority1      NVARCHAR(20)
          , @c_sku_priority2      NVARCHAR(20)
          , @c_sku_priority3      NVARCHAR(20)
@@ -298,21 +308,23 @@ BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LOTATTRIBUTE.Lottable15 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @@dt_Lottable15, 112))'
       END
       
-      --NJOW01 S
       SELECT @c_Sku_Priority1 = '', @c_Sku_Priority2= '', @c_Sku_Priority3 = '', @c_Sku_Priority4 ='', @c_Sku_Priority5 ='' 
       
-      SELECT @c_Sku_Priority1 = ISNULL(CL.UDF01,''),
-             @c_Sku_Priority2 = ISNULL(CL.UDF02,''),
-             @c_Sku_Priority3 = ISNULL(CL.UDF03,''),
-             @c_Sku_Priority4 = ISNULL(CL.UDF04,''),
-             @c_Sku_Priority5 = ISNULL(CL.UDF05,''),
-             @c_AgingPickZone = ISNULL(CL.Short,'')
+      SELECT @c_Sku_Priority1  = ISNULL(CL.UDF01,''),
+             @c_Sku_Priority2  = ISNULL(CL.UDF02,''),
+             @c_Sku_Priority3  = ISNULL(CL.UDF03,''),
+             @c_Sku_Priority4  = ISNULL(CL.UDF04,''),
+             @c_Sku_Priority5  = ISNULL(CL.UDF05,''),
+             @c_AgingPickZone  = ISNULL(CL.Short,''),
+             @n_AgingQtyPerOrd = CASE WHEN ISNUMERIC(CL.Long) = 1 THEN CAST(CL.Long AS INT) ELSE 0 END --NJOW01
       FROM CODELKUP CL (NOLOCK)
       JOIN ORDERS O (NOLOCK) ON CL.Code = O.Priority AND CL.Storerkey = O.Storerkey 
       WHERE O.Orderkey = @c_Orderkey
       AND CL.Listname = 'PMIALLOC'
       AND CL.Code2 = @c_AltSku
       
+      SET @n_AgingQtyPerOrdBal = @n_AgingQtyPerOrd --NJOW01 
+            
       IF @@ROWCOUNT = 0
          GOTO NEXT_ALTSKU
       
@@ -320,12 +332,12 @@ BEGIN
       --BEGIN
       --   SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LOC.PickZone = ''PMIAGING'' '         
       --END
-      --NJOW01 E
 
       SET @n_skucnt = 0
       WHILE @n_QtyLeftToFulfill > 0 AND @n_skucnt < 5 
       BEGIN
       	 SELECT @c_Sku = '', @n_Casecnt = 0, @n_Inner = 0, @n_Otherunit1 = 0
+      	 SELECT @n_SkuQtyPerDay = 0, @n_SkuQtyPerDayBal = 0, @n_TotQtyAllocated = 0, @n_TotQtyPreAllocated = 0 --NJOW01
       	 
       	 SET @n_skucnt = @n_skucnt +  1
       	 
@@ -342,14 +354,31 @@ BEGIN
       	          	    
       	 IF ISNULL(@c_SKU,'') = ''
       	    GOTO NEXT_SKU      	          	    
-      	 
-      	 SELECT @n_Casecnt = PACK.Casecnt,
+      	       	 
+      	 SELECT @n_Casecnt = PACK.Casecnt, 
       	        @n_Inner = PACK.InnerPack,
-      	        @n_otherunit1 = PACK.Otherunit1
+      	        @n_otherunit1 = PACK.Otherunit1,
+      	        @n_SkuQtyPerDay = CASE WHEN ISNUMERIC(SKU.Busr1) = 1THEN CAST(SKU.Busr1 AS INT) ELSE 0 END --NJOW01
       	 FROM SKU (NOLOCK)
       	 JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
       	 WHERE SKU.Sku = @c_Sku
       	 AND SKU.Storerkey = @c_Storerkey
+      	 
+      	 IF @n_SkuQtyPerDay > 0  --NJOW01
+      	 BEGIN
+      	    SELECT @n_TotQtyAllocated = SUM(Qty)
+      	    FROM PICKDETAIL PD (NOLOCK)
+      	    WHERE Storerkey  = @c_Storerkey
+      	    AND Sku = @c_Sku
+      	    AND DATEDIFF(day, PD.AddDate, GETDATE()) = 0
+      	    
+      	    SELECT @n_TotQtyPreAllocated = SUM(Qty)
+      	    FROM #TMP_PREALLOC TP
+      	    WHERE Storerkey  = @c_Storerkey
+      	    AND Sku = @c_Sku
+      	    
+      	    SET @n_SkuQtyPerDayBal = @n_SkuQtyPerDay - ISNULL(@n_TotQtyAllocated,0) - ISNULL(@n_TotQtyPreAllocated,0)
+      	 END
       	 
       	 IF @c_AgingPickZone = 'YES'
       	 BEGIN
@@ -379,8 +408,7 @@ BEGIN
          FETCH NEXT FROM CUR_UOM INTO @n_seq, @c_PickZone, @c_UOM, @n_PackQty
                        
          WHILE @@FETCH_STATUS = 0 AND @n_QtyLeftToFulfill > 0
-         BEGIN     	      
-         	 
+         BEGIN     	               	 
          	 IF @n_PackQty <= 0 
          	    GOTO NEXT_UOM
          	   	 
@@ -531,6 +559,18 @@ BEGIN
                END
                */
                --(Wan01) - END
+               
+               --NJOW01 S
+               IF @c_PickZone = 'PMIAGING' AND @n_AgingQtyPerOrd > 0 AND @n_QtyAvailable > @n_AgingQtyPerOrdBal  --Exceeded aging qty per order
+               BEGIN
+                  SET @n_QtyAvailable = @n_AgingQtyPerOrdBal               	
+               END
+               
+               IF @n_SkuQtyPerDay > 0 AND @n_QtyAvailable > @n_SkuQtyPerDayBal  --Exceeded qty per sku per day
+               BEGIN
+                  SET @n_QtyAvailable = @n_SkuQtyPerDayBal
+               END
+               --NJOW01 E                             
             
                IF @n_QtyLeftToFulfill > @n_QtyAvailable
                BEGIN
@@ -544,6 +584,18 @@ BEGIN
                SET @n_UOMQty = @n_OpenQty / @n_Packqty                                                   --(Wan01)
             
                SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_OpenQty
+                              
+               --NJOW01 S
+               IF @c_PickZone = 'PMIAGING' AND @n_AgingQtyPerOrd > 0 
+               BEGIN
+                  SET @n_AgingQtyPerOrdBal = @n_AgingQtyPerOrdBal - @n_OpenQty
+               END  
+               
+                IF @n_SkuQtyPerDay > 0                
+                BEGIN
+                	 SET @n_SkuQtyPerDayBal = @n_SkuQtyPerDayBal - @n_OpenQty
+                END
+               --NJOW01 E
             
                IF @b_debug = 1
                BEGIN
@@ -646,7 +698,7 @@ BEGIN
          DEALLOCATE CUR_UOM
          
          --if the sku still have stock proceed to next altsku
-         IF @n_QtyLeftToFulfill > 0
+         IF @n_QtyLeftToFulfill > 0 
          BEGIN         	         	
          	  SET @n_QtyAvailable = 0
          	  
@@ -680,7 +732,7 @@ BEGIN
                 + ' AND   SKU.Sku       = @c_Sku'
                 + ' AND   LOC.Facility  = @c_Facility'
                 + ' AND   (LOC.Pickzone ' 
-                + CASE WHEN @c_AgingPickZone = 'YES' THEN 'IN (''PMICASEPZ'',''PMICARPZ'',''PMIPACKPZ'',''PMIAGING'') ' ELSE 'IN (''PMICASEPZ'',''PMICARPZ'',''PMIPACKPZ'') ' END 
+                + CASE WHEN @c_AgingPickZone = 'YES' AND ISNULL(@n_AgingQtyPerOrd,0) = 0 THEN 'IN (''PMICASEPZ'',''PMICARPZ'',''PMIPACKPZ'',''PMIAGING'') ' ELSE 'IN (''PMICASEPZ'',''PMICARPZ'',''PMIPACKPZ'') ' END  --NJOW01 exclude check aging zone if turn on aging per order
                 + ' OR LOC.Loc IN (''PMIRTNSTG'',''PMISTG''))  '
                 + @c_AddWhereSQL
                 + ' AND   LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - ISNULL(PR.PreAllocatedQty,0)  - ISNULL(PR2.PreAllocatedQty,0) > 0'
@@ -735,8 +787,7 @@ BEGIN
             IF @n_QtyAvailable > 0
                GOTO NEXT_ALTSKU           	         	
          END
-         
-         
+                  
          NEXT_SKU:         
       END --sku loop
       
