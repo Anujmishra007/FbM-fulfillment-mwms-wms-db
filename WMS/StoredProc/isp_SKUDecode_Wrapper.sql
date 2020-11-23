@@ -24,14 +24,20 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 22-Mar-2011  NJOW     1.0  Fix new sku no value problem if not setup */
+/* 07-Sep-2020  WLChooi  1.1  WMS-14786 - Add new optional parameters   */
+/*                            for decoding (WL01)                       */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_SKUDecode_Wrapper]
    @c_Storerkey  NVARCHAR(15),  
    @c_Sku        NVARCHAR(60),
-   @c_NewSku     NVARCHAR(60) OUTPUT,    
+   @c_NewSku     NVARCHAR(60) OUTPUT,   
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
-   @c_ErrMsg     NVARCHAR(250) OUTPUT
+   @c_ErrMsg     NVARCHAR(250) OUTPUT,
+   @c_Code01     NVARCHAR(60) = '' OUTPUT,   --WL01
+   @c_Code02     NVARCHAR(60) = '' OUTPUT,   --WL01
+   @c_Code03     NVARCHAR(60) = '' OUTPUT    --WL01 
+
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -70,19 +76,44 @@ BEGIN
               ': Storerconfig SKUDECODE - Stored Proc name invalid ('+RTRIM(ISNULL(@c_SPCode,''))+') (isp_SKUDecode_Wrapper)'  
        GOTO QUIT_SP
    END
-
    
-   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_StorerKey, @c_sku, @c_NewSku OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT,' +
-                ' @c_ErrMsg OUTPUT '
-     
-   EXEC sp_executesql @c_SQL, 
-        N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(60), @c_NewSku NVARCHAR(60) OUTPUT, @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
+   --WL01 START
+   IF EXISTS (SELECT 1
+              FROM sys.parameters AS p
+              JOIN sys.types AS t ON t.user_type_id = p.user_type_id
+              WHERE object_id = OBJECT_ID(RTRIM(@c_SPCode))
+              AND   P.name = N'@c_Code01')
+   BEGIN
+      SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_StorerKey, @c_sku, @c_NewSku OUTPUT, @c_Code01 OUTPUT, @c_Code02 OUTPUT, @c_Code03 OUTPUT, '
+                 + '@b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
+                 
+      EXEC sp_executesql @c_SQL, 
+        N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(60), @c_NewSku NVARCHAR(60) OUTPUT, @c_Code01 NVARCHAR(60) OUTPUT, @c_Code02 NVARCHAR(60) OUTPUT, @c_Code03 NVARCHAR(60) OUTPUT, 
+          @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
         @c_StorerKey,
         @c_Sku,
         @c_NewSku OUTPUT,
+        @c_Code01 OUTPUT,   
+        @c_Code02 OUTPUT,  
+        @c_Code03 OUTPUT,
         @b_Success OUTPUT,                      
         @n_Err OUTPUT, 
         @c_ErrMsg OUTPUT
+   END
+   ELSE
+   BEGIN   --WL01 END
+      SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_StorerKey, @c_sku, @c_NewSku OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT,' +
+                   ' @c_ErrMsg OUTPUT '
+        
+      EXEC sp_executesql @c_SQL, 
+           N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(60), @c_NewSku NVARCHAR(60) OUTPUT, @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
+           @c_StorerKey,
+           @c_Sku,
+           @c_NewSku OUTPUT,
+           @b_Success OUTPUT,                      
+           @n_Err OUTPUT, 
+           @c_ErrMsg OUTPUT
+   END   --WL01
                         
    IF @b_Success <> 1
    BEGIN
