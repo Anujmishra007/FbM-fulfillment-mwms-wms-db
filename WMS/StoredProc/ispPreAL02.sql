@@ -7,27 +7,28 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Proc: ispPreAL02                                              */
-/* Creation Date: 05-NOV-2017                                           */
-/* Copyright: LF Logistics                                              */
-/* Written by: YTWan                                                    */
-/*                                                                      */
-/* Purpose:                                                             */
-/*        :                                                             */
-/* Called By:                                                           */
-/*          :                                                           */
-/* PVCS Version: 1.1                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 07-NOV-2017 Wan01    1.1   WMS-3044 - PMS Allocation Logic Based on  */
-/*                            consignee                                 */
-/************************************************************************/
+/*************************************************************************/
+/* Stored Proc: ispPreAL02                                               */
+/* Creation Date: 05-NOV-2017                                            */
+/* Copyright: LF Logistics                                               */
+/* Written by: YTWan                                                     */
+/*                                                                       */
+/* Purpose:                                                              */
+/*        :                                                              */
+/* Called By:                                                            */
+/*          :                                                            */
+/* PVCS Version: 1.1                                                     */
+/*                                                                       */
+/* Version: 7.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver   Purposes                                   */
+/* 07-NOV-2017 Wan01    1.1   WMS-3044 - PMS Allocation Logic Based on   */
+/*                            consignee                                  */
+/* 05-OCT-2020 NJOW01   1.2   WMS-15367 allocation based on consignee PMS*/
+/*************************************************************************/
 CREATE PROC dbo.ispPreAL02                      
            @c_OrderKey NVARCHAR(10) 
          , @c_LoadKey  NVARCHAR(10)    
@@ -91,6 +92,8 @@ BEGIN
          , @dt_Lottable13_Prev   DATETIME    
          , @dt_Lottable14_Prev   DATETIME    
          , @dt_Lottable15_Prev   DATETIME  
+         , @c_InvLottable02      NVARCHAR(18)  --NJOW01
+         , @n_BatchCnt           INT           --NJOW01
 
          , @c_PreAllocatePickDetailKey NVARCHAR(10)
 
@@ -300,6 +303,7 @@ BEGIN
                + ',QtyAvail=SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - ISNULL(PR.PreAllocatedQty,0))'
                + ',PACK.CaseCnt'                                                                   --(Wan01) 
                + ',PACK.Pallet'                                                                    --(Wan01) 
+               + ',LOTATTRIBUTE.Lottable02'                                                        --NJOW01
                + ' FROM   SKU  WITH (NOLOCK)'
                + ' JOIN   PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)'
                + ' JOIN   LOTxLOCxID WITH (NOLOCK) ON (SKU.Storerkey = LOTxLOCxID.Storerkey)'
@@ -333,9 +337,13 @@ BEGIN
                +        ',  LOTATTRIBUTE.Lottable15'
                +        ',  PACK.CaseCnt'                                                          --(Wan01) 
                +        ',  PACK.Pallet'                                                           --(Wan01) 
-               + ' ORDER BY LOTATTRIBUTE.Lottable06 DESC'
+               +        ',  LOTATTRIBUTE.Lottable02'                                               --NJOW01
+               +        ',  LOTATTRIBUTE.Lottable05'                                               --NJOW01
+               + CASE WHEN @c_Consigneekey = 'PMS'  THEN  --NJOW01
+               + ' ORDER BY LOTATTRIBUTE.Lottable06 DESC, ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot ' ELSE 
+                 ' ORDER BY LOTATTRIBUTE.Lottable06 DESC'
                +        ',  ISNULL(SKU.BUSR5,'''')'  
-               +        ',  LOTATTRIBUTE.Lottable15'
+               +        ',  LOTATTRIBUTE.Lottable15' END
                --(Wan01) - START
                + CASE WHEN @c_Consigneekey = 'PMS1'  
                       THEN ''
@@ -391,10 +399,11 @@ BEGIN
          ,@dt_Lottable15                                                                                            
 
       OPEN CUR_LLI
-
-      FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Sku, @n_QtyAvailable, @n_CaseCnt, @n_Pallet          --(Wan01)
+     
+      FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Sku, @n_QtyAvailable, @n_CaseCnt, @n_Pallet, @c_InvLottable02  --(Wan01)  NJOW01
+      
       WHILE @@FETCH_STATUS <> -1 AND @n_QtyLeftToFulfill > 0 
-      BEGIN
+      BEGIN      	    
          IF @b_debug = 1
          BEGIN
             SELECT @c_Lot 'Lot', @c_Sku 'Sku', @n_QtyAvailable 'QtyAvailable' 
@@ -428,6 +437,30 @@ BEGIN
             END
          END
          --(Wan01) - END
+         
+         --NJOW01
+         IF @c_Consigneekey = 'PMS'
+         BEGIN
+         	  IF @n_QtyAvailable >= @n_QtyLeftToFulfill  --last batch
+         	  BEGIN
+               SET @n_BatchCnt = 0  
+         	  	
+         	  	 SELECT @n_Batchcnt = COUNT(DISTINCT LA.Lottable02) + 1  --total batch
+         	  	 FROM #TMP_PREALLOC P
+         	  	 JOIN LOTATTRIBUTE LA (NOLOCK) ON P.Lot = LA.Lot 
+         	  	 WHERE LA.Lottable02 <> @c_InvLottable02
+         	  	 AND P.AltSku = @c_AltSku
+         	  	 
+         	  	 IF @n_Batchcnt > 1  --more than one batch
+         	  	 BEGIN
+         	  	 	  IF @n_QtyLeftToFulfill % CAST(@n_CaseCnt AS INT) > 0 --Not full case
+         	  	 	  BEGIN
+         	  	 	  	 IF @n_QtyAvailable >= CEILING(@n_QtyLeftToFulfill / @n_CaseCnt) * @n_Casecnt --sufficient stock to fulfill as full case
+         	  	 	  	    SET @n_QtyLeftToFulfill = CEILING(@n_QtyLeftToFulfill / @n_CaseCnt) * @n_Casecnt
+         	  	 	  END
+         	  	 END
+         	  END
+         END
 
          IF @n_QtyLeftToFulfill > @n_QtyAvailable
          BEGIN
@@ -509,8 +542,10 @@ BEGIN
                GOTO QUIT_SP  
             END
          END
+                  
          NEXT_INV:                                                                                 --(Wan01) 
-         FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Sku, @n_QtyAvailable, @n_CaseCnt, @n_Pallet       --(Wan01)    
+         
+         FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Sku, @n_QtyAvailable, @n_CaseCnt, @n_Pallet, @c_InvLottable02       --(Wan01)    NJOW01         
       END
       CLOSE CUR_LLI
       DEALLOCATE CUR_LLI
