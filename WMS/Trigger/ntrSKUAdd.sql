@@ -44,6 +44,8 @@ GO
 /* 23-NOV-2017  TLTING    1.5   Skip trigger with archiveCop               */
 /* 06-Jul-2020  WLChooi   1.6   WMS-13990 - New Storerconfig               */
 /*                              DefaultSkuLottableCode (WL01)              */
+/* 11-Nov-2020  WLChooi   1.7   WMS-15671 - SKUTrigger_SP - call custom SP */
+/*                              when INSERT record (WL02)                  */
 /***************************************************************************/
 CREATE TRIGGER ntrSKUAdd ON SKU 
 FOR INSERT
@@ -129,6 +131,49 @@ BEGIN
 	   SELECT @n_continue = 4
    END
 
+   --WL02 START
+   IF @n_continue=1 or @n_continue = 2
+   BEGIN
+      IF EXISTS (SELECT 1 FROM INSERTED i
+                 JOIN storerconfig s WITH (NOLOCK) ON  i.StorerKey = s.StorerKey
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'SKUTrigger_SP')
+      BEGIN
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+          SELECT *
+          INTO #INSERTED
+          FROM INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+          SELECT *
+          INTO #DELETED
+          FROM DELETED
+
+         EXECUTE dbo.isp_SKUTrigger_Wrapper
+                   'INSERT'  --@c_Action
+                 , @b_Success  OUTPUT
+                 , @n_Err      OUTPUT
+                 , @c_ErrMsg   OUTPUT
+
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3
+                  ,@c_errmsg = 'ntrSKUAdd ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END
+
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END
+   --WL02 END
+   
    -- (YokeBeen01) - Start
    IF @n_continue=1 OR @n_continue=2
    BEGIN

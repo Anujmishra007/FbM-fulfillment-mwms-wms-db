@@ -32,6 +32,8 @@ GO
 /* 14-Jul-2011  KHLim02  1.3  GetRight for Delete log                      */
 /* 18-Jan-2012  KHLim03  1.4  check ArchiveCop                             */
 /* 22-May-2012  YTWan    1.5  SOS#244027: SkuInfo (Wan01)                  */
+/* 11-Nov-2020  WLChooi  1.6  WMS-15671 - SKUTrigger_SP - call custom SP   */
+/*                            when DELETE record (WL02)                    */
 /***************************************************************************/
 
 CREATE TRIGGER ntrSKUDelete
@@ -135,7 +137,49 @@ CREATE TRIGGER ntrSKUDelete
       END
    -- End (KHLim01) 
    END
-
+   
+   --WL01 START
+   IF @n_continue=1 or @n_continue=2          
+   BEGIN
+      IF EXISTS (SELECT 1 FROM DELETED d  
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'SKUTrigger_SP')  
+      BEGIN        	  
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+      	 SELECT * 
+      	 INTO #INSERTED
+      	 FROM INSERTED
+            
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+   
+      	 SELECT * 
+      	 INTO #DELETED
+      	 FROM DELETED
+   
+         EXECUTE dbo.isp_SKUTrigger_Wrapper
+                   'DELETE'  --@c_Action
+                 , @b_Success  OUTPUT  
+                 , @n_Err      OUTPUT   
+                 , @c_ErrMsg   OUTPUT  
+   
+         IF @b_success <> 1  
+         BEGIN  
+            SELECT @n_continue = 3  
+                  ,@c_errmsg = 'ntrSKUDelete ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END  
+         
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END  
+   --WL01 END
  END
 
 GO

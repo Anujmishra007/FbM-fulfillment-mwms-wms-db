@@ -2,6 +2,12 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrSKUUpda
               and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
 drop trigger [dbo].[ntrSKUUpdate]
 GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************/
 /* Trigger: ntrSkuUpdate                                                   */
 /* Creation Date:                                                          */
@@ -47,6 +53,8 @@ GO
 /* 28-Oct-2013  TLTING   1.3  Review Editdate column update                */
 /* 12-May-2015  TLTING   1.4  ArchiveCop Update Skip trigger               */
 /* 04-Jul-2018  MCTang   1.5  Change UPDSKULOG Key2 value (MC03)           */
+/* 11-Nov-2020  WLChooi  1.6  WMS-15671 - SKUTrigger_SP - call custom SP   */
+/*                            when UPDATE record (WL01)                    */
 /***************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrSKUUpdate] ON [dbo].[SKU]
@@ -90,6 +98,7 @@ BEGIN
          , @c_transmitlogkey NVARCHAR(10)
          , @c_authority_vskuitf NVARCHAR(1)  -- MC01
          , @c_authority_ValidateSKUChange NVARCHAR(1)     --(KC01)
+         , @c_TrafficCopAllowTriggerSP NVARCHAR(10) --WL01
 
    SELECT  @c_Storerkey  = ''
          , @c_Sku        = ''
@@ -163,6 +172,16 @@ BEGIN
 
    IF UPDATE(TrafficCop)
    BEGIN
+   	--WL01 START
+      IF EXISTS (SELECT 1 FROM INSERTED i   
+                 JOIN storerconfig s WITH (NOLOCK) ON  i.storerkey = s.storerkey    
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'SKUTrigger_SP' AND i.TrafficCop IS NULL) 
+      BEGIN
+         SELECT @c_TrafficCopAllowTriggerSP = 'Y'
+      END
+      --WL01 END
+   
       SELECT @n_continue = 4
    END
 
@@ -859,7 +878,49 @@ BEGIN
    END
    */
    -- end
-
+   
+   --WL01 START
+   IF @n_continue=1 or @n_continue=2 OR (@c_TrafficCopAllowTriggerSP = 'Y' AND @n_continue <> 3)
+   BEGIN
+      IF EXISTS (SELECT 1 FROM DELETED d
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey
+                 JOIN sys.objects sys WITH (NOLOCK) ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'SKUTrigger_SP')
+      BEGIN
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+          SELECT *
+          INTO #INSERTED
+          FROM INSERTED
+   
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+   
+          SELECT *
+          INTO #DELETED
+          FROM DELETED
+   
+         EXECUTE dbo.isp_SKUTrigger_Wrapper
+                   'UPDATE'  --@c_Action
+                 , @b_Success  OUTPUT
+                 , @n_Err      OUTPUT
+                 , @c_ErrMsg   OUTPUT
+   
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3
+                  ,@c_errmsg = 'ntrSKUUpdate ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END
+   
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END
+   --WL01 END
 QUIT:
    /* #INCLUDE <TRRDA2.SQL> */
    IF @n_continue=3  -- Error Occured - Process And Return
