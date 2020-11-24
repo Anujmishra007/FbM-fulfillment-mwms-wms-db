@@ -29,7 +29,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author    Ver. Purposes                                 */  
+/* Date         Author    Ver. Purposes                                 */ 
+/* 2020-11-13   WLChooi   1.1  WMS-15673 - Add ORDERS.Route (WL01)      */ 
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[isp_UCC_Carton_Label_89_rdt]  
                  @c_Storerkey       NVARCHAR(15)
@@ -70,6 +71,7 @@ BEGIN
             , PD.LabelNo
             , PD.CartonNo
             , ORD.BuyerPO
+            , ORD.[Route]   --WL01
       FROM ORDERS ORD (NOLOCK)
       JOIN PACKHEADER PH (NOLOCK) ON PH.Orderkey = ORD.Orderkey
       JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
