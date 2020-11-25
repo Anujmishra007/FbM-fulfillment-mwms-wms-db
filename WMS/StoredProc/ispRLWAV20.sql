@@ -20,7 +20,7 @@ GO
 /*                                                                      */
 /* Called By: ReleaseWave_SP                                            */
 /*          :                                                           */
-/* PVCS Version: 1.7                                                    */
+/* PVCS Version: 1.8                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -45,7 +45,8 @@ GO
 /* 2020-03-23  Wan15    1.6   WMS-12136 - NIKE - PH Cartonization       */  
 /* 2020-03-30  Wan16    1.6   WMS-12269 - [PH] - NIKE - Picking Task    */
 /*                            Dispatch                                  */  
-/* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */        
+/* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */ 
+/* 2020-09-23  Wan02    1.8   Sku Bundle CR                             */       
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV20]
         @c_wavekey      NVARCHAR(10)  
@@ -2059,7 +2060,8 @@ BEGIN
       ,  CubeTolerance     FLOAT        DEFAULT(0.00)    --2020-08-27  
       ,  [Length]          FLOAT        DEFAULT(0.00)    --2020-08-07  
       ,  Width             FLOAT        DEFAULT(0.00)    --2020-08-07  
-      ,  Height            FLOAT        DEFAULT(0.00)    --2020-08-07 
+      ,  Height            FLOAT        DEFAULT(0.00)    --2020-08-07
+      ,  PackQtyIndicator  INT          DEFAULT(0)       --(Wan02) 
       ,  DropID            NVARCHAR(20) DEFAULT('')
       ,  LocLevel          NVARCHAR(10) DEFAULT('')
       ,  Logicallocation   NVARCHAR(10) DEFAULT('')
