@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-11-13  WLChooi  v1.1  WMS-15688 - Modify Qty Column Logic (WL01)*/
+/* 2020-11-25  WLChooi  v1.2  WMS-15747 - Modify From & To Whse (WL02)  */
 /************************************************************************/
 CREATE PROC isp_stock_transfer_request_ph_rpt  
             @c_OrderKey     NVARCHAR(10)  
@@ -166,7 +167,7 @@ BEGIN
       )  
    SELECT ORDERS.Facility  
   --, DeliveryNote = ISNULL(RTRIM(orders.deliverynote),'')  
-  , OHUDF02 = ISNULL(RTRIM(orders.userdefine02),'')  
+  , OHUDF02 = ISNULL(RTRIM(orders.userdefine03),'')   --WL02  
  -- , shipperkey = ISNULL(RTRIM(orders.shipperkey),'')  
   --    , ShipDate = MBOL.ShipDate    
   --, OIFUDF03 = ISNULL(OIF.OrderInfo03,'')  
@@ -176,7 +177,7 @@ BEGIN
  -- , ExternPOkey =  ISNULL(RTRIM(ORDERS.ExternPOkey),'')      
   --, ORDERS.OrderDate  
   --, ORDERS.DeliveryDate  
-  , OHUDF01 = ISNULL(RTRIM(orders.userdefine01),'')
+  , OHUDF01 = ISNULL(RTRIM(orders.userdefine02),'')   --WL02  
   , C_Company = ISNULL(RTRIM(ORDERS.C_Company),'')  
   , C_Address1 = ISNULL(RTRIM(ORDERS.C_Address1),'')  
   , C_Address2 = ISNULL(RTRIM(ORDERS.C_Address2),'')  
@@ -242,7 +243,7 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
  -- , ISNULL(RTRIM(ORDERS.ExternPOkey),'')  
   , ORDERS.OrderDate  
   , ORDERS.DeliveryDate  
-  , ISNULL(RTRIM(orders.userdefine01),'')
+  , ISNULL(RTRIM(orders.userdefine03),'')   --WL02  
   , ISNULL(RTRIM(ORDERS.C_Company),'')  
   , ISNULL(RTRIM(ORDERS.C_Address1),'')  
   , ISNULL(RTRIM(ORDERS.C_Address2),'')  
