@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 2020-09-17   WLChooi 1.1   Bug Fix - Get RD.ExternReceiptkey (WL01)  */
+/* 2020-11-09   WLChooi 1.2   WMS-13851 - Add column (WL02)             */
 /************************************************************************/
 
 CREATE PROC isp_warrant_receipt_02 (
@@ -188,7 +189,8 @@ CREATE PROC isp_warrant_receipt_02 (
           ISNULL(RECEIPT.POKEY ,RECEIPTDETAIL.POKEY) POKEY,
           CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideQty,                 
           CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showdatereceived,       
-          MAX(receiptdetail.datereceived) as Recvdate                                         
+          MAX(receiptdetail.datereceived) as Recvdate,
+          RECEIPTDETAIL.UserDefine02 AS UserDefine02   --WL02                                
    FROM RECEIPTDETAIL WITH (NOLOCK)
    JOIN RECEIPT WITH (NOLOCK) ON ( RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey )
    JOIN STORER WITH (NOLOCK) ON ( RECEIPTDETAIL.StorerKey = STORER.StorerKey )
@@ -197,9 +199,9 @@ CREATE PROC isp_warrant_receipt_02 (
    JOIN PACK WITH (NOLOCK) ON ( SKU.PACKKey = PACK.PackKey )
    LEFT JOIN CODELKUP WITH (NOLOCK) ON (CODELKUP.CODE = RECEIPT.ASNREASON AND CODELKUP.ListName = 'ASNREASON') 
    LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (RECEIPT.Storerkey = CLR.Storerkey AND CLR.Code = 'HIDEQTY'
-                                              AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_warrant_receipt' AND ISNULL(CLR.Short,'') <> 'N')
+                                              AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_warrant_receipt_02' AND ISNULL(CLR.Short,'') <> 'N')   --WL02
    LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (RECEIPT.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWDATERECEIVED'
-                                              AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_warrant_receipt' AND ISNULL(CLR1.Short,'') <> 'N')
+                                              AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_warrant_receipt_02' AND ISNULL(CLR1.Short,'') <> 'N')   --WL02
    WHERE ( RECEIPTDETAIL.Receiptkey = @c_receiptkey ) 
    GROUP BY RECEIPTDETAIL.StorerKey, 
             RECEIPTDETAIL.Sku, 
@@ -232,7 +234,8 @@ CREATE PROC isp_warrant_receipt_02 (
             RECEIPT.UserDefine01, 
             ISNULL(RECEIPT.POKEY ,RECEIPTDETAIL.POKEY), 
             CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END,      
-            CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END    
+            CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END,
+            RECEIPTDETAIL.UserDefine02   --WL02    
  END        
 GO          
             

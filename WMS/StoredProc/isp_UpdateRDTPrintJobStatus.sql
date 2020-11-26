@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,6 +30,7 @@ GO
 /* 2019-03-12  Wan01    1.0   WM - Printing: Add Parm11 - Parm20        */
 /* 2019-06-16  James    1.2   Comment commit tran before start          */
 /*                            transaction (james01)                     */
+/* 2020-11-23  Wan02    1.3   Fixed.Insert NULL to RDT.RDTPRINTJOB_LOG  */
 /************************************************************************/
 CREATE PROC [dbo].[isp_UpdateRDTPrintJobStatus]
       @n_JobID          BIGINT
@@ -119,7 +120,7 @@ BEGIN
             ,  @c_JobErrMsg  
             ,  [NextRun]       
             ,  [LastRun]       
-            ,  [Datawindow]    
+            ,  Datawindow = ISNULL([Datawindow],'')    -- (Wan02) ,  [Datawindow]    
             ,  [NoOfParms]     
             ,  [Parm1]         
             ,  [Parm2]         
@@ -166,7 +167,7 @@ BEGIN
          SET @n_Continue = 3
          SET @c_ErrMsg =  CONVERT(CHAR(5), @n_Err) 
          SET @n_Err = 62820
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Insert record Into RDT.RDTPRINTJOB_LOG Fail. (isp_UpdateRDTPrintJobStatus)'
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Insert record Into RDT.RDTPRINTJOB_LOG Fail - JobID:' + CAST(@n_JobId AS NVARCHAR) + '. (isp_UpdateRDTPrintJobStatus)'
                        + '(' + @c_ErrMsg + ')'
          GOTO QUIT_SP
       END  

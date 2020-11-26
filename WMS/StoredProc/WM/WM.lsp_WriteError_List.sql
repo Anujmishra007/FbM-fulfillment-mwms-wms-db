@@ -14,9 +14,12 @@ GO
 /* Written by:                                                          */    
 /*                                                                      */    
 /* Purpose:  Retrieve Error List for WMS Web                            */    
-/*                                                                      */    
-/* 27-May-2013  TLTING     1.1  Use table Identity to generate running  */  
-/* 26-Oct-2018  Wan        1.1  Add WriteType                           */
+/*                                                                      */  
+/* Date        Author   Ver   Purposes                                  */  
+/* 27-May-2013 TLTING   1.1   Use table Identity to generate running    */  
+/* 26-Oct-2018 Wan      1.1   Add WriteType                             */
+/* 2020-11-23  Wan01    1.2   Add Big Outer Begin Try..End Try to enable*/
+/*                            Revert when Sub SP Raise error            */
 /************************************************************************/   
     
 CREATE PROC [WM].[lsp_WriteError_List]
@@ -48,10 +51,11 @@ BEGIN
 
    SELECT @n_starttcnt=@@TRANCOUNT, @n_continue=1, @b_success=1
 
-   --If First Error get new key
-   IF @i_iErrGroupKey = 0
-   BEGIN
-         
+   --(Wan01) - START
+   BEGIN TRY
+      --If First Error get new key
+      IF @i_iErrGroupKey = 0
+      BEGIN
          --Call get Key        
          EXECUTE   nspg_getkey    
                   'ErrGroupKey'    
@@ -68,26 +72,33 @@ BEGIN
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Get ErrGroupkey Failed. (lsp_WrtieError_List)' 
             GOTO QUIT
          END
-   END
-   --(Wan01) - START
-   IF @n_LogWarningNo IS NULL 
-   BEGIN
-      SET @n_LogWarningNo = 0 --Initialize
-   END
+      END
+      --(Wan01) - START
+      IF @n_LogWarningNo IS NULL 
+      BEGIN
+         SET @n_LogWarningNo = 0 --Initialize
+      END
 
-   INSERT [WM].[WMS_Error_List]( ErrGroupKey, TableName, SourceType, RefKey1, RefKey2, RefKey3, LogWarningNo, WriteType, ErrCode, ErrMsg)
-   SELECT @i_iErrGroupKey, @c_TableName, @c_SourceType, @c_Refkey1, @c_Refkey2, @c_Refkey3, @n_LogWarningNo, @c_WriteType, @n_err2, @c_errmsg2
+      INSERT [WM].[WMS_Error_List]( ErrGroupKey, TableName, SourceType, RefKey1, RefKey2, RefKey3, LogWarningNo, WriteType, ErrCode, ErrMsg)
+      SELECT @i_iErrGroupKey, @c_TableName, @c_SourceType, @c_Refkey1, @c_Refkey2, @c_Refkey3, @n_LogWarningNo, @c_WriteType, @n_err2, @c_errmsg2
+      --(Wan01) - END
+
+      IF @@Error <> 0 or @@Rowcount = 0
+      BEGIN
+         SET @b_success = 0    
+         SET @n_continue = 3    
+         SET @n_err = 553852
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Failed to insert. (lsp_WrtieError_List)' 
+         GOTO QUIT
+      END
+   END TRY
+
+   BEGIN CATCH
+      SET @n_continue = 3
+      SET @c_errmsg='Writing Record to WM.WMS_Error_List Failed. (lsp_WrtieError_List). ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '  
+      GOTO QUIT  
+   END CATCH
    --(Wan01) - END
-
-   IF @@Error <> 0 or @@Rowcount = 0
-   BEGIN
-      SET @b_success = 0    
-      SET @n_continue = 3    
-      SET @n_err = 553852
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Failed to insert. (lsp_WrtieError_List)' 
-      GOTO QUIT
-   END
-
    QUIT:
 
    IF @n_continue=3  -- Error Occured - Process And Return
@@ -113,14 +124,12 @@ BEGIN
    END
    ELSE
    BEGIN
-
       WHILE @@TRANCOUNT > @n_starttcnt
       BEGIN
          COMMIT TRAN
       END     
       RETURN
    END
-
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WriteError_List] TO nSQL 
