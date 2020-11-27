@@ -29,6 +29,7 @@ GO
 /* 01-Oct-2018  CHEEMUN 1.1  INC0411478 - Lotattribute Lottables        */ 
 /* 28-Nov-2018  CSCHONG 1.2  WMS-7041 - Revised sorting rule (CS01)     */
 /* 29-Aug-2019  SPChin  1.3  INC0834464 - Bug Fixed                     */
+/* 14-Sep-2020  SPChin  1.4  INC1189002 - Bug Fixed                     */
 /************************************************************************/
 
 CREATE PROC nspPRTH01
@@ -140,6 +141,7 @@ BEGIN
       JOIN SKU WITH (NOLOCK) ON (STORER.Storerkey = SKU.Storerkey)
       WHERE STORER.Storerkey = @c_Storerkey
       AND SKU.Facility = @c_Facility
+      AND SKU.SKU = @c_Sku --INC1189002
 
       IF @n_StorerMinShelfLife IS NULL SET @n_StorerMinShelfLife = 0
    
