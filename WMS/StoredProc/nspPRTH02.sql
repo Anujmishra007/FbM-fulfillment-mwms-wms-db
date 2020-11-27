@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: nspOrderProcessing                                        */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver. Purposes                                   */
+/* 14-Sep-2020  SPChin  1.1  INC1189002 - Bug Fixed                     */
 /************************************************************************/
 
 CREATE PROC nspPRTH02
@@ -184,7 +185,8 @@ BEGIN
       FROM STORER WITH (NOLOCK)
       JOIN SKU WITH (NOLOCK) ON (STORER.Storerkey = SKU.Storerkey)
       WHERE STORER.Storerkey = @c_Storerkey
-      AND SKU.Facility = @c_Facility
+      --AND SKU.Facility = @c_Facility --INC1189002
+      AND SKU.SKU = @c_Sku             --INC1189002
 
       IF @n_StorerMinShelfLife IS NULL SET @n_StorerMinShelfLife = 0
    
