@@ -23,6 +23,7 @@ GO
 /* Date         Author   Purposes                                       */ 
 /* 6/12/2017	  WLCHOOI	 Show UPC for NIKEKR (WL01)					          	*/
 /* 17/10/2018   NJOW01   remove linking to pickdetail.wavekey           */ 
+/* 24/11/2020   NJOW02   Fix duplicate pickslip when run mutiple times  */
 /************************************************************************/  
   
 CREATE PROC dbo.isp_GetPickSlipWave12 (  
@@ -36,39 +37,35 @@ BEGIN
    SET ANSI_NULLS OFF     
    SET CONCAT_NULL_YIELDS_NULL OFF    
      
-   DECLARE @n_StartTCnt       INT  
-         , @n_Continue        INT             
-         , @b_Success         INT  
-         , @n_Err             INT  
-         , @c_Errmsg          NVARCHAR(255)  
+   DECLARE @n_StartTCnt          INT  
+         , @n_Continue           INT             
+         , @b_Success            INT  
+         , @n_Err                INT  
+         , @c_Errmsg             NVARCHAR(255)  
            
-   DECLARE @c_Wavekey         NVARCHAR(10)  
-         , @c_Type            NVARCHAR(2)  
-         , @c_Loadkey         NVARCHAR(10)  
-         , @c_PickSlipNo      NVARCHAR(10)  
-         , @c_RPickSlipNo   NVARCHAR(10)  
-         , @c_PrintedFlag     NVARCHAR(1)   
+   DECLARE @c_Wavekey            NVARCHAR(10)  
+         , @c_Type               NVARCHAR(2)  
+         , @c_Loadkey            NVARCHAR(10)  
+         , @c_PickSlipNo         NVARCHAR(10)  
+         , @c_RPickSlipNo        NVARCHAR(10)  
+         , @c_PrintedFlag        NVARCHAR(1)   
    
-   DECLARE @c_PickHeaderkey   NVARCHAR(10)   
-         , @c_Storerkey       NVARCHAR(15)   
-         , @c_ST_Company      NVARCHAR(45)  
-         , @c_Orderkey        NVARCHAR(10)  
-         , @c_OrderType       NVARCHAR(10)  
-         , @c_Stop            NVARCHAR(10)  
-         , @c_ExternOrderkey  NVARCHAR(30)  
-  
-         , @c_BuyerPO         NVARCHAR(20)  
-         , @c_OrderGroup      NVARCHAR(20)  
-         , @c_Sectionkey      NVARCHAR(10)  
-         , @c_DeliveryDate    NVARCHAR(10)  
-         , @c_Consigneekey    NVARCHAR(15)  
-         , @c_C_Company       NVARCHAR(45)  
-                             
-  
-         , @n_TotalCBM        FLOAT     
-         , @n_TotalGrossWgt   FLOAT  
-         , @n_noOfTotes       INT  
-  
+   DECLARE @c_PickHeaderkey      NVARCHAR(10)   
+         , @c_Storerkey          NVARCHAR(15)   
+         , @c_ST_Company         NVARCHAR(45)  
+         , @c_Orderkey           NVARCHAR(10)  
+         , @c_OrderType          NVARCHAR(10)  
+         , @c_Stop               NVARCHAR(10)  
+         , @c_ExternOrderkey     NVARCHAR(30)  
+         , @c_BuyerPO            NVARCHAR(20)  
+         , @c_OrderGroup         NVARCHAR(20)  
+         , @c_Sectionkey         NVARCHAR(10)  
+         , @c_DeliveryDate       NVARCHAR(10)  
+         , @c_Consigneekey       NVARCHAR(15)  
+         , @c_C_Company          NVARCHAR(45)                                                  
+         , @n_TotalCBM           FLOAT     
+         , @n_TotalGrossWgt      FLOAT  
+         , @n_noOfTotes          INT    
          , @c_PAZone             NVARCHAR(10) 
          , @c_PrevPAZone         NVARCHAR(10) 
          , @c_PADescr            NVARCHAR(60)   
@@ -89,7 +86,7 @@ BEGIN
          , @n_RowNo              INT
          , @n_CntRowNo           INT
          , @c_OrdKey             NVARCHAR(20)
-   , @c_OrdLineNo          NVARCHAR(5)
+         , @c_OrdLineNo          NVARCHAR(5)
          , @c_GetWavekey         NVARCHAR(10)
          , @c_GetPickSlipNo      NVARCHAR(10)    
          , @c_GetPickZone        NVARCHAR(10)
@@ -100,54 +97,43 @@ BEGIN
          , @c_ExecStatement      NVARCHAR(4000)
          , @c_GetPHOrdKey        NVARCHAR(20)
          , @c_GetWDOrdKey        NVARCHAR(20)
-        
-  
-  
+          
    SET @n_StartTCnt  =  @@TRANCOUNT  
-   SET @n_Continue   =  1  
-  
+   SET @n_Continue   =  1    
    SET @c_PickHeaderkey = ''  
    SET @c_Storerkey     = ''  
    SET @c_ST_Company    = ''  
    SET @c_Orderkey      = ''  
    SET @c_OrderType     = ''  
    SET @c_Stop   = ''  
-   SET @c_ExternOrderkey= ''  
-  
+   SET @c_ExternOrderkey= ''    
    SET @c_BuyerPO       = ''  
    SET @c_Consigneekey  = ''  
    SET @c_C_Company     = ''       
-   SET @c_RPickSlipNo   = ''                
-  
+   SET @c_RPickSlipNo   = ''                  
    SET @n_TotalCBM      = 0.00  
    SET @n_TotalGrossWgt = 0.00  
-   SET @n_noOfTotes     = 0  
-                        
+   SET @n_noOfTotes     = 0                          
    SET @c_Sku           = ''  
    SET @c_SkuDescr      = ''  
    SET @c_HazardousFlag = ''  
    SET @c_Loc           = ''  
    SET @c_ID            = ''  
-   SET @c_DropID        = ''  
-   
+   SET @c_DropID        = ''     
    SET @c_PZone         = ''
-  
-  
    SET @n_Qty           = 0  
    SET @c_PADescr       = ''  
    SET @c_UserDefine02  = ''  
    SET @n_NoOfLine      =  1
    SET @c_GetStorerkey  = ''
    SET @n_CntRowNo      = 1
-   --SET @n_MaxRow =  1
-  
+   --SET @n_MaxRow =  1  
   
    WHILE @@TranCount > 0    
    BEGIN    
       COMMIT TRAN    
    END   
-  
-         
+           
    CREATE TABLE #TMP_PICK  
    (  PickSlipNo         NVARCHAR(10) NULL,  
       LoadKey            NVARCHAR(10),  
@@ -201,7 +187,7 @@ BEGIN
       vat                NVARCHAR(18) NULL,  
       OVAS               NVARCHAR(30) NULL,  
       SKUGROUP           NVARCHAR(10) NULL,  
-      Storerkey         NVARCHAR(15) NULL,  
+      Storerkey          NVARCHAR(15) NULL,  
       Country            NVARCHAR(20) NULL,  
       Brand              NVARCHAR(50) NULL,  
       QtyOverAllocate    INT NULL,  
@@ -210,17 +196,17 @@ BEGIN
       ConsSUSR4          NVARCHAR(20) NULL,
       ConsNotes1         NVARCHAR(255) NULL,
       SensorTag          NVARCHAR(10) NULL,
-      Style            NVARCHAR(20) NULL,            
-      MANUFACTURERSKU  NVARCHAR(20) NULL,             
-      ShowSkuField     INT          NULL,             
-      stdcude          FLOAT DEFAULT(0),                         
-      GrossWgt         FLOAT DEFAULT(0),
-      OrderGrp         NVARCHAR(20) NULL,
-      Wavekey          NVARCHAR(10) NULL,
-      PAZone           NVARCHAR(10) NULL,
-      Pickdetailkey    NVARCHAR(20) NULL,
-	  ALTSKU		   NVARCHAR(20),--WL01
-	  CLKUPSHORT	   NVARCHAR(1) NULL  )--WL01       
+      Style              NVARCHAR(20) NULL,            
+      MANUFACTURERSKU    NVARCHAR(20) NULL,             
+      ShowSkuField       INT          NULL,             
+      stdcude            FLOAT DEFAULT(0),                         
+      GrossWgt           FLOAT DEFAULT(0),
+      OrderGrp           NVARCHAR(20) NULL,
+      Wavekey            NVARCHAR(10) NULL,
+      PAZone             NVARCHAR(10) NULL,
+      Pickdetailkey      NVARCHAR(20) NULL,
+	    ALTSKU		         NVARCHAR(20),--WL01
+	    CLKUPSHORT	       NVARCHAR(1) NULL  )--WL01       
       
       
    CREATE TABLE #TEMP_PICKBYZONE
@@ -230,20 +216,17 @@ BEGIN
   
    SET @c_Wavekey = SUBSTRING(@c_wavekey_type, 1, 10)  
    SET @c_Type    = SUBSTRING(@c_wavekey_type, 11,2)  
-   
-   
+      
    SELECT TOP 1 @c_GetStorerkey = ORD.Storerkey
    FROM WAVEDETAIL WD  WITH (NOLOCK)
    JOIN ORDERS ORD WITH (NOLOCK) ON WD.Orderkey = ORD.OrderKey
-   WHERE WD.Wavekey = @c_Wavekey  
-   
+   WHERE WD.Wavekey = @c_Wavekey     
    
    SELECT @n_NoOfLine = ISNULL(CONVERT(INT,short),1) 
    FROM codelkup (NOLOCK)
    WHERE listname = 'NIKEWAV' 
    AND code = 'PICKSLIP' 
-   AND storerkey = @c_GetStorerkey 
-   
+   AND storerkey = @c_GetStorerkey    
    
    SELECT DISTINCT PD.Pickdetailkey, TP.Orderkey  
    INTO #EARLYPICK  
@@ -257,17 +240,17 @@ BEGIN
          AND SL.LocationType IN ('PICK','CASE')  
          AND WD.wavekey = @c_waveKey) TP ON PD.Lot = TP.Lot AND PD.Loc = TP.Loc AND PD.ID = TP.ID   
                                         AND PD.Pickdetailkey <= TP.Pickdetailkey   
-  WHERE PD.Status < '9'       
-  AND PD.Storerkey = @c_GetStorerkey  
-    
-  SELECT EP.Orderkey, LLI.Lot, LLI.Loc, LLI.Id, (LLI.Qty - SUM(PD.Qty)) AS QtyOverAllocate  
-  INTO #TMP_OVERALLOCATE  
-  FROM #EARLYPICK EP  
-  JOIN PICKDETAIL PD (NOLOCK) ON EP.Pickdetailkey = PD.Pickdetailkey  
-  JOIN LOTXLOCXID LLI (NOLOCK) ON PD.Lot = LLI.Lot AND PD.Loc = LLI.Loc AND PD.Id = LLI.Id  
-  GROUP BY EP.Orderkey, LLI.Lot, LLI.Loc, LLI.Id, LLI.Qty  
-  HAVING LLI.Qty - SUM(PD.Qty) < 0  
-  
+   WHERE PD.Status < '9'       
+   AND PD.Storerkey = @c_GetStorerkey  
+   
+   SELECT EP.Orderkey, LLI.Lot, LLI.Loc, LLI.Id, (LLI.Qty - SUM(PD.Qty)) AS QtyOverAllocate  
+   INTO #TMP_OVERALLOCATE  
+   FROM #EARLYPICK EP  
+   JOIN PICKDETAIL PD (NOLOCK) ON EP.Pickdetailkey = PD.Pickdetailkey  
+   JOIN LOTXLOCXID LLI (NOLOCK) ON PD.Lot = LLI.Lot AND PD.Loc = LLI.Loc AND PD.Id = LLI.Id  
+   GROUP BY EP.Orderkey, LLI.Lot, LLI.Loc, LLI.Id, LLI.Qty  
+   HAVING LLI.Qty - SUM(PD.Qty) < 0  
+   
    SELECT Storerkey,
          ShowSkufield   =  ISNULL(MAX(CASE WHEN Code = 'SHOWSKUFIELD'  THEN 1 ELSE 0 END),0)     
    INTO #TMP_RPTCFG
@@ -276,11 +259,10 @@ BEGIN
    AND Long      = 'r_dw_print_wave_pickslip_12'
    AND (Short IS NULL OR Short <> 'N')
    GROUP BY Storerkey
-   
-   
-    INSERT INTO #TMP_PICK  
-            (  
-                PickSlipNo,  
+      
+   INSERT INTO #TMP_PICK  
+         (  
+           PickSlipNo,  
 					 LoadKey,  
 					 OrderKey,  
 					 ConsigneeKey,  
@@ -338,10 +320,9 @@ BEGIN
 					 QtyOverAllocate,  
 					 QtyPerCarton,     
 					 ConsSUSR3,      ConsSUSR4,       ConsNotes1,  SensorTag,
-                Style,MANUFACTURERSKU,showskufield, stdcude ,GrossWgt,OrderGrp,wavekey,PAZone,Pickdetailkey,
-				ALTSKU,CLKUPSHORT)  --WL01
-                
-          SELECT DISTINCT RefKeyLookup.PickSlipNo,  
+           Style,MANUFACTURERSKU,showskufield, stdcude ,GrossWgt,OrderGrp,wavekey,PAZone,Pickdetailkey,
+			     ALTSKU,CLKUPSHORT)  --WL01                
+   SELECT DISTINCT RefKeyLookup.PickSlipNo,  
           orders.loadkey                   AS LoadKey,  
           PickDetail.OrderKey,  
           ISNULL(ORDERS.ConsigneeKey, '') AS ConsigneeKey,  
@@ -412,69 +393,44 @@ BEGIN
           CASE WHEN ISNULL(st.Susr4,'') = 'SECURITY TAG' AND Sku.Price > 50 THEN 'YES' ELSE '' END ,
           sku.style,sku.MANUFACTURERSKU,ISNULL(RC.showskufield,0),sku.STDCUBE,sku.GrossWgt
           ,BRAND.OrdGroup,wd.WaveKey,Loc.PutawayZone AS Pzone,pickdetail.PickDetailKey
-		  ,ISNULL(SKU.ALTSKU,'') --WL01
-		  ,ISNULL(C.SHORT,'N') --WL01
+		      ,ISNULL(SKU.ALTSKU,'') --WL01
+		      ,ISNULL(C.SHORT,'N') --WL01
    FROM WAVEDETAIL      WD  WITH (NOLOCK) 
    JOIN pickdetail WITH (NOLOCK)  ON pickdetail.OrderKey = WD.OrderKey --AND  pickdetail.WaveKey=wd.WaveKey
    LEFT JOIN Pickheader WITH (NOLOCK) ON PickHeader.ExternOrderkey = pickdetail.PickSlipNo
-          JOIN orders WITH (NOLOCK)  
-               ON  pickdetail.orderkey = orders.orderkey  
-          JOIN lotattribute WITH (NOLOCK)  
-               ON  pickdetail.lot = lotattribute.lot  
-          JOIN loadplandetail WITH (NOLOCK)  
-               ON  pickdetail.orderkey = loadplandetail.orderkey  
-          JOIN orderdetail WITH (NOLOCK)  
-               ON  pickdetail.orderkey = orderdetail.orderkey  
-               AND pickdetail.orderlinenumber = orderdetail.orderlinenumber  
-          JOIN storer WITH (NOLOCK)  
-               ON  pickdetail.storerkey = storer.storerkey  
-          JOIN sku(NOLOCK)  
-               ON  pickdetail.sku = sku.sku  
-               AND pickdetail.storerkey = sku.storerkey  
-          JOIN pack WITH (NOLOCK)  
-               ON  pickdetail.packkey = pack.packkey  
-          JOIN loc WITH (NOLOCK)  
-               ON  pickdetail.loc = loc.loc  
-          LEFT JOIN routemaster WITH (NOLOCK)  
-               ON  orders.route = routemaster.route  
-          --LEFT JOIN areadetail WITH (NOLOCK)  
-          --     ON  loc.putawayzone = areadetail.putawayzone  
-          LEFT JOIN storer st WITH  (NOLOCK)  
-               ON  orders.consigneekey = st.storerkey  
-          LEFT JOIN (  
-                   SELECT O.Orderkey,  
-                          MAX(SUBSTRING(LTRIM(ISNULL(CL.Description, '')), 6, 50)) AS   
-                          BrandName,MAX(o.OrderGroup) AS OrdGroup  
-                   FROM   ORDERS O WITH (NOLOCK)  
-                          JOIN ORDERDETAIL OD WITH (NOLOCK)  
-                               ON  O.Orderkey = OD.Orderkey  
-                          JOIN SKU(NOLOCK)  
-                               ON  OD.Storerkey = SKU.Storerkey  
-                               AND OD.Sku = SKU.Sku  
-                          LEFT JOIN CODELKUP CL WITH (NOLOCK)  
-                               ON  SKU.ItemClass = CL.Code  
-                               AND CL.Listname = 'ITEMCLASS'  
-                          LEFT JOIN  WAVEDETAIL  WD  WITH (NOLOCK)     
-                          ON WD.OrderKey = O.Orderkey 
-                   WHERE  WD.wavekey = @c_Wavekey  
-                   GROUP BY  
-                          O.Orderkey  
-                   HAVING COUNT(  
-                              DISTINCT SUBSTRING(LTRIM(ISNULL(CL.Description, '')), 6, 50)  
-                          ) = 1  
-               ) BRAND  
-               ON  ORDERS.Orderkey = BRAND.Orderkey  
-          LEFT JOIN #TMP_OVERALLOCATE lli WITH (NOLOCK)  
-               ON pickdetail.Lot = lli.Lot  
-               AND pickdetail.Loc = lli.Loc  
-               AND pickdetail.ID = lli.ID  
-               AND pickdetail.Orderkey = lli.Orderkey 
-          LEFT JOIN #TMP_RPTCFG RC ON (ORDERS.Storerkey = RC.Storerkey)        --(CS02) 
-          left outer join RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey) 
-		  LEFT JOIN CODELKUP C (NOLOCK) ON (C.Storerkey = Storer.Storerkey) AND C.Long = 'r_dw_print_wave_pickslip_12' --WL01
-											AND C.Listname = 'REPORTCFG' AND C.Code = 'SHOWUPC' --WL01
-		WHERE  PickDetail.Status < '5'  
-          AND WD.WaveKey = @c_waveKey  
+   JOIN orders WITH (NOLOCK) ON  pickdetail.orderkey = orders.orderkey  
+   JOIN lotattribute WITH (NOLOCK) ON  pickdetail.lot = lotattribute.lot  
+   JOIN loadplandetail WITH (NOLOCK) ON  pickdetail.orderkey = loadplandetail.orderkey  
+   JOIN orderdetail WITH (NOLOCK)  ON  pickdetail.orderkey = orderdetail.orderkey  
+                                   AND pickdetail.orderlinenumber = orderdetail.orderlinenumber  
+   JOIN storer WITH (NOLOCK) ON  pickdetail.storerkey = storer.storerkey  
+   JOIN sku(NOLOCK) ON  pickdetail.sku = sku.sku  
+                       AND pickdetail.storerkey = sku.storerkey  
+   JOIN pack WITH (NOLOCK) ON  pickdetail.packkey = pack.packkey  
+   JOIN loc WITH (NOLOCK) ON  pickdetail.loc = loc.loc  
+   LEFT JOIN routemaster WITH (NOLOCK) ON  orders.route = routemaster.route  
+   --LEFT JOIN areadetail WITH (NOLOCK) ON  loc.putawayzone = areadetail.putawayzone  
+   LEFT JOIN storer st WITH  (NOLOCK) ON  orders.consigneekey = st.storerkey  
+   LEFT JOIN (SELECT O.Orderkey,  
+                     MAX(SUBSTRING(LTRIM(ISNULL(CL.Description, '')), 6, 50)) AS   
+                     BrandName,MAX(o.OrderGroup) AS OrdGroup  
+              FROM   ORDERS O WITH (NOLOCK)  
+                     JOIN ORDERDETAIL OD WITH (NOLOCK) ON  O.Orderkey = OD.Orderkey  
+                     JOIN SKU(NOLOCK) ON  OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku  
+                     LEFT JOIN CODELKUP CL WITH (NOLOCK) ON  SKU.ItemClass = CL.Code AND CL.Listname = 'ITEMCLASS'  
+                     LEFT JOIN  WAVEDETAIL  WD  WITH (NOLOCK) ON WD.OrderKey = O.Orderkey 
+              WHERE  WD.wavekey = @c_Wavekey  
+              GROUP BY O.Orderkey  
+              HAVING COUNT(DISTINCT SUBSTRING(LTRIM(ISNULL(CL.Description, '')), 6, 50)) = 1  
+              ) BRAND ON  ORDERS.Orderkey = BRAND.Orderkey  
+   LEFT JOIN #TMP_OVERALLOCATE lli WITH (NOLOCK) ON pickdetail.Lot = lli.Lot AND pickdetail.Loc = lli.Loc  
+                                                 AND pickdetail.ID = lli.ID AND pickdetail.Orderkey = lli.Orderkey 
+   LEFT JOIN #TMP_RPTCFG RC ON (ORDERS.Storerkey = RC.Storerkey)        --(CS02) 
+   left outer join RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey) 
+	 LEFT JOIN CODELKUP C (NOLOCK) ON (C.Storerkey = Storer.Storerkey) AND C.Long = 'r_dw_print_wave_pickslip_12' --WL01
+	               									AND C.Listname = 'REPORTCFG' AND C.Code = 'SHOWUPC' --WL01
+	 WHERE  PickDetail.Status < '5'  
+   AND WD.WaveKey = @c_waveKey  
    GROUP BY RefKeyLookup.PickSlipNo,orders.loadkey ,
           PickDetail.OrderKey,  
           ISNULL(ORDERS.ConsigneeKey, ''),  
@@ -489,7 +445,7 @@ BEGIN
           CONVERT(NVARCHAR(60), ISNULL(ORDERS.Notes, '')),  
           CONVERT(NVARCHAR(60), ISNULL(ORDERS.Notes2, '')),  
           PickDetail.loc,  
-     PickDetail.id,  
+          PickDetail.id,  
           PickDetail.sku,  
           ISNULL(Sku.Descr, ''),  
           loc.pickzone,
@@ -513,9 +469,8 @@ BEGIN
           SKU.OVAS,  
           SKU.SKUGROUP,  
           ORDERS.Storerkey,  
-          CASE   
-               WHEN ORDERS.C_ISOCntryCode IN ('ID', 'IN', 'KR', 'PH', 'TH', 'TW', 'VN') THEN   
-                    'EXPORT'  
+          CASE WHEN ORDERS.C_ISOCntryCode IN ('ID', 'IN', 'KR', 'PH', 'TH', 'TW', 'VN') THEN   
+                   'EXPORT'  
                ELSE ISNULL(ORDERS.C_ISOCntryCode, '')  
           END,  
           ISNULL(BRAND.BrandName, ''),   
@@ -534,11 +489,11 @@ BEGIN
       COMMIT TRAN  
    END
      
-      SET @c_OrderKey = ''  
-      SET @c_Pickzone = ''
-      SET @c_PrevPAzone = ''
-      SET @c_PickDetailKey = ''  
-      SET @n_continue = 1
+   SET @c_OrderKey = ''  
+   SET @c_Pickzone = ''
+   SET @c_PrevPAzone = ''
+   SET @c_PickDetailKey = ''  
+   SET @n_continue = 1
     
    DECLARE CUR_LOAD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT loadkey  
@@ -558,16 +513,12 @@ BEGIN
                              ,@c_GetPickDetailKey
   
    WHILE (@@FETCH_STATUS <> -1)  
-   BEGIN  
-   	
-   	
+   BEGIN     	   	
      IF ISNULL(@c_OrderKey, '0') = '0'  
-            BREAK  
+        BREAK  
                   
-     IF @c_PrevPAZone <> @c_PZone 
-         
-      BEGIN	
-      		
+     IF @c_PrevPAZone <> @c_PZone          
+     BEGIN	      		
          SET @c_RPickSlipNo = ''
          
          EXECUTE nspg_GetKey       
@@ -580,251 +531,250 @@ BEGIN
                         
          IF @b_success = 1   
          BEGIN                 
-         SET @c_RPickSlipNo = 'P' + @c_RPickSlipNo          
+            SET @c_RPickSlipNo = 'P' + @c_RPickSlipNo          
                       
-					INSERT INTO PICKHEADER      
-								(  PickHeaderKey    
-								,  Wavekey    
-								,  Orderkey    
-								,  ExternOrderkey    
-								,  Loadkey    
-								,  PickType    
-								,  Zone    
-								,  consoorderkey
-								,  TrafficCop    
-								)      
-					VALUES      
-								(  @c_RPickSlipNo    
-								,  @c_Wavekey    
-								,  '' 
-								,  @c_RPickSlipNo   
-								,  @c_Loadkey    
-								,  '0'     
-								,  'LP'  
-								,  @c_PZone  
-								,  ''    
-								)          
-             
-							SET @n_err = @@ERROR      
-							IF @n_err <> 0      
-							BEGIN      
-								SET @n_continue = 3      
-								SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-								SET @n_err = 81008  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-								SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert PICKHEADER Failed (isp_GetPickSlipWave12)'   
-												 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
-								GOTO QUIT     
-							END  
-					
-          END
-          ELSE   
-            BEGIN  
-               SELECT @n_continue = 3  
-               SELECT @n_err = 63502
-	            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Get PSNO Failed. (isp_GetPickSlipWave12)'  
-               BREAK   
-            END 
+					  INSERT INTO PICKHEADER      
+					  			(  PickHeaderKey    
+					  			,  Wavekey    
+					  			,  Orderkey    
+					  			,  ExternOrderkey    
+					  			,  Loadkey    
+					  			,  PickType    
+					  			,  Zone    
+					  			,  consoorderkey
+					  			,  TrafficCop    
+					  			)      
+					  VALUES      
+					  			(  @c_RPickSlipNo    
+					  			,  @c_Wavekey     
+					  			,  '' 
+					  			,  @c_RPickSlipNo   
+					  			,  @c_Loadkey    
+					  			,  '0'     
+					  			,  'LP'  
+					  			,  @c_PZone     
+					  			,  ''    
+					  			)          
             
-          END    
-          
-           IF @n_Continue = 1  
-         BEGIN        
-            SET @c_ExecStatement = N'DECLARE C_PickDetailKey CURSOR FAST_FORWARD READ_ONLY FOR ' +
-                                    'SELECT PickDetail.PickDetailKey, PickDetail.OrderLineNumber ' +   
-                                    'FROM   PickDetail WITH (NOLOCK) ' +
-                                    'JOIN   OrderDetail WITH (NOLOCK) ' +                                       
-                                    'ON (PICKDETAIL.OrderKey = ORDERDETAIL.OrderKey AND ' + 
-                                    'PICKDETAIL.OrderLineNumber = ORDERDETAIL.OrderLineNumber) ' +
-                                    'JOIN   LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) ' +
-                                    'WHERE  PickDetail.pickdetailkey = ''' + @c_GetPickDetailKey + '''' +
-                                    ' AND    OrderDetail.LoadKey  = ''' + @c_LoadKey  + ''' ' +
-                                    ' AND LOC.PutawayZone = ''' + RTRIM(@c_Pzone) + ''' ' +  
-                                    ' ORDER BY PickDetail.PickDetailKey '  
-   
-            EXEC(@c_ExecStatement)
-            OPEN C_PickDetailKey  
-     
-            FETCH NEXT FROM C_PickDetailKey INTO @c_PickDetailKey, @c_OrdLineNo   
-     
-            WHILE @@FETCH_STATUS <> -1  
-            BEGIN  
-               IF NOT EXISTS (SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)   
-               BEGIN   
-                  INSERT INTO RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey)  
-                  VALUES (@c_PickDetailKey, @c_RPickSlipNo, @c_OrderKey, @c_OrdLineNo, @c_Loadkey)
-
-                  SELECT @n_err = @@ERROR  
-                  IF @n_err <> 0   
-                  BEGIN  
-                     SELECT @n_continue = 3
-                     SELECT @n_err = 63503
-	                   SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert RefKeyLookup Failed. (isp_GetPickSlipWave12)'    
-                     GOTO QUIT
-                  END                          
-               END   
-     
-               FETCH NEXT FROM C_PickDetailKey INTO @c_PickDetailKey, @c_OrdLineNo   
-            END   
-            CLOSE C_PickDetailKey   
-            DEALLOCATE C_PickDetailKey        
-         END   
-                
-         UPDATE #TMP_PICK  
-            SET PickSlipNo = @c_RPickSlipNo  
-         WHERE OrderKey = @c_OrderKey  
-         AND   PAzone = @c_Pzone
-         AND   ISNULL(PickSlipNo,'') = '' 
-         AND Pickdetailkey = @c_GetPickDetailKey
-
-         SELECT @n_err = @@ERROR  
-         IF @n_err <> 0   
+					  SET @n_err = @@ERROR
+					        
+					  IF @n_err <> 0      
+					  BEGIN      
+					  	SET @n_continue = 3      
+					  	SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+					  	SET @n_err = 81008  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
+					  	SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert PICKHEADER Failed (isp_GetPickSlipWave12)'   
+					  					 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
+					  	GOTO QUIT     
+					  END  					
+         END
+         ELSE   
          BEGIN  
             SELECT @n_continue = 3  
-            SELECT @n_err = 63504
-            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update #TMP_PICK Failed. (isp_GetPickSlipWave12)'    
-            GOTO QUIT
-         END
-						UPDATE PICKDETAIL WITH (ROWLOCK)      
-					    SET  PickSlipNo = @c_RPickSlipNo     
-						 ,EditWho = SUSER_NAME()    
-						 ,EditDate= GETDATE()     
-						 ,TrafficCop = NULL     
-					FROM ORDERS     OH WITH (NOLOCK)    
-					JOIN PICKDETAIL PD ON (OH.Orderkey = PD.Orderkey) 
-					JOIN LOC L ON L.LOC = PD.Loc   
-					 WHERE PD.OrderKey = @c_OrderKey  
-                AND L.PutawayZone = @c_PZone
-                AND   ISNULL(PickSlipNo,'') = ''  
-                AND Pickdetailkey = @c_GetPickDetailKey
+            SELECT @n_err = 63502
+	          SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Get PSNO Failed. (isp_GetPickSlipWave12)'  
+            BREAK   
+         END            
+     END            
+       
+     IF @n_Continue = 1  
+     BEGIN        
+        SET @c_ExecStatement = N'DECLARE C_PickDetailKey CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                                'SELECT PickDetail.PickDetailKey, PickDetail.OrderLineNumber ' +   
+                                'FROM   PickDetail WITH (NOLOCK) ' +
+                                'JOIN   OrderDetail WITH (NOLOCK) ' +                                       
+                                'ON (PICKDETAIL.OrderKey = ORDERDETAIL.OrderKey AND ' + 
+                                'PICKDETAIL.OrderLineNumber = ORDERDETAIL.OrderLineNumber) ' +
+                                'JOIN   LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) ' +
+                                'WHERE  PickDetail.pickdetailkey = ''' + @c_GetPickDetailKey + '''' +
+                                ' AND    OrderDetail.LoadKey  = ''' + @c_LoadKey  + ''' ' +
+                                ' AND LOC.PutawayZone = ''' + RTRIM(@c_Pzone) + ''' ' +  
+                                ' ORDER BY PickDetail.PickDetailKey '  
+   
+        EXEC(@c_ExecStatement)
+        OPEN C_PickDetailKey  
+     
+        FETCH NEXT FROM C_PickDetailKey INTO @c_PickDetailKey, @c_OrdLineNo   
+     
+        WHILE @@FETCH_STATUS <> -1  
+        BEGIN  
+           IF NOT EXISTS (SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)   
+           BEGIN   
+              INSERT INTO RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey)  
+              VALUES (@c_PickDetailKey, @c_RPickSlipNo, @c_OrderKey, @c_OrdLineNo, @c_Loadkey)
 
-  
-					SET @n_err = @@ERROR      
-					IF @n_err <> 0      
-					BEGIN      
-						SET @n_continue = 3      
-						SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-						SET @n_err = 81009 -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-						SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE Pickdetail Failed (isp_GetPickSlipWave12)'   
-										 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
-						GOTO QUIT     
-					END  
-         
-					WHILE @@TRANCOUNT > 0  
-					BEGIN  
-						COMMIT TRAN  
-					END  
-  
-         
-         WHILE @@TRANCOUNT > 0  
-         BEGIN  
-            COMMIT TRAN  
-         END           	
+              SELECT @n_err = @@ERROR  
+              IF @n_err <> 0   
+              BEGIN  
+                 SELECT @n_continue = 3
+                 SELECT @n_err = 63503
+	               SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert RefKeyLookup Failed. (isp_GetPickSlipWave12)'    
+                 GOTO QUIT
+              END                          
+           END   
+     
+           FETCH NEXT FROM C_PickDetailKey INTO @c_PickDetailKey, @c_OrdLineNo   
+        END   
+        CLOSE C_PickDetailKey   
+        DEALLOCATE C_PickDetailKey        
+     END   
+                
+     UPDATE #TMP_PICK  
+     SET PickSlipNo = @c_RPickSlipNo  
+     WHERE OrderKey = @c_OrderKey  
+     AND   PAzone = @c_Pzone
+     AND   ISNULL(PickSlipNo,'') = '' 
+     AND Pickdetailkey = @c_GetPickDetailKey
 
-        -- SET @c_RPickSlipNo = ''   
-         SET @c_PrevPAzone = @c_Pzone                 
+     SELECT @n_err = @@ERROR  
+     IF @n_err <> 0   
+     BEGIN  
+        SELECT @n_continue = 3  
+        SELECT @n_err = 63504
+        SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update #TMP_PICK Failed. (isp_GetPickSlipWave12)'    
+        GOTO QUIT
+     END
+     
+		 UPDATE PICKDETAIL WITH (ROWLOCK)      
+		 SET PickSlipNo = @c_RPickSlipNo     
+		  	,EditWho = SUSER_NAME()    
+		 	  ,EditDate= GETDATE()     
+		 	  ,TrafficCop = NULL     
+		 FROM ORDERS     OH WITH (NOLOCK)    
+		 JOIN PICKDETAIL PD ON (OH.Orderkey = PD.Orderkey) 
+		 JOIN LOC L ON L.LOC = PD.Loc   
+		 WHERE PD.OrderKey = @c_OrderKey  
+     AND L.PutawayZone = @c_PZone
+     AND   ISNULL(PickSlipNo,'') = ''  
+     AND Pickdetailkey = @c_GetPickDetailKey
+     
+		 SET @n_err = @@ERROR      
+		 
+		 IF @n_err <> 0      
+		 BEGIN      
+		 	  SET @n_continue = 3      
+		 	  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+		 	  SET @n_err = 81009 -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
+		 	  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE Pickdetail Failed (isp_GetPickSlipWave12)'   
+		 	  				 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
+		 	  GOTO QUIT     
+		 END  
+     
+		 WHILE @@TRANCOUNT > 0  
+		 BEGIN  
+		 	COMMIT TRAN  
+		 END  
+           
+     WHILE @@TRANCOUNT > 0  
+     BEGIN  
+        COMMIT TRAN  
+     END           	
+
+     -- SET @c_RPickSlipNo = ''   
+     SET @c_PrevPAzone = @c_Pzone                 
              
-      FETCH NEXT FROM CUR_LOAD INTO @c_loadkey,@c_Orderkey  
-                                 ,  @c_PZone
-                               --  ,  @n_MaxRow
-                                 , @c_GetPickDetailKey
+     FETCH NEXT FROM CUR_LOAD INTO @c_loadkey,@c_Orderkey  
+                                ,  @c_PZone
+                              --  ,  @n_MaxRow
+                                , @c_GetPickDetailKey
    END  
    CLOSE CUR_LOAD  
    DEALLOCATE CUR_LOAD  
    
    DECLARE CUR_WaveOrder CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-     SELECT DISTINCT   
-          WD.Wavekey  
-         ,LPD.LoadKey  
-         ,PH.OrderKey
-         ,WD.Orderkey
+      SELECT DISTINCT   
+             WD.Wavekey  
+            ,LPD.LoadKey  
+            ,'' --PH.OrderKey --NJOW02
+            ,WD.Orderkey
       FROM WAVEDETAIL      WD  WITH (NOLOCK)  
       JOIN LOADPLANDETAIL  LPD WITH (NOLOCK) ON (WD.Orderkey = LPD.Orderkey)  
       JOIN PICKDETAIL AS PDET ON PDET.OrderKey = WD.OrderKey
       JOIN LOC L WITH (NOLOCK) ON L.LOC = PDET.Loc
-      LEFT JOIN PICKHEADER PH  WITH (NOLOCK) ON (WD.WaveKey = PH.Wavekey)  
-                                          AND(LPD.Loadkey = PH.ExternOrderkey)    
-                                          AND(LPD.Loadkey = PH.Loadkey)                                         
-                                          AND(PH.Zone = 'LP')  
-     WHERE WD.WaveKey = @c_Wavekey                                        
+      --LEFT JOIN PICKHEADER PH  WITH (NOLOCK) ON (WD.WaveKey = PH.Wavekey)   --NJOW02 Removed
+      --                                    AND(LPD.Loadkey = PH.ExternOrderkey)    
+      --                                    AND(LPD.Loadkey = PH.Loadkey)                                         
+      --                                    AND(PH.Zone = 'LP')  
+      WHERE WD.WaveKey = @c_Wavekey                                        
                                           
-      OPEN CUR_WaveOrder 
-   	
-   	FETCH NEXT FROM CUR_WaveOrder INTO @c_GetWavekey,@c_GetLoadkey,@c_GetPHOrdKey,@c_GetWDOrdKey
-   	
-   	WHILE (@@FETCH_STATUS <> -1)  
-      BEGIN    
-      	
-      	IF RTRIM(@c_GetPHOrdKey) = '' OR @c_GetPHOrdKey IS NULL  
-         BEGIN  
-         BEGIN TRAN
-         EXECUTE nspg_GetKey       
-                  'PICKSLIP'    
-               ,  9    
-               ,  @c_Pickslipno OUTPUT    
-               ,  @b_Success    OUTPUT    
-               ,  @n_err        OUTPUT    
-               ,  @c_errmsg     OUTPUT          
-                          
-         SET @c_Pickslipno = 'P' + @c_Pickslipno    
-         
-         
-         IF NOT EXISTS (SELECT 1 FROM PICKHEADER (NOLOCK) 
-                        WHERE wavekey      = @c_Wavekey 
-                        AND ExternOrderkey = @c_Pickslipno
-                        AND Orderkey       = @c_GetPHOrdKey)
-         BEGIN
-         INSERT INTO PICKHEADER      
-                  (  PickHeaderKey    
-                  ,  Wavekey    
-                  ,  Orderkey    
-                  ,  ExternOrderkey    
-                  ,  Loadkey    
-                  ,  PickType    
-                  ,  Zone    
-                  ,  consoorderkey
-                  ,  TrafficCop    
-                  )      
-         VALUES      
-                  (  @c_Pickslipno    
-                  ,  @c_Wavekey    
-                  ,  @c_GetWDOrdKey   
-                  ,  @c_Pickslipno   
-                  ,  @c_Loadkey    
-                  ,  '0'     
-                  ,  '3'  
-                  ,  ''  
-                  ,  ''    
-                  )          
-             
-					SET @n_err = @@ERROR      
-					IF @n_err <> 0      
-					BEGIN      
-						SET @n_continue = 3      
-						SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-						SET @n_err = 81008  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-						SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert PICKHEADER Failed (isp_GetPickSlipWave12)'   
-										 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
-						GOTO QUIT     
-					END      
-
-        END   
-        
-        
-         WHILE @@TRANCOUNT > 0  
-         BEGIN  
-            COMMIT TRAN  
-         END	
-      END  
-
-      
-      FETCH NEXT FROM  CUR_WaveOrder INTO @c_GetWavekey,@c_GetLoadkey,@c_GetPHOrdKey,@c_GetWDOrdKey
-      END  
-      
-      CLOSE CUR_WaveOrder  
-      DEALLOCATE CUR_WaveOrder                                                     
+   OPEN CUR_WaveOrder 
    
-    GOTO QUIT    
+   FETCH NEXT FROM CUR_WaveOrder INTO @c_GetWavekey,@c_GetLoadkey,@c_GetPHOrdKey,@c_GetWDOrdKey
+   
+   WHILE (@@FETCH_STATUS <> -1)  
+   BEGIN         	
+       --IF RTRIM(@c_GetPHOrdKey) = '' OR @c_GetPHOrdKey IS NULL  --NJOW02 Removed
+       -- BEGIN  
+       
+       IF NOT EXISTS (SELECT 1 FROM PICKHEADER (NOLOCK)   --NJOW02 move from below
+                      WHERE wavekey      = @c_Wavekey 
+                      AND Orderkey       = @c_GetWDOrdKey)         
+       BEGIN               
+          BEGIN TRAN
+          EXECUTE nspg_GetKey       
+                   'PICKSLIP'    
+                ,  9    
+                ,  @c_Pickslipno OUTPUT    
+                ,  @b_Success    OUTPUT    
+                ,  @n_err        OUTPUT    
+                ,  @c_errmsg     OUTPUT          
+                           
+          SET @c_Pickslipno = 'P' + @c_Pickslipno    
+                    
+          --IF NOT EXISTS (SELECT 1 FROM PICKHEADER (NOLOCK)   --NJOW02 Removed
+          --               WHERE wavekey      = @c_Wavekey 
+          --               AND ExternOrderkey = @c_Pickslipno
+          --               AND Orderkey       = @c_GetPHOrdKey)
+          --BEGIN
+          INSERT INTO PICKHEADER      
+                   (  PickHeaderKey    
+                   ,  Wavekey    
+                   ,  Orderkey    
+                   ,  ExternOrderkey    
+                   ,  Loadkey    
+                   ,  PickType    
+                   ,  Zone    
+                   ,  consoorderkey
+                   ,  TrafficCop    
+                   )      
+          VALUES      
+                   (  @c_Pickslipno    
+                   ,  @c_Wavekey    
+                   ,  @c_GetWDOrdKey   
+                   ,  @c_Pickslipno   
+                   ,  @c_GetLoadkey --NJOW02    
+                   ,  '0'     
+                   ,  '3'  
+                   ,  ''  
+                   ,  ''    
+                   )          
+           
+					 SET @n_err = @@ERROR      
+					 
+					 IF @n_err <> 0      
+					 BEGIN      
+					 	  SET @n_continue = 3      
+					 	  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+					 	  SET @n_err = 81008  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
+					 	  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert PICKHEADER Failed (isp_GetPickSlipWave12)'   
+					 	  				 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
+					 	  GOTO QUIT     
+					 END      
+       END   
+              
+       WHILE @@TRANCOUNT > 0  
+       BEGIN  
+          COMMIT TRAN  
+       END	
+     --END  
      
+       FETCH NEXT FROM  CUR_WaveOrder INTO @c_GetWavekey,@c_GetLoadkey,@c_GetPHOrdKey,@c_GetWDOrdKey
+   END     
+   CLOSE CUR_WaveOrder  
+   DEALLOCATE CUR_WaveOrder                                                     
+   
+   GOTO QUIT    
+      
 QUIT:  
   
    IF CURSOR_STATUS('LOCAL' , 'CUR_LOAD') in (0 , 1)  
@@ -847,8 +797,7 @@ QUIT:
       END   
       EXECUTE nsp_logerror @n_err, @c_errmsg, 'isp_GetPickSlipWave12'    
    END  
-   
-   
+      
     --NJOW01 Start   
    SELECT tp.Orderkey,   
           SUM(tp.QtyOverAllocate) AS TotalQtyOverAllocate   
@@ -859,7 +808,6 @@ QUIT:
    LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.Listname = 'TitleRem' AND CS.Fax2 = CL.Code AND CL.Storerkey = @c_GetStorerkey)  
    GROUP BY tp.Orderkey  
          ,  ISNULL(RTRIM(CL.Description),'')   
- 
      
    SELECT DISTINCT #tmp_pick.Loc  
    INTO #tmp_highbayloc  
