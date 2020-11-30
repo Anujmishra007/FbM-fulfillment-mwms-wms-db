@@ -18,6 +18,7 @@ GO
 /* 12-11-2014  1.0  Shong       Created                                 */
 /* 03-05-2018  1.0  TLTING      enlarge variable length                 */  
 /* 14-08-2018  1.1  TLTING01    bug fix                                 */ 
+/* 10-11-2020  1.2  SHONG       Create User to Archive DB               */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_Synchronize_WM_Users]
    @c_User_Name       NVARCHAR(100) = '',   
@@ -114,7 +115,7 @@ BEGIN
           BEGIN
             SET  @n_SYNC_ERROR_NO = 0 
             SET  @c_SYNC_ERROR_MESSAGE = ''
-         	  
+              
              SET @c_SQL = 'CREATE LOGIN [' + @c_WMS_USER_NAME + '] FROM WINDOWS'  
 
              BEGIN TRY  
@@ -130,16 +131,16 @@ BEGIN
       END -- IF NOT EXISTS   
       ELSE 
       BEGIN
-	      BEGIN TRY
-	         EXECUTE AS LOGIN=@c_WMS_USER_NAME;		
-	         REVERT;     
-	      END TRY
-	      BEGIN CATCH
-	         REVERT;     	      
+         BEGIN TRY
+            EXECUTE AS LOGIN=@c_WMS_USER_NAME;     
+            REVERT;     
+         END TRY
+         BEGIN CATCH
+            REVERT;              
             SET @c_SQL = 'DROP USER [' + @c_WMS_USER_NAME + ']' 
             
-            EXEC sp_executesql @c_SQL    	         
-	      END CATCH
+            EXEC sp_executesql @c_SQL              
+         END CATCH
       END 
             
 
@@ -157,7 +158,11 @@ BEGIN
             @cWMS_DBName =@c_DBName,  
             @cWCS_DBName ='',  
             @cDTSITF_DBName = '',  
-            @cRDTUser = 'N'      
+            @cRDTUser = 'N'   
+            
+         -- Added by SHONG on 10-Nov-2020
+         EXEC sp_CreateWMSArchiveUser 
+             @cUserName = @c_WMS_USER_NAME,  @cWMS_DBName  = @c_DBName   
       END TRY  
       BEGIN CATCH             
            SELECT @n_SYNC_ERROR_NO = ERROR_NUMBER(),   
