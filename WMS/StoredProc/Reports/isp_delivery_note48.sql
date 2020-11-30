@@ -25,8 +25,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 06-NOV-2020 CSCHONG  1.1   WMS-15197 revised field mapping (CS01)    */
+/* 10-NOV-2020 CSCHONG  1.2   WMS-15197 fix sn length, taxqty issue (CS02)*/
 /************************************************************************/
-CREATE PROC isp_delivery_note48  
+CREATE PROC isp_delivery_note48
             @c_OrderKey     NVARCHAR(10)  
            ,@c_RePrint      NVARCHAR(5) = 'N'
 AS  
@@ -50,13 +52,18 @@ BEGIN
          , @n_Leadtime1       INT  
          , @n_Leadtime2       INT 
          , @n_MaxLine         INT 
+         , @c_GetOrdKey       NVARCHAR(20)      --(CS02) START
+         , @c_Getstorerkey    NVARCHAR(20)
+         , @c_GetSKU          NVARCHAR(20)
+         , @c_GetSN           NVARCHAR(50)
+         , @n_seqno           INT              --(CS02) END
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
      
    SET @c_Rptsku = ''            
    SET @n_Maxline = 17        
-  
+    
   
    CREATE TABLE #DN48  
       (  Facility          NVARCHAR(5)      
@@ -101,6 +108,7 @@ BEGIN
       ,  ST_Address3       NVARCHAR(45)   
       ,  Pageno            INT
       ,  ODlinenumber      NVARCHAR(10)
+      ,  snum              NVARCHAR(50)     --(CS02)
       )  
   
   INSERT INTO #DN48  
@@ -145,11 +153,13 @@ BEGIN
       ,  ST_Address2         
       ,  ST_Address3          
       ,  Pageno    
-      ,  ODlinenumber            
+      ,  ODlinenumber      
+      ,  snum                               --CS02      
       )  
    SELECT ORDERS.Facility  
   , DeliveryNote = ISNULL(RTRIM(orders.deliverynote),'')  
-  , OHUDF06 = ISNULL(RTRIM(orders.userdefine06),'')  
+ -- , OHUDF06 = ISNULL(RTRIM(orders.userdefine06),'')                --CS01
+  , OHUDF06 = CONVERT(NVARCHAR(10),getdate(),101)                    --CS01
   , shipperkey = ISNULL(RTRIM(orders.shipperkey),'')  
   --    , ShipDate = MBOL.ShipDate    
   , PmtTerm = ISNULL(orders.PmtTerm,'')  
@@ -193,6 +203,7 @@ BEGIN
   , ST_Address3 = ISNULL(RTRIM(ST.Address3),'')
   , pageno = 1--(Row_Number() OVER (PARTITION BY ORDERS.Orderkey ORDER BY ORDERS.Orderkey, ORDERDETAIL.orderlinenumber,PICKDETAIL.Sku Asc)-1)/@n_maxLine + 1   
   , ODlinenumber = ORDERDETAIL.orderlinenumber
+  , ''                                             --CS02
  FROM ORDERS     WITH (NOLOCK) 
  JOIN PICKDETAIL WITH (NOLOCK) ON (ORDERS.Orderkey = PICKDETAIL.Orderkey)  
  JOIN ORDERDETAIL (NOLOCK)
@@ -210,7 +221,7 @@ BEGIN
 AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
  GROUP BY ORDERS.Facility  
   , ISNULL(RTRIM(orders.deliverynote),'')   
-  , ISNULL(RTRIM(orders.userdefine06),'')
+ -- , ISNULL(RTRIM(orders.userdefine06),'')                    --CS01
   , ISNULL(RTRIM(orders.shipperkey),'')  
     --  , MBOL.ShipDate   
   , ISNULL(orders.PmtTerm,'')  
@@ -252,9 +263,123 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
  ,  ORDERDETAIL.orderlinenumber 
   , PACK.PACKUOM1,PACK.PACKUOM2,PACK.PACKUOM3,PACK.PACKUOM4
   ,PACK.CASECNT,PACK.INNERPACK,PACK.qty,PACK.Pallet
- 
+   
+   --CS02 START
+   SET @n_seqno = 1
+
+   DECLARE CUR_ORDSN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+   SELECT  OD.Storerkey    
+          ,OD.Orderkey    
+          ,OD.SKU
+          ,ISNULL(SN.serialno,'')     
+   FROM  ORDERDETAIL OD (NOLOCK)     
+   LEFT JOIN serialno SN WITH (NOLOCK)  ON SN.Orderkey = OD.Orderkey AND SN.sku = OD.sku AND SN.Storerkey = OD.Storerkey
+   where OD.Orderkey = @c_orderkey
+   
+   OPEN CUR_ORDSN    
+       
+   FETCH FROM CUR_ORDSN INTO @c_GetStorerkey, @c_GetOrdKey, @c_getsku,@c_getsn    
+       
+   WHILE @@FETCH_STATUS = 0    
+   BEGIN      
+
+    IF @n_seqno = 1
+    BEGIN
+          UPDATE #DN48
+          SET snum = @c_GetSN
+          where Orderkey = @c_GetOrdKey and Sku = @c_GetSKU and storerkey = @c_Getstorerkey
+    END
+    ELSE
+    BEGIN
+         
+         INSERT INTO #DN48 (Facility ,  DeliveryNote ,  OHUDF06  ,  shipperkey  ,  PmtTerm   
+      ,  BuyerPO             
+      ,  Orderkey            
+      ,  ExternOrderkey      
+      ,  ExternPOkey              
+      ,  OHUDF05        
+      ,  C_Company           
+      ,  C_Address1          
+      ,  C_Address2    
+      ,  C_Address3        
+      ,  C_Address4              
+      ,  C_contact1               
+      ,  c_vat            
+      ,  Salesman           
+      ,  UOM           
+      ,  B_Address1          
+      ,  B_Address2     
+      ,  B_Address3       
+      ,  B_Address4              
+      ,  ST_VAT               
+      ,  ST_Phone1            
+      ,  OHNotes              
+      ,  Storerkey           
+      ,  Sku                 
+      ,  SKUDescr            
+      ,  UOMQTY            
+      ,  TAXQTY             
+      ,  OHUDF03     
+      ,  PQTY     
+      ,  EcomOrderId   
+      ,  ST_Address1        
+      ,  ST_Address2         
+      ,  ST_Address3          
+      ,  Pageno    
+      ,  ODlinenumber      
+      ,  snum                               --CS02      
+      )  
+     SELECT TOP 1 Facility ,  DeliveryNote ,  OHUDF06  ,  shipperkey  ,  PmtTerm   
+      ,  BuyerPO             
+      ,  Orderkey            
+      ,  ExternOrderkey      
+      ,  ExternPOkey              
+      ,  OHUDF05        
+      ,  C_Company           
+      ,  C_Address1          
+      ,  C_Address2    
+      ,  C_Address3        
+      ,  C_Address4              
+      ,  C_contact1               
+      ,  c_vat            
+      ,  Salesman           
+      ,  0          
+      ,  B_Address1          
+      ,  B_Address2     
+      ,  B_Address3       
+      ,  B_Address4              
+      ,  ST_VAT               
+      ,  ST_Phone1            
+      ,  OHNotes              
+      ,  Storerkey           
+      ,  ''                 
+      ,  ''            
+      ,  0            
+      ,  0             
+      ,  0     
+      ,  0     
+      ,  EcomOrderId   
+      ,  ST_Address1        
+      ,  ST_Address2         
+      ,  ST_Address3          
+      ,  Pageno    
+      ,  ODlinenumber      
+      ,  @c_GetSN  
+    FROM #DN48
+     where Orderkey = @c_GetOrdKey and Sku = @c_GetSKU and storerkey = @c_Getstorerkey
+   
+    END
+
+   SET @n_seqno = @n_seqno + 1
+
+   FETCH FROM CUR_ORDSN INTO @c_GetStorerkey, @c_GetOrdKey, @c_getsku,@c_getsn    
+   END -- While CUR_UPD_MBOLDETAIL    
+              
+   CLOSE CUR_ORDSN    
+   DEALLOCATE CUR_ORDSN      
+   --CS02 END     
   
-   SELECT DISTINCT   
+   SELECT    
          DN48.Facility            
       ,  DN48.DeliveryNote    
       ,  convert(nvarchar(10),CAST(DN48.OHUDF06 as DATETIME),101) as OHUDF06     
@@ -288,17 +413,17 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  DN48.UOMQTY            
       ,  (DN48.UOMQTY *DN48.OHUDF03) AS TAXQTY             
       ,  DN48.OHUDF03   
-      ,  sum(DN48.PQTY) as PQTY       
+      ,  (DN48.PQTY) as PQTY       
       ,  DN48.EcomOrderId   
       ,  DN48.ST_Address1        
       ,  DN48.ST_Address2         
       ,  DN48.ST_Address3          
-      ,   (Row_Number() OVER (PARTITION BY DN48.Orderkey ORDER BY DN48.Orderkey, DN48.ODlinenumber,DN48.Sku,ISNULL(SN.serialno,'') Asc)-1)/@n_maxLine + 1 as Pageno  
+      ,   (Row_Number() OVER (PARTITION BY DN48.Orderkey ORDER BY DN48.Orderkey, DN48.ODlinenumber,DN48.Sku,ISNULL(DN48.SNUM,'') Asc)-1)/@n_maxLine + 1 as Pageno  --CS02
       ,  DN48.BuyerPO  
       ,  DN48.ODlinenumber
-      ,  ISNULL(SN.serialno,'') AS SNUM
+      ,  ISNULL(DN48.SNUM,'') AS SNUM              --CS02
       FROM #DN48  DN48   
-      LEFT JOIN serialno SN WITH (NOLOCK)  ON SN.Orderkey = DN48.Orderkey AND SN.sku = DN48.sku AND SN.Storerkey = DN48.Storerkey
+     -- LEFT JOIN serialno SN WITH (NOLOCK)  ON SN.Orderkey = DN48.Orderkey AND SN.sku = DN48.sku AND SN.Storerkey = DN48.Storerkey
       group by DN48.Facility            
       ,  DN48.DeliveryNote    
       ,  convert(nvarchar(10),CAST(DN48.OHUDF06 as DATETIME),101)     
@@ -330,9 +455,9 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  DN48.Sku                 
       ,  DN48.SKUDescr            
       ,  DN48.UOMQTY            
-      ,  (DN48.UOMQTY *DN48.OHUDF03)              
+     -- ,  (DN48.UOMQTY *DN48.OHUDF03)              
       ,  DN48.OHUDF03   
-     -- ,  PQTY       
+      ,  PQTY       
       ,  DN48.EcomOrderId   
       ,  DN48.ST_Address1        
       ,  DN48.ST_Address2         
@@ -340,11 +465,12 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
      -- ,  Pageno  
       ,  DN48.BuyerPO  
       ,  DN48.ODlinenumber
-      ,  ISNULL(SN.serialno,'')
+      ,  ISNULL(DN48.SNUM,'')
       ORDER BY DN48.Orderkey  
             , DN48.ODLineNumber
             ,  DN48.Storerkey       
-            ,  DN48.Sku  
+           -- ,  DN48.Sku  
+            ,  CASE WHEN DN48.Sku <> '' THEN 1 ELSE 0 END desc        --CS02
   
 QUIT:  
   
