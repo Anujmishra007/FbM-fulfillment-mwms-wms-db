@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 05-NOV-2020 CSCHONG  1.1   WMS-15198 revised field logic (CS01)      */
 /************************************************************************/
 CREATE PROC isp_sales_order_ph_ncci_rpt  
             @c_OrderKey     NVARCHAR(10)  
@@ -164,7 +165,7 @@ BEGIN
   , OHUDF06 = ISNULL(RTRIM(orders.userdefine02),'')  
   , shipperkey = ISNULL(RTRIM(orders.shipperkey),'')  
   --    , ShipDate = MBOL.ShipDate    
-  , OIFUDF03 = ISNULL(OIF.OrderInfo03,'')  
+  , OIFUDF03 = CASE WHEN ISNUMERIC(OIF.OrderInfo03) = 1 THEN CAST(CAST(OIF.OrderInfo03 as decimal(10,2)) as nvarchar(20)) ELSE ISNULL(OIF.OrderInfo03,'')  END  --CS01
   , OHNotes2= ISNULL(RTRIM(orders.notes2),'')  
   , ORDERS.Orderkey  
   , ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
@@ -230,7 +231,7 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
   , ISNULL(RTRIM(orders.userdefine02),'')
   , ISNULL(RTRIM(orders.shipperkey),'')  
     --  , MBOL.ShipDate   
-  , ISNULL(OIF.OrderInfo03,'')   
+  , CASE WHEN ISNUMERIC(OIF.OrderInfo03) = 1 THEN CAST(CAST(OIF.OrderInfo03 as decimal(10,2)) as nvarchar(20)) ELSE ISNULL(OIF.OrderInfo03,'')  END   --CS01
   , ISNULL(RTRIM(orders.notes2),'')  
   , ORDERS.Orderkey  
   , ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
@@ -276,7 +277,7 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  OHUDF02     
       ,  shipperkey           
     --  ,  ShipDate   
-      ,  oifudf03   
+      ,  FORMAT(cast(oifudf03 as decimal(10,2)),'##,###,##0.00','en-US') as oifudf03   --CS01
     --  ,  BuyerPO             
       ,  Orderkey            
       ,  ExternOrderkey      
@@ -303,7 +304,7 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  SKUDescr            
       ,  UOMQTY            
       ,  UnitPrice           
-      ,  ODUDF02   
+      ,  ODUDF02    
       ,  PQTY       
       ,  EcomOrderId   
       ,  ST_Address1        
