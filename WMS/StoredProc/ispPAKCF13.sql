@@ -26,6 +26,7 @@ GO
 /*                                                                         */  
 /* Updates:                                                                */  
 /* Date         Author  Ver   Purposes                                     */  
+/* 06-NOV-2020  CSCHONG 1.1   WMS-15217 bug fix deliverynote not update(CS01)*/
 /***************************************************************************/    
 CREATE PROC [dbo].[ispPAKCF13]    
 (     @c_PickSlipNo  NVARCHAR(10)     
@@ -67,7 +68,7 @@ BEGIN
           @c_OH_DELNote = CASE WHEN ISNULL(C.UDF02,'N') = 'Y' THEN ISNULL(O.deliveryNote,'') ELSE '0000000000' END
    FROM PICKHEADER PH (NOLOCK)  
    JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey  
-   LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'ORDERTYPE' AND C.code = O.type
+   LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'ORDERTYPE' AND C.code = O.type AND C.storerkey = O.Storerkey  --CS01
    WHERE PH.Pickheaderkey = @c_Pickslipno  
     
    IF @n_continue IN(1,2)  
