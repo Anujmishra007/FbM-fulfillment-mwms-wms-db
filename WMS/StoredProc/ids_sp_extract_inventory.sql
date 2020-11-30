@@ -6,8 +6,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
-CREATE PROC ids_sp_extract_inventory
+/***************************************************************************/ 
+/* Object Name: ids_SP_Extract_Inventory                                   */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/***************************************************************************/ 
+CREATE PROC ids_SP_Extract_Inventory
  AS
  BEGIN
    SET NOCOUNT ON 

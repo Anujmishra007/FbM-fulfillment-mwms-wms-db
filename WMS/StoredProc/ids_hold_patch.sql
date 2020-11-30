@@ -6,7 +6,24 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
+/***************************************************************************/ 
+/* Object Name: ids_hold_patch                                             */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* 13-Jul-2004            1.1   Include Drop Object before Create          */
+/* 15-Oct-2004  mohit     1.2   change cursor type                         */
+/* 05-Nov-2004  wtshong   1.3   Add NOLOCK                                 */
+/***************************************************************************/ 
 CREATE PROC ids_hold_patch 
  	@c_storer NVARCHAR(15)  = '%',
  	@c_testonly NVARCHAR(1) = 'N'

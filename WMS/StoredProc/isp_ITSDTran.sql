@@ -5,16 +5,27 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+/***************************************************************************/ 
+/* Object Name: isp_CC_vs_System                                           */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* 12 Nov 2002  SHONG     1.1   SOS# 8541  Changing Poison Flag from Y to P*/
+/* 10-May-2002  YokeBeen  1.2   For ITS Delivery Transaction system        */
+/*                               (FBR089)                                  */
+/* 18-Feb-2004  YokeBeen  1.3   Changed the Storer ConfigKey from 'OWITF'  */
+/*                              to 'ITSITF'                                */
+/***************************************************************************/    
 CREATE PROC isp_ITSDTran
--- Change by SHONG on 12 Nov 2002
--- SOS# 8541
--- Changing Poison Flag from Y to P.
-
--- For ITS Delivery Transaction system (FBR089).
--- Created By YokeBeen on 10-May-2002
-
--- Modified by YokeBeen on 18-Feb-2004 - (YokeBeen01)
--- Changed the Storer ConfigKey from 'OWITF' to 'ITSITF'
 AS 
 BEGIN
    SET NOCOUNT ON 
