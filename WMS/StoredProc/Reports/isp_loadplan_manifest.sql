@@ -5,7 +5,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-/* 26-Nov-2013  TLTING     Change user_name() to SUSER_SNAME()          */
+/***************************************************************************/ 
+/* Object Name: isp_loadplan_manifest                                      */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* 26-Nov-2013  TLTING    1.1   Change user_name() to SUSER_SNAME()        */
+/***************************************************************************/    
 CREATE PROC isp_loadplan_manifest(
     @c_loadkey NVARCHAR(10)
  )

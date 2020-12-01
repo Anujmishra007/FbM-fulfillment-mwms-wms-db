@@ -5,34 +5,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-CREATE PROC isp_Consolidated_Picklist_Summary (
- 		@ac_pickslipno1 NVARCHAR(10),
-		@ac_pickslipno2 NVARCHAR(10),	
-		@ac_pickslipno3 NVARCHAR(10),
-		@ac_pickslipno4 NVARCHAR(10),
-		@ac_pickslipno5 NVARCHAR(10),
-		@ac_pickslipno6 NVARCHAR(10),
-		@ac_pickslipno7 NVARCHAR(10),
-		@ac_pickslipno8 NVARCHAR(10),
-		@ac_pickslipno9 NVARCHAR(10),
-		@ac_pickslipno10 NVARCHAR(10),
-		@ac_pickslipno11 NVARCHAR(10),
-		@ac_pickslipno12 NVARCHAR(10),	
-		@ac_pickslipno13 NVARCHAR(10),
-		@ac_pickslipno14 NVARCHAR(10),
-		@ac_pickslipno15 NVARCHAR(10),
-		@ac_pickslipno16 NVARCHAR(10),
-		@ac_pickslipno17 NVARCHAR(10),
-		@ac_pickslipno18 NVARCHAR(10),
-		@ac_pickslipno19 NVARCHAR(10),
-		@ac_pickslipno20 NVARCHAR(10),
-		@ac_storerkey NVARCHAR(18)
-)
-AS
-BEGIN
-   SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET CONCAT_NULL_YIELDS_NULL OFF
 /************************************************************************/
 /* SP: isp_Consolidated_Picklist_Summary					                  */
 /* Creation Date: 17 Jan 2004                                           */
@@ -63,9 +35,37 @@ BEGIN
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
-/*                                                                      */
+/* 17-Jan-2004                Initial Version                           */
 /*                                                                      */
 /************************************************************************/
+CREATE PROC isp_Consolidated_Picklist_Summary (
+ 		@ac_pickslipno1 NVARCHAR(10),
+		@ac_pickslipno2 NVARCHAR(10),	
+		@ac_pickslipno3 NVARCHAR(10),
+		@ac_pickslipno4 NVARCHAR(10),
+		@ac_pickslipno5 NVARCHAR(10),
+		@ac_pickslipno6 NVARCHAR(10),
+		@ac_pickslipno7 NVARCHAR(10),
+		@ac_pickslipno8 NVARCHAR(10),
+		@ac_pickslipno9 NVARCHAR(10),
+		@ac_pickslipno10 NVARCHAR(10),
+		@ac_pickslipno11 NVARCHAR(10),
+		@ac_pickslipno12 NVARCHAR(10),	
+		@ac_pickslipno13 NVARCHAR(10),
+		@ac_pickslipno14 NVARCHAR(10),
+		@ac_pickslipno15 NVARCHAR(10),
+		@ac_pickslipno16 NVARCHAR(10),
+		@ac_pickslipno17 NVARCHAR(10),
+		@ac_pickslipno18 NVARCHAR(10),
+		@ac_pickslipno19 NVARCHAR(10),
+		@ac_pickslipno20 NVARCHAR(10),
+		@ac_storerkey NVARCHAR(18)
+)
+AS
+BEGIN
+   SET NOCOUNT ON 
+   SET QUOTED_IDENTIFIER OFF 
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
 	DECLARE @c_sku NVARCHAR(20),
 		@c_barcode  NVARCHAR(30),

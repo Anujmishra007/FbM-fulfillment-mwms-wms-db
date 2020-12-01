@@ -5,6 +5,23 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+/***************************************************************************/ 
+/* Object Name: isp_ea_gst_invoice                                         */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  FBR - Ticket # 468                                          */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 11-Apr-2002  YokeBeen  1.0   Initial revision                           */
+/* 14-Mar-2012  KHLim01   1.1   Update EditDate                            */
+/***************************************************************************/   
 CREATE proc isp_ea_gst_invoice(
 			@c_storerkey NVARCHAR(15),
 			@c_inv_no	 NVARCHAR(10),
@@ -17,12 +34,6 @@ BEGIN
    SET NOCOUNT ON 
    SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
-
--- Author: YokeBeen
--- Date Created: 11-April-2002
--- Description: (FBR - Ticket # 4688) - GST Invoice
-
-/* 14-Mar-2012 KHLim01   Update EditDate              */       
 
 	declare @c_status		 NVARCHAR(1),
 	        @c_wms_inv	 NVARCHAR(10),
@@ -40,11 +51,7 @@ if @c_reprint = 'Y'
 else
    select @c_wms_inv = userdefine01, @c_status = status, @c_inv_found = invoiceno from orders(nolock)
    where invoiceno = @c_inv_no
-
---   select @c_wms_inv , @c_status , @c_inv_found  from orders(nolock)
---    where invoiceno = @c_inv_no
--- if @@rowcount=0
---    select '','01-01-1900','','','','','','','','','','','','','','','','','','','','',0, '',''
+    
 
 if (dbo.fnc_RTrim(@c_wms_inv) is null or @c_wms_inv='') and (dbo.fnc_RTrim(@c_inv_found) is not null)
 begin
