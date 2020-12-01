@@ -152,6 +152,8 @@ GO
 /*                                  ASNCloseExtendedValidation (WL01)          */
 /* 26-AUG-2020  NJOW02       1.24   WMS-14941 update finalizedate upon close   */
 /*                                  ASN by config                              */
+/* 25-Nov-2020  WLChooi      1.15   WMS-15742 - Disable status update to 9 when*/
+/*                                  openqty <= 0 (WL02)                        */
 /*******************************************************************************/
 
 CREATE TRIGGER ntrReceiptHeaderUpdate
@@ -221,6 +223,7 @@ BEGIN
 
           , @c_HoldChannel       NVARCHAR(1)       = '0' --(Wan02) 
           , @c_CloseASNStatusUpdFinalizeDate NVARCHAR(30) --NJOW02
+          , @c_ASNSkipStatusUpdate NVARCHAR(30)   --WL02
           
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
@@ -660,23 +663,45 @@ END -- Added for IDSV5 by June 21.Jun.02, (extract from IDSSG) *** END
 
 IF @n_continue = 1 or @n_continue=2
 BEGIN
-   UPDATE  RECEIPT with (ROWLOCK)
-      SET  Status = '9'
-   FROM RECEIPT , INSERTED, DELETED
-   WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
-   AND INSERTED.ReceiptKey = DELETED.ReceiptKey
-   AND INSERTED.OpenQty <= 0
-   AND (SELECT SUM(QtyReceived) From Receiptdetail RD WITH (NOLOCK) WHERE RD.Receiptkey = INSERTED.RECEIPTKEY) > 0
+   --WL02 START
+   SELECT @b_success = 0, @c_ASNSkipStatusUpdate = ''
+   Execute nspGetRight @c_Facility,  -- facility
+                       @c_StorerKey,  -- Storerkey
+                       null,          -- Sku
+                       'ASNSkipStatusUpdate',     -- Configkey
+                       @b_success     output,
+                       @c_ASNSkipStatusUpdate  output,
+                       @n_err         output,
+                       @c_errmsg      output
 
-   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   IF @n_err <> 0
+   IF @b_success <> 1
    BEGIN
-      SELECT @n_continue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63802   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+      SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptHeaderupdate' + dbo.fnc_RTrim(@c_errmsg)
+      SELECT @n_err = 60260
    END
-
-   SET @c_StatusUpdated = 'Y' -- (MC02)
+   ELSE 
+   BEGIN
+      IF ISNULL(@c_ASNSkipStatusUpdate,'') <> '1'
+      BEGIN --WL02 END
+         UPDATE  RECEIPT with (ROWLOCK)
+            SET  Status = '9'
+         FROM RECEIPT , INSERTED, DELETED
+         WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
+         AND INSERTED.ReceiptKey = DELETED.ReceiptKey
+         AND INSERTED.OpenQty <= 0
+         AND (SELECT SUM(QtyReceived) From Receiptdetail RD WITH (NOLOCK) WHERE RD.Receiptkey = INSERTED.RECEIPTKEY) > 0
+      
+         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+         IF @n_err <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63802   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+         END
+   
+         SET @c_StatusUpdated = 'Y' -- (MC02)
+      END   --WL02
+   END   --WL02
 
 END -- @n_continue = 1 or @n_continue=2
 
