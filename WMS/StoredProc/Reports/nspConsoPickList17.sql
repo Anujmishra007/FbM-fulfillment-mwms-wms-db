@@ -27,7 +27,7 @@ GO
 /*                                                                      */  
 /* Called By:                                                           */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.6                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -42,6 +42,7 @@ GO
 /* 26-Nov-2014  NJOW04  1.3  320669 - add group by location type only   */  
 /* 29-Apr-2015  CSCHONG 1.4   SOS339808  (CS01)                         */
 /* 09-Jul-2015  CSCHONG 1.5   SOS346307  (CS02)                         */
+/* 18-Nov-2020  WLChooi 1.6  WMS-15667 Add Innerpack calculation (WL01) */
 /************************************************************************/  
   
 CREATE PROC nspConsoPickList17 (  
@@ -65,84 +66,27 @@ BEGIN
           @c_PickDetailKey   NVARCHAR(10),   
           @c_Orderkey        NVARCHAR(10),   
           @c_OrderLineNumber NVARCHAR(5),  
-       @c_StorerKey       NVARCHAR(15),  
-       @c_GroupByPAZone   NCHAR(1),  
-       @c_GroupByLocType  NCHAR(1)  
+          @c_StorerKey       NVARCHAR(15),  
+          @c_GroupByPAZone   NCHAR(1),  
+          @c_GroupByLocType  NCHAR(1)  
             
- SELECT @n_StartTranCnt=@@TRANCOUNT, @n_continue = 1, @n_err = 0, @c_errmsg = ''  
- -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 7 - Consolidated pick list , 8 - By Order  
+   SELECT @n_StartTranCnt=@@TRANCOUNT, @n_continue = 1, @n_err = 0, @c_errmsg = ''  
+   -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 7 - Consolidated pick list , 8 - By Order  
    
-  BEGIN TRAN  
+   BEGIN TRAN  
   
- SELECT LoadPlanDetail.LoadKey,     
-        RefKeyLookup.PickSlipNo,  
-        ISNULL(LoadPlan.Route, '') Route,    
-        LoadPlan.AddDate,     
-        PICKDETAIL.Loc,     
-        PICKDETAIL.Sku,     
-        SUM(PICKDETAIL.Qty) Qty,         
-        SKU.DESCR SKU_DESCR,     
-        PACK.CaseCnt,    
-        PACK.PackKey,  
-        ISNULL(LoadPlan.CarrierKey, '') CarrierKey,  
-        PICKDETAIL.ID AS Pallet_ID,  
-        LOTATTRIBUTE.Lottable01,   
-        LOTATTRIBUTE.Lottable02,   
-        LOTATTRIBUTE.Lottable03,   
-        LOTATTRIBUTE.Lottable04,   
-        LOTATTRIBUTE.Lottable05,  
-        PACK.Pallet,  
-        LoadPlan.Delivery_Zone,  
-        Palletcnt = CASE WHEN PACK.Pallet  > 0 THEN FLOOR(SUM(PICKDETAIL.Qty) / PACK.Pallet) ELSE 0 END,  
-        Cartoncnt = CASE WHEN PACK.CaseCnt > 0 AND Pack.Pallet > 0   
-             THEN FLOOR((SUM(PICKDETAIL.Qty) - (FLOOR(SUM(PICKDETAIL.Qty) / PACK.Pallet) * PACK.Pallet))/PACK.Casecnt)   
-             WHEN PACK.CaseCnt > 0 AND Pack.Pallet = 0   
-             THEN SUM(PICKDETAIL.Qty)/PACK.Casecnt  
-             ELSE 0 END,  
-         CASE WHEN ISNULL(CL.CODE,'') <> '' THEN LOC.Putawayzone  
-              WHEN ISNULL(CL2.CODE,'') <> '' THEN LOC.Locationtype  --Store location type to PA Zone column will show barcode in report  
-              ELSE '' END AS Putawayzone, --NJOW01,03, 04  
-         CASE WHEN ISNULL(CL.CODE,'') <> '' THEN  
-              LOC.Locationtype ELSE '' END AS Locationtype, --NJOW01,03  
-         CASE WHEN ISNULL(CL.CODE,'') <> '' THEN 'Y' ELSE 'N' END AS GroupByPAZone,   
-         CASE WHEN ISNULL(CL2.CODE,'') <> '' THEN 'Y' ELSE 'N' END AS GroupByLocType,  
-        --LOC.Putawayzone,  
-         --LOC.Locationtype  
-         Loadplan.Route AS LRoute,                     --(CS01)
-         Loadplan.Externloadkey AS LEXTLoadKey,        --(CS01)
-         Loadplan.Priority AS LPriority,                --(CS01)
-        -- Loadplan.UserDefine01 AS LUdef01               --(CS01)  --(CS02) 
-         REPLACE(CONVERT(NVARCHAR(12),Loadplan.LPuserdefDate01,106),' ','/') AS LUdef01 --(CS02)
-  INTO #TEMP_PICK   
-  FROM LoadPlanDetail WITH (NOLOCK)  
-  JOIN ORDERDETAIL WITH (NOLOCK) ON ( LoadPlanDetail.LoadKey = ORDERDETAIL.LoadKey AND   
-                                  LoadPlanDetail.OrderKey = ORDERDETAIL.OrderKey)    
- JOIN ORDERS WITH (NOLOCK) ON ( ORDERDETAIL.OrderKey = ORDERS.OrderKey )  
- JOIN PICKDETAIL WITH (NOLOCK) ON ( ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey ) AND     
-                ( ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber )     
- JOIN SKU WITH (NOLOCK) ON  ( SKU.StorerKey = PICKDETAIL.Storerkey ) AND    
-                       ( SKU.Sku = PICKDETAIL.Sku )  
- JOIN LoadPlan WITH (NOLOCK) ON ( LoadPlanDetail.LoadKey = LoadPlan.LoadKey )   
- JOIN PACK WITH (NOLOCK) ON ( PACK.PackKey = SKU.PACKKey )   
- JOIN LOTATTRIBUTE WITH (NOLOCK) ON ( LOTATTRIBUTE.Lot = PICKDETAIL.Lot )  
-  LEFT JOIN RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey)  
- LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.ListName = 'REPORTCFG' AND CL.Code = 'PGBREAKBYPAZONE' AND CL.Long = 'r_dw_consolidated_pick17'  
-                                    AND CL.Storerkey = ORDERS.Storerkey AND ISNULL(CL.Short,'') <> 'N') --NJOW01,03  
- LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON (CL2.ListName = 'REPORTCFG' AND CL2.Code = 'PGBREAKBYLOCTYPE' AND CL2.Long = 'r_dw_consolidated_pick17'  
-                                    AND CL2.Storerkey = ORDERS.Storerkey AND ISNULL(CL2.Short,'') <> 'N') --NJOW04  
- JOIN LOC WITH (NOLOCK) ON ( PICKDETAIL.Loc = LOC.Loc ) --NJOW01  
- WHERE ( LoadPlanDetail.LoadKey = @c_LoadKey )  
- GROUP BY LoadPlanDetail.LoadKey,     
+   SELECT LoadPlanDetail.LoadKey,     
           RefKeyLookup.PickSlipNo,  
-          ISNULL(LoadPlan.Route, ''),    
+          ISNULL(LoadPlan.Route, '') Route,    
           LoadPlan.AddDate,     
           PICKDETAIL.Loc,     
           PICKDETAIL.Sku,     
-          SKU.DESCR,     
+          SUM(PICKDETAIL.Qty) Qty,         
+          SKU.DESCR SKU_DESCR,     
           PACK.CaseCnt,    
           PACK.PackKey,  
-          ISNULL(LoadPlan.CarrierKey, ''),  
-          PICKDETAIL.ID,  
+          ISNULL(LoadPlan.CarrierKey, '') CarrierKey,  
+          PICKDETAIL.ID AS Pallet_ID,  
           LOTATTRIBUTE.Lottable01,   
           LOTATTRIBUTE.Lottable02,   
           LOTATTRIBUTE.Lottable03,   
@@ -150,20 +94,93 @@ BEGIN
           LOTATTRIBUTE.Lottable05,  
           PACK.Pallet,  
           LoadPlan.Delivery_Zone,  
-           CASE WHEN ISNULL(CL.CODE,'') <> '' THEN LOC.Putawayzone   
-              WHEN ISNULL(CL2.CODE,'') <> '' THEN LOC.Locationtype   
-              ELSE '' END, --NJOW01,03, 04  
+          Palletcnt = CASE WHEN PACK.Pallet  > 0 THEN FLOOR(SUM(PICKDETAIL.Qty) / PACK.Pallet) ELSE 0 END,  
+          Cartoncnt = CASE WHEN PACK.CaseCnt > 0 AND Pack.Pallet > 0   
+               THEN FLOOR((SUM(PICKDETAIL.Qty) - (FLOOR(SUM(PICKDETAIL.Qty) / PACK.Pallet) * PACK.Pallet))/PACK.Casecnt)   
+               WHEN PACK.CaseCnt > 0 AND Pack.Pallet = 0   
+               THEN SUM(PICKDETAIL.Qty)/PACK.Casecnt  
+               ELSE 0 END,  
+           CASE WHEN ISNULL(CL.CODE,'') <> '' THEN LOC.Putawayzone  
+                WHEN ISNULL(CL2.CODE,'') <> '' THEN LOC.Locationtype  --Store location type to PA Zone column will show barcode in report  
+                ELSE '' END AS Putawayzone, --NJOW01,03, 04  
            CASE WHEN ISNULL(CL.CODE,'') <> '' THEN  
-                LOC.Locationtype ELSE '' END, --NJOW01,03      
-           CASE WHEN ISNULL(CL.CODE,'') <> '' THEN 'Y' ELSE 'N' END,   
-           CASE WHEN ISNULL(CL2.CODE,'') <> '' THEN 'Y' ELSE 'N' END,   
-           --LOC.Putawayzone,  
+                LOC.Locationtype ELSE '' END AS Locationtype, --NJOW01,03  
+           CASE WHEN ISNULL(CL.CODE,'') <> '' THEN 'Y' ELSE 'N' END AS GroupByPAZone,   
+           CASE WHEN ISNULL(CL2.CODE,'') <> '' THEN 'Y' ELSE 'N' END AS GroupByLocType,  
+          --LOC.Putawayzone,  
            --LOC.Locationtype  
-           loadplan.Route,              --(CS01)
-           Loadplan.ExternLoadKey,      --(CS01) 
-           Loadplan.Priority,           --(CS01)
-           --Loadplan.UserDefine01        --(CS01)   --(CS02)
-           REPLACE(CONVERT(NVARCHAR(12),Loadplan.LPuserdefDate01,106),' ','/')
+           Loadplan.Route AS LRoute,                     --(CS01)
+           Loadplan.Externloadkey AS LEXTLoadKey,        --(CS01)
+           Loadplan.Priority AS LPriority,                --(CS01)
+          -- Loadplan.UserDefine01 AS LUdef01               --(CS01)  --(CS02) 
+           REPLACE(CONVERT(NVARCHAR(12),Loadplan.LPuserdefDate01,106),' ','/') AS LUdef01, --(CS02)
+           --WL01 START
+           InnerCnt = CASE WHEN PACK.InnerPack > 0  
+                           THEN FLOOR( (SUM(PICKDETAIL.Qty) - (PACK.Pallet * CASE WHEN PACK.Pallet  > 0 THEN FLOOR(SUM(PICKDETAIL.Qty) / PACK.Pallet) ELSE 0 END ) - 
+                                (PACK.CaseCnt * CASE WHEN PACK.CaseCnt > 0 AND Pack.Pallet > 0   
+                                                THEN FLOOR((SUM(PICKDETAIL.Qty) - (FLOOR(SUM(PICKDETAIL.Qty) / PACK.Pallet) * PACK.Pallet))/PACK.Casecnt)   
+                                                WHEN PACK.CaseCnt > 0 AND Pack.Pallet = 0   
+                                                THEN SUM(PICKDETAIL.Qty) / PACK.Casecnt  
+                                                ELSE 0 END) ) /Pack.InnerPack)
+                           ELSE 0 END,
+           ISNULL(CL3.Short,'N') AS ShowInner,
+           PACK.InnerPack
+           --WL01 END
+   INTO #TEMP_PICK   
+   FROM LoadPlanDetail WITH (NOLOCK)  
+   JOIN ORDERDETAIL WITH (NOLOCK) ON ( LoadPlanDetail.LoadKey = ORDERDETAIL.LoadKey AND   
+                                       LoadPlanDetail.OrderKey = ORDERDETAIL.OrderKey)    
+   JOIN ORDERS WITH (NOLOCK) ON ( ORDERDETAIL.OrderKey = ORDERS.OrderKey )  
+   JOIN PICKDETAIL WITH (NOLOCK) ON ( ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey ) AND     
+                                    ( ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber )     
+   JOIN SKU WITH (NOLOCK) ON  ( SKU.StorerKey = PICKDETAIL.Storerkey ) AND    
+                              ( SKU.Sku = PICKDETAIL.Sku )  
+   JOIN LoadPlan WITH (NOLOCK) ON ( LoadPlanDetail.LoadKey = LoadPlan.LoadKey )   
+   JOIN PACK WITH (NOLOCK) ON ( PACK.PackKey = SKU.PACKKey )   
+   JOIN LOTATTRIBUTE WITH (NOLOCK) ON ( LOTATTRIBUTE.Lot = PICKDETAIL.Lot )  
+   LEFT JOIN RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey)  
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.ListName = 'REPORTCFG' AND CL.Code = 'PGBREAKBYPAZONE' AND CL.Long = 'r_dw_consolidated_pick17'  
+                                       AND CL.Storerkey = ORDERS.Storerkey AND ISNULL(CL.Short,'') <> 'N') --NJOW01,03  
+   LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON (CL2.ListName = 'REPORTCFG' AND CL2.Code = 'PGBREAKBYLOCTYPE' AND CL2.Long = 'r_dw_consolidated_pick17'  
+                                       AND CL2.Storerkey = ORDERS.Storerkey AND ISNULL(CL2.Short,'') <> 'N') --NJOW04  
+   LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON (CL3.ListName = 'REPORTCFG' AND CL3.Code = 'ShowInner' AND CL3.Long = 'r_dw_consolidated_pick17'  
+                                       AND CL3.Storerkey = ORDERS.Storerkey AND ISNULL(CL3.Short,'') <> 'N')   --WL01
+   JOIN LOC WITH (NOLOCK) ON ( PICKDETAIL.Loc = LOC.Loc ) --NJOW01  
+   WHERE ( LoadPlanDetail.LoadKey = @c_LoadKey )  
+   GROUP BY LoadPlanDetail.LoadKey,     
+            RefKeyLookup.PickSlipNo,  
+            ISNULL(LoadPlan.Route, ''),    
+            LoadPlan.AddDate,     
+            PICKDETAIL.Loc,     
+            PICKDETAIL.Sku,     
+            SKU.DESCR,     
+            PACK.CaseCnt,    
+            PACK.PackKey,  
+            ISNULL(LoadPlan.CarrierKey, ''),  
+            PICKDETAIL.ID,  
+            LOTATTRIBUTE.Lottable01,   
+            LOTATTRIBUTE.Lottable02,   
+            LOTATTRIBUTE.Lottable03,   
+            LOTATTRIBUTE.Lottable04,   
+            LOTATTRIBUTE.Lottable05,  
+            PACK.Pallet,  
+            LoadPlan.Delivery_Zone,  
+            CASE WHEN ISNULL(CL.CODE,'') <> '' THEN LOC.Putawayzone   
+               WHEN ISNULL(CL2.CODE,'') <> '' THEN LOC.Locationtype   
+               ELSE '' END, --NJOW01,03, 04  
+            CASE WHEN ISNULL(CL.CODE,'') <> '' THEN  
+                 LOC.Locationtype ELSE '' END, --NJOW01,03      
+            CASE WHEN ISNULL(CL.CODE,'') <> '' THEN 'Y' ELSE 'N' END,   
+            CASE WHEN ISNULL(CL2.CODE,'') <> '' THEN 'Y' ELSE 'N' END,   
+            --LOC.Putawayzone,  
+            --LOC.Locationtype  
+            loadplan.Route,              --(CS01)
+            Loadplan.ExternLoadKey,      --(CS01) 
+            Loadplan.Priority,           --(CS01)
+            --Loadplan.UserDefine01        --(CS01)   --(CS02)
+            REPLACE(CONVERT(NVARCHAR(12),Loadplan.LPuserdefDate01,106),' ','/'),
+            PACK.InnerPack,         --WL01
+            ISNULL(CL3.Short,'N')   --WL01
       
   DECLARE C_zone CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
   SELECT DISTINCT PutawayZone, Locationtype, GroupByPAZone, GroupByLocType  
@@ -331,10 +348,14 @@ BEGIN
             LRoute,                --(CS01) 
             LEXTLoadKey,           --(CS01)
             LPriority,             --(CS01) 
-            LUdef01                --(CS01)                                                       
+            LUdef01,               --(CS01)     
+            InnerCnt,              --(WL01)         
+            ShowInner,             --(WL01)   
+            InnerPack              --(WL01)                                           
       FROM #TEMP_PICK     
-  
-  DROP TABLE #TEMP_PICK      
+      
+   IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL   --WL01
+      DROP TABLE #TEMP_PICK   
      
   IF @n_continue=3  -- Error Occured - Process And Return      
   BEGIN      
