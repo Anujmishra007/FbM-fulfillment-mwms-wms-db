@@ -28,6 +28,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2020-11-01  Wan      1.0   Created                                   */ 
 /* 2020-11-30  Wan01    1.1   Fixed not Getting Default Value from Codelkup*/ 
+/* 2020-12-03  Wan02    1.2   LFWM-2474 - PROD  Australia  Qty Expected */
+/*                            is incorrect and addwho was changed to    */
+/*                            WMConnect                                 */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulateSODs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -379,19 +382,31 @@ BEGIN
          BEGIN
             SET @c_SQL = N'INSERT INTO #tLOTATTRIBUTE  (' + @c_TableColumns + ')'
                         + ' SELECT ' + @c_TableColumns_Select 
-                        + ' FROM #tPICKDETAIL PD'
-                        + ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot= PD.Lot'
+                        --(Wan02) - START
+                        + ' FROM LOTATTRIBUTE WITH (NOLOCK)'                                          
+                        + ' WHERE EXISTS (SELECT 1 FROM #tPICKDETAIL PD WHERE LOTATTRIBUTE.Lot= PD.Lot)'
+                        --+ ' FROM #tPICKDETAIL PD'
+                        --+ ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot= PD.Lot'
+                        --(Wan02) - END
        
             IF @b_PopulateFromArchive = 1
             BEGIN
                SET @c_SQL = @c_SQL + N' UNION '
                         + ' SELECT ' + @c_TableColumns_Select 
-                        + ' FROM #tPICKDETAIL PD'
-                        + ' JOIN ' + RTRIM(@c_DBName) + 'dbo.LOTATTRIBUTE LOTATTRIBUTE WITH (NOLOCK)'
-                        +                               ' ON LOTATTRIBUTE.Lot= PD.Lot'
-                        + ' LEFT JOIN LOTATTRIBUTE LA WITH (NOLOCK)'
-                        +                               ' ON LA.Lot= PD.Lot'
-                        + ' WHERE LA.Lot IS NULL'
+                        --(Wan02) - START
+                        + ' FROM ' + RTRIM(@c_DBName) + 'dbo.LOTATTRIBUTE WITH (NOLOCK)'
+                        + ' WHERE EXISTS (SELECT 1 FROM #tPICKDETAIL PD'
+                        +               ' LEFT JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON LA.Lot= PD.Lot'
+                        +               ' WHERE LA.Lot IS NULL'
+                        +               ' AND LOTATTRIBUTE.Lot= PD.Lot'
+                        +               ' )'
+                        --+ ' FROM #tPICKDETAIL PD'
+                        --+ ' JOIN ' + RTRIM(@c_DBName) + 'dbo.LOTATTRIBUTE LOTATTRIBUTE WITH (NOLOCK)'
+                        --+                               ' ON LOTATTRIBUTE.Lot= PD.Lot'
+                        --+ ' LEFT JOIN LOTATTRIBUTE LA WITH (NOLOCK)'
+                        --+                               ' ON LA.Lot= PD.Lot'
+                        --+ ' WHERE LA.Lot IS NULL'
+                        --(Wan02) - END
 
             END
             EXEC sp_ExecuteSQL @c_SQL

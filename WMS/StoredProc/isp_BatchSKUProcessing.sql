@@ -44,6 +44,7 @@ GO
 /* 12-Feb-2020  Wan04   2.3   SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */    
 /* 22-Oct-2020  Shong   2.4   LWP-193 Performance Tuning                */
+/* 01-Dec-2020  Shong   2.5   Handle Pending Cancel Orders (SWT04)      */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -73,7 +74,7 @@ BEGIN
             @c_ToLoc                 NVARCHAR(10),  
             @n_Fetch_Status          INT,  
             @c_Lottable01            NVARCHAR(18),  
-            @c_Lottable02     NVARCHAR(18),  
+            @c_Lottable02            NVARCHAR(18),  
             @c_Lottable03            NVARCHAR(18),  
             @d_Lottable04            DATETIME,  
             @d_Lottable05            DATETIME,  
@@ -98,6 +99,8 @@ BEGIN
             @n_LotAvailableQty              INT = 0 --SWT02   
          ,  @n_FacLotAvailQty               INT = 0 --(Wan01)   
          ,  @n_OD_OpenQty                   INT = 0 --SWT03  
+         ,  @c_SOStatus                     NVARCHAR(10) = '' -- (SWT04)
+         ,  @c_Status                       NVARCHAR(10) = '' -- (SWT04)
   
   
    DECLARE   
@@ -399,6 +402,7 @@ BEGIN
          JOIN STRATEGY (NOLOCK) ON Strategy.StrategyKey = CASE WHEN @c_Strategy = '' THEN SKU.StrategyKey ELSE @c_Strategy END   
          JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey            
          WHERE ORDERS.Status IN ('0', '1')  
+         AND   ORDERS.SOStatus NOT IN ('CANC', 'PENDCANC') -- (SWT04)
          AND   ORDERS.StorerKey = @c_StorerKey   
          AND   PREALLOCATEPICKDETAIL.StorerKey = @c_StorerKey    
          AND   PREALLOCATEPICKDETAIL.SKU = @c_SKU   
@@ -447,7 +451,7 @@ BEGIN
          AND   OD.StorerKey = @c_StorerKey   
          AND   OD.Sku = @c_SKU  
          AND   ORDERS.Type NOT IN ( 'M', 'I' )   
-         AND   ORDERS.SOStatus <> 'CANC'   
+         AND   ORDERS.SOStatus NOT IN ('CANC', 'PENDCANC') -- (SWT04)
          AND   ORDERS.Status IN ('0','1')   
          AND   (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0  
          AND   EXISTS(SELECT 1 FROM AutoAllocBatchDetail AS aabd WITH (NOLOCK)   
@@ -527,7 +531,7 @@ BEGIN
                  @c_preallocationgrouping = preallocationgrouping,  
                  @c_preallocationsort = preallocationsort,      
                  @c_waveoption = waveoption,   
-        @n_batchpickmaxcube = batchpickmaxcube,  
+                 @n_batchpickmaxcube = batchpickmaxcube,  
                  @n_batchpickmaxcount = batchpickmaxcount,  
                  @c_workoskey = OrderSelectionkey  
          FROM OrderSelection (NOLOCK)   
@@ -637,7 +641,7 @@ BEGIN
                                  Id               NVARCHAR(18) ,  
                                  Caseid           NVARCHAR(10) ,  
                                  UOM              NVARCHAR(10) ,  
-        UOMQty           INT ,  
+                                 UOMQty           INT ,  
                                  Qty              INT ,  
                                  PackKey          NVARCHAR(10) ,  
                                  CartonGroup      NVARCHAR(10) ,  
@@ -1665,7 +1669,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                               SELECT @n_QtyToTake = @n_aQtyLeftToFulfill  
                            END  
                            ELSE  
-BEGIN  
+                           BEGIN  
                               SELECT @n_QtyToTake = @n_cQtyAvailable   
                            END  
   
@@ -1706,7 +1710,7 @@ BEGIN
                               --   SELECT TOP 1  
                               --      @c_OrderType = CASE WHEN (ISNULL(ORDERS.UserDefine01,'') <> '') THEN 'ECOM' ELSE 'STORE' END  
                               --   FROM   ORDERS WITH (NOLOCK)  
-                --   WHERE  LoadKey = @n_LoadKey  
+                              --   WHERE  LoadKey = @n_LoadKey  
                              
                               --   IF @c_OrderType <> 'ECOM' AND ISNUMERIC(@c_OtherValue) = 1  
                               --   BEGIN  
@@ -1862,7 +1866,7 @@ BEGIN
                                ' JOIN LOTxLOCxID LLI (NOLOCK) ON PL.LOC = LLI.LOC ' +  
                                ' AND (LLI.Qty - LLI.QtyPicked > 0 OR (LLI.QtyAllocated + LLI.QtyPicked) - LLI.Qty > 0) '  +  
                                ' JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot ' +  
-                          ' JOIN LOTATTRIBUTE LA2 (NOLOCK) ON LA2.Lot = @c_aLOT ' +  
+                               ' JOIN LOTATTRIBUTE LA2 (NOLOCK) ON LA2.Lot = @c_aLOT ' +  
                                       CASE WHEN CHARINDEX('01',@c_PickOverAllocateNoMixLot) > 0 THEN ' AND LA.Lottable01 = LA2.Lottable01 ' ELSE ' ' END +  
                                       CASE WHEN CHARINDEX('02',@c_PickOverAllocateNoMixLot) > 0 THEN ' AND LA.Lottable02 = LA2.Lottable02 ' ELSE ' ' END +  
                                       CASE WHEN CHARINDEX('03',@c_PickOverAllocateNoMixLot) > 0 THEN ' AND LA.Lottable03 = LA2.Lottable03 ' ELSE ' ' END +  
@@ -1930,7 +1934,7 @@ BEGIN
                               DELETE FROM #OP_PICKLOCS  
                                WHERE StorerKey = @c_aStorerKey  
                                  AND SKU = @c_aSKU  
-                AND LocationType = @c_sLocationTypeOverride  
+                                 AND LocationType = @c_sLocationTypeOverride  
                              
                               SELECT TOP 1 @c_PickLoc = LOC  
                               FROM #OP_PickLocType  
@@ -2195,13 +2199,13 @@ BEGIN
       BEGIN  
          SET @c_OrderStatus = ''  
            
-         SELECT @c_OrderStatus = [Status]   
+         SELECT @c_OrderStatus = [Status] 
          FROM  ORDERS WITH (NOLOCK)   
          WHERE OrderKey = @c_OrderKey    
            
          IF @c_PostAllocationSP <> '' AND (@c_OrderStatus = '2' OR (@c_OrderStatus = '1' AND @c_Option1 = 'AllowPartialAllocate'))  -- (SWT01)      
          BEGIN  
-   IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')              
+            IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')              
                OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP)   
             BEGIN  
                SET @b_Success = 0     
@@ -2378,7 +2382,8 @@ BEGIN
       BEGIN           
          DECLARE CUR_OrderLines CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
             SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty,   
-                   o.LooseQty  
+                   o.LooseQty
+                   ,ORDERS.SOStatus, ORDERS.[Status] -- (SWT04)  
             FROM   #OPORDERLINES o  
             JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey --NJOW03  
             JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku --NJOW03  
@@ -2409,7 +2414,8 @@ BEGIN
                
             DECLARE CUR_OrderLines CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
                SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty,  
-                      o.LooseQty  
+                      o.LooseQty
+                      ,ORDERS.SOStatus, ORDERS.[Status] -- (SWT04)  
                FROM   #OPORDERLINES o  
                JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber  
                JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey --NJOW03  
@@ -2426,7 +2432,7 @@ BEGIN
                       OD.Lottable02 = @c_Lottable02 AND  
                       OD.Lottable03 = @c_Lottable03 AND  
                       OD.Lottable04 = @d_Lottable04 AND  
-                      OD.Lottable05 = @d_Lottable05   
+                      OD.Lottable05 = @d_Lottable05     
                ORDER BY ORDERS.Priority, --NJOW03  
                         CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
                         CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
@@ -2443,7 +2449,8 @@ BEGIN
           BEGIN  
             DECLARE CUR_OrderLines CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
                SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty,  
-                      o.LooseQty  
+                      o.LooseQty
+                     ,ORDERS.SOStatus, ORDERS.[Status] -- (SWT04)   
                FROM   #OPORDERLINES o  
                JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber  
                JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey --NJOW03  
@@ -2453,9 +2460,9 @@ BEGIN
                       o.SKU = @c_aSKU AND  
                       o.Facility = @c_aFacility AND  
                       o.UOM = @c_OriginUOM AND  
-                    o.Qty > 0 AND  
+                      o.Qty > 0 AND  
                       o.StrategyKey = @c_aStrategyKey AND  
-                      o.UOMQty = @n_OriginUOMQty AND  
+                      o.UOMQty = @n_OriginUOMQty  AND
                       EXISTS(SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK) -- SHONG   1.7  
                              WHERE LOT = @c_aLOT  
                              AND   LA.StorerKey = OD.StorerKey  
@@ -2508,16 +2515,15 @@ BEGIN
                         CASE WHEN PACK.InnerPack > 0 THEN FLOOR(CASE WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
                                                                      WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
                                                                 / PACK.InnerPack) ELSE 0 END DESC, --NJOW03  
-     CASE WHEN PACK.InnerPack > 0 THEN o.Qty % CAST(PACK.InnerPack AS INT)  
+                        CASE WHEN PACK.InnerPack > 0 THEN o.Qty % CAST(PACK.InnerPack AS INT)  
                              WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
                              WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC --NJOW03           
          END              
       END  
   
       OPEN CUR_OrderLines  
-      FETCH NEXT FROM CUR_OrderLines INTO @n_SeqNo, @c_aOrderKey,  
-                       @c_aOrderLineNumber, @n_PickQty, @n_OriginUOMQty,  
-                                          @n_LooseQtyPick  
+      FETCH NEXT FROM CUR_OrderLines INTO @n_SeqNo, @c_aOrderKey, @c_aOrderLineNumber, 
+                                          @n_PickQty, @n_OriginUOMQty, @n_LooseQtyPick, @c_SOStatus, @c_Status  -- (SWT04) 
   
       WHILE @@FETCH_STATUS <> -1 AND @n_QtyToInsert > 0  
       BEGIN  
@@ -2533,8 +2539,22 @@ BEGIN
          SELECT @n_OD_OpenQty = o.OpenQty - o.QtyAllocated - o.QtyPicked   
          FROM ORDERDETAIL AS o WITH(NOLOCK)  
          WHERE o.OrderKey = @c_aOrderKey   
-         AND   o.OrderLineNumber = @c_aOrderLineNumber   
-         IF @n_OD_OpenQty <= 0   
+         AND   o.OrderLineNumber = @c_aOrderLineNumber 
+         
+         IF @c_SOStatus IN ('CANC','PENDCANC') -- (SWT04)
+         BEGIN
+            IF EXISTS(SELECT 1 FROM PreAllocatePickDetail AS papd WITH(NOLOCK)
+                      WHERE papd.OrderKey = @c_aOrderKey
+                      AND papd.OrderLineNumber = @c_aOrderLineNumber)
+            BEGIN
+               UPDATE PreAllocatePickDetail WITH (ROWLOCK)
+                  SET Qty = 0
+               WHERE OrderKey = @c_aOrderKey
+               AND OrderLineNumber = @c_aOrderLineNumber
+            END
+            GOTO NEXTORDLINE 
+         END
+         ELSE IF @n_OD_OpenQty <= 0   
          BEGIN  
             GOTO NEXTORDLINE   
          END        
@@ -2611,7 +2631,7 @@ BEGIN
                   IF @c_DoCartonization <> 'Y'  
                   BEGIN  
                      SELECT @c_PHeaderKey = ''  
-             SELECT @c_caseid = ' '  
+                     SELECT @c_caseid = ' '  
                   END  
                   ELSE  
                   BEGIN  
@@ -2706,7 +2726,7 @@ BEGIN
          
        FETCH NEXT FROM CUR_OrderLines INTO @n_SeqNo, @c_aOrderKey,  
                         @c_aOrderLineNumber, @n_PickQty, @n_OriginUOMQty,  
-                        @n_LooseQtyPick  
+                        @n_LooseQtyPick, @c_SOStatus, @c_Status -- (SWT04)  
       END  
       CLOSE CUR_OrderLines  
       DEALLOCATE CUR_OrderLines  

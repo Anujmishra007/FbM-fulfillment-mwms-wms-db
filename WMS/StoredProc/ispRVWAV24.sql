@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */  
+/* 01-12-2020  Wan02    1.2   Add (NOLOCK)                               */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV24]      
@@ -124,7 +125,7 @@ CREATE PROCEDURE [dbo].[ispRVWAV24]
              FROM WAVEDETAIL WD (NOLOCK)
              JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
              JOIN TASKDETAIL TD (NOLOCK) ON PD.Taskdetailkey = TD.Taskdetailkey
-            LEFT JOIN TASKDETAIL PND ON TD.Taskdetailkey = PND.Sourcekey AND TD.Storerkey = PND.Storerkey AND TD.Sku = PND.Sku AND PND.TaskType = 'RPT'
+            LEFT JOIN TASKDETAIL PND (NOLOCK) ON TD.Taskdetailkey = PND.Sourcekey AND TD.Storerkey = PND.Storerkey AND TD.Sku = PND.Sku AND PND.TaskType = 'RPT'  --(Wan02)
                                         AND PND.Status <> 'X'
              WHERE WD.Wavekey = @c_Wavekey
              --AND TD.Sourcetype = 'ispRLWAV14'                             
@@ -323,8 +324,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV24]
       DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PICKDETAIL.Pickdetailkey
           FROM WAVEDETAIL (NOLOCK)  
-          JOIN PICKDETAIL ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey
-          LEFT JOIN TASKDETAIL PND ON PICKDETAIL.Taskdetailkey = PND.Sourcekey AND PICKDETAIL.Storerkey = PND.Storerkey AND PICKDETAIL.Sku = PND.Sku AND PND.TaskType = 'RPT'
+          JOIN PICKDETAIL (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey     --(Wan02)
+          LEFT JOIN TASKDETAIL PND (NOLOCK) ON PICKDETAIL.Taskdetailkey = PND.Sourcekey AND PICKDETAIL.Storerkey = PND.Storerkey AND PICKDETAIL.Sku = PND.Sku AND PND.TaskType = 'RPT' --(Wan02)
                                      AND PND.Status <> 'X'
           WHERE WAVEDETAIL.Wavekey = @c_Wavekey
           AND PND.Taskdetailkey IS NULL 
