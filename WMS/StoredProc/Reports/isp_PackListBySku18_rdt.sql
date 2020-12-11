@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_packing_list_by_sku18_rdt                            */
 /*          :                                                           */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 10-Dec-2020 WLChooi  1.1   Fix Multiple Externorderkey in one load   */
+/*                            caused wrong Qty (WL01)                   */
 /************************************************************************/
 CREATE PROC [dbo].[isp_PackListBySku18_rdt]
             @c_Pickslipno NVARCHAR(10),
@@ -37,11 +39,12 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_StartTCnt       INT
-         , @n_Continue        INT 
-         , @n_Err             INT = 0
-         , @c_ErrMsg          NVARCHAR(255) = ''
-         , @b_success         INT = 1
+   DECLARE @n_StartTCnt         INT
+         , @n_Continue          INT 
+         , @n_Err               INT = 0
+         , @c_ErrMsg            NVARCHAR(255) = ''
+         , @b_success           INT = 1
+         , @c_Externorderkeys   NVARCHAR(4000) = ''   --WL01
    
    IF ISNULL(@c_Type,'') = '' SET @c_Type = 'H'
    
@@ -53,13 +56,14 @@ BEGIN
       GOTO QUIT_SP
    END
 
-   SELECT LTRIM(RTRIM(ISNULL(OH.C_Company,''))) AS C_Company
+   SELECT
+          LTRIM(RTRIM(ISNULL(OH.C_Company,''))) AS C_Company
         , LTRIM(RTRIM(ISNULL(OH.C_City,''))) AS C_City
         , LTRIM(RTRIM(ISNULL(OH.C_Address1,''))) + LTRIM(RTRIM(ISNULL(OH.C_Address2,''))) +
           LTRIM(RTRIM(ISNULL(OH.C_Address3,''))) + LTRIM(RTRIM(ISNULL(OH.C_Address4,''))) AS C_Addresses
         , LTRIM(RTRIM(ISNULL(OH.C_Contact1,''))) AS C_Contact1
         , LTRIM(RTRIM(ISNULL(OH.C_Phone1,''))) AS C_Phone1
-        , OH.ExternOrderKey
+        , CAST(OH.ExternOrderKey AS NVARCHAR(4000)) AS ExternOrderKey   --WL01
         , OH.LoadKey
         , PD.CartonNo
         , PD.SKU
@@ -96,10 +100,17 @@ BEGIN
           , ISNULL(S.Color,'')
           , ISNULL(S.BUSR9,'')
           , P.PackUOM3
-          
+   
+   --WL01 START
+   SELECT @c_Externorderkeys = STUFF((SELECT DISTINCT ', ' + RTRIM(ExternOrderKey) FROM #TMP_SKU18 ORDER BY ', ' + RTRIM(ExternOrderKey) FOR XML PATH('')),1,1,'' )
+   
+   UPDATE #TMP_SKU18
+   SET ExternOrderkey = LTRIM(RTRIM(@c_Externorderkeys))
+   --WL01 END
+   
    IF @c_Type = 'H1'
    BEGIN
-   	SELECT *
+   	SELECT DISTINCT *   --WL01
    	FROM #TMP_SKU18
    	ORDER BY Style, CartonNo
              , SKU, Size
@@ -107,13 +118,13 @@ BEGIN
    END
    ELSE
    BEGIN
-   	SELECT *
+   	SELECT DISTINCT *   --WL01
    	FROM #TMP_SKU18
    	ORDER BY CartonNo, SKU
              , Style, Size
              , Color, BUSR9
    END
-
+   
 QUIT_SP:
    IF OBJECT_ID('tempdb..#TMP_SKU18') IS NOT NULL
    BEGIN
