@@ -20,7 +20,7 @@ GO
 /*                                                                      */  
 /* Called By: ReleaseWave_SP                                            */  
 /*          :                                                           */  
-/* PVCS Version: 1.9                                                    */  
+/* PVCS Version: 2.0                                                    */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -48,6 +48,7 @@ GO
 /* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */ 
 /* 2020-09-23  Wan02    1.8   Sku Bundle CR                             */          
 /* 2020-09-19  NJOW01   1.9   WMS-15204 change taskdetail mapping       */  
+/* 2020-11-27  Wan03    2.0   Add SkuStdGrossWgt TO #PICKDETAIL_WIP     */      
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV20]  
         @c_wavekey      NVARCHAR(10)    
@@ -2113,6 +2114,7 @@ BEGIN
       ,  StdCube           FLOAT        DEFAULT(0.00)  
       ,  StdGrossWgt       FLOAT        DEFAULT(0.00)  
       ,  SkuStdCube        FLOAT        DEFAULT(0.00)    --2020-08-27    
+      ,  SkuStdGrossWgt    FLOAT        DEFAULT(0.00)    --2020-11-27 -- (Wan03)      
       ,  CubeTolerance     FLOAT        DEFAULT(0.00)    --2020-08-27    
       ,  [Length]          FLOAT        DEFAULT(0.00)    --2020-08-07    
       ,  Width             FLOAT        DEFAULT(0.00)    --2020-08-07    
