@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 14-Dec-2020 WLChooi  1.1   Fix Multiple Externorderkey in one load   */
 /*                            caused wrong Qty (WL01)                   */
+/* 15-Dec-2020 WLChooi  1.2   WMS-15905 Print based on Consignee (WL02) */
 /************************************************************************/
 CREATE PROC [dbo].[isp_PackListBySku18_rdt]
             @c_Pickslipno NVARCHAR(10),
@@ -45,15 +46,37 @@ BEGIN
          , @c_ErrMsg            NVARCHAR(255) = ''
          , @b_success           INT = 1
          , @c_Externorderkeys   NVARCHAR(4000) = ''   --WL01
+         , @c_Consigneekey      NVARCHAR(15) = ''   --WL02
+         , @c_Storerkey         NVARCHAR(15) = ''   --WL02
    
    IF ISNULL(@c_Type,'') = '' SET @c_Type = 'H'
    
    IF @c_Type = 'H'
    BEGIN
-      SELECT @c_Pickslipno, '1'
-      UNION ALL
-      SELECT @c_Pickslipno, '2'
-      GOTO QUIT_SP
+   	--WL02 S
+   	SELECT @c_Consigneekey = MAX(OH.Consigneekey)
+   	     , @c_Storerkey    = MAX(OH.StorerKey)
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN LoadPlanDetail LPD (NOLOCK) ON LPD.LoadKey = PH.LoadKey
+      JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = LPD.OrderKey
+      WHERE PH.Pickslipno = @c_Pickslipno   
+      
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.LISTNAME = 'PrintJIT'
+                 AND CL.Code = @c_Consigneekey
+                 AND CL.Storerkey = @c_Storerkey)
+      BEGIN
+         SELECT @c_Pickslipno, '2'
+         GOTO QUIT_SP
+      END
+      ELSE
+      BEGIN
+         SELECT @c_Pickslipno, '1'
+         UNION ALL
+         SELECT @c_Pickslipno, '2'
+         GOTO QUIT_SP
+      END        
+      --WL02 E
    END
    
    --WL01 START
