@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2020-12-03  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
+/*                            Revert when Raise error                    */  
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Wrapper]  
       @c_Module            NVARCHAR(60) = ''
@@ -121,83 +123,88 @@ BEGIN
    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
    
    EXECUTE AS LOGIN=@c_UserName
-        
-   IF @c_SQL <> ''
-   BEGIN
-      SET @c_StorerKey = ''
-      EXEC sp_ExecuteSQL @c_SQL, N' @c_StorerKey NVARCHAR(15) OUTPUT', @c_StorerKey OUTPUT
-   END -- IF @c_SQL <> ''  
+   
+   BEGIN TRY   --(Wan01) - START     
+      IF @c_SQL <> ''
+      BEGIN
+         SET @c_StorerKey = ''
+         EXEC sp_ExecuteSQL @c_SQL, N' @c_StorerKey NVARCHAR(15) OUTPUT', @c_StorerKey OUTPUT
+      END -- IF @c_SQL <> ''  
 
-   DECLARE CUR_STORED_PROCEDURE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT wtec.StepNo, wtec.StoredProcedure 
-   FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
-   WHERE wtec.Module = @c_Module 
-   AND   wtec.TableName = @c_TableName 
-   AND   wtec.[Event] = 'PRE_DELETE' 
-   AND   wtec.StorerKey = @c_StorerKey
-   UNION 
-   SELECT 0 AS [StepNo], wtec.StoredProcedure 
-   FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
-   WHERE wtec.Module = @c_Module 
-   AND   wtec.TableName = @c_TableName 
-   AND   wtec.[Event] = 'PRE_DELETE' 
-   AND   wtec.StorerKey = 'ALL'        
-   ORDER BY StepNo 
+      DECLARE CUR_STORED_PROCEDURE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT wtec.StepNo, wtec.StoredProcedure 
+      FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
+      WHERE wtec.Module = @c_Module 
+      AND   wtec.TableName = @c_TableName 
+      AND   wtec.[Event] = 'PRE_DELETE' 
+      AND   wtec.StorerKey = @c_StorerKey
+      UNION 
+      SELECT 0 AS [StepNo], wtec.StoredProcedure 
+      FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
+      WHERE wtec.Module = @c_Module 
+      AND   wtec.TableName = @c_TableName 
+      AND   wtec.[Event] = 'PRE_DELETE' 
+      AND   wtec.StorerKey = 'ALL'        
+      ORDER BY StepNo 
               
-   OPEN CUR_STORED_PROCEDURE
+      OPEN CUR_STORED_PROCEDURE
        
-   FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
+      FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
        
-   WHILE @@FETCH_STATUS = 0
-   BEGIN
-      SET @c_SQL = N'EXEC ' +  @c_StoredProcedure + ' ' + 
-                  N' @c_StorerKey      = @c_StorerKey' + 
-                  N',@c_RefKey1        = @c_RefKey1' +         
-                  N',@c_RefKey2        = @c_RefKey2' +         
-                  N',@c_RefKey3        = @c_RefKey3' +         
-                  N',@c_RefreshHeader  = @c_RefreshHeader OUTPUT' +  
-                  N',@c_RefreshDetail  = @c_RefreshDetail OUTPUT' + 
-                  N',@b_Success        = @b_Success OUTPUT' +        
-                  N',@n_Err            = @n_Err OUTPUT' +            
-                  N',@c_Errmsg         = @c_Errmsg OUTPUT' +         
-                  N',@c_UserName       = @c_UserName'  +
-                  N',@c_IsSupervisor   = @c_IsSupervisor'
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         SET @c_SQL = N'EXEC ' +  @c_StoredProcedure + ' ' + 
+                     N' @c_StorerKey      = @c_StorerKey' + 
+                     N',@c_RefKey1        = @c_RefKey1' +         
+                     N',@c_RefKey2        = @c_RefKey2' +         
+                     N',@c_RefKey3        = @c_RefKey3' +         
+                     N',@c_RefreshHeader  = @c_RefreshHeader OUTPUT' +  
+                     N',@c_RefreshDetail  = @c_RefreshDetail OUTPUT' + 
+                     N',@b_Success        = @b_Success OUTPUT' +        
+                     N',@n_Err            = @n_Err OUTPUT' +            
+                     N',@c_Errmsg         = @c_Errmsg OUTPUT' +         
+                     N',@c_UserName       = @c_UserName'  +
+                     N',@c_IsSupervisor   = @c_IsSupervisor'
                        
-      EXEC sp_ExecuteSQL @c_SQL,  
-            N' @c_StorerKey         NVARCHAR(15)
-            , @c_RefKey1            NVARCHAR(50)  = ''''
-            , @c_RefKey2            NVARCHAR(50)  = ''''
-            , @c_RefKey3            NVARCHAR(50)  = ''''
-            , @c_ColumnsUpdated     NVARCHAR(4000) = '''' 
-            , @c_RefreshHeader      CHAR(1) = ''N'' OUTPUT
-            , @c_RefreshDetail      CHAR(1) = ''N'' OUTPUT 
-            , @b_Success            INT = 1 OUTPUT   
-            , @n_Err                INT = 0 OUTPUT
-            , @c_Errmsg             NVARCHAR(255) = '''' OUTPUT
-            , @c_UserName           NVARCHAR(128) = '''' 
-            , @c_IsSupervisor       CHAR(1) = ''N'' '
-            , @c_StorerKey 
-            , @c_RefKey1         
-            , @c_RefKey2         
-            , @c_RefKey3         
-            , @c_ColumnsUpdated 
-            , @c_RefreshHeader  OUTPUT 
-            , @c_RefreshDetail  OUTPUT 
-            , @b_Success OUTPUT        
-            , @n_Err     OUTPUT            
-            , @c_Errmsg  OUTPUT         
-            , @c_UserName         
-            , @c_IsSupervisor 
+         EXEC sp_ExecuteSQL @c_SQL,  
+               N' @c_StorerKey         NVARCHAR(15)
+               , @c_RefKey1            NVARCHAR(50)  = ''''
+               , @c_RefKey2            NVARCHAR(50)  = ''''
+               , @c_RefKey3            NVARCHAR(50)  = ''''
+               , @c_ColumnsUpdated     NVARCHAR(4000) = '''' 
+               , @c_RefreshHeader      CHAR(1) = ''N'' OUTPUT
+               , @c_RefreshDetail      CHAR(1) = ''N'' OUTPUT 
+               , @b_Success            INT = 1 OUTPUT   
+               , @n_Err                INT = 0 OUTPUT
+               , @c_Errmsg             NVARCHAR(255) = '''' OUTPUT
+               , @c_UserName           NVARCHAR(128) = '''' 
+               , @c_IsSupervisor       CHAR(1) = ''N'' '
+               , @c_StorerKey 
+               , @c_RefKey1         
+               , @c_RefKey2         
+               , @c_RefKey3         
+               , @c_ColumnsUpdated 
+               , @c_RefreshHeader  OUTPUT 
+               , @c_RefreshDetail  OUTPUT 
+               , @b_Success OUTPUT        
+               , @n_Err     OUTPUT            
+               , @c_Errmsg  OUTPUT         
+               , @c_UserName         
+               , @c_IsSupervisor 
        
-   FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
-   END
+      FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
+      END
        
-   CLOSE CUR_STORED_PROCEDURE
-   DEALLOCATE CUR_STORED_PROCEDURE
-
-   --END -- IF @c_SQL <> ''
-
-         
+      CLOSE CUR_STORED_PROCEDURE
+      DEALLOCATE CUR_STORED_PROCEDURE
+      
+      --END -- IF @c_SQL <> '' 
+   END TRY
+   BEGIN CATCH
+      SET @c_ErrMsg = 'Pre Delete fail. (lsp_Pre_Delete_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
+      execute nsp_logerror @n_err, @c_errmsg, 'lsp_Pre_Delete_Wrapper'         
+   END CATCH   --(Wan01) - END
+        
    REVERT      
 END
 GO

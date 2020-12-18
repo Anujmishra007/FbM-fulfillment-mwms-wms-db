@@ -23,7 +23,9 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
+/*                            Revert when Raise error                    */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_InventoryHoldASN_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
@@ -60,44 +62,52 @@ BEGIN
              
    EXECUTE AS LOGIN = @c_UserName   
 
-   SET @c_ASNReason = ''
-   SELECT @c_ASNReason = ISNULL(RTRIM(R.ASNReason),'')
-   FROM RECEIPT R WITH (NOLOCK)
-   WHERE R.Receiptkey = @c_ReceiptKey
+   BEGIN TRY -- (Wan01) - START  
+      SET @c_ASNReason = ''
+      SELECT @c_ASNReason = ISNULL(RTRIM(R.ASNReason),'')
+      FROM RECEIPT R WITH (NOLOCK)
+      WHERE R.Receiptkey = @c_ReceiptKey
 
-   BEGIN TRY
-      EXEC dbo.ispInventoryHoldByReceipt
-            @c_ReceiptKey = @c_ReceiptKey
-         , @c_ReceiptLineNumber=@c_ReceiptLineNumber
-         , @c_ReasonCode = @c_ASNReason              
-         , @b_Success    = @b_Success       OUTPUT
-         , @n_Err        = @n_Err           OUTPUT
-         , @c_ErrMsg     = @c_ErrMsg        OUTPUT
-   END TRY 
-   BEGIN CATCH
-      IF (XACT_STATE()) = -1  
-      BEGIN
-         ROLLBACK TRAN
-      END
+      BEGIN TRY
+         EXEC dbo.ispInventoryHoldByReceipt
+               @c_ReceiptKey = @c_ReceiptKey
+            , @c_ReceiptLineNumber=@c_ReceiptLineNumber
+            , @c_ReasonCode = @c_ASNReason              
+            , @b_Success    = @b_Success       OUTPUT
+            , @n_Err        = @n_Err           OUTPUT
+            , @c_ErrMsg     = @c_ErrMsg        OUTPUT
+      END TRY 
+      BEGIN CATCH
+         IF (XACT_STATE()) = -1  
+         BEGIN
+            ROLLBACK TRAN
+         END
 
-      WHILE @@TRANCOUNT < @n_StartTCNT
-      BEGIN
-         BEGIN TRAN
-      END
+         WHILE @@TRANCOUNT < @n_StartTCNT
+         BEGIN
+            BEGIN TRAN
+         END
                            
-      SET @n_err = 555101
-      SET @c_ErrMsg  = ERROR_MESSAGE()
-      SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                     + ': Error Executing lsp_HoldReceiptLot_Wrapper. (lsp_InventoryHoldASN_Wrapper)'
-                     + ' (' + @c_ErrMsg + ')'
-   END CATCH    
+         SET @n_err = 555101
+         SET @c_ErrMsg  = ERROR_MESSAGE()
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                        + ': Error Executing lsp_HoldReceiptLot_Wrapper. (lsp_InventoryHoldASN_Wrapper)'
+                        + ' (' + @c_ErrMsg + ')'
+      END CATCH    
                
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_Continue = 3      
+      IF @b_success = 0 OR @n_Err <> 0        
+      BEGIN        
+         SET @n_Continue = 3      
+         GOTO EXIT_SP
+      END        
+   END TRY
+
+   BEGIN CATCH
+      SET @n_continue = 3
+      SET @c_ErrMsg = 'Inventory Hold For ASN fail. (lsp_InventoryHoldASN_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
       GOTO EXIT_SP
-   END        
-         
+   END CATCH -- (Wan01) - END  
+       
    EXIT_SP:       
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

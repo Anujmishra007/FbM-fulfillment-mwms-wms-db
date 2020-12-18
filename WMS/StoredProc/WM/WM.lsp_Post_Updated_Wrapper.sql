@@ -23,7 +23,9 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */
+/* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
+/*                            Revert when Raise error                    */  
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Post_Updated_Wrapper]  
       @c_Module            NVARCHAR(60) = ''
@@ -112,38 +114,39 @@ BEGIN
     EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
     EXECUTE AS LOGIN=@c_UserName
-        
-    IF @c_SQL <> ''
-    BEGIN
+       
+    BEGIN TRY  --(Wan01) - START    
+      IF @c_SQL <> ''
+      BEGIN
       
-       SET @c_StorerKey = ''
-       EXEC sp_ExecuteSQL @c_SQL, N' @c_StorerKey NVARCHAR(15) OUTPUT', @c_StorerKey OUTPUT
+         SET @c_StorerKey = ''
+         EXEC sp_ExecuteSQL @c_SQL, N' @c_StorerKey NVARCHAR(15) OUTPUT', @c_StorerKey OUTPUT
        
-       DECLARE CUR_STORED_PROCEDURE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-       SELECT wtec.StepNo, wtec.StoredProcedure 
-       FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
-       WHERE wtec.Module = @c_Module 
-       AND   wtec.TableName = @c_TableName 
-       AND   wtec.[Event] = 'UPDATED' 
-       AND   wtec.StorerKey = @c_StorerKey
-       UNION 
-       SELECT 0 AS [StepNo], wtec.StoredProcedure 
-       FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
-       WHERE wtec.Module = @c_Module 
-       AND   wtec.TableName = @c_TableName 
-       AND   wtec.[Event] = 'UPDATED' 
-       AND   wtec.StorerKey = 'ALL'        
-       ORDER BY StepNo 
+         DECLARE CUR_STORED_PROCEDURE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT wtec.StepNo, wtec.StoredProcedure 
+         FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
+         WHERE wtec.Module = @c_Module 
+         AND   wtec.TableName = @c_TableName 
+         AND   wtec.[Event] = 'UPDATED' 
+         AND   wtec.StorerKey = @c_StorerKey
+         UNION 
+         SELECT 0 AS [StepNo], wtec.StoredProcedure 
+         FROM WM.WMS_TABLE_EVENT_CONFIG AS wtec WITH(NOLOCK) 
+         WHERE wtec.Module = @c_Module 
+         AND   wtec.TableName = @c_TableName 
+         AND   wtec.[Event] = 'UPDATED' 
+         AND   wtec.StorerKey = 'ALL'        
+         ORDER BY StepNo 
        
        
-       OPEN CUR_STORED_PROCEDURE
+         OPEN CUR_STORED_PROCEDURE
        
-       FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
+         FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
        
-       WHILE @@FETCH_STATUS = 0
-       BEGIN
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
          EXEC sp_ExecuteSQL @c_StoredProcedure, 
-       N'@c_StorerKey  NVARCHAR(15)
+         N'@c_StorerKey  NVARCHAR(15)
          ,  @c_RefKey1           NVARCHAR(50)  = ''''
          ,  @c_RefKey2           NVARCHAR(50)  = ''''
          ,  @c_RefKey3           NVARCHAR(50)  = ''''
@@ -167,14 +170,18 @@ BEGIN
          , @c_UserName          
        
          FETCH FROM CUR_STORED_PROCEDURE INTO @n_StepNo, @c_StoredProcedure
-       END
+         END
        
-       CLOSE CUR_STORED_PROCEDURE
-       DEALLOCATE CUR_STORED_PROCEDURE
+         CLOSE CUR_STORED_PROCEDURE
+         DEALLOCATE CUR_STORED_PROCEDURE
 
-    END -- IF @c_SQL <> ''
+      END -- IF @c_SQL <> ''
+   END TRY
 
-   
+   BEGIN CATCH
+      SET @c_ErrMsg = 'POST Update fail. (lsp_Post_Updated_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
+      execute nsp_logerror @n_err, @c_errmsg, 'lsp_Post_Updated_Wrapper'  
+   END CATCH   --(Wan01) - END   
    REVERT      
 END
 GO
