@@ -27,6 +27,7 @@ GO
 /* Date         Author   Ver   Purposes                                  */    
 /* 20-OCT-2020  CSCHONG  1.1   INC1330177 - Fix over lenght issue (CS01) */    
 /* 30-OCT-2020  CSCHONG  1.2   WMS-15624 Revised report filter logic (CS01)*/
+/* 23-Nov-2020  WLChooi  1.3   WMS-15745 - Modify Logic of A1 (WL01)     */
 /*************************************************************************/    
     
 CREATE PROC [dbo].[isp_Delivery_Note45_RDT]     
@@ -258,7 +259,8 @@ BEGIN
          SET @c_ExecStatements = 'SELECT DISTINCT  TMP.Seqno' +    
             ',OH.Orderkey ' +    
             ',A1= CASE WHEN ISNULL(CL1.short,''0'') = ''1''  THEN OH.C_Company + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +       
-            ' ELSE ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') + space(2) + OH.C_Company END' +                                       
+            '          ELSE ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') + space(2) + ' +                             --WL01
+            '                                                         ISNULL(RTRIM(OH.C_Contact2),'''') + '' '' + ISNULL(RTRIM(OH.C_Contact1),'''') END ' +   --WL01                                       
             ',A2=ISNULL(MAX(CASE WHEN CL.Code =''A2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +    
             ',A3=ISNULL(MAX(CASE WHEN CL.Code =''A3'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +    
             ',A4=ISNULL(MAX(CASE WHEN CL.Code =''A4'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +    
@@ -271,7 +273,9 @@ BEGIN
             ',A15=ISNULL(RTRIM(OH.BuyerPO),'''') ' +    
             ',A16=ISNULL(RTRIM(CONVERT(NVARCHAR(10),OH.OrderDate,112)),'''') ' +     
             ',A17=ISNULL(RTRIM(MAX(OH.Notes2)),'''') ' +    
-            ',A18_1=(ISNULL(RTRIM(OH.C_Company),'''') + ISNULL(RTRIM(ST.B_Contact2),'''') ) ' +     
+            --',A18_1=(ISNULL(RTRIM(OH.C_Company),'''') + ISNULL(RTRIM(ST.B_Contact2),'''') ) ' +   --WL01
+            ',A18_1 = CASE WHEN ISNULL(CL1.short,''0'') = ''1''  THEN OH.C_Company ' +   --WL01       
+            '              ELSE ISNULL(RTRIM(OH.C_Contact2),'''') + '' '' + ISNULL(RTRIM(OH.C_Contact1),'''') END' +   --WL01
             ',A18_2=ISNULL(RTRIM(OH.C_Zip),'''') ' +     
             ',A18_3=ISNULL(RTRIM(OH.C_State),'''') ' +    
             ',A18_4=ISNULL(RTRIM(OH.C_City),'''') ' +    
@@ -331,7 +335,8 @@ BEGIN
             ',ISNULL(RTRIM(C_Address2),'''') ' +      
             ',ISNULL(RTRIM(C_Address3),'''') ' +      
             ',ISNULL(RTRIM(C_Address4),'''') ' +      
-            ',ISNULL(PD.notes,''''),ISNULL(CL1.short,''0'') ' +     
+            ',ISNULL(PD.notes,''''),ISNULL(CL1.short,''0'') ' + 
+            ',ISNULL(RTRIM(OH.C_Contact2),''''), ISNULL(RTRIM(OH.C_Contact1),'''')' +   --WL01    
             ' ORDER BY TMP.Seqno '    
             --' ORDER BY ISNULL(PD.notes,''''), OH.Orderkey '      
     

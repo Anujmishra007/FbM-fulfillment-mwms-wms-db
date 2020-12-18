@@ -37,6 +37,7 @@ GO
 /* 2020-09-23  Wan02    1.2   Sku Bundle CR                             */
 /* 2020-09-04  Wan03    1.2   FBR Version 4.2 - Optimization            */
 /* 2020-11-18  Wan03    1.2   Get per piece LWH for bundle item         */
+/* 2020-11-27  Wan04    1.3   Fixed                                     */
 /************************************************************************/
 CREATE PROC ispRLWAV20_PACK
            @c_Wavekey            NVARCHAR(10)
@@ -157,6 +158,7 @@ BEGIN
       ,  StdCube           FLOAT        DEFAULT(0.00)
       ,  StdGrossWgt       FLOAT        DEFAULT(0.00)
       ,  SkuStdCube        FLOAT        DEFAULT(0.00)    --2020-08-27  
+      ,  SkuStdGrossWgt    FLOAT        DEFAULT(0.00)    --2020-11-27        
       ,  CubeTolerance     FLOAT        DEFAULT(0.00)    --2020-08-27  
       ,  [Length]          FLOAT        DEFAULT(0.00)    --2020-08-07
       ,  Width             FLOAT        DEFAULT(0.00)    --2020-08-07
@@ -252,7 +254,8 @@ BEGIN
       ,  PickStdGrossWgt               
       ,  StdCube        
       ,  StdGrossWgt 
-      ,  SkuStdCube     
+      ,  SkuStdCube 
+      ,  SkuStdGrossWgt             --2020-11-27              
       ,  CubeTolerance  
       ,  [Length]   
       ,  [Width]  
@@ -278,7 +281,8 @@ BEGIN
          , PickStdWgt  = SUM(PD.Qty * SKU.StdGrossWgt)  
          , StdCube = SKU.StdCube 
          , StdWgt  = SKU.StdGrossWgt  
-         , SkuStdCube = SKU.StdCube  
+         , SkuStdCube = SKU.StdCube 
+         , SkuStdGrossWgt = SKU.StdGrossWgt                 --2020-11-27          
          , CubeTolerance = CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END    
          , [Length]= ISNULL(SKU.[Length],0.00)  
          , Width   = ISNULL(SKU.Width,0.00)    
@@ -340,6 +344,7 @@ BEGIN
       ,  StdCube        
       ,  StdGrossWgt 
       ,  SkuStdCube     --2020-08-27 
+      ,  SkuStdGrossWgt --2020-11-27       
       ,  CubeTolerance  --2020-08-27   
       ,  [Length] --2020-08-07   
       ,  [Width]  --2020-08-07
@@ -365,9 +370,11 @@ BEGIN
                         * (SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube)) --2020-08-27
          , PickStdWgt  = PD.Qty / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)   --(Wan02) -- 2020-10-19
                        * SKU.StdGrossWgt
-         , StdCube = SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube) --2020-08-27
-         , StdWgt  = SKU.StdGrossWgt
-         , SkuStdCube = SKU.StdCube
+         , StdCube = (SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube))                      --2020-08-27  
+                     /  (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)                   --2020-08-27 
+         , StdWgt  = SKU.StdGrossWgt /  (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)   --2020-08-27 
+         , SkuStdCube = SKU.StdCube  
+         , SkuStdGrossWgt = SKU.StdGrossWgt                 --2020-11-27
          , CubeTolerance = CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END  --2020-08-27
          , [Length]= ISNULL(SKU.[Length],0.00) / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
          , Width   = ISNULL(SKU.Width,0.00)    / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
@@ -726,6 +733,7 @@ BEGIN
                FROM #PICKDETAIL_WIP p
                WHERE p.CartonType = @c_CartonType
                AND p.CartonSeqNo  = @n_CartonSeqNo
+               AND p.orderkey = @c_Orderkey              --Wan04
                GROUP BY p.Storerkey
                      ,  p.Sku
                      ,  p.[Length]
@@ -834,6 +842,7 @@ BEGIN
                   ,  StdCube
                   ,  StdGrossWgt
                   ,  SkuStdCube        --2020-08-27
+                  ,  SkuStdGrossWgt    --2020-11-27 
                   ,  [Length]          --2020-08-07
                   ,  Width             --2020-08-07
                   ,  Height            --2020-08-07
@@ -864,6 +873,7 @@ BEGIN
                   ,  StdCube = @n_StdCube
                   ,  StdGrossWgt = @n_StdGrossWgt
                   ,  PD.SkuStdCube        --2020-08-27
+                  ,  PD.SkuStdGrossWgt    --2020-11-27                     
                   ,  PD.[Length]          --2020-08-07
                   ,  PD.Width             --2020-08-07
                   ,  PD.Height            --2020-08-07
@@ -1127,6 +1137,7 @@ BEGIN
                END  
             END
          END   --2020-08-10
+         
          IF @n_Status = 2
          BEGIN
             SET @b_success = 1  

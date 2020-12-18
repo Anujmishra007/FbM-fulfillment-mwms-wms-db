@@ -24,7 +24,9 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author   Rev   Purposes                                  */ 
-/* 04-SEP-2020 Shong    1.0   Created                                   */            
+/* 04-SEP-2020 Shong    1.0   Created                                   */ 
+/* 11-NOV-2020 Wan01    1.1   Do not wait scheduler job to submit as take*/
+/*                            1 min (slow)                              */           
 /************************************************************************/    
 CREATE PROC [dbo].[isp_QCmd_SubmitAutoMbolPack] (
      @c_PickSlipNo  NVARCHAR(10)     
@@ -48,7 +50,7 @@ BEGIN
           ,@c_Port                VARCHAR(10)
           ,@n_ThreadPerAcct       INT
           ,@n_MilisecondDelay     INT
-          ,@c_APP_DB_Name         VARCHAR(10)
+          ,@c_APP_DB_Name         VARCHAR(20)         --(Wan01) Destination DB Name > 10 for eg CNDTSITFUAM
           ,@n_ThreadPerStream     INT
           ,@c_IniFilePath         NVARCHAR(200)
           ,@nStartTranCount       INT=0
@@ -95,7 +97,9 @@ BEGIN
                   ,@c_Port = Port
                   ,@n_ThreadPerAcct = ThreadPerAcct
                   ,@n_MilisecondDelay = MilisecondDelay 
-                  ,@c_APP_DB_Name = TargetDB 
+                  ,@c_APP_DB_Name = App_DB_Name--TargetDB      --(Wan01) As instruct by Chen Yu
+                  ,@c_IniFilePath = IniFilePath                --(Wan01) As instruct by Chen Yu
+                  ,@n_ThreadPerStream = ThreadPerStream        --(Wan01) As instruct by Chen Yu
             FROM  QCmd_TransmitlogConfig WITH (NOLOCK)  
             WHERE DataStream = @c_DataStream 
               AND TableName = 'AutoMbolPack'      
@@ -104,14 +108,15 @@ BEGIN
             IF @b_Debug = 1    
             BEGIN      
                PRINT '  > @c_Command : ' + @c_Command                          
-            END                        
-
-            IF NOT EXISTS(SELECT 1 FROM TCPSocket_QueueTask AS tqt WITH(NOLOCK)
-                          WHERE tqt.DataStream = @c_DataStream)
-            BEGIN
+            END 
+                                   
+            --(Wan01) - Let isp_QCmd_SubmitTaskToQCommander to validate Tranmitlogkey
+            --IF NOT EXISTS(SELECT 1 FROM TCPSocket_QueueTask AS tqt WITH(NOLOCK)
+            --              WHERE tqt.DataStream = @c_DataStream)
+            --BEGIN
                BEGIN TRY    
                EXEC isp_QCmd_SubmitTaskToQCommander     
-                     @cTaskType          = 'O' -- D=By Datastream, T=Transmitlog, O=Others           
+                     @cTaskType          = 'T' -- D=By Datastream, T=Transmitlog, O=Others   --(Wan01) Change from 'O' to 'T'          
                      , @cStorerKey       = @c_StorerKey                                                
                      , @cDataStream      = @c_DataStream                                                         
                      , @cCmdType         = 'SQL'                                                      
@@ -125,9 +130,10 @@ BEGIN
                      , @cPORT            = @c_PORT                                                    
                      , @cIniFilePath     = @c_IniFilePath           
                      , @cAPPDBName       = @c_APP_DB_Name                                                   
-                     , @b_Success        = @b_Success OUTPUT      
+                     , @bSuccess         = @b_Success OUTPUT                                 --(Wan01)     
                      , @nErr             = @n_Err OUTPUT      
-                     , @cErrMsg          = @c_ErrMsg OUTPUT    
+                     , @cErrMsg          = @c_ErrMsg OUTPUT 
+                     , @nPriority        = 2                                                 --(Wan01) As instruct by Chen Yu
                 
                IF @n_Err <> 0 AND ISNULL(@c_ErrMsg,'') <> ''    
                BEGIN
@@ -143,7 +149,7 @@ BEGIN
                      PRINT @c_ErrMsg                                                                
                   GOTO EXIT_SP                   
                END CATCH                
-            END
+            --END                            --(Wan01)
          END         
       END
    END

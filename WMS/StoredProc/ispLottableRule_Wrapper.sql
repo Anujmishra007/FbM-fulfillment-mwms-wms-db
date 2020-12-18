@@ -36,6 +36,9 @@ GO
 /* 13-Apr-2015  CSCHONG  fix bugs SOS338163 AND RDT  bugs (CS02)        */
 /* 30-Nov-2017  NJOW01   retrieve stored proc name from codelkup for    */
 /*                       eWMS.                                          */
+/* 29-Sep-2020  Wan01    Fix Dynamic Select statement issue             */
+/* 27-Nov-2020  Wan02    LFWM-2438 - UAT  Philippines  PH SCE Lottable13*/
+/*                       Not Autocomputing                              */
 /************************************************************************/
 
 CREATE PROC ispLottableRule_Wrapper (
@@ -109,22 +112,22 @@ BEGIN
    BEGIN          
         SET @cSQLStatement = ''
         
-        SELECT @c_Rtn = CASE WHEN @c_ListName = 'LOTTABLE01' AND ISNULL(@c_Lottable01Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE02' AND ISNULL(@c_Lottable02Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE03' AND ISNULL(@c_Lottable03Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE04' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable04 ,112) = '19000101' OR @dt_Lottable04 IS NULL) THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE05' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable05 ,112) = '19000101' OR @dt_Lottable05 IS NULL) THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE06' AND ISNULL(@c_Lottable06Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE07' AND ISNULL(@c_Lottable07Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE08' AND ISNULL(@c_Lottable08Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE09' AND ISNULL(@c_Lottable09Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE10' AND ISNULL(@c_Lottable10Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE11' AND ISNULL(@c_Lottable11Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE12' AND ISNULL(@c_Lottable12Value,'') = '' THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE13' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable13 ,112) = '19000101' OR @dt_Lottable13 IS NULL) THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE14' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable14 ,112) = '19000101' OR @dt_Lottable13 IS NULL) THEN 'Y'
-                           WHEN @c_ListName = 'LOTTABLE15' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable15 ,112) = '19000101' OR @dt_Lottable15 IS NULL) THEN 'Y'
-                       ELSE 'N' END    
+        SELECT @c_Rtn = CASE WHEN @c_ListName = 'LOTTABLE01' AND ISNULL(@c_Lottable01Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE02' AND ISNULL(@c_Lottable02Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE03' AND ISNULL(@c_Lottable03Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE04' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable04Value ,112) = '19000101' OR @dt_Lottable04Value IS NULL) THEN 'Y'  --(Wan02)
+                           WHEN @c_ListName = 'LOTTABLE05' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable05Value ,112) = '19000101' OR @dt_Lottable05Value IS NULL) THEN 'Y'  --(Wan02)
+                           WHEN @c_ListName = 'LOTTABLE06' AND ISNULL(@c_Lottable06Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE07' AND ISNULL(@c_Lottable07Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE08' AND ISNULL(@c_Lottable08Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE09' AND ISNULL(@c_Lottable09Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE10' AND ISNULL(@c_Lottable10Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE11' AND ISNULL(@c_Lottable11Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE12' AND ISNULL(@c_Lottable12Value,'') = '' THEN 'Y'  
+                           WHEN @c_ListName = 'LOTTABLE13' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable13Value ,112) = '19000101' OR @dt_Lottable13Value IS NULL) THEN 'Y' --(Wan02) 
+                           WHEN @c_ListName = 'LOTTABLE14' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable14Value ,112) = '19000101' OR @dt_Lottable13Value IS NULL) THEN 'Y' --(Wan02) 
+                           WHEN @c_ListName = 'LOTTABLE15' AND (CONVERT(NVARCHAR(8) ,@dt_Lottable15Value ,112) = '19000101' OR @dt_Lottable15Value IS NULL) THEN 'Y' --(Wan02) 
+                       ELSE 'N' END      
       
       IF @c_Rtn = 'Y'
          GOTO QUIT                     
@@ -136,7 +139,7 @@ BEGIN
       ' JOIN SKU (NOLOCK) ON CL.Code = SKU.Lottable'  + RIGHT(RTRIM(@c_ListName),2) + 'Label ' +
       ' WHERE CL.Listname = @c_Listname ' +
       CASE WHEN @c_PrePost IN('PRE','BOTH') THEN
-          ' CL.Short IN(''PRE'',''BOTH'') '
+          ' AND CL.Short IN(''PRE'',''BOTH'') '
       ELSE '' END +    
       ' AND SKU.Storerkey = @c_Storerkey 
       AND SKU.Sku = @c_Sku 

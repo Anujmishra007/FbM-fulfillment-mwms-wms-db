@@ -7,6 +7,29 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
+/***************************************************************************/ 
+/* Object Name: isp_AlertNonExceedTable                                    */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* Oct 25 2012  tlting    1.1   New Table                                  */
+/* Mar 07 2013  tlting    1.2   New table added                            */
+/* May 03 2013  tlting    1.3   New table - DeviceProfile, DeviceProfileLog*/ 
+/*                              ,PTLTran                                   */
+/* Jun 04 2013  tlting    1.4   New table added                            */
+/* Oct 22 2013  tlting    1.5   New table added                            */
+/* Dec 02 2013  khlim     1.6   New Bartender tables                       */
+/***************************************************************************/ 
 CREATE PROCEDURE isp_AlertNonExceedTable   
    @cOperator     NVARCHAR(215) = '',  
    @cRecipients   NVARCHAR(215) = ''  

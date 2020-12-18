@@ -7,6 +7,21 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+/***************************************************************************/ 
+/* Object Name: isp_monthly_by_bizgroup                                    */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/***************************************************************************/    
 CREATE proc isp_monthly_by_bizgroup(
    @c_storerkey NVARCHAR(15),
    @c_datemin NVARCHAR(10),

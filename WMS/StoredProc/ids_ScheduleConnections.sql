@@ -5,9 +5,21 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
-/*  5-Sep-2012  KHLim     "LIKE EXceed%" intead of "= EXceed WMS" (KH01)            */  
-
+/***************************************************************************/ 
+/* Object Name: ids_ScheduleConnections                                    */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Sep-2012  KHLim     LIKE EXceed%" intead of "= EXceed WMS" (KH01)    */  
+/***************************************************************************/ 
 CREATE PROC ids_ScheduleConnections    
       @c_WMSDB NVARCHAR(10)   
 AS    
@@ -23,16 +35,24 @@ BEGIN
       where db_name(dbid) = @c_WMSDB     
         AND program_name LIKE 'EXceed%'   --KH01    
     
-   insert user_connections (login_name, login_date, [Application])    
-      select RTRIM(UserName),     
+   INSERT USER_CONNECTIONS (login_name, login_date, [Application])    
+      SELECT RTRIM(UserName),     
              getdate(),   
              'RDT'    
-      from RDT.RdtMobRec (nolock)    
-      where datediff(minute, editdate, getdate()) <= 120    
-      group by UserName    
+      FROM RDT.RdtMobRec (nolock)    
+      WHERE datediff(minute, editdate, getdate()) <= 120    
+      GROUP BY UserName    
     
-END    
-    
+END  
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+GRANT EXECUTE ON ids_ScheduleConnections TO nSQL
+GO    
     
     
   

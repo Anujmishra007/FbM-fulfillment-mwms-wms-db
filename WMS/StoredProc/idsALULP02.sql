@@ -2,11 +2,30 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[idsALULP02
 drop procedure [dbo].[idsALULP02]
 GO
 
- 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 
+/***************************************************************************/ 
+/* Object Name: idsALULP02                                                 */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* 16-Dec-2004  wtshong   1.1   Change cursor type                         */
+/* 24-Mar-2009  ang       1.2   SOS131215 : Added in Lot, ID, Lot.Status,  */
+/*                              ID.Status, Loc.status ='OK'                */
+/* 05-Jul-2012  khlim     1.3   SET ANSI_NULLS OFF                         */
+/***************************************************************************/ 
 CREATE PROC idsALULP02
        @c_lot NVARCHAR(10) ,
        @c_uom NVARCHAR(10) ,

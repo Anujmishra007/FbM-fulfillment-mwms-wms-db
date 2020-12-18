@@ -8,6 +8,21 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+/***************************************************************************/ 
+/* Object Name: isp_generate_delivery_receipt_by_load_nw                   */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/***************************************************************************/   
 CREATE PROC isp_generate_delivery_receipt_by_load_nw
    @c_loadkey NVARCHAR(10),
    @c_storerkey NVARCHAR(15)

@@ -7,9 +7,22 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
-/* 27-Feb-2017  TLTING   1.3  Variable Nvarchar                          */
-
+/***************************************************************************/ 
+/* Object Name: isp_GetStyleLoc                                            */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* 27-Feb-2017  TLTING   1.3  Variable Nvarchar                            */
+/***************************************************************************/    
 CREATE PROC [dbo].[isp_GetStyleLoc] (   
             @c_storerkey  NVARCHAR(15),
 				@c_facility	  NVARCHAR(10))  

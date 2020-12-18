@@ -5,26 +5,13 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-CREATE PROC isp_CheckListByStore (
-	@c_storerkey NVARCHAR(20), 
-	@c_supplierstart NVARCHAR(45),
-	@c_supplierend NVARCHAR(45),
-	@c_receiptkeystart NVARCHAR(10),
-	@c_receiptkeyend NVARCHAR(10)
-) 
-AS
-BEGIN
-   SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET CONCAT_NULL_YIELDS_NULL OFF
-
 /**************************************************************************/
-/* Trigger: isp_CheckListByStore 												               	  */
+/* Stored Procedure: isp_CheckListByStore                                 */
 /* Creation Date:                                                         */
 /* Copyright: IDS                                                         */
 /* Written by:                                                            */
 /*                                                                        */
-/* Purpose:  										                                          */
+/* Purpose:  										                                */
 /*                                                                        */
 /* Input Parameters:                                                      */
 /*                                                                        */
@@ -46,16 +33,28 @@ BEGIN
 /*                                                                        */
 /* Updates:                                                               */
 /* Date         Author    Ver.  Purposes                                  */
-/* 28-Jan-2005	YTWan	          Not Able to Update/Insert Pickslip # to 	*/
-/*			                        Table Pickheader, pickdetail, refkeylookup*/
-/*			                        But able to print out PickslipNo          */
-/* 11-Mar-2005  YTWan		  	    so#32746:To Print Check List for C4 Xdock */
-/*							               	and FT After Allocated from Report Module */
+/* 28-Jan-2005	YTWan	           Not Able to Update/Insert Pickslip # to   */
+/*			                       Table Pickheader, pickdetail, refkeylookup*/
+/*			                       But able to print out PickslipNo          */
+/* 11-Mar-2005  YTWan		  	  so#32746:To Print Check List for C4 Xdock */
+/*							           and FT After Allocated from Report Module */
 /* 29-Mar-2005  YTWan           so#32746:Fix bug - Sort by OD.Externpokey */
 /* 08-Apr-2005  MaryVong        Added Drop object and Grant Execution     */
 /* 25-May-2009  NJOW01    1.1   Add BUSR3 column. (sensitive              */
 /*                              & non sensitive SKU flag)                 */
 /**************************************************************************/
+CREATE PROC isp_CheckListByStore (
+	@c_storerkey NVARCHAR(20), 
+	@c_supplierstart NVARCHAR(45),
+	@c_supplierend NVARCHAR(45),
+	@c_receiptkeystart NVARCHAR(10),
+	@c_receiptkeyend NVARCHAR(10)
+) 
+AS
+BEGIN
+   SET NOCOUNT ON 
+   SET QUOTED_IDENTIFIER OFF 
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
 	SELECT PICKDETAIL.OrderKey, 
           PICKDETAIL.OrderLineNumber, 

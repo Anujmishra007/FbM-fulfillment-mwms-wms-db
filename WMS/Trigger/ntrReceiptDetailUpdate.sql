@@ -167,6 +167,7 @@ GO
 /* 15-Apr-2020  NJOW10    4.9   WMS-12880 add offset to ReturnDefaultLottable05*/ 
 /* 09-Jun-2020  NJOW11    5.0   WMS-13612 add new column support for        */
 /*                              CopyRecDetValueToLottable.                  */
+/* 13-Jul-2020  NJOW12    5.1   WMS-14228 storerconfig add facility         */
 /****************************************************************************/ 
  
 CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -1024,7 +1025,7 @@ BEGIN
                   
             -- (james02)
             SELECT @b_success = 0 
-            EXECUTE nspGetRight null,  -- facility 
+            EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                @c_StorerKey,    -- Storerkey 
                null,    -- Sku 
                'BYPASSRECEIPTSERIALQTYTALLYCHK', -- Configkey 
@@ -1106,7 +1107,7 @@ BEGIN
          -- 10.1.99 WALLY 
  
          SELECT @b_success = 0 
-         EXECUTE nspGetRight null,  -- facility 
+         EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                @c_StorerKey,  -- Storerkey 
                @c_Sku,           -- Sku 
                'Update Lot04 to Lot03', -- Configkey 
@@ -1146,7 +1147,7 @@ BEGIN
          IF @c_RecType <> 'GRN' AND @c_Lottable03Label  = 'SUB-INV' 
          BEGIN 
             SELECT @b_success = 0 
-            EXECUTE nspGetRight NULL,  -- facility 
+            EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                     @c_StorerKey,      -- Storerkey 
                     @c_Sku,            -- Sku 
                     'PopulateSubInv',       -- Configkey 
@@ -1180,7 +1181,7 @@ BEGIN
          --NJOW07 S         
          SELECT @b_success = 0 
          EXECUTE nspGetRight 
-                 @c_Facility = NULL,  -- facility 
+                 @c_Facility = @c_Facility,  -- facility --NJOW12
                  @c_Storerkey = @c_StorerKey,      -- Storerkey 
                  @c_Sku = @c_Sku,            -- Sku 
                  @c_configkey = 'CopyReceiptkeyToLottable',  -- Configkey 
@@ -1227,7 +1228,7 @@ BEGIN
          --NJOW09 S         
          SELECT @b_success = 0 
          EXECUTE nspGetRight 
-                 @c_Facility = NULL,  -- facility 
+                 @c_Facility = @c_Facility,  -- facility --NJOW12
                  @c_Storerkey = @c_StorerKey,      -- Storerkey 
                  @c_Sku = @c_Sku,            -- Sku 
                  @c_configkey = 'CopyRecDetValueToLottable',  -- Configkey 
@@ -1391,7 +1392,7 @@ BEGIN
          IF @n_continue=1 or @n_continue=2 
          BEGIN 
             SELECT @b_success = 0 
-            EXECUTE nspGetRight null,        -- facility 
+            EXECUTE nspGetRight @c_Facility,        -- facility --NJOW12
                   @c_StorerKey,              -- Storerkey 
                   @c_Sku,                    -- Sku 
                   'DefaultLottable_Returns', -- Configkey 
@@ -1668,7 +1669,7 @@ BEGIN
          /*CS01 End*/ 
  
          SELECT @b_success = 0 
-         EXECUTE nspGetRight null,  -- facility 
+         EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                @c_StorerKey,  -- Storerkey 
                @c_SKU,           -- Sku 
                'ExpiredReason',        -- Configkey 
@@ -1810,7 +1811,7 @@ BEGIN
          -- Added By MaryVong on 29-Apr-2004 (NZMM) 
          -- Set SubReasonCode to mandotary if DocType = Return 
          SELECT @b_success = 0 
-         EXECUTE nspGetRight null,  -- facility 
+         EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                @c_StorerKey,      -- Storerkey 
                null,              -- Sku 
                'ReturnReason',    -- Configkey 
@@ -1840,7 +1841,7 @@ BEGIN
          IF @n_continue = 1 OR @n_Continue = 2 
          BEGIN 
             SELECT @b_success = 0 
-            EXECUTE nspGetRight NULL,  -- facility 
+            EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                   @c_StorerKey,        -- Storerkey 
                   @c_Sku,              -- Sku 
                   'UPDATEUCC',         -- Configkey 
@@ -1929,7 +1930,7 @@ BEGIN
          IF @n_continue=1 or @n_continue=2 
          BEGIN 
             SELECT @b_success = 0 
-            EXECUTE nspGetRight null,  -- facility 
+            EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                   @c_StorerKey,       -- Storerkey 
                   '',                 -- Sku 
                   'UCC',              -- Configkey 
@@ -1976,7 +1977,7 @@ BEGIN
          BEGIN 
             SELECT @b_success = 0 
              
-            EXECUTE nspGetRight null, 
+            EXECUTE nspGetRight @c_Facility, --NJOW12
                      @c_StorerKey, 
                      '', 
                      'PopulatePalletLabel', 
@@ -2092,7 +2093,7 @@ BEGIN
             ELSE 
             BEGIN 
                SELECT @b_success = 0 
-               EXECUTE nspGetRight null,  -- facility 
+               EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                      @c_StorerKey,        -- Storerkey 
                      '',                  -- Sku 
                      'UCCTracking',       -- Configkey 
@@ -2109,7 +2110,7 @@ BEGIN
                END 
  
                SELECT @b_success = 0 
-               EXECUTE nspGetRight null,     -- facility 
+               EXECUTE nspGetRight @c_Facility,     -- facility --NJOW12
                      @c_StorerKey,           -- Storerkey 
                      '',                     -- Sku 
                      'AddUCCFromColUDF01',   -- Configkey 
@@ -2263,7 +2264,7 @@ BEGIN
              --(Wan01) - START 
             SET @b_success = 0 
             SET @c_authority = '' 
-            EXECUTE nspGetRight null,  -- facility 
+            EXECUTE nspGetRight @c_Facility,  -- facility --NJOW12
                   @c_StorerKey,        -- Storerkey 
                   '',                  -- Sku 
                   'RCPTDETLOG',        -- Configkey 

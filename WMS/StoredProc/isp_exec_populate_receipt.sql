@@ -7,7 +7,21 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
+/***************************************************************************/ 
+/* Object Name: isp_exec_populate_receipt                                  */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */ 
+/***************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_exec_populate_receipt] (
 @c_spname NVARCHAR(100),
 @c_stdkey NVARCHAR(10),

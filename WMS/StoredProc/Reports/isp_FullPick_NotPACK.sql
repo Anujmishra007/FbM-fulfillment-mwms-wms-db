@@ -5,7 +5,21 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
- 
+/***************************************************************************/ 
+/* Object Name: isp_FullPick_NotPACK                                       */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/***************************************************************************/     
 Create PROC isp_FullPick_NotPACK 
 ( @c_LoadKey  NVARCHAR(10)   )    
 AS      

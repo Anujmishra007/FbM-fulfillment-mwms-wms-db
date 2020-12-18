@@ -21,6 +21,7 @@ GO
 /*                                                                                                           */  
 /* Date         Rev  Author     Purposes                                                                     */  
 /* 02-OCT-2020  1.1  CSCHONG    WMS-15196 Fix digit more than 10 with last digit 0 show ZERO (CS01)          */
+/* 13-Nov-2020  1.2  WLChooi    WMS-15452 Fix Decimal to Words - 2 d.p. (WL01)                               */
 /*************************************************************************************************************/  
   
 CREATE FUNCTION fnc_NumberToWords(@n_Number AS FLOAT, @c_WordPrefix NVARCHAR(100), @c_NumberSurfix NVARCHAR(100), @c_DecimalSurfix NVARCHAR(100), @c_WordSurfix NVARCHAR(100))  
@@ -34,8 +35,9 @@ BEGIN
       DECLARE @n_DecimalPart BIGINT   
         
       SET @n_NumberPart = CAST(@n_Number AS BIGINT)  
-      SET @n_DecimalPart = CAST(REPLACE(CAST(@n_Number - @n_NumberPart AS NVARCHAR),'0.','') AS BIGINT)  
-        
+      --SET @n_DecimalPart = CAST(REPLACE(CAST(@n_Number - @n_NumberPart AS NVARCHAR),'0.','') AS BIGINT)   --WL01  
+      SET @n_DecimalPart = CAST(LEFT(REPLACE(CAST(@n_Number - @n_NumberPart AS NVARCHAR),'0.','') + '0', 2) AS BIGINT)   --WL01
+                                                                                                                         --  
       DECLARE @Below20 TABLE (ID int identity(0,1), Word varchar(32))  
   
       DECLARE @Below100 TABLE (ID int identity(2,1), Word varchar(32))  
@@ -151,7 +153,8 @@ IF ISNULL(@c_WordSurfix,'') <> ''
 RETURN @c_NumberInWords  
   
 END  
-  
+GO
+GRANT EXECUTE ON fnc_NumberToWords TO NSQL
 --SELECT dbo.fnc_NumberToWords(0,'','','','')  
 --SELECT dbo.fnc_NumberToWords(1234567.12,'','','','')  
 --SELECT dbo.fnc_NumberToWords(1234567.12,'Dollar','','','')  

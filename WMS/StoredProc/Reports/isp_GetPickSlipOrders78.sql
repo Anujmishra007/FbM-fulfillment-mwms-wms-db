@@ -29,6 +29,7 @@ GO
 /*                                                                         */  
 /* Updates:                                                                */  
 /* Date        Author      Ver   Purposes                                  */  
+/* 2020-11-19  WLChooi     1.1   WMS-15729 - Show Full Route (WL01)        */
 /***************************************************************************/  
   
 CREATE PROC [dbo].[isp_GetPickSlipOrders78] (@c_loadkey NVARCHAR(10))   
@@ -151,7 +152,9 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders78] (@c_loadkey NVARCHAR(10))
          OVAS             NVARCHAR(30) NULL,  -- SOS41046  
          SKUGROUP         NVARCHAR(10) NULL, -- SOS144415    
          ContainerType    NVARCHAR(20) NULL,
-         RptGrp           NVARCHAR(1) NULL)  
+         RptGrp           NVARCHAR(1)  NULL,
+         ShowFullRoute    NVARCHAR(10) NULL   --WL01
+       )  
          
        INSERT INTO #TEMP_PICK78  
             (PickSlipNo,          LoadKey,         OrderKey,   ConsigneeKey,  
@@ -166,7 +169,8 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders78] (@c_loadkey NVARCHAR(10))
              packeaches,          externorderkey,  LogicalLoc,  Areakey,    UOM,   
              Pallet_cal,          Cartons_cal,      inner_cal,   Each_cal,   Total_cal,   
              DeliveryDate,        RetailSku,        BuyerPO,      InvoiceNo,  OrderDate,  
-             Susr4,               Vat,                OVAS,         SKUGROUP,    ContainerType,RptGrp) -- SOS144415  
+             Susr4,               Vat,                OVAS,         SKUGROUP,    ContainerType,RptGrp, -- SOS144415  
+             ShowFullRoute )   --WL01
         SELECT  (SELECT PICKHEADERKEY FROM PICKHEADER   
                    WHERE ExternOrderKey = @c_LoadKey   
                    AND OrderKey = PickDetail.OrderKey   
@@ -233,7 +237,8 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders78] (@c_loadkey NVARCHAR(10))
         SKU.OVAS, -- SOS41046  
         SKU.SKUGROUP, -- SOS#144415   
         ORDERS.ContainerType,
-        Rptgrp = CASE WHEN SKU.SKUGROUP = 'F' THEN '1' ELSE '2' END
+        Rptgrp = CASE WHEN SKU.SKUGROUP = 'F' THEN '1' ELSE '2' END,
+        ISNULL(CL.Short,'N') AS ShowFullRoute   --WL01
      FROM pickdetail (nolock)  
          join orders (nolock)  
           on pickdetail.orderkey = orders.orderkey  
@@ -255,8 +260,11 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders78] (@c_loadkey NVARCHAR(10))
           on orders.route = routemaster.route  
          left outer join areadetail (nolock)  
           on loc.putawayzone = areadetail.putawayzone  
-        left outer join storer st (nolock)  
-         on orders.consigneekey = st.storerkey  
+         left outer join storer st (nolock)  
+          on orders.consigneekey = st.storerkey  
+         LEFT OUTER JOIN CODELKUP CL (NOLOCK)   --WL01
+          ON CL.Listname = 'REPORTCFG' AND CL.Storerkey = ORDERS.Storerkey AND   --WL01
+             CL.Code = 'ShowFullRoute' AND CL.Long = 'r_dw_print_pickorder78'    --WL01
      WHERE PickDetail.Status < '5'    
        AND LoadPlanDetail.LoadKey = @c_LoadKey  
      GROUP BY PickDetail.OrderKey,                              
@@ -302,7 +310,8 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders78] (@c_loadkey NVARCHAR(10))
         SKU.OVAS, -- SOS41046  
         SKU.SKUGROUP, -- SOS#144415  
         ORDERS.ContainerType,
-        CASE WHEN SKU.SKUGROUP = 'F' THEN '1' ELSE '2' END   
+        CASE WHEN SKU.SKUGROUP = 'F' THEN '1' ELSE '2' END,
+        ISNULL(CL.Short,'N')   --WL01
   -- SOS 7236  
   -- wally 16.aug.2002  
   -- commented the cursor below and instead update directly the temp table  

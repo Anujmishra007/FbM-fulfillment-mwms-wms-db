@@ -5,11 +5,24 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
-/* 26-Nov-2013  TLTING     Change user_name() to SUSER_SNAME()          */
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
-
-CREATE proc isp_iqcn_rpt (
+/***************************************************************************/ 
+/* Object Name: isp_IQCn_Rpt                                               */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/* 26-Nov-2013  TLTING    1.1   Change user_name() to SUSER_SNAME()        */
+/* 28-Jan-2019  TLTING    1.2  enlarge externorderkey field length         */
+/***************************************************************************/    
+CREATE proc isp_IQCn_Rpt (
    @c_storerkey NVARCHAR(15),
    @d_orderdate_start datetime,
    @d_orderdate_end datetime

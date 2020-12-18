@@ -29,6 +29,8 @@ GO
 /* Updates:                                                                */  
 /* Date        Ver  Author   Purposes                                      */  
 /* 09-JAN-2018 1.1  Wan01    Increase @c_Dropid to NVARCHAR(20)            */ 
+/* 27-Nov-2020 1.2  NJOW01   WMS-15762 filter out orders.status 9 AND Sort */
+/*                           by order.status < 5.                          */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_packfindsingleorder]    
 (     @c_DropId      NVARCHAR(20)     
@@ -71,9 +73,11 @@ BEGIN
    AND PD.Storerkey = @c_Storerkey
    AND PD.SKU = @c_Sku
    AND PKD.Pickslipno IS NULL
-   GROUP BY PD.Orderkey, O.Priority
-   HAVING SUM(PD.QTY) = 1   
-   ORDER BY O.Priority, PD.Orderkey
+   AND O.Status <> '9'  --NJOW02
+   GROUP BY PD.Orderkey, O.Priority, O.Status  --NJOW01
+   HAVING SUM(PD.QTY) = 1
+   ORDER BY CASE WHEN O.Status < '5' THEN 1 ELSE 2 END, O.Priority, PD.Orderkey  --NJOW02   
+   --ORDER BY O.Priority, PD.Orderkey
 
    IF ISNULL(@c_Orderkey,'') =  ''  
    BEGIN

@@ -8,7 +8,21 @@ GO
 SET ANSI_WARNINGS ON
 GO
 
- 
+/***************************************************************************/ 
+/* Object Name: isp_GetSKUSuspend                                          */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 05-Aug-2002            1.0   Initial revision                           */
+/***************************************************************************/    
 CREATE PROC [dbo].[isp_GetSKUSuspend]  
 @c_Storerkey Nvarchar(15),
 @n_ActivePeriod INT = '0',

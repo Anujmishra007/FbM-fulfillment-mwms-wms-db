@@ -35,7 +35,8 @@ GO
 /* 23-JUL-2019  Wan04   1.7   WMS - 9914 [MY] JDSPORTSMY - Channel      */
 /*                            Inventory Ignore QtyOnHold - CR           */
 /* 12-Feb-2020  Wan05   1.8   SQLBindParm. Create Temp table to Store   */
-/*                            Preallocate data from pickcode            */  
+/*                            Preallocate data from pickcode            */ 
+/* 01-Dec-2020  Shong   1.9   Handle PENDCANC SO Status  (SWT99)        */
 /************************************************************************/
 CREATE PROC  [dbo].[isp_BatchSKUPreProcessing]
    @n_AllocBatchNo BIGINT
@@ -178,8 +179,8 @@ BEGIN
             JOIN   AutoAllocBatchDetail AS aabd WITH (NOLOCK) ON aabd.OrderKey = ORDERS.OrderKey            
             WHERE  aabd.AllocBatchNo = @n_AllocBatchNo AND 
                    ORDERS.Type NOT IN ( 'M', 'I' ) AND
-                   ORDERS.SOStatus <> 'CANC' AND
-                   ORDERS.Status < '9' AND 
+                   ORDERS.SOStatus NOT IN ('CANC', 'PENDCANC') AND -- (SWT99)
+                   ORDERS.Status NOT IN ('9','CANC') AND 
                    OD.StorerKey = @c_StorerKey AND 
                    OD.Sku = @c_SKU                                                        
          END
@@ -192,8 +193,8 @@ BEGIN
             JOIN   ORDERDETAIL AS OD WITH(NOLOCK) ON OD.OrderKey = ORDERS.OrderKey
             JOIN   AutoAllocBatchDetail AS aabd WITH (NOLOCK) ON aabd.OrderKey = ORDERS.OrderKey  
             WHERE  aabd.AllocBatchNo = @n_AllocBatchNo AND 
-                   ORDERS.SOStatus <> 'CANC' AND
-                   ORDERS.Status < '9' AND 
+                   ORDERS.SOStatus NOT IN ('CANC', 'PENDCANC') AND -- (SWT99)
+                   ORDERS.Status NOT IN ('9','CANC') AND 
                    OD.StorerKey = @c_StorerKey AND 
                    OD.Sku = @c_SKU          
          END

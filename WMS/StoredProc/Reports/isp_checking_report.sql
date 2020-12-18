@@ -1,148 +1,176 @@
-IF EXISTS (SELECT name 
-	   FROM   dbo.sysobjects 
-	   WHERE  name = N'isp_checking_report' 
-	   AND 	  type = 'P')
-    DROP PROCEDURE isp_checking_report
+IF EXISTS (SELECT
+      name
+   FROM dbo.sysobjects
+   WHERE name = N'isp_checking_report'
+   AND type = 'P')
+   DROP PROCEDURE isp_checking_report
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
-
-CREATE PROC isp_checking_report
-   @c_xdockpokey NVARCHAR(8)
+/***************************************************************************/ 
+/* Object Name: isp_checking_report                                        */
+/* Modification History:                                                   */  
+/*                                                                         */  
+/* Called By:  Exceed                                                      */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Date         Author    Ver.  Purposes                                   */
+/* 07-Jul-2012            1.0   Initial revision                           */
+/* 21-Mar-2014  tlting    1.1   SQL2012 Bug fix                            */
+/***************************************************************************/    
+CREATE PROC isp_checking_report @c_xdockpokey nvarchar(8)
 AS
 BEGIN -- main
-   SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    -- create result table
    BEGIN TRANSACTION
-   CREATE TABLE #result
-   	(
-      pickslipno NVARCHAR(10) NULL,
-   	xdockpokey NVARCHAR(8) NULL,
-   	sellersreference NVARCHAR(18) NULL,
-   	sellername NVARCHAR(45) NULL,
-   	storerkey NVARCHAR(15) NULL,
-   	sku NVARCHAR(20) NULL,
-   	descr NVARCHAR(60) NULL,
-   	orderkey NVARCHAR(10) NULL,
-   	consigneekey NVARCHAR(10) NULL,
-   	company NVARCHAR(45) NULL,
-   	totalqty int NULL,
-   	casecnt float(53) NULL,
-      reprint NVARCHAR(1) NULL
-   	)
-   COMMIT   
+      CREATE TABLE #result (
+         pickslipno nvarchar(10) NULL,
+         xdockpokey nvarchar(8) NULL,
+         sellersreference nvarchar(18) NULL,
+         sellername nvarchar(45) NULL,
+         storerkey nvarchar(15) NULL,
+         sku nvarchar(20) NULL,
+         descr nvarchar(60) NULL,
+         orderkey nvarchar(10) NULL,
+         consigneekey nvarchar(10) NULL,
+         company nvarchar(45) NULL,
+         totalqty int NULL,
+         casecnt float(53) NULL,
+         reprint nvarchar(1) NULL
+      )
+   COMMIT
 
-   declare @c_orderkey NVARCHAR(10),
-            @c_pickslipno NVARCHAR(10),
-            @c_reprint NVARCHAR(1),
-            @b_success int,
-            @n_err int,
-            @c_errmsg NVARCHAR(255)
+   DECLARE @c_orderkey nvarchar(10),
+           @c_pickslipno nvarchar(10),
+           @c_reprint nvarchar(1),
+           @b_success int,
+           @n_err int,
+           @c_errmsg nvarchar(255)
 
-   select @c_orderkey = ''
-   while (1=1)
-   begin -- while 1
-      select @c_orderkey = min(orderkey)
-      from orders (nolock)
-      where pokey = @c_xdockpokey
-         and orderkey > @c_orderkey
+   SELECT
+      @c_orderkey = ''
+   WHILE (1 = 1)
+   BEGIN -- while 1
+      SELECT
+         @c_orderkey = MIN(orderkey)
+      FROM orders(nolock)
+      WHERE pokey = @c_xdockpokey
+      AND orderkey > @c_orderkey
 
-      if @@rowcount = 0 or @c_orderkey is null or @c_orderkey = null
-         break
+      IF @@rowcount = 0
+         OR @c_orderkey IS NULL
+         OR @c_orderkey = NULL
+         BREAK
 
-      if not exists (select 1 from pickheader (nolock) where orderkey = @c_orderkey)
-      begin
-         select @b_success = 0
-         EXECUTE nspg_GetKey
-            'PICKSLIP',
-            9,   
-            @c_pickslipno OUTPUT,
-            @b_success OUTPUT,
-            @n_err OUTPUT,
-            @c_errmsg OUTPUT
-         
-         if @b_success = 1
-         begin
-            SELECT @c_pickslipno = 'P' + @c_pickslipno
-            begin tran
-            INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, PickType, Zone, TrafficCop)
-                VALUES (@c_pickslipno, @c_orderkey, '0', '3', '')
-            select @n_err = @@error
-            if @n_err = 0
-               commit tran
-            else
-            begin
-               select @c_errmsg = 'Pickheader Insert Failed. (isp_checking_report).'
+      IF NOT EXISTS (SELECT
+            1
+         FROM pickheader(nolock)
+         WHERE orderkey = @c_orderkey)
+      BEGIN
+         SELECT
+            @b_success = 0
+         EXECUTE nspg_GetKey 'PICKSLIP',
+                             9,
+                             @c_pickslipno OUTPUT,
+                             @b_success OUTPUT,
+                             @n_err OUTPUT,
+                             @c_errmsg OUTPUT
+
+         IF @b_success = 1
+         BEGIN
+            SELECT
+               @c_pickslipno = 'P' + @c_pickslipno
+            BEGIN TRAN
+               INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, PickType, Zone, TrafficCop)
+                  VALUES (@c_pickslipno, @c_orderkey, '0', '3', '')
+               SELECT
+                  @n_err = @@error
+               IF @n_err = 0
+               COMMIT TRAN
+            ELSE
+            BEGIN
+               SELECT
+                  @c_errmsg = 'Pickheader Insert Failed. (isp_checking_report).'
                RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-               rollback tran
-            end
-         end
-         else
-         begin
+               ROLLBACK TRAN
+            END
+         END
+         ELSE
+         BEGIN
             RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-            return
-         end   
-      end
-      else -- pickslip already existing
-      begin
-         select @c_pickslipno = pickheaderkey,
+            RETURN
+         END
+      END
+      ELSE -- pickslip already existing
+      BEGIN
+         SELECT
+            @c_pickslipno = pickheaderkey,
             @c_reprint = 'Y'
-         from pickheader (nolock)
-         where orderkey = @c_orderkey
-      end
+         FROM pickheader(nolock)
+         WHERE orderkey = @c_orderkey
+      END
 
       -- insert into #result
-      insert #result
-         select @c_pickslipno,
-            po.xdockpokey, 
-      		po.sellersreference,
-      		po.sellername,
-      		orderdetail.storerkey,
-      		orderdetail.sku,
-      		sku.descr,
-      		orderdetail.orderkey,
-      		consigneekey = dbo.fnc_RTrim(substring(orders.consigneekey,5,10)),
-      		orders.c_company,
-      		totalqty = sum(orderdetail.qtyallocated+qtypicked+shippedqty),
-      		convert(int, pack.casecnt),
+      INSERT #result
+         SELECT
+            @c_pickslipno,
+            po.xdockpokey,
+            po.sellersreference,
+            po.sellername,
+            orderdetail.storerkey,
+            orderdetail.sku,
+            sku.descr,
+            orderdetail.orderkey,
+            consigneekey = dbo.fnc_RTrim(SUBSTRING(orders.consigneekey, 5, 10)),
+            orders.c_company,
+            totalqty = SUM(orderdetail.qtyallocated + qtypicked + shippedqty),
+            CONVERT(int, pack.casecnt),
             @c_reprint
-      	from po (nolock) join orders (nolock)    
-      		on po.xdockpokey = orders.pokey
-      	join orderdetail (nolock)    
-      		on orders.orderkey = orderdetail.orderkey
-      	join sku (nolock)    
-      		on sku.storerkey = orderdetail.storerkey
-      			and sku.sku = orderdetail.sku
-      	join pack (nolock)     
-      		on sku.packkey = pack.packkey
-         where orders.orderkey = @c_orderkey
-            and po.xdockpokey = @c_xdockpokey
-      	group by po.xdockpokey, 
-      		po.sellersreference,
-      		po.sellername,
-      		orderdetail.storerkey,
-      		orderdetail.sku,
-      		sku.descr,
-      		orderdetail.orderkey,
-      		orders.consigneekey,
-      		orders.c_company,
-      		pack.casecnt
-         having sum(orderdetail.qtyallocated+qtypicked+shippedqty) > 0       
-   end -- while 1
+         FROM po(nolock)
+         JOIN orders(nolock)
+            ON po.xdockpokey = orders.pokey
+         JOIN orderdetail(nolock)
+            ON orders.orderkey = orderdetail.orderkey
+         JOIN sku(nolock)
+            ON sku.storerkey = orderdetail.storerkey
+            AND sku.sku = orderdetail.sku
+         JOIN pack(nolock)
+            ON sku.packkey = pack.packkey
+         WHERE orders.orderkey = @c_orderkey
+         AND po.xdockpokey = @c_xdockpokey
+         GROUP BY po.xdockpokey,
+                  po.sellersreference,
+                  po.sellername,
+                  orderdetail.storerkey,
+                  orderdetail.sku,
+                  sku.descr,
+                  orderdetail.orderkey,
+                  orders.consigneekey,
+                  orders.c_company,
+                  pack.casecnt
+         HAVING SUM(orderdetail.qtyallocated + qtypicked + shippedqty) > 0
+   END -- while 1
 
    -- display result
-   select * from #result
+   SELECT
+      *
+   FROM #result
 
-   begin tran
-   drop table #result
-   commit tran
+   BEGIN TRAN
+      DROP TABLE #result
+   COMMIT TRAN
 END -- main
 GO
 
 GRANT EXECUTE ON isp_checking_report TO NSQL
 GO
-

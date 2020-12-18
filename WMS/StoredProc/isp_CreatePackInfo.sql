@@ -31,7 +31,9 @@ GO
 /* 2020-04-28   Wan01    1.2  WMS-12722 - SG - PMI - Packing [CR]       */   
 /* 14-May-2020  WLChooi  1.3  Bug Fix for WMS-9661 (WL02)               */    
 /* 15-May-2020  WLChooi  1.4  Insert PACKInfo table with CartonType =   */  
-/*                            NULL (WL03)                               */  
+/*                            NULL (WL03)                               */ 
+/* 14-Dec-2020  WLChooi  1.5  WMS-15830 - Populate Length, Width, Height*/
+/*                            From Cartonization (WL04)                 */ 
 /************************************************************************/      
     
 CREATE PROCEDURE isp_CreatePackInfo    
@@ -65,7 +67,13 @@ BEGIN
     
            ,  @c_PackPreCaseID        NVARCHAR(30)= ''     --(Wan01)  
            ,  @c_Orderkey             NVARCHAR(10)= ''     --(Wan01)  
-  
+           
+           ,  @c_Option2             NVARCHAR(50)   = ''   --WL04
+           ,  @c_Option3             NVARCHAR(50)   = ''   --WL04
+           ,  @c_Option4             NVARCHAR(50)   = ''   --WL04
+           ,  @c_Option5             NVARCHAR(4000) = ''   --WL04
+           ,  @c_DefaultLWH          NVARCHAR(10)   = ''   --WL04
+           
    DECLARE @t_DropID  TABLE                              --(Wan01)  
          (  DropID NVARCHAR(20)  DEFAULT(0) PRIMARY KEY )--(Wan01)  
      
@@ -117,8 +125,13 @@ BEGIN
       ,  @b_Success           OUTPUT       
       ,  @c_DefaultPackInfo   OUTPUT       
       ,  @n_Err               OUTPUT       
-      ,  @c_ErrMsg            OUTPUT     
-    
+      ,  @c_ErrMsg            OUTPUT  
+      ,  @c_Option1           OUTPUT   --WL04
+      ,  @c_Option2           OUTPUT   --WL04
+      ,  @c_Option3           OUTPUT   --WL04
+      ,  @c_Option4           OUTPUT   --WL04
+      ,  @c_Option5           OUTPUT   --WL04
+      
       IF @b_success <> 1      
       BEGIN      
          SET @n_continue = 3      
@@ -127,6 +140,8 @@ BEGIN
                      + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '       
          GOTO QUIT      
       END    
+      
+      SELECT @c_DefaultLWH = dbo.fnc_GetParamValueFromString('@c_DefaultLWH', @c_Option5, @c_DefaultLWH)   --WL04  
           
       EXEC nspGetRight       
          @c_Facility          -- facility      
@@ -176,7 +191,7 @@ BEGIN
       --WL01 END    
      
       --(Wan01) - START  
-EXEC nspGetRight     
+      EXEC nspGetRight     
          @c_Facility              -- facility    
       ,  @c_Storerkey             -- Storerkey    
       ,  NULL                     -- Sku    
@@ -265,19 +280,41 @@ EXEC nspGetRight
       BEGIN    
          IF @c_DefaultPackInfo = '1'   
          BEGIN  
-            INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], Weight)  
-            SELECT DISTINCT PACKDETAIL.pickslipno, PACKDETAIL.CartonNo, SUM(PACKDETAIL.Qty), ISNULL(cz.CartonType,''),  
-            CASE WHEN ISNULL(CZ.[Cube],0) = 0 THEN SUM(PACKDETAIL.Qty * Sku.StdCube) ELSE ISNULL(CZ.[Cube],0) END,  
-            SUM(PACKDETAIL.Qty * Sku.StdGrossWgt) + ISNULL(CZ.CartonWeight,0) AS WEIGHT  
-            FROM PACKDETAIL (NOLOCK)  
-            JOIN STORER (NOLOCK) ON (PACKDETAIL.StorerKey = STORER.StorerKey)  
-            JOIN SKU (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey AND PACKDETAIL.SKU = SKU.Sku)  
-            LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.UseSequence = 1)  
-            WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno  
-            AND PACKDETAIL.CartonNo NOT IN  
-                     (SELECT CartonNo FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)  
-            GROUP BY PACKDETAIL.PickSlipNo, PACKDETAIL.CartonNo, ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.CartonWeight,0)  
-  
+         	--WL04 START
+            IF @c_DefaultLWH = 'Y'
+            BEGIN
+               INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], WEIGHT, [Length], [Width], [Height])  
+               SELECT DISTINCT PACKDETAIL.pickslipno, PACKDETAIL.CartonNo, SUM(PACKDETAIL.Qty), ISNULL(cz.CartonType,''),  
+               CASE WHEN ISNULL(CZ.[Cube],0) = 0 THEN SUM(PACKDETAIL.Qty * Sku.StdCube) ELSE ISNULL(CZ.[Cube],0) END,  
+               SUM(PACKDETAIL.Qty * Sku.StdGrossWgt) + ISNULL(CZ.CartonWeight,0) AS WEIGHT,
+               ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0)
+               FROM PACKDETAIL (NOLOCK)  
+               JOIN STORER (NOLOCK) ON (PACKDETAIL.StorerKey = STORER.StorerKey)  
+               JOIN SKU (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey AND PACKDETAIL.SKU = SKU.Sku)  
+               LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.UseSequence = 1)  
+               WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno  
+               AND PACKDETAIL.CartonNo NOT IN  
+                        (SELECT CartonNo FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)  
+               GROUP BY PACKDETAIL.PickSlipNo, PACKDETAIL.CartonNo, ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.CartonWeight,0),
+                        ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0)  
+            END
+            ELSE
+            BEGIN
+               INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], Weight)  
+               SELECT DISTINCT PACKDETAIL.pickslipno, PACKDETAIL.CartonNo, SUM(PACKDETAIL.Qty), ISNULL(cz.CartonType,''),  
+               CASE WHEN ISNULL(CZ.[Cube],0) = 0 THEN SUM(PACKDETAIL.Qty * Sku.StdCube) ELSE ISNULL(CZ.[Cube],0) END,  
+               SUM(PACKDETAIL.Qty * Sku.StdGrossWgt) + ISNULL(CZ.CartonWeight,0) AS WEIGHT  
+               FROM PACKDETAIL (NOLOCK)  
+               JOIN STORER (NOLOCK) ON (PACKDETAIL.StorerKey = STORER.StorerKey)  
+               JOIN SKU (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey AND PACKDETAIL.SKU = SKU.Sku)  
+               LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.UseSequence = 1)  
+               WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno  
+               AND PACKDETAIL.CartonNo NOT IN  
+                        (SELECT CartonNo FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)  
+               GROUP BY PACKDETAIL.PickSlipNo, PACKDETAIL.CartonNo, ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.CartonWeight,0)  
+            END
+            --WL04 END
+            
             SELECT @n_Err = @@ERROR  
   
             IF @@ERROR <> 0  
@@ -369,16 +406,21 @@ EXEC nspGetRight
                      WHERE PD.Orderkey = @c_Orderkey  
                      GROUP BY PD.DropID, PD.Storerkey, PD.CartonType, PD.UOM  
                      )  
-  
-            INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], [Weight])  
+            
+            --WL04 START
+            INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], [Weight], [Length], [Width], [Height])  
             SELECT @c_PickSlipNo, PACK.CartonNo, PACK.Qty, ISNULL(CZ.CartonType,'')  
                   ,[Cube]   = ISNULL(CZ.[Cube],0)   
                   ,[Weight] = ISNULL(CZ.MaxWeight,0)   
+                  ,[Length] = CASE WHEN @c_DefaultLWH = 'Y' THEN ISNULL(CZ.CartonLength,0) ELSE 0.00 END
+                  ,[Width]  = CASE WHEN @c_DefaultLWH = 'Y' THEN ISNULL(CZ.CartonWidth,0)  ELSE 0.00 END
+                  ,[Height] = CASE WHEN @c_DefaultLWH = 'Y' THEN ISNULL(CZ.CartonHeight,0) ELSE 0.00 END
             FROM PACK_CTN PACK WITH (NOLOCK)  
             JOIN PICK_CTN PICK WITH (NOLOCK) ON PACK.DropID = PICK.DropID  
             JOIN STORER ST (NOLOCK) ON (PICK.StorerKey = ST.StorerKey)  
             LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (ST.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = PICK.CartonType)  
-                 
+            --WL04 END 
+
             SET @n_Err = @@ERROR  
   
             IF @@ERROR <> 0  
@@ -396,15 +438,33 @@ EXEC nspGetRight
             BEGIN    
                --WL01 START    
                IF @c_UPCUOM = @c_ScanUPCUOM AND @c_DefaultCartonType = '1'    
-               BEGIN    
-                  INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], [Weight])    
-                  SELECT DISTINCT PickSlipNo, CartonNo, SUM(Qty), ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.MaxWeight,0)    
-                  FROM PACKDETAIL (NOLOCK)     
-                  JOIN STORER (NOLOCK) ON (PACKDETAIL.StorerKey = STORER.StorerKey)    
-                  LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = @c_CartonType)    
-                  WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno      
-                  AND PACKDETAIL.CartonNo NOT IN (SELECT CartonNo FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)    
-                  GROUP BY PACKDETAIL.PickSlipNo, PACKDETAIL.CartonNo, ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.MaxWeight,0)    
+               BEGIN
+                  --WL04 START
+                  IF @c_DefaultLWH = 'Y'
+                  BEGIN    
+                     INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], [Weight], [Length], [Width], [Height])    
+                     SELECT DISTINCT PickSlipNo, CartonNo, SUM(Qty), ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.MaxWeight,0)
+                                   , ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0) 
+                     FROM PACKDETAIL (NOLOCK)     
+                     JOIN STORER (NOLOCK) ON (PACKDETAIL.StorerKey = STORER.StorerKey)    
+                     LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = @c_CartonType)    
+                     WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno      
+                     AND PACKDETAIL.CartonNo NOT IN (SELECT CartonNo FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)    
+                     GROUP BY PACKDETAIL.PickSlipNo, PACKDETAIL.CartonNo, ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.MaxWeight,0)  
+                            , ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0) 
+                  END
+                  ELSE
+                  BEGIN
+                     INSERT INTO PACKINFO (PickSlipNo, CartonNo, Qty, CartonType, [Cube], [Weight])    
+                     SELECT DISTINCT PickSlipNo, CartonNo, SUM(Qty), ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.MaxWeight,0)    
+                     FROM PACKDETAIL (NOLOCK)     
+                     JOIN STORER (NOLOCK) ON (PACKDETAIL.StorerKey = STORER.StorerKey)    
+                     LEFT JOIN CARTONIZATION CZ (NOLOCK) ON (STORER.CartonGroup = CZ.CartonizationGroup AND CZ.CartonType = @c_CartonType)    
+                     WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno      
+                     AND PACKDETAIL.CartonNo NOT IN (SELECT CartonNo FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)    
+                     GROUP BY PACKDETAIL.PickSlipNo, PACKDETAIL.CartonNo, ISNULL(cz.CartonType,''), ISNULL(CZ.[Cube],0), ISNULL(CZ.MaxWeight,0) 
+                  END  
+                  --WL04 END
                END    
                ELSE    
                BEGIN    
