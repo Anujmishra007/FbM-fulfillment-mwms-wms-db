@@ -23,7 +23,9 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2020-06-25  Wan01    1.1   LFWM-2153 - UAT CNKitting Module shows     */
+/*                            lottable is required                      */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_KitDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -258,16 +260,19 @@ BEGIN
 
       SET @c_Cnt = RIGHT('0' + CONVERT(NVARCHAR(2), @n_Cnt),2) -- For 'EXLOTLBCHK' & 'MATCHLNAME' SeekCode
 
-      IF @c_Type = 'T'
+      IF @c_Type = 'T' AND @n_Cnt NOT IN (5)                  --(Wan01) 
       BEGIN
-         IF @c_LottableLabel <> '' AND (ISNULL(@c_LottableValue,'') = '' OR (@n_Cnt IN (4,5,13,14,15) AND @c_LottableValue = '19000101'))
+         IF @n_Cnt IN (3,5) AND @c_LottableLabel <> 'RCP_DATE'--(Wan01)
          BEGIN
-            SET @n_Continue = 3
-            SET @n_Err = 557551
-            SET @c_errmsg = 'Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_KitDetail_Std)'
-                           + '|' + @c_Cnt + '|' + @c_LottableLabel
-            GOTO EXIT_SP
-         END
+            IF @c_LottableLabel <> '' AND (ISNULL(@c_LottableValue,'') = '' OR (@n_Cnt IN (4,5,13,14,15) AND @c_LottableValue = '19000101'))   
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 557551
+               SET @c_errmsg = 'Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_KitDetail_Std)'
+                              + '|' + @c_Cnt + '|' + @c_LottableLabel
+               GOTO EXIT_SP
+            END
+         END                                                 --(Wan01)
       END
       
       IF @c_Facility <> '' AND @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND ISNULL(@c_LottableValue,'') <> ''
