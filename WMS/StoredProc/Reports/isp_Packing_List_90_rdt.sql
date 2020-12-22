@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_packing_list_90_rdt                                  */  
 /*          :                                                           */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -25,10 +25,12 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */ 
+/* 10-Dec-2020  WLChooi   1.1 WMS-15849 - Add new parameter (WL01)      */
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_90_rdt  
-            @c_Pickslipno    NVARCHAR(10)
+            @c_Pickslipno    NVARCHAR(15),      --WL01 - Could be Storerkey/Pickslipno/Orderkey
+            @c_Orderkey      NVARCHAR(10) = ''  --WL01 - Could be Orderkey
 AS  
 BEGIN  
    SET NOCOUNT ON  
@@ -60,14 +62,34 @@ BEGIN
    SET @n_Err       = 0  
    SET @c_Errmsg    = '' 
 
-   IF EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
+   --WL01 START
+   IF ISNULL(@c_Orderkey,'') = '' SET @c_Orderkey = ''
+   
+   CREATE TABLE #TMP_Orders (
+   	Orderkey   NVARCHAR(10)
+   )
+   
+   IF EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE Pickslipno = @c_Pickslipno AND @c_Pickslipno <> '')
    BEGIN
-      SET @c_Source = 'PACKING'
+      INSERT INTO #TMP_Orders (Orderkey)
+      SELECT Orderkey 
+      FROM PACKHEADER (NOLOCK)
+      WHERE PickSlipNo = @c_Pickslipno
+   END   
+   ELSE IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE Orderkey = @c_Pickslipno AND @c_Pickslipno <> '')
+   BEGIN
+      INSERT INTO #TMP_Orders (Orderkey)
+      SELECT @c_Pickslipno
    END
    ELSE
    BEGIN
-      SET @c_Source = 'ORDERS'
+   	INSERT INTO #TMP_Orders (Orderkey)
+      SELECT Orderkey
+      FROM ORDERS (NOLOCK)
+      WHERE Storerkey = @c_Pickslipno 
+      AND OrderKey = @c_Orderkey
    END
+   --WL01 END
 
    SELECT ORDERS.ExternOrderKey
         , ORDERS.C_Company
@@ -91,9 +113,10 @@ BEGIN
    JOIN SKU (NOLOCK) ON SKU.SKU = ORDERDETAIL.SKU AND SKU.Storerkey = ORDERDETAIL.Storerkey
    JOIN PICKDETAIL (NOLOCK) ON ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey AND ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber
                               AND ORDERDETAIL.SKU = PICKDETAIL.SKU
+   JOIN #TMP_Orders t ON t.Orderkey = ORDERS.Orderkey   --WL01
    --LEFT JOIN Codelkup ON ORDERS.Storerkey = Codelkup.Storerkey and Codelkup.Listname = 'Platform'  
-   WHERE PACKHEADER.Pickslipno = CASE WHEN @c_Source = 'PACKING' THEN @c_Pickslipno ELSE PACKHEADER.Pickslipno END
-   AND ORDERS.Orderkey = CASE WHEN @c_Source = 'ORDERS' THEN @c_Pickslipno ELSE ORDERS.Orderkey END
+   --WHERE PACKHEADER.Pickslipno = CASE WHEN @c_Source = 'PACKING' THEN @c_Pickslipno ELSE PACKHEADER.Pickslipno END   --WL01
+   --AND ORDERS.Orderkey = CASE WHEN @c_Source = 'ORDERS' THEN @c_Pickslipno ELSE ORDERS.Orderkey END                  --WL01
    GROUP BY ORDERS.ExternOrderKey
           , ORDERS.C_Company
           , ORDERS.C_Contact1
@@ -110,6 +133,10 @@ BEGIN
    ORDER BY CAST(REPLACE(LTRIM(REPLACE(ORDERDETAIL.OrderLineNumber, '0', ' ')), ' ', '0') AS INT)
 
 QUIT_SP:  
+   --WL01 START
+   IF OBJECT_ID('tempdb..#TMP_Orders') IS NOT NULL
+      DROP TABLE #TMP_Orders
+   --WL01 END
 END -- procedure
 
 GO
