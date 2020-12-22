@@ -44,6 +44,7 @@ GO
 /* 13-Dec-2019  NJOW04    2.6   INC0971176 - Fixed last carton not replen  */
 /*                              full case issue                            */
 /* 05-Mar-2020  TLTING02  2.7   Performance tune                           */
+/* 15-Dec-2020  WWANG02   2.8   Setting Movement Ref Key                   */
 /***************************************************************************/    
 CREATE PROCEDURE [dbo].[isp_GenEOrder_Replenishment]  
    @c_LoadKeyList NVARCHAR(1000),  
@@ -1939,7 +1940,7 @@ BEGIN
                      GOTO EXIT_SP         
                   END
                   
-                  SET @c_MoveRefKey = ''
+                  SET @c_MoveRefKey = 'ECOM' --WWANG02
 
                   IF @n_ReplenQty > @n_QtyToTake
                      SET @n_QtyInPickLoc = @n_QtyToTake
@@ -2163,11 +2164,13 @@ BEGIN
 
 
                -- NJOW04 (Start) 
-               SET @c_MoveRefKey = ''  
+               SET @c_MoveRefKey = 'ECOM'  --WWANG02  
                 
                -- If cannot find available Qty with full case, then find missing Qty taken by others
                IF (@cFastPickLoc = 'Y' AND @n_QtyAvailable < @n_CaseCnt)                           
-               BEGIN                                    
+               BEGIN     
+               	SET @c_MoveRefKey = ''  --WWANG02
+               	                               
                    DECLARE @n_QtyLocked INT, @n_QtyLockedToMove INT
                    SET @n_QtyToTake = @n_QtyAvailable                -- Take all available Qty if last carton is partial 
                    SET @n_QtyLocked = @n_CaseCnt - @n_QtyAvailable
@@ -2187,6 +2190,8 @@ BEGIN
                      SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': nspg_GetKey Failed! (isp_GenEOrder_Replenishment)'  
                      GOTO EXIT_SP           
                   END  
+                  
+                  SET @c_MoveRefKey = 'E' + RIGHT(@c_MoveRefKey, 9) --WWANG02
                   
                   DECLARE @n_PDQty INT
                   DECLARE CUR_UPDATE_MOVE_REF CURSOR FAST_FORWARD READ_ONLY FOR  
@@ -2313,7 +2318,7 @@ BEGIN
                   
                   -- If PickDetail line not found, then reset MoveRefKey 
                   IF (@n_QtyLocked - @n_QtyLockedToMove) = 0
-                     SET @c_MoveRefKey = ''                  
+                     SET @c_MoveRefKey = 'ECOM'   --wawng02                 
                END
                -- NJOW04 (End)
                
@@ -2447,7 +2452,7 @@ BEGIN
                               GOTO EXIT_SP         
                            END
                   
-                           SET @c_MoveRefKey = ''
+                           SET @c_MoveRefKey = 'ECOM'  --WWANG02
                            SET @n_QtyInPickLoc = 0           
                                                                                                    
                            INSERT INTO REPLENISHMENT(

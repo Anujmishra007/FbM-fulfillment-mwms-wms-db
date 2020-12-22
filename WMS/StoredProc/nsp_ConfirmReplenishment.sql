@@ -40,6 +40,7 @@ GO
 /*                            confirm replen with replengroup only      */
 /* 16-Jul-2019  NJOW03  1.3   WMS-8356 support replen by UCC. Update to */
 /*                            status 6 for confirm replen.              */
+/* 15-Dec-2020  WWANG02 1.4   Adding Movement Key into PickDetail       */
 /************************************************************************/
 
 CREATE PROC  nsp_ConfirmReplenishment
@@ -88,6 +89,7 @@ BEGIN
    --NJOW03
    DECLARE @c_EOrderReplenByUCC NVARCHAR(30), 
            @c_RefNo             NVARCHAR(20), 
+           @c_MoveRefKey        NVARCHAR(10),  --WWANNG02
            @c_Sku               NVARCHAR(20), 
            @n_UCC_RowRef        BIGINT,    
            @cur_UCC             CURSOR,
@@ -105,6 +107,7 @@ BEGIN
    --(Wan01) - END
    
    SELECT @ReplenKey = ''
+   SELECT @c_MoveRefKey = 'E' + RIGHT(@c_replgrp, 9) --WWANG02
    SELECT @counter = 0 
    SELECT @n_continue = 1
    SET @n_starttcnt = @@TRANCOUNT
@@ -246,7 +249,8 @@ BEGIN
                   BEGIN TRAN
                   	
               	  UPDATE PICKDETAIL WITH (ROWLOCK)
-              	  SET MoveRefKey = @c_replgrp,
+              	  --SET MoveRefKey = @c_replgrp,
+              	  SET MoveRefKey = @c_MoveRefKey, --WWANG02
               	      TrafficCop = NULL
               	  WHERE Pickdetailkey = @c_Pickdetailkey
 
@@ -280,7 +284,8 @@ BEGIN
               BEGIN
                  BEGIN TRAN
                  UPDATE Replenishment WITH (ROWLOCK) 
-                 SET MoveRefKey = @c_replgrp,
+                 --SET MoveRefKey = @c_replgrp,
+                 SET MoveRefKey = @c_MoveRefKey, --WWANG02                 
                      ArchiveCop = NULL
                  WHERE ReplenishmentKey = @ReplenKey
                  AND   Confirmed IN ('N', 'L')            
