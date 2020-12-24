@@ -23,6 +23,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 02-Dec-2020  NJOW01   1.0  WMS-15720 revise allocation logic          */
 /*************************************************************************/   
 CREATE  PROC [dbo].[nspPRTW19]    
    @c_StorerKey NVARCHAR(15) ,    
@@ -389,7 +390,82 @@ BEGIN
            AND PR.Sku = @c_Sku
            ORDER BY LA.Lottable04
         END
-
+        
+        --NJOW01 S                
+        IF @dt_LastOrderDate IS NOT NULL
+        BEGIN
+           SET @c_SQL = 
+                 " SELECT @n_QtyAvailable = SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), @dt_MinLottable04 = MIN(LOTATTRIBUTE.Lottable04) " +     
+                 " FROM LOTxLOCxID (NOLOCK) " +   
+                 " JOIN LOT (NOLOCK) ON LOT.LOT = LOTxLOCxID.Lot " +   
+                 " JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT " +   
+                 " JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc " +   
+                 " JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID " +   
+                 " JOIN SKUxLOC (NOLOCK) ON SKUxLOC.StorerKey = LOTxLOCxID.StorerKey " +   
+                 " AND SKUxLOC.SKU = LOTxLOCxID.SKU " +   
+                 " AND SKUxLOC.LOC = LOTxLOCxID.LOC " +   
+                 " WHERE LOT.StorerKey = @c_StorerKey " +  
+                 " AND LOT.SKU = @c_SKU " +   
+                 " AND LOT.STATUS = 'OK' " +   
+                 " AND ID.STATUS <> 'HOLD' " +   
+                 " AND LOC.Status = 'OK' " +   
+                 " AND LOC.Facility = @c_Facility " +   
+                 " AND LOC.LocationFlag <> 'HOLD' " +   
+                 " AND LOC.LocationFlag <> 'DAMAGE' " +   
+                 " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED > 0 " +
+                 " AND DATEDIFF(month, LOTATTRIBUTE.Lottable04, @dt_LastOrderDate) = 0 " + --find the stock with same expiry month of last order
+                 @c_Condition 
+           
+           EXEC sp_executesql @c_SQL,
+              N'@n_QtyAvailable INT OUTPUT, @dt_MinLottable04 DATETIME OUTPUT, @c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5), @dt_LastOrderDate DATETIME', 
+              @n_QtyAvailable OUTPUT,
+              @dt_MinLottable04 OUTPUT,
+              @c_Storerkey,
+              @c_Sku,
+              @c_Facility, 
+              @dt_LastOrderDate        	
+        END 
+        
+        IF ISNULL(@n_QtyAvailable,0) < @n_OrderQty  --if the expiry date of same month less than order qty or no last order, find other month
+        BEGIN
+        	 SET @n_QtyAvailable = 0
+           SET @c_SQL = 
+                 " SELECT TOP 1 @n_QtyAvailable = SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), @dt_MinLottable04 = MIN(LOTATTRIBUTE.Lottable04) " +     
+                 " FROM LOTxLOCxID (NOLOCK) " +   
+                 " JOIN LOT (NOLOCK) ON LOT.LOT = LOTxLOCxID.Lot " +   
+                 " JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT " +   
+                 " JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc " +   
+                 " JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID " +   
+                 " JOIN SKUxLOC (NOLOCK) ON SKUxLOC.StorerKey = LOTxLOCxID.StorerKey " +   
+                 " AND SKUxLOC.SKU = LOTxLOCxID.SKU " +   
+                 " AND SKUxLOC.LOC = LOTxLOCxID.LOC " +   
+                 " WHERE LOT.StorerKey = @c_StorerKey " +  
+                 " AND LOT.SKU = @c_SKU " +   
+                 " AND LOT.STATUS = 'OK' " +   
+                 " AND ID.STATUS <> 'HOLD' " +   
+                 " AND LOC.Status = 'OK' " +   
+                 " AND LOC.Facility = @c_Facility " +   
+                 " AND LOC.LocationFlag <> 'HOLD' " +   
+                 " AND LOC.LocationFlag <> 'DAMAGE' " +   
+                 " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED > 0 " +
+                 @c_Condition +
+                 " GROUP BY CONVERT(NVARCHAR(6), LOTATTRIBUTE.Lottable04, 112) " +
+                 " HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_OrderQty " +
+                 " ORDER BY CONVERT(NVARCHAR(6), LOTATTRIBUTE.Lottable04, 112) "
+           
+           EXEC sp_executesql @c_SQL,
+              N'@n_QtyAvailable INT OUTPUT, @dt_MinLottable04 DATETIME OUTPUT, @c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5), @dt_LastOrderDate DATETIME, @n_OrderQty INT', 
+              @n_QtyAvailable OUTPUT,
+              @dt_MinLottable04 OUTPUT,
+              @c_Storerkey,
+              @c_Sku,
+              @c_Facility, 
+              @dt_LastOrderDate,
+              @n_OrderQty
+        END        
+        --NJOW01 E       
+        
+        /* --NJOW01 Removed
         SET @c_SQL = 
               " SELECT TOP 1 @n_QtyAvailable = SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), @dt_MinLottable04 = MIN(LOTATTRIBUTE.Lottable04) " +     
               " FROM LOTxLOCxID (NOLOCK) " +   
@@ -422,10 +498,11 @@ BEGIN
            @c_Sku,
            @c_Facility, 
            @dt_LastOrderDate
+        */   
         
         --IF @dt_LastOrderDate IS NOT NULL
         --BEGIN                         
-           IF @n_QtyAvailable < @n_OrderQty  --if the expiry date of same month less than order qty not to allocate
+           IF ISNULL(@n_QtyAvailable,0) < @n_OrderQty --if the expiry date of same month less than order qty not to allocate
            BEGIN
               DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
                 SELECT NULL, NULL, NULL, 0
