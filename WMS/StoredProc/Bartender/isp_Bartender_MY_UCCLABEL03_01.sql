@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                       
 /*                                                                            */                       
 /* Date       Rev  Author     Purposes                                        */      
-/*23-SEP-2020 1.0  CSCHONG   Created (WMS-15174)                               */      
+/*23-SEP-2020 1.0  CSCHONG   Created (WMS-15174)                              */      
+/*01-DEC-2020 1.1  CSCHONG   WMS-15578 add new col43 (CS01)                   */
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_Bartender_MY_UCCLABEL03_01]                            
@@ -191,7 +192,7 @@ BEGIN
                     +' '''','''','''','''','''','''','''','''','''','''','''','''','''','''','''',' + CHAR(13)  --35        
                     +' CONVERT(NVARCHAR(80), ORDERS.Notes),PACKHEADER.Editwho,CONVERT(NVARCHAR(10),getdate(),111),'+ CHAR(13)  --38 
                     + 'CAST(PACKDETAIL.CartonNo AS NVARCHAR(10)) + '' OF '' + CAST(PACKHEADER.TTLCNTS AS NVARCHAR(10)),ISNULL(RTRIM(ORDERS.C_ADDRESS3),''''),'  + CHAR(13) --40             
-                    +' ISNULL(RTRIM(ORDERS.C_ADDRESS3),''''),ISNULL(RTRIM(ORDERS.C_ADDRESS4),''''),'''','''','''','''','''','''','''','''', ' + CHAR(13) --50             
+                    +' ISNULL(RTRIM(ORDERS.C_ADDRESS3),''''),ISNULL(RTRIM(ORDERS.C_ADDRESS4),''''),ISNULL(ST1.company,''''),'''','''','''','''','''','''','''', ' + CHAR(13) --50   --(CS01)           
                     +' '''','''','''','''','''','''','''','''',PACKDETAIL.CartonNo,''O'' ' + CHAR(13)  --60                
                     +' FROM  PACKDETAIL  WITH (NOLOCK)   ' + CHAR(13)             
                     +' JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo) '+ CHAR(13)               
@@ -200,7 +201,8 @@ BEGIN
                     +'                                 AND (PACKDETAIL.Sku = SKU.Sku)  '+ CHAR(13)    
                    -- +' JOIN  PACK        WITH (NOLOCK)  ON (SKU.Packkey = PACK.Packkey)    ' + CHAR(13)            
                    -- +' LEFT JOIN  ROUTEMASTER WITH (NOLOCK)  ON (ORDERS.Route  = ROUTEMASTER.Route)  '+ CHAR(13)              
-                    +' LEFT JOIN  STORER ST WITH (NOLOCK)  ON (ST.Storerkey = ORDERS.Consigneekey)  '+ CHAR(13)                
+                    +' LEFT JOIN  STORER ST WITH (NOLOCK)  ON (ST.Storerkey = ORDERS.Consigneekey)  '+ CHAR(13)   
+                    +' LEFT JOIN  STORER ST1 WITH (NOLOCK)  ON (ST1.Storerkey = ORDERS.Userdefine02)'+ CHAR(13)           --(CS01)              
                     +' WHERE PACKDETAIL.PICKSLIPNO = @c_Sparm01     '+ CHAR(13)              
                     +' AND PACKDETAIL.LABELNO = @c_Sparm02'+ CHAR(13)    
                     +' GROUP BY ST.Company,ORDERS.Orderkey,ISNULL(RTRIM(ORDERS.ExternOrderkey),'''')'+ CHAR(13)    
@@ -208,7 +210,7 @@ BEGIN
                     +',ISNULL(RTRIM(ORDERS.route),''''),ISNULL(RTRIM(ORDERS.shipperkey),''''),ISNULL(RTRIM(ORDERS.C_ADDRESS1),'''')'+ CHAR(13)    
                     +',ISNULL(RTRIM(ORDERS.C_ADDRESS2),''''),ISNULL(RTRIM(ORDERS.C_ADDRESS3),'''')'+ CHAR(13)    
                     +',ISNULL(RTRIM(ORDERS.C_Address4),''''),CONVERT(NVARCHAR(80), ORDERS.Notes)'+ CHAR(13)    
-                    +', PACKHEADER.EditWho,PACKDETAIL.CartonNo,PACKDETAIL.PICKSLIPNO,CONVERT(NVARCHAR(10),Orders.DeliveryDate,111),PACKHEADER.TTLCNTS'    
+                    +', PACKHEADER.EditWho,PACKDETAIL.CartonNo,PACKDETAIL.PICKSLIPNO,CONVERT(NVARCHAR(10),Orders.DeliveryDate,111),PACKHEADER.TTLCNTS,ISNULL(ST1.company,'''')'    --(CS01)    
     
              
            
@@ -229,14 +231,14 @@ BEGIN
       
    SET @c_ExecArguments = N'  @c_Sparm01          NVARCHAR(80)'          
                          + ', @c_Sparm02          NVARCHAR(80) '          
-      --  + ', @c_Sparm03          NVARCHAR(80) '       
+                     --  + ', @c_Sparm03          NVARCHAR(80) '       
                                
                                
    EXEC sp_ExecuteSql     @c_SQL           
                         , @c_ExecArguments          
                         , @c_Sparm01         
                         , @c_Sparm02     
-      --, @c_Sparm03           
+                      --, @c_Sparm03           
               
     --EXEC sp_executesql @c_SQL                
               
@@ -477,7 +479,7 @@ BEGIN
             BREAK;      
          END            
       END      
-      FETCH NEXT FROM CUR_RowNoLoop INTO @c_orderkey,@c_pickslipno,@c_cartonno                       
+   FETCH NEXT FROM CUR_RowNoLoop INTO @c_orderkey,@c_pickslipno,@c_cartonno                       
    END -- While                         
    CLOSE CUR_RowNoLoop                        
    DEALLOCATE CUR_RowNoLoop         
