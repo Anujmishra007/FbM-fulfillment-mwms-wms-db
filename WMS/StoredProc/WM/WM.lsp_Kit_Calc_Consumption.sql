@@ -27,6 +27,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                     */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Kit_Calc_Consumption]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -73,7 +74,9 @@ BEGIN
    END
 
    EXECUTE AS LOGIN = @c_UserName
-
+   
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
+   
    DECLARE @c_FromSKU         NVARCHAR(20) = '',
            @c_ToSKU           NVARCHAR(20) = '',  
            @n_FromExpectedQty INT = 0,
@@ -176,6 +179,12 @@ BEGIN
    CLOSE CUR_SOURCE_KITDETAIL
    DEALLOCATE CUR_SOURCE_KITDETAIL
 
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
+   
    EXIT_SP:
    
    IF @n_Continue = 3   

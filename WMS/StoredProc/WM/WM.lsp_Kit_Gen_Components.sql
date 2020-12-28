@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 2020-10-09  Wan01    1.1   LFWM-2136 - UAT  MY SCE Kitting Get Component*/
 /*                            Error                                      */
+/* 28-Dec-2020 SWT01    1.2   Adding Begin Try/Catch                     */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Kit_Gen_Components]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -71,6 +72,8 @@ BEGIN
 
    EXECUTE AS LOGIN = @c_UserName 
 
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
+   
    DECLARE @c_FromSKU         NVARCHAR(20) = '', 
            @n_FromExpectedQty INT = 0 
    
@@ -185,7 +188,12 @@ BEGIN
    CLOSE CUR_COMPONENTS
    DEALLOCATE CUR_COMPONENTS
    
-
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
+   
    EXIT_SP:
    
    IF @n_Continue = 3   

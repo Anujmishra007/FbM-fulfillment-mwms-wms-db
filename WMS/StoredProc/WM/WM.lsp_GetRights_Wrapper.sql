@@ -14,6 +14,7 @@ GO
 /* Purpose: Dynamic lottable                                            */
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
+/* 28-Dec-2020 1.0  SWT01       Adding Begin Try/Catch                  */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_GetRights_Wrapper]
    @c_Facility NVARCHAR(5),
@@ -39,7 +40,6 @@ BEGIN
 
    SET @b_Success = 0
    
-    --EXECUTE AS LOGIN=@c_UserName
     SET @n_Err = 0 
     EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
     
@@ -54,6 +54,8 @@ BEGIN
    -- SET @cDateFormat = RDT.rdtGetDateFormat( @cUserName)
    -- SET DATEFORMAT @cDateFormat
    
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
+              --    
    EXEC dbo.nspGetRight
         @c_Facility  = @c_Facility  
        ,@c_StorerKey = @c_StorerKey 
@@ -69,7 +71,11 @@ BEGIN
        ,@c_Option4   = @c_Option4 OUTPUT  
        ,@c_Option5   = @c_Option5 OUTPUT  
    
-
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
 
    EXIT_SP:
    REVERT  

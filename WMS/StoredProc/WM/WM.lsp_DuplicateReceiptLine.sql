@@ -13,7 +13,8 @@ GO
 /*                                                                      */
 /* Purpose: Duplicate Receipt Line Number                               */
 /*                                                                      */
-/* Date        Rev  Author      Purposes                                */
+/* Date        Rev      Author      Purposes                            */
+/* 28-Dec-2020 SWT01    1.0         Adding Begin Try/Catch              */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_DuplicateReceiptLine]
     @c_ReceiptKey             NVARCHAR(10)
@@ -44,6 +45,8 @@ BEGIN
     BEGIN
       GOTO EXIT_SP
     END
+    
+    BEGIN TRY -- SWT01 - Begin Outer Begin Try
     
     IF NOT EXISTS(
       SELECT 1 FROM RECEIPTDETAIL RD WITH (NOLOCK)
@@ -174,10 +177,14 @@ BEGIN
          SET @b_Success = 0
          SET @c_ErrMsg = 'Failed to Duplicates the ReceiptLine: ' + @c_OriginalLineNumber
       END
-      
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
 
-    EXIT_SP: 
-    REVERT
+   EXIT_SP: 
+   REVERT
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_DuplicateReceiptLine] TO nSQL 

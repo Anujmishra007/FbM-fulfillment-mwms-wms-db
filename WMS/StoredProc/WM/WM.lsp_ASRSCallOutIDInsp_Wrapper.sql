@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_ASRSCallOutIDInsp_Wrapper]  
    @c_PalletIDList   NVARCHAR(MAX)
@@ -67,7 +68,8 @@ BEGIN
    BEGIN
       GOTO EXIT_SP
    END
-
+   
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
    WHILE @@TRANCOUNT > 0
    BEGIN
       COMMIT TRAN
@@ -193,6 +195,12 @@ BEGIN
    CLOSE @CUR_ID 
    DEALLOCATE @CUR_ID
    
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
+             --       
    EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return

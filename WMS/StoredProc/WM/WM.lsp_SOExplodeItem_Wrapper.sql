@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                    */
 /************************************************************************/   
 
 CREATE PROCEDURE [WM].[lsp_SOExplodeItem_Wrapper]
@@ -50,7 +51,9 @@ BEGIN
     END
     
     EXECUTE AS LOGIN = @c_UserName
-        
+    
+    BEGIN TRY -- SWT01 - Begin Outer Begin Try
+              --     
     DECLARE @n_Continue              INT
            ,@n_starttcnt             INT
            ,@c_StorerKey             NVARCHAR(15) 
@@ -577,7 +580,13 @@ BEGIN
        SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
              ': No item found for explode. BOM not setup. (lsp_SOExplodeItem_Wrapper)'
     END         
-                 
+
+    END TRY  
+    
+    BEGIN CATCH      
+       GOTO EXIT_SP  
+    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
+             --                  
     EXIT_SP: 
     REVERT
     

@@ -26,6 +26,7 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -89,6 +90,21 @@ BEGIN
          ,  RemainOrders      INT            NOT NULL DEFAULT(0)
          )
 
+   SET @n_Err = 0   
+   EXEC [WM].[lsp_SetUser]   
+         @c_UserName = @c_UserName  OUTPUT  
+      ,  @n_Err      = @n_Err       OUTPUT  
+      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT  
+                  
+   EXECUTE AS LOGIN = @c_UserName  
+  
+   IF @n_Err <> 0   
+   BEGIN
+      GOTO EXIT_SP  
+   END 
+   
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
+             --        
    IF OBJECT_ID('tempdb..#TMP_ORDERS','u') IS NULL  
    BEGIN                                                                                                                                      
       CREATE TABLE #TMP_ORDERS                                                                                                                                    
@@ -311,7 +327,16 @@ BEGIN
          ,  SummAllocPctg  = @n_AllocPctg
          ,  SummTotalOrders= @n_TotalOrders
    FROM @t_WaveOrderAnalysis
-
+   
+   END TRY  
+  
+   BEGIN CATCH    
+      SET @c_ErrMsg = 'Wave Order Analysis Failed. (lsp_WaveOrderAnalysis) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '  
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
+   
+   EXIT_SP: 
+   REVERT
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WaveOrderAnalysis] TO nSQL 

@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                     */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Kit_Gen_PalletID]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -69,6 +70,7 @@ BEGIN
    END
 
    EXECUTE AS LOGIN = @c_UserName 
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
    
    SELECT @c_StorerKey = k.StorerKey
    FROM KIT AS k WITH(NOLOCK)
@@ -137,7 +139,12 @@ BEGIN
    CLOSE CUR_KITDETAIL_LINES
    DEALLOCATE CUR_KITDETAIL_LINES
    
-
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
+   
    EXIT_SP:
    
    IF @n_Continue = 3   

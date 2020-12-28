@@ -25,6 +25,7 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                     */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -185,6 +186,7 @@ AS
    BEGIN
       GOTO EXIT_SP
    END 
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
    
    CREATE TABLE #tWaveOrder                                                                                                                                    
    (                                           
@@ -925,7 +927,13 @@ START_BUILDLOAD:
       PRINT '--Finish Insert Trace Log--'          
       PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
    END                                                                                                                                                         
-                                                                                                                                                            
+
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
+             --                                                                                                                                                             
 EXIT_SP:    
    IF @n_Continue = 3                                                                                                                                            
    BEGIN                                                                                                                                                       

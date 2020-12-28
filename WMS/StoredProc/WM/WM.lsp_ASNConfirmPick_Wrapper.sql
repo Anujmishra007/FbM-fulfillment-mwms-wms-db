@@ -23,6 +23,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_ASNConfirmPick_Wrapper]
   @c_StorerKey    NVARCHAR(15) ,
@@ -51,37 +52,34 @@ BEGIN
       GOTO EXIT_SP
    END 
     
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
 
-   IF NOT EXISTS (SELECT 1 FROM ORDERDETAIL AS o WITH(NOLOCK)
-                WHERE o.StorerKey = @c_StorerKey
-                AND o.ExternPOKey = @c_ExternPOKey)
-   BEGIN
-      SET @n_err = 554001
-      SET @c_ErrMsg = 'Error: ' + CAST(@n_err AS VARCHAR(6)) + ': Invalid Extern PO Key.'
-      SET @b_Success = 0
-      GOTO EXIT_SP        
-   END
+      IF NOT EXISTS (SELECT 1 FROM ORDERDETAIL AS o WITH(NOLOCK)
+                   WHERE o.StorerKey = @c_StorerKey
+                   AND o.ExternPOKey = @c_ExternPOKey)
+      BEGIN
+         SET @n_err = 554001
+         SET @c_ErrMsg = 'Error: ' + CAST(@n_err AS VARCHAR(6)) + ': Invalid Extern PO Key.'
+         SET @b_Success = 0
+         GOTO EXIT_SP        
+      END
       
-   EXEC dbo.ispASNConfirmPick
-        @cStorerKey = @c_Storerkey,
-        @cExternPOKey = @c_ExternPOkey, -- For one storer, pass in the Storerkey; For All Storer, pass in '%'
-         @b_Success    = @b_Success OUTPUT, 
-         @n_err        = @n_err OUTPUT,
-         @c_ErrMsg     = @c_ErrMsg OUTPUT 
-          
+      EXEC dbo.ispASNConfirmPick
+           @cStorerKey = @c_Storerkey,
+           @cExternPOKey = @c_ExternPOkey, -- For one storer, pass in the Storerkey; For All Storer, pass in '%'
+           @b_Success    = @b_Success OUTPUT, 
+           @n_err        = @n_err OUTPUT,
+           @c_ErrMsg     = @c_ErrMsg OUTPUT 
+            
+   END TRY  
+  
+   BEGIN CATCH    
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch         
+   
    EXIT_SP:
    REVERT     
 END  
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-
-SET ANSI_NULLS OFF
 GO
 
 GRANT EXECUTE ON [WM].[lsp_ASNConfirmPick_Wrapper] TO NSQL
