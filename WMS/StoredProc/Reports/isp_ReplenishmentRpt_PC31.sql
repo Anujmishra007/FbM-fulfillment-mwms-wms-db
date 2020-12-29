@@ -17,7 +17,7 @@ GO
 /*                                                                         */
 /* Called By: Replenishment Report                                         */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -25,6 +25,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
+/* 29-Dec-2020 WLChooi  1.1   Fix wrong datawindow name for config (WL01)  */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC31]
                @c_zone01            NVARCHAR(10)
@@ -521,7 +522,7 @@ BEGIN
                   ,@c_CaseToPick     = ISNULL(MAX(CASE WHEN CL.Code ='REPLCASETOPICK' THEN 'Y' ELSE 'N' END),'N')
             FROM CODELKUP CL WITH (NOLOCK)
             WHERE CL.ListName = 'REPORTCFG' 
-            AND CL.Long = 'r_replenishment_report_pc29'
+            AND CL.Long = 'r_replenishment_report_pc31'
             AND CL.Storerkey = @c_Storerkey
             AND CL.Short = 'Y'
                         
@@ -554,7 +555,7 @@ BEGIN
                    FROM CODELKUP CL (NOLOCK)
                    WHERE CL.Listname = 'REPORTCFG'
                    AND CL.Code = 'UNISORT'
-                   AND CL.Long = 'r_replenishment_report_pc29'
+                   AND CL.Long = 'r_replenishment_report_pc31'
                    AND CL.Storerkey = @c_Storerkey
                    AND ISNULL(CL.Short,'') <> 'N') --NJOW01
          BEGIN                   	    
@@ -1088,7 +1089,7 @@ QUIT_SP:
       JOIN  PACK            WITH (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
       JOIN  LOTATTRIBUTE LA WITH (NOLOCK) ON (R.Lot = LA.Lot)
       LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (R.Storerkey = CLR.Storerkey AND CLR.Code = 'REPLCASETOPICK' 
-                                            AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_replenishment_report_pc29' AND ISNULL(CLR.Short,'') <> 'N')   --NJOW02      
+                                            AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_replenishment_report_pc31' AND ISNULL(CLR.Short,'') <> 'N')   --NJOW02      
       WHERE(LOC.PickZone = @c_ReplGrp OR @c_ReplGrp = 'ALL')
       AND   LOC.facility = @c_zone01
       AND  (R.Storerkey  = @c_Storerkey OR @c_Storerkey = 'ALL')
