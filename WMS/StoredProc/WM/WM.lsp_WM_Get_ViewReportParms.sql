@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                    */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Get_ViewReportParms]
            @c_ModuleID           NVARCHAR(30) = 'ViewReport'
@@ -132,6 +133,7 @@ BEGIN
    ORDER BY parm_no
 
    EXIT_SP:
+   REVERT -- SWT01
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_WM_Get_ViewReportParms] TO nSQL 
