@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date          Rev  Author     Purposes                                     */     
-/* 17-SEP-2018   1.0  CSCHONG    WMS-5850&5854 Created                        */            
+/* 17-SEP-2018   1.0  CSCHONG    WMS-5850&5854 Created                        */   
+/* 16-Dec-2020   1.1  WLChooi    WMS-15899 - Add Col60 (WL01)                 */ 
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_01]                      
@@ -189,7 +190,7 @@ BEGIN
      )        
      
      
-      CREATE TABLE [#TEMPSKU] (                   
+   CREATE TABLE [#TEMPSKU] (                   
       [ID]          [INT] IDENTITY(1,1) NOT NULL,                                      
       [Pickslipno]  [NVARCHAR] (20)  NULL,  
       [CartonNo]    [NVARCHAR] (30)  NULL,       
@@ -213,7 +214,8 @@ BEGIN
              + ' '''','''','''','''','''','''','''','''',ORD.Route,PD.CartonNo, '  --50       
              + ' '''',CONVERT(NVARCHAR(10),ORD.DeliveryDate,111),PIF.weight, '
              + ' '''','''','''',ISNULL(C.description,''''),(ISNULL(RTRIM(ORD.c_city),'''') +Space(2) + ISNULL(RTRIM(ORD.C_country),'''')), '
-             + ' '''',(RTRIM(PH.Pickslipno) + ''O'') '   --60          
+             --+ ' '''',(RTRIM(PH.Pickslipno) + ''O'') '   --60   --WL01
+             + ' '''',ISNULL(ORD.BuyerPO,'''') '   --60   --WL01          
              + CHAR(13) +            
              +' FROM ORDERS ORD WITH (NOLOCK) '
              +' JOIN FACILITY F WITH (NOLOCK) ON F.facility = ORD.Facility'
@@ -223,67 +225,64 @@ BEGIN
              +' LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.Pickslipno = PD.Pickslipno AND PIF.CartonNo = PD.CartonNo '
              + 'LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = ''TMSHIP'' AND C.code=ORD.c_country AND C.storerkey = ORD.Storerkey'
              +' AND PIF.CartonNo = PD.CartonNo '    
-             + ' WHERE PD.Pickslipno =  @c_Sparm01'                                           
-             + ' AND PD.Cartonno >= CONVERT(INT,  @c_Sparm02)'                                
-             + ' AND PD.Cartonno <= CONVERT(INT,  @c_Sparm03)'                    
+             +' WHERE PD.Pickslipno =  @c_Sparm01'                                           
+             +' AND PD.Cartonno >= CONVERT(INT,  @c_Sparm02)'                                
+             +' AND PD.Cartonno <= CONVERT(INT,  @c_Sparm03)'                    
             
           
-IF @b_debug=1        
-BEGIN        
-   PRINT @c_SQLJOIN          
-END                
-              
-  SET @c_SQL='INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +           
+   IF @b_debug=1        
+   BEGIN        
+      PRINT @c_SQLJOIN          
+   END                
+                 
+   SET @c_SQL='INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +           
              +',Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22'  + CHAR(13) +           
              +',Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34' + CHAR(13) +           
              +',Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44'  + CHAR(13) +           
              +',Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54'+ CHAR(13) +           
-             + ',Col55,Col56,Col57,Col58,Col59,Col60) '          
-    
-SET @c_SQL = @c_SQL + @c_SQLJOIN        
-        
-    --EXEC sp_executesql @c_SQL        
-    
-    SET @c_ExecArguments = N'  @c_Sparm01           NVARCHAR(80)'    
-                          + ', @c_Sparm02           NVARCHAR(80) '    
-                          + ', @c_Sparm03           NVARCHAR(80) '                 
-                         
+             +',Col55,Col56,Col57,Col58,Col59,Col60) '          
+             
+   SET @c_SQL = @c_SQL + @c_SQLJOIN        
+           
+   --EXEC sp_executesql @c_SQL        
+       
+   SET @c_ExecArguments = N'  @c_Sparm01           NVARCHAR(80)'    
+                         + ', @c_Sparm02           NVARCHAR(80) '    
+                         + ', @c_Sparm03           NVARCHAR(80) '                 
+                            
    EXEC sp_ExecuteSql     @c_SQL     
                         , @c_ExecArguments    
                         , @c_Sparm01    
                         , @c_Sparm02  
                         , @c_Sparm03 
-    
-        
+       
+           
    IF @b_debug=1        
    BEGIN          
       PRINT @c_SQL          
    END  
-   
-         
+              
    IF @b_debug=1        
    BEGIN        
       SELECT * FROM #Result (nolock)        
    END        
-  
-  
-  DECLARE CUR_RowNoLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-  SELECT DISTINCT LEFT(col60,10),col50     
-   FROM #Result               
-   WHERE RIGHT(Col60,1) = 'O'   
-          
-   OPEN CUR_RowNoLoop                  
+     
+   DECLARE CUR_RowNoLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      SELECT DISTINCT @c_Sparm01,col50   --WL01     
+      FROM #Result               
+      --WHERE RIGHT(Col60,1) = 'O'   --WL01   
              
+   OPEN CUR_RowNoLoop                  
+                
    FETCH NEXT FROM CUR_RowNoLoop INTO @c_Pickslipno,@c_cartonno    
-               
+                  
    WHILE @@FETCH_STATUS <> -1             
    BEGIN                 
       IF @b_debug='1'              
       BEGIN              
          PRINT @c_Pickslipno +space(2) +@c_cartonno             
       END 
-     
-      
+        
       INSERT INTO [#TEMPSKU] (Pickslipno, cartonno, SKU, SSTYLE, SSIZE, SCOLOR, Qty,CDESCR,
                   Retrieve)
       SELECT DISTINCT PD.Pickslipno,PD.CartonNo,PD.sku,S.Style,S.Size,S.color,
@@ -296,7 +295,7 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
       GROUP BY PD.Pickslipno,PD.CartonNo,PD.sku,S.Style,S.Size,S.color,
                ISNULL(C.Description,'''')
       ORDER BY PD.Pickslipno,PD.Cartonno,PD.sku
-      
+         
       SET @c_SKU01 = ''
       SET @c_SKU02 = ''
       SET @c_SKU03 = ''
@@ -344,280 +343,269 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
       SET @n_pageQty = 0
       SET @n_Pickqty = 0
       SET @n_PACKQty = 0
-   
-         
+      
+            
       SELECT @n_CntRec = COUNT (1)
       FROM #TEMPSKU 
       WHERE Pickslipno = @c_Pickslipno
       AND Cartonno = @c_cartonno 
       AND Retrieve = 'N' 
-      
+         
       SET @n_TTLpage =  FLOOR(@n_CntRec / @n_MaxLine )
-
+   
       IF @n_TTLpage = 0
-      BEGIN
-       
-       SET @n_TTLpage = 1
-
+      BEGIN    
+         SET @n_TTLpage = 1
       END
       ELSE
       BEGIN
-        IF (@n_CntRec%@n_MaxLine) <> 0
-        BEGIN
-          SET @n_TTLpage = @n_TTLpage + 1
-        END
+         IF (@n_CntRec%@n_MaxLine) <> 0
+         BEGIN
+            SET @n_TTLpage = @n_TTLpage + 1
+         END
       END
-
-   --   SET @c_col54 = CAST(@n_CurrentPage as NVARCHAR(5)) +  '/' + CAST(@n_TTLpage as NVARCHAR(5))
-      
-
+   
+      --   SET @c_col54 = CAST(@n_CurrentPage as NVARCHAR(5)) +  '/' + CAST(@n_TTLpage as NVARCHAR(5))
+         
+   
       SELECT @n_MaxCtnNo = MAX(cartonno)
-             ,@n_PACKQty = SUM(Qty)
+            ,@n_PACKQty = SUM(Qty)
       FROM PACKDETAIL WITH (NOLOCK)
       WHERE Pickslipno = @c_Pickslipno
-
-     SELECT @n_PACKQty = SUM(Qty)
+   
+      SELECT @n_PACKQty = SUM(Qty)
       FROM PACKDETAIL WITH (NOLOCK)
       WHERE Pickslipno = @c_Pickslipno
       and Cartonno <= CAST(@c_cartonno as INT)
-       
+          
       SELECT @n_PickQty = SUM(PIDET.Qty)
       FROM PACKHEADER PH WITH (NOLOCK)
       JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.orderkey = PH.orderkey
       WHERE PH.Pickslipno = @c_Pickslipno
-      
-      
-
-     WHILE @n_intFlag <= @n_CntRec           
-     BEGIN   
-      
-      SELECT @c_sku    = SKU,
-             @c_SStyle = SSTYLE,
-             @c_SSize  = SSIZE,
-             @c_SColor = SCOLOR,
-             @n_skuqty = SUM(Qty),
-             @c_SDESCR = CDESCR
-      FROM #TEMPSKU 
-      WHERE ID = @n_intFlag
-      GROUP BY SKU,SSTYLE, SSIZE, SCOLOR,CDESCR
-      
-      IF (@n_intFlag%@n_MaxLine) = 1 
-       BEGIN        
-        SET @c_sku01    = @c_sku
-        SET @c_SSTYLE01 = @c_SStyle
-        SET @c_SColor01 = @c_SColor
-        SET @c_SSIZE01  = @c_SSize
-        SET @c_SKUQty01 = CONVERT(NVARCHAR(10),@n_skuqty)  
-        SET @c_REF01    =  @c_SDESCR    
-      --  SET @n_pageQty = @n_pageQty
-       END        
-       
-       ELSE IF (@n_intFlag%@n_MaxLine) = 2
-       BEGIN        
-        SET @c_sku02    = @c_sku
-        SET @c_SSTYLE02 = @c_SStyle
-        SET @c_SColor02 = @c_SColor
-        SET @c_SSIZE02  = @c_SSize
-        SET @c_SKUQty02 = CONVERT(NVARCHAR(10),@n_skuqty)
-        SET @c_REF02    =  @c_SDESCR          
-       END        
-        
-       ELSE IF (@n_intFlag%@n_MaxLine) = 3
-       BEGIN            
-        SET @c_sku03    = @c_sku
-        SET @c_SSTYLE03 = @c_SStyle
-        SET @c_SColor03 = @c_SColor
-        SET @c_SSIZE03  = @c_SSize
-        SET @c_SKUQty03 = CONVERT(NVARCHAR(10),@n_skuqty) 
-        SET @c_REF03    =  @c_SDESCR         
-       END        
-          
-       ELSE IF (@n_intFlag%@n_MaxLine) = 4
-       BEGIN        
-        SET @c_sku04    = @c_sku
-        SET @c_SSTYLE04 = @c_SStyle
-        SET @c_SColor04 = @c_SColor
-        SET @c_SSIZE04  = @c_SSize
-        SET @c_SKUQty04 = CONVERT(NVARCHAR(10),@n_skuqty) 
-        SET @c_REF04    =  @c_SDESCR         
-       END     
-       
-       ELSE IF (@n_intFlag%@n_MaxLine) = 5
-       BEGIN        
-        SET @c_sku05    = @c_sku
-        SET @c_SSTYLE05 = @c_SStyle
-        SET @c_SColor05 = @c_SColor
-        SET @c_SSIZE05  = @c_SSize
-        SET @c_SKUQty05 = CONVERT(NVARCHAR(10),@n_skuqty)  
-        SET @c_REF05    =  @c_SDESCR        
-       END   
-       
-       ELSE IF (@n_intFlag%@n_MaxLine) = 6
-       BEGIN        
-        SET @c_sku06    = @c_sku
-        SET @c_SSTYLE06 = @c_SStyle
-        SET @c_SColor06 = @c_SColor
-        SET @c_SSIZE06  = @c_SSize
-        SET @c_SKUQty06 = CONVERT(NVARCHAR(10),@n_skuqty)  
-        SET @c_REF06    =  @c_SDESCR       
-       END      
-       
-       ELSE IF (@n_intFlag%@n_MaxLine) = 0
-       BEGIN        
-        SET @c_sku07    = @c_sku
-        SET @c_SSTYLE07 = @c_SStyle
-        SET @c_SColor07 = @c_SColor
-        SET @c_SSIZE07  = @c_SSize
-        SET @c_SKUQty07 = CONVERT(NVARCHAR(10),@n_skuqty)  
-        SET @c_REF07    =  @c_SDESCR 
-        
-        
-        --SELECT @n_pageQty = SUM(qty)
-        --FROM #TEMPSKU 
-        --WHERE ID <= @n_intFlag
-               
-       END  
-       
-       --IF @n_pageQty = 0
-       --BEGIN
-       --  SELECT @n_pageQty = SUM(qty)
-       --  FROM #TEMPSKU
-       --END 
-
-	   SET @n_pageQty = (cast(@c_SKUQty01 as INT ) + cast(@c_SKUQty02 as INT )+ cast(@c_SKUQty03 as INT )
-	                    + cast(@c_SKUQty04 as INT ) + cast(@c_SKUQty05 as INT ) + cast(@c_SKUQty06 as INT ) +cast(@c_SKUQty07 as INT ))
          
-       UPDATE #Result                  
-       SET Col07 = @c_sstyle01,         
-           Col08 = @c_SColor01,         
-           Col09 = @c_SSIZE01,        
-           Col10 = @c_sku01, 
-           Col11 = @c_REF01,       
-           Col12 = @c_SKUQty01,        
-           Col13 = @c_sstyle02,        
-           Col14 = @c_SColor02,  
-           Col15 = @c_SSIZE02,
-           Col16 = @c_sku02,
-           Col17 = @c_REF02,
-           Col18 = @c_SKUQty02,
-           Col19 = @c_sstyle03,
-           Col20 = @c_SColor03,
-           Col21 = @c_SSIZE03,
-           Col22 = @c_sku03,
-           Col23 = @c_REF03,
-           Col24 = @c_SKUQty03,
-           Col25 = @c_sstyle04,  
-           Col26 = @c_SColor04,  
-           Col27 = @c_SSIZE04,  
-           Col28 = @c_sku04,  
-           Col29 = @c_REF04,
-           Col30 = @c_SKUQty04,  
-           Col31 = @c_sstyle05,  
-           Col32 = @c_SColor05,  
-           Col33 = @c_SSIZE05,
-           Col34 = @c_sku05, 
-           Col35 = @c_REF05, 
-           Col36 = @c_SKUQty05,  
-           Col37 = @c_sstyle06, 
-           Col38 = @c_SColor06,  
-           Col39 = @c_SSIZE06,  
-           Col40 = @c_sku06,  
-           Col41 = @c_REF06,
-           Col42 = @c_SKUQty06,  
-           Col43 = @c_sstyle07,  
-           Col44 = @c_SColor07,  
-           Col45 = @c_SSIZE07,  
-           Col46 = @c_sku07,
-           Col47 = @c_REF07,
-           Col48 = @c_SKUQty07,  
-           Col51 = CAST(@n_MaxCtnNo AS NVARCHAR(10)),  
-           Col54 = CAST(@n_CurrentPage as NVARCHAR(5)) +  '/' + CAST(@n_TTLpage as NVARCHAR(5)),
-           Col55 = CAST(@n_pageqty as NVARCHAR(10)),  
-           Col56 = CAST(@n_PACKQty as NVARCHAR(10)),             
-           Col59 = CAST((@n_pickqty -@n_PACKQty) as nvarchar(10))  
-       WHERE ID = @n_CurrentPage  
-       
-       
-   IF (@n_intFlag%@n_MaxLine) = 0 --AND (@n_CntRec - 1) <> 0
-    BEGIN
-      SET @n_CurrentPage = @n_CurrentPage + 1
-
-	  	 SET @c_SKU01 = ''
-      SET @c_SKU02 = ''
-      SET @c_SKU03 = ''
-      SET @c_SKU04 = ''
-      SET @c_SKU05= ''
-      SET @c_SKU06= ''
-      SET @c_SKU07= ''
-      SET @c_SSTYLE01 = ''
-      SET @c_SSTYLE02 = ''
-      SET @c_SSTYLE03 = ''
-      SET @c_SSTYLE04 = ''
-      SET @c_SSTYLE05= ''
-      SET @c_SSTYLE06 = ''
-      SET @c_SSTYLE07 = ''
-      SET @c_SSIZE01 = ''
-      SET @c_SSIZE02 = ''
-      SET @c_SSIZE03 = ''
-      SET @c_SSIZE04 = ''
-      SET @c_SSIZE05= ''
-      SET @c_SSIZE06 = ''
-      SET @c_SSIZE07 = ''
-      SET @c_SColor01 = ''
-      SET @c_SColor02 = ''
-      SET @c_SColor03 = ''
-      SET @c_SColor04 = ''
-      SET @c_SColor05= ''
-      SET @c_SColor06 = ''
-      SET @c_SColor07 = ''
-      SET @c_SKUQty01 = ''
-      SET @c_SKUQty02 = ''
-      SET @c_SKUQty03 = ''
-      SET @c_SKUQty04 = ''
-      SET @c_SKUQty05 = ''
-      SET @c_SKUQty06 = ''
-      SET @c_SKUQty07 = ''
-      SET @c_REF01 = ''
-      SET @c_REF02 = ''
-      SET @c_REF03 = ''
-      SET @c_REF04 = ''
-      SET @c_REF05= ''
-      SET @c_REF06= ''
-      SET @c_REF07= ''
-	  SET @n_pageqty = 0
-      
-      INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09                 
-                            ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22               
-                            ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                
-                            ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                 
-                            ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54               
-                            ,Col55,Col56,Col57,Col58,Col59,Col60) 
-      SELECT TOP 1 Col01,Col02,Col03,Col04,Col05,Col06,'','','','',                 
-                   '','','','','', '','','','','',              
-                   '','','','','', '','','','','',              
-                   '','','','','', '','','','','',                 
-                   '','','','','', '','','',Col49,Col50,               
-                   '',Col52,Col53,'','', '',Col57,Col58,'',''
-     FROM  #Result 
-      WHERE RIGHT(Col60,1)='O'                    
-      
-    END  
-       
-    SET @n_intFlag = @n_intFlag + 1   
-    --SET @n_CntRec = @n_CntRec - 1 
-
-
-
-           
-  END    
-  
-   FETCH NEXT FROM CUR_RowNoLoop INTO  @c_pickslipno,@c_cartonno           
-        
-      END -- While                   
-      CLOSE CUR_RowNoLoop                  
-      DEALLOCATE CUR_RowNoLoop   
+      WHILE @n_intFlag <= @n_CntRec           
+      BEGIN   
+         SELECT @c_sku    = SKU,
+                @c_SStyle = SSTYLE,
+                @c_SSize  = SSIZE,
+                @c_SColor = SCOLOR,
+                @n_skuqty = SUM(Qty),
+                @c_SDESCR = CDESCR
+         FROM #TEMPSKU 
+         WHERE ID = @n_intFlag
+         GROUP BY SKU,SSTYLE, SSIZE, SCOLOR,CDESCR
+         
+         IF (@n_intFlag%@n_MaxLine) = 1 
+         BEGIN        
+            SET @c_sku01    = @c_sku
+            SET @c_SSTYLE01 = @c_SStyle
+            SET @c_SColor01 = @c_SColor
+            SET @c_SSIZE01  = @c_SSize
+            SET @c_SKUQty01 = CONVERT(NVARCHAR(10),@n_skuqty)  
+            SET @c_REF01    =  @c_SDESCR    
+            --  SET @n_pageQty = @n_pageQty
+         END        
           
-SELECT * FROM #Result (nolock)        
+         ELSE IF (@n_intFlag%@n_MaxLine) = 2
+         BEGIN        
+            SET @c_sku02    = @c_sku
+            SET @c_SSTYLE02 = @c_SStyle
+            SET @c_SColor02 = @c_SColor
+            SET @c_SSIZE02  = @c_SSize
+            SET @c_SKUQty02 = CONVERT(NVARCHAR(10),@n_skuqty)
+            SET @c_REF02    =  @c_SDESCR          
+         END        
+           
+         ELSE IF (@n_intFlag%@n_MaxLine) = 3
+         BEGIN            
+            SET @c_sku03    = @c_sku
+            SET @c_SSTYLE03 = @c_SStyle
+            SET @c_SColor03 = @c_SColor
+            SET @c_SSIZE03  = @c_SSize
+            SET @c_SKUQty03 = CONVERT(NVARCHAR(10),@n_skuqty) 
+            SET @c_REF03    =  @c_SDESCR         
+         END        
+             
+         ELSE IF (@n_intFlag%@n_MaxLine) = 4
+         BEGIN        
+            SET @c_sku04    = @c_sku
+            SET @c_SSTYLE04 = @c_SStyle
+            SET @c_SColor04 = @c_SColor
+            SET @c_SSIZE04  = @c_SSize
+            SET @c_SKUQty04 = CONVERT(NVARCHAR(10),@n_skuqty) 
+            SET @c_REF04    =  @c_SDESCR         
+         END     
+          
+         ELSE IF (@n_intFlag%@n_MaxLine) = 5
+         BEGIN        
+            SET @c_sku05    = @c_sku
+            SET @c_SSTYLE05 = @c_SStyle
+            SET @c_SColor05 = @c_SColor
+            SET @c_SSIZE05  = @c_SSize
+            SET @c_SKUQty05 = CONVERT(NVARCHAR(10),@n_skuqty)  
+            SET @c_REF05    =  @c_SDESCR        
+         END   
+          
+         ELSE IF (@n_intFlag%@n_MaxLine) = 6
+         BEGIN        
+            SET @c_sku06    = @c_sku
+            SET @c_SSTYLE06 = @c_SStyle
+            SET @c_SColor06 = @c_SColor
+            SET @c_SSIZE06  = @c_SSize
+            SET @c_SKUQty06 = CONVERT(NVARCHAR(10),@n_skuqty)  
+            SET @c_REF06    =  @c_SDESCR       
+         END      
+          
+         ELSE IF (@n_intFlag%@n_MaxLine) = 0
+         BEGIN        
+            SET @c_sku07    = @c_sku
+            SET @c_SSTYLE07 = @c_SStyle
+            SET @c_SColor07 = @c_SColor
+            SET @c_SSIZE07  = @c_SSize
+            SET @c_SKUQty07 = CONVERT(NVARCHAR(10),@n_skuqty)  
+            SET @c_REF07    =  @c_SDESCR 
+ 
+           --SELECT @n_pageQty = SUM(qty)
+           --FROM #TEMPSKU 
+           --WHERE ID <= @n_intFlag
+                  
+         END  
+          
+          --IF @n_pageQty = 0
+          --BEGIN
+          --  SELECT @n_pageQty = SUM(qty)
+          --  FROM #TEMPSKU
+          --END 
+   
+         SET @n_pageQty = (cast(@c_SKUQty01 as INT ) + cast(@c_SKUQty02 as INT )+ cast(@c_SKUQty03 as INT )
+                        + cast(@c_SKUQty04 as INT ) + cast(@c_SKUQty05 as INT ) + cast(@c_SKUQty06 as INT ) +cast(@c_SKUQty07 as INT ))
+            
+         UPDATE #Result                  
+         SET Col07 = @c_sstyle01,         
+             Col08 = @c_SColor01,         
+             Col09 = @c_SSIZE01,        
+             Col10 = @c_sku01, 
+             Col11 = @c_REF01,       
+             Col12 = @c_SKUQty01,        
+             Col13 = @c_sstyle02,        
+             Col14 = @c_SColor02,  
+             Col15 = @c_SSIZE02,
+             Col16 = @c_sku02,
+             Col17 = @c_REF02,
+             Col18 = @c_SKUQty02,
+             Col19 = @c_sstyle03,
+             Col20 = @c_SColor03,
+             Col21 = @c_SSIZE03,
+             Col22 = @c_sku03,
+             Col23 = @c_REF03,
+             Col24 = @c_SKUQty03,
+             Col25 = @c_sstyle04,  
+             Col26 = @c_SColor04,  
+             Col27 = @c_SSIZE04,  
+             Col28 = @c_sku04,  
+             Col29 = @c_REF04,
+             Col30 = @c_SKUQty04,  
+             Col31 = @c_sstyle05,  
+             Col32 = @c_SColor05,  
+             Col33 = @c_SSIZE05,
+             Col34 = @c_sku05, 
+             Col35 = @c_REF05, 
+             Col36 = @c_SKUQty05,  
+             Col37 = @c_sstyle06, 
+             Col38 = @c_SColor06,  
+             Col39 = @c_SSIZE06,  
+             Col40 = @c_sku06,  
+             Col41 = @c_REF06,
+             Col42 = @c_SKUQty06,  
+             Col43 = @c_sstyle07,  
+             Col44 = @c_SColor07,  
+             Col45 = @c_SSIZE07,  
+             Col46 = @c_sku07,
+             Col47 = @c_REF07,
+             Col48 = @c_SKUQty07,  
+             Col51 = CAST(@n_MaxCtnNo AS NVARCHAR(10)),  
+             Col54 = CAST(@n_CurrentPage as NVARCHAR(5)) +  '/' + CAST(@n_TTLpage as NVARCHAR(5)),
+             Col55 = CAST(@n_pageqty as NVARCHAR(10)),  
+             Col56 = CAST(@n_PACKQty as NVARCHAR(10)),             
+             Col59 = CAST((@n_pickqty -@n_PACKQty) as nvarchar(10))  
+         WHERE ID = @n_CurrentPage  
+          
+          
+         IF (@n_intFlag%@n_MaxLine) = 0 --AND (@n_CntRec - 1) <> 0
+         BEGIN
+            SET @n_CurrentPage = @n_CurrentPage + 1
+   
+            SET @c_SKU01 = ''
+            SET @c_SKU02 = ''
+            SET @c_SKU03 = ''
+            SET @c_SKU04 = ''
+            SET @c_SKU05= ''
+            SET @c_SKU06= ''
+            SET @c_SKU07= ''
+            SET @c_SSTYLE01 = ''
+            SET @c_SSTYLE02 = ''
+            SET @c_SSTYLE03 = ''
+            SET @c_SSTYLE04 = ''
+            SET @c_SSTYLE05= ''
+            SET @c_SSTYLE06 = ''
+            SET @c_SSTYLE07 = ''
+            SET @c_SSIZE01 = ''
+            SET @c_SSIZE02 = ''
+            SET @c_SSIZE03 = ''
+            SET @c_SSIZE04 = ''
+            SET @c_SSIZE05= ''
+            SET @c_SSIZE06 = ''
+            SET @c_SSIZE07 = ''
+            SET @c_SColor01 = ''
+            SET @c_SColor02 = ''
+            SET @c_SColor03 = ''
+            SET @c_SColor04 = ''
+            SET @c_SColor05= ''
+            SET @c_SColor06 = ''
+            SET @c_SColor07 = ''
+            SET @c_SKUQty01 = ''
+            SET @c_SKUQty02 = ''
+            SET @c_SKUQty03 = ''
+            SET @c_SKUQty04 = ''
+            SET @c_SKUQty05 = ''
+            SET @c_SKUQty06 = ''
+            SET @c_SKUQty07 = ''
+            SET @c_REF01 = ''
+            SET @c_REF02 = ''
+            SET @c_REF03 = ''
+            SET @c_REF04 = ''
+            SET @c_REF05= ''
+            SET @c_REF06= ''
+            SET @c_REF07= ''
+            SET @n_pageqty = 0
+         
+            INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09                 
+                                ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22               
+                                ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                
+                                ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                 
+                                ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54               
+                                ,Col55,Col56,Col57,Col58,Col59,Col60) 
+            SELECT TOP 1 Col01,Col02,Col03,Col04,Col05,Col06,'','','','',                 
+                         '','','','','', '','','','','',              
+                         '','','','','', '','','','','',              
+                         '','','','','', '','','','','',                 
+                         '','','','','', '','','',Col49,Col50,               
+                         '',Col52,Col53,'','', '',Col57,Col58,'',Col60   --WL01
+            FROM  #Result 
+            --WHERE RIGHT(Col60,1)='O'   --WL01                    
+         END  
+          
+         SET @n_intFlag = @n_intFlag + 1   
+         --SET @n_CntRec = @n_CntRec - 1 
+      END    
+     
+      FETCH NEXT FROM CUR_RowNoLoop INTO  @c_pickslipno,@c_cartonno           
+           
+   END -- While                   
+   CLOSE CUR_RowNoLoop                  
+   DEALLOCATE CUR_RowNoLoop   
+             
+   SELECT * FROM #Result (nolock)        
             
 EXIT_SP:    
   
@@ -642,9 +630,7 @@ EXIT_SP:
       @b_Success = 1,  
       @n_Err = 0,  
       @c_ErrMsg = ''              
-   
-  
-                                  
+                            
 END -- procedure   
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_SHIPUCCLBL_01] TO nsql 
