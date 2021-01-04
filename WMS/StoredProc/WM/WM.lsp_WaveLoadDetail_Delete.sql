@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
+/*                            changed                                   */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveLoadDetail_Delete] 
       @c_LoadKey              NVARCHAR(10)                                                                                                                    
@@ -65,7 +67,11 @@ BEGIN
       ,  @n_Err      = @n_Err       OUTPUT
       ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
+   -- SWT02
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXECUTE AS LOGIN = @c_UserName      
+   END
 
    IF @n_Err <> 0 
    BEGIN

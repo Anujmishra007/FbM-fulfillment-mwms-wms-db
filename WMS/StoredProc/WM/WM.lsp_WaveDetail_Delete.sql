@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 27-Oct-2020 LZG      1.1   Extended @c_UserName length to 128 (ZG01) */
+/* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
+/*                            changed                                   */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveDetail_Delete] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -71,7 +73,11 @@ BEGIN
       ,  @n_Err      = @n_Err       OUTPUT
       ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
+   -- SWT02
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXECUTE AS LOGIN = @c_UserName      
+   END
 
    IF @n_Err <> 0 
    BEGIN
