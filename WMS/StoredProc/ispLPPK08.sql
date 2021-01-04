@@ -24,6 +24,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 17-DEC-2020  NJOW01   1.0  WMS-15907 add full case logic             */
 /************************************************************************/
 
 CREATE PROC ispLPPK08   
@@ -58,6 +59,17 @@ BEGIN
            @n_QtyCanFit                    INT,
            @c_NewCarton                    NVARCHAR(5),
            @c_AssignPackLabelToOrdCfg      NVARCHAR(30)
+  
+  --NJOW01
+  DECLARE  @n_Casecnt                      INT,
+           @c_UOM                          NVARCHAR(10),
+           @n_packqty                      INT,   
+           @n_pickqty                      INT,  
+           @n_splitqty                     INT,  
+           @c_RefNo                        NVARCHAR(20),
+           @c_Pickdetailkey                NVARCHAR(10),
+           @c_NewPickdetailkey             NVARCHAR(10),
+           @n_cnt                          INT
                                                
    DECLARE @n_Continue   INT,
            @n_StartTCnt  INT,
@@ -213,30 +225,35 @@ BEGIN
          IF NOT EXISTS(SELECT 1 FROM PACKDETAIL (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
          BEGIN
             DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-               SELECT P.SKU, SKU.StdCube, SKU.StdGrossWgt, SUM(P.Qty)  
+               SELECT P.SKU, SKU.StdCube, SKU.StdGrossWgt, SUM(P.Qty), 
+                      PACK.Casecnt, P.UOM --NJOW01  
                FROM PICKDETAIL P (NOLOCK)  
                JOIN LOC (NOLOCK) ON P.Loc = LOC.Loc
                JOIN SKU (NOLOCK) ON P.Storerkey = SKU.Storerkey AND P.Sku = SKU.Sku
+               JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey  --NJOW01
                WHERE P.Orderkey = @c_Orderkey
                AND P.Qty > 0                 
-               GROUP BY P.SKU, SKU.StdCube, SKU.StdGrossWgt, LOC.LogicalLocation, LOC.Loc
-               ORDER BY LOC.LogicalLocation, LOC.Loc, P.SKU
+               GROUP BY P.SKU, SKU.StdCube, SKU.StdGrossWgt, LOC.LogicalLocation, LOC.Loc, PACK.Casecnt, P.UOM 
+               ORDER BY LOC.LogicalLocation, LOC.Loc, P.SKU, P.UOM 
               
             OPEN CUR_PICKDETAIL            
                           
-            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_StdCube, @n_StdGrossWgt, @n_Qty
+            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_StdCube, @n_StdGrossWgt, @n_Qty, @n_Casecnt, @c_UOM --NJOW01
             
             SET @c_NewCarton = 'Y'            
             SET @n_CartonNo = 0
             DELETE FROM PACKINFO WHERE Pickslipno = @c_PickslipNo 
             
             WHILE @@FETCH_STATUS<>-1  AND @n_continue IN(1,2)
-            BEGIN        	
-    	      	 IF @n_debug = 1 
-            	    Print '@c_SKU=' + RTRIM(@c_SKU) + ' @n_StdCube=' + CAST(@n_StdCube AS NVARCHAR) + ' @n_StdGrossWgt=' + CAST(@n_StdGrossWgt AS NVARCHAR) + ' @n_Qty=' + CAST(@n_Qty AS NVARCHAR)
+            BEGIN        	            	  
+            	 IF @c_UOM = '2'  --NJOW01
+            	    SET @c_NewCarton = 'Y'
 
+    	      	 IF @n_debug = 1 
+            	    Print '@c_SKU=' + RTRIM(@c_SKU) + ' @n_StdCube=' + CAST(@n_StdCube AS NVARCHAR) + ' @n_StdGrossWgt=' + CAST(@n_StdGrossWgt AS NVARCHAR) + ' @n_Qty=' + CAST(@n_Qty AS NVARCHAR) +  ' @c_UOM=' + RTRIM(@c_UOM) +  ' @c_Newcarton=' + RTRIM(@c_newcarton) 
+            	    
             	 WHILE @n_Qty > 0 AND @n_continue IN(1,2)
-            	 BEGIN            	  
+            	 BEGIN            	 	            	  
             	    IF @c_NewCarton = 'Y'
             	    BEGIN
             	    	 SET @c_LabelNo = ''
@@ -256,20 +273,44 @@ BEGIN
                      
                      IF @bSuccess <> 1
                         SET @n_continue = 3            	     	       
-                                          
-                     SELECT TOP 1 @c_cartonType = CZ.CartonType, @n_CartonCube = CZ.Cube
-                     FROM CARTONIZATION CZ (NOLOCK)
-                     WHERE CZ.CartonizationGroup = @c_CartonizationGroup
-                     AND CZ.Cube >= @n_OrderCube
-                     ORDER BY CZ.Cube
                      
-                     IF ISNULL(@n_CartonCube,0) = 0 
+                     IF @c_UOM = '2' --NJOW01
                      BEGIN
                         SELECT TOP 1 @c_cartonType = CZ.CartonType, @n_CartonCube = CZ.Cube
                         FROM CARTONIZATION CZ (NOLOCK)
+                        JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'ZCJCARTON' AND CZ.CartonType = CL.Code 
                         WHERE CZ.CartonizationGroup = @c_CartonizationGroup
-                        ORDER BY CZ.Cube DESC
-                     END                       
+                        AND CZ.Cube >= (@n_Casecnt * @n_StdCube)
+                        ORDER BY CZ.Cube                     	
+                     END
+                     ELSE 
+                     BEGIN                     
+                        SELECT TOP 1 @c_cartonType = CZ.CartonType, @n_CartonCube = CZ.Cube
+                        FROM CARTONIZATION CZ (NOLOCK)
+                        WHERE CZ.CartonizationGroup = @c_CartonizationGroup
+                        AND CZ.Cube >= @n_OrderCube
+                        AND CZ.CartonType NOT IN (SELECT Code FROM codelkup (NOLOCK) WHERE Listname = 'ZCJCARTON') --NJOW01
+                        ORDER BY CZ.Cube
+                     	   
+                        /*IF ISNULL(@n_CartonCube,0) = 0 --NJOW01
+                        BEGIN 
+                           SELECT TOP 1 @c_cartonType = CZ.CartonType, @n_CartonCube = CZ.Cube
+                           FROM CARTONIZATION CZ (NOLOCK)
+                           WHERE CZ.CartonizationGroup = @c_CartonizationGroup
+                           AND CZ.Cube >= (@n_Qty * @n_StdCube)
+                           AND CZ.CartonType NOT IN (SELECT Code FROM codelkup (NOLOCK) WHERE Listname = 'ZCJCARTON') --NJOW01
+                           ORDER BY CZ.Cube
+                        END*/
+                        
+                        IF ISNULL(@n_CartonCube,0) = 0 
+                        BEGIN
+                           SELECT TOP 1 @c_cartonType = CZ.CartonType, @n_CartonCube = CZ.Cube
+                           FROM CARTONIZATION CZ (NOLOCK)
+                           WHERE CZ.CartonizationGroup = @c_CartonizationGroup
+                           AND CZ.CartonType NOT IN (SELECT Code FROM codelkup (NOLOCK) WHERE Listname = 'ZCJCARTON') --NJOW01
+                           ORDER BY CZ.Cube DESC
+                        END  
+                     END                     
                                           
                      IF ISNULL(@n_CartonCube,0) = 0 
                      BEGIN
@@ -290,8 +331,8 @@ BEGIN
           	      	 IF @n_debug = 1 
                   	    Print  '@c_CartonizationGroup=' + RTRIM(@c_CartonizationGroup) + ' @c_cartonType=' + RTRIM(@c_cartonType) + ' @n_CartonCube=' + CAST(@n_CartonCube AS NVARCHAR) + ' @n_CartonNo=' + CAST(@n_CartonNo AS NVARCHAR)  
                      
-                     INSERT INTO PACKINFO (PickSlipNo, Cartonno, CartonType, Cube, Weight, Qty)
-                     VALUES (@c_PickSlipno, @n_CartonNo, @c_CartonType, @n_CartonCube, 0, 0)             
+                     INSERT INTO PACKINFO (PickSlipNo, Cartonno, CartonType, Cube, Weight, Qty, RefNo)
+                     VALUES (@c_PickSlipno, @n_CartonNo, @c_CartonType, @n_CartonCube, 0, 0, @c_UOM)             
                      
                      SET @nerr = @@ERROR
                      
@@ -304,21 +345,29 @@ BEGIN
                      END                      
             	    END
             	    
-            	    SET @n_QtyCanFit = FLOOR(@n_CartonCube / @n_StdCube)
-            	    
-            	    IF @n_QtyCanFit = 0
+            	    IF @c_UOM = '2' --NJOW01
             	    BEGIN
-            	    	  SET @c_NewCarton = 'Y'
-            	    	  CONTINUE
+            	    	 SET @n_QtyPack = @n_Casecnt
+            	       SET @c_NewCarton = 'Y'  --Open new carton            	    	
             	    END
-            	    
-            	    IF @n_Qty >= @n_QtyCanFit
+            	    ELSE
             	    BEGIN
-            	       SET @n_QtyPack = @n_QtyCanFit 
-            	       SET @c_NewCarton = 'Y'  --Open new carton for remaining qty
-            	    END   
-            	    ELSE 
-            	       SET @n_QtyPack = @n_Qty    
+            	       SET @n_QtyCanFit = FLOOR(@n_CartonCube / @n_StdCube)
+            	       
+            	       IF @n_QtyCanFit = 0
+            	       BEGIN
+            	       	  SET @c_NewCarton = 'Y'
+            	       	  CONTINUE
+            	       END
+            	       
+            	       IF @n_Qty >= @n_QtyCanFit
+            	       BEGIN
+            	          SET @n_QtyPack = @n_QtyCanFit 
+            	          SET @c_NewCarton = 'Y'  --Open new carton for remaining qty
+            	       END   
+            	       ELSE 
+            	          SET @n_QtyPack = @n_Qty
+            	    END       
 
        	      	  IF @n_debug = 1 
                   	 Print '@n_QtyCanFit=' + CAST(@n_QtyCanFit AS NVARCHAR) + ' @n_QtyPack=' + CAST(@n_QtyPack AS NVARCHAR) + ' @n_CartonCube=' + CAST(@n_CartonCube AS NVARCHAR)  + ' @n_OrderCube=' + CAST(@n_OrderCube AS NVARCHAR) + ' @n_Qty=' + CAST(@n_Qty AS NVARCHAR)        
@@ -378,14 +427,14 @@ BEGIN
                      IF @nerr <> 0
                      BEGIN
                         SELECT @n_continue = 3  
-                        SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38050     
+                        SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38110     
                         SELECT @cerrmsg='NSQL'+CONVERT(NVARCHAR(5),@nerr)+': Update Error On PACKDETAIL Table. (ispLPPK08)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@cerrmsg) + ' ) '    
                         BREAK       
                      END
                   END                                     
                END -- @n_Qty > 0
                                
-               FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_StdCube, @n_StdGrossWgt, @n_Qty
+               FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_StdCube, @n_StdGrossWgt, @n_Qty, @n_Casecnt, @c_UOM --NJOW01
             END
             CLOSE CUR_PICKDETAIL 
             DEALLOCATE CUR_PICKDETAIL         	
@@ -409,7 +458,7 @@ BEGIN
          IF @nerr <> 0
          BEGIN
             SELECT @n_continue = 3  
-            SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38110     
+            SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38120     
             SELECT @cerrmsg='NSQL'+CONVERT(NVARCHAR(5),@nerr)+': Update Error On PICKINGINFO Table. (ispLPPK08)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@cerrmsg) + ' ) '           
          END
 
@@ -422,7 +471,7 @@ BEGIN
          IF @nerr <> 0
          BEGIN
             SELECT @n_continue = 3  
-            SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38120     
+            SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38130     
             SELECT @cerrmsg='NSQL'+CONVERT(NVARCHAR(5),@nerr)+': Update Error On PACKHEADER Table. (ispLPPK08)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@cerrmsg) + ' ) '           
          END   
          */
@@ -433,17 +482,28 @@ BEGIN
       DEALLOCATE CUR_ORDERS                                                        
    END
    
-   --update labelno to pickdeetail
-   IF (@n_continue = 1 OR @n_continue = 2) AND @c_AssignPackLabelToOrdCfg = '1'
+   --update labelno to pickdeetail   
+   IF (@n_continue = 1 OR @n_continue = 2) --AND @c_AssignPackLabelToOrdCfg = '1'
    BEGIN
+   	  --NJOW01 S
+   	  IF @c_AssignPackLabelToOrdCfg = '1'
+   	  BEGIN
+   	     UPDATE STORERCONFIG WITH (ROWLOCK)
+   	     SET Option4 = 'SKIPSTAMPED'
+   	     WHERE Configkey = 'AssignPackLabelToOrdCfg'
+   	     AND Storerkey = @c_Storerkey
+   	     AND Option4 <> 'SKIPSTAMPED'
+   	     AND (Facility = @c_Facility OR Facility = '')
+   	  END   
+   	     
       DECLARE CUR_PACK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
         SELECT PKH.Pickslipno
         FROM LOADPLANDETAIL LPD (NOLOCK)
         JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
-        JOIN PACKHEADER PKH (NOLOCK) ON O.Orderkey = PKH.Orderkey
+        JOIN PICKHEADER PIH (NOLOCK) ON O.Orderkey = PIH.Orderkey
+        JOIN PACKHEADER PKH (NOLOCK) ON PIH.Pickheaderkey = PKH.Pickslipno
         WHERE LPD.Loadkey = @cLoadkey
-        GROUP BY PKH.PickslipNo
-        ORDER BY PKH.PickslipNo
+        ORDER BY PKH.Pickslipno
 
       OPEN CUR_PACK
                                 
@@ -451,6 +511,165 @@ BEGIN
       
       WHILE @@FETCH_STATUS<>-1 AND @n_continue IN(1,2)  
       BEGIN
+         DECLARE PickDet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+            SELECT PICKDETAIL.Pickdetailkey  
+            FROM PACKHEADER (NOLOCK)
+            JOIN  PICKDETAIL (NOLOCK) ON PACKHEADER.Orderkey = PICKDETAIL.Orderkey  
+            WHERE PACKHEADER.Pickslipno = @c_Pickslipno  
+  
+         OPEN PickDet_cur  
+         
+         FETCH NEXT FROM PickDet_cur INTO @c_pickdetailkey  
+         
+         WHILE @@FETCH_STATUS = 0 AND ( @n_continue = 1 OR @n_continue = 2 )  
+         BEGIN  
+            UPDATE PICKDETAIL WITH (ROWLOCK)  
+            SET PICKDETAIL.CaseID = ''
+               ,TrafficCop = NULL  
+            WHERE PICKDETAIL.Pickdetailkey = @c_pickdetailkey
+                 
+            FETCH NEXT FROM PickDet_cur INTO @c_pickdetailkey  
+         END  
+         CLOSE PickDet_cur  
+         DEALLOCATE PickDet_cur  
+      	 
+         DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno, PACKHEADER.Orderkey, PACKINFO.RefNo
+         FROM PACKHEADER (NOLOCK) 
+         JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno        
+         JOIN PACKINFO (NOLOCK) ON PACKDETAIL.Pickslipno = PACKINFO.Pickslipno AND PACKDETAIL.Cartonno = PACKINFO.Cartonno
+         WHERE  PACKHEADER.Pickslipno = @c_Pickslipno 
+         ORDER BY CASE WHEN PACKINFO.Refno = '2' THEN 1 ELSE 2 END, PACKDETAIL.Sku, PACKDETAIL.Labelno
+
+         OPEN CUR_PACKDET  
+  
+         FETCH NEXT FROM CUR_PACKDET INTO @c_sku, @n_packqty, @c_labelno, @c_orderkey, @c_RefNo
+                  
+         WHILE @@FETCH_STATUS <> -1  
+         BEGIN
+     	      SET @c_Pickdetailkey = ''
+
+            WHILE @n_packqty > 0  
+            BEGIN           	   
+            	  SET @n_cnt = 0
+            	  
+            	  IF @c_Refno = '2'
+            	  BEGIN            	  	 
+                   SELECT TOP 1 @n_cnt = 1  
+                         ,@n_pickqty = PICKDETAIL.Qty  
+                         ,@c_pickdetailkey = PICKDETAIL.Pickdetailkey
+                   FROM PICKDETAIL WITH (NOLOCK)
+                   WHERE PICKDETAIL.Orderkey = @c_orderkey
+                   AND PICKDETAIL.Sku = @c_sku
+                   AND PICKDETAIL.storerkey = @c_storerkey
+                   AND (PICKDETAIL.CaseID = '' OR PICKDETAIL.CaseID IS NULL)
+                   --AND PICKDETAIL.Pickdetailkey > @c_pickdetailkey
+                   AND PICKDETAIL.UOM = '2' 
+                   ORDER BY PICKDETAIL.Qty DESC, PICKDETAIL.Pickdetailkey
+                END
+                ELSE
+                BEGIN
+                   SELECT TOP 1 @n_cnt = 1  
+                         ,@n_pickqty = PICKDETAIL.Qty  
+                         ,@c_pickdetailkey = PICKDETAIL.Pickdetailkey
+                   FROM PICKDETAIL WITH (NOLOCK)
+                   WHERE PICKDETAIL.Orderkey = @c_orderkey
+                   AND PICKDETAIL.Sku = @c_sku
+                   AND PICKDETAIL.storerkey = @c_storerkey
+                   AND (PICKDETAIL.CaseID = '' OR PICKDETAIL.CaseID IS NULL)
+                   AND PICKDETAIL.Pickdetailkey > @c_pickdetailkey
+                   ORDER BY PICKDETAIL.Pickdetailkey
+                END
+
+                IF @n_cnt = 0  
+                   BREAK  
+  
+                IF @n_pickqty <= @n_packqty  
+                BEGIN  
+                   UPDATE PICKDETAIL WITH (ROWLOCK)  
+                   SET PICKDETAIL.CaseID = @c_labelno
+                      ,TrafficCop = NULL  
+                   WHERE Pickdetailkey = @c_pickdetailkey 
+                    
+                   SELECT @nerr = @@ERROR  
+                   IF @nerr <> 0  
+                   BEGIN  
+                      SELECT @n_continue = 3  
+                      SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38140  
+                      SELECT @cerrmsg='NSQL'+CONVERT(NVARCHAR(5),@nerr)+': Update Pickdetail Table Failed. (ispLPPK08)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@cerrmsg),'') + ' ) '  
+                      BREAK  
+                   END  
+                   
+                   SELECT @n_packqty = @n_packqty - @n_pickqty  
+                END  
+                ELSE  
+                BEGIN  -- pickqty > packqty  
+                   SELECT @n_splitqty = @n_pickqty - @n_packqty  
+                   EXECUTE nspg_GetKey  
+                   'PICKDETAILKEY',  
+                   10,  
+                   @c_newpickdetailkey OUTPUT,  
+                   @bsuccess OUTPUT,  
+                   @nerr OUTPUT,  
+                   @cerrmsg OUTPUT          
+                   
+                   IF NOT @bsuccess = 1  
+                   BEGIN  
+                      SELECT @n_continue = 3  
+                      BREAK  
+                   END  
+                
+                   INSERT PICKDETAIL  
+                          (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                           Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,  
+                           DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                           ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                           WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, Channel_ID, TaskDetailKey                                                
+                          )  
+                   SELECT @c_newpickdetailkey, '', PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                          Storerkey, Sku, AltSku, UOM, CASE UOM WHEN '6' THEN @n_splitqty ELSE UOMQty END , @n_splitqty, QtyMoved, Status,  
+                          PICKDETAIL.DropId, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                          ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                          WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, Channel_ID, TaskDetailKey                                               
+                   FROM PICKDETAIL (NOLOCK)  
+                   WHERE PickdetailKey = @c_pickdetailkey  
+                
+                   SELECT @nerr = @@ERROR  
+                   IF @nerr <> 0  
+                   BEGIN  
+                      SELECT @n_continue = 3  
+                      SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38150  
+                      SELECT @cerrmsg='NSQL'+CONVERT(NVARCHAR(5),@nerr)+': Insert Pickdetail Table Failed. (ispLPPK08)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@cerrmsg),'') + ' ) '  
+                      BREAK  
+                   END  
+                
+                   UPDATE PICKDETAIL WITH (ROWLOCK)  
+                   SET PICKDETAIL.CaseID = @c_labelno
+                      ,Qty = @n_packqty  
+                      ,UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END   
+                      ,TrafficCop = NULL  
+                   WHERE Pickdetailkey = @c_pickdetailkey
+                      
+                   SELECT @nerr = @@ERROR  
+                   IF @nerr <> 0  
+                   BEGIN  
+                      SELECT @n_continue = 3  
+                      SELECT @cerrmsg = CONVERT(NVARCHAR(250),@nerr), @nerr = 38160  
+                      SELECT @cerrmsg='NSQL'+CONVERT(NVARCHAR(5),@nerr)+': Update Pickdetail Table Failed. (ispLPPK08)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@cerrmsg),'') + ' ) '  
+                      BREAK  
+                   END  
+                
+                   SELECT @n_packqty = 0  
+                END  
+            END    
+                
+            FETCH NEXT FROM CUR_PACKDET INTO @c_sku, @n_packqty, @c_labelno, @c_orderkey, @c_RefNo 
+         END  
+         CLOSE CUR_PACKDET
+         DEALLOCATE CUR_PACKDET
+         --NJOW01 E
+      	
+         /*  --NJOW01 Removed
          EXEC isp_AssignPackLabelToOrderByLoad
            @c_PickslipNo = @c_PickslipNo,     
            @b_Success = @bSuccess OUTPUT,  
@@ -459,12 +678,13 @@ BEGIN
            
          IF @bSuccess <> 1
             SET @n_continue = 3
+         */   
                 	
          FETCH NEXT FROM CUR_PACK INTO @c_Pickslipno
       END
       CLOSE CUR_PACK
       DEALLOCATE CUR_PACK
-   END   
+   END      
       
    QUIT_SP:
 

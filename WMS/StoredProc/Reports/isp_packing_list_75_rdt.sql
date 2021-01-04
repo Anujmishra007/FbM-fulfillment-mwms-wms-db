@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_packing_list_75_rdt                                  */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 07-Dec-2020 WLChooi  1.1   WMS-15816 - Sort By SKU then UPC, Support */
+/*                            1 SKU Multiple UPC (WL01)                 */
 /************************************************************************/
 CREATE PROC isp_packing_list_75_rdt
            @c_Storerkey       NVARCHAR(15),
@@ -136,14 +138,15 @@ BEGIN
          , ISNULL(SKU.SUSR2,'') AS SUSR2
          , CASE WHEN LEN(ISNULL(SKU.BUSR4,'')) > 10 THEN SUBSTRING(ISNULL(SKU.BUSR4,''),1,10) + ' ' + SUBSTRING(ISNULL(SKU.BUSR4,''),11,LEN(ISNULL(SKU.BUSR4,'')) - 10)
                                                     ELSE ISNULL(SKU.BUSR4,'') END AS BUSR4
-         , SUM(PD.Qty)
+         , (SELECT SUM(P.Qty) FROM PACKDETAIL P (NOLOCK) WHERE P.SKU = PDET.SKU AND P.LabelNo = PDET.LabelNo AND P.StorerKey = @c_Storerkey) AS Qty   --WL01
          , CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN LA.Lottable03 ELSE '' END AS Lottable03
-         , CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN LA.Lottable04 ELSE NULL END AS Lottable04
+         , CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN CONVERT(NVARCHAR(10), LA.Lottable04, 120) ELSE '' END AS Lottable04   --WL01
          , LTRIM(RTRIM(@c_ExternOrderkey1)) AS ExternOrderkey1
          , LTRIM(RTRIM(@c_ExternOrderkey2)) AS ExternOrderkey2
          , LTRIM(RTRIM(@c_ExternOrderkey3)) AS ExternOrderkey3
          , LTRIM(RTRIM(@c_ExternOrderkey4)) AS ExternOrderkey4
          , LTRIM(RTRIM(@c_ExternOrderkey5)) AS ExternOrderkey5
+   INTO #TMP_PL75   --WL01
    FROM PACKHEADER PH WITH (NOLOCK)
    JOIN PACKDETAIL PDET WITH (NOLOCK) ON (PDET.Pickslipno = PH.Pickslipno)
    JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON (PH.Loadkey = LPD.Loadkey)
@@ -174,8 +177,47 @@ BEGIN
                                                     ELSE ISNULL(SKU.BUSR4,'') END
          --, PDET.Qty
          , CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN LA.Lottable03 ELSE '' END 
-         , CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN LA.Lottable04 ELSE NULL END 
-
+         , CASE WHEN ISNULL(CL.Short,'N') = 'Y' THEN CONVERT(NVARCHAR(10), LA.Lottable04, 120) ELSE '' END   --WL01
+   
+   --WL01 - S
+   SELECT DISTINCT
+          LabelNo
+        , Loadkey
+        , FContact1
+        , FAddress1
+        , FAddress2
+        , FAddress3
+        , FAddress4
+        , C_Company
+        , C_Address2
+        , C_Address3
+        , CaseID
+        , LTRIM(RTRIM(CAST(STUFF((SELECT DISTINCT ', ' + RTRIM(t1.UPC) 
+                                  FROM #TMP_PL75 t1
+                                  WHERE ISNULL(t1.UPC,'') <> '' AND t1.SKU = t.SKU
+                                  ORDER BY ', ' + RTRIM(t1.UPC) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(4000)))) AS UPC
+        , SKU
+        , DESCR
+        , SUSR2
+        , BUSR4
+        , Qty
+        , ISNULL(LTRIM(RTRIM(CAST(STUFF((SELECT DISTINCT ', ' + RTRIM(t2.Lottable03) 
+                                         FROM #TMP_PL75 t2
+                                         WHERE ISNULL(t2.Lottable03,'') <> '' AND t2.SKU = t.SKU 
+                                         ORDER BY ', ' + RTRIM(t2.Lottable03) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(4000)))),'') AS Lottable03
+        , ISNULL(LTRIM(RTRIM(CAST(STUFF((SELECT DISTINCT ', ' + RTRIM(t3.Lottable04) 
+                                         FROM #TMP_PL75 t3
+                                         WHERE ISNULL(t3.Lottable04,'') <> '' AND t3.SKU = t.SKU
+                                         ORDER BY ', ' + RTRIM(t3.Lottable04) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(4000)))),'') AS Lottable04
+        , ExternOrderkey1
+        , ExternOrderkey2
+        , ExternOrderkey3
+        , ExternOrderkey4
+        , ExternOrderkey5
+   FROM #TMP_PL75 t
+   ORDER BY SKU, UPC
+   --WL01 - E
+   
 QUIT_SP:
    IF CURSOR_STATUS('LOCAL' , 'CUR_LOOP') in (0 , 1)
    BEGIN
@@ -192,6 +234,13 @@ QUIT_SP:
    BEGIN
       DROP TABLE #TMP_DECRYPTEDDATA
    END
+
+   --WL01 - S
+   IF OBJECT_ID('tempdb..#TMP_PL75') IS NOT NULL
+   BEGIN
+      DROP TABLE #TMP_PL75
+   END
+   --WL01 - E
 
    IF @n_continue=3  -- Error Occured - Process And Return  
     BEGIN  

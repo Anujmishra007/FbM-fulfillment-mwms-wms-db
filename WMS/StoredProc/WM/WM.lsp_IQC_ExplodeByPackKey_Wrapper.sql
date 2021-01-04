@@ -18,6 +18,7 @@ GO
 /*                                 and terminate processing                               */
 /*                               2)Add BEGIN TRY - END CATCH on insert and update         */
 /*                                 statement                                              */
+/* 29-Dec-2020  1.1  SWT01       Remove Duplicate Execute Login                           */
 /******************************************************************************************/
 CREATE PROCEDURE [WM].[lsp_IQC_ExplodeByPackKey_Wrapper]
     @c_QC_Key NVARCHAR(10) 
@@ -85,19 +86,6 @@ BEGIN
 
    SET @b_Success = 1
    SET @c_ErrMsg =''
-
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END     
 
    SELECT @c_Facility   = IQC.From_Facility
          ,@c_ToFacility = IQC.to_Facility
