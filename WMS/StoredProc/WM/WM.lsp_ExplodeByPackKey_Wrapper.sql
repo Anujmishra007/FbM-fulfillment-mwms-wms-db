@@ -25,8 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                    */
 /************************************************************************/
-
 CREATE PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
    ,@c_ReceiptLineNumber NVARCHAR(5)=''  
@@ -50,6 +50,8 @@ BEGIN
     END
                 
     EXECUTE AS LOGIN = @c_UserName        
+    
+    BEGIN TRY -- SWT01 - Begin Outer Begin Try
     
     DECLARE @c_StorerKey                  NVARCHAR(15) = ''
            ,@c_Sku                        NVARCHAR(20) = ''
@@ -516,7 +518,13 @@ BEGIN
           DEALLOCATE CUR_RECEIPTDETAIL
        END              
     END
-             
+
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
+                          
     EXIT_SP: 
     REVERT
 END

@@ -6,7 +6,7 @@ GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
+GO
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_BuildWave_ClrBuildVal                           */                                                                                  
 /* Creation Date: 08-MAR-2018                                           */                                                                                  
@@ -26,6 +26,7 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_BuildWave_ClrBuildVal]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -33,7 +34,8 @@ CREATE PROC [WM].[lsp_BuildWave_ClrBuildVal]
    ,  @n_err               INT            = 0  OUTPUT                                                                                                             
    ,  @c_ErrMsg            NVARCHAR(255)  = '' OUTPUT 
    ,  @c_UserName          NVARCHAR(128)  = ''                  
-AS                                                                                                                                                          
+AS
+BEGIN
    SET NOCOUNT ON                                                                                                                                           
    SET ANSI_NULLS OFF                                                                                                                                       
    SET QUOTED_IDENTIFIER OFF                                                                                                                                
@@ -162,7 +164,7 @@ AS
    CLOSE @CUR_BPD
    DEALLOCATE @CUR_BPD
 
-   REVERT
+
 EXIT_SP:    
   IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
@@ -194,9 +196,9 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END
--- End Procedure
+   
+   REVERT   
+END -- Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_BuildWave_ClrBuildVal] TO nSQL 
 GO        
-
-

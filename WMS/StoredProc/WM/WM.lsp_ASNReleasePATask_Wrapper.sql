@@ -27,6 +27,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /************************************************************************/ 
 CREATE PROCEDURE [WM].[lsp_ASNReleasePATask_Wrapper]
    @c_ReceiptKey NVARCHAR(10),    
@@ -52,13 +53,19 @@ BEGIN
    BEGIN
       GOTO EXIT_SP
    END
-    
-   EXEC isp_ASNReleasePATask_Wrapper 
-      @c_ReceiptKey = @c_ReceiptKey,
-      @b_Success = @b_Success OUTPUT, 
-      @n_Err = @n_Err OUTPUT, 
-      @c_ErrMsg = @c_ErrMsg OUTPUT
 
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try                 
+      EXEC isp_ASNReleasePATask_Wrapper 
+         @c_ReceiptKey = @c_ReceiptKey,
+         @b_Success = @b_Success OUTPUT, 
+         @n_Err = @n_Err OUTPUT, 
+         @c_ErrMsg = @c_ErrMsg OUTPUT
+   END TRY  
+  
+   BEGIN CATCH    
+      SET @c_ErrMsg = 'Wave Order Analysis Failed. (lsp_WaveOrderAnalysis) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '  
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
    EXIT_SP:       
    REVERT  
    

@@ -26,7 +26,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2020-09-14  Wan01    1.1   Fixed Lottables Nullable                  */ 
-/* 2020-09-15  Wan01    1.1   Fixed Nullable column insert into detail  */ 
+/* 2020-09-15  Wan01    1.2   Fixed Nullable column insert into detail  */ 
+/* 28-Dec-2020 SWT01    1.3   Adding Begin Try/Catch                    */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -204,8 +205,10 @@ BEGIN
    IF @n_Err <> 0 
    BEGIN
       GOTO EXIT_SP
-   END 
-
+   END
+    
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
+   
    SET @n_ErrGroupKey = 0
 
    IF @b_PopulateFromArchive = 1
@@ -1697,7 +1700,14 @@ BEGIN
          COMMIT TRAN
       END
    END
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
+   
 EXIT_SP:
+
    IF OBJECT_ID('tempdb..#tPOs', 'U') IS NOT NULL
    BEGIN
       DROP TABLE #tPOs
@@ -1757,5 +1767,6 @@ EXIT_SP:
    REVERT
 END
 GO
+
 GRANT EXECUTE ON [WM].[lsp_ASN_PopulatePOs_Wrapper] TO nSQL 
 GO  

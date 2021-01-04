@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                     */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional
@@ -62,7 +63,8 @@ BEGIN
     END
     
     EXECUTE AS LOGIN = @c_UserName
-       
+    BEGIN TRY -- SWT01 - Begin Outer Begin Try   
+    
     DECLARE @n_Continue              INT
            ,@n_starttcnt             INT
 
@@ -187,7 +189,13 @@ BEGIN
        CLOSE CUR_PICKDETAIL
        DEALLOCATE CUR_PICKDETAIL     
     END    
-
+    
+    END TRY  
+  
+    BEGIN CATCH      
+       GOTO EXIT_SP  
+    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
+    
     EXIT_SP: 
     REVERT
     

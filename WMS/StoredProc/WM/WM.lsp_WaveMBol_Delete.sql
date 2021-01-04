@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 29-Dec-2020  SWT01    1.1   Add Big Outer Begin Try.End Try to enable*/
+/*                             Revert when Sub SP Raise error           */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMbol_Delete] 
       @c_MBOLKey              NVARCHAR(10)                                                                                                                    
@@ -68,7 +70,13 @@ BEGIN
 
       GOTO EXIT_SP
    END
-
+   
+   SET @n_Err = 0 
+   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   
+   EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
+   BEGIN TRY -- (SWT01)
+   
    SET @n_ErrGroupKey = 0
 
    SELECT @n_TotalSelectedKeys_Det = COUNT(1)
@@ -171,7 +179,12 @@ BEGIN
             ,  @c_errmsg      = @c_errmsg    OUTPUT
       END CATCH  
    END
+   END TRY -- (SWT01)
 
+   BEGIN CATCH
+      GOTO EXIT_SP
+   END CATCH    
+   
 EXIT_SP:
    IF @b_Deleted = 1 
    BEGIN     
