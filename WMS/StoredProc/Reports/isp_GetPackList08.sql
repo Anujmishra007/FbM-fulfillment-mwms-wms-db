@@ -17,7 +17,7 @@ GO
 /*                                                                      */    
 /* Called By:r_dw_print_packlist_08                                     */    
 /*                                                                      */    
-/* PVCS Version: 1.2 (Unicode)                                          */    
+/* PVCS Version: 1.3 (Unicode)                                          */    
 /*                                                                      */    
 /* Version: 5.4                                                         */    
 /*                                                                      */    
@@ -28,6 +28,8 @@ GO
 /* 23-MAR-2017  JyhBin    1.0 Order by Externorderkey                   */      
 /* 07-JUNE-2018 CSCHONG   1.1 WMS-5239 add new field (CS01)             */   
 /* 21-AUG-2018  CSCHONG   1.2 WMS-5904 - Revised field logic (CS02)     */ 
+/* 24-Dec-2020  WLChooi   1.3 WMS-15885 - Show Qty = 0 on report if the */
+/*                            StyleColor not allocated (WL01)           */
 /************************************************************************/    
     
 CREATE PROC [dbo].[isp_GetPackList08]     
@@ -576,103 +578,103 @@ BEGIN
                   SKUSZ.SSize21, SKUSZ.SSize22, SKUSZ.SSize23, SKUSZ.SSize24,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize1 AND ISNULL(SKUSZ.SSIZE1,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize2 AND ISNULL(SKUSZ.SSIZE2,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize3 AND ISNULL(SKUSZ.SSIZE3,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize4 AND  ISNULL(SKUSZ.SSIZE4,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize5 AND ISNULL(SKUSZ.SSIZE5,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize6 AND ISNULL(SKUSZ.SSIZE6,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize7 AND ISNULL(SKUSZ.SSIZE7,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize8 AND ISNULL(SKUSZ.SSIZE8,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                       END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize9 AND ISNULL(SKUSZ.SSIZE9,'') <> ''     
                       THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize10 AND ISNULL(SKUSZ.SSIZE10,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize11 AND ISNULL(SKUSZ.SSIZE11,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize12 AND ISNULL(SKUSZ.SSIZE12,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize13 AND ISNULL(SKUSZ.SSIZE13,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize14 AND ISNULL(SKUSZ.SSIZE14,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize15 AND ISNULL(SKUSZ.SSIZE15,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize16 AND ISNULL(SKUSZ.SSIZE16,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,      
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize17 AND ISNULL(SKUSZ.SSIZE17,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize18 AND ISNULL(SKUSZ.SSIZE18,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize19 AND ISNULL(SKUSZ.SSIZE19,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize20 AND ISNULL(SKUSZ.SSIZE20,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize21 AND ISNULL(SKUSZ.SSIZE21,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize22 AND ISNULL(SKUSZ.SSIZE22,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize23 AND ISNULL(SKUSZ.SSIZE23,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                                  END,    
                   CASE WHEN LTRIM(S.size)=SKUSZ.SSize24 AND ISNULL(SKUSZ.SSIZE24,'') <> ''     
                                  THEN SUM(ODET.QtyAllocated + ODET.QtyPicked + ShippedQty)     
-                                 ELSE 0    
+                                 ELSE NULL   --WL01    
                         END    
               ,PH.PickHeaderKey                              --(CS01)        
             FROM ORDERS ORD (NOLOCK)    
-            JOIN Orderdetail ODET (NOLOCK) ON ORD.OrderKey=ODET.OrderKey    
+            JOIN Orderdetail ODET (NOLOCK) ON ORD.OrderKey=ODET.OrderKey   
             JOIN Storer STO WITH (NOLOCK) ON STO.StorerKey=ORD.StorerKey AND STO.[type]='1'    
             LEFT JOIN CODELKUP AS c WITH (NOLOCK) ON c.LISTNAME='KSCOMPANY' AND c.Code=ORD.OrderGroup    
             JOIN SKU S WITH (NOLOCK) ON S.StorerKey=ODET.StorerKey AND S.Sku = ODET.Sku    
@@ -757,9 +759,24 @@ BEGIN
     
  --IF @c_DWCategory = 'H'    
  --BEGIN    
+ 
+   --WL01 - S
+   SELECT StyleColor
+        , ISNULL(SUM(Qty1),0)  + ISNULL(SUM(Qty2),0)  + ISNULL(SUM(Qty3),0)  + ISNULL(SUM(Qty4),0)  + ISNULL(SUM(Qty5),0)  + ISNULL(SUM(Qty6),0)  +   
+          ISNULL(SUM(Qty7),0)  + ISNULL(SUM(Qty8),0)  + ISNULL(SUM(Qty9),0)  + ISNULL(SUM(Qty10),0) + ISNULL(SUM(Qty11),0) + ISNULL(SUM(Qty12),0) +    
+          ISNULL(SUM(Qty13),0) + ISNULL(SUM(Qty14),0) + ISNULL(SUM(Qty15),0) + ISNULL(SUM(Qty16),0) +     
+          ISNULL(SUM(Qty17),0) + ISNULL(SUM(Qty18),0) + ISNULL(SUM(Qty19),0) + ISNULL(SUM(Qty20),0) + ISNULL(SUM(Qty21),0) + ISNULL(SUM(Qty22),0) +  
+          ISNULL(SUM(Qty23),0) + ISNULL(SUM(Qty24),0) AS TotalQty
+   INTO #TempPacklist08_Qty
+   FROM #TempPacklist08
+   GROUP BY StyleColor
+   
+   --SELECT * FROM #TempPacklist08_Qty
+   --WL01 - E
+   
    SELECT STOCompany,CLogo,Loadkey,OrderKey,InvoiceNo,CCompany,    
           B_Vat,BAddress,CAddress,ORDUdef09,BillToKey,SalesMan,    
-          ExternOrderkey,ORDUdef04,SDescr,Style,color,stylecolor,UnitPrice,    
+          ExternOrderkey,ORDUdef04,SDescr,Style,color,#TempPacklist08.StyleColor,UnitPrice,   --WL01    
           ExtendedPrice,TDate,    
           SkuSize1, SkuSize2, SkuSize3, SkuSize4, SkuSize5, SkuSize6, SkuSize7, SkuSize8,    
           SkuSize9, SkuSize10, SkuSize11, SkuSize12, SkuSize13, SkuSize14, SkuSize15, SkuSize16,    
@@ -768,15 +785,16 @@ BEGIN
          SUM(Qty7) Qty7, SUM(Qty8) Qty8, SUM(Qty9) Qty9, SUM(Qty10) Qty10, SUM(Qty11) Qty11, SUM(Qty12) Qty12,    
          SUM(Qty13) Qty13, SUM(Qty14) Qty14, SUM(Qty15) Qty15, SUM(Qty16) Qty16,    
          SUM(Qty17) Qty17, SUM(Qty18) Qty18, SUM(Qty19) Qty19, SUM(Qty20) Qty20, SUM(Qty21) Qty21, SUM(Qty22) Qty22,    
-         SUM(Qty23) Qty23, SUM(Qty24) Qty24,pickheaderkey              --(CS01)    
-      FROM #TempPacklist08 WITH (NOLOCK)    
+         SUM(Qty23) Qty23, SUM(Qty24) Qty24,pickheaderkey,Q.TotalQty              --(CS01)   --WL01    
+      FROM #TempPacklist08 WITH (NOLOCK) 
+      JOIN #TempPacklist08_Qty Q (NOLOCK) ON Q.StyleColor = #TempPacklist08.StyleColor   --WL01
       GROUP BY STOCompany,CLogo,Loadkey,OrderKey,InvoiceNo,CCompany,    
             B_Vat,BAddress,CAddress,ORDUdef09,BillToKey,SalesMan,    
-            ExternOrderkey,ORDUdef04,Style,color,SDescr,stylecolor,UnitPrice,    
+            ExternOrderkey,ORDUdef04,Style,color,SDescr,#TempPacklist08.StyleColor,UnitPrice,   --WL01    
             ExtendedPrice,TDate, SkuSize1, SkuSize2, SkuSize3, SkuSize4, SkuSize5, SkuSize6, SkuSize7, SkuSize8,    
             SkuSize9, SkuSize10, SkuSize11, SkuSize12, SkuSize13, SkuSize14, SkuSize15, SkuSize16,    
             SkuSize17, SkuSize18, SkuSize19, SkuSize20, SkuSize21, SkuSize22, SkuSize23, SkuSize24     
-            ,pickheaderkey              --(CS01)    
+            ,pickheaderkey,Q.TotalQty              --(CS01)   --WL01    
    ORDER BY  ExternOrderkey,ORDUdef04,Style,color    --JyhBin
  --END    
 -- ELSE    
@@ -790,10 +808,21 @@ BEGIN
   --          SkuSize9, SkuSize10, SkuSize11, SkuSize12, SkuSize13, SkuSize14, SkuSize15, SkuSize16,    
   --          SkuSize17, SkuSize18, SkuSize19, SkuSize20, SkuSize21, SkuSize22, SkuSize23, SkuSize24    
   --END              
-QUIT:    
-   DROP TABLE #TempOrder    
-   DROP TABLE #TempPacklist08    
-   DROP TABLE #TempSKU    
+QUIT:  
+   --WL01 - S  
+   --DROP TABLE #TempOrder    
+   --DROP TABLE #TempPacklist08    
+   --DROP TABLE #TempSKU
+ 
+   IF OBJECT_ID('tempdb..#TempOrder') IS NOT NULL
+      DROP TABLE #TempOrder
+   IF OBJECT_ID('tempdb..#TempPacklist08') IS NOT NULL
+      DROP TABLE #TempPacklist08
+   IF OBJECT_ID('tempdb..#TempSKU') IS NOT NULL
+      DROP TABLE #TempSKU
+   IF OBJECT_ID('tempdb..#TempPacklist08_Qty') IS NOT NULL
+      DROP TABLE #TempPacklist08_Qty
+   --WL01 - E
 END    
 GO 
 GRANT EXECUTE ON isp_GetPackList08 TO NSQL
