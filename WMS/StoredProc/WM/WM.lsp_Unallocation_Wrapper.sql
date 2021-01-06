@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: Unallocation                                              */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
@@ -25,6 +25,10 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                    */
+/* 05-Jan-2021  Wan01    1.2  Execute login if current user<>@c_username*/
+/*                            Return Error Msg for Big Outer Catch      */
+/*                            Do Not Raise error for WM Script          */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional
@@ -53,16 +57,23 @@ BEGIN
     SET ANSI_NULLS OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
     
-    SET @n_Err = 0 
-    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
     
-    IF @n_Err <> 0 
+    SET @n_Err = 0 
+    
+    IF SUSER_SNAME() <> @c_UserName    --(Wan01)
     BEGIN
-      GOTO EXIT_SP
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+    
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
     END
     
-    EXECUTE AS LOGIN = @c_UserName
-       
+    BEGIN TRY -- SWT01 - Begin Outer Begin Try   
+    
     DECLARE @n_Continue              INT
            ,@n_starttcnt             INT
 
@@ -187,9 +198,16 @@ BEGIN
        CLOSE CUR_PICKDETAIL
        DEALLOCATE CUR_PICKDETAIL     
     END    
-
+    
+    END TRY  
+  
+    BEGIN CATCH
+      SET @n_Continue = 3                       --(Wan01)
+      SET @c_ErrMsg = ERROR_MESSAGE()           --(Wan01)      
+      GOTO EXIT_SP  
+    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
+    
     EXIT_SP: 
-    REVERT
     
     IF @n_continue=3  -- Error Occured - Process And Return  
     BEGIN  
@@ -206,7 +224,7 @@ BEGIN
           END  
        END  
        execute nsp_logerror @n_err, @c_errmsg, 'lsp_Unallocation_Wrapper'  
-       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
+       --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012 --(Wan01)  
        RETURN  
     END  
     ELSE  
@@ -217,7 +235,8 @@ BEGIN
           COMMIT TRAN  
        END  
        RETURN  
-    END                
+    END 
+    REVERT                                                        --(Wan01) - Move Down             
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Unallocation_Wrapper] TO nSQL 

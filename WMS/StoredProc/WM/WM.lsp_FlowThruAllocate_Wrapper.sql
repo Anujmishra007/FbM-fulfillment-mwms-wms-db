@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 12/29/2020   SWT01    1.1  Remove Duplicate Execute Login             */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_FlowThruAllocate_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
@@ -71,8 +72,6 @@ BEGIN
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
    IF @n_Err <> 0 
    BEGIN
       GOTO EXIT_SP

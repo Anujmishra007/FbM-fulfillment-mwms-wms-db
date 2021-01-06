@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 22-Feb-2018 Wan01    1.0   Try..Catch                                */
+/* 2020-12-29  SWT01    1.3  Missing Execute Login As                   */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
@@ -61,6 +62,7 @@ BEGIN
    BEGIN
       GOTO EXIT_SP
    END
+   EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
    
    SELECT @c_Storerkey = Storerkey,
           @c_Facility = Facility

@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,8 @@ GO
 /* 2020-11-04  Wan      1.0   Created                                   */ 
 /* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable*/
 /*                            Revert when Raise error                   */
+/* 2021-01-05  Wan02    1.2   Remove debug 'select * from #tRECEIPTDETAIL'*/
+/*                            Execute Login if current login<>@c_Username*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulateSOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -218,19 +220,20 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
 
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                   
-   IF @n_Err <> 0 
+   IF SUSER_SNAME() <> @c_UserName  --(Wan02)
    BEGIN
-      GOTO EXIT_SP
-   END 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                   
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END 
 
-   EXECUTE AS LOGIN = @c_UserName
-   
+      EXECUTE AS LOGIN = @c_UserName
+   END         --(Wan02)
    BEGIN TRY   --(Wan01) 
       SET @n_ErrGroupKey = 0
 
@@ -1261,8 +1264,6 @@ BEGIN
                
          GOTO EXIT_SP
       END CATCH
-
-      select * from #tRECEIPTDETAIL
 
       SET @n_ReceiptLineNumber = 0
       SELECT TOP 1 @n_ReceiptLineNumber = CONVERT(INT, RD.ReceiptLineNumber)

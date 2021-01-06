@@ -25,6 +25,9 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 28-Dec-2020  SWT01   1.0   Adding Begin Try/Catch                    */
+/* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
+/*                            changed                                   */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -179,12 +182,17 @@ AS
       ,  @n_Err      = @n_Err       OUTPUT
       ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
+   -- SWT02
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXECUTE AS LOGIN = @c_UserName      
+   END
 
    IF @n_Err <> 0 
    BEGIN
       GOTO EXIT_SP
    END 
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
    
    CREATE TABLE #tWaveOrder                                                                                                                                    
    (                                           
@@ -925,7 +933,13 @@ START_BUILDLOAD:
       PRINT '--Finish Insert Trace Log--'          
       PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
    END                                                                                                                                                         
-                                                                                                                                                            
+
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
+             --                                                                                                                                                             
 EXIT_SP:    
    IF @n_Continue = 3                                                                                                                                            
    BEGIN                                                                                                                                                       

@@ -23,8 +23,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
--- 2020-05-08  KHLim    1.1  Include get session & view report URL
--- 2020-06-05  KHLim    1.2  ReturnURLStorer
+/* 2020-05-08  KHLim    1.1  Include get session & view report URL      */
+/* 2020-06-05  KHLim    1.2  ReturnURLStorer                            */
+/* 2020-12-29  SWT01    1.3  Missing Execute Login As                   */
 /************************************************************************/
 CREATE  PROC  WM.lsp_WM_Get_JReport_URL
      @c_CountryName        NVARCHAR(50)  =''
@@ -67,6 +68,8 @@ BEGIN
    BEGIN
       GOTO EXIT_SP
    END
+   
+   EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
 
    SELECT TOP 1 @c_URLTemplate = n.NSQLDescrip + ISNULL(s.Option5,'')
    FROM NSQLCONFIG AS n WITH (NOLOCK)

@@ -23,14 +23,15 @@ GO
 /*                                                                         */    
 /* Called By: r_dw_print_pickorder95                                       */    
 /*                                                                         */    
-/* PVCS Version: 1.0                                                       */    
+/* PVCS Version: 1.1                                                       */    
 /*                                                                         */    
 /* Version: 5.4                                                            */    
 /*                                                                         */    
 /* Data Modifications:                                                     */    
 /*                                                                         */    
 /* Updates:                                                                */    
-/* Date        Author      Ver   Purposes                                  */    
+/* Date        Author      Ver   Purposes                                  */ 
+/* 2020-12-21  WLChooi     1.1   WMS-15856 - Add SKU.Putawayzone (WL01)    */
 /***************************************************************************/     
 CREATE PROC [dbo].[isp_GetPickSlipOrders95] (@c_loadkey NVARCHAR(10))     
 AS    
@@ -185,7 +186,8 @@ BEGIN
          LOC              NVARCHAR(50) NULL,  
          ID               NVARCHAR(50) NULL,  
          TotalQTY         INT NULL,  
-         Storerkey        NVARCHAR(20) NULL )  
+         Storerkey        NVARCHAR(20) NULL,
+         Putawayzone      NVARCHAR(10) NULL )   --WL01 
      
    INSERT INTO #TEMP_PICK95 ( PickSlipNo        
                              ,LoadKey           
@@ -216,7 +218,8 @@ BEGIN
                              ,LOC  
                              ,ID   
                              ,TotalQTY  
-                             ,Storerkey )  
+                             ,Storerkey
+                             ,Putawayzone )   --WL01   
        --INSERT INTO #TEMP_PICK95    
        --     (PickSlipNo,          LoadKey,         OrderKey,   ConsigneeKey,    
        --      Company,             Addr1,           Addr2,         PgGroup,    
@@ -264,7 +267,8 @@ BEGIN
            LOC.LOC,  
            PICKDETAIL.ID,  
            SUM(pickdetail.Qty),  
-           Orders.Storerkey  
+           Orders.Storerkey,
+           SKU.Putawayzone   --WL01
    FROM pickdetail (nolock)    
    join orders (nolock)    
           on pickdetail.orderkey = orders.orderkey    
@@ -314,7 +318,8 @@ BEGIN
             SKU.SKU,  
             LOC.LOC,  
             PICKDETAIL.ID,  
-            Orders.Storerkey  
+            Orders.Storerkey,
+            SKU.Putawayzone   --WL01 
   
             
    --IF @n_continue = 1 OR @n_continue = 2  
@@ -434,7 +439,8 @@ SUCCESS:
           ,COUNT(DISTINCT t.SKU) AS TotalSKUByItemClass  
           ,COUNT(DISTINCT t.LOC) AS TotalLOCByItemClass  
           ,COUNT(DISTINCT t.ID ) AS TotalIDByItemClass  
-          ,SUM(t.TotalQTY)  
+          ,SUM(t.TotalQTY) 
+          ,t.Putawayzone   --WL01
    FROM #TEMP_PICK95 t  
    GROUP BY t.PickSlipNo      
            ,t.LoadKey         
@@ -461,6 +467,7 @@ SUCCESS:
            ,t.vat             
            ,t.ContainerType  
            ,t.ItemClassDescr  
+           ,t.Putawayzone   --WL01
     ORDER BY t.PickSlipNo  
    
     --select t.ItemClassDescr  

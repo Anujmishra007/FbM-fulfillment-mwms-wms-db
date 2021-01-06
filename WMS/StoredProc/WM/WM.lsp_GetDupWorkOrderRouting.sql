@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /************************************************************************/
 CREATE PROC [WM].[lsp_GetDupWorkOrderRouting]
            @c_MasterWorkOrder NVARCHAR(50)
@@ -128,7 +129,8 @@ BEGIN
    BEGIN
       GOTO EXIT_SP
    END
-
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
+   
    SET @c_SQL = N'INSERT INTO #TMP_WOM ('
               + ' ' + @c_SQLColumns  + ')'            
               + 'SELECT'
@@ -238,6 +240,12 @@ BEGIN
       CLOSE @CUR_REFKEY
       DEALLOCATE @CUR_REFKEY 
    END
+   
+   END TRY  
+  
+   BEGIN CATCH      
+      GOTO EXIT_SP  
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
 EXIT_SP:
 
    IF @n_Continue = 3
