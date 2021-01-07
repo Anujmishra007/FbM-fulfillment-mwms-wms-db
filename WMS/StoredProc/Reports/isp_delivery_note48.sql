@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 06-NOV-2020 CSCHONG  1.1   WMS-15197 revised field mapping (CS01)    */
 /* 10-NOV-2020 CSCHONG  1.2   WMS-15197 fix sn length, taxqty issue (CS02)*/
+/* 21-DEC-2020 LZG      1.3   INC1382606 - Misc fixes (ZG01)            */
 /************************************************************************/
 CREATE PROC isp_delivery_note48
             @c_OrderKey     NVARCHAR(10)  
@@ -283,14 +284,15 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
    WHILE @@FETCH_STATUS = 0    
    BEGIN      
 
-    IF @n_seqno = 1
-    BEGIN
-          UPDATE #DN48
-          SET snum = @c_GetSN
-          where Orderkey = @c_GetOrdKey and Sku = @c_GetSKU and storerkey = @c_Getstorerkey
-    END
-    ELSE
-    BEGIN
+    -- ZG01 (Start)
+    --IF @n_seqno = 1
+    --BEGIN
+    --      UPDATE #DN48
+    --      SET snum = @c_GetSN
+    --      where Orderkey = @c_GetOrdKey and Sku = @c_GetSKU and storerkey = @c_Getstorerkey
+    --END
+    --ELSE
+    --BEGIN
          
          INSERT INTO #DN48 (Facility ,  DeliveryNote ,  OHUDF06  ,  shipperkey  ,  PmtTerm   
       ,  BuyerPO             
@@ -368,9 +370,10 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
     FROM #DN48
      where Orderkey = @c_GetOrdKey and Sku = @c_GetSKU and storerkey = @c_Getstorerkey
    
-    END
+   -- END
 
-   SET @n_seqno = @n_seqno + 1
+   --SET @n_seqno = @n_seqno + 1
+   -- ZG01 (End)
 
    FETCH FROM CUR_ORDSN INTO @c_GetStorerkey, @c_GetOrdKey, @c_getsku,@c_getsn    
    END -- While CUR_UPD_MBOLDETAIL    
@@ -418,7 +421,8 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  DN48.ST_Address1        
       ,  DN48.ST_Address2         
       ,  DN48.ST_Address3          
-      ,   (Row_Number() OVER (PARTITION BY DN48.Orderkey ORDER BY DN48.Orderkey, DN48.ODlinenumber,DN48.Sku,ISNULL(DN48.SNUM,'') Asc)-1)/@n_maxLine + 1 as Pageno  --CS02
+      --,   (Row_Number() OVER (PARTITION BY DN48.Orderkey ORDER BY DN48.Orderkey, DN48.ODlinenumber,DN48.Sku,ISNULL(DN48.SNUM,'') Asc)-1)/@n_maxLine + 1 as Pageno  --CS02
+      ,   (Row_Number() OVER (PARTITION BY DN48.Orderkey ORDER BY DN48.Orderkey, DN48.ODlinenumber,CASE WHEN DN48.Sku <> '' THEN 1 ELSE 0 END desc,ISNULL(DN48.SNUM,'') Asc)-1)/@n_maxLine + 1 as Pageno  --CS02 -- ZG01
       ,  DN48.BuyerPO  
       ,  DN48.ODlinenumber
       ,  ISNULL(DN48.SNUM,'') AS SNUM              --CS02
