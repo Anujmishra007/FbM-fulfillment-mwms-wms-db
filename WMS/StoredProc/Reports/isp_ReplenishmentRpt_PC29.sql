@@ -25,6 +25,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 18-Dec-2020  LZG     1.1   INC1383049 - Excluded QtyAllocated (ZG01)    */
 /***************************************************************************/
 
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC29]
@@ -164,9 +165,9 @@ BEGIN
          GROUP BY LOC.Facility, SKUxLOC.StorerKey, SKUxLOC.SKU, SKUxLOC.LOC, SKUxLOC.Qty, SKUxLOC.QtyPicked, SKUxLOC.QtyAllocated,
                   SKUxLOC.QtyAllocated, SKUxLOC.QtyLocationLimit, SKUxLOC.QtyLocationMinimum, SKUxLOC.ReplenishmentPriority, PACK.CaseCnt, SKUxLOC.LocationType,         
                   PACK.Pallet, SKU.PickCode, SKU.PickCode, SC2.Svalue, LOC.LocationType, PACK.PackKey, PACK.PackUOM3 
-         HAVING (SKUxLOC.Qty - SKUxLOC.QtyPicked) + SUM(ISNULL(LOTXLOCXID.PendingMoveIn,0)) <= SKUxLOC.QtyLocationMinimum  --below mininum
+         HAVING (SKUxLOC.Qty - SKUxLOC.QtyPicked - SKUxLOC.QtyAllocated) + SUM(ISNULL(LOTXLOCXID.PendingMoveIn,0)) <= SKUxLOC.QtyLocationMinimum  --below mininum   -- ZG01
 	 	             OR (SUM(IIF(ISNULL(LOTXLOCXID.PendingMoveIn,0) < ISNULL(LOTXLOCXID.QtyExpected,0), 1, 0)) > 0   --some lotxlocxid over allocated
-	 	                 AND (SKUxLOC.Qty - SKUxLOC.QtyPicked) <= SKUxLOC.QtyLocationMinimum)                  
+	 	                 AND (SKUxLOC.Qty - SKUxLOC.QtyPicked - SKUxLOC.QtyAllocated) <= SKUxLOC.QtyLocationMinimum)    -- ZG01             
          ORDER BY SKUxLOC.ReplenishmentPriority, SKUxLOC.Loc 
          
       OPEN Cur_ReplenPickLoc
