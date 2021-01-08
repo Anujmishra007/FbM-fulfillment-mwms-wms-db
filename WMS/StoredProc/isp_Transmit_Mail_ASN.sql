@@ -27,6 +27,7 @@ GO
 /* 01-Sep-2016  KHLim     Ref:TA:00122357 Display more debuging info (KHLim10)                           */
 /* 06-Dec-2016  KHLim     WMS-636 ID-Receipt & Ship Confirmation Send thru Email Notification - ATI(KH11)*/
 /* 27-Feb-2017  KHLim     WMS-636 ID-Receipt & Ship Confirmation Send thru                    - ATI(KH13)*/
+/* 21-Dec-2020  LZG       INC1383108 - DISTINCT record to fix email duplication (ZG01)                   */
 /*-------------------------------------------------------------------------------------------------------*/
 
 CREATE PROCEDURE [dbo].[isp_Transmit_Mail_ASN] (
@@ -149,7 +150,7 @@ BEGIN
       
    DECLARE GEN_Email  CURSOR LOCAL FAST_FORWARD READ_ONLY   FOR      
        
-   SELECT RTRIM(tf.key1) key1, ISNULL(r.Facility,''), r.ExternReceiptKey, 
+   SELECT DISTINCT RTRIM(tf.key1) key1, ISNULL(r.Facility,''), r.ExternReceiptKey, -- ZG01
       ISNULL(r.rectype,''),  ISNULL(r.CarrierKey,''), ISNULL(r.CarrierName,''), ISNULL(CONVERT(VARCHAR, r.ReceiptDate, 106),''), 
       st.Email1, st.Email2, ISNULL(r.ReceiptGroup,'')
       ,ISNULL(r.ContainerKey,'') --KH11
