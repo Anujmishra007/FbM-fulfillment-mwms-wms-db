@@ -1,41 +1,42 @@
 IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nspItrnAddWithdrawalCheck' AND type = 'P')
    DROP PROC nspItrnAddWithdrawalCheck
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
-/************************************************************************/
-/* Stored Procedure: nspItrnAddWithdrawalCheck                          */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:                                                             */
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.8                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 06/11/2002   Leo Ng        Program rewrite for IDS version 5         */
-/* 07-Sep-2006  MaryVong      Add in RDT compatible error messages      */
-/* 25-Jun-2013  TLTING01      Deadlock Tuning - reduce update to ID     */
-/* 25-Apr-2014  CSCHONG       Add Lottable06-15 (CS01)                  */
-/* 06-Feb-2018  SWT02     1.2 Added Channel Management Logic            */
-/*                        1.2.1 Handle QtyOnHold For Channel Mgmt       */
-/* 23-JUL-2019  Wan01     1.3 WMS - 9914 [MY] JDSPORTSMY - Channel      */
-/*                            Inventory Ignore QtyOnHold - CR           */
-/* 26-SEP-2019  Wan02     1.7 WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for */
-/*                            Channel                                   */
-/* 26-Sep-2019  Leong     1.7 INC0871401 - Revise error message.        */ 
-/* 10-Jun-2020  Wan03     1.8 WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/ 
-/************************************************************************/
+/**************************************************************************/
+/* Stored Procedure: nspItrnAddWithdrawalCheck                            */
+/* Creation Date:                                                         */
+/* Copyright: IDS                                                         */
+/* Written by:                                                            */
+/*                                                                        */
+/* Purpose:                                                               */
+/*                                                                        */
+/* Called By:                                                             */
+/*                                                                        */
+/* PVCS Version: 1.8                                                      */
+/*                                                                        */
+/* Version: 5.4                                                           */
+/*                                                                        */
+/* Data Modifications:                                                    */
+/*                                                                        */
+/* Updates:                                                               */
+/* Date         Author        Purposes                                    */
+/* 06/11/2002   Leo Ng        Program rewrite for IDS version 5           */
+/* 07-Sep-2006  MaryVong      Add in RDT compatible error messages        */
+/* 25-Jun-2013  TLTING01      Deadlock Tuning - reduce update to ID       */
+/* 25-Apr-2014  CSCHONG       Add Lottable06-15 (CS01)                    */
+/* 06-Feb-2018  SWT02     1.2 Added Channel Management Logic              */
+/*                        1.2.1 Handle QtyOnHold For Channel Mgmt         */
+/* 23-JUL-2019  Wan01     1.3 WMS - 9914 [MY] JDSPORTSMY - Channel        */
+/*                            Inventory Ignore QtyOnHold - CR             */
+/* 26-SEP-2019  Wan02     1.7 WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for   */
+/*                            Channel                                     */
+/* 26-Sep-2019  Leong     1.7 INC0871401 - Revise error message.          */
+/* 10-Jun-2020  Wan03     1.8 WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
+/* 04-Jan-2021  Leong     1.9 INC1362763 - Revise error message.          */
+/**************************************************************************/
 
 CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                 @c_itrnkey      NVARCHAR(10)
@@ -46,15 +47,15 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
  ,              @c_ToID         NVARCHAR(18)
  ,              @c_packkey      NVARCHAR(10)
  ,              @c_Status       NVARCHAR(10)
- ,              @n_CaseCnt      int       
- ,              @n_InnerPack    int       
- ,              @n_Qty          int       
- ,              @n_Pallet       int       
- ,              @f_cube         float     
- ,              @f_GrossWgt     float     
- ,              @f_NetWgt       float     
- ,              @f_otherunit1   float     
- ,              @f_otherunit2   float     
+ ,              @n_CaseCnt      int
+ ,              @n_InnerPack    int
+ ,              @n_Qty          int
+ ,              @n_Pallet       int
+ ,              @f_cube         float
+ ,              @f_GrossWgt     float
+ ,              @f_NetWgt       float
+ ,              @f_otherunit1   float
+ ,              @f_otherunit2   float
  ,              @c_Lottable01   NVARCHAR(18) = ''
  ,              @c_Lottable02   NVARCHAR(18) = ''
  ,              @c_Lottable03   NVARCHAR(18) = ''
@@ -76,21 +77,21 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
  ,              @n_Err          int        OUTPUT
  ,              @c_ErrMsg       NVARCHAR(250)  OUTPUT
  ,              @c_Channel      NVARCHAR(20) = '' --(SWT02)
- ,              @n_Channel_ID   BIGINT = 0 OUTPUT --(SWT02)   
+ ,              @n_Channel_ID   BIGINT = 0 OUTPUT --(SWT02)
  AS
- SET NOCOUNT ON 
+ SET NOCOUNT ON
  SET ANSI_NULLS OFF
- SET QUOTED_IDENTIFIER OFF 
+ SET QUOTED_IDENTIFIER OFF
  SET CONCAT_NULL_YIELDS_NULL OFF
 
  DECLARE @b_debug int
  SELECT @b_debug = 0
- DECLARE   @c_SKUdefallowed NVARCHAR(18)   
- ,      @n_continue int             
- ,      @n_Err2 int              
- ,      @c_preprocess NVARCHAR(250)  
- ,      @c_pstprocess NVARCHAR(250)  
- ,      @n_cnt int                  
+ DECLARE   @c_SKUdefallowed NVARCHAR(18)
+ ,      @n_continue int
+ ,      @n_Err2 int
+ ,      @c_preprocess NVARCHAR(250)
+ ,      @c_pstprocess NVARCHAR(250)
+ ,      @n_cnt int
 
  IF @n_continue=1 or @n_continue=2
  BEGIN
@@ -104,25 +105,25 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
      END
  END
  SELECT @n_continue=1, @b_success=0, @n_Err = 1,@c_ErrMsg=""
- 
- DECLARE @c_allowidqtyupdate NVARCHAR(1) 
+
+ DECLARE @c_allowidqtyupdate NVARCHAR(1)
        , @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- (SWT02)
-       
-      /* #INCLUDE <SPIAWC1.SQL> */     
+
+      /* #INCLUDE <SPIAWC1.SQL> */
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
      SELECT @c_allowidqtyupdate = IsNull (NSQLValue, '0')
      FROM NSQLCONFIG (NOLOCK)
      WHERE CONFIGKEY = "ALLOWIDQTYUPDATE"
  END
- 
+
   -- (SWT02)
  DECLARE @c_Facility NVARCHAR(10)
- 
- SELECT @c_Facility = Facility  
+
+ SELECT @c_Facility = Facility
  FROM LOC WITH (NOLOCK)
  WHERE LOC = @c_ToLoc
-      
+
  SET @c_ChannelInventoryMgmt = '0'
  If @n_continue = 1 or @n_continue = 2
  Begin
@@ -139,8 +140,8 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
     Begin
        Select @n_continue = 3, @n_Err = 61961, @c_ErrMsg = 'nspItrnAddWithdrawalCheck:' + ISNULL(RTRIM(@c_ErrMsg),'')
     End
- END  
-   
+ END
+
  IF @n_continue =1 or @n_continue=2
  BEGIN
      IF @n_continue=1 or @n_continue=2
@@ -150,7 +151,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
              SELECT @c_StorerKey=( SELECT dbo.fnc_LTrim(dbo.fnc_RTrim(NSQLValue))
              FROM NSQLCONFIG (NOLOCK)
              WHERE NSQLCONFIG.ConfigKey = "gc_storerdef")
-             IF @c_StorerKey IS NULL 
+             IF @c_StorerKey IS NULL
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61911 --61300
                  SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)"
@@ -161,9 +162,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                  IF @n_Err <> 0
                  BEGIN
                      SELECT @n_continue = 3
-                     SELECT @n_Err = 61912 --61301   
+                     SELECT @n_Err = 61912 --61301
                      SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Insert Trigger On ITRN Failed Because An Attempt To Update StorerKey Failed. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
-                 END                         
+                 END
                  ELSE IF @n_cnt = 0
                  BEGIN
                      SELECT @n_continue = 3
@@ -171,22 +172,22 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                      SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
                  END
              END
-        END     
+        END
      END
      IF @n_continue=1 or @n_continue=2
      BEGIN
      IF   (dbo.fnc_LTrim(dbo.fnc_RTrim(@c_SKU)) IS NULL)
-     BEGIN       
+     BEGIN
          SELECT @c_SKUDefAllowed =( SELECT dbo.fnc_LTrim(dbo.fnc_RTrim(NSQLValue))
          FROM NSQLCONFIG (NOLOCK)
          WHERE ConfigKey = "gb_skudefallowed" )
-         IF @c_SKUDefAllowed = "TRUE" 
+         IF @c_SKUDefAllowed = "TRUE"
          BEGIN
              SELECT @c_SKU=(SELECT NSQLVALUE FROM NSQLCONFIG (NOLOCK) WHERE NSQLCONFIG.Configkey="gc_skudef")
              IF @c_SKU IS NULL
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61914 --61302
-                 SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)"                              
+                 SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)"
              END
              ELSE BEGIN
                  UPDATE ITrn SET sku = @c_SKU WHERE itrnkey = @c_itrnkey
@@ -194,7 +195,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                  IF @n_Err <> 0
                  BEGIN
                      SELECT @n_continue = 3
-                     SELECT @n_Err = 61915 --61303   
+                     SELECT @n_Err = 61915 --61303
                      SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Insert Trigger On ITRN Failed Because An Attempt To Update SKU Failed. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
                  END
                  ELSE IF @n_cnt = 0
@@ -217,12 +218,12 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
      BEGIN
          DECLARE @b_isok int
          SELECT @b_isok=0
-         EXECUTE nsp_LOTLookUp @c_StorerKey, @c_SKU, @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, 
-             @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, 
+         EXECUTE nsp_LOTLookUp @c_StorerKey, @c_SKU, @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05,
+             @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12,
              @d_Lottable13, @d_Lottable14, @d_Lottable15, --(CS01)
              @c_LOT OUTPUT, @b_isOK OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
          IF @b_isok = 1
-         BEGIN                    
+         BEGIN
              IF ISNULL(RTRIM(@c_LOT),'') = ''
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61918 --61305
@@ -231,7 +232,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          END
          ELSE BEGIN
              SELECT @n_continue=3
-         END                                                
+         END
      END
      ELSE BEGIN
          DECLARE @c_verifysku NVARCHAR(20)
@@ -240,21 +241,21 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @n_continue = 3 , @n_Err = 61919 --61306
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Number Is Not Unique Or Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddWithdrawalCheck)"
-         END                             
+         END
          ELSE BEGIN
              IF @c_SKU <> @c_verifysku
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61920 --61307
-                 SELECT @c_ErrMsg = "NSQL"+CONVERT(CHAR(5), @n_Err) 
-                                  + ": Lot Number: " + ISNULL(RTRIM(@c_lot),'') 
-                                  + ", Sku In LotAttribute: " + ISNULL(RTRIM(@c_verifysku),'') 
-                                  + ", Sku Passed In: " + ISNULL(RTRIM(@c_SKU),'') 
-                                  + " - Do Not Matched with LOTATTRIBUTE.(nspItrnAddWithdrawalCheck)" -- INC0871401 
+                 SELECT @c_ErrMsg = "NSQL"+CONVERT(CHAR(5), @n_Err)
+                                  + ": Lot Number: " + ISNULL(RTRIM(@c_lot),'')
+                                  + ", Sku In LotAttribute: " + ISNULL(RTRIM(@c_verifysku),'')
+                                  + ", Sku Passed In: " + ISNULL(RTRIM(@c_SKU),'')
+                                  + " - Do Not Matched with LOTATTRIBUTE.(nspItrnAddWithdrawalCheck)" -- INC0871401
              END
          END
-     END 
+     END
  END
- IF @n_continue=1 or @n_continue=2          
+ IF @n_continue=1 or @n_continue=2
  BEGIN
      DECLARE @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
              @f_curcube float, @f_curGrossWgt float, @f_curNetWgt float, @f_curotherunit1 float, @f_curotherunit2 float
@@ -264,19 +265,19 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
      SELECT @n_rcnt=@@ROWCOUNT
      IF @n_rcnt=1
      BEGIN
-         UPDATE LOT 
+         UPDATE LOT
          SET   CaseCnt=CaseCnt+@n_CaseCnt, InnerPack=InnerPack+@n_InnerPack, QTY = QTY+@n_qty, Pallet=Pallet+@n_Pallet,
                CUBE=CUBE+@f_cube, GrossWgt=(CASE WHEN (GrossWgt+@f_GrossWgt) > 0 THEN (GrossWgt+@f_GrossWgt) ELSE 0 END ),
                NetWgt=(CASE WHEN (NetWgt+@f_NetWgt) > 0 THEN (NetWgt+@f_NetWgt) ELSE 0 END ),
                OTHERUNIT1=OTHERUNIT1+@f_otherunit1, OTHERUNIT2=OTHERUNIT2+@f_otherunit2
-         WHERE LOT=@c_LOT                    
+         WHERE LOT=@c_LOT
          SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_Err <> 0
          BEGIN
              SELECT @n_continue = 3
-             SELECT @n_Err = 61921 --61308   
+             SELECT @n_Err = 61921 --61308
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
-         END                                        
+         END
          ELSE IF @n_cnt = 0
          BEGIN
              SELECT @n_continue = 3, @n_Err = 61922 --61325
@@ -285,18 +286,19 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
      END
      ELSE BEGIN
          SELECT @n_continue = 3, @n_Err = 61923 --61309
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"                    
+         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"
+         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Table " + ISNULL(RTRIM(@c_lot),'') + " Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"  --INC1362763
      END
  END
-  
- IF @n_continue=1 or @n_continue=2          
+
+ IF @n_continue=1 or @n_continue=2
  BEGIN
      SELECT @n_rcnt=NULL, @n_curqty=NULL, @c_curstatus=NULL
-      
-     SELECT @n_curqty=Qty, @c_curstatus=Status 
-     FROM ID (NOLOCK) 
+
+     SELECT @n_curqty=Qty, @c_curstatus=Status
+     FROM ID (NOLOCK)
      WHERE ID = @c_toid
-     
+
      SELECT @n_rcnt=@@ROWCOUNT
      IF @n_rcnt=1
      BEGIN
@@ -304,7 +306,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @c_Status = @c_curstatus
          END
-         IF @c_allowidqtyupdate = "1" 
+         IF @c_allowidqtyupdate = "1"
          BEGIN
             IF ISNULL(RTRIM(@c_toid),'') <> ''
             BEGIN
@@ -315,12 +317,12 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                SELECT @n_cnt = 1
             END
          END
-         ELSE 
+         ELSE
          BEGIN
             --tlting01
             SET @n_cnt = 0
             SELECT @n_cnt = COUNT(1) FROM  ID with (NOLOCK) WHERE ID = @c_toid
-            
+
             IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_toid AND [Status] <> @c_Status )
             BEGIN
                UPDATE ID with (ROWLOCK) SET Status = @c_Status WHERE ID=@c_toid
@@ -329,21 +331,21 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          SELECT @n_Err = @@ERROR--, @n_cnt = @@ROWCOUNT
          IF @n_Err <> 0
          BEGIN
-             SELECT @n_continue = 3 
-             SELECT @n_Err = 61924 --61312   
+             SELECT @n_continue = 3
+             SELECT @n_Err = 61924 --61312
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table ID. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
-         END                                        
+         END
          --ELSE IF @n_cnt = 0
          IF @n_cnt = 0 AND (@n_continue = 1 OR @n_continue = 2)
          BEGIN
-             SELECT @n_continue = 3 
+             SELECT @n_continue = 3
              SELECT @n_Err = 61925 --61327
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3 , @n_Err = 61926 --61313
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"                    
+         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"
      END
      IF (@n_rcnt = 1 or @n_rcnt = 0) and (@n_continue =1 or @n_continue=2)
      BEGIN
@@ -352,7 +354,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
              DECLARE @n_ti int, @n_hi int, @n_totalqty int, @c_currentpackkey NVARCHAR(10)
              SELECT @n_ti = 0, @n_hi = 0, @n_totalqty = 0
              SELECT @n_totalqty = QTY,@c_currentpackkey = PACKKEY FROM ID (NOLOCK) WHERE ID = @c_toid
-             IF ISNULL(RTRIM(@c_currentpackkey),'') <> ''                         
+             IF ISNULL(RTRIM(@c_currentpackkey),'') <> ''
              BEGIN
                  SELECT @n_hi = Ceiling(@n_totalqty / CaseCnt / PalletTI), @n_ti = PalletTI
                  FROM PACK (NOLOCK)
@@ -363,18 +365,18 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                      SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
                      IF @n_Err <> 0
                      BEGIN
-                         SELECT @n_continue = 3 
+                         SELECT @n_continue = 3
                          SELECT @n_Err = 61927 --61339
                          SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
-                     END                                        
+                     END
                  END
-             END                              
+             END
          END
      END
- END 
- IF @n_continue=1 or @n_continue=2          
+ END
+ IF @n_continue=1 or @n_continue=2
  BEGIN
-     SELECT @n_rcnt=NULL, @n_curqty=NULL 
+     SELECT @n_rcnt=NULL, @n_curqty=NULL
      SELECT  @n_curqty=Qty FROM SKUxLOC (NOLOCK) WHERE STORERKEY = @c_StorerKey and SKU = @c_SKU and LOC = @c_toloc
      SELECT @n_rcnt=@@ROWCOUNT
      IF @n_rcnt=1
@@ -383,25 +385,25 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_Err <> 0
          BEGIN
-             SELECT @n_continue = 3 
-             SELECT @n_Err = 61928 --61333   
+             SELECT @n_continue = 3
+             SELECT @n_Err = 61928 --61333
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table SKUxLOC. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
          END
          ELSE IF @n_cnt = 0
          BEGIN
-             SELECT @n_continue = 3 
+             SELECT @n_continue = 3
              SELECT @n_Err = 61929 --61334
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table SKUxLOC Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3 , @n_Err = 61930 --61335
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"                    
+         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"
      END
- END 
- IF @n_continue=1 or @n_continue=2          
+ END
+ IF @n_continue=1 or @n_continue=2
  BEGIN
-     SELECT @n_rcnt=NULL, @n_curqty=NULL 
+     SELECT @n_rcnt=NULL, @n_curqty=NULL
      SELECT  @n_curqty=Qty FROM LOTxLOCxID (NOLOCK) WHERE LOT=@c_LOT and LOC=@c_toloc and ID=@c_toid
      SELECT @n_rcnt=@@ROWCOUNT
      IF @n_rcnt=1
@@ -410,22 +412,22 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_Err <> 0
          BEGIN
-             SELECT @n_continue = 3 
-             SELECT @n_Err = 61931 --61320   
+             SELECT @n_continue = 3
+             SELECT @n_Err = 61931 --61320
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOTxLOCxID. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
-         END                                        
+         END
          ELSE IF @n_cnt = 0
          BEGIN
-             SELECT @n_continue = 3 
+             SELECT @n_continue = 3
              SELECT @n_Err = 61932 --61331
              SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table LOTxLOCxID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3 , @n_Err = 61933 --61321
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)"                    
+         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)"
      END
- END 
+ END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
      IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> "OK")
@@ -435,19 +437,19 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          -- to avoid negative qtyonhold
          IF (SELECT qtyonhold FROM LOT (NOLOCK) WHERE LOT = @c_lot) < ABS(@n_qty )
              UPDATE LOT SET QTYONHOLD = 0 WHERE LOT = @c_lot
-         ELSE 
+         ELSE
              UPDATE LOT SET QTYONHOLD = QTYONHOLD + @n_qty WHERE LOT = @c_lot
              SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
              IF @n_Err <> 0
              BEGIN
-                 SELECT @n_continue = 3 
-                 SELECT @n_Err = 61934 --61337   
+                 SELECT @n_continue = 3
+                 SELECT @n_Err = 61934 --61337
                  SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
-             END                    
+             END
      END
- END   
+ END
     -- (SWT02) Channel Management
-   IF @n_continue=1 or @n_continue=2          
+   IF @n_continue=1 or @n_continue=2
    BEGIN
       IF @c_ChannelInventoryMgmt = '1'
       BEGIN
@@ -455,9 +457,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
             ISNULL(@n_Channel_ID,0) = 0
          BEGIN
             SET @n_Channel_ID = 0
-                
+
             BEGIN TRY
-               EXEC isp_ChannelGetID 
+               EXEC isp_ChannelGetID
                    @c_StorerKey   = @c_StorerKey
                   ,@c_Sku         = @c_SKU
                   ,@c_Facility    = @c_Facility
@@ -466,20 +468,20 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                   ,@n_Channel_ID  = @n_Channel_ID OUTPUT
                   ,@b_Success     = @b_Success OUTPUT
                   ,@n_ErrNo       = @n_Err     OUTPUT
-                  ,@c_ErrMsg      = @c_ErrMsg  OUTPUT                
+                  ,@c_ErrMsg      = @c_ErrMsg  OUTPUT
             END TRY
             BEGIN CATCH
                   SELECT @n_err = ERROR_NUMBER(),
                          @c_ErrMsg = ERROR_MESSAGE()
-                            
+
                   SELECT @n_continue = 3
-                  SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddWithdrawalCheck)' 
-            END CATCH         
+                  SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddWithdrawalCheck)'
+            END CATCH
          END
 
          IF @n_Channel_ID > 0
          BEGIN
-            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - START  
+            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - START
             DECLARE @b_UpdateChannel      BIT         = 1
                   , @n_ToChannel_ID       BIGINT      = 0
                   , @c_ToChannel          NVARCHAR(20)= ''
@@ -489,34 +491,34 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                   , @c_ToFacility         NVARCHAR(5) = ''
                   , @c_ToStorerKey        NVARCHAR(15)= ''
                   , @c_ToSku              NVARCHAR(20)= ''
-                  , @c_C_AttributeLbl01   NVARCHAR(30)= ''  
-                  , @c_C_AttributeLbl02   NVARCHAR(30)= ''  
-                  , @c_C_AttributeLbl03   NVARCHAR(30)= ''  
-                  , @c_C_AttributeLbl04   NVARCHAR(30)= ''  
-                  , @c_C_AttributeLbl05   NVARCHAR(30)= ''  
-                  , @c_C_Attribute01      NVARCHAR(30)= ''  
-                  , @c_C_Attribute02      NVARCHAR(30)= ''  
-                  , @c_C_Attribute03      NVARCHAR(30)= ''  
-                  , @c_C_Attribute04      NVARCHAR(30)= ''  
-                  , @c_C_Attribute05      NVARCHAR(30)= '' 
-                  , @c_ToLottable01       NVARCHAR(30)= ''  
-                  , @c_ToLottable02       NVARCHAR(30)= ''  
-                  , @c_ToLottable03       NVARCHAR(30)= ''  
-                  , @d_ToLottable04       DATETIME  
-                  , @d_ToLottable05       DATETIME 
-                  , @c_ToLottable06       NVARCHAR(30)=''  
-                  , @c_ToLottable07       NVARCHAR(30)=''  
-                  , @c_ToLottable08       NVARCHAR(30)=''  
-                  , @c_ToLottable09       NVARCHAR(30)=''  
-                  , @c_ToLottable10       NVARCHAR(30)='' 
-                  , @c_ToLottable11       NVARCHAR(30)=''  
-                  , @c_ToLottable12       NVARCHAR(30)=''  
-                  , @d_ToLottable13       DATETIME      
-                  , @d_ToLottable14       DATETIME      
+                  , @c_C_AttributeLbl01   NVARCHAR(30)= ''
+                  , @c_C_AttributeLbl02   NVARCHAR(30)= ''
+                  , @c_C_AttributeLbl03   NVARCHAR(30)= ''
+                  , @c_C_AttributeLbl04   NVARCHAR(30)= ''
+                  , @c_C_AttributeLbl05   NVARCHAR(30)= ''
+                  , @c_C_Attribute01      NVARCHAR(30)= ''
+                  , @c_C_Attribute02      NVARCHAR(30)= ''
+                  , @c_C_Attribute03      NVARCHAR(30)= ''
+                  , @c_C_Attribute04      NVARCHAR(30)= ''
+                  , @c_C_Attribute05      NVARCHAR(30)= ''
+                  , @c_ToLottable01       NVARCHAR(30)= ''
+                  , @c_ToLottable02       NVARCHAR(30)= ''
+                  , @c_ToLottable03       NVARCHAR(30)= ''
+                  , @d_ToLottable04       DATETIME
+                  , @d_ToLottable05       DATETIME
+                  , @c_ToLottable06       NVARCHAR(30)=''
+                  , @c_ToLottable07       NVARCHAR(30)=''
+                  , @c_ToLottable08       NVARCHAR(30)=''
+                  , @c_ToLottable09       NVARCHAR(30)=''
+                  , @c_ToLottable10       NVARCHAR(30)=''
+                  , @c_ToLottable11       NVARCHAR(30)=''
+                  , @c_ToLottable12       NVARCHAR(30)=''
+                  , @d_ToLottable13       DATETIME
+                  , @d_ToLottable14       DATETIME
                   , @d_ToLottable15       DATETIME
-                  
+
                   , @c_ToChannelInventoryMgmt   NVARCHAR(10) = ''
-                                        
+
             SET @b_UpdateChannel = 1
 
             IF @c_SourceType LIKE 'ntrTransferDetail%'
@@ -529,7 +531,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                      @c_ToFacility   = TFH.ToFacility
                    , @c_ToStorerkey  = TFH.ToStorerkey
                    , @c_ToSku        = TFD.ToSku
-                   , @c_ToChannel    = TFD.ToChannel 
+                   , @c_ToChannel    = TFD.ToChannel
                    , @n_ToChannel_ID = TFD.ToChannel_ID
                    , @c_ToLottable01 = TFD.ToLottable01
                    , @c_ToLottable02 = TFD.ToLottable02
@@ -554,14 +556,14 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                IF @n_ToChannel_ID = 0
                BEGIN
                    SET @b_success = 0
-                   Execute nspGetRight2 
-                        @c_ToFacility 
+                   Execute nspGetRight2
+                        @c_ToFacility
                       , @c_ToStorerKey             -- Storer
                       , @c_ToSKU                   -- Sku
                       , 'ChannelInventoryMgmt'     -- ConfigKey
                       , @b_success                 OUTPUT
-                      , @c_ToChannelInventoryMgmt  OUTPUT 
-                      , @n_Err                     OUTPUT 
+                      , @c_ToChannelInventoryMgmt  OUTPUT
+                      , @n_Err                     OUTPUT
                       , @c_ErrMsg                  OUTPUT
 
                   IF @b_success <> 1
@@ -575,15 +577,15 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                   BEGIN
 
                      SELECT @n_Cnt = 1
-                           ,@c_C_AttributeLbl01 = cac.C_AttributeLabel01  
-                           ,@c_C_AttributeLbl02 = cac.C_AttributeLabel02  
-                           ,@c_C_AttributeLbl03 = cac.C_AttributeLabel03  
-                           ,@c_C_AttributeLbl04 = cac.C_AttributeLabel04  
-                           ,@c_C_AttributeLbl05 = cac.C_AttributeLabel05  
-                     FROM   ChannelAttributeConfig AS cac WITH(NOLOCK)  
-                     WHERE  cac.StorerKey = @c_ToStorerKey  
+                           ,@c_C_AttributeLbl01 = cac.C_AttributeLabel01
+                           ,@c_C_AttributeLbl02 = cac.C_AttributeLabel02
+                           ,@c_C_AttributeLbl03 = cac.C_AttributeLabel03
+                           ,@c_C_AttributeLbl04 = cac.C_AttributeLabel04
+                           ,@c_C_AttributeLbl05 = cac.C_AttributeLabel05
+                     FROM   ChannelAttributeConfig AS cac WITH(NOLOCK)
+                     WHERE  cac.StorerKey = @c_ToStorerKey
 
-                     SET @c_C_Attribute01 = CASE @c_C_AttributeLbl01 
+                     SET @c_C_Attribute01 = CASE @c_C_AttributeLbl01
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
@@ -659,7 +661,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              ELSE ''
                                              END
 
-                     SET @c_C_Attribute05 = CASE @c_C_AttributeLbl05 
+                     SET @c_C_Attribute05 = CASE @c_C_AttributeLbl05
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
@@ -678,86 +680,86 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              ELSE ''
                                              END
 
-                     SET @n_ToChannel_ID = 0                                                   
+                     SET @n_ToChannel_ID = 0
                      SELECT @n_ToChannel_ID = ci.Channel_ID
-                     FROM ChannelInv AS ci WITH(NOLOCK)  
-                     WHERE ci.StorerKey = @c_ToStorerKey   
-                     AND   ci.SKU = @c_ToSku  
-                     AND   ci.Facility = @c_ToFacility   
-                     AND   ci.Channel = @c_ToChannel   
-                     AND   ci.C_Attribute01 = @c_C_Attribute01  
-                     AND   ci.C_Attribute02 = @c_C_Attribute02  
-                     AND   ci.C_Attribute03 = @c_C_Attribute03  
-                     AND   ci.C_Attribute04 = @c_C_Attribute04  
+                     FROM ChannelInv AS ci WITH(NOLOCK)
+                     WHERE ci.StorerKey = @c_ToStorerKey
+                     AND   ci.SKU = @c_ToSku
+                     AND   ci.Facility = @c_ToFacility
+                     AND   ci.Channel = @c_ToChannel
+                     AND   ci.C_Attribute01 = @c_C_Attribute01
+                     AND   ci.C_Attribute02 = @c_C_Attribute02
+                     AND   ci.C_Attribute03 = @c_C_Attribute03
+                     AND   ci.C_Attribute04 = @c_C_Attribute04
                      AND   ci.C_Attribute05 = @c_C_Attribute05
-                
+
                   END
                END
 
-               IF @n_ToChannel_ID = @n_Channel_ID 
+               IF @n_ToChannel_ID = @n_Channel_ID
                BEGIN
                   SET @b_UpdateChannel = 0
                END
             END
-            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - END  
-            --(Wan01) - START: Use Channel InventoryHold to Hold Instead              
+            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - END
+            --(Wan01) - START: Use Channel InventoryHold to Hold Instead
             --IF EXISTS(SELECT 1 FROM LOC WITH (NOLOCK)
             --            WHERE Loc = @c_ToLoc
             --            AND ( LocationFlag IN ('DAMAGE','HOLD') OR LOC.[Status]  ='HOLD' ))
-            --            AND @c_ChannelZeroLocHold = '0'                              
+            --            AND @c_ChannelZeroLocHold = '0'
             --BEGIN
             -- UPDATE ChannelInv WITH (ROWLOCK)
-            --    SET Qty = Qty + @n_Qty, 
-            --          QtyOnHold = QtyOnHold + @n_Qty,  
+            --    SET Qty = Qty + @n_Qty,
+            --          QtyOnHold = QtyOnHold + @n_Qty,
             --          EditDate = GETDATE(),
-            --          EditWho  = SUSER_SNAME() 
-            -- WHERE Channel_ID = @n_Channel_ID 
-            --SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT                
+            --          EditWho  = SUSER_SNAME()
+            -- WHERE Channel_ID = @n_Channel_ID
+            --SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
             --END
-            --ELSE 
-            --(Wan01) - END   
-            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - START 
+            --ELSE
+            --(Wan01) - END
+            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - START
             IF @b_UpdateChannel = 1
-            BEGIN 
+            BEGIN
                 UPDATE ChannelInv WITH (ROWLOCK)
-                   SET Qty = Qty + @n_qty, 
+                   SET Qty = Qty + @n_qty,
                        EditDate = GETDATE(),
-                       EditWho  = SUSER_SNAME() 
-                WHERE Channel_ID = @n_Channel_ID 
-                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT                
-      
+                       EditWho  = SUSER_SNAME()
+                WHERE Channel_ID = @n_Channel_ID
+                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+
                IF @n_err <> 0
                BEGIN
                   SELECT @n_continue = 3
-                  SELECT @n_err = 61992  
+                  SELECT @n_err = 61992
                   SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)
                   +": Update Failed on Table ChannelInv. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
-               END   
-            END 
-            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - END                                          
-         END            
+               END
+            END
+            --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - END
+         END
       END
-      ELSE 
+      ELSE
       BEGIN
-         SET @n_Channel_ID = 0 
-      END                  
+         SET @n_Channel_ID = 0
+      END
    END
-             
-   IF @n_continue=1 or @n_continue=2        
+
+   IF @n_continue=1 or @n_continue=2
    BEGIN
-      UPDATE Itrn WITH (ROWLOCK)  
-      SET TrafficCop = NULL, 
-            StorerKey = @c_StorerKey, 
-            Sku = @c_SKU, 
-            Lot = @c_Lot, 
-            ToId = @c_ToId, 
+      UPDATE Itrn WITH (ROWLOCK)
+      SET TrafficCop = NULL,
+            StorerKey = @c_StorerKey,
+            Sku = @c_SKU,
+            Lot = @c_Lot,
+            ToId = @c_ToId,
             ToLoc = @c_ToLoc,
-            Lottable04 = @d_Lottable04, 
-            Lottable05 = @d_Lottable05, 
+            Lottable04 = @d_Lottable04,
+            Lottable05 = @d_Lottable05,
             Status = @c_Status,
             Channel_ID = @n_Channel_ID, -- (SWT02)
             EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()             
+            EditWho = SUSER_SNAME()
       WHERE ItrnKey = @c_itrnkey
    END
    --(Wan03) - START
@@ -768,7 +770,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
 
       SET @b_success = 0
       SET @c_UCC = ''
-      Execute nspGetRight 
+      Execute nspGetRight
          @c_facility = @c_facility
       ,  @c_StorerKey= @c_StorerKey                   -- Storer
       ,  @c_Sku      = ''                             -- Sku
@@ -789,7 +791,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
       BEGIN
          SET @b_success = 0
          SET @c_UCCTracking = ''
-         Execute nspGetRight 
+         Execute nspGetRight
             @c_facility = @c_facility
          ,  @c_StorerKey= @c_StorerKey                   -- Storer
          ,  @c_Sku      = ''                             -- Sku
@@ -810,28 +812,28 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
       IF @n_continue IN (1,2) AND (@c_UCC = '1' OR @c_UCCTracking = '1')
       BEGIN
          EXEC isp_ItrnUCCAdd
-           @c_Storerkey       = @c_StorerKey 
-         , @c_UCCNo           = ''     
-         , @c_Sku             = @c_Sku  
-         , @c_UCCStatus       = ''            
-         , @c_SourceKey       = @c_Sourcekey         
-         , @c_ItrnSourceType  = @c_SourceType 
-         , @c_ToStorerkey     = '' 
-         , @c_ToUCCNo         = ''     
-         , @c_ToSku           = ''  
-         , @c_ToUCCStatus     = ''                         
+           @c_Storerkey       = @c_StorerKey
+         , @c_UCCNo           = ''
+         , @c_Sku             = @c_Sku
+         , @c_UCCStatus       = ''
+         , @c_SourceKey       = @c_Sourcekey
+         , @c_ItrnSourceType  = @c_SourceType
+         , @c_ToStorerkey     = ''
+         , @c_ToUCCNo         = ''
+         , @c_ToSku           = ''
+         , @c_ToUCCStatus     = ''
          , @b_Success         = @b_Success          OUTPUT
          , @n_Err             = @n_Err              OUTPUT
          , @c_ErrMsg          = @c_ErrMsg           OUTPUT
 
-         IF @b_Success <> 1  
+         IF @b_Success <> 1
          BEGIN
-            SET @n_continue = 3     
+            SET @n_continue = 3
             SET @n_err = 62712
-            SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (isp_FinalizeADJ)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
-         END 
-      END                
+            SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (isp_FinalizeADJ)'
+                           + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+         END
+      END
    END
    --(Wan03) - END
 
@@ -847,9 +849,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
             SELECT @n_continue = 3
          END
-      END 
+      END
    END
-END 
+END
 
 /* #INCLUDE <SPIAWC2.SQL> */
 IF @n_continue = 3  -- Error Occured - Process And Return
@@ -868,9 +870,9 @@ BEGIN
       -- WHILE @@TRANCOUNT > @n_starttcnt
       --    COMMIT TRAN
 
-      -- Raise error with severity = 10, instead of the default severity 16. 
+      -- Raise error with severity = 10, instead of the default severity 16.
       -- RDT cannot handle error with severity > 10, which stop the processing after executed this trigger
-      RAISERROR (@n_Err, 10, 1) WITH SETERROR 
+      RAISERROR (@n_Err, 10, 1) WITH SETERROR
 
       -- The RAISERROR has to be last line, to ensure @@ERROR is not getting overwritten
    END
@@ -880,18 +882,18 @@ BEGIN
       RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
-END         
+END
 ELSE
 BEGIN
    SELECT @b_success = 1
    RETURN
-END         
+END
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON nspItrnAddWithdrawalCheck TO NSQL 
+GRANT EXECUTE ON nspItrnAddWithdrawalCheck TO NSQL
 GO
