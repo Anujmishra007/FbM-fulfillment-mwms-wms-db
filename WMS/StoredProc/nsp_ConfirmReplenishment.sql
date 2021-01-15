@@ -1,9 +1,10 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_ConfirmReplenishment]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[nsp_ConfirmReplenishment]
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* SP: nsp_ConfirmReplenishment                                         */
@@ -40,10 +41,9 @@ GO
 /*                            confirm replen with replengroup only      */
 /* 16-Jul-2019  NJOW03  1.3   WMS-8356 support replen by UCC. Update to */
 /*                            status 6 for confirm replen.              */
-/* 15-Dec-2020  WWANG02 1.4   Adding Movement Key into PickDetail       */
+/* 21-Dec-2020  WWANG01 1.4   Update MoveRefKey for ECOM replenishment  */
 /************************************************************************/
-
-CREATE PROC  nsp_ConfirmReplenishment
+CREATE PROC  [dbo].[nsp_ConfirmReplenishment]
                @c_Facility         NVARCHAR(10)
 ,              @c_zone02           NVARCHAR(10)
 ,              @c_zone03           NVARCHAR(10)
@@ -89,7 +89,7 @@ BEGIN
    --NJOW03
    DECLARE @c_EOrderReplenByUCC NVARCHAR(30), 
            @c_RefNo             NVARCHAR(20), 
-           @c_MoveRefKey        NVARCHAR(10),  --WWANNG02
+		   @c_MoveRefKey        NVARCHAR(10),  --WWANG01
            @c_Sku               NVARCHAR(20), 
            @n_UCC_RowRef        BIGINT,    
            @cur_UCC             CURSOR,
@@ -107,7 +107,7 @@ BEGIN
    --(Wan01) - END
    
    SELECT @ReplenKey = ''
-   SELECT @c_MoveRefKey = 'E' + RIGHT(@c_replgrp, 9) --WWANG02
+   SELECT @c_MoveRefKey = 'E' + RIGHT(@c_replgrp, 9) --WWANG01
    SELECT @counter = 0 
    SELECT @n_continue = 1
    SET @n_starttcnt = @@TRANCOUNT
@@ -249,8 +249,7 @@ BEGIN
                   BEGIN TRAN
                   	
               	  UPDATE PICKDETAIL WITH (ROWLOCK)
-              	  --SET MoveRefKey = @c_replgrp,
-              	  SET MoveRefKey = @c_MoveRefKey, --WWANG02
+              	  SET MoveRefKey = @c_MoveRefKey, --WWANG01
               	      TrafficCop = NULL
               	  WHERE Pickdetailkey = @c_Pickdetailkey
 
@@ -284,8 +283,7 @@ BEGIN
               BEGIN
                  BEGIN TRAN
                  UPDATE Replenishment WITH (ROWLOCK) 
-                 --SET MoveRefKey = @c_replgrp,
-                 SET MoveRefKey = @c_MoveRefKey, --WWANG02                 
+                 SET MoveRefKey = @c_MoveRefKey, --WWANG01
                      ArchiveCop = NULL
                  WHERE ReplenishmentKey = @ReplenKey
                  AND   Confirmed IN ('N', 'L')            
@@ -333,7 +331,7 @@ BEGIN
          IF @@TRANCOUNT > 0 
             COMMIT TRAN
       END
-      
+
       IF @nQtyInPickLoc > 0 AND ISNULL(RTRIM(@c_replgrp),'') <> ''
       BEGIN
          IF EXISTS(SELECT 1 FROM PackTask AS pt WITH(NOLOCK)
@@ -364,7 +362,7 @@ BEGIN
             --END                      
          END         
       END
-      
+
       --NJOW03 S
       IF @c_EOrderReplenByUCC = '1' AND @n_continue IN(1,2)
       BEGIN
@@ -603,11 +601,6 @@ BEGIN
     
       
 END -- Procedure
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
 GO
 
 GRANT EXECUTE ON [nsp_ConfirmReplenishment] TO NSQL

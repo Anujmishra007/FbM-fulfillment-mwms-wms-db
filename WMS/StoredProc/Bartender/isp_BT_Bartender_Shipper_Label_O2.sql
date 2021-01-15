@@ -130,7 +130,7 @@ BEGIN
                     +' OH.Userdefine06, OH.InvoiceAmount, ISNULL(F.Contact1,''''), ISNULL(F.Contact2,''''), ISNULL(F.Phone1,''''), ISNULL(F.Phone2,''''),  ' + CHAR(13)   --30 
                     +' LTRIM(RTRIM(ISNULL(F.Address1,''''))) + '' '' + LTRIM(RTRIM(ISNULL(F.Address2,''''))) + '' '' + LTRIM(RTRIM(ISNULL(F.Address3,''''))), ' + CHAR(13)   --31 
                     +' '''', '''', ISNULL(OH.DeliveryPlace,''''), ISNULL(OH.DeliveryNote,''''), ISNULL(OH.B_Address1,''''), ISNULL(OH.B_Zip,''''), ' + CHAR(13)   --37
-                    +' ISNULL(CL1.UDF01,''''), CASE WHEN @c_Sparm05 = ''1'' THEN ISNULL(CT1.TrackingNo,'''') ELSE ISNULL(CT2.TrackingNo,'''') END, ISNULL(CL2.Long,''''), ' + CHAR(13)  --40     
+                    +' ISNULL(CL1.UDF01,''''), CASE WHEN @c_Sparm05 = ''1'' THEN OH.UserDefine04 ELSE ISNULL(CT2.TrackingNo,'''') END, ISNULL(CL2.Long,''''), ' + CHAR(13)  --40     
                     +' ISNULL(CL3.Long,''''), '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --50                           
                     +' '''', '''', '''', '''', '''', '''', '''', @c_Sparm01, @c_Sparm02, @c_Sparm05 ' + CHAR(13)  --60                
                     +' FROM ORDERS OH (NOLOCK) ' + CHAR(13)
@@ -138,11 +138,11 @@ BEGIN
                     +' LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.Listname = ''WSCourier'' AND CL1.Short = OH.ShipperKey ' + CHAR(13)
                     +'                                AND CL1.Storerkey = OH.StorerKey ' + CHAR(13)
                     +' LEFT JOIN CODELKUP CL2 (NOLOCK) ON CL2.Listname = ''NIKESoldTo'' AND CL2.Short = OH.B_Company ' + CHAR(13)
-                    +' LEFT JOIN CODELKUP CL3 (NOLOCK) ON CL3.Listname = ''Expresstype'' AND CL3.Code = OH.B_Zip ' + CHAR(13) 
+                    +' LEFT JOIN CODELKUP CL3 (NOLOCK) ON CL3.Listname = ''Expresstyp'' AND CL3.Code = OH.B_Zip ' + CHAR(13) 
                     +'                                AND CL3.Short = OH.Shipperkey ' + CHAR(13)
-                    +' LEFT JOIN CartonTrack CT1 (NOLOCK) ON CT1.LabelNo = OH.OrderKey AND CT1.KeyName = ''NIKE_IML'' AND CT1.CarrierRef1 = '''' ' + CHAR(13)
-                    +'                                   AND CT1.CarrierName = OH.ShipperKey ' + CHAR(13)
-                    +' LEFT JOIN CartonTrack CT2 (NOLOCK) ON CT2.LabelNo = OH.OrderKey AND CT2.KeyName = ''NIKEO2SUB'' AND RIGHT(CT2.CarrierRef1,3) = RIGHT(''000'' + @c_Sparm05,3) ' + CHAR(13)
+                    --+' LEFT JOIN CartonTrack CT1 (NOLOCK) ON CT1.LabelNo = OH.OrderKey AND CT1.KeyName = ''NIKE_IML'' AND CT1.CarrierRef1 = '''' ' + CHAR(13)
+                    --+'                                   AND CT1.CarrierName = OH.ShipperKey ' + CHAR(13)
+                    +' LEFT JOIN CartonTrack CT2 (NOLOCK) ON CT2.LabelNo = OH.OrderKey AND CT2.KeyName = ''NIKEO2SUB'' AND SUBSTRING(CT2.CarrierRef1, 11, 3) = @c_Sparm05 ' + CHAR(13)
                     +'                                   AND CT2.CarrierName = OH.ShipperKey ' + CHAR(13)  
                     +' WHERE OH.LoadKey = @c_Sparm01 '+ CHAR(13)              
                     +' AND OH.OrderKey = @c_Sparm02 '

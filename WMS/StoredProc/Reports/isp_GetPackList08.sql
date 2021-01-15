@@ -30,6 +30,7 @@ GO
 /* 21-AUG-2018  CSCHONG   1.2 WMS-5904 - Revised field logic (CS02)     */ 
 /* 24-Dec-2020  WLChooi   1.3 WMS-15885 - Show Qty = 0 on report if the */
 /*                            StyleColor not allocated (WL01)           */
+/* 11-Jan-2021  WLChooi   1.4 WMS-15885 - Fix Total Qty issue (WL02)    */
 /************************************************************************/    
     
 CREATE PROC [dbo].[isp_GetPackList08]     
@@ -766,18 +767,18 @@ BEGIN
           ISNULL(SUM(Qty7),0)  + ISNULL(SUM(Qty8),0)  + ISNULL(SUM(Qty9),0)  + ISNULL(SUM(Qty10),0) + ISNULL(SUM(Qty11),0) + ISNULL(SUM(Qty12),0) +    
           ISNULL(SUM(Qty13),0) + ISNULL(SUM(Qty14),0) + ISNULL(SUM(Qty15),0) + ISNULL(SUM(Qty16),0) +     
           ISNULL(SUM(Qty17),0) + ISNULL(SUM(Qty18),0) + ISNULL(SUM(Qty19),0) + ISNULL(SUM(Qty20),0) + ISNULL(SUM(Qty21),0) + ISNULL(SUM(Qty22),0) +  
-          ISNULL(SUM(Qty23),0) + ISNULL(SUM(Qty24),0) AS TotalQty, Pickheaderkey
+          ISNULL(SUM(Qty23),0) + ISNULL(SUM(Qty24),0) AS TotalQty, Pickheaderkey, UnitPrice, ExtendedPrice   --WL02
    INTO #TempPacklist08_Qty
    FROM #TempPacklist08
-   GROUP BY StyleColor, Pickheaderkey
+   GROUP BY StyleColor, Pickheaderkey, UnitPrice, ExtendedPrice   --WL02
    
    --SELECT * FROM #TempPacklist08_Qty
    --WL01 - E
    
    SELECT STOCompany,CLogo,Loadkey,OrderKey,InvoiceNo,CCompany,    
           B_Vat,BAddress,CAddress,ORDUdef09,BillToKey,SalesMan,    
-          ExternOrderkey,ORDUdef04,SDescr,Style,color,#TempPacklist08.StyleColor,UnitPrice,   --WL01    
-          ExtendedPrice,TDate,    
+          ExternOrderkey,ORDUdef04,SDescr,Style,color,#TempPacklist08.StyleColor,#TempPacklist08.UnitPrice,   --WL01   --WL02 
+          #TempPacklist08.ExtendedPrice,TDate,    --WL02
           SkuSize1, SkuSize2, SkuSize3, SkuSize4, SkuSize5, SkuSize6, SkuSize7, SkuSize8,    
           SkuSize9, SkuSize10, SkuSize11, SkuSize12, SkuSize13, SkuSize14, SkuSize15, SkuSize16,    
           SkuSize17, SkuSize18, SkuSize19, SkuSize20, SkuSize21, SkuSize22, SkuSize23, SkuSize24,    
@@ -787,15 +788,16 @@ BEGIN
          SUM(Qty17) Qty17, SUM(Qty18) Qty18, SUM(Qty19) Qty19, SUM(Qty20) Qty20, SUM(Qty21) Qty21, SUM(Qty22) Qty22,    
          SUM(Qty23) Qty23, SUM(Qty24) Qty24,#TempPacklist08.Pickheaderkey,Q.TotalQty              --(CS01)   --WL01    
       FROM #TempPacklist08 WITH (NOLOCK) 
-      JOIN #TempPacklist08_Qty Q (NOLOCK) ON Q.StyleColor = #TempPacklist08.StyleColor AND Q.Pickheaderkey = #TempPacklist08.Pickheaderkey   --WL01
+      JOIN #TempPacklist08_Qty Q (NOLOCK) ON Q.StyleColor = #TempPacklist08.StyleColor AND Q.Pickheaderkey = #TempPacklist08.Pickheaderkey --WL01
+                                         AND #TempPacklist08.UnitPrice = Q.UnitPrice AND Q.ExtendedPrice = #TempPacklist08.ExtendedPrice   --WL02
       GROUP BY STOCompany,CLogo,Loadkey,OrderKey,InvoiceNo,CCompany,    
             B_Vat,BAddress,CAddress,ORDUdef09,BillToKey,SalesMan,    
-            ExternOrderkey,ORDUdef04,Style,color,SDescr,#TempPacklist08.StyleColor,UnitPrice,   --WL01    
-            ExtendedPrice,TDate, SkuSize1, SkuSize2, SkuSize3, SkuSize4, SkuSize5, SkuSize6, SkuSize7, SkuSize8,    
+            ExternOrderkey,ORDUdef04,Style,color,SDescr,#TempPacklist08.StyleColor,#TempPacklist08.UnitPrice,   --WL01    
+            #TempPacklist08.ExtendedPrice,TDate, SkuSize1, SkuSize2, SkuSize3, SkuSize4, SkuSize5, SkuSize6, SkuSize7, SkuSize8,   --WL02   
             SkuSize9, SkuSize10, SkuSize11, SkuSize12, SkuSize13, SkuSize14, SkuSize15, SkuSize16,    
             SkuSize17, SkuSize18, SkuSize19, SkuSize20, SkuSize21, SkuSize22, SkuSize23, SkuSize24     
             ,#TempPacklist08.Pickheaderkey,Q.TotalQty              --(CS01)   --WL01    
-   ORDER BY  ExternOrderkey,ORDUdef04,Style,color    --JyhBin
+   ORDER BY ExternOrderkey,ORDUdef04,Style,color    --JyhBin
  --END    
 -- ELSE    
  --BEGIN     

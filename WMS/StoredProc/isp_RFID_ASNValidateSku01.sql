@@ -1,0 +1,132 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_ASNValidateSku01]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_RFID_ASNValidateSku01]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/************************************************************************/
+/* Stored Proc: isp_RFID_ASNValidateSku01                               */
+/* Creation Date: 2020-Dec-01                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by: Wan                                                      */
+/*                                                                      */
+/* Purpose:  WMS-14739 - CN NIKE O2 WMS RFID Receiving Module           */
+/*        :                                                             */
+/* Called By:                                                           */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 7.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/* 01-DEC-2020 Wan      1.0   Created                                   */
+/************************************************************************/
+CREATE PROC isp_RFID_ASNValidateSku01
+           @c_Receiptkey   NVARCHAR(10) = ''  
+         , @c_Storerkey    NVARCHAR(15) = '' 
+         , @c_SKU          NVARCHAR(20) = ''
+         , @b_Success      INT          = 1  OUTPUT
+         , @n_Err          INT          = 0  OUTPUT
+         , @c_ErrMsg       NVARCHAR(255)= '' OUTPUT
+         , @n_WarningNo    INT          = 0  OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE  
+           @n_StartTCnt       INT = @@TRANCOUNT
+         , @n_Continue        INT = 1
+        
+         , @n_NikeSet         INT = 0
+
+   SET @n_err      = 0
+   SET @c_errmsg   = ''
+
+   IF NOT EXISTS ( SELECT 1 
+                   FROM RECEIPTDETAIL RD WITH (NOLOCK)
+                   WHERE RD.ReceiptKey = @c_Receiptkey
+                   AND RD.Storerkey = @c_Storerkey
+                   AND RD.Sku = @c_SKU
+                  )
+   BEGIN
+   	SET @n_Continue = 3
+      SET @n_err = 83010   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Sku not found in ASN#: ' + @c_Receiptkey
+                     +'. (isp_RFID_ASNValidateSku01)'   
+      GOTO QUIT_SP
+   END
+
+   SELECT @c_errmsg= @c_errmsg + 'BP#1 SKU'
+   FROM SKUINFO SIF WITH (NOLOCK) 
+   WHERE SIF.Storerkey = @c_Storerkey
+   AND   SIF.Sku       = @c_Sku
+   AND   SIF.ExtendedField01 = 'BP1'
+
+   SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END +  'BP#2 SKU'
+   FROM SKUINFO SIF WITH (NOLOCK) 
+   WHERE SIF.Storerkey = @c_Storerkey
+   AND   SIF.Sku       = @c_Sku
+   AND   SIF.ExtendedField02 = 'BP2'
+
+   SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END + 'RFID'
+   FROM SKUINFO SIF WITH (NOLOCK) 
+   WHERE SIF.Storerkey = @c_Storerkey
+   AND   SIF.Sku       = @c_Sku
+   AND   SIF.ExtendedField03 = 'RFID'
+
+   SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END + 'SET SKU'
+         ,@n_NikeSet  = 1
+   FROM SKU SKU WITH (NOLOCK) 
+   WHERE SKU.Storerkey = @c_Storerkey
+   AND   SKU.Sku       = @c_Sku
+   AND   SKU.LottableCode = 'NIKESET'
+   
+   IF @n_NikeSet = 1 
+   BEGIN
+      SET @c_errmsg = @c_errmsg + '. Accept SET Sku?'
+      SET @b_Success = 2
+   END 
+
+QUIT_SP:
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SET @b_Success = 0
+      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'isp_RFID_ASNValidateSku01'
+   END
+   ELSE
+   BEGIN
+      IF @b_Success < 2
+      BEGIN
+         SET @b_Success = 1
+      END
+      
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+END -- procedure
+GO
+GRANT EXECUTE ON [dbo].[isp_RFID_ASNValidateSku01] TO nSQL 
+GO
