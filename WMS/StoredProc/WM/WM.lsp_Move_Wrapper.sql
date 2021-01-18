@@ -28,6 +28,8 @@ GO
 /* 2020-10-13  Wan01    1.1   Fixed.                                    */
 /* 2020-11-26  Wan02    1.1   Add Big Outer Begin Try..End Try to enable*/
 /*                            Revert when Sub SP Raise error            */
+/* 2020-12-08  Wan03    1.1   LFWM-2440 - UAT Philippines PH SCE Inventory*/
+/*                            Move using ToUOM Not Functional           */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Move_Wrapper]
    @c_Storerkey NVARCHAR(15) 
@@ -55,17 +57,20 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
     
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-   GOTO EXIT_SP
-   END
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+             
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+                    
+      EXECUTE AS LOGIN = @c_UserName
+    END
    --(Wan01) - START
    BEGIN TRY   
        DECLARE @n_Continue                   INT
@@ -152,16 +157,18 @@ BEGIN
        END   
 
        IF @n_continue IN(1,2) AND @c_TaskManagerMove <> 'Y' 
-       BEGIN              
-         IF ISNULL(@c_ToPackkey,'') = ''
-         BEGIN
-            SELECT @c_ToPackkey = PACK.Packkey,
-                  @c_ToUOM = PACK.PackUOM3
-            FROM SKU (NOLOCK)
-            JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
-            WHERE SKU.Storerkey = @c_Storerkey
-            AND SKU.Sku = @c_Sku
-         END
+       BEGIN 
+         --(Wan03) - START             
+         --IF ISNULL(@c_ToPackkey,'') = ''
+         --BEGIN
+         --   SELECT @c_ToPackkey = PACK.Packkey,
+         --         @c_ToUOM = PACK.PackUOM3
+         --   FROM SKU (NOLOCK)
+         --   JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+         --   WHERE SKU.Storerkey = @c_Storerkey
+         --   AND SKU.Sku = @c_Sku
+         --END
+         --(Wan03) - END
 
          BEGIN TRY         
             EXEC dbo.nspItrnAddMove
