@@ -51,6 +51,7 @@ GO
 /* 02-Jun-2016  MCTang    1.1   Add TRF2LOG(MC03)                       */
 /* 24-Jan-2017  TLTING01  1.2   SET ANSI NULLS Option (tlting)          */
 /* 02-Jun-2016  MCTang    1.1   Add TRF3LOG(MC04)                       */
+/* 07-Dec-2020  KHChan    1.4   LFI-379 - Add WSTRFFMLOG (KH01)         */
 /************************************************************************/
 
 CREATE PROC isp_ITF_ntrTransfer
@@ -198,6 +199,12 @@ BEGIN
                   GOTO AddIntoTransmitLog_FromStorerKey
                END -- IF @c_ConfigKey = 'TRFFMLOG'
                -- MC01 - E
+               --(KH01) -S WSTRFFMLOG
+               ELSE IF (@c_ConfigKey = 'WSTRFFMLOG')
+               BEGIN 
+                  GOTO AddIntoTransmitLog_FromStorerKey
+               END -- IF @c_ConfigKey = 'WSTRFFMLOG'
+               --(KH01) -E
             END -- IF ISNULL(@c_ConfigFacility,'') = ''
 
             GOTO Next_Record_FromStorerKey
@@ -243,6 +250,25 @@ BEGIN
                END 
             END -- IF @c_TargetTable = 'TRANSMITLOG3'
             -- MC01 - E
+            --(KH01) - S
+            ELSE IF @c_TargetTable = 'TRANSMITLOG2'
+            BEGIN
+               EXEC ispGenTransmitLog2 @c_Tablename, @c_TransferKey, @c_ReasonCode, @c_FromStorerKey, ''
+                                       , @b_success OUTPUT
+                                       , @n_err OUTPUT
+                                       , @c_errmsg OUTPUT
+                  
+               IF @b_success <> 1
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 68001
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) + 
+                                  ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrTransfer) ( SQLSvr MESSAGE = ' + 
+                                  ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+                  GOTO QUIT
+               END 
+            END -- IF @c_TargetTable = 'TRANSMITLOG2'
+            --(KH01) - E
 /*************************************************************************************/
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */
 /*************************************************************************************/
