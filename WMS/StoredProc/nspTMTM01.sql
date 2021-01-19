@@ -80,6 +80,10 @@ GO
 /*                               Enable areakey as output param         */
 /*                               Retrieve user default areakey          */
 /* 18-06-2020   4.2   James      WMS-12055 Add CPK task type (james05)  */
+/* 03-11-2020   4.3   James      WMS-15573 Add config to let task       */
+/*                               dispatch all same task type within     */
+/*                               current area before move to next task  */
+/*                               task (james06)                         */
 /************************************************************************/
 CREATE  PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
@@ -178,6 +182,11 @@ BEGIN
            ,@nCnt   INT
            ,@nCnt1  INT
            ,@nCnt2  INT
+
+    DECLARE @c_ContinueTask   NVARCHAR( 1)
+
+    -- (james06)
+    SET @c_ContinueTask = rdt.RDTGetConfig( @n_Func, 'ContinueALLTaskWithinAisle', @c_StorerKey)
 
     SET @nCnt = 0
     SET @nCnt1 = 0
@@ -368,7 +377,7 @@ BEGIN
 
     IF @n_continue=1 OR @n_continue=2
     BEGIN
-        IF @c_InterLeaveTasks='1' AND ISNULL(RTRIM(@c_LastTaskType) ,'')<>''
+        IF (@c_InterLeaveTasks='1' AND ISNULL(RTRIM(@c_LastTaskType) ,'')<>'') OR ( @c_ContinueTask = '1')
         BEGIN
             BEGIN
                 SELECT @c_CurrentLineNumber = TTMStrategyLineNumber
@@ -847,27 +856,75 @@ BEGIN
             END-- interleave = 1
             ELSE
             BEGIN
-                SELECT TOP 1
-                       @c_CurrentLineNumber = TTMStrategyLineNumber
-                      ,@c_TTMTaskType = TaskType
-                      ,@c_ttmpickcode = TTMPickCode
-                      ,@c_ttmoverride = TTMOverride
-                      ,@nCnt2 = 1
-                FROM   TTMStrategyDetail WITH (NOLOCK)
-                WHERE  TTMStrategykey = @c_TTMStrategyKey
-                AND    TTMStrategyLineNumber>@c_CurrentLineNumber
-                AND    EXISTS(SELECT 1
-                              FROM   TaskManagerUserDetail WITH (NOLOCK)
-                              WHERE  USERKEY = @c_userid
-                              AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
-                              AND PERMISSION = '1')
-                ORDER BY TTMStrategyLineNumber
+               -- (james06)
+               IF @c_ContinueTask = 1 AND ISNULL( @c_LastTaskType, '') <> ''
+               BEGIN
+                  SELECT TOP 1
+                         @c_CurrentLineNumber = TTMStrategyLineNumber
+                        ,@c_TTMTaskType = TaskType
+                        ,@c_ttmpickcode = TTMPickCode
+                        ,@c_ttmoverride = TTMOverride
+                        ,@nCnt2 = 1
+                  FROM   TTMStrategyDetail WITH (NOLOCK)
+                  WHERE  TTMStrategykey = @c_TTMStrategyKey
+                  AND    TaskType = @c_LastTaskType
+                  AND    EXISTS(SELECT 1
+                                FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                WHERE  USERKEY = @c_userid
+                                AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                AND PERMISSION = '1')
+                  ORDER BY TTMStrategyLineNumber
 
-                IF @nCnt2=0
-                BEGIN
-                    SET ROWCOUNT 0
-                    BREAK
-                END
+                  IF @nCnt2=0
+                  BEGIN
+                     SELECT TOP 1
+                            @c_CurrentLineNumber = TTMStrategyLineNumber
+                           ,@c_TTMTaskType = TaskType
+                           ,@c_ttmpickcode = TTMPickCode
+                           ,@c_ttmoverride = TTMOverride
+                           ,@nCnt2 = 1
+                     FROM   TTMStrategyDetail WITH (NOLOCK)
+                     WHERE  TTMStrategykey = @c_TTMStrategyKey
+                     AND    TTMStrategyLineNumber>@c_CurrentLineNumber
+                     AND    EXISTS(SELECT 1
+                                   FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                   WHERE  USERKEY = @c_userid
+                                   AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                   AND PERMISSION = '1')
+                     ORDER BY TTMStrategyLineNumber
+
+                     IF @nCnt2=0
+                     BEGIN
+                        SET ROWCOUNT 0
+                        BREAK
+                     END
+                  END
+                  
+               END
+               ELSE
+               BEGIN
+                  SELECT TOP 1
+                         @c_CurrentLineNumber = TTMStrategyLineNumber
+                        ,@c_TTMTaskType = TaskType
+                        ,@c_ttmpickcode = TTMPickCode
+                        ,@c_ttmoverride = TTMOverride
+                        ,@nCnt2 = 1
+                  FROM   TTMStrategyDetail WITH (NOLOCK)
+                  WHERE  TTMStrategykey = @c_TTMStrategyKey
+                  AND    TTMStrategyLineNumber>@c_CurrentLineNumber
+                  AND    EXISTS(SELECT 1
+                                FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                WHERE  USERKEY = @c_userid
+                                AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                AND PERMISSION = '1')
+                  ORDER BY TTMStrategyLineNumber
+
+                  IF @nCnt2=0
+                  BEGIN
+                     SET ROWCOUNT 0
+                     BREAK
+                  END
+               END
             END
             --DROP TABLE #Aisle_InUsed
 
@@ -2258,6 +2315,7 @@ END
     END
 END -- End Proc
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
