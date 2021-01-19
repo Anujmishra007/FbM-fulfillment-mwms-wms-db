@@ -5,6 +5,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Stored Procedure: nspCheckEquipmentProfile                           */
 /* Creation Date:                                                       */
@@ -26,9 +27,10 @@ GO
 /* 28-09-2009   1.1   Vicky      RDT Compatible Error Message (Vicky01) */
 /* 27-01-2010   1.2   Vicky      SOS#158756 - Add in MaxLevel &         */
 /*                               MaxHeight Checking (Vicky02)           */
+/* 17-07-2020   1.3   James      WMS14152 - Check MaxPallet (james01)   */
 /************************************************************************/
 
-CREATE PROC    nspCheckEquipmentProfile
+CREATE PROC    [dbo].[nspCheckEquipmentProfile]
                 @c_userid       NVARCHAR(18)
  ,              @c_taskdetailkey NVARCHAR(10)
  ,              @c_storerkey    NVARCHAR(15)
@@ -67,6 +69,9 @@ CREATE PROC    nspCheckEquipmentProfile
          @c_loc_level  int,  -- (Vicky02)
          @c_loc_height float -- (Vicky02)
 
+DECLARE @c_MaximumPallet      INT
+DECLARE @c_FromAisle          NVARCHAR( 10)
+
       /* #INCLUDE <SPCEQ1.SQL> */     
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
@@ -81,6 +86,15 @@ CREATE PROC    nspCheckEquipmentProfile
              @c_loc_height = Height   -- (Vicky02)
       FROM LOC WITH (NOLOCK)
       WHERE LOC = @c_toloc
+
+      SELECT @c_FromAisle = LOC.LocAisle
+      FROM dbo.TaskDetail TD WITH (NOLOCK)
+      JOIN dbo.LOC LOC WITH (NOLOCK) ON td.FromLoc = loc.Loc
+      WHERE TD.TaskDetailKey = @c_taskdetailkey
+      
+      SELECT @c_MaximumPallet = MaximumPallet
+      FROM dbo.EquipmentProfile WITH (NOLOCK)
+      WHERE EquipmentProfileKey = @c_userequipmentprofilekey
 
       IF EXISTS(SELECT 1 FROM PAZoneEquipmentExcludeDetail WITH (NOLOCK)
                 WHERE EQUIPMENTPROFILEKEY = @c_userequipmentprofilekey
@@ -120,6 +134,19 @@ CREATE PROC    nspCheckEquipmentProfile
         END
       END
       -- (Vicky02) - End
+      
+      IF EXISTS ( SELECT 1 
+                  FROM dbo.TaskDetail TD WITH (NOLOCK)
+                  JOIN dbo.LOC LOC WITH (NOLOCK) ON td.FromLoc = loc.Loc
+                  WHERE TD.TaskDetailKey = @c_taskdetailkey
+                  AND   TD.[Status] = '3'
+                  AND   LOC.LocAisle = @c_FromAisle
+                  GROUP BY TD.UserKey
+                  HAVING COUNT( DISTINCT TD.UserKey) > CAST( @c_MaximumPallet AS INT))
+      BEGIN
+         SELECT @n_continue = 3 
+         SELECT @n_err = 67765
+      END
     END
  END
 
@@ -227,8 +254,8 @@ CREATE PROC    nspCheckEquipmentProfile
    RETURN
  END
 END -- End Proc
-
 GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
