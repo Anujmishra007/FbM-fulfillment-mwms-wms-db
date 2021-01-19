@@ -134,6 +134,7 @@ GO
 /* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic */
 /*                                  SQL Statement                             */  
 /* 08-Jul-2020  Shong         4.6   Bug Fixing                                */
+/* 12-Jan-2021  NJOW02        4.8   WMS-16023 type 07 cater for pendingmovein */
 /******************************************************************************/
 CREATE PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
@@ -3970,15 +3971,16 @@ ELSE
                -- INC0075406 (Start)
                IF @cpa_PAType = '07'
                BEGIN
-                  IF ( SELECT ISNULL( SUM(Qty - QtyPicked), 0)
+                  IF ( SELECT ISNULL( SUM((SKUxLOC.Qty - SKUxLOC.QtyPicked) + ISNULL(SLE.PendingMoveIn,0)), 0)  --NJOW02
                         FROM SKUxLOC WITH (NOLOCK)
                         JOIN LOC WITH (NOLOCK) ON SKUxLOC.loc = LOC.LOC
-            WHERE SKU = @c_SKU
-                        AND StorerKey = @c_StorerKey
-                        AND Facility = @c_Facility -- CDC Migration
-                        AND LocationFlag = 'NONE'
-                        AND LocationCategory <> 'VIRTUAL'
-                        AND SKUxLOC.LOC <> @c_FromLoc) > 0 -- vicky
+                        OUTER APPLY dbo.fnc_skuxloc_extended(SKUxLOC.StorerKey, SKUxLOC.Sku, SKUxLOC.Loc) AS SLE --NJOW02 
+                        WHERE SKUxLOC.SKU = @c_SKU
+                        AND SKUxLOC.StorerKey = @c_StorerKey
+                        AND LOC.Facility = @c_Facility -- CDC Migration
+                        AND LOC.LocationFlag = 'NONE'
+                        AND LOC.LocationCategory <> 'VIRTUAL'
+                        AND SKUxLOC.LOC <> @c_FromLoc) > 0 -- vicky               	
                   BEGIN
                      IF @b_Debug = 1
                      BEGIN
