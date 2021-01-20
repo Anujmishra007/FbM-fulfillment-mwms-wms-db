@@ -18,7 +18,7 @@ GO
 /*        :                                                             */    
 /* Called By: ECOM PackHeader - ue_saveend                              */    
 /*          :                                                           */    
-/* PVCS Version: 1.2                                                    */    
+/* PVCS Version: 1.3                                                    */    
 /*                                                                      */    
 /* Version: 7.0                                                         */    
 /*                                                                      */    
@@ -27,8 +27,9 @@ GO
 /* Updates:                                                             */    
 /* Date        Author   Ver   Purposes                                  */    
 /* 2019-07-10  Wan01    1.1   Fixed. Order without Tracking#            */  
-/* 2020-11-03  WLChooi  1.2   WMS-15598 - New Storerconfig to skip      */
-/*                            Trackingno validation (WL01)              */  
+/* 2020-11-03  WLChooi  1.2   WMS-15598 - New Storerconfig to skip      */  
+/*                            Trackingno validation (WL01)              */   
+/* 2020-10-09  Wan02    1.3   WMS-14948 - PH_Benby_Ecom_Packing_Filter  */  
 /************************************************************************/    
 CREATE PROC isp_ECOM_PackSaveEnd    
            @c_PickSlipNo         NVARCHAR(10)    
@@ -46,20 +47,21 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF    
     
    DECLARE      
-           @n_StartTCnt                INT            = @@TRANCOUNT    
-         , @n_Continue                 INT            = 1    
-                                       
-         , @n_RowId                    INT            = 1    
-         , @n_CartonNo_PD              INT            = 0    
-         , @n_CartonNo                 INT            = 0    
-         , @c_Storerkey                NVARCHAR(15)   = ''    
-         , @c_RefNo                    NVARCHAR(40)   = ''    
-         , @c_TrackingNo               NVARCHAR(30)   = ''    
-         , @c_WarningMsg               NVARCHAR(255)  = ''    
-                                       
-         , @c_ValidateTrackNo          NVARCHAR(10)   = ''    
-         , @CUR_PIF                    CURSOR    
-         , @c_EPackSkipTracknoCheck    NVARCHAR(10)   = ''   --WL01
+           @n_StartTCnt       INT            = @@TRANCOUNT    
+         , @n_Continue        INT            = 1    
+    
+         , @n_RowId           INT            = 1    
+         , @n_CartonNo_PD     INT            = 0    
+         , @n_CartonNo        INT            = 0    
+         , @c_Storerkey       NVARCHAR(15)   = ''    
+         , @c_RefNo           NVARCHAR(40)   = ''    
+         , @c_TrackingNo      NVARCHAR(30)   = ''    
+         , @c_WarningMsg      NVARCHAR(255)  = ''    
+    
+         , @c_ValidateTrackNo NVARCHAR(10)   = ''    
+         , @CUR_PIF           CURSOR   
+         
+         , @c_EPackSkipTracknoCheck    NVARCHAR(10)   = ''   --WL01   
     
     
    SET @n_err      = 0    
@@ -78,9 +80,9 @@ BEGIN
    FROM ORDERS OH WITH (NOLOCK)    
    WHERE OH.Orderkey = @c_Orderkey    
        
-   SELECT @c_ValidateTrackNo = dbo.fnc_GetRight('', @c_Storerkey, '', 'ValidateTrackNo')   
-   SELECT @c_EPackSkipTracknoCheck = dbo.fnc_GetRight('', @c_Storerkey, '', 'EPackSkipTracknoCheck')   --WL01
-    
+   SELECT @c_ValidateTrackNo = dbo.fnc_GetRight('', @c_Storerkey, '', 'ValidateTrackNo')    
+   SELECT @c_EPackSkipTracknoCheck = dbo.fnc_GetRight('', @c_Storerkey, '', 'EPackSkipTracknoCheck')   --WL01  
+
    SET @CUR_PIF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
    SELECT DISTINCT PD.CartonNo                  --(Wan01)    
          ,PIF.CartonNo    
@@ -138,7 +140,7 @@ BEGIN
             SET @c_WarningMsg = 'Tracking # not match on first CartonNo. Carton #: ' + CONVERT(NVARCHAR(10), @n_CartonNo)    
          END    
     
-         IF @n_Continue = 1 AND @c_RefNo = '' AND ISNULL(@c_EPackSkipTracknoCheck,'') IN ('','0')   --WL01   
+         IF @n_Continue = 1 AND @c_RefNo = '' AND ISNULL(@c_EPackSkipTracknoCheck,'') IN ('','0')   --WL01  
          BEGIN    
             SET @n_Continue = 2    
             SET @c_WarningMsg = 'Tracking # is required. Carton #: ' + CONVERT(NVARCHAR(10), @n_CartonNo)    
@@ -146,7 +148,8 @@ BEGIN
     
          IF (@n_SaveResult IN (0,2) OR @c_ValidateTrackNo= '1') AND @n_Continue = 2    
          BEGIN    
-            GOTO QUIT_SP     
+            --GOTO QUIT_SP          --(Wan02)
+            GOTO POST_SAVEEND       --(Wan02)    
          END    
       END    
     
@@ -159,6 +162,26 @@ BEGIN
    CLOSE @CUR_PIF    
    DEALLOCATE @CUR_PIF     
     
+   --(Wan02) - START
+   POST_SAVEEND:
+   SET @b_Success = 0      
+   EXECUTE dbo.isp_PostEPackSaveEnd_Wrapper     
+           @c_PickSlipNo= @c_PickSlipNo    
+         , @b_Success   = @b_Success      OUTPUT      
+         , @n_Err       = @n_err          OUTPUT       
+         , @c_ErrMsg    = @c_errmsg       OUTPUT 
+         , @c_WarningMsg= @c_WarningMsg   OUTPUT     
+    
+   IF @n_err <> 0      
+   BEGIN     
+      SET @n_continue= 3     
+      SET @n_err = 67900   
+      SET @c_errmsg = CONVERT(char(5),@n_err)    
+      SET @c_errmsg = 'NSQL'+CONVERT(char(6), @n_err)+ ': Execute isp_PostEPackSaveEnd_Wrapper Failed. (isp_ECOM_PackSaveEnd) '     
+                     + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '    
+      GOTO QUIT_SP                          
+   END     
+   --(Wan02) - END
 QUIT_SP:    
    IF @n_Continue=3  -- Error Occured - Process And Return    
    BEGIN    
