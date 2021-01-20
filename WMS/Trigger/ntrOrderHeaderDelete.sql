@@ -49,6 +49,7 @@ GO
 /* 02-OCT-2015  NJOW01   354034 - call custom stored proc               */
 /* 13-Feb-2018  CheeMun  INC0133268 - Insert into orders_dellog         */
 /*                       status <> '9'                                  */
+/* 15-Jan-2021  TLTING03 Add New Orders fields                          */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrOrderHeaderDelete]
@@ -220,7 +221,8 @@ BEGIN
             UserDefine09, UserDefine10, Issued, DeliveryNote, PODCust, PODArrive, PODReject, PODUser, 
             xdockpokey, SpecialHandling, RoutingTool,MarkforKey, M_Contact1, M_Contact2, M_Company, M_Address1, 
             M_Address2, M_Address3, M_Address4, M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, 
-            M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey)
+            M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey,
+            DocType,TrackingNo,ECOM_PRESALE_FLAG,ECOM_SINGLE_Flag,CurrencyCode,RTNTrackingNo,BizUnit )
       SELECT OrderKey, StorerKey, ExternOrderKey, OrderDate, DeliveryDate, Priority, 
             ConsigneeKey, C_contact1, C_Contact2, C_Company, C_Address1, C_Address2, 
             C_Address3, C_Address4, C_City, C_State, C_Zip, C_Country, C_ISOCntryCode, 
@@ -237,7 +239,9 @@ BEGIN
             UserDefine09, UserDefine10, Issued, DeliveryNote, PODCust, PODArrive, PODReject, PODUser, 
             xdockpokey, SpecialHandling, RoutingTool, MarkforKey, M_Contact1, M_Contact2, M_Company, M_Address1, 
             M_Address2, M_Address3, M_Address4, M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, 
-            M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey FROM DELETED 
+            M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey,
+            DocType,TrackingNo,ECOM_PRESALE_FLAG,ECOM_SINGLE_Flag,CurrencyCode,RTNTrackingNo,BizUnit 
+            FROM DELETED 
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
       BEGIN
@@ -265,7 +269,8 @@ BEGIN
          UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, Issued, DeliveryNote, 
          PODCust, PODArrive, PODReject, PODUser, xdockpokey, delDate, delWho, SpecialHandling, RoutingTool,
          MarkforKey, M_Contact1, M_Contact2, M_Company, M_Address1, M_Address2, M_Address3, M_Address4, 
-         M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey )
+         M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey,
+         DocType,TrackingNo,ECOM_PRESALE_FLAG,ECOM_SINGLE_Flag,CurrencyCode,RTNTrackingNo,BizUnit   )
       SELECT OrderKey, StorerKey, ExternOrderKey, OrderDate, DeliveryDate, Priority, 
          ConsigneeKey, C_contact1, C_Contact2, C_Company, C_Address1, C_Address2, C_Address3, 
          C_Address4, C_City, C_State, C_Zip, C_Country, C_ISOCntryCode, C_Phone1, C_Phone2, 
@@ -281,7 +286,8 @@ BEGIN
          UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, Issued, DeliveryNote, 
          PODCust, PODArrive, PODReject, PODUser, xdockpokey, GETDATE(), sUSER_sNAME(), SpecialHandling, RoutingTool,
          MarkforKey, M_Contact1, M_Contact2, M_Company, M_Address1, M_Address2, M_Address3, M_Address4, 
-         M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey
+         M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2, M_Fax1, M_Fax2, M_vat, ShipperKey,
+         DocType,TrackingNo,ECOM_PRESALE_FLAG,ECOM_SINGLE_Flag,CurrencyCode,RTNTrackingNo,BizUnit  
       FROM DELETED
 
    END
