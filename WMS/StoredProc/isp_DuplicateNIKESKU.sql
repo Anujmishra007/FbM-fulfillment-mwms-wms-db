@@ -29,7 +29,8 @@ GO
 /* Updates:                                                             */
 /* Date         Ver  Author   Purposes                                  */
 /* 17-Dec-2020  1.0  TLTING   Initital version                          */
-/* 12-Jan-2021  1.1  TLTING01 Bug fix                                   */   
+/* 12-Jan-2021  1.1  TLTING01 Bug fix                                   */  
+/* 19-Jan-2021  1.2  TLTING02 Lottable03label default ''                */  
 /*                                                                      */
 /************************************************************************/
 
@@ -341,7 +342,7 @@ BEGIN
       , BUSR4                     
       , 'Grade'            -- LOTTABLE01LABEL         
       , 'Reason'           -- LOTTABLE02LABEL         
-      , LOTTABLE03LABEL         
+      , ''                 -- LOTTABLE03LABEL         
       , LOTTABLE05LABEL         
       , 'ECOM_SKPP'        -- StrategyKey          
       , CartonGroup               
