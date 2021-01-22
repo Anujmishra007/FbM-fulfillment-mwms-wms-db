@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */               
 /*                                                                            */               
 /* Date       Rev  Author     Purposes                                        */               
-/* 2021-01-18 1.0  WLChooi    Created (WMS-15926)                             */
+/* 2021-01-18 1.0  WLChooi    Created (WMS-15926)                             */ 
+/* 2021-01-22 1.1  WLChooi    Fix Col59 (WL01)                                */
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_CN_WWMTLabel_LULU]                     
@@ -620,7 +621,8 @@ BEGIN
           ,@c_field33,@c_field34,@c_field35,@c_field36,@c_field37,@c_field38,@c_field39,@c_field40,@c_field41,@c_field42
           ,@c_field43,@c_field44,@c_field45,@c_field46,@c_field47,@c_field48,@c_field49,@c_field50,@c_field51,@c_field52
           ,@c_field53,@c_field54,@c_style,@c_Sparm1,@c_SCData,@c_altsku,@c_sku,@n_Unitprice
-          ,CASE WHEN @c_SCType = 'CNY' THEN N'¥' ELSE @c_SCType END + ' ' + @c_SCData,'')
+          --,CASE WHEN @c_SCType = 'CNY' THEN N'¥' ELSE @c_SCType END + ' ' + @c_SCData,'')   --WL01
+          ,@c_SCData,'')   --WL01
 
    WHILE @n_copy > 1
    BEGIN   
