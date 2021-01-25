@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 30-Dec-2020  CSCHONG   1.1 WMS-15970 revised field mapping (CS01)    */
 /************************************************************************/  
   
 CREATE PROC isp_packinglist_detail_07
@@ -71,6 +72,8 @@ BEGIN
          , @c_GetOrderkey         NVARCHAR(10)
          , @c_showqrcode          NVARCHAR(5)
          , @c_OHUDF03             NVARCHAR(50)
+         , @c_OHTYPE              NVARCHAR(30)            --CS01
+         , @c_RTPDATE             NVARCHAR(10)            --CS01
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue  = 1  
@@ -103,7 +106,8 @@ BEGIN
         RPTNotes1        NVARCHAR(4000),  
         RPTNotes2        NVARCHAR(4000),
         RPTNotes3        NVARCHAR(4000),
-        RPTNotes4        NVARCHAR(4000)
+        RPTNotes4        NVARCHAR(4000),
+        RPTDATE          NVARCHAR(10)
    )
 
    CREATE TABLE #TMP_DECRYPTEDDATA (  
@@ -161,6 +165,20 @@ BEGIN
       SET @c_Conso = 'Y'
    END
 
+    --CS01 START
+     SET @c_RTPDATE = ''
+     SET @c_OHTYPE = ''
+     SELECT @c_OHTYPE = OH.[type]
+     FROM ORDERS OH WITH (NOLOCK)
+     WHERE OH.Orderkey = @c_GetOrderkey
+
+
+    SELECT @c_RTPDATE = CASE WHEN @c_OHTYPE ='COD' THEN convert(nvarchar(10), OI.OrderInfo08,120) 
+                        ELSE convert(nvarchar(10), OI.PmtDate,120) END
+    FROM ORDERINFO OI WITH (NOLOCK) 
+    WHERE OI.Orderkey = @c_GetOrderkey
+    --CS01 END
+
    IF @c_Conso = 'Y'
    BEGIN
       INSERT INTO #Temp_PACKDET07
@@ -184,6 +202,7 @@ BEGIN
            ,MAX(ISNULL(C2.notes,''))
            ,MAX(ISNULL(C3.notes,''))
            ,MAX(ISNULL(C1.notes,''))
+           ,@c_RTPDATE                             --CS01
       FROM ORDERS OH (NOLOCK)
       --LEFT JOIN STORER St (NOLOCK) ON St.Storerkey = OH.ConsigneeKey
       JOIN LoadPlanDetail LPD (NOLOCK) ON LPD.Orderkey = OH.Orderkey
@@ -227,6 +246,7 @@ BEGIN
            ,MAX(ISNULL(C2.notes,''))
            ,MAX(ISNULL(C3.notes,''))
            ,MAX(ISNULL(C.notes,''))  
+           , @c_RTPDATE                          --CS01
       FROM ORDERS OH (NOLOCK)
       LEFT JOIN STORER St (NOLOCK) ON St.Storerkey = OH.ConsigneeKey
       JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
@@ -299,7 +319,8 @@ BEGIN
                RPTNotes1,  
                RPTNotes2,
                RPTNotes3,
-               RPTNotes4
+               RPTNotes4,
+               RPTDATE                         --CS01
       FROM #Temp_PACKDET07
       WHERE Pickslipno = @c_Pickslipno 
       GROUP BY externorderkey,
@@ -317,7 +338,8 @@ BEGIN
                RPTNotes1,  
                RPTNotes2,
                RPTNotes3,
-               RPTNotes4
+               RPTNotes4,
+               RPTDATE                       --CS01
       ORDER BY Pickslipno
    END
    ELSE IF @c_Type = 'D1'
