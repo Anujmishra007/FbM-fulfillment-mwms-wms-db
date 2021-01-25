@@ -39,6 +39,7 @@ GO
 /* 04-NOV-2009  Vanessa   1.1   SOS#152412 Prevent job fail due to lot  */
 /*                              issue cause by manual alloc.(Vanessa01) */
 /* 28-May-2014  TKLIM     1.1   Added Lottables 06-15                   */
+/* 06-JAN-2021  CSCHONG   1.2   WMS-15986 revised logic (CS01)          */
 /************************************************************************/
 
 CREATE PROC isp_ULMAutoRelease (
@@ -237,7 +238,9 @@ BEGIN
       AND LOT.QtyPreAllocated = 0 -- (Vanessa01)
       AND LOT.QtyAllocated =0     -- (Vanessa01)
       AND LOT.QtyPicked = 0       -- (Vanessa01)
-      AND DATEDIFF(Day, CONVERT(varchar(8), LOTAttribute.Lottable05, 112), CONVERT(varchar(8), GetDate(), 112)) 
+      --AND DATEDIFF(Day, CONVERT(varchar(8), LOTAttribute.Lottable05, 112), CONVERT(varchar(8), GetDate(), 112))      --CS01
+      AND DATEDIFF(Day,CONVERT(DATETIME, SUBSTRING(LOTAttribute.Lottable01,5,4) + SUBSTRING(LOTAttribute.Lottable01,3,2) + 
+                   LEFT(LOTAttribute.Lottable01,2)), CONVERT(varchar(8), GetDate(), 112))                              --CS01
           >= CONVERT(INT, SKU.Busr10) 
       GROUP BY LOC.Facility
 
@@ -390,7 +393,9 @@ BEGIN
             AND LOT.QtyPreAllocated = 0 -- (Vanessa01)
             AND LOT.QtyAllocated =0     -- (Vanessa01)
             AND LOT.QtyPicked = 0       -- (Vanessa01)
-            AND DATEDIFF(Day, CONVERT(varchar(8), LOTAttribute.Lottable05, 112), CONVERT(varchar(8), GetDate(), 112)) 
+            --AND DATEDIFF(Day, CONVERT(varchar(8), LOTAttribute.Lottable05, 112), CONVERT(varchar(8), GetDate(), 112))        --CS01
+             AND DATEDIFF(Day,CONVERT(DATETIME, SUBSTRING(LOTAttribute.Lottable01,5,4) + SUBSTRING(LOTAttribute.Lottable01,3,2) + 
+                   LEFT(LOTAttribute.Lottable01,2)), CONVERT(varchar(8), GetDate(), 112))                              --CS01
                 >= CONVERT(INT, SKU.Busr10) 
 
             OPEN C_TransferDetail   
@@ -648,7 +653,9 @@ BEGIN
          AND LOC.HOSTWHCODE = ISNULL(RTRIM(@c_HOSTWHCODE), '')  --20-AUG-09: Data Selection for LOC.HOSTWHCODE='M001'. (Vanessa)
          AND LOTAttribute.Lottable03 = ISNULL(RTRIM(@c_Lottable03), '')
          AND (LOT.QtyPreAllocated > 0 OR LOT.QtyAllocated > 0 OR LOT.QtyPicked > 0) -- (Vanessa01)
-         AND DATEDIFF(Day, CONVERT(varchar(8), LOTAttribute.Lottable05, 112), CONVERT(varchar(8), GetDate(), 112)) 
+         --AND DATEDIFF(Day, CONVERT(varchar(8), LOTAttribute.Lottable05, 112), CONVERT(varchar(8), GetDate(), 112))     --CS01
+          AND DATEDIFF(Day,CONVERT(DATETIME, SUBSTRING(LOTAttribute.Lottable01,5,4) + SUBSTRING(LOTAttribute.Lottable01,3,2) + 
+                   LEFT(LOTAttribute.Lottable01,2)), CONVERT(varchar(8), GetDate(), 112))                              --CS01 
              >= CONVERT(INT, SKU.Busr10) 
 
          IF @@ROWCOUNT > 0
