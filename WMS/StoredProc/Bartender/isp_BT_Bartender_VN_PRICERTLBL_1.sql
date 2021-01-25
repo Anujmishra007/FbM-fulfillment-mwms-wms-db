@@ -20,7 +20,8 @@ GO
 /* 2020-07-10 1.0  WLChooi    Created (WMS-14217)                             */     
 /* 2020-07-21 1.1  WLChooi    WMS-14217 - Change BUSR7 to Notes1 (WL01)       */    
 /* 2020-08-06 1.2  WLChooi    WMS-14217 - Add Col08 = Notes2 (WL02)           */  
-/* 2020-09-17 1.3  WLChooi    WMS-15163 Remove Table Linkage to Receipt (WL03)*/              
+/* 2020-09-17 1.3  WLChooi    WMS-15163 Remove Table Linkage to Receipt (WL03)*/  
+/* 2021-01-15 1.4  WLChooi    WMS-16121 - Change Col01 (WL04)                 */             
 /******************************************************************************/                 
                     
 CREATE PROC [dbo].[isp_BT_Bartender_VN_PRICERTLBL_1]                        
@@ -159,7 +160,7 @@ BEGIN
    --                 +' AND RECDET.storerkey = @c_Sparm03 ' + CHAR(13)  
    --                 +' AND RECDET.sku = @c_Sparm02 '    
                     
-   SET @c_SQLJOIN = +N'SELECT DISTINCT ISNULL(S.BUSR3,''''), S.SKU, SUBSTRING(ISNULL(S.DESCR,''''),1,80), S.COUNTRYOFORIGIN, SUBSTRING(ISNULL(S.Notes1,''''), 1, 80),'   --5   --WL01     
+   SET @c_SQLJOIN = +N'SELECT DISTINCT ISNULL(S.BUSR4,''''), S.SKU, SUBSTRING(ISNULL(S.DESCR,''''),1,80), S.COUNTRYOFORIGIN, SUBSTRING(ISNULL(S.Notes1,''''), 1, 80),'   --5   --WL01   --WL04     
                     + CHAR(13) +     
                     +N'S.AltSKU, ISNULL(S.BUSR5,''''), SUBSTRING(ISNULL(S.Notes2,''''),1,80),'''','''','   --WL02    
                     + CHAR(13) +    

@@ -1,4 +1,3 @@
-
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_EOrderReplenConfirm]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 BEGIN 
@@ -34,6 +33,7 @@ GO
 /* 12-Nov-2020  Shong   1.1   Offset the Pickdetail if Lot replen is not*/
 /*                            same as expected LOT                      */
 /* 25-Nov-2020  Shong   1.2   Cater ForceAllocLottable Setting          */
+/* 21-Jan-2020  WWANG01 1.3   Cater Replenish include Allocation qty    */
 /************************************************************************/
 CREATE PROC [dbo].[isp_EOrderReplenConfirm] ( 
    @c_ReplenishmentGroup   NVARCHAR(10)
@@ -43,7 +43,7 @@ CREATE PROC [dbo].[isp_EOrderReplenConfirm] (
   ,@c_Errmsg               NVARCHAR(255) = '' OUTPUT
   ,@b_Debug                INT = 0 
 )
-AS 
+AS    
 BEGIN
    SET NOCOUNT ON  
    SET ANSI_NULLS OFF
@@ -82,6 +82,7 @@ BEGIN
            @c_ToID                NVARCHAR(20),  
            @n_QtyToTake           INT,
            @n_QtyReplan           INT = 0, 
+		   @n_QtyInPickLoc        INT = 0, --WWANG02
            @n_PT_RowRef           BIGINT = 0,
            @c_FastPickLoc         CHAR(1) = 'N',
            @c_PickLOT             NVARCHAR(10), 
@@ -113,11 +114,32 @@ BEGIN
 	       @c_StorerKey = r.Storerkey, 
 	       @c_SKU = r.Sku, 
 	       @n_RemainReplenQty =  r.Qty -  r.QtyInPickLoc,
-           @n_ReplenQty = CASE WHEN r.QtyInPickLoc > r.Qty THEN r.Qty ELSE r.QtyInPickLoc END
+           @n_ReplenQty = CASE WHEN r.QtyInPickLoc > r.Qty THEN r.Qty ELSE r.QtyInPickLoc END,
+		   @c_MoveRefKey = MoveRefKey   --WWANG01 
 	FROM REPLENISHMENT AS r WITH(NOLOCK)  
 	JOIN LOC AS l WITH(NOLOCK) ON r.ToLoc = L.Loc 
 	WHERE r.ReplenishmentKey = @c_ReplenishmentKey
+  
+   --WWANG01 BEGIN  QtyAllocate in current Batch
+    IF @c_MoveRefKey Like 'E%'
+	BEGIN
+	  SELECT @n_QtyInPickLoc = SUM(Qty)
+	  FROM PICKDETAIL AS PD WITH (NOLOCK) 
+	  JOIN PackTask PT WITH (NOLOCK) ON PD.OrderKey = PT.OrderKey  
+	  WHERE PT.ReplenishmentGroup = @c_ReplenishmentGroup 
+	  AND   PD.MoveRefKey = @c_MoveRefKey
 
+      IF @n_QtyInPickLoc > 0
+	  BEGIN
+
+	    SET @n_RemainReplenQty = @n_RemainReplenQty - @n_QtyInPickLoc
+            SET @n_ReplenQty = @n_ReplenQty + @n_QtyInPickLoc
+
+	  END --@n_QtyInPickLoc > 0 
+
+	END --c_MoveRefKey like '%E'
+
+   --WWANG01 END
 
    SET @c_ForceAllocLottable = '0'
 
@@ -352,6 +374,7 @@ BEGIN
 	  JOIN LOC AS LOC WITH(NOLOCK) ON LLI.LOC = LOC.LOC
 	  WHERE Storerkey = @c_StorerKey
 	  AND   SKU = @c_SKU
+	  AND   Facility = @c_Facility
 	  AND   LOT = @c_PickLOT
 	  AND   LOC.Status = 'OK'
 
@@ -383,8 +406,8 @@ BEGIN
    		   WHERE NOT EXISTS(SELECT 1 FROM PackTask AS PT WITH (NOLOCK)  
    			                  WHERE PT.ReplenishmentGroup = @c_ReplenishmentGroup
    			                  AND   PT.OrderKey = P.OrderKey)   
-		   --AND   P.DoReplenish = 'N'  --WWANG01
-		   --AND   P.UOM = '7'          --WWANG01
+		   AND   P.DoReplenish = 'N'  
+		   AND   P.UOM = '7'          
            AND   P.StorerKey = @c_StorerKey   
 		   AND   ISNULL(P.CartonGroup,'') <> 'ReplenSwap'
    	       AND   P.Sku = @c_SKU    		
@@ -392,10 +415,9 @@ BEGIN
 		   AND   P.LOT = @c_LOT
 		   AND   P.ID  = @c_ToID
    		   AND   P.Qty > 0 
-           --AND   P.STATUS < '4'       --WWANG01
-		   AND   P.STATUS <= '5'       --WWANG01
-           --AND   P.ShipFlag NOT IN ('P','Y')  --WWANG01
-		   ORDER BY P.STATUS, P.DoReplenish, P.UOM DESC, PickdetailKey
+           AND   P.STATUS < '4'      
+           AND   P.ShipFlag NOT IN ('P','Y')  
+		   ORDER BY PickdetailKey
                     
          IF @c_SwapPickDetailKey <> ''
          BEGIN
@@ -494,6 +516,7 @@ BEGIN
 	   JOIN LOC AS LOC WITH(NOLOCK) ON LLI.LOC = LOC.LOC
 	   WHERE Storerkey = @c_StorerKey
 	   AND   SKU = @c_SKU
+	   AND   Facility = @c_Facility
 	   AND   LOT = @c_LOT
 	   AND   LOC.Status = 'OK'
 
@@ -755,6 +778,7 @@ BEGIN
 			JOIN LOC AS LOC WITH(NOLOCK) ON LLI.LOC = LOC.LOC
 			WHERE Storerkey = @c_StorerKey
 			AND   SKU = @c_SKU
+			AND   Facility = @c_Facility
 			AND   LOT = @c_LOT
 			AND   ID = @c_ToID
 			AND   LOC.Status = 'OK'

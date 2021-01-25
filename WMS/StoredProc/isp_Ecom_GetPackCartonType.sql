@@ -29,8 +29,12 @@ GO
 /* 01-JUN-2017 Wan01    1.1   WMS-1816 - CN_DYSON_Exceed_ECOM PACKING   */  
 /* 24-APR-2017 Wan02    1.2   WMS-4628 - [CR] DYSON - ECOM Packing      */   
 /* 02-JAN-2019 WLCHOOI  1.3   WMS-7418 - CN IKEA Ecom Packing CR (WL01) */ 
+/* 09-DEC-2020 Wan03    1.4   WMS-15844 - CR CN IKEA ECOM Packing Module*/
+/*                            Enhancement on Carton List Shown By       */
+/*                            StorerkeyFacilityCartonization            */
+/* 14-DEC-2020 Wan04    1.4   WMS-15244-[CN] NIKE_O2_Ecom_packing_RFID_CR*/
 /************************************************************************/  
-CREATE PROC isp_Ecom_GetPackCartonType   
+CREATE PROC isp_Ecom_GetPackCartonType  
          @c_Facility    NVARCHAR(5)  
       ,  @c_Storerkey   NVARCHAR(15)  
       ,  @c_CartonType  NVARCHAR(10) = ''   
@@ -46,23 +50,26 @@ BEGIN
   
    DECLARE   
 --           @c_CartonGroup  NVARCHAR(10) --(Wan01)  
-           @n_StartTCnt    INT            --(Wan01)  
-         , @b_Success      INT  
-         , @n_err          INT               
-         , @c_errmsg       NVARCHAR(250)   
+           @n_StartTCnt       INT            --(Wan01)  
+         , @b_Success         INT  
+         , @n_err             INT               
+         , @c_errmsg          NVARCHAR(250)   
   
-         , @c_ConfigKey    NVARCHAR(30)  
-         , @c_authority    NVARCHAR(30)      
-         , @c_Option1      NVARCHAR(50)     
-         , @c_Option2      NVARCHAR(50)    
-         , @c_Option3      NVARCHAR(50)  
-         , @c_Option4      NVARCHAR(50)   
-         , @c_Option5      NVARCHAR(4000)  
+         , @c_ConfigKey       NVARCHAR(30)  
+         , @c_authority       NVARCHAR(30)      
+         , @c_Option1         NVARCHAR(50)     
+         , @c_Option2         NVARCHAR(50)    
+         , @c_Option3         NVARCHAR(50)  
+         , @c_Option4         NVARCHAR(50)   
+         , @c_Option5         NVARCHAR(4000)  
   
-         , @c_Sql          NVARCHAR(4000)  
-         , @c_SqlWhere     NVARCHAR(4000)  
+         , @c_Sql             NVARCHAR(4000) 
+         , @c_SQLParms        NVARCHAR(4000) --(Wan03) 
+         , @c_SqlWhere        NVARCHAR(4000)  
   
-         , @c_SPCode       NVARCHAR(100)  --(Wan02)  
+         , @c_SPCode          NVARCHAR(100)  --(Wan02)
+         , @c_CartonGroupALT  NVARCHAR(10)   = '' --(Wan04)  
+         , @c_AlertMsg        NVARCHAR(255)  = '' --(Wan04)  
   
    --(Wan01) - START  
    SET @n_StartTCnt = @@TRANCOUNT  
@@ -77,14 +84,6 @@ BEGIN
     
    IF ISNULL(RTRIM(@c_ConfigKey),'') = '' BEGIN SET @c_ConfigKey  =  'CtnTypeInput' END  
    SET @c_CartonType = ISNULL(RTRIM(@c_CartonType),'')  
-  
-   IF @c_CartonGroup= ''                     --(Wan01)  
-   BEGIN                                     --(Wan01)  
-      SELECT @c_CartonGroup = RTRIM(CartonGroup)  
-      FROM STORER WITH (NOLOCK)  
-      WHERE Storerkey = @c_Storerkey  
-   END                                       --(Wan01)  
-  
   
    SET @c_ConfigKey = 'CtnTypeInput'  
    SET @b_Success = 1  
@@ -116,8 +115,67 @@ BEGIN
       GOTO QUIT_SP  
    END  
   
-   SET @c_SqlWhere = @c_Option5   
+   --(Wan03) - START
+   IF @c_authority = '1'                   
+   BEGIN 
+      IF ISNULL(@c_Option1,'') <> '' 
+      BEGIN
+         SET @c_CartonGroup = @c_Option1
+      END
+      ELSE
+      BEGIN 
+         -- Get Sku CartonGroup and Validate Input CartonType at Custom SP 
+         IF ISNULL(@c_Option2,'') NOT IN ( '0', '1', '' ) -- Sku CartonGroup For Single
+         BEGIN
+            IF EXISTS ( SELECT 1 FROM sys.objects AS o WHERE NAME = @c_Option2 AND o.[type] = 'P')
+            BEGIN
+               SET @c_SQL  = 'EXEC ' + RTRIM(@c_Option2) 
+                           +  ' @c_Facility   = @c_Facility'   
+                           +  ',@c_CartonType = @c_CartonType'  
+                           +  ',@c_PickSlipNo = @c_PickSlipNo'  
+                           +  ',@n_CartonNo   = @n_CartonNo' 
+                           +  ',@c_CartonGroupALT= @c_CartonGroupALT OUTPUT'
+                           +  ',@c_AlertMsg   = @c_AlertMsg OUTPUT'        
+            
+               EXEC sp_executesql @c_SQL   
+                  ,  N' @c_Facility       NVARCHAR(5)                                    
+                      , @c_CartonType     NVARCHAR(10)    
+                      , @c_PickSlipNo     NVARCHAR(10)  
+                      , @n_CartonNo       INT
+                      , @c_CartonGroupALT NVARCHAR(10)   OUTPUT
+                      , @c_AlertMsg       NVARCHAR(255)  OUTPUT'
+                  ,  @c_Facility
+                  ,  @c_CartonType     
+                  ,  @c_PickSlipNo  
+                  ,  @n_CartonNo 
+                  ,  @c_CartonGroupALT OUTPUT  
+                  ,  @c_AlertMsg       OUTPUT 
+
+               IF @c_CartonGroup = '' AND ISNULL(@c_CartonType,'') = '' AND ISNULL(@c_CartonGroupALT,'') <> ''   -- Get Alt Cartontype to show
+               BEGIN
+                  SET @c_CartonGroup = @c_CartonGroupALT
+               END 
+            END 
+         END
+      END     
+   END
+   
+   IF @c_CartonGroup= ''                     --(Wan01)-- Move Down  
+   BEGIN                                     --(Wan01)  
+      SELECT @c_CartonGroup = RTRIM(CartonGroup)  
+      FROM STORER WITH (NOLOCK)  
+      WHERE Storerkey = @c_Storerkey  
+   END                                       --(Wan01) 
+                            
+   IF @c_authority = '0'
+   BEGIN
+      GOTO QUIT_SP  
+   END
+   --(Wan03) - END
   
+   SET @c_SqlWhere = @c_Option5   
+
+   --If @c_CartonType <> '' mean it is called from cartongroup and type checking
    IF @c_CartonType <> '' AND @c_SqlWhere = ''  
    BEGIN  
       SET @c_ConfigKey = 'DefaultCtnType'  
@@ -129,7 +187,7 @@ BEGIN
       SET @c_Option3 = ''  
       SET @c_Option4 = ''  
       SET @c_Option5 = ''  
-  
+ 
       EXEC nspGetRight    
             @c_Facility             
          ,  @c_StorerKey               
@@ -149,7 +207,7 @@ BEGIN
       BEGIN   
          GOTO QUIT_SP  
       END  
-  
+
       IF NOT EXISTS (   SELECT 1   
                         FROM CODELKUP WITH (NOLOCK) WHERE ListName = @c_Option1  
                     )  
@@ -172,7 +230,7 @@ BEGIN
    BEGIN    
       GOTO QUIT_SP           
    END  
-  
+
    IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')  
    BEGIN  
       CREATE TABLE #TMP_CTNTYPMEAS                                
@@ -211,7 +269,8 @@ BEGIN
            ,  CartonWeight        
            ,  CartonLength        
            ,  CartonWidth         
-           ,  CartonHeight   
+           ,  CartonHeight
+           ,  AlertMsg = @c_AlertMsg      --(Wan04)   
       FROM #TMP_CTNTYPMEAS  
   
       GOTO MEASURE_CUSTOM  
@@ -231,14 +290,26 @@ BEGIN
               + ', CartonWeight = ISNULL(CartonWeight,0)'  
               + ', CartonLength = ISNULL(CartonLength,0)'  
               + ', CartonWidth  = ISNULL(CartonWidth,0)'  
-              + ', CartonHeight = ISNULL(CartonHeight,0)'  
+              + ', CartonHeight = ISNULL(CartonHeight,0)' 
+              + ', AlertMsg = @c_AlertMsg'                
               + ' FROM CARTONIZATION WITH (NOLOCK)'  
               + ' WHERE CartonizationGroup = N''' + RTRIM(@c_CartonGroup) + ''''  
-              + ' AND  (CartonType = N''' + @c_CartonType + ''' OR ''' + @c_CartonType + '''='''') '  
+              --+ ' AND  (CartonType = N''' + @c_CartonType + ''' OR ''' + @c_CartonType + '''='''') '            --(Wan03)  
+              + CASE WHEN @c_CartonType <> '' THEN ' AND CartonType = N''' + @c_CartonType + '''' ELSE '' END     --(Wan03) 
               + @c_SqlWhere  
               + ' ORDER BY UseSequence'  
-  
-   EXEC ( @c_Sql )  
+   --(Wan03) - START
+   --EXEC ( @c_Sql ) 
+   SET @c_SQLParms = N'@c_CartonGroup NVARCHAR(10)'
+                   + ',@c_CartonType  NVARCHAR(10)'
+                   + ',@c_AlertMsg    NVARCHAR(255)'     --(Wan04)
+                  
+   EXEC sp_ExecuteSQL @c_Sql
+                   ,  @c_SQLParms
+                   ,  @c_CartonGroup
+                   ,  @c_CartonType
+                   ,  @c_AlertMsg                        --(Wan04)
+   --(Wan03) - END 
   
    --(Wan02) - START  
    MEASURE_CUSTOM:  

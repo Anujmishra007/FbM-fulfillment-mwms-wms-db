@@ -9,13 +9,26 @@ SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Store procedure: WMS                                                 */
-/* Copyright      : LFLogistics                                         */
+/* Creation Date:                                                       */
+/* Copyright : LFLogistics                                              */
+/* Written by: Wan                                                      */  
 /*                                                                      */
-/* Purpose: Dynamic lottable                                            */
-/*                                                                      */
+/* Purpose: Finalize Receipt                                            */
+/*                                                                      */                                                                                  
+/* Called By: SCE                                                       */                                                                                  
+/*          :                                                           */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
+/*                                                                      */                                                                                  
+/* Version: 8.0                                                         */                                                                                  
+/*                                                                      */                                                                                  
+/* Data Modifications:                                                  */                                                                                  
+/*                                                                      */                                                                                  
+/* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 2020-11-26  Wan01    1.1   Add Big Outer Begin Try..End Try to enable*/
 /*                            Revert when Sub SP Raise error            */
+/* 2020-12-15  Wan02    1.2   LFWM-2303 - UAT - TW  ASN Finalize issues */
+/* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
       @c_ReceiptKey              NVARCHAR(10)
@@ -187,16 +200,18 @@ BEGIN
          , @CUR_RD                     CURSOR
 
    SET  @n_ErrGroupKey = 0
-     
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-
-   IF @n_Err <> 0 
+   IF SUSER_SNAME() <> @c_UserName     --(Wan03)
    BEGIN
-      GOTO EXIT_SP
-   END
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
              
-   EXECUTE AS LOGIN = @c_UserName        
+      EXECUTE AS LOGIN = @c_UserName   
+   END                                  --(Wan03)
    
    SET @n_continue   = 1
    SET @c_TableName  = 'ReceiptDetail'
@@ -588,8 +603,8 @@ BEGIN
             SET @n_TOLPCT = 0.00
             SET @n_ShelfLife = 0.00
             SET @c_SkuIVAS  = ''
-            SELECT @n_TOLPCT    = CASE WHEN ISNUMERIC(S.SUSR4) = 1 THEN ISNULL(S.SUSR4,0.00) ELSE -1.00 END
-                  ,@n_ShelfLife = CASE WHEN ISNUMERIC(S.SUSR1) = 1 THEN ISNULL(S.SUSR1,0.00) ELSE -1.00 END
+            SELECT @n_TOLPCT    = CASE WHEN ISNUMERIC(S.SUSR4) = 1 THEN CONVERT(DECIMAL(8,2),S.SUSR4) ELSE -1.00 END --(Wan02)
+                  ,@n_ShelfLife = CASE WHEN ISNUMERIC(S.SUSR1) = 1 THEN CONVERT(FLOAT,S.SUSR1) ELSE -1.00 END        --(Wan02)
                   ,@c_SkuIVAS = ISNULL(RTRIM(IVAS),'')
                   ,@c_Packkey = S.PACKKey
             FROM SKU S WITH (NOLOCK)
@@ -1630,7 +1645,7 @@ BEGIN
          IF @c_ChkASNVarTol = '1' --AND @c_ToleranceAdmin = 'N'
          BEGIN
             SET @n_TOLPCT = 0.00
-            SELECT @n_TOLPCT = CASE WHEN ISNUMERIC(S.SUSR4) = 1 THEN ISNULL(S.SUSR4,0.00) ELSE -1.00 END
+            SELECT @n_TOLPCT = CASE WHEN ISNUMERIC(S.SUSR4) = 1 THEN CONVERT(DECIMAL(8,2), S.SUSR4) ELSE -1.00 END   --(Wan02)
             FROM SKU S WITH (NOLOCK)
             WHERE S.Storerkey = @c_Storerkey
             AND S.Sku = @c_Sku
@@ -1705,7 +1720,7 @@ BEGIN
                SET @n_TolPct = 0.00
                SET @n_QtyOrdered = 0 
                SET @n_QtyReceived = 0 
-               SELECT @n_TolPct = CASE WHEN ISNUMERIC(ISNULL(S.SUSR4,0.00)) = 1 THEN ISNULL(S.SUSR4,0.00) ELSE -1.00 END
+               SELECT @n_TolPct = CASE WHEN ISNUMERIC(S.SUSR4) = 1 THEN CONVERT(DECIMAL(8,2),S.SUSR4) ELSE -1.00 END --(Wan02)
                      ,@n_QtyOrdered = ISNULL(SUM(PD.QtyOrdered),0)
                      ,@n_QtyReceived= ISNULL(SUM(PD.QtyReceived),0)
                FROM PODETAIL PD WITH (NOLOCK)
@@ -1714,7 +1729,7 @@ BEGIN
                WHERE PD.POKey = @c_POKey
                AND   PD.ExternPOKey = @c_ExternReceiptkey
                AND   PD.ExternLineNo= @c_ExternLineNo
-               GROUP BY ISNULL(S.SUSR4,0.00)
+               GROUP BY CASE WHEN ISNUMERIC(S.SUSR4) = 1 THEN CONVERT(DECIMAL(8,2),S.SUSR4) ELSE -1.00 END           --(Wan02)
 
                IF @n_TolPct >= 0 
                BEGIN
@@ -1748,7 +1763,7 @@ BEGIN
       SET @c_MUID = ''
       SELECT @c_MUID = ISNULL(RTRIM(nsqlvalue),'') 
       FROM NSQLCONFIG WITH (NOLOCK)
-      WHERE ConfigKey = "MUID_Enable"
+      WHERE ConfigKey = 'MUID_Enable'
   
       BEGIN TRY
          EXEC nspGetRight
@@ -1809,7 +1824,8 @@ BEGIN
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN
-         SELECT @c_ReceiptLineNo     = RD.ReceiptLineNumber
+         SELECT TOP 1                                                --(Wan02)
+                @c_ReceiptLineNo     = RD.ReceiptLineNumber
                ,@n_BeforeReceivedQty = RD.BeforeReceivedQty
                ,@n_FreeGoodQtyReceived = ISNULL(RD.FreeGoodQtyReceived,0)
          FROM @tRECEIPTDETAIL t
@@ -1864,7 +1880,7 @@ BEGIN
                   SET ToId = @c_ToID
                      ,EditWho = @c_UserName
                      ,EditDate= GETDATE()
-                     , Trafficcop = NULL
+                     ,Trafficcop = NULL
                WHERE ReceiptKey = @c_ReceiptKey
                AND   ReceiptLineNumber = @c_ReceiptLineNo
 

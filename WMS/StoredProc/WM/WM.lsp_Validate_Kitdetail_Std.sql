@@ -25,7 +25,9 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2020-06-25  Wan01    1.1   LFWM-2153 - UAT CNKitting Module shows     */
-/*                            lottable is required                      */
+/*                            lottable is required                       */
+/* 2021-01-04  Wan02    1.2   LFWM-2448 - UAT - TW  Validation while     */
+/*                            creating new kitting                       */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_KitDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -160,6 +162,7 @@ BEGIN
 
       ,  @n_Cnt                  INT          = 1
       ,  @c_Cnt                  NVARCHAR(2)  = ''
+      ,  @n_CheckLottables       INT          = 1  --(Wan02)
 
       ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
 
@@ -188,105 +191,119 @@ BEGIN
       ,  @dt_Lottable15 = KD.Lottable15
    FROM  #KITDETAIL KD  
 
-   SET @c_Facility = ''
-   SELECT @c_Facility = KH.Facility
-   FROM KIT KH WITH (NOLOCK)
-   WHERE KH.KitKey = @c_KitKey
-
-   IF @c_Facility = '' AND @c_Loc <> ''
+   --(Wan02) - START
+   SET @n_CheckLottables = 0
+   IF EXISTS(  SELECT 1 FROM KITDETAIL AS k WITH (NOLOCK) 
+               WHERE k.KITKey = @c_KitKey
+               AND k.KITLineNumber = @c_kitLineNo
+               AND k.[Type] = @c_Type
+            )
    BEGIN
-      SELECT @c_Facility = L.Facility
-      FROM LOC L WITH (NOLOCK)
-      WHERE L.Loc = @c_Loc
-   END
+      SET @n_CheckLottables = 1
+   END   	
+   --(Wan02) - END  
+       
+   IF @n_CheckLottables = 1      --(Wan02) - START
+   BEGIN
+      SET @c_Facility = ''
+      SELECT @c_Facility = KH.Facility
+      FROM KIT KH WITH (NOLOCK)
+      WHERE KH.KitKey = @c_KitKey
 
-   SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
-        , @c_Lottable02Label = ISNULL(RTRIM(Lottable02Label),'')
-        , @c_Lottable03Label = ISNULL(RTRIM(Lottable03Label),'')
-        , @c_Lottable04Label = ISNULL(RTRIM(Lottable04Label),'')
-        , @c_Lottable05Label = ISNULL(RTRIM(Lottable05Label),'')
-        , @c_Lottable06Label = ISNULL(RTRIM(Lottable06Label),'')
-        , @c_Lottable07Label = ISNULL(RTRIM(Lottable07Label),'')
-        , @c_Lottable08Label = ISNULL(RTRIM(Lottable08Label),'')
-        , @c_Lottable09Label = ISNULL(RTRIM(Lottable09Label),'')
-        , @c_Lottable10Label = ISNULL(RTRIM(Lottable10Label),'')
-        , @c_Lottable11Label = ISNULL(RTRIM(Lottable11Label),'')
-        , @c_Lottable12Label = ISNULL(RTRIM(Lottable12Label),'')
-        , @c_Lottable13Label = ISNULL(RTRIM(Lottable13Label),'')
-        , @c_Lottable14Label = ISNULL(RTRIM(Lottable14Label),'')
-        , @c_Lottable15Label = ISNULL(RTRIM(Lottable15Label),'')
-   FROM SKU S WITH (NOLOCK)
-   WHERE S.Storerkey = @c_Storerkey
-   AND S.Sku = @c_Sku
+      IF @c_Facility = '' AND @c_Loc <> ''
+      BEGIN
+         SELECT @c_Facility = L.Facility
+         FROM LOC L WITH (NOLOCK)
+         WHERE L.Loc = @c_Loc
+      END
 
-   SELECT @c_VLDLotLabelExist = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateLotLabelExist')
+      SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
+           , @c_Lottable02Label = ISNULL(RTRIM(Lottable02Label),'')
+           , @c_Lottable03Label = ISNULL(RTRIM(Lottable03Label),'')
+           , @c_Lottable04Label = ISNULL(RTRIM(Lottable04Label),'')
+           , @c_Lottable05Label = ISNULL(RTRIM(Lottable05Label),'')
+           , @c_Lottable06Label = ISNULL(RTRIM(Lottable06Label),'')
+           , @c_Lottable07Label = ISNULL(RTRIM(Lottable07Label),'')
+           , @c_Lottable08Label = ISNULL(RTRIM(Lottable08Label),'')
+           , @c_Lottable09Label = ISNULL(RTRIM(Lottable09Label),'')
+           , @c_Lottable10Label = ISNULL(RTRIM(Lottable10Label),'')
+           , @c_Lottable11Label = ISNULL(RTRIM(Lottable11Label),'')
+           , @c_Lottable12Label = ISNULL(RTRIM(Lottable12Label),'')
+           , @c_Lottable13Label = ISNULL(RTRIM(Lottable13Label),'')
+           , @c_Lottable14Label = ISNULL(RTRIM(Lottable14Label),'')
+           , @c_Lottable15Label = ISNULL(RTRIM(Lottable15Label),'')
+      FROM SKU S WITH (NOLOCK)
+      WHERE S.Storerkey = @c_Storerkey
+      AND S.Sku = @c_Sku
+
+      SELECT @c_VLDLotLabelExist = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateLotLabelExist')
    
-   SET @n_Cnt = 1
-   WHILE @n_Cnt <= 15
-   BEGIN
-      SET @c_LottableValue= CASE @n_Cnt WHEN 1  THEN @c_Lottable01
-                                        WHEN 2  THEN @c_Lottable02
-                                        WHEN 3  THEN @c_Lottable03
-                                        WHEN 4  THEN CONVERT(NVARCHAR(10), @dt_Lottable04, 112)
-                                        WHEN 5  THEN CONVERT(NVARCHAR(10), @dt_Lottable05, 112)
-                                        WHEN 6  THEN @c_Lottable06
-                                        WHEN 7  THEN @c_Lottable07
-                                        WHEN 8  THEN @c_Lottable08
-                                        WHEN 9  THEN @c_Lottable09
-                                        WHEN 10 THEN @c_Lottable10
-                                        WHEN 11 THEN @c_Lottable11
-                                        WHEN 12 THEN @c_Lottable12
-                                        WHEN 13 THEN CONVERT(NVARCHAR(10), @dt_Lottable13, 112)
-                                        WHEN 14 THEN CONVERT(NVARCHAR(10), @dt_Lottable14, 112)
-                                        WHEN 15 THEN CONVERT(NVARCHAR(10), @dt_Lottable15, 112)
-                                        END
-      
-      SET @c_LottableLabel= CASE @n_Cnt WHEN 1  THEN @c_Lottable01Label
-                                        WHEN 2  THEN @c_Lottable02Label
-                                        WHEN 3  THEN @c_Lottable03Label
-                                        WHEN 4  THEN @c_Lottable04Label
-                                        WHEN 5  THEN @c_Lottable05Label
-                                        WHEN 6  THEN @c_Lottable06Label
-                                        WHEN 7  THEN @c_Lottable07Label
-                                        WHEN 8  THEN @c_Lottable08Label
-                                        WHEN 9  THEN @c_Lottable09Label
-                                        WHEN 10 THEN @c_Lottable10Label
-                                        WHEN 11 THEN @c_Lottable11Label
-                                        WHEN 12 THEN @c_Lottable12Label
-                                        WHEN 13 THEN @c_Lottable13Label
-                                        WHEN 14 THEN @c_Lottable14Label
-                                        WHEN 15 THEN @c_Lottable15Label
-                                        END
-
-      SET @c_Cnt = RIGHT('0' + CONVERT(NVARCHAR(2), @n_Cnt),2) -- For 'EXLOTLBCHK' & 'MATCHLNAME' SeekCode
-
-      IF @c_Type = 'T' AND @n_Cnt NOT IN (5)                  --(Wan01) 
+      SET @n_Cnt = 1
+      WHILE @n_Cnt <= 15
       BEGIN
-         IF @n_Cnt IN (3,5) AND @c_LottableLabel <> 'RCP_DATE'--(Wan01)
+         SET @c_LottableValue= CASE @n_Cnt WHEN 1  THEN @c_Lottable01
+                                           WHEN 2  THEN @c_Lottable02
+                                           WHEN 3  THEN @c_Lottable03
+                                           WHEN 4  THEN CONVERT(NVARCHAR(10), @dt_Lottable04, 112)
+                                           WHEN 5  THEN CONVERT(NVARCHAR(10), @dt_Lottable05, 112)
+                                           WHEN 6  THEN @c_Lottable06
+                                           WHEN 7  THEN @c_Lottable07
+                                           WHEN 8  THEN @c_Lottable08
+                                           WHEN 9  THEN @c_Lottable09
+                                           WHEN 10 THEN @c_Lottable10
+                                           WHEN 11 THEN @c_Lottable11
+                                           WHEN 12 THEN @c_Lottable12
+                                           WHEN 13 THEN CONVERT(NVARCHAR(10), @dt_Lottable13, 112)
+                                           WHEN 14 THEN CONVERT(NVARCHAR(10), @dt_Lottable14, 112)
+                                           WHEN 15 THEN CONVERT(NVARCHAR(10), @dt_Lottable15, 112)
+                                           END
+      
+         SET @c_LottableLabel= CASE @n_Cnt WHEN 1  THEN @c_Lottable01Label
+                                           WHEN 2  THEN @c_Lottable02Label
+                                           WHEN 3  THEN @c_Lottable03Label
+                                           WHEN 4  THEN @c_Lottable04Label
+                                           WHEN 5  THEN @c_Lottable05Label
+                                           WHEN 6  THEN @c_Lottable06Label
+                                           WHEN 7  THEN @c_Lottable07Label
+                                           WHEN 8  THEN @c_Lottable08Label
+                                           WHEN 9  THEN @c_Lottable09Label
+                                           WHEN 10 THEN @c_Lottable10Label
+                                           WHEN 11 THEN @c_Lottable11Label
+                                           WHEN 12 THEN @c_Lottable12Label
+                                           WHEN 13 THEN @c_Lottable13Label
+                                           WHEN 14 THEN @c_Lottable14Label
+                                           WHEN 15 THEN @c_Lottable15Label
+                                           END
+
+         SET @c_Cnt = RIGHT('0' + CONVERT(NVARCHAR(2), @n_Cnt),2) -- For 'EXLOTLBCHK' & 'MATCHLNAME' SeekCode
+
+         IF @c_Type = 'T' AND @n_Cnt NOT IN (5)                  --(Wan01) 
          BEGIN
-            IF @c_LottableLabel <> '' AND (ISNULL(@c_LottableValue,'') = '' OR (@n_Cnt IN (4,5,13,14,15) AND @c_LottableValue = '19000101'))   
+            IF @n_Cnt IN (3,5) AND @c_LottableLabel <> 'RCP_DATE'--(Wan01)
             BEGIN
-               SET @n_Continue = 3
-               SET @n_Err = 557551
-               SET @c_errmsg = 'Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_KitDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_LottableLabel
-               GOTO EXIT_SP
-            END
-         END                                                 --(Wan01)
-      END
+               IF @c_LottableLabel <> '' AND (ISNULL(@c_LottableValue,'') = '' OR (@n_Cnt IN (4,5,13,14,15) AND @c_LottableValue = '19000101'))   
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 557551
+                  SET @c_errmsg = 'Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_KitDetail_Std)'
+                                 + '|' + @c_Cnt + '|' + @c_LottableLabel
+                  GOTO EXIT_SP
+               END
+            END                                                 --(Wan01)
+         END
       
-      IF @c_Facility <> '' AND @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND ISNULL(@c_LottableValue,'') <> ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 557552
-         SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_KitDetail_Std)'
-                        + '|' + @c_Cnt + '|' + @c_Sku
-         GOTO EXIT_SP
-      END
+         IF @c_Facility <> '' AND @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND ISNULL(@c_LottableValue,'') <> ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 557552
+            SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_KitDetail_Std)'
+                           + '|' + @c_Cnt + '|' + @c_Sku
+            GOTO EXIT_SP
+         END
 
-      SET @n_Cnt = @n_Cnt + 1
-   END 
-  
+         SET @n_Cnt = @n_Cnt + 1
+      END 
+   END      --(Wan02) - END
    EXIT_SP:
    
    IF @n_Continue = 3

@@ -25,6 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 2021-01-18   WLChooi   1.1   INC1403544 - Return Blank Result if     */
+/*                              ISOCntryCode = MY (WL01)                */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
@@ -59,8 +61,9 @@ BEGIN
    JOIN StorerSODefault SSOD (NOLOCK) ON SSOD.StorerKey = OH.ConsigneeKey
    WHERE OH.OrderKey = @c_Orderkey AND SSOD.Destination <> 'EAST MALAYSIA'
    
-   IF @c_ISOCntryCode = 'MY'
-      GOTO QUIT_SP
+   --WL01 Move Down
+   --IF @c_ISOCntryCode = 'MY'
+   --   GOTO QUIT_SP
    
    IF ISNULL(@c_Storerkey,'') = ''
    BEGIN
@@ -140,7 +143,12 @@ BEGIN
        , ShowCustom              INT NULL
        , Lottable06              NVARCHAR(30)   NULL
        , Lottable07              NVARCHAR(30)   NULL)
-    
+
+   --WL01 S
+   IF @c_ISOCntryCode = 'MY'
+      GOTO QUIT_SP
+   --WL01 E
+      
    INSERT INTO #TMP_SUM (Orderkey, UnitPricexQtyPicked, QtyPicked, AmtInWords, UOM)
    SELECT MAX(OH.Orderkey)
         , SUM(OD.UnitPrice * PD.Qty)
@@ -237,6 +245,7 @@ BEGIN
    JOIN #TMP_SUM t (NOLOCK) ON t.Orderkey = OH.Orderkey
    WHERE OH.Orderkey = @c_Orderkey
 
+QUIT_SP:   --WL01
    SELECT  STCompany             
          , STNotes1              
          , STAddress             
@@ -326,7 +335,7 @@ BEGIN
          , Lottable07 
    ORDER BY Sku
    
-QUIT_SP:
+--QUIT_SP:   --WL01 Move Up
    IF OBJECT_ID('tempdb..#TMP_SUM') IS NOT NULL
       DROP TABLE #TMP_SUM
    

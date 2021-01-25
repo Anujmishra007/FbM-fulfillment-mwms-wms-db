@@ -28,6 +28,7 @@ GO
 /* 21-SEP-2016 Wan01    1.1   Performance Tune                          */
 /* 01-JUN-2017 Wan02    1.2   WMS-1816 - CN_DYSON_Exceed_ECOM PACKING   */
 /* 13-JUL-2017 Wan03    1.3   WMS-2306 - CN-Nike SDC WMS ECOM Packing CR*/
+/* 09-OCT-2020 Wan04    1.4   WMS-14948 - PH_Benby_Ecom_Packing_Filter  */
 /************************************************************************/
 CREATE PROC isp_Ecom_RedoPack 
             @c_PickSlipNo NVARCHAR(10)       
@@ -97,6 +98,25 @@ BEGIN
    --(Wan02) - END
 
    BEGIN TRAN
+
+   --(Wan04) - START
+   SET @b_Success = 0      
+   EXECUTE dbo.isp_PreRedoPack_Wrapper     
+           @c_PickSlipNo= @c_PickSlipNo    
+         , @b_Success   = @b_Success     OUTPUT      
+         , @n_Err       = @n_err         OUTPUT       
+         , @c_ErrMsg    = @c_errmsg      OUTPUT      
+    
+   IF @n_err <> 0      
+   BEGIN     
+      SET @n_continue= 3     
+      SET @n_err = 60090    
+      SET @c_errmsg = CONVERT(char(5),@n_err)    
+      SET @c_errmsg = 'NSQL'+CONVERT(char(6), @n_err)+ ': Execute isp_PreRedoPack_Wrapper Failed. (isp_Ecom_RedoPack) '     
+                     + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '    
+      GOTO QUIT                          
+   END     
+   --(Wan04) - END
 
    --(Wan02) - START
    SET @c_CTNTrackNoReverse_SP = ''
@@ -265,7 +285,7 @@ BEGIN
    CLOSE CUR_PTD
    DEALLOCATE CUR_PTD 
    -- (Wan01) -  END
-   
+
 QUIT:
    -- (Wan01) -  START
    IF CURSOR_STATUS( 'LOCAL', 'CUR_PTD') in (0 , 1)  

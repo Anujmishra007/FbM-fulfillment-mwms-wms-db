@@ -30,6 +30,8 @@ GO
 /* 02-Jan-2020  Wan01      1.3   Dynamic SQL review, impact SQL cache log*/  
 /* 12-May-2020  LZG        1.4   INC1138834 - Fixed MinShelfLife         */ 
 /*                               conversion (ZG01)                       */
+/* 11-Jan-2021 BeeTin      1.5   INC1398518 - extend @c_LimitString to   */
+/*                               1000                                    */
 /*************************************************************************/  
   
 CREATE PROC nspPRFEFO1  
@@ -60,7 +62,7 @@ AS
   
 DECLARE @b_success INT, @n_err INT, @c_errmsg NVARCHAR(250), @b_debug INT,  
         @c_manual  NVARCHAR(1),  
-        @c_LimitString NVARCHAR(255),  
+        @c_LimitString NVARCHAR(1000),-- INC1398518
         @n_shelflife INT,  
         @c_sql NVARCHAR(MAX)  
           

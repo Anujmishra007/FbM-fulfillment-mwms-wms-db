@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: isp_Ecom_Packconfirm                                      */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2020-12-23  Wan01    1.1   WMS-15244 -[CN] NIKE_O2_Ecom_packing_RFID_CR */
 /************************************************************************/
 CREATE PROC isp_PackConfirmQRF
            @c_PickSlipNo   NVARCHAR(10)
@@ -41,6 +42,10 @@ BEGIN
    DECLARE  
            @n_StartTCnt       INT = @@TRANCOUNT
          , @n_Continue        INT = 1
+         
+         , @n_CartonNo        INT = 0           --(Wan01)
+         , @n_QRFGroupKey     INT = 0           --(Wan01)
+         , @c_LabelLine       NVARCHAR(5)       --(Wan01)
 
          , @c_Orderkey        NVARCHAR(10) = ''
          , @c_ExternOrderkey  NVARCHAR(50) = ''
@@ -62,13 +67,26 @@ BEGIN
                  
          , @cur_PQRF          CURSOR 
          
+         , @cur_PQRFGRP       CURSOR         --(Wan01)
+         
    DECLARE @TORDERDETAIL      TABLE
-      (  OrderLineNumber NVARCHAR(5)    NOT NULL PRIMARY KEY
-      ,  ExternLineNo    NVARCHAR(10)   NOT NULL DEFAULT('')
-      ,  Sku             NVARCHAR(20)   NOT NULL DEFAULT('')
-      ,  QtyAllocated    INT            NOT NULL DEFAULT(0) 
+      (  OrderLineNumber   NVARCHAR(5)    NOT NULL PRIMARY KEY
+      ,  ExternLineNo      NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Sku               NVARCHAR(20)   NOT NULL DEFAULT('')
+      ,  QtyAllocated      INT            NOT NULL DEFAULT(0) 
       )         
 
+   DECLARE @TPACKQRF          TABLE             --(Wan01) - START                      
+      (  RowRef            INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
+      ,  PickSlipNo        NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  CartonNo          INT            NOT NULL DEFAULT(0)   
+      ,  LabelLine         NVARCHAR(5)    NOT NULL DEFAULT('')          
+      ,	QRCode            NVARCHAR(100)  NOT NULL DEFAULT('')
+      ,  RFIDNo            NVARCHAR(100)  NOT NULL DEFAULT('')
+      ,  TIDNo             NVARCHAR(100)  NOT NULL DEFAULT('')
+      ,  QRFGroupKey       INT            NOT NULL DEFAULT(0) 
+      )                                         --(Wan01) - END
+      
    SELECT @c_Orderkey = PH.Orderkey
    FROM PACKHEADER PH   WITH (NOLOCK) 
    WHERE PH.PickSlipNo = @c_PickSlipNo
@@ -152,31 +170,56 @@ BEGIN
    FROM ORDERDETAIL OD WITH (NOLOCK)
    WHERE OD.Orderkey = @c_Orderkey
 
-   SET @cur_PQRF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT PD.Storerkey
-         ,PD.Sku
-         ,PD.labelNo
+   --(Wan01) - START
+   INSERT INTO @TPACKQRF
+      (  PickSlipNo
+      ,  CartonNo
+      ,  LabelLine
+      ,  QRCode
+      ,  RFIDNo
+      ,  TIDNo
+      ,  QRFGroupKey
+      ) 
+   SELECT PQRF.PickSlipNo
+         ,PQRF.CartonNo
+         ,PQRF.LabelLine
          ,PQRF.QRCode
          ,PQRF.RFIDNo
          ,PQRF.TIDNo
+         ,PQRF.QRFGroupKey
+   FROM PackQRF PQRF WITH (NOLOCK)
+   WHERE PQRF.PickSlipNo = @c_PickSlipNo
+   ORDER BY PQRF.PickSlipNo
+         ,  PQRF.CartonNo
+         ,  PQRF.LabelLine
+         ,  PQRF.QRFGroupKey
+         ,  PQRF.PackQRFKey 
+         
+   SET @cur_PQRFGRP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT 
+          PD.Storerkey
+         ,PD.Sku
+         ,PD.labelNo
+         ,PD.CartonNo
+         ,PD.LabelLine    
+         ,PQRF.QRFGroupKey
    FROM PACKDETAIL PD (NOLOCK)
-   JOIN PackQRF PQRF ON  PD.PickSlipNo = PQRF.PickSlipNo 
-                     AND PD.CartonNo   = PQRF.CartonNo 
-                     AND PD.LabelLine  = PQRF.LabelLine
+   JOIN @TPACKQRF PQRF ON PD.PickSlipNo = PQRF.PickSlipNo 
+                      AND PD.CartonNo   = PQRF.CartonNo 
+                      AND PD.LabelLine  = PQRF.LabelLine
    WHERE PD.PickSlipNo = @c_PickSlipNo
-   ORDER BY PD.PickSlipNo
-         ,  PD.CartonNo
+   ORDER BY PD.CartonNo
          ,  PD.LabelLine
+         ,  PQRF.QRFGroupKey         
 
-   OPEN @cur_PQRF  
+   OPEN @cur_PQRFGRP  
           
-   FETCH NEXT FROM @cur_PQRF INTO @c_Storerkey
-                              ,  @c_Sku
-                              ,  @c_labelNo
-                              ,  @c_QRCode
-                              ,  @c_RFIDNo
-                              ,  @c_TIDNo  
-        
+   FETCH NEXT FROM @cur_PQRFGRP INTO   @c_Storerkey
+                                    ,  @c_Sku
+                                    ,  @c_labelNo
+                                    ,  @n_CartonNo
+                                    ,  @c_LabelLine
+                                    ,  @n_QRFGroupKey
    WHILE @@FETCH_STATUS <> -1 
    BEGIN
       SET @c_OrderLineNumber = ''
@@ -190,46 +233,70 @@ BEGIN
       AND QtyAllocated > 0
       ORDER BY T.OrderLineNumber
 
-      INSERT INTO EXTERNORDERSDETAIL   
-         (   
-            OrderKey       
-         ,  Orderlinenumber
-         ,  ExternOrderKey 
-         ,  ExternLineNo   
-         ,  QRCode         
-         ,  Storerkey      
-         ,  SKU            
-         ,  RFIDNo         
-         ,  TIDNo 
-         ,  UserDefine01         
-         ,  [Status] 
-         )        
-      VALUES
-         ( 
-            @c_OrderKey       
-         ,  @c_Orderlinenumber
-         ,  @c_ExternOrderKey 
-         ,  @c_ExternLineNo   
-         ,  @c_QRCode         
-         ,  @c_Storerkey      
-         ,  @c_SKU            
-         ,  @c_RFIDNo         
-         ,  @c_TIDNo
-         ,  @c_labelNo          
-         ,  @c_OrderStatus 
-         )  
+      SET @cur_PQRF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PQRF.QRCode
+            ,PQRF.RFIDNo
+            ,PQRF.TIDNo 
+      FROM @TPACKQRF PQRF 
+      WHERE PQRF.PickSlipNo = @c_PickSlipNo
+      AND PQRF.CartonNo   = @n_CartonNo 
+      AND PQRF.LabelLine  = @c_LabelLine
+      AND PQRF.QRFGroupKey= @n_QRFGroupKey   
+      ORDER BY PQRF.RowRef
 
-      SET @n_err = @@ERROR      
+      OPEN @cur_PQRF  
+          
+      FETCH NEXT FROM @cur_PQRF INTO   @c_QRCode
+                                    ,  @c_RFIDNo
+                                    ,  @c_TIDNo 
+      WHILE @@FETCH_STATUS <> -1 
+      BEGIN                        
+         INSERT INTO EXTERNORDERSDETAIL   
+            (   
+               OrderKey       
+            ,  Orderlinenumber
+            ,  ExternOrderKey 
+            ,  ExternLineNo   
+            ,  QRCode         
+            ,  Storerkey      
+            ,  SKU            
+            ,  RFIDNo         
+            ,  TIDNo 
+            ,  UserDefine01         
+            ,  [Status] 
+            )        
+         VALUES
+            ( 
+               @c_OrderKey       
+            ,  @c_Orderlinenumber
+            ,  @c_ExternOrderKey 
+            ,  @c_ExternLineNo   
+            ,  @c_QRCode         
+            ,  @c_Storerkey      
+            ,  @c_SKU            
+            ,  @c_RFIDNo         
+            ,  @c_TIDNo
+            ,  @c_labelNo          
+            ,  @c_OrderStatus 
+            )  
+
+         SET @n_err = @@ERROR      
          
-      IF @n_err <> 0      
-      BEGIN      
-         SET @n_continue = 3      
-         SET @c_errmsg = CONVERT(char(250),@n_err)
-         SET @n_err = 81020
-         SET @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table ExternOrdersDetail. (isp_PackConfirmQRF)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
-         BREAK
-      END  
+         IF @n_err <> 0      
+         BEGIN      
+            SET @n_continue = 3      
+            SET @c_errmsg = CONVERT(char(250),@n_err)
+            SET @n_err = 81020
+            SET @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table ExternOrdersDetail. (isp_PackConfirmQRF)' 
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+            BREAK
+         END 
+         FETCH NEXT FROM @cur_PQRF INTO   @c_QRCode
+                                       ,  @c_RFIDNo
+                                       ,  @c_TIDNo  
+      END
+      CLOSE @cur_PQRF
+      DEALLOCATE @cur_PQRF
 
       UPDATE @TORDERDETAIL 
          SET QtyAllocated = QtyAllocated - 1
@@ -237,16 +304,16 @@ BEGIN
       AND Sku = @c_Sku
       AND QtyAllocated > 0
 
-
-      FETCH NEXT FROM @cur_PQRF INTO @c_Storerkey
-                                 ,  @c_Sku
-                                 ,  @c_LabelNo
-                                 ,  @c_QRCode
-                                 ,  @c_RFIDNo
-                                 ,  @c_TIDNo 
+      FETCH NEXT FROM @cur_PQRFGRP INTO   @c_Storerkey
+                                       ,  @c_Sku
+                                       ,  @c_labelNo
+                                       ,  @n_CartonNo
+                                       ,  @c_LabelLine
+                                       ,  @n_QRFGroupKey
    END
-   CLOSE @cur_PQRF
-   DEALLOCATE @cur_PQRF
+   CLOSE @cur_PQRFGRP
+   DEALLOCATE @cur_PQRFGRP
+   --(Wan01)
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
