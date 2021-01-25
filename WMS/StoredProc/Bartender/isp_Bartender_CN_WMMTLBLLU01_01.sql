@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
-/* 2020-12-22 1.0  WLChooi    Created (WMS-15926)                             */                  
+/* 2020-12-22 1.0  WLChooi    Created (WMS-15926)                             */    
+/* 2021-01-18 1.1  WLChooi    WMS-15926 - Add @c_Sparm02 = Receiptkey (WL01)  */              
 /******************************************************************************/                                     
 CREATE PROC [dbo].[isp_Bartender_CN_WMMTLBLLU01_01]                        
 (  @c_Sparm01            NVARCHAR(250),                
@@ -128,10 +129,22 @@ BEGIN
    
    SET @c_WhereCondition = ''
    
-   IF @c_Sparm02 = '18505'
+   IF @c_Sparm03 = '18505'   --WL01
    BEGIN
    	SET @c_WhereCondition = 'AND R.RecType IN (''LULUASN'',''LULUDCTODC'') AND R.Status IN (''1'',''9'') AND RD.QtyReceived > 0 '
-   END             
+   END     
+   
+   --WL01 S
+   IF ISNULL(@c_Sparm01,'') <> ''
+   BEGIN
+      SET @c_WhereCondition = @c_WhereCondition + 'AND RD.Userdefine01 = @c_Sparm01 '
+   END
+   
+   IF ISNULL(@c_Sparm02,'') <> ''
+   BEGIN
+      SET @c_WhereCondition = @c_WhereCondition + 'AND R.Receiptkey = @c_Sparm02 '
+   END
+   --WL01 E   
               
    SET @c_SQLJOIN = +' SELECT DISTINCT LTRIM(RTRIM(RD.UserDefine01)), LTRIM(RTRIM(RD.SKU)), LTRIM(RTRIM(RD.QtyReceived)), '''', '''','+ CHAR(13) +     --5       
                     + ' '''','''','''','''','''', '+ CHAR(13) +     --10    
@@ -143,11 +156,11 @@ BEGIN
                     + ' '''','''','''','''','''','''','''','''','''','''' '+ CHAR(13) +   --60    
                     + ' FROM RECEIPTDETAIL RD WITH (NOLOCK) ' 
                     + ' JOIN RECEIPT R WITH (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey '
-                    + ' WHERE RD.Storerkey = @c_Sparm02 '  
-                    + ' AND RD.UserDefine01 = @c_Sparm01 '     
+                    + ' WHERE RD.Storerkey = @c_Sparm03 '      --WL01  
+                    --+ ' AND RD.UserDefine01 = @c_Sparm01 '   --WL01    
                     + @c_WhereCondition  
             
-   IF @b_debug=1          
+   IF @b_debug=0          
    BEGIN          
       PRINT @c_SQLJOIN            
    END                  
@@ -160,7 +173,8 @@ BEGIN
              +',Col55,Col56,Col57,Col58,Col59,Col60) '        
   
    SET @c_ExecArguments = N'@c_Sparm01       NVARCHAR(80),'     
-                        +  '@c_Sparm02       NVARCHAR(80) '  
+                        +  '@c_Sparm02       NVARCHAR(80),'  
+                        +  '@c_Sparm03       NVARCHAR(80) '   --WL01
     
       
    SET @c_SQL = @c_SQL + @c_SQLJOIN   
@@ -168,7 +182,8 @@ BEGIN
    EXEC sp_ExecuteSql @c_SQL     
                     , @c_ExecArguments    
                     , @c_Sparm01      
-                    , @c_Sparm02         
+                    , @c_Sparm02   
+                    , @c_Sparm03   --WL01
                   
           
    IF @b_debug=1   

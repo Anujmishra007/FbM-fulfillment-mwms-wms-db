@@ -32,6 +32,7 @@ GO
 /* 23/06/2017   MT01    1.1   IN00385458 Removed '@c_' in where clause     */
 /* 27/10/2017   AikLiang1.2   Add Busr6 GIVENCHY FRAGRANCE                 */
 /* 14/09/2018   NJOW02  1.3   WMS-6312 add expiry checking for FIFO Sku    */ 
+/* 10/07/2020   CSCHONG 1.4   WMS-14049 revised field logic (CS01)         */
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_ShelfLifeExpiredAlert]    
 (
@@ -124,55 +125,87 @@ BEGIN
                   WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife -(CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END), LA.Lottable05)) <= 179 THEN
                   'EXPIRING' 
              END AS StockStatus*/    
-             CASE WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 0 THEN  --NJOW02
+             --CS01 START
+             /*CASE WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 0 THEN  --NJOW02
                   'EXPIRED'
                   WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 179 THEN
                   'EXPIRING' 
+             END AS StockStatus*/
+             CASE WHEN LA.Lottable03 IN ('OK','OK-RTN','EXPIRING','IBEXPR') AND DATEDIFF(dd, GETDATE(), LA.Lottable04) <= 1 THEN  
+                  'EXPIRED'
+                  WHEN LA.Lottable03 IN ('OK','OK-RTN')  AND DATEDIFF(dd, GETDATE(), LA.Lottable04) > 1
+                       AND (CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END) - DATEDIFF(dd, GETDATE(), LA.Lottable04) >=1 THEN
+                  'EXPIRING' 
              END AS StockStatus     
+            --CS01 END     
       INTO #TMP_EXPLOT
       FROM LOTXLOCXID LLI (NOLOCK)
       JOIN SKU (NOLOCK)ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku      
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot
       JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc
       WHERE LLI.Storerkey = @c_Storerkey
-      AND DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 179   --NJOW02  
+      --AND DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 179   --NJOW02                         --CS01
       AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
       AND (LOC.Facility = @c_Facility OR ISNULL(@c_Facility,'') = '')      
-      AND SKU.Strategykey = 'PPDSTD'  --NJOW02
-      AND (LA.Lottable03 = 'OK' --NOT IN('EXPIRED','EXPIRING')
-           OR (LA.Lottable03 = 'EXPIRING' AND DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 0))  
+      --AND SKU.Strategykey = 'PPDSTD'  --NJOW02                                                                           --CS01
+      --AND (LA.Lottable03 = 'OK' --NOT IN('EXPIRED','EXPIRING')                                                           --CS01  
+      --     OR (LA.Lottable03 = 'EXPIRING' AND DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 0)) --CS01  
       GROUP BY LLI.Lot,
-               CASE WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 0 THEN  --NJOW02
-                    'EXPIRED'
-                    WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 179 THEN
-                    'EXPIRING'                                     
-               END      
-      UNION ALL         
-      SELECT LLI.Lot, 
-             CASE WHEN LA.Lottable03 = 'EXPIRING' OR DATEDIFF(DAY, GETDATE(), LA.Lottable04) <= 0 THEN 
-                 'EXPIRED' ELSE 'EXPIRING' END AS StockStatus
-      FROM LOTXLOCXID LLI (NOLOCK)
-      JOIN SKU (NOLOCK)ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku      
-      JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot
-      JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc
-      WHERE LLI.Storerkey = @c_Storerkey
-      AND SKU.SkuGroup = @c_SkuGroup
-      AND SKU.Busr6 IN(@c_Busr6Value01, @c_Busr6Value02, @c_Busr6Value03)  --AL01
-      --AND DATEDIFF(Day, GETDATE(), LA.Lottable04) <= @n_Shelflife
-      AND DATEDIFF(Day, GETDATE(), LA.Lottable04) <= CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END
-      AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
-      AND (LOC.Facility = @c_Facility OR ISNULL(@c_Facility,'') = '')      
-      AND SKU.Strategykey <> 'PPDSTD'  --NJOW02
-      AND (LA.Lottable03 = 'OK' --NOT IN('EXPIRED','EXPIRING')
-           OR (LA.Lottable03 = 'EXPIRING' AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) <= 0))  
-      GROUP BY LLI.Lot,
-               CASE WHEN LA.Lottable03 = 'EXPIRING' OR DATEDIFF(DAY, GETDATE(), LA.Lottable04) <= 0 THEN 
-                 'EXPIRED' ELSE 'EXPIRING' END
-      
+               --CS01 START
+               --CASE WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 0 THEN  --NJOW02
+               --     'EXPIRED'
+               --     WHEN DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable05)) <= 179 THEN
+               --     'EXPIRING'                                     
+               --END
+              CASE WHEN LA.Lottable03 IN ('OK','OK-RTN','EXPIRING','IBEXPR') AND DATEDIFF(dd, GETDATE(), LA.Lottable04) <= 1 THEN  
+                  'EXPIRED'
+                  WHEN LA.Lottable03 IN ('OK','OK-RTN')  AND DATEDIFF(dd, GETDATE(), LA.Lottable04) > 1
+                       AND (CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END) - DATEDIFF(dd, GETDATE(), LA.Lottable04) >=1 THEN
+                  'EXPIRING' 
+             END       
+             --CS01 END
+      --UNION ALL  --CS01 remove union       
+      --SELECT LLI.Lot, 
+      --        --CS01 START
+      --       --CASE WHEN LA.Lottable03 = 'EXPIRING' OR DATEDIFF(DAY, GETDATE(), LA.Lottable04) <= 0 THEN 
+      --       --    'EXPIRED' ELSE 'EXPIRING' END AS StockStatus
+      --        CASE WHEN LA.Lottable03 IN ('OK','OK-RTN','EXPIRING') AND DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable04)) <= 1 THEN  
+      --            'EXPIRED'
+      --            WHEN LA.Lottable03 IN ('OK','OK-RTN')  AND DATEDIFF(dd, GETDATE(), LA.Lottable04) > 1
+      --                 AND (CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END) - DATEDIFF(dd, GETDATE(), LA.Lottable04) >=1 THEN
+      --            'EXPIRING' 
+      --       END AS StockStatus 
+      --       --CS01 END
+      --FROM LOTXLOCXID LLI (NOLOCK)
+      --JOIN SKU (NOLOCK)ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku      
+      --JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot
+      --JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc
+      --WHERE LLI.Storerkey = @c_Storerkey
+      ----AND SKU.SkuGroup = @c_SkuGroup                                     --CS01
+      --AND SKU.Busr6 IN(@c_Busr6Value01, @c_Busr6Value02, @c_Busr6Value03)  --AL01
+      ----AND DATEDIFF(Day, GETDATE(), LA.Lottable04) <= @n_Shelflife
+      --AND DATEDIFF(Day, GETDATE(), LA.Lottable04) <= CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END
+      --AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
+      --AND (LOC.Facility = @c_Facility OR ISNULL(@c_Facility,'') = '')      
+      ----AND SKU.Strategykey <> 'PPDFEFO'  --NJOW02                                                 --CS01
+      ----AND (LA.Lottable03 = 'OK' --NOT IN('EXPIRED','EXPIRING')                                   --CS01
+      ----     OR (LA.Lottable03 = 'EXPIRING' AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) <= 0))     --CS01
+      --GROUP BY LLI.Lot,
+      --         --CS01 START
+      --         --CASE WHEN LA.Lottable03 = 'EXPIRING' OR DATEDIFF(DAY, GETDATE(), LA.Lottable04) <= 0 THEN 
+      --         --  'EXPIRED' ELSE 'EXPIRING' END
+      --         CASE WHEN LA.Lottable03 IN ('OK','OK-RTN','EXPIRING') AND DATEDIFF(dd, GETDATE(), DATEADD(DAY, SKU.ShelfLife, LA.Lottable04)) <= 1 THEN  
+      --            'EXPIRED'
+      --            WHEN LA.Lottable03 IN ('OK','OK-RTN')  AND DATEDIFF(dd, GETDATE(), LA.Lottable04) > 1
+      --                 AND (CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END) - DATEDIFF(dd, GETDATE(), LA.Lottable04) >=1 THEN
+      --            'EXPIRING'  
+      --       END 
+               --CS01 END
       
       DECLARE CUR_EXPLOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT Lot, StockStatus
          FROM #TMP_EXPLOT
+         WHERE ISNULL(StockStatus,'') <> ''                 --CS01
          ORDER BY StockStatus, Lot
          
       OPEN CUR_EXPLOT  
@@ -345,8 +378,8 @@ BEGIN
             SET @n_Err = @@ERROR  
             IF @n_Err <> 0  
             BEGIN           
-               SELECT @n_continue = 3
-  SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63230
+                 SELECT @n_continue = 3
+                 SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63230
    	           SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TRANSFER for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ShelfLifeExpiredAlert)' + ' ( '
                               + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END  

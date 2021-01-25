@@ -27,6 +27,7 @@ GO
 /* Date         Author  Ver   Purposes                                   */
 /* 01-AUG-2019  CSCHONG 1.0   WMS-9952 revised field logic (CS01)        */
 /* 16-AUG-2019  CSCHONG 1.1   WMS-9952 revised field logic (CS02)        */
+/* 14-JAN-2021  CSCHONG 1.2   Fix wrong alias (CS03)                     */
 /*************************************************************************/
 CREATE PROC isp_shipping_manifest_by_load_13
          (  @c_loadkey    NVARCHAR(10)
@@ -383,7 +384,7 @@ BEGIN
       JOIN pack pack  WITH (nolock) on pack.packkey = sku.packkey 
       LEFT JOIN PickDetail pickdetail  WITH  (nolock) on pickdetail.OrderKey=orderdetail.OrderKey and pickdetail.OrderLineNumber=orderdetail.OrderLineNumber
       --LEFT JOIN LotAttribute lot  WITH (nolock) on pickdetail.Lot=lot.Lot    --CS02
-      LEFT JOIN storer ST  WITH (nolock) on orders.ShipperKey = storer.storerkey 
+      LEFT JOIN storer ST  WITH (nolock) on orders.ShipperKey = ST.storerkey   --CS03
       LEFT JOIN fnc_manifest_by_load13 (@c_getOrderkey) lbl ON (lbl.orderkey = orders.Orderkey)
        WHERE orders.StorerKey = @c_getstorerkey
        AND orders.LoadKey = @c_getLoadkey

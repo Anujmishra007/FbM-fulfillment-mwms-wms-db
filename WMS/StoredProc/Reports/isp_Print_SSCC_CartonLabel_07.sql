@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Print_SSCC_CartonLabel_07a]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Print_SSCC_CartonLabel_07a]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Print_SSCC_CartonLabel_07]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_Print_SSCC_CartonLabel_07]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
