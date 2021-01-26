@@ -24,9 +24,10 @@ GO
 /* 21-FEB-2019  WLCHOOI   1.1 WMS-8051-Change to Sub SP and filter by   */
 /*                                     Orders.Type (WL01)               */
 /* 15-APR-2019  WLCHOOI   1.2 WMS-8682-Change MaxLineNo (WL02)          */
+/* 20-JAN-2021  WLCHOOI   1.3 WMS-16114 - Change MaxLineNo (WL03)       */
 /************************************************************************/  
   
-CREATE PROC isp_GetPickSlipOrders85_1  
+CREATE PROC [dbo].[isp_GetPickSlipOrders85_1]    
             @c_Loadkey     NVARCHAR(10)
 AS  
 BEGIN  
@@ -78,7 +79,7 @@ BEGIN
    SET @n_CntRec    = 1  
    SET @n_LastPage  = 0  
    SET @n_ReqLine   = 1  
-   SET @n_MaxLineno = 8 --WL02
+   SET @n_MaxLineno = 7 --WL02   --WL03
    SET @n_PrnQty    = 1
    SET @n_MaxId     = 1
    SET @n_MaxRec    = 1
