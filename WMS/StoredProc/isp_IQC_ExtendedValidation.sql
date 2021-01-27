@@ -25,6 +25,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 19-Jul-2017  JayLim    1.2   Performance tune-reduce cache log (jay01)*/
+/* 26-Jan-2021  LZG       1.3   Go to QUIT when hit matching            */
+/*                              condition (ZG01)                        */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_IQC_ExtendedValidation]
@@ -237,6 +239,15 @@ BEGIN
 END
 CLOSE CUR_IQC_CONDITION
 DEALLOCATE CUR_IQC_CONDITION
+
+-- ZG01 (Start)
+IF @b_InValid = 1  
+   GOTO QUIT  
+  
+----------- Check Condition ------  
+  
+SET @b_InValid = 0  
+-- ZG01 (End)
 
 DECLARE CUR_IQC_SPCONDITION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 SELECT Code, Description, Long
