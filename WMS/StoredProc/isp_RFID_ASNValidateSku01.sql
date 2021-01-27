@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,15 +26,16 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 01-DEC-2020 Wan      1.0   Created                                   */
+/* 20-JAN-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
 /************************************************************************/
 CREATE PROC isp_RFID_ASNValidateSku01
            @c_Receiptkey   NVARCHAR(10) = ''  
          , @c_Storerkey    NVARCHAR(15) = '' 
          , @c_SKU          NVARCHAR(20) = ''
-         , @b_Success      INT          = 1  OUTPUT
+         , @b_ReadRFIDTag  INT          = 0  OUTPUT      --(Wan01) 
+         , @b_Success      INT          = 1  OUTPUT      --2: Question
          , @n_Err          INT          = 0  OUTPUT
          , @c_ErrMsg       NVARCHAR(255)= '' OUTPUT
-         , @n_WarningNo    INT          = 0  OUTPUT
 AS
 BEGIN
    SET NOCOUNT ON
@@ -51,6 +52,8 @@ BEGIN
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
+   SET @b_ReadRFIDTag = ISNULL(@b_ReadRFIDTag,0)
+   
    IF NOT EXISTS ( SELECT 1 
                    FROM RECEIPTDETAIL RD WITH (NOLOCK)
                    WHERE RD.ReceiptKey = @c_Receiptkey
@@ -78,6 +81,7 @@ BEGIN
    AND   SIF.ExtendedField02 = 'BP2'
 
    SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END + 'RFID'
+         ,@b_ReadRFIDTag = 1                                                     --(Wan01)
    FROM SKUINFO SIF WITH (NOLOCK) 
    WHERE SIF.Storerkey = @c_Storerkey
    AND   SIF.Sku       = @c_Sku
