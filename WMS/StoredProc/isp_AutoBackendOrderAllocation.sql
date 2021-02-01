@@ -1,6 +1,12 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_AutoBackendOrderAllocation]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_AutoBackendOrderAllocation]  
+END
+GO 
+
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
