@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 01-DEC-2020 Wan      1.0   Created                                   */
+/* 20-JAN-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
 /************************************************************************/
 CREATE PROC isp_RFID_ASNValidateSku
            @c_Receiptkey         NVARCHAR(10)  
@@ -46,6 +47,7 @@ CREATE PROC isp_RFID_ASNValidateSku
          , @c_Lottable13attrib   NVARCHAR(1)  = '0'   OUTPUT
          , @c_Lottable14attrib   NVARCHAR(1)  = '0'   OUTPUT
          , @c_Lottable15attrib   NVARCHAR(1)  = '0'   OUTPUT
+         , @b_ReadRFIDTag        INT          = 0     OUTPUT      --(Wan01)  
          , @b_Success            INT          = 1     OUTPUT
          , @n_Err                INT          = 0     OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= ''    OUTPUT
@@ -177,23 +179,26 @@ BEGIN
    SET @c_SQL = N'EXEC ' + @c_RFIDValidateSku_SP
                +'  @c_Receiptkey = @c_Receiptkey' 
                +', @c_Storerkey  = @c_Storerkey' 
-               +', @c_Sku        = @c_Sku'     
-               +', @b_Success    = @b_Success OUTPUT'
-               +', @n_Err        = @n_Err     OUTPUT'
-               +', @c_ErrMsg     = @c_ErrMsg  OUTPUT'
+               +', @c_Sku        = @c_Sku' 
+               +', @b_ReadRFIDTag= @b_ReadRFIDTag  OUTPUT'      --(Wan01)    
+               +', @b_Success    = @b_Success      OUTPUT'
+               +', @n_Err        = @n_Err          OUTPUT'
+               +', @c_ErrMsg     = @c_ErrMsg       OUTPUT'
 
-   SET @c_SQLParms= N'@c_Receiptkey NVARCHAR(10)'
-                  +', @c_Storerkey  NVARCHAR(15)'
-                  +', @c_Sku        NVARCHAR(20)'
-                  +', @b_Success    INT          OUTPUT'
-                  +', @n_Err        INT          OUTPUT'
-                  +', @c_ErrMsg     NVARCHAR(255)OUTPUT'
+   SET @c_SQLParms= N'@c_Receiptkey    NVARCHAR(10)'
+                  +', @c_Storerkey     NVARCHAR(15)'
+                  +', @c_Sku           NVARCHAR(20)'
+                  +', @b_ReadRFIDTag   INT            OUTPUT'  --(Wan01)    
+                  +', @b_Success       INT            OUTPUT'
+                  +', @n_Err           INT            OUTPUT'
+                  +', @c_ErrMsg        NVARCHAR(255)  OUTPUT'
 
    EXEC sp_ExecuteSQL  @c_SQL
                      , @c_SQLParms
                      , @c_Receiptkey                     
                      , @c_Storerkey   
-                     , @c_Sku       
+                     , @c_Sku  
+                     , @b_ReadRFIDTag  OUTPUT                  --(Wan01)  
                      , @b_Success      OUTPUT
                      , @n_Err          OUTPUT
                      , @c_ErrMsg       OUTPUT

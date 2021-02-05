@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_packing_list_93_rdt                                  */  
 /*          :                                                           */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -25,6 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */ 
+/* 2021-01-28   WLChooi   1.1 Do not join Packdetail to get Qty, use    */
+/*                            SUM(PICKDETAIL.Qty) instead (WL01)        */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Packing_List_93_rdt]
             @c_Pickslipno    NVARCHAR(15),      --Could be Storerkey/Pickslipno/Orderkey
@@ -85,21 +87,37 @@ BEGIN
         , OH.Shipperkey
         , S.ALTSKU
         , PID.LOC
-        , PD.QTY
+        , SUM(PID.QTY) AS Qty   --WL01 Use PICKDETAIL.Qty Instead
         , S.SKU
         , PH.PickSlipNo
         , OH.OrderKey
         , ISNULL(CL.Long,'') AS QRCode
    FROM ORDERS OH (NOLOCK)
    JOIN PACKHEADER PH (NOLOCK) ON OH.OrderKey = PH.OrderKey
-   JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.PickSlipNo
-   JOIN PICKDETAIL PID (NOLOCK) ON PID.OrderKey = OH.OrderKey AND PID.SKU = PD.SKU
+   --JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.PickSlipNo                      --WL01
+   --JOIN PICKDETAIL PID (NOLOCK) ON PID.OrderKey = OH.OrderKey AND PID.SKU = PD.SKU   --WL01
+   JOIN PICKDETAIL PID (NOLOCK) ON PID.OrderKey = OH.OrderKey                          --WL01
    JOIN SKU S (NOLOCK) ON S.SKU = PID.SKU AND S.StorerKey = OH.StorerKey
    JOIN #TMP_Orders t ON t.Orderkey = OH.Orderkey
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'TNFQRCode' AND CL.Code = OH.Salesman
                                  AND CL.Storerkey = OH.StorerKey
    WHERE OH.UserDefine01 = 'VC30'
    AND OH.DocType = 'E'
+   --WL01 S
+   GROUP BY ISNULL(OH.Externorderkey,'')
+          , ISNULL(OH.M_Company,'')
+          , LTRIM(RTRIM(ISNULL(OH.C_Contact1,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Contact2,'''')))
+          , LTRIM(RTRIM(ISNULL(OH.C_Address2,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address3,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address4,'''')))
+          , OH.C_Phone1
+          , ISNULL(OH.Salesman,'')
+          , OH.Shipperkey
+          , S.ALTSKU
+          , PID.LOC
+          , S.SKU
+          , PH.PickSlipNo
+          , OH.OrderKey
+          , ISNULL(CL.Long,'')
+   --WL01 E
 
 QUIT_SP:  
    IF OBJECT_ID('tempdb..#TMP_Orders') IS NOT NULL

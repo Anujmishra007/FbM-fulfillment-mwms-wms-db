@@ -21,6 +21,7 @@ GO
 /* 06-Jun-2017  	NJOW01  	1.5  WMS-1914 Add sorting logic              */
 /* 28-Nov-2017  	CSCHONG  1.6  WMS-3481-revised Avail qty logic (CS01) */
 /* 23-Apr-2018	   LZG	   1.7  Added StorerKey filter (INC0178826)     */
+/* 29-Dec-2020    SPChin   1.8  INC1098384 - Bug Fixed                  */
 /************************************************************************/  
 CREATE PROC  ispAL_TW11     
    @c_lot NVARCHAR(10) ,  
@@ -50,9 +51,10 @@ BEGIN
    BEGIN
       SELECT @c_OrderKey = LEFT(LTRIM(@c_OtherParms), 10)
       
-      SELECT @c_Storerkey = Storerkey, @c_LoadPickMethod = ISNULL(L.LoadPickMethod,'')
+      SELECT @c_Storerkey = O.Storerkey, @c_LoadPickMethod = ISNULL(L.LoadPickMethod,'')
       FROM ORDERS O (NOLOCK) 
-      JOIN LOADPLAN L (NOLOCK) ON O.Loadkey = L.Loadkey
+      --JOIN LOADPLAN L (NOLOCK) ON O.Loadkey = L.Loadkey      --INC1098384
+      LEFT JOIN LOADPLAN L (NOLOCK) ON O.Loadkey = L.Loadkey   --INC1098384
       WHERE O.Orderkey = @c_OrderKey 
       
       SET @c_Casecond = ''

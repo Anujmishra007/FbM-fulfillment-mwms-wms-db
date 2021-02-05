@@ -3,6 +3,25 @@ AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
 DROP PROCEDURE [dbo].[nsp_rfstocktake]
 GO
 
+/************************************************************************/
+/* Stored Procedure: nsp_rfstocktake                                    */
+/* Creation Date: 24-Mar-2004                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:Wan                                                       */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 24-Mar-2004  WANYT  1.0    Timberland FBR#20720: RF Stock Take Entry */
+/************************************************************************/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -11,7 +30,7 @@ CREATE PROC [nsp_rfstocktake] (
 	@c_cckey       NVARCHAR(10),
 	@c_ccdetailkey NVARCHAR(10),
 	@n_count       int,
-        @c_loc         NVARCHAR(10),
+   @c_loc         NVARCHAR(10),
 	@c_uccno       NVARCHAR(20), 
 	@c_storerkey   NVARCHAR(15),
 	@c_sku         NVARCHAR(20),  

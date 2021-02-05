@@ -2,6 +2,25 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_ucccar
 drop procedure [dbo].[nsp_ucccartonlabel_repl]
 GO
 
+/************************************************************************/
+/* Stored Procedure: nsp_ucccartonlabel_repl                            */
+/* Creation Date: 1/22/2021                                             */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:    ver  purpose                                             */
+/* 05-Apr-2004 1.0  WANYT Timberland FBR#20679: RF Replenishment With   */
+/*                  UCC and UCC Pick                                    */
+/************************************************************************/
 CREATE PROC nsp_ucccartonlabel_repl (
 	@c_batchno	 NVARCHAR(20),
 	@c_uccno1	 NVARCHAR(20),
@@ -20,7 +39,7 @@ BEGIN
    SET NOCOUNT ON 
    SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
-/* 5 April 2004 WANYT Timberland FBR#20679: RF Replenishment With UCC and UCC Pick */
+
 	declare @n_continue  		int,
 		@n_starttcnt 		int,
 		@local_n_err 		int,
@@ -30,8 +49,8 @@ BEGIN
 		@b_success		int,
 		@n_err			int,
 		@c_errmsg	 NVARCHAR(255),
-                @c_cartontype           NVARCHAR(2),
-                @c_ordertype            NVARCHAR(10)
+      @c_cartontype           NVARCHAR(2),
+      @c_ordertype            NVARCHAR(10)
 		
 
 	select @n_starttcnt=@@trancount , @n_continue=1, @b_success=0,@n_err=0,@c_errmsg='',

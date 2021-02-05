@@ -7,6 +7,25 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
+/************************************************************************/
+/* Stored Procedure: nsp_SplitChildParallel                             */
+/* Creation Date: 01-May-2003                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author       Purposes                                   */
+/* 01-May-2003  DLIM     1.0 Initial Creation for Parallel Pick Slip    */
+/************************************************************************/
 
 CREATE PROCEDURE dbo.nsp_SplitChildParallel (@c_loadkey NVARCHAR(10),
                                 @c_orderkey NVARCHAR(10),

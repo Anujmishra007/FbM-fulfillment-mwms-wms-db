@@ -29,6 +29,8 @@ GO
 /*                           Strategy (Wan01)                           */
 /* 12-Nov-2015 NJOW02   1.2  Fix preallocated qty by id not correct     */
 /* 02-Jan-2020 Wan02    1.3  Dynamic SQL review, impact SQL cache log   */ 
+/* 11-Jan-2021 WLChooi  1.4  WMS-15991 - Add FilterEmptyLotXX Codelkup  */
+/*                           (WL01)                                     */
 /************************************************************************/
 
 CREATE PROC nspPR_FIFO
@@ -116,14 +118,56 @@ BEGIN
       BEGIN
          SELECT @c_Condition = " AND LOTTABLE01 = @c_Lottable01 "                                  --(Wan02)
       END
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT01'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = ' AND LOTTABLE01 = '''' '
+         END
+      END
+      --WL01 E
+      
       IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable02)) <> '' AND @c_Lottable02 IS NOT NULL
       BEGIN
          SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE02 = @c_Lottable02 "    --(Wan02)
       END
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT02'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND LOTTABLE02 = '''' '
+         END
+      END
+      --WL01 E
+      
       IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable03)) <> '' AND @c_Lottable03 IS NOT NULL
       BEGIN
          SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE03 = @c_Lottable03 "    --(Wan02)
       END
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT03'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND LOTTABLE03 = '''' '
+         END
+      END
+      --WL01 E
+      
       IF CONVERT(char(10), @d_Lottable04, 103) <> "01/01/1900"
       BEGIN
          SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE04 = @d_Lottable04 "    --(Wan02)
@@ -137,37 +181,128 @@ BEGIN
       IF RTRIM(@c_Lottable06) <> '' AND @c_Lottable06 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable06 = @c_Lottable06'   --(Wan02)
-      END   
+      END  
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT06'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable06 = '''' '
+         END
+      END
+      --WL01 E 
 
       IF RTRIM(@c_Lottable07) <> '' AND @c_Lottable07 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable07 = @c_Lottable07'   --(Wan02)
-      END   
+      END  
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT07'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable07 = '''' '
+         END
+      END
+      --WL01 E 
 
       IF RTRIM(@c_Lottable08) <> '' AND @c_Lottable08 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable08 = @c_Lottable08'   --(Wan02)
       END  
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT08'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable08 = '''' '
+         END
+      END
+      --WL01 E
 
       IF RTRIM(@c_Lottable09) <> '' AND @c_Lottable09 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable09 = @c_Lottable09'   --(Wan02)
       END   
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT09'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable09 = '''' '
+         END
+      END
+      --WL01 E
 
       IF RTRIM(@c_Lottable10) <> '' AND @c_Lottable10 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable10 = @c_Lottable10'   --(Wan02)
       END   
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT10'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable10 = '''' '
+         END
+      END
+      --WL01 E
 
       IF RTRIM(@c_Lottable11) <> '' AND @c_Lottable11 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable11 = @c_Lottable11'   --(Wan02)
       END   
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT11'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable11 = '''' '
+         END
+      END
+      --WL01 E
 
       IF RTRIM(@c_Lottable12) <> '' AND @c_Lottable12 IS NOT NULL
       BEGIN
          SET @c_Condition = @c_Condition + ' AND Lottable12 = @c_Lottable12'   --(Wan02) 
       END  
+      ELSE   --WL01 S
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Storerkey = @c_Storerkey
+                    AND CL.Code = 'FILTEREMPTYLOT12'
+                    AND CL.Listname = 'PKCODECFG'
+                    AND CL.Code2 = 'nspPR_FIFO'
+                    AND ISNULL(CL.Short,'') <> 'N') 
+         BEGIN              
+            SET @c_Condition = @c_Condition + ' AND Lottable12 = '''' '
+         END
+      END
+      --WL01 E
 
       IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900'
       BEGIN

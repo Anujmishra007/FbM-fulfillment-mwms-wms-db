@@ -29,6 +29,7 @@ GO
 /* 24-Sep-2013  NJOW01 1.2   290121-Configurable generate label no      */
 /* 13-MAY-2106  Wan01  1.3   Specify SP parameters                      */ 
 /* 08-NOV-2017  CSCHONG1.4   WMS-3389- cater for conso orders (CS01)    */ 
+/* 09-NOV-2020  SPChin 1.5   INC1342431 - Bug Fixed                     */
 /************************************************************************/
 
 CREATE PROC ispGet_CartonNo
@@ -156,6 +157,19 @@ BEGIN
       -- Added By SHONG on 05-May-2005
       -- SOS# 35108 
       -- NSC Taiwan Scan Pack Module Changes 
+
+      --INC1342431 Start
+      SET @n_CartonNo = 0
+      SELECT TOP 1 @n_CartonNo = PD.CartonNo 
+      FROM PackDetail PD WITH (NOLOCK)
+      WHERE PD.PickSlipNo  = @c_PickSlipNo
+      AND PD.SKU = '' 
+      AND PD.Storerkey = ''
+      ORDER BY PD.CartonNo
+      
+      IF @n_CartonNo > 0
+         GOTO EXIT_SP      
+      --INC1342431 End
 
       /*
         EXECUTE nspg_getkey

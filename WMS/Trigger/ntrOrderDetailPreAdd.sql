@@ -36,6 +36,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  ver  Purposes                                   */
+/* 27-Jan-2021  TLTING01 1.1 Add new column                             */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrOrderDetailPreAdd]
@@ -149,7 +150,9 @@ BEGIN
 	   [Lottable15] [datetime] NULL,
 	   [Notes] [nvarchar](500)  NULL DEFAULT '',
 	   [Notes2] [nvarchar](500) NULL DEFAULT '',
-	   [Channel] [nvarchar](20) NULL DEFAULT ''  
+	   [Channel] [nvarchar](20) NULL DEFAULT '',
+	   [HashValue] [TinyInt] NULL DEFAULT 0, 
+	   [SalesChannel]  	[nvarchar](100) DEFAULT ''	 	  
       )
 
    INSERT INTO @t_OrderDetail 
@@ -167,7 +170,7 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel)
+        Channel, HashValue, SalesChannel )
    SELECT OrderKey, OrderLineNumber, ExternOrderKey,
         ExternLineNo, Sku, StorerKey, ManufacturerSku, RetailSku, AltSku,
         OriginalQty, OpenQty, ShippedQty, AdjustedQty, QtyPreAllocated,
@@ -182,7 +185,7 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel
+        Channel, HashValue, SalesChannel
    FROM INSERTED                
    
    SELECT TOP 1 
@@ -375,7 +378,7 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel)
+        Channel, HashValue, SalesChannel)
    SELECT OrderKey, OrderLineNumber, ExternOrderKey,
         ExternLineNo, Sku, StorerKey, ManufacturerSku, RetailSku, AltSku,
         OriginalQty, OpenQty, ShippedQty, AdjustedQty, QtyPreAllocated,
@@ -390,7 +393,7 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel
+        Channel, HashValue, SalesChannel
    FROM @t_OrderDetail                 
    
 END -- Trigger
