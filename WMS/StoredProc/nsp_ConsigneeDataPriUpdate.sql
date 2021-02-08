@@ -1,10 +1,11 @@
+
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_ConsigneeDataPriUpdate]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [nsp_ConsigneeDataPriUpdate]
+GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_ConsigneeDataPriUpdate_check]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [nsp_ConsigneeDataPriUpdate_check]
 GO
 /*********************************************************************************/          
 /* Stored Procedure: nsp_ConsigneeDataPriUpdate                                  */          
@@ -27,6 +28,8 @@ GO
 /* 13-Apr-18      TLTING      1.1   WMS-4514 - more table and column             */
 /* 19-Mar-19      TLTING      1.2   WMS-7613 - OD.ExternOrderkey                 */
 /* 25-Feb-20      TLTING      1.3   WMS-11852  Receipt data privacy              */
+/* 03-Aug-20      TLTING01    1.4   Ext length TrackingNo                        */
+/* 02-Feb-21      TLTING      1.5   Bug fix WMS-11852                            */
 /*********************************************************************************/    
 
 CREATE PROC [dbo].[nsp_ConsigneeDataPriUpdate] (  
@@ -100,7 +103,7 @@ BEGIN
    CREATE TABLE #HMOld_Orders
    ( rowref INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
       Orderkey  nvarchar(10),
-      TrackingNo NVARCHAR(30)
+      TrackingNo NVARCHAR(40)
         )
 
     CREATE TABLE #HMOld_Receipt
@@ -113,7 +116,7 @@ BEGIN
    INSERT INTO #DBTable ( DBName )
    VALUES ( @c_WMS_DBName1 )
    END 
-IF ISNULL(RTRIM(@c_WMS_DBName2 ), '') <> '' AND EXISTS (  SELECT 1 FROM sys.databases WHERE name = @c_WMS_DBName2   )
+   IF ISNULL(RTRIM(@c_WMS_DBName2 ), '') <> '' AND EXISTS (  SELECT 1 FROM sys.databases WHERE name = @c_WMS_DBName2   )
    BEGIN
    INSERT INTO #DBTable ( DBName )
    VALUES ( @c_WMS_DBName2 )
@@ -204,12 +207,13 @@ IF ISNULL(RTRIM(@c_WMS_DBName2 ), '') <> '' AND EXISTS (  SELECT 1 FROM sys.data
             SELECT @n_row = COUNT(1) FROM #HMOld_Orders
             PRINT ' Process #HMOld_Orders - ' + CAST (@n_row AS NVARCHAR(10))
          END
+         
          SET @cSQL1 = N' USE ['+ @c_DBName + '] '   + CHAR(13) 
 
          SET @cSQL1 =  @cSQL1 +
                   ' SET NOCOUNT ON ' + Char(13) +
                   ' Declare @c_Orderkey nvarchar(10) ' + Char(13) +
-                  ' Declare @c_TrackingNo  nvarchar(30)  ' + Char(13) +
+                  ' Declare @c_TrackingNo  nvarchar(40)  ' + Char(13) +
                   ' Declare @c_OrderLinenumber  nvarchar(5)  ' + Char(13) +
 			         ' Declare @c_PickSlipNo  Nvarchar(10), @n_CartonNo INT, @c_LabelNo nvarchar(20), @c_LabelLine nvarchar(5)  '+ Char(13) +
 			         ' Declare @c_NewLabelNo nvarchar(20), @n_Cnt INT '+ Char(13) +
@@ -311,9 +315,19 @@ IF ISNULL(RTRIM(@c_WMS_DBName2 ), '') <> '' AND EXISTS (  SELECT 1 FROM sys.data
 	 			      ' END ' + Char(13) +
 	 			      ' CLOSE Orders_Itemcur  ' + Char(13) +
 	 			      ' DEALLOCATE Orders_Itemcur '
-         END
+	 			      
+            IF @n_Debug = 1
+            BEGIn
+               PRINT 'Update Orders data privacy'
+               PRINT @cSQL1
+            END
+          
+            EXEC (@cSQL1)   
+            	 			      
+         END -- EXISTS #HMOld_Orders
       END -- END @n_OrderFlag
-
+    
+    
       IF @n_ReceiptFlag = 1
       BEGIN
          SET @cSQL = ''
@@ -406,16 +420,20 @@ IF ISNULL(RTRIM(@c_WMS_DBName2 ), '') <> '' AND EXISTS (  SELECT 1 FROM sys.data
 	 			   ' END ' + Char(13) +
 	 			   ' CLOSE Receipt_Itemcur  ' + Char(13) +
 	 			   ' DEALLOCATE Receipt_Itemcur '
-         END
+	 			   
+            IF @n_Debug = 1
+            BEGIn
+               PRINT 'Update Receipt data privacy'
+               PRINT @cSQL1
+            END
+          
+            EXEC (@cSQL1) 	 			
+               
+         END  -- EXISTS  #HMOld_Receipt
+                               
       END --END @n_ReceiptFlag
 
-      IF @n_Debug = 1
-      BEGIn
-         PRINT @cSQL1
-      END
-    
-      EXEC (@cSQL1) 
-                   
+ 
 	 	FETCH NEXT FROM DBName_Itemcur INTO @c_DBName   
 	END  
 	CLOSE DBName_Itemcur   
