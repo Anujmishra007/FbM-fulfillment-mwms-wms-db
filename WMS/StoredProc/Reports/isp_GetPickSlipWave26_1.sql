@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By: R_dw_print_wave_pickslip_26_1                             */
 /*          :                                                           */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */   
+/* 2021-02-08  WLChooi  1.1   WMS-16289 - Get WaveSeqOfDay from NCounter*/
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave26_1
             @c_Wavekey        NVARCHAR(10)
@@ -53,15 +55,23 @@ BEGIN
 
          , @c_Storerkey       NVARCHAR(15)                                     
          , @c_ordermode       NVARCHAR(30)                                     
-         , @n_TTLSeq          INT                                               
+         , @n_TTLSeq          INT     
+         
+         --WL01 S
+         , @c_KeyName         NVARCHAR(30)   
+         , @c_KeyCount        NVARCHAR(10) 
+         , @b_Success         INT          
+         , @n_err             INT          
+         , @c_errmsg          NVARCHAR(250)
+         , @c_WaveSeq         NVARCHAR(10)  
+         --WL01 E                                      
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
-
   
    SELECT TOP 1 @dt_Adddate = CASE WHEN ISNULL(TD.AddDate,'')  <>'1900-01-01 00:00:00.000' 
-                               THEN MIN(TD.AddDate) ELSE WH.EditDate END  
-         ,@c_Storerkey= OH.Storerkey                                           
+                              THEN MIN(TD.AddDate) ELSE WH.EditDate END  
+               ,@c_Storerkey= OH.Storerkey                                           
    FROM WAVE WH  WITH (NOLOCK)
    JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)               
    JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)              
@@ -69,7 +79,6 @@ BEGIN
    WHERE WH.Wavekey = @c_Wavekey
    GROUP BY OH.Storerkey,TD.AddDate ,WH.EditDate
    
-
    SET @d_Adddate = CONVERT (DATETIME, CONVERT(NVARCHAR(10), @dt_Adddate, 112))
  
    IF OBJECT_ID('tempdb..#TMP_WAVORD','u') IS NOT NULL  
@@ -111,30 +120,61 @@ BEGIN
    LEFT JOIN Taskdetail TD WITH (NOLOCK) ON TD.wavekey=WH.wavekey                    
    GROUP BY WH.Wavekey,TD.AddDate ,WH.EditDate      
       
-     SELECT WaveSeqOfDay  = ROW_NUMBER() OVER (PARTITION BY  WH.MaxOrderQty ORDER BY WH.Wavekey)
-          ,ordermode = WH.MaxOrderQty                                     
-          ,Wavekey = WH.wavekey
-          ,DateRelease = WH.ReleaseDate
-   INTO   #TMP_WaveSeq     
+   --WL01 S
+   SELECT @c_WaveSeq = ISNULL(W.UserDefine02,'')
+   FROM WAVE W (NOLOCK)
+   WHERE W.WaveKey = @c_Wavekey
+   
+   IF ISNULL(@c_WaveSeq,'') = ''
+   BEGIN
+      SELECT @c_KeyName = CL.Code
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'WVSeqOfDay' 
+      AND CL.Storerkey = @c_Storerkey
+      AND CL.Short = 'Y'
+      
+      EXEC [dbo].[nspg_GetKey]     
+          @KeyName     =  @c_KeyName     
+        , @fieldlength =  10
+        , @keystring   =  @c_KeyCount   OUTPUT    
+        , @b_Success   =  @b_Success    OUTPUT    
+        , @n_err       =  @n_err        OUTPUT    
+        , @c_errmsg    =  @c_errmsg     OUTPUT    
+        
+      SET @c_WaveSeq = LTRIM(REPLACE(@c_KeyCount,'0',''))
+
+      UPDATE WAVE WITH (ROWLOCK)
+      SET UserDefine02 = @c_WaveSeq,
+          TrafficCop   = NULL,
+          EditDate     = EditDate,
+          EditWho      = EditWho
+      WHERE WaveKey = @c_Wavekey
+   END
+   --WL01 E
+
+   SELECT WaveSeqOfDay  = @c_WaveSeq   --ROW_NUMBER() OVER (PARTITION BY  WH.MaxOrderQty ORDER BY WH.Wavekey)   --WL01
+         ,ordermode = WH.MaxOrderQty                                     
+         ,Wavekey = WH.wavekey
+         ,DateRelease = WH.ReleaseDate
+   INTO  #TMP_WaveSeq     
    FROM #TMP_Wave WH   
- 
+
   --select * from #TMP_WaveSeq                                               
    
    SET @n_WaveSeqOfDay = 0
    SET @c_ordermode = ''
    
    SELECT @n_WaveSeqOfDay  = WH.WaveSeqOfDay
-          ,@c_ordermode = WH.ordermode                                     
+         ,@c_ordermode = WH.ordermode                                     
    FROM #TMP_WaveSeq WH   
    WHERE Wavekey = @c_Wavekey
      
    SET @n_TTLSeq = 1
 
-      SELECT @n_TTLSeq = COUNT(1)
-      FROM #TMP_WaveSeq
-      WHERE DateRelease <= @dt_Adddate
-
-                             
+   SELECT @n_TTLSeq = COUNT(1)
+   FROM #TMP_WaveSeq
+   WHERE DateRelease <= @dt_Adddate
+                        
    SELECT PH.Wavekey
          ,AddDate = @dt_Adddate
          ,@c_ordermode AS ordermode                                             
