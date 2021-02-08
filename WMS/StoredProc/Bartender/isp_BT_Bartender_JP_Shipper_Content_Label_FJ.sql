@@ -7,7 +7,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-  
+     
 /******************************************************************************/                         
 /* Copyright: IDS                                                             */                         
 /* Purpose: BarTender Filter by ShipperKey                                    */                         
@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                         
 /*                                                                            */                         
 /* Date       Rev  Author     Purposes                                        */                         
-/* 2015-06-08 1.0  CSCHONG    Created(WMS-2044 )                              */            
+/* 2015-06-08 1.0  CSCHONG    Created(WMS-2044 )                              */      
+/* 2021-01-14 1.1  LZG        INC1402338 - Fixed duplicate Qty (ZG01)         */      
 /******************************************************************************/                        
                           
 CREATE PROC [dbo].[isp_BT_Bartender_JP_Shipper_Content_Label_FJ]                               
@@ -329,7 +330,8 @@ DECLARE
    WHILE @@FETCH_STATUS <> -1               
    BEGIN                   
         
-        
+          -- ZG01 (Start)
+          /*
            SELECT TOP 1 @n_cntsku = count(DISTINCT PD.SKU),  
                         @n_SumPackDETQTY = SUM(PD.Qty)  
           FROM ORDERDETAIL OD WITH (NOLOCK)   
@@ -341,7 +343,21 @@ DECLARE
           WHERE od.orderkey=@C_Getorderkey  
            AND PD.Cartonno >= CONVERT(INT,@c_Sparm2)  
            AND PD.Cartonno <= CONVERT(INT,@c_Sparm3)    
+          */
             
+          SELECT TOP 1 @n_cntsku = count(DISTINCT PD.SKU),  
+                       @n_SumPackDETQTY = SUM(PD.Qty)  
+          FROM PackHeader PH WITH (NOLOCK)  
+          JOIN PackDetail PD WITH (NOLOCK) ON PD.PickSlipno = PH.PickSlipno   
+          JOIN (
+          SELECT DISTINCT OrderKey, SKU FROM OrderDetail OD WITH (NOLOCK)
+          WHERE OrderKey = @C_Getorderkey) 
+           AS OD ON OD.OrderKey = PH.OrderKey AND OD.SKU = PD.SKU
+          JOIN SKU S WITH (NOLOCK) ON S.SKU = OD.SKU AND S.StorerKey = PH.StorerKey   
+          WHERE OD.OrderKey = @C_Getorderkey 
+           AND PD.Cartonno >= CONVERT(INT,@c_Sparm2)  
+           AND PD.Cartonno <= CONVERT(INT,@c_Sparm3)  
+          -- ZG01 (End)
   
          IF @n_cntsku > 1  
             BEGIN                 
@@ -369,7 +385,8 @@ DECLARE
           
    INSERT INTO #CartonContent (Orderkey,ORDSku,SDESCR,TTLPICKQTY)          
                 
-   SELECT orddet.orderkey  
+   -- ZG01 (Start)
+   /*SELECT orddet.orderkey  
           ,orddet.sku  
           ,s.descr+'-'+s.color+'-'+s.size  
          ,SUM(pd.qty)      
@@ -384,8 +401,26 @@ DECLARE
            AND PD.Cartonno <= CONVERT(INT,@c_Sparm3)       
    GROUP BY orddet.orderkey,s.color,s.size     
            ,orddet.sku  
-           ,s.descr  
-                           
+           ,s.descr */ 
+   
+   SELECT OD.OrderKey  
+   ,OD.SKU  
+   ,S.Descr+'-'+S.Color+'-'+S.Size  
+   ,SUM(PD.Qty)      
+   FROM PackHeader ph WITH (NOLOCK)        
+   JOIN PackDetail pd WITH (NOLOCK) ON PH.PickSlipno = PD.PickSlipno
+   JOIN (
+   SELECT DISTINCT OrderKey, SKU FROM ORDERDETAIL OD WITH (NOLOCK)
+   WHERE OrderKey= @C_Getorderkey) 
+   AS OD ON OD.OrderKey = PH.OrderKey AND OD.SKU = PD.SKU
+   JOIN SKU S WITH (NOLOCK) ON S.SKU = OD.SKU      
+     AND S.StorerKey = PH.Storerkey      
+   WHERE  OD.OrderKey = @C_Getorderkey  
+     AND PD.Cartonno >= CONVERT(INT,@c_Sparm2)  
+     AND PD.Cartonno <= CONVERT(INT,@c_Sparm3)     
+   GROUP BY OD.OrderKey,S.Color,S.Size,OD.SKU,S.Descr   
+   -- ZG01 (End)                       
+   
        IF @b_debug = '1'              
        BEGIN              
          SELECT 'carton',* FROM #CartonContent          
@@ -758,7 +793,7 @@ DECLARE
              
    EXEC isp_InsertTraceInfo           
       @c_TraceCode = 'BARTENDER',          
-      @c_TraceName = 'isp_BT_Bartender_JP_Shipper_Content_Label_FJ',          
+      @c_TraceName = 'isp_BT_Bartender_CN_Shipper_Content_Label_UA',          
       @c_starttime = @d_Trace_StartTime,          
       @c_endtime = @d_Trace_EndTime,          
       @c_step1 = @c_UserName,          
