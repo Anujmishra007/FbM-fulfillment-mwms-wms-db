@@ -35,6 +35,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 28-Dec-2020  CSCHONG   1.1   WMS-15909 add new field (CS01)          */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_GetPickSlipWave_23]
@@ -54,6 +55,9 @@ BEGIN
          , @c_PickHeaderKey  NVARCHAR(10)
          , @c_PrintedFlag    NVARCHAR(1)
          , @c_Loadkey        NVARCHAR(10)
+         , @n_CtnOrder       INT                --CS01
+         , @n_TTLQTY         INT                --CS01
+         , @c_VASCode        NVARCHAR(20)       --CS01
 
    SET @n_StartTranCnt  = @@TRANCOUNT  
    SET @n_Continue      = 1 
@@ -62,6 +66,8 @@ BEGIN
    SET @c_errmsg        = ''
    SET @c_PickHeaderKey = ''
    SET @c_PrintedFlag   = 'N'
+   SET @n_CtnOrder      = 1                   --CS01
+   SET @n_TTLQTY        = 1                   --CS01
 
    IF ISNULL(@c_Type,'') = '' SET @c_Type = ''
    
@@ -83,22 +89,45 @@ BEGIN
          Orderkey   NVARCHAR(100)
       )
 
+      --CS01 START
+     CREATE TABLE #TMP_STG3 (
+         RowID      INT NOT NULL identity(1,1),
+         Orderkey   NVARCHAR(100),
+         Wavekey    NVARCHAR(10),
+         ExtOrdKey  NVARCHAR(50),
+         VASCODE    NVARCHAR(2500),
+         OHNotes    NVARCHAR(2500)
+ 
+      )
+      --CS01 END
+
       INSERT INTO #TMP_STG1
       SELECT DISTINCT LTRIM(RTRIM(Orderkey))
       FROM WAVEDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey --IN ('0000000021','0000000022','0000000027','0000000031','0000000032','0000000033','0000000034','0000000037')
       ORDER BY LTRIM(RTRIM(Orderkey))
       
-      WHILE(EXISTS(SELECT 1 FROM #TMP_STG1) )
-      BEGIN
-         INSERT #TMP_STG2
-         SELECT CAST(STUFF((SELECT TOP 3 ',' + RTRIM(a.Orderkey) FROM #TMP_STG1 a ORDER BY RowID FOR XML PATH('')),1,1,'' ) AS NVARCHAR(250)) AS Orderkey
+      --WHILE(EXISTS(SELECT 1 FROM #TMP_STG1) )
+      --BEGIN
+      --   INSERT #TMP_STG2
+      --   SELECT CAST(STUFF((SELECT TOP 3 ',' + RTRIM(a.Orderkey) FROM #TMP_STG1 a ORDER BY RowID FOR XML PATH('')),1,1,'' ) AS NVARCHAR(250)) AS Orderkey
       
-         DELETE TOP (3) FROM #TMP_STG1
-      END
+      --   DELETE TOP (3) FROM #TMP_STG1
+      --END
 
-      SELECT LTRIM(RTRIM(Orderkey)) FROM #TMP_STG2 
-      ORDER BY RowID
+       SET @c_VASCode = ''
+
+       SELECT TOP 1 @c_VASCode = RTRIM(OD.userdefine01) + '-' + RTRIM(OD.Userdefine02) + '-' + RTRIM(OD.notes)
+       FROM  #TMP_STG1 STG1
+       JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = STG1.Orderkey
+       JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = OH.OrderKey
+
+      SELECT DISTINCT LTRIM(RTRIM(STG1.Orderkey)) AS Orderkey, OH.ExternOrderKey as ExtOrdkey,OH.Notes AS OHNotes , @c_VASCode as VASCODE,@c_WaveKey as wavekey
+                     , 'Ext Order Key : ' as extordkeyfield , 'Address Code : ' as Addcodefield, 'VAS Code : ' as vascodefield
+      FROM #TMP_STG1 STG1
+      JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = STG1.Orderkey
+      --JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = OH.OrderKey
+      ORDER BY LTRIM(RTRIM(STG1.Orderkey))
 
       GOTO QUIT_SP
    END
@@ -115,6 +144,24 @@ BEGIN
    JOIN LOADPLANDETAIL LPD (NOLOCK) ON WD.Orderkey = LPD.Orderkey
    LEFT JOIN PICKHEADER PH (NOLOCK) ON PH.Loadkey = LPD.Loadkey
    WHERE WD.Wavekey = @c_WaveKey
+
+   --CS01 START
+   
+   
+   SELECT @n_CtnOrder  = COUNT(DISTINCT Orderkey)
+   FROM WAVEDETAIL WITH (NOLOCK)
+   WHERE wavekey = @c_WaveKey
+
+   SELECT @n_TTLQTY = SUM(PickDetail.Qty)
+   FROM PickHeader WITH (NOLOCK)
+   INNER JOIN LoadPlan WITH (NOLOCK) ON  (LoadPlan.LoadKey = PICKHEADER.ExternOrderKey)
+   INNER JOIN LoadPlanDetail WITH (NOLOCK) ON  (LoadPlanDetail.LoadKey = LoadPlan.LoadKey)
+   INNER JOIN PickDetail WITH (NOLOCK) ON  (PickDetail.OrderKey = LoadPlanDetail.OrderKey)
+   INNER JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WD.Orderkey = Pickdetail.Orderkey)
+   WHERE  WD.WaveKey = @c_Wavekey
+   AND    PickDetail.QTY > 0 
+
+   --CS01 END
 
    BEGIN TRAN 
 
@@ -248,7 +295,7 @@ BEGIN
       GOTO QUIT_SP
    END  */
 
-   SELECT ISNULL(RTRIM(PickHeader.PickHeaderKey),'')
+   SELECT  ISNULL(RTRIM(PickHeader.PickHeaderKey),'')
         , @c_PrintedFlag
         , ISNULL(RTRIM(WD.Wavekey),'')
         , LoadPlan.LPUserdefDate01
@@ -278,6 +325,9 @@ BEGIN
         , ISNULL(RTRIM(PACK.PackUOM2),'')
         , ISNULL(RTRIM(PACK.PackUOM3),'')
         , UPPER(ISNULL(RTRIM(L.PickZone),''))
+        , ISNULL(RTRIM(LoadPlan.Loadkey),'') as Loadkey
+        , @n_CtnOrder AS TTLORD
+        , @n_TTLQTY AS PTTLQTY
    FROM PickHeader WITH (NOLOCK)
    INNER JOIN LoadPlan WITH (NOLOCK) ON  (LoadPlan.LoadKey = PICKHEADER.ExternOrderKey)
    INNER JOIN LoadPlanDetail WITH (NOLOCK) ON  (LoadPlanDetail.LoadKey = LoadPlan.LoadKey)
