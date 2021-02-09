@@ -8,7 +8,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-  
 /************************************************************************/  
 /* Stored Procedure: isp_dmanifest_vehicle_04                           */  
 /* Creation Date: 2020-09-01                                            */  
@@ -27,6 +26,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author    Ver.  Purposes                                 */  
+/* 21-Dec-2020 WLChooi   1.1   WMS-15884 - Add new logic (WL01)         */
 /************************************************************************/  
   
 CREATE PROC isp_dmanifest_vehicle_04 (  
@@ -34,9 +34,9 @@ CREATE PROC isp_dmanifest_vehicle_04 (
  )  
  AS  
  BEGIN  
-    SET NOCOUNT ON  
-    SET QUOTED_IDENTIFIER OFF  
-    SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET NOCOUNT ON  
+   SET QUOTED_IDENTIFIER OFF  
+   SET CONCAT_NULL_YIELDS_NULL OFF  
   
    DECLARE @n_totalorders  int,  
      @n_totalcust    int,  
@@ -97,37 +97,40 @@ CREATE PROC isp_dmanifest_vehicle_04 (
              
         
    SELECT MBOL.mbolkey,   
-    VoyageNumber = MBOL.VoyageNumber,        
-    MBOL.carrierkey,   
-    MBOLDETAIL.loadkey,   
-    MBOLDETAIL.orderkey,   
-    ORDERS.externorderkey,   
-    ST_Company = ST.company,    
-    MBOL.ArrivalDate,       
-    totalqty = 0,  
-    totalorders = 0,  
-    totalcust = 0,  
-    MBOL.Departuredate,   
-    totalwgt = 99999999.99,  
-    totalcarton = 0,  
-    totaleach = 0,  
-    TotalCartons = Orders.ContainerQty,   
-    MBOL.VesselQualifier,   
-    MBOL.Equipment,       
-    remarks = convert(NVARCHAR(255), MBOL.remarks),       
-    MBOL.transmethod TransMethod,   
-    MBOL.placeofdelivery,   
-    MBOL.placeofloading,   
-    MBOL.placeofdischarge,   
-    MBOL.otherreference,  
-    ORDERS.invoiceno,   
-    MBOL.route,        
-    m3 = 99999999.99,  
-    STORER.Logo,    
-    ORDERS.Storerkey,  
-    MBWGT = MBOL.Weight,  
-    MBCube = MBOL.Cube,   
-    epodfullurl = @c_epodweburlparam           
+          VoyageNumber = MBOL.VoyageNumber,        
+          MBOL.carrierkey,   
+          MBOLDETAIL.loadkey,   
+          MBOLDETAIL.orderkey,   
+          ORDERS.externorderkey,   
+          ST_Company = ST.company,    
+          MBOL.ArrivalDate,       
+          totalqty = 0,  
+          totalorders = 0,  
+          totalcust = 0,  
+          MBOL.Departuredate,   
+          totalwgt = 99999999.99,  
+          totalcarton = 0,  
+          totaleach = 0,  
+          TotalCartons = ISNULL(Orders.ContainerQty,0),   --WL01 
+          MBOL.VesselQualifier,   
+          MBOL.Equipment,       
+          remarks = convert(NVARCHAR(255), MBOL.remarks),       
+          MBOL.transmethod TransMethod,   
+          MBOL.placeofdelivery,   
+          MBOL.placeofloading,   
+          MBOL.placeofdischarge,   
+          MBOL.otherreference,  
+          ORDERS.invoiceno,   
+          MBOL.route,        
+          m3 = 99999999.99,  
+          STORER.Logo,    
+          ORDERS.Storerkey,  
+          MBWGT = MBOL.Weight,  
+          MBCube = MBOL.Cube,   
+          epodfullurl = @c_epodweburlparam,
+          (SELECT SUM(PD.Qty) FROM PICKDETAIL PD (NOLOCK) WHERE PD.OrderKey = ORDERS.OrderKey) AS SUMQty,   --WL01    
+          ContainerNo = ISNULL(MBOL.ContainerNo,''),   --WL01 
+          SealNo = ISNULL(MBOL.SealNo,'')   --WL01      
    INTO #RESULT  
    FROM MBOL WITH (NOLOCK)  
    INNER JOIN MBOLDETAIL WITH (NOLOCK) ON MBOL.mbolkey = MBOLDETAIL.mbolkey  
@@ -136,11 +139,11 @@ CREATE PROC isp_dmanifest_vehicle_04 (
    JOIN STORER ST WITH (NOLOCK) ON ORDERS.consigneekey = ST.Storerkey   
    LEFT OUTER JOIN CODELKUP WITH (NOLOCK) ON CODELKUP.ListName = 'TRANSMETH' AND CODELKUP.Code = MBOL.transmethod  
    WHERE MBOL.mbolkey = @c_mbolkey  
-  
+   
    SELECT @n_totalorders = COUNT(*), @n_totalcust = COUNT(DISTINCT description)  
    FROM MBOLDETAIL WITH (NOLOCK)  
    WHERE mbolkey = @c_mbolkey  
-  
+   
    UPDATE #RESULT  
    SET totalorders = @n_totalorders,  
    totalcust = @n_totalcust  
@@ -151,14 +154,14 @@ CREATE PROC isp_dmanifest_vehicle_04 (
    OPEN cur_1  
    FETCH NEXT FROM cur_1 INTO @c_orderkey  
    WHILE (@@fetch_status <> -1)  
-      BEGIN  
+   BEGIN  
       SELECT @n_totalqty = ISNULL(SUM(qty), 0)  
       FROM PICKDETAIL WITH (NOLOCK)  
       WHERE orderkey = @c_orderkey  
   
       UPDATE #RESULT  
       SET totalqty = @n_totalqty  
-      , epodfullurl = @c_Orderkey    
+        , epodfullurl = @c_Orderkey    
       WHERE mbolkey = @c_mbolkey  
       AND orderkey = @c_orderkey  
   
@@ -167,34 +170,34 @@ CREATE PROC isp_dmanifest_vehicle_04 (
    CLOSE cur_1  
    DEALLOCATE cur_1  
   
-  SELECT ORDERS.Mbolkey,  
-   ORDERS.Orderkey,  
-   totwgt = ISNULL(SUM(PICKDETAIL.Qty),0) * SKU.stdgrosswgt,  
-   totcs = CASE WHEN PACK.CaseCnt > 0 THEN ISNULL(SUM(PICKDETAIL.Qty),0) / PACK.CaseCnt ELSE 0 END,  
-   totea = CASE WHEN PACK.CaseCnt > 0 THEN ISNULL(SUM(PICKDETAIL.Qty),0) % CAST (PACK.CaseCnt AS Int) ELSE 0 END,  
-   m3 = CASE WHEN PACK.CaseCnt > 0 THEN (SKU.[Cube] * ISNULL(SUM(PICKDETAIL.Qty),0)) / (PACK.CaseCnt) ELSE 0 END  
-  INTO #TEMPCALC  
+   SELECT ORDERS.Mbolkey,  
+          ORDERS.Orderkey,  
+          totwgt = ISNULL(SUM(PICKDETAIL.Qty),0) * SKU.stdgrosswgt,  
+          totcs = CASE WHEN PACK.CaseCnt > 0 THEN ISNULL(SUM(PICKDETAIL.Qty),0) / PACK.CaseCnt ELSE 0 END,  
+          totea = CASE WHEN PACK.CaseCnt > 0 THEN ISNULL(SUM(PICKDETAIL.Qty),0) % CAST (PACK.CaseCnt AS Int) ELSE 0 END,  
+          m3 = CASE WHEN PACK.CaseCnt > 0 THEN (SKU.[Cube] * ISNULL(SUM(PICKDETAIL.Qty),0)) / (PACK.CaseCnt) ELSE 0 END  
+   INTO #TEMPCALC  
    FROM PICKDETAIL WITH (NOLOCK)  
    INNER JOIN SKU WITH (NOLOCK) ON Pickdetail.sku = Sku.sku  
                                    AND (Pickdetail.storerkey = Sku.storerkey)  
    INNER JOIN PACK WITH (NOLOCK) ON PickDetail.PackKey = Pack.PackKey  
    INNER JOIN ORDERS WITH (NOLOCK) ON (PickDetail.OrderKey = Orders.OrderKey  
                                    AND ORDERS.Mbolkey = @c_mbolkey)  
- GROUP BY ORDERS.Mbolkey, ORDERS.Orderkey, PACK.CaseCnt, SKU.stdgrosswgt, SKU.[cube]  
+   GROUP BY ORDERS.Mbolkey, ORDERS.Orderkey, PACK.CaseCnt, SKU.stdgrosswgt, SKU.[cube]  
   
- SELECT Mbolkey, Orderkey, totwgt = SUM(totwgt), totcs = SUM(totcs), totea = SUM(totea), m3 = SUM(m3)  
- INTO   #TEMPTOTAL  
- FROM   #TEMPCALC  
- GROUP BY Mbolkey, Orderkey  
+   SELECT Mbolkey, Orderkey, totwgt = SUM(totwgt), totcs = SUM(totcs), totea = SUM(totea), m3 = SUM(m3)  
+   INTO   #TEMPTOTAL  
+   FROM   #TEMPCALC  
+   GROUP BY Mbolkey, Orderkey  
   
    UPDATE #RESULT  
-      SET totalwgt = t.totwgt,  
-      totalcarton = t.totcs,  
-      totaleach = t.totea,  
-      m3 = t.m3  
+   SET totalwgt = t.totwgt,  
+       totalcarton = t.totcs,  
+       totaleach = t.totea,  
+       m3 = t.m3  
    FROM #TEMPTOTAL t  
-    WHERE #RESULT.mbolkey = t.Mbolkey  
-    AND #RESULT.Orderkey = t.Orderkey  
+   WHERE #RESULT.mbolkey = t.Mbolkey  
+   AND #RESULT.Orderkey = t.Orderkey  
   
    SELECT *  
    FROM #RESULT  
