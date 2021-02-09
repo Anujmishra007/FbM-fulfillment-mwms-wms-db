@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 30-SEP-2020 NJOW01   1.0   WMS-15380 Aging zone allocation qty limit */
 /*                            per order and qty limit per sku per day   */
+/* 08-JAN-2021 NJOW02   1.1   WMS-15923 Filter out zone by consignee    */
 /************************************************************************/
 CREATE PROC dbo.ispPreAL04                      
            @c_OrderKey NVARCHAR(10) 
@@ -411,6 +412,16 @@ BEGIN
          BEGIN     	               	 
          	 IF @n_PackQty <= 0 
          	    GOTO NEXT_UOM
+         	 
+         	 --NJOW02
+         	 IF EXISTS(SELECT 1
+         	           FROM CODELKUP CL (NOLOCK)
+         	           WHERE CL.Listname = 'PMICUST'
+         	           AND CL.Code = @c_Consigneekey
+         	           AND @c_PickZone IN (SELECT PZ.ColValue FROM dbo.fnc_DelimSplit(',',CL.Long) PZ))      	   
+         	  BEGIN
+         	     GOTO NEXT_UOM
+         	  END                   	    
          	   	 
             SET @c_SQL = 
                      N'DECLARE CUR_LLI CURSOR FAST_FORWARD READ_ONLY FOR'
@@ -460,7 +471,7 @@ BEGIN
                     -- + ' ,CASE LOTxLOCxID.Sku WHEN ' + RTRIM(@c_SkuPriority1) + ' THEN 1 WHEN  ' + RTRIM(@c_SkuPriority2) + ' THEN 2 WHEN '  + RTRIM(@c_SkuPriority3) + ' THEN 3 WHEN '   + RTRIM(@c_SkuPriority4) + ' THEN 4 WHEN '   + RTRIM(@c_SkuPriority5) + ' THEN 5 ELSE 6 END' --NJOW01  
 --                     +        ',  ISNULL(SKU.BUSR5,'''')'  
                      +        ' ORDER BY LOTATTRIBUTE.Lottable15'
-                     +        ',  LOTATTRIBUTE.Lottable05' --NJOW05
+                     +        ',  LOTATTRIBUTE.Lottable05' --NJOW01                                     
                      --(Wan01) - START
                      + CASE WHEN @c_Consigneekey = 'PMS1'  
                             THEN ''
