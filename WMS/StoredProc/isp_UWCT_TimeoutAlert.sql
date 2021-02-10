@@ -1,13 +1,16 @@
-IF  EXISTS ( SELECT * FROM sys.objects WHERE OBJECT_ID = 
-      OBJECT_ID(N'[dbo].[isp_UWCT_TimeoutAlert]') AND type in ('P', 'PC') )
-   DROP PROCEDURE [dbo].[isp_UWCT_TimeoutAlert]
-GO
-SET ANSI_WARNINGS ON  
-GO
-SET ANSI_NULLS ON
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_UWCT_TimeoutAlert]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_UWCT_TimeoutAlert]  
+END
+GO 
+
+SET ANSI_NULLS ON  
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+ 
+
 /************************************************************************/  
 /* Stored Procedure: isp_UWCT_TimeoutAlert                              */  
 /* Creation Date: 11-Aug-2010                                           */  

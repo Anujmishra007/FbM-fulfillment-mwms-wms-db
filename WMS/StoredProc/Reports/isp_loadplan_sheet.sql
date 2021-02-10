@@ -113,7 +113,7 @@ BEGIN
               ,a.externloadkey ---- SOS 102426: column missing
         FROM   loadplan a(NOLOCK) 
         JOIN LoadPlanDetail AS lpd WITH(NOLOCK) ON lpd.LoadKey = a.LoadKey
-        JOIN orders b(NOLOCK) ON ON b.OrderKey = lpd.OrderKey 
+        JOIN orders b(NOLOCK) ON b.OrderKey = lpd.OrderKey 
         JOIN storer c(NOLOCK) ON c.StorerKey = b.StorerKey 
         WHERE a.loadkey = @c_loadkey 
     

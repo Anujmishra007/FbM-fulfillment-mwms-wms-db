@@ -2,10 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPrLotA1
 drop procedure [dbo].[nspPrLotA1]
 GO
 
- 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
+
 
 CREATE PROC    nspPrLotA1
   	@c_storerkey NVARCHAR(15) ,
