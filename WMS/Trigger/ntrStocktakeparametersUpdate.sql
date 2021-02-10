@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStockta
 drop trigger [dbo].[ntrStocktakeparametersUpdate]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Trigger: ntrStocktakeparametersUpdate                                */
 /* Creation Date:                                                       */

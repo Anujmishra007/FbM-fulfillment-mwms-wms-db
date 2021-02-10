@@ -3,6 +3,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrIDS_LP_
 drop trigger [dbo].[ntrIDS_LP_VehicleDelete]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Trigger: ntrIDS_LP_VehicleDelete                                     */
 /* Creation Date:                                                       */

@@ -26,7 +26,7 @@ GO
 /* 20-Oct-2020 Leong    1.1   INC1325877 - Bug fix.                        */
 /***************************************************************************/
 
-ALTER VIEW [dbo].[V_BTBShipment_Wave]
+CREATE VIEW [dbo].[V_BTBShipment_Wave]
 AS
 SELECT WD.WAVEKEY
 FROM WAVEDETAIL WD (NOLOCK)

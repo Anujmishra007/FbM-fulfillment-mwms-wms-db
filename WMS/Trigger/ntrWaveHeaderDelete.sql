@@ -3,9 +3,33 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrWaveHea
 drop trigger [dbo].[ntrWaveHeaderDelete]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
+/************************************************************************/
+/* Trigger: ntrWaveHeaderDelete                                         */
+/* Creation Date: 10-Feb-2021                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author           Purposes                               */
 /*  9-Jun-2011  KHLim01    1.1   Insert Delete log                      */
 /* 14-Jul-2011  KHLim02    1.2   GetRight for Delete log                */
 /* 06-Oct-2016  TLTING     1.3   SET Option                             */
+/************************************************************************/
 
 CREATE TRIGGER ntrWaveHeaderDelete
  ON Wave
