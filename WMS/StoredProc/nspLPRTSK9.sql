@@ -25,6 +25,7 @@ GO
 /* Date         Author   Ver  Purposes                                   */  
 /* 09-Jun-2002  NJOW01   1.1  Fix to filter by storerkey                 */
 /* 27-Oct-2020  NJOW02   1.2  WMS-15601 Support multi load per booking   */
+/* 04-Feb-2020  NJOW03   1.3  WMS-16307 Remove groupkey mapping          */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[nspLPRTSK9]      
@@ -167,7 +168,7 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
     	 SET @c_SQL = '
        DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR  
     	    SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
-    	           MAX(PD.UOM), SUM(PD.UOMQty) AS UOMQty, O.Consigneekey, PD.Loc AS ToLoc,
+    	           MAX(PD.UOM), SUM(PD.UOMQty) AS UOMQty, '''' AS Consigneekey, PD.Loc AS ToLoc,
     	           ISNULL(PLT.PLTBalQty,0), ISNULL(PLT.PLTQtyAllocated,0), SL.LocationType, CON.Company, MAX(O.Orderkey), COUNT(DISTINCT O.Orderkey)  
           FROM LOADPLANDETAIL LD (NOLOCK)
           JOIN LOADPLAN L (NOLOCK) ON LD.Loadkey = L.Loadkey
@@ -184,8 +185,8 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
           AND PD.Status = ''0''
           AND PD.WIP_RefNo = @c_SourceType
           AND (O.Storerkey = @c_Storerkey OR ISNULL(@c_Storerkey,'''') = '''')
-          GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, O.Consigneekey, Loc.LogicalLocation, ISNULL(PLT.PLTBalQty,0), ISNULL(PLT.PLTQtyAllocated,0), SL.LocationType, CON.Company                    
-          ORDER BY PD.Storerkey, O.Consigneekey, Loc.LogicalLocation, PD.Loc '       
+          GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, Loc.LogicalLocation, ISNULL(PLT.PLTBalQty,0), ISNULL(PLT.PLTQtyAllocated,0), SL.LocationType, CON.Company                    
+          ORDER BY PD.Storerkey, Loc.LogicalLocation, PD.Loc '       
        
        EXEC sp_executesql @c_SQL,
           N'@c_Loadkey NVARCHAR(10), @c_SourceType NVARCHAR(30), @c_Storerkey NVARCHAR(15)', 
@@ -200,7 +201,7 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN          	        	
-  	  	 	 SET @c_LinkTaskToPick_SQL = 'AND ORDERS.Consigneekey = ''' + RTRIM(ISNULL(@c_Consigneekey,'')) + ''' '
+  	  	 	 SET @c_LinkTaskToPick_SQL = ''  --'AND ORDERS.Consigneekey = ''' + RTRIM(ISNULL(@c_Consigneekey,'')) + ''' '  --NJOW03 removed
       	   SET @c_UOM = ''
       	   SET @n_UOMQty = 0
       	   SET @c_TaskType = 'FCP'
@@ -255,7 +256,7 @@ CREATE PROCEDURE [dbo].[nspLPRTSK9]
               ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey 
               ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
               ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL  
-              ,@c_Groupkey              = @c_Consigneekey
+              ,@c_Groupkey              = '' --@c_Consigneekey  --NJOW03 Removed
               ,@c_WIP_RefNo             = @c_SourceType
               ,@b_Success               = @b_Success OUTPUT
               ,@n_Err                   = @n_err OUTPUT 
