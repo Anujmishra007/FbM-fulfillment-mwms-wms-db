@@ -28,6 +28,7 @@ GO
 /*                            Strategy CR                               */    
 /* 18-JUL-2019 CSCHONG  1.2   WMS-9822-revised report condition (CS01)  */    
 /* 08-AUG-2019 CSCHONG  1.4   WMS-10204 - add channel checking (CS01a)  */    
+/* 10-FEB-2021 CSCHONG  1.5   Bug Fix (CS02)                            */
 /************************************************************************/        
 CREATE  PROC [dbo].[ispPRNIK08]            
     @c_WaveKey                      NVARCHAR(10)    
@@ -549,7 +550,7 @@ BEGIN
                      +  ',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30) '     
                      +  ',@c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30) '      
                      +  ',@c_Lottable12 NVARCHAR(30) '     
-                     +  ',@c_LocationTypeOverride NVARCHAR(10) ,)'  --(Wan01)      
+                     +  ',@c_LocationTypeOverride NVARCHAR(10)'  --(Wan01)      
              
       EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU    
                         ,@c_Lottable01, @c_Lottable02, @c_Lottable03     
@@ -872,7 +873,9 @@ BEGIN
                             + CHAR(13) + 'CASE WHEN (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) <  CA.CHANNELAVIQTY THEN '    
                             + CHAR(13) + '(OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) ELSE CA.CHANNELAVIQTY END as OrderQty'    
                             + CHAR(13) + ',OD.channel '    
-                            + CHAR(13) + 'FROM ORDERDETAIL OD (NOLOCK) '    
+                            + CHAR(13) + 'FROM ORDERDETAIL OD (NOLOCK) '  
+                            + CHAR(13) + 'JOIN #CHANNELINFO CA WITH (NOLOCK) ON CA.Orderkey = OD.Orderkey AND CA.Storerkey = OD.Storerkey '    --CS02
+                            + CHAR(13) + '        AND CA.SKU = OD.SKU AND CA.Channel = OD.Channel '      
                             + CHAR(13) + 'WHERE OD.ORderkey = @c_Orderkey '    
                             + CHAR(13) + 'AND OD.StorerKey  = @c_StorerKey '                  
                             + CHAR(13) + 'AND OD.SKU = @c_SKU '    
