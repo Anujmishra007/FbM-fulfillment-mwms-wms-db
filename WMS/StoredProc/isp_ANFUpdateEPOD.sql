@@ -31,7 +31,7 @@ GO
 /************************************************************************/
  
 
-CREATE OR ALTER  PROCEDURE [dbo].[isp_ANFUpdateEPOD]
+CREATE PROCEDURE [dbo].[isp_ANFUpdateEPOD]
        @c_Storerkey Nvarchar(15) = 'ANF',   @c_TargetDB Nvarchar(20) = 'HKEPOD'
 AS
 BEGIN
