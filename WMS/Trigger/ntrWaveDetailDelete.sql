@@ -2,6 +2,11 @@ IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrWaveDet
 	DROP TRIGGER [dbo].[ntrWaveDetailDelete]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************/
 /* Trigger: ntrWaveDetailDelete                                               */
 /* Creation Date:                                                             */

@@ -2,6 +2,11 @@ IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrBillOfM
     DROP TRIGGER [dbo].[ntrBillOfMaterialDelete]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /**************************************************************  
 *  Author  : Ricky Yee                                        *  
 *  Date    : Nov 24th, 2007                                   *  
@@ -66,7 +71,8 @@ BEGIN
          BEGIN  
            SELECT @n_continue = 3  
            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60001   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-           SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Inventory Exists! Delete trigger On BillOfMaterial Failed. (ntrBillOfMaterialDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "  
+           SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Inventory Exists! Delete trigger On BillOfMaterial Failed. (ntrBillOfMaterialDelete)" 
+           + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "  
          END  
       END -- Configkey  
  END  

@@ -2,12 +2,31 @@ IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nsp_TransferDetailInter
    DROP PROC nsp_TransferDetailInterface_CCOPACK
 GO
 
-/*******************************************************************
-* Modification History:                                            
-*
-* 03/09/2002 RYEE  Program rewrite for IDS version 5
-* *****************************************************************/
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
+
+/************************************************************************/
+/* Stored Procedure: nsp_TransferDetailInterface_CCOPACK                */
+/* Creation Date: 03/09/2002                                            */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 03/09/2002 RYEE  Program rewrite for IDS version 5							*/
+/************************************************************************/
 CREATE PROC  nsp_TransferDetailInterface_CCOPACK
               @c_transferkey           NVARCHAR(10), 
               @c_transferlinenumber    NVARCHAR(5), 

@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_smr_it
 drop procedure [dbo].[nsp_smr_itemclass_desc]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: nsp_smr_itemclass_desc                             */
 /* Creation Date:                                                       */

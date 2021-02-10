@@ -2,6 +2,12 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntridsStkT
 drop trigger [dbo].[ntridsStkTrfDocdelete]
 GO
 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 CREATE TRIGGER ntridsStkTrfDocdelete
 ON  idsStkTrfDoc
 FOR DELETE

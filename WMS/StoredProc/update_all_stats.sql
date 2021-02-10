@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[update_all
 drop procedure [dbo].[update_all_stats]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: update_all_stats                                   */
 /* Creation Date:                                                       */

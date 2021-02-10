@@ -3,6 +3,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInvento
 drop trigger [dbo].[ntrInventoryHoldAdd]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Trigger: ntrInventoryHoldAdd                                         */
 /* Creation Date:                                                       */

@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrContainerDetailDelete]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ntrContainerDetailDelete]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrContainerDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+   DROP TRIGGER [dbo].[ntrContainerDetailDelete]
 GO
 
 SET QUOTED_IDENTIFIER OFF 

@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_smr_3]
 drop procedure [dbo].[nsp_smr_3]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: nsp_smr_3                                          */
 /* Creation Date:                                                       */
@@ -338,7 +343,8 @@ BEGIN
          , EffectiveDate = @bfDate
          , flag="AA"
          , TranType = "          "
-         , RunningTotal = 0              INTO #BF_TEMP3
+         , RunningTotal = 0
+              INTO #BF_TEMP3
          FROM #ITRN_CUT_BY_SKU
          WHERE
          (EffectiveDate > @d_begin_date and EffectiveDate <= @d_end_date)
@@ -744,7 +750,8 @@ BEGIN
 
    /* output to user */
    select Company,
-   StorerKey,                 itemclass,
+   StorerKey,
+                 itemclass,
    skugroup,
    o_qty,
    convert(decimal(10,3), o_volume) as o_volume,

@@ -3,8 +3,9 @@ drop procedure [dbo].[nspPR_HK02]
 GO
 
 
+SET ANSI_NULLS OFF
 GO
-
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/

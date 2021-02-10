@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_Transf
 drop procedure [dbo].[nsp_TransferDetailInterface_ALL]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: nsp_TransferDetailInterface_ALL                    */
 /* Creation Date:                                                       */

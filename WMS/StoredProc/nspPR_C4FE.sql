@@ -2,6 +2,10 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR_C4FE
 drop procedure [dbo].[nspPR_C4FE]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
   
 
 /************************************************************************/
@@ -144,8 +148,6 @@ BEGIN
 END
 GO
  
-SET ANSI_NULLS OFF
-GO
 
 GRANT EXECUTE ON nspPR_C4FE TO NSQL
 GO

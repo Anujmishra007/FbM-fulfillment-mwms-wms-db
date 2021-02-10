@@ -2,9 +2,9 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRstdC2
 drop procedure [dbo].[nspPRstdC2]
 GO
 
-
+SET ANSI_NULLS OFF
 GO
-
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/

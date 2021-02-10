@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_stkonh
 drop procedure [dbo].[nsp_stkonhand_by_batch]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: nsp_stkonhand_by_batch                             */
 /* Creation Date:                                                       */

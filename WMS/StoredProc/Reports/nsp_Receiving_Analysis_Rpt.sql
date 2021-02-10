@@ -1,6 +1,15 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_Receiving_Analysis_Rpt]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nsp_Receiving_Analysis_Rpt]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_Receiving_Analysis_Rpt]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[nsp_Receiving_Analysis_Rpt]  
+END
+GO 
+
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Stored Procedure: nsp_Receiving_Analysis_Rpt                         */

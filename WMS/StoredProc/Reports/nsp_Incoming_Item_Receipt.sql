@@ -1,5 +1,13 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_Incoming_Item_Receipt]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nsp_Incoming_Item_Receipt]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_Incoming_Item_Receipt]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[nsp_Incoming_Item_Receipt]  
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -22,7 +30,7 @@ GO
 /* Date         Author        Purposes                                  */
 /************************************************************************/
 
-create proc nsp_Incoming_Item_Receipt(
+CREATE PROC [dbo].[nsp_Incoming_Item_Receipt] (
 @c_fr_storerkey NVARCHAR(15),
 @c_to_storerkey NVARCHAR(15),
 @c_fr_potype NVARCHAR(10),

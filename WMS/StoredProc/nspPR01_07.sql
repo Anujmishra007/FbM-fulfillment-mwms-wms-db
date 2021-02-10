@@ -2,11 +2,31 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR01_07
 drop procedure [dbo].[nspPR01_07]
 GO
  
+SET ANSI_NULLS OFF
 GO
- 
+SET QUOTED_IDENTIFIER OFF
 GO
 
-   
+
+/************************************************************************/
+/* Stored Procedure: nspPR01_07                                         */
+/* Creation Date: 10-Feb-2015                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 10-Feb-2015       1.0      Initial Version						         */
+/************************************************************************/   
 CREATE PROC    nspPR01_07    
  @c_storerkey NVARCHAR(15) ,    
  @c_sku NVARCHAR(20) ,    

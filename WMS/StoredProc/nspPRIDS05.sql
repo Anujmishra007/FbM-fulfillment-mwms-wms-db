@@ -2,13 +2,13 @@ if (objectProperty(object_id('dbo.nspPRIDS05'), 'IsPRocedure') is not null)
 	drop procedure dbo.nspPRIDS05 
 GO
 
- 
+SET ANSI_NULLS OFF
 GO
- 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Stored Procedure: nspPRIDS05																					*/
+/* Stored Procedure: nspPRIDS05														*/
 /* Creation Date:                                                       */
 /* Copyright: IDS                                                       */
 /* Written by:                                                          */
@@ -25,8 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
-/* 28-Jul-2005	June					SOS38650 - Fuji Allocation error					*/
-/*														- multiple rows of same records return    */
+/* 28-Jul-2005	June			   SOS38650 - Fuji Allocation error			   */
+/*										- multiple rows of same records return    */
 /************************************************************************/
 
 CREATE PROC    nspPRIDS05

@@ -2,7 +2,32 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspArchive
 drop procedure [dbo].[nspArchiveErrLog]
 GO
 
-create proc nsparchiveerrlog      
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
+/************************************************************************/
+/* Stored Procedure: nspArchiveErrLog                                   */
+/* Creation Date: 09-Feb-2004                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 09-Feb-2004       1.0      SOS#:18664 Archiving & Archive Parameters */
+/************************************************************************/
+CREATE PROC [dbo].[nspArchiveErrLog]      
 		@c_archivekey	 NVARCHAR(10)
 	,	@b_success      int        output    
 	,  @n_err          int        output    
