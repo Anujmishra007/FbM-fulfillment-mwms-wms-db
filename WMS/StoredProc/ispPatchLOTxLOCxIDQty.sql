@@ -1,9 +1,13 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispPatchLOTxLOCxIDQty]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispPatchLOTxLOCxIDQty]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPatchSKUxLOCQty]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[ispPatchSKUxLOCQty]  
+END
+GO 
+
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/  
@@ -114,5 +118,5 @@ BEGIN
 END
 GO
 
-GRANT EXECUTE ON ispPatchLOTxLOCxIDQty TO NSQL
+GRANT EXECUTE ON [dbo].[ispPatchSKUxLOCQty] TO NSQL
 GO

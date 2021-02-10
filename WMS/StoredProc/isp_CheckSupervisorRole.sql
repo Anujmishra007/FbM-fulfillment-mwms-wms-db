@@ -1,10 +1,13 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID (N'[dbo].[isp].[isp_CheckSupervisorRole]') AND OBJECTPROPERTY (id, N'IsProcedure') = 1)
-DROP PROC [dbo].[isp_CheckSupervisorRole]
-GO
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_CheckSupervisorRole]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_CheckSupervisorRole]   
+END
+GO 
 
-SET ANSI_NULLS ON 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_WARNINGS ON 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/  

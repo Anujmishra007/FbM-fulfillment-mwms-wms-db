@@ -1,6 +1,10 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRTW03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[nspPRTW03]
 GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 CREATE  PROC nspPRTW03
 @c_storerkey NVARCHAR(15) ,

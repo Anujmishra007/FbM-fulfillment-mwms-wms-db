@@ -2,8 +2,30 @@ IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nsp_PMTL_Validation' AN
    DROP PROC nsp_PMTL_Validation
 GO
 
-/* 07-Nov-2012  KHLim  1.1   DM integrity - Update EditDate  (KH01)        */
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
+/************************************************************************/
+/* Stored Procedure: nsp_PMTL_Validation                                */
+/* Creation Date: 07-Nov-2012                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 07-Nov-2012  KHLim  1.1   DM integrity - Update EditDate  (KH01)     */
+/************************************************************************/
 CREATE PROC nsp_PMTL_Validation 
 AS  
 BEGIN 

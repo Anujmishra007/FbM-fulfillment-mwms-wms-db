@@ -2,8 +2,9 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRstdA6
 drop procedure [dbo].[nspPRstdA6]
 GO
 
+SET ANSI_NULLS OFF
 GO
- 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE PROC  [dbo].[nspPRstdA6]  -- rename from IDSMY:nspPRstd06  

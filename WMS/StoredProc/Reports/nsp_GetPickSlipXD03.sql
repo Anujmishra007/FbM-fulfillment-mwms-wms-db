@@ -1,5 +1,13 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = N'nsp_GetPickSlipXD03' AND TYPE = 'P')
-DROP PROC nsp_GetPickSlipXD03 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_GetPickSlipXD03]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[nsp_GetPickSlipXD03]  
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -21,10 +29,10 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author   Ver.   	Purposes                                */
+/* Date        Author   Ver.    Purposes                                */
 /* 2005-06-15  Vicky         	  SOS#36849 - Add in Supplier name        */
-/* 2007-04-05	 ONG01			    	SOS#71903 - Add Column POTYPE					  */
-/* 2009-05-25	 NJOW01		1.1    	SOS#137191 - Add column BUSR3 (sensitive*/  
+/* 2007-04-05	 ONG01			  SOS#71903 - Add Column POTYPE			   */
+/* 2009-05-25	 NJOW01		1.1  SOS#137191 - Add column BUSR3 (sensitive*/  
 /*                              & non sensitive SKU flag)               */
 /************************************************************************/
 

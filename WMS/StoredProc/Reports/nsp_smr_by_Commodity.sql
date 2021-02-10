@@ -1,5 +1,13 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_smr_by_Commodity]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nsp_smr_by_Commodity]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_smr_by_Commodity]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[nsp_smr_by_Commodity]  
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/

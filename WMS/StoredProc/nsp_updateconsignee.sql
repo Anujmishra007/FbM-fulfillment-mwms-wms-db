@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_update
 drop procedure [dbo].[nsp_updateconsignee]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: nsp_updateconsignee                                */
 /* Creation Date:                                                       */

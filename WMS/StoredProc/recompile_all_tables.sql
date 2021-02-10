@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[recompile_
 drop procedure [dbo].[recompile_all_tables]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: recompile_all_tables                               */
 /* Creation Date:                                                       */

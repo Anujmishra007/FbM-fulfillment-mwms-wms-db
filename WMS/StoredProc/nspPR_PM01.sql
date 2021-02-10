@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR_PM01
 drop procedure [dbo].[nspPR_PM01]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Store procedure: nspPR_PM01                                          */
 /* Copyright      : IDS                                                 */

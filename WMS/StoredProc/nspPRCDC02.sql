@@ -2,9 +2,9 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRCDC02
 drop procedure [dbo].[nspPRCDC02]
 GO
 
-
+SET ANSI_NULLS OFF
 GO
-
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -26,7 +26,6 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /************************************************************************/
-
 CREATE PROC nspPRCDC02
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,

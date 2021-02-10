@@ -4,6 +4,31 @@ IF EXISTS (SELECT name
 	   AND 	  type = 'P')
     DROP PROCEDURE nsp_ReplenishmentRpt_RF02
 GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
+/************************************************************************/
+/* Stored Procedure: nsp_ReplenishmentRpt_RF02                          */
+/* Creation Date: 03-Mar-2003                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 03-Mar-2003  Wally    1.0  Initial Version								   */
+/************************************************************************/
 
 CREATE PROC    nsp_ReplenishmentRpt_RF02
  @c_zone01           NVARCHAR(10) 
@@ -595,7 +620,8 @@ CREATE PROC    nsp_ReplenishmentRpt_RF02
                               -- end
  									END -- if from qty > 0
  									IF @b_debug = 1 
- 									BEGIN										select @c_currentSKU ' SKU', @c_currentLOC 'LOC', @c_CurrentPriority 'priority', @n_currentfullcase 'full case', @n_CurrentSeverity 'severity'
+ 									BEGIN
+										select @c_currentSKU ' SKU', @c_currentLOC 'LOC', @c_CurrentPriority 'priority', @n_currentfullcase 'full case', @n_CurrentSeverity 'severity'
  										-- select @n_fromqty 'qty', @c_fromLOC 'fromLOC', @c_fromlot 'from lot', @n_possiblecases 'possible cases'
  										select @n_remainingqty '@n_remainingqty', @c_currentLOC + ' SKU = ' + @c_currentSKU, @c_fromlot 'from lot', @c_fromid
  									END

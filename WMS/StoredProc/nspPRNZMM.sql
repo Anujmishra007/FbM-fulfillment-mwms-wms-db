@@ -1,11 +1,34 @@
- 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspPRNZMM]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[nspPRNZMM]  
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-GO
-
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nspPRNZMM' AND type = 'P')
-   DROP PROC nspPRNZMM
-GO
+/************************************************************************/
+/* Stored Procedure: nspPRNZMM                                          */
+/* Creation Date: 10-Feb-2005                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 10-Feb-2005       1.0      Initial Version								   */
+/************************************************************************/
 
 CREATE PROC nspPRNZMM 
     @c_storerkey NVARCHAR(15) ,  

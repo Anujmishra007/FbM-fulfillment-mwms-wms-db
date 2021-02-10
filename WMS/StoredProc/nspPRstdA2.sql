@@ -2,12 +2,30 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRstdA2
 drop procedure [dbo].[nspPRstdA2]
 GO
 
-
- 
+SET ANSI_NULLS OFF
 GO
- 
+SET QUOTED_IDENTIFIER OFF
 GO
 
+/************************************************************************/
+/* Stored Procedure: nspPRstdA2                                         */
+/* Creation Date: 10-Feb-2005                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by:wtshong                                                   */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* GIT Version: 1.0                                                     */
+/*                                                                      */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 10-Feb-2005       1.0      Initial Version								   */
+/************************************************************************/
 CREATE PROC  nspPRstdA2  -- Rename from IDSMY:nspPRstd02
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
@@ -24,40 +42,55 @@ CREATE PROC  nspPRstdA2  -- Rename from IDSMY:nspPRstd02
 AS
 BEGIN
 
-IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL
+IF ISNULL(RTRIM(@c_lot),'') <> ''
 BEGIN
-DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-SELECT LOT.STORERKEY,LOT.SKU,LOT.LOT ,
-QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
-FROM LOT (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK) 
-WHERE LOTXLOCXID.Lot = LOT.LOT
-AND LOTXLOCXID.LOC = LOC.LOC
-AND LOC.Facility = @c_facility
-AND LOT.LOT = @c_lot
-ORDER BY LOT.LOT
+    DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY 
+    FOR
+        SELECT LOT.STORERKEY
+              ,LOT.SKU
+              ,LOT.LOT
+              ,QTYAVAILABLE = (
+                   LOT.QTY- LOT.QTYALLOCATED- LOT.QTYPICKED- LOT.QTYPREALLOCATED
+               )
+        FROM   LOT(NOLOCK)
+              ,LOTXLOCXID(NOLOCK)
+              ,LOC(NOLOCK)
+        WHERE  LOTXLOCXID.Lot = LOT.LOT
+               AND LOTXLOCXID.LOC = LOC.LOC
+               AND LOC.Facility = @c_facility
+               AND LOT.LOT = @c_lot
+        ORDER BY
+               LOT.LOT
 END
 ELSE
 BEGIN
-DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-SELECT LOT.STORERKEY,LOT.SKU,LOT.LOT  ,
-QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD)
-FROM LOT (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK) 
-WHERE LOTXLOCXID.Lot = LOT.LOT
-AND LOTXLOCXID.LOC = LOC.LOC
-AND LOC.Facility = @c_facility
-AND LOT.STORERKEY = @c_storerkey
-AND LOT.SKU = @c_sku
-AND LOT.STATUS = "OK"
-AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD) > 0
-ORDER BY LOT.LOT
+    DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY 
+    FOR
+        SELECT LOT.STORERKEY
+              ,LOT.SKU
+              ,LOT.LOT
+              ,QTYAVAILABLE = (
+                   LOT.QTY- LOT.QTYALLOCATED- LOT.QTYPICKED- LOT.QTYPREALLOCATED- QTYONHOLD
+               )
+        FROM   LOT(NOLOCK)
+              ,LOTXLOCXID(NOLOCK)
+              ,LOC(NOLOCK)
+        WHERE  LOTXLOCXID.Lot = LOT.LOT
+               AND LOTXLOCXID.LOC = LOC.LOC
+               AND LOC.Facility = @c_facility
+               AND LOT.STORERKEY = @c_storerkey
+               AND LOT.SKU = @c_sku
+               AND LOT.STATUS = "OK"
+               AND (
+                       LOT.QTY- LOT.QTYALLOCATED- LOT.QTYPICKED- LOT.QTYPREALLOCATED- QTYONHOLD
+                   )>0
+        ORDER BY
+               LOT.LOT
 END
 END
 
 GO
  
-GO
-SET ANSI_NULLS OFF 
-GO
 
 GRANT EXECUTE ON nspPRstdA2 to NSQL
 GO

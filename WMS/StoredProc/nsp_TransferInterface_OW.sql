@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_Transf
 drop procedure [dbo].[nsp_TransferInterface_OW]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Stored Procedure: nsp_TransferInterface_OW                           */
 /* Creation Date:                                                       */
@@ -20,15 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 06/11/2002 Leo Ng  Program rewrite for IDS version 5                 */
 /************************************************************************/
-
-
-/*******************************************************************
-* Modification History:
-*
-* 06/11/2002 Leo Ng  Program rewrite for IDS version 5
-* *****************************************************************/
-
 CREATE PROC  nsp_TransferInterface_OW
 @c_transferkey           NVARCHAR(10),
 @c_transferlinenumber    NVARCHAR(5),

@@ -2,8 +2,9 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR_HK4A
 drop procedure [dbo].[nspPR_HK4A]
 GO
  
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE  PROC  nspPR_HK4A

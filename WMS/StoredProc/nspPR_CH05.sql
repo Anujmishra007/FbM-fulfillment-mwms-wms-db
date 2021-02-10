@@ -2,7 +2,11 @@ IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nspPR_CH05' AND type = 
    DROP PROC nspPR_CH05
 GO
 
- 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /************************************************************************/
 /* Stored Procedure: nspPR_CH05                                         */

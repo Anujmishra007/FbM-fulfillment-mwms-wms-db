@@ -2,6 +2,11 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Insert
 drop procedure [dbo].[isp_Insert_PickDetail]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/  
 /* SP: isp_Insert_PickDetail                                        	   */  
 /* Creation Date:    19-Feb-2008                                        */  
