@@ -37,221 +37,125 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /* 2012-Nov-30  Chew KP   1.1   Auto Gen PalletLinenumber (ChewKP01)    */  
 /* 2018-Dec-19  TLTING01  1.2   missing NOLOCK                          */  
-/* 31-Mar-2020  kocy      1.1   Skip when data move from Archive (kocy01)  */
+/* 31-Mar-2020  kocy      1.3   Skip when data move from Archive (kocy01)*/
+/* 12-Jan-2021  Shong     1.4   Performance Tuning, Move the logic to   */ 
+/*                              Pre-Add Trigger                         */
 /************************************************************************/  
 CREATE TRIGGER [dbo].[ntrPalletDetailAdd]  
- ON  [dbo].[PALLETDETAIL]  
+   ON  [dbo].[PALLETDETAIL]  
  FOR INSERT  
  AS  
  BEGIN  
- SET NOCOUNT ON  
- SET ANSI_NULLS OFF  
- SET QUOTED_IDENTIFIER OFF  
- SET CONCAT_NULL_YIELDS_NULL OFF  
+    SET NOCOUNT ON  
+    SET ANSI_NULLS OFF  
+    SET QUOTED_IDENTIFIER OFF  
+    SET CONCAT_NULL_YIELDS_NULL OFF  
     
- DECLARE @b_debug int  
- SELECT @b_debug = 0  
- DECLARE  
- @b_Success            int       -- Populated by calls to stored procedures - was the proc successful?  
- ,         @n_err                int       -- Error number returned by stored procedure or this trigger  
- ,         @n_err2 int              -- For Additional Error Detection  
- ,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger  
- ,         @n_continue int                   
- ,         @n_starttcnt int                -- Holds the current transaction count  
- ,         @c_preprocess NVARCHAR(250)         -- preprocess  
- ,         @c_pstprocess NVARCHAR(250)         -- post process  
- ,         @n_cnt int                 
- ,         @cPalletLine  NVARCHAR(5)   -- (ChewKP01)  
-   
- SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
-      /* #INCLUDE <TRPALDA1.SQL> */       
+    DECLARE @b_debug INT  
+    SELECT @b_debug = 0  
+    DECLARE @b_Success        INT -- Populated by calls to stored procedures - was the proc successful?
+           ,@n_err            INT -- Error number returned by stored procedure or this trigger
+           ,@n_err2           INT -- For Additional Error Detection
+           ,@c_errmsg         NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+           ,@n_continue       INT
+           ,@n_starttcnt      INT -- Holds the current transaction count
+           ,@c_preprocess     NVARCHAR(250) -- preprocess
+           ,@c_pstprocess     NVARCHAR(250) -- post process
+           ,@n_cnt            INT
+
+    DECLARE 
+            @c_CaseID       NVARCHAR(20)   
+           ,@c_Status       NVARCHAR(10)
+        
+    SELECT @n_continue = 1
+          ,@n_starttcnt = @@TRANCOUNT  
+         /* #INCLUDE <TRPALDA1.SQL> */       
       
- -- kocy01(s)
- IF @n_continue=1 or @n_continue=2  
- BEGIN
-    IF EXISTS (SELECT 1 FROM INSERTED WHERE ArchiveCop = "9")
+    -- kocy01(s)
+    IF @n_continue=1 OR @n_continue=2
     BEGIN
-       SELECT @n_continue = 4
+        IF EXISTS (SELECT 1 FROM   INSERTED WHERE  ArchiveCop = '9' )
+        BEGIN
+           SELECT @n_continue = 4
+        END
     END
- END
- --kocy01(e)
+    --kocy01(e)
  
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
- IF EXISTS (SELECT * FROM PALLET (NOLOCK), INSERTED  
- WHERE PALLET.PalletKey = INSERTED.PalletKey  
- AND PALLET.Status = "9")  
- BEGIN  
- SELECT @n_continue = 3  
- SELECT @n_err=67600  
- SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": PALLET.Status = 'SHIPPED'. UPDATE rejected. (ntrPalletDetailAdd)"  
+
+ IF @n_continue=1 OR @n_continue=2
+ BEGIN     
+     DECLARE CUR_CASEMANIFEST_UPDATE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+     SELECT CM.CaseId 
+          , INS.[Status]
+     FROM [dbo].[CASEMANIFEST] AS CM WITH (NOLOCK) 
+     JOIN INSERTED AS INS ON CM.CaseId = INS.CaseId 
+     WHERE INS.CaseID IS NOT NULL
+     AND INS.CaseID > ''
+     AND INS.Status = '9' 
+     
+     OPEN CUR_CASEMANIFEST_UPDATE
+     
+     FETCH FROM CUR_CASEMANIFEST_UPDATE INTO @c_CaseId, @c_Status
+     
+     WHILE @@FETCH_STATUS = 0
+     BEGIN 
+        IF @c_Status = '9'
+        BEGIN
+           UPDATE dbo.CASEMANIFEST
+            SET   ShipStatus = '9'
+           WHERE  CaseId = @c_CaseID
+     
+           SELECT @n_err = @@ERROR
+                 ,@n_cnt = @@ROWCOUNT
+     
+           IF @n_err<>0
+           BEGIN
+               SELECT @n_continue = 3  
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
+                     ,@n_err = 67601 -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+               SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
+                      ': Update Failed On Table CASEMANIFEST. (ntrPalletDetailAdd)'+' ( '+' SQLSvr MESSAGE='+ISNULL(TRIM(@c_errmsg) ,'') 
+                     +' ) '
+           END           
+        END -- IF @c_Status = '9'
+        
+        FETCH FROM CUR_CASEMANIFEST_UPDATE INTO @c_CaseId, @c_Status
+     END
+     
+     CLOSE CUR_CASEMANIFEST_UPDATE
+     DEALLOCATE CUR_CASEMANIFEST_UPDATE
+ END
+  
+ 
+ /* #INCLUDE <TRPALDA2.SQL> */  
+ IF @n_continue=3 -- Error Occured - Process And Return
+ BEGIN
+     IF @@TRANCOUNT=1
+        AND @@TRANCOUNT>=@n_starttcnt
+     BEGIN
+         ROLLBACK TRAN
+     END
+     ELSE
+     BEGIN
+         WHILE @@TRANCOUNT>@n_starttcnt
+         BEGIN
+             COMMIT TRAN
+         END
+     END  
+     EXECUTE nsp_logerror @n_err,
+          @c_errmsg,
+          'ntrPalletDetailAdd'
+     
+     RAISERROR (@c_errmsg ,16 ,1) WITH SETERROR -- SQL2012  
+     RETURN
+ END
+ ELSE
+ BEGIN
+     WHILE @@TRANCOUNT>@n_starttcnt
+     BEGIN
+         COMMIT TRAN
+     END 
+     RETURN
  END  
- END  
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
- IF EXISTS ( SELECT *  
- FROM INSERTED  
- WHERE NOT EXISTS ( SELECT *  
- FROM SKU   (NOLOCK)
- WHERE SKU.StorerKey = INSERTED.StorerKey  
- AND SKU.Sku = INSERTED.Sku )  
- AND NOT dbo.fnc_LTrim(dbo.fnc_RTrim(Sku)) IS NULL )  
- BEGIN  
- SELECT @n_continue = 3  
- SELECT @n_err=67605  
- SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Bad PALLETDETAIL.StorerKey or PALLETDETAIL.Sku. (ntrPalletDetailAdd)"  
- END  
- END  
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
- IF @b_debug = 1  
- BEGIN  
- SELECT PALLETDETAIL.*  
- FROM PALLETDETAIL (NOLOCK), INSERTED, CASEMANIFEST   (NOLOCK)
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- END  
- UPDATE PALLETDETAIL  
- SET TrafficCop = NULL,  
- StorerKey = CASEMANIFEST.StorerKey,  
- Sku = CASEMANIFEST.Sku ,  
- Qty = CASEMANIFEST.Qty  
- FROM PALLETDETAIL, INSERTED, CASEMANIFEST   (NOLOCK)
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- AND (dbo.fnc_LTrim(dbo.fnc_RTrim(INSERTED.CaseID))) IS NOT NULL  
- SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
- IF @n_err <> 0  
- BEGIN  
- SELECT @n_continue = 3  
- SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=67603   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
- SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Update Failed On Table PALLETDETAIL. (ntrPalletDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
- END  
- IF @b_debug = 1  
- BEGIN  
- SELECT PALLETDETAIL.*  
- FROM PALLETDETAIL (NOLOCK), INSERTED, CASEMANIFEST (NOLOCK)  
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- END  
- END  
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
- IF @b_debug = 1  
- BEGIN  
- SELECT PALLETDETAIL.*  
- FROM PALLETDETAIL (NOLOCK), INSERTED, CASEMANIFEST   (NOLOCK)
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- END  
- UPDATE PALLETDETAIL  
- SET TrafficCop = NULL,  
- Qty = 1  
- FROM PALLETDETAIL, INSERTED, CASEMANIFEST (NOLOCK)
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- AND PALLETDETAIL.Qty = 0  
- SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
- IF @n_err <> 0  
- BEGIN  
- SELECT @n_continue = 3  
- SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=67603   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
- SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Update Failed On Table PALLETDETAIL. (ntrPalletDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
- END  
- IF @b_debug = 1  
- BEGIN  
- SELECT PALLETDETAIL.*  
- FROM PALLETDETAIL (NOLOCK), INSERTED, CASEMANIFEST   (NOLOCK)
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- SELECT INSERTED.*  
- FROM PALLETDETAI (NOLOCK)L, INSERTED, CASEMANIFEST (NOLOCK)  
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND CASEMANIFEST.CaseId = INSERTED.CaseId  
- END  
- END  
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
- IF EXISTS (SELECT *  
- FROM PALLETDETAIL (NOLOCK), INSERTED  
- WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey  
- AND PALLETDETAIL.CaseId = INSERTED.CaseId  
- AND (dbo.fnc_LTrim(dbo.fnc_RTrim(PALLETDETAIL.StorerKey)) IS NULL OR dbo.fnc_LTrim(dbo.fnc_RTrim(PALLETDETAIL.Sku)) IS NULL))  
- BEGIN  
- SELECT @n_continue = 3  
- SELECT @n_err=67604  
- SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": PALLETDETAIL.StorerKey or PALLETDETAIL.Sku may not be blank. (ntrPalletDetailAdd)"  
- END  
- END  
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
-          -- (ChewKP01) - Start  
-          IF Exists (SELECT 1 FROM INSERTED WITH (NOLOCK) WHERE INSERTED.PalletLineNumber = '0')  
-          BEGIN  
-                    
-              SELECT @cPalletLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletDetail.PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
-              FROM PalletDetail WITH (NOLOCK)  
-              JOIN INSERTED WITH (NOLOCK) ON (PalletDetail.PalletKey = INSERTED.PalletKey)  
-              WHERE PalletDetail.PalletKey = INSERTED.PalletKey  
-                
-                 
-              UPDATE PalletDetail  
-                  SET PalletLineNumber = @cPalletLine  
-              FROM INSERTED WITH (NOLOCK)  
-              WHERE PalletDetail.PalletKey = INSERTED.PalletKey  
-              AND PALLETDetail.PalletLineNumber = INSERTED.PalletLineNumber  
-                
-                    
-          END  
-          -- (ChewKP01) - End  
- END            
- IF @n_continue=1 or @n_continue=2  
- BEGIN  
- UPDATE CASEMANIFEST  
- SET ShipStatus = "9"  
- FROM CASEMANIFEST, INSERTED  
- WHERE CASEMANIFEST.CaseId = INSERTED.CaseId  
- AND INSERTED.Status = "9"  
- SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
- IF @n_err <> 0  
- BEGIN  
- SELECT @n_continue = 3  
- SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=67601   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
- SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Update Failed On Table ntrPalletDetailAdd. (ntrPalletDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
- END  
- END  
-      /* #INCLUDE <TRPALDA2.SQL> */  
- IF @n_continue=3  -- Error Occured - Process And Return  
- BEGIN  
- IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt  
- BEGIN  
- ROLLBACK TRAN  
- END  
- ELSE  
- BEGIN  
- WHILE @@TRANCOUNT > @n_starttcnt  
- BEGIN  
- COMMIT TRAN  
- END  
- END  
- execute nsp_logerror @n_err, @c_errmsg, "ntrPalletDetailAdd"  
- RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
- RETURN  
- END  
- ELSE  
- BEGIN  
- WHILE @@TRANCOUNT > @n_starttcnt  
- BEGIN  
- COMMIT TRAN  
- END  
- RETURN  
- END  
- END  
+END  
 GO
