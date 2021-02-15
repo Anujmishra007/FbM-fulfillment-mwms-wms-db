@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date         Author   Ver  Purposes                                   */
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_CCGenTagNo_Wrapper]  
    @c_StockTakeKey      NVARCHAR(10)
@@ -34,13 +36,11 @@ CREATE PROCEDURE [WM].[lsp_CCGenTagNo_Wrapper]
 ,  @c_UserName          NVARCHAR(128)= ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
-
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
 
@@ -51,48 +51,62 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-   
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
 
-   BEGIN TRY      
-      EXECUTE dbo.ispGenTagNo        
-         @c_StockTakeKey = @c_StockTakeKey         
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+
+      EXECUTE AS LOGIN = @c_UserName
+   END
+   --(mingle01) - END
+
+   --(mingle01) - START
+   BEGIN TRY  
+      BEGIN TRY      
+         EXECUTE dbo.ispGenTagNo        
+            @c_StockTakeKey = @c_StockTakeKey         
+      END TRY
+      BEGIN CATCH
+         SET @n_continue = 3      
+         SET @n_err = 550351
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenTagNo. (lsp_CCGenTagNo_Wrapper)'
+                       + '( ' + @c_errmsg + ' )'
+         GOTO EXIT_SP
+      END CATCH    
+
+      SET @n_Count = 0
+      SET @n_EmptyTag = 0
+      SELECT @n_Count    = COUNT(1)
+            ,@n_EmptyTag = ISNULL(SUM(CASE WHEN ISNULL(RTRIM(TagNo),'') = '' THEN 1 ELSE 0 END),0)
+      FROM CCDETAIL WITH (NOLOCK)
+      WHERE cckey = @c_StockTakeKey
+   
+      IF @n_Count > 0 AND @n_EmptyTag = 0 
+      BEGIN
+         SET @c_ErrMsg = 'Cycle Count Ref #: ' + @c_StockTakeKey + CHAR(13)
+                       + 'Tag # is generated Successfully'  
+         GOTO EXIT_SP
+      END
+      
    END TRY
+
    BEGIN CATCH
-      SET @n_continue = 3      
-      SET @n_err = 550351
+      SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenTagNo. (lsp_CCGenTagNo_Wrapper)'
-                    + '( ' + @c_errmsg + ' )'
       GOTO EXIT_SP
-   END CATCH    
-
-   SET @n_Count = 0
-   SET @n_EmptyTag = 0
-   SELECT @n_Count    = COUNT(1)
-         ,@n_EmptyTag = ISNULL(SUM(CASE WHEN ISNULL(RTRIM(TagNo),'') = '' THEN 1 ELSE 0 END),0)
-   FROM CCDETAIL WITH (NOLOCK)
-   WHERE cckey = @c_StockTakeKey
-   
-   IF @n_Count > 0 AND @n_EmptyTag = 0 
-   BEGIN
-      SET @c_ErrMsg = 'Cycle Count Ref #: ' + @c_StockTakeKey + CHAR(13)
-                    + 'Tag # is generated Successfully'  
-      GOTO EXIT_SP
-   END
-
-   EXIT_SP:
-   
+   END CATCH
+   --(mingle01) - END
+EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
