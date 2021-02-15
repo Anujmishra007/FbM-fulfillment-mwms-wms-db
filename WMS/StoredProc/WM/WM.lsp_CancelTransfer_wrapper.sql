@@ -24,8 +24,10 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
-/************************************************************************/   
+/* Date         Author   Ver  Purposes                                  */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_CancelTransfer_Wrapper]
     @c_Transferkey NVARCHAR(10)  
    ,@b_Success     INT = 1 OUTPUT 
@@ -34,54 +36,69 @@ CREATE PROCEDURE [WM].[lsp_CancelTransfer_Wrapper]
    ,@c_UserName    NVARCHAR(128) = ''
 AS
 BEGIN 
-    SET NOCOUNT ON
-    SET QUOTED_IDENTIFIER OFF
-    SET ANSI_NULLS OFF
-    SET CONCAT_NULL_YIELDS_NULL OFF
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
     
-    DECLARE @n_err2 INT
+   DECLARE @n_err2 INT
     
-    SET @n_Err = 0 
-    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   SET @n_Err = 0 
+
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
     
-    IF @n_Err <> 0 
-    BEGIN
+   IF @n_Err <> 0 
+   BEGIN
       GOTO EXIT_SP
-    END
+   END
                 
-    EXECUTE AS LOGIN = @c_UserName
-        
-    DECLARE @n_Continue              INT
-           ,@n_starttcnt             INT
+   EXECUTE AS LOGIN = @c_UserName
+   END
+   --(mingle01) - END
+    
+   --(mingle01) - START
+   BEGIN TRY    
+      DECLARE @n_Continue              INT
+            ,@n_starttcnt             INT
 
-    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
+      SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
     
-    IF @@TRANCOUNT = 0
-       BEGIN TRAN
+      IF @@TRANCOUNT = 0
+         BEGIN TRAN
 
-    IF @n_continue IN(1,2)
-    BEGIN      
-      BEGIN TRY      
-         UPDATE Transfer WITH (ROWLOCK)
-         SET Status = 'CANC'
-         WHERE TransferKey = @c_Transferkey
-      END TRY 
-      BEGIN CATCH
-         IF @n_err = 0 
-         BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err2 = ERROR_NUMBER()
-               SELECT @c_ErrMsg = ERROR_MESSAGE()
-             SELECT @n_err = 550251
-             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': ' + RTRIM(ISNULL(@c_errmsg,''))  + ' (lsp_CancelTransfer_Wrapper)' + ' (' 
-                           + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50),@n_err2),''))) + ' )'    
-         END
-      END CATCH             
-     END
+      IF @n_continue IN(1,2)
+      BEGIN      
+         BEGIN TRY      
+            UPDATE Transfer WITH (ROWLOCK)
+            SET Status = 'CANC'
+            WHERE TransferKey = @c_Transferkey
+         END TRY
     
-    EXIT_SP: 
-    REVERT
-    
+         BEGIN CATCH
+            IF @n_err = 0 
+            BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_err2 = ERROR_NUMBER()
+                  SELECT @c_ErrMsg = ERROR_MESSAGE()
+                  SELECT @n_err = 550251
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': ' + RTRIM(ISNULL(@c_errmsg,''))  + ' (lsp_CancelTransfer_Wrapper)' + ' (' 
+                              + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50),@n_err2),''))) + ' )'    
+            END
+         END CATCH             
+      END
+
+   END TRY
+
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
+EXIT_SP: 
     IF @n_continue=3  -- Error Occured - Process And Return  
     BEGIN  
        SELECT @b_success = 0  
@@ -108,7 +125,8 @@ BEGIN
           COMMIT TRAN  
        END  
        RETURN  
-    END                
+    END  
+    REVERT              
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_CancelTransfer_Wrapper] TO nSQL 

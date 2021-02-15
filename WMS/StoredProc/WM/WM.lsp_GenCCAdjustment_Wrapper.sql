@@ -25,6 +25,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_GenCCAdjustment_Wrapper]  
    @c_StockTakeKey      NVARCHAR(10)
@@ -36,12 +38,10 @@ CREATE PROCEDURE [WM].[lsp_GenCCAdjustment_Wrapper]
 ,  @c_UserName          NVARCHAR(128)= ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -53,131 +53,146 @@ BEGIN
    SET @c_ErrMsg = ''
    SET @n_Err = 0 
 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
    
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+
+      EXECUTE AS LOGIN = @c_UserName
    END
+   --(mingle01) - END
 
-   SELECT @c_CountNo = CONVERT(CHAR(1), ISNULL(FinalizeStage, 0))
-   FROM STOCKTAKESHEETPARAMETERS WITH (NOLOCK)
-   WHERE StockTakeKey = @c_StockTakeKey
-
-   IF @c_CountNo = '0'
-   BEGIN
-      SET @n_continue = 3 
-      SET @n_err = 552251
-      SET @c_ErrMsg= 'NSQL' +CONVERT(CHAR(6),@n_err) + ': None of the count was FINALISED, Please check with administrator.'
-                   + ' (lsp_GenCCAdjustment_Wrapper)' 
-      GOTO EXIT_SP
-   END
-
-   IF EXISTS ( SELECT 1  
-               FROM ADJUSTMENT WITH (NOLOCK) 
-               WHERE CustomerRefNo = @c_StockTakeKey 
-             )
-   BEGIN
-      SET @n_continue = 3 
-      SET @n_err = 552252
-      SET @c_ErrMsg= 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Adjustment Transaction Already Generated.'
-                   + ' (lsp_GenCCAdjustment_Wrapper)' 
-      GOTO EXIT_SP
-   END
-
-   SET @n_Count = 0
-   BEGIN TRY      
-      EXECUTE @n_Count = ispCheckOutstandingOrders        
-         @c_StockTakeKey = @c_StockTakeKey         
-      ,  @c_CountNo      = @c_CountNo
-      ,  @c_ByPalletLevel= @c_ByPalletLevel 
-   END TRY
-
-   BEGIN CATCH
-      SET @n_err = 552253
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckOutstandingOrders. (lsp_GenCCAdjustment_Wrapper)'
-                    + '( ' + @c_errmsg + ' )'
-   END CATCH    
-                   
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
-      GOTO EXIT_SP
-   END        
-
-   IF @n_Count > 0 
-   BEGIN
-      SET @n_continue = 3 
-      SET @n_err = 552254
-      SET @c_ErrMsg= 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Outstanding record(s) found!'
-                   + ' Please close all the Shipment Orders before you proceed. (lsp_GenCCAdjustment_Wrapper)' 
-      GOTO EXIT_SP
-   END
-
-   BEGIN TRY      
-      EXECUTE ispGenCCAdjustmentPost_MultiCnt        
-            @c_StockTakeKey = @c_StockTakeKey 
-         ,  @c_CountNo      = @c_CountNo
-         ,  @b_success      = @b_Success  OUTPUT
-         ,  @c_TaskDetailKey= ''
-         ,  @c_ByPalletLevel= @c_ByPalletLevel   
-         ,  @c_IDOnHold     = @c_IDOnHold        
-   END TRY
-
-   BEGIN CATCH
-      SET @n_err = 552255
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCCAdjustmentPost_MultiCnt. (lsp_GenCCAdjustment_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-   END CATCH    
-                  
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
-      GOTO EXIT_SP
-   END 
-
-   BEGIN TRY      
-      UPDATE STOCKTAKESHEETPARAMETERS WITH (ROWLOCK)
-         SET [Protect] = 'Y'
-            ,[PassWord]= 'POSTED' 
-            ,[Status]  = '9'
-            ,[EditWho] = @c_UserName
-            ,[EditDate]= GETDATE()
+   --(mingle01) - START
+   BEGIN TRY  
+      SELECT @c_CountNo = CONVERT(CHAR(1), ISNULL(FinalizeStage, 0))
+      FROM STOCKTAKESHEETPARAMETERS WITH (NOLOCK)
       WHERE StockTakeKey = @c_StockTakeKey
+
+      IF @c_CountNo = '0'
+      BEGIN
+         SET @n_continue = 3 
+         SET @n_err = 552251
+         SET @c_ErrMsg= 'NSQL' +CONVERT(CHAR(6),@n_err) + ': None of the count was FINALISED, Please check with administrator.'
+                      + ' (lsp_GenCCAdjustment_Wrapper)' 
+         GOTO EXIT_SP
+      END
+
+      IF EXISTS ( SELECT 1  
+                  FROM ADJUSTMENT WITH (NOLOCK) 
+                  WHERE CustomerRefNo = @c_StockTakeKey 
+                )
+      BEGIN
+         SET @n_continue = 3 
+         SET @n_err = 552252
+         SET @c_ErrMsg= 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Adjustment Transaction Already Generated.'
+                      + ' (lsp_GenCCAdjustment_Wrapper)' 
+         GOTO EXIT_SP
+      END
+
+      SET @n_Count = 0
+      BEGIN TRY      
+         EXECUTE @n_Count = ispCheckOutstandingOrders        
+            @c_StockTakeKey = @c_StockTakeKey         
+         ,  @c_CountNo      = @c_CountNo
+         ,  @c_ByPalletLevel= @c_ByPalletLevel 
+      END TRY
+
+      BEGIN CATCH
+         SET @n_err = 552253
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckOutstandingOrders. (lsp_GenCCAdjustment_Wrapper)'
+                       + '( ' + @c_errmsg + ' )'
+      END CATCH    
+                   
+      IF @b_success = 0 OR @n_Err <> 0        
+      BEGIN        
+         SET @n_continue = 3      
+         GOTO EXIT_SP
+      END        
+
+      IF @n_Count > 0 
+      BEGIN
+         SET @n_continue = 3 
+         SET @n_err = 552254
+         SET @c_ErrMsg= 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Outstanding record(s) found!'
+                      + ' Please close all the Shipment Orders before you proceed. (lsp_GenCCAdjustment_Wrapper)' 
+         GOTO EXIT_SP
+      END
+
+      BEGIN TRY      
+         EXECUTE ispGenCCAdjustmentPost_MultiCnt        
+               @c_StockTakeKey = @c_StockTakeKey 
+            ,  @c_CountNo      = @c_CountNo
+            ,  @b_success      = @b_Success  OUTPUT
+            ,  @c_TaskDetailKey= ''
+            ,  @c_ByPalletLevel= @c_ByPalletLevel   
+            ,  @c_IDOnHold     = @c_IDOnHold        
+      END TRY
+
+      BEGIN CATCH
+         SET @n_err = 552255
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCCAdjustmentPost_MultiCnt. (lsp_GenCCAdjustment_Wrapper)'
+                        + '( ' + @c_errmsg + ' )'
+      END CATCH    
+                  
+      IF @b_success = 0 OR @n_Err <> 0        
+      BEGIN        
+         SET @n_continue = 3      
+         GOTO EXIT_SP
+      END 
+
+      BEGIN TRY      
+         UPDATE STOCKTAKESHEETPARAMETERS WITH (ROWLOCK)
+            SET [Protect] = 'Y'
+               ,[PassWord]= 'POSTED' 
+               ,[Status]  = '9'
+               ,[EditWho] = @c_UserName
+               ,[EditDate]= GETDATE()
+         WHERE StockTakeKey = @c_StockTakeKey
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @n_err = 552256
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Update STOCKTAKESHEETPARAMETERS Fail. (lsp_CloseStockTake_Wrapper)'
+                        + '( ' + @c_errmsg + ' )'
+
+         GOTO EXIT_SP
+      END CATCH    
+          
+      SET @n_Count = 0
+      SELECT @n_Count = COUNT(1)  
+      FROM ADJUSTMENT WITH (NOLOCK) 
+      WHERE CustomerRefNo = @c_StockTakeKey 
+   
+      IF @n_Count = 0 
+      BEGIN
+         SET @c_ErrMsg = 'Stocktake are posted without variance to be adjusted.'
+      END
+      ELSE
+      BEGIN
+         SET @c_ErrMsg = 'Adjustment Generated Sucessfully!'
+      END
+   
    END TRY
 
    BEGIN CATCH
       SET @n_Continue = 3
-      SET @n_err = 552256
       SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Update STOCKTAKESHEETPARAMETERS Fail. (lsp_CloseStockTake_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-
       GOTO EXIT_SP
-   END CATCH    
-          
-   SET @n_Count = 0
-   SELECT @n_Count = COUNT(1)  
-   FROM ADJUSTMENT WITH (NOLOCK) 
-   WHERE CustomerRefNo = @c_StockTakeKey 
-   
-   IF @n_Count = 0 
-   BEGIN
-      SET @c_ErrMsg = 'Stocktake are posted without variance to be adjusted.'
-   END
-   ELSE
-   BEGIN
-      SET @c_ErrMsg = 'Adjustment Generated Sucessfully!'
-   END
-   
-   EXIT_SP:
+   END CATCH
+   --(mingle01) - END
+EXIT_SP:
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN

@@ -25,6 +25,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]  
    @c_StockTakeKey         NVARCHAR(10)
@@ -39,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]
 ,  @c_UserName             NVARCHAR(128)= ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -62,44 +62,156 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
 
-   IF @c_GenType = 'B'
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      IF @c_BlankCSheetHideLoc = 'Y' AND ISNULL(@n_BlankCSheetNoOfPage, 0) = 0
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+  
+      IF @n_Err <> 0 
       BEGIN
-         SET @n_Continue = 3
-         SET @n_err = 552401
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Please Key-in No Of Blank Count Sheet. (lsp_GenCountSheet_Blank_Wrapper)'
-         GOTO EXIT_SP      
-      END 
+         GOTO EXIT_SP
+      END
+
+      EXECUTE AS LOGIN = @c_UserName
    END
-   ELSE
-   BEGIN
-      SET @n_Count = 0
+   --(mingle01) - END
+
+   --(mingle01) - START
+   BEGIN TRY 
+
+      IF @c_GenType = 'B'
+      BEGIN
+         IF @c_BlankCSheetHideLoc = 'Y' AND ISNULL(@n_BlankCSheetNoOfPage, 0) = 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 552401
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Please Key-in No Of Blank Count Sheet. (lsp_GenCountSheet_Blank_Wrapper)'
+            GOTO EXIT_SP      
+         END 
+      END
+      ELSE
+      BEGIN
+         SET @n_Count = 0
  
-      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1 
+         IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1 
+         BEGIN
+            BEGIN TRY      
+               EXECUTE @n_Count = ispCheckOutstandingOrders        
+                  @c_StockTakeKey = @c_StockTakeKey         
+               ,  @c_CountNo = @c_CountNo 
+            END TRY
+
+            BEGIN CATCH
+               SET @n_err = 552402
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckOutstandingOrders. (lsp_GenCountSheet_Wrapper)'
+                              + '( ' + @c_errmsg + ' )'
+            END CATCH    
+                   
+            IF @b_success = 0 OR @n_Err <> 0        
+            BEGIN        
+               SET @n_continue = 3      
+               GOTO EXIT_SP
+            END        
+
+            IF @n_Count > 0 
+            BEGIN
+               SET @n_continue  = 3
+               SET @c_ErrMsg= 'Warning !' + CONVERT(NVARCHAR(10),@n_Count) + ' Outstanding record(s) found! Please close all the Shipment Orders before you proceed. ' + CHAR(13) 
+                              + 'Warning, System will generate Count Sheet even with Outstanding record(s) being found ! '
+                              + 'Are you sure you want to proceed?'
+               SET @n_WarningNo = 1
+               GOTO EXIT_SP
+            END
+         END
+      END
+
+      SET @n_Count = 0
+      BEGIN TRY
+         INSERT INTO #TMP_CC (DataCount)
+         EXECUTE ispCheckCCkey        
+          @c_StockTakeKey = @c_StockTakeKey
+      END TRY
+
+      BEGIN CATCH
+         SET @n_err = 552403
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckCCkey. (lsp_GenCountSheet_Wrapper)'
+                        + '( ' + @c_errmsg + ' )'
+      END CATCH    
+                   
+      IF @b_success = 0 OR @n_Err <> 0        
+      BEGIN        
+         SET @n_continue = 3      
+         GOTO EXIT_SP
+      END        
+
+      IF (SELECT DataCount FROM #TMP_CC) > 0 
+      BEGIN
+         SET @n_continue = 3    
+         SET @n_err = 552404
+         SET @c_ErrMsg = 'CCDetail Transaction Found ! Regeneration Not Allow.' 
+      
+         GOTO EXIT_SP
+      END
+
+      IF @c_GenType = 'B'
       BEGIN
          BEGIN TRY      
-            EXECUTE @n_Count = ispCheckOutstandingOrders        
-               @c_StockTakeKey = @c_StockTakeKey         
-            ,  @c_CountNo = @c_CountNo 
+         EXECUTE ispGenBlankSheet        
+            @c_StockTakeKey = @c_StockTakeKey         
          END TRY
 
          BEGIN CATCH
-            SET @n_err = 552402
+            SET @n_err = 552405
             SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckOutstandingOrders. (lsp_GenCountSheet_Wrapper)'
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenBlankSheet. (lsp_GenCountSheet_Blank_Wrapper)'
+                           + '( ' + @c_errmsg + ' )'
+         END CATCH    
+                   
+         IF @b_success = 0 OR @n_Err <> 0        
+         BEGIN        
+            SET @n_continue = 3      
+            GOTO EXIT_SP
+         END  
+      END
+
+      IF @c_GenType = 'N'
+      BEGIN
+         BEGIN TRY      
+            EXECUTE ispGenCountSheet        
+               @c_StockTakeKey = @c_StockTakeKey         
+         END TRY
+
+         BEGIN CATCH
+            SET @n_err = 552406
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCountSheet. (lsp_GenCountSheet_Wrapper)'
+                           + '( ' + @c_errmsg + ' )'
+         END CATCH    
+                  
+         IF @b_success = 0 OR @n_Err <> 0        
+         BEGIN        
+            SET @n_continue = 3      
+            GOTO EXIT_SP
+         END        
+      END
+
+      IF @c_GenType = 'U'
+      BEGIN
+         BEGIN TRY      
+            EXECUTE ispCheckUCCBal        
+               @c_StockTakeKey = @c_StockTakeKey         
+         END TRY
+
+         BEGIN CATCH
+            SET @n_err = 552407
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckUCCBal. (lsp_GenCountSheet_UCC_Wrapper)'
                            + '( ' + @c_errmsg + ' )'
          END CATCH    
                    
@@ -109,159 +221,64 @@ BEGIN
             GOTO EXIT_SP
          END        
 
+         SET @n_Count = 0
+         SELECT TOP 1 @n_Count = 1
+         FROM STOCKTAKEERRORREPORT WITH (NOLOCK)
+         WHERE StockTakeKey = @c_StockTakeKey
+
          IF @n_Count > 0 
          BEGIN
-            SET @n_continue  = 3
-            SET @c_ErrMsg= 'Warning !' + CONVERT(NVARCHAR(10),@n_Count) + ' Outstanding record(s) found! Please close all the Shipment Orders before you proceed. ' + CHAR(13) 
-                           + 'Warning, System will generate Count Sheet even with Outstanding record(s) being found ! '
-                           + 'Are you sure you want to proceed?'
-            SET @n_WarningNo = 1
+            SET @n_continue = 3    
+            SET @n_err = 552408
+            SET @c_ErrMsg = 'UCC Qty Not Tally With LOTXLOCXID. Please Refer to STOCKTAKEERRORREPORT. (lsp_GenCountSheet_UCC_Wrapper)'
+      
             GOTO EXIT_SP
          END
+
+         BEGIN TRY      
+            EXECUTE ispGenCountSheetByUCC        
+               @c_StockTakeKey = @c_StockTakeKey         
+         END TRY
+
+         BEGIN CATCH
+            SET @n_err = 552409
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCountSheetByUCC. (lsp_GenCountSheet_UCC_Wrapper)'
+                           + '( ' + @c_errmsg + ' )'
+         END CATCH    
+                   
+         IF @b_success = 0 OR @n_Err <> 0        
+         BEGIN        
+            SET @n_continue = 3      
+            GOTO EXIT_SP
+         END        
       END
-   END
-
-   SET @n_Count = 0
-   BEGIN TRY
-      INSERT INTO #TMP_CC (DataCount)
-      EXECUTE ispCheckCCkey        
-       @c_StockTakeKey = @c_StockTakeKey
-   END TRY
-
-   BEGIN CATCH
-      SET @n_err = 552403
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckCCkey. (lsp_GenCountSheet_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-   END CATCH    
-                   
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
-      GOTO EXIT_SP
-   END        
-
-   IF (SELECT DataCount FROM #TMP_CC) > 0 
-   BEGIN
-      SET @n_continue = 3    
-      SET @n_err = 552404
-      SET @c_ErrMsg = 'CCDetail Transaction Found ! Regeneration Not Allow.' 
-      
-      GOTO EXIT_SP
-   END
-
-   IF @c_GenType = 'B'
-   BEGIN
-      BEGIN TRY      
-      EXECUTE ispGenBlankSheet        
-         @c_StockTakeKey = @c_StockTakeKey         
-      END TRY
-
-      BEGIN CATCH
-         SET @n_err = 552405
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenBlankSheet. (lsp_GenCountSheet_Blank_Wrapper)'
-                        + '( ' + @c_errmsg + ' )'
-      END CATCH    
-                   
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_continue = 3      
-         GOTO EXIT_SP
-      END  
-   END
-
-   IF @c_GenType = 'N'
-   BEGIN
-      BEGIN TRY      
-         EXECUTE ispGenCountSheet        
-            @c_StockTakeKey = @c_StockTakeKey         
-      END TRY
-
-      BEGIN CATCH
-         SET @n_err = 552406
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCountSheet. (lsp_GenCountSheet_Wrapper)'
-                        + '( ' + @c_errmsg + ' )'
-      END CATCH    
-                  
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_continue = 3      
-         GOTO EXIT_SP
-      END        
-   END
-
-   IF @c_GenType = 'U'
-   BEGIN
-      BEGIN TRY      
-         EXECUTE ispCheckUCCBal        
-            @c_StockTakeKey = @c_StockTakeKey         
-      END TRY
-
-      BEGIN CATCH
-         SET @n_err = 552407
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckUCCBal. (lsp_GenCountSheet_UCC_Wrapper)'
-                        + '( ' + @c_errmsg + ' )'
-      END CATCH    
-                   
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_continue = 3      
-         GOTO EXIT_SP
-      END        
 
       SET @n_Count = 0
-      SELECT TOP 1 @n_Count = 1
-      FROM STOCKTAKEERRORREPORT WITH (NOLOCK)
-      WHERE StockTakeKey = @c_StockTakeKey
+      SELECT @c_CCSheetNo_Min = ISNULL(MIN(CCSheetNo),'')
+            ,@c_CCSheetNo_Max = ISNULL(MAX(CCSheetNo),'') 
+            ,@n_Count = COUNT(1)
+      FROM CCDETAIL WITH (NOLOCK)
+      WHERE cckey = @c_StockTakeKey
 
       IF @n_Count > 0 
       BEGIN
-         SET @n_continue = 3    
-         SET @n_err = 552408
-         SET @c_ErrMsg = 'UCC Qty Not Tally With LOTXLOCXID. Please Refer to STOCKTAKEERRORREPORT. (lsp_GenCountSheet_UCC_Wrapper)'
+         SET @c_ErrMsg = 'Cycle Count Ref #: ' + @c_StockTakeKey + CHAR(13)
+                       + 'Count Sheet # From: '+ @c_CCSheetNo_Min + ' To ' + @c_CCSheetNo_Max + CHAR(13)
+                       + 'Generate Successfully'  
       
          GOTO EXIT_SP
       END
 
-      BEGIN TRY      
-         EXECUTE ispGenCountSheetByUCC        
-            @c_StockTakeKey = @c_StockTakeKey         
-      END TRY
+   END TRY
 
-      BEGIN CATCH
-         SET @n_err = 552409
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCountSheetByUCC. (lsp_GenCountSheet_UCC_Wrapper)'
-                        + '( ' + @c_errmsg + ' )'
-      END CATCH    
-                   
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_continue = 3      
-         GOTO EXIT_SP
-      END        
-   END
-
-   SET @n_Count = 0
-   SELECT @c_CCSheetNo_Min = ISNULL(MIN(CCSheetNo),'')
-         ,@c_CCSheetNo_Max = ISNULL(MAX(CCSheetNo),'') 
-         ,@n_Count = COUNT(1)
-   FROM CCDETAIL WITH (NOLOCK)
-   WHERE cckey = @c_StockTakeKey
-
-   IF @n_Count > 0 
-   BEGIN
-      SET @c_ErrMsg = 'Cycle Count Ref #: ' + @c_StockTakeKey + CHAR(13)
-                    + 'Count Sheet # From: '+ @c_CCSheetNo_Min + ' To ' + @c_CCSheetNo_Max + CHAR(13)
-                    + 'Generate Successfully'  
-      
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
-   END
-
-   EXIT_SP:
+   END CATCH
+   --(mingle01) - END
+EXIT_SP: 
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
