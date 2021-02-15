@@ -1,13 +1,22 @@
-SET ANSI_NULLS OFF      ;   SET QUOTED_IDENTIFIER OFF;
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_OrderSumIntegrity]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_OrderSumIntegrity]  
+END
+GO 
+
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************/
 /* Updates:                                                                */
 /* Date         Author      Ver.  Purposes                                 */
 /* 02-Jun-2020  KHLim       1.0   Data Integrity detect & patch            */
 /* 13-Nov-2020  KHLim       1.1   Get PickDate from DocStatusTrack         */
 /***************************************************************************/
--- Test: EXEC dbo.isp_OrderSumIntegrity @b_debug=1
-CREATE OR ALTER PROC dbo.isp_OrderSumIntegrity
+CREATE PROC dbo.isp_OrderSumIntegrity
    @b_debug  INT = 0
   ,@FreqInterval smallint = 10
 AS    

@@ -1,12 +1,39 @@
-SET ANSI_NULLS OFF      ;   SET QUOTED_IDENTIFIER OFF;
+
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_OrderStage]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_OrderStage]  
+END
+GO 
+
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 /***************************************************************************/
+/* Stored Procedure: isp_OrderStage                                        */    
+/* Creation Date: 19-Apr-2020                                              */    
+/* Copyright: IDS                                                          */    
+/* Written by: KHLim                                                       */    
+/*                                                                         */    
+/* Purpose: Staging shipment Orders and store in Summary table             */    
+/*                                                                         */    
+/* Called By:                                                              */    
+/*                                                                         */    
+/* PVCS Version: 1.0                                                       */    
+/*                                                                         */    
+/* Version: 5.4                                                            */    
+/*                                                                         */    
+/* Data Modifications:                                                     */    
+/*                                                                         */    
 /* Updates:                                                                */
 /* Date         Author      Ver.  Purposes                                 */
 /* 19-Apr-2020  KHLim   Staging shipment Orders and store in Summary table */
 /* 12-Nov-2020  KHLim       1.1   Get PickDate from DocStatusTrack         */
 /***************************************************************************/
-CREATE OR ALTER PROC  dbo.isp_OrderStage
+CREATE   PROC  [dbo].[isp_OrderStage]
    @d_StartDate datetime  = NULL -- last Cut Off time
   ,@d_Date  smalldatetime = NULL
   ,@nDaysAgo smallint = 14
@@ -261,3 +288,6 @@ BEGIN
 END
 
 END
+GO
+
+
