@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]  
    @c_Facility             NVARCHAR(10) = ''
@@ -49,12 +51,10 @@ CREATE PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]
 ,  @c_UserName             NVARCHAR(128)= ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue     INT = 1
          , @n_StartTCnt    INT = @@TRANCOUNT 
@@ -65,91 +65,107 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
+
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
    
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
-
-   IF ISNULL(RTRIM(@c_Facility),'') = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 554901
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Facility cannot be blank. (lsp_ConfirmReplen_Wrapper)'
-      GOTO EXIT_SP
-   END
-    
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN
-      SET @n_WarningNo = 1
-      SET @c_ErrMsg = 'Confirm Replenisment ?'
-      GOTO EXIT_SP     
-   END  
-   
-   IF @c_Replenishmentkey = ''
-   BEGIN
-      BEGIN TRY
-         EXEC nsp_ConfirmReplenishment
-            @c_Zone01 = @c_Facility      
-         ,  @c_Zone02 = @c_Zone02       
-         ,  @c_Zone03 = @c_Zone03        
-         ,  @c_Zone04 = @c_Zone04        
-         ,  @c_Zone05 = @c_Zone05        
-         ,  @c_Zone06 = @c_Zone06        
-         ,  @c_Zone07 = @c_Zone07        
-         ,  @c_Zone08 = @c_Zone08        
-         ,  @c_Zone09 = @c_Zone09        
-         ,  @c_Zone10 = @c_Zone10        
-         ,  @c_Zone11 = @c_Zone11        
-         ,  @c_Zone12 = @c_Zone12 
-         ,  @c_Storerkey= @c_Storerkey 
-         ,  @c_ReplGroup= @c_ReplGroup
-         ,  @b_Success  = @b_Success   OUTPUT 
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_Errmsg   = @c_Errmsg    OUTPUT
-
-      END TRY
-      BEGIN CATCH
-         SET @n_err = 554902
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                       + ': Error Executing nsp_ConfirmReplenishment. (lsp_ConfirmReplen_Wrapper)'
-                       + '( ' + @c_ErrMsg + ' )'
-      END CATCH
-
-      IF @b_Success = 0 OR @n_Err <> 0 
+      IF @n_Err <> 0 
       BEGIN
-         SET @n_continue = 3
-         GOTO EXIT_SP 
+         GOTO EXIT_SP
       END
+
+      EXECUTE AS LOGIN = @c_UserName
    END
-   ELSE
-   BEGIN
-      BEGIN TRY
-         UPDATE REPLENISHMENT
-            SET Confirmed = 'Y'
-               ,EditWho = SUSER_SNAME()
-               ,EditDate= GETDATE()
-         WHERE ReplenishmentKey = @c_ReplenishmentKey
-      END TRY
-      BEGIN CATCH
-         SET @n_continue = 3   
-         SET @n_err = 554903
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                       + ': Update REPLENISHMENT table fail. (lsp_ConfirmReplen_Wrapper)'
-                       + '( ' + @c_ErrMsg + ' )'
-         GOTO EXIT_SP 
-      END CATCH
+   --(mingle01) - END
+
+   --(mingle01) - START
+   BEGIN TRY
+      IF ISNULL(RTRIM(@c_Facility),'') = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 554901
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Facility cannot be blank. (lsp_ConfirmReplen_Wrapper)'
+         GOTO EXIT_SP
+      END
+    
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN
+         SET @n_WarningNo = 1
+         SET @c_ErrMsg = 'Confirm Replenisment ?'
+         GOTO EXIT_SP     
+      END  
+   
+      IF @c_Replenishmentkey = ''
+      BEGIN
+         BEGIN TRY
+            EXEC nsp_ConfirmReplenishment
+               @c_Zone01 = @c_Facility      
+            ,  @c_Zone02 = @c_Zone02       
+            ,  @c_Zone03 = @c_Zone03        
+            ,  @c_Zone04 = @c_Zone04        
+            ,  @c_Zone05 = @c_Zone05        
+            ,  @c_Zone06 = @c_Zone06        
+            ,  @c_Zone07 = @c_Zone07        
+            ,  @c_Zone08 = @c_Zone08        
+            ,  @c_Zone09 = @c_Zone09        
+            ,  @c_Zone10 = @c_Zone10        
+            ,  @c_Zone11 = @c_Zone11        
+            ,  @c_Zone12 = @c_Zone12 
+            ,  @c_Storerkey= @c_Storerkey 
+            ,  @c_ReplGroup= @c_ReplGroup
+            ,  @b_Success  = @b_Success   OUTPUT 
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_Errmsg   = @c_Errmsg    OUTPUT
+
+         END TRY
+         BEGIN CATCH
+            SET @n_err = 554902
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                          + ': Error Executing nsp_ConfirmReplenishment. (lsp_ConfirmReplen_Wrapper)'
+                          + '( ' + @c_ErrMsg + ' )'
+         END CATCH
+
+         IF @b_Success = 0 OR @n_Err <> 0 
+         BEGIN
+            SET @n_continue = 3
+            GOTO EXIT_SP 
+         END
+      END
+      ELSE
+      BEGIN
+         BEGIN TRY
+            UPDATE REPLENISHMENT
+               SET Confirmed = 'Y'
+                  ,EditWho = SUSER_SNAME()
+                  ,EditDate= GETDATE()
+            WHERE ReplenishmentKey = @c_ReplenishmentKey
+         END TRY
+         BEGIN CATCH
+            SET @n_continue = 3   
+            SET @n_err = 554903
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                          + ': Update REPLENISHMENT table fail. (lsp_ConfirmReplen_Wrapper)'
+                          + '( ' + @c_ErrMsg + ' )'
+            GOTO EXIT_SP 
+         END CATCH
   
-   END
-   EXIT_SP:
+      END
+   END TRY
+
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
+EXIT_SP:
    
    IF @n_Continue = 3   
    BEGIN
