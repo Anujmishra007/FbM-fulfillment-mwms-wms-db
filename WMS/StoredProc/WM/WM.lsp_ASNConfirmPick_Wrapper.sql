@@ -15,15 +15,16 @@ GO
 /*                                                                      */  
 /* Called By: XDock Confirm Pick                                        */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date        Author   Ver   Purposes                                  */  
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
+/* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_ASNConfirmPick_Wrapper]
   @c_StorerKey    NVARCHAR(15) ,
@@ -42,15 +43,19 @@ BEGIN
    SET @b_Success = 0
 
    --EXECUTE AS LOGIN=@c_UserName
+   
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   IF SUSER_SNAME() <> @c_UserName     --(Wan01) - START
+   BEGIN    
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END 
+      
+      EXECUTE AS LOGIN = @c_UserName
+   END                                 --(Wan01) - END
     
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
 
@@ -73,7 +78,9 @@ BEGIN
             
    END TRY  
   
-   BEGIN CATCH    
+   BEGIN CATCH  
+      SET @b_Success = 0               --(Wan01) 
+      SET @c_ErrMsg  = ERROR_MESSAGE() --(Wan01)
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch         
    

@@ -1,0 +1,16 @@
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_RTRIM]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
+DROP FUNCTION [dbo].[fnc_RTRIM]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+CREATE FUNCTION [dbo].[fnc_RTRIM] (@cString NVARCHAR(max))  
+RETURNS NVARCHAR(max) AS  
+BEGIN 
+   RETURN CASE WHEN RTRIM(@cString) = '' THEN NULL ELSE RTRIM(@cString) END
+END
+GO
+GRANT EXECUTE ON [dbo].[fnc_RTRIM] TO nSQL 
+GO

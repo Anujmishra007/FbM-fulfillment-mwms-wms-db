@@ -18,7 +18,7 @@ GO
 /*                                                                      */      
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
+/* 15-Jan-2021 Wan01    1.2   Missing Continue = 3 for error            */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMBolDetail_Delete] 
       @c_MBOLkey              NVARCHAR(10)                                                                                                                    
@@ -90,6 +91,7 @@ BEGIN
    END TRY
 
    BEGIN CATCH
+      SET @n_Continue = 3                 --(Wan01)
       SET @n_Err = 557301
       SET @c_ErrMsg = ERROR_MESSAGE()
       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete Mboldetail Fail. (lsp_WaveMBolDetail_Delete)'   

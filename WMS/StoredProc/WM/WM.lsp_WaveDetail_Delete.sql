@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,7 @@ GO
 /* 27-Oct-2020 LZG      1.1   Extended @c_UserName length to 128 (ZG01) */
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
+/* 15-Jan-2021 Wan01    1.2   Add Big Outer Begin try/Catch             */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveDetail_Delete] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -72,172 +73,183 @@ BEGIN
          @c_UserName = @c_UserName  OUTPUT
       ,  @n_Err      = @n_Err       OUTPUT
       ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END 
+                   
    -- SWT02
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXECUTE AS LOGIN = @c_UserName      
    END
 
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   IF @n_ErrGroupKey IS NULL
-   BEGIN 
-      SET @n_ErrGroupKey = 0
-   END
-
-   SET @c_Orderkey = ''
-   SET @c_Loadkey = ''
-   SET @c_MBOLkey = ''
-   SELECT @c_Orderkey = WD.Orderkey
-         ,@c_Loadkey  = ISNULL(OH.Loadkey,'')
-         ,@c_MBOLkey  = ISNULL(OH.MBOLkey,'')
-   FROM WAVEDETAIL WD WITH (NOLOCK) 
-   JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)
-   WHERE WaveDetailKey = @c_WaveDetailKey
-
-   IF @c_MBOLkey <> ''
-   BEGIN
-      SET @c_MBOLLineNumber = ''
-      SELECT @c_MBOLLineNumber = MD.MBOLLineNumber
-      FROM MBOLDETAIL MD WITH (NOLOCK)
-      WHERE MD.MBOLkey = @c_MBOLkey
-      AND   MD.Orderkey= @c_Orderkey
-
-      IF @c_MBOLLineNumber <> ''
-      BEGIN
-         BEGIN TRY
-            DELETE FROM MBOLDETAIL
-            WHERE MBOLkey = @c_MBOLkey
-            AND  MBOLLineNumber = @c_MBOLLineNumber
-         END TRY
-
-         BEGIN CATCH
-            SET @n_Err = 557001
-            SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete MBOLDETAIL Fail. (lsp_WaveDetail_Delete)'   
-                           + '(' + @c_ErrMsg + ')' 
-                    
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_WaveKey
-               ,  @c_Refkey2     = @c_WaveDetailkey
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-            IF (XACT_STATE()) = -1  
-            BEGIN
-               ROLLBACK TRAN
-
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END 
-            GOTO EXIT_SP
-         END CATCH
+   BEGIN TRY --(Wan01) - START
+      IF @n_ErrGroupKey IS NULL
+      BEGIN 
+         SET @n_ErrGroupKey = 0
       END
-   END
 
-   IF @c_Loadkey <> ''
-   BEGIN
-      SET @c_LoadLineNumber = ''
-      SELECT @c_LoadLineNumber = LPD.LoadLineNumber
-      FROM LOADPLANDETAIL LPD WITH (NOLOCK)
-      WHERE LPD.Loadkey = @c_Loadkey
-      AND   LPD.Orderkey= @c_Orderkey
-
-      IF @c_LoadLineNumber <> ''
-      BEGIN
-         BEGIN TRY
-            DELETE FROM LOADPLANDETAIL
-            WHERE Loadkey = @c_Loadkey
-            AND  LoadLineNumber = @c_LoadLineNumber
-         END TRY
-
-         BEGIN CATCH
-            SET @n_Err = 557002
-            SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete LOADPLANDETAIL Fail. (lsp_WaveDetail_Delete)'   
-                           + '(' + @c_ErrMsg + ')' 
-                    
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_WaveKey
-               ,  @c_Refkey2     = @c_WaveDetailkey
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-            IF (XACT_STATE()) = -1  
-            BEGIN
-               ROLLBACK TRAN
-
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END 
-            GOTO EXIT_SP
-         END CATCH
-      END
-   END
-
-   BEGIN TRY
-      SET @b_Deleted = 1
-
-      DELETE WAVEDETAIL 
+      SET @c_Orderkey = ''
+      SET @c_Loadkey = ''
+      SET @c_MBOLkey = ''
+      SELECT @c_Orderkey = WD.Orderkey
+            ,@c_Loadkey  = ISNULL(OH.Loadkey,'')
+            ,@c_MBOLkey  = ISNULL(OH.MBOLkey,'')
+      FROM WAVEDETAIL WD WITH (NOLOCK) 
+      JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)
       WHERE WaveDetailKey = @c_WaveDetailKey
 
-   END TRY
-
-   BEGIN CATCH
-      SET @n_Err = 557003
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete WAVEDETAIL Fail. (lsp_WaveDetail_Delete)'   
-                     + '(' + @c_ErrMsg + ')' 
-                    
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = @c_WaveDetailkey
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-      IF (XACT_STATE()) = -1  
+      IF @c_MBOLkey <> ''
       BEGIN
-         ROLLBACK TRAN
+         SET @c_MBOLLineNumber = ''
+         SELECT @c_MBOLLineNumber = MD.MBOLLineNumber
+         FROM MBOLDETAIL MD WITH (NOLOCK)
+         WHERE MD.MBOLkey = @c_MBOLkey
+         AND   MD.Orderkey= @c_Orderkey
 
-         WHILE @@TRANCOUNT < @n_StartTCnt
+         IF @c_MBOLLineNumber <> ''
          BEGIN
-            BEGIN TRAN
-         END
-      END 
-   END CATCH
+            BEGIN TRY
+               DELETE FROM MBOLDETAIL
+               WHERE MBOLkey = @c_MBOLkey
+               AND  MBOLLineNumber = @c_MBOLLineNumber
+            END TRY
 
+            BEGIN CATCH
+               SET @n_Continue=3                --(Wan01)
+               SET @n_Err = 557001
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete MBOLDETAIL Fail. (lsp_WaveDetail_Delete)'   
+                              + '(' + @c_ErrMsg + ')' 
+                    
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_WaveDetailkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+               IF (XACT_STATE()) = -1  
+               BEGIN
+                  ROLLBACK TRAN
+
+                  WHILE @@TRANCOUNT < @n_StartTCnt
+                  BEGIN
+                     BEGIN TRAN
+                  END
+               END 
+               GOTO EXIT_SP
+            END CATCH
+         END
+      END
+
+      IF @c_Loadkey <> ''
+      BEGIN
+         SET @c_LoadLineNumber = ''
+         SELECT @c_LoadLineNumber = LPD.LoadLineNumber
+         FROM LOADPLANDETAIL LPD WITH (NOLOCK)
+         WHERE LPD.Loadkey = @c_Loadkey
+         AND   LPD.Orderkey= @c_Orderkey
+
+         IF @c_LoadLineNumber <> ''
+         BEGIN
+            BEGIN TRY
+               DELETE FROM LOADPLANDETAIL
+               WHERE Loadkey = @c_Loadkey
+               AND  LoadLineNumber = @c_LoadLineNumber
+            END TRY
+
+            BEGIN CATCH
+               SET @n_Continue=3                --(Wan01)
+               SET @n_Err = 557002
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete LOADPLANDETAIL Fail. (lsp_WaveDetail_Delete)'   
+                              + '(' + @c_ErrMsg + ')' 
+                    
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_WaveDetailkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+               IF (XACT_STATE()) = -1  
+               BEGIN
+                  ROLLBACK TRAN
+
+                  WHILE @@TRANCOUNT < @n_StartTCnt
+                  BEGIN
+                     BEGIN TRAN
+                  END
+               END 
+               GOTO EXIT_SP
+            END CATCH
+         END
+      END
+
+      BEGIN TRY
+         SET @b_Deleted = 1
+
+         DELETE WAVEDETAIL 
+         WHERE WaveDetailKey = @c_WaveDetailKey
+
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Continue=3                --(Wan01)
+         SET @n_Err = 557003
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete WAVEDETAIL Fail. (lsp_WaveDetail_Delete)'   
+                        + '(' + @c_ErrMsg + ')' 
+                    
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_WaveDetailkey
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+         IF (XACT_STATE()) = -1  
+         BEGIN
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+         END 
+      END CATCH
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue=3 
+      SET @c_ErrMsg = ERROR_MESSAGE()  
+      GOTO EXIT_SP             
+   END CATCH
+   --(Wan01) - END
 EXIT_SP:
    IF @b_Deleted = 1
    BEGIN     

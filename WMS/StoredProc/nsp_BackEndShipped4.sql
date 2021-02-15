@@ -1,7 +1,16 @@
-SET QUOTED_IDENTIFIER OFF
-GO
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_BackEndShipped4]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[nsp_BackEndShipped4]  
+END
+GO 
+
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 /************************************************************************/
 /* Stored Procedure: nsp_BackEndShipped4                                */
 /* Creation Date:                                                       */
@@ -43,7 +52,7 @@ GO
 /* 01-Nov-2020  SHONG        Prevent rollback to pickdetail update      */  
 /*                           and Log Short Qty to ErrLog Table          */  
 /************************************************************************/
-CREATE OR ALTER PROCEDURE [dbo].[nsp_BackEndShipped4]
+CREATE PROCEDURE [dbo].[nsp_BackEndShipped4]
      @cStorerKey NVARCHAR(15),
      @cMBOLKey   NVARCHAR(10) -- For one storer, pass in the Storerkey; For All Storer, pass in '%'
    , @b_debug    INT = 0 -- Leong01
@@ -355,9 +364,6 @@ BEGIN
    END
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
+
 GRANT EXECUTE ON nsp_BackEndShipped4 to NSQL
 GO

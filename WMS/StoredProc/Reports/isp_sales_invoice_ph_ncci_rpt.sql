@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-01-29  WLChooi  1.1   WMS-16171 Change UnitPrice Logic (WL01)   */
+/* 2021-02-11  WLChooi  1.2   Bug Fix for WMS-16171 (WL02)              */
 /************************************************************************/
 CREATE PROC isp_sales_invoice_ph_ncci_rpt  
             @c_OrderKey     NVARCHAR(10)  
@@ -118,7 +119,7 @@ BEGIN
       ,  SKUDescr          NVARCHAR(60)  NULL DEFAULT('')  
       ,  UOMQTY            INT   DEFAULT (0)
       ,  TAXQTY            DECIMAL(10,2) NULL DEFAULT(0.00) 
-      ,  UNITPRICE         DECIMAL(10,8) NULL DEFAULT(0.00)   --WL01  
+      ,  UNITPRICE         DECIMAL(10,4) NULL DEFAULT(0.00)   --WL01   --WL02
       ,  PQTY              INT      
       ,  TTLSVAT           DECIMAL(10,2) NULL
       ,  ST_Address1       NVARCHAR(45)   
@@ -350,7 +351,12 @@ BEGIN
       END 
 
       --SET @n_PriceAmt = (@n_uomqty * @n_unitprice) - ((@n_uomqty * @n_unitprice)*(@n_tax01/100))   --WL01
-      SET @n_PriceAmt = @n_ExtPrice - (@n_ExtPrice * (@n_tax01/100))   --WL01
+      --WL02 S
+      IF @c_Destination = 'H'
+         SET @n_PriceAmt = (@n_ExtPrice - (@n_ExtPrice * (@n_tax01/100))) * 1.12
+      ELSE
+         SET @n_PriceAmt = @n_ExtPrice - (@n_ExtPrice * (@n_tax01/100))   --WL01
+      --WL02 E
 
       UPDATE #SALESINVRPT
       SET PriceAmt = @n_PriceAmt

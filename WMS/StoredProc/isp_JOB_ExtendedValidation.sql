@@ -1,3 +1,14 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_JOB_ExtendedValidation]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_JOB_ExtendedValidation]   
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /************************************************************************/
 /* Store Procedure: isp_JOB_ExtendedValidation                          */
@@ -20,7 +31,7 @@
 /* Date         Author    Ver.  Purposes                                */
 /* 19-Jul-2017  JayLim    1.2   Performance tune-reduce cache log (jay01)*/
 /************************************************************************/
-ALTER PROC [dbo].[isp_JOB_ExtendedValidation] 
+CREATE PROC [dbo].[isp_JOB_ExtendedValidation] 
       @c_JobKey               NVARCHAR(10)  
    ,  @c_JobValidationRules   NVARCHAR(30) 
    ,  @b_Success              INT = 1        OUTPUT  
@@ -341,3 +352,8 @@ ELSE
    SET @b_Success = 1
 
 -- End Procedure
+GO
+
+
+GRANT EXECUTE ON [dbo].[isp_JOB_ExtendedValidation] TO NSQL  
+GO 

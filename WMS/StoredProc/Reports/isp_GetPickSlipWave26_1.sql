@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */   
 /* 2021-02-08  WLChooi  1.1   WMS-16289 - Get WaveSeqOfDay from NCounter*/
 /*                            (WL01)                                    */
+/* 2021-02-15  WLChooi  1.2   Fix Bug for WMS-16289 (WL02)              */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave26_1
             @c_Wavekey        NVARCHAR(10)
@@ -141,7 +142,8 @@ BEGIN
         , @n_err       =  @n_err        OUTPUT    
         , @c_errmsg    =  @c_errmsg     OUTPUT    
         
-      SET @c_WaveSeq = LTRIM(REPLACE(@c_KeyCount,'0',''))
+      --SET @c_WaveSeq = LTRIM(REPLACE(@c_KeyCount,'0',''))   --WL02
+      SET @c_WaveSeq = SUBSTRING(@c_KeyCount, PATINDEX('%[^0]%', @c_KeyCount + '.'), LEN(@c_KeyCount))   --WL02
 
       UPDATE WAVE WITH (ROWLOCK)
       SET UserDefine02 = @c_WaveSeq,

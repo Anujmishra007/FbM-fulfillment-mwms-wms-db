@@ -4,6 +4,11 @@ BEGIN
 END
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************/
 /* Trigger:  ntrContainerHeaderAdd                                         */
 /* Creation Date:                                                          */
@@ -30,6 +35,8 @@ GO
 /* Date         Author    Ver.  Purposes                                   */
 /* 17-Mar-2009  TLTING          Change user_name() to SUSER_SNAME()        */
 /* 31-Mar-2020  kocy      1.1   Skip when data move from Archive (kocy01)  */
+/* 13-Jan-2021  Shong     1.2   Comment the update for AddWho... Schema    */
+/*                              Default already have this. Redundancy      */
 /***************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrContainerHeaderAdd]
@@ -75,25 +82,25 @@ CREATE TRIGGER [dbo].[ntrContainerHeaderAdd]
    END
  END
 
- IF @n_continue=1 or @n_continue=2
- BEGIN
-   UPDATE CONTAINER
-   SET TrafficCop = NULL,
-   AddDate = GETDATE(),
-   AddWho = SUSER_SNAME(),
-   EditDate = GETDATE(),
-   EditWho = SUSER_SNAME()
-   FROM CONTAINER, INSERTED
-   WHERE CONTAINER.ContainerKey = INSERTED.ContainerKey
+ --IF @n_continue=1 or @n_continue=2
+ --BEGIN
+ --  UPDATE CONTAINER
+ --  SET TrafficCop = NULL,
+ --  AddDate = GETDATE(),
+ --  AddWho = SUSER_SNAME(),
+ --  EditDate = GETDATE(),
+ --  EditWho = SUSER_SNAME()
+ --  FROM CONTAINER, INSERTED
+ --  WHERE CONTAINER.ContainerKey = INSERTED.ContainerKey
    
-   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   IF @n_err <> 0
-   BEGIN
-      SELECT @n_continue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67901   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table CONTAINER. (nspContainerHeaderAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
-   END
- END
+ --  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+ --  IF @n_err <> 0
+ --  BEGIN
+ --     SELECT @n_continue = 3
+ --     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67901   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+ --     SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table CONTAINER. (nspContainerHeaderAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+ --  END
+ --END
 
  /* #INCLUDE <TRCONHA2.SQL> */
  IF @n_continue=3  -- Error Occured - Process And Return
@@ -127,7 +134,6 @@ CREATE TRIGGER [dbo].[ntrContainerHeaderAdd]
 END -- End SP
 GO
 
-ALTER TABLE [dbo].[CONTAINER] ENABLE TRIGGER [ntrContainerHeaderAdd]
-GO
+ 
 
 

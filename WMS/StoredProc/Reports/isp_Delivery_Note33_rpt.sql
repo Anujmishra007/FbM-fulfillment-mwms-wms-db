@@ -1,21 +1,25 @@
-﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Delivery_Note33_rdt]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_Delivery_Note33_rdt]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Delivery_Note33_rpt]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_Delivery_Note33_rpt]  
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 
 /*************************************************************************/
-/* Stored Procedure: isp_Delivery_Note33_rdt                             */
+/* Stored Procedure: isp_Delivery_Note33_rpt                             */
 /* Creation Date: 2018-10-04                                             */
 /* Copyright: IDS                                                        */
 /* Written by:                                                           */
 /*                                                                       */
-/* Purpose: WMS-8515 -[KR] Stussy Report Migration                       */
+/* Purpose: WMS-5056 -[KR] Stussy Report Migration                       */
 /*                                                                       */
-/* Called By: r_dw_delivery_note33_rdt                                   */
+/* Called By: r_dw_delivery_note33_rpt                                   */
 /*                                                                       */
 /* PVCS Version: 1.1                                                     */
 /*                                                                       */
@@ -25,11 +29,9 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author  Ver   Purposes                                   */
-/*10/05/2019    WLCHOOI 1.0   WMS-9035 - Add ExternOrderkey and change   */
-/*                                       mapping (WL01)                  */
 /*************************************************************************/
 
-CREATE PROC isp_Delivery_Note33_rdt 
+CREATE PROC [dbo].[isp_Delivery_Note33_rpt] 
 			(  @c_Orderkey    NVARCHAR(10)
 			,  @c_Loadkey     NVARCHAR(10)= ''
 			,  @c_Type        NVARCHAR(1) = ''
@@ -75,28 +77,27 @@ BEGIN
 				)
 
 		CREATE TABLE #TMP_HDR33
-				(  SeqNo           INT            
-				,  Orderkey        NVARCHAR(10) NULL
-				,  Storerkey       NVARCHAR(15) NULL
-				,  C_Cphone1       NVARCHAR(30) NULL
-				,  b_phone1        NVARCHAR(30) NULL
-				,  CAddress        NVARCHAR(180) NULL
-				,  SDescr          NVARCHAR(120) NULL
-				,  SKU             NVARCHAR(120) NULL
-				,  C_Zip           NVARCHAR(120) NULL
-				,  OrderDate       DATETIME NULL
-				,  Qty             INT  NULL
-				,  RecGrp          INT NULL              
-				,  SBUSR2          NVARCHAR(50) NULL
-				,  C_Contact1      NVARCHAR(45) NULL
-				,  B_Contact1      NVARCHAR(45) NULL
-				,  MAddress        NVARCHAR(120) NULL
-				,  B_Zip           NVARCHAR(120) NULL
-				,  c_Country       NVARCHAR(45) NULL
-				,  b_Country       NVARCHAR(45) NULL
-				,  CNotes          NVARCHAR(120) NULL
-				,  BuyerPO         NVARCHAR(20) NULL
-				,  ExternOrderKey  NVARCHAR(50) NULL   --WL01
+				(  SeqNo         INT            
+				,  Orderkey      NVARCHAR(10) NULL
+				,  Storerkey     NVARCHAR(15) NULL
+				,  C_Cphone1     NVARCHAR(30) NULL
+				,  b_phone1      NVARCHAR(30) NULL
+				,  CAddress      NVARCHAR(180) NULL
+				,  SDescr        NVARCHAR(120) NULL
+				,  SKU           NVARCHAR(120) NULL
+				,  C_Zip         NVARCHAR(120) NULL
+				,  OrderDate     DATETIME NULL
+				,  Qty           INT  NULL
+				,  RecGrp        INT NULL              
+				,  SBUSR2        NVARCHAR(50) NULL
+				,  C_Contact1    NVARCHAR(45) NULL
+				,  B_Contact1    NVARCHAR(45) NULL
+				,  MAddress      NVARCHAR(120) NULL
+				,  B_Zip         NVARCHAR(120) NULL
+				,  c_Country     NVARCHAR(45) NULL
+				,  b_Country     NVARCHAR(45) NULL
+				,  CNotes        NVARCHAR(120) NULL
+				,  BuyerPO       NVARCHAR(20) NULL
 			)
 
 		IF ISNULL(RTRIM(@c_Orderkey),'') = ''
@@ -162,31 +163,29 @@ BEGIN
 				,  b_Country 
 				,  CNotes   
 				,  BuyerPO  
-				,  ExternOrderKey    --WL01
 			)
 		SELECT DISTINCT 
 				 TMP.SeqNo
 				,OH.orderkey
 				,OH.Storerkey
-				,C_CPhone1      = 'T:' + OH.C_Phone1
-				,b_phone1       = 'T:' + OH.b_phone1
-				,Caddress       = (ISNULL(OH.C_Address1,'') + ISNULL(OH.C_Address2,'')  )
-				,SDESCR         = S.descr
-				,SKU            = S.style + '-' + S.color + '-' + S.size --TMP.SKU
-				,C_Zip          = (ISNULL(oh.c_city,'') + ISNULL(oh.c_State,'') +ISNULL(oh.c_Zip,'') ) 
-				,OrderDate      = ISNULL(RTRIM(OH.OrderDate),'')
-				,Qty            = TMP.TotalQty
-				,RecGrp         = TMP.Recgrp
-				,SBUSR2         = ISNULL(S.BUSR2,'') 
-				,C_Contact1     = ISNULL(oh.c_contact1,'')
-				,B_Contact1     = ISNULL(OH.b_contact1,'')
-				,Maddress       = (ISNULL(OH.c_Address1,'') + ISNULL(OH.c_Address2,'')  )  --WL01
-				,B_Zip          = (ISNULL(OH.B_City,'') + ISNULL(OH.B_State,'') +ISNULL(OH.B_Zip,'') ) 
-				,c_Country      = OH.c_Country
-				,b_Country      = OH.b_Country
-				,CNotes         = ISNULL(MAX(CASE WHEN CL.Code ='1' THEN RTRIM(CL.notes) ELSE '' END),'') 
-				,BuyerPO        = ISNULL(OH.BuyerPO,'')
-				,ExternOrderKey = ISNULL(OH.ExternOrderKey,'')     --WL01
+				,C_CPhone1  = 'T:' + OH.C_Phone1
+				,b_phone1   = 'T:' + OH.b_phone1
+				,Caddress   = (ISNULL(OH.C_Address1,'') + ISNULL(OH.C_Address2,'')  )
+				,SDESCR     = S.descr
+				,SKU        = S.style + '-' + S.color + '-' + S.size --TMP.SKU
+				,C_Zip      = (ISNULL(oh.c_city,'') + ISNULL(oh.c_State,'') +ISNULL(oh.c_Zip,'') ) 
+				,OrderDate  = ISNULL(RTRIM(OH.OrderDate),'')
+				,Qty        = TMP.TotalQty
+				,RecGrp     = TMP.Recgrp
+				,SBUSR2     = ISNULL(S.BUSR2,'') 
+				,C_Contact1 = ISNULL(oh.c_contact1,'')
+				,B_Contact1 = ISNULL(OH.b_contact1,'')
+				,Maddress   = (ISNULL(OH.m_Address1,'') + ISNULL(OH.m_Address2,'')  )
+				,B_Zip      = (ISNULL(OH.B_City,'') + ISNULL(OH.B_State,'') +ISNULL(OH.B_Zip,'') ) 
+				,c_Country  = OH.c_Country
+				,b_Country  = OH.b_Country
+				,CNotes     = ISNULL(MAX(CASE WHEN CL.Code ='1' THEN RTRIM(CL.notes) ELSE '' END),'') 
+				, BuyerPO   = ISNULL(OH.BuyerPO,'')
 		FROM #TMP_ORD33 TMP
 		JOIN ORDERS      OH WITH (NOLOCK) ON (TMP.Orderkey = OH.Orderkey)
 		JOIN STORER      ST WITH (NOLOCK) ON (OH.Storerkey = ST.Storerkey)
@@ -209,13 +208,12 @@ BEGIN
 					  ,ISNULL(S.BUSR2,'') 
 					  ,ISNULL(c_contact1,'')
 					  ,ISNULL(OH.b_contact1,'')
-					  ,(ISNULL(OH.c_Address1,'') + ISNULL(OH.c_Address2,'')  )          --WL01
+					  ,(ISNULL(OH.m_Address1,'') + ISNULL(OH.m_Address2,'')  )
 					  ,(ISNULL(OH.B_City,'') + ISNULL(OH.B_State,'') +ISNULL(OH.B_Zip,'') ) 
 					  ,OH.c_Country
 					  ,OH.b_Country
 					  ,ISNULL(OH.BuyerPO,'')
 					  --,ISNULL(MAX(CASE WHEN CL.Code ='C10' THEN RTRIM(CL.long) ELSE '' END),'') 
-					  ,ISNULL(OH.ExternOrderKey,'')   --WL01
 		ORDER BY TMP.SeqNo
 
 		
@@ -240,8 +238,7 @@ BEGIN
 				,  c_Country 
 				,  b_Country 
 				,  CNotes     
-				,  BuyerPO
-				,  ExternOrderKey   --WL01
+				, BuyerPO
 		FROM #TMP_HDR33
 		ORDER BY SeqNo                    
 
@@ -253,10 +250,7 @@ BEGIN
 QUIT_SP:  
 END       
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO
-		 
-GRANT EXECUTE ON isp_Delivery_Note33_rdt TO NSQL
-GO     
+
+
+GRANT EXECUTE ON [dbo].[isp_Delivery_Note33_rpt] TO NSQL  
+GO 

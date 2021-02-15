@@ -18,18 +18,19 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
-/* 2020-06-16  Wan01    1.1   WMS-2049. Fix not to return correct        */
-/*                            @b_success when error executing            */
-/*                            isp_Wrapup_Validation                      */
-/* 2020-11-18  SWT01    1.2   Bug fixing                                 */ 
-/* 2020-11-23  Wan02    1.2   Add Big Outer Begin Try..End Try to enable */
-/*                            Revert when Sub SP Raise error             */ 
+/* Date       Author   Ver   Purposes                                    */ 
+/* 2020-06-16 Wan01    1.1   WMS-2049. Fix not to return correct         */
+/*                           @b_success when error executing             */
+/*                           isp_Wrapup_Validation                       */
+/* 2020-11-18 SWT01    1.2   Bug fixing                                  */ 
+/* 2020-11-23 Wan02    1.2   Add Big Outer Begin Try..End Try to enable  */
+/*                           Revert when Sub SP Raise error              */ 
+/* 2021-01-15 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME() */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
       @c_Module               NVARCHAR(60) = ''
@@ -61,13 +62,19 @@ BEGIN
          , @b_logerror  BIT            = 0   --(Wan02)
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
+   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            
+      IF @n_Err = 0   
+      BEGIN       
+         EXECUTE AS LOGIN = @c_UserName
+      END
+   END                                   --(Wan03) - END
+   
    DECLARE 
       @n_Continue       INT = 1
    --(Wan02) - START  

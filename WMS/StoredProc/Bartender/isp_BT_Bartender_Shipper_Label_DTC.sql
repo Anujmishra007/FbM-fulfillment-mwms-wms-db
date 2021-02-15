@@ -1,12 +1,15 @@
---IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_DTC]') 
---AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
---DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_DTC]
---GO
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_DTC]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_DTC]  
+END
+GO 
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO           
+GO
+
 /******************************************************************************/               
 /* Copyright: IDS                                                             */               
 /* Purpose: BarTender Filter by ShipperKey                                    */               
@@ -22,7 +25,7 @@ GO
 /* 2017-04-07 4.2  CSCHONG    Performance tuning addd (NOLOCK) (CS06)         */
 /******************************************************************************/              
                 
-ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_DTC]                     
+CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_DTC]                     
 (  @c_Sparm1            NVARCHAR(250),            
    @c_Sparm2            NVARCHAR(250),            
    @c_Sparm3            NVARCHAR(250),            
@@ -284,8 +287,7 @@ EXIT_SP:
 select * from #result WITH (NOLOCK)
                                 
 END -- procedure  
-
- 
 GO
+
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_Shipper_Label_DTC] TO nsql 
 GO

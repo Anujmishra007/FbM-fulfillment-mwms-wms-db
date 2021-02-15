@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -26,8 +26,9 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
-/* 29-Dec-2020  SWT01    1.1   Add Big Outer Begin Try.End Try to enable*/
+/* 29-Dec-2020 SWT01    1.1   Add Big Outer Begin Try.End Try to enable */
 /*                             Revert when Sub SP Raise error           */
+/* 15-Jan-2021 Wan01    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMbol_Delete] 
       @c_MBOLKey              NVARCHAR(10)                                                                                                                    
@@ -71,117 +72,123 @@ BEGIN
       GOTO EXIT_SP
    END
    
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   IF SUSER_SNAME() <> @c_UserName  --(Wan01) - START
+   BEGIN
+      SET @n_Err = 0 
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT --(Wan01)
    
-   EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
+      EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
+   END                              --(Wan01) - END
+   
    BEGIN TRY -- (SWT01)
    
-   SET @n_ErrGroupKey = 0
+      SET @n_ErrGroupKey = 0
 
-   SELECT @n_TotalSelectedKeys_Det = COUNT(1)
-   FROM MBOLDETAIL MD WITH (NOLOCK)
-   WHERE MD.MBOLKey = @c_MBOLKey
+      SELECT @n_TotalSelectedKeys_Det = COUNT(1)
+      FROM MBOLDETAIL MD WITH (NOLOCK)
+      WHERE MD.MBOLKey = @c_MBOLKey
 
-   SET @CUR_DETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT MD.MBolLineNumber
-   FROM MBOLDETAIL MD WITH (NOLOCK)
-   WHERE MD.MBOLKey = @c_MBOLKey
-   ORDER BY MD.MBolLineNumber
+      SET @CUR_DETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT MD.MBolLineNumber
+      FROM MBOLDETAIL MD WITH (NOLOCK)
+      WHERE MD.MBOLKey = @c_MBOLKey
+      ORDER BY MD.MBolLineNumber
 
-   OPEN @CUR_DETAIL
+      OPEN @CUR_DETAIL
    
-   FETCH NEXT FROM @CUR_DETAIL INTO @c_MBolLineNumber                                                                                
+      FETCH NEXT FROM @CUR_DETAIL INTO @c_MBolLineNumber                                                                                
                                     
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @b_Deleted = 1
-      SET @c_ErrMsg  = ''
-      EXEC [WM].[lsp_WaveMBolDetail_Delete]  
-           @c_MBOLKey            = @c_MBOLKey                                                                                                                         
-         , @c_MBolLineNumber     = @c_MBolLineNumber             
-         , @n_TotalSelectedKeys  = @n_TotalSelectedKeys_Det
-         , @n_KeyCount           = @n_KeyCount_Det OUTPUT
-         , @b_Success            = @b_Success      OUTPUT
-         , @n_Err                = @n_Err          OUTPUT 
-         , @c_ErrMsg             = @c_ErrMsg       OUTPUT 
-         , @n_WarningNo          = 1        
-         , @c_ProceedWithWarning = 'Y'                     
-         , @c_UserName           = @c_UserName
-         , @n_ErrGroupKey        = @n_ErrGroupKey  OUTPUT
-
-      IF @b_Success = 0 OR @n_Err <> 0
+      WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @n_Continue=3
-         SET @n_Err = 557251
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing lsp_WaveMBolDetail_Delete. (lsp_WaveMbol_Delete)'   
+         SET @b_Deleted = 1
+         SET @c_ErrMsg  = ''
+         EXEC [WM].[lsp_WaveMBolDetail_Delete]  
+              @c_MBOLKey            = @c_MBOLKey                                                                                                                         
+            , @c_MBolLineNumber     = @c_MBolLineNumber             
+            , @n_TotalSelectedKeys  = @n_TotalSelectedKeys_Det
+            , @n_KeyCount           = @n_KeyCount_Det OUTPUT
+            , @b_Success            = @b_Success      OUTPUT
+            , @n_Err                = @n_Err          OUTPUT 
+            , @c_ErrMsg             = @c_ErrMsg       OUTPUT 
+            , @n_WarningNo          = 1        
+            , @c_ProceedWithWarning = 'Y'                     
+            , @c_UserName           = @c_UserName
+            , @n_ErrGroupKey        = @n_ErrGroupKey  OUTPUT
+
+         IF @b_Success = 0 OR @n_Err <> 0
+         BEGIN
+            SET @n_Continue=3
+            SET @n_Err = 557251
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing lsp_WaveMBolDetail_Delete. (lsp_WaveMbol_Delete)'   
                     
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_MBOLKey
-            ,  @c_Refkey2     = @c_MBolLineNumber
-            ,  @c_Refkey3     = ''
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_MBOLKey
+               ,  @c_Refkey2     = @c_MBolLineNumber
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
 
+         END
+         FETCH NEXT FROM @CUR_DETAIL INTO @c_MBolLineNumber 
       END
-      FETCH NEXT FROM @CUR_DETAIL INTO @c_MBolLineNumber 
-   END
-   CLOSE @CUR_DETAIL
-   DEALLOCATE @CUR_DETAIL
+      CLOSE @CUR_DETAIL
+      DEALLOCATE @CUR_DETAIL
 
-   IF NOT EXISTS (   SELECT 1  
-                     FROM MBOLDETAIL MD WITH (NOLOCK)
-                     WHERE MD.MBOLKey = @c_MBOLKey
-                  )
-   BEGIN
-      BEGIN TRY  
-         DELETE FROM MBOL  
-         WHERE MBOLKey = @c_MBOLKey  
-      END TRY  
+      IF NOT EXISTS (   SELECT 1  
+                        FROM MBOLDETAIL MD WITH (NOLOCK)
+                        WHERE MD.MBOLKey = @c_MBOLKey
+                     )
+      BEGIN
+         BEGIN TRY  
+            DELETE FROM MBOL  
+            WHERE MBOLKey = @c_MBOLKey  
+         END TRY  
   
-      BEGIN CATCH
-         SET @n_Continue=3        
-         SET @n_Err = 557252 
-         SET @c_ErrMsg = ERROR_MESSAGE()  
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete MBol Fail. (lsp_WaveMbol_Delete)'     
-                        + '(' + @c_ErrMsg + ')'   
+         BEGIN CATCH
+            SET @n_Continue=3        
+            SET @n_Err = 557252 
+            SET @c_ErrMsg = ERROR_MESSAGE()  
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete MBol Fail. (lsp_WaveMbol_Delete)'     
+                           + '(' + @c_ErrMsg + ')'   
              
-         IF (XACT_STATE()) = -1    
-         BEGIN  
-            ROLLBACK TRAN  
-  
-            WHILE @@TRANCOUNT < @n_StartTCnt  
+            IF (XACT_STATE()) = -1    
             BEGIN  
-               BEGIN TRAN  
+               ROLLBACK TRAN  
+  
+               WHILE @@TRANCOUNT < @n_StartTCnt  
+               BEGIN  
+                  BEGIN TRAN  
+               END  
             END  
-         END  
                                
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_MBOLKey
-            ,  @c_Refkey2     = '' 
-            ,  @c_Refkey3     = ''
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
-      END CATCH  
-   END
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_MBOLKey
+               ,  @c_Refkey2     = '' 
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
+         END CATCH  
+      END
    END TRY -- (SWT01)
 
    BEGIN CATCH
+      SET @n_Continue = 3              --(Wan01)
+      SET @c_ErrMsg   = ERROR_MESSAGE()--(Wan01)
       GOTO EXIT_SP
    END CATCH    
    
