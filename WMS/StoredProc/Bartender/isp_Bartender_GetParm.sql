@@ -1,7 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Bartender_GetParm]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'isp_Bartender_GetParm') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 BEGIN 
-   DROP PROCEDURE [dbo].[isp_Bartender_GetParm]  
+   DROP PROCEDURE isp_Bartender_GetParm  
 END
 GO 
 
@@ -101,9 +101,5 @@ BEGIN
 END -- procedure   
 GO
 
-
 GRANT EXECUTE ON [dbo].[isp_Bartender_GetParm] TO NSQL  
 GO 
-
-
-
