@@ -18,13 +18,14 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
+/* Date        Author   Ver  Purposes                                    */ 
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                     */
+/* 2021-01-15  Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_ASRSCallOutIDInsp_Wrapper]  
    @c_PalletIDList   NVARCHAR(MAX)
@@ -57,147 +58,153 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
+   
+   IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
    BEGIN
-      GOTO EXIT_SP
-   END
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END  
+              
+      EXECUTE AS LOGIN = @c_UserName
+   END                                    --(Wan01) - END
+
    
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
-   WHILE @@TRANCOUNT > 0
-   BEGIN
-      COMMIT TRAN
-   END
-   
-   IF ISNULL(RTRIM(@c_FinalLoc),'') = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 550451
-      SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Workstation is required.' 
-
-      EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = ''
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_PalletIDList
-               ,  @c_Refkey2     = ''
-               ,  @c_Refkey3     = ''
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success   OUTPUT
-               ,  @n_err         = @n_err       OUTPUT
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-      GOTO EXIT_SP      
-   END 
-
-   IF ISNULL(RTRIM(@c_ReasonCode),'') = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 550452
-      SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is required.' 
-  
-      EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = ''
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_PalletIDList
-               ,  @c_Refkey2     = ''
-               ,  @c_Refkey3     = ''
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success   OUTPUT
-               ,  @n_err         = @n_err       OUTPUT
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
-      GOTO EXIT_SP  
-   END
-
-   IF LEN(RTRIM(@c_ReasonCode)) > 10
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 550453
-      SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is more than 10 characters. ' 
-                    + 'Please check codelkup setup.'
-
-      EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = ''
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_PalletIDList
-               ,  @c_Refkey2     = ''
-               ,  @c_Refkey3     = ''
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success   OUTPUT
-               ,  @n_err         = @n_err       OUTPUT
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-      GOTO EXIT_SP  
-   END
-
-   SET @CUR_ID = CURSOR  FAST_FORWARD READ_ONLY FOR
-   SELECT ID = ColValue
-   FROM fnc_DelimSplit ('|', @c_PalletIDList) 
-
-   OPEN @CUR_ID
-   
-   FETCH NEXT FROM @CUR_ID INTO @c_ID
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      BEGIN TRAN
-      BEGIN TRY      
-         EXEC isp_InspectionCallOut 
-               @c_ID          = @c_ID
-            ,  @c_Finalloc    = @c_Finalloc
-            ,  @c_Reasoncode  = @c_Reasoncode
-            ,  @c_Remarks     = @c_Remarks
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
-      END TRY
-
-      BEGIN CATCH
-         SET @n_Continue = 3
-         SET @n_err = 550454
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Call out ID: ' + @c_ID + ' fail. ' +  @c_ErrMsg 
-
-         ROLLBACK TRAN
-
-         EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = ''
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_ID
-               ,  @c_Refkey2     = ''
-               ,  @c_Refkey3     = ''
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success   OUTPUT
-               ,  @n_err         = @n_err       OUTPUT
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-      END CATCH  
-
       WHILE @@TRANCOUNT > 0
       BEGIN
          COMMIT TRAN
-      END  
-
-      FETCH NEXT FROM @CUR_ID INTO @c_ID
-   END
-   CLOSE @CUR_ID 
-   DEALLOCATE @CUR_ID
+      END
    
+      IF ISNULL(RTRIM(@c_FinalLoc),'') = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 550451
+         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Workstation is required.' 
+
+         EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = ''
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_PalletIDList
+                  ,  @c_Refkey2     = ''
+                  ,  @c_Refkey3     = ''
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   OUTPUT
+                  ,  @n_err         = @n_err       OUTPUT
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+         GOTO EXIT_SP      
+      END 
+
+      IF ISNULL(RTRIM(@c_ReasonCode),'') = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 550452
+         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is required.' 
+  
+         EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = ''
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_PalletIDList
+                  ,  @c_Refkey2     = ''
+                  ,  @c_Refkey3     = ''
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   OUTPUT
+                  ,  @n_err         = @n_err       OUTPUT
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+         GOTO EXIT_SP  
+      END
+
+      IF LEN(RTRIM(@c_ReasonCode)) > 10
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 550453
+         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is more than 10 characters. ' 
+                       + 'Please check codelkup setup.'
+
+         EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = ''
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_PalletIDList
+                  ,  @c_Refkey2     = ''
+                  ,  @c_Refkey3     = ''
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   OUTPUT
+                  ,  @n_err         = @n_err       OUTPUT
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+         GOTO EXIT_SP  
+      END
+
+      SET @CUR_ID = CURSOR  FAST_FORWARD READ_ONLY FOR
+      SELECT ID = ColValue
+      FROM fnc_DelimSplit ('|', @c_PalletIDList) 
+
+      OPEN @CUR_ID
+   
+      FETCH NEXT FROM @CUR_ID INTO @c_ID
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         BEGIN TRAN
+         BEGIN TRY      
+            EXEC isp_InspectionCallOut 
+                  @c_ID          = @c_ID
+               ,  @c_Finalloc    = @c_Finalloc
+               ,  @c_Reasoncode  = @c_Reasoncode
+               ,  @c_Remarks     = @c_Remarks
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_err = 550454
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Call out ID: ' + @c_ID + ' fail. ' +  @c_ErrMsg 
+
+            ROLLBACK TRAN
+
+            EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = ''
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_ID
+                  ,  @c_Refkey2     = ''
+                  ,  @c_Refkey3     = ''
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   OUTPUT
+                  ,  @n_err         = @n_err       OUTPUT
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+         END CATCH  
+
+         WHILE @@TRANCOUNT > 0
+         BEGIN
+            COMMIT TRAN
+         END  
+
+         FETCH NEXT FROM @CUR_ID INTO @c_ID
+      END
+      CLOSE @CUR_ID 
+      DEALLOCATE @CUR_ID
    END TRY  
   
-   BEGIN CATCH      
+   BEGIN CATCH 
+      SET @n_Continue = 3                          --(Wan01)
+      SET @c_Errmsg = ERROR_MESSAGE()              --(Wan01) 
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
              --       
