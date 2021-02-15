@@ -37,5 +37,5 @@ RETURN
             COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), 
             COLUMN_NAME, 'ColumnID')) <> 0
 GO
-GRANT EXECUTE ON [dbo].[fnc_GetUpdatedColumns] TO nSQL 
+GRANT SELECT ON [dbo].[fnc_GetUpdatedColumns] TO nSQL 
 GO

@@ -43,5 +43,5 @@ RETURN
 	GROUP BY LLI.Storerkey, LLI.Sku, LLI.Loc
 )
 GO
-GRANT EXECUTE ON [dbo].[fnc_SKUXLOC_Extended] TO nSQL 
+GRANT SELECT ON [dbo].[fnc_SKUXLOC_Extended] TO nSQL 
 GO

@@ -49,5 +49,5 @@ RETURN (
     FROM Result1
   )
 GO
-GRANT EXECUTE ON [dbo].[fnc_get_lpVolWgtUsed] TO nSQL 
+GRANT SELECT ON [dbo].[fnc_get_lpVolWgtUsed] TO nSQL 
 GO

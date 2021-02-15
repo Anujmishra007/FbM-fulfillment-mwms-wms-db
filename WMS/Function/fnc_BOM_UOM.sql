@@ -56,5 +56,6 @@ RETURN (
     FROM Result1
   )
 GO
-GRANT EXECUTE ON [dbo].[fnc_BOM_UOM] TO nSQL 
+
+GRANT SELECT ON [dbo].[fnc_BOM_UOM] TO nSQL 
 GO
