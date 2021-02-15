@@ -17,6 +17,7 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2018-02-01 1.0  CSCHONG    Created (WMS-3882)                              */ 
+/* 2018-07-17 1.1  CSCHONG    WMS-5097 - revised field mapping (CS01)         */
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_CN_SKU_Label_01_UA]                      
@@ -50,28 +51,28 @@ BEGIN
       @c_SQLJOIN         NVARCHAR(4000)      
     
   DECLARE   @d_Trace_StartTime   DATETIME,   
-				@d_Trace_EndTime    DATETIME,  
-				@c_Trace_ModuleName NVARCHAR(20),   
-				@d_Trace_Step1      DATETIME,   
-				@c_Trace_Step1      NVARCHAR(20),  
-				@c_UserName         NVARCHAR(20),
-				@c_SKU01            NVARCHAR(20),         
-				@c_SKU02            NVARCHAR(20),          
-				@c_SKU03            NVARCHAR(20),        
-				@c_SKU04            NVARCHAR(20),        
-				@c_SKU05            NVARCHAR(20),        
-				@c_SKUQty01         NVARCHAR(10),        
-				@c_SKUQty02         NVARCHAR(10),         
-				@c_SKUQty03         NVARCHAR(10),         
-				@c_SKUQty04         NVARCHAR(10),         
-				@c_SKUQty05         NVARCHAR(10) ,
-				@n_TTLpage          INT,        
-				@n_CurrentPage      INT,
-				@n_MaxLine          INT  ,
-				@c_LLIId            NVARCHAR(80) ,
-				@c_storerkey        NVARCHAR(20) ,
-				@n_skuqty           INT, 
-				@c_ExecStatements   NVARCHAR(4000),   
+         @d_Trace_EndTime    DATETIME,  
+         @c_Trace_ModuleName NVARCHAR(20),   
+         @d_Trace_Step1      DATETIME,   
+         @c_Trace_Step1      NVARCHAR(20),  
+         @c_UserName         NVARCHAR(20),
+         @c_SKU01            NVARCHAR(20),         
+         @c_SKU02            NVARCHAR(20),          
+         @c_SKU03            NVARCHAR(20),        
+         @c_SKU04            NVARCHAR(20),        
+         @c_SKU05            NVARCHAR(20),        
+         @c_SKUQty01         NVARCHAR(10),        
+         @c_SKUQty02         NVARCHAR(10),         
+         @c_SKUQty03         NVARCHAR(10),         
+         @c_SKUQty04         NVARCHAR(10),         
+         @c_SKUQty05         NVARCHAR(10) ,
+         @n_TTLpage          INT,        
+         @n_CurrentPage      INT,
+         @n_MaxLine          INT  ,
+         @c_LLIId            NVARCHAR(80) ,
+         @c_storerkey        NVARCHAR(20) ,
+         @n_skuqty           INT, 
+         @c_ExecStatements   NVARCHAR(4000),   
             @c_ExecArguments    NVARCHAR(4000)    
   
    SET @d_Trace_StartTime = GETDATE()  
@@ -149,15 +150,15 @@ BEGIN
       [Col60] [NVARCHAR] (80) NULL             
      )        
      
-     
-      CREATE TABLE [#TEMPLLISKU03] (                   
+     --CS01 Start
+  /*    CREATE TABLE [#TEMPLLISKU03] (                   
       [ID]          [INT] IDENTITY(1,1) NOT NULL,                                      
       [Storerkey]   [NVARCHAR] (20) NULL,  
       [LLI_ID]        [NVARCHAR] (20) NULL,       
       [SKU]         [NVARCHAR] (20) NULL,           
       [Qty]         INT , 
       [Retrieve]    [NVARCHAR] (1) default 'N')         
-  	        
+           
   SET @c_SQLJOIN = +' SELECT DISTINCT sc.[Data],lli.id,lli.sku,sum(lli.qty) AS qty,'''','+ CHAR(13)      --5      
              + ' '''','''','''','''','''','     --10  
              + ' '''','''','''','''','''','     --15  
@@ -209,8 +210,21 @@ END
    IF @b_debug=1        
    BEGIN        
       SELECT * FROM #Result (nolock)        
-   END        
-       	 
+   END        */
+
+    INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09                 
+                            ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22               
+                            ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                
+                            ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                 
+                            ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54               
+                            ,Col55,Col56,Col57,Col58,Col59,Col60)           
+     VALUES(@c_Sparm01,@c_Sparm02,@c_Sparm03,@c_Sparm04,'','',         
+            '','','','','','','','','','','','','','',        
+            '','','','','','','','','','','','','','','','','','','','','','','','','','','','','',''        
+            ,'','','','','','','','','','O')  
+
+  --CS01 End
+          
 SELECT * FROM #Result (nolock)        
             
 EXIT_SP:    
