@@ -19,14 +19,13 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.1                                                          */  
+/* Version: 1.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
-/* 2020-12-08  Wan      1.0   Created                                    */
-/* 2021-01-15  Wan01    1.1   Adding Outer Begin Try/Catch               */
+/* 2020-12-08  Wan01    1.0   Created                                    */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_ReceiptDetail_Lottable02PreRule_Std] (
         @c_Listname              NVARCHAR(10)
@@ -95,61 +94,54 @@ BEGIN
 
    SET @c_Receiptkey = LEFT(@c_Sourcekey,10)
 
-   BEGIN TRY      --(Wan01) - START
-      IF @c_LottableLabel = 'BATCHNO' AND @n_WarningNo = 0 
+   IF @c_LottableLabel = 'BATCHNO' AND @n_WarningNo = 0 
+   BEGIN
+      SELECT TOP 1 @c_Facility = Facility
+      FROM RECEIPT WITH (NOLOCK) 
+      WHERE Receiptkey = @c_Receiptkey
+
+      SELECT @c_UTLITF = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'UTLITF')
+
+      SET @n_MinShelfLife = 0
+
+      IF @c_UTLITF = '1' 
       BEGIN
-         SELECT TOP 1 @c_Facility = Facility
-         FROM RECEIPT WITH (NOLOCK) 
-         WHERE Receiptkey = @c_Receiptkey
+         SELECT @n_MinShelfLife = ISNULL(ShelfLife,0) 
+		   FROM   SKU WITH (NOLOCK)
+		   WHERE  STORERKEY = @c_StorerKey
+		   AND    SKU = @c_SKU
 
-         SELECT @c_UTLITF = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'UTLITF')
+         SET @c_BatchNo = LEFT(@c_Lottable02Value,8)
 
-         SET @n_MinShelfLife = 0
-
-         IF @c_UTLITF = '1' 
+         IF ISDATE(@c_BatchNo) = 0
          BEGIN
-            SELECT @n_MinShelfLife = ISNULL(ShelfLife,0) 
-		      FROM   SKU WITH (NOLOCK)
-		      WHERE  STORERKEY = @c_StorerKey
-		      AND    SKU = @c_SKU
+            SET @n_Continue = 3
+         END
 
-            SET @c_BatchNo = LEFT(@c_Lottable02Value,8)
+         IF @n_Continue IN (1,2)
+         BEGIN
+            SET @d_BatchNo = @c_BatchNo
 
-            IF ISDATE(@c_BatchNo) = 0
+            IF DATEADD(DAY, @n_MinShelfLife, @d_BatchNo) <= @dt_ReceiptDate
             BEGIN
                SET @n_Continue = 3
             END
-
-            IF @n_Continue IN (1,2)
+            ELSE
             BEGIN
-               SET @d_BatchNo = @c_BatchNo
-
-               IF DATEADD(DAY, @n_MinShelfLife, @d_BatchNo) <= @dt_ReceiptDate
-               BEGIN
-                  SET @n_Continue = 3
-               END
-               ELSE
-               BEGIN
-                  SET @dt_Lottable04Value = @d_BatchNo
-                  SET @dt_Lottable04 = @d_BatchNo
-               END 
-            END
+               SET @dt_Lottable04Value = @d_BatchNo
+               SET @dt_Lottable04 = @d_BatchNo
+            END 
+         END
            
-            IF @n_Continue = 3
-            BEGIN
-               SET @n_Err = 559151 
-               SET @c_errmsg = 'Invalid Expiry Date. (lsp_ReceiptDetail_Lottable02PreRule_Std)'
-               GOTO EXIT_SP
-            END          
-         END 
-      END
-   END TRY
-   BEGIN CATCH
-      SET @n_Continue = 3
-      SET @c_errmsg   = ERROR_MESSAGE()
-      GOTO EXIT_SP
-   END CATCH      --(Wan01) - END
-   
+         IF @n_Continue = 3
+         BEGIN
+            SET @n_Err = 559151 
+            SET @c_errmsg = 'Invalid Expiry Date. (lsp_ReceiptDetail_Lottable02PreRule_Std)'
+            GOTO EXIT_SP
+         END          
+      END 
+   END
+
    EXIT_SP:
    
    IF @n_Continue = 3

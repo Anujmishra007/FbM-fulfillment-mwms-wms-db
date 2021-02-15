@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.0                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,8 +27,6 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
-/* 15-Jan-2021 Wan01    1.1   Add Big Outer Begin try/Catch             */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_BuildWave_ClrBuildVal]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -53,129 +51,120 @@ BEGIN
    SET @b_Success = 1
 
    SET @n_Err = 0 
-   
-   IF SUSER_SNAME() <> @c_UserName        --(Wan01) 
-   BEGIN 
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   EXEC [WM].[lsp_SetUser] 
+         @c_UserName = @c_UserName  OUTPUT
+      ,  @n_Err      = @n_Err       OUTPUT
+      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END  
-                      
-      EXECUTE AS LOGIN = @c_UserName      --(Wan01) 
-   END
+   EXECUTE AS LOGIN = @c_UserName
+
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END                                                                                                     
    
-   BEGIN TRY   --(Wan01) - START
-      BEGIN TRAN
+   BEGIN TRAN
 
-      IF EXISTS ( SELECT 1 
-                  FROM BUILDPARM WITH (NOLOCK)
-                  WHERE BuildParmKey = @c_BuildParmKey
-                  AND ( RestrictionBuildValue01 <> '' OR RestrictionBuildValue02 <> '' OR 
-                        RestrictionBuildValue03 <> '' OR RestrictionBuildValue04 <> '' OR 
-                        RestrictionBuildValue05 <> ''
-                      )
-                )
-      BEGIN
-         BEGIN TRY                                                                                                                                                      
-            UPDATE BUILDPARM 
-               SET   RestrictionBuildValue01 = ''
-                  ,  RestrictionBuildValue02 = ''
-                  ,  RestrictionBuildValue03 = ''
-                  ,  RestrictionBuildValue04 = ''
-                  ,  RestrictionBuildValue05 = ''
-                  ,  EditDate = GETDATE()
-                  ,  EditWho  = @c_UserName
-                  ,  TrafficCop = NULL
-            WHERE BuildParmKey = @c_BuildParmKey
-         END TRY
+   IF EXISTS ( SELECT 1 
+               FROM BUILDPARM WITH (NOLOCK)
+               WHERE BuildParmKey = @c_BuildParmKey
+               AND ( RestrictionBuildValue01 <> '' OR RestrictionBuildValue02 <> '' OR 
+                     RestrictionBuildValue03 <> '' OR RestrictionBuildValue04 <> '' OR 
+                     RestrictionBuildValue05 <> ''
+                   )
+             )
+   BEGIN
+      BEGIN TRY                                                                                                                                                      
+         UPDATE BUILDPARM 
+            SET   RestrictionBuildValue01 = ''
+               ,  RestrictionBuildValue02 = ''
+               ,  RestrictionBuildValue03 = ''
+               ,  RestrictionBuildValue04 = ''
+               ,  RestrictionBuildValue05 = ''
+               ,  EditDate = GETDATE()
+               ,  EditWho  = @c_UserName
+               ,  TrafficCop = NULL
+         WHERE BuildParmKey = @c_BuildParmKey
+      END TRY
 
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @n_Err     = 555551
-            SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                                                        
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                           + ': Update BUILDPARM fail. Actual Build Values Not Clear. (lsp_BuildWave_ClrBuildVal) '
-                           + '( ' + @c_ErrMsg + ' )'    
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @n_Err     = 555551
+         SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                                                        
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+                        + ': Update BUILDPARM fail. Actual Build Values Not Clear. (lsp_BuildWave_ClrBuildVal) '
+                        + '( ' + @c_ErrMsg + ' )'    
 
-            IF (XACT_STATE()) = -1  
+         IF (XACT_STATE()) = -1  
+         BEGIN
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
             BEGIN
-               ROLLBACK TRAN
+               BEGIN TRAN
+            END
+         END                                                                                                                 
+         GOTO EXIT_SP   
+      END CATCH
+   END
 
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END                                                                                                                 
-            GOTO EXIT_SP   
-         END CATCH
+   SET @c_BuildParmLineNo = ''
+   SET @CUR_BPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+   SELECT Code = BPD.BuildParmLineNo
+   FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
+   WHERE BPD.BuildParmKey = @c_BuildParmKey
+   AND   BPD.BuildValue <> ''
+   ORDER BY BPD.BuildParmLineNo                                                                                                                                            
+                                                                                                                                                            
+   OPEN @CUR_BPD                                                                                                                                    
+                                                                                                                                                            
+   FETCH NEXT FROM @CUR_BPD INTO @c_BuildParmLineNo
+                                                                    
+   WHILE @@FETCH_STATUS <> -1                             
+   BEGIN 
+      BEGIN TRAN
+      BEGIN TRY                                                                                                                                                      
+         UPDATE BUILDPARMDETAIL
+            SET   BuildValue = ''
+               ,  EditDate = GETDATE()
+               ,  EditWho  = @c_UserName
+               ,  TrafficCop = NULL
+         WHERE BuildParmKey = @c_BuildParmKey
+         AND   BuildParmLineNo = @c_BuildParmLineNo  
+         AND   BuildValue <> ''
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @n_Err     = 555552
+         SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                                                        
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+                        + ': Update BUILDPARMDETAIL fail. Actual Build Value Not Clear. (lsp_BuildWave_ClrBuildVal) '
+                        + '( ' + @c_ErrMsg + ' )'    
+
+         IF (XACT_STATE()) = -1  
+         BEGIN
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+         END                                                                                                                 
+         GOTO EXIT_SP   
+      END CATCH
+
+      WHILE @@TRANCOUNT > 0 
+      BEGIN
+         COMMIT TRAN
       END
 
-      SET @c_BuildParmLineNo = ''
-      SET @CUR_BPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-      SELECT Code = BPD.BuildParmLineNo
-      FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
-      WHERE BPD.BuildParmKey = @c_BuildParmKey
-      AND   BPD.BuildValue <> ''
-      ORDER BY BPD.BuildParmLineNo                                                                                                                                            
-                                                                                                                                                            
-      OPEN @CUR_BPD                                                                                                                                    
-                                                                                                                                                            
       FETCH NEXT FROM @CUR_BPD INTO @c_BuildParmLineNo
-                                                                    
-      WHILE @@FETCH_STATUS <> -1                             
-      BEGIN 
-         BEGIN TRAN
-         BEGIN TRY                                                                                                                                                      
-            UPDATE BUILDPARMDETAIL
-               SET   BuildValue = ''
-                  ,  EditDate = GETDATE()
-                  ,  EditWho  = @c_UserName
-                  ,  TrafficCop = NULL
-            WHERE BuildParmKey = @c_BuildParmKey
-            AND   BuildParmLineNo = @c_BuildParmLineNo  
-            AND   BuildValue <> ''
-         END TRY
+   END                                                                                                                                                            
+   CLOSE @CUR_BPD
+   DEALLOCATE @CUR_BPD
 
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @n_Err     = 555552
-            SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                                                        
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                           + ': Update BUILDPARMDETAIL fail. Actual Build Value Not Clear. (lsp_BuildWave_ClrBuildVal) '
-                           + '( ' + @c_ErrMsg + ' )'    
 
-            IF (XACT_STATE()) = -1  
-            BEGIN
-               ROLLBACK TRAN
-
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END                                                                                                                 
-            GOTO EXIT_SP   
-         END CATCH
-
-         WHILE @@TRANCOUNT > 0 
-         BEGIN
-            COMMIT TRAN
-         END
-
-         FETCH NEXT FROM @CUR_BPD INTO @c_BuildParmLineNo
-      END                                                                                                                                                            
-      CLOSE @CUR_BPD
-      DEALLOCATE @CUR_BPD
-   END TRY
-   BEGIN CATCH
-      SET @n_Continue = 3   
-      SET @c_ErrMsg   = ERROR_MESSAGE()
-      GOTO EXIT_SP
-   END CATCH            --(Wan01) - END
 EXIT_SP:    
   IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

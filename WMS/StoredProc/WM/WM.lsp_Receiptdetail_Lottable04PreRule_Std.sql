@@ -19,14 +19,13 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.1                                                          */  
+/* Version: 1.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
-/* 2020-12-08  Wan      1.0   Created                                    */
-/* 2021-01-15  Wan01    1.1   Adding Outer Begin Try/Catch               */
+/* 2020-12-08  Wan01    1.0   Created                                    */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_ReceiptDetail_Lottable04PreRule_Std] (
         @c_Listname              NVARCHAR(10)
@@ -98,112 +97,105 @@ BEGIN
          , @c_ManLotExpDate   NVARCHAR(30)= ''
 
    SET @c_Receiptkey = LEFT(@c_Sourcekey,10)
-   
-   BEGIN TRY      --(Wan01) - START
-      IF @c_LottableLabel = 'EXP_DATE'  
+
+   IF @c_LottableLabel = 'EXP_DATE'  
+   BEGIN
+      SELECT TOP 1 @c_Facility = Facility
+      FROM RECEIPT WITH (NOLOCK) 
+      WHERE Receiptkey = @c_Receiptkey
+
+      SELECT @c_UTLITF = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'UTLITF')
+
+      SET @n_MinShelfLife = 0
+      IF @c_UTLITF = '1' 
       BEGIN
-         SELECT TOP 1 @c_Facility = Facility
-         FROM RECEIPT WITH (NOLOCK) 
-         WHERE Receiptkey = @c_Receiptkey
+         SELECT @n_MinShelfLife = ISNULL(ShelfLife,0) 
+		   FROM   SKU WITH (NOLOCK)
+		   WHERE  STORERKEY = @c_StorerKey
+		   AND    SKU = @c_SKU
+      END
+      ELSE
+      BEGIN
+         SELECT @n_MinShelfLife = CASE WHEN ISNUMERIC(SUSR1)= 1 THEN SUSR1 ELSE 0 END 
+		   FROM   SKU WITH (NOLOCK)
+		   WHERE  STORERKEY = @c_StorerKey
+		   AND    SKU = @c_SKU
+      END
 
-         SELECT @c_UTLITF = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'UTLITF')
+      SET @d_ExpiryDate = @dt_Lottable04Value
 
-         SET @n_MinShelfLife = 0
-         IF @c_UTLITF = '1' 
+      IF @n_WarningNo = 0
+      BEGIN
+         IF @n_MinShelfLife = 0 
          BEGIN
-            SELECT @n_MinShelfLife = ISNULL(ShelfLife,0) 
-		      FROM   SKU WITH (NOLOCK)
-		      WHERE  STORERKEY = @c_StorerKey
-		      AND    SKU = @c_SKU
-         END
-         ELSE
-         BEGIN
-            SELECT @n_MinShelfLife = CASE WHEN ISNUMERIC(SUSR1)= 1 THEN SUSR1 ELSE 0 END 
-		      FROM   SKU WITH (NOLOCK)
-		      WHERE  STORERKEY = @c_StorerKey
-		      AND    SKU = @c_SKU
-         END
-
-         SET @d_ExpiryDate = @dt_Lottable04Value
-
-         IF @n_WarningNo = 0
-         BEGIN
-            IF @n_MinShelfLife = 0 
+            IF @d_ExpiryDate <= @dt_ReceiptDate OR @d_ExpiryDate IS NULL
             BEGIN
-               IF @d_ExpiryDate <= @dt_ReceiptDate OR @d_ExpiryDate IS NULL
-               BEGIN
-                  SET @n_Continue = 3
-                  SET @n_Err = 559201 
-                  SET @c_errmsg = 'Invalid Expiry Date. (lsp_ReceiptDetail_Lottable04PreRule_Std)'
-                  GOTO EXIT_SP
-               END
-            END
-
-            SET @n_DiffDay = DATEDIFF(DAY, @dt_ReceiptDate, @d_ExpiryDate)
-
-            IF @n_DiffDay < @n_MinShelfLife
-            BEGIN
-               SET @n_WarningNo = 1
-               SET @c_Errmsg = 'Expiry Date is less than a Minimum Shelf Life. Min Shelf days = ' + CONVERT(NVARCHAR(5), @n_MinShelfLife)
-                             + ', Expiry Date - Current Date = ' + CONVERT(NVARCHAR(5), @n_DiffDay) + '. Continue?'
+               SET @n_Continue = 3
+               SET @n_Err = 559201 
+               SET @c_errmsg = 'Invalid Expiry Date. (lsp_ReceiptDetail_Lottable04PreRule_Std)'
                GOTO EXIT_SP
             END
          END
 
-         SELECT @c_ManLotExpDate = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ManLotExpDate')
+         SET @n_DiffDay = DATEDIFF(DAY, @dt_ReceiptDate, @d_ExpiryDate)
 
-         IF @c_ManLotExpDate = '1'
+         IF @n_DiffDay < @n_MinShelfLife
          BEGIN
-            SET @n_Cnt = 0
-      	   SELECT @n_Cnt = 1
-		      FROM LOTATTRIBUTE WITH (NOLOCK)
-		      WHERE Storerkey= @c_Storerkey
-		      AND sku        = @c_Sku
-            AND lottable02 = @c_Lottable02Value
-		      AND lottable03 = @c_Lottable03Value
-		      AND lottable04 = @dt_Lottable04Value
+            SET @n_WarningNo = 1
+            SET @c_Errmsg = 'Expiry Date is less than a Minimum Shelf Life. Min Shelf days = ' + CONVERT(NVARCHAR(5), @n_MinShelfLife)
+                          + ', Expiry Date - Current Date = ' + CONVERT(NVARCHAR(5), @n_DiffDay) + '. Continue?'
+            GOTO EXIT_SP
+         END
+      END
 
-            IF @n_Cnt = 0 
+      SELECT @c_ManLotExpDate = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ManLotExpDate')
+
+      IF @c_ManLotExpDate = '1'
+      BEGIN
+         SET @n_Cnt = 0
+      	SELECT @n_Cnt = 1
+		   FROM LOTATTRIBUTE WITH (NOLOCK)
+		   WHERE Storerkey= @c_Storerkey
+		   AND sku        = @c_Sku
+         AND lottable02 = @c_Lottable02Value
+		   AND lottable03 = @c_Lottable03Value
+		   AND lottable04 = @dt_Lottable04Value
+
+         IF @n_Cnt = 0 
+         BEGIN
+            SET @n_Cnt        = 0
+            SET @n_MatchLot02 = 0
+
+      	   SELECT @n_Cnt        = ISNULL(SUM(CASE WHEN LA.lottable02 Like @c_Lottable02Value + '.%' THEN 1 ELSE 0 END),0)
+               ,   @n_MatchLot02 = ISNULL(MAX(CASE WHEN LA.lottable02 = @c_Lottable02Value THEN 1 ELSE 0 END),0)
+		      FROM LOTATTRIBUTE LA WITH (NOLOCK)
+		      WHERE LA.Storerkey= @c_Storerkey
+		      AND LA.Sku        = @c_Sku
+            AND LA.lottable02 Like @c_Lottable02Value + '%'
+		      AND LA.lottable03 = @c_Lottable03Value
+
+            IF @n_MatchLot02 = 1 
             BEGIN
-               SET @n_Cnt        = 0
-               SET @n_MatchLot02 = 0
-
-      	      SELECT @n_Cnt        = ISNULL(SUM(CASE WHEN LA.lottable02 Like @c_Lottable02Value + '.%' THEN 1 ELSE 0 END),0)
-                  ,   @n_MatchLot02 = ISNULL(MAX(CASE WHEN LA.lottable02 = @c_Lottable02Value THEN 1 ELSE 0 END),0)
-		         FROM LOTATTRIBUTE LA WITH (NOLOCK)
-		         WHERE LA.Storerkey= @c_Storerkey
-		         AND LA.Sku        = @c_Sku
-               AND LA.lottable02 Like @c_Lottable02Value + '%'
-		         AND LA.lottable03 = @c_Lottable03Value
-
-               IF @n_MatchLot02 = 1 
+               SET @c_WarningMsg = 'Manufacturer Lot: ' + @c_Lottable02Value + ' exists with different expiry date.'
+               IF @n_Cnt <> 0 
                BEGIN
-                  SET @c_WarningMsg = 'Manufacturer Lot: ' + @c_Lottable02Value + ' exists with different expiry date.'
-                  IF @n_Cnt <> 0 
-                  BEGIN
-                     SET @n_Cnt = @n_Cnt + 1
-                     SET @c_Lottable02Value = @c_Lottable02Value + REPLICATE ('.',@n_Cnt)
-                     SET @c_Lottable02      = @c_Lottable02Value
-                  END
+                  SET @n_Cnt = @n_Cnt + 1
+                  SET @c_Lottable02Value = @c_Lottable02Value + REPLICATE ('.',@n_Cnt)
+                  SET @c_Lottable02      = @c_Lottable02Value
                END
             END
          END
-
-         IF @c_UTLITF = '1' 
-         BEGIN
-            SET @d_BatchNo = DATEADD(day, (-1 * @n_MinShelfLife), @d_ExpiryDate)
-            SET @c_BatchNo = CONVERT(NVARCHAR(8), @d_BatchNo, 112) + 'A'
-            SET @c_Lottable02Value = @c_BatchNo
-            SET @c_Lottable02      = @c_Lottable02Value
-         END
       END
-   END TRY
-   BEGIN CATCH
-      SET @n_Continue = 3
-      SET @c_errmsg   = ERROR_MESSAGE()
-      GOTO EXIT_SP
-   END CATCH      --(Wan01) - END
-   
+
+      IF @c_UTLITF = '1' 
+      BEGIN
+         SET @d_BatchNo = DATEADD(day, (-1 * @n_MinShelfLife), @d_ExpiryDate)
+         SET @c_BatchNo = CONVERT(NVARCHAR(8), @d_BatchNo, 112) + 'A'
+         SET @c_Lottable02Value = @c_BatchNo
+         SET @c_Lottable02      = @c_Lottable02Value
+      END
+   END
+
    EXIT_SP:
 
    IF @n_Continue = 3

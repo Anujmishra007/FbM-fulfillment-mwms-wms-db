@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: Inventory hold screen                                     */  
 /*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.0                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
@@ -27,7 +27,6 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable*/
 /*                            Revert when Raise error                   */
-/* 2021-01-15  Wan02    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Inventoryhold_Wrapper]
      @c_StorerKey   NVARCHAR(15)
@@ -64,19 +63,15 @@ BEGIN
     SET ANSI_NULLS OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
     
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+    SET @n_Err = 0 
+    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
     
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
+    IF @n_Err <> 0 
+    BEGIN
+      GOTO EXIT_SP
+    END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                   --(Wan02) - END
-    
+    EXECUTE AS LOGIN = @c_UserName
         
     DECLARE @n_Continue              INT
            ,@n_starttcnt             INT

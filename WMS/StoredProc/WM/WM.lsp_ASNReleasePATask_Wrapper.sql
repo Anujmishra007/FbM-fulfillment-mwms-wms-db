@@ -19,7 +19,7 @@ GO
 /*                                                                      */  
 /* Called By: ASN RCM Release Putaway Tasks                             */  
 /*                                                                      */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.0                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -28,7 +28,6 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
-/* 15-JAN-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/ 
 CREATE PROCEDURE [WM].[lsp_ASNReleasePATask_Wrapper]
    @c_ReceiptKey NVARCHAR(10),    
@@ -46,19 +45,15 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
    
    SET @n_Err = 0 
-   
-   IF SUSER_SNAME() <> @c_UserName     --(Wan01) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-      
-      EXECUTE AS LOGIN = @c_UserName
-   END                                 --(Wan01) - END
+   EXECUTE AS LOGIN = @c_UserName
    
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END
+
    BEGIN TRY -- SWT01 - Begin Outer Begin Try                 
       EXEC isp_ASNReleasePATask_Wrapper 
          @c_ReceiptKey = @c_ReceiptKey,
@@ -67,13 +62,13 @@ BEGIN
          @c_ErrMsg = @c_ErrMsg OUTPUT
    END TRY  
   
-   BEGIN CATCH  
-      SET @b_Success= 0       --(Wan01)  
-      SET @c_ErrMsg = 'ASN Release Putaway Task Failed. (lsp_ASNReleasePATask_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '    --(Wan01)  
+   BEGIN CATCH    
+      SET @c_ErrMsg = 'Wave Order Analysis Failed. (lsp_WaveOrderAnalysis) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '  
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
    EXIT_SP:       
    REVERT  
+   
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ASNReleasePATask_Wrapper] TO nSQL 

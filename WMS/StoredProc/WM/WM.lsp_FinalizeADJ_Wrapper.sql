@@ -19,7 +19,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.3                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -29,7 +29,6 @@ GO
 /* 2020-12-10  Wan02    1.2   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when SP Raise error                 */
 /*                      1.2   Fixed Uncommitable Transaction             */
-/* 2021-01-15  Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]  
    @c_AdjustmentKey  NVARCHAR(10)
@@ -40,7 +39,7 @@ CREATE PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]
 ,  @n_ErrGroupKey    INT = 0 OUTPUT
 AS  
 BEGIN  
-   SET NOCOUNT ON                      --(Wan02) - START                                 
+	SET NOCOUNT ON                      --(Wan02) - START                                 
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
@@ -107,21 +106,18 @@ BEGIN
    SET @n_ErrGroupKey= 0
 
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan03) - END
-   
+   EXECUTE AS LOGIN = @c_UserName
+
    WHILE @@TRANCOUNT > 0
    BEGIN
       COMMIT TRAN
@@ -787,7 +783,7 @@ BEGIN
 
          IF @n_Continue = 3
          BEGIN 
-            IF @@TRANCOUNT > 0            --(Wan02)  
+      	   IF @@TRANCOUNT > 0            --(Wan02)  
                ROLLBACK TRAN;
 
             EXEC [WM].[lsp_WriteError_List] 

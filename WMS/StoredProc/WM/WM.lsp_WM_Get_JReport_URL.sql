@@ -15,7 +15,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.0                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -26,7 +26,6 @@ GO
 /* 2020-05-08  KHLim    1.1  Include get session & view report URL      */
 /* 2020-06-05  KHLim    1.2  ReturnURLStorer                            */
 /* 2020-12-29  SWT01    1.3  Missing Execute Login As                   */
-/* 15-Jan-2021 Wan01    1.4   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/
 CREATE  PROC  WM.lsp_WM_Get_JReport_URL
      @c_CountryName        NVARCHAR(50)  =''
@@ -58,22 +57,19 @@ BEGIN
    SET @c_errmsg   = ''
 
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
-   BEGIN   
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
    
-      IF @b_Debug <> 0
-      BEGIN
-         SELECT @n_Err, @c_ErrMsg
-      END
+   IF @b_Debug <> 0
+   BEGIN
+      SELECT @n_Err, @c_ErrMsg
+   END
 
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END
    
-      EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
-   END                                   --(Wan01) - END
+   EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
 
    SELECT TOP 1 @c_URLTemplate = n.NSQLDescrip + ISNULL(s.Option5,'')
    FROM NSQLCONFIG AS n WITH (NOLOCK)

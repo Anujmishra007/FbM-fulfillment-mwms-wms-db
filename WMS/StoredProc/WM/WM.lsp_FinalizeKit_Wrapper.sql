@@ -18,7 +18,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -29,7 +29,6 @@ GO
 /* 2020-12-10  Wan02    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when SP Raise error                 */
 /*                      1.1   Fixed Uncommitable Transaction             */
-/* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]  
    @c_KITKey               NVARCHAR(10)
@@ -142,20 +141,17 @@ BEGIN
    SET @n_ErrGroupKey = 0
 
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-      
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan03) - END
+   EXECUTE AS LOGIN = @c_UserName
+
+   IF @n_Err <> 0 
+   BEGIN
+      GOTO EXIT_SP
+   END
 
    BEGIN TRY         --(Wan02) - START
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1

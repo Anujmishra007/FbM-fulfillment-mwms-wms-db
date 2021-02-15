@@ -15,7 +15,7 @@ GO
 /*                                                                      */  
 /* Called By: Allocation                                                */  
 /*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
@@ -25,8 +25,6 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-11-23  Wan01    1.1   Add Big Outer Begin Try..End Try to enable*/
 /*                            Revert when Sub SP Raise error            */
-/* 2021-01-15  Wan02    1.2   Add Big Outer Begin try/Catch             */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Allocation_Wrapper]
    @c_Orderkey     NVARCHAR(10) = '', -- pass in only if call from shipment order
@@ -66,18 +64,16 @@ BEGIN
 
    SELECT @n_continue = 1, @b_Success = 0
    
+   --EXECUTE AS LOGIN=@c_UserName
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName        --(Wan02) - START
+   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   
+   EXECUTE AS LOGIN=@c_UserName -- (Wan01) 
+
+   IF @n_Err <> 0 
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-                
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    --(Wan02) - END
+      GOTO EXIT_SP
+   END
    
    --(Wan01) - START
    BEGIN TRY
