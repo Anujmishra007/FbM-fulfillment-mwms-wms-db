@@ -10,11 +10,23 @@ GO
 /************************************************************************/
 /* Store procedure: WMS                                                 */
 /* Copyright      : LFLogistics                                         */
-/*                                                                      */
+/* Copyright: LFL                                                       */                                                                                  
+/* Written by: Wan                                                      */                                                                                  
+/*                                                                      */                                                                                  
+/* Purpose: Duplicate Receipt Line Number                               */
+/*                                                                      */                                                                                  
+/* Called By: SCE                                                       */                                                                                  
+/*          :                                                           */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
+/*                                                                      */                                                                                  
+/* Version: 8.0                                                         */                                                                                  
+/*                                                                      */                                                                           
+/* Updates:                                                             */  
 /* Purpose: Duplicate Receipt Line Number                               */
 /*                                                                      */
-/* Date        Rev      Author      Purposes                            */
-/* 28-Dec-2020 SWT01    1.0         Adding Begin Try/Catch              */
+/* Date        Author   Rev   Purposes                                  */
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
+/* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_DuplicateReceiptLine]
     @c_ReceiptKey             NVARCHAR(10)
@@ -27,64 +39,67 @@ CREATE PROCEDURE [WM].[lsp_DuplicateReceiptLine]
    ,@c_UserName               NVARCHAR(128)=''
 AS
 BEGIN
-    SET NOCOUNT ON
-    SET QUOTED_IDENTIFIER OFF
-    SET ANSI_NULLS OFF
-    SET CONCAT_NULL_YIELDS_NULL OFF
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
     
-    SET @b_Success = 1
-    SET @c_ErrMsg = ''
+   SET @b_Success = 1
+   SET @c_ErrMsg = ''
 
-    --EXECUTE AS LOGIN=@c_UserName
-    SET @n_Err = 0 
-    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT        
+   SET @n_Err = 0 
+    
+   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
+   BEGIN
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT        
 
-    EXECUTE AS LOGIN = @c_UserName
-   
-    IF @n_Err <> 0 
-    BEGIN
+      IF @n_Err <> 0 
+      BEGIN
       GOTO EXIT_SP
-    END
+      END
+       
+      EXECUTE AS LOGIN = @c_UserName
+   END                                   --(Wan01) - END
     
-    BEGIN TRY -- SWT01 - Begin Outer Begin Try
+   BEGIN TRY -- SWT01 - Begin Outer Begin Try
     
-    IF NOT EXISTS(
+      IF NOT EXISTS(
       SELECT 1 FROM RECEIPTDETAIL RD WITH (NOLOCK)
       WHERE ReceiptKey = @c_ReceiptKey 
       AND   RD.ReceiptLineNumber = @c_OriginalLineNumber
       AND   RD.FinalizeFlag = CASE WHEN @c_IncludeFinalizedItem = 'Y' 
                                        THEN RD.FinalizeFlag 
-                                   ELSE 'N' 
+                                    ELSE 'N' 
                               END    
       AND   RD.QtyExpected > RD.BeforeReceivedQty )   
-    BEGIN
-       SET @b_Success = 0
-       SET @n_Err = 550701
-       SET @c_ErrMsg = 'Cannot duplicate from Receipt# ' + @c_ReceiptKey + 
+      BEGIN
+         SET @b_Success = 0
+         SET @n_Err = 550701
+         SET @c_ErrMsg = 'Cannot duplicate from Receipt# ' + @c_ReceiptKey + 
                ': No receipt line items with more Quantity Expected than Quantity Received.'
-       GOTO EXIT_SP
-    END                               
+         GOTO EXIT_SP
+      END                               
     
-    DECLARE @c_StorerKey             NVARCHAR(15) = ''
-           ,@c_Sku                   NVARCHAR(20) = ''
-           ,@c_UOM                   NVARCHAR(10) = ''
-           ,@c_PackKey               NVARCHAR(10) = ''
-           ,@n_BeforeReceivedQty     INT          = 0
-           ,@n_QtyExpected           INT          = 0
-           ,@c_Facility              NVARCHAR(15) = ''
-           ,@c_CustomisedSplitLine   NVARCHAR(30) = ''
-           ,@n_PalletCnt             INT = 0 
-           ,@b_ZeroExpected          BIT = 0 
-           ,@b_ByExpected            BIT = 0 
-           ,@n_QtyToBeSplitted       INT = 0 
-           ,@n_RemainQty             INT = 0
-           ,@c_LastReceiveLineNo     NVARCHAR(5) = ''
-           ,@c_NextReceiveLineNo     NVARCHAR(5) = ''
-           ,@n_RemainingQtyExpected  INT = 0 
-           ,@n_RemainQtyReceived     INT = 0 
-           ,@n_InsertBeforeReceivedQty INT = 0 
-           ,@n_InsertQtyExpected       INT = 0
-           ,@c_ReceiptLineNumber       NVARCHAR(5)=''   
+       DECLARE @c_StorerKey             NVARCHAR(15) = ''
+              ,@c_Sku                   NVARCHAR(20) = ''
+              ,@c_UOM                   NVARCHAR(10) = ''
+              ,@c_PackKey               NVARCHAR(10) = ''
+              ,@n_BeforeReceivedQty     INT          = 0
+              ,@n_QtyExpected           INT          = 0
+              ,@c_Facility              NVARCHAR(15) = ''
+              ,@c_CustomisedSplitLine   NVARCHAR(30) = ''
+              ,@n_PalletCnt             INT = 0 
+              ,@b_ZeroExpected          BIT = 0 
+              ,@b_ByExpected            BIT = 0 
+              ,@n_QtyToBeSplitted       INT = 0 
+              ,@n_RemainQty             INT = 0
+              ,@c_LastReceiveLineNo     NVARCHAR(5) = ''
+              ,@c_NextReceiveLineNo     NVARCHAR(5) = ''
+              ,@n_RemainingQtyExpected  INT = 0 
+              ,@n_RemainQtyReceived     INT = 0 
+              ,@n_InsertBeforeReceivedQty INT = 0 
+              ,@n_InsertQtyExpected       INT = 0
+              ,@c_ReceiptLineNumber       NVARCHAR(5)=''   
            --,@c_NewReceiptKey           NVARCHAR(10) = ''
     
       
@@ -179,7 +194,9 @@ BEGIN
       END
    END TRY  
   
-   BEGIN CATCH      
+   BEGIN CATCH
+      SET @b_Success = 0                  --(Wan01)
+      SET @c_ErrMsg = ERROR_MESSAGE()     --(Wan01)
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
 
