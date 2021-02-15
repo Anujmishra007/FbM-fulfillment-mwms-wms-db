@@ -18,7 +18,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -26,6 +26,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when Raise error                    */ 
+/* 15-Jan-2021 Wan02    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Post_Added_Wrapper]  
       @c_Module            NVARCHAR(60) = ''
@@ -109,11 +110,17 @@ BEGIN
    DEALLOCATE CUR_PRIMARY_KEY
 
    -- PRINT @c_SQL
-   --EXECUTE AS LOGIN=@c_UserName
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-   EXECUTE AS LOGIN=@c_UserName
+   SET @n_Err = 0 
+   IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
+   BEGIN
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+
+      IF @n_Err = 0 
+      BEGIN
+         EXECUTE AS LOGIN=@c_UserName
+      END
+   END                                   --(Wan02) - END
 
    BEGIN TRY   --(Wan01) - START
       IF @c_SQL <> ''
@@ -191,7 +198,8 @@ BEGIN
    BEGIN CATCH
       SET @c_ErrMsg = 'POST ADD fail. (lsp_Post_Added_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
       execute nsp_logerror @n_err, @c_errmsg, 'lsp_Post_Added_Wrapper'  
-   END CATCH   --(Wan01) - END    
+   END CATCH   --(Wan01) - END
+  
    REVERT      
 END
 GO

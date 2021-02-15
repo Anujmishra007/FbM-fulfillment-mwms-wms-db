@@ -18,13 +18,15 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver  Purposes                                    */ 
-/* 22-OCT-2020 Wan      1.0   Created                                    */         
+/* 22-OCT-2020 Wan      1.0   Created                                    */ 
+/* 15-JAN-2020 Wan01    1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/        
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper] (
   @c_Receiptkeys        NVARCHAR(2000)       -- List of Receiptkey with | seperator
@@ -64,17 +66,18 @@ BEGIN
 
    --2020-11-20 - START
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
+   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
    BEGIN
-      GOTO EXIT_SP
-   END
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+    
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+                
+      EXECUTE AS LOGIN = @c_UserName        
+   END                                   --(Wan01) - END
+    
    --2020-11-20 - END
 
 
