@@ -18,7 +18,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -26,7 +26,8 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when Raise error                    */
-/* 12/29/2020   SWT01    1.1  Remove Duplicate Execute Login             */
+/* 12/29/2020  SWT01    1.1   Remove Duplicate Execute Login             */
+/* 15-Jan-2021 Wan02    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_InventoryHoldASN_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
@@ -49,18 +50,21 @@ BEGIN
    DECLARE @c_ASNReason       NVARCHAR(10)= ''
      
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   IF @n_Err <> 0 
+   IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
    BEGIN
-      GOTO EXIT_SP
-   END
+      EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
              
-   EXECUTE AS LOGIN = @c_UserName   
-
+      EXECUTE AS LOGIN = @c_UserName   
+   END                                   --(Wan02) - END
+   
    BEGIN TRY -- (Wan01) - START  
       SET @c_ASNReason = ''
       SELECT @c_ASNReason = ISNULL(RTRIM(R.ASNReason),'')

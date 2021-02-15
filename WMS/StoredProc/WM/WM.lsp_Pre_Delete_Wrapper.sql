@@ -18,14 +18,15 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver   Purposes                                   */ 
 /* 2020-12-03  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when Raise error                    */  
+/* 15-Jan-2021 Wan02    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Wrapper]  
       @c_Module            NVARCHAR(60) = ''
@@ -118,11 +119,17 @@ BEGIN
       DEALLOCATE CUR_PRIMARY_KEY
    END
    -- PRINT @c_SQL
-   --EXECUTE AS LOGIN=@c_UserName
+
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   IF SUSER_SNAME() <> @c_UserName        --(Wan02) - START
+   BEGIN
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
    
-   EXECUTE AS LOGIN=@c_UserName
+      IF @n_Err = 0 
+      BEGIN
+         EXECUTE AS LOGIN=@c_UserName
+      END
+   END                                    --(Wan02) - END
    
    BEGIN TRY   --(Wan01) - START     
       IF @c_SQL <> ''

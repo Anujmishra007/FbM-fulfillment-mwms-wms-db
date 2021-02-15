@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,7 @@ GO
 /* 2020-12-03  Wan02    1.2   LFWM-2474 - PROD  Australia  Qty Expected */
 /*                            is incorrect and addwho was changed to    */
 /*                            WMConnect                                 */
+/* 15-Jan-2021 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulateSODs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -136,17 +137,20 @@ BEGIN
    IF @b_PopulateFromArchive = 1 SET @c_IsArch = 'Y' 
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
+   BEGIN   
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END 
+                
+      EXECUTE AS LOGIN = @c_UserName
+   END                                   --(Wan03) - END
 
    BEGIN TRY -- Wan01 - Begin Outer Begin Try
       SET @n_ErrGroupKey = 0

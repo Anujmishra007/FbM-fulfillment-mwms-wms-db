@@ -17,8 +17,9 @@ GO
 /*        :                                                              */  
 /* Called By:                                                            */  
 /*                                                                       */  
-/*                                                                       */  
-/* Version: 1.1                                                          */  
+/* PVCS Version: 1.0                                                     */                                                                                  
+/*                                                                       */                                                                                  
+/* Version: 8.0                                                          */                                                                                  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -30,6 +31,7 @@ GO
 /*                            BOM                                        */
 /* 2020-12-18  Wan02    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when SP Raise error                 */
+/* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_KitToExplodeBOM_Wrapper]  
    @c_KITKey               NVARCHAR(10)
@@ -108,17 +110,18 @@ BEGIN
    SET @n_ErrGroupKey = 0
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
+   
+   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
-      GOTO EXIT_SP
-   END
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+    
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+                
+      EXECUTE AS LOGIN = @c_UserName        
+   END                                   --(Wan03) - END
    
    BEGIN TRY   --(Wan01) --2020-12-18
   	
