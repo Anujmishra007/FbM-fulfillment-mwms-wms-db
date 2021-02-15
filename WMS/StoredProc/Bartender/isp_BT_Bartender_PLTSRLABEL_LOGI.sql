@@ -1,7 +1,7 @@
---IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_PLTSRLABEL_LOGI]') 
---AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
---DROP PROCEDURE [dbo].[isp_BT_Bartender_PLTSRLABEL_LOGI]
---GO
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_PLTSRLABEL_LOGI]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_BT_Bartender_PLTSRLABEL_LOGI]
+GO
 
 SET ANSI_NULLS OFF
 GO
