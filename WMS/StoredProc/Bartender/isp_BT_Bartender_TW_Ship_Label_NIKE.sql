@@ -1,6 +1,12 @@
 ﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_BT_Bartender_TW_Ship_Label_NIKE]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[isp_BT_Bartender_TW_Ship_Label_NIKE]
 GO  
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO   
+
   
 /******************************************************************************/                   
 /* Copyright: IDS                                                             */                   
