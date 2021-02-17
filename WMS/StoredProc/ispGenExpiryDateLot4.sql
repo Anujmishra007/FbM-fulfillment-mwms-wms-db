@@ -28,8 +28,9 @@ GO
 /*                              Userdefine01.(Wan01)                    */
 /* 21-May-2014  TKLIM     1.1   Added Lottables 06-15                   */
 /* 27-AUG-2015  YTWAN     1.4   SOS#351301-TH-CTX auto calucate Lot04   */
-/*                              (Wan02)                                 */ 
-/* 06-MAR-2020  SPChin    1.5   INC1064615 - Add Filter By StorerKey    */              
+/*                              (Wan02)                                 */  
+/* 06-MAR-2020  SPChin    1.5   INC1064615 - Add Filter By StorerKey    */ 
+/* 04-AUG-2020  Chermaine 1.6   WMS-14523 remark set lottble ='' (cc01) */
 /************************************************************************/
 
 CREATE PROCEDURE ispGenExpiryDateLot4
@@ -91,18 +92,18 @@ BEGIN
            @b_debug        INT
 
    SELECT @n_continue = 1, @b_success = 1, @n_Err = 0, @b_debug = 0
-   SELECT @c_Lottable01  = '',
-          @c_Lottable02  = '',
-          @c_Lottable03  = '',
+   SELECT --@c_Lottable01  = '',    --(cc01)
+   --       @c_Lottable02  = '',
+   --       @c_Lottable03  = '',
           @dt_Lottable04 = NULL,
           @dt_Lottable05 = NULL,
-          @c_Lottable06 = '',
-          @c_Lottable07 = '',
-          @c_Lottable08 = '',
-          @c_Lottable09 = '',
-          @c_Lottable10 = '',
-          @c_Lottable11 = '',
-          @c_Lottable12 = '',
+          --@c_Lottable06 = '',
+          --@c_Lottable07 = '',
+          --@c_Lottable08 = '',
+          --@c_Lottable09 = '',
+          --@c_Lottable10 = '',
+          --@c_Lottable11 = '',
+          --@c_Lottable12 = '',
           @dt_Lottable13 = NULL,
           @dt_Lottable14 = NULL,
           @dt_Lottable15 = NULL
