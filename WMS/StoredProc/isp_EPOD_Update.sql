@@ -1,623 +1,459 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_TH_EPOD_Update]')  
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )  
-DROP PROCEDURE [dbo].[isp_TH_EPOD_Update]  
-GO  
-  
-SET ANSI_NULLS OFF  
-GO  
-SET QUOTED_IDENTIFIER OFF  
-GO  
-  
-/************************************************************************/  
-/* Stored Procedure: isp_TH_EPOD_Update                                 */  
-/* Creation Date: 29-Aug-2014                                           */  
-/* Copyright: IDS                                                       */  
-/* Written by: CSCHONG                                                  */  
-/*                                                                      */  
-/* Purpose: duplicate from isp_TH_EPOD_Update                           */  
-/*                                                                      */  
-/* Called By:                                                           */  
-/*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date           Author      Purposes                                  */  
-/* 29-Aug-2014    CSCHONG     SOS319466  (CS01)                         */  
-/* 22-Feb-2018    Alex        Jira Ticket #WMS-3936 (Alex01)            */  
-/************************************************************************/  
-  
-CREATE PROC [dbo].[isp_TH_EPOD_Update] (  
-   @cStorerKey           NVARCHAR(15),  
-   @cEPOD_OrderKey       NVARCHAR(50),  
-   @cEPODStatus          NVARCHAR(10),  
-   @cEPOD_Date           DATETIME,  
-   @cEPODNotes           NVARCHAR(1000),  
-   @cLatitude            NVARCHAR(30),  
-   @cLongtitude          NVARCHAR(30),  
-   @cAccountID           NVARCHAR(30),  
-   @cRejectReasonCode    NVARCHAR(20),  
-   @nePODKey             BIGINT,  
-   @dLocationCaptureDate DATETIME,  
-   @nUID                 INT,  
-   @cContainImage        NVARCHAR(1),  
-   @cEmailTitle          NVARCHAR(250)  = '',  
-   @cEmailRecipients     NVARCHAR(1000) = '',  
-   @nErrorNo             INT = 1             OUTPUT,  
-   @cErrorMsg            NVARCHAR(2048) = '' OUTPUT,  
-   @cEPODAddDate         DATETIME,  -- (Chee01)  
-   @nEPODTry             INT        -- (Chee01)  
-)               
-AS               
-BEGIN              
-   SET NOCOUNT ON                 
-   SET ANSI_WARNINGS OFF              
-   SET QUOTED_IDENTIFIER OFF              
-   SET ANSI_NULLS OFF              
-              
-   --DECLARE @cMBOLKey             CHAR (10)               
-   --      , @cMBOLLineNumber      CHAR ( 5)            
-   --      , @cPOD_Status          CHAR ( 2)            
-   --      , @cFinalizeFlag        CHAR ( 1)                       
-                          
-   -- SOS77243              
-   DECLARE @cReasonCode          NVARCHAR(10)              
-                    
-   DECLARE @nReturnCode          INT                
-         , @cSubject             NVARCHAR(255)                
-         , @cEmailBodyHeader     NVARCHAR(255)                
-         , @cTableHTML           NVARCHAR(MAX)                
-         , @b_debug              INT       
-         , @cE1_ePODOrderKey     NVARCHAR(50)      
-         , @b_success            INT     
-        -- , @c_GetEPODNotes     NVARCHAR(1000)       
-     
-   --(Alex01)  
-   DECLARE @cOrderType           NVARCHAR(20)  
-         , @cPOD_StorerKey       NVARCHAR(15)  
-         , @cExecStatements      NVARCHAR(4000)  
-         , @cExecArguments       NVARCHAR(1000)  
-         , @nContinue            INT  
-         , @nStartTCnt           INT  
-   
-   DECLARE @cPODMbolKey          NVARCHAR(10)  
-         , @cPODMBOLLineNumber   NVARCHAR(50)  
-         , @cPODStorerKey        NVARCHAR(15)  
-  
-   SET @nErrorNo           = 0              
-   SET @cErrorMsg          = ''                      
-   --SET @cMBOLKey           = ''              
-   --SET @cMBOLLineNumber    = ''              
-   --SET @cPOD_Status        = '0' -- Initialize current Status in POD table              
-   --SET @cFinalizeFlag      = 'N'              
-   SET @b_debug            = 1      
-   SET @b_Success          = 1    
-  
-   --(Alex01)  
-   SET @cOrderType         = ''  
-   SET @cPOD_StorerKey     = ''  
-   SET @cExecStatements    = ''  
-   SET @cExecArguments     = ''  
-   SET @nContinue          = 1  
-   SET @nStartTCnt         = @@TRANCOUNT  
-  
---   IF ISNULL(@cEPODNotes,'') <> ''  
---     BEGIN  
---       SET @cEPODNotes = '|' + @cEPODNotes  
---     END  
-                 
-   DECLARE @tError TABLE  
-      ( ErrorNo INT              
-      , ErrorMessage NVARCHAR(1000))               
-     
-   --(Alex01)  
-   IF OBJECT_ID('tempdb..#tWMSStorerList') IS NOT NULL  
-      DROP TABLE #tWMSStorerList  
-  
-   CREATE TABLE #tWMSStorerList(  
-      StorerKey      NVARCHAR(15)   NULL,  
-      ValidExtOrd    NVARCHAR(1)    NULL  
-   )  
-   --(Alex01)  
-   IF OBJECT_ID('tempdb..#tPOD') IS NOT NULL  
-      DROP TABLE #tPOD  
-  
-   CREATE TABLE #tPOD(  
-      MBOLKey           NVARCHAR(10),  
-      MBOLLineNumber    NVARCHAR(50),  
-      StorerKey         NVARCHAR(15)   NULL,  
-      [Status]          NVARCHAR(10)   NULL,  
-      FinalizeFlag      NVARCHAR(1)    NULL  
-   )  
-  
-   BEGIN TRAN  
-   /*------------------------*/              
-   /* Process POD records    */              
-   /*------------------------*/              
-   --DECLARE @cPrevPODStatus       CHAR (1)             
-   --      , @cPrevRefNo           CHAR (20)            
-   --      , @cBlankRefNo          CHAR (20)      
-  
-   --(Alex01) BEGIN  
-   --IF NOT EXISTS (SELECT  TOP 1 * FROM CODELKUP (NOLOCK) WHERE Listname = 'EPODSTORER' AND Code = @cAccountID)    
-   --BEGIN    
-   --   SET @b_success = 0    
-   --   SET @nErrorNo = 70001                
-   --   SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid AccountID# ' + ISNULL(RTRIM(@cAccountID), '') + '.'              
-   --   INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)               
-   --   GOTO QUIT       
-   --END      
-     
-   IF @b_debug = 1  
-   BEGIN  
-      PRINT '======================'  
-      PRINT '>>> isp_TH_EPOD_Update STARTED'  
-      PRINT '>>> INSERT #tWMSStorerList '  
-   END  
-  
-   --Extract all wms storers from wms codelkup (Alex01)  
-   INSERT INTO #tWMSStorerList (StorerKey, ValidExtOrd)  
-   SELECT C.StorerKey, ISNULL(RTRIM(SC.sValue), '')  
-   FROM Codelkup C WITH (NOLOCK)  
-   LEFT OUTER JOIN StorerConfig SC WITH (NOLOCK)  
-   ON SC.StorerKey = C.StorerKey AND ConfigKey = 'EPOD_VALIDATE_EXTORDKEY'  
-   WHERE C.ListName = 'EPODStorer' AND C.Code = @cAccountID  
-  
-   IF @@ERROR <> 0   
-   BEGIN   
-      SET @nContinue = 3  
-      SET @nErrorNo = 70000  
-      SET @cErrorMsg = 'Failed to get WMS StorerKey - ' + ERROR_MESSAGE()  
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)  
-      GOTO QUIT  
-   END  
-  
-   IF NOT EXISTS ( SELECT 1 FROM #tWMSStorerList )  
-   BEGIN  
-      SET @nContinue = 3  
-      --SET @b_success = 0   
-      SET @nErrorNo = 70001  
-      SET @cErrorMsg = 'Invalid AccountID# ' + ISNULL(RTRIM(@cAccountID), '') + '.'  
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)  
-      GOTO QUIT  
-   END  
-   --IF NOT EXISTS (SELECT  TOP 1 * FROM POD P (NOLOCK) WHERE  P.OrderKey  = @cEPOD_OrderKey )    
-   --BEGIN    
-   --   SET @nErrorNo = 90001                
-   --   SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid OrderKey ' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + '.'              
-   --   INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)               
-   --   GOTO QUIT       
-   --END    
-  
-   --SELECT TOP 1 @cCurPODStatus   = P.Status  
-   --FROM POD P WITH (NOLOCK)  
-   --WHERE P.OrderKey  = @cEPOD_OrderKey  
-  
-   SET @cOrderType = CASE   
-                        WHEN EXISTS ( SELECT 1 FROM dbo.POD P WITH (NOLOCK)   
-                              WHERE P.OrderKey = @cEPOD_OrderKey   
-                              AND EXISTS ( SELECT 1 FROM #tWMSStorerList T   
-                                 WHERE T.StorerKey = P.StorerKey )  
-                              ) THEN 'OrderKey'  
-                        WHEN EXISTS ( SELECT 1 FROM dbo.POD P WITH (NOLOCK)   
-                              WHERE P.ExternOrderKey = @cEPOD_OrderKey   
-                              AND EXISTS ( SELECT 1 FROM #tWMSStorerList T   
-                                 WHERE T.StorerKey = P.StorerKey AND ValidExtOrd = '1' )  
-                              ) THEN 'ExternOrderKey'  
-                        ELSE '' END  
-  
-   IF ISNULL(RTRIM(@cOrderType), '') = ''  
-   BEGIN  
-      SET @nContinue = 3  
-      SET @nErrorNo = 70003                
-      SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid OrderKey ' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + '.'              
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)               
-      GOTO QUIT   
-   END  
-  
-   SET @cExecStatements = ''  
-   SET @cExecArguments = ''  
-   SET @cExecStatements = N'INSERT INTO #tPOD(MBOLKey, MBOLLineNumber, StorerKey, [Status], FinalizeFlag) '  
-                        +  'SELECT P.Mbolkey, P.Mbollinenumber, StorerKey, [Status], FinalizeFlag '  
-                        +  'FROM POD P WITH (NOLOCK) '  
-                        +  'WHERE P.' + @cOrderType + ' = @cEPOD_OrderKey '  
-                        +  'AND EXISTS ( SELECT 1 FROM #tWMSStorerList T WHERE T.StorerKey = P.StorerKey ) '  
-   SET @cExecArguments = '@cEPOD_OrderKey NVARCHAR(50)'  
-   EXEC SP_EXECUTESQL @cExecStatements, @cExecArguments, @cEPOD_OrderKey  
-   IF @@ERROR <> 0   
-   BEGIN   
-      SET @nContinue = 3  
-      SET @nErrorNo = 70008  
-      SET @cErrorMsg = 'Failed to get WMS POD - ' + ERROR_MESSAGE()  
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)  
-      GOTO QUIT  
-   END  
-  
-   IF @b_debug = 1  
-      PRINT '>>> INSERT #tPOD - ' + @cExecStatements  
-  
-   IF EXISTS(SELECT 1 FROM #tPOD WHERE [Status] IN ('7', '8'))--@cPOD_Status in ('7','8')  
-   BEGIN              
-      SET @nContinue = 3  
-      SET @nErrorNo = 70004  
-      SET @cErrorMsg = RTRIM(@cErrorMsg) + ' POD already Confirmed (' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ').'  
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)  
-      GOTO QUIT  
-   END  
-  
-   IF EXISTS ( SELECT 1 FROM #tPOD WHERE [FinalizeFlag] = 'Y' )  
-   BEGIN   
-      SET @nContinue = 3  
-      SET @nErrorNo = 70005  
-      SET @cErrorMsg = RTRIM(@cErrorMsg) + ' POD already Finalized (' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ').'  
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)  
-   END   
-   --(Alex01) END  
-  
-   IF (ISNULL(RTRIM(@cEPODStatus),'') = '')              
-   BEGIN  
-      SET @nContinue = 3  
-      --SET @cBlankRefNo = RTRIM(@cEPODStatus)  + ISNULL(RTRIM(@cEPOD_OrderKey), '')              
-      SET @nErrorNo = 70006           
-      SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Ref# cannot be blank (' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ').'              
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)                   
-      GOTO QUIT                    
-   END  
-  
-   -- Delivery Status Validation  
-   -- 0 - Notify  
-   -- 1 - Full Delivered  
-   -- 2 - Partial Delivered  
-   -- 3 - Delivered with POD Held  
-   -- 4 - Redeliver  
-   -- 5 - Close  
-   IF @cEPODStatus NOT IN ('0', '1', '2', '3', '4', '5')              
-   BEGIN  
-      SET @nContinue = 3  
-      SET @nErrorNo = 70007      
-      SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid Delivery Status: Ref# ' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ' (0-5).'              
-      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)              
-      GOTO QUIT              
-   END  
-     
-   IF @nContinue = 1  
-   BEGIN  
-      BEGIN TRY  
-         DECLARE CUR_TEMP_POD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT Mbolkey, Mbollinenumber, StorerKey  
-         FROM #tPOD  
-         WHERE FinalizeFlag = 'N'  
-         OPEN CUR_TEMP_POD                
-         FETCH NEXT FROM CUR_TEMP_POD INTO @cPODMbolKey, @cPODMBOLLineNumber, @cPODStorerKey  
-           
-         WHILE @@FETCH_STATUS <> -1            
-         BEGIN  
-            SET @cReasonCode = ''              
-            SELECT @cReasonCode = c.Long                
-            FROM CODELKUP c WITH (NOLOCK)   
-            WHERE ListName = 'ePODreason'  
-            AND C.StorerKey = @cPODStorerKey  
-            AND C.[Description]  = @cRejectReasonCode  
-  
-            IF ISNULL(RTRIM(@cReasonCode),'') = ''            
-               SET @cReasonCode = @cRejectReasonCode  
-     
-            IF @b_debug=1  
-               PRINT 'Reason code = ' + @cReasonCode  
-  
-            --EPOD.PODStatus = '0' (Notify)  
-            IF @cEPODStatus = '0'   
-            BEGIN  
-               UPDATE POD WITH (ROWLOCK)  
-               SET [Status] = 'A' -- Arrive Destination  
-                  ,PODDate01 = @cEPOD_Date  
-                  ,PODDef09 =  @cAccountID  
-               WHERE Mbolkey = @cPODMbolKey  
-               AND Mbollinenumber = @cPODMBOLLineNumber  
-               AND FinalizeFlag = 'N'  
-            END    
-            --EPOD.PODStatus = '1' (Full Delivered)                 
-            ELSE IF @cEPODStatus = '1'              
-            BEGIN  
-               UPDATE POD WITH (ROWLOCK)  
-               SET [Status] = '7' -- Successful delivery  
-                  ,PODDef09  = @cAccountID  
-                  ,ActualDeliveryDate = @cEPOD_Date  
-                  ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END  
-                  ,Latitude = @cLatitude  
-                  ,Longtitude = @cLongtitude  
-                  ,EditDate  = GetDate()  
-                  ,TrafficCop = NULL  
-               WHERE Mbolkey = @cPODMbolKey  
-               AND Mbollinenumber = @cPODMBOLLineNumber  
-               AND FinalizeFlag = 'N'  
-            END  
-            -- EPOD.PODStatus = '2' (Partial Delivered)     
-            ELSE IF @cEPODStatus = '2'            
-            BEGIN  
-               UPDATE POD WITH (ROWLOCK)  
-               SET [Status] = '3' -- Partial Rejection  
-                  ,PODDef09  = @cAccountID  
-                  ,ActualDeliveryDate = @cEPOD_Date  
-                  ,RejectReasonCode = @cReasonCode  
-                  ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END  
-                  ,Latitude = @cLatitude  
-                  ,Longtitude = @cLongtitude  
-                  ,EditDate  = GetDate()                   
-                  ,TrafficCop = NULL  
-               WHERE Mbolkey = @cPODMbolKey  
-               AND Mbollinenumber = @cPODMBOLLineNumber                       
-               AND FinalizeFlag = 'N'  
-            END  
-            -- EPOD.PODStatus = '3' (Delivered With Held POD)  
-            ELSE IF @cEPODStatus = '3'             
-            BEGIN  
-               UPDATE POD WITH (ROWLOCK)  
-               SET [Status] = '7' --Successful delivery  
-                  ,PODDef06 = 'Y'  
-                  ,PODDef09  = @cAccountID  
-                  ,ActualDeliveryDate = @cEPOD_Date  
-                  ,RejectReasonCode = @cReasonCode  
-                  ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END  
-                  ,Latitude = @cLatitude  
-                  ,Longtitude = @cLongtitude  
-                  ,EditDate  = GetDate()  
-                  ,EditWho   = @cAccountID  
-                  ,TrafficCop = NULL  
-               WHERE Mbolkey = @cPODMbolKey  
-               AND Mbollinenumber = @cPODMBOLLineNumber  
-               AND FinalizeFlag = 'N'  
-            END  
-            -- EPOD.PODStatus = '4' (Redelivery)  
-            ELSE IF @cEPODStatus = '4'   
-            BEGIN  
-               UPDATE POD WITH (ROWLOCK)  
-               SET ReDeliveryDate = @cEPOD_Date  
-                  ,ReDeliveryCount = ISNULL(ReDeliveryCount,0) + 1  
-                  ,RejectReasonCode = @cReasonCode  
-                  ,PODDef09  = @cAccountID  
-                  ,Latitude = @cLatitude  
-                  ,Longtitude = @cLongtitude  
-                  ,EditDate  = GetDate()  
-                  ,EditWho   = @cAccountID  
-                  ,TrafficCop = NULL  
-               WHERE Mbolkey = @cPODMbolKey  
-               AND Mbollinenumber = @cPODMBOLLineNumber  
-               AND    FinalizeFlag = 'N'  
-            END  
-            ELSE IF @cEPODStatus = '5' -- EPOD.PODStatus = '5' (Close)  
-            BEGIN  
-               UPDATE POD WITH (ROWLOCK)  
-               SET [Status] = '2' --Full Rejection    
-                  ,FullRejectDate = @cEPOD_Date   
-                  ,RejectReasonCode = @cReasonCode  
-                  ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END  
-                  ,PODDef09  = @cAccountID  
-                  ,Latitude = @cLatitude  
-                  ,Longtitude = @cLongtitude  
-                  ,EditDate  = GetDate()  
-                  ,EditWho   = @cAccountID  
-                  ,TrafficCop = NULL  
-               WHERE Mbolkey = @cPODMbolKey  
-               AND Mbollinenumber = @cPODMBOLLineNumber  
-               AND FinalizeFlag = 'N'  
-            END  
-            FETCH NEXT FROM CUR_TEMP_POD INTO @cPODMbolKey, @cPODMBOLLineNumber, @cPODStorerKey  
-         END  
-         CLOSE CUR_TEMP_POD            
-         DEALLOCATE CUR_TEMP_POD  
-      END TRY  
-      BEGIN CATCH  
-         IF @b_debug = 1   
-         BEGIN   
-            PRINT '>>> ERROR EXCEPTION : ' + CONVERT(NVARCHAR, ERROR_NUMBER()) + ERROR_MESSAGE()  
-         END   
-         SET @nContinue = 3  
-         SET @nErrorNo = ERROR_NUMBER()  
-         SET @cErrorMsg = ERROR_MESSAGE()  
-         INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)  
-         GOTO QUIT   
-      END CATCH  
-   END  
-  
-   --BEGIN TRAN              
-   --IF @nErrorNo = 0               
-   --BEGIN   
-   --   SET @cReasonCode = ''              
-        
-   --   SELECT @cReasonCode = c.Long                
-   --   FROM CODELKUP c WITH (NOLOCK)   
-   --   --JOIN POD WITH (NOLOCK) ON POD.Storerkey=C.storerkey      
-   --   WHERE ListName = 'ePODreason'  
-   --   AND C.StorerKey = @cPOD_StorerKey  
-   --   AND C.Description  = @cRejectReasonCode  
-   --   --and C.Storerkey = @cStorerKey  
-  
-   --   IF ISNULL(RTRIM(@cReasonCode),'') = ''  
-   --   BEGIN              
-   --      SET @cReasonCode = @cRejectReasonCode  
-   --   END  
-     
-   --   IF @b_debug=1  
-   --   BEGIN  
-   --      PRINT 'Reason code = ' + @cReasonCode  
-   --   END  
-        
-   --   -- EPOD.PODStatus = '0' (Notify)    
-   --   IF @cEPODStatus = '0'   
-   --   BEGIN  
-   --      IF @b_debug=1              
-   --      BEGIN              
-   --         PRINT 'status = 0'  
-   --      END              
-     
-   --      UPDATE POD WITH (ROWLOCK)   
-   --         SET Status = 'A' -- Arrive Destination  
-   --            ,PODDate01 = @cEPOD_Date  
-   --            ,PODDef09 =  @cAccountID  
-   --      WHERE Orderkey = @cEPOD_OrderKey  
-   --      -- AND    StorerKey = @cStorerKey  
-   --      AND FinalizeFlag = 'N'  
-   --   END             
-   --   -- EPOD.PODStatus = '1' (Full Delivered)                 
-   --   ELSE IF @cEPODStatus = '1'              
-   --   BEGIN              
-   --      UPDATE POD WITH (ROWLOCK)               
-   --      SET Status = '7' -- Successful delivery              
-   --         ,PODDef09  = @cAccountID                        
-   --         ,ActualDeliveryDate = @cEPOD_Date              
-   --         -- ,RejectReasonCode = ''               
-   --         ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END                
-   --         ,Latitude = @cLatitude              
-   --         ,Longtitude = @cLongtitude               
-   --         ,EditDate  = GetDate()               
-   --         --  ,EditWho   = @cAccountID                     
-   --         ,TrafficCop = NULL        
-   --      WHERE Orderkey = @cEPOD_OrderKey             
-   --      --  AND    MbolLineNumber = @cMBOLLineNumber              
-   --      --  AND    StorerKey = @cStorerKey              
-   --      AND    FinalizeFlag = 'N'  
-   --   END              
-   --   ELSE IF @cEPODStatus = '2' -- EPOD.PODStatus = '2' (Partial Delivered)              
-   --   BEGIN              
-   --      UPDATE POD WITH (ROWLOCK)               
-   --      SET Status = '3'     -- Partial Rejection            
-   --         ,PODDef09  = @cAccountID                  
-   --         ,ActualDeliveryDate = @cEPOD_Date              
-   --         ,RejectReasonCode = @cReasonCode               
-   --         ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END                 
-   --         ,Latitude = @cLatitude              
-   --         ,Longtitude = @cLongtitude               
-   --         ,EditDate  = GetDate()               
-   --         -- ,EditWho   = @cAccountID                     
-   --         ,TrafficCop = NULL                
-   --      WHERE Orderkey = @cEPOD_OrderKey  
-   --      --WHERE  MbolKey = @cMBOLKey               
-   --      --AND    MbolLineNumber = @cMBOLLineNumber              
-   --      --AND    StorerKey = @cStorerKey              
-   --      AND FinalizeFlag = 'N'  
-   --   END  
-   --   ELSE IF @cEPODStatus = '3' -- EPOD.PODStatus = '3' (Delivered With Held POD)              
-   --   BEGIN        
-   --      UPDATE POD WITH (ROWLOCK)               
-   --      SET Status = '7'               --Successful delivery    
-   --         ,PODDef06 = 'Y'  
-   --         ,PODDef09  = @cAccountID                   
-   --         ,ActualDeliveryDate = @cEPOD_Date              
-   --         ,RejectReasonCode = @cReasonCode              
-   --         ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END                 
-   --         ,Latitude = @cLatitude              
-   --         ,Longtitude = @cLongtitude               
-   --         ,EditDate  = GetDate()               
-   --         ,EditWho   = @cAccountID                     
-   --         ,TrafficCop = NULL                
-   --      WHERE Orderkey = @cEPOD_OrderKey  
-   --      --  WHERE  MbolKey = @cMBOLKey               
-   --      --  AND    MbolLineNumber = @cMBOLLineNumber              
-   --      -- AND    StorerKey = @cStorerKey              
-   --      AND FinalizeFlag = 'N'  
-   --   END              
-   --   ELSE IF @cEPODStatus = '4' -- EPOD.PODStatus = '4' (Re-try)                    
-   --   BEGIN  
-   --      UPDATE POD WITH (ROWLOCK)               
-   --      SET ReDeliveryDate = @cEPOD_Date   
-   --         ,ReDeliveryCount = ISNULL(ReDeliveryCount,0) + 1             
-   --         ,RejectReasonCode = @cReasonCode    
-   --         ,PODDef09  = @cAccountID     
-   --         ,Latitude = @cLatitude              
-   --         ,Longtitude = @cLongtitude           
-   --         ,EditDate  = GetDate()               
-   --         ,EditWho   = @cAccountID                     
-   --         ,TrafficCop = NULL                
-   --      WHERE Orderkey = @cEPOD_OrderKey  
-   --      --WHERE  MbolKey = @cMBOLKey               
-   --      --AND    MbolLineNumber = @cMBOLLineNumber              
-   --      --AND    StorerKey = @cStorerKey              
-   --      AND    FinalizeFlag = 'N'  
-   --   END  
-   --   ELSE IF @cEPODStatus = '5' -- EPOD.PODStatus = '5' (Close)  
-   --   BEGIN                             
-   --      UPDATE POD WITH (ROWLOCK)               
-   --      SET Status = '2'               --Full Rejection    
-   --         ,FullRejectDate = @cEPOD_Date   
-   --         ,RejectReasonCode = @cReasonCode    
-   --         ,Notes = case when ISNULL(POD.Notes,'') = '' then @cEPODNotes Else (POD.Notes + '|' + @cEPODNotes) END   
-   --         ,PODDef09  = @cAccountID     
-   --         ,Latitude = @cLatitude              
-   --         ,Longtitude = @cLongtitude           
-   --         ,EditDate  = GetDate()               
-  --         ,EditWho   = @cAccountID                     
-   --         ,TrafficCop = NULL                
-   --      WHERE Orderkey = @cEPOD_OrderKey  
-   --      --WHERE  MbolKey = @cMBOLKey               
-   --      --AND    MbolLineNumber = @cMBOLLineNumber              
-   --      --AND    StorerKey = @cStorerKey              
-   --      AND    FinalizeFlag = 'N'          
-   --   END                         
-              
-   -- --END              
-   --END            
-   --COMMIT TRAN              
-  
-   QUIT:  
-   IF CURSOR_STATUS('LOCAL' , 'CUR_TEMP_POD') in (0 , 1)  
-   BEGIN                
-      CLOSE CUR_TEMP_POD  
-      DEALLOCATE CUR_TEMP_POD  
-   END  
-  
-   --Send Error Msg            
-   IF @nErrorNo <> 0 AND ISNULL(RTRIM(@cEmailRecipients),'') <> ''  
-   BEGIN  
-      SET @cSubject = @cEmailTitle + ' (' + @cEPOD_OrderKey + ')'                
-      SET @cEmailBodyHeader = @cStorerkey + ' EPOD Update Error '                
-         SET @cTableHTML =                 
-             N'<H1>' + @cEmailBodyHeader + '</H1>' +                
-             N'<table border="1">' +                
-             N'<tr><th>Error No</th><th>Error Message</th>' +                
-             CAST ( ( SELECT td = ErrorNo, ''                 
-                            ,td = ErrorMessage, ''                
-                      FROM @tError               
-               FOR XML PATH('tr'), TYPE                 
-             ) AS NVARCHAR(MAX) ) +                
-             N'</table>' ;                       
-                           
-      EXEC @nReturnCode = msdb.dbo.sp_send_dbmail @recipients=@cEmailRecipients                
-                                          ,  @subject=@cSubject                 
-                                          ,  @body=@cTableHTML                 
-                                          ,  @body_format='HTML';                
-   END  
-  
-   WHILE @@TRANCOUNT < @nStartTCnt  
-      BEGIN TRAN  
-  
-   IF @nContinue=3  
-   BEGIN   
-      IF @@TRANCOUNT > @nStartTCnt AND @@TRANCOUNT = 1  
-      BEGIN    
-         ROLLBACK TRAN    
-      END    
-      ELSE    
-      BEGIN    
-         WHILE @@TRANCOUNT > @nStartTCnt    
-         BEGIN    
-            COMMIT TRAN    
-         END    
-      END  
-      RETURN    
-   END  
-   ELSE    
-   BEGIN     
-      WHILE @@TRANCOUNT > @nStartTCnt    
-      BEGIN             
-         COMMIT TRAN    
-      END    
-      RETURN    
-   END  
-END -- Procedure   
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_EPOD_Update]')
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
+DROP PROCEDURE [dbo].[isp_EPOD_Update]
 GO
 
-GRANT EXEC ON isp_TH_EPOD_Update TO nSQL
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+/************************************************************************/
+/* Stored Procedure: isp_EPOD_Update                                    */
+/* Creation Date: 04-Apr-2013                                           */
+/* Copyright: IDS                                                       */
+/* Written by: Shong                                                    */
+/*                                                                      */
+/* Purpose: Update POD Status using ePOD method                         */
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author   Ver  Purposes                                  */
+/* 09-May-2013  CSCHONG  1.1  SOS276392  (CS01)                         */
+/* 25-JUL-2013  CSCHONG  1.2  Fix the bug when order key not exist(CS01)*/
+/* 06-Jun-2014  CHEE     1.3  Add EPOD.AddDate & EPOD.Try (Chee01)      */
+/* 17-Jul-2014  CHEE     1.4  SOS#314938 Search for EPOD.OrderKey = POD.*/
+/*                            TrackCOl02 & POD.FinalizeFlag='N'(Chee02) */
+/* 30-Jul-2014  CHEE     1.5  SOS#314938 Update POD FullRejectDate,     */
+/*                            PartialRejectDate, RedeliveryDate based on*/
+/*                            EPOD status when turned on StorerConfig - */ 
+/*                            CP_ShowPODEventHistory (Chee03)           */
+/* 27-Jul-2017  TLTING   1.6  Wrong datatype                            */
+/* 26-Feb-2018  Alex     1.7  Bug Fixed (Alex01)                        */
+/************************************************************************/
+
+CREATE PROC [dbo].[isp_EPOD_Update] (
+  @cStorerKey           NVARCHAR(15),
+  @cEPOD_OrderKey       NVARCHAR(50),
+  @cEPODStatus          NVARCHAR(10),
+  @cEPOD_Date           DATETIME,
+  @cEPODNotes           NVARCHAR(1000),
+  @cLatitude            NVARCHAR(30),
+  @cLongtitude          NVARCHAR(30),
+  @cAccountID           NVARCHAR(30),
+  @cRejectReasonCode    NVARCHAR(20),
+  @nePODKey             BIGINT,
+  @dLocationCaptureDate DATETIME,
+  @nUID                 INT,
+  @cContainImage        NVARCHAR(1),
+  @cEmailTitle          NVARCHAR(250)  = '',
+  @cEmailRecipients     NVARCHAR(1000) = '',
+  @nErrorNo             INT = 1 OUTPUT,
+  @cErrorMsg            NVARCHAR(2048) = '' OUTPUT,
+  @cEPODAddDate         DATETIME,  -- (Chee01)
+  @nEPODTry             INT        -- (Chee01)
+)
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_WARNINGS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+
+   DECLARE
+      @cMBOLKey          NVARCHAR (10),
+      @cMBOLLineNumber   NVARCHAR ( 5),
+      @cCurPODStatus     NVARCHAR ( 2),
+      @cFinalizeFlag     NVARCHAR ( 1),
+      @nCurrRowId        INT
+
+   -- SOS77243
+   DECLARE
+      @cResonCode  NVARCHAR(10)
+
+   -- (Chee04)
+   DECLARE
+      @cCP_ShowPODEventHistory NVARCHAR(1)
+
+   DECLARE @nReturnCode      INT
+         , @cSubject         NVARCHAR(255)
+         , @cEmailBodyHeader NVARCHAR(255)
+         , @cTableHTML       NVARCHAR(MAX)
+         , @b_debug          INT
+         , @cE1_ePODOrderKey NVARCHAR(50)
+         , @b_success        INT
+
+   SET @nErrorNo = 0
+   SET @cErrorMsg = ''
+   SET @nCurrRowId = 0
+   SET @cMBOLKey = ''
+   SET @cMBOLLineNumber = ''
+   SET @cCurPODStatus = '0' -- Initialize current Status in POD table
+   SET @cFinalizeFlag = 'N'
+   SET @b_debug = 1
+   SET @b_Success = 1
+
+   DECLARE @tError TABLE
+      ( ErrorNo INT
+      , ErrorMessage NVARCHAR(1000))
+
+   /*------------------------*/
+   /* Process POD records    */
+   /*------------------------*/
+   DECLARE
+      --@cPrevPODStatus CHAR (1),
+      --@cPrevRefNo  CHAR (20),
+      @cBlankRefNo NVARCHAR (20)
+
+   --IF NOT EXISTS (SELECT  TOP 1 * FROM CODELKUP (NOLOCK) WHERE  Code = @cAccountID) --Alex01
+   IF NOT EXISTS (SELECT  TOP 1 * FROM CODELKUP (NOLOCK) WHERE ListName = 'EPODStorer' AND Code = @cAccountID) --Alex01
+   BEGIN
+      SET @b_success = 0
+      SET @nErrorNo = 90001
+      SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid AccountID# ' + ISNULL(RTRIM(@cAccountID), '') + '.'
+      INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)
+      GOTO QUIT
+   END
+
+   IF @b_success <> 0
+   BEGIN
+      SET @cMBOLKey = ''
+
+      SELECT TOP 1
+         @cMBOLKey        = P.MbolKey
+        ,@cMBOLLineNumber = P.MbolLineNumber
+        ,@cCurPODStatus   = P.Status
+        ,@cFinalizeFlag   = P.FinalizeFlag
+      --  ,@cEPODStatus     = P.Status
+        ,@cStorerKey      = P.Storerkey
+      FROM POD P WITH (NOLOCK)
+      JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'EPODStorer' AND  c.Code = @cAccountID AND c.StorerKey = p.Storerkey
+      WHERE P.OrderKey  = @cEPOD_OrderKey
+      AND   P.FinalizeFlag='N'
+      ORDER BY P.OrderKey
+
+      IF @b_debug = '1'
+      BEGIN
+         PRINT ' cmbolkey based on order key : ' + @cMBOLKey + 'for account : ' +   @cAccountID
+      END
+
+      IF ISNULL(RTRIM(@cMBOLKey), '') = ''
+      BEGIN
+         SELECT TOP 1
+            @cMBOLKey  = P.MbolKey
+           ,@cMBOLLineNumber = P.MbolLineNumber
+           ,@cCurPODStatus   = P.Status 
+           ,@cFinalizeFlag   = P.FinalizeFlag 
+         --  ,@cEPODStatus     = P.Status
+           ,@cStorerKey      = P.Storerkey
+         FROM POD P WITH (NOLOCK)
+         JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'EPODStorer' AND  c.Code = @cAccountID AND c.StorerKey = p.Storerkey
+         WHERE P.InvoiceNo  = @cEPOD_OrderKey
+         AND   P.FinalizeFlag='N'
+         ORDER BY P.OrderKey
+      END
+
+      IF @b_debug = '1'
+      BEGIN
+         PRINT ' cmbolkey based on invoice no : ' + @cMBOLKey + 'for account : ' +   @cAccountID
+      END
+
+      IF ISNULL(RTRIM(@cMBOLKey), '') = ''
+      BEGIN
+         SELECT TOP 1
+            @cMBOLKey        = P.MbolKey
+           ,@cMBOLLineNumber = P.MbolLineNumber
+           ,@cCurPODStatus   = P.Status
+           ,@cFinalizeFlag   = P.FinalizeFlag
+         --  ,@cEPODStatus     = P.Status
+           ,@cStorerKey      = P.Storerkey
+         FROM POD P WITH (NOLOCK)
+         JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'EPODStorer' AND  c.Code = @cAccountID AND c.StorerKey = p.Storerkey
+         WHERE P.ExternOrderKey  = @cEPOD_OrderKey
+         AND   P.FinalizeFlag='N'
+         ORDER BY P.OrderKey
+      END
+
+      IF @b_debug = '1'
+      BEGIN
+         PRINT ' cmbolkey based on externorder key : ' + @cMBOLKey + 'for account : ' +   @cAccountID
+      END
+
+      IF ISNULL(RTRIM(@cMBOLKey), '') = ''
+      BEGIN
+         IF @b_debug = '1'
+         BEGIN
+            PRINT ' storerkey : ' + @cStorerKey
+         END
+
+         IF EXISTS(SELECT 1 FROM StorerConfig sc WITH (NOLOCK)
+                   JOIN  CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'EPODStorer'
+                   AND  c.Code = @cAccountID AND c.StorerKey = sc.Storerkey
+                   --AND sc.StorerKey = @cStorerKey
+                   WHERE   sc.ConfigKey = 'OWITF'
+                   AND svalue='1')
+         BEGIN
+            SET @cE1_ePODOrderKey = SUBSTRING(@cEPOD_OrderKey, 6, 10)
+
+            IF @b_debug = '1'
+            BEGIN
+               PRINT ' Orderkey : ' + @cE1_ePODOrderKey
+            END
+
+            IF ISNULL(@cE1_ePODOrderKey,'') <> ''   --(CS01)
+            BEGIN
+               SELECT TOP 1
+                  @cMBOLKey        = P.MbolKey
+                 ,@cMBOLLineNumber = P.MbolLineNumber
+                 ,@cCurPODStatus   = P.Status
+                 ,@cFinalizeFlag   = P.FinalizeFlag
+               --  ,@cEPODStatus     = P.Status
+                 ,@cStorerKey      = P.Storerkey
+               FROM POD P WITH (NOLOCK)
+               JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'EPODStorer' AND  c.Code = @cAccountID AND c.StorerKey = p.Storerkey
+               WHERE P.InvoiceNo  = @cE1_ePODOrderKey
+               AND   P.FinalizeFlag='N'
+               ORDER BY P.OrderKey
+            END
+
+            IF @b_debug = '1'
+            BEGIN
+               PRINT ' MBOL KEY : ' + @cMBOLKey
+            END
+         END --(CS01)
+      END
+
+      -- Search for EPOD.OrderKey = POD.TrackCol02 and POD.FinalizeFlag='N'(Chee02)
+      IF ISNULL(RTRIM(@cMBOLKey), '') = ''
+      BEGIN
+         SELECT TOP 1
+            @cMBOLKey        = P.MbolKey
+           ,@cMBOLLineNumber = P.MbolLineNumber
+           ,@cCurPODStatus   = P.Status
+           ,@cFinalizeFlag   = P.FinalizeFlag
+         --  ,@cEPODStatus     = P.Status
+           ,@cStorerKey      = P.Storerkey
+         FROM POD P WITH (NOLOCK)
+         JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'EPODStorer' AND  c.Code = @cAccountID AND c.StorerKey = p.Storerkey
+         WHERE P.TrackCol02  = @cEPOD_OrderKey
+         AND   P.FinalizeFlag='N'
+         ORDER BY P.OrderKey
+      END
+
+      IF @b_debug = '1'
+      BEGIN
+         PRINT ' cmbolkey based on trackcol02 key : ' + @cMBOLKey + 'for account : ' +   @cAccountID
+      END
+
+      IF ISNULL(RTRIM(@cMBOLKey), '') = ''
+      BEGIN
+         SET @nErrorNo = 70005
+         SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid Ref# ' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + '.'
+         INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)
+         GOTO QUIT
+      END
+
+      -- Avoid duplicate same errmsg for same PODStatus & RefNo
+      -- Eg. 'P;;A,', both with RefNo = blank, but different PODStatus
+      IF (ISNULL(RTRIM(@cEPODStatus),'') = '')
+      BEGIN
+         SET @cBlankRefNo = RTRIM(@cEPODStatus)  + ISNULL(RTRIM(@cEPOD_OrderKey), '')
+         SET @nErrorNo = 70005
+         SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Ref# cannot be blank (' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ').'
+         INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)
+         --GOTO QUIT
+      END
+
+      IF @b_debug=1
+      BEGIN
+         PRINT ' Order Key : ' + @cEPOD_OrderKey
+         PRINT 'Status : ' + @cEPODStatus
+         PRINT ' MBOKLKEY : ' + @cMBOLKey
+         PRINT ' MBOL LINE ' + @cMBOLLineNumber
+         PRINT ' Storerkey : ' + @cStorerKey
+      END
+
+      IF @cCurPODStatus = '8'
+      BEGIN
+         -- Avoid duplicate same errmsg for same RefNo
+         SET @nErrorNo = 70008
+         SET @cErrorMsg = RTRIM(@cErrorMsg) + ' POD already arrived at DC (' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ').'
+         INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)
+         --GOTO QUIT
+      END
+
+      -- Delivery Status Validation
+      -- F-Full Delivery
+      -- P-Partial Delivery
+      -- R-Reject
+      IF @cEPODStatus NOT IN ('0','1', '2', '3', '4')
+      BEGIN
+         SET @nErrorNo = 70009
+         SET @cErrorMsg = RTRIM(@cErrorMsg) + ' Invalid Delivery Status: Ref# ' + ISNULL(RTRIM(@cEPOD_OrderKey), '') + ' (1-4).'
+         INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)
+         --GOTO QUIT
+      END
+
+      IF @b_debug = 1
+      BEGIN
+         PRINT 'Error Code :' + convert(varchar(5),@nErrorNo)
+      END
+
+      -- (Chee04)
+      SET @cCP_ShowPODEventHistory = ''
+      EXEC nspGetRight  
+         NULL,                      -- facility  
+         @cStorerKey,               -- Storerkey  
+         NULL,                      -- Sku  
+         'CP_ShowPODEventHistory',  -- Configkey  
+         @b_success               OUTPUT,  
+         @cCP_ShowPODEventHistory OUTPUT,  
+         @nErrorNo                OUTPUT,  
+         @cErrorMsg               OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+         SET @b_success = 0
+         SET @nErrorNo = 90002
+         SET @cErrorMsg = 'nspGetRight - CP_ShowPODEventHistory: ' + RTRIM(@cErrorMsg)
+         INSERT INTO @tError VALUES (@nErrorNo, @cErrorMsg)
+         GOTO QUIT
+      END
+
+      BEGIN TRAN
+      IF @nErrorNo = 0
+      BEGIN
+         -- EPOD.PODStatus = '1' (Delivered)
+         IF @cEPODStatus = '1'
+         BEGIN
+            UPDATE POD WITH (ROWLOCK)
+            SET    Status = '7' -- Successful delivery
+                  ,PODDef09  = @cEPODStatus                 --CS01
+                  ,ActualDeliveryDate = @cEPOD_Date
+                  ,RejectReasonCode = ''    
+                  ,Notes = @cEPODNotes
+                  ,Latitude = @cLatitude
+                  ,Longtitude = @cLongtitude 
+                  ,EditDate  = GetDate()
+                  ,EditWho   = @cAccountID
+                  ,TrafficCop = NULL
+            WHERE  MbolKey = @cMBOLKey
+            AND    MbolLineNumber = @cMBOLLineNumber
+            AND    StorerKey = @cStorerKey
+            AND    FinalizeFlag = 'N'   
+         END
+         ELSE IF @cEPODStatus = '2' -- EPOD.PODStatus = '2' (Redelivered)
+         BEGIN
+            UPDATE POD WITH (ROWLOCK)
+            SET    Status = '4'
+                  ,PODDef09  = @cEPODStatus                 --CS01
+                  ,ActualDeliveryDate = @cEPOD_Date
+                  ,RejectReasonCode = ''    
+                  ,Notes = @cEPODNotes
+                  ,Latitude = @cLatitude
+                  ,Longtitude = @cLongtitude 
+                  ,EditDate  = GetDate()
+                  ,EditWho   = @cAccountID
+                  ,TrafficCop = NULL
+                  ,RedeliveryDate = CASE WHEN @cCP_ShowPODEventHistory = '1' THEN @cEPOD_Date ELSE RedeliveryDate END -- (Chee04)
+            WHERE  MbolKey = @cMBOLKey 
+            AND    MbolLineNumber = @cMBOLLineNumber
+            AND    StorerKey = @cStorerKey
+            AND    FinalizeFlag = 'N'
+         END
+         ELSE IF @cEPODStatus = '3' -- EPOD.PODStatus = '3' (Full Reject)
+         BEGIN
+            SET @cResonCode = ''
+
+            SELECT @cResonCode = c.Long
+            FROM CODELKUP c WITH (NOLOCK)
+            WHERE ListName = 'ePODreason'
+            and @cRejectReasonCode = C.Description
+            and C.Storerkey = @cStorerKey
+
+            IF ISNULL(RTRIM(@cResonCode),'') = ''
+               SET @cResonCode = @cRejectReasonCode
+
+            UPDATE POD WITH (ROWLOCK)
+            SET    Status = '2'
+                  ,PODDef09  = @cEPODStatus                 --CS01
+                  ,ActualDeliveryDate = @cEPOD_Date
+                  ,RejectReasonCode = @cResonCode
+                  ,Notes = @cEPODNotes
+                  ,Latitude = @cLatitude
+                  ,Longtitude = @cLongtitude
+                  ,EditDate  = GetDate()
+                  ,EditWho   = @cAccountID
+                  ,TrafficCop = NULL
+                  ,FullRejectDate = CASE WHEN @cCP_ShowPODEventHistory = '1' THEN @cEPOD_Date ELSE FullRejectDate END -- (Chee04)
+            WHERE  MbolKey = @cMBOLKey
+            AND    MbolLineNumber = @cMBOLLineNumber
+            AND    StorerKey = @cStorerKey
+            AND    FinalizeFlag = 'N'
+         END
+         ELSE IF @cEPODStatus = '4' -- EPOD.PODStatus = '4' (Partial Reject)
+         BEGIN
+            SELECT @cResonCode = c.Long
+            FROM CODELKUP c WITH (NOLOCK)
+            WHERE ListName = 'ePODreason'
+            and @cRejectReasonCode = C.Description
+            and C.Storerkey = @cStorerKey
+
+            IF ISNULL(RTRIM(@cResonCode),'') = ''
+               SET @cResonCode = @cRejectReasonCode
+
+            UPDATE POD WITH (ROWLOCK)
+            SET    Status = '3'
+                  ,PODDef09  = @cEPODStatus            --CS01
+                  ,ActualDeliveryDate = @cEPOD_Date
+                  ,RejectReasonCode = @cResonCode
+                  ,Notes = @cEPODNotes
+                  ,Latitude = @cLatitude
+                  ,Longtitude = @cLongtitude
+                  ,EditDate  = GetDate()
+                  ,EditWho   = @cAccountID
+                  ,TrafficCop = NULL
+                  ,PartialRejectDate = CASE WHEN @cCP_ShowPODEventHistory = '1' THEN @cEPOD_Date ELSE PartialRejectDate END -- (Chee04)
+            WHERE  MbolKey = @cMBOLKey 
+            AND    MbolLineNumber = @cMBOLLineNumber
+            AND    StorerKey = @cStorerKey
+            AND    FinalizeFlag = 'N'
+         END
+      END
+   END
+   COMMIT TRAN
+
+QUIT:
+   -- Update ErrMsg
+   IF @nErrorNo <> 0 AND ISNULL(RTRIM(@cEmailRecipients),'') <> ''
+   BEGIN 
+      SET @cSubject = @cEmailTitle + ' (' + @cEPOD_OrderKey + ')'
+      SET @cEmailBodyHeader = @cStorerkey + ' EPOD Update Error '
+      SET @cTableHTML =
+             N'<H1>' + @cEmailBodyHeader + '</H1>' +
+             N'<table border="1">' +
+             N'<tr><th>Error No</th><th>Error Message</th>' +
+             CAST ( ( SELECT td = ErrorNo, ''
+                            ,td = ErrorMessage, ''
+                      FROM @tError
+               FOR XML PATH('tr'), TYPE
+             ) AS NVARCHAR(MAX) ) +
+             N'</table>' ;
+
+      EXEC @nReturnCode = msdb.dbo.sp_send_dbmail @recipients=@cEmailRecipients
+                                          ,  @subject=@cSubject
+                                          ,  @body=@cTableHTML
+                                          ,  @body_format='HTML';
+   END
+
+END -- Procedure
+GO
+GRANT EXECUTE ON [dbo].[isp_EPOD_Update] TO nSQL 
+GO
