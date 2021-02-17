@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_CheckCarton]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_CheckCarton]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_CheckCarton]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_CheckCarton]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_CheckCarton]    Script Date: 6/3/2020 4:38:10 PM ******/
+/****** Object:  StoredProcedure [API].[isp_CheckCarton]    Script Date: 6/3/2020 4:38:10 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_CheckCarton                                           */  
+/* Store procedure: isp_CheckCarton                                           */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-03-27   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
   
-CREATE PROC [API].[fnc_CheckCarton] (  
+CREATE PROC [API].[isp_CheckCarton] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -82,13 +81,13 @@ IF @cScanNo = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 100300  
-   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : fnc_CheckCarton'  
+   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : isp_CheckCarton'  
 
    GOTO EXIT_SP  
 END  
 
 --check pickslipNo
-EXEC [API].[fnc_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT,1
+EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT,1
 
 IF @n_Err <>0
 BEGIN
@@ -175,7 +174,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_CheckCarton TO NSQL
+GRANT EXECUTE ON api.isp_CheckCarton TO NSQL
 GO
 
 

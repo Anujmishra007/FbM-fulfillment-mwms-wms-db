@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_Print]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_Print]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_Print]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_Print]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_Print]    Script Date: 6/3/2020 5:01:32 PM ******/
+/****** Object:  StoredProcedure [API].[isp_Print]    Script Date: 6/3/2020 5:01:32 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: fncPrint                                                  */
+/* Store procedure: isp_Print                                                 */
 /* Copyright      : LF Logistics                                              */
 /*                                                                            */
 /* Date        Rev   Author      Purposes                                     */
 /*13-04-2020   1.0   chermaine   duplicate rdt.rdt_print                      */
 /******************************************************************************/
 
-CREATE PROC [API].[fnc_Print] (
+CREATE PROC [API].[isp_Print] (
    @cLangCode      NVARCHAR( 3)
    ,@cFacility     NVARCHAR( 5)
    ,@cStorerKey    NVARCHAR( 15)
@@ -771,7 +770,8 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_Print TO NSQL
+GRANT EXECUTE ON api.isp_Print TO NSQL
 GO
+
 
 

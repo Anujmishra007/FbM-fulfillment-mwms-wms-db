@@ -1,22 +1,21 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_PackConfirm]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_PackConfirm]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_PackConfirm]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_PackConfirm]
 GO
-/****** Object:  StoredProcedure [API].[fnc_PackConfirm]    Script Date: 6/3/2020 4:58:54 PM ******/
+/****** Object:  StoredProcedure [API].[isp_PackConfirm]    Script Date: 6/3/2020 4:58:54 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: fnc_PackConfirm                                           */
+/* Store procedure: isp_PackConfirm                                           */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-04-09   1.0  Chermaine  Created                                       */
 /******************************************************************************/
 
-CREATE PROC [API].[fnc_PackConfirm] (
+CREATE PROC [API].[isp_PackConfirm] (
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) ='' OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -177,7 +176,7 @@ END
 
 
 --check pickslipNo
-EXEC [API].[fnc_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
+EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
 
 IF @n_Err <>0
 BEGIN
@@ -307,7 +306,7 @@ BEGIN
       IF (ISNULL(@cDymEcomCtnWgtTb,'') NOT IN ('SKU')) OR (ISNULL(@cDymEcomCtnWgtTb,'') = '')
       BEGIN
          SET @n_Err = 101404
-         SET @c_ErrMsg = 'Incorrect dynamic E-Comm Carton Weight column setup. Function : fnc_PackConfirm'
+         SET @c_ErrMsg = 'Incorrect dynamic E-Comm Carton Weight column setup. Function : isp_PackConfirm'
          --SET @jResult = (select @nProceedPrintFlag AS nProceedPrintFlag FOR JSON PATH ) 
          SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )
          GOTO EXIT_SP
@@ -331,7 +330,7 @@ BEGIN
       IF (ISNULL(@cDymEcomCtnCubeTb,'') NOT IN ('SKU')) OR (ISNULL(@cDymEcomCtnCubeTb,'') = '')
       BEGIN
          SET @n_Err = 101405
-         SET @c_ErrMsg = 'Incorrect dynamic E-Comm Cube column setup. Function : fnc_packConfirm'
+         SET @c_ErrMsg = 'Incorrect dynamic E-Comm Cube column setup. Function : isp_packConfirm'
          --SET @jResult = (select @nProceedPrintFlag AS nProceedPrintFlag FOR JSON PATH ) 
          SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )
          GOTO EXIT_SP
@@ -353,7 +352,7 @@ IF ISNULL(@cCartonID,'') =''
 BEGIN   
       	
    SET @GetCartonID = '     
-   EXEC [API].[fnc_GetPackCartonID] ''[{"StorerKey":"' +@cStorerKey+ '","Facility":"' +@cFacility + '","Func":"' +@nFunc + '","PickSlipNo":"' +@cPickSlipNo+ '"}]'' ,@jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT'
+   EXEC [API].[isp_GetPackCartonID] ''[{"StorerKey":"' +@cStorerKey+ '","Facility":"' +@cFacility + '","Func":"' +@nFunc + '","PickSlipNo":"' +@cPickSlipNo+ '"}]'' ,@jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT'
    --SELECT @GetCartonID
    
    SET @SQLParam = '
@@ -378,7 +377,7 @@ END
 --Data Validate
 SET @nTranCount = @@TRANCOUNT
 BEGIN TRAN
---SAVE TRAN fnc_PackConfirm
+--SAVE TRAN isp_PackConfirm
 
 --Close: packHeader
 IF NOT EXISTS( SELECT TOP 1 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
@@ -389,7 +388,7 @@ BEGIN
    BEGIN      
       SET @b_Success = 0  
       SET @n_Err = 101406  
-      SET @c_ErrMsg = 'Fail to insert into PackHeader. Function : fnc_PackConfirm'
+      SET @c_ErrMsg = 'Fail to insert into PackHeader. Function : isp_PackConfirm'
 
       GOTO RollBackTran
    END
@@ -417,7 +416,7 @@ BEGIN
       BEGIN  
          SET @b_Success = 0  
          SET @n_Err = 101413  
-         SET @c_ErrMsg = 'Fail to insert into PackInfo. Function : fnc_PackConfirm'
+         SET @c_ErrMsg = 'Fail to insert into PackInfo. Function : isp_PackConfirm'
                 
          GOTO RollBackTran
       END
@@ -440,7 +439,7 @@ BEGIN
       BEGIN      
          SET @b_Success = 0  
          SET @n_Err = 101414  
-         SET @c_ErrMsg = 'Fail to update into PackInfo. Function : fnc_PackConfirm'
+         SET @c_ErrMsg = 'Fail to update into PackInfo. Function : isp_PackConfirm'
 
          GOTO RollBackTran
       END
@@ -467,7 +466,7 @@ BEGIN
       BEGIN  
          SET @b_Success = 0  
          SET @n_Err = 101414  
-         SET @c_ErrMsg = 'Fail to insert into PackInfo. Function : fnc_PackConfirm'
+         SET @c_ErrMsg = 'Fail to insert into PackInfo. Function : isp_PackConfirm'
                 
          GOTO RollBackTran
       END
@@ -490,7 +489,7 @@ BEGIN
       BEGIN      
          SET @b_Success = 0  
          SET @n_Err = 101415  
-         SET @c_ErrMsg = 'Fail to update into PackInfo. Function : fnc_PackConfirm'
+         SET @c_ErrMsg = 'Fail to update into PackInfo. Function : isp_PackConfirm'
 
          GOTO RollBackTran
       END
@@ -624,7 +623,7 @@ BEGIN
       BEGIN
          SET @b_Success = 0  
          SET @n_Err = 101411  
-         SET @c_ErrMsg = 'Fail to insert into PackDetail. Function : fnc_PackConfirm' 
+         SET @c_ErrMsg = 'Fail to insert into PackDetail. Function : isp_PackConfirm' 
                 
          GOTO RollBackTran
       END
@@ -647,7 +646,7 @@ BEGIN
       BEGIN         
          SET @b_Success = 0  
          SET @n_Err = 101412  
-         SET @c_ErrMsg = 'Fail to update into PackDetail. Function : fnc_PackConfirm' 
+         SET @c_ErrMsg = 'Fail to update into PackDetail. Function : isp_PackConfirm' 
                
          GOTO RollBackTran
       END
@@ -745,7 +744,7 @@ BEGIN
    BEGIN
       SET @b_Success = 0  
       SET @n_Err = 101417  
-      SET @c_ErrMsg = 'Fail to update into PackHeader. Function : fnc_PackConfirm'
+      SET @c_ErrMsg = 'Fail to update into PackHeader. Function : isp_PackConfirm'
          
       GOTO RollBackTran
    END
@@ -789,7 +788,7 @@ AND scanNo = @cScanNo
 GOTO Quit
       
 RollBackTran:
-   ROLLBACK TRAN --fnc_PackConfirm
+   ROLLBACK TRAN --isp_PackConfirm
    SET @b_Success = 0
    --SET @jResult = (select @nProceedPrintFlag AS nProceedPrintFlag FOR JSON PATH ) 
    SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )
@@ -798,7 +797,7 @@ RollBackTran:
 
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN --fnc_PackConfirm
+      COMMIT TRAN --isp_PackConfirm
 
 IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey ='TPS-ExtInfoVAS' AND sValue <> '')
 BEGIN
@@ -876,10 +875,10 @@ BEGIN
 	   END
 	   ELSE
 	   BEGIN
-		   EXEC API.fnc_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
+		   EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
          'TPSHIPPLBL', -- Report type
          @tShipLabel, -- Report params
-         'API.fnc_PackConfim', --source Type
+         'API.isp_PackConfim', --source Type
          @n_Err  OUTPUT,
          @c_ErrMsg OUTPUT,
          '1', --noOfCopy
@@ -917,10 +916,10 @@ BEGIN
 	      END
 	      ELSE
 	      BEGIN
-		      EXEC API.fnc_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
+		      EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
             'TPPACKLIST', -- Report type
             @tShipLabel, -- Report params
-            'API.fnc_PackConfim', --source Type
+            'API.isp_PackConfim', --source Type
             @n_Err  OUTPUT,
             @c_ErrMsg OUTPUT,
             '1', --noOfCopy
@@ -960,6 +959,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_PackConfirm TO NSQL
+GRANT EXECUTE ON api.isp_PackConfirm TO NSQL
 GO
+
 

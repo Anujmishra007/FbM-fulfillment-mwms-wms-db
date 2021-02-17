@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_HoldCarton]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_HoldCarton]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_HoldCarton]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_HoldCarton]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_HoldCarton]    Script Date: 6/3/2020 4:57:55 PM ******/
+/****** Object:  StoredProcedure [API].[isp_HoldCarton]    Script Date: 6/3/2020 4:57:55 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: fnc_HoldCarton                                            */
+/* Store procedure: isp_HoldCarton                                            */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-03-24   1.0  Chermaine  Created                                       */
 /******************************************************************************/
 
-CREATE PROC [API].[fnc_HoldCarton] (
+CREATE PROC [API].[isp_HoldCarton] (
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) ='' OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -145,7 +144,7 @@ BEGIN
 END  
 
 --check pickslipNo
-EXEC [API].[fnc_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
+EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
 
 IF @n_Err <>0
 BEGIN
@@ -241,7 +240,7 @@ IF ISNULL(@cCartonID,'') =''
 BEGIN   
       	
    SET @GetCartonID = '     
-   EXEC [API].[fnc_GetPackCartonID] ''[{"StorerKey":"' +@cStorerKey+ '","Facility":"' +@cFacility + '","Func":"' +@nFunc + '","PickSlipNo":"' +@cPickSlipNo+ '"}]'' ,@jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT'
+   EXEC [API].[isp_GetPackCartonID] ''[{"StorerKey":"' +@cStorerKey+ '","Facility":"' +@cFacility + '","Func":"' +@nFunc + '","PickSlipNo":"' +@cPickSlipNo+ '"}]'' ,@jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT'
    --SELECT @GetCartonID
    
    SET @SQLParam = '
@@ -266,7 +265,7 @@ END
 --Data Validate
 SET @nTranCount = @@TRANCOUNT
 BEGIN TRAN
-SAVE TRAN fnc_HoldCarton
+SAVE TRAN isp_HoldCarton
 
 --Hold: packHeader
 IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
@@ -279,7 +278,7 @@ BEGIN
    BEGIN      
       SET @b_Success = 0  
       SET @n_Err = 101304  
-      SET @c_ErrMsg = 'Fail to insert into PackHeader. Function : fnc_HoldCarton'
+      SET @c_ErrMsg = 'Fail to insert into PackHeader. Function : isp_HoldCarton'
 
       GOTO RollBackTran
    END
@@ -379,7 +378,7 @@ OPEN @curPD
             BEGIN
          	   SET @b_Success = 0  
                SET @n_Err = 101309  
-               SET @c_ErrMsg = 'Fail to insert into PackDetail. Function : fnc_HoldCarton' 
+               SET @c_ErrMsg = 'Fail to insert into PackDetail. Function : isp_HoldCarton' 
                 
                GOTO RollBackTran
             END
@@ -402,7 +401,7 @@ OPEN @curPD
             BEGIN         
                SET @b_Success = 0  
                SET @n_Err = 101310  
-               SET @c_ErrMsg = 'Fail to update into PackDetail. Function : fnc_HoldCarton' 
+               SET @c_ErrMsg = 'Fail to update into PackDetail. Function : isp_HoldCarton' 
                
                GOTO RollBackTran
             END
@@ -426,7 +425,7 @@ OPEN @curPD
       BEGIN  
          SET @b_Success = 0  
          SET @n_Err = 101311  
-         SET @c_ErrMsg = 'Fail to insert into PackInfo. Function : fnc_HoldCarton'
+         SET @c_ErrMsg = 'Fail to insert into PackInfo. Function : isp_HoldCarton'
                 
          GOTO RollBackTran
       END
@@ -448,7 +447,7 @@ OPEN @curPD
       BEGIN      
          SET @b_Success = 0  
          SET @n_Err = 101312  
-         SET @c_ErrMsg = 'Fail to update into PackInfo. Function : fnc_HoldCarton'
+         SET @c_ErrMsg = 'Fail to update into PackInfo. Function : isp_HoldCarton'
 
          GOTO RollBackTran
       END
@@ -462,13 +461,13 @@ OPEN @curPD
    
   
    RollBackTran:
-      ROLLBACK TRAN fnc_HoldCarton
+      ROLLBACK TRAN isp_HoldCarton
       SET @b_Success = 0
       SET @jResult = ''
 
    Quit:
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      	COMMIT TRAN fnc_HoldCarton
+      	COMMIT TRAN isp_HoldCarton
          
 
    EXIT_SP:
@@ -479,7 +478,8 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_HoldCarton TO NSQL
+GRANT EXECUTE ON api.isp_HoldCarton TO NSQL
 GO
+
 
 

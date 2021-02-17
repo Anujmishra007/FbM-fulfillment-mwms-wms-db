@@ -1,23 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_GetPrinter]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_GetPrinter]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_GetStatistic]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_GetStatistic]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_GetPrinter]    Script Date: 6/3/2020 4:50:51 PM ******/
+/****** Object:  StoredProcedure [API].[isp_GetStatistic]    Script Date: 6/3/2020 4:52:04 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_GetPrinter                                            */  
+/* Store procedure: isp_GetStatistic                                          */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
-/* 2020-04-06   1.0  Chermaine  Created                                       */  
+/* 2020-04-020   1.0  Chermaine  Created                                      */  
 /******************************************************************************/  
   
-Create PROC [API].[fnc_GetPrinter] (  
+Create PROC [API].[isp_GetStatistic] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -33,7 +33,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
   
 DECLARE   
    @cLangCode           NVARCHAR( 3),  
-   @cUserName           NVARCHAR( 30),
+   @cUserName           NVARCHAR( 128),
    @cStorerKey          NVARCHAR( 15),  
    @cFacility           NVARCHAR( 5),  
    @nFunc               INT,    
@@ -43,12 +43,12 @@ DECLARE
 
   
 --Decode Json Format
-SELECT @nFunc=Func, @cLangCode = LangCode, @cWorkstation = Workstation
+SELECT @nFunc=Func, @cLangCode = LangCode, @cUserName = UserName
 FROM OPENJSON(@json)  
 WITH (  
 	   Func        INT,  
       LangCode    NVARCHAR( 3),
-      Workstation NVARCHAR( 30)
+      UserName    NVARCHAR( 128)
 )  
 --SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
 
@@ -67,51 +67,40 @@ BEGIN
    GOTO EXIT_SP  
 END  
 
-
 ----SELECT @cUserName AS username
 ----select SUSER_SNAME ()
 
 --Data Validate  - ScanNo
-IF @cWorkstation = ''  
+IF @cUserName = ''  
 BEGIN  
    SET @b_Success = 0  
-   SET @n_Err = 101000  
-   SET @c_ErrMsg = 'Unable to retrieve Workstation ID. Function : fnc_GetPrinter'
+   SET @n_Err = 101100  
+   SET @c_ErrMsg = 'Unable to retrieve username. Function : isp_GetStatistic'
    
    GOTO EXIT_SP  
 END  
 
-SELECT @cLabelPrinterConfig = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND PrinterType = 'Label'
-SELECT @cPaperPrinterConfig = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND PrinterType = 'Paper'
+DECLARE 
+@cCartonPacked NVARCHAR( 5),
+@cPickSlipPacked NVARCHAR( 5)	
+	
+SELECT @cPickSlipPacked = COUNT(DISTINCT pickslipNo) FROM packInfo WITH (NOLOCK) WHERE editWho = @cUserName AND CONVERT(NVARCHAR(10),editDate,121) = CONVERT(nvarchar(10),GETDATE(),121)
+SELECT @cCartonPacked = COUNT(cartonNo) FROM packInfo WITH (NOLOCK) WHERE editWho = @cUserName AND CONVERT(NVARCHAR(10),editDate,121) = CONVERT(nvarchar(10),GETDATE(),121)
+
 
 SET @b_Success = 1
 SET @jResult =(
-SELECT @cLabelPrinterConfig AS LabelPrinterConfig,@cPaperPrinterConfig AS PaperPrinterConfig,* FROM (SELECT 
-'[' +STUFF(( SELECT ',' + '"' + printerID  + '"' 
-FROM rdt.rdtPrinter WITH (NOLOCK) FOR XML PATH('')),1,1,'')+ ']' as LabelPrinter
-,
-'[' +STUFF(( SELECT ',' + '"' + printerID + '"' 
-FROM rdt.rdtPrinter WITH (NOLOCK) FOR XML PATH('')),1,1,'')+ ']' as PaperPrinter
-)PrinterList 
-FOR JSON AUTO 
+SELECT 'ORDERES PROCESSED' AS ColName1,@cPickSlipPacked AS ColValue1, 'CARTON PACKED' AS ColName2,@cCartonPacked AS ColValue2
+,'' AS ColName3, '' AS ColValue3
+,'' AS ColName4, '' AS ColValue4
+,'' AS ColName5, '' AS ColValue5
+FOR JSON PATH 
 )
-
---SET @jResult =(
---SELECT JSON_QUERY('[' + STUFF(( SELECT ',' + '"' + printerID + '"' 
---FROM rdt.rdtPrinter WITH (NOLOCK) FOR XML PATH('')),1,1,'') + ']' ) LabelPrinter  
---FOR JSON PATH , WITHOUT_ARRAY_WRAPPER
---)
-
-
 
 EXIT_SP:
    REVERT  
 
 SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON api.fnc_GetPrinter TO NSQL
 GO
 
 

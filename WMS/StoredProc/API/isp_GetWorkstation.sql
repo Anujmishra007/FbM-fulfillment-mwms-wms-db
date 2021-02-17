@@ -1,24 +1,22 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_GetWorkstation]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_GetWorkstation]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_GetWorkstation]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_GetWorkstation]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_GetWorkstation]    Script Date: 6/3/2020 4:55:57 PM ******/
+/****** Object:  StoredProcedure [API].[isp_GetWorkstation]    Script Date: 6/3/2020 4:55:57 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-
-
 /******************************************************************************/  
-/* Store procedure: fnc_GetWorkstation                                        */  
+/* Store procedure: isp_GetWorkstation                                        */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-05-05   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
   
-CREATE PROC [API].[fnc_GetWorkstation] (  
+CREATE PROC [API].[isp_GetWorkstation] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -81,7 +79,7 @@ BEGIN
 	   BEGIN
 		   SET @b_Success = 0  
          SET @n_Err = 102000  
-         SET @c_ErrMsg = 'No workstation available for device setup. Please ensure workstation has been setup to proceed for device setup. Funtion : fnc_GetWorkstation'
+         SET @c_ErrMsg = 'No workstation available for device setup. Please ensure workstation has been setup to proceed for device setup. Funtion : isp_GetWorkstation'
       
          GOTO EXIT_SP
 	   END
@@ -91,7 +89,7 @@ ELSE
 BEGIN
 	SET @b_Success = 0  
    SET @n_Err = 102001  
-   SET @c_ErrMsg = 'Device ID setup not done. Please setup the Device ID. Funtion : fnc_GetWorkstation'
+   SET @c_ErrMsg = 'Device ID setup not done. Please setup the Device ID. Funtion : isp_GetWorkstation'
       
    GOTO EXIT_SP
 END	
@@ -120,7 +118,8 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_GetWorkstation TO NSQL
+GRANT EXECUTE ON api.isp_GetWorkstation TO NSQL
 GO
+
 
 

@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_UpdateWorkstation]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_UpdateWorkstation]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_UpdateWorkstation]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_UpdateWorkstation]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_UpdateWorkstation]    Script Date: 6/3/2020 5:13:01 PM ******/
+/****** Object:  StoredProcedure [API].[isp_UpdateWorkstation]    Script Date: 6/3/2020 5:13:01 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_UpdateWorkStation                                     */  
+/* Store procedure: isp_UpdateWorkStation                                     */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-04-07   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
   
-CREATE PROC [API].[fnc_UpdateWorkstation] (  
+CREATE PROC [API].[isp_UpdateWorkstation] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -78,7 +77,7 @@ IF @cWorkstation = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 101900  
-   SET @c_ErrMsg = 'Unable to retrieve Workstation ID. Function : fnc_UpdateWorkstation'
+   SET @c_ErrMsg = 'Unable to retrieve Workstation ID. Function : isp_UpdateWorkstation'
    
    GOTO EXIT_SP  
 END  
@@ -87,7 +86,7 @@ IF @cDeviceID = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 101901  
-   SET @c_ErrMsg = 'Unable to retrieve Device ID. Function : fnc_UpdateWorkstation'
+   SET @c_ErrMsg = 'Unable to retrieve Device ID. Function : isp_UpdateWorkstation'
    
    GOTO EXIT_SP  
 END 
@@ -97,7 +96,7 @@ BEGIN
 	BEGIN
 		SET @b_Success = 0  
       SET @n_Err = 101902  
-      SET @c_ErrMsg = 'Invalid setup. This device has been assigned to a workstation. Function : fnc_UpdateWorkstation' 
+      SET @c_ErrMsg = 'Invalid setup. This device has been assigned to a workstation. Function : isp_UpdateWorkstation' 
       
       GOTO EXIT_SP
 	END
@@ -132,7 +131,7 @@ BEGIN
    BEGIN         
       SET @b_Success = 0  
       SET @n_Err = 101903  
-      SET @c_ErrMsg = 'Fail to update into Workstation. Function : fnc_UpdateWorkstation' 
+      SET @c_ErrMsg = 'Fail to update into Workstation. Function : isp_UpdateWorkstation' 
       
       GOTO EXIT_SP
    END
@@ -146,7 +145,7 @@ ELSE
 BEGIN
 	SET @b_Success = 0  
    SET @n_Err = 101904  
-   SET @c_ErrMsg = 'Invalid Workstation. Please use other Workstation. Function : fnc_UpdateWorkstation' 
+   SET @c_ErrMsg = 'Invalid Workstation. Please use other Workstation. Function : isp_UpdateWorkstation' 
                
    GOTO EXIT_SP
 END
@@ -157,11 +156,9 @@ EXIT_SP:
 
 SET QUOTED_IDENTIFIER OFF
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_UpdateWorkstation TO NSQL
+GRANT EXECUTE ON api.isp_UpdateWorkstation TO NSQL
 GO
+
 

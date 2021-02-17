@@ -1,18 +1,16 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_AppSection]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_AppSection]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_AppSection]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_AppSection]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_AppSection]    Script Date: 6/3/2020 4:35:06 PM ******/
+/****** Object:  StoredProcedure [API].[isp_AppSection]    Script Date: 6/3/2020 4:35:06 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
-
 /******************************************************************************/  
-/* Store procedure: fnc_AppSection                                            */  
+/* Store procedure: isp_AppSection                                            */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
@@ -20,7 +18,7 @@ GO
 /******************************************************************************/  
   
 --App,DeviceID,UserID,ScanNo
-CREATE PROC [API].[fnc_AppSection] (  
+CREATE PROC [API].[isp_AppSection] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -52,8 +50,8 @@ DECLARE
 SET @dNow = GETDATE()
 
 DECLARE @errMsg TABLE (  
-    nErrNo    INT,  
-    cErrMsg   NVARCHAR( 1024)  
+   nErrNo    INT,  
+   cErrMsg   NVARCHAR( 1024)  
 )  
   
 --Decode Json Format
@@ -99,7 +97,7 @@ IF  @cAppName = '' OR @cDeviceID = ''  OR @cSCEUserName = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 100200  
-   SET @c_ErrMsg = 'Insufficient parameter for application process execution. Function : fnc_AppSection'
+   SET @c_ErrMsg = 'Insufficient parameter for application process execution. Function : isp_AppSection'
                                                                   
    GOTO EXIT_SP  
 END  
@@ -119,7 +117,7 @@ EXECUTE dbo.nspGetRight @cFacility
    BEGIN        
       SET @b_Success = 0  
       SET @n_Err = 100201  
-      SET @c_ErrMsg = 'Error in executing nspGetRight. Function : fnc_AppSection'
+      SET @c_ErrMsg = 'Error in executing nspGetRight. Function : isp_AppSection'
       SET @n_LogOut = 0
                                                                   
       GOTO EXIT_SP   
@@ -141,7 +139,7 @@ BEGIN
       	--SELECT  '1ab'
       	SET @b_Success = 0  
          SET @n_Err = 100202
-         SET @c_ErrMsg = 'User login in another device. Please logout from previous device before proceed to login in this device. Function : fnc_AppSection'
+         SET @c_ErrMsg = 'User login in another device. Please logout from previous device before proceed to login in this device. Function : isp_AppSection'
          SET @n_LogOut = 1
                                                                   
          GOTO EXIT_SP
@@ -241,7 +239,7 @@ BEGIN
    	--SELECT  '5b'
    	SET @b_Success = 0  
       SET @n_Err = 100203  
-      SET @c_ErrMsg = 'The scanned document ID is process by another user. Please use another document ID. Function : fnc_AppSection'
+      SET @c_ErrMsg = 'The scanned document ID is process by another user. Please use another document ID. Function : isp_AppSection'
       SET @n_LogOut = 0
                                                                   
       GOTO EXIT_SP  
@@ -260,7 +258,7 @@ BEGIN
    	--SELECT  '6b'
    	SET @b_Success = 0  
       SET @n_Err = 100204  
-      SET @c_ErrMsg = 'Other user login to this device. Please ensure no other user login in this device before proceed to login. Function : fnc_AppSection'
+      SET @c_ErrMsg = 'Other user login to this device. Please ensure no other user login in this device before proceed to login. Function : isp_AppSection'
       SET @n_LogOut = 1
                                                                   
       GOTO EXIT_SP 
@@ -273,7 +271,7 @@ BEGIN
    	--SELECT  '7a'
    	SET @b_Success = 0  
       SET @n_Err = 100205  
-      SET @c_ErrMsg = 'User found login in another device. Please logout from previous device before proceed to login in this device. Function : fnc_AppSection'
+      SET @c_ErrMsg = 'User found login in another device. Please logout from previous device before proceed to login in this device. Function : isp_AppSection'
       SET @n_LogOut = 1
                                                                   
       GOTO EXIT_SP 
@@ -330,5 +328,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_AppSection TO NSQL
+GRANT EXECUTE ON api.isp_AppSection TO NSQL
 GO
+
+

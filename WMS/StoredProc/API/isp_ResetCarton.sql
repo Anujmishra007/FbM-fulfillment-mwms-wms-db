@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_ResetCarton]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_ResetCarton]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_ResetCarton]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_ResetCarton]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_ResetCarton]    Script Date: 6/3/2020 5:03:48 PM ******/
+/****** Object:  StoredProcedure [API].[isp_ResetCarton]    Script Date: 6/3/2020 5:03:48 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: fnc_ResetCarton                                           */
+/* Store procedure: isp_ResetCarton                                           */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-03-30   1.0  Chermaine  Created                                       */
 /******************************************************************************/
 
-CREATE PROC [API].[fnc_ResetCarton] (
+CREATE PROC [API].[isp_ResetCarton] (
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) ='' OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -118,7 +117,7 @@ END
 
 
 --check pickslipNo
-EXEC [API].[fnc_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
+EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
 
 IF @n_Err <>0
 BEGIN
@@ -178,7 +177,7 @@ SELECT @cPickSlipNo AS pickslipno
 
 SET @nTranCount = @@TRANCOUNT
 BEGIN TRAN
-SAVE TRAN fnc_ResetCarton
+SAVE TRAN isp_ResetCarton
 -- if hav SKU
    IF EXISTS (SELECT TOP 1 1 FROM @ResetCartonList)
    BEGIN
@@ -215,7 +214,7 @@ SAVE TRAN fnc_ResetCarton
             BEGIN      
                SET @b_Success = 0  
                SET @n_Err = 101600  
-               SET @c_ErrMsg = 'Unable to delete PackDetail. Function : fnc_ResetCarton'
+               SET @c_ErrMsg = 'Unable to delete PackDetail. Function : isp_ResetCarton'
             
                GOTO RollBackTran
             END
@@ -242,7 +241,7 @@ SAVE TRAN fnc_ResetCarton
                BEGIN      
                   SET @b_Success = 0  
                   SET @n_Err = 101601  
-                  SET @c_ErrMsg = 'Unable to update PackInfo. Function : fnc_ResetCarton'
+                  SET @c_ErrMsg = 'Unable to update PackInfo. Function : isp_ResetCarton'
             
                   GOTO RollBackTran
                END
@@ -257,7 +256,7 @@ SAVE TRAN fnc_ResetCarton
                BEGIN      
                   SET @b_Success = 0  
                   SET @n_Err = 101602  
-                  SET @c_ErrMsg = 'Unable to delete PackInfo. Function : fnc_ResetCarton'
+                  SET @c_ErrMsg = 'Unable to delete PackInfo. Function : isp_ResetCarton'
             
                   GOTO RollBackTran
                END
@@ -279,7 +278,7 @@ SAVE TRAN fnc_ResetCarton
       BEGIN      
          SET @b_Success = 0  
          SET @n_Err = 101603  
-         SET @c_ErrMsg = 'Unable to delete PackDetail. Function : fnc_ResetCarton'
+         SET @c_ErrMsg = 'Unable to delete PackDetail. Function : isp_ResetCarton'
             
          GOTO RollBackTran
       END
@@ -291,12 +290,12 @@ SAVE TRAN fnc_ResetCarton
       BEGIN      
          SET @b_Success = 0  
          SET @n_Err = 101604  
-         SET @c_ErrMsg = 'Unable to update PackInfo. Function : fnc_ResetCarton'
+         SET @c_ErrMsg = 'Unable to update PackInfo. Function : isp_ResetCarton'
             
          GOTO RollBackTran
       END
    END
-   --COMMIT TRAN fnc_ResetCarton
+   --COMMIT TRAN isp_ResetCarton
    SET @b_Success = 1
    SET @jResult = '[{Success}]'
    GOTO Quit
@@ -304,22 +303,23 @@ SAVE TRAN fnc_ResetCarton
 RollBackTran:
       SELECT 'rollBack'
       --Revert
-      ROLLBACK TRAN fnc_ResetCarton
+      ROLLBACK TRAN isp_ResetCarton
 
    Quit:
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-         COMMIT TRAN fnc_ResetCarton
+         COMMIT TRAN isp_ResetCarton
          
 
    EXIT_SP:
    Revert
 END
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_ResetCarton TO NSQL
+GRANT EXECUTE ON api.isp_ResetCarton TO NSQL
 GO
+
+
 

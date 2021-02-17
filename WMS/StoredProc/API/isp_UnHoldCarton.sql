@@ -1,23 +1,22 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_UnHoldCarton]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_UnHoldCarton]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_UnHoldCarton]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_UnHoldCarton]
 GO
-/****** Object:  StoredProcedure [API].[fnc_UnHoldCarton]    Script Date: 6/3/2020 5:10:13 PM ******/
+/****** Object:  StoredProcedure [API].[isp_UnHoldCarton]    Script Date: 6/3/2020 5:10:13 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_UnHoldCarton                                          */  
+/* Store procedure: isp_UnHoldCarton                                          */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-03-27   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
   
-CREATE PROC [API].[fnc_UnHoldCarton] (  
+CREATE PROC [API].[isp_UnHoldCarton] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -98,14 +97,14 @@ IF @cScanNo = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 101700  
-   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : fnc_UnHoldCarton'
+   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : isp_UnHoldCarton'
                                                                   --      
    --SET @jsonErrMsg=(SELECT * FROM @errMsg FOR json AUTO)  
    GOTO EXIT_SP  
 END  
  
 --check pickslipNo
-EXEC [API].[fnc_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
+EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
 
 IF @n_Err <>0
 BEGIN
@@ -158,7 +157,7 @@ IF EXISTS (SELECT TOP 1 1 FROM packInfo (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
 BEGIN
 	SET @b_Success = 0  
    SET @n_Err = 101701  
-   SET @c_ErrMsg = 'Unable to unHold Carton. Carton No is not in On-Hold status. Function : fnc_UnHoldCarton'
+   SET @c_ErrMsg = 'Unable to unHold Carton. Carton No is not in On-Hold status. Function : isp_UnHoldCarton'
 END
 ELSE 
 BEGIN
@@ -173,7 +172,7 @@ BEGIN
    BEGIN      
       SET @b_Success = 0  
       SET @n_Err = 101702  
-      SET @c_ErrMsg = 'Unable to update PackInfo. Function : fnc_UnHoldCarton'
+      SET @c_ErrMsg = 'Unable to update PackInfo. Function : isp_UnHoldCarton'
 
       GOTO EXIT_SP
    END
@@ -193,7 +192,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_UnHoldCarton TO NSQL
+GRANT EXECUTE ON api.isp_UnHoldCarton TO NSQL
 GO
-
 

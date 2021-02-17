@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_GetToPackDetail]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_GetToPackDetail]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_CheckCartonDetail]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_CheckCartonDetail]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_GetToPackDetail]    Script Date: 6/3/2020 4:54:52 PM ******/
+/****** Object:  StoredProcedure [API].[isp_CheckCartonDetail]    Script Date: 6/3/2020 4:39:47 PM ******/
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_GetToPackDetail                                       */  
+/* Store procedure: isp_CheckCartonDetail                                     */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
-/* 2019-11-08   1.0  Chermaine  Created                                       */  
+/* 2020-03-27   1.0  Chermaine  Created                                       */ 
+/* 2020-10-28   1.1  Chermaine  TPS-533 change @cInputCube to nvarchar(10) (cc01)*/
 /******************************************************************************/  
   
-Create PROC [API].[fnc_GetToPackDetail] (  
+CREATE PROC [API].[isp_CheckCartonDetail] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -43,8 +42,10 @@ DECLARE
    @cScanNoType   NVARCHAR( 30),
    @cPickSlipNo   NVARCHAR( 30),
    @cDropID       NVARCHAR( 30),    
+   @cCartonNo     NVARCHAR( 3),
      
    @cOrderKey     NVARCHAR( 10),  
+   @cOrderKeyCheck   NVARCHAR( 10),
    @cLoadKey      NVARCHAR( 10),  
    @cZone         NVARCHAR( 18),  
    @cLot          NVARCHAR( 30),
@@ -62,7 +63,7 @@ DECLARE
    @cDynamicCol2  NVARCHAR( 30),
    
    @cDynamicRightName1  NVARCHAR( 30),
-   @cDynamicRightValue1 NVARCHAR( 30),
+   @cDynamicRightValue1  NVARCHAR( 30),
    @cDymEcomCtnWgtTb    NVARCHAR( 20),
    @cDymEcomCtnWgtCol   NVARCHAR( 20),
    @cDymEcomCtnCubeTb   NVARCHAR( 20),
@@ -87,6 +88,8 @@ DECLARE @packSKUDetail TABLE (
     PackedQty        INT,    
     Img              NVARCHAR( 1024),
     Ecom_CartonType  NVARCHAR( 10),
+    InputWeight      NVARCHAR( 10),  --(cc01)
+    InputCube        NVARCHAR( 10),  --(cc01)
     WEIGHT           FLOAT,
     CUBE             FLOAT,
     Ecom_Weight      FLOAT,
@@ -106,35 +109,47 @@ CREATE TABLE #pickSKUDetail (
     LoadKey          NVARCHAR( 30),--externalOrderKey
     PickDetailStatus NVARCHAR ( 3)
 )
- 
+
+  
 --Decode Json Format
-SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc=Func,@cScanNo=ScanNo, @cType = cType, @cUserName = UserName, @cLangCode = LangCode
+SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc=Func,@cScanNo=ScanNo, @cType = cType, @cUserName = UserName, @cLangCode = LangCode, @cCartonNo = CartonNo, @cOrderKeyCheck = OrderKey
 FROM OPENJSON(@json)  
 WITH (  
 	   StorerKey   NVARCHAR ( 15),
 	   Facility    NVARCHAR ( 5),
       Func        INT,  
-      ScanNo      NVARCHAR( 30),
+      ScanNo     NVARCHAR( 30),
       cType       NVARCHAR( 30),
       UserName    NVARCHAR( 30),
-      LangCode    NVARCHAR( 3)
+      LangCode    NVARCHAR( 3),
+      CartonNo    NVARCHAR( 3),
+      OrderKey    NVARCHAR( 10)
 )  
---SELECT @cStorerKey AS StorerKey, @cFacility AS Facility,@nFunc AS Func, @cScanNo AS ScanNo, @cType AS TYPE, @cUserName AS userName, @cLangCode AS LangCode
+--SELECT @cStorerKey AS StorerKey, @cFacility AS Facility,@nFunc AS Func, @cScanNo AS ScanNo, @cType AS TYPE, @cUserName AS userName, @cLangCode AS LangCode, @cOrderKeyCheck as OrderKey
 
 
 --Data Validate  - Check ScanNo blank 
 IF @cScanNo = ''  
 BEGIN  
    SET @b_Success = 0  
-   SET @n_Err = 101200  
-   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : fnc_GetToPackDetail'  
+   SET @n_Err = 100400  
+   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : isp_CheckCartonDetail'
                                                                   --      
    --SET @jsonErrMsg=(SELECT * FROM @errMsg FOR json AUTO)  
    GOTO EXIT_SP  
 END  
 
+IF @cCartonNo = ''
+BEGIN  
+   SET @b_Success = 0  
+   SET @n_Err = 100401  
+   SET @c_ErrMsg = 'Unable to identify Carton No for check carton function. Function : isp_CheckCartonDetail' 
+                                                              
+   GOTO EXIT_SP  
+END  
+
 --check pickslipNo
-EXEC [API].[fnc_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT
+EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT,1
 
 IF @n_Err <>0
 BEGIN
@@ -178,26 +193,20 @@ WITH (
       PickDetailStatus  NVARCHAR( 1)   '$.PickDetailStatus'
 )
 
-
---check packstatus is it close
---IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9')
---BEGIN
---   SET @b_Success = 0  
---   SET @n_Err = 100351  
---   SET @c_ErrMsg = 'Scan Document already packed'
---   GOTO EXIT_SP
---END
+IF @EcomSingle = '1'
+BEGIN
+	
+	SELECT @cPickSlipNo = pickslipNo FROM #pickSKUDetail WHERE orderKey = @cOrderKeyCheck
+	
+END
 
  --check storerConfig to skip cartonize
  DECLARE @skipCartonize NVARCHAR( 1)
  DECLARE @hidePackedSku NVARCHAR( 1)
- DECLARE @navCtnScn NVARCHAR(1)
  
  SET @hidePackedSku = '0'
  
- SELECT @navCtnScn = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE @cStorerKey = @cStorerKey AND configKey = 'TPS-NavCtnScn'
- 
- IF EXISTS (SELECT TOP 1 1  FROM dbo.storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-captureWeight' AND (sValue LIKE '%w%' or sValue LIKE'%c%'))
+ IF EXISTS (SELECT TOP 1 1  FROM dbo.storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-captureWeight'AND (sValue LIKE '%w%' or sValue LIKE'%c%'))
  BEGIN
  	SET @skipCartonize = '0'
  END
@@ -212,8 +221,8 @@ WITH (
  	IF NOT EXISTS (SELECT TOP 1 1 FROM STORER S WITH (NOLOCK)
                JOIN CARTONIZATION C WITH (NOLOCK) ON (S.cartonGroup=C.CartonizationGroup)  WHERE S.StorerKey = @cStorerKey)
    BEGIN
-   	SET @n_Err = 101201
-      SET @c_ErrMsg = 'Please setup Cartonization in SCE/WMS to proceed. Function : fnc_GetToPackDetail'
+   	SET @n_Err = 100402
+      SET @c_ErrMsg = 'Please setup Cartonization in SCE/WMS to proceed. Function : isp_CheckCartonDetail'
       GOTO EXIT_SP
    END
  END
@@ -222,6 +231,8 @@ IF EXISTS (SELECT TOP 1 1  FROM dbo.storerConfig WITH (NOLOCK) WHERE storerKey =
  BEGIN
  	SET @hidePackedSku = '1'
  END
+ 
+ 
  
 --set Dynamic Column  
 DECLARE @cSQLDynamicSelect NVARCHAR ( MAX)
@@ -242,8 +253,8 @@ IF @@ROWCOUNT > 0
 BEGIN
 	IF (ISNULL(@cDynamicTb1,'') <> '' AND @cDynamicTb1 NOT IN ('SKU')) OR (ISNULL(@cDynamicTb2,'') <> '' AND @cDynamicTb2 NOT IN ('SKU')) 
    BEGIN
-      SET @n_Err = 101202
-      SET @c_ErrMsg = 'Incorrect dynamic Weight and Cube columns setup. Function : fnc_GetToPackDetail'
+      SET @n_Err = 100403
+      SET @c_ErrMsg = 'Incorrect dynamic Weight and Cube columns setup. Function : isp_CheckCartonDetail'
       GOTO EXIT_SP
    END
    
@@ -307,7 +318,6 @@ END
 --FROM storerConfig (NOLOCK)
 --WHERE storerKey = @cStorerKey
 --AND configKey = 'TPS-DisplayImage'
-
 DECLARE @cSQLDymWgtSelect NVARCHAR ( 150)
 
 -- Dynamic SKU weight 
@@ -323,8 +333,8 @@ BEGIN
       
    IF (ISNULL(@cDymCtnWgtTb,'') NOT IN ('SKU')) OR (ISNULL(@cDymCtnWgtTb,'') = '')
    BEGIN
-      SET @n_Err = 101202
-      SET @c_ErrMsg = 'Incorrect dynamic SKU Weight column setup. Function : fnc_GetToPackDetail'
+      SET @n_Err = 100404
+      SET @c_ErrMsg = 'Incorrect dynamic SKU Weight column setup. Function : isp_CheckCartonDetail'
       GOTO EXIT_SP
    END
    ELSE
@@ -350,8 +360,8 @@ BEGIN
       
    IF (ISNULL(@cDymCtnCubeTb,'') NOT IN ('SKU')) OR (ISNULL(@cDymCtnCubeTb,'') = '')
    BEGIN
-      SET @n_Err = 101203
-      SET @c_ErrMsg = 'Incorrect dynamic SKU Cube column setup. Function : fnc_GetToPackDetail'
+      SET @n_Err = 100405
+      SET @c_ErrMsg = 'Incorrect dynamic SKU Cube column setup. Function : isp_CheckCartonDetail'
       GOTO EXIT_SP
    END
    ELSE
@@ -377,8 +387,8 @@ BEGIN
       
    IF (ISNULL(@cDymEcomCtnWgtTb,'') NOT IN ('SKU')) OR (ISNULL(@cDymEcomCtnWgtTb,'') = '')
    BEGIN
-      SET @n_Err = 101205
-      SET @c_ErrMsg = 'Incorrect dynamic E-Comm Carton Weight column setup. Function : fnc_GetToPackDetail'
+      SET @n_Err = 100406
+      SET @c_ErrMsg = 'Incorrect dynamic E-Comm Carton Weight column setup. Function : isp_CheckCartonDetail'
       GOTO EXIT_SP
    END
    ELSE
@@ -404,8 +414,8 @@ BEGIN
       
    IF (ISNULL(@cDymEcomCtnCubeTb,'') NOT IN ('SKU')) OR (ISNULL(@cDymEcomCtnCubeTb,'') = '')
    BEGIN
-      SET @n_Err = 101206
-      SET @c_ErrMsg = 'Incorrect dynamic E-Comm Cube column setup. Function : fnc_GetToPackDetail'
+      SET @n_Err = 100407
+      SET @c_ErrMsg = 'Incorrect dynamic E-Comm Cube column setup. Function : isp_CheckCartonDetail'
       GOTO EXIT_SP
    END
    ELSE
@@ -418,37 +428,58 @@ BEGIN
 	   SET @cSQLDymWgtSelect = @cSQLDymWgtSelect + ', SKU.Cube'
 END
 
+--WeightKey in 
+DECLARE @cInputWeight   NVARCHAR(10)   --(cc01)
+DECLARE @cInputCube     NVARCHAR(10)   --(cc01)
+
+SELECT @cInputWeight = CONVERT(NVARCHAR(10),ISNULL(WEIGHT,0)), @cInputCube = CONVERT(NVARCHAR(10),ISNULL(CUBE,0)) FROM packInfo WITH (NOLOCK) WHERE cartonNo = @cCartonNo AND pickslipno = @cPickSlipNo 
+--SELECT @cCartonNo AS cCartonNo, @cPickSlipNo AS cPickSlipNo
+--SELECT @cInputWeight AS cInputWeight,@cInputCube AS cInputCube
+--SELECT @cSQLDymWgtSelect AS SQLDymWgtSelect
 --form packInfo output 
 DECLARE @cSQLCobine     NVARCHAR( MAX)
 DECLARE @cSQLMainSelect NVARCHAR( MAX)
 DECLARE @cSQLFrom       NVARCHAR( MAX)
-
---(sum(pick.QtyToPack)-isnull((SUM(PD.qty)),0)) AS QtyToPack
+   
 IF @EcomSingle = '1'
 BEGIN
 	SET @cSQLMainSelect = '
    SELECT 
-   sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(sum(pick.QtyToPack)-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType
-'
+   sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType,
+   ' + @cInputWeight + ' AS InputWeight, '+@cInputCube+ ' AS InputCube'
+   
+   SET @cSQLFrom =
+   '
+   FROM dbo.packHeader PH WITH (NOLOCK) 
+   JOIN dbo.packDetail PD WITH (NOLOCK) on (PH.pickslipNo = PD.pickslipNo and PH.storerKey = PD.storerKey)
+   JOIN dbo.SKU sku WITH (NOLOCK) on (SKU.SKU = PD.SKU)
+   JOIN #pickSKUDetail pick on (pick.OrderKey = PH.orderKey and pick.pickslipNo = PD.pickslipNo and pick.sku = Sku.sku)
+   WHERE SKU.storerKey = ''' +@cStorerKey+ '''
+   and PH.OrderKey = ''' +@cOrderKeyCheck+ '''
+   GROUP BY sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,sku.WEIGHT,sku.[CUBE],
+   SKU.EcomCartonType,sku.StdGrossWgt,sku.StdCube,pick.QtyToPack
+   '
 END
 ELSE
 BEGIN
 	SET @cSQLMainSelect = '
    SELECT 
-   sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType
-'
+   sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, PD2.qty AS PackedQty,'''' AS Img,SKU.EcomCartonType,
+   ' + @cInputWeight + ' AS InputWeight, '+@cInputCube+ ' AS InputCube'
+   
+   SET @cSQLFrom =
+   '
+   FROM #pickSKUDetail pick
+   LEFT JOIN dbo.SKU sku WITH (NOLOCK) ON (sku.sku = pick.sku)
+   LEFT JOIN dbo.packDetail PD WITH (NOLOCK) on (pick.pickslipNo = PD.pickslipNo and SKU.SKU = PD.SKU)
+   LEFT JOIN dbo.packDetail PD2 WITH (NOLOCK) on (PD.pickslipNo = PD2.pickslipNo and PD.SKU = PD2.SKU)
+   WHERE SKU.storerKey = ''' +@cStorerKey+ '''
+   and PD2.cartonNo = ''' +@cCartonNo+ '''
+   GROUP BY sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,sku.WEIGHT,sku.[CUBE],
+   SKU.EcomCartonType,sku.StdGrossWgt,sku.StdCube,pick.QtyToPack,PD2.qty
+   '
 END
 
-
-SET @cSQLFrom =
-'
-FROM #pickSKUDetail pick
-LEFT JOIN dbo.SKU sku WITH (NOLOCK) ON (sku.sku = pick.sku)
-LEFT JOIN dbo.packDetail PD WITH (NOLOCK) on (pick.pickslipNo = PD.pickslipNo and SKU.SKU = PD.SKU)
-WHERE SKU.storerKey = ''' +@cStorerKey+ '''
-GROUP BY sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,sku.WEIGHT,sku.[CUBE],
-SKU.EcomCartonType,sku.StdGrossWgt,sku.StdCube,pick.QtyToPack
-'
 
 SET @cSQLCobine = @cSQLMainSelect+@cSQLDymWgtSelect+@cSQLDynamicSelect+@cSQLFrom+@cSQLGropBy
 --LEFT JOIN dbo.packDetail PD WITH (NOLOCK) on (pick.pickslipNo = PD.pickslipNo and PD.storerKey = PD.storerKey)
@@ -460,7 +491,13 @@ EXEC (@cSQLCobine)
 
 --DROP TABLE #pickSKUDetail 
 --SELECT * FROM #pickSKUDetail ORDER BY pickslipNo
---SELECT * FROM #pickSKUDetail 
+
+--SELECT pick.*,SUM(PD.QTY) AS PackedQty,PD.QTY AS CartonQty FROM #pickSKUDetail pick
+--LEFT JOIN packDetail PD (NOLOCK) ON ( pick.PickslipNo = PD.PickSlipNo AND pick.sku = PD.SKU)
+----LEFT JOIN packDetail PD2 (NOLOCK) ON ( PD.PickslipNo = PD2.PickSlipNo AND PD2.sku = PD.SKU AND PD2.CartonNo = @cCartonNo)
+--WHERE PD.cartonno = @cCartonNo
+--GROUP BY pick.sku,pick.LoadKey,pick.OrderKey,pick.PickDetailStatus,pick.PickslipNo,pick.QtyToPack,PD.PickSlipNo,PD.pickslipNo,PD.SKU,PD.QTY--,PD2.pickslipNo,PD2.SKU,,PD2.CartonNo,PD2.QTY
+
 --SELECT 'AA',* FROM @packSKUDetail
 
 --get img
@@ -483,8 +520,8 @@ WHILE @@FETCH_STATUS = 0
    BEGIN
    	--default Img, cause sp still point to MYWMS
       INSERT INTO @SkuImg
-      EXEC [API].[fnc_Get_SKU_Image_UR] 
-      --exec rdt.[Get_SKU_Image_URL_test]       
+      EXEC [API].[isp_Get_SKU_Image_UR] 
+      --exec [MYWMS].rdt.[Get_SKU_Image_URL_test]       
       --EXEC [MYWMS].[WM].[lsp_WM_Get_SKU_Image_URL]
          'NIKEMY'      
       , @cSku            
@@ -518,20 +555,33 @@ JOIN  @SkuImg s ON p.sku = s.sku
 SET @b_Success = 1  
 ----SET @jResult = (SELECT * FROM @packSKUDetail FOR JSON AUTO, INCLUDE_NULL_VALUES)
 
-SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo,(SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,
-@cDynamicRightName1 AS DynamicRightName1,@cDynamicRightValue1 AS DynamicRightValue1,@skipCartonize AS skipCartonize,@navCtnScn AS navCtnScn, @hidePackedSku AS hidePackedSku,@EcomSingle AS EcomSingle,
---COUNT(PKI.cartonStatus) AS HoldStatus,
+--SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo,(SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,
+--@cDynamicRightName1 AS DynamicRightName1,@cDynamicRightValue1 AS DynamicRightValue1,@skipCartonize AS skipCartonize,@hidePackedSku AS hidePackedSku,@EcomSingle AS EcomSingle,
+----COUNT(PKI.cartonStatus) AS HoldStatus,
+--   (SELECT p.*,UPC.upc
+--   FROM @packSKUDetail p 
+--   left JOIN (SELECT UPC,sku FROM UPC (NOLOCK) WHERE StorerKey = @cStorerKey) UPC
+--   ON UPC.sku = p.sku 
+--   FOR JSON AUTO, INCLUDE_NULL_VALUES ) AS Details
+   
+--FROM #pickSKUDetail PSKU  WITH (NOLOCK) 
+--LEFT JOIN PackDetail PD WITH (NOLOCK) ON (PSKU.pickslipno = PD.pickslipNo)
+----WHERE PD.PickSlipNo = @cPickSlipNo
+--AND StorerKey = @cStorerKey
+--FOR JSON AUTO, INCLUDE_NULL_VALUES)
+
+SET @jResult = 
    (SELECT p.*,UPC.upc
    FROM @packSKUDetail p 
    left JOIN (SELECT UPC,sku FROM UPC (NOLOCK) WHERE StorerKey = @cStorerKey) UPC
    ON UPC.sku = p.sku 
-   FOR JSON AUTO, INCLUDE_NULL_VALUES ) AS Details
+   FOR JSON AUTO, INCLUDE_NULL_VALUES ) 
    
-FROM #pickSKUDetail PSKU  WITH (NOLOCK) 
-LEFT JOIN PackDetail PD WITH (NOLOCK) ON (PSKU.pickslipno = PD.pickslipNo)
---WHERE PD.PickSlipNo = @cPickSlipNo
-AND StorerKey = @cStorerKey
-FOR JSON AUTO, INCLUDE_NULL_VALUES)
+--FROM #pickSKUDetail PSKU  WITH (NOLOCK) 
+--LEFT JOIN PackDetail PD WITH (NOLOCK) ON (PSKU.pickslipno = PD.pickslipNo)
+----WHERE PD.PickSlipNo = @cPickSlipNo
+--AND StorerKey = @cStorerKey
+--FOR JSON AUTO, INCLUDE_NULL_VALUES)
 
 DROP TABLE #pickSKUDetail 
 
@@ -542,7 +592,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_GetToPackDetail TO NSQL
+GRANT EXECUTE ON api.isp_CheckCartonDetail TO NSQL
 GO
 
 

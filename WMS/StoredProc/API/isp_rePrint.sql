@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_rePrint]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_rePrint]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_rePrint]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_rePrint]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_rePrint]    Script Date: 6/3/2020 5:02:23 PM ******/
+/****** Object:  StoredProcedure [API].[isp_rePrint]    Script Date: 6/3/2020 5:02:23 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: fnc_rePrint                                               */
+/* Store procedure: isp_rePrint                                               */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-04-14   1.0  Chermaine  Created                                       */
 /******************************************************************************/
 
-CREATE PROC [API].[fnc_rePrint] (
+CREATE PROC [API].[isp_rePrint] (
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) ='' OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -180,10 +179,10 @@ BEGIN
 	END
 	ELSE
 	BEGIN
-		EXEC API.fnc_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
+		EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
       'TPSHIPPLBL', -- Report type
       @tShipLabel, -- Report params
-      'API.fnc_PackConfim', --source Type
+      'API.isp_PackConfim', --source Type
       @n_Err  OUTPUT,
       @c_ErrMsg OUTPUT,
       '1', --noOfCopy
@@ -217,10 +216,10 @@ BEGIN
 	   END
 	   ELSE
 	   BEGIN
-		   EXEC API.fnc_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
+		   EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
          'TPPACKLIST', -- Report type
          @tShipLabel, -- Report params
-         'API.fnc_PackConfim', --source Type
+         'API.isp_PackConfim', --source Type
          @n_Err  OUTPUT,
          @c_ErrMsg OUTPUT,
          '1', --noOfCopy
@@ -260,6 +259,8 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_rePrint TO NSQL
+GRANT EXECUTE ON api.isp_rePrint TO NSQL
 GO
+
+
 

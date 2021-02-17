@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_GetCartonType]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_GetCartonType]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_GetCartonType]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_GetCartonType]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_GetCartonType]    Script Date: 6/3/2020 4:45:54 PM ******/
+/****** Object:  StoredProcedure [API].[isp_GetCartonType]    Script Date: 6/3/2020 4:45:54 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_GetCartonType                                         */  
+/* Store procedure: isp_GetCartonType                                         */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-04-07   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
 
-CREATE PROC [API].[fnc_GetCartonType] (  
+CREATE PROC [API].[isp_GetCartonType] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -90,7 +89,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_GetCartonType TO NSQL
+GRANT EXECUTE ON api.isp_GetCartonType TO NSQL
 GO
 
 

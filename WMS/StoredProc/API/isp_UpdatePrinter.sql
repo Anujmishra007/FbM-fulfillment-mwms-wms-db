@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_UpdatePrinter]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_UpdatePrinter]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_UpdatePrinter]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_UpdatePrinter]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_UpdatePrinter]    Script Date: 6/3/2020 5:11:12 PM ******/
+/****** Object:  StoredProcedure [API].[isp_UpdatePrinter]    Script Date: 6/3/2020 5:11:12 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_UpdatePrinter                                         */  
+/* Store procedure: isp_UpdatePrinter                                         */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-04-07   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
   
-CREATE PROC [API].[fnc_UpdatePrinter] (  
+CREATE PROC [API].[isp_UpdatePrinter] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -80,7 +79,7 @@ IF @cWorkstation = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 101800  
-   SET @c_ErrMsg = 'Unable to retrieve Workstation ID. Function : fnc_UpdatePrinter'
+   SET @c_ErrMsg = 'Unable to retrieve Workstation ID. Function : isp_UpdatePrinter'
    
    GOTO EXIT_SP  
 END  
@@ -89,7 +88,7 @@ IF @cPrinterType = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 101801  
-   SET @c_ErrMsg = 'Unable to retrieve Printer Type. Function : fnc_UpdatePrinter'
+   SET @c_ErrMsg = 'Unable to retrieve Printer Type. Function : isp_UpdatePrinter'
    
    GOTO EXIT_SP  
 END 
@@ -98,7 +97,7 @@ IF @cPrinterID = ''
 BEGIN  
    SET @b_Success = 0  
    SET @n_Err = 101802  
-   SET @c_ErrMsg = 'Unable to retrieve Printer ID. Function : fnc_UpdatePrinter'
+   SET @c_ErrMsg = 'Unable to retrieve Printer ID. Function : isp_UpdatePrinter'
    
    GOTO EXIT_SP  
 END
@@ -114,7 +113,7 @@ BEGIN
    BEGIN         
       SET @b_Success = 0  
       SET @n_Err = 101803  
-      SET @c_ErrMsg = 'Fail to update into PackDetail. Function : fnc_UpdatePrinter' 
+      SET @c_ErrMsg = 'Fail to update into PackDetail. Function : isp_UpdatePrinter' 
                
       GOTO EXIT_SP
    END
@@ -133,7 +132,7 @@ BEGIN
    BEGIN         
       SET @b_Success = 0  
       SET @n_Err = 101804  
-      SET @c_ErrMsg = 'Fail to Insert into PackDetail. Function : fnc_UpdatePrinter' 
+      SET @c_ErrMsg = 'Fail to Insert into PackDetail. Function : isp_UpdatePrinter' 
                
       GOTO EXIT_SP
    END
@@ -153,7 +152,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_UpdatePrinter TO NSQL
+GRANT EXECUTE ON api.isp_UpdatePrinter TO NSQL
 GO
 
 

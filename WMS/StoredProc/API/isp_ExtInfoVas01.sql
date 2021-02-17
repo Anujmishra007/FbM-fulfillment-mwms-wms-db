@@ -1,23 +1,22 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_ExtInfoVas01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_ExtInfoVas01]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_ExtInfoVas01]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_ExtInfoVas01]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_ExtInfoVas01]    Script Date: 6/3/2020 4:50:51 PM ******/
+/****** Object:  StoredProcedure [API].[isp_ExtInfoVas01]    Script Date: 6/3/2020 4:50:51 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/  
-/* Store procedure: fnc_ExtInfoVas01                                          */  
+/* Store procedure: isp_ExtInfoVas01                                          */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date         Rev  Author     Purposes                                      */  
 /* 2020-06-26   1.0  Chermaine  Created                                       */  
 /******************************************************************************/  
   
-Create PROC [API].[fnc_ExtInfoVas01] (  
+Create PROC [API].[isp_ExtInfoVas01] (  
    @cStorerKey    NVARCHAR( 15),  
    @cOrderKey     NVARCHAR( 10),  
    @b_Success     INT = 1  OUTPUT,  
@@ -46,7 +45,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_ExtInfoVas01 TO NSQL
+GRANT EXECUTE ON api.isp_GetPrinter TO NSQL
 GO
 
 

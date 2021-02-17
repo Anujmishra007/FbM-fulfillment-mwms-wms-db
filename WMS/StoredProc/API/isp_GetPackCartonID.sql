@@ -1,24 +1,23 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[fnc_GetPackCartonID]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[fnc_GetPackCartonID]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_GetPackCartonID]') and objectproperty(id, N'IsProcedure') = 1)
+   DROP PROC [API].[isp_GetPackCartonID]
 GO
 
-/****** Object:  StoredProcedure [API].[fnc_GetPackCartonID]    Script Date: 6/3/2020 4:48:41 PM ******/
+/****** Object:  StoredProcedure [API].[isp_GetPackCartonID]    Script Date: 6/3/2020 4:48:41 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: fnc_GetPackCartonID                                       */
+/* Store procedure: isp_GetPackCartonID                                       */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2019-11-08   1.0  Chermaine  Created                                       */
 /******************************************************************************/
 
-CREATE PROC [API].[fnc_GetPackCartonID] (
+CREATE PROC [API].[isp_GetPackCartonID] (
    @json       NVARCHAR( MAX),
    @jResult    NVARCHAR( MAX) OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -213,7 +212,7 @@ BEGIN
       IF ISNUMERIC(@c_VAT) = 0     
       BEGIN      
          SET @n_Err = 100700    
-         SET @c_errmsg = 'Execution Error : NSQL ' + CONVERT(NCHAR(5),@n_Err) + ': Vat is not a numeric value. (isp_GLBL20). Function : fnc_GetPackCartonID'    
+         SET @c_errmsg = 'Execution Error : NSQL ' + CONVERT(NCHAR(5),@n_Err) + ': Vat is not a numeric value. (isp_GLBL20). Function : isp_GetPackCartonID'    
          GOTO EXIT_SP   
       END     
       
@@ -303,7 +302,7 @@ ELSE
 BEGIN
 	SET @b_Success = 0  
    SET @n_Err = 100701  
-   SET @c_ErrMsg = 'Fail to retrieve LableNo. Function : fnc_GetPackCartonID'
+   SET @c_ErrMsg = 'Fail to retrieve LableNo. Function : isp_GetPackCartonID'
 END
 
 EXIT_SP:
@@ -318,7 +317,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.fnc_GetPackCartonID TO NSQL
+GRANT EXECUTE ON api.isp_GetPackCartonID TO NSQL
 GO
 
 
