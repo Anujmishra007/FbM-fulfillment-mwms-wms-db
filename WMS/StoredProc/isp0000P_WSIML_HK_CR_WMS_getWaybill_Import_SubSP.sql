@@ -1,5 +1,3 @@
-USE [HKWMS]
-
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp0000P_WSIML_HK_CR_WMS_getWaybill_Import_SubSP]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 DROP PROCEDURE [isp0000P_WSIML_HK_CR_WMS_getWaybill_Import_SubSP]
 GO
