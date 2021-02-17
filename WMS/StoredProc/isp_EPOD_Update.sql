@@ -1,6 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_EPOD_Update]')  
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_TH_EPOD_Update]')  
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )  
-DROP PROCEDURE [dbo].[isp_EPOD_Update]  
+DROP PROCEDURE [dbo].[isp_TH_EPOD_Update]  
 GO  
   
 SET ANSI_NULLS OFF  
@@ -8,14 +8,13 @@ GO
 SET QUOTED_IDENTIFIER OFF  
 GO  
   
-  
 /************************************************************************/  
 /* Stored Procedure: isp_TH_EPOD_Update                                 */  
 /* Creation Date: 29-Aug-2014                                           */  
 /* Copyright: IDS                                                       */  
 /* Written by: CSCHONG                                                  */  
 /*                                                                      */  
-/* Purpose: duplicate from isp_EPOD_Update                              */  
+/* Purpose: duplicate from isp_TH_EPOD_Update                           */  
 /*                                                                      */  
 /* Called By:                                                           */  
 /*                                                                      */  
@@ -619,5 +618,6 @@ BEGIN
       RETURN    
    END  
 END -- Procedure   
+GO
 
-GRANT EXEC ON isp_EPOD_Update TO nSQL
+GRANT EXEC ON isp_TH_EPOD_Update TO nSQL
