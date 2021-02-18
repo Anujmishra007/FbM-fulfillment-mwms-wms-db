@@ -103,6 +103,8 @@ GO
 /*                            Custom SP                                 */ 
 /* 21-MAY-2020  Wan08    3.6  Fixed no record retrieve if Loc.HostWHCode*/
 /*                            is null & OverAllocPickByHostWHCode is off*/
+/* 17-FEB-2021  LZG      3.7  INC1430235 - Extended to NVARCHAR 128 to  */
+/*                            follow WMS tables AddWho & EditWho (ZG01) */
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspOrderProcessing]  
@@ -423,9 +425,9 @@ BEGIN
          [RunKey] [nvarchar](10) NULL DEFAULT (' '),  
          [EffectiveDate] [datetime] NULL DEFAULT (getdate()),  
          [AddDate] [datetime] NULL DEFAULT (getdate()),  
-         [AddWho] [nvarchar](18) NULL DEFAULT (suser_sname()),  
+         [AddWho] [nvarchar](128) NULL DEFAULT (suser_sname()),    -- ZG01
          [EditDate] [datetime] NULL DEFAULT (getdate()),  
-         [EditWho] [nvarchar](18) NULL DEFAULT (suser_sname()),  
+         [EditWho] [nvarchar](128) NULL DEFAULT (suser_sname()),   -- ZG01
          [TrafficCop] [nvarchar](1) NULL,  
          [ArchiveCop] [nvarchar](1) NULL,  
          [CARTONGROUP] NVARCHAR(10) NULL,  
