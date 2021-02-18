@@ -24,7 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date          Author   Ver  Purposes                                  */  
-/* 15-Jun-2020   GHChan   1.0  Initial Development                       */  
+/* 15-Jun-2020   GHChan   1.0  Initial Development                       */
+/* 18-Feb-2021   GHChan   2.0  Update Generic SP name                    */
 /*************************************************************************/  
   
 CREATE PROCEDURE [dbo].[isp_EXG_Construct_FileName]  
@@ -164,7 +165,7 @@ BEGIN
          GOTO QUIT  
       END  
   
-      EXEC [dbo].[isp_EXG_CNWMS_Main]  
+      EXEC [dbo].[isp_EXG_Main]  
             @c_FileKeyList  
          ,  @b_Debug        
          ,  @b_Success      OUTPUT  
