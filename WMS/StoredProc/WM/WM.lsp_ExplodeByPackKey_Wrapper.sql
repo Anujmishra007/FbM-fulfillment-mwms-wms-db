@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: ASN/Receipt                                               */  
 /*                                                                      */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
@@ -27,6 +27,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 09-Feb-2021 Wan02    1.2   LFWM-2467 - UAT - TW  Duplicated Moveable */
+/*                            Unit populated when Explode by Packkey in */
+/*                            ASNReceipt Module                         */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
@@ -246,55 +249,55 @@ BEGIN
             INSERT INTO RECEIPTDETAIL
             (
             ReceiptKey,          ReceiptLineNumber,           ExternReceiptKey,
-            ExternLineNo,        StorerKey,                     POKey,
-            Sku,                   AltSku,                          Id,
-            [Status],              DateReceived,                   QtyExpected,
-            QtyAdjusted,         QtyReceived,                   UOM,
-            PackKey,             VesselKey,                     VoyageKey,
-            XdockKey,              ContainerKey,                   ToLoc,
-            ToLot,                 ToId,                           ConditionCode,
-            Lottable01,          Lottable02,                    Lottable03,
-            Lottable04,          Lottable05,                    CaseCnt,
-            InnerPack,           Pallet,                         [Cube],
-            GrossWgt,              NetWgt,                          OtherUnit1,
-            OtherUnit2,            UnitPrice,                      ExtendedPrice,
-            EffectiveDate,       TariffKey,                     FreeGoodQtyExpected,
-            FreeGoodQtyReceived,SubReasonCode,                FinalizeFlag,
+            ExternLineNo,        StorerKey,                   POKey,
+            Sku,                 AltSku,                      Id,
+            [Status],            DateReceived,                QtyExpected,
+            QtyAdjusted,         QtyReceived,                 UOM,
+            PackKey,             VesselKey,                   VoyageKey,
+            XdockKey,            ContainerKey,                ToLoc,
+            ToLot,               ToId,                        ConditionCode,
+            Lottable01,          Lottable02,                  Lottable03,
+            Lottable04,          Lottable05,                  CaseCnt,
+            InnerPack,           Pallet,                      [Cube],
+            GrossWgt,            NetWgt,                      OtherUnit1,
+            OtherUnit2,          UnitPrice,                   ExtendedPrice,
+            EffectiveDate,       TariffKey,                   FreeGoodQtyExpected,
+            FreeGoodQtyReceived, SubReasonCode,               FinalizeFlag,
             DuplicateFrom,       BeforeReceivedQty,           PutawayLoc,
-            ExportStatus,          SplitPalletFlag,              POLineNumber,
-            LoadKey,              ExternPoKey,                  UserDefine01,
-            UserDefine02,          UserDefine03,                   UserDefine04,
-            UserDefine05,          UserDefine06,                   UserDefine07,
-            UserDefine08,          UserDefine09,                   UserDefine10,
-            Lottable06,            Lottable07,                     Lottable08,
-            Lottable09,            Lottable10,                     Lottable11,
-            Lottable12,            Lottable13,                     Lottable14,
+            ExportStatus,        SplitPalletFlag,             POLineNumber,
+            LoadKey,             ExternPoKey,                 UserDefine01,
+            UserDefine02,        UserDefine03,                UserDefine04,
+            UserDefine05,        UserDefine06,                UserDefine07,
+            UserDefine08,        UserDefine09,                UserDefine10,
+            Lottable06,          Lottable07,                  Lottable08,
+            Lottable09,          Lottable10,                  Lottable11,
+            Lottable12,          Lottable13,                  Lottable14,
             Lottable15         )
             SELECT 
-            ReceiptKey,          @c_NextReceiveLineNo,         ExternReceiptKey,
-            ExternLineNo,        StorerKey,                     POKey,
-            Sku,                   AltSku,                          Id,
-            [Status],              DateReceived,                   @n_InsertQtyExpected, 
-            0,                 QtyReceived,                  UOM,
-            PackKey,             VesselKey,                     VoyageKey,
-            XdockKey,              ContainerKey,                   ToLoc,
-            ToLot,                 ToId,                           ConditionCode,
-            Lottable01,          Lottable02,                    Lottable03,
-            Lottable04,          Lottable05,                    CaseCnt,
-            InnerPack,           Pallet,                         [Cube],
-            GrossWgt,              NetWgt,                          OtherUnit1,
-            OtherUnit2,            UnitPrice,                      ExtendedPrice,
-            EffectiveDate,       TariffKey,                     FreeGoodQtyExpected,
-            FreeGoodQtyReceived,SubReasonCode,                FinalizeFlag,
-            DuplicateFrom,     @n_InsertBeforeReceivedQty,  PutawayLoc,
-            ExportStatus,          SplitPalletFlag,              POLineNumber,
-            LoadKey,              ExternPoKey,                  UserDefine01,
-            UserDefine02,          UserDefine03,                   UserDefine04,
-            UserDefine05,          UserDefine06,                   UserDefine07,
-            UserDefine08,          UserDefine09,                   UserDefine10,
-            Lottable06,            Lottable07,                     Lottable08,
-            Lottable09,            Lottable10,                     Lottable11,
-            Lottable12,            Lottable13,                     Lottable14,
+            ReceiptKey,          @c_NextReceiveLineNo,        ExternReceiptKey,
+            ExternLineNo,        StorerKey,                   POKey,
+            Sku,                 AltSku,                      Id,
+            [Status],            DateReceived,                @n_InsertQtyExpected, 
+            0,                   QtyReceived,                 UOM,
+            PackKey,             VesselKey,                   VoyageKey,
+            XdockKey,            ContainerKey,                ToLoc,
+            ToLot,               '',                          ConditionCode,       -- (Wan02) Do Not duplicate Pallet ID
+            Lottable01,          Lottable02,                  Lottable03,
+            Lottable04,          Lottable05,                  CaseCnt,
+            InnerPack,           Pallet,                      [Cube],
+            GrossWgt,            NetWgt,                      OtherUnit1,
+            OtherUnit2,          UnitPrice,                   ExtendedPrice,
+            EffectiveDate,       TariffKey,                   FreeGoodQtyExpected,
+            FreeGoodQtyReceived, SubReasonCode,               FinalizeFlag,
+            DuplicateFrom,       @n_InsertBeforeReceivedQty,  PutawayLoc,
+            ExportStatus,        SplitPalletFlag,             POLineNumber,
+            LoadKey,             ExternPoKey,                 UserDefine01,
+            UserDefine02,        UserDefine03,                UserDefine04,
+            UserDefine05,        UserDefine06,                UserDefine07,
+            UserDefine08,        UserDefine09,                UserDefine10,
+            Lottable06,          Lottable07,                  Lottable08,
+            Lottable09,          Lottable10,                  Lottable11,
+            Lottable12,          Lottable13,                  Lottable14,
             Lottable15            
             FROM RECEIPTDETAIL AS r WITH(NOLOCK)
             WHERE r.ReceiptKey = @c_ReceiptKey 
@@ -500,7 +503,7 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
             
-            EXEC dbo.nspg_GetKey               
+               EXEC dbo.nspg_GetKey               
                   @KeyName = 'ID'    
                ,@fieldlength = 10
                ,@keystring = @c_ToID OUTPUT    

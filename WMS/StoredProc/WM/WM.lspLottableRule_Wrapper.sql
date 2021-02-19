@@ -28,6 +28,7 @@ GO
 /* 2020-11-30  Wan      1.0   Creation                                   */
 /* 2020-12-08  Wan      1.0   LFWM-2410 - UAT  Philippines  PH SCE No    */
 /*                            Prompt For Entering Expired Stocks         */
+/* 2021-02-19  Wan01    1.1   Execute Login @c_Username if <> SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lspLottableRule_Wrapper]  
         @c_SPName                NVARCHAR(250)
@@ -104,6 +105,20 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
+   --(Wan01) - START
+   IF SUSER_SNAME() <> @c_UserName        
+   BEGIN
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+    
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+                
+      EXECUTE AS LOGIN = @c_UserName        
+   END 
+   --(Wan01) - END    
+   
    --Need to Create Big Outer BEGIN TRY..END TRY If more Logic in the SP
 
    BEGIN TRY
@@ -381,7 +396,10 @@ BEGIN
          COMMIT TRAN
       END
    END
-
+   
+   --(Wan01)
+   REVERT
+   
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
