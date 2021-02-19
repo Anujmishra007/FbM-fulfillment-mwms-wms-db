@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: Of_RFIDValidateTag                                        */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-01-11  Wan      1.0   Created                                   */
+/* 2021-02-19  Wan01    1.1   Fixed.                                    */
 /************************************************************************/
 CREATE PROC isp_RFIDTagReadChk01
            @n_Try          INT               OUTPUT
@@ -106,7 +107,7 @@ BEGIN
    FROM SKU AS s WITH (NOLOCK)
    JOIN SKUINFO AS si WITH (NOLOCK) ON  si.StorerKey = s.StorerKey
                                     AND si.Sku = s.Sku
-   WHERE @c_Storerkey = @c_Storerkey
+   WHERE s.Storerkey = @c_Storerkey          -- (Wan01) Fixed
    AND s.Sku = @c_Sku
    AND si.ExtendedField03 = 'RFID'
 
