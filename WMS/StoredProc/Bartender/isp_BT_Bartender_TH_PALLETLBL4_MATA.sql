@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2020-02-20 1.0  WLChooi    Created (WMS-12113)                             */     
+/* 2020-02-20 1.0  WLChooi    Created (WMS-12113)                             */ 
+/* 25-JAN-2021  1.3  CSCHONG    WMS-16146 - revised column03 mapping (CS01)   */      
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_TH_PALLETLBL4_MATA]                      
@@ -133,10 +134,10 @@ BEGIN
               
             
   SET @c_SQLJOIN = N' SELECT DISTINCT RECDET.SKU, SUBSTRING(ISNULL(S.Descr,''''),1,80), ISNULL(RECDET.Lottable07,''''), ' + CHAR(13) --3
-                  + ' ISNULL(RECDET.Lottable03,''''), ISNULL(RECDET.Lottable02,''''), ' + CHAR(13)  --5
+                  + ' @c_Sparm03 ,ISNULL(RECDET.Lottable02,''''), ' + CHAR(13)  --5      --CS01
                   + ' ISNULL(RECDET.Lottable02,''''),CONVERT(NVARCHAR(10), REC.ReceiptDate, 120), ' --7
                   + ' RTRIM(LTRIM(ISNULL(RECDET.SKU,''''))) + '';'' + RTRIM(LTRIM(ISNULL(RECDET.Lottable02,''''))) + '';'' + ' --8
-                  + ' RTRIM(LTRIM(ISNULL(RECDET.Lottable07,''''))) + '';'' + RTRIM(LTRIM(ISNULL(RECDET.Lottable03,''''))) + '';1'' , ' --8
+                  + ' RTRIM(LTRIM(ISNULL(RECDET.Lottable07,''''))) + '';'' + RTRIM(LTRIM(ISNULL(@c_Sparm03,''''))) + '';1'' , ' --8  --CS01
                   + ' RECDET.ReceiptLineNumber,'''', ' + CHAR(13)  --10  
                   + ' '''','''','''','''','''','''','''','''','''','''', ' + CHAR(13)  --20   
                   + ' '''','''','''','''','''','''','''','''','''','''', ' + CHAR(13)  --30   
@@ -164,9 +165,9 @@ BEGIN
    SET @c_SQL = @c_SQL + @c_SQLJOIN        
            
    --EXEC sp_executesql @c_SQL  
-	
-	 SET @c_ExecArguments = N'  @c_Sparm01         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm02         NVARCHAR(80)'  
+   
+    SET @c_ExecArguments = N'  @c_Sparm01         NVARCHAR(80)'  
+                          + ' ,@c_Sparm02         NVARCHAR(80)'  
                           + ' ,@c_Sparm03         NVARCHAR(80)'  
                           + ' ,@c_Sparm04         NVARCHAR(80)'  
                           + ' ,@c_Sparm05         NVARCHAR(80)'  

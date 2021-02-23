@@ -13,8 +13,9 @@ GO
 /*                                                                            */                       
 /* Modifications log:                                                         */                       
 /*                                                                            */                       
-/* Date       Rev  Author     Purposes                                        */      
-/*08-Dec-2020 1.0  WLChooi   Created (WMS-15823)                              */      
+/* Date       Rev  Author    Purposes                                         */      
+/*08-Dec-2020 1.0  WLChooi   Created (WMS-15823)                              */ 
+/*11-Feb-2021 1.1  WLChooi   WMS-16339 - Add Col42 to Col47 (WL01)            */     
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_O2]                            
@@ -131,7 +132,10 @@ BEGIN
                     +' LTRIM(RTRIM(ISNULL(F.Address1,''''))) + '' '' + LTRIM(RTRIM(ISNULL(F.Address2,''''))) + '' '' + LTRIM(RTRIM(ISNULL(F.Address3,''''))), ' + CHAR(13)   --31 
                     +' '''', '''', ISNULL(OH.DeliveryPlace,''''), ISNULL(OH.DeliveryNote,''''), ISNULL(OH.B_Address1,''''), ISNULL(OH.B_Zip,''''), ' + CHAR(13)   --37
                     +' ISNULL(CL1.UDF01,''''), CASE WHEN @c_Sparm05 = ''1'' THEN OH.UserDefine04 ELSE ISNULL(CT2.TrackingNo,'''') END, ISNULL(CL2.Long,''''), ' + CHAR(13)  --40     
-                    +' ISNULL(CL3.Long,''''), '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --50                           
+                    +' ISNULL(CL3.Long,''''), SUBSTRING(ISNULL(CL2.Notes,''''), 1, 80), SUBSTRING(ISNULL(CL2.[Description],''''), 1, 80), ISNULL(CL2.UDF01,''''), ISNULL(CL2.UDF02,''''), ' + CHAR(13)  --45   --WL01     
+                    +' SUBSTRING(LTRIM(RTRIM(ISNULL(OH.C_State,''''))) + LTRIM(RTRIM(ISNULL(OH.C_City,''''))) + LTRIM(RTRIM(ISNULL(OH.C_Address1,''''))) + ' +   --WL01
+                    +' LTRIM(RTRIM(ISNULL(OH.C_Address2,''''))) + LTRIM(RTRIM(ISNULL(OH.C_Address3,''''))) + LTRIM(RTRIM(ISNULL(OH.C_Address4,''''))), 1, 80), ' + CHAR(13)   --46   --WL01
+                    +' ISNULL(OH.DeliveryNote,''''), '''', '''', '''', ' + CHAR(13)  --50   --WL01                           
                     +' '''', '''', '''', '''', '''', '''', '''', @c_Sparm01, @c_Sparm02, @c_Sparm05 ' + CHAR(13)  --60                
                     +' FROM ORDERS OH (NOLOCK) ' + CHAR(13)
                     +' JOIN FACILITY F (NOLOCK) ON OH.Facility = F.Facility ' + CHAR(13)

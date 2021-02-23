@@ -27,7 +27,8 @@ GO
 /*                                                                      */        
 /* Updates:                                                             */        
 /* Date        Author   Ver   Purposes                                  */        
-/* 12-OCT-2020 Wan      1.0   Created                                   */         
+/* 12-OCT-2020 Wan      1.0   Created                                   */  
+/* 19-FEB-2021 Wan01    1.1   Fixed. Extend Variable length             */       
 /************************************************************************/        
 CREATE PROC [dbo].[isp_EPackCtnTrack06]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -58,7 +59,7 @@ BEGIN
          , @c_Port            VARCHAR(10)   =''
          , @n_ThreadPerAcct   INT           =0
          , @n_MilisecondDelay INT           =0
-         , @c_APP_DB_Name     VARCHAR(10)   =''
+         , @c_APP_DB_Name     VARCHAR(30)   =''    --Wan01
          , @n_ThreadPerStream INT           =0
          , @c_IniFilePath     NVARCHAR(200) =''
          , @c_DataStream      VARCHAR(10)   ='4577'
