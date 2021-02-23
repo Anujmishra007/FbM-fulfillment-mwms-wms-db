@@ -73,7 +73,7 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)          
    	  BEGIN
-   	  	 SET @c_Lottable03 = SUBSTRING(ToID,3,2)
+   	  	 SET @c_Lottable03 = SUBSTRING(@c_ToID,3,2)
    	  	    	  	 
          UPDATE RECEIPTDETAIL WITH (ROWLOCK)
          SET Lottable03 =  @c_Lottable03,
