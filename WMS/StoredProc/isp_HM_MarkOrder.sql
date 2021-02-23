@@ -1,33 +1,34 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_HM_MarkOrder]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_HM_MarkOrder]
-GO
-SET ANSI_NULLS ON
-GO
-
-SET QUOTED_IDENTIFIER ON
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_HM_MarkOrder]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_HM_MarkOrder]
 GO
 
-    
-/************************************************************************/    
-/* Stored Procedure: isp_HM_MarkOrder                                   */    
-/* Creation Date: 11-Jun-2020                                           */    
-/* Copyright: LF Logistics                                              */    
-/* Written by: Josh Yan (CN)                                            */    
-/*                                                                      */    
-/* Purpose: CN H&M Mark order process for D11                           */    
-/*                                                                      */    
-/* Called By: Backend Schedule Job                                      */    
-/*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
-/*                                                                      */    
-/* Version: 7.0                                                         */    
-/*                                                                      */    
-/* Data Modifications:                                                  */    
-/*                                                                      */    
-/* Updates:                                                             */    
-/* Date         Author  Ver   Purposes                                  */    
-/* 2020/11/01   Josh    V1.1    Performance tune                        */    
-/************************************************************************/    
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+   
+/*******************************************************************************/
+/* Stored Procedure: isp_HM_MarkOrder                                   		 */
+/* Creation Date: 11-Jun-2020                                           		 */
+/* Copyright: LF Logistics                                              		 */
+/* Written by: Josh Yan (CN)                                            		 */
+/*                                                                      		 */
+/* Purpose: CN H&M Mark order process for D11                           		 */
+/*                                                                      		 */
+/* Called By: Backend Schedule Job                                      		 */
+/*                                                                      		 */
+/* PVCS Version: 1.0                                                    		 */
+/*                                                                      		 */
+/* Version: 7.0                                                         		 */
+/*                                                                      		 */
+/* Data Modifications:                                                  		 */
+/*                                                                      		 */
+/* Updates:                                                             		 */
+/* Date         Author  Ver     Purposes                                		 */
+/* 2020/07/09   kocy    V1.0    https://jiralfl.atlassian.net/browse/WMS-13511 */
+/* 2020/11/01   Josh    V1.1    Performance tune                               */
+/*******************************************************************************/
     
 CREATE PROC [dbo].[isp_HM_MarkOrder]    
 AS    
@@ -88,7 +89,7 @@ BEGIN
       END;    
     
     
-      -------------------------ªÒ»°∂©µ•--------------------        
+      -------------------------Ëé∑ÂèñËÆ¢Âçï--------------------      
       CREATE TABLE #tempOrdersScope (    
          Orderkey nvarchar(10) NOT NULL PRIMARY KEY    
       );    
@@ -147,7 +148,7 @@ BEGIN
          PRINT 'Completed IDX_TEMPSKUSCOPE';    
       END;    
     
-      ------------------------- ±Íº«flag Œ™ P --------------        
+      ------------------------- Ê†áËÆ∞flag ‰∏∫ P --------------        
       INSERT INTO #tempInv (SKU, INVQTY, USEQTY)    
          SELECT    
             lli.Sku,    
@@ -379,8 +380,4 @@ BEGIN
 END;
 GO
 
-
-
-GRANT EXECUTE ON isp_HM_MarkOrder to nSQL
-GO
 
