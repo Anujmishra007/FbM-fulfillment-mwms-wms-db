@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_TransferAllocation_Wrapper]  
    @c_FromStorerkey  NVARCHAR(15) = ''
@@ -34,12 +36,10 @@ CREATE PROCEDURE [WM].[lsp_TransferAllocation_Wrapper]
 ,  @c_UserName       NVARCHAR(128)= ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -50,53 +50,68 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
-
-   BEGIN TRY   
-
-      WHILE  @@TRANCOUNT > 0
+      IF @n_Err <> 0 
       BEGIN
-         COMMIT TRAN
+         GOTO EXIT_SP
       END
-
-      SET @b_Success = 1
-       
-      EXEC ispTransferAllocation
-         @c_FromStorerkey  = @c_FromStorerkey
-      ,  @c_TransferKey    = @c_TransferKey
-      ,  @b_Success        = @b_Success   OUTPUT
-      ,  @n_Err            = @n_Err       OUTPUT  
-      ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
-      ,  @c_Code           = ''        
-
-   END TRY
-
-   BEGIN CATCH
-      SET @n_err = 554301
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Executing ispTransferAllocation. (lsp_TransferAllocation_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-
-
-
-      GOTO EXIT_SP
-   END CATCH    
-   
-   IF @n_err <> 0 
-   BEGIN
-      SET @n_Continue = 3
-      GOTO EXIT_SP
+    
+      EXECUTE AS LOGIN = @c_UserName
    END
+   --(mingle01) - END
+   
+   --(mingle01) - START
+   BEGIN TRY
+      BEGIN TRY   
+
+         WHILE  @@TRANCOUNT > 0
+         BEGIN
+            COMMIT TRAN
+         END
+
+         SET @b_Success = 1
+          
+         EXEC ispTransferAllocation
+            @c_FromStorerkey  = @c_FromStorerkey
+         ,  @c_TransferKey    = @c_TransferKey
+         ,  @b_Success        = @b_Success   OUTPUT
+         ,  @n_Err            = @n_Err       OUTPUT  
+         ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
+         ,  @c_Code           = ''        
+
+      END TRY
+
+      BEGIN CATCH
+         SET @n_err = 554301
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Executing ispTransferAllocation. (lsp_TransferAllocation_Wrapper)'
+                        + '( ' + @c_errmsg + ' )'
+
+
+
+         GOTO EXIT_SP
+      END CATCH    
+      
+      IF @n_err <> 0 
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_SP
+      END
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END   
    EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return

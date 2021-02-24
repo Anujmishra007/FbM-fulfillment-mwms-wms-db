@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */ 
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */  
+/* 2021-02-11   Wan01    1.1  Add Execute Login UserName.. Revert       */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_LoadPlanDetail_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,12 +42,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_LoadPlanDetail_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue                 INT = 1
          , @n_StartTCnt                INT = @@TRANCOUNT
@@ -64,31 +64,55 @@ BEGIN
    SET @c_LoadKey = ISNULL(@c_RefKey1,'')
    SET @c_LoadLineNumber = ISNULL(@c_RefKey2,'')
 
-   IF @c_Loadkey = '' AND @c_LoadLineNumber = ''
+   --(Wan01) - START Login @c_UserName as there calling Sub SP
+   SET @n_Err = 0 
+   IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      GOTO EXIT_SP  
-   END
-         
-   SELECT @c_Orderkey = LPD.Orderkey
-   FROM LOADPLANDETAIL LPD WITH (NOLOCK)
-   WHERE LPD.Loadkey = @c_LoadKey
-   AND   LPD.LoadLineNumber = @c_LoadLineNumber
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-   EXEC dbo.ispLoadplanDetAllow2Del
-            @c_LoadKey  = @c_Loadkey 
-         ,  @c_OrderKey = @c_Orderkey 
-         ,  @n_Allow    = @n_Allow  OUTPUT   -- 0=Not Allow, 1=Allow  
-         ,  @c_ErrMsg   = @c_ErrMsg OUTPUT  
-
-   IF @n_Allow = 0
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 556901
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Disallow to delete Loadplan. (lsp_Pre_Delete_LoadPlanDetail_STD)'
-                   +'(' + @c_ErrMsg + ')'   
-      GOTO EXIT_SP  
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END 
+       
+      EXECUTE AS LOGIN = @c_UserName 
    END
+   --(Wan01) - END
    
+   --(mingle01) - START
+   BEGIN TRY
+      IF @c_Loadkey = '' AND @c_LoadLineNumber = ''
+      BEGIN
+         GOTO EXIT_SP  
+      END
+            
+      SELECT @c_Orderkey = LPD.Orderkey
+      FROM LOADPLANDETAIL LPD WITH (NOLOCK)
+      WHERE LPD.Loadkey = @c_LoadKey
+      AND   LPD.LoadLineNumber = @c_LoadLineNumber
+
+      EXEC dbo.ispLoadplanDetAllow2Del
+               @c_LoadKey  = @c_Loadkey 
+            ,  @c_OrderKey = @c_Orderkey 
+            ,  @n_Allow    = @n_Allow  OUTPUT   -- 0=Not Allow, 1=Allow  
+            ,  @c_ErrMsg   = @c_ErrMsg OUTPUT  
+
+      IF @n_Allow = 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 556901
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Disallow to delete Loadplan. (lsp_Pre_Delete_LoadPlanDetail_STD)'
+                      +'(' + @c_ErrMsg + ')'   
+         GOTO EXIT_SP  
+      END
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
 EXIT_SP:
 
    IF @n_continue=3  -- Error Occured - Process And Return  
@@ -106,7 +130,7 @@ EXIT_SP:
          END  
       END  
       execute nsp_logerror @n_err, @c_errmsg, 'lsp_Pre_Delete_LoadPlanDetail_STD'
-      RETURN  
+      RETURN                  --(Wan01)
    END  
    ELSE  
    BEGIN  
@@ -115,8 +139,9 @@ EXIT_SP:
       BEGIN  
          COMMIT TRAN  
       END  
-      RETURN  
-   END              
+      --RETURN                --(Wan01)  
+   END  
+   REVERT            
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_Pre_Delete_LoadPlanDetail_STD] TO nSQL 

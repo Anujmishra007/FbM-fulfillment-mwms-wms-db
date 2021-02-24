@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */ 
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */ 
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Wave_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_Wave_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
@@ -58,58 +57,67 @@ BEGIN
    SET @c_RefreshHeader = 'Y'
         
    SET @c_WaveKey = ISNULL(@c_RefKey1,'')
-
-   IF @c_WaveKey = ''
-   BEGIN
-      GOTO EXIT_SP  
-   END
    
-   IF EXISTS(  SELECT 1 
-               FROM WAVE WITH (NOLOCK)
-               WHERE Wavekey = @c_WaveKey
-               AND Status = '9' 
-               )
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 552351
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Completed wave may not be deleted. (lsp_Pre_Delete_Wave_STD)'   
-      GOTO EXIT_SP             
-   END                         
-     
-   IF EXISTS(  SELECT 1 
-               FROM WAVEDETAIL WH WITH (NOLOCK)
-               JOIN WAVEDETAIL WD WITH (NOLOCK) ON  WH.Wavekey = WD.Wavekey
-               JOIN PICKHEADER PH WITH (NOLOCK) ON  PH.Wavekey = WD.Wavekey
-                                                AND PH.Orderkey= WD.Orderkey
-               WHERE WH.WaveKey = @c_WaveKey
-            ) 
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err   = 552352
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)
-                     +': PickSlip Printed. Delete Not Allowed. (lsp_Pre_Delete_Wave_STD)'               
-      GOTO EXIT_SP 
-   END                         
+   --(mingle01) - START
+   BEGIN TRY
+      IF @c_WaveKey = ''
+      BEGIN
+         GOTO EXIT_SP  
+      END
+      
+      IF EXISTS(  SELECT 1 
+                  FROM WAVE WITH (NOLOCK)
+                  WHERE Wavekey = @c_WaveKey
+                  AND Status = '9' 
+                  )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 552351
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Completed wave may not be deleted. (lsp_Pre_Delete_Wave_STD)'   
+         GOTO EXIT_SP             
+      END                         
+        
+      IF EXISTS(  SELECT 1 
+                  FROM WAVEDETAIL WH WITH (NOLOCK)
+                  JOIN WAVEDETAIL WD WITH (NOLOCK) ON  WH.Wavekey = WD.Wavekey
+                  JOIN PICKHEADER PH WITH (NOLOCK) ON  PH.Wavekey = WD.Wavekey
+                                                   AND PH.Orderkey= WD.Orderkey
+                  WHERE WH.WaveKey = @c_WaveKey
+               ) 
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err   = 552352
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)
+                        +': PickSlip Printed. Delete Not Allowed. (lsp_Pre_Delete_Wave_STD)'               
+         GOTO EXIT_SP 
+      END                         
 
-   IF EXISTS(  SELECT 1
-               FROM TASKDETAIL TD WITH (NOLOCK)
-               WHERE TD.WaveKey = @c_WaveKey
-               AND TD.[Status] IN ('3','9')
-            )
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 552353
-      SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(6),@n_err)
-                     + ': Cannot delete this wave. The wave has task details which are In Progress and/or Completed and which may not be deleted'
-                     + '. (lsp_Pre_Delete_Wave_STD)' 
-      GOTO EXIT_SP 
-   END  
-   ELSE
-   BEGIN
-      SET @c_errmsg    = 'There are Task Details for this Wave. Delete Anyway?'
-      GOTO EXIT_SP                                                                                                                                                                                                                   
-   END                
-  
+      IF EXISTS(  SELECT 1
+                  FROM TASKDETAIL TD WITH (NOLOCK)
+                  WHERE TD.WaveKey = @c_WaveKey
+                  AND TD.[Status] IN ('3','9')
+               )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 552353
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(6),@n_err)
+                        + ': Cannot delete this wave. The wave has task details which are In Progress and/or Completed and which may not be deleted'
+                        + '. (lsp_Pre_Delete_Wave_STD)' 
+         GOTO EXIT_SP 
+      END  
+      ELSE
+      BEGIN
+         SET @c_errmsg    = 'There are Task Details for this Wave. Delete Anyway?'
+         GOTO EXIT_SP                                                                                                                                                                                                                   
+      END                
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END 
 EXIT_SP:
 
    IF @n_continue=3  -- Error Occured - Process And Return  

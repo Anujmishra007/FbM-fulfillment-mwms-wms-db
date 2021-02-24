@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */ 
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Receiptdetail_STD]
        @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_Receiptdetail_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue            INT 
           ,@n_starttcnt           INT
@@ -60,79 +59,78 @@ BEGIN
    SET @c_ReceiptLineNumber = @c_Refkey2
    SET @c_RefreshDetail = 'Y'
        
-   --SET @n_Err = 0 
-   --EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   --(mingle01) - START
+   BEGIN TRY  
+      IF @n_Continue IN (1,2)
+      BEGIN      
+         IF EXISTS(SELECT 1 
+                     FROM RECEIPTDETAIL (NOLOCK)
+                     WHERE Receiptkey = @c_Receiptkey
+                     AND ReceiptLineNumber = @c_ReceiptLineNumber
+                     AND QtyReceived > 0)
+           BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551051
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete Receiptdetail where item have been received. (lsp_Pre_Delete_Receiptdetail_STD)'                
+           END                                 
+      END    
 
-   --EXECUTE AS LOGIN = @c_UserName
-
-   --IF @n_Err <> 0 
-   --BEGIN
-   --   GOTO EXIT_SP
-   --END
-     
-   IF @n_Continue IN (1,2)
-   BEGIN      
-      IF EXISTS(SELECT 1 
-                  FROM RECEIPTDETAIL (NOLOCK)
-                  WHERE Receiptkey = @c_Receiptkey
-                  AND ReceiptLineNumber = @c_ReceiptLineNumber
-                  AND QtyReceived > 0)
-        BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551051
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete Receiptdetail where item have been received. (lsp_Pre_Delete_Receiptdetail_STD)'                
-        END                                 
-   END    
-
-   IF @n_Continue IN (1,2)
-   BEGIN      
-        BEGIN TRAN
-         
-      EXEC nspGetRight
-            @c_Facility = '',
-            @c_StorerKey = @c_StorerKey,
-            @c_sku = '',
-            @c_ConfigKey = 'UCCTracking',
-            @b_Success   = @b_Success OUTPUT,
-            @c_authority = @c_UCCTracking OUTPUT,
-            @n_err = @n_Err,
-            @c_errmsg = @c_ErrMsg      
-
-      IF @c_UCCTracking = '1'
-      BEGIN       
-         DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT UCCNo
-         FROM UCC WITH (NOLOCK)
-         WHERE Receiptkey = @c_ReceiptKey
-         AND ReceiptLineNumber = @c_ReceiptLineNumber
-         
-         OPEN CUR_UCC
-         
-         FETCH FROM CUR_UCC INTO @c_UCCNo
-         
-         WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-         BEGIN
-            UPDATE UCC WITH (ROWLOCK)
-               SET Receiptkey = '', 
-                   ReceiptLineNumber = '' 
-            WHERE UCCNo = @c_UCCNo 
+      IF @n_Continue IN (1,2)
+      BEGIN      
+           BEGIN TRAN
             
-            SET @n_err = @@ERROR
+         EXEC nspGetRight
+               @c_Facility = '',
+               @c_StorerKey = @c_StorerKey,
+               @c_sku = '',
+               @c_ConfigKey = 'UCCTracking',
+               @b_Success   = @b_Success OUTPUT,
+               @c_authority = @c_UCCTracking OUTPUT,
+               @n_err = @n_Err,
+               @c_errmsg = @c_ErrMsg      
+
+         IF @c_UCCTracking = '1'
+         BEGIN       
+            DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT UCCNo
+            FROM UCC WITH (NOLOCK)
+            WHERE Receiptkey = @c_ReceiptKey
+            AND ReceiptLineNumber = @c_ReceiptLineNumber
             
-            IF @n_err <> 0
-            BEGIN
-              SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551052
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Update UCC Table Failed. (lsp_Pre_Delete_Receiptdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-          END  
-         
+            OPEN CUR_UCC
+            
             FETCH FROM CUR_UCC INTO @c_UCCNo
-         END         
-         CLOSE CUR_UCC
-         DEALLOCATE CUR_UCC                                              
-      END -- @c_UCCTracking = '1'      
-   END 
-         
+            
+            WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+            BEGIN
+               UPDATE UCC WITH (ROWLOCK)
+                  SET Receiptkey = '', 
+                      ReceiptLineNumber = '' 
+               WHERE UCCNo = @c_UCCNo 
+               
+               SET @n_err = @@ERROR
+               
+               IF @n_err <> 0
+               BEGIN
+                 SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551052
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Update UCC Table Failed. (lsp_Pre_Delete_Receiptdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+             END  
+            
+               FETCH FROM CUR_UCC INTO @c_UCCNo
+            END         
+            CLOSE CUR_UCC
+            DEALLOCATE CUR_UCC                                              
+         END -- @c_UCCTracking = '1'      
+      END 
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END      
    EXIT_SP:
    --REVERT     
    
