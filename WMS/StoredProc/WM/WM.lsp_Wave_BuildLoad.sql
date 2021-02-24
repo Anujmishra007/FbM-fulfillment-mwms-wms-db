@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -28,6 +28,8 @@ GO
 /* 28-Dec-2020  SWT01   1.0   Adding Begin Try/Catch                    */
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
+/* 2021-02-24  Wan01    1.2   Fixed to call lsp_SetUser SP & Quip SP    */
+/*                            if @c_UserName <> SUSER_SNAME()           */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -175,16 +177,22 @@ AS
 
    SET @b_Success = 1
    SET @n_Err     = 0
-               
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   -- SWT02
+    
+      -- SWT02  -- Wan01 Move up
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
+   BEGIN            
+      SET @n_Err = 0 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+      --(Wan01)           
+      IF @n_Err <> 0       
+      BEGIN                
+         GOTO EXIT_SP
+      END
+      
       EXECUTE AS LOGIN = @c_UserName      
    END
 

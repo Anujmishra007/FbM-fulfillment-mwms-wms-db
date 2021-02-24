@@ -17,14 +17,16 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
 /* Data Modifications:                                                  */                                                                                  
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/* Date        Author   Ver.  Purposes                                  */
+/* 2021-02-24  Wan01    1.1   Fixed Pass into Sub SP to check if to execute*/
+/*                            login if @c_UserName <> SUSER_SNAME()     */  
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveGenLoadPlan]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
@@ -131,6 +133,7 @@ BEGIN
          , @b_Success   = @b_Success OUTPUT
          , @n_Err       = @n_Err     OUTPUT 
          , @c_ErrMsg    = @c_ErrMsg  OUTPUT
+         , @c_UserName  = @c_UserName           --(Wan01)
     
       IF @b_Success = 0 OR @n_Err <> 0
       BEGIN
