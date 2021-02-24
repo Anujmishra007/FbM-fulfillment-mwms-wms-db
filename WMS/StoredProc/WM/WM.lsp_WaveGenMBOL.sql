@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-02-24  Wan01    1.2   Fixed Pass into Sub SP to check if to execute*/
+/*                            login if @c_UserName <> SUSER_SNAME()     */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveGenMBOL]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
@@ -158,9 +160,10 @@ BEGIN
         @c_WaveKey   = @c_WaveKey
       , @c_Facility  = @c_Facility                                                                                                                            
       , @c_StorerKey = @c_StorerKey           
-      , @b_Success   = @b_Success OUTPUT
-      , @n_Err       = @n_Err     OUTPUT 
-      , @c_ErrMsg    = @c_ErrMsg  OUTPUT
+      , @b_Success   = @b_Success   OUTPUT
+      , @n_Err       = @n_Err       OUTPUT 
+      , @c_ErrMsg    = @c_ErrMsg    OUTPUT
+      , @c_UserName  = @c_UserName              -- (Wan01) Fixed Pass into Sub SP to check if to execute login if @c_UserName <> SUSER_SNAME()
        
       IF @b_Success = 0 OR @n_Err <> 0
       BEGIN
@@ -193,7 +196,7 @@ EXIT_SP:
          END
       END
 
-      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_WaveGenLoadPlan'
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_WaveGenMBOL'
    END
    ELSE
    BEGIN
