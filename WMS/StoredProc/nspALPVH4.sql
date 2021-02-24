@@ -1,35 +1,34 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPVH1]')
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPVH4]')
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALPVH1]
+DROP PROCEDURE [dbo].[nspALPVH4]
 GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/    
-/* Stored Procedure: nspALPVH1                                          */    
-/* Creation Date: 28-SEP-2017                                           */    
-/* Copyright: LFL                                                       */    
-/* Written by:                                                          */    
-/*                                                                      */    
-/* Purpose: WMS-2819 CN PVH Allocate from bulk                          */
-/*          SkipPreallocation = '1'                                     */
-/*                                                                      */
-/*                                                                      */
-/* Called By: Wave                                                      */    
-/*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
-/*                                                                      */    
-/* Version: 1.0                                                         */    
-/*                                                                      */    
-/* Data Modifications:                                                  */    
-/*                                                                      */    
-/* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */    
-/* 10-Nov-2020  NJOW01  1.0   WMS-15565 Cater for more allocation type  */
-/************************************************************************/    
-CREATE  PROC [dbo].[nspALPVH1]        
+/*************************************************************************/    
+/* Stored Procedure: nspALPVH4                                           */    
+/* Creation Date: 11-NOV-2020                                            */    
+/* Copyright: LFL                                                        */    
+/* Written by:                                                           */    
+/*                                                                       */    
+/* Purpose: WMS-15565 CN PVH Allocate from pick/bulk for transfer channel*/
+/*          SkipPreallocation = '1'                                      */
+/*                                                                       */
+/*                                                                       */
+/* Called By: Wave                                                       */    
+/*                                                                       */    
+/* PVCS Version: 1.0                                                     */    
+/*                                                                       */    
+/* Version: 1.0                                                          */    
+/*                                                                       */    
+/* Data Modifications:                                                   */    
+/*                                                                       */    
+/* Updates:                                                              */    
+/* Date         Author  Ver.  Purposes                                   */    
+/*************************************************************************/    
+CREATE  PROC [dbo].[nspALPVH4]        
    @c_DocumentNo NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -77,13 +76,13 @@ BEGIN
            @c_PrevLOT            NVARCHAR(10),
            @n_LotQtyAvailable    INT,
            @c_OrdType            NVARCHAR(10),  --1=Wholesales,ECOM Multi-order 2=Retail, new launch, replenishment, ecom single
-           @c_SalesMan           NVARCHAR(30), --NJOW01
-           @c_WaveType           NVARCHAR(18)  --NJOW01
+           @c_SalesMan           NVARCHAR(30),
+           @c_WaveType           NVARCHAR(18) 
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
    SET @n_QtyToTake = 0
-   
+      
    IF LEN(@c_OtherParms) > 0 
    BEGIN
    	  -- this pickcode can call from wave by discrete / load conso / wave conso
@@ -102,7 +101,7 @@ BEGIN
          AND OD.Sku = @c_SKU
          ORDER BY O.Orderkey, OD.OrderLineNumber
       END        	     
-         
+      
       IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='W' --call by wave conso
       BEGIN
          SET @c_Orderkey = ''
@@ -115,37 +114,27 @@ BEGIN
       END        	     
       
       SELECT @c_ordtype = CL.Short,
-             @c_SalesMan = ISNULL(O.Salesman,''), --NJOW01
-             @c_WaveType = ISNULL(W.WaveType,'') --NJOW01
-      FROM ORDERS O (NOLOCK)      
+             @c_SalesMan = ISNULL(O.Salesman,''), 
+             @c_WaveType = ISNULL(W.WaveType,'') 
+      FROM ORDERS O (NOLOCK)
       JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'ORDERGROUP' AND O.OrderGroup = CL.Code AND O.Storerkey = CL.Storerkey
-      LEFT JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey  --NJOW01
-      LEFT JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey --NJOW01
-      WHERE O.Orderkey = @c_Orderkey      
+      LEFT JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey  --NJOW02
+      LEFT JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey --NJOW02
+      WHERE O.Orderkey = @c_Orderkey    
       
-      /*
-      IF @c_OrdType = '2' AND @c_UOM <> '2' AND ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='' --If retail new launch allocate by load conso only allow UOM 2. other is by wave conso
-         AND @c_WaveType = 'PTS' AND @c_SalesMan <> 'TRF'  --NJOW01  exit for new launch A only
+      IF @c_UOM = '6' AND NOT (@c_Salesman = 'TRF' OR (@c_ordtype IN('1','2') AND @c_WaveType = 'PTS')) --UOM 6 only for wholesales/retail with PTS and Transfer
          GOTO EXIT_SP
-      */         
-   END
-   
-   IF @c_UOM = '7' AND NOT (@c_ordtype IN('1','2') AND @c_WaveType = 'PTS' AND @c_Salesman <> 'TRF') --UOM 7 only for wholesales/retail with PTS
-      GOTO EXIT_SP
-      
-   IF @c_UOM = '7' AND @c_ordtype = '1' AND ISNULL(@c_key2,'') <> '' --UOM 7 not to allocate piece at bulk for wholesale when discrete allocation
-      GOTO EXIT_SP 
+         
+      IF @c_UOM = '6' AND @c_ordtype = '1' AND ISNULL(@c_key2,'') <> '' AND @c_Salesman <> 'TRF' --UOM 6 not to allocate piece at pick for wholesale when discrete allocation
+         GOTO EXIT_SP 
 
-   IF @c_UOM = '7' AND @c_ordtype = '2' AND ISNULL(@c_key2,'') = '' AND ISNULL(@c_key3,'') = '' --UOM 7 not to allocate piece at bulk for retail when load conso allocation
-      GOTO EXIT_SP 
-   
-   /*
-   IF (@c_OrdType <> '2' AND @c_UOM = '7') --If not retail new launch not to allocate piece from bulk 
-      OR (@c_OrdType = '2' AND @c_UOM = '7' AND @c_WaveType <> 'PTS' AND @c_SalesMan <> 'TRF') --NJOW01 also not allow new launch b
-      OR (@c_UOM = '7' AND @c_SalesMan = 'TRF')  --NJOW01  also not allow transfer
-      GOTO EXIT_SP
-   */
-   
+      IF @c_UOM = '6' AND @c_ordtype = '2' AND ISNULL(@c_key2,'') = '' AND ISNULL(@c_key3,'') = '' AND @c_Salesman <> 'TRF' --UOM 6 not to allocate piece at pick for retail when load conso allocation
+         GOTO EXIT_SP          
+              
+      IF @c_UOM = '7' AND @c_Salesman <> 'TRF'  --UOM 7 for transfer only
+         GOTO EXIT_SP          
+   END
+      
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
    JOIN Storer (nolock) ON Sku.Storerkey = Storer.Storerkey
@@ -160,7 +149,7 @@ BEGIN
       SELECT LOTxLOCxID.LOT,
              LOTxLOCxID.LOC,
              LOTxLOCxID.ID,
-             QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen)
+             QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED)
       FROM LOTxLOCxID (NOLOCK)
       JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
@@ -172,11 +161,11 @@ BEGIN
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''
       AND LOC.Facility = @c_Facility
-      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
+      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_UOMBase
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
-      AND LOTxLOCxID.SKU = @c_SKU 
-      AND SL.LocationType NOT IN (''PICK'',''CASE'')
-      AND LOC.LocationType = ''OTHER'' ' +
+      AND LOTxLOCxID.SKU = @c_SKU ' +
+      CASE WHEN @c_UOM = '6' THEN ' AND SL.LocationType IN (''PICK'',''CASE'') ' 
+           WHEN @c_UOM = '7' THEN ' AND SL.LocationType NOT IN (''PICK'',''CASE'') ' ELSE '' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
@@ -283,5 +272,5 @@ BEGIN
    END
 END -- Procedure
 GO
-GRANT EXECUTE ON [dbo].[nspALPVH1] TO nSQL
+GRANT EXECUTE ON [dbo].[nspALPVH4] TO nSQL
 GO
