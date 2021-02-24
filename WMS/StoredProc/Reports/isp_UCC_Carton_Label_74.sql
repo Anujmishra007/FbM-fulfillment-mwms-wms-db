@@ -33,7 +33,8 @@ GO
 /* 2018-12-15   TLTING   1.1  missing nolock                            */                
 /* 2019-04-01   WLCHOOI  1.2  WMS-8452 New Barcode (WL01)               */                
 /* 2019-04-29   WLCHOOI  1.3  WMS-8452 - Add new condition (WL02)       */                
-/* 2019-12-13   KuanYee  1.4  INC0967625 - Add Border (KY01)            */                
+/* 2019-12-13   KuanYee  1.4  INC0967625 - Add Border (KY01)            */   
+/* 2021-02-05   CSCHONG  1.5  WMS-16224 revised field mapping (CS01)    */            
 /************************************************************************/                
                 
 CREATE PROC [dbo].[isp_UCC_Carton_Label_74] (                
@@ -72,7 +73,8 @@ BEGIN
          , @n_Page            INT                
          , @c_ordkey          NVARCHAR(20)                
          , @n_PrnQty          INT                
-         , @n_MaxId           INT                   , @n_MaxRec          INT                
+         , @n_MaxId           INT                   
+         , @n_MaxRec          INT                
          , @n_getPageno       INT                
          , @n_MaxLineno       INT                
          , @n_CurrentRec      INT                
@@ -153,7 +155,7 @@ CREATE TABLE #TMP_LCartonLABEL74_1
                                    Con_Add4,Con_city,pdLabelno )                   
    SELECT DISTINCT ST.company                
          ,  PAH.Pickslipno                
-    ,  PAH.loadkey                
+         ,  PAH.loadkey                
          ,  ''                
          ,  ORDERS.consigneekey                                           
          ,  PADET.CartonNo                
@@ -168,10 +170,10 @@ CREATE TABLE #TMP_LCartonLABEL74_1
          ,  ISNULL(RTRIM(CONST.Address4),'')                            
          ,  ISNULL(RTRIM(CONST.City),'')                   
   --     ,  PADET.labelno                
-         ,  CASE WHEN ISNULL(CL.SHORT,'N') = 'Y' AND CAST(CL.LONG AS INT) <> 0 THEN    --WL01 --WL02                
+         ,  CASE WHEN ISNULL(CL.SHORT,'N') = 'Y' AND CAST(CL.LONG AS INT) <> 0 AND ORDERS.type<>'IC' THEN    --WL01 --WL02        --CS01           
             CL.UDF01 + RIGHT(REPLICATE('0',CL.LONG) + SUBSTRING(PADET.labelno,CAST(CL.UDF02 AS INT),CAST(CL.UDF03 AS INT)-CAST(CL.UDF02 AS INT)+1)   --WL01                
                  ,CAST(CL.LONG AS INT)-LEN(CL.UDF01))            --WL01                
-            WHEN ISNULL(CL.SHORT,'N') = 'Y' AND CAST(CL.LONG AS INT) = 0 THEN --WL02                
+            WHEN ISNULL(CL.SHORT,'N') = 'Y' AND CAST(CL.LONG AS INT) = 0  AND ORDERS.type<>'IC'  THEN --WL02     --CS01           
             CL.UDF01 + PADET.LABELNO                                          --WL02                
             ELSE PADET.labelno END                                            --WL01                                      
    FROM PACKHEADER PAH WITH (NOLOCK)                
@@ -283,8 +285,3 @@ GO
 
 GRANT EXECUTE ON isp_UCC_Carton_Label_74 TO NSQL 
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO 
