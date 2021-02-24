@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_KioskASRSCCTaskCfm_Wrapper]  
    @c_Jobkey         NVARCHAR(10)
@@ -57,12 +59,10 @@ CREATE PROCEDURE [WM].[lsp_KioskASRSCCTaskCfm_Wrapper]
 ,  @c_UserName       NVARCHAR(128)= ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON                                                                                                                                           
+   SET ANSI_NULLS OFF                                                                                                                                       
+   SET QUOTED_IDENTIFIER OFF                                                                                                                                
+   SET CONCAT_NULL_YIELDS_NULL OFF  
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -71,67 +71,84 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT 
+
+   --(mingle01) - START
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
+               
+      IF @n_Err <> 0 
+
+      BEGIN
+         GOTO EXIT_SP
+      END 
+
+       EXECUTE AS LOGIN = @c_UserName
    END
+   --(mingle01) - END
 
-   BEGIN TRY      
-      EXEC isp_KioskASRSCCTaskCfm
-         @c_jobkey         = @c_jobkey
-      ,  @c_TaskDetailkey  = @c_TaskDetailkey 
-      ,  @c_id             = @c_id 
-      ,  @c_CCKey          = @c_CCKey      
-      ,  @c_CCSheetNo      = @c_CCSheetNo  
-      ,  @c_CCDetailkey    = @c_CCDetailkey
-      ,  @c_Storerkey      = @c_Storerkey  
-      ,  @c_Sku            = @c_Sku        
-      ,  @c_Lottable01     = @c_Lottable01 
-      ,  @c_Lottable02     = @c_Lottable02 
-      ,  @c_Lottable03     = @c_Lottable03 
-      ,  @dt_Lottable04    = @dt_Lottable04
-      ,  @dt_Lottable05    = @dt_Lottable05
-      ,  @c_Lottable06     = @c_Lottable06 
-      ,  @c_Lottable07     = @c_Lottable07 
-      ,  @c_Lottable08     = @c_Lottable08 
-      ,  @c_Lottable09     = @c_Lottable09 
-      ,  @c_Lottable10     = @c_Lottable10 
-      ,  @c_Lottable11     = @c_Lottable11 
-      ,  @c_Lottable12     = @c_Lottable12 
-      ,  @dt_Lottable13    = @dt_Lottable13
-      ,  @dt_Lottable14    = @dt_Lottable14
-      ,  @dt_Lottable15    = @dt_Lottable15
-      ,  @n_CountedQty     = @n_CountedQty 
-      ,  @c_taskstatus     = @c_taskstatus   OUTPUT 
-      ,  @b_Success        = @b_Success      OUTPUT   
-      ,  @n_Err            = @n_Err          OUTPUT
-      ,  @c_Errmsg         = @c_Errmsg       OUTPUT
+   --(mingle01) - START
+   BEGIN TRY
+
+      BEGIN TRY      
+         EXEC isp_KioskASRSCCTaskCfm
+            @c_jobkey         = @c_jobkey
+         ,  @c_TaskDetailkey  = @c_TaskDetailkey 
+         ,  @c_id             = @c_id 
+         ,  @c_CCKey          = @c_CCKey      
+         ,  @c_CCSheetNo      = @c_CCSheetNo  
+         ,  @c_CCDetailkey    = @c_CCDetailkey
+         ,  @c_Storerkey      = @c_Storerkey  
+         ,  @c_Sku            = @c_Sku        
+         ,  @c_Lottable01     = @c_Lottable01 
+         ,  @c_Lottable02     = @c_Lottable02 
+         ,  @c_Lottable03     = @c_Lottable03 
+         ,  @dt_Lottable04    = @dt_Lottable04
+         ,  @dt_Lottable05    = @dt_Lottable05
+         ,  @c_Lottable06     = @c_Lottable06 
+         ,  @c_Lottable07     = @c_Lottable07 
+         ,  @c_Lottable08     = @c_Lottable08 
+         ,  @c_Lottable09     = @c_Lottable09 
+         ,  @c_Lottable10     = @c_Lottable10 
+         ,  @c_Lottable11     = @c_Lottable11 
+         ,  @c_Lottable12     = @c_Lottable12 
+         ,  @dt_Lottable13    = @dt_Lottable13
+         ,  @dt_Lottable14    = @dt_Lottable14
+         ,  @dt_Lottable15    = @dt_Lottable15
+         ,  @n_CountedQty     = @n_CountedQty 
+         ,  @c_taskstatus     = @c_taskstatus   OUTPUT 
+         ,  @b_Success        = @b_Success      OUTPUT   
+         ,  @n_Err            = @n_Err          OUTPUT
+         ,  @c_Errmsg         = @c_Errmsg       OUTPUT
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @n_err = 552851
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                       + ': CC Count Complete Fail. ' +  @c_ErrMsg 
+      END CATCH  
+
+      IF @b_success = 0 OR @n_Err <> 0        
+      BEGIN        
+         SET @n_continue = 3      
+         GOTO EXIT_SP
+      END        
+   
+      SET @c_ErrMsg = 'CC Count Complete Sucessfully.'
+
    END TRY
-
    BEGIN CATCH
       SET @n_Continue = 3
-      SET @n_err = 552851
       SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                    + ': CC Count Complete Fail. ' +  @c_ErrMsg 
-   END CATCH  
-
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
       GOTO EXIT_SP
-   END        
-   
-   SET @c_ErrMsg = 'CC Count Complete Sucessfully.'
-
-   EXIT_SP:
+   END CATCH
+   --(mingle01) - END
+EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

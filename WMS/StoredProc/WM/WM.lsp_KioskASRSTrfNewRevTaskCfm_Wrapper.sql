@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_KioskASRSTrfNewRevTaskCfm_Wrapper]  
    @c_Jobkey               NVARCHAR(10)
@@ -49,12 +51,10 @@ CREATE PROCEDURE [WM].[lsp_KioskASRSTrfNewRevTaskCfm_Wrapper]
 
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON                                                                                                                                           
+   SET ANSI_NULLS OFF                                                                                                                                       
+   SET QUOTED_IDENTIFIER OFF                                                                                                                                
+   SET CONCAT_NULL_YIELDS_NULL OFF  
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -66,124 +66,141 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT 
+
+   --(mingle01) - START
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
+               
+      IF @n_Err <> 0 
+
+      BEGIN
+         GOTO EXIT_SP
+      END 
+
+       EXECUTE AS LOGIN = @c_UserName
    END
+   --(mingle01) - END
 
-   SET @n_Qty = (@n_QtyInCS * @n_CaseCnt) + @n_QtyInEA
-   SET @n_QtyToPut = (@n_QtyToPutInCS * @n_CaseCnt) + @n_QtyToPutInEA
+   --(mingle01) - START
+   BEGIN TRY
 
-   IF @c_ProceedWithAlert = 'N' AND @n_Qty < 0
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 551851
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) +  ': Qty Picked less than 0.'
-      GOTO EXIT_SP
-   END
+      SET @n_Qty = (@n_QtyInCS * @n_CaseCnt) + @n_QtyInEA
+      SET @n_QtyToPut = (@n_QtyToPutInCS * @n_CaseCnt) + @n_QtyToPutInEA
 
-   IF @c_ProceedWithAlert = 'Y' AND @c_AlertMsg <> '' 
-   BEGIN
-      BEGIN TRY      
-         EXEC isp_KioskASRSAlertSupv
-            @c_Jobkey         = @c_Jobkey
-         ,  @c_ID             = @c_ID 
-         ,  @b_Hold           = 1
-         ,  @c_AlertCode      = 'SHORT/DMG'
-         ,  @b_Success        = @b_Success   OUTPUT   
-         ,  @n_Err            = @n_Err       OUTPUT
-         ,  @c_Errmsg         = @c_AlertMsg  OUTPUT
+      IF @c_ProceedWithAlert = 'N' AND @n_Qty < 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 551851
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) +  ': Qty Picked less than 0.'
+         GOTO EXIT_SP
+      END
+
+      IF @c_ProceedWithAlert = 'Y' AND @c_AlertMsg <> '' 
+      BEGIN
+         BEGIN TRY      
+            EXEC isp_KioskASRSAlertSupv
+               @c_Jobkey         = @c_Jobkey
+            ,  @c_ID             = @c_ID 
+            ,  @b_Hold           = 1
+            ,  @c_AlertCode      = 'SHORT/DMG'
+            ,  @b_Success        = @b_Success   OUTPUT   
+            ,  @n_Err            = @n_Err       OUTPUT
+            ,  @c_Errmsg         = @c_AlertMsg  OUTPUT
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_err = 551852
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                          + ': Alert Supervisor fail. ' +  @c_ErrMsg 
+         END CATCH  
+
+         IF @b_success = 0 OR @n_Err <> 0        
+         BEGIN        
+            SET @n_continue = 3      
+            GOTO EXIT_SP
+         END      
+      END
+
+      IF @n_AlertNo < 1 AND @n_Qty <> @n_QtyToPut
+      BEGIN
+         SET @n_AlertNo = 1
+         SET @c_AlertMsg= 'Discrepency pick from pallet: ' + RTRIM(@c_ID)
+                        + ' to pallet: ' +  RTRIM(@c_PickToID)
+                        + '. System suggests to pick ' + CONVERT(NVARCHAR(5), @n_QtyToPutInCS)
+                        + ' Carton ' + CONVERT(NVARCHAR(5), @n_QtyToPutInEA) + ' EA '
+                        + ' but actual pick ' + CONVERT(NVARCHAR(5), @n_QtyInCS)
+                        + ' Carton ' + CONVERT(NVARCHAR(5), @n_QtyInEA) + ' EA.'
+               
+         SET @n_Continue = 3
+         SET @c_ErrMsg = @c_AlertMsg + ' Do you wist to continue and alert supervisor?'
+         GOTO EXIT_SP
+      END
+
+      BEGIN TRY  
+         IF @c_ConfirmAt = 'c'
+         BEGIN    
+            EXEC isp_KioskASRSTRFNewRevTaskCfm
+               @c_Jobkey            = @c_Jobkey
+            ,  @c_TaskDetailkey     = @c_TaskDetailkey 
+            ,  @c_TransferKey       = @c_TransferKey
+            ,  @c_TransferLineNumber= @c_TransferLineNumber
+            ,  @c_ID                = @c_ID
+            ,  @c_PickToID          = @c_PickToID
+            ,  @n_PickToQty         = @n_Qty
+            ,  @n_QtyToPut          = @n_QtyToPut
+            ,  @c_TaskStatus        = @c_TaskStatus   OUTPUT
+            ,  @b_Success           = @b_Success      OUTPUT   
+            ,  @n_Err               = @n_Err          OUTPUT
+            ,  @c_Errmsg            = @c_Errmsg       OUTPUT
+         END
+         ELSE
+         BEGIN
+            EXEC isp_KioskASRSTRFRevTaskCfm
+               @c_Jobkey            = @c_Jobkey
+            ,  @c_TaskDetailkey     = @c_TaskDetailkey 
+            ,  @c_TransferKey       = @c_TransferKey
+            ,  @c_TransferLineNumber= @c_TransferLineNumber
+            ,  @c_ID                = @c_ID
+            ,  @c_PickToID          = @c_PickToID
+            ,  @n_PickToQty         = @n_Qty
+            ,  @n_QtyToPut          = @n_QtyToPut
+            ,  @c_TaskStatus        = @c_TaskStatus   OUTPUT
+            ,  @b_Success           = @b_Success      OUTPUT   
+            ,  @n_Err               = @n_Err          OUTPUT
+            ,  @c_Errmsg            = @c_Errmsg       OUTPUT
+         END
       END TRY
 
       BEGIN CATCH
          SET @n_Continue = 3
-         SET @n_err = 551852
+         SET @n_err = 551853
          SET @c_ErrMsg = ERROR_MESSAGE()
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                       + ': Alert Supervisor fail. ' +  @c_ErrMsg 
+                       + ': Transfer Sku Confirm Pick Fail. ' +  @c_ErrMsg 
       END CATCH  
 
       IF @b_success = 0 OR @n_Err <> 0        
       BEGIN        
          SET @n_continue = 3      
          GOTO EXIT_SP
-      END      
-   END
+      END        
+   
+      SET @c_ErrMsg = 'Transfer Sku Confirmed Pick.'
 
-   IF @n_AlertNo < 1 AND @n_Qty <> @n_QtyToPut
-   BEGIN
-      SET @n_AlertNo = 1
-      SET @c_AlertMsg= 'Discrepency pick from pallet: ' + RTRIM(@c_ID)
-                     + ' to pallet: ' +  RTRIM(@c_PickToID)
-                     + '. System suggests to pick ' + CONVERT(NVARCHAR(5), @n_QtyToPutInCS)
-                     + ' Carton ' + CONVERT(NVARCHAR(5), @n_QtyToPutInEA) + ' EA '
-                     + ' but actual pick ' + CONVERT(NVARCHAR(5), @n_QtyInCS)
-                     + ' Carton ' + CONVERT(NVARCHAR(5), @n_QtyInEA) + ' EA.'
-               
-      SET @n_Continue = 3
-      SET @c_ErrMsg = @c_AlertMsg + ' Do you wist to continue and alert supervisor?'
-      GOTO EXIT_SP
-   END
-
-   BEGIN TRY  
-      IF @c_ConfirmAt = 'c'
-      BEGIN    
-         EXEC isp_KioskASRSTRFNewRevTaskCfm
-            @c_Jobkey            = @c_Jobkey
-         ,  @c_TaskDetailkey     = @c_TaskDetailkey 
-         ,  @c_TransferKey       = @c_TransferKey
-         ,  @c_TransferLineNumber= @c_TransferLineNumber
-         ,  @c_ID                = @c_ID
-         ,  @c_PickToID          = @c_PickToID
-         ,  @n_PickToQty         = @n_Qty
-         ,  @n_QtyToPut          = @n_QtyToPut
-         ,  @c_TaskStatus        = @c_TaskStatus   OUTPUT
-         ,  @b_Success           = @b_Success      OUTPUT   
-         ,  @n_Err               = @n_Err          OUTPUT
-         ,  @c_Errmsg            = @c_Errmsg       OUTPUT
-      END
-      ELSE
-      BEGIN
-         EXEC isp_KioskASRSTRFRevTaskCfm
-            @c_Jobkey            = @c_Jobkey
-         ,  @c_TaskDetailkey     = @c_TaskDetailkey 
-         ,  @c_TransferKey       = @c_TransferKey
-         ,  @c_TransferLineNumber= @c_TransferLineNumber
-         ,  @c_ID                = @c_ID
-         ,  @c_PickToID          = @c_PickToID
-         ,  @n_PickToQty         = @n_Qty
-         ,  @n_QtyToPut          = @n_QtyToPut
-         ,  @c_TaskStatus        = @c_TaskStatus   OUTPUT
-         ,  @b_Success           = @b_Success      OUTPUT   
-         ,  @n_Err               = @n_Err          OUTPUT
-         ,  @c_Errmsg            = @c_Errmsg       OUTPUT
-      END
    END TRY
-
    BEGIN CATCH
       SET @n_Continue = 3
-      SET @n_err = 551853
       SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                    + ': Transfer Sku Confirm Pick Fail. ' +  @c_ErrMsg 
-   END CATCH  
-
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
       GOTO EXIT_SP
-   END        
-   
-   SET @c_ErrMsg = 'Transfer Sku Confirmed Pick.'
-
-   EXIT_SP:
+   END CATCH
+   --(mingle01) - END
+EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

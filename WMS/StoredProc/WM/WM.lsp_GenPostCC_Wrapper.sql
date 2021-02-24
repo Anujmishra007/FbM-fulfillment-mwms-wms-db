@@ -25,6 +25,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_GenPostCC_Wrapper]  
    @c_StockTakeKey      NVARCHAR(10)
@@ -53,82 +55,98 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
 
+   --(mingle01) - START
+   IF SUSER_SNAME() <> @c_UserName
+	BEGIN
+		EXEC [WM].[lsp_SetUser] 
+				@c_UserName = @c_UserName  OUTPUT
+			,  @n_Err      = @n_Err       OUTPUT
+			,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+               
+		IF @n_Err <> 0 
 
-   SELECT @c_CountNo = CONVERT(CHAR(1), ISNULL(FinalizeStage, 0))
-   FROM STOCKTAKESHEETPARAMETERS WITH (NOLOCK)
-   WHERE StockTakeKey = @c_StockTakeKey
+		BEGIN
+			GOTO EXIT_SP
+		END 
 
-   IF @c_CountNo = '0'
-   BEGIN
-      SET @n_continue = 3 
-      SET @n_err = 552601
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': None of the count was FINALISED, Please check with administrator. (lsp_GenPostCC_Wrapper)'
-      GOTO EXIT_SP
-   END
+		 EXECUTE AS LOGIN = @c_UserName
+	END
+	--(mingle01) - END
 
-   SET @n_Count = 0
+	--(mingle01) - START
+   BEGIN TRY
 
-   BEGIN TRY      
-      EXECUTE @n_Count = ispCheckOutstandingOrders        
-         @c_StockTakeKey = @c_StockTakeKey         
-      ,  @c_CountNo = @c_CountNo 
-   END TRY
+		SELECT @c_CountNo = CONVERT(CHAR(1), ISNULL(FinalizeStage, 0))
+		FROM STOCKTAKESHEETPARAMETERS WITH (NOLOCK)
+		WHERE StockTakeKey = @c_StockTakeKey
 
-   BEGIN CATCH
-      SET @n_err = 552602
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckOutstandingOrders. (lsp_GenPostCC_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-   END CATCH    
+		IF @c_CountNo = '0'
+		BEGIN
+			SET @n_continue = 3 
+			SET @n_err = 552601
+			SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': None of the count was FINALISED, Please check with administrator. (lsp_GenPostCC_Wrapper)'
+			GOTO EXIT_SP
+		END
+
+		SET @n_Count = 0
+
+		BEGIN TRY      
+			EXECUTE @n_Count = ispCheckOutstandingOrders        
+				@c_StockTakeKey = @c_StockTakeKey         
+			,  @c_CountNo = @c_CountNo 
+		END TRY
+
+		BEGIN CATCH
+			SET @n_err = 552602
+			SET @c_ErrMsg = ERROR_MESSAGE()
+			SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispCheckOutstandingOrders. (lsp_GenPostCC_Wrapper)'
+								+ '( ' + @c_errmsg + ' )'
+		END CATCH    
                    
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
-      GOTO EXIT_SP
-   END        
+		IF @b_success = 0 OR @n_Err <> 0        
+		BEGIN        
+			SET @n_continue = 3      
+			GOTO EXIT_SP
+		END        
 
-   IF @n_Count > 0 
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 552603
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Outstanding record(s) found! Please close all the Shipment Orders before you proceed. (lsp_GenPostCC_Wrapper)'
-      GOTO EXIT_SP
-   END
+		IF @n_Count > 0 
+		BEGIN
+			SET @n_Continue = 3
+			SET @n_err = 552603
+			SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Outstanding record(s) found! Please close all the Shipment Orders before you proceed. (lsp_GenPostCC_Wrapper)'
+			GOTO EXIT_SP
+		END
 
-   BEGIN TRY      
-      EXECUTE ispGenCCPostMultipleCnt        
-         @c_StockTakeKey = @c_StockTakeKey 
-      ,  @c_CountNo = @c_CountNo        
-   END TRY
+		BEGIN TRY      
+			EXECUTE ispGenCCPostMultipleCnt        
+				@c_StockTakeKey = @c_StockTakeKey 
+			,  @c_CountNo = @c_CountNo        
+		END TRY
 
-   BEGIN CATCH
-      SET @n_err = 552604
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCCPostMultipleCnt. (lsp_GenPostCC_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-   END CATCH    
+		BEGIN CATCH
+			SET @n_err = 552604
+			SET @c_ErrMsg = ERROR_MESSAGE()
+			SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispGenCCPostMultipleCnt. (lsp_GenPostCC_Wrapper)'
+								+ '( ' + @c_errmsg + ' )'
+		END CATCH    
                   
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
-      GOTO EXIT_SP
-   END        
+		IF @b_success = 0 OR @n_Err <> 0        
+		BEGIN        
+			SET @n_continue = 3      
+			GOTO EXIT_SP
+		END        
  
-   SET @c_ErrMsg = 'Generate Post CC Transaction Successfully'  
+		SET @c_ErrMsg = 'Generate Post CC Transaction Successfully'  
    
-   EXIT_SP:
+	END TRY
+	BEGIN CATCH
+      SET @n_Continue = 3
+		SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+	END CATCH
+	--(mingle01) - END
+EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
