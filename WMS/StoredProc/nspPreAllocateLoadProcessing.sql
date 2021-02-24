@@ -64,6 +64,7 @@ GO
 /* 08-Jan-2020  NJOW06  3.1   WMS-10420 add strategykey parameter       */ 
 /* 12-Feb-2020  Wan07   3.2   SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */     
+/* 01-Dec-2020  NJOW07  3.3   WMS-15746 get channel hold qty by config  */  
 /************************************************************************/  
   
 CREATE PROC  [dbo].[nspPreAllocateLoadProcessing]  
@@ -112,6 +113,7 @@ DECLARE @c_OtherParms NVARCHAR(200),  -- For CDC
   ,@n_Channel_Qty_Available INT = 0  
   ,@n_AllocatedHoldQty INT = 0  
   ,@c_AllocateByOrderPackkey NVARCHAR(30) --NJOW05  
+  ,@n_ChannelHoldQty         INT          --NJOW07
   
 --NJOW03  
 DECLARE  
@@ -1251,12 +1253,12 @@ BEGIN
   
                      BEGIN TRY  
                         EXEC isp_ChannelGetID  
-                              @c_StorerKey   = @c_sStorerKey  
+                            @c_StorerKey   = @c_sStorerKey  
                            ,@c_Sku         = @c_sSKU  
                            ,@c_Facility    = @c_FACILITY  
                            ,@c_Channel     = @c_Channel  
                            ,@c_LOT         = @c_sLOT  
-   ,@n_Channel_ID  = @n_Channel_ID OUTPUT  
+                           ,@n_Channel_ID  = @n_Channel_ID OUTPUT  
                            ,@b_Success     = @b_Success OUTPUT  
                            ,@n_ErrNo       = @n_Err OUTPUT  
                            ,@c_ErrMsg      = @c_ErrMsg OUTPUT  
@@ -1273,6 +1275,24 @@ BEGIN
                   BEGIN  
                      SET @n_Channel_Qty_Available = 0  
                      SET @n_AllocatedHoldQty = 0  
+                     
+                     --NJOW07 S                                   
+                     SET @n_ChannelHoldQty = 0 
+                     EXEC isp_ChannelAllocGetHoldQty_Wrapper  
+                        @c_StorerKey = @c_aStorerkey, 
+                        @c_Sku = @c_aSKU,  
+                        @c_Facility = @c_Facility,           
+                        @c_Lot = @c_sLOT,
+                        @c_Channel = @c_Channel,
+                        @n_Channel_ID = @n_Channel_ID,   
+                        @c_SourceKey = @c_Loadkey,
+                        @c_SourceType = 'nspPreAllocateLoadProcessing', 
+                        @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
+                        @b_Success = @b_Success OUTPUT,
+                        @n_Err = @n_Err OUTPUT, 
+                        @c_ErrMsg = @c_ErrMsg OUTPUT
+                     --NJOW07 E   
+                                                      
                      /*(Wan05) - START  
                      SELECT @n_AllocatedHoldQty = SUM(p.Qty)  
                      FROM PICKDETAIL AS p WITH(NOLOCK)  
@@ -1286,7 +1306,7 @@ BEGIN
                      AND p.Channel_ID = @n_Channel_ID  
                      --(Wan05) - END */  
   
-                     SELECT @n_Channel_Qty_Available = ci.Qty - ( ci.QtyAllocated - @n_AllocatedHoldQty ) - ci.QtyOnHold  
+                     SELECT @n_Channel_Qty_Available = ci.Qty - ( ci.QtyAllocated - @n_AllocatedHoldQty ) - ci.QtyOnHold - @n_ChannelHoldQty --NJOW07
                      FROM ChannelInv AS ci WITH(NOLOCK)  
                      WHERE ci.Channel_ID = @n_Channel_ID  
                      IF @n_Channel_Qty_Available < @n_QtyAvailable  
