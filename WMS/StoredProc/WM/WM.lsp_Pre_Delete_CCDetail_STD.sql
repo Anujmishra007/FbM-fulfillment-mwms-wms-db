@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */ 
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */  
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_CCDetail_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_CCDetail_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue          INT,
            @n_starttcnt         INT,
@@ -64,9 +63,19 @@ BEGIN
       GOTO EXIT_SP
    END   
    */
-            
-   SET @c_CCKey = @c_RefKey1
-   SET @c_CCDetailKey = @c_RefKey2      
+   
+   --(mingle01) - START
+   BEGIN TRY           
+      SET @c_CCKey = @c_RefKey1
+      SET @c_CCDetailKey = @c_RefKey2   
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END   
       
    EXIT_SP:
    --REVERT     

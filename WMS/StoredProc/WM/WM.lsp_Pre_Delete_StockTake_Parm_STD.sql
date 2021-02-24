@@ -24,10 +24,12 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */  
+/* 2021-02-11   Wan01    1.1  Add Execute Login UserName.. Revert       */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_StockTake_Parm_STD]
-       @c_StorerKey         NVARCHAR(15)
+      @c_StorerKey         NVARCHAR(15)
    ,  @c_RefKey1           NVARCHAR(50)  = '' 
    ,  @c_RefKey2           NVARCHAR(50)  = '' 
    ,  @c_RefKey3           NVARCHAR(50)  = '' 
@@ -40,12 +42,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_StockTake_Parm_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue          INT,
            @n_starttcnt         INT,
@@ -54,39 +54,53 @@ BEGIN
    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
    SET @c_RefreshHeader = 'Y'
    
-   /*
+   --(Wan01) - START Login @c_UserName as there is Delete statement
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-
-   IF @n_Err <> 0 
+   IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      GOTO EXIT_SP
-   END   
-   */
-            
-   SET @c_StockTakeKey = @c_RefKey1
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END 
+       
+      EXECUTE AS LOGIN = @c_UserName 
+   END
+   --(Wan01) - END
    
-   IF @n_continue IN(1,2)
-   BEGIN          
-        IF EXISTS(SELECT 1 
+   --(mingle01) - START
+   BEGIN TRY         
+      SET @c_StockTakeKey = @c_RefKey1
+      
+      IF @n_continue IN(1,2)
+      BEGIN          
+         IF EXISTS(SELECT 1 
                   FROM CCDETAIL (NOLOCK)
                   WHERE CCKey = @c_StockTakeKey
                   AND (Finalizeflag = 'Y' OR FinalizeFlag_Cnt2 = 'Y' OR FinalizeFlag_Cnt3 = 'Y'))
-        BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551151
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete finalized CCDetail. (lsp_Pre_Delete_StockTake_Parm_STD)'                
-        END
-        ELSE
-        BEGIN
-           DELETE FROM CCDetail
-           WHERE CCKey = @c_StockTakeKey
-           
-           DELETE FROM NCOUNTER
-           WHERE KeyName = 'CSHEET'+RTRIM(@c_StockTakeKey)
-        END                         
-   END
-      
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551151
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete finalized CCDetail. (lsp_Pre_Delete_StockTake_Parm_STD)'                
+         END
+         ELSE
+         BEGIN
+            DELETE FROM CCDetail
+            WHERE CCKey = @c_StockTakeKey
+              
+            DELETE FROM NCOUNTER
+            WHERE KeyName = 'CSHEET'+RTRIM(@c_StockTakeKey)
+         END                         
+      END
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END   
    EXIT_SP:
    --REVERT     
 
@@ -105,7 +119,7 @@ BEGIN
          END  
       END  
       execute nsp_logerror @n_err, @c_errmsg, 'lsp_Pre_Delete_StockTake_Parm_STD'  
-      RETURN  
+      --RETURN                --(Wan01) 
    END  
    ELSE  
    BEGIN  
@@ -114,8 +128,9 @@ BEGIN
       BEGIN  
          COMMIT TRAN  
       END  
-      RETURN  
-   END              
+      --RETURN                --(Wan01)
+   END
+   REVERT              
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_Pre_Delete_StockTake_Parm_STD] TO nSQL 

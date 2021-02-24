@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-09   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]  
    @c_Storerkey            NVARCHAR(15) = ''
@@ -49,12 +51,10 @@ CREATE PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]
 ,  @c_Errmsg               NVARCHAR(255)= '' OUTPUT
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT 
@@ -78,308 +78,323 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
-
-   IF @c_ProceedWithWarning = 'N'
-   BEGIN
-
-      IF ISNULL(RTRIM(@c_Storerkey),'') = ''
+      IF @n_Err <> 0 
       BEGIN
-         SET @n_Continue = 3
-         SET @n_err = 551601
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Storerkey cannot be blank. (lsp_Start_Replenishment_Wrapper)'
          GOTO EXIT_SP
       END
-
-      IF ISNULL(RTRIM(@c_Facility),'') = ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_err = 551602
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Facility cannot be blank. (lsp_Start_Replenishment_Wrapper)'
-         GOTO EXIT_SP
-      END
-
-      IF ISNULL(RTRIM(@c_ReplenishStrategyKey),'') = ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_err = 551603
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Replenishment Strategy Key is required. (lsp_Start_Replenishment_Wrapper)'
-         GOTO EXIT_SP
-      END
-
-      SELECT @n_RowRef = PRM.RowRef
-      FROM REPLENISHMENTPARMS PRM WITH (NOLOCK)
-      WHERE PRM.Storerkey= @c_Storerkey
-      AND   PRM.Facility = @c_Facility 
-
-      IF @n_RowRef > 0
-      BEGIN
-         BEGIN TRY
-            UPDATE REPLENISHMENTPARMS
-            SET  Storerkey             = @c_Storerkey            
-               , Facility              = @c_Facility
-               , ReplenishStrategyKey  = @c_ReplenishStrategyKey 
-               , ReplenishmentGroup    = @c_ReplGroup
-               , Zone02                = @c_Zone02 
-               , Zone03                = @c_Zone03 
-               , Zone04                = @c_Zone04 
-               , Zone05                = @c_Zone05 
-               , Zone06                = @c_Zone06
-               , Zone07                = @c_Zone07 
-               , Zone08                = @c_Zone08
-               , Zone09                = @c_Zone09
-               , Zone10                = @c_Zone10 
-               , Zone11                = @c_Zone11 
-               , Zone12                = @c_Zone12 
-               , EditWho               = SUSER_SNAME()
-               , EditDate              = GETDATE()
-               , Trafficcop            = NULL
-            WHERE RowRef = @n_RowRef 
-         END TRY
-         BEGIN CATCH
-            SET @n_continue = 3
-            SET @n_err = 551604
-            SET @c_ErrMsg = ERROR_MESSAGE()    
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                           + ': Update REPLENISHMENTPARMS Fail. (lsp_Start_Replenishment_Wrapper)'
-                           + ' (' + @c_ErrMsg + ')'
-            GOTO EXIT_SP
-         END CATCH
-      END
-      ELSE
-      BEGIN
-         -- INSERT INTO REPLENISHPARMS
-         BEGIN TRY
-            INSERT INTO REPLENISHMENTPARMS
-               (  Storerkey, Facility, ReplenishStrategyKey, ReplenishmentGroup
-               ,  Zone02, Zone03, Zone04, Zone05, Zone06, Zone07, Zone08, Zone09
-               ,  Zone10, Zone11, Zone12
-               )
-            VALUES
-               (  @c_Storerkey, @c_Facility, @c_ReplenishStrategyKey, @c_ReplGroup
-               ,  @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09
-               ,  @c_Zone10, @c_Zone11, @c_Zone12
-               )
-         END TRY
-         BEGIN CATCH
-            SET @n_continue = 3
-            SET @n_err = 551605
-            SET @c_ErrMsg = ERROR_MESSAGE()    
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                           + ': Insert REPLENISHMENTPARMS Fail. (lsp_Start_Replenishment_Wrapper)'
-                           + ' (' + @c_ErrMsg + ')'
-            GOTO EXIT_SP
-         END CATCH
-      END
-   END
     
-   IF @n_WarningNo < 1
-   BEGIN
-      SET @n_WarningNo = 1
-      IF ISNULL(RTRIM(@c_Zone02),'') = 'ALL'  
-      BEGIN
-         SET @n_Count = 0 
-            
-         SELECT @n_Count = Count(LOC.LOC) 
-         FROM   Replenishment R WITH (NOLOCK) 
-         JOIN   LOC (NOLOCK) ON R.TOLOC = LOC.LOC 
-         LEFT OUTER JOIN STORERCONFIG SCF WITH (NOLOCK) ON (SCF.StorerKey = R.StorerKey 
-                                                         AND SCF.ConfigKey = 'RDTDYNAMICPICK' 
-                                                         AND SCF.sValue = '1')
-         WHERE ((R.CONFIRMED IN ('N','L') AND SCF.sVAlue = '1') OR (SCF.sVAlue IS NULL))
-         AND LOC.Facility = @c_Facility
-         AND (R.ReplenishmentGroup = @c_ReplGroup OR @c_ReplGroup = 'ALL')      
-         AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')
-      END
-      ELSE
-      BEGIN
-         SET @n_Count = 0 
-            
-         SELECT @n_Count = Count(LOC.LOC) 
-         FROM   Replenishment R WITH (NOLOCK) 
-         JOIN   LOC (NOLOCK) ON R.TOLOC = LOC.LOC 
-         LEFT OUTER JOIN STORERCONFIG SCF WITH (NOLOCK) ON (SCF.StorerKey = R.StorerKey 
-                                                         AND SCF.ConfigKey = 'RDTDYNAMICPICK' 
-                                                         AND SCF.sValue = '1')
-         WHERE ((R.CONFIRMED IN ('N','L') AND SCF.sVAlue = '1') OR (SCF.sVAlue IS NULL))
-         AND LOC.Facility = @c_Facility
-         AND LOC.PutawayZone IN (@c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, 
-                                 @c_Zone06, @c_Zone07,  @c_Zone08,  @c_Zone09,  
-                                 @c_Zone10,  @c_Zone11,  @c_Zone12)              
-         AND (R.ReplenishmentGroup = @c_ReplGroup OR @c_ReplGroup = 'ALL')      
-         AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')          
-      END
-
-      IF @n_Count > 0 
-      BEGIN
-         SET @c_ErrMsg = 'Previous Generated Replenishment is not confirmed yet. Regenarate ?'
-         GOTO EXIT_SP 
-      END
+      EXECUTE AS LOGIN = @c_UserName
    END
-
-   IF @n_WarningNo < 2
-   BEGIN
-      SET @n_WarningNo = 2
-      SET @c_ErrMsg = 'Generate Replenishment Transaction?'
-      GOTO EXIT_SP     
-   END  
-
+   --(mingle01) - END
+   
+   --(mingle01) - START
    BEGIN TRY
-      EXEC isp_DeleteNotConfirmRepl
-            @c_facility  = @c_Facility   
-         ,  @c_zone02    = @c_Zone02     
-         ,  @c_zone03    = @c_Zone03     
-         ,  @c_zone04    = @c_Zone04     
-         ,  @c_zone05    = @c_Zone05     
-         ,  @c_zone06    = @c_Zone06     
-         ,  @c_zone07    = @c_Zone07     
-         ,  @c_zone08    = @c_Zone08     
-         ,  @c_zone09    = @c_Zone09     
-         ,  @c_zone10    = @c_Zone10     
-         ,  @c_zone11    = @c_Zone11     
-         ,  @c_zone12    = @c_Zone12     
-         ,  @c_storerkey = @c_Storerkey  
-         ,  @c_ReplGroup = @c_ReplGroup  
-         ,  @b_Success   = @b_Success OUTPUT
-         ,  @n_Err       = @n_Err     OUTPUT
-         ,  @c_ErrMsg    = @c_Errmsg  OUTPUT
-   END TRY
-   BEGIN CATCH
-      SET @n_err = 551606
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing isp_DeleteNotConfirmRepl. (lsp_Start_Replenishment_Wrapper)'
-                     + '( ' + @c_errmsg + ' )'
-   END CATCH      
 
-   IF @b_Success = 0 OR @n_Err <> 0 
-   BEGIN
-      SET @n_Continue = 3
-      GOTO EXIT_SP 
-   END   
-
-   SET @c_ReplenType = ''
-   SET @c_ReplenSQL  = ''
-   SELECT TOP 1 
-          @c_ReplenType  = RTRIM(RS.[Type])
-      ,   @c_ReplenSQL   = RTRIM(RSD.ReplenCode)
-   FROM dbo.REPLENISHSTRATEGY       RS WITH (NOLOCK)
-   JOIN dbo.REPLENISHSTRATEGYDETAIL RSD WITH (NOLOCK) ON (RS.ReplenishStrategyKey = RSD.ReplenishStrategyKey)
-   WHERE RS.ReplenishStrategyKey = @c_ReplenishStrategyKey
-   AND RTRIM(RSD.ReplenCode) <> ''
-
-   IF @c_ReplenType = '' AND @c_ReplenSQL = ''
-   BEGIN
-      GOTO EXIT_SP 
-   END
-
-   IF @c_ReplenType = 'RULES'
-   BEGIN
-      SET @c_ReplenSQL = 'isp_GenReplenishment_STD '
-                       + '''' + ISNULL(RTRIM(@c_Facility),'') + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Storerkey),'')+ ''''
-                       + ','''+ ISNULL(RTRIM(@c_ReplenishStrategyKey),'') + ''''
-                       + ','''+ ISNULL(RTRIM(@c_ReplGroup),'')+ ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone02),'')   + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone03),'')   + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone04),'')   + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone05),'')   + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone06),'')   + '''' 
-                       + ','''+ ISNULL(RTRIM(@c_Zone07),'')   + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone08),'')   + '''' 
-                       + ','''+ ISNULL(RTRIM(@c_Zone09),'')   + ''''
-                       + ','''+ ISNULL(RTRIM(@c_Zone10),'')   + '''' 
-                       + ','''+ ISNULL(RTRIM(@c_Zone11),'')   + '''' 
-                       + ','''+ ISNULL(RTRIM(@c_Zone12),'')   + '''' 
-                  
-   END
-
-   IF @c_ReplenType = 'STOREDPROC' AND @c_ReplenSQL = ''
-   BEGIN
-      SET @n_Continue = 3 
-      SET @n_err = 551607
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Replenish Code not setup for STOREDPROC Replenishment Type. (lsp_Start_Replenishment_Wrapper)'
-      GOTO EXIT_SP   
-   END
-
-   SET @c_ReplenSPName = RTRIM(SUBSTRING(@c_ReplenSQL, 1, CHARINDEX('@',@c_ReplenSQL,1) - 1))
-
-   IF NOT EXISTS (SELECT 1 
-                  FROM dbo.sysobjects 
-                  WHERE name = RTRIM(@c_ReplenSPName)
-                  AND type = 'P'
-                  )
-   BEGIN
-      SET @n_Continue = 3 
-      SET @n_err = 551608
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Replenishment SP: ' + RTRIM(@c_ReplenSPName) + ' not found. (lsp_Start_Replenishment_Wrapper)'
-                    + ' |' + RTRIM(@c_ReplenSPName)
-      GOTO EXIT_SP   
-   END
-
-   SET @c_ReplenSQL_Origin = @c_ReplenSQL
-   SET @n_ParmPosStart = CHARINDEX('@',@c_ReplenSQL_Origin,1) 
-
-   WHILE @n_ParmPosStart > 0  
-   BEGIN
-      SET @n_ParmPosEnd = CHARINDEX(',', @c_ReplenSQL_Origin, @n_ParmPosStart)
-
-      IF @n_ParmPosEnd <= 0
+      IF @c_ProceedWithWarning = 'N'
       BEGIN
-         SET @n_ParmPosEnd = LEN(@c_ReplenSQL_Origin) + 1
-      END
 
-      IF @n_ParmPosEnd >  0
-      BEGIN 
-         SET @c_ParmName = RTRIM(LTRIM(SUBSTRING(@c_ReplenSQL_Origin, @n_ParmPosStart, @n_ParmPosEnd - @n_ParmPosStart )))
-
-         IF @c_ParmName = '@c_Storerkey'  SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Storerkey),'') + '''' )
-         IF @c_ParmName = '@c_Facility'   SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Facility),'')  + '''' )
-         IF @c_ParmName = '@c_ReplGroup'  SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_ReplGroup),'') + '''' )
-         IF @c_ParmName = '@c_Zone02'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone02),'') + '''' )
-         IF @c_ParmName = '@c_Zone03'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone03),'') + '''' )
-         IF @c_ParmName = '@c_Zone04'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone04),'') + '''' )
-         IF @c_ParmName = '@c_Zone05'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone05),'') + '''' )
-         IF @c_ParmName = '@c_Zone06'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone06),'') + '''' )
-         IF @c_ParmName = '@c_Zone07'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone07),'') + '''' )
-         IF @c_ParmName = '@c_Zone08'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone08),'') + '''' )
-         IF @c_ParmName = '@c_Zone09'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone09),'') + '''' )
-         IF @c_ParmName = '@c_Zone10'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone10),'') + '''' )
-         IF @c_ParmName = '@c_Zone11'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone11),'') + '''' )
-         IF @c_ParmName = '@c_Zone12'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone12),'') + '''' )
-
-         SET @n_ParmPosStart = 0 
-
-         IF @n_ParmPosEnd <= LEN(@c_ReplenSQL_Origin)
+         IF ISNULL(RTRIM(@c_Storerkey),'') = ''
          BEGIN
-            SET @n_ParmPosStart = @n_ParmPosEnd + 1 
+            SET @n_Continue = 3
+            SET @n_err = 551601
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Storerkey cannot be blank. (lsp_Start_Replenishment_Wrapper)'
+            GOTO EXIT_SP
+         END
+
+         IF ISNULL(RTRIM(@c_Facility),'') = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 551602
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Facility cannot be blank. (lsp_Start_Replenishment_Wrapper)'
+            GOTO EXIT_SP
+         END
+
+         IF ISNULL(RTRIM(@c_ReplenishStrategyKey),'') = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 551603
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Replenishment Strategy Key is required. (lsp_Start_Replenishment_Wrapper)'
+            GOTO EXIT_SP
+         END
+
+         SELECT @n_RowRef = PRM.RowRef
+         FROM REPLENISHMENTPARMS PRM WITH (NOLOCK)
+         WHERE PRM.Storerkey= @c_Storerkey
+         AND   PRM.Facility = @c_Facility 
+
+         IF @n_RowRef > 0
+         BEGIN
+            BEGIN TRY
+               UPDATE REPLENISHMENTPARMS
+               SET  Storerkey             = @c_Storerkey            
+                  , Facility              = @c_Facility
+                  , ReplenishStrategyKey  = @c_ReplenishStrategyKey 
+                  , ReplenishmentGroup    = @c_ReplGroup
+                  , Zone02                = @c_Zone02 
+                  , Zone03                = @c_Zone03 
+                  , Zone04                = @c_Zone04 
+                  , Zone05                = @c_Zone05 
+                  , Zone06                = @c_Zone06
+                  , Zone07                = @c_Zone07 
+                  , Zone08                = @c_Zone08
+                  , Zone09                = @c_Zone09
+                  , Zone10                = @c_Zone10 
+                  , Zone11                = @c_Zone11 
+                  , Zone12                = @c_Zone12 
+                  , EditWho               = SUSER_SNAME()
+                  , EditDate              = GETDATE()
+                  , Trafficcop            = NULL
+               WHERE RowRef = @n_RowRef 
+            END TRY
+            BEGIN CATCH
+               SET @n_continue = 3
+               SET @n_err = 551604
+               SET @c_ErrMsg = ERROR_MESSAGE()    
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                              + ': Update REPLENISHMENTPARMS Fail. (lsp_Start_Replenishment_Wrapper)'
+                              + ' (' + @c_ErrMsg + ')'
+               GOTO EXIT_SP
+            END CATCH
+         END
+         ELSE
+         BEGIN
+            -- INSERT INTO REPLENISHPARMS
+            BEGIN TRY
+               INSERT INTO REPLENISHMENTPARMS
+                  (  Storerkey, Facility, ReplenishStrategyKey, ReplenishmentGroup
+                  ,  Zone02, Zone03, Zone04, Zone05, Zone06, Zone07, Zone08, Zone09
+                  ,  Zone10, Zone11, Zone12
+                  )
+               VALUES
+                  (  @c_Storerkey, @c_Facility, @c_ReplenishStrategyKey, @c_ReplGroup
+                  ,  @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09
+                  ,  @c_Zone10, @c_Zone11, @c_Zone12
+                  )
+            END TRY
+            BEGIN CATCH
+               SET @n_continue = 3
+               SET @n_err = 551605
+               SET @c_ErrMsg = ERROR_MESSAGE()    
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                              + ': Insert REPLENISHMENTPARMS Fail. (lsp_Start_Replenishment_Wrapper)'
+                              + ' (' + @c_ErrMsg + ')'
+               GOTO EXIT_SP
+            END CATCH
          END
       END
-   END
+       
+      IF @n_WarningNo < 1
+      BEGIN
+         SET @n_WarningNo = 1
+         IF ISNULL(RTRIM(@c_Zone02),'') = 'ALL'  
+         BEGIN
+            SET @n_Count = 0 
+               
+            SELECT @n_Count = Count(LOC.LOC) 
+            FROM   Replenishment R WITH (NOLOCK) 
+            JOIN   LOC (NOLOCK) ON R.TOLOC = LOC.LOC 
+            LEFT OUTER JOIN STORERCONFIG SCF WITH (NOLOCK) ON (SCF.StorerKey = R.StorerKey 
+                                                            AND SCF.ConfigKey = 'RDTDYNAMICPICK' 
+                                                            AND SCF.sValue = '1')
+            WHERE ((R.CONFIRMED IN ('N','L') AND SCF.sVAlue = '1') OR (SCF.sVAlue IS NULL))
+            AND LOC.Facility = @c_Facility
+            AND (R.ReplenishmentGroup = @c_ReplGroup OR @c_ReplGroup = 'ALL')      
+            AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')
+         END
+         ELSE
+         BEGIN
+            SET @n_Count = 0 
+               
+            SELECT @n_Count = Count(LOC.LOC) 
+            FROM   Replenishment R WITH (NOLOCK) 
+            JOIN   LOC (NOLOCK) ON R.TOLOC = LOC.LOC 
+            LEFT OUTER JOIN STORERCONFIG SCF WITH (NOLOCK) ON (SCF.StorerKey = R.StorerKey 
+                                                            AND SCF.ConfigKey = 'RDTDYNAMICPICK' 
+                                                            AND SCF.sValue = '1')
+            WHERE ((R.CONFIRMED IN ('N','L') AND SCF.sVAlue = '1') OR (SCF.sVAlue IS NULL))
+            AND LOC.Facility = @c_Facility
+            AND LOC.PutawayZone IN (@c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, 
+                                    @c_Zone06, @c_Zone07,  @c_Zone08,  @c_Zone09,  
+                                    @c_Zone10,  @c_Zone11,  @c_Zone12)              
+            AND (R.ReplenishmentGroup = @c_ReplGroup OR @c_ReplGroup = 'ALL')      
+            AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')          
+         END
 
-   BEGIN TRY 
-      SET @b_Log = 1                 
-      EXEC ( @c_ReplenSQL )
+         IF @n_Count > 0 
+         BEGIN
+            SET @c_ErrMsg = 'Previous Generated Replenishment is not confirmed yet. Regenarate ?'
+            GOTO EXIT_SP 
+         END
+      END
+
+      IF @n_WarningNo < 2
+      BEGIN
+         SET @n_WarningNo = 2
+         SET @c_ErrMsg = 'Generate Replenishment Transaction?'
+         GOTO EXIT_SP     
+      END  
+
+      BEGIN TRY
+         EXEC isp_DeleteNotConfirmRepl
+               @c_facility  = @c_Facility   
+            ,  @c_zone02    = @c_Zone02     
+            ,  @c_zone03    = @c_Zone03     
+            ,  @c_zone04    = @c_Zone04     
+            ,  @c_zone05    = @c_Zone05     
+            ,  @c_zone06    = @c_Zone06     
+            ,  @c_zone07    = @c_Zone07     
+            ,  @c_zone08    = @c_Zone08     
+            ,  @c_zone09    = @c_Zone09     
+            ,  @c_zone10    = @c_Zone10     
+            ,  @c_zone11    = @c_Zone11     
+            ,  @c_zone12    = @c_Zone12     
+            ,  @c_storerkey = @c_Storerkey  
+            ,  @c_ReplGroup = @c_ReplGroup  
+            ,  @b_Success   = @b_Success OUTPUT
+            ,  @n_Err       = @n_Err     OUTPUT
+            ,  @c_ErrMsg    = @c_Errmsg  OUTPUT
+      END TRY
+      BEGIN CATCH
+         SET @n_err = 551606
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing isp_DeleteNotConfirmRepl. (lsp_Start_Replenishment_Wrapper)'
+                        + '( ' + @c_errmsg + ' )'
+      END CATCH      
+
+      IF @b_Success = 0 OR @n_Err <> 0 
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_SP 
+      END   
+
+      SET @c_ReplenType = ''
+      SET @c_ReplenSQL  = ''
+      SELECT TOP 1 
+             @c_ReplenType  = RTRIM(RS.[Type])
+         ,   @c_ReplenSQL   = RTRIM(RSD.ReplenCode)
+      FROM dbo.REPLENISHSTRATEGY       RS WITH (NOLOCK)
+      JOIN dbo.REPLENISHSTRATEGYDETAIL RSD WITH (NOLOCK) ON (RS.ReplenishStrategyKey = RSD.ReplenishStrategyKey)
+      WHERE RS.ReplenishStrategyKey = @c_ReplenishStrategyKey
+      AND RTRIM(RSD.ReplenCode) <> ''
+
+      IF @c_ReplenType = '' AND @c_ReplenSQL = ''
+      BEGIN
+         GOTO EXIT_SP 
+      END
+
+      IF @c_ReplenType = 'RULES'
+      BEGIN
+         SET @c_ReplenSQL = 'isp_GenReplenishment_STD '
+                          + '''' + ISNULL(RTRIM(@c_Facility),'') + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Storerkey),'')+ ''''
+                          + ','''+ ISNULL(RTRIM(@c_ReplenishStrategyKey),'') + ''''
+                          + ','''+ ISNULL(RTRIM(@c_ReplGroup),'')+ ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone02),'')   + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone03),'')   + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone04),'')   + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone05),'')   + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone06),'')   + '''' 
+                          + ','''+ ISNULL(RTRIM(@c_Zone07),'')   + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone08),'')   + '''' 
+                          + ','''+ ISNULL(RTRIM(@c_Zone09),'')   + ''''
+                          + ','''+ ISNULL(RTRIM(@c_Zone10),'')   + '''' 
+                          + ','''+ ISNULL(RTRIM(@c_Zone11),'')   + '''' 
+                          + ','''+ ISNULL(RTRIM(@c_Zone12),'')   + '''' 
+                     
+      END
+
+      IF @c_ReplenType = 'STOREDPROC' AND @c_ReplenSQL = ''
+      BEGIN
+         SET @n_Continue = 3 
+         SET @n_err = 551607
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Replenish Code not setup for STOREDPROC Replenishment Type. (lsp_Start_Replenishment_Wrapper)'
+         GOTO EXIT_SP   
+      END
+
+      SET @c_ReplenSPName = RTRIM(SUBSTRING(@c_ReplenSQL, 1, CHARINDEX('@',@c_ReplenSQL,1) - 1))
+
+      IF NOT EXISTS (SELECT 1 
+                     FROM dbo.sysobjects 
+                     WHERE name = RTRIM(@c_ReplenSPName)
+                     AND type = 'P'
+                     )
+      BEGIN
+         SET @n_Continue = 3 
+         SET @n_err = 551608
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Replenishment SP: ' + RTRIM(@c_ReplenSPName) + ' not found. (lsp_Start_Replenishment_Wrapper)'
+                       + ' |' + RTRIM(@c_ReplenSPName)
+         GOTO EXIT_SP   
+      END
+
+      SET @c_ReplenSQL_Origin = @c_ReplenSQL
+      SET @n_ParmPosStart = CHARINDEX('@',@c_ReplenSQL_Origin,1) 
+
+      WHILE @n_ParmPosStart > 0  
+      BEGIN
+         SET @n_ParmPosEnd = CHARINDEX(',', @c_ReplenSQL_Origin, @n_ParmPosStart)
+
+         IF @n_ParmPosEnd <= 0
+         BEGIN
+            SET @n_ParmPosEnd = LEN(@c_ReplenSQL_Origin) + 1
+         END
+
+         IF @n_ParmPosEnd >  0
+         BEGIN 
+            SET @c_ParmName = RTRIM(LTRIM(SUBSTRING(@c_ReplenSQL_Origin, @n_ParmPosStart, @n_ParmPosEnd - @n_ParmPosStart )))
+
+            IF @c_ParmName = '@c_Storerkey'  SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Storerkey),'') + '''' )
+            IF @c_ParmName = '@c_Facility'   SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Facility),'')  + '''' )
+            IF @c_ParmName = '@c_ReplGroup'  SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_ReplGroup),'') + '''' )
+            IF @c_ParmName = '@c_Zone02'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone02),'') + '''' )
+            IF @c_ParmName = '@c_Zone03'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone03),'') + '''' )
+            IF @c_ParmName = '@c_Zone04'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone04),'') + '''' )
+            IF @c_ParmName = '@c_Zone05'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone05),'') + '''' )
+            IF @c_ParmName = '@c_Zone06'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone06),'') + '''' )
+            IF @c_ParmName = '@c_Zone07'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone07),'') + '''' )
+            IF @c_ParmName = '@c_Zone08'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone08),'') + '''' )
+            IF @c_ParmName = '@c_Zone09'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone09),'') + '''' )
+            IF @c_ParmName = '@c_Zone10'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone10),'') + '''' )
+            IF @c_ParmName = '@c_Zone11'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone11),'') + '''' )
+            IF @c_ParmName = '@c_Zone12'     SET @c_ReplenSQL = REPLACE(@c_ReplenSQL, @c_ParmName, '''' + ISNULL(RTRIM(@c_Zone12),'') + '''' )
+
+            SET @n_ParmPosStart = 0 
+
+            IF @n_ParmPosEnd <= LEN(@c_ReplenSQL_Origin)
+            BEGIN
+               SET @n_ParmPosStart = @n_ParmPosEnd + 1 
+            END
+         END
+      END
+
+      BEGIN TRY 
+         SET @b_Log = 1                 
+         EXEC ( @c_ReplenSQL )
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Continue = 3   
+         SET @n_err = 551609
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing Replenish Code: ' + RTRIM(@c_ReplenSPName) + '. (lsp_Start_Replenishment_Wrapper)'
+                       + ' |' + RTRIM(@c_ReplenSPName)
+         GOTO EXIT_SP    
+      END CATCH
    END TRY
-
+   
    BEGIN CATCH
-      SET @n_Continue = 3   
-      SET @n_err = 551609
+      SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing Replenish Code: ' + RTRIM(@c_ReplenSPName) + '. (lsp_Start_Replenishment_Wrapper)'
-                    + ' |' + RTRIM(@c_ReplenSPName)
-      GOTO EXIT_SP    
+      GOTO EXIT_SP
    END CATCH
-
+   --(mingle01) - END
    EXIT_SP:
    
    IF @n_Continue = 3   

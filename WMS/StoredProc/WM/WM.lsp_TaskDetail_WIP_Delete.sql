@@ -24,6 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-09   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_TaskDetail_WIP_Delete]
    @c_BatchNo              NVARCHAR(10)  
@@ -34,12 +36,10 @@ CREATE PROCEDURE [WM].[lsp_TaskDetail_WIP_Delete]
 
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -51,69 +51,83 @@ BEGIN
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
-
+   SET @n_Err = 0
+   
    IF ISNULL(@c_UserName,'') <> ''
    BEGIN
-      SET @n_Err = 0 
-      EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT 
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      EXECUTE AS LOGIN = @c_UserName
+   --(mingle01) - START   
+      IF SUSER_SNAME() <> @c_UserName
+      BEGIN 
+         EXEC [WM].[lsp_SetUser] 
+                  @c_UserName = @c_UserName  OUTPUT 
+               ,  @n_Err      = @n_Err       OUTPUT
+               ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                   
+         EXECUTE AS LOGIN = @c_UserName
+      END
    END
+   --(mingle01) - END
    
-   SET @CUR_DEL = CURSOR FAST_FORWARD READ_ONLY FOR
-   SELECT RowID
-   FROM TASKDETAIL_WIP WITH (NOLOCK)
-   WHERE TaskWIPBatchNo = @c_BatchNo
+   --(mingle01) - START
+   BEGIN TRY
+      SET @CUR_DEL = CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT RowID
+      FROM TASKDETAIL_WIP WITH (NOLOCK)
+      WHERE TaskWIPBatchNo = @c_BatchNo
 
-   OPEN @CUR_DEL
+      OPEN @CUR_DEL
+      
+      FETCH NEXT FROM @CUR_DEL INTO @n_RowID
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         BEGIN TRY
+            DELETE TASKDETAIL_WIP
+            WHERE RowID = @n_RowID
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_err = 554751
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete from TASKDETAIL_WIP Fail. (lsp_TaskDetail_WIP_Delete)'
+                           + '( ' + @c_errmsg + ' )'
+
+            GOTO EXIT_SP
+         END CATCH  
+         FETCH NEXT FROM @CUR_DEL INTO @n_RowID        
+      END
+      CLOSE @CUR_DEL 
+      DEALLOCATE @CUR_DEL
+
+      SELECT @n_LogKey = LogKey
+      FROM IDS_GENERALLOG WITH (NOLOCK)
+      WHERE udf01 = 'SKURELOPTION'
+      AND   udf02 = @c_BatchNo 
+
+      IF @n_LogKey > 0 
+      BEGIN
+         BEGIN TRY
+            DELETE IDS_GENERALLOG WHERE LogKey = @n_LogKey
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_err = 554752
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete From IDS_GeneralLog Fail. (lsp_TaskDetail_WIP_Delete)'
+                           + '( ' + @c_errmsg + ' )'
+
+            GOTO EXIT_SP
+         END CATCH  
+      END
+   END TRY
    
-   FETCH NEXT FROM @CUR_DEL INTO @n_RowID
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      BEGIN TRY
-         DELETE TASKDETAIL_WIP
-         WHERE RowID = @n_RowID
-      END TRY
-
-      BEGIN CATCH
-         SET @n_Continue = 3
-         SET @n_err = 554751
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete from TASKDETAIL_WIP Fail. (lsp_TaskDetail_WIP_Delete)'
-                        + '( ' + @c_errmsg + ' )'
-
-         GOTO EXIT_SP
-      END CATCH  
-      FETCH NEXT FROM @CUR_DEL INTO @n_RowID        
-   END
-   CLOSE @CUR_DEL 
-   DEALLOCATE @CUR_DEL
-
-   SELECT @n_LogKey = LogKey
-   FROM IDS_GENERALLOG WITH (NOLOCK)
-   WHERE udf01 = 'SKURELOPTION'
-   AND   udf02 = @c_BatchNo 
-
-   IF @n_LogKey > 0 
-   BEGIN
-      BEGIN TRY
-         DELETE IDS_GENERALLOG WHERE LogKey = @n_LogKey
-      END TRY
-
-      BEGIN CATCH
-         SET @n_Continue = 3
-         SET @n_err = 554752
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete From IDS_GeneralLog Fail. (lsp_TaskDetail_WIP_Delete)'
-                        + '( ' + @c_errmsg + ' )'
-
-         GOTO EXIT_SP
-      END CATCH  
-   END
-
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
    EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return

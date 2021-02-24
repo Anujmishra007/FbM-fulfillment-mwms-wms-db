@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
-/* 2020-12-23 1.0  WLChooi    Created (WMS-15889)                             */                  
+/* 2020-12-23 1.0  WLChooi    Created (WMS-15889)                             */ 
+/* 2021-02-24 1.1  WLChooi    WMS-15889 - Add Col33 (WL01)                    */                 
 /******************************************************************************/                                     
 CREATE PROC [dbo].[isp_Bartender_HK_SHIPSFBZLB_01]                        
 (  @c_Sparm01            NVARCHAR(250),                
@@ -153,7 +154,8 @@ BEGIN
                     + ' CASE WHEN PD.CartonNo > ''1'' THEN OH.Userdefine04 ELSE '''' END, ' + CHAR(13) +   --26
                     + ' CASE WHEN PD.CartonNo = ''1'' THEN OH.Userdefine04 ELSE ISNULL(CT.TrackingNo,'''') END,'+ CHAR(13) +   --27
                     + ' ISNULL(CL.Long,''''), SUM(PD.Qty), MAX(PD.CartonNo),'   + CHAR(13) +   --30
-                    + ' ISNULL(CL1.Long,''''),CONVERT(NVARCHAR(16), OH.DeliveryDate, 120),'''','''','''','''','''','''','''','''','+ CHAR(13) +   --40         
+                    + ' ISNULL(CL1.Long,''''),CONVERT(NVARCHAR(16), OH.DeliveryDate, 120),CASE WHEN LTRIM(RTRIM(ISNULL(OH.SpecialHandling,''''))) = ''Q'' THEN ''QS'' ELSE '''' END, ' + CHAR(13) +   --33   --WL01
+                    + ' '''','''','''','''','''','''','''','+ CHAR(13) +   --40   --WL01         
                     + ' '''','''','''','''','''','''','''','''','''','''','+ CHAR(13) +   --50         
                     + ' '''','''','''','''','''','''','''','''','''',PH.PickSlipNo '+ CHAR(13) +   --60    
                     + ' FROM ORDERS OH (NOLOCK) '   + CHAR(13) + 
@@ -175,7 +177,8 @@ BEGIN
                     + '          OH.C_Address4, F.Contact1, F.Phone1, F.Address1, F.Address2,'+ CHAR(13) +    
                     + '          F.Address3, F.Country, PD.Cartonno,'+ CHAR(13) +
                     + '          OH.Userdefine04, CASE WHEN PD.CartonNo = ''1'' THEN OH.Userdefine04 ELSE ISNULL(CT.TrackingNo,'''') END,'+ CHAR(13) +
-                    + '          ISNULL(CL.Long,''''), PH.PickSlipNo,ISNULL(CL1.Long,''''), CONVERT(NVARCHAR(16), OH.DeliveryDate, 120)'
+                    + '          ISNULL(CL.Long,''''), PH.PickSlipNo,ISNULL(CL1.Long,''''), CONVERT(NVARCHAR(16), OH.DeliveryDate, 120), '+ CHAR(13) +   --WL01
+                    + '          CASE WHEN LTRIM(RTRIM(ISNULL(OH.SpecialHandling,''''))) = ''Q'' THEN ''QS'' ELSE '''' END '   --WL01
             
    IF @b_debug=1          
    BEGIN          

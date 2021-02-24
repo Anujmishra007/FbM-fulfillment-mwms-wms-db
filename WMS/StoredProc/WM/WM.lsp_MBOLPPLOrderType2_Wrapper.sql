@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                  */                                                                                  
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/* Date        Author   Ver.  Purposes                                  */ 
+/* 2021-02-05  mingle01 1.1   Add Big Outer Begin try/Catch             */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_MBOLPPLOrderType2_Wrapper] 
       @c_MBOLKey              NVARCHAR(10)
@@ -69,192 +71,138 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
+
+   --(mingle01) - START
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
    
-   IF OBJECT_ID('tempdb..#MBOLPPLORD','U') IS NOT NULL
-   BEGIN
-      DROP TABLE #MBOLPPLORD
-   END
-
-   CREATE TABLE #MBOLPPLORD
-      (  RowID    INT            NOT NULL IDENTITY(1,1)  PRIMARY KEY
-      ,  Orderkey NVARCHAR(10)   NOT NULL DEFAULT('')
-      ) 
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END
-
-   IF @n_ErrGroupKey IS NULL
-   BEGIN
-      SET @n_ErrGroupKey = 0
-   END
-   
-   INSERT INTO #MBOLPPLORD (  OrderKey )
-   SELECT DISTINCT Orderkey = VALUE FROM string_split (@c_OrderKeys,'|')
-   ORDER BY Orderkey
-
-   EXEC isp_MBOL_PopulateValidation
-         @c_MBOLKey     = @c_MBOLKey
-      ,  @c_OrderkeyList= @c_OrderKeys
-      ,  @b_Success     = @b_Success   OUTPUT
-      ,  @c_ErrMsg      = @c_ErrMsg    OUTPUT
-     
-   IF @b_Success  = 0
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 558401
-      SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Executing isp_MBOL_PopulateValidation. (lsp_MBOLPPLOrderType2_Wrapper) '
-               + '( ' + @c_errmsg + ' )'
-
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_MBOLKey
-         ,  @c_Refkey2     = ''
-         ,  @c_Refkey3     = '' 
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success    
-         ,  @n_err         = @n_err        
-         ,  @c_errmsg      = @c_errmsg    
-          
-      GOTO EXIT_SP      
-   END
-
-   IF @n_continue = 1
-   BEGIN
-      SET @CUR_MDET = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT MD.MBOLLineNumber
-      FROM MBOLDETAIL MD WITH (NOLOCK) 
-      WHERE MD.MBOLKey = @c_MBOLKey
-      AND MD.Orderkey = ''
-      ORDER BY MD.MBOLLineNumber
-
-      OPEN @CUR_MDET
-
-      FETCH NEXT FROM @CUR_MDET INTO @c_MBOLLineNumber
-
-      WHILE @@FETCH_STATUS <> -1
+      IF @n_Err <> 0 
       BEGIN
-         DELETE MBOLDETAIL
-         WHERE MBOLKey = @c_MBOLKey
-         AND   MBOLLineNumber = @c_MBOLLineNumber
-         FETCH NEXT FROM @CUR_MDET INTO @c_MBOLLineNumber
-
-         IF @@ERROR <> 0
-         BEGIN
-            SET @n_continue = 3
-            SET @n_err = 558402
-            SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Update MBOLDETAIL. (lsp_MBOLPPLOrderType2_Wrapper)'
-
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_MBOLKey
-               ,  @c_Refkey2     = ''
-               ,  @c_Refkey3     = '' 
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success    
-               ,  @n_err         = @n_err        
-               ,  @c_errmsg      = @c_errmsg  
-                  
-            GOTO EXIT_SP
-         END
-         FETCH NEXT FROM @CUR_MDET INTO @c_MBOLLineNumber
+         GOTO EXIT_SP
       END
-      CLOSE @CUR_MDET
-      DEALLOCATE @CUR_MDET
+
+      EXECUTE AS LOGIN = @c_UserName
    END
- 
-   IF @n_continue = 1
-   BEGIN
-      SET @CUR_PPLORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT OH.Facility
-            ,OH.Orderkey
-            ,ExternOrderKey= ISNULL(OH.ExternOrderKey,'')
-            ,C_Company     = ISNULL(OH.C_Company,'')
-            ,[Route]       = ISNULL(OH.[Route],'')
-            ,OH.DeliveryDate
-            ,OH.OrderDate
-      FROM #MBOLPPLORD TORD 
-      JOIN ORDERS OH WITH (NOLOCK) ON TORD.Orderkey = OH.Orderkey
-      ORDER BY TORD.RowID
+   --(mingle01) - END
 
-      OPEN @CUR_PPLORD
-
-      FETCH NEXT FROM @CUR_PPLORD INTO @c_Facility
-                                    ,  @c_Orderkey
-                                    ,  @c_ExternOrderKey
-                                    ,  @c_C_Company
-                                    ,  @c_Route
-                                    ,  @dt_DeliveryDate
-                                    ,  @dt_OrderDate
-
-      WHILE @@FETCH_STATUS <> -1
+   --(mingle01) - START
+   BEGIN TRY
+   IF OBJECT_ID('tempdb..#MBOLPPLORD','U') IS NOT NULL
       BEGIN
-         BEGIN TRY
-            SET @b_Success = 0
-            SET @n_err = 0
-            EXEC dbo.isp_InsertMBOLDetail 
-                  @cMBOLKey         = @c_MBOLKey
-               ,  @cFacility        = @c_Facility
-               ,  @cOrderKey        = @c_Orderkey
-               ,  @cLoadKey         = ''
-               ,  @nStdGrossWgt     = 0.00
-               ,  @nStdCube         = 0.00
-               ,  @cExternOrderKey  = @c_ExternOrderKey
-               ,  @dOrderDate       = @dt_OrderDate
-               ,  @dDelivery_Date   = @dt_DeliveryDate 
-               ,  @cRoute           = @c_Route           
-               ,  @b_Success        = @b_Success        OUTPUT
-               ,  @n_err            = @n_err            OUTPUT
-               ,  @c_errmsg         = @c_errmsg         OUTPUT
-         END TRY
+         DROP TABLE #MBOLPPLORD
+      END
 
-         BEGIN CATCH
-            SET @n_err = 558403
-            SET @c_ErrMsg = ERROR_MESSAGE()
-         END CATCH
+      CREATE TABLE #MBOLPPLORD
+         (  RowID    INT            NOT NULL IDENTITY(1,1)  PRIMARY KEY
+         ,  Orderkey NVARCHAR(10)   NOT NULL DEFAULT('')
+         ) 
 
-         IF @b_Success = 0  
+      IF @n_ErrGroupKey IS NULL
+      BEGIN
+         SET @n_ErrGroupKey = 0
+      END
+   
+      INSERT INTO #MBOLPPLORD (  OrderKey )
+      SELECT DISTINCT Orderkey = VALUE FROM string_split (@c_OrderKeys,'|')
+      ORDER BY Orderkey
+
+      EXEC isp_MBOL_PopulateValidation
+            @c_MBOLKey     = @c_MBOLKey
+         ,  @c_OrderkeyList= @c_OrderKeys
+         ,  @b_Success     = @b_Success   OUTPUT
+         ,  @c_ErrMsg      = @c_ErrMsg    OUTPUT
+     
+      IF @b_Success  = 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 558401
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Executing isp_MBOL_PopulateValidation. (lsp_MBOLPPLOrderType2_Wrapper) '
+                  + '( ' + @c_errmsg + ' )'
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_MBOLKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = '' 
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success    
+            ,  @n_err         = @n_err        
+            ,  @c_errmsg      = @c_errmsg    
+          
+         GOTO EXIT_SP      
+      END
+
+      IF @n_continue = 1
+      BEGIN
+         SET @CUR_MDET = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT MD.MBOLLineNumber
+         FROM MBOLDETAIL MD WITH (NOLOCK) 
+         WHERE MD.MBOLKey = @c_MBOLKey
+         AND MD.Orderkey = ''
+         ORDER BY MD.MBOLLineNumber
+
+         OPEN @CUR_MDET
+
+         FETCH NEXT FROM @CUR_MDET INTO @c_MBOLLineNumber
+
+         WHILE @@FETCH_STATUS <> -1
          BEGIN
-            SET @n_err = 558403
-         END   
+            DELETE MBOLDETAIL
+            WHERE MBOLKey = @c_MBOLKey
+            AND   MBOLLineNumber = @c_MBOLLineNumber
+            FETCH NEXT FROM @CUR_MDET INTO @c_MBOLLineNumber
 
-         IF @n_err <> 0
-         BEGIN
-            SET @n_Continue = 3
-            SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Executing isp_InsertMBOLDetail. (lsp_MBOLPPLOrderType2_Wrapper) '
-                          + '( ' + @c_errmsg + ' )'
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 558402
+               SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Update MBOLDETAIL. (lsp_MBOLPPLOrderType2_Wrapper)'
 
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_MBOLKey
-               ,  @c_Refkey2     = @c_Orderkey
-               ,  @c_Refkey3     = '' 
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success    
-               ,  @n_err         = @n_err        
-               ,  @c_errmsg      = @c_errmsg  
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_MBOLKey
+                  ,  @c_Refkey2     = ''
+                  ,  @c_Refkey3     = '' 
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success    
+                  ,  @n_err         = @n_err        
+                  ,  @c_errmsg      = @c_errmsg  
                   
-            GOTO EXIT_SP
+               GOTO EXIT_SP
+            END
+            FETCH NEXT FROM @CUR_MDET INTO @c_MBOLLineNumber
          END
+         CLOSE @CUR_MDET
+         DEALLOCATE @CUR_MDET
+      END
+ 
+      IF @n_continue = 1
+      BEGIN
+         SET @CUR_PPLORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT OH.Facility
+               ,OH.Orderkey
+               ,ExternOrderKey= ISNULL(OH.ExternOrderKey,'')
+               ,C_Company     = ISNULL(OH.C_Company,'')
+               ,[Route]       = ISNULL(OH.[Route],'')
+               ,OH.DeliveryDate
+               ,OH.OrderDate
+         FROM #MBOLPPLORD TORD 
+         JOIN ORDERS OH WITH (NOLOCK) ON TORD.Orderkey = OH.Orderkey
+         ORDER BY TORD.RowID
+
+         OPEN @CUR_PPLORD
 
          FETCH NEXT FROM @CUR_PPLORD INTO @c_Facility
                                        ,  @c_Orderkey
@@ -263,30 +211,99 @@ BEGIN
                                        ,  @c_Route
                                        ,  @dt_DeliveryDate
                                        ,  @dt_OrderDate
+
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            BEGIN TRY
+               SET @b_Success = 0
+               SET @n_err = 0
+               EXEC dbo.isp_InsertMBOLDetail 
+                     @cMBOLKey         = @c_MBOLKey
+                  ,  @cFacility        = @c_Facility
+                  ,  @cOrderKey        = @c_Orderkey
+                  ,  @cLoadKey         = ''
+                  ,  @nStdGrossWgt     = 0.00
+                  ,  @nStdCube         = 0.00
+                  ,  @cExternOrderKey  = @c_ExternOrderKey
+                  ,  @dOrderDate       = @dt_OrderDate
+                  ,  @dDelivery_Date   = @dt_DeliveryDate 
+                  ,  @cRoute           = @c_Route           
+                  ,  @b_Success        = @b_Success        OUTPUT
+                  ,  @n_err            = @n_err            OUTPUT
+                  ,  @c_errmsg         = @c_errmsg         OUTPUT
+            END TRY
+
+            BEGIN CATCH
+               SET @n_err = 558403
+               SET @c_ErrMsg = ERROR_MESSAGE()
+            END CATCH
+
+            IF @b_Success = 0  
+            BEGIN
+               SET @n_err = 558403
+            END   
+
+            IF @n_err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Executing isp_InsertMBOLDetail. (lsp_MBOLPPLOrderType2_Wrapper) '
+                             + '( ' + @c_errmsg + ' )'
+
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_MBOLKey
+                  ,  @c_Refkey2     = @c_Orderkey
+                  ,  @c_Refkey3     = '' 
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success    
+                  ,  @n_err         = @n_err        
+                  ,  @c_errmsg      = @c_errmsg  
+                  
+               GOTO EXIT_SP
+            END
+
+            FETCH NEXT FROM @CUR_PPLORD INTO @c_Facility
+                                          ,  @c_Orderkey
+                                          ,  @c_ExternOrderKey
+                                          ,  @c_C_Company
+                                          ,  @c_Route
+                                          ,  @dt_DeliveryDate
+                                          ,  @dt_OrderDate
+         END
+         CLOSE @CUR_PPLORD
+         DEALLOCATE @CUR_PPLORD
+
+         IF @n_Continue = 1 
+         BEGIN
+            SET @c_errmsg = 'Populate Order Type 2 Successfully.'
+
+            EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_MBOLKey
+            ,  @c_Refkey2     = @c_Orderkey
+            ,  @c_Refkey3     = '' 
+            ,  @c_WriteType   = 'MESSAGE' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success    
+            ,  @n_err         = @n_err        
+            ,  @c_errmsg      = @c_errmsg
+         END  
       END
-      CLOSE @CUR_PPLORD
-      DEALLOCATE @CUR_PPLORD
-
-      IF @n_Continue = 1 
-      BEGIN
-         SET @c_errmsg = 'Populate Order Type 2 Successfully.'
-
-         EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_MBOLKey
-         ,  @c_Refkey2     = @c_Orderkey
-         ,  @c_Refkey3     = '' 
-         ,  @c_WriteType   = 'MESSAGE' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success    
-         ,  @n_err         = @n_err        
-         ,  @c_errmsg      = @c_errmsg
-      END  
-   END
-   EXIT_SP:
+   END TRY
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
+EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
