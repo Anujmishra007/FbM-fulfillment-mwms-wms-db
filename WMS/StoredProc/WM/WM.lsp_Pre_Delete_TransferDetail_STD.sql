@@ -1,12 +1,15 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Pre_Delete_TransferDetail_STD') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Pre_Delete_TransferDetail_STD]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Pre_Delete_TransferDetail_STD]
-GO
+BEGIN 
+   DROP PROCEDURE [WM].[lsp_Pre_Delete_TransferDetail_STD]  
+END
+GO 
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/  
 /* Stored Procedure: lsp_Pre_Delete_TransferDetail_STD                  */  
 /* Creation Date: 25-Sep-2018                                           */  
