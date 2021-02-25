@@ -1,3 +1,12 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_invoice_07_rdt]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_invoice_07_rdt]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
   
 /************************************************************************/  
 /* Function:   isp_invoice_07_rdt                                       */  
@@ -128,3 +137,7 @@ BEGIN
       DROP TABLE #TMP_INVDET07rdt  
   
 END  
+GO          
+            
+GRANT EXECUTE ON isp_invoice_07_rdt TO NSQL
+GO  
