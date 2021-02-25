@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author    Ver Purposes                                  */    
+/* Date         Author    Ver  Purposes                                 */    
+/* 2021-02-24   WLChooi   1.1  WMS-15940 - Sort by Qty DESC (WL01)      */
 /************************************************************************/    
     
 CREATE PROC isp_Delivery_Note51_RDT    
@@ -116,6 +117,7 @@ BEGIN
           , ISNULL(S.descr,'')
           , PAD.LabelNo
           , PAD.Qty
+   ORDER BY PAD.Qty DESC   --WL01
 
    SET @n_MaxRec = 0
    
