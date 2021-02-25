@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMoveOrderToNewMBOL]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -64,57 +66,36 @@ BEGIN
    SET @n_ErrGroupKey = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   SET @c_ToMBOLKey = ISNULL(@c_ToMBOLKey,'')
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN
-      IF @c_CreateNew <> 'Y' 
+      IF @n_Err <> 0 
       BEGIN
-         IF @c_ToMBOLKey = ''
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
+   END
+   --(mingle01) - END
+   
+   --(mingle01) - START
+   BEGIN TRY
+      SET @c_ToMBOLKey = ISNULL(@c_ToMBOLKey,'')
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN
+         IF @c_CreateNew <> 'Y' 
          BEGIN
-            SET @n_Continue = 3
-            SET @n_Err = 556551
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': To Ship Reference Unit key is required. (lsp_WaveMoveOrderToNewMBOL)'  
-            
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_WaveKey
-               ,  @c_Refkey2     = @c_MBOLkey
-               ,  @c_Refkey3     = @c_MBOLLineNumber
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT              
-
-         END                  
-         ELSE
-         BEGIN
-            SELECT @n_Cnt = 1
-            FROM MBOL MB WITH (NOLOCK)
-            WHERE MB.MBOLkey = @c_ToMBOLKey
-
-            IF @n_Cnt = 0
+            IF @c_ToMBOLKey = ''
             BEGIN
                SET @n_Continue = 3
-               SET @n_Err = 556552
-               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid To Ship Reference Unit key.'
-                             + ' To Ship Reference Unit key ' + @c_ToMBOLKey + ' not found. (lsp_WaveMoveOrderToNewMBOL) |' +@c_ToMBOLKey
-
+               SET @n_Err = 556551
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': To Ship Reference Unit key is required. (lsp_WaveMoveOrderToNewMBOL)'  
+               
                EXEC [WM].[lsp_WriteError_List] 
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                   ,  @c_TableName   = @c_TableName
@@ -127,48 +108,101 @@ BEGIN
                   ,  @c_errmsg2     = @c_errmsg 
                   ,  @b_Success     = @b_Success   OUTPUT 
                   ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT                   
-             END
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT              
+
+            END                  
+            ELSE
+            BEGIN
+               SELECT @n_Cnt = 1
+               FROM MBOL MB WITH (NOLOCK)
+               WHERE MB.MBOLkey = @c_ToMBOLKey
+
+               IF @n_Cnt = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 556552
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid To Ship Reference Unit key.'
+                                + ' To Ship Reference Unit key ' + @c_ToMBOLKey + ' not found. (lsp_WaveMoveOrderToNewMBOL) |' +@c_ToMBOLKey
+
+                  EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_MBOLkey
+                     ,  @c_Refkey3     = @c_MBOLLineNumber
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT                   
+                END
+            END
          END
-      END
 
-      IF @n_Continue = 3
-      BEGIN
-         GOTO EXIT_SP      
-      END
-
-      SET @n_WarningNo = 1
-      SET @c_ErrMsg = 'Confirm to move order(s) to other/new Shipment Reference Unit ?'
-      GOTO EXIT_SP  
-   END
-
-   BEGIN TRY
-      EXEC [dbo].[isp_MoveOrdersToMBOL]  
-           @c_MBOLkey   = @c_MBOLkey
-         , @c_MBOLLineNumber = @c_MBOLLineNumber
-         , @c_ToMBOLKey = @c_ToMBOLKey    OUTPUT
-         , @b_Success   = @b_Success      OUTPUT
-         , @n_Err       = @n_Err          OUTPUT 
-         , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
-   END TRY
-
-   BEGIN CATCH
-
-      SET @n_Err = 556553
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_MoveOrdersToMBOL. (lsp_WaveMoveOrderToNewMBOL)'   
-                     + '(' + @c_ErrMsg + ')'  
-
-      IF (XACT_STATE()) = -1  
-      BEGIN
-         ROLLBACK TRAN
-
-         WHILE @@TRANCOUNT < @n_StartTCnt
+         IF @n_Continue = 3
          BEGIN
-            BEGIN TRAN
+            GOTO EXIT_SP      
          END
-      END  
 
+         SET @n_WarningNo = 1
+         SET @c_ErrMsg = 'Confirm to move order(s) to other/new Shipment Reference Unit ?'
+         GOTO EXIT_SP  
+      END
+
+      BEGIN TRY
+         EXEC [dbo].[isp_MoveOrdersToMBOL]  
+              @c_MBOLkey   = @c_MBOLkey
+            , @c_MBOLLineNumber = @c_MBOLLineNumber
+            , @c_ToMBOLKey = @c_ToMBOLKey    OUTPUT
+            , @b_Success   = @b_Success      OUTPUT
+            , @n_Err       = @n_Err          OUTPUT 
+            , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
+      END TRY
+
+      BEGIN CATCH
+
+         SET @n_Err = 556553
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_MoveOrdersToMBOL. (lsp_WaveMoveOrderToNewMBOL)'   
+                        + '(' + @c_ErrMsg + ')'  
+
+         IF (XACT_STATE()) = -1  
+         BEGIN
+            ROLLBACK TRAN
+
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+         END  
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_MBOLkey
+            ,  @c_Refkey3     = @c_MBOLLineNumber
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT 
+            
+         SET @n_Continue = 3
+         GOTO EXIT_MOVE                        
+      END CATCH
+           
+      IF @b_Success = 0 OR @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_MOVE   
+      END
+
+      SET @c_errmsg = 'Successfully Move Order to To Other/New Shipment Reference Unit: ' + @c_ToMBOLKey  
       EXEC [WM].[lsp_WriteError_List] 
             @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
          ,  @c_TableName   = @c_TableName
@@ -176,48 +210,31 @@ BEGIN
          ,  @c_Refkey1     = @c_WaveKey
          ,  @c_Refkey2     = @c_MBOLkey
          ,  @c_Refkey3     = @c_MBOLLineNumber
-         ,  @c_WriteType   = 'ERROR' 
+         ,  @c_WriteType   = 'MESSAGE'  
          ,  @n_err2        = @n_err 
          ,  @c_errmsg2     = @c_errmsg 
          ,  @b_Success     = @b_Success   OUTPUT 
          ,  @n_err         = @n_err       OUTPUT 
          ,  @c_errmsg      = @c_errmsg    OUTPUT 
-         
+
+   EXIT_MOVE:    
+      --IF @n_KeyCount = @n_TotalSelectedKeys
+      --BEGIN
+      --   SET @c_ErrMsg = 'Move Order(s) To Other/New Shipment Reference Unit is/are done.'
+      --END
+
+      IF @n_KeyCount < @n_TotalSelectedKeys
+      BEGIN
+         SET @n_KeyCount = @n_KeyCount + 1
+      END
+   END TRY
+   
+   BEGIN CATCH
       SET @n_Continue = 3
-      GOTO EXIT_MOVE                        
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
    END CATCH
-        
-   IF @b_Success = 0 OR @n_Err <> 0
-   BEGIN
-      SET @n_Continue = 3
-      GOTO EXIT_MOVE   
-   END
-
-   SET @c_errmsg = 'Successfully Move Order to To Other/New Shipment Reference Unit: ' + @c_ToMBOLKey  
-   EXEC [WM].[lsp_WriteError_List] 
-         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-      ,  @c_TableName   = @c_TableName
-      ,  @c_SourceType  = @c_SourceType
-      ,  @c_Refkey1     = @c_WaveKey
-      ,  @c_Refkey2     = @c_MBOLkey
-      ,  @c_Refkey3     = @c_MBOLLineNumber
-      ,  @c_WriteType   = 'MESSAGE'  
-      ,  @n_err2        = @n_err 
-      ,  @c_errmsg2     = @c_errmsg 
-      ,  @b_Success     = @b_Success   OUTPUT 
-      ,  @n_err         = @n_err       OUTPUT 
-      ,  @c_errmsg      = @c_errmsg    OUTPUT 
-
-EXIT_MOVE:    
-   --IF @n_KeyCount = @n_TotalSelectedKeys
-   --BEGIN
-   --   SET @c_ErrMsg = 'Move Order(s) To Other/New Shipment Reference Unit is/are done.'
-   --END
-
-   IF @n_KeyCount < @n_TotalSelectedKeys
-   BEGIN
-      SET @n_KeyCount = @n_KeyCount + 1
-   END
+   --(mingle01) - END
 
 EXIT_SP:
 

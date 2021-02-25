@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveGenPackFromPick]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -60,142 +62,158 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   SET @c_Loadkey = ISNULL(@c_Loadkey, '')
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN 
-      SET @n_WarningNo = 1
-      SET @c_ErrMsg = 'Do you want to generate pack from picked '
-                    + CASE WHEN @c_Loadkey = '' THEN 'By Wave' ELSE 'By Load' END
-                    + ' ?' 
-      GOTO EXIT_SP
-   END
-
-   IF @c_Loadkey = ''
-   BEGIN
-      SET @c_Facility = ''
-      SET @c_Storerkey= ''
-      SELECT TOP 1 
-               @c_Facility = OH.Facility
-            , @c_Storerkey= OH.Storerkey
-      FROM WAVEDETAIL WD WITH (NOLOCK)  
-      JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
-      WHERE WD.Wavekey = @c_Wavekey
-      ORDER BY WD.WaveDetailKey
-
-      SET @c_Configkey = 'WAVGENPACKFROMPICKED_SP'
-      SELECT @c_PackFromPicked_SP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', @c_Configkey)
-
-      SET @n_PickedCnt = 0
-      SELECT @n_PickedCnt = 1 
-      FROM WAVEDETAIL WD WITH (NOLOCK)
-      JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
-      WHERE WD.WaveKey = @c_WaveKey
-   END
-   ELSE
-   BEGIN
-      SET @c_Facility = ''
-      SET @c_Storerkey= ''
-      SELECT TOP 1 
-              @c_Facility = OH.Facility
-            , @c_Storerkey= OH.Storerkey
-      FROM LOADPLANDETAIL LPD WITH (NOLOCK)  
-      JOIN ORDERS OH WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
-      WHERE LPD.LoadKey = @c_LoadKey
-      ORDER BY LPD.LoadLineNumber
-
-      SET @c_Configkey = 'LPGENPACKFROMPICKED'
-      SELECT @c_PackFromPicked_SP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', @c_Configkey)
-
-      SET @n_PickedCnt = 0
-      SELECT @n_PickedCnt = 1 
-      FROM LOADPLANDETAIL LPD WITH (NOLOCK)
-      JOIN PICKDETAIL PD WITH (NOLOCK) ON LPD.Orderkey = PD.Orderkey
-      WHERE LPD.LoadKey = @c_LoadKey
-   END
-
-
-   IF @c_PackFromPicked_SP <> ''
-   BEGIN
-      IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_PackFromPicked_SP) AND type = 'P')
+      IF @n_Err <> 0 
       BEGIN
-         SET @n_continue = 3
-         SET @n_err = 555901
-         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
-                        + ': Storerconfigkey: ' + @c_Configkey + ' must be assigned with valid stored proc name to use this function'
-                        + '. (lsp_WaveGenPackFromPick)'
-                        + '|' + @c_Configkey
-         GOTO EXIT_SP
-      END 
-   END
-
-   IF @n_PickedCnt = 0
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 555902
-      SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
-                     + ': No Picks to generate pack. (lsp_WaveGenPackFromPick)'
-      GOTO EXIT_SP
-   END
-
-   
-   IF @c_Loadkey = ''
-   BEGIN
-      BEGIN TRY
-         EXEC  [dbo].[isp_WAVGenPackFromPicked_Wrapper]  
-              @c_WaveKey = @c_WaveKey    
-            , @b_Success = @b_Success OUTPUT
-            , @n_Err     = @n_Err     OUTPUT 
-            , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
-      END TRY
-      BEGIN CATCH
-         SET @n_Err = 555903
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_WAVGenPackFromPicked_Wrapper. (lsp_WaveGenPackFromPick)'   
-                       + '(' + @c_ErrMsg + ')'          
-      END CATCH
-         
-      IF @b_Success = 0 OR @n_Err <> 0
-      BEGIN
-         SET @n_Continue = 3
          GOTO EXIT_SP
       END
+    
+      EXECUTE AS LOGIN = @c_UserName
    END
-   ELSE
-   BEGIN
-      BEGIN TRY
-         EXEC  [dbo].[isp_LPGenPackFromPicked_Wrapper]  
-                 @c_LoadKey = @c_LoadKey    
+   --(mingle01) - END
+   
+   --(mingle01) - START
+   BEGIN TRY
+      SET @c_Loadkey = ISNULL(@c_Loadkey, '')
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN 
+         SET @n_WarningNo = 1
+         SET @c_ErrMsg = 'Do you want to generate pack from picked '
+                       + CASE WHEN @c_Loadkey = '' THEN 'By Wave' ELSE 'By Load' END
+                       + ' ?' 
+         GOTO EXIT_SP
+      END
+
+      IF @c_Loadkey = ''
+      BEGIN
+         SET @c_Facility = ''
+         SET @c_Storerkey= ''
+         SELECT TOP 1 
+                  @c_Facility = OH.Facility
+               , @c_Storerkey= OH.Storerkey
+         FROM WAVEDETAIL WD WITH (NOLOCK)  
+         JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+         WHERE WD.Wavekey = @c_Wavekey
+         ORDER BY WD.WaveDetailKey
+
+         SET @c_Configkey = 'WAVGENPACKFROMPICKED_SP'
+         SELECT @c_PackFromPicked_SP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', @c_Configkey)
+
+         SET @n_PickedCnt = 0
+         SELECT @n_PickedCnt = 1 
+         FROM WAVEDETAIL WD WITH (NOLOCK)
+         JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
+         WHERE WD.WaveKey = @c_WaveKey
+      END
+      ELSE
+      BEGIN
+         SET @c_Facility = ''
+         SET @c_Storerkey= ''
+         SELECT TOP 1 
+                 @c_Facility = OH.Facility
+               , @c_Storerkey= OH.Storerkey
+         FROM LOADPLANDETAIL LPD WITH (NOLOCK)  
+         JOIN ORDERS OH WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+         WHERE LPD.LoadKey = @c_LoadKey
+         ORDER BY LPD.LoadLineNumber
+
+         SET @c_Configkey = 'LPGENPACKFROMPICKED'
+         SELECT @c_PackFromPicked_SP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', @c_Configkey)
+
+         SET @n_PickedCnt = 0
+         SELECT @n_PickedCnt = 1 
+         FROM LOADPLANDETAIL LPD WITH (NOLOCK)
+         JOIN PICKDETAIL PD WITH (NOLOCK) ON LPD.Orderkey = PD.Orderkey
+         WHERE LPD.LoadKey = @c_LoadKey
+      END
+
+
+      IF @c_PackFromPicked_SP <> ''
+      BEGIN
+         IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_PackFromPicked_SP) AND type = 'P')
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 555901
+            SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                           + ': Storerconfigkey: ' + @c_Configkey + ' must be assigned with valid stored proc name to use this function'
+                           + '. (lsp_WaveGenPackFromPick)'
+                           + '|' + @c_Configkey
+            GOTO EXIT_SP
+         END 
+      END
+
+      IF @n_PickedCnt = 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 555902
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                        + ': No Picks to generate pack. (lsp_WaveGenPackFromPick)'
+         GOTO EXIT_SP
+      END
+
+      
+      IF @c_Loadkey = ''
+      BEGIN
+         BEGIN TRY
+            EXEC  [dbo].[isp_WAVGenPackFromPicked_Wrapper]  
+                 @c_WaveKey = @c_WaveKey    
                , @b_Success = @b_Success OUTPUT
                , @n_Err     = @n_Err     OUTPUT 
                , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
-      END TRY
-      BEGIN CATCH
-         SET @n_Err = 555904
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_LPGenPackFromPicked_Wrapper. (lsp_WaveGenPackFromPick)'   
-                       + '(' + @c_ErrMsg + ')'          
-      END CATCH
-         
-      IF @b_Success = 0 OR @n_Err <> 0
-      BEGIN
-         SET @n_Continue = 3
-         GOTO EXIT_SP
+         END TRY
+         BEGIN CATCH
+            SET @n_Err = 555903
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_WAVGenPackFromPicked_Wrapper. (lsp_WaveGenPackFromPick)'   
+                          + '(' + @c_ErrMsg + ')'          
+         END CATCH
+            
+         IF @b_Success = 0 OR @n_Err <> 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP
+         END
       END
-   END
+      ELSE
+      BEGIN
+         BEGIN TRY
+            EXEC  [dbo].[isp_LPGenPackFromPicked_Wrapper]  
+                    @c_LoadKey = @c_LoadKey    
+                  , @b_Success = @b_Success OUTPUT
+                  , @n_Err     = @n_Err     OUTPUT 
+                  , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
+         END TRY
+         BEGIN CATCH
+            SET @n_Err = 555904
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_LPGenPackFromPicked_Wrapper. (lsp_WaveGenPackFromPick)'   
+                          + '(' + @c_ErrMsg + ')'          
+         END CATCH
+            
+         IF @b_Success = 0 OR @n_Err <> 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP
+         END
+      END
 
-   SET @c_ErrMsg = 'Generate Pack Completed.'
+      SET @c_ErrMsg = 'Generate Pack Completed.'
+      
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END 
 
 EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return

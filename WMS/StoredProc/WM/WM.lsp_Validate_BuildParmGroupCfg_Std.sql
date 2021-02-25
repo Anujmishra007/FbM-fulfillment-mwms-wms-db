@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_BuildParmGroupCfg_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -55,126 +56,136 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
-
-   IF OBJECT_ID('tempdb..#BuildParmGroupCfg') IS NOT NULL
-   BEGIN
-      DROP TABLE #BuildParmGroupCfg
-   END
-
-   CREATE TABLE #BuildParmGroupCfg( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
-   SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-   SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
-   DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
-         ,x.value('@DataType','NVARCHAR(128)') AS datatype
-   FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
-      
-   OPEN CUR_SCHEMA
-
-   FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_TableName = ''
-      IF CHARINDEX('.', @c_ColumnName) > 0 
+   
+   
+   --(mingle01) - START
+   BEGIN TRY
+      IF OBJECT_ID('tempdb..#BuildParmGroupCfg') IS NOT NULL
       BEGIN
-         SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-         SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         DROP TABLE #BuildParmGroupCfg
       END
 
-      SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-      SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-      SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+      CREATE TABLE #BuildParmGroupCfg( Rowid  INT NOT NULL IDENTITY(1,1) )   
+
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
+            ,x.value('@DataType','NVARCHAR(128)') AS datatype
+      FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
          
+      OPEN CUR_SCHEMA
+
       FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-   END
-   CLOSE CUR_SCHEMA
-   DEALLOCATE CUR_SCHEMA
-       
-       
-   IF LEN(@c_SQLSchema) > 0 
-   BEGIN
-      SET @c_SQL = N'ALTER TABLE #BuildParmGroupCfg  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
+         BEGIN
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         END
+
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+            
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      END
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+          
+          
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #BuildParmGroupCfg  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+            
+         EXEC (@c_SQL)
+
+         SET @c_SQL = N' INSERT INTO #BuildParmGroupCfg' --+  @c_UpdateTable 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+            
+         EXEC sp_executeSQl @c_SQL
+                           , N'@x_XMLData xml'
+                           , @x_XMLData
          
-      EXEC (@c_SQL)
+      END
 
-      SET @c_SQL = N' INSERT INTO #BuildParmGroupCfg' --+  @c_UpdateTable 
-                  + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                  + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                  + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
-         
-      EXEC sp_executeSQl @c_SQL
-                        , N'@x_XMLData xml'
-                        , @x_XMLData
-      
-   END
-
-   DECLARE @n_CfgCnt                INT          = 0
-         , @n_ParmGroupCfgID        BIGINT       = 0  
-         , @c_Facility              NVARCHAR(5)  = ''
-         , @c_Storerkey             NVARCHAR(15) = ''
-         , @c_Type                  NVARCHAR(30) = ''                
-         , @n_ParmGroupCfgID_INS    BIGINT       = 0  
-   	   , @c_ParmGroup_INS         NVARCHAR(10) = ''
-         , @c_Facility_INS          NVARCHAR(5)  = ''
-         , @c_Storerkey_INS         NVARCHAR(15) = ''
-         , @c_Type_INS              NVARCHAR(30) = ''
+      DECLARE @n_CfgCnt                INT          = 0
+            , @n_ParmGroupCfgID        BIGINT       = 0  
+            , @c_Facility              NVARCHAR(5)  = ''
+            , @c_Storerkey             NVARCHAR(15) = ''
+            , @c_Type                  NVARCHAR(30) = ''                
+            , @n_ParmGroupCfgID_INS    BIGINT       = 0  
+            , @c_ParmGroup_INS         NVARCHAR(10) = ''
+            , @c_Facility_INS          NVARCHAR(5)  = ''
+            , @c_Storerkey_INS         NVARCHAR(15) = ''
+            , @c_Type_INS              NVARCHAR(30) = ''
 
 
-   SELECT TOP 1 
-         @n_ParmGroupCfgID_INS = ISNULL(INS.ParmGroupCfgID,0)
-      ,  @c_ParmGroup_INS      = INS.ParmGroup
-      ,  @c_Facility_INS       = INS.Facility
-      ,  @c_Storerkey_INS      = INS.Storerkey
-      ,  @c_Type_INS           = INS.[Type]
-   FROM  #BuildParmGroupCfg INS  
+      SELECT TOP 1 
+            @n_ParmGroupCfgID_INS = ISNULL(INS.ParmGroupCfgID,0)
+         ,  @c_ParmGroup_INS      = INS.ParmGroup
+         ,  @c_Facility_INS       = INS.Facility
+         ,  @c_Storerkey_INS      = INS.Storerkey
+         ,  @c_Type_INS           = INS.[Type]
+      FROM  #BuildParmGroupCfg INS  
 
-   SELECT 
-         @n_CfgCnt = 1
-      ,  @n_ParmGroupCfgID = BPC.ParmGroupCfgID
-   FROM BuildParmGroupCfg BPC WITH (NOLOCK)
-   WHERE BPC.ParmGroup= @c_ParmGroup_INS
-   AND   BPC.Facility = @c_Facility_INS   
-   AND   BPC.Storerkey= @c_Storerkey_INS  
-   AND   BPC.[Type]   = @c_Type_INS  
+      SELECT 
+            @n_CfgCnt = 1
+         ,  @n_ParmGroupCfgID = BPC.ParmGroupCfgID
+      FROM BuildParmGroupCfg BPC WITH (NOLOCK)
+      WHERE BPC.ParmGroup= @c_ParmGroup_INS
+      AND   BPC.Facility = @c_Facility_INS   
+      AND   BPC.Storerkey= @c_Storerkey_INS  
+      AND   BPC.[Type]   = @c_Type_INS  
 
-   IF @n_CfgCnt > 0  
-   BEGIN
-      IF @n_ParmGroupCfgID_INS = 0 AND @n_ParmGroupCfgID_INS <> @n_ParmGroupCfgID -- New Insert
+      IF @n_CfgCnt > 0  
+      BEGIN
+         IF @n_ParmGroupCfgID_INS = 0 AND @n_ParmGroupCfgID_INS <> @n_ParmGroupCfgID -- New Insert
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 555951
+            SET @c_errmsg = 'Duplicate ParmGroup Config Record Found. (lsp_Validate_BuildParmGroupCfg_Std)'
+            GOTO EXIT_SP  
+         END             
+      END 
+
+      SET @n_CfgCnt = 0
+      SELECT @n_CfgCnt = 1
+      FROM BuildParmGroupCfg BPC WITH (NOLOCK)
+      WHERE BPC.ParmGroup = @c_ParmGroup_INS
+      AND   BPC.Storerkey <> @c_Storerkey_INS  
+      AND   BPC.[Type]    <> @c_Type_INS  
+
+      IF @n_CfgCnt > 0 
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err = 555951
-         SET @c_errmsg = 'Duplicate ParmGroup Config Record Found. (lsp_Validate_BuildParmGroupCfg_Std)'
-         GOTO EXIT_SP  
-      END             
-   END 
-
-   SET @n_CfgCnt = 0
-   SELECT @n_CfgCnt = 1
-   FROM BuildParmGroupCfg BPC WITH (NOLOCK)
-   WHERE BPC.ParmGroup = @c_ParmGroup_INS
-   AND   BPC.Storerkey <> @c_Storerkey_INS  
-   AND   BPC.[Type]    <> @c_Type_INS  
-
-   IF @n_CfgCnt > 0 
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 555952
-      SET @c_errmsg = 'Parm Group found. It had setup for Storerkey/Type. (lsp_Validate_BuildParmGroupCfg_Std)'
-      GOTO EXIT_SP      
-   END
+         SET @n_Err = 555952
+         SET @c_errmsg = 'Parm Group found. It had setup for Storerkey/Type. (lsp_Validate_BuildParmGroupCfg_Std)'
+         GOTO EXIT_SP      
+      END
+   END TRY
    
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
    EXIT_SP:
    
    IF @n_Continue = 3
    BEGIN
-   	SET @b_Success = 0 
+      SET @b_Success = 0 
    END
    ELSE
    BEGIN
- 	   SET @b_Success = 1   
+      SET @b_Success = 1   
    END
 END -- Procedure
 GO

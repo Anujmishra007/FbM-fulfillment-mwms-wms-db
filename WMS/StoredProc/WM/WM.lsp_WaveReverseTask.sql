@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveReverseTask]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -52,119 +54,134 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   SET @c_Loadkey = ISNULL(@c_Loadkey, '')
-   SET @c_MBolkey = ISNULL(@c_MBolkey, '')
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN
-      SET @n_WarningNo = 1
-      SET @c_ErrMsg = 'Confirm to Reverse ' 
-                    + CASE WHEN @c_Loadkey <> '' 
-                           THEN ' Selected Load #' 
-                           ELSE ' Wave #: ' + @c_WaveKey
-                           END
-                    + ' task ?'
-      GOTO EXIT_SP
-   END
-
-   IF @c_MBolkey <> ''
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 555851
-      SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
-                     + ': Reverse task from MBOL is Not Available. (lsp_WaveReleaseTask)'
-      GOTO EXIT_SP
-   END
-
-   IF @c_Loadkey = '' AND @c_MBolkey = ''
-   BEGIN
-      WAVE_REVERSE:
-      BEGIN TRY
-         EXEC  [dbo].[isp_ReverseWaveReleased_Wrapper]  
-              @c_WaveKey = @c_WaveKey    
-            , @b_Success = @b_Success OUTPUT
-            , @n_Err     = @n_Err     OUTPUT 
-            , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
-      END TRY
-      BEGIN CATCH
-         SET @n_Err = 555852
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ReverseWaveReleased_Wrapper. (lsp_WaveReverseTask)'   
-                       + '(' + @c_ErrMsg + ')'          
-      END CATCH
-         
-      IF @b_Success = 0 OR @n_Err <> 0
+      IF @n_Err <> 0 
       BEGIN
-         SET @n_Continue = 3
-         GOTO EXIT_SP   
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
+   END
+   --(mingle01) - END
+   
+   --(mingle01) - START
+   BEGIN TRY
+
+      SET @c_Loadkey = ISNULL(@c_Loadkey, '')
+      SET @c_MBolkey = ISNULL(@c_MBolkey, '')
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN
+         SET @n_WarningNo = 1
+         SET @c_ErrMsg = 'Confirm to Reverse ' 
+                       + CASE WHEN @c_Loadkey <> '' 
+                              THEN ' Selected Load #' 
+                              ELSE ' Wave #: ' + @c_WaveKey
+                              END
+                       + ' task ?'
+         GOTO EXIT_SP
       END
 
-      BEGIN TRY
-         UPDATE WAVE
-            SET TMReleaseFlag = 'N'
-               ,TrafficCop = NULL
-         WHERE WaveKey = @c_WaveKey
-      END TRY
+      IF @c_MBolkey <> ''
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 555851
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                        + ': Reverse task from MBOL is Not Available. (lsp_WaveReleaseTask)'
+         GOTO EXIT_SP
+      END
 
-      BEGIN CATCH
-         SET @n_Err = 555807
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE table fail. (lsp_WaveReleaseTask)'   
-                       + '(' + @c_ErrMsg + ')'  
-         IF (XACT_STATE()) = -1  
+      IF @c_Loadkey = '' AND @c_MBolkey = ''
+      BEGIN
+         WAVE_REVERSE:
+         BEGIN TRY
+            EXEC  [dbo].[isp_ReverseWaveReleased_Wrapper]  
+                 @c_WaveKey = @c_WaveKey    
+               , @b_Success = @b_Success OUTPUT
+               , @n_Err     = @n_Err     OUTPUT 
+               , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
+         END TRY
+         BEGIN CATCH
+            SET @n_Err = 555852
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ReverseWaveReleased_Wrapper. (lsp_WaveReverseTask)'   
+                          + '(' + @c_ErrMsg + ')'          
+         END CATCH
+            
+         IF @b_Success = 0 OR @n_Err <> 0
          BEGIN
-            ROLLBACK TRAN
+            SET @n_Continue = 3
+            GOTO EXIT_SP   
+         END
 
-            WHILE @@TRANCOUNT < @n_StartTCnt
+         BEGIN TRY
+            UPDATE WAVE
+               SET TMReleaseFlag = 'N'
+                  ,TrafficCop = NULL
+            WHERE WaveKey = @c_WaveKey
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Err = 555807
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE table fail. (lsp_WaveReleaseTask)'   
+                          + '(' + @c_ErrMsg + ')'  
+            IF (XACT_STATE()) = -1  
             BEGIN
-               BEGIN TRAN
-            END
-         END 
-      END CATCH
-         
-      IF @n_Err <> 0
-      BEGIN
-         SET @n_Continue = 3
-         GOTO EXIT_SP   
-      END
-   END
-   ELSE IF @c_Loadkey <> ''
-   BEGIN 
-      LOAD_REVERSE:
+               ROLLBACK TRAN
 
-      BEGIN TRY
-         EXEC  [dbo].[ispLoadReversePickTask_Wrapper]  
-              @c_LoadKey = @c_Loadkey 
-            , @b_Success = @b_Success OUTPUT
-            , @n_Err     = @n_Err     OUTPUT 
-            , @c_ErrMsg  = @c_ErrMsg  OUTPUT                  
-      END TRY
-      BEGIN CATCH
-         SET @n_Err = 555853
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing ispLoadReversePickTask_Wrapper. (lsp_WaveReverseTask)'   
-                       + '(' + @c_ErrMsg + ')'          
-      END CATCH
-         
-      IF @b_Success = 0 OR @n_Err <> 0
-      BEGIN
-         SET @n_Continue = 3
-         GOTO EXIT_SP   
+               WHILE @@TRANCOUNT < @n_StartTCnt
+               BEGIN
+                  BEGIN TRAN
+               END
+            END 
+         END CATCH
+            
+         IF @n_Err <> 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP   
+         END
       END
-   END
+      ELSE IF @c_Loadkey <> ''
+      BEGIN 
+         LOAD_REVERSE:
 
-   SET @c_ErrMsg = 'Wave Reverse task Completed.'
+         BEGIN TRY
+            EXEC  [dbo].[ispLoadReversePickTask_Wrapper]  
+                 @c_LoadKey = @c_Loadkey 
+               , @b_Success = @b_Success OUTPUT
+               , @n_Err     = @n_Err     OUTPUT 
+               , @c_ErrMsg  = @c_ErrMsg  OUTPUT                  
+         END TRY
+         BEGIN CATCH
+            SET @n_Err = 555853
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing ispLoadReversePickTask_Wrapper. (lsp_WaveReverseTask)'   
+                          + '(' + @c_ErrMsg + ')'          
+         END CATCH
+            
+         IF @b_Success = 0 OR @n_Err <> 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP   
+         END
+      END
+      SET @c_ErrMsg = 'Wave Reverse task Completed.'
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
 EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
