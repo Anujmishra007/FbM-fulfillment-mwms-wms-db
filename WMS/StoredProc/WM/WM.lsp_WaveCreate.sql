@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                    
 /* Updates:                                                             */                                                                                    
 /* Date        Author   Ver.  Purposes                                  */    
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch             */
+/* 2021-02-15  Wan01    1.1   MOve Up to Include in Begin try/catch     */
 /************************************************************************/                                                                                    
 CREATE PROC [WM].[lsp_WaveCreate]                                                                                                                       
       @c_Facility          NVARCHAR(5)                                                                                                                       
@@ -80,146 +82,253 @@ BEGIN
       )
           
    SET @n_SessionNoInit = @n_SessionNo
-      
-   IF @c_BuildWave = 'Y' 
-   BEGIN                                                                            
-      SELECT @n_Cnt = 1  
-            ,@c_BuildParmGroup = CFG.ParmGroup  
-      FROM   BUILDPARMGROUPCFG CFG WITH (NOLOCK)  
-      JOIN   BUILDPARM BP WITH (NOLOCK) ON (CFG.ParmGroup = BP.ParmGroup)                                                                                                                            
-      WHERE  BP.BuildParmKey = @c_BuildParmKey  
-      AND    CFG.[Type] = 'BuildWaveParm'                                                                                                                         
-      AND    BP.Active = '1'                                                                                                                         
-      ORDER BY BP.BuildParmKey      
-     
-      IF @n_Cnt = 0  
-      BEGIN  
-         SET @n_Continue = 3  
-         SET @n_err      = 555601  
-         SET @c_ErrMsg   = 'NSQL' +CONVERT(CHAR(6), @n_Err) +  ': Invalid Build Wave parameter Key. (lsp_WaveCreate)'  
-         GOTO EXIT_SP                                                                                                                                           
-      END  
-  
-      EXEC [WM].[lsp_Build_Wave]                                                                                                                         
-            @c_BuildParmKey   = @c_BuildParmKey                                                                                                                   
-         ,  @c_Facility       = @c_Facility                                                                                                                   
-         ,  @c_StorerKey      = @c_StorerKey  
-         ,  @c_BuildWaveType  = ''  
-         ,  @c_SQLBuildWave   = @c_SQLBuildWave OUTPUT                                                  
-         ,  @n_BatchNo        = @n_BatchNo      OUTPUT  
-         ,  @n_SessionNo      = @n_SessionNo    OUTPUT  
-         ,  @b_Success        = @b_Success      OUTPUT    
-         ,  @n_err            = @n_err          OUTPUT                                                                                                               
-         ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT   
-         ,  @c_UserName       = @c_UserName   
-         ,  @b_Debug          = @b_Debug                 --2020-07-10          
-      
-      --2020-07-10 - START
-      IF @b_Debug IN (1,2)
-      BEGIN
-         Print @c_SQLBuildWave
-      END
-      --2020-07-10 - END
-
-      IF @b_Success = 0   
-      BEGIN        
-         SET @n_Continue = 3  
-      END 
-   END       
-EXIT_SP:  
-   IF @n_Continue = 1 
-   BEGIN 
-      SET @CUR_WAVECREATED = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT BatchNo = BWL.BatchNo
-         ,   Wavekey = BWLD.Wavekey 
-         ,   TotalWaveCnt=  BWL.TotalWaveCnt  
-         ,   TotalCube   = ISNULL(BWLD.TotalCube,0)  
-         ,   TotalWeight = ISNULL(BWLD.TotalWeight,0)  
-         ,   TotalOrderQty= ISNULL(BWLD.TotalOrderQty,0) 
-         ,   TotalOrderCnt= ISNULL(BWLD.TotalOrderCnt,0)               
-      FROM BUILDWAVELOG BWL WITH (NOLOCK)    
-      JOIN BUILDWAVEDETAILLOG BWLD WITH (NOLOCK) ON (BWL.BatchNo = BWLD.BatchNo) 
-      JOIN WAVE WH WITH (NOLOCK) ON BWLD.Wavekey = WH.Wavekey 
-      WHERE BWL.SessionNo = @n_SessionNo
-      AND BWLD.Wavekey > @c_Wavekey
-      ORDER BY BWL.BatchNo
-             , BWLD.Wavekey        
-         
-      OPEN @CUR_WAVECREATED
    
-      FETCH NEXT FROM @CUR_WAVECREATED INTO @n_BatchNo
-                                          , @c_Wavekey        
-                                          , @n_TotalWaveCnt                                                                               
-                                          , @n_TotalCube                                      
-                                          , @n_TotalWeight        
-                                          , @n_TotalOrderQty       
-                                          , @n_TotalOrderCnt  
-
-      WHILE @@FETCH_STATUS <> -1
-      BEGIN
-         IF @n_SessionNoInit = 0
+   --(mingle01) - START
+   BEGIN TRY   
+      IF @c_BuildWave = 'Y' 
+      BEGIN                                                                            
+         SELECT @n_Cnt = 1  
+               ,@c_BuildParmGroup = CFG.ParmGroup  
+         FROM   BUILDPARMGROUPCFG CFG WITH (NOLOCK)  
+         JOIN   BUILDPARM BP WITH (NOLOCK) ON (CFG.ParmGroup = BP.ParmGroup)                                                                                                                            
+         WHERE  BP.BuildParmKey = @c_BuildParmKey  
+         AND    CFG.[Type] = 'BuildWaveParm'                                                                                                                         
+         AND    BP.Active = '1'                                                                                                                         
+         ORDER BY BP.BuildParmKey      
+        
+         IF @n_Cnt = 0  
+         BEGIN  
+            SET @n_Continue = 3  
+            SET @n_err      = 555601  
+            SET @c_ErrMsg   = 'NSQL' +CONVERT(CHAR(6), @n_Err) +  ': Invalid Build Wave parameter Key. (lsp_WaveCreate)'  
+            GOTO EXIT_SP                                                                                                                                           
+         END  
+     
+         EXEC [WM].[lsp_Build_Wave]                                                                                                                         
+               @c_BuildParmKey   = @c_BuildParmKey                                                                                                                   
+            ,  @c_Facility       = @c_Facility                                                                                                                   
+            ,  @c_StorerKey      = @c_StorerKey  
+            ,  @c_BuildWaveType  = ''  
+            ,  @c_SQLBuildWave   = @c_SQLBuildWave OUTPUT                                                  
+            ,  @n_BatchNo        = @n_BatchNo      OUTPUT  
+            ,  @n_SessionNo      = @n_SessionNo    OUTPUT  
+            ,  @b_Success        = @b_Success      OUTPUT    
+            ,  @n_err            = @n_err          OUTPUT                                                                                                               
+            ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT   
+            ,  @c_UserName       = @c_UserName   
+            ,  @b_Debug          = @b_Debug                 --2020-07-10          
+         
+         --2020-07-10 - START
+         IF @b_Debug IN (1,2)
          BEGIN
-            SET @n_SessionCube    = @n_SessionCube     + @n_TotalCube   
-            SET @n_SessionWeight  = @n_SessionWeight   + @n_TotalWeight  
-            SET @n_SessionOrderQty= @n_SessionOrderQty + @n_TotalOrderQty 
-            SET @n_SessionOrderCnt= @n_SessionOrderCnt + @n_TotalOrderCnt
-            SET @n_SessionWaveCnt = @n_SessionWaveCnt  + 1                            
-         END 
-         ELSE
-         BEGIN
-            SET @n_TotalOrderQty = 0
-            SET @n_TotalOrderCnt = 0
-            SELECT @n_TotalOrderQty = ISNULL(SUM(OH.OpenQty),0)
-                 , @n_TotalOrderCnt = COUNT( DISTINCT WD.Orderkey)
-            FROM WAVEDETAIL  WD WITH (NOLOCK)  
-            JOIN ORDERS OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)
-            WHERE WD.Wavekey = @c_Wavekey
-
-            SET @n_TotalCube       = 0.00
-            SET @n_TotalWeight     = 0.00
-            SELECT  @n_TotalCube   = ISNULL(SUM(OD.OpenQty * SKU.StdCube),0)  
-                  , @n_TotalWeight = ISNULL(SUM(OD.OpenQty * SKU.StdGrossWgt),0)  
-            FROM WAVEDETAIL  WD WITH (NOLOCK)  
-            JOIN ORDERDETAIL OD WITH (NOLOCK) ON (WD.Orderkey= OD.Orderkey)
-            JOIN SKU         WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
-                                           AND(OD.Sku = SKU.Sku)
-            WHERE WD.Wavekey = @c_Wavekey
-
-            SET @n_SessionCube    = @n_SessionCube    + @n_TotalCube   
-            SET @n_SessionWeight  = @n_SessionWeight  + @n_TotalWeight  
-            SET @n_SessionOrderQty= @n_SessionOrderQty+ @n_TotalOrderQty 
-            SET @n_SessionOrderCnt= @n_SessionOrderCnt+ @n_TotalOrderCnt
-            SET @n_SessionWaveCnt = @n_SessionWaveCnt + 1     
+            Print @c_SQLBuildWave
          END
+         --2020-07-10 - END
 
-         INSERT INTO @t_WaveCreated 
-            (  SessioNo 
-            ,  BatchNo           
-            ,  Wavekey           
-            ,  [Cube]            
-            ,  [Weight]          
-            ,  NoOfOrder
-            )
-         VALUES 
-            (
-               @n_SessionNo
-            ,  @n_BatchNo 
-            ,  @c_Wavekey   
-            ,  @n_TotalCube
-            ,  @n_TotalWeight
-            ,  @n_TotalOrderCnt
-            ) 
-
+         IF @b_Success = 0   
+         BEGIN        
+            SET @n_Continue = 3  
+         END 
+      END 
+      
+      --(Wan01) --MOve Up to Include in Begin try/catch
+      IF @n_Continue = 1 
+      BEGIN 
+         SET @CUR_WAVECREATED = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT BatchNo = BWL.BatchNo
+            ,   Wavekey = BWLD.Wavekey 
+            ,   TotalWaveCnt=  BWL.TotalWaveCnt  
+            ,   TotalCube   = ISNULL(BWLD.TotalCube,0)  
+            ,   TotalWeight = ISNULL(BWLD.TotalWeight,0)  
+            ,   TotalOrderQty= ISNULL(BWLD.TotalOrderQty,0) 
+            ,   TotalOrderCnt= ISNULL(BWLD.TotalOrderCnt,0)               
+         FROM BUILDWAVELOG BWL WITH (NOLOCK)    
+         JOIN BUILDWAVEDETAILLOG BWLD WITH (NOLOCK) ON (BWL.BatchNo = BWLD.BatchNo) 
+         JOIN WAVE WH WITH (NOLOCK) ON BWLD.Wavekey = WH.Wavekey 
+         WHERE BWL.SessionNo = @n_SessionNo
+         AND BWLD.Wavekey > @c_Wavekey
+         ORDER BY BWL.BatchNo
+                , BWLD.Wavekey        
+         
+         OPEN @CUR_WAVECREATED
+   
          FETCH NEXT FROM @CUR_WAVECREATED INTO @n_BatchNo
-                                             , @c_Wavekey    
+                                             , @c_Wavekey        
                                              , @n_TotalWaveCnt                                                                               
                                              , @n_TotalCube                                      
                                              , @n_TotalWeight        
                                              , @n_TotalOrderQty       
-                                             , @n_TotalOrderCnt    
-      END 
-      CLOSE @CUR_WAVECREATED
-      DEALLOCATE @CUR_WAVECREATED 
+                                             , @n_TotalOrderCnt  
+
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            IF @n_SessionNoInit = 0
+            BEGIN
+               SET @n_SessionCube    = @n_SessionCube     + @n_TotalCube   
+               SET @n_SessionWeight  = @n_SessionWeight   + @n_TotalWeight  
+               SET @n_SessionOrderQty= @n_SessionOrderQty + @n_TotalOrderQty 
+               SET @n_SessionOrderCnt= @n_SessionOrderCnt + @n_TotalOrderCnt
+               SET @n_SessionWaveCnt = @n_SessionWaveCnt  + 1                            
+            END 
+            ELSE
+            BEGIN
+               SET @n_TotalOrderQty = 0
+               SET @n_TotalOrderCnt = 0
+               SELECT @n_TotalOrderQty = ISNULL(SUM(OH.OpenQty),0)
+                    , @n_TotalOrderCnt = COUNT( DISTINCT WD.Orderkey)
+               FROM WAVEDETAIL  WD WITH (NOLOCK)  
+               JOIN ORDERS OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)
+               WHERE WD.Wavekey = @c_Wavekey
+
+               SET @n_TotalCube       = 0.00
+               SET @n_TotalWeight     = 0.00
+               SELECT  @n_TotalCube   = ISNULL(SUM(OD.OpenQty * SKU.StdCube),0)  
+                     , @n_TotalWeight = ISNULL(SUM(OD.OpenQty * SKU.StdGrossWgt),0)  
+               FROM WAVEDETAIL  WD WITH (NOLOCK)  
+               JOIN ORDERDETAIL OD WITH (NOLOCK) ON (WD.Orderkey= OD.Orderkey)
+               JOIN SKU         WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
+                                              AND(OD.Sku = SKU.Sku)
+               WHERE WD.Wavekey = @c_Wavekey
+
+               SET @n_SessionCube    = @n_SessionCube    + @n_TotalCube   
+               SET @n_SessionWeight  = @n_SessionWeight  + @n_TotalWeight  
+               SET @n_SessionOrderQty= @n_SessionOrderQty+ @n_TotalOrderQty 
+               SET @n_SessionOrderCnt= @n_SessionOrderCnt+ @n_TotalOrderCnt
+               SET @n_SessionWaveCnt = @n_SessionWaveCnt + 1     
+            END
+
+            INSERT INTO @t_WaveCreated 
+               (  SessioNo 
+               ,  BatchNo           
+               ,  Wavekey           
+               ,  [Cube]            
+               ,  [Weight]          
+               ,  NoOfOrder
+               )
+            VALUES 
+               (
+                  @n_SessionNo
+               ,  @n_BatchNo 
+               ,  @c_Wavekey   
+               ,  @n_TotalCube
+               ,  @n_TotalWeight
+               ,  @n_TotalOrderCnt
+               ) 
+
+            FETCH NEXT FROM @CUR_WAVECREATED INTO @n_BatchNo
+                                                , @c_Wavekey    
+                                                , @n_TotalWaveCnt                                                                               
+                                                , @n_TotalCube                                      
+                                                , @n_TotalWeight        
+                                                , @n_TotalOrderQty       
+                                                , @n_TotalOrderCnt    
+         END 
+         CLOSE @CUR_WAVECREATED
+         DEALLOCATE @CUR_WAVECREATED 
+      END
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END  
+EXIT_SP:  
+   IF @n_Continue = 1 
+   BEGIN 
+      --(Wan01) Move Up 
+      --SET @CUR_WAVECREATED = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      --SELECT BatchNo = BWL.BatchNo
+      --   ,   Wavekey = BWLD.Wavekey 
+      --   ,   TotalWaveCnt=  BWL.TotalWaveCnt  
+      --   ,   TotalCube   = ISNULL(BWLD.TotalCube,0)  
+      --   ,   TotalWeight = ISNULL(BWLD.TotalWeight,0)  
+      --   ,   TotalOrderQty= ISNULL(BWLD.TotalOrderQty,0) 
+      --   ,   TotalOrderCnt= ISNULL(BWLD.TotalOrderCnt,0)               
+      --FROM BUILDWAVELOG BWL WITH (NOLOCK)    
+      --JOIN BUILDWAVEDETAILLOG BWLD WITH (NOLOCK) ON (BWL.BatchNo = BWLD.BatchNo) 
+      --JOIN WAVE WH WITH (NOLOCK) ON BWLD.Wavekey = WH.Wavekey 
+      --WHERE BWL.SessionNo = @n_SessionNo
+      --AND BWLD.Wavekey > @c_Wavekey
+      --ORDER BY BWL.BatchNo
+      --       , BWLD.Wavekey        
+         
+      --OPEN @CUR_WAVECREATED
+   
+      --FETCH NEXT FROM @CUR_WAVECREATED INTO @n_BatchNo
+      --                                    , @c_Wavekey        
+      --                                    , @n_TotalWaveCnt                                                                               
+      --                                    , @n_TotalCube                                      
+      --                                    , @n_TotalWeight        
+      --                                    , @n_TotalOrderQty       
+      --                                    , @n_TotalOrderCnt  
+
+      --WHILE @@FETCH_STATUS <> -1
+      --BEGIN
+      --   IF @n_SessionNoInit = 0
+      --   BEGIN
+      --      SET @n_SessionCube    = @n_SessionCube     + @n_TotalCube   
+      --      SET @n_SessionWeight  = @n_SessionWeight   + @n_TotalWeight  
+      --      SET @n_SessionOrderQty= @n_SessionOrderQty + @n_TotalOrderQty 
+      --      SET @n_SessionOrderCnt= @n_SessionOrderCnt + @n_TotalOrderCnt
+      --      SET @n_SessionWaveCnt = @n_SessionWaveCnt  + 1                            
+      --   END 
+      --   ELSE
+      --   BEGIN
+      --      SET @n_TotalOrderQty = 0
+      --      SET @n_TotalOrderCnt = 0
+      --      SELECT @n_TotalOrderQty = ISNULL(SUM(OH.OpenQty),0)
+      --           , @n_TotalOrderCnt = COUNT( DISTINCT WD.Orderkey)
+      --      FROM WAVEDETAIL  WD WITH (NOLOCK)  
+      --      JOIN ORDERS OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)
+      --      WHERE WD.Wavekey = @c_Wavekey
+
+      --      SET @n_TotalCube       = 0.00
+      --      SET @n_TotalWeight     = 0.00
+      --      SELECT  @n_TotalCube   = ISNULL(SUM(OD.OpenQty * SKU.StdCube),0)  
+      --            , @n_TotalWeight = ISNULL(SUM(OD.OpenQty * SKU.StdGrossWgt),0)  
+      --      FROM WAVEDETAIL  WD WITH (NOLOCK)  
+      --      JOIN ORDERDETAIL OD WITH (NOLOCK) ON (WD.Orderkey= OD.Orderkey)
+      --      JOIN SKU         WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
+      --                                     AND(OD.Sku = SKU.Sku)
+      --      WHERE WD.Wavekey = @c_Wavekey
+
+      --      SET @n_SessionCube    = @n_SessionCube    + @n_TotalCube   
+      --      SET @n_SessionWeight  = @n_SessionWeight  + @n_TotalWeight  
+      --      SET @n_SessionOrderQty= @n_SessionOrderQty+ @n_TotalOrderQty 
+      --      SET @n_SessionOrderCnt= @n_SessionOrderCnt+ @n_TotalOrderCnt
+      --      SET @n_SessionWaveCnt = @n_SessionWaveCnt + 1     
+      --   END
+
+      --   INSERT INTO @t_WaveCreated 
+      --      (  SessioNo 
+      --      ,  BatchNo           
+      --      ,  Wavekey           
+      --      ,  [Cube]            
+      --      ,  [Weight]          
+      --      ,  NoOfOrder
+      --      )
+      --   VALUES 
+      --      (
+      --         @n_SessionNo
+      --      ,  @n_BatchNo 
+      --      ,  @c_Wavekey   
+      --      ,  @n_TotalCube
+      --      ,  @n_TotalWeight
+      --      ,  @n_TotalOrderCnt
+      --      ) 
+
+      --   FETCH NEXT FROM @CUR_WAVECREATED INTO @n_BatchNo
+      --                                       , @c_Wavekey    
+      --                                       , @n_TotalWaveCnt                                                                               
+      --                                       , @n_TotalCube                                      
+      --                                       , @n_TotalWeight        
+      --                                       , @n_TotalOrderQty       
+      --                                       , @n_TotalOrderCnt    
+      --END 
+      --CLOSE @CUR_WAVECREATED
+      --DEALLOCATE @CUR_WAVECREATED 
       
       SELECT SessioNo 
          ,  TotalWaveCnt = @n_SessionWaveCnt

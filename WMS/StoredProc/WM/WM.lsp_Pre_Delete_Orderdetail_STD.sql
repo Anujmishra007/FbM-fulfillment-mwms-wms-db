@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver  Purposes                                   */ 
 /* 2020-04-08  Wan01    1.1   LFWM-2062 - MYS SCE unable to delete      */
 /*                            shipment order detail                     */
+/* 2021-02-08  mingle01 1.2   Add Big Outer Begin try/Catch             */ 
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Orderdetail_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -42,12 +43,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_Orderdetail_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue          INT 
           ,@n_starttcnt         INT
@@ -70,33 +69,43 @@ BEGIN
    END
    */
    
-   IF @n_Continue IN (1,2)
-   BEGIN      
-      IF EXISTS (SELECT 1 
-                 FROM PICKDETAIL (NOLOCK)
-                   WHERE STATUS >= '5'
-                      AND Orderkey =  @c_Orderkey 
-                      AND OrderLineNumber = @c_OrderLineNumber)
+   --(mingle01) - START
+   BEGIN TRY 
+      IF @n_Continue IN (1,2)
+      BEGIN      
+         IF EXISTS ( SELECT 1 
+                     FROM PICKDETAIL (NOLOCK)
+                     WHERE STATUS >= '5'
+                        AND Orderkey =  @c_Orderkey 
+                        AND OrderLineNumber = @c_OrderLineNumber)
+            BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553551   
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': This Shipment Order cannot be deleted. It has been Shipped or Picked. (lsp_Pre_Delete_Orderdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+            END                  
+      END 
+      
+      IF @n_Continue IN (1,2)
+      BEGIN      
+         IF EXISTS (SELECT 1 PicksReleased            --(Wan01)
+                    FROM TASKDETAIL WITH (NOLOCK)
+                    WHERE TaskType = 'PK'
+                    AND OrderKey = @c_Orderkey
+                    AND OrderLineNumber = @c_OrderLineNumber)
          BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553551   
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': This Shipment Order cannot be deleted. It has been Shipped or Picked. (lsp_Pre_Delete_Orderdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553552  
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': This Shipment Order cannot be deleted. It has been Shipped or Picked. (lsp_Pre_Delete_Orderdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          END                  
-   END 
+      END
+   END TRY
    
-   IF @n_Continue IN (1,2)
-   BEGIN      
-      IF EXISTS (SELECT 1 PicksReleased            --(Wan01)
-                 FROM TASKDETAIL WITH (NOLOCK)
-                 WHERE TaskType = 'PK'
-                 AND OrderKey = @c_Orderkey
-                 AND OrderLineNumber = @c_OrderLineNumber)
-         BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553552  
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': This Shipment Order cannot be deleted. It has been Shipped or Picked. (lsp_Pre_Delete_Orderdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-         END                  
-   END 
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END 
          
    EXIT_SP:
    --REVERT     

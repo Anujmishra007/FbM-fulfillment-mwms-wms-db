@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_Shift_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -55,117 +56,126 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
-
-   IF OBJECT_ID('tempdb..#SHIFT') IS NOT NULL
-   BEGIN
-      DROP TABLE #SHIFT
-   END
-
-   CREATE TABLE #SHIFT( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
-   SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-   SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
-   DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
-         ,x.value('@DataType','NVARCHAR(128)') AS datatype
-   FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
-      
-   OPEN CUR_SCHEMA
-
-   FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_TableName = ''
-      IF CHARINDEX('.', @c_ColumnName) > 0 
+   
+   --(mingle01) - START
+   BEGIN TRY
+      IF OBJECT_ID('tempdb..#SHIFT') IS NOT NULL
       BEGIN
-         SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-         SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         DROP TABLE #SHIFT
       END
 
-      SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-      SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-      SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+      CREATE TABLE #SHIFT( Rowid  INT NOT NULL IDENTITY(1,1) )   
+
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
+            ,x.value('@DataType','NVARCHAR(128)') AS datatype
+      FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
          
+      OPEN CUR_SCHEMA
+
       FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-   END
-   CLOSE CUR_SCHEMA
-   DEALLOCATE CUR_SCHEMA
-       
-   IF LEN(@c_SQLSchema) > 0 
-   BEGIN
-      SET @c_SQL = N'ALTER TABLE #SHIFT  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
+         BEGIN
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         END
+
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+            
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      END
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+          
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #SHIFT  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+            
+         EXEC (@c_SQL)
+
+         SET @c_SQL = N' INSERT INTO #SHIFT' --+  @c_UpdateTable 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+            
+         EXEC sp_executeSQl @c_SQL
+                           , N'@x_XMLData xml'
+                           , @x_XMLData
          
-      EXEC (@c_SQL)
+      END
 
-      SET @c_SQL = N' INSERT INTO #SHIFT' --+  @c_UpdateTable 
-                  + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                  + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                  + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
-         
-      EXEC sp_executeSQl @c_SQL
-                        , N'@x_XMLData xml'
-                        , @x_XMLData
-      
-   END
+      DECLARE 
+            @n_ShiftNumber          INT = 0
+         ,  @c_ShiftDescr           NVARCHAR(20) = ''
+         ,  @c_Day                  NVARCHAR(20) = ''
+         ,  @dt_TimeFrom            DATETIME
+         ,  @dt_TimeTo              DATETIME
 
-   DECLARE 
-         @n_ShiftNumber          INT = 0
-      ,  @c_ShiftDescr           NVARCHAR(20) = ''
-      ,  @c_Day                  NVARCHAR(20) = ''
-      ,  @dt_TimeFrom            DATETIME
-      ,  @dt_TimeTo              DATETIME
+      SELECT TOP 1 
+            @n_ShiftNumber = ISNULL(SHF.ShiftNumber,0)
+         ,  @c_ShiftDescr  = ISNULL(SHF.ShiftDescr,'')
+         ,  @c_Day         = ISNULL(SHF.[Day],'')
+         ,  @dt_TimeFrom   = SHF.TimeFrom
+         ,  @dt_TimeTo     = SHF.TimeTo
 
-   SELECT TOP 1 
-         @n_ShiftNumber = ISNULL(SHF.ShiftNumber,0)
-      ,  @c_ShiftDescr  = ISNULL(SHF.ShiftDescr,'')
-      ,  @c_Day         = ISNULL(SHF.[Day],'')
-      ,  @dt_TimeFrom   = SHF.TimeFrom
-      ,  @dt_TimeTo     = SHF.TimeTo
+      FROM  #SHIFT SHF  
 
-   FROM  #SHIFT SHF  
+      IF @n_ShiftNumber = 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557751
+         SET @c_errmsg = 'Shift Number Is Required. (lsp_Validate_Shift_Std)'
+         GOTO EXIT_SP
+      END
 
-   IF @n_ShiftNumber = 0
-   BEGIN
+      IF @c_ShiftDescr = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557752
+         SET @c_errmsg = 'Shift Is Required. (lsp_Validate_Shift_Std)'
+         GOTO EXIT_SP
+      END
+
+      IF @c_Day = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557753
+         SET @c_errmsg = 'Day Is Required. (lsp_Validate_Shift_Std)'
+         GOTO EXIT_SP
+      END
+
+      IF CONVERT(NVARCHAR(5), @dt_TimeFrom, 108) = '00:00' OR @dt_TimeFrom IS NULL
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557754
+         SET @c_errmsg = 'Time From Is Required. (lsp_Validate_Shift_Std)'
+         GOTO EXIT_SP
+      END
+
+      IF CONVERT(NVARCHAR(5), @dt_TimeTo, 108) = '00:00' OR @dt_TimeTo IS NULL
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557755
+         SET @c_errmsg = 'Time To Is Required. (lsp_Validate_Shift_Std)'
+         GOTO EXIT_SP
+      END
+   END TRY
+   
+   BEGIN CATCH
       SET @n_Continue = 3
-      SET @n_Err = 557751
-      SET @c_errmsg = 'Shift Number Is Required. (lsp_Validate_Shift_Std)'
+      SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
-   END
-
-   IF @c_ShiftDescr = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557752
-      SET @c_errmsg = 'Shift Is Required. (lsp_Validate_Shift_Std)'
-      GOTO EXIT_SP
-   END
-
-   IF @c_Day = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557753
-      SET @c_errmsg = 'Day Is Required. (lsp_Validate_Shift_Std)'
-      GOTO EXIT_SP
-   END
-
-   IF CONVERT(NVARCHAR(5), @dt_TimeFrom, 108) = '00:00' OR @dt_TimeFrom IS NULL
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557754
-      SET @c_errmsg = 'Time From Is Required. (lsp_Validate_Shift_Std)'
-      GOTO EXIT_SP
-   END
-
-   IF CONVERT(NVARCHAR(5), @dt_TimeTo, 108) = '00:00' OR @dt_TimeTo IS NULL
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557755
-      SET @c_errmsg = 'Time To Is Required. (lsp_Validate_Shift_Std)'
-      GOTO EXIT_SP
-   END
-
+   END CATCH
+   --(mingle01) - END
    EXIT_SP:
    
    IF @n_Continue = 3

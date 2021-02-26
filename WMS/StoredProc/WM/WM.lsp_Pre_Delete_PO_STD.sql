@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_PO_STD]
        @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_PO_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue          INT,
            @n_starttcnt         INT,
@@ -65,22 +64,31 @@ BEGIN
       GOTO EXIT_SP
    END   
    */
-         
-   SET @c_POKey = @c_RefKey1
    
-   IF @n_continue IN(1,2)
-   BEGIN          
-        IF EXISTS(SELECT 1 
-                  FROM PODETAIL (NOLOCK)
-                  WHERE POkey = @c_Pokey
-                  AND QtyReceived > 0) 
-        BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550651
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete PO where items have been received. (lsp_Pre_Delete_PO_STD)'                
-        END                         
-   END
+   --(mingle01) - START
+   BEGIN TRY       
+      SET @c_POKey = @c_RefKey1
       
+      IF @n_continue IN(1,2)
+      BEGIN          
+           IF EXISTS(SELECT 1 
+                     FROM PODETAIL (NOLOCK)
+                     WHERE POkey = @c_Pokey
+                     AND QtyReceived > 0) 
+           BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550651
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete PO where items have been received. (lsp_Pre_Delete_PO_STD)'                
+           END                         
+      END
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END    
    EXIT_SP:
    --REVERT     
 

@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */ 
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Adjustmentdetail_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_Adjustmentdetail_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue          INT 
           ,@n_starttcnt         INT
@@ -61,19 +60,8 @@ BEGIN
    SET @c_Adjustmentkey = @c_RefKey1
    SET @c_AdjustmentLineNumber = @c_Refkey2
    SET @c_RefreshDetail = 'Y'
-   
-   SELECT @c_Storerkey = ADJUSTMENT.Storerkey
-         ,@c_Facility = ADJUSTMENT.Facility
-         ,@c_FinalizedFlag = ADJUSTMENTDETAIL.Finalizedflag
-   FROM ADJUSTMENT (NOLOCK)
-   JOIN ADJUSTMENTDETAIL (NOLOCK) ON ADJUSTMENT.Adjustmentkey = ADJUSTMENTDETAIL.Adjustmentkey
-   WHERE ADJUSTMENTDETAIL.Adjustmentkey = @c_Adjustmentkey
-   AND ADJUSTMENTDETAIL.AdjustmentLineNumber = @c_AdjustmentLineNumber
-   
-   SELECT @c_FinalizeAdjustment = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeAdjustment')
-   SELECT @c_AdjStatusControl = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AdjStatusControl')
-   
-     /*
+
+   /*
    SET @n_Err = 0 
    EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
@@ -83,30 +71,50 @@ BEGIN
    END
    */
    
-   IF @n_Continue IN (1,2) 
-   BEGIN      
-      IF EXISTS (SELECT 1 
-                 FROM ADJUSTMENTDETAIL (NOLOCK)
-                   WHERE Finalizedflag = 'Y'
-                      AND Adjustmentkey =  @c_Adjustmentkey 
-                      AND AdjustmentLineNumber = @c_AdjustmentLineNumber)
-         BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553401   
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot Delete Finalized Adjustment Line. (lsp_Pre_Delete_Adjustmentdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-         END                  
-   END    
+   --(mingle01) - START
+   BEGIN TRY     
+      SELECT @c_Storerkey = ADJUSTMENT.Storerkey
+            ,@c_Facility = ADJUSTMENT.Facility
+            ,@c_FinalizedFlag = ADJUSTMENTDETAIL.Finalizedflag
+      FROM ADJUSTMENT (NOLOCK)
+      JOIN ADJUSTMENTDETAIL (NOLOCK) ON ADJUSTMENT.Adjustmentkey = ADJUSTMENTDETAIL.Adjustmentkey
+      WHERE ADJUSTMENTDETAIL.Adjustmentkey = @c_Adjustmentkey
+      AND ADJUSTMENTDETAIL.AdjustmentLineNumber = @c_AdjustmentLineNumber
+   
+      SELECT @c_FinalizeAdjustment = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeAdjustment')
+      SELECT @c_AdjStatusControl = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AdjStatusControl')
+ 
+      IF @n_Continue IN (1,2) 
+      BEGIN      
+         IF EXISTS (SELECT 1 
+                    FROM ADJUSTMENTDETAIL (NOLOCK)
+                      WHERE Finalizedflag = 'Y'
+                         AND Adjustmentkey =  @c_Adjustmentkey 
+                         AND AdjustmentLineNumber = @c_AdjustmentLineNumber)
+            BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553401   
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot Delete Finalized Adjustment Line. (lsp_Pre_Delete_Adjustmentdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+            END                  
+      END    
 
-   IF @n_Continue IN (1,2) AND @c_FinalizeAdjustment = '1' AND @c_AdjStatusControl = '1'
-   BEGIN    
-      IF @c_IsSupervisor <> 'Y' AND @c_FinalizedFlag NOT IN ('N','R')
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553402   
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': User is not allowed to delete Submitted or Approved line. Please check with supervisor. (lsp_Pre_Delete_Adjustmentdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-      END
-   END                    
-         
+      IF @n_Continue IN (1,2) AND @c_FinalizeAdjustment = '1' AND @c_AdjStatusControl = '1'
+      BEGIN    
+         IF @c_IsSupervisor <> 'Y' AND @c_FinalizedFlag NOT IN ('N','R')
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553402   
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': User is not allowed to delete Submitted or Approved line. Please check with supervisor. (lsp_Pre_Delete_Adjustmentdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+         END
+      END                    
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END        
    EXIT_SP:
    --REVERT     
    

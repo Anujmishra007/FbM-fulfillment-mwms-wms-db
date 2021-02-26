@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveCancelOrder] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -56,17 +58,22 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      GOTO EXIT_SP
-   END 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
+   END
+   --(mingle01) - END
 
    -- UI Ask Confirmation Message...
    --IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
@@ -76,127 +83,136 @@ BEGIN
 
    --   GOTO EXIT_SP
    --END
+   
+   --(mingle01) - START
+   BEGIN TRY
+      IF EXISTS(  SELECT 1 FROM ORDERS OH WITH (NOLOCK)
+                  WHERE OH.Orderkey = @c_Orderkey
+                  AND  (OH.[Status] = 'CANC'
+                  AND   OH.[SOStatus] IN ('CANC'))
+                  )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 556101
+         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                        + ': Orders had been cancelled. (lsp_WaveCancelOrder)'
 
-   IF EXISTS(  SELECT 1 FROM ORDERS OH WITH (NOLOCK)
-               WHERE OH.Orderkey = @c_Orderkey
-               AND  (OH.[Status] = 'CANC'
-               AND   OH.[SOStatus] IN ('CANC'))
-               )
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 556101
-      SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
-                     + ': Orders had been cancelled. (lsp_WaveCancelOrder)'
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Orderkey
+            ,  @c_Refkey3     = '' 
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success    
+            ,  @n_err         = @n_err        
+            ,  @c_errmsg      = @c_errmsg     
+            
+         GOTO EXIT_CANC             
+      END
 
-      EXEC [WM].[lsp_WriteError_List] 
+      BEGIN TRY
+         UPDATE ORDERS 
+            SET [Status] = 'CANC'
+               ,[SOStatus] = 'CANC'
+         WHERE Orderkey = @c_Orderkey 
+      END TRY
+
+      BEGIN CATCH
+         SET @n_continue = 3
+         SET @n_Err = 556102
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': UPDATE Orders fail. (lsp_WaveCancelOrder)'   
+                       + '(' + @c_ErrMsg + ')' 
+                       
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Orderkey
+            ,  @c_Refkey3     = '' 
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success    
+            ,  @n_err         = @n_err        
+            ,  @c_errmsg      = @c_errmsg    
+
+            IF (XACT_STATE()) = -1  
+            BEGIN
+               ROLLBACK TRAN
+
+               WHILE @@TRANCOUNT < @n_StartTCnt
+               BEGIN
+                  BEGIN TRAN
+               END
+            END  
+      END CATCH
+
+      IF @n_continue = 1 
+      BEGIN
+         SET @c_errmsg = 'Order is cancelled.'
+         EXEC [WM].[lsp_WriteError_List] 
             @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
          ,  @c_TableName   = @c_TableName
          ,  @c_SourceType  = @c_SourceType
          ,  @c_Refkey1     = @c_WaveKey
          ,  @c_Refkey2     = @c_Orderkey
          ,  @c_Refkey3     = '' 
-         ,  @c_WriteType   = 'ERROR' 
+         ,  @c_WriteType   = 'MESSAGE' 
          ,  @n_err2        = @n_err 
          ,  @c_errmsg2     = @c_errmsg 
          ,  @b_Success     = @b_Success    
          ,  @n_err         = @n_err        
-         ,  @c_errmsg      = @c_errmsg     
+         ,  @c_errmsg      = @c_errmsg  
+      END  
+       
+   EXIT_CANC:   
+      --2020-04-24 - fixed  - START    
+      IF @n_KeyCount < @n_TotalSelectedKeys
+      BEGIN
+         SET @n_KeyCount = @n_KeyCount + 1
+      END
+      --2020-04-24 - fixed  - END
+      
+      IF @n_KeyCount = @n_TotalSelectedKeys
+      BEGIN
+         SET @c_ErrMsg = 'Cancel Order(s) is/are done.'
+         IF @n_ErrGroupKey > 0  
+         BEGIN 
+            IF EXISTS (SELECT 1 FROM WM.WMS_Error_List WITH (NOLOCK) WHERE ErrGroupKey = @n_ErrGroupKey AND  ErrCode > 0)
+            BEGIN
+               SET @n_Continue = 3
+               SET @c_ErrMsg = 'Cancel Order(s) is/are done with Errors.'
+            END 
+         END
          
-      GOTO EXIT_CANC             
-   END
-
-   BEGIN TRY
-      UPDATE ORDERS 
-         SET [Status] = 'CANC'
-            ,[SOStatus] = 'CANC'
-      WHERE Orderkey = @c_Orderkey 
-   END TRY
-
-   BEGIN CATCH
-      SET @n_continue = 3
-      SET @n_Err = 556102
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': UPDATE Orders fail. (lsp_WaveCancelOrder)'   
-                    + '(' + @c_ErrMsg + ')' 
-                    
-      EXEC [WM].[lsp_WriteError_List] 
+         EXEC [WM].[lsp_WriteError_List] 
             @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
          ,  @c_TableName   = @c_TableName
          ,  @c_SourceType  = @c_SourceType
          ,  @c_Refkey1     = @c_WaveKey
          ,  @c_Refkey2     = @c_Orderkey
          ,  @c_Refkey3     = '' 
-         ,  @c_WriteType   = 'ERROR' 
+         ,  @c_WriteType   = 'MESSAGE' 
          ,  @n_err2        = @n_err 
          ,  @c_errmsg2     = @c_errmsg 
          ,  @b_Success     = @b_Success    
          ,  @n_err         = @n_err        
          ,  @c_errmsg      = @c_errmsg    
-
-         IF (XACT_STATE()) = -1  
-         BEGIN
-            ROLLBACK TRAN
-
-            WHILE @@TRANCOUNT < @n_StartTCnt
-            BEGIN
-               BEGIN TRAN
-            END
-         END  
-   END CATCH
-
-   IF @n_continue = 1 
-   BEGIN
-      SET @c_errmsg = 'Order is cancelled.'
-      EXEC [WM].[lsp_WriteError_List] 
-         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-      ,  @c_TableName   = @c_TableName
-      ,  @c_SourceType  = @c_SourceType
-      ,  @c_Refkey1     = @c_WaveKey
-      ,  @c_Refkey2     = @c_Orderkey
-      ,  @c_Refkey3     = '' 
-      ,  @c_WriteType   = 'MESSAGE' 
-      ,  @n_err2        = @n_err 
-      ,  @c_errmsg2     = @c_errmsg 
-      ,  @b_Success     = @b_Success    
-      ,  @n_err         = @n_err        
-      ,  @c_errmsg      = @c_errmsg  
-   END  
-    
-EXIT_CANC:   
-   --2020-04-24 - fixed  - START    
-   IF @n_KeyCount < @n_TotalSelectedKeys
-   BEGIN
-      SET @n_KeyCount = @n_KeyCount + 1
-   END
-   --2020-04-24 - fixed  - END
-   
-   IF @n_KeyCount = @n_TotalSelectedKeys
-   BEGIN
-      SET @c_ErrMsg = 'Cancel Order(s) is/are done.'
-      IF @n_ErrGroupKey > 0  
-      BEGIN 
-         IF EXISTS (SELECT 1 FROM WM.WMS_Error_List WITH (NOLOCK) WHERE ErrGroupKey = @n_ErrGroupKey AND  ErrCode > 0)
-         BEGIN
-            SET @n_Continue = 3
-            SET @c_ErrMsg = 'Cancel Order(s) is/are done with Errors.'
-         END 
       END
-      
-      EXEC [WM].[lsp_WriteError_List] 
-         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-      ,  @c_TableName   = @c_TableName
-      ,  @c_SourceType  = @c_SourceType
-      ,  @c_Refkey1     = @c_WaveKey
-      ,  @c_Refkey2     = @c_Orderkey
-      ,  @c_Refkey3     = '' 
-      ,  @c_WriteType   = 'MESSAGE' 
-      ,  @n_err2        = @n_err 
-      ,  @c_errmsg2     = @c_errmsg 
-      ,  @b_Success     = @b_Success    
-      ,  @n_err         = @n_err        
-      ,  @c_errmsg      = @c_errmsg    
-   END
-
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END 
 EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

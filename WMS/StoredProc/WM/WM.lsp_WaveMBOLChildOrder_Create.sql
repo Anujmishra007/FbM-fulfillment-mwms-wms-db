@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMBOLChildOrder_Create] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -101,401 +103,264 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   SET @n_ErrGroupKey = 0
-
-   SET @c_MBOLKey = ISNULL(@c_MBOLKey,'')
-
-   INSERT INTO @T_ORDERS (Orderkey)
-   SELECT [VALUE]
-   FROM STRING_SPLIT ( @c_OrderkeyList , '|' )  
-
-   INSERT INTO @T_CASEID (CaseID)
-   SELECT [VALUE]
-   FROM STRING_SPLIT ( @c_CaseIDList , '|' )  
-
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN
-      SELECT @c_DisAllowMultiStorerOnMBOL = ISNULL(CFG.NSQLValue, '0')
-      FROM NSQLConfig CFG WITH (NOLOCK)
-      WHERE CFG.Configkey = 'DisAllowMultiStorerOnMBOL'
-
-      IF @c_DisAllowMultiStorerOnMBOL = '1' AND @c_MBOLKey <> ''
+      IF @n_Err <> 0 
       BEGIN
-         SELECT TOP 1 @c_MBOLStorerkey = OH.Storerkey
-                     ,@c_MBOLVendor    = ISNULL(RTRIM(OH.UserDefine05),'') 
-                     ,@n_MBOLDetailCnt = 1
-         FROM MBOLDETAIL MBD WITH (NOLOCK)
-         JOIN ORDERS     OH  WITH (NOLOCK) ON MBD.Orderkey = OH.Orderkey
-         WHERE MBD.MBOLKey = @c_MBOLKey
-      END
-      
-      SELECT  @n_VendorCnt = COUNT( DISTINCT ISNULL(RTRIM(OH.UserDefine05),'') ) 
-            , @c_Vendor    = ISNULL(MIN(RTRIM(OH.UserDefine05)),'')
-            , @n_StorerCnt = COUNT( DISTINCT ISNULL(RTRIM(OH.Storerkey),'') ) 
-            , @c_Storerkey = MIN(OH.Storerkey)
-            , @c_Facility  = MIN(OH.Facility)
-            , @c_MoMixVendor = CASE WHEN ISNULL(MAX(CL.Short), '') = 'Y' OR ISNULL(MIN(CL.ListName),'') = '' THEN 'Y' ELSE 'N' END
-      FROM @T_ORDERS SO
-      JOIN ORDERS OH (NOLOCK) ON SO.Orderkey = OH.Orderkey
-      LEFT JOIN CODELKUP CL WITH (NOLOCK) ON  CL.ListName = 'MBByVendor' 
-                                          AND CL.Code = OH.C_IsoCntryCode
-                               
-      IF @c_DisAllowMultiStorerOnMBOL = '1' 
-      BEGIN
-         IF (@n_StorerCnt > 1) OR 
-            (@n_MBOLDetailCnt > 0 AND @c_MBOLStorerkey <> @c_Storerkey) 
-         BEGIN            
-            SET @n_Err = 556651
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow to Mix Storer. (lsp_WaveMBOLChildOrder_Create)' 
-          
-            EXEC [WM].[lsp_WriteError_List] 
-                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                  ,  @c_TableName   = @c_TableName
-                  ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_WaveKey
-                  ,  @c_Refkey2     = @c_MBOLkey
-                  ,  @c_Refkey3     = ''
-                  ,  @c_WriteType   = 'ERROR' 
-                  ,  @n_err2        = @n_err 
-                  ,  @c_errmsg2     = @c_errmsg 
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT 
-         END                           
-      END
-
-      SELECT @c_MBOLByVendor  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'MBOLByVendor')
-
-      IF @c_MBOLByVendor = '1' 
-      BEGIN
-         IF  @c_MoMixVendor = 'Y' AND  
-            (@n_VendorCnt > 1 OR (@n_MBOLDetailCnt > 0 AND @c_MBOLVendor <> @c_Vendor))
-         BEGIN  
-            SET @n_Err = 556652
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow to Mix Vendor. (lsp_WaveMBOLChildOrder_Create)' 
-          
-            EXEC [WM].[lsp_WriteError_List] 
-                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                  ,  @c_TableName   = @c_TableName
-                  ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_WaveKey
-                  ,  @c_Refkey2     = @c_MBOLkey
-                  ,  @c_Refkey3     = ''
-                  ,  @c_WriteType   = 'ERROR' 
-                  ,  @n_err2        = @n_err 
-                  ,  @c_errmsg2     = @c_errmsg 
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT   
-         END                         
-      END
-
-      INSERT INTO @T_CASEORDER   
-         (  Orderkey
-         ,  Store
-         ,  CaseID
-         )
-      SELECT DISTINCT 
-               PD.Orderkey
-            ,  Store = ISNULL(OD.UserDefine02,'')                  
-            ,  CTN.CaseID
-      FROM @T_CASEID CTN
-      JOIN PICKDETAIL  PD WITH (NOLOCK) ON  CTN.CaseID = PD.CaseID
-      JOIN ORDERDETAIL OD WITH (NOLOCK) ON  OD.Orderkey = PD.Orderkey
-                                        AND OD.OrderLineNumber = PD.OrderLineNumber
-      WHERE PD.ShipFlag <> 'Y' 
-      AND PD.[Status] < '9'
-      AND ( OD.UserDefine09 = '' OR OD.UserDefine09 IS NULL )
-      AND ( OD.UserDefine10 = '' OR OD.UserDefine10 IS NULL)
-
-
-      SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT T.CaseID
-      FROM @T_CASEORDER T
-      WHERE NOT EXISTS (SELECT 1 
-                        FROM @T_ORDERS SO
-                        JOIN @T_CASEID CTN ON SO.RowRef = CTN.RowRef
-                        WHERE T.Orderkey = SO.Orderkey
-                        AND   T.CaseID   = CTN.CaseID
-                        )
-      OPEN @CUR_CTN
-   
-      FETCH NEXT FROM @CUR_CTN INTO @c_CaseID                                                                              
-                                    
-      WHILE @@FETCH_STATUS <> -1
-      BEGIN
-         SET @n_Err = 556653
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow Partial Consolidate Order selected to create Child Order'
-                       + '. Carton #: ' + @c_CaseID 
-                       + '. (lsp_WaveMBOLChildOrder_Create) |' +  @c_CaseID 
-
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_WaveKey
-            ,  @c_Refkey2     = @c_MBOLkey
-            ,  @c_Refkey3     = @c_Orderkey
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-         FETCH NEXT FROM @CUR_CTN INTO @c_CaseID   
-      END
-      CLOSE @CUR_CTN
-      DEALLOCATE @CUR_CTN
-
-
-      IF @n_ErrGroupKey > 0
-      BEGIN
-         SET @n_Continue = 3
          GOTO EXIT_SP
       END
+    
+      EXECUTE AS LOGIN = @c_UserName
    END
+   --(mingle01) - END
+   
+   --(mingle01) - START
+   BEGIN TRY
+      SET @n_ErrGroupKey = 0
 
-   IF @c_MBOLKey = ''
-   BEGIN
-      BEGIN TRY
-         SET @b_success = 1
-         EXECUTE nspg_GetKey                                                                                                                                      
-               'MBOL'                                                                                                                                           
-               , 10                                                                                                                                                 
-               , @c_MBOLkey  OUTPUT                                                                                                                                 
-               , @b_success  OUTPUT                                                                                                                                   
-               , @n_err      OUTPUT                                                                                                                                       
-               , @c_ErrMsg   OUTPUT                                                                                                                                    
-      END TRY
+      SET @c_MBOLKey = ISNULL(@c_MBOLKey,'')
+
+      INSERT INTO @T_ORDERS (Orderkey)
+      SELECT [VALUE]
+      FROM STRING_SPLIT ( @c_OrderkeyList , '|' )  
+
+      INSERT INTO @T_CASEID (CaseID)
+      SELECT [VALUE]
+      FROM STRING_SPLIT ( @c_CaseIDList , '|' )  
+
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN
+         SELECT @c_DisAllowMultiStorerOnMBOL = ISNULL(CFG.NSQLValue, '0')
+         FROM NSQLConfig CFG WITH (NOLOCK)
+         WHERE CFG.Configkey = 'DisAllowMultiStorerOnMBOL'
+
+         IF @c_DisAllowMultiStorerOnMBOL = '1' AND @c_MBOLKey <> ''
+         BEGIN
+            SELECT TOP 1 @c_MBOLStorerkey = OH.Storerkey
+                        ,@c_MBOLVendor    = ISNULL(RTRIM(OH.UserDefine05),'') 
+                        ,@n_MBOLDetailCnt = 1
+            FROM MBOLDETAIL MBD WITH (NOLOCK)
+            JOIN ORDERS     OH  WITH (NOLOCK) ON MBD.Orderkey = OH.Orderkey
+            WHERE MBD.MBOLKey = @c_MBOLKey
+         END
          
-      BEGIN CATCH
-         SET @n_Err     = 556654                                                                                                                             
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                        + ': Error Executing nspg_GetKey - MBOL. (lsp_WaveMBOLChildOrder_Create)' 
-      END CATCH
-                                                                                                                                                                     
-      IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
-      BEGIN 
-         SET @n_Continue = 3  
-         GOTO EXIT_SP
-      END  
-          
-      BEGIN TRY
-         INSERT INTO MBOL(MBOLkey, Facility )   
-         VALUES(@c_MBOLkey, @c_Facility)         
-      END TRY                             
-                                                                                                                                    
-      BEGIN CATCH                                                                                                                                                
-         SET @n_Continue = 3  
-         SET @c_ErrMsg  = ERROR_MESSAGE()
-         SET @n_Err     = 556655  
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                        + ': Insert Into MBOL Failed. (lsp_WaveMBOLChildOrder_Create) ' 
-                        + '(' + @c_ErrMsg + ')' 
-
-         IF (XACT_STATE()) = -1  
+         SELECT  @n_VendorCnt = COUNT( DISTINCT ISNULL(RTRIM(OH.UserDefine05),'') ) 
+               , @c_Vendor    = ISNULL(MIN(RTRIM(OH.UserDefine05)),'')
+               , @n_StorerCnt = COUNT( DISTINCT ISNULL(RTRIM(OH.Storerkey),'') ) 
+               , @c_Storerkey = MIN(OH.Storerkey)
+               , @c_Facility  = MIN(OH.Facility)
+               , @c_MoMixVendor = CASE WHEN ISNULL(MAX(CL.Short), '') = 'Y' OR ISNULL(MIN(CL.ListName),'') = '' THEN 'Y' ELSE 'N' END
+         FROM @T_ORDERS SO
+         JOIN ORDERS OH (NOLOCK) ON SO.Orderkey = OH.Orderkey
+         LEFT JOIN CODELKUP CL WITH (NOLOCK) ON  CL.ListName = 'MBByVendor' 
+                                             AND CL.Code = OH.C_IsoCntryCode
+                                  
+         IF @c_DisAllowMultiStorerOnMBOL = '1' 
          BEGIN
-            ROLLBACK TRAN
+            IF (@n_StorerCnt > 1) OR 
+               (@n_MBOLDetailCnt > 0 AND @c_MBOLStorerkey <> @c_Storerkey) 
+            BEGIN            
+               SET @n_Err = 556651
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow to Mix Storer. (lsp_WaveMBOLChildOrder_Create)' 
+             
+               EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_MBOLkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT 
+            END                           
+         END
 
-            WHILE @@TRANCOUNT < @n_StartTCnt
-            BEGIN
-               BEGIN TRAN
-            END
-         END                                                          
-         GOTO EXIT_SP     
-      END CATCH  
-   END
+         SELECT @c_MBOLByVendor  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'MBOLByVendor')
 
-   SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT T.Orderkey
-      ,   T.Store
-      ,   T.CaseID
-   FROM @T_CASEORDER T
-   ORDER BY T.CaseID
-         ,  T.Orderkey
-
-   OPEN @CUR_CTN
-   
-   FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
-                              ,  @c_Store
-                              ,  @c_CaseID                                                                              
-                                    
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      BEGIN TRY
-         EXEC [dbo].[isp_ChildOrder_CreateMBOL]  
-              @c_MBOLkey   = @c_MBOLkey
-            , @c_Orderkey  = @c_Orderkey
-            , @c_Store     = @c_Store
-            , @c_CaseID    = @c_CaseID
-            , @b_Success   = @b_Success      OUTPUT
-            , @n_Err       = @n_Err          OUTPUT 
-            , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
-      END TRY
-
-      BEGIN CATCH
-         SET @n_Err = 556656
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ChildOrder_CreateMBOL. (lsp_WaveMBOLChildOrder_Create)'   
-                        + '(' + @c_ErrMsg + ')' 
-                
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_WaveKey
-            ,  @c_Refkey2     = @c_MBOLkey
-            ,  @c_Refkey3     = @c_Orderkey
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-         IF (XACT_STATE()) = -1  
+         IF @c_MBOLByVendor = '1' 
          BEGIN
-            ROLLBACK TRAN
+            IF  @c_MoMixVendor = 'Y' AND  
+               (@n_VendorCnt > 1 OR (@n_MBOLDetailCnt > 0 AND @c_MBOLVendor <> @c_Vendor))
+            BEGIN  
+               SET @n_Err = 556652
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow to Mix Vendor. (lsp_WaveMBOLChildOrder_Create)' 
+             
+               EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_MBOLkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   OUTPUT 
+                     ,  @n_err         = @n_err       OUTPUT 
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT   
+            END                         
+         END
 
-            WHILE @@TRANCOUNT < @n_StartTCnt
-            BEGIN
-               BEGIN TRAN
-            END
-         END  
-      END CATCH
+         INSERT INTO @T_CASEORDER   
+            (  Orderkey
+            ,  Store
+            ,  CaseID
+            )
+         SELECT DISTINCT 
+                  PD.Orderkey
+               ,  Store = ISNULL(OD.UserDefine02,'')                  
+               ,  CTN.CaseID
+         FROM @T_CASEID CTN
+         JOIN PICKDETAIL  PD WITH (NOLOCK) ON  CTN.CaseID = PD.CaseID
+         JOIN ORDERDETAIL OD WITH (NOLOCK) ON  OD.Orderkey = PD.Orderkey
+                                           AND OD.OrderLineNumber = PD.OrderLineNumber
+         WHERE PD.ShipFlag <> 'Y' 
+         AND PD.[Status] < '9'
+         AND ( OD.UserDefine09 = '' OR OD.UserDefine09 IS NULL )
+         AND ( OD.UserDefine10 = '' OR OD.UserDefine10 IS NULL)
 
-      FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
-                                 ,  @c_Store
-                                 ,  @c_CaseID     
-   END
-   CLOSE @CUR_CTN
-   DEALLOCATE @CUR_CTN
 
-   -- Create Child Order in the MBOL into WaveDetail
-   SET @CUR_MBORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT MBD.Orderkey
-   FROM MBOLDETAIL MBD WITH (NOLOCK)
-   LEFT JOIN WAVEDETAIL WD WITH (NOLOCK) ON MBD.Orderkey = WD.Orderkey
-   WHERE MBD.MBolKey = @c_MBOLKey
-   AND   WD.WavedetailKey IS NULL
-   ORDER BY MBD.MBolLineNumber
-
-   OPEN @CUR_MBORD
-   
-   FETCH NEXT FROM @CUR_MBORD INTO @c_Orderkey
-                                    
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-     SET @b_success = 1                                                                                                                                    
+         SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT DISTINCT T.CaseID
+         FROM @T_CASEORDER T
+         WHERE NOT EXISTS (SELECT 1 
+                           FROM @T_ORDERS SO
+                           JOIN @T_CASEID CTN ON SO.RowRef = CTN.RowRef
+                           WHERE T.Orderkey = SO.Orderkey
+                           AND   T.CaseID   = CTN.CaseID
+                           )
+         OPEN @CUR_CTN
       
-      BEGIN TRY
-         EXECUTE nspg_GetKey                                                                                                                                      
-               'WavedetailKey'                                                                                                                                           
-               , 10                                                                                                                                                 
-               , @c_WavedetailKey   OUTPUT                                                                                                                                 
-               , @b_success         OUTPUT                                                                                                                                   
-               , @n_err             OUTPUT                                                                                                                                       
-               , @c_ErrMsg          OUTPUT                                                                                                                                    
-      END TRY
-
-      BEGIN CATCH
-         SET @n_Err     = 556657                                                                                                                             
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                        + ': Error Executing nspg_GetKey - WavedetailKey. (lsp_Build_Wave)' 
-
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_WaveKey
-            ,  @c_Refkey2     = @c_MBOLkey
-            ,  @c_Refkey3     = @c_Orderkey
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
-      END CATCH
-                                                                                                                                                                     
-      IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
-      BEGIN 
-         SET @n_Continue = 3  
-         GOTO EXIT_SP
-      END  
-
-      BEGIN TRY                                                                                                                                                            
-         INSERT INTO WAVEDETAIL                                                                                                                               
-               (WavedetailKey, WaveKey, Orderkey, AddWho)                                                                                                    
-         VALUES(@c_WavedetailKey, @c_WaveKey, @c_Orderkey, @c_UserName)
-      END TRY                                  
-                                                                                                                                        
-      BEGIN CATCH                                                                                                                                                           
-         SET @n_Continue = 3      
-         SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                               
-         SET @n_Err     = 556658  
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                        + ': Insert Into WAVEDETAIL Failed. (lsp_Build_Wave) ' 
-                        + '( ' + @c_ErrMsg + ') ' 
-                         
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_WaveKey
-            ,  @c_Refkey2     = @c_MBOLkey
-            ,  @c_Refkey3     = @c_Orderkey
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT                          
-                                                   
-         IF (XACT_STATE()) = -1  
+         FETCH NEXT FROM @CUR_CTN INTO @c_CaseID                                                                              
+                                       
+         WHILE @@FETCH_STATUS <> -1
          BEGIN
-            ROLLBACK TRAN
+            SET @n_Err = 556653
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow Partial Consolidate Order selected to create Child Order'
+                          + '. Carton #: ' + @c_CaseID 
+                          + '. (lsp_WaveMBOLChildOrder_Create) |' +  @c_CaseID 
 
-            WHILE @@TRANCOUNT < @n_StartTCnt
-            BEGIN
-               BEGIN TRAN
-            END
-         END                                                          
-         GOTO EXIT_SP     
-      END CATCH 
-   
-      IF EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey= @c_Orderkey AND (UserDefine09 = '' OR UserDefine09 IS NULL))
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_MBOLkey
+               ,  @c_Refkey3     = @c_Orderkey
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+            FETCH NEXT FROM @CUR_CTN INTO @c_CaseID   
+         END
+         CLOSE @CUR_CTN
+         DEALLOCATE @CUR_CTN
+
+
+         IF @n_ErrGroupKey > 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP
+         END
+      END
+
+      IF @c_MBOLKey = ''
       BEGIN
          BEGIN TRY
-            UPDATE ORDERS                                                                                                                       
-            SET UserDefine09 = @c_WaveKey                                                                                                                              
-               ,TrafficCop = NULL                                                                                                                                 
-               ,EditWho    = @c_UserName                                                                                                                              
-               ,EditDate   = GETDATE()                                                                                                                             
-            WHERE Orderkey = @c_Orderkey
-         END TRY                                  
-                                                                                                                                        
-         BEGIN CATCH           
-            SET @n_Continue = 3 
-            SET @c_ErrMsg  = ERROR_MESSAGE() 
-            SET @n_Err     = 556659               
+            SET @b_success = 1
+            EXECUTE nspg_GetKey                                                                                                                                      
+                  'MBOL'                                                                                                                                           
+                  , 10                                                                                                                                                 
+                  , @c_MBOLkey  OUTPUT                                                                                                                                 
+                  , @b_success  OUTPUT                                                                                                                                   
+                  , @n_err      OUTPUT                                                                                                                                       
+                  , @c_ErrMsg   OUTPUT                                                                                                                                    
+         END TRY
+            
+         BEGIN CATCH
+            SET @n_Err     = 556654                                                                                                                             
             SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                           + ': UPDATE Orders Failed. (lsp_Build_Wave) ' 
-                           + '( ' + @c_ErrMsg + ') '
+                           + ': Error Executing nspg_GetKey - MBOL. (lsp_WaveMBOLChildOrder_Create)' 
+         END CATCH
+                                                                                                                                                                        
+         IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
+         BEGIN 
+            SET @n_Continue = 3  
+            GOTO EXIT_SP
+         END  
+             
+         BEGIN TRY
+            INSERT INTO MBOL(MBOLkey, Facility )   
+            VALUES(@c_MBOLkey, @c_Facility)         
+         END TRY                             
+                                                                                                                                       
+         BEGIN CATCH                                                                                                                                                
+            SET @n_Continue = 3  
+            SET @c_ErrMsg  = ERROR_MESSAGE()
+            SET @n_Err     = 556655  
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+                           + ': Insert Into MBOL Failed. (lsp_WaveMBOLChildOrder_Create) ' 
+                           + '(' + @c_ErrMsg + ')' 
 
+            IF (XACT_STATE()) = -1  
+            BEGIN
+               ROLLBACK TRAN
+
+               WHILE @@TRANCOUNT < @n_StartTCnt
+               BEGIN
+                  BEGIN TRAN
+               END
+            END                                                          
+            GOTO EXIT_SP     
+         END CATCH  
+      END
+
+      SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT T.Orderkey
+         ,   T.Store
+         ,   T.CaseID
+      FROM @T_CASEORDER T
+      ORDER BY T.CaseID
+            ,  T.Orderkey
+
+      OPEN @CUR_CTN
+      
+      FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
+                                 ,  @c_Store
+                                 ,  @c_CaseID                                                                              
+                                       
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         BEGIN TRY
+            EXEC [dbo].[isp_ChildOrder_CreateMBOL]  
+                 @c_MBOLkey   = @c_MBOLkey
+               , @c_Orderkey  = @c_Orderkey
+               , @c_Store     = @c_Store
+               , @c_CaseID    = @c_CaseID
+               , @b_Success   = @b_Success      OUTPUT
+               , @n_Err       = @n_Err          OUTPUT 
+               , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Err = 556656
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ChildOrder_CreateMBOL. (lsp_WaveMBOLChildOrder_Create)'   
+                           + '(' + @c_ErrMsg + ')' 
+                   
             EXEC [WM].[lsp_WriteError_List] 
                   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                ,  @c_TableName   = @c_TableName
@@ -518,16 +383,168 @@ BEGIN
                BEGIN
                   BEGIN TRAN
                END
-            END                                                                                                                                                                                         
-                                   
-            GOTO EXIT_SP                                                                                                                                           
-         END CATCH   
-      END  
+            END  
+         END CATCH
 
+         FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
+                                    ,  @c_Store
+                                    ,  @c_CaseID     
+      END
+      CLOSE @CUR_CTN
+      DEALLOCATE @CUR_CTN
+
+      -- Create Child Order in the MBOL into WaveDetail
+      SET @CUR_MBORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT MBD.Orderkey
+      FROM MBOLDETAIL MBD WITH (NOLOCK)
+      LEFT JOIN WAVEDETAIL WD WITH (NOLOCK) ON MBD.Orderkey = WD.Orderkey
+      WHERE MBD.MBolKey = @c_MBOLKey
+      AND   WD.WavedetailKey IS NULL
+      ORDER BY MBD.MBolLineNumber
+
+      OPEN @CUR_MBORD
+      
       FETCH NEXT FROM @CUR_MBORD INTO @c_Orderkey
-   END
-   CLOSE @CUR_MBORD
-   DEALLOCATE @CUR_MBORD
+                                       
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+        SET @b_success = 1                                                                                                                                    
+         
+         BEGIN TRY
+            EXECUTE nspg_GetKey                                                                                                                                      
+                  'WavedetailKey'                                                                                                                                           
+                  , 10                                                                                                                                                 
+                  , @c_WavedetailKey   OUTPUT                                                                                                                                 
+                  , @b_success         OUTPUT                                                                                                                                   
+                  , @n_err             OUTPUT                                                                                                                                       
+                  , @c_ErrMsg          OUTPUT                                                                                                                                    
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Err     = 556657                                                                                                                             
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+                           + ': Error Executing nspg_GetKey - WavedetailKey. (lsp_Build_Wave)' 
+
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_MBOLkey
+               ,  @c_Refkey3     = @c_Orderkey
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
+         END CATCH
+                                                                                                                                                                        
+         IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
+         BEGIN 
+            SET @n_Continue = 3  
+            GOTO EXIT_SP
+         END  
+
+         BEGIN TRY                                                                                                                                                            
+            INSERT INTO WAVEDETAIL                                                                                                                               
+                  (WavedetailKey, WaveKey, Orderkey, AddWho)                                                                                                    
+            VALUES(@c_WavedetailKey, @c_WaveKey, @c_Orderkey, @c_UserName)
+         END TRY                                  
+                                                                                                                                           
+         BEGIN CATCH                                                                                                                                                           
+            SET @n_Continue = 3      
+            SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                               
+            SET @n_Err     = 556658  
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+                           + ': Insert Into WAVEDETAIL Failed. (lsp_Build_Wave) ' 
+                           + '( ' + @c_ErrMsg + ') ' 
+                            
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_MBOLkey
+               ,  @c_Refkey3     = @c_Orderkey
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT                          
+                                                      
+            IF (XACT_STATE()) = -1  
+            BEGIN
+               ROLLBACK TRAN
+
+               WHILE @@TRANCOUNT < @n_StartTCnt
+               BEGIN
+                  BEGIN TRAN
+               END
+            END                                                          
+            GOTO EXIT_SP     
+         END CATCH 
+      
+         IF EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey= @c_Orderkey AND (UserDefine09 = '' OR UserDefine09 IS NULL))
+         BEGIN
+            BEGIN TRY
+               UPDATE ORDERS                                                                                                                       
+               SET UserDefine09 = @c_WaveKey                                                                                                                              
+                  ,TrafficCop = NULL                                                                                                                                 
+                  ,EditWho    = @c_UserName                                                                                                                              
+                  ,EditDate   = GETDATE()                                                                                                                             
+               WHERE Orderkey = @c_Orderkey
+            END TRY                                  
+                                                                                                                                           
+            BEGIN CATCH           
+               SET @n_Continue = 3 
+               SET @c_ErrMsg  = ERROR_MESSAGE() 
+               SET @n_Err     = 556659               
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+                              + ': UPDATE Orders Failed. (lsp_Build_Wave) ' 
+                              + '( ' + @c_ErrMsg + ') '
+
+               EXEC [WM].[lsp_WriteError_List] 
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_WaveKey
+                  ,  @c_Refkey2     = @c_MBOLkey
+                  ,  @c_Refkey3     = @c_Orderkey
+                  ,  @c_WriteType   = 'ERROR' 
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success   OUTPUT 
+                  ,  @n_err         = @n_err       OUTPUT 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+               IF (XACT_STATE()) = -1  
+               BEGIN
+                  ROLLBACK TRAN
+
+                  WHILE @@TRANCOUNT < @n_StartTCnt
+                  BEGIN
+                     BEGIN TRAN
+                  END
+               END                                                                                                                                                                                         
+                                      
+               GOTO EXIT_SP                                                                                                                                           
+            END CATCH   
+         END  
+
+         FETCH NEXT FROM @CUR_MBORD INTO @c_Orderkey
+      END
+      CLOSE @CUR_MBORD
+      DEALLOCATE @CUR_MBORD
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
 EXIT_SP:
 
 

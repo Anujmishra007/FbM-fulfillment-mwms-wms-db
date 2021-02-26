@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveSplitOrder]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -67,248 +69,274 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   SET @n_ErrGroupKey = ISNULL(@n_ErrGroupKey,0)
-
-   IF OBJECT_ID('tempdb..#tORDERS','u') IS NOT NULL
-   BEGIN
-      DROP TABLE #tORDERS
-   END 
-
-   CREATE TABLE #tORDERS
-      (  RowRef      INT            NOT NULL IDENTITY(1,1)  Primary Key
-      ,  Wavekey     NVARCHAR(10)   NOT NULL DEFAULT ('')
-      ,  Loadkey     NVARCHAR(10)   NOT NULL DEFAULT ('')
-      ,  MBOLkey     NVARCHAR(10)   NOT NULL DEFAULT ('')
-      ,  Orderkey    NVARCHAR(10)   NOT NULL DEFAULT ('')
-      ,  OrderStatus NVARCHAR(10)   NOT NULL DEFAULT ('')
-      ,  Facility    NVARCHAR(5)    NOT NULL DEFAULT ('')
-      ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT ('')
-      )
-
-   IF @c_SplitType = 'WAVE'
-   BEGIN
-      INSERT INTO #tORDERS ( Wavekey, Loadkey, MBOLKey, Orderkey, OrderStatus, Facility, Storerkey )
-      SELECT WD.Wavekey
-            ,Loadkey = ISNULL(OH.Loadkey,'')
-            ,MBOLKey = ISNULL(OH.MBOLKey,'')
-            ,OH.Orderkey
-            ,OH.[Status]
-            ,OH.Facility
-            ,OH.Storerkey
-      FROM WAVEDETAIL WD WITH (NOLOCK)
-      JOIN ORDERS     OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
-      WHERE WD.Wavekey = @c_Wavekey
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
    END
-
-   SET @c_Status = ''
-   SELECT TOP 1 @c_Status = WH.[Status] 
-   FROM #tORDERS T
-   JOIN  WAVE WH WITH (NOLOCK) ON T.Wavekey = WH.Wavekey
-   WHERE T.Wavekey <> ''
-   ORDER BY WH.[Status] DESC
-
-   IF @c_Status = '9'
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557351
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Wave is closed. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
-
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = ''
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
-   END
-
-   SET @c_Status = ''
-   SELECT TOP 1 @c_Status = LP.[Status] 
-   FROM #tORDERS T
-   JOIN  LOADPLAN LP WITH (NOLOCK) ON T.Loadkey = LP.Loadkey
-   WHERE T.Loadkey <> ''
-   ORDER BY LP.[Status] DESC
-
-   IF @c_Status = '9'
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557352
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Found closed Loadplan. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
-
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = ''
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
-   END
-
-   SET @c_Status = ''
-   SET @c_FinalizeFlag = 'N'
-   SELECT @c_Status = ISNULL(MAX(MH.[Status]),'0')
-         ,@c_FinalizeFlag = ISNULL(MAX(MH.FinalizeFlag),'N') 
-   FROM #tORDERS T
-   JOIN  MBOL MH WITH (NOLOCK) ON T.MBOLkey = MH.MBOLKey
-   WHERE T.MBOLkey <> ''
-
-   IF @c_Status = '9' OR @c_FinalizeFlag = 'Y'
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557353
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Found Finalized OR closed Ship Ref. Unit. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
-
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = ''
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-   END
-
-   IF NOT EXISTS (SELECT 1 FROM #tORDERS)
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557354
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': No detail Orders found.  (lsp_WaveSplitOrder)' 
-
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = ''
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-   END
-
-   SELECT TOP 1 
-            @c_Facility = T.Facility
-         ,  @c_Storerkey= T.Storerkey
-   FROM #tORDERS T
-
-   SET @c_WaveSplitOrder_SP = ''
-   SELECT @c_WaveSplitOrder_SP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WaveSplitOrder_SP')
-
-
-   --Default to call lsp_SplitNotFullAllocOrder
-   IF @c_WaveSplitOrder_SP IN ( '1', '0' )
-   BEGIN
-      SET @c_WaveSplitOrder_SP = 'isp_SplitWaveNotFullAllocOrder' --'lsp_SplitNotFullAllocOrder'
-   END
-
-   SET @n_Cnt = 0
-   SELECT @n_Cnt = 1 
-         ,@c_SchemaSP = SCHEMA_NAME(schema_id) 
-   FROM SYS.OBJECTS WITH (NOLOCK) 
-   WHERE [Type] = 'P' 
-   AND   [Name] = @c_WaveSplitOrder_SP
-
-   IF @n_Cnt = 0
-   BEGIN
-      SET @n_Err = 557355
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid Stored Procedure name:' + @c_WaveSplitOrder_SP
-                    + '. (lsp_WaveSplitOrder)' 
-                    + '|' + @c_WaveSplitOrder_SP
-
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = ''
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
-   END
-
-   IF @n_Continue = 3
-   BEGIN
-      GOTO EXIT_SP
-   END
-
-   SPLIT_ORDER:
-   --SETUP Storerconfig 'WAVESPLITORDER_SP', svalue = isp_WTC_SplitOrdersBySkuThreshold if to 'Split by sku thres'
+   --(mingle01) - END
+   
+   --(mingle01) - START
    BEGIN TRY
-      SET @b_Success = 1
-      SET @c_SQL = N'EXEC ' + @c_SchemaSP + '.' + @c_WaveSplitOrder_SP
-                  + ' @c_WaveKey = @c_WaveKey' 
-                  --+ ',@c_Loadkey = @c_Loadkey' 
-                  --+ ',@c_MBOLKey = @c_MBOLKey' 
-                  + ',@b_Success = @b_Success OUTPUT'
-                  + ',@n_Err     = @n_Err     OUTPUT' 
-                  + ',@c_ErrMsg  = @c_ErrMsg  OUTPUT' 
 
-      SET @c_SQLParms = N'@c_WaveKey   NVARCHAR(10)' 
-                     --+ ', @c_Loadkey    NVARCHAR(10)' 
-                     --+ ', @c_MBOLKey    NVARCHAR(10)' 
-                     + ', @b_Success    INT OUTPUT'
-                     + ', @n_Err        INT OUTPUT' 
-                     + ', @c_ErrMsg     NVARCHAR(255) OUTPUT'
+      SET @n_ErrGroupKey = ISNULL(@n_ErrGroupKey,0)
 
-      EXEC sp_ExecuteSQL  @c_SQL
-                        , @c_SQLParms
-                        , @c_WaveKey
-                        --, @c_Loadkey  
-                        --, @c_MBOLKey                     
-                        , @b_Success   OUTPUT   
-                        , @n_Err       OUTPUT
-                        , @c_ErrMsg    OUTPUT
+      IF OBJECT_ID('tempdb..#tORDERS','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #tORDERS
+      END 
+
+      CREATE TABLE #tORDERS
+         (  RowRef      INT            NOT NULL IDENTITY(1,1)  Primary Key
+         ,  Wavekey     NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  Loadkey     NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  MBOLkey     NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  Orderkey    NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  OrderStatus NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  Facility    NVARCHAR(5)    NOT NULL DEFAULT ('')
+         ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT ('')
+         )
+
+      IF @c_SplitType = 'WAVE'
+      BEGIN
+         INSERT INTO #tORDERS ( Wavekey, Loadkey, MBOLKey, Orderkey, OrderStatus, Facility, Storerkey )
+         SELECT WD.Wavekey
+               ,Loadkey = ISNULL(OH.Loadkey,'')
+               ,MBOLKey = ISNULL(OH.MBOLKey,'')
+               ,OH.Orderkey
+               ,OH.[Status]
+               ,OH.Facility
+               ,OH.Storerkey
+         FROM WAVEDETAIL WD WITH (NOLOCK)
+         JOIN ORDERS     OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+         WHERE WD.Wavekey = @c_Wavekey
+      END
+
+      SET @c_Status = ''
+      SELECT TOP 1 @c_Status = WH.[Status] 
+      FROM #tORDERS T
+      JOIN  WAVE WH WITH (NOLOCK) ON T.Wavekey = WH.Wavekey
+      WHERE T.Wavekey <> ''
+      ORDER BY WH.[Status] DESC
+
+      IF @c_Status = '9'
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557351
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Wave is closed. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+      END
+
+      SET @c_Status = ''
+      SELECT TOP 1 @c_Status = LP.[Status] 
+      FROM #tORDERS T
+      JOIN  LOADPLAN LP WITH (NOLOCK) ON T.Loadkey = LP.Loadkey
+      WHERE T.Loadkey <> ''
+      ORDER BY LP.[Status] DESC
+
+      IF @c_Status = '9'
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557352
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Found closed Loadplan. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+      END
+
+      SET @c_Status = ''
+      SET @c_FinalizeFlag = 'N'
+      SELECT @c_Status = ISNULL(MAX(MH.[Status]),'0')
+            ,@c_FinalizeFlag = ISNULL(MAX(MH.FinalizeFlag),'N') 
+      FROM #tORDERS T
+      JOIN  MBOL MH WITH (NOLOCK) ON T.MBOLkey = MH.MBOLKey
+      WHERE T.MBOLkey <> ''
+
+      IF @c_Status = '9' OR @c_FinalizeFlag = 'Y'
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557353
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Found Finalized OR closed Ship Ref. Unit. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+      END
+
+      IF NOT EXISTS (SELECT 1 FROM #tORDERS)
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557354
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': No detail Orders found.  (lsp_WaveSplitOrder)' 
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+      END
+
+      SELECT TOP 1 
+               @c_Facility = T.Facility
+            ,  @c_Storerkey= T.Storerkey
+      FROM #tORDERS T
+
+      SET @c_WaveSplitOrder_SP = ''
+      SELECT @c_WaveSplitOrder_SP  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WaveSplitOrder_SP')
 
 
-   END TRY
+      --Default to call lsp_SplitNotFullAllocOrder
+      IF @c_WaveSplitOrder_SP IN ( '1', '0' )
+      BEGIN
+         SET @c_WaveSplitOrder_SP = 'isp_SplitWaveNotFullAllocOrder' --'lsp_SplitNotFullAllocOrder'
+      END
 
-   BEGIN CATCH
-      SET @n_Err = 557356
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing WaveSplitOrder_SP Stored Procedure. (lsp_WaveSplitOrder)' 
-                     + '(' + @c_ErrMsg + ')'  
-   END CATCH
+      SET @n_Cnt = 0
+      SELECT @n_Cnt = 1 
+            ,@c_SchemaSP = SCHEMA_NAME(schema_id) 
+      FROM SYS.OBJECTS WITH (NOLOCK) 
+      WHERE [Type] = 'P' 
+      AND   [Name] = @c_WaveSplitOrder_SP
 
-   IF @b_Success = 0 OR @n_Err <> 0
-   BEGIN
-      SET @n_Err = 555655
+      IF @n_Cnt = 0
+      BEGIN
+         SET @n_Err = 557355
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid Stored Procedure name:' + @c_WaveSplitOrder_SP
+                       + '. (lsp_WaveSplitOrder)' 
+                       + '|' + @c_WaveSplitOrder_SP
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+      END
+
+      IF @n_Continue = 3
+      BEGIN
+         GOTO EXIT_SP
+      END
+
+      SPLIT_ORDER:
+      --SETUP Storerconfig 'WAVESPLITORDER_SP', svalue = isp_WTC_SplitOrdersBySkuThreshold if to 'Split by sku thres'
+      BEGIN TRY
+         SET @b_Success = 1
+         SET @c_SQL = N'EXEC ' + @c_SchemaSP + '.' + @c_WaveSplitOrder_SP
+                     + ' @c_WaveKey = @c_WaveKey' 
+                     --+ ',@c_Loadkey = @c_Loadkey' 
+                     --+ ',@c_MBOLKey = @c_MBOLKey' 
+                     + ',@b_Success = @b_Success OUTPUT'
+                     + ',@n_Err     = @n_Err     OUTPUT' 
+                     + ',@c_ErrMsg  = @c_ErrMsg  OUTPUT' 
+
+         SET @c_SQLParms = N'@c_WaveKey   NVARCHAR(10)' 
+                        --+ ', @c_Loadkey    NVARCHAR(10)' 
+                        --+ ', @c_MBOLKey    NVARCHAR(10)' 
+                        + ', @b_Success    INT OUTPUT'
+                        + ', @n_Err        INT OUTPUT' 
+                        + ', @c_ErrMsg     NVARCHAR(255) OUTPUT'
+
+         EXEC sp_ExecuteSQL  @c_SQL
+                           , @c_SQLParms
+                           , @c_WaveKey
+                           --, @c_Loadkey  
+                           --, @c_MBOLKey                     
+                           , @b_Success   OUTPUT   
+                           , @n_Err       OUTPUT
+                           , @c_ErrMsg    OUTPUT
+
+
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Err = 557356
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing WaveSplitOrder_SP Stored Procedure. (lsp_WaveSplitOrder)' 
+                        + '(' + @c_ErrMsg + ')'  
+      END CATCH
+
+      IF @b_Success = 0 OR @n_Err <> 0
+      BEGIN
+         SET @n_Err = 555655
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = ''
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT   
+            
+         GOTO EXIT_SP           
+      END
+
+      SET @c_errmsg = 'Wave Split Order process is done.'
       EXEC [WM].[lsp_WriteError_List] 
             @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
          ,  @c_TableName   = @c_TableName
@@ -316,31 +344,20 @@ BEGIN
          ,  @c_Refkey1     = @c_WaveKey
          ,  @c_Refkey2     = ''
          ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
+         ,  @c_WriteType   = 'MESSAGE' 
          ,  @n_err2        = @n_err 
          ,  @c_errmsg2     = @c_errmsg 
          ,  @b_Success     = @b_Success   OUTPUT 
          ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT   
-         
-      GOTO EXIT_SP           
-   END
-
-   SET @c_errmsg = 'Wave Split Order process is done.'
-   EXEC [WM].[lsp_WriteError_List] 
-         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-      ,  @c_TableName   = @c_TableName
-      ,  @c_SourceType  = @c_SourceType
-      ,  @c_Refkey1     = @c_WaveKey
-      ,  @c_Refkey2     = ''
-      ,  @c_Refkey3     = ''
-      ,  @c_WriteType   = 'MESSAGE' 
-      ,  @n_err2        = @n_err 
-      ,  @c_errmsg2     = @c_errmsg 
-      ,  @b_Success     = @b_Success   OUTPUT 
-      ,  @n_err         = @n_err       OUTPUT 
-      ,  @c_errmsg      = @c_errmsg    OUTPUT 
-
+         ,  @c_errmsg      = @c_errmsg    OUTPUT 
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
 EXIT_SP:
 
  

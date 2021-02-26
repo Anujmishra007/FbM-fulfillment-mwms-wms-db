@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */   
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Adjustment_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_Adjustment_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue           INT,
            @n_starttcnt          INT,
@@ -67,45 +66,54 @@ BEGIN
       GOTO EXIT_SP
    END   
    */
-            
-   SET @c_AdjustmentKey = @c_RefKey1
    
-   SELECT @c_Storerkey = Storerkey, 
-          @c_Facility = Facility,
-          @c_Finalizedflag = Finalizedflag
-   FROM ADJUSTMENT (NOLOCK)
-   WHERE Adjustmentkey = @c_Adjustmentkey
-   
-   SELECT @c_AdjStatusControl = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AdjStatusControl')     
-   SELECT @c_FinalizeAdjustment = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeAdjustment') 
-   
-   IF @n_continue IN(1,2)
-   BEGIN          
-        IF EXISTS(SELECT 1 
-                  FROM ADJUSTMENTDETAIL (NOLOCK)
-                  WHERE Adjustmentkey = @c_Adjustmentkey
-                  AND Finalizedflag = 'Y')
-        BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553251   
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete. Adjusment already finalized. (lsp_Pre_Delete_Adjustment_STD)'                
-        END                         
-   END
+   --(mingle01) - START
+   BEGIN TRY         
+      SET @c_AdjustmentKey = @c_RefKey1
       
-   IF @n_continue IN(1,2) AND @c_AdjStatusControl = '1' AND @c_FinalizeAdjustment = '1'
-   BEGIN
-      IF @c_IsSupervisor <> 'Y'
-      BEGIN
-          IF @c_Finalizedflag NOT IN ('N','R') OR 
-            (@c_Finalizedflag = 'R' AND EXISTS (SELECT 1 FROM ADJUSTMENTDETAIL (NOLOCK) WHERE Adjustmentkey = @c_Adjustmentkey AND Finalizedflag <> 'R'))
-          BEGIN
+      SELECT @c_Storerkey = Storerkey, 
+             @c_Facility = Facility,
+             @c_Finalizedflag = Finalizedflag
+      FROM ADJUSTMENT (NOLOCK)
+      WHERE Adjustmentkey = @c_Adjustmentkey
+      
+      SELECT @c_AdjStatusControl = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AdjStatusControl')     
+      SELECT @c_FinalizeAdjustment = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeAdjustment') 
+      
+      IF @n_continue IN(1,2)
+      BEGIN          
+           IF EXISTS(SELECT 1 
+                     FROM ADJUSTMENTDETAIL (NOLOCK)
+                     WHERE Adjustmentkey = @c_Adjustmentkey
+                     AND Finalizedflag = 'Y')
+           BEGIN
             SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553252   
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': User is not allowed to delete Submitted or Approved adjustment. Please check with supervisor. (lsp_Pre_Delete_Adjustment_STD)'              
-          END
-      END        
-   END
-      
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553251   
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete. Adjusment already finalized. (lsp_Pre_Delete_Adjustment_STD)'                
+           END                         
+      END
+         
+      IF @n_continue IN(1,2) AND @c_AdjStatusControl = '1' AND @c_FinalizeAdjustment = '1'
+      BEGIN
+         IF @c_IsSupervisor <> 'Y'
+         BEGIN
+             IF @c_Finalizedflag NOT IN ('N','R') OR 
+               (@c_Finalizedflag = 'R' AND EXISTS (SELECT 1 FROM ADJUSTMENTDETAIL (NOLOCK) WHERE Adjustmentkey = @c_Adjustmentkey AND Finalizedflag <> 'R'))
+             BEGIN
+               SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 553252   
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': User is not allowed to delete Submitted or Approved adjustment. Please check with supervisor. (lsp_Pre_Delete_Adjustment_STD)'              
+             END
+         END        
+      END
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END   
    EXIT_SP:
    --REVERT     
 

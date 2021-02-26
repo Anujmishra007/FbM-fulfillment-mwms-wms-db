@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_WorkOrderRouting_STD]
        @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_WorkOrderRouting_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue           INT,
            @n_starttcnt          INT,
@@ -54,6 +53,9 @@ BEGIN
            
    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
    SET @c_RefreshHeader = 'Y'
+            
+   SET @c_WorkOrderName = @c_RefKey1
+   SET @c_MasterWorkOrder = @c_RefKey2
    
    /*
    SET @n_Err = 0 
@@ -64,22 +66,27 @@ BEGIN
       GOTO EXIT_SP
    END   
    */
-            
-   SET @c_WorkOrderName = @c_RefKey1
-   SET @c_MasterWorkOrder = @c_RefKey2
+    --(mingle01) - START
+   BEGIN TRY 
+      IF @n_continue IN (1,2)
+      BEGIN
+         IF EXISTS(SELECT 1 
+                  FROM WORKORDERJOB (NOLOCK)
+                  WHERE WorkOrderName = @c_WorkOrderName)
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551301
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Error deleting header Work Order Routing. Job Exists. (lsp_Pre_Delete_WorkOrderRouting_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '                               
+         END          
+      END
+   END TRY
    
-   IF @n_continue IN (1,2)
-   BEGIN
-       IF EXISTS(SELECT 1 
-                 FROM WORKORDERJOB (NOLOCK)
-                 WHERE WorkOrderName = @c_WorkOrderName)
-       BEGIN
-        SELECT @n_continue = 3
-        SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551301
-        SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Error deleting header Work Order Routing. Job Exists. (lsp_Pre_Delete_Adjustmentdetail_STD)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '                               
-       END          
-   END
-       
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END    
    EXIT_SP:
    --REVERT     
 

@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author  Ver. Purposes                                   */  
 /* 16-Jun-2020  NJOW01  1.0  Fix sorting and grouping                   */
+/* 03-Dec-2020  WLChooi 1.1  WMS-15808 - Add new sorting based on config*/
+/*                           (WL01)                                     */
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspPR_PH09]  
@@ -226,13 +228,37 @@ BEGIN
       BEGIN  
          IF @c_UOM = '1'                       
           --SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN(''PICK'') THEN 1 ELSE 2 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.Lottable05, LOT.Lot '  -- ZG01
-          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN(''CASE'',''PICK'') THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc '  -- ZG01
+          SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN (''CASE'',''PICK'') THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LogicalLocation, LOC.Loc '  -- ZG01
          ELSE IF @c_UOM = '2'  
           SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''CASE'' THEN 1 WHEN LOC.LocationType = ''PICK'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, MIN(Loc.LogicalLocation), LOT.Lot '  
          ELSE --uom 6  
           SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, MIN(Loc.LogicalLocation), LOT.Lot '              
-      END  
-         
+      END
+      
+      --WL01 START
+      SELECT @c_SortMode = ISNULL(CL.Code,'')
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'PKCODECFG'
+      AND CL.Long = 'nspPR_PH09'
+      AND CL.Code = 'ADISORT'
+      AND CL.Storerkey = @c_storerkey
+      AND CL.Short = 'Y'
+      AND (CL.Code2 = @c_Facility OR CL.Code2 = '')
+      ORDER BY CASE WHEN CL.Code2 = '' THEN 2 ELSE 1 END
+      
+      IF @c_SortMode = 'ADISORT'
+      BEGIN
+         IF @c_UOM = '1'                       
+            SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType NOT IN (''CASE'',''PICK'') AND LOC.LocationType = ''DYNPCKFACE'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, LOC.LogicalLocation, LOTATTRIBUTE.LOTTABLE05'
+         ELSE IF @c_UOM = '2'  
+            SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''CASE'' THEN 1 WHEN LOC.LocationType = ''PICK'' THEN 2 ELSE 3 END, MIN(Loc.LogicalLocation), LOTATTRIBUTE.LOTTABLE05 '  
+         ELSE --uom 6  
+            SET @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType = ''CASE'' THEN 2 ELSE 3 END, MIN(Loc.LogicalLocation), LOTATTRIBUTE.LOTTABLE05 '   
+            
+         SET @c_Where = @c_Where + 'AND LOC.LocationType IN (''CASE'',''PICK'',''DYNPCKFACE'')'    
+      END
+      --WL01 END
+      
       --Shelflife    
       SELECT @n_SkuShelfLife = SKU.Shelflife,   
           @n_SkuOutgoingShelfLife = ISNULL( CAST( SKU.SUSR2 as int), 0)  
@@ -301,6 +327,7 @@ BEGIN
        ELSE    
          ' GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LocationType ' 
        END +  
+       CASE WHEN @c_SortMode = 'ADISORT' THEN ', LOTATTRIBUTE.LOTTABLE05 ' ELSE '' END +   --WL01
       ' HAVING SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked ) - MIN(ISNULL(P.QtyPreallocated, 0)) >= @n_uombase ' +  
       RTRIM(@c_OrderBy)  
       
@@ -320,7 +347,8 @@ BEGIN
                          @c_Lottable10, @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15,    
                          @n_ConsigneeShelfLife , @n_SkuOutgoingShelfLife, @n_uombase, @c_Consigneekey    
   
-     IF @b_debug = 1 PRINT @c_SQLStmt       
+     IF @b_debug = 1 
+        PRINT @c_SQLStmt       
     END  
 END  
 GO

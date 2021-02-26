@@ -1,19 +1,18 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_InsertTransmitLog_WSCRSOADD_UA]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_InsertTransmitLog_WSCRSOADD_UA]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_InsertTransmitLog_WSCRSOADD_UA]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_InsertTransmitLog_WSCRSOADD_UA]
 GO
+
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-
-    
 /*-------------------------------------------------------------------------------------------------------------------*/            
 /*                                                                                                                   */    
 /*Stored Procedure: isp_InsertTransmitLog_WSCRSOADD_UA                                                               */                  
 /* Creation Date: 22-February-201                                                                                    */                    
 /* Copyright: LF LOGISTICS                                                                                           */                    
-/* Written by: KelvinOngCY                                                                                           */                    
+/* Written by: kelvinongcy                                                                                           */                    
 /*                                                                                                                   */                    
 /* Purpose: https://jira.lfapps.net/browse/WMS-7642                                                                  */                    
 /*                                                                                                                   */                    
@@ -29,11 +28,11 @@ GO
 /*                                                                                                                   */                    
 /* Updates:                                                                                                          */                    
 /* Date          Author      Ver. Purposes                                                                           */             
-/* 22- Feb-2019  kelvinongcy 1.0  Insert TransmitLog3 for Storerkey ='UA' & tablename = 'WSCRSOADD'                  */    
+/* 22- Feb-2019  kocy        1.0  Insert TransmitLog3 for Storerkey ='UA' & tablename = 'WSCRSOADD'                  */    
 /*                                and update Orders.Issued = 'Y' after UA Combined Orders job run                    */    
-/* 17-May -2019  kelvinongcy 1.1  Insert TL2/TL3 based on UDF01 = T2/T3 when orders.ShipperKey = Codelkup.Short      */  
+/* 17-May -2019  kocy        1.1  Insert TL2/TL3 based on UDF01 = T2/T3 when orders.ShipperKey = Codelkup.Short      */  
 /*                                where listname = 'CourierMap', t.tablename = 'WSCRSOADD' (refer FBR ver 1.5)       */  
-/* 24-May -2019  kelvinongcy01 1.2  Revise script                                                                    */  
+/* 24-May -2019  kocy01      1.2  Revise script                                                                      */  
 /*                                Insert TL2/TL3 based on UDF01 = T2/T3 when orders.ShipperKey = Codelkup.Short      */  
 /*                                where listname = 'CourierMap', t.tablename = Codelkup.UDF02(refer FBR ver 1.6)     */  
 /* 07-Nov-2019  Shong        1.3  WMS-7642 - Enable JD to get tracking number (SWT01)                                */  
@@ -236,8 +235,4 @@ QUIT:
  END 
 GO
 
-
-
-GRANT EXECUTE ON isp_InsertTransmitLog_WSCRSOADD_UA to nSQL
-GO
 

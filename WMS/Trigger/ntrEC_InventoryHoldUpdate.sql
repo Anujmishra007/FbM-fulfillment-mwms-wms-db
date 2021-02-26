@@ -1,5 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrEC_InventoryHoldUpdate]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ntrEC_InventoryHoldUpdate]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrEC_InventoryHoldUpdate]') 
+              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
+drop trigger [dbo].[ntrEC_InventoryHoldUpdate]
 GO
 
 SET ANSI_NULLS OFF

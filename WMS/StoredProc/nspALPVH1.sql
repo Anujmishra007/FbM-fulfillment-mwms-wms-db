@@ -27,6 +27,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 10-Nov-2020  NJOW01  1.0   WMS-15565 Cater for more allocation type  */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPVH1]        
    @c_DocumentNo NVARCHAR(10),  
@@ -75,7 +76,9 @@ BEGIN
            @n_StorerMinShelfLife INT,
            @c_PrevLOT            NVARCHAR(10),
            @n_LotQtyAvailable    INT,
-           @c_OrdType            NVARCHAR(10)  -- 1=Wholesales 2=Retail New Launch 3=Retail replenishment
+           @c_OrdType            NVARCHAR(10),  --1=Wholesales,ECOM Multi-order 2=Retail, new launch, replenishment, ecom single
+           @c_SalesMan           NVARCHAR(30), --NJOW01
+           @c_WaveType           NVARCHAR(18)  --NJOW01
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
@@ -111,17 +114,37 @@ BEGIN
          ORDER BY O.Orderkey, OD.OrderLineNumber
       END        	     
       
-      SELECT @c_ordtype = CL.Short
-      FROM ORDERS O (NOLOCK)
+      SELECT @c_ordtype = CL.Short,
+             @c_SalesMan = ISNULL(O.Salesman,''), --NJOW01
+             @c_WaveType = ISNULL(W.WaveType,'') --NJOW01
+      FROM ORDERS O (NOLOCK)      
       JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'ORDERGROUP' AND O.OrderGroup = CL.Code AND O.Storerkey = CL.Storerkey
+      LEFT JOIN WAVEDETAIL WD (NOLOCK) ON O.Orderkey = WD.Orderkey  --NJOW01
+      LEFT JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey --NJOW01
       WHERE O.Orderkey = @c_Orderkey      
       
+      /*
       IF @c_OrdType = '2' AND @c_UOM <> '2' AND ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='' --If retail new launch allocate by load conso only allow UOM 2. other is by wave conso
-         GOTO EXIT_SP         
+         AND @c_WaveType = 'PTS' AND @c_SalesMan <> 'TRF'  --NJOW01  exit for new launch A only
+         GOTO EXIT_SP
+      */         
    END
    
-   IF @c_OrdType <> '2' AND @c_UOM = '7' --If not retail new launch not to allocate piece from bulk
+   IF @c_UOM = '7' AND NOT (@c_ordtype IN('1','2') AND @c_WaveType = 'PTS' AND @c_Salesman <> 'TRF') --UOM 7 only for wholesales/retail with PTS
       GOTO EXIT_SP
+      
+   IF @c_UOM = '7' AND @c_ordtype = '1' AND ISNULL(@c_key2,'') <> '' --UOM 7 not to allocate piece at bulk for wholesale when discrete allocation
+      GOTO EXIT_SP 
+
+   IF @c_UOM = '7' AND @c_ordtype = '2' AND ISNULL(@c_key2,'') = '' AND ISNULL(@c_key3,'') = '' --UOM 7 not to allocate piece at bulk for retail when load conso allocation
+      GOTO EXIT_SP 
+   
+   /*
+   IF (@c_OrdType <> '2' AND @c_UOM = '7') --If not retail new launch not to allocate piece from bulk 
+      OR (@c_OrdType = '2' AND @c_UOM = '7' AND @c_WaveType <> 'PTS' AND @c_SalesMan <> 'TRF') --NJOW01 also not allow new launch b
+      OR (@c_UOM = '7' AND @c_SalesMan = 'TRF')  --NJOW01  also not allow transfer
+      GOTO EXIT_SP
+   */
    
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
@@ -144,8 +167,7 @@ BEGIN
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
       JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
-      WHERE LOC.LocationFlag <> ''HOLD''
-      AND LOC.LocationFlag <> ''DAMAGE''
+      WHERE LOC.LocationFlag = ''NONE''
       AND LOC.Status <> ''HOLD''
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''

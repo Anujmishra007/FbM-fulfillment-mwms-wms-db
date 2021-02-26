@@ -30,6 +30,7 @@ GO
 /*                            Phase 2  Backend Setup  SPs Setup         */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /* 2021-02-15  Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-02-25  Wan01    1.2   Fixed. Add Revert                         */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Get_ModuleReport]
            @c_ModuleID           NVARCHAR(30)
@@ -218,6 +219,7 @@ BEGIN
    END CATCH
    --(mingle01) - END 
    EXIT_SP:
+   REVERT 
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_WM_Get_ModuleReport] TO nSQL 

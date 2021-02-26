@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_Loadplan_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,12 +41,10 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_Loadplan_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
@@ -59,23 +58,32 @@ BEGIN
         
    SET @c_LoadKey = ISNULL(@c_RefKey1,'')
 
-   IF @c_LoadKey = ''
-   BEGIN
-      GOTO EXIT_SP  
-   END
+   --(mingle01) - START
+   BEGIN TRY     
+      IF @c_LoadKey = ''
+      BEGIN
+         GOTO EXIT_SP  
+      END
+      
+      IF EXISTS(  SELECT 1 
+                  FROM LOADPLAN WITH (NOLOCK)
+                  WHERE Loadkey = @c_Loadkey
+                  AND [Status] > '0' 
+                  )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 556951
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Only Load Plan# With ''Normal'' Status Can Be Deleted. (lsp_Pre_Delete_Loadplan_STD)'   
+         GOTO EXIT_SP             
+      END                         
+   END TRY
    
-   IF EXISTS(  SELECT 1 
-               FROM LOADPLAN WITH (NOLOCK)
-               WHERE Loadkey = @c_Loadkey
-               AND [Status] > '0' 
-               )
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 556951
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Only Load Plan# With ''Normal'' Status Can Be Deleted. (lsp_Pre_Delete_Loadplan_STD)'   
-      GOTO EXIT_SP             
-   END                         
-  
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END  
 EXIT_SP:
 
    IF @n_continue=3  -- Error Occured - Process And Return  

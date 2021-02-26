@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_InventoryQC_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -55,90 +56,99 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
-
-   IF OBJECT_ID('tempdb..#INVENTORYQC') IS NOT NULL
-   BEGIN
-      DROP TABLE #INVENTORYQC
-   END
-
-   CREATE TABLE #INVENTORYQC( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
-   SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-   SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
-   DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
-         ,x.value('@DataType','NVARCHAR(128)') AS datatype
-   FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
-      
-   OPEN CUR_SCHEMA
-
-   FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_TableName = ''
-      IF CHARINDEX('.', @c_ColumnName) > 0 
+   
+   --(mingle01) - START
+   BEGIN TRY
+      IF OBJECT_ID('tempdb..#INVENTORYQC') IS NOT NULL
       BEGIN
-         SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-         SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         DROP TABLE #INVENTORYQC
       END
 
-      SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-      SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-      SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+      CREATE TABLE #INVENTORYQC( Rowid  INT NOT NULL IDENTITY(1,1) )   
+
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
+            ,x.value('@DataType','NVARCHAR(128)') AS datatype
+      FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
          
+      OPEN CUR_SCHEMA
+
       FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-   END
-   CLOSE CUR_SCHEMA
-   DEALLOCATE CUR_SCHEMA
-       
-       
-   IF LEN(@c_SQLSchema) > 0 
-   BEGIN
-      SET @c_SQL = N'ALTER TABLE #INVENTORYQC  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
+         BEGIN
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         END
+
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+            
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      END
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+          
+          
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #INVENTORYQC  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+            
+         EXEC (@c_SQL)
+
+         SET @c_SQL = N' INSERT INTO #INVENTORYQC' --+  @c_UpdateTable 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+            
+         EXEC sp_executeSQl @c_SQL
+                           , N'@x_XMLData xml'
+                           , @x_XMLData
          
-      EXEC (@c_SQL)
+      END
 
-      SET @c_SQL = N' INSERT INTO #INVENTORYQC' --+  @c_UpdateTable 
-                  + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                  + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                  + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
-         
-      EXEC sp_executeSQl @c_SQL
-                        , N'@x_XMLData xml'
-                        , @x_XMLData
-      
-   END
+      DECLARE 
+            @c_FromFacility      NVARCHAR(5)  = ''
+         ,  @c_ToFacility        NVARCHAR(5)  = ''
+         ,  @c_Storerkey         NVARCHAR(15) = ''
+         ,  @c_QC_Key            NVARCHAR(10) = ''
 
-   DECLARE 
-         @c_FromFacility      NVARCHAR(5)  = ''
-      ,  @c_ToFacility        NVARCHAR(5)  = ''
-      ,  @c_Storerkey         NVARCHAR(15) = ''
-      ,  @c_QC_Key            NVARCHAR(10) = ''
-
-   SELECT TOP 1 
-            @c_FromFacility = ISNULL(IQCH.From_Facility,'')
-         ,  @c_ToFacility   = ISNULL(IQCH.To_Facility,'')
-   FROM  #INVENTORYQC IQCH WITH (NOLOCK) 
+      SELECT TOP 1 
+               @c_FromFacility = ISNULL(IQCH.From_Facility,'')
+            ,  @c_ToFacility   = ISNULL(IQCH.To_Facility,'')
+      FROM  #INVENTORYQC IQCH WITH (NOLOCK) 
 
 
-   IF @c_FromFacility = ''  
-   BEGIN
+      IF @c_FromFacility = ''  
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557701
+         SET @c_errmsg = 'From Facility is required! (lsp_Validate_InventoryQC_Std)'
+         GOTO EXIT_SP
+      END
+
+      IF @c_ToFacility = ''  
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 557702
+         SET @c_errmsg = 'To Facility is required! (lsp_Validate_InventoryQC_Std)'
+         GOTO EXIT_SP
+      END
+   END TRY
+   
+   BEGIN CATCH
       SET @n_Continue = 3
-      SET @n_Err = 557701
-      SET @c_errmsg = 'From Facility is required! (lsp_Validate_InventoryQC_Std)'
+      SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
-   END
-
-   IF @c_ToFacility = ''  
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 557702
-      SET @c_errmsg = 'To Facility is required! (lsp_Validate_InventoryQC_Std)'
-      GOTO EXIT_SP
-   END
-  
+   END CATCH
+   --(mingle01) - END
    EXIT_SP:
    
    IF @n_Continue = 3

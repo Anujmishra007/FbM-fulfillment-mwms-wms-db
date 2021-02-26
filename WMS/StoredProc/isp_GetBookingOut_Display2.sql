@@ -24,7 +24,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 14-MAR-2017 Wan01    1.1   Fixed Order_Status                        */  
-/* 22-MAR-2017 TLTING   1.1   foce Commit tran -                        */
+/* 22-MAR-2017 TLTING   1.2   foce Commit tran -                        */
+/* 17-SEP-2020 WLChooi  1.3   WMS-15141 - Add new columns, extra remark */
+/*                            and status (WL01)                         */
 /************************************************************************/
 CREATE PROC [dbo].[isp_GetBookingOut_Display2]
       (  @c_Facility          NVARCHAR(5)
@@ -70,6 +72,8 @@ BEGIN
       ,  Order_Status_Color   INT            NULL
       ,  Remarks              NVARCHAR(30)   NULL
       ,  BKO_Status           NVARCHAR(10)   NULL
+      ,  MBOLKey              NVARCHAR(10)   NULL   --WL01
+      ,  CallTime             DATETIME       NULL   --WL01
       )
 
 
@@ -157,13 +161,19 @@ BEGIN
                 +                 ' THEN ''Late For Loading'''
                 +                 ' WHEN ISNUMERIC(FAC.USERDEFINE07) = 0 AND BKO.Status = ''1'' AND GETDATE() > DATEADD(hour, 0, BKO.BookingDate)'
                 +                 ' THEN ''Late For Loading'''
+                +                 ' WHEN ISNULL(CL.Short,''N'') = ''Y'' AND BKO.Status = ''9'' AND BKO.CallTime > BKO.EndTime'   --WL01
+                +                 ' THEN ''Early Departure'''   --WL01
                 +                 ' ELSE '''''
                 +                 ' END'
                 + ' ,BKO.Status'
+                + ' ,BKO.MBOLKey '    --WL01
+                + ' ,BKO.CallTime '   --WL01
                 + ' FROM BOOKING_OUT BKO WITH (NOLOCK)'
                 + ' JOIN LOADPLAN    LP  WITH (NOLOCK) ON (BKO.BookingNo = LP.BookingNo)'
                 + ' JOIN ORDERS      OH  WITH (NOLOCK) ON (LP.Loadkey = OH.Loadkey)'
                 + ' JOIN FACILITY    FAC WITH (NOLOCK) ON (BKO.Facility = FAC.Facility)'
+                + ' LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.Listname = ''DBoardCFG'' AND CL.Code = ''ExtraRemark'' AND (CL.Code2 = OH.Facility OR CL.Code2 = '''') '   --WL01
+                + '                                         AND CL.Long = ''d_dw_booking_dashboard_out_dsp2'' ) '   --WL01
                 + ' ' + @c_SQLWhere  
                 + ' AND OH.Storerkey = N''' + RTRIM(@c_Storerkey) + ''''
                 + ' ORDER BY BKO.Facility'
@@ -172,9 +182,83 @@ BEGIN
 
       INSERT INTO #TMP_DSP2 ( Facility, Storerkey, BookingNo, BookingDate, EndTime, Loc, ToLoc, Loc2
                             , VehicleType, Truck_Name, Truck_Status, Order_Status, Remarks, BKO_Status
+                            , MBOLKey, CallTime   --WL01
                             )
       EXEC ( @c_SQL )
 
+      --WL01 START
+      DECLARE @c_MBOLKey       NVARCHAR(10)
+            , @c_OrderStatus   NVARCHAR(50) = ''
+            , @c_TruckStatus   NVARCHAR(50) = ''
+            , @n_CountCaseID   INT = 0
+            , @n_CountURNNo    INT = 0
+            , @c_ExtraStatus   NVARCHAR(10) = 'N'
+      
+      SELECT @c_ExtraStatus = ISNULL(CL.Short,'N')
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'DBoardCFG'
+      AND CL.Code = 'ExtraStatus'
+      AND CL.Storerkey = @c_Storerkey
+      AND CL.Long = 'd_dw_booking_dashboard_out_dsp2'
+      AND (CL.code2 = @c_Facility OR CL.code2 = '')
+      ORDER BY CASE WHEN ISNULL(CL.code2,'') = '' THEN 2 ELSE 1 END
+      
+      DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT MBOLKey
+      FROM #TMP_DSP2
+      WHERE ISNULL(MBOLKey,'') <> '' AND @c_ExtraStatus = 'Y'
+      
+      OPEN CUR_LOOP
+      	
+      FETCH NEXT FROM CUR_LOOP INTO @c_MBOLKey
+      
+      WHILE @@FETCH_STATUS <> - 1
+      BEGIN
+      	SET @c_OrderStatus = ''
+      	SET @c_TruckStatus = ''
+
+      	--Order Status
+      	SELECT @c_OrderStatus = CASE WHEN MAX(LOC.LocationCategory) <> 'Staging' THEN '' 
+      		                         WHEN ISNULL(MAX(LOC.LocationCategory),'') = '' THEN '' 
+      		                         ELSE 'Staged' END
+      	FROM PICKDETAIL (NOLOCK)
+      	JOIN ORDERS (NOLOCK) ON PICKDETAIL.OrderKey = ORDERS.OrderKey
+      	JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.Loc
+      	WHERE ORDERS.MBOLKey = @c_MBOLKey
+      	--AND LOC.LocationCategory <> 'Staging'
+
+      	IF EXISTS (SELECT 1
+      	           FROM RDT.rdtScanToTruck RSTT (NOLOCK)
+      	           WHERE RSTT.MBOLKey = @c_MBOLKey)
+      	BEGIN
+      		SET @c_OrderStatus = 'Loading'
+      		SET @c_TruckStatus = 'Loading'   --Truck Status
+      	END
+      	
+      	--Truck Status
+         SELECT @n_CountCaseID = COUNT(DISTINCT PD.CaseID)
+              , @n_CountURNNo  = COUNT(DISTINCT RSTT.URNNo)
+         FROM ORDERS OH (NOLOCK)
+         JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+         LEFT JOIN rdt.RDTScanToTruck RSTT (NOLOCK) ON OH.MBOLKey = RSTT.MBOLKey
+         WHERE OH.MBOLKey = @c_MBOLKey
+
+         IF ISNULL(@n_CountCaseID,0) > 0 AND ISNULL(@n_CountURNNo,0) > 0 AND ISNULL(@n_CountCaseID,0) = ISNULL(@n_CountURNNo,0)
+         BEGIN
+         	SET @c_TruckStatus = 'Loaded'
+         END
+         
+         UPDATE #TMP_DSP2
+         SET Order_Status = CASE WHEN @c_OrderStatus = '' THEN Order_Status ELSE '5-' + @c_OrderStatus END
+           , Truck_Status = CASE WHEN @c_TruckStatus = '' THEN Truck_Status ELSE @c_TruckStatus END
+         WHERE MBOLKey = @c_MBOLKey
+         
+      	FETCH NEXT FROM CUR_LOOP INTO @c_MBOLKey
+      END
+      CLOSE CUR_LOOP
+      DEALLOCATE CUR_LOOP
+      --WL01 END
+      
       SET @n_TotalCnt = 0
       SELECT @n_TotalCnt = COUNT(1)
       FROM #TMP_DSP2
@@ -190,10 +274,12 @@ BEGIN
          INSERT INTO #TMP_DSP2 ( Facility, Storerkey, BookingNo, BookingDate, EndTime, Loc, ToLoc, Loc2
                                , VehicleType, Truck_Name, Truck_Status, Order_Status, Order_Status_Color, Remarks
                                , BKO_Status
+                               , MBOLKey, CallTime   --WL01
                                )
          VALUES ('', '', NULL, NULL, NULL, '', '', ''
                , '', '','', '', NULL, ''
-               , '')
+               , ''
+               , '', NULL)   --WL01
 
          SET @n_RecToIns = @n_RecToIns - 1
       END
@@ -224,6 +310,8 @@ BEGIN
                                     END
          ,Remarks
          ,PageGroup = CEILING ( (RowNo * 1.00) / @n_RowPerPage )
+         ,MBOLKey   --WL01
+         ,CallTime  --WL01
    FROM #TMP_DSP2
    ORDER BY RowNo
 
