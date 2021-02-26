@@ -22,18 +22,22 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date        Author   Ver   Purposes                                  */ 
+/* 27-Jan-2021 Wan01    1.1   WMS-16079 - RG - LEGO - EXCEED Packing    */ 
 /************************************************************************/  
  
-CREATE PROCEDURE [dbo].[isp_PackAutoCloseCarton_Wrapper ]
+CREATE PROCEDURE [dbo].[isp_PackAutoCloseCarton_Wrapper]
    @c_PickSlipNo  NVARCHAR(10),
    @c_Storerkey   NVARCHAR(15),  
    @c_ScanSkuCode NVARCHAR(50),
-   @c_Sku         NVARCHAR(20),    
+   @c_Sku         NVARCHAR(20),  
    @c_CloseCarton NVARCHAR(10) OUTPUT,
    @b_Success     INT      OUTPUT,
    @n_Err         INT      OUTPUT, 
-   @c_ErrMsg      NVARCHAR(250) OUTPUT
+   @c_ErrMsg      NVARCHAR(250) OUTPUT,
+   @n_CartonNo    INT          = 0,          -- Add default @n_CartonNo to SP
+   @c_ScanColumn  NVARCHAR(50) = '',         -- Add default @c_ScanColumn to SP
+   @n_Qty         INT          = 0           -- Add default @n_Qty to SP  
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -44,6 +48,8 @@ BEGIN
    DECLARE @n_continue      INT,
            @c_SPCode        NVARCHAR(30),
            @c_SQL           NVARCHAR(MAX)
+           
+         , @c_SQLParms     NVARCHAR(4000) = ''  --(Wan01)
                                                       
    SELECT @c_SPCode = '', @n_err=0, @b_success=1, @c_errmsg=''
       
@@ -72,11 +78,34 @@ BEGIN
        GOTO QUIT_SP
    END
    
-   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Pickslipno, @c_Storerkey, @c_ScanSkuCode, @c_Sku, @c_CloseCarton OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT,' +
-                ' @c_ErrMsg OUTPUT '
-     
+   --(Wan01) - Add @n_CartonNo,  @c_ScanColumn,  @n_Qty
+   SET @c_SQL = 'EXEC ' + @c_SPCode 
+              + '  @c_Pickslipno  = @c_Pickslipno'
+              + ', @c_Storerkey   = @c_Storerkey'
+              + ', @c_ScanSkuCode = @c_ScanSkuCode'
+              + ', @c_Sku         = @c_Sku'
+              + ', @c_CloseCarton = @c_CloseCarton OUTPUT'
+              + ', @b_Success     = @b_Success OUTPUT'
+              + ', @n_Err         = @n_Err     OUTPUT'
+              + ', @c_ErrMsg      = @c_ErrMsg  OUTPUT'
+              + ', @n_CartonNo    = @n_CartonNo'           
+              + ', @c_ScanColumn  = @c_ScanColumn'  
+              + ', @n_Qty         = @n_Qty'
+                        
+   SET @c_SQLParms = N'@c_Pickslipno    NVARCHAR(10)'
+                   + ', @c_Storerkey      NVARCHAR(15)'
+                   + ', @c_ScanSkuCode    NVARCHAR(50)'
+                   + ', @c_Sku            NVARCHAR(20)'
+                   + ', @c_CloseCarton    NVARCHAR(10) OUTPUT'
+                   + ', @b_Success        int OUTPUT'
+                   + ', @n_Err            int OUTPUT'
+                   + ', @c_ErrMsg         NVARCHAR(250) OUTPUT'
+                   + ', @n_CartonNo       INT' 
+                   + ', @c_ScanColumn     NVARCHAR(50)'  
+                   + ', @n_Qty            INT'                          
+             
    EXEC sp_executesql @c_SQL, 
-        N'@c_Pickslipno NVARCHAR(10), @c_Storerkey NVARCHAR(15), @c_ScanSkuCode NVARCHAR(50), @c_Sku NVARCHAR(20), @c_CloseCarton NVARCHAR(10) OUTPUT, @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
+        @c_SQLParms,
         @c_Pickslipno,
         @c_Storerkey,
         @c_ScanSkuCode,
@@ -84,7 +113,10 @@ BEGIN
         @c_CloseCarton OUTPUT,
         @b_Success OUTPUT,                      
         @n_Err OUTPUT, 
-        @c_ErrMsg OUTPUT
+        @c_ErrMsg OUTPUT,
+        @n_CartonNo,  
+        @c_ScanColumn, 
+        @n_Qty
                          
    IF @b_Success <> 1
    BEGIN
