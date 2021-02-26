@@ -103,7 +103,8 @@ GO
 /*                            Custom SP                                 */ 
 /* 21-MAY-2020  Wan08    3.6  Fixed no record retrieve if Loc.HostWHCode*/
 /*                            is null & OverAllocPickByHostWHCode is off*/
-/* 17-FEB-2021  LZG      3.7  INC1430235 - Extended to NVARCHAR 128 to  */
+/* 01-Dec-2020  NJOW16   3.7  WMS-15746 get channel hold qty by config  */  
+/* 17-FEB-2021  LZG      3.8  INC1430235 - Extended to NVARCHAR 128 to  */
 /*                            follow WMS tables AddWho & EditWho (ZG01) */
 /************************************************************************/  
   
@@ -163,6 +164,9 @@ BEGIN
          , @c_OverAllocPickLoc_SP       NVARCHAR(30) --NJOW15            
          , @c_CallSource                NVARCHAR(20) --NJOW15
          , @n_OverAlQtyLeftToFulfill    INT          --NJOW15
+         , @c_SourceType                NVARCHAR(50) --NJOW16
+         , @c_SourceKey                 NVARCHAR(30) --NJOW16
+         , @n_ChannelHoldQty            INT          --NJOW16
       
     -- NJOW05       
     DECLARE   
@@ -2174,6 +2178,30 @@ BEGIN
                                     SET @n_Channel_Qty_Available = 0   
                  
                                     SET @n_AllocatedHoldQty = 0   
+                                    
+                                    --NJOW16 S
+                                    SET @c_SourceType = 'nspOrderProcessing'
+                                    SET @n_ChannelHoldQty = 0
+                                    IF ISNULL(@c_Orderkey,'') = ''                                       
+                                       SET @c_SourceKey = SPACE(10) + @c_oskey 
+                                    ELSE
+                                       SET @c_SourceKey = @c_Orderkey   
+
+                                    EXEC isp_ChannelAllocGetHoldQty_Wrapper  
+                                       @c_StorerKey = @c_aStorerkey, 
+                                       @c_Sku = @c_aSKU,  
+                                       @c_Facility = @c_aFacility,           
+                                       @c_Lot = @c_aLOT,
+                                       @c_Channel = @c_Channel,
+                                       @n_Channel_ID = @n_Channel_ID,   
+                                       @c_SourceKey = @c_SourceKey,
+                                       @c_SourceType = @c_SourceType, 
+                                       @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
+                                       @b_Success = @b_Success OUTPUT,
+                                       @n_Err = @n_Err OUTPUT, 
+                                       @c_ErrMsg = @c_ErrMsg OUTPUT
+                                    --NJOW16 E   
+                                    
                                     /*(Wan05) - START
                                     SELECT @n_AllocatedHoldQty = ISNULL(SUM(p.Qty),0)   
                                     FROM PICKDETAIL AS p WITH(NOLOCK)   
@@ -2187,7 +2215,7 @@ BEGIN
                                     AND p.Channel_ID = @n_Channel_ID               
                                     (Wan05) - END */
                                          
-                                    SELECT @n_Channel_Qty_Available = ci.Qty - (ci.QtyAllocated - @n_AllocatedHoldQty) - ci.QtyOnHold  
+                                    SELECT @n_Channel_Qty_Available = ci.Qty - (ci.QtyAllocated - @n_AllocatedHoldQty) - ci.QtyOnHold - @n_ChannelHoldQty --NJOW16
                                     FROM ChannelInv AS ci WITH(NOLOCK)  
                                     WHERE ci.Channel_ID = @n_Channel_ID  
                                     IF @n_Channel_Qty_Available < @n_cQtyAvailable  

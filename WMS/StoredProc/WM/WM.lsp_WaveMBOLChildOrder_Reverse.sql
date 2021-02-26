@@ -26,6 +26,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMBOLChildOrder_Reverse] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -80,171 +82,186 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   SET @n_ErrGroupKey = 0
-
-   SET @c_MBOLKey = ISNULL(@c_MBOLKey,'')
-
-   INSERT INTO @T_ORDERS (Orderkey)
-   SELECT [VALUE]
-   FROM STRING_SPLIT ( @c_OrderkeyList , '|' )  
-
-   INSERT INTO @T_CASEID (CaseID)
-   SELECT [VALUE]
-   FROM STRING_SPLIT ( @c_CaseIDList , '|' )  
-
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN
-      INSERT INTO @T_CASEORDER   
-         (  Orderkey
-         ,  Store
-         ,  PExternOrderkey
-         ,  CaseID
-         )
-      SELECT DISTINCT 
-               PD.Orderkey
-            ,  Store = ISNULL(OH.Consigneekey,'')   
-            ,  PExternOrderkey  = ISNULL(OHP.ExternOrderkey,'')              
-            ,  CTN.CaseID
-      FROM @T_CASEID CTN
-      JOIN PICKDETAIL  PD WITH (NOLOCK) ON  CTN.CaseID = PD.CaseID
-      JOIN ORDERS      OH WITH (NOLOCK) ON  OH.Orderkey = PD.Orderkey
-      JOIN ORDERDETAIL OD WITH (NOLOCK) ON  OD.Orderkey = PD.Orderkey
-                                        AND OD.OrderLineNumber = PD.OrderLineNumber 
-      JOIN ORDERS       OHP WITH (NOLOCK) ON  OHP.Orderkey= OD.UserDefine09
-      JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON  DPD.Childid = PD.CaseID 
-                                          AND DPD.Userdefine01 = OD.Mbolkey 
-      WHERE PD.ShipFlag <> 'Y' 
-      AND   PD.[Status] < '9'
-      AND ( OD.UserDefine09 <> '' AND OD.UserDefine09 IS NOT NULL )
-      AND ( OD.UserDefine10 <> '' AND OD.UserDefine10 IS NOT NULL )
-
-      SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT T.CaseID
-      FROM @T_CASEORDER T
-      WHERE NOT EXISTS (SELECT 1 
-                        FROM @T_ORDERS SO
-                        JOIN @T_CASEID CTN ON SO.RowRef = CTN.RowRef
-                        WHERE T.Orderkey = SO.Orderkey
-                        AND   T.CaseID   = CTN.CaseID
-                        )
-      OPEN @CUR_CTN
-   
-      FETCH NEXT FROM @CUR_CTN INTO @c_CaseID                                                                              
-                                    
-      WHILE @@FETCH_STATUS <> -1
+      IF @n_Err <> 0 
       BEGIN
-         SET @n_Err = 556701
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow Partial Child Order selected to reverse'
-                       + '. Carton #: ' + @c_CaseID 
-                       + '. (lsp_WaveMBOLChildOrder_Reverse) |' +  @c_CaseID 
-
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_WaveKey
-            ,  @c_Refkey2     = @c_MBOLkey
-            ,  @c_Refkey3     = @c_Orderkey
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-         FETCH NEXT FROM @CUR_CTN INTO @c_CaseID   
-      END
-      CLOSE @CUR_CTN
-      DEALLOCATE @CUR_CTN
-
-      IF @n_ErrGroupKey > 0
-      BEGIN
-         SET @n_Continue = 3
          GOTO EXIT_SP
       END
+    
+      EXECUTE AS LOGIN = @c_UserName
    END
-
-   SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT T.Orderkey
-      ,   T.Store
-      ,   T.PExternOrderkey
-      ,   T.CaseID
-   FROM @T_CASEORDER T
-   ORDER BY T.CaseID
-         ,  T.Orderkey
-
-   OPEN @CUR_CTN
+   --(mingle01) - END
    
-   FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
-                              ,  @c_Store
-                              ,  @c_PExternOrderkey
-                              ,  @c_CaseID                                                                              
-                                    
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      BEGIN TRY
+   --(mingle01) - START
+   BEGIN TRY
+      SET @n_ErrGroupKey = 0
 
-         EXEC [dbo].[isp_ChildOrder_Reverse]  
-              @c_MBOLkey         = @c_MBOLkey
-            , @c_Orderkey        = @c_Orderkey
-            , @c_Store           = @c_Store
-            , @c_PExternOrderkey = @c_PExternOrderkey
-            , @c_CaseID          = @c_CaseID
-            , @b_Success         = @b_Success      OUTPUT
-            , @n_Err             = @n_Err          OUTPUT 
-            , @c_ErrMsg          = @c_ErrMsg       OUTPUT 
-      END TRY
+      SET @c_MBOLKey = ISNULL(@c_MBOLKey,'')
 
-      BEGIN CATCH
-         SET @n_Err = 556702
-         SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ChildOrder_Reverse. (lsp_WaveMBOLChildOrder_Reverse)'   
-                        + '(' + @c_ErrMsg + ')' 
-                    
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_WaveKey
-            ,  @c_Refkey2     = @c_MBOLkey
-            ,  @c_Refkey3     = @c_Orderkey
-            ,  @c_WriteType   = 'ERROR' 
-            ,  @n_err2        = @n_err 
-            ,  @c_errmsg2     = @c_errmsg 
-            ,  @b_Success     = @b_Success   OUTPUT 
-            ,  @n_err         = @n_err       OUTPUT 
-            ,  @c_errmsg      = @c_errmsg    OUTPUT
+      INSERT INTO @T_ORDERS (Orderkey)
+      SELECT [VALUE]
+      FROM STRING_SPLIT ( @c_OrderkeyList , '|' )  
 
-         IF (XACT_STATE()) = -1  
+      INSERT INTO @T_CASEID (CaseID)
+      SELECT [VALUE]
+      FROM STRING_SPLIT ( @c_CaseIDList , '|' )  
+
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN
+         INSERT INTO @T_CASEORDER   
+            (  Orderkey
+            ,  Store
+            ,  PExternOrderkey
+            ,  CaseID
+            )
+         SELECT DISTINCT 
+                  PD.Orderkey
+               ,  Store = ISNULL(OH.Consigneekey,'')   
+               ,  PExternOrderkey  = ISNULL(OHP.ExternOrderkey,'')              
+               ,  CTN.CaseID
+         FROM @T_CASEID CTN
+         JOIN PICKDETAIL  PD WITH (NOLOCK) ON  CTN.CaseID = PD.CaseID
+         JOIN ORDERS      OH WITH (NOLOCK) ON  OH.Orderkey = PD.Orderkey
+         JOIN ORDERDETAIL OD WITH (NOLOCK) ON  OD.Orderkey = PD.Orderkey
+                                           AND OD.OrderLineNumber = PD.OrderLineNumber 
+         JOIN ORDERS       OHP WITH (NOLOCK) ON  OHP.Orderkey= OD.UserDefine09
+         JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON  DPD.Childid = PD.CaseID 
+                                             AND DPD.Userdefine01 = OD.Mbolkey 
+         WHERE PD.ShipFlag <> 'Y' 
+         AND   PD.[Status] < '9'
+         AND ( OD.UserDefine09 <> '' AND OD.UserDefine09 IS NOT NULL )
+         AND ( OD.UserDefine10 <> '' AND OD.UserDefine10 IS NOT NULL )
+
+         SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT DISTINCT T.CaseID
+         FROM @T_CASEORDER T
+         WHERE NOT EXISTS (SELECT 1 
+                           FROM @T_ORDERS SO
+                           JOIN @T_CASEID CTN ON SO.RowRef = CTN.RowRef
+                           WHERE T.Orderkey = SO.Orderkey
+                           AND   T.CaseID   = CTN.CaseID
+                           )
+         OPEN @CUR_CTN
+      
+         FETCH NEXT FROM @CUR_CTN INTO @c_CaseID                                                                              
+                                       
+         WHILE @@FETCH_STATUS <> -1
          BEGIN
-            ROLLBACK TRAN
+            SET @n_Err = 556701
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow Partial Child Order selected to reverse'
+                          + '. Carton #: ' + @c_CaseID 
+                          + '. (lsp_WaveMBOLChildOrder_Reverse) |' +  @c_CaseID 
 
-            WHILE @@TRANCOUNT < @n_StartTCnt
-            BEGIN
-               BEGIN TRAN
-            END
-         END  
-      END CATCH
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_MBOLkey
+               ,  @c_Refkey3     = @c_Orderkey
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
 
+            FETCH NEXT FROM @CUR_CTN INTO @c_CaseID   
+         END
+         CLOSE @CUR_CTN
+         DEALLOCATE @CUR_CTN
+
+         IF @n_ErrGroupKey > 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP
+         END
+      END
+
+      SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT T.Orderkey
+         ,   T.Store
+         ,   T.PExternOrderkey
+         ,   T.CaseID
+      FROM @T_CASEORDER T
+      ORDER BY T.CaseID
+            ,  T.Orderkey
+
+      OPEN @CUR_CTN
+      
       FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
                                  ,  @c_Store
                                  ,  @c_PExternOrderkey
-                                 ,  @c_CaseID     
-   END
-   CLOSE @CUR_CTN
-   DEALLOCATE @CUR_CTN
+                                 ,  @c_CaseID                                                                              
+                                       
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         BEGIN TRY
+
+            EXEC [dbo].[isp_ChildOrder_Reverse]  
+                 @c_MBOLkey         = @c_MBOLkey
+               , @c_Orderkey        = @c_Orderkey
+               , @c_Store           = @c_Store
+               , @c_PExternOrderkey = @c_PExternOrderkey
+               , @c_CaseID          = @c_CaseID
+               , @b_Success         = @b_Success      OUTPUT
+               , @n_Err             = @n_Err          OUTPUT 
+               , @c_ErrMsg          = @c_ErrMsg       OUTPUT 
+         END TRY
+
+         BEGIN CATCH
+            SET @n_Err = 556702
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ChildOrder_Reverse. (lsp_WaveMBOLChildOrder_Reverse)'   
+                           + '(' + @c_ErrMsg + ')' 
+                       
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_WaveKey
+               ,  @c_Refkey2     = @c_MBOLkey
+               ,  @c_Refkey3     = @c_Orderkey
+               ,  @c_WriteType   = 'ERROR' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+            IF (XACT_STATE()) = -1  
+            BEGIN
+               ROLLBACK TRAN
+
+               WHILE @@TRANCOUNT < @n_StartTCnt
+               BEGIN
+                  BEGIN TRAN
+               END
+            END  
+         END CATCH
+
+         FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
+                                    ,  @c_Store
+                                    ,  @c_PExternOrderkey
+                                    ,  @c_CaseID     
+      END
+      CLOSE @CUR_CTN
+      DEALLOCATE @CUR_CTN
+   END TRY
+   
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
 EXIT_SP:
 
 

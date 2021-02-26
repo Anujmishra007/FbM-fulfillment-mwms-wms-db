@@ -25,6 +25,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveReleaseToWCS]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -54,75 +56,91 @@ BEGIN
    SET @n_Err     = 0
                
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
-   BEGIN
-      SET @c_ErrMsg = 'Confirm Release to WCS ?'
-
-      SET @n_PreAllocOrderCnt = 0
-      SELECT @n_PreAllocOrderCnt = COUNT(DISTINCT WD.Orderkey)
-      FROM WAVEDETAIL WD WITH (NOLOCK)
-      JOIN PREALLOCATEPICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)
-      WHERE WD.Wavekey = @c_Wavekey
-      AND PD.Qty > 0
-
-      IF @n_PreAllocOrderCnt > 0
+      IF @n_Err <> 0 
       BEGIN
-         SET @c_ErrMsg = 'Found ' + CONVERT(NVARCHAR(10), @n_PreAllocOrderCnt) + ' Pre-Allocated Orders, Confirm Release to WCS ?'
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
+   END
+   --(mingle01) - END
+   
+   --(mingle01) - START
+   BEGIN TRY
+
+      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
+      BEGIN
+         SET @c_ErrMsg = 'Confirm Release to WCS ?'
+
+         SET @n_PreAllocOrderCnt = 0
+         SELECT @n_PreAllocOrderCnt = COUNT(DISTINCT WD.Orderkey)
+         FROM WAVEDETAIL WD WITH (NOLOCK)
+         JOIN PREALLOCATEPICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)
+         WHERE WD.Wavekey = @c_Wavekey
+         AND PD.Qty > 0
+
+         IF @n_PreAllocOrderCnt > 0
+         BEGIN
+            SET @c_ErrMsg = 'Found ' + CONVERT(NVARCHAR(10), @n_PreAllocOrderCnt) + ' Pre-Allocated Orders, Confirm Release to WCS ?'
+         END
+
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = '' 
+            ,  @c_Refkey3     = '' 
+            ,  @c_WriteType   = 'QUESTION' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT       
+
+         SET @n_WarningNo = 1
+         GOTO EXIT_SP 
       END
 
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_WaveKey
-         ,  @c_Refkey2     = '' 
-         ,  @c_Refkey3     = '' 
-         ,  @c_WriteType   = 'QUESTION' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT       
+      BEGIN TRY
+         EXEC [dbo].[isp_WaveReleaseToWCS_Wrapper]    
+              @c_WaveKey = @c_WaveKey    
+            , @b_Success = @b_Success OUTPUT
+            , @n_Err     = @n_Err     OUTPUT 
+            , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
+      END TRY
 
-      SET @n_WarningNo = 1
-      GOTO EXIT_SP 
-   END
+      BEGIN CATCH
+         SET @b_Success = 0
+         SET @c_ErrMsg = ERROR_MESSAGE()
+      END CATCH
+     
+      IF @b_Success = 0 
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 556401
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_WaveReleaseToWCS_Wrapper. (lsp_WaveReleaseToWCS)'   
+                        + '(' + @c_ErrMsg + ')'       
+         GOTO EXIT_SP   
+      END
 
-   BEGIN TRY
-      EXEC [dbo].[isp_WaveReleaseToWCS_Wrapper]    
-           @c_WaveKey = @c_WaveKey    
-         , @b_Success = @b_Success OUTPUT
-         , @n_Err     = @n_Err     OUTPUT 
-         , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
+      SET @c_ErrMsg = 'Wave Release To WCS action Completed.'
    END TRY
-
+   
    BEGIN CATCH
-      SET @b_Success = 0
-      SET @c_ErrMsg = ERROR_MESSAGE()
-   END CATCH
-  
-   IF @b_Success = 0 
-   BEGIN
       SET @n_Continue = 3
-      SET @n_Err = 556401
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_WaveReleaseToWCS_Wrapper. (lsp_WaveReleaseToWCS)'   
-                     + '(' + @c_ErrMsg + ')'       
-      GOTO EXIT_SP   
-   END
-
-   SET @c_ErrMsg = 'Wave Release To WCS action Completed.'
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END 
 EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

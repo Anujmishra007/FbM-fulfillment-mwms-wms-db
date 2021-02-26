@@ -25,6 +25,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_WOMJobCancWO_Wrapper]  
   @c_JobKey         NVARCHAR(10)
@@ -35,12 +37,10 @@ CREATE PROCEDURE [WM].[lsp_WOMJobCancWO_Wrapper]
 , @c_UserName       NVARCHAR(128) = ''
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -49,42 +49,57 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT 
+   --(mingle01) - START   
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
-   EXECUTE AS LOGIN = @c_UserName
-   
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+    
+      EXECUTE AS LOGIN = @c_UserName
    END
-
+   --(mingle01) - END
+   
+   --(mingle01) - START
    BEGIN TRY
-      EXEC isp_JobCancWO
-         @c_JobKey         = @c_JobKey          
-      ,  @c_WorkOrderkey   = @c_WorkOrderkey    
-      ,  @b_Success        = @b_Success         OUTPUT   
-      ,  @n_Err            = @n_Err             OUTPUT
-      ,  @c_Errmsg         = @c_Errmsg          OUTPUT
-   END TRY
 
+      BEGIN TRY
+         EXEC isp_JobCancWO
+            @c_JobKey         = @c_JobKey          
+         ,  @c_WorkOrderkey   = @c_WorkOrderkey    
+         ,  @b_Success        = @b_Success         OUTPUT   
+         ,  @n_Err            = @n_Err             OUTPUT
+         ,  @c_Errmsg         = @c_Errmsg          OUTPUT
+      END TRY
+
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @n_err = 553351
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                       + ': Error Executing isp_JobCancWO. (lsp_WOMJobCancWO_Wrapper)'
+                       + '( ' + @c_errmsg + ' )'
+      END CATCH  
+
+      IF @b_success = 0 OR @n_Err <> 0        
+      BEGIN        
+         SET @n_continue = 3      
+         GOTO EXIT_SP
+      END          
+   END TRY
+   
    BEGIN CATCH
       SET @n_Continue = 3
-      SET @n_err = 553351
       SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                    + ': Error Executing isp_JobCancWO. (lsp_WOMJobCancWO_Wrapper)'
-                    + '( ' + @c_errmsg + ' )'
-   END CATCH  
-
-   IF @b_success = 0 OR @n_Err <> 0        
-   BEGIN        
-      SET @n_continue = 3      
       GOTO EXIT_SP
-   END          
-
+   END CATCH
+   --(mingle01) - END 
     
    EXIT_SP:
    

@@ -37,6 +37,7 @@ GO
 /* 12-Feb-2020  Wan05   1.8   SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */ 
 /* 01-Dec-2020  Shong   1.9   Handle PENDCANC SO Status  (SWT99)        */
+/* 01-Dec-2020  NJOW01  2.0   WMS-15746 get channel hold qty by config  */  
 /************************************************************************/
 CREATE PROC  [dbo].[isp_BatchSKUPreProcessing]
    @n_AllocBatchNo BIGINT
@@ -86,6 +87,7 @@ DECLARE @c_OtherParms NVARCHAR(200),  -- For CDC
   ,@n_Channel_ID                    BIGINT = 0         -- (SWT02) 
   ,@n_Channel_Qty_Available         INT = 0            -- (SWT02)
   ,@n_AllocatedHoldQty              INT = 0            -- (SWT02)
+  ,@n_ChannelHoldQty                INT                --NJOW01
    
 SET @c_DefaultStrategykey = ''               --(Wan01)
 
@@ -1158,6 +1160,23 @@ BEGIN
                   BEGIN
                      SET @n_Channel_Qty_Available = 0 
                      SET @n_AllocatedHoldQty = 0 
+
+                     --NJOW01 S              
+                     SET @n_ChannelHoldQty = 0                      
+                     EXEC isp_ChannelAllocGetHoldQty_Wrapper  
+                        @c_StorerKey = @c_aStorerkey, 
+                        @c_Sku = @c_aSKU,  
+                        @c_Facility = @c_Facility,           
+                        @c_Lot = @c_sLOT,
+                        @c_Channel = @c_Channel,
+                        @n_Channel_ID = @n_Channel_ID,   
+                        @c_SourceKey = @n_AllocBatchNo,
+                        @c_SourceType = 'isp_BatchSkuPreProcessing', 
+                        @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
+                        @b_Success = @b_Success OUTPUT,
+                        @n_Err = @n_Err OUTPUT, 
+                        @c_ErrMsg = @c_ErrMsg OUTPUT
+                     --NJOW01 E   
                
                      /*--(Wan04) - START
                      SELECT @n_AllocatedHoldQty = SUM(p.Qty) 
@@ -1172,7 +1191,7 @@ BEGIN
                      AND p.Channel_ID = @n_Channel_ID 
                      --(Wan04) - END*/
                
-                     SELECT @n_Channel_Qty_Available = ci.Qty - ( ci.QtyAllocated - @n_AllocatedHoldQty ) - ci.QtyOnHold               
+                     SELECT @n_Channel_Qty_Available = ci.Qty - ( ci.QtyAllocated - @n_AllocatedHoldQty ) - ci.QtyOnHold - @n_ChannelHoldQty --NJOW01            
                      FROM ChannelInv AS ci WITH(NOLOCK)
                      WHERE ci.Channel_ID = @n_Channel_ID
                      IF @n_Channel_Qty_Available < @n_QtyAvailable

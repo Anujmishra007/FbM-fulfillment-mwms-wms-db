@@ -95,6 +95,7 @@ GO
 /* 18-Feb-2020  Wan05   4.3   WMS-11774                                 */         
 /* 27-Mar-2020  NJOW25  4.4   WMS-12491 Get Over allocation pick loc by */
 /*                            Custom SP                                 */
+/* 01-Dec-2020  NJOW26  4.5   WMS-15746 get channel hold qty by config  */  
 /************************************************************************/    
 
 CREATE PROC [dbo].[ispWaveProcessing]      
@@ -160,7 +161,8 @@ BEGIN
             @c_WconsoOption4              NVARCHAR(50), --NJOW24
             @c_WconsoOption5              NVARCHAR(4000), --NJOW24
             @c_OverAllocPickLoc_SP        NVARCHAR(30), --NJOW25            
-            @n_OverAlQtyLeftToFulfill     INT          --NJOW25
+            @n_OverAlQtyLeftToFulfill     INT,          --NJOW25
+            @n_ChannelHoldQty             INT           --NJOW07
               
     --NJOW17
     DECLARE @c_OparmsOption1             NVARCHAR(50), 
@@ -1848,7 +1850,7 @@ BEGIN
                                        ,@c_LOT         = @c_aLOT
                                        ,@n_Channel_ID  = @n_Channel_ID OUTPUT
                                        ,@b_Success     = @b_Success OUTPUT
-                                 ,@n_ErrNo       = @n_Err OUTPUT
+                                       ,@n_ErrNo       = @n_Err OUTPUT
                                        ,@c_ErrMsg      = @c_ErrMsg OUTPUT                 
                                        ,@c_CreateIfNotExist = 'N'
                                  END TRY
@@ -1864,6 +1866,24 @@ BEGIN
                               BEGIN
                                  SET @n_Channel_Qty_Available = 0 
                                  SET @n_AllocatedHoldQty = 0 
+
+                                 --NJOW26 S                                    
+                                 SET @n_ChannelHoldQty = 0
+                                 EXEC isp_ChannelAllocGetHoldQty_Wrapper  
+                                    @c_StorerKey = @c_aStorerkey, 
+                                    @c_Sku = @c_aSKU,  
+                                    @c_Facility = @c_aFacility,           
+                                    @c_Lot = @c_aLOT,
+                                    @c_Channel = @c_Channel,
+                                    @n_Channel_ID = @n_Channel_ID,   
+                                    @c_SourceKey = @c_Wavekey,
+                                    @c_SourceType = 'ispWaveProcessing', 
+                                    @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
+                                    @b_Success = @b_Success OUTPUT,
+                                    @n_Err = @n_Err OUTPUT, 
+                                    @c_ErrMsg = @c_ErrMsg OUTPUT
+                                 --NJOW26 E   
+                                                                  
                                   /*(Wan03) - START
                                  SELECT @n_AllocatedHoldQty = ISNULL(SUM(p.Qty),0) 
                                  FROM PICKDETAIL AS p WITH(NOLOCK) 
@@ -1877,7 +1897,7 @@ BEGIN
                                  AND p.Channel_ID = @n_Channel_ID 
                                  (Wan03) - END*/
                                  
-                                 SELECT @n_Channel_Qty_Available = ci.Qty - ( ci.QtyAllocated - @n_AllocatedHoldQty ) - ci.QtyOnHold                                 
+                                 SELECT @n_Channel_Qty_Available = ci.Qty - ( ci.QtyAllocated - @n_AllocatedHoldQty ) - ci.QtyOnHold - @n_ChannelHoldQty --NJOW26                                 
                                  FROM ChannelInv AS ci WITH(NOLOCK)
                                  WHERE ci.Channel_ID = @n_Channel_ID
                                  

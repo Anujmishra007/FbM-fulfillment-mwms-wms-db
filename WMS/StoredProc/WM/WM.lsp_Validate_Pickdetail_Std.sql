@@ -24,6 +24,7 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Validate_Pickdetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -55,100 +56,109 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
-
-   IF OBJECT_ID('tempdb..#PICKDETAIL') IS NOT NULL
-   BEGIN
-      DROP TABLE #PICKDETAIL
-   END
-
-   CREATE TABLE #PICKDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
-   SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-   SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
-   DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
-         ,x.value('@DataType','NVARCHAR(128)') AS datatype
-   FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
-      
-   OPEN CUR_SCHEMA
-
-   FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_TableName = ''
-      IF CHARINDEX('.', @c_ColumnName) > 0 
+   
+   --(mingle01) - START
+   BEGIN TRY
+      IF OBJECT_ID('tempdb..#PICKDETAIL') IS NOT NULL
       BEGIN
-         SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-         SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         DROP TABLE #PICKDETAIL
       END
 
-      SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-      SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-      SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+      CREATE TABLE #PICKDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
+
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
+            ,x.value('@DataType','NVARCHAR(128)') AS datatype
+      FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
          
+      OPEN CUR_SCHEMA
+
       FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-   END
-   CLOSE CUR_SCHEMA
-   DEALLOCATE CUR_SCHEMA
-       
-       
-   IF LEN(@c_SQLSchema) > 0 
-   BEGIN
-      SET @c_SQL = N'ALTER TABLE #PICKDETAIL  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
-         
-      EXEC (@c_SQL)
 
-      SET @c_SQL = N' INSERT INTO #PICKDETAIL' --+  @c_UpdateTable 
-                  + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                  + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                  + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
+         BEGIN
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         END
+
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+            
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      END
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+          
+          
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #PICKDETAIL  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+            
+         EXEC (@c_SQL)
+
+         SET @c_SQL = N' INSERT INTO #PICKDETAIL' --+  @c_UpdateTable 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+            
+         EXEC sp_executeSQl @c_SQL
+                           , N'@x_XMLData xml'
+                           , @x_XMLData
          
-      EXEC sp_executeSQl @c_SQL
-                        , N'@x_XMLData xml'
-                        , @x_XMLData
+      END
+
+      DECLARE 
+            @c_OrderKey    NVARCHAR(10) = ''
+         ,  @c_Lot         NVARCHAR(10) = ''
+         ,  @c_Loc         NVARCHAR(15) = ''
+         ,  @c_ID          NVARCHAR(15) = ''        
+         ,  @n_Qty         INT = 0 
+
+            
+      SELECT  
+            @c_OrderKey  = PD.OrderKey
+         ,  @c_Lot = PD.Lot
+         ,  @c_Loc = PD.Loc 
+         ,  @c_ID  = PD.ID
+         ,  @n_Qty = PD.Qty 
+      FROM  #PICKDETAIL PD  
       
-   END
+      SET @b_Success = 1
+      SET @n_Err = 0 
+      SET @c_Errmsg = ''
 
-   DECLARE 
-         @c_OrderKey    NVARCHAR(10) = ''
-      ,  @c_Lot         NVARCHAR(10) = ''
-      ,  @c_Loc         NVARCHAR(15) = ''
-      ,  @c_ID          NVARCHAR(15) = ''        
-      ,  @n_Qty         INT = 0 
+      EXEC isp_ValidatePickdetail
+            @c_OrderKey          = @c_OrderKey   
+         ,  @c_Lot               = @c_Lot        
+         ,  @c_Loc               = @c_Loc        
+         ,  @c_ID                = @c_ID         
+         ,  @n_Qty               = @n_Qty        
+         ,  @b_ReturnCode        = @b_Success      OUTPUT  -- 0 = OK, -1 = Error, 1 = Warning 
+         ,  @n_err               = @n_err          OUTPUT        
+         ,  @c_errmsg            = @c_errmsg       OUTPUT      
+         ,  @n_WarningNo         = @n_WarningNo    OUTPUT
+         ,  @c_ProceedWithWarning= @c_ProceedWithWarning             
 
-         
-   SELECT  
-         @c_OrderKey  = PD.OrderKey
-      ,  @c_Lot = PD.Lot
-      ,  @c_Loc = PD.Loc 
-      ,  @c_ID  = PD.ID
-      ,  @n_Qty = PD.Qty 
-   FROM  #PICKDETAIL PD  
+      IF @b_Success <> 0
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_SP
+      END          
+   END TRY
    
-   SET @b_Success = 1
-   SET @n_Err = 0 
-   SET @c_Errmsg = ''
-
-   EXEC isp_ValidatePickdetail
-         @c_OrderKey          = @c_OrderKey   
-      ,  @c_Lot               = @c_Lot        
-      ,  @c_Loc               = @c_Loc        
-      ,  @c_ID                = @c_ID         
-      ,  @n_Qty               = @n_Qty        
-      ,  @b_ReturnCode        = @b_Success      OUTPUT  -- 0 = OK, -1 = Error, 1 = Warning 
-      ,  @n_err               = @n_err          OUTPUT        
-      ,  @c_errmsg            = @c_errmsg       OUTPUT      
-      ,  @n_WarningNo         = @n_WarningNo    OUTPUT
-      ,  @c_ProceedWithWarning= @c_ProceedWithWarning             
-
-   IF @b_Success <> 0
-   BEGIN
+   BEGIN CATCH
       SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
-   END          
-   
+   END CATCH
+   --(mingle01) - END
    EXIT_SP:
    
    IF @n_Continue = 3
