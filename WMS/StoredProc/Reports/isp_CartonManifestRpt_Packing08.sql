@@ -1,10 +1,15 @@
-if (objectProperty(object_id('dbo.nspAL_TH04'), 'IsPRocedure') is not null)
-   drop procedure dbo.isp_CartonManifestRpt_Packing08 
-GO
-SET QUOTED_IDENTIFIER OFF 
-GO
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_CartonManifestRpt_Packing08]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE [dbo].[isp_CartonManifestRpt_Packing08]  
+END
+GO 
+
 SET ANSI_NULLS OFF
-GO    
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+  
 /************************************************************************/  
 /* Stored Procedure: isp_CartonManifestRpt_Packing08                    */  
 /* Creation Date:26-SEP-2019                                            */  
@@ -25,7 +30,7 @@ GO
 /* Date         Author        Purposes                                  */  
 /************************************************************************/  
   
-CREATE PROC isp_CartonManifestRpt_Packing08  
+CREATE PROC [dbo].[isp_CartonManifestRpt_Packing08]  
    @c_loadkey  NVARCHAR(20) ,  
    @c_Orderkey NVARCHAR(20),  
    @b_debug    NVARCHAR(1) = '0'   
