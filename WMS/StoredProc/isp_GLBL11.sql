@@ -28,6 +28,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 20-Jan-2020  WLChooi  1.1  Performance Tuning (WL01)                 */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_GLBL11] ( 
@@ -74,11 +75,13 @@ BEGIN
 	 
 	 IF ISNULL(@c_Prefix,'') = ''
 	 BEGIN
-	    SELECT TOP 1 @c_Prefix = O.RDD 
-	    FROM PICKHEADER PH (NOLOCK)
-	    JOIN ORDERS O (NOLOCK) ON PH.ExternOrderkey = O.Loadkey
-	    WHERE PH.Pickheaderkey = @c_Pickslipno	 	
-	    ORDER BY O.RDD DESC
+       SELECT TOP 1 @c_Prefix = O.RDD 
+       FROM PICKHEADER PH (NOLOCK)
+       --JOIN ORDERS O (NOLOCK) ON PH.ExternOrderkey = O.Loadkey             --WL01
+       JOIN LOADPLANDETAIL LPD (NOLOCK) ON PH.ExternOrderkey = LPD.Loadkey   --WL01
+       JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey                   --WL01
+       WHERE PH.Pickheaderkey = @c_Pickslipno	 	
+       ORDER BY O.RDD DESC
 	 END
 
    IF ISNULL(@c_Prefix,'') = ''
