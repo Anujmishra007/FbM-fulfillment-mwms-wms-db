@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_03]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_03]') and OBJECTPROPERTY(Id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_03]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,6 +33,8 @@ GO
 /* 16/03/2019   ML       1.7  Add new fields:                            */
 /*                            OrderLineNo, Amount_Sum, Lbl_TotalCarton   */
 /* 17/12/2019   ML       1.8  Fix UOM Grouping issue                     */
+/* 23/06/2020   ML       1.9  Add Total_Doc_Amount                       */
+/* 08/07/2020   ML       1.10 Add new fields                             */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_03] (
@@ -55,6 +57,7 @@ BEGIN
    [MAPFIELD]
       BrandLogoCode, ReportTitle, SplitPrintKey, DocNumber, ExternOrderkey, LFLRefNo, ReferenceNo,
       ReferenceNo2, ReferenceNo3, ReferenceNo4, ReferenceNo5, Remark,
+      BilltoKey, B_Company, B_Address, B_Phone, B_Fax, B_Contact, Consigneekey, C_Company, C_Address, C_Phone, C_Fax, C_Contact
       LineGrouping, OrderLineNo, Descr, LineRemark, LineRef1, LineRef2, LineRef3,
       Qty, UOM, Unitprice, Discount, Amount, GrossAmount,
       ShowField, ConsigneePrefix
@@ -64,26 +67,26 @@ BEGIN
       T_LineNo, T_Sku, T_Descr, T_LineRemark, T_LineRef1, T_LineRef2, T_LineRef3,
       T_Qty, T_UOM, T_UnitPrice, T_PriceFormat, T_Discount, T_Amount, T_GrossAmount, T_TotalQty, T_TotalAmount, T_TotalCarton,
       T_ReceivedBy, T_TermsNCond1, T_TermsNCond2,
-      N_Xpos1, N_Xpos_LineNo, N_Xpos_Sku, N_Xpos_Descr, N_Xpos_LineRemark, N_Xpos_LineRef1, N_Xpos_LineRef2, N_Xpos_LineRef3,
+      N_Xpos1, N_Xpos_S_Company, N_Xpos_LineNo, N_Xpos_Sku, N_Xpos_Descr, N_Xpos_LineRemark, N_Xpos_LineRef1, N_Xpos_LineRef2, N_Xpos_LineRef3,
       N_Xpos_Qty, N_Xpos_UOM, N_Xpos_UnitPrice, N_Xpos_Discount, N_Xpos_Amount, N_Xpos_GrossAmount,
       N_Xpos_TermsNCond1, N_Xpos_TermsNCond2, N_Xpos_ReceivedBy, N_Xpos_TotalQty, N_Xpos_TotalAmount,
       N_Ypos_TermsNCond1, N_Ypos_TermsNCond2, N_Ypos_ReceivedBy,
-      N_Width_LineNo, N_Width_Sku, N_Width_Descr, N_Width_LineRemark, N_Width_LineRef1, N_Width_LineRef2, N_Width_LineRef3,
+      N_Width_S_Company, N_Width_LineNo, N_Width_Sku, N_Width_Descr, N_Width_LineRemark, N_Width_LineRef1, N_Width_LineRef2, N_Width_LineRef3,
       N_Width_Qty, N_Width_UOM, N_Width_UnitPrice, N_Width_Discount, N_Width_Amount, N_Width_GrossAmount,
       N_Width_TermsNCond1, N_Width_TermsNCond2, N_Width_ReceivedBy, N_Width_TotalQty, N_Width_TotalAmount
    [SHOWFIELD]
       UseLFLogo, UseCode39, UsePackDetail,
-      Storer_B_ComAddr, AddressDirectConcate, City, Contact, Country, OrderType,
+      Storer_B_ComAddr, AddressDirectConcate, City, State, Zip, Fax, Contact, Country, OrderType,
       ReferenceNo, ReferenceNo2, ReferenceNo3, ReferenceNo4, ReferenceNo5,
       ChineseDescr, LineRef1, LineRef2, LineRef3, LineRemark, ChineseLineRemark, UnitPrice, Discount, Amount, GrossAmount, TotalAmount,
-      HideBarcode, HideAddressRect, HideLFLRefNo, HideStorerCompany, HideStorerAddress, HideBillToKey, HideBillToCompany, HideBillToAddress, HideBillToPhone,
-      HideConsigneeKey, HideShipToCompany, HideShipToAddress, HideShipToPhone, HideAddress4, HideC_Phone1, HideRemark,
+      HidePrintDate, HidePageNo, HideBarcode, HideAddressRect, HideLFLRefNo, HideStorerCompany, HideStorerAddress, HideBillToKey, HideBillToCompany, HideBillToAddress, HideBillToPhone,
+      HideConsigneeKey, HideShipToCompany, HideShipToAddress, HideShipToPhone, HideAddress4, HideC_Phone1, HideRemark, HideDeliveryDate, HideDocNumber,
       HideLineNo, HideSku, HideDescr, HideUOM, HideTotalQty, HideTotalCarton, HideReceivedBy, HideDataWindowName,
       Remark_SFont, Dethdr_SFont, Dethdr_SFont2, Detline_SFont, Detline_SFont2, Detline_SFont3, Detftr_SFont, Detftr_SFont2, Descr_SFont,
       TermsNCond1_Bold, TermsNCond1_Italic, TermsNCond2_Bold, TermsNCond2_Italic,
       LineGrouping_Separateline,
       BoldDeliveryDate, BoldDocNumber, BoldLFLRefNo, BoldReferenceNo, BoldReferenceNo2, BoldReferenceNo3, BoldReferenceNo4, BoldReferenceNo5,
-      PrintByOrder, WaterMark, DescrAutoHeight, LineRemarkAutoHeight, SumAmount
+      PrintByOrder, WaterMark, DescrAutoHeight, LineRemarkAutoHeight, SumAmount, Total_Doc_Amount
    [SQLJOIN]
 */
 
@@ -158,6 +161,18 @@ BEGIN
          , @c_ReferenceNo4Exp    NVARCHAR(4000)
          , @c_ReferenceNo5Exp    NVARCHAR(4000)
          , @c_RemarkExp          NVARCHAR(4000)
+         , @c_BilltoKeyExp       NVARCHAR(4000)
+         , @c_B_CompanyExp       NVARCHAR(4000)
+         , @c_B_AddressExp       NVARCHAR(4000)
+         , @c_B_PhoneExp         NVARCHAR(4000)
+         , @c_B_FaxExp           NVARCHAR(4000)
+         , @c_B_ContactExp       NVARCHAR(4000)
+         , @c_ConsigneekeyExp    NVARCHAR(4000)
+         , @c_C_CompanyExp       NVARCHAR(4000)
+         , @c_C_AddressExp       NVARCHAR(4000)
+         , @c_C_PhoneExp         NVARCHAR(4000)
+         , @c_C_FaxExp           NVARCHAR(4000)
+         , @c_C_ContactExp       NVARCHAR(4000)
          , @c_LineGroupingExp    NVARCHAR(4000)
          , @c_DescrExp           NVARCHAR(4000)
          , @c_LineRemarkExp      NVARCHAR(4000)
@@ -187,41 +202,53 @@ BEGIN
    SELECT @c_DataWidnow = 'r_hk_delivery_note_03'
 
    CREATE TABLE #TEMP_ORDET (
-        Orderkey        NVARCHAR(10)
-      , Storerkey       NVARCHAR(15)
-      , ReportTitle     NVARCHAR(500)
-      , SplitPrintKey   NVARCHAR(500)
-      , DocNumber       NVARCHAR(500)
-      , ExternOrderkey  NVARCHAR(500)
-      , LFLRefNo        NVARCHAR(500)
-      , ReferenceNo     NVARCHAR(500)
-      , ReferenceNo2    NVARCHAR(500)
-      , ReferenceNo3    NVARCHAR(500)
-      , ReferenceNo4    NVARCHAR(500)
-      , ReferenceNo5    NVARCHAR(500)
-      , Remark          NVARCHAR(500)
-      , PickSlipNo      NVARCHAR(10)
-      , LineGrouping    NVARCHAR(500)
-      , OrderLineNumber NVARCHAR(5 )
-      , Sku             NVARCHAR(20)
-      , Descr           NVARCHAR(500)
-      , LineRemark      NVARCHAR(500)
-      , LineRef1        NVARCHAR(500)
-      , LineRef2        NVARCHAR(500)
-      , LineRef3        NVARCHAR(500)
-      , Unitprice       FLOAT
-      , Qty             FLOAT
-      , Discount        FLOAT
-      , Amount          FLOAT
-      , GrossAmount     FLOAT
-      , ShowField       NVARCHAR(4000)
-      , UOM             NVARCHAR(10)
-      , ConsigneePrefix NVARCHAR(15)
-      , BRAND_Logo_Code NVARCHAR(500)
-      , ConsolPick      NVARCHAR(1)
-      , DocKey          NVARCHAR(10)
-      , FirstOrderkey   NVARCHAR(10)
-      , OrderLineNo     NVARCHAR(500)
+        Orderkey         NVARCHAR(10)
+      , Storerkey        NVARCHAR(15)
+      , ReportTitle      NVARCHAR(500)
+      , SplitPrintKey    NVARCHAR(500)
+      , DocNumber        NVARCHAR(500)
+      , ExternOrderkey   NVARCHAR(500)
+      , LFLRefNo         NVARCHAR(500)
+      , ReferenceNo      NVARCHAR(500)
+      , ReferenceNo2     NVARCHAR(500)
+      , ReferenceNo3     NVARCHAR(500)
+      , ReferenceNo4     NVARCHAR(500)
+      , ReferenceNo5     NVARCHAR(500)
+      , Remark           NVARCHAR(500)
+      , PickSlipNo       NVARCHAR(10)
+      , BilltoKey        NVARCHAR(4000)
+      , B_Company        NVARCHAR(4000)
+      , B_Address        NVARCHAR(4000)
+      , B_Phone          NVARCHAR(4000)
+      , B_Fax            NVARCHAR(4000)
+      , B_Contact        NVARCHAR(4000)
+      , Consigneekey     NVARChAR(4000)
+      , C_Company        NVARCHAR(4000)
+      , C_Address        NVARCHAR(4000)
+      , C_Phone          NVARCHAR(4000)
+      , C_Fax            NVARCHAR(4000)
+      , C_Contact        NVARCHAR(4000)
+      , LineGrouping     NVARCHAR(500)
+      , OrderLineNumber  NVARCHAR(5 )
+      , Sku              NVARCHAR(20)
+      , Descr            NVARCHAR(500)
+      , LineRemark       NVARCHAR(500)
+      , LineRef1         NVARCHAR(500)
+      , LineRef2         NVARCHAR(500)
+      , LineRef3         NVARCHAR(500)
+      , Unitprice        MONEY
+      , Qty              INT
+      , Discount         FLOAT
+      , Amount           MONEY
+      , GrossAmount      MONEY
+      , ShowField        NVARCHAR(4000)
+      , UOM              NVARCHAR(10)
+      , ConsigneePrefix  NVARCHAR(15)
+      , BRAND_Logo_Code  NVARCHAR(500)
+      , ConsolPick       NVARCHAR(1)
+      , DocKey           NVARCHAR(10)
+      , FirstOrderkey    NVARCHAR(10)
+      , OrderLineNo      NVARCHAR(500)
    )
 
    CREATE TABLE #TEMP_COPYDESCR (
@@ -241,75 +268,126 @@ BEGIN
 
    SET @n_PickslipNoCnt = @@ROWCOUNT
 
-   -- Orderkey List
-   SELECT SeqNo    = MIN(SeqNo)
-        , ColValue = LTRIM(RTRIM(ColValue))
-     INTO #TEMP_ORDERKEY
-     FROM dbo.fnc_DelimSplit(',',replace(@as_orderkey,char(13)+char(10),','))
-    WHERE ColValue<>''
-    GROUP BY LTRIM(RTRIM(ColValue))
-
-   SET @n_OrderkeyCnt = @@ROWCOUNT
-
    -- ExternOrderkey List
    SELECT SeqNo    = MIN(SeqNo)
         , ColValue = LTRIM(RTRIM(ColValue))
      INTO #TEMP_EXTERNORDERKEY
-     FROM dbo.fnc_DelimSplit(',',replace(@as_externorderkey,char(13)+char(10),','))
+     FROM dbo.fnc_DelimSplit(',',REPLACE(@as_externorderkey,CHAR(13)+CHAR(10),','))
     WHERE ColValue<>''
     GROUP BY LTRIM(RTRIM(ColValue))
 
    SET @n_ExternOrderkeyCnt = @@ROWCOUNT
 
+   -- Orderkey List
+   SELECT SeqNo    = MIN(SeqNo)
+        , ColValue = LTRIM(RTRIM(ColValue))
+     INTO #TEMP_ORDERKEY
+     FROM dbo.fnc_DelimSplit(',',REPLACE(@as_orderkey,CHAR(13)+CHAR(10),','))
+    WHERE ColValue<>''
+    GROUP BY LTRIM(RTRIM(ColValue))
+
+   SET @n_OrderkeyCnt = @@ROWCOUNT
+
 
    -- Final Orderkey, PickslipNo List
-   SELECT Orderkey       = OH.Orderkey
-        , PickslipNo     = MAX( PIKHD.PickheaderKey )
-        , Loadkey        = MAX( OH.Loadkey )
-        , ConsolPick     = 'N'
-        , DocKey         = MAX( OH.Orderkey )
-        , Storerkey      = MAX( OH.Storerkey )
-     INTO #TEMP_FINALORDERKEY
-     FROM dbo.ORDERS        OH (NOLOCK)
-     JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>''
-    WHERE OH.Status >= '5' AND OH.Status <= '9'
-      AND ( @as_storerkey = CHAR(9) OR OH.Storerkey = @as_storerkey )
-      AND ( @as_wavekey<>'' OR @as_loadkey<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0 )
-      AND ( ISNULL(@as_wavekey,'')='' OR (@as_wavekey<>'' AND OH.Userdefine09 = @as_wavekey ) )
-      AND ( ISNULL(@as_loadkey,'')='' OR (@as_loadkey<>'' AND OH.LoadKey = @as_loadkey ) )
-      AND (@n_PickslipNoCnt=0 OR PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO) )
-      AND (@n_ExternOrderkeyCnt=0 OR OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY ) )
-      AND (@n_OrderkeyCnt=0 OR OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY ) )
-    GROUP BY OH.Orderkey
+   CREATE TABLE #TEMP_FINALORDERKEY (
+        Orderkey         NVARCHAR(10)
+      , PickslipNo       NVARCHAR(10)
+      , Loadkey          NVARCHAR(10)
+      , ConsolPick       NVARCHAR(1)
+      , DocKey           NVARCHAR(10)
+      , Storerkey        NVARCHAR(15)
+   )
+   SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
+                        + ',@as_wavekey NVARCHAR(10)'
+                        + ',@as_loadkey NVARCHAR(10)'
+                        + ',@c_DataWidnow NVARCHAR(40)'
 
-   INSERT INTO #TEMP_FINALORDERKEY
-   SELECT Orderkey       = OH.Orderkey
-        , PickslipNo     = MAX( PIKHD.PickheaderKey )
-        , Loadkey        = MAX( OH.Loadkey )
-        , ConsolPick     = MAX( CASE WHEN RptCfg.ShowFields LIKE '%,PrintByOrder,%' OR ISNULL(OH.Userdefine09,'')='' THEN 'N' ELSE 'Y' END )
-        , DocKey         = MAX( CASE WHEN RptCfg.ShowFields LIKE '%,PrintByOrder,%' OR ISNULL(OH.Userdefine09,'')='' THEN OH.Orderkey ELSE OH.Loadkey END )
-        , Storerkey      = MAX( OH.Storerkey )
-     FROM dbo.ORDERS        OH (NOLOCK)
-     JOIN dbo.PICKHEADER PIKHD WITH(NOLOCK, INDEX(IDX_PICKHD_LOADKEY) ) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'')=''
-     LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey
-     LEFT JOIN (
-        SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
-             , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
-          FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWidnow AND Short='Y'
-     ) RptCfg
-     ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1
-    WHERE OH.Loadkey<>''
-      AND OH.Status >= '5' AND OH.Status <= '9'
-      AND ( @as_storerkey = CHAR(9) OR OH.Storerkey = @as_storerkey )
-      AND ( @as_wavekey<>'' OR @as_loadkey<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0 )
-      AND ( ISNULL(@as_wavekey,'')='' OR (@as_wavekey<>'' AND OH.Userdefine09 = @as_wavekey ) )
-      AND ( ISNULL(@as_loadkey,'')='' OR (@as_loadkey<>'' AND OH.LoadKey = @as_loadkey ) )
-      AND (@n_PickslipNoCnt=0 OR PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO) )
-      AND (@n_ExternOrderkeyCnt=0 OR OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY ) )
-      AND (@n_OrderkeyCnt=0 OR OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY ) )
-      AND FOK.Orderkey IS NULL
-    GROUP BY OH.Orderkey
+   -- Discrete Orders
+   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY'
+                         + ' SELECT Orderkey   = OH.Orderkey'
+                         +       ', PickslipNo = MAX( PIKHD.PickheaderKey )'
+                         +       ', Loadkey    = MAX( OH.Loadkey )'
+                         +       ', ConsolPick = ''N'''
+                         +       ', DocKey     = MAX( OH.Orderkey )'
+                         +       ', Storerkey  = MAX( OH.Storerkey )'
+                         +   ' FROM dbo.ORDERS        OH (NOLOCK)'
+                         +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>'''''
+                         +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
+   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
+   BEGIN
+      IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Storerkey = @as_storerkey'
+      IF ISNULL(@as_wavekey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Userdefine09 = @as_wavekey'
+      IF ISNULL(@as_loadkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.LoadKey = @as_loadkey'
+      IF @n_PickslipNoCnt>0
+         SET @c_ExecStatements += ' AND PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
+      IF @n_ExternOrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY)'
+      IF @n_OrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY)'
+   END
+   ELSE
+   BEGIN
+      SET @c_ExecStatements += ' AND (1=2)'
+   END
+   SET @c_ExecStatements += ' GROUP BY OH.Orderkey'
 
+   EXEC sp_ExecuteSql @c_ExecStatements
+                    , @c_ExecArguments
+                    , @as_storerkey
+                    , @as_wavekey
+                    , @as_loadkey
+                    , @c_DataWidnow
+
+   -- Consol Orders
+   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY'
+                         + ' SELECT Orderkey   = OH.Orderkey'
+                         +       ', PickslipNo = MAX( PIKHD.PickheaderKey )'
+                         +       ', Loadkey    = MAX( OH.Loadkey )'
+                         +       ', ConsolPick = MAX( CASE WHEN RptCfg.ShowFields LIKE ''%,PrintByOrder,%'' OR ISNULL(OH.Userdefine09,'''')='''' THEN ''N'' ELSE ''Y'' END )'
+                         +       ', DocKey     = MAX( CASE WHEN RptCfg.ShowFields LIKE ''%,PrintByOrder,%'' OR ISNULL(OH.Userdefine09,'''')='''' THEN OH.Orderkey ELSE OH.Loadkey END )'
+                         +       ', Storerkey  = MAX( OH.Storerkey )'
+                         +   ' FROM dbo.ORDERS        OH (NOLOCK)'
+                         +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'''')='''''
+                         +   ' LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey'
+                         +   ' LEFT JOIN ('
+                         +      ' SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))'
+                         +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+                         +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
+                         +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
+                         +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
+                         +    ' AND OH.Loadkey<>'''''
+                         +    ' AND FOK.Orderkey IS NULL'
+   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
+   BEGIN
+      IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Storerkey = @as_storerkey'
+      IF ISNULL(@as_wavekey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Userdefine09 = @as_wavekey'
+      IF ISNULL(@as_loadkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.LoadKey = @as_loadkey'
+      IF @n_PickslipNoCnt>0
+         SET @c_ExecStatements += ' AND PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
+      IF @n_ExternOrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY)'
+      IF @n_OrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY)'
+   END
+   ELSE
+   BEGIN
+      SET @c_ExecStatements += ' AND (1=2)'
+   END
+   SET @c_ExecStatements += ' GROUP BY OH.Orderkey'
+
+   EXEC sp_ExecuteSql @c_ExecStatements
+                    , @c_ExecArguments
+                    , @as_storerkey
+                    , @as_wavekey
+                    , @as_loadkey
+                    , @c_DataWidnow
 
    SELECT DISTINCT
           PickslipNo     = FOK.PickslipNo
@@ -335,6 +413,7 @@ BEGIN
      ) X
 
 
+   -- Storerkey Loop
    DECLARE C_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT Storerkey
      FROM #TEMP_FINALORDERKEY
@@ -362,6 +441,18 @@ BEGIN
            , @c_ReferenceNo4Exp    = ''
            , @c_ReferenceNo5Exp    = ''
            , @c_RemarkExp          = ''
+           , @c_BilltoKeyExp       = ''
+           , @c_B_CompanyExp       = ''
+           , @c_B_AddressExp       = ''
+           , @c_B_PhoneExp         = ''
+           , @c_B_FaxExp           = ''
+           , @c_B_ContactExp       = ''
+           , @c_ConsigneekeyExp    = ''
+           , @c_C_CompanyExp       = ''
+           , @c_C_AddressExp       = ''
+           , @c_C_PhoneExp         = ''
+           , @c_C_FaxExp           = ''
+           , @c_C_ContactExp       = ''
            , @c_LineGroupingExp    = ''
            , @c_DescrExp           = ''
            , @c_LineRemarkExp      = ''
@@ -444,6 +535,42 @@ BEGIN
            , @c_RemarkExp          = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='Remark')), '' )
+           , @c_BilltoKeyExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='BilltoKey')), '' )
+           , @c_B_CompanyExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Company')), '' )
+           , @c_B_AddressExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Address')), '' )
+           , @c_B_PhoneExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Phone')), '' )
+           , @c_B_FaxExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Fax')), '' )
+           , @c_B_ContactExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Contact')), '' )
+           , @c_ConsigneekeyExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Consigneekey')), '' )
+           , @c_C_CompanyExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Company')), '' )
+           , @c_C_AddressExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Address')), '' )
+           , @c_C_PhoneExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Phone')), '' )
+           , @c_C_FaxExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Fax')), '' )
+           , @c_C_ContactExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Contact')), '' )
            , @c_LineGroupingExp    = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='LineGrouping')), '' )
@@ -507,6 +634,7 @@ BEGIN
       SET @c_ExecStatements = N'INSERT INTO #TEMP_ORDET'
           +' (Orderkey, Storerkey, ReportTitle, SplitPrintKey, DocNumber, ExternOrderkey, LFLRefNo, ReferenceNo, ReferenceNo2'
           + ', ReferenceNo3, ReferenceNo4, ReferenceNo5, Remark, PickslipNo'
+          + ', BilltoKey, B_Company, B_Address, B_Phone, B_Fax, B_Contact, Consigneekey, C_Company, C_Address, C_Phone, C_Fax, C_Contact'
           + ', LineGrouping, OrderLineNumber, Sku, Descr, LineRemark'
           + ', LineRef1, LineRef2, LineRef3'
           + ', Qty, UOM, Unitprice, Discount, Amount, GrossAmount, ShowField, OrderLineNo'
@@ -518,11 +646,11 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SplitPrintKeyExp  ,'')<>'' THEN @c_SplitPrintKeyExp   ELSE '''''' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DocNumberExp      ,'')<>'' THEN @c_DocNumberExp       ELSE 'IIF(FOK.ConsolPick=''Y'',FOK.DocKey,OH.ExternOrderkey)' END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DocNumberExp      ,'')<>'' THEN @c_DocNumberExp       ELSE 'UPPER(IIF(FOK.ConsolPick=''Y'',FOK.DocKey,OH.ExternOrderkey))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExternOrderkeyExp ,'')<>'' THEN @c_ExternOrderkeyExp  ELSE 'OH.ExternOrderkey' END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExternOrderkeyExp ,'')<>'' THEN @c_ExternOrderkeyExp  ELSE 'UPPER(OH.ExternOrderkey)' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LFLRefNoExp       ,'')<>'' THEN @c_LFLRefNoExp        ELSE 'IIF(FOK.ConsolPick=''Y'', '''', OH.Orderkey)' END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LFLRefNoExp       ,'')<>'' THEN @c_LFLRefNoExp        ELSE 'UPPER(IIF(FOK.ConsolPick=''Y'', '''', OH.Orderkey))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ReferenceNoExp    ,'')<>'' THEN @c_ReferenceNoExp     ELSE '''''' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -536,6 +664,30 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RemarkExp         ,'')<>'' THEN @c_RemarkExp          ELSE 'ISNULL(LTRIM(RTRIM(OH.Notes)),'''')+'' ''+ISNULL(LTRIM(RTRIM(OH.Notes2)),'''')' END + '),'''')'
                + ', FOK.PickslipNo'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BilltoKeyExp      ,'')<>'' THEN @c_BilltoKeyExp       ELSE 'UPPER(OH.BilltoKey)' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_CompanyExp      ,'')<>'' THEN @c_B_CompanyExp       ELSE 'OH.B_Company'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_AddressExp      ,'')<>'' THEN @c_B_AddressExp       ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_PhoneExp        ,'')<>'' THEN @c_B_PhoneExp         ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_FaxExp          ,'')<>'' THEN @c_B_FaxExp           ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_ContactExp      ,'')<>'' THEN @c_B_ContactExp       ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ConsigneekeyExp   ,'')<>'' THEN @c_ConsigneekeyExp    ELSE 'UPPER(OH.Consigneekey)' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_CompanyExp      ,'')<>'' THEN @c_C_CompanyExp       ELSE 'OH.C_Company'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_AddressExp      ,'')<>'' THEN @c_C_AddressExp       ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_PhoneExp        ,'')<>'' THEN @c_C_PhoneExp         ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_FaxExp          ,'')<>'' THEN @c_C_FaxExp           ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_ContactExp      ,'')<>'' THEN @c_C_ContactExp       ELSE ''''''                END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineGroupingExp   ,'')<>'' THEN @c_LineGroupingExp    ELSE ''''''              END + '),'''')'
                + ', OD.OrderLineNumber'
@@ -657,29 +809,29 @@ BEGIN
         , S_B_Phone2        = MAX ( ISNULL( LTRIM(RTRIM(STORER.B_Phone2)),'' ) )
         , S_B_Fax1          = MAX ( ISNULL( LTRIM(RTRIM(STORER.B_Fax1)),'' ) )
 
-        , BilltoKey         = RTRIM ( ISNULL( MAX( CASE WHEN LEFT(OH.BilltoKey, LEN(ORDET.ConsigneePrefix))=ORDET.ConsigneePrefix
-                                           THEN SUBSTRING(OH.BilltoKey, LEN(ORDET.ConsigneePrefix)+1, LEN(OH.BillToKey))
-                                           ELSE OH.BilltoKey END ), '' ) )
-        , B_Company         = MAX ( ISNULL( RTRIM ( OH.B_Company ), '' ) )
-        , B_Address1        = MAX ( ISNULL( OH.B_Address1, '' ) )
-        , B_Address2        = MAX ( ISNULL( OH.B_Address2, '' ) )
-        , B_Address3        = MAX ( ISNULL( OH.B_Address3, '' ) )
-        , B_Address4        = MAX ( ISNULL( OH.B_Address4, '' ) )
-        , B_Country         = MAX ( ISNULL( RTRIM ( OH.B_Country ), '' ) )
-        , B_Contact1        = MAX ( ISNULL( RTRIM ( OH.B_Contact1 ), '' ) )
-        , B_Phone1          = MAX ( ISNULL( RTRIM ( OH.B_Phone1 ), '' ) )
+        , BilltoKey         = RTRIM ( ISNULL( MAX( CASE WHEN LEFT(ORDET.BilltoKey, LEN(ORDET.ConsigneePrefix))=ORDET.ConsigneePrefix
+                                           THEN SUBSTRING(ORDET.BilltoKey, LEN(ORDET.ConsigneePrefix)+1, LEN(ORDET.BillToKey))
+                                           ELSE ORDET.BilltoKey END ), '' ) )
+        , B_Company         = MAX ( ISNULL( RTRIM ( ORDET.B_Company ), '' ) )
+        , B_Address1        = MAX( ISNULL( IIF(@c_B_AddressExp<>'',ORDET.B_Address,OH.B_Address1), '' ) )
+        , B_Address2        = MAX( ISNULL( IIF(@c_B_AddressExp<>'',''             ,OH.B_Address2), '' ) )
+        , B_Address3        = MAX( ISNULL( IIF(@c_B_AddressExp<>'',''             ,OH.B_Address3), '' ) )
+        , B_Address4        = MAX( ISNULL( IIF(@c_B_AddressExp<>'',''             ,OH.B_Address4), '' ) )
+        , B_Country         = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_AddressExp<>'', ''             , OH.B_Country ) )), '' ) )
+        , B_Contact1        = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_ContactExp<>'', ORDET.B_Contact, OH.B_Contact1) )), '' ) )
+        , B_Phone1          = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_PhoneExp  <>'', ORDET.B_Phone  , OH.B_Phone1  ) )), '' ) )
 
-        , ConsigneeKey      = RTRIM ( ISNULL( MAX( CASE WHEN LEFT(OH.ConsigneeKey, LEN(ORDET.ConsigneePrefix))=ORDET.ConsigneePrefix
-                                           THEN SUBSTRING(OH.ConsigneeKey, LEN(ORDET.ConsigneePrefix)+1, LEN(OH.ConsigneeKey))
-                                           ELSE OH.ConsigneeKey END ), '' ) )
-        , C_Company         = MAX ( ISNULL( RTRIM ( OH.C_Company ), '' ) )
-        , C_Address1        = MAX ( ISNULL( OH.C_Address1, '' ) )
-        , C_Address2        = MAX ( ISNULL( OH.C_Address2, '' ) )
-        , C_Address3        = MAX ( ISNULL( OH.C_Address3, '' ) )
-        , C_Address4        = MAX ( ISNULL( OH.C_Address4, '' ) )
-        , C_Country         = MAX ( ISNULL( RTRIM ( OH.C_Country ), '' ) )
-        , C_Contact1        = MAX ( ISNULL( RTRIM ( OH.C_Contact1 ), '' ) )
-        , C_Phone1          = MAX ( ISNULL( RTRIM ( OH.C_Phone1 ), '' ) )
+        , ConsigneeKey      = RTRIM ( ISNULL( MAX( CASE WHEN LEFT(ORDET.ConsigneeKey, LEN(ORDET.ConsigneePrefix))=ORDET.ConsigneePrefix
+                                           THEN SUBSTRING(ORDET.ConsigneeKey, LEN(ORDET.ConsigneePrefix)+1, LEN(ORDET.ConsigneeKey))
+                                           ELSE ORDET.ConsigneeKey END ), '' ) )
+        , C_Company         = MAX( ISNULL( RTRIM ( ORDET.C_Company ), '') )
+        , C_Address1        = MAX( ISNULL( IIF(@c_C_AddressExp<>'', ORDET.C_Address, OH.C_Address1), '' ) )
+        , C_Address2        = MAX( ISNULL( IIF(@c_C_AddressExp<>'', ''             , OH.C_Address2), '' ) )
+        , C_Address3        = MAX( ISNULL( IIF(@c_C_AddressExp<>'', ''             , OH.C_Address3), '' ) )
+        , C_Address4        = MAX( ISNULL( IIF(@c_C_AddressExp<>'', ''             , OH.C_Address4), '' ) )
+        , C_Country         = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_AddressExp<>'', ''             , OH.C_Country ) )), '' ) )
+        , C_Contact1        = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_ContactExp<>'', ORDET.C_Contact, OH.C_Contact1) )), '' ) )
+        , C_Phone1          = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_PhoneExp  <>'', ORDET.C_Phone  , OH.C_Phone1  ) )), '' ) )
 
         , Notes             = MAX ( ISNULL( RTRIM ( OH.Notes ), '' ) )
         , Notes2            = MAX ( ISNULL( RTRIM ( OH.Notes2 ), '' ) )
@@ -711,8 +863,8 @@ BEGIN
         , SeqOK             = MAX ( ISNULL( SelOK.SeqNo, 0 ) )
         , datawindow        = @c_DataWidnow
 
-        , B_City            = MAX ( ISNULL( RTRIM ( OH.B_City ), '' ) )
-        , C_City            = MAX ( ISNULL( RTRIM ( OH.C_City ), '' ) )
+        , B_City            = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_AddressExp<>'', '', OH.B_City) )), '' ) )
+        , C_City            = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_AddressExp<>'', '', OH.C_City) )), '' ) )
         , Type              = MAX ( ISNULL( RTRIM ( OH.Type ), '' ) )
         , ReferenceNo2      = MAX ( ISNULL( RTRIM ( ORDET.ReferenceNo2 ), '') )
         , ReferenceNo3      = MAX ( ISNULL( RTRIM ( ORDET.ReferenceNo3 ), '') )
@@ -957,6 +1109,19 @@ BEGIN
         , Lbl_TotalCarton   = CAST( RTRIM( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_TotalCarton') ) AS NVARCHAR(500))
+        , Total_Doc_Amount  = (SELECT SUM(Amount) FROM #TEMP_ORDET WHERE Dockey=ORDET.DocKey)
+        , B_State           = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_AddressExp<>'', ''             , OH.B_State   ) )), '' ) )   -- v1.2
+        , B_Zip             = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_AddressExp<>'', ''             , OH.B_Zip     ) )), '' ) )   -- v1.2
+        , B_Fax1            = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_B_FaxExp    <>'', ORDET.B_Fax    , OH.B_Fax1    ) )), '' ) )   -- v1.2
+        , C_State           = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_AddressExp<>'', ''             , OH.C_State   ) )), '' ) )   -- v1.2
+        , C_Zip             = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_AddressExp<>'', ''             , OH.C_Zip     ) )), '' ) )   -- v1.2
+        , C_Fax1            = MAX( ISNULL( LTRIM(RTRIM( IIF(@c_C_FaxExp    <>'', ORDET.C_Fax    , OH.C_Fax1    ) )), '' ) )   -- v1.2
+        , N_Xpos_S_Company  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_S_Company') ) AS NVARCHAR(50))
+        , N_Width_S_Company = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_S_Company') ) AS NVARCHAR(50))
 
    FROM #TEMP_ORDET ORDET
    JOIN dbo.ORDERS     OH (NOLOCK) ON (ORDET.FirstOrderKey = OH.Orderkey)
