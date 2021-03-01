@@ -39,6 +39,8 @@ GO
 /* 16-Jul-2020 WLChooi 1.8  WMS-14236 - Add ReportCFG to show bigger    */
 /*                          font (WL01)                                 */
 /* 29-Jul-2020 WLChooi 1.9  WMS-14236 Fix show UPPER(LOC) (WL02)        */
+/* 10-Feb-2021 WLChooi 2.0  WMS-16170 Group same SKU+LOC in one page one*/
+/*                          pickslip (WL03)                             */
 /************************************************************************/
 
 CREATE PROC nspConsoPickList22 (@as_LoadKey NVARCHAR(10) )
@@ -78,7 +80,11 @@ BEGIN
       @c_lottable02            NVARCHAR(18), --NJOW04
       @dt_lottable04           DATETIME,     --NJOW04
       @c_LogicalLoc            NVARCHAR(18),  --(CCS01)
-      @c_NOSPLITBYLINECNTZONE  NVARCHAR(10)  --NJOW05
+      @c_NOSPLITBYLINECNTZONE  NVARCHAR(10), --NJOW05
+      @n_Count                 INT = 0,      --WL03
+      @c_GroupSameSKULOC       NVARCHAR(1) = 'N',   --WL03
+      @c_PrevSKU               NVARCHAR(20) = '',   --WL03
+      @c_PrevLOC               NVARCHAR(10) = ''    --WL03
 
    SELECT @n_starttrancnt = @@TRANCOUNT, @n_continue = 1
 
@@ -323,10 +329,12 @@ BEGIN
                 TP.Putawayzone, TP.sku, TP.loc, TP.id, TP.lottable01, TP.lottable02, TP.lottable04 --NJOW04
                ,TP.LogicalLoc                                                    --CCS01
                ,CASE WHEN CLR.Code IS NOT NULL THEN 'Y' ELSE 'N' END AS NOSPLITBYLINECNTZONE --NJOW05
+               ,ISNULL(CL1.Short,'N') AS GroupSameSKULOC --WL03
          FROM   #TEMP_PICK TP
          LEFT JOIN CODELKUP CLR (NOLOCK) ON (TP.Storerkey = CLR.Storerkey AND CLR.Code = 'NOSPLITBYLINECNTZONE' 
-                                             AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_consolidated_pick22' AND ISNULL(CLR.Short,'') <> 'N') --NJOW05
-         
+                                             AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_consolidated_pick22' AND ISNULL(CLR.Short,'') <> 'N') --NJOW05                                 
+         LEFT JOIN CODELKUP CL1 (NOLOCK) ON (TP.Storerkey = CL1.Storerkey AND CL1.Code = 'GroupSameSKULOC' 
+                                             AND CL1.Listname = 'REPORTCFG' AND CL1.Long = 'r_dw_consolidated_pick22' AND ISNULL(CL1.Short,'') <> 'N') --NJOW05
          WHERE  TP.PickSlipNo IS NULL or TP.PickSlipNo = ''
          ORDER BY TP.LoadKey, TP.LocationTypeDesc,
                   TP.Putawayzone, TP.logicalloc, TP.loc, TP.sku, TP.id --NJOW04 --CS01
@@ -337,16 +345,30 @@ BEGIN
                                                     @c_Putawayzone, @c_sku, @c_loc, @c_id, @c_lottable01, @c_lottable02, @dt_lottable04 --NJOW04
                                                    ,@c_LogicalLoc                 --CCS01
                                                    ,@c_NOSPLITBYLINECNTZONE --NJOW05
+                                                   ,@c_GroupSameSKULOC   --WL03
 
          WHILE (@@Fetch_Status <> -1)
          BEGIN -- while 1
 
             SELECT @n_Linecount = @n_Linecount + 1 --NJOW04
+            
+            --WL03 S
+            IF @c_GroupSameSKULOC = 'Y' AND @c_PrevSKU <> @c_SKU AND  @c_PrevLOC <> @c_loc
+            BEGIN
+               SELECT @n_Count = COUNT(1)
+               FROM #TEMP_PICK TP
+               WHERE TP.putawayzone = @c_Putawayzone AND TP.LocationTypeDesc = @c_LocTypeDesc 
+               AND TP.SKU = @c_SKU AND TP.LOC = @c_LOC
+
+               --SELECT @c_SKU, @c_LOC, @n_Count, @n_Linecount
+            END
+            --WL03 E
 
             IF @c_PrevLoadKey <> @as_LoadKey OR
                @c_PrevLocTypeDesc <> @c_LocTypeDesc OR
                (@c_PrevPutawayzone <> @c_Putawayzone AND @c_NOSPLITBYLINECNTZONE <> 'Y') OR  --NJOW04 NJOW05
-               (@n_Linecount > 15 AND @c_NOSPLITBYLINECNTZONE <> 'Y') --NJOW04 NJOW05
+               (@n_Linecount > 15 AND @c_NOSPLITBYLINECNTZONE <> 'Y') OR --NJOW04 NJOW05   --WL03
+               (@n_Linecount + @n_Count > 15 AND @c_GroupSameSKULOC = 'Y')   --WL03
             BEGIN
                SET @c_PickSlipNo = ''
                SET @n_Linecount = 1 --NJOW04
@@ -469,11 +491,15 @@ BEGIN
             SET @c_PrevLoadKey = @as_LoadKey
             SET @c_PrevLocTypeDesc = @c_LocTypeDesc
             SET @c_PrevPutawayzone = @c_Putawayzone --NJOW04
+            SET @c_PrevSKU = @c_sku   --WL03
+            SET @c_PrevLOC = @c_loc   --WL03
+            SET @n_Count = 0   --WL03
 
             FETCH NEXT FROM C_Loadkey_LocTypeDesc INTO @as_LoadKey, @c_LocTypeDesc,
                                                        @c_Putawayzone, @c_sku, @c_loc, @c_id, @c_lottable01, @c_lottable02, @dt_lottable04 --NJOW04
                                                       ,@c_LogicalLoc         --CCS01
                                                       ,@c_NOSPLITBYLINECNTZONE --NJOW05
+                                                      ,@c_GroupSameSKULOC   --WL03
          END -- while 1
 
          CLOSE C_Loadkey_LocTypeDesc
