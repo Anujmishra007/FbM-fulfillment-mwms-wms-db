@@ -1,4 +1,4 @@
-ï»¿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Delivery_Note50]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Delivery_Note50]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
    drop procedure [dbo].[isp_Delivery_Note50]
 GO
 
@@ -26,7 +26,6 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
-/* 2021-02-02   WLChooi  1.1  WMS-16205 Add Salesman Description (WL01) */
 /************************************************************************/   
 
 CREATE PROCEDURE [dbo].[isp_Delivery_Note50]
@@ -123,7 +122,7 @@ BEGIN
         , FLOOR(SUM(PD.Qty)/MAX(P.CaseCnt)) AS QTYCTN
         , SUM(PD.Qty) % CONVERT(INT,MAX(P.CaseCnt)) AS QTYPCS
         , OH.[Type]
-        , LEFT(OH.StorerKey,3) + ' â€“ ' + LEFT(OH.Facility,3) AS Company
+        , LEFT(OH.StorerKey,3) + ' – ' + LEFT(OH.Facility,3) AS Company
         , MB.MbolKey
         , OH.StorerKey
         , ISNULL(ST.Logo,'') AS StorerLogo
@@ -147,16 +146,10 @@ BEGIN
         , ISNULL((SELECT TOP 1 UDF03 FROM #TMP_DNSIGN WHERE Code = 'DNSIGN3'),'') AS C3
         , ISNULL((SELECT TOP 1 UDF04 FROM #TMP_DNSIGN WHERE Code = 'DNSIGN3'),'') AS C4
         , ISNULL((SELECT TOP 1 UDF05 FROM #TMP_DNSIGN WHERE Code = 'DNSIGN3'),'') AS C5  
-        , ISNULL(CL2.[Description],'') AS Salescode   --WL01
    FROM MBOL MB (NOLOCK)
    JOIN ORDERS OH (NOLOCK) ON OH.MbolKey = MB.MbolKey
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Storerkey = OH.Storerkey and CL.Code = OH.PmtTerm and CL.LISTNAME = 'PMTTERM'
    LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.Storerkey = OH.Storerkey and CL1.Code = OH.[Type] and CL1.LISTNAME = 'ORDERTYPE'
-   OUTER APPLY (SELECT TOP 1 CODELKUP.[Description]
-                FROM CODELKUP (NOLOCK)
-                WHERE CODELKUP.LISTNAME = 'SalesCode'
-                AND CODELKUP.Code = OH.Salesman
-                ORDER BY CASE WHEN CL.Storerkey = OH.StorerKey THEN 1 ELSE 2 END) AS CL2
    JOIN PICKDETAIL PD (NOLOCK) ON OH.OrderKey = PD.OrderKey
    JOIN SKU S (NOLOCK) ON PD.Storerkey = S.StorerKey and PD.SKU = S.SKU
    JOIN PACK P (NOLOCK) ON PD.PackKey = P.PackKey
@@ -186,7 +179,7 @@ BEGIN
           , PD.SKU
           , S.Descr
           , OH.[Type]
-          , LEFT(OH.StorerKey,3) + ' â€“ ' + LEFT(OH.Facility,3)
+          , LEFT(OH.StorerKey,3) + ' – ' + LEFT(OH.Facility,3)
           , MB.MbolKey
           , OH.StorerKey
           , ISNULL(ST.Logo,'')
@@ -195,7 +188,6 @@ BEGIN
             CASE WHEN OH.[Type] = 'ZB55' THEN '' ELSE LTRIM(RTRIM(ISNULL(CL.Short,''))) END
           , LTRIM(RTRIM(ISNULL(CL1.UDF01,'')))
           , CASE WHEN LTRIM(RTRIM(ISNULL(CL1.UDF02,''))) = '1' THEN LTRIM(RTRIM(ISNULL(CL1.Short,''))) ELSE '' END
-          , ISNULL(CL2.[Description],'')   --WL01
    ORDER BY OH.ExternOrderKey
    
 QUIT_SP:
