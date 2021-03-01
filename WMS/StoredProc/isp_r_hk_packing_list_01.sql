@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_packing_list_01]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_packing_list_01]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_packing_list_01]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -39,6 +39,10 @@ GO
 /*                              TotalCarton, TotalQty, InvoiceAmount     */
 /* 07/08/2019   ML       1.14 Add fields TotalWeight, T_HDR_Ref, HDR_Ref */
 /*                            Add join by OrderDetail, PickDetail        */
+/* 27/02/2020   ML       1.15 Add B_PhoneExp,B_FaxExp,B_ContactExp       */
+/*                                C_PhoneExp,C_FaxExp,C_ContactExp       */
+/* 08/05/2020   ML       1.16 WMS-13282 Split Line by BatchNo (11384)    */
+/* 06/07/2020   ML       1.17 WMS-14119 Add new field LBL_CartonNo       */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_packing_list_01] (
@@ -58,14 +62,16 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+   SET ANSI_WARNINGS OFF   -- v1.15
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
       DocKey, ReportHeading, ReportTitle, ReportTitle_M2, ReportTitle_M3
       SplitPrintKey, OrderGrouping, Barcode, DocNumber, ExternOrderkey, Consigneekey
       Wavekey, PickslipNo, DeliveryDate, BuyerPO, Brand
-      B_Company, B_Address, C_Company, C_Address, B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3
-      Remark, TotalWeight, T_HDR_Ref, HDR_Ref, CtnGrouping, LineGrouping, LineSort, InvoiceAmount,
+      B_Company, B_Address, B_Phone, B_Fax, B_Contact, C_Company, C_Address, C_Phone, C_Fax, C_ContactExp
+      B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3
+      Remark, TotalWeight, T_HDR_Ref, HDR_Ref, CtnGrouping, LineGrouping, LineSort, LineSplit, InvoiceAmount,
       CartonSort, CartonNo, LabelNo, CartonWeight, CartonCBM, Dimenson, Refno, Refno2
       Style, Color, Measurement, Size, SizeSort, Sku, Dept, Descr
       LineRef, LineRef2, LineRef3, LineRemark, Qty, UOM, UnitPrice
@@ -81,7 +87,7 @@ BEGIN
       T_ShipTo_M3, T_C_Phone_M3, T_PO_No_M3, T_Total_CBM_M3, T_Total_Weight_M3, T_InvoiceAmount_M3
       T_CartonLabelNo_M3, T_OriginalUCC_M3, T_Carton_CBM_M3, T_Carton_Weight_M3, T_Dimension_M3
       T_Exporter, T_ReportHeading, T_ReportTitle, T_ReportTitle_M2, T_ReportTitle_M3
-      T_OrderGroupTitle, T_OrderGroupTotalCarton, T_OrderGroupTotalQty, T_OrderGroupTotalWeight, T_OrderGroupTotalCBM
+      T_OrderGroupTitle, T_OrderGroupTotalCarton, T_OrderGroupTotalQty, T_OrderGroupTotalWeight, T_OrderGroupTotalCBM, T_CartonNo
       N_Xpos1, N_Xpos2, N_Xpos_Remark
       N_Xpos_T_BillTo, N_Xpos_BillTo, N_Xpos_T_B_Phone, N_Xpos_B_Phone, N_Xpos_T_ShipTo, N_Xpos_ShipTo, N_Xpos_T_C_Phone, N_Xpos_C_Phone
       N_Xpos_TotalCarton, N_Xpos_TotalQty, N_Xpos_InvoiceAmount, N_Xpos_T_HDR_Ref
@@ -233,8 +239,14 @@ BEGIN
          , @c_BrandExp           NVARCHAR(4000)
          , @c_B_CompanyExp       NVARCHAR(4000)
          , @c_B_AddressExp       NVARCHAR(4000)
+         , @c_B_PhoneExp         NVARCHAR(4000)
+         , @c_B_FaxExp           NVARCHAR(4000)
+         , @c_B_ContactExp       NVARCHAR(4000)
          , @c_C_CompanyExp       NVARCHAR(4000)
          , @c_C_AddressExp       NVARCHAR(4000)
+         , @c_C_PhoneExp         NVARCHAR(4000)
+         , @c_C_FaxExp           NVARCHAR(4000)
+         , @c_C_ContactExp       NVARCHAR(4000)
          , @c_B_Company_M3Exp    NVARCHAR(4000)
          , @c_B_Address_M3Exp    NVARCHAR(4000)
          , @c_C_Company_M3Exp    NVARCHAR(4000)
@@ -246,6 +258,7 @@ BEGIN
          , @c_CtnGroupingExp     NVARCHAR(4000)
          , @c_LineGroupingExp    NVARCHAR(4000)
          , @c_LineSortExp        NVARCHAR(4000)
+         , @c_LineSplitExp       NVARCHAR(4000)
          , @c_InvoiceAmountExp   NVARCHAR(4000)
          , @c_CartonSortExp      NVARCHAR(4000)
          , @c_CartonNoExp        NVARCHAR(4000)
@@ -307,8 +320,14 @@ BEGIN
       , Brand            NVARCHAR(500)
       , B_Company        NVARCHAR(4000)
       , B_Address        NVARCHAR(4000)
+      , B_Phone          NVARCHAR(4000)
+      , B_Fax            NVARCHAR(4000)
+      , B_Contact        NVARCHAR(4000)
       , C_Company        NVARCHAR(4000)
       , C_Address        NVARCHAR(4000)
+      , C_Phone          NVARCHAR(4000)
+      , C_Fax            NVARCHAR(4000)
+      , C_Contact        NVARCHAR(4000)
       , B_Company_M3     NVARCHAR(4000)
       , B_Address_M3     NVARCHAR(4000)
       , C_Company_M3     NVARCHAR(4000)
@@ -320,6 +339,7 @@ BEGIN
       , CtnGrouping      NVARCHAR(500)
       , LineGrouping     NVARCHAR(500)
       , LineSort         NVARCHAR(500)
+      , LineSplit        NVARCHAR(500)
       , InvoiceAmount    NVARCHAR(500)
       , Sku              NVARCHAR(500)
       , Style            NVARCHAR(500)
@@ -530,8 +550,14 @@ BEGIN
            , @c_BrandExp           = ''
            , @c_B_CompanyExp       = ''
            , @c_B_AddressExp       = ''
+           , @c_B_PhoneExp         = ''
+           , @c_B_FaxExp           = ''
+           , @c_B_ContactExp       = ''
            , @c_C_CompanyExp       = ''
            , @c_C_AddressExp       = ''
+           , @c_C_PhoneExp         = ''
+           , @c_C_FaxExp           = ''
+           , @c_C_ContactExp       = ''
            , @c_B_Company_M3Exp    = ''
            , @c_B_Address_M3Exp    = ''
            , @c_C_Company_M3Exp    = ''
@@ -543,6 +569,7 @@ BEGIN
            , @c_CtnGroupingExp     = ''
            , @c_LineGroupingExp    = ''
            , @c_LineSortExp        = ''
+           , @c_LineSplitExp       = ''
            , @c_InvoiceAmountExp   = ''
            , @c_CartonSortExp      = ''
            , @c_CartonNoExp        = ''
@@ -644,12 +671,30 @@ BEGIN
            , @c_B_AddressExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='B_Address')), '' )
+           , @c_B_PhoneExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Phone')), '' )
+           , @c_B_FaxExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Fax')), '' )
+           , @c_B_ContactExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='B_Contact')), '' )
            , @c_C_CompanyExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='C_Company')), '' )
            , @c_C_AddressExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='C_Address')), '' )
+           , @c_C_PhoneExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Phone')), '' )
+           , @c_C_FaxExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Fax')), '' )
+           , @c_C_ContactExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='C_Contact')), '' )
            , @c_B_Company_M3Exp    = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='B_Company_M3')), '' )
@@ -683,6 +728,9 @@ BEGIN
            , @c_LineSortExp        = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='LineSort')), '' )
+           , @c_LineSplitExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineSplit')), '' )
            , @c_InvoiceAmountExp   = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='InvoiceAmount')), '' )
@@ -822,8 +870,9 @@ BEGIN
           +' (Orderkey, Storerkey, ReportHeading, ReportTitle, ReportTitle_M2, ReportTitle_M3'
           + ', SplitPrintKey, OrderGrouping, Barcode, DocNumber, ExternOrderkey, Consigneekey'
           + ', Wavekey, PickslipNo, PickslipNo_key, DeliveryDate, BuyerPO, Brand'
-          + ', B_Company, B_Address, C_Company, C_Address, B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3'
-          + ', Remark, TotalWeight, T_HDR_Ref, HDR_Ref, CtnGrouping, LineGrouping, LineSort, InvoiceAmount, Sku'
+          + ', B_Company, B_Address, B_Phone, B_Fax, B_Contact, C_Company, C_Address, C_Phone, C_Fax, C_Contact'
+          + ', B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3'
+          + ', Remark, TotalWeight, T_HDR_Ref, HDR_Ref, CtnGrouping, LineGrouping, LineSort, LineSplit, InvoiceAmount, Sku'
           + ', Style, Color, Measurement, Size, SizeSeq'
           + ', Descr, Dept, LineRef, LineRef2'
           + ', LineRef3, LineRemark, CartonSort, CartonNo, LabelNo, CartonWeight, CartonCBM, Dimenson'
@@ -868,9 +917,21 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_AddressExp      ,'')<>'' THEN @c_B_AddressExp       ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_PhoneExp        ,'')<>'' THEN @c_B_PhoneExp         ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_FaxExp          ,'')<>'' THEN @c_B_FaxExp           ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_ContactExp      ,'')<>'' THEN @c_B_ContactExp       ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_CompanyExp      ,'')<>'' THEN @c_C_CompanyExp       ELSE 'OH.C_Company'      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_AddressExp      ,'')<>'' THEN @c_C_AddressExp       ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_PhoneExp        ,'')<>'' THEN @c_C_PhoneExp         ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_FaxExp          ,'')<>'' THEN @c_C_FaxExp           ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_ContactExp      ,'')<>'' THEN @c_C_ContactExp       ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_Company_M3Exp   ,'')<>'' THEN @c_B_Company_M3Exp    ELSE 'CX.B_Company'      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -893,6 +954,8 @@ BEGIN
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineGroupingExp   ,'')<>'' THEN @c_LineGroupingExp    ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineSortExp       ,'')<>'' THEN @c_LineSortExp        ELSE ''''''              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineSplitExp      ,'')<>'' THEN @c_LineSplitExp       ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_InvoiceAmountExp  ,'')<>'' THEN @c_InvoiceAmountExp   ELSE '''~'''             END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -1005,8 +1068,8 @@ BEGIN
           +' (Orderkey, Storerkey, PickslipNo_key, ReportHeading, ReportTitle'
           +', ReportTitle_M2, ReportTitle_M3, SplitPrintKey, OrderGrouping, Barcode, DocNumber'
           +', ExternOrderkey, Consigneekey, Wavekey, PickslipNo, DeliveryDate'
-          +', BuyerPO, Brand, B_Company, B_Address, C_Company'
-          +', C_Address, B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3'
+          +', BuyerPO, Brand, B_Company, B_Address, B_Phone, B_Fax, B_Contact'
+          +', C_Company, C_Address, C_Phone, C_Fax, C_Contact, B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3'
           +', Remark, TotalWeight, HDR_Ref, InvoiceAmount, ConsolPick, DocKey, FirstOrderkey, Sku'
           +', ExtOrdKey01, ExtOrdKey02, ExtOrdKey03, ExtOrdKey04, ExtOrdKey05'
           +', Section)'
@@ -1031,8 +1094,14 @@ BEGIN
           +      ', Brand          = MAX(PAKDT.Brand)'
           +      ', B_Company      = MAX(PAKDT.B_Company)'
           +      ', B_Address      = MAX(PAKDT.B_Address)'
+          +      ', B_Phone        = MAX(PAKDT.B_Phone)'
+          +      ', B_Fax          = MAX(PAKDT.B_Fax)'
+          +      ', B_Contact      = MAX(PAKDT.B_Contact)'
           +      ', C_Company      = MAX(PAKDT.C_Company)'
           +      ', C_Address      = MAX(PAKDT.C_Address)'
+          +      ', C_Phone        = MAX(PAKDT.C_Phone)'
+          +      ', C_Fax          = MAX(PAKDT.C_Fax)'
+          +      ', C_Contact      = MAX(PAKDT.C_Contact)'
           +      ', B_Company_M3   = MAX(PAKDT.B_Company_M3)'
           +      ', B_Address_M3   = MAX(PAKDT.B_Address_M3)'
           +      ', C_Company_M3   = MAX(PAKDT.C_Company_M3)'
@@ -1122,8 +1191,14 @@ BEGIN
         , BuyerPO         = b.BuyerPO
         , B_Company       = b.B_Company
         , B_Address       = b.B_Address
+        , B_Phone         = b.B_Phone
+        , B_Fax           = b.B_Fax
+        , B_Contact       = b.B_Contact
         , C_Company       = b.C_Company
         , C_Address       = b.C_Address
+        , C_Phone         = b.C_Phone
+        , C_Fax           = b.C_Fax
+        , C_Contact       = b.C_Contact
         , B_Company_M3    = b.B_Company_M3
         , B_Address_M3    = b.B_Address_M3
         , C_Company_M3    = b.C_Company_M3
@@ -1177,9 +1252,9 @@ BEGIN
         , B_State            = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_State)    ELSE IIF(@c_B_AddressExp<>'','',OH.B_State)    END )), '' ) )
         , B_Zip              = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_Zip)      ELSE IIF(@c_B_AddressExp<>'','',OH.B_Zip)      END )), '' ) )
         , B_Country          = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_Country)  ELSE IIF(@c_B_AddressExp<>'','',OH.B_Country)  END )), '' ) )
-        , B_Phone1           = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Phone1   ELSE OH.B_Phone1   END )), '' ) )
-        , B_Contact1         = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Contact1 ELSE OH.B_Contact1 END )), '' ) )
-        , B_Fax1             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Fax1     ELSE OH.B_Fax1     END )), '' ) )
+        , B_Phone1           = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Phone1   ELSE IIF(@c_B_PhoneExp<>'',PAKDT.B_Phone,OH.B_Phone1) END )), '' ) )
+        , B_Contact1         = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Contact1 ELSE IIF(@c_B_ContactExp<>'',PAKDT.B_Contact,OH.B_Contact1) END )), '' ) )
+        , B_Fax1             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Fax1     ELSE IIF(@c_B_FaxExp<>'',PAKDT.B_Fax,OH.B_Fax1) END )), '' ) )
         , C_Company          = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN PAKDT.C_Company_M3 ELSE PAKDT.C_Company END, '') )
         , C_Address1         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',PAKDT.C_Address_M3,CX.Address1)   ELSE IIF(@c_C_AddressExp<>'',PAKDT.C_Address,OH.C_Address1) END, '' ) )
         , C_Address2         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address2)   ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address2) END, '' ) )
@@ -1189,9 +1264,9 @@ BEGIN
         , C_State            = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.State)      ELSE IIF(@c_C_AddressExp<>'','',OH.C_State)    END )), '' ) )
         , C_Zip              = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.Zip)        ELSE IIF(@c_C_AddressExp<>'','',OH.C_Zip)      END )), '' ) )
         , C_Country          = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.Country)    ELSE IIF(@c_C_AddressExp<>'','',OH.C_Country)  END )), '' ) )
-        , C_Phone1           = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Phone1   ELSE OH.C_Phone1   END )), '' ) )
-        , C_Contact1         = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Contact1 ELSE OH.C_Contact1 END )), '' ) )
-        , C_Fax1             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Fax1     ELSE OH.C_Fax1     END )), '' ) )
+        , C_Phone1           = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Phone1   ELSE IIF(@c_C_PhoneExp<>'',PAKDT.C_Phone,OH.C_Phone1) END )), '' ) )
+        , C_Contact1         = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Contact1 ELSE IIF(@c_C_ContactExp<>'',PAKDT.C_Contact,OH.C_Contact1) END )), '' ) )
+        , C_Fax1             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Fax1     ELSE IIF(@c_C_FaxExp<>'',PAKDT.C_Fax,OH.C_Fax1) END )), '' ) )
         , Remark             = MAX( ISNULL( RTRIM( PAKDT.Remark ), '' ) )
         , InvoiceAmount      = MAX( ISNULL( RTRIM( PAKDT.InvoiceAmount ), '' ) )
         , CartonSort         = MAX( ISNULL( RTRIM( PAKDT.CartonSort ), '' ) )
@@ -1204,7 +1279,7 @@ BEGIN
         , LineSort           = MAX( ISNULL( RTRIM ( PAKDT.LineSort ), '') )
         , Line_No            = ROW_NUMBER() OVER(PARTITION BY PAKDT.DocKey, PAKDT.CartonNo, PAKDT.LabelNo
                                ORDER BY MAX(PAKDT.CartonSort), PAKDT.LineGrouping,
-                                        MAX(PAKDT.LineSort), MAX(PAKDT.Style), MAX(PAKDT.Color), MAX(PAKDT.SizeSeq), MAX(PAKDT.Size), PAKDT.Sku )
+                                        MAX(PAKDT.LineSort), MAX(PAKDT.Style), MAX(PAKDT.Color), MAX(PAKDT.SizeSeq), MAX(PAKDT.Size), PAKDT.Sku, PAKDT.LineSplit )
         , Refno              = MAX( ISNULL( RTRIM( PAKDT.Refno ), '' ) )
         , Refno2             = MAX( ISNULL( RTRIM( PAKDT.Refno2 ), '' ) )
         , Carton_Type        = MAX( RTRIM( PI.CartonType ) )
@@ -1784,6 +1859,10 @@ BEGIN
         , N_Width_T_HDR_Ref  = CAST( RTRIM( (select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='N_Width_T_HDR_Ref') ) AS NVARCHAR(50))
+        , LineSplit          = ISNULL( RTRIM ( PAKDT.LineSplit ), '')
+        , LBL_CartonNo       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_CartonNo') ) AS NVARCHAR(500))
 
    FROM #TEMP_PAKDT PAKDT
    JOIN dbo.ORDERS OH (NOLOCK) ON PAKDT.FirstOrderKey=OH.OrderKey
@@ -1854,6 +1933,7 @@ BEGIN
           , PAKDT.LabelNo
           , PAKDT.LineGrouping
           , PAKDT.SKU
+          , PAKDT.LineSplit
 
    ORDER BY SortOrderkey, SeqPS, SeqEOK, SeqOK, DocKey, CtnGrouping, Section, CartonNo, LabelNo, Line_No
 
