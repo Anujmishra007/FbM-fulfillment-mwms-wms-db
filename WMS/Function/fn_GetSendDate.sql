@@ -58,6 +58,7 @@ BEGIN
    END;    
    RETURN @SendDate;    
 END; 
+GO
 
 GRANT EXECUTE ON [dbo].[fn_GetSendDate] TO NSQL
 GO
