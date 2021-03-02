@@ -17,7 +17,7 @@ GO
 /* 05-05-2015  1.0  James       SOS335929 Created                       */
 /************************************************************************/
 
-ALTER PROCEDURE [dbo].[isp860LblNoDecode01]
+CREATE PROCEDURE [dbo].[isp860LblNoDecode01]
    @c_LabelNo          NVARCHAR(40),
    @c_Storerkey        NVARCHAR(15),
    @c_ReceiptKey       NVARCHAR(10),
