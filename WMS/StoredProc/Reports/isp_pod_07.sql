@@ -117,24 +117,24 @@ BEGIN
    JOIN PACKHEADER PH      WITH (NOLOCK) ON (OH.Orderkey = PH.Orderkey)    
    LEFT JOIN ORDERINFO OIF WITH (NOLOCK) ON (OH.Orderkey = OIF.Orderkey)    
    WHERE OH.MBOLKey = @c_MBOLKey    
-   	 /*CS03 Start*/
-	 AND PH.Orderkey <> ''
-	 UNION ALL
-	 SELECT 
-	 OH.MBOLKey 
-	 , OH.Orderkey
-	 , OH.Loadkey
-	 , OH.Consigneekey
-	 , PH.PickSlipNo
-	 ,  ISNULL(RTRIM(OH.Deliverynote),'')            --CS02
-	 FROM ORDERS OH WITH (NOLOCK)
-	 JOIN LOADPLANDETAIL LD WITH (NOLOCK) ON OH.Orderkey = LD.Orderkey
-	 JOIN PACKHEADER PH WITH (NOLOCK) ON (LD.Loadkey = PH.Loadkey)
-	 LEFT JOIN ORDERINFO OIF WITH (NOLOCK) ON (OH.Orderkey = OIF.Orderkey)
-	 WHERE OH.MBOLKey = @c_Mbolkey 
-	 AND PH.Orderkey = ''
-	 AND PH.Loadkey <> ''
-		 /*CS03 End*/   
+       /*CS03 Start*/
+    AND PH.Orderkey <> ''
+    UNION ALL
+    SELECT 
+    OH.MBOLKey 
+    , OH.Orderkey
+    , OH.Loadkey
+    , OH.Consigneekey
+    , PH.PickSlipNo
+    ,  ISNULL(RTRIM(OH.Deliverynote),'')            --CS02
+    FROM ORDERS OH WITH (NOLOCK)
+    JOIN LOADPLANDETAIL LD WITH (NOLOCK) ON OH.Orderkey = LD.Orderkey
+    JOIN PACKHEADER PH WITH (NOLOCK) ON (LD.Loadkey = PH.Loadkey)
+    LEFT JOIN ORDERINFO OIF WITH (NOLOCK) ON (OH.Orderkey = OIF.Orderkey)
+    WHERE OH.MBOLKey = @c_Mbolkey 
+    AND PH.Orderkey = ''
+    AND PH.Loadkey <> ''
+       /*CS03 End*/   
     
    INSERT INTO #TMP_PODRPT    
       (  MBOLKey      
@@ -228,7 +228,7 @@ BEGIN
    JOIN FACILITY   FC  WITH (NOLOCK) ON (MH.Facility = FC.Facility)    
    JOIN #TMP_POD   TMP WITH (NOLOCK) ON (OH.Orderkey = TMP.Orderkey)    
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname =  'REPORTCFG' AND CL.Storerkey = OH.Storerkey       
-                                  AND CL.Code = 'RemovePODfrPODBarcode' AND CL.Long = 'r_dw_pod_07'     --mingle01 - END
+                                  AND CL.Code = 'RemovePODfrPODBarcode' AND CL.Long = 'r_dw_pod_07'     --mingle01 
    WHERE MH.MBOLKey = @c_MBOLKey    
    GROUP BY TMP.MBOLKey    
          ,  MH.Facility    
@@ -243,7 +243,8 @@ BEGIN
          ,  OH.Storerkey    
          ,  TMP.Consigneekey    
          ,  TMP.CRD    
-         --,ISNULL(RTRIM(SKU.BUSR7),'')             --CS01    
+         --,ISNULL(RTRIM(SKU.BUSR7),'')             --CS01   
+         ,  ISNULL(CL.SHORT,'')                     --mingle01 - END 
    ORDER BY TMP.Consigneekey    
          ,  TMP.CRD    
     

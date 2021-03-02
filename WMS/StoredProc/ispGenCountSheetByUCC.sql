@@ -59,6 +59,8 @@ GO
 /* 29-JUN-2016  Wan04      SOS#370874 - TW Add Cycle Count Strategy     */
 /* 08-AUG-2016  Wan05      SOS#373839 - [TW] CountSheet Generation Logic*/
 /* 23-NOV-2016  Wan06      WMS-648 - GW StockTake Parameter2 Enhancement*/
+/* 21-Jan-2021  WLChooi    WMS-15985 - Generate No. Of Loc by Count     */
+/*                         Sheet (WL01)                                 */
 /************************************************************************/
 
 CREATE PROC ispGenCountSheetByUCC (
@@ -110,9 +112,11 @@ BEGIN
          , @c_ColumnName              NVARCHAR(50)
          , @c_SheetLineColumn         NVARCHAR(1000)
          , @n_SheetLineNo             INT
-         , @c_RowRefColumn             NVARCHAR(1000)
-         , @n_RowRef                   BIGINT
+         , @c_RowRefColumn            NVARCHAR(1000)
+         , @n_RowRef                  BIGINT
          --(Wan05) - END            
+         , @n_LOCPerPage              INT                  --WL01
+         , @c_IsLOCPerPage            NVARCHAR(10) = 'Y'   --WL01
 
    SET @b_Debug = 0
    
@@ -237,6 +241,7 @@ BEGIN
                            + ',' + CountSheetSortBy07
                            + ',' + CountSheetSortBy08
       --(Wan05) - END          
+      , @n_LOCPerPage       = LocPerPage   --WL01 
    FROM StockTakeSheetParameters (NOLOCK)
    WHERE StockTakeKey = @c_StockTakeKey
    SET NOCOUNT ON
@@ -244,6 +249,14 @@ BEGIN
    IF @n_LinesPerPage = 0 OR @n_LinesPerPage IS NULL
    SELECT @n_LinesPerPage = 999
    
+   --WL01 S
+   IF @n_LOCPerPage = 0 OR @n_LOCPerPage IS NULL OR @n_LOCPerPage = 999
+   BEGIN
+   	SET @c_IsLOCPerPage = 'N'
+      SET @n_LOCPerPage = 999
+   END
+   --WL01 E
+
    EXEC ispParseParameters
       @c_StorerParm,
       'string',
@@ -2225,14 +2238,14 @@ BEGIN
       BEGIN
        -- select @c_Aisle '@c_Aisle', @c_prev_Aisle '@c_prev_Aisle', @n_LocLevel '@n_LocLevel', @n_prev_LocLevel '@n_prev_LocLevel'
          --(Wan05) - START   
-         IF (@n_LineCount > @n_LinesPerPage 
+         IF ((@n_LineCount > @n_LinesPerPage 
             AND (ISNULL(@c_Loc,'') <> ISNULL(@c_prev_LOC,'')
             OR ISNULL(@c_ID,'') <> ISNULL(@c_prev_ID,'') )  
              )
          --OR RTRIM(@c_PutawayZone) <> RTRIM(@c_PrevZone)   
          --OR RTRIM(@c_Aisle) <> RTRIM(@c_prev_Aisle)       
          --OR RTRIM(@n_LocLevel) <> RTRIM(@n_prev_LocLevel)
-         OR @n_SheetLineNo = 1  
+         OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'N'   --WL01    
          --(Wan05) - END                            
          BEGIN
             EXECUTE nspg_getkey
@@ -2245,6 +2258,23 @@ BEGIN
                   , @c_errmsg OUTPUT
             SELECT @n_LineCount = 1
          END
+
+         --WL01 S
+         IF ((@n_LineCount > @n_LOCPerPage AND (ISNULL(@c_Loc,'') <> ISNULL(@c_prev_LOC,'') OR ISNULL(@c_ID,'') <> ISNULL(@c_prev_ID,'') ))
+            OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'Y'
+         BEGIN
+            EXECUTE nspg_getkey
+                  --'CCSheetNo'
+                  @c_CCSheetNoKeyName
+                  , 10
+                  , @c_CCSheetNo OUTPUT
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+         
+            SELECT @n_LineCount = 1
+         END
+         --WL01 E
       
          --NJOW03 Start
          SET @c_GenUCCCountSheetStatus2 = ''
