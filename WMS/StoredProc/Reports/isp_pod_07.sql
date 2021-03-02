@@ -27,6 +27,8 @@ GO
 /* 02-Nov-2018  LZG       1.6 INC0452488 - Fix incorrect report Qty due */  
 /*                            to cut off of #TMP_PODRPT.PickSlipNo(ZG01)*/  
 /* 27-Aug-2018  CSCHONG   1.5 WMS-6055 - support for conso pick (CS03)  */  
+/* 26-Feb-2021  mingle01  1.6 WMS-16413 - add codelkup to remove 'POD-' */
+/*                                        for mbolkey barcode           */  
 /************************************************************************/    
 CREATE PROC [dbo].[isp_POD_07]    
            @c_MBOLKey   NVARCHAR(10)    
@@ -212,7 +214,7 @@ BEGIN
          --                AND   ORDERS.Consigneekey = OH.Consigneekey    
          --                )    
          ,CRD         = TMP.CRD    
-         ,POD_Barcode = 'POD-' + RTRIM(TMP.MBOLKey)    
+         ,POD_Barcode = CASE WHEN ISNULL(CL.SHORT,'') = 'Y' THEN RTRIM(TMP.MBOLKey) ELSE 'POD-' + RTRIM(TMP.MBOLKey)  END       --mingle01 - START
          ,'0'--FWCtn       = CASE WHEN ISNULL(RTRIM(SKU.BUSR7),'') = '20' THEN COUNT(DISTINCT PD.CaseID) ELSE 0 END    
          ,'0'--APPCtn      = CASE WHEN ISNULL(RTRIM(SKU.BUSR7),'') = '10' THEN COUNT(DISTINCT PD.CaseID) ELSE 0 END    
          ,'0'--EQCtn       = CASE WHEN ISNULL(RTRIM(SKU.BUSR7),'') = '30' THEN COUNT(DISTINCT PD.CaseID) ELSE 0 END    
@@ -225,6 +227,8 @@ BEGIN
                                      AND(SKU.Sku = PD.Sku)    
    JOIN FACILITY   FC  WITH (NOLOCK) ON (MH.Facility = FC.Facility)    
    JOIN #TMP_POD   TMP WITH (NOLOCK) ON (OH.Orderkey = TMP.Orderkey)    
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname =  'REPORTCFG' AND CL.Storerkey = OH.Storerkey       
+                                  AND CL.Code = 'RemovePODfrPODBarcode' AND CL.Long = 'r_dw_pod_07'     --mingle01 - END
    WHERE MH.MBOLKey = @c_MBOLKey    
    GROUP BY TMP.MBOLKey    
          ,  MH.Facility    
