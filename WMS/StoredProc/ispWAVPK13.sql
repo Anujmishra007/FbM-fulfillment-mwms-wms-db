@@ -18,7 +18,7 @@ GO
 /*                                                                      */  
 /* Called By: Wave                                                      */  
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -26,6 +26,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-03-01   WLChooi  1.1  WMS-15713 - AssignPackLabelToOrdCfg (WL01)*/
 /************************************************************************/  
   
 CREATE PROC [dbo].[ispWAVPK13]  
@@ -52,8 +53,9 @@ BEGIN
            @c_Loadkey                      NVARCHAR(10),  
            @c_Conso                        NVARCHAR(10) = 'N',
            @c_NewPickSlipNoGen             NVARCHAR(1) = 'N',
-           @c_AllPickslipno                NVARCHAR(4000) = ''
-  
+           @c_AllPickslipno                NVARCHAR(4000) = '',
+           @c_GetPickslipno                NVARCHAR(10) = ''   --WL01
+           
    DECLARE @n_Continue   INT,  
            @n_StartTCnt  INT,  
            @n_debug      INT  
@@ -65,6 +67,13 @@ BEGIN
   
    SELECT @n_Continue=1, @n_StartTCnt=@@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_success = 1  
   
+   --WL01 S
+   CREATE TABLE #TMP_PSNO (
+   	RowID        INT NOT NULL IDENTITY(1,1),
+      Pickslipno   NVARCHAR(10)	
+   )
+   --WL01 E
+   
    IF @@TRANCOUNT = 0  
       BEGIN TRAN  
   
@@ -302,17 +311,22 @@ BEGIN
          END  
          
          SET @c_NewPickSlipNoGen = 'Y'
-         
+
          IF ISNULL(@c_Pickslipno,'') <> ''
          BEGIN
-            IF @c_AllPickslipno = ''
-            BEGIN
-               SET @c_AllPickslipno = @c_Pickslipno
-            END
-            ELSE
-            BEGIN
-               SET @c_AllPickslipno = @c_AllPickslipno + ',' + @c_Pickslipno
-            END
+         	--WL01 S
+            --IF @c_AllPickslipno = ''
+            --BEGIN
+            --   SET @c_AllPickslipno = @c_Pickslipno
+            --END
+            --ELSE
+            --BEGIN
+            --   SET @c_AllPickslipno = @c_AllPickslipno + ',' + @c_Pickslipno
+            --END
+            
+            INSERT INTO #TMP_PSNO (Pickslipno)
+            SELECT @c_Pickslipno
+            --WL01 E
          END
 NEXT_LOOP:
          FETCH NEXT FROM CUR_DISCPACK INTO @c_Loadkey, @c_Orderkey, @c_Storerkey 
@@ -471,14 +485,19 @@ NEXT_LOOP:
 
          IF ISNULL(@c_Pickslipno,'') <> ''
          BEGIN
-            IF @c_AllPickslipno = ''
-            BEGIN
-               SET @c_AllPickslipno = @c_Pickslipno
-            END
-            ELSE
-            BEGIN
-               SET @c_AllPickslipno = @c_AllPickslipno + ',' + @c_Pickslipno
-            END
+         	--WL01 S
+            --IF @c_AllPickslipno = ''
+            --BEGIN
+            --   SET @c_AllPickslipno = @c_Pickslipno
+            --END
+            --ELSE
+            --BEGIN
+            --   SET @c_AllPickslipno = @c_AllPickslipno + ',' + @c_Pickslipno
+            --END
+            
+            INSERT INTO #TMP_PSNO (Pickslipno)
+            SELECT @c_Pickslipno
+            --WL01 E
          END
 NEXT_ConsoLOOP:
          FETCH NEXT FROM CUR_DISCPACKConso INTO @c_Loadkey, @c_Storerkey 
@@ -491,6 +510,39 @@ NEXT_ConsoLOOP:
    --BEGIN
    --   SELECT @c_Errmsg = 'Generate pack for Pickslipno ' + @c_AllPickslipno + ' is completed.'
    --END
+   
+   --WL01 S
+   IF (@n_continue = 1 OR @n_continue = 2) 
+   BEGIN  
+   	DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   	   SELECT DISTINCT Pickslipno
+   	   FROM #TMP_PSNO
+   	   ORDER BY Pickslipno
+   	   
+   	OPEN CUR_LOOP
+   		
+   	FETCH NEXT FROM CUR_LOOP INTO @c_GetPickslipno
+   	
+   	WHILE @@FETCH_STATUS <> -1
+   	BEGIN
+   		EXEC isp_AssignPackLabelToOrderByLoad
+             @c_Pickslipno = @c_GetPickslipno
+           , @b_Success    = @b_Success       OUTPUT
+           , @n_err        = @n_err           OUTPUT
+           , @c_errmsg     = @c_errmsg        OUTPUT
+           
+         IF @n_err <> 0  
+         BEGIN  
+            SELECT @n_continue = 3  
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68105  
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Exec isp_AssignPackLabelToOrderByLoad. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+            GOTO QUIT_SP
+         END  
+
+   	   FETCH NEXT FROM CUR_LOOP INTO @c_GetPickslipno
+   	END
+   END
+   --WL01 E
 
 QUIT_SP:  
    IF CURSOR_STATUS('LOCAL', 'CUR_DISCPACK') IN (0 , 1)
@@ -507,6 +559,17 @@ QUIT_SP:
    
    IF OBJECT_ID('tempdb..#TMP_DATA') IS NOT NULL
       DROP TABLE #TMP_DATA
+      
+   --WL01 S
+   IF OBJECT_ID('tempdb..#TMP_PSNO') IS NOT NULL
+      DROP TABLE #TMP_PSNO
+      
+   IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_LOOP
+      DEALLOCATE CUR_LOOP   
+   END
+   --WL01 E
    
    IF @n_Continue=3  -- Error Occured - Process AND Return
    BEGIN

@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */ 
+/* 17-11-2020  WLChooi  1.2   WMS-15571 - Revise Logic (WL01)            */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV11]      
@@ -88,8 +89,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
             ,@c_Short NVARCHAR(10)
             ,@n_QtyShort INT
             ,@n_QtyAvailable INT
-            ,@n_QtyReplen INT
-                        
+            ,@n_QtyReplen INT = 0       --WL01
+            ,@c_DocType  NVARCHAR(1)    --WL01
+            ,@c_Salesman NVARCHAR(30)   --WL01
+            ,@c_WaveType  NVARCHAR(36)  --WL01
+            ,@c_PTSStatus  NVARCHAR(10) --WL01
+            ,@c_PTLWavekey NVARCHAR(10) --WL01 
+              
     SET @c_SourceType = 'ispRLWAV11'    
     SET @c_Priority = '9'
     SET @c_TaskType = 'RPF'
@@ -125,6 +131,35 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
           SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has beed released. (ispRLWAV11)'       
         END                 
     END
+
+    --WL01 S
+    IF @n_continue = 1 OR @n_continue = 2
+    BEGIN
+        IF EXISTS (SELECT 1 FROM WAVEDETAIL WD (NOLOCK)
+                   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey 
+                   WHERE WD.Wavekey = @c_Wavekey
+                   AND OH.DocType = 'E'
+                   AND OH.[Status] < '2')
+        BEGIN
+          SELECT @n_continue = 3  
+          SELECT @n_err = 83015   
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': ECOM Order does not allow partial allocate. (ispRLWAV11)'       
+        END                 
+    END
+    
+    IF @n_continue = 1 OR @n_continue = 2
+    BEGIN
+        IF EXISTS (SELECT 1 FROM WAVEDETAIL WD (NOLOCK) 
+                   JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
+                   JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU AND S.StorerKey = PD.Storerkey
+                   WHERE WD.Wavekey = @c_Wavekey AND S.STDGROSSWGT = 0.00)
+        BEGIN
+          SELECT @n_continue = 3  
+          SELECT @n_err = 83016   
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Some of the SKU has StdGrossWgt = 0. Could not proceed further. (ispRLWAV11)'       
+        END                 
+    END
+    --WL01 E
           
     -----Get Storerkey, facility and order group
     IF  (@n_continue = 1 OR @n_continue = 2)
@@ -134,8 +169,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                      @c_Short = CL.Short,   --1=Wholesale(D) 2=Retail new launch(C) 3=Retail replenishment(C)
                      @c_UDF02 = CL.UDF02,    --D=Discrete C=Consolidate 
                      @c_DispatchCasePickMethod = W.DispatchCasePickMethod,
-                      @c_Userdefine02 = W.UserDefine02,
-                     @c_Userdefine03 = W.UserDefine03                     
+                     @c_Userdefine02 = W.UserDefine02,
+                     @c_Userdefine03 = W.UserDefine03,
+                     @c_WaveType = W.WaveType   --WL01 --Use Wavetype = PTS to distinguish PTS order --Wholesale(Discrete) Retail(Conso)                    
         FROM WAVE W (NOLOCK)
         JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
         JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
@@ -150,7 +186,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
            GOTO RETURN_SP                      
         END
         
-        IF @c_Short = '2' AND (ISNULL(@c_Userdefine02,'') = '' OR ISNULL(@c_Userdefine03,'') = '')
+        IF (@c_WaveType = 'PTS') AND (ISNULL(@c_Userdefine02,'') = '' OR ISNULL(@c_Userdefine03,'') = '')   --WL01   --Removed @c_Short = '2'
         BEGIN         
            SELECT @n_continue = 3  
            SELECT @n_err = 83030    
@@ -176,33 +212,33 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
        
        INSERT INTO PickDetail_WIP 
        (
-         PickDetailKey,      CaseID,             PickHeaderKey,
-         OrderKey,           OrderLineNumber, Lot,
-         Storerkey,          Sku,                AltSku,     UOM,
-         UOMQty,              Qty,               QtyMoved,   [Status],
-         DropID,              Loc,             ID,        PackKey,
-         UpdateSource,       CartonGroup,     CartonType,
-         ToLoc,               DoReplenish,     ReplenishZone,
-         DoCartonize,        PickMethod,      WaveKey,
-         EffectiveDate,      AddDate,         AddWho,
-         EditDate,           EditWho,         TrafficCop,
-         ArchiveCop,         OptimizeCop,     ShipFlag,
-         PickSlipNo,         TaskDetailKey,   TaskManagerReasonKey,
-         Notes,               MoveRefKey,        WIP_RefNo 
+         PickDetailKey,     CaseID,             PickHeaderKey,
+         OrderKey,          OrderLineNumber,    Lot,
+         Storerkey,         Sku,                AltSku,                    UOM,
+         UOMQty,            Qty,                QtyMoved,                  [Status],
+         DropID,            Loc,                ID,                        PackKey,
+         UpdateSource,      CartonGroup,        CartonType,
+         ToLoc,             DoReplenish,        ReplenishZone,
+         DoCartonize,       PickMethod,         WaveKey,
+         EffectiveDate,     AddDate,            AddWho,
+         EditDate,          EditWho,            TrafficCop,
+         ArchiveCop,        OptimizeCop,        ShipFlag,
+         PickSlipNo,        TaskDetailKey,      TaskManagerReasonKey,
+         Notes,             MoveRefKey,         WIP_RefNo 
        )
-       SELECT PD.PickDetailKey,  CaseID,                    PD.PickHeaderKey, 
-         PD.OrderKey,                PD.OrderLineNumber,  PD.Lot,
-         PD.Storerkey,               PD.Sku,             PD.AltSku,        PD.UOM,
-         PD.UOMQty,                  PD.Qty,             PD.QtyMoved,      PD.[Status],
-         PD.DropID,                  PD.Loc,             PD.ID,             PD.PackKey,
-         PD.UpdateSource,            PD.CartonGroup,      PD.CartonType,
-         PD.ToLoc,                   PD.DoReplenish,      PD.ReplenishZone,
-         PD.DoCartonize,             PD.PickMethod,       WD.Wavekey,
-         PD.EffectiveDate,           PD.AddDate,           PD.AddWho,
-         PD.EditDate,                PD.EditWho,           PD.TrafficCop,
-         PD.ArchiveCop,              PD.OptimizeCop,      PD.ShipFlag,
-         PD.PickSlipNo,              PD.TaskDetailKey,    PD.TaskManagerReasonKey,
-         PD.Notes,                   PD.MoveRefKey,            @c_SourceType 
+       SELECT PD.PickDetailKey,  CaseID,              PD.PickHeaderKey, 
+         PD.OrderKey,            PD.OrderLineNumber,  PD.Lot,
+         PD.Storerkey,           PD.Sku,              PD.AltSku,           PD.UOM,
+         PD.UOMQty,              PD.Qty,              PD.QtyMoved,         PD.[Status],
+         PD.DropID,              PD.Loc,              PD.ID,               PD.PackKey,
+         PD.UpdateSource,        PD.CartonGroup,      PD.CartonType,
+         PD.ToLoc,               PD.DoReplenish,      PD.ReplenishZone,
+         PD.DoCartonize,         PD.PickMethod,       WD.Wavekey,
+         PD.EffectiveDate,       PD.AddDate,          PD.AddWho,
+         PD.EditDate,            PD.EditWho,          PD.TrafficCop,
+         PD.ArchiveCop,          PD.OptimizeCop,      PD.ShipFlag,
+         PD.PickSlipNo,          PD.TaskDetailKey,    PD.TaskManagerReasonKey,
+         PD.Notes,               PD.MoveRefKey,       @c_SourceType 
        FROM WAVEDETAIL WD (NOLOCK) 
        JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
        WHERE WD.Wavekey = @c_Wavekey
@@ -253,23 +289,25 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
        END
     END              
     
-    --PTS reservation for retail new launch(2) from bulk
-    IF (@n_continue = 1 OR @n_continue = 2) AND @c_Short = '2'
+    --PTS reservation for retail new launch(2) from bulk 
+    --Updated: All orders (B2B & B2C) may choose PTS in wave, so we use WaveType to decide   --WL01
+    --Use @c_Loadkey as Sourcekey, can be loadkey / orderkey depending on @c_UDF02           --WL01
+    IF (@n_continue = 1 OR @n_continue = 2) AND (@c_WaveType = 'PTS')                        --WL01
     BEGIN      
        DECLARE cur_load CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-          SELECT DISTINCT O.Storerkey, O.Loadkey
-          FROM WAVEDETAIL WD (NOLOCK)
-          JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-          JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey 
-          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
-          JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND PD.Loc = SL.Loc
-          WHERE WD.Wavekey = @c_Wavekey
-          AND PD.Status = '0'
-          AND PD.WIP_RefNo = @c_SourceType
-          AND SL.LocationType NOT IN('PICK','CASE')
-          AND LOC.LocationType = 'OTHER'
-          AND PD.UOM IN('6','7')
-          ORDER BY O.Storerkey, O.Loadkey
+          SELECT DISTINCT O.Storerkey, CASE WHEN @c_UDF02 = 'D' THEN O.OrderKey WHEN @c_UDF02 = 'C' THEN O.Loadkey ELSE '' END   --WL01
+          FROM WAVEDETAIL WD (NOLOCK)  
+          JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+          JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey   
+          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+          JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND PD.Loc = SL.Loc  
+          WHERE WD.Wavekey = @c_Wavekey  
+          AND PD.Status = '0'  
+          AND PD.WIP_RefNo = @c_SourceType  
+          --AND SL.LocationType NOT IN('PICK','CASE')   --WL01  
+          --AND LOC.LocationType = 'OTHER'              --WL01
+          AND PD.UOM IN('6','7')  
+          ORDER BY O.Storerkey, CASE WHEN @c_UDF02 = 'D' THEN O.OrderKey WHEN @c_UDF02 = 'C' THEN O.Loadkey ELSE '' END   --WL01
 
           OPEN cur_load  
           
@@ -279,37 +317,51 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
           BEGIN             
              SELECT @c_DeviceId = '', @c_IPAddress = '', @c_PortNo = '', @c_DevicePosition = '', @c_PTSLOC = '', @c_PTSLoadkey = ''
              
-             SELECT TOP 1 @c_DeviceId = DP.DeviceID, 
-                          @c_IPAddress = DP.IPAddress, 
-                          @c_PortNo = DP.PortNo, 
-                          @c_DevicePosition = DP.DevicePosition, 
-                          @c_PTSLOC = LOC.Loc,
-                          @c_PTSLoadkey = PTL.Loadkey
-             FROM LOC (NOLOCK) 
-             JOIN DEVICEPROFILE DP (NOLOCK) ON LOC.Loc = DP.Loc 
-             LEFT JOIN RDT.rdtPTLStationLog PTL (NOLOCK) ON LOC.Loc = PTL.Loc 
-             WHERE LOC.Loc BETWEEN @c_Userdefine02 AND @c_Userdefine03                  
-             AND LOC.LocationCategory = 'PTS'
-             AND LOC.Facility = @c_Facility
-             AND DP.DeviceType = 'STATION'       
-             AND (PTL.RowRef IS NULL 
-                  OR (PTL.Loadkey = @c_Loadkey AND PTL.Wavekey = @c_Wavekey)
-                  )
-             ORDER BY CASE WHEN PTL.Loadkey = @c_Loadkey THEN 1 ELSE 2 END, LOC.LogicalLocation, LOC.Loc
-
+             SELECT TOP 1 @c_DeviceId = DP.DeviceID,   
+                          @c_IPAddress = DP.IPAddress,   
+                          @c_PortNo = DP.PortNo,   
+                          @c_DevicePosition = DP.DevicePosition,   
+                          @c_PTSLOC = LOC.Loc,  
+                          @c_PTSLoadkey = PTL.Loadkey,
+                          @c_PTSStatus = CASE WHEN ISNULL(PTL.Sourcekey,'') <> '' THEN 'OLD' ELSE 'NEW' END,   --WL01
+                          @c_PTLWavekey = ISNULL(PTL.Wavekey,'')   --WL01
+             FROM LOC (NOLOCK)   
+             JOIN DEVICEPROFILE DP (NOLOCK) ON LOC.Loc = DP.Loc   
+             LEFT JOIN RDT.rdtPTLStationLog PTL (NOLOCK) ON LOC.Loc = PTL.Loc   
+             WHERE LOC.Loc BETWEEN @c_Userdefine02 AND @c_Userdefine03                    
+             AND LOC.LocationCategory = 'PTS'  
+             AND LOC.Facility = @c_Facility  
+             AND DP.DeviceType = 'STATION'         
+             AND (PTL.RowRef IS NULL   
+                  --OR (PTL.Loadkey = @c_Loadkey AND PTL.Wavekey = @c_Wavekey)   --WL01
+                  OR ((PTL.Loadkey = @c_loadkey AND PTL.Wavekey = @c_Wavekey) OR (PTL.Orderkey = @c_loadkey AND PTL.Wavekey = @c_Wavekey))     --WL01
+                  )  
+             --ORDER BY CASE WHEN PTL.Loadkey = @c_Loadkey THEN 1 ELSE 2 END, LOC.LogicalLocation, LOC.Loc   --WL01  
+             ORDER BY CASE WHEN (PTL.Loadkey = @c_Loadkey OR PTL.OrderKey = @c_Loadkey) THEN 1 ELSE 2 END, LOC.LogicalLocation, LOC.Loc   --WL01  
+  
              IF ISNULL(@c_PTSLOC,'')=''
              BEGIN
                 SELECT @n_continue = 3  
                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83070  -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': PTS Location Not Setup / Not enough PTS Location. (ispRLWAV11)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
              END 
-                 
-             IF ISNULL(@c_PTSLoadkey,'') = ''
-             BEGIN                       
-                INSERT INTO RDT.rdtPTLStationLog (Station, IPAddress, Position, Loc, Wavekey, Storerkey, Loadkey, SourceType, SourceKey)
-                VALUES (@c_DeviceId, @c_IPAddress, @c_DevicePosition, @c_PTSLoc, @c_Wavekey, @c_Storerkey, @c_Loadkey, @c_SourceType, @c_Wavekey) 
 
+             --WL01 S  
+             IF @c_PTSStatus = 'NEW' OR @c_Wavekey <> @c_PTLWavekey
+             BEGIN
+                IF @c_UDF02 = 'D'   --Discrete, by Orderkey
+                BEGIN
+                   INSERT INTO RDT.rdtPTLStationLog (Station, IPAddress, Position, Loc, Wavekey, Storerkey, ShipTo, Orderkey, Sourcekey, SourceType)  
+                   VALUES (@c_DeviceId, @c_IPAddress, @c_DevicePosition, @c_PTSLoc, @c_Wavekey, @c_Storerkey, '', @c_Loadkey, @c_Wavekey, 'ispRLWAV11')   
+                END
+                ELSE IF @c_UDF02 = 'C'   --Conso, by Loadkey
+                BEGIN
+                   INSERT INTO RDT.rdtPTLStationLog (Station, IPAddress, Position, Loc, Wavekey, Storerkey, ShipTo, Loadkey, Sourcekey, SourceType)  
+                   VALUES (@c_DeviceId, @c_IPAddress, @c_DevicePosition, @c_PTSLoc, @c_Wavekey, @c_Storerkey, '', @c_Loadkey, @c_Wavekey, 'ispRLWAV11')   
+                END
+                
                 SELECT @n_err = @@ERROR  
+                
                 IF @n_err <> 0  
                 BEGIN
                    SELECT @n_continue = 3  
@@ -317,6 +369,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                    SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert RTD.rdtPTLStationLog Failed. (ispRLWAV11)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
                 END   
              END
+             
+             --IF ISNULL(@c_PTSLoadkey,'') = ''
+             --BEGIN                       
+             --   INSERT INTO RDT.rdtPTLStationLog (Station, IPAddress, Position, Loc, Wavekey, Storerkey, Loadkey, SourceType, SourceKey)
+             --   VALUES (@c_DeviceId, @c_IPAddress, @c_DevicePosition, @c_PTSLoc, @c_Wavekey, @c_Storerkey, @c_Loadkey, @c_SourceType, @c_Wavekey) 
+
+             --   SELECT @n_err = @@ERROR  
+             --   IF @n_err <> 0  
+             --   BEGIN
+             --      SELECT @n_continue = 3  
+             --      SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83080  -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+             --      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert RTD.rdtPTLStationLog Failed. (ispRLWAV11)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                  
+             --   END   
+             --END
+             --WL01 E
             
              FETCH NEXT FROM cur_load INTO @c_Storerkey, @c_loadkey
           END
@@ -330,9 +397,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
     -----Retail replenishment(3) full carton(uom2) to pack station.    
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN             
-       IF @c_Short = '2' --Retail new launch split task by in loc
+       IF (@c_WaveType = 'PTS') --Retail new launch split task by in loc   --Updated: All orders may choose PTS in wave, so we use WaveType to decide   --WL01
        BEGIN
-          SELECT DISTINCT PTL.Loadkey, PZ.InLoc
+          --SELECT DISTINCT PTL.Loadkey, PZ.InLoc   --WL01
+          SELECT DISTINCT CASE WHEN @c_UDF02 = 'D' THEN PTL.OrderKey WHEN @c_UDF02 = 'C' THEN PTL.Loadkey ELSE '' END AS Sourcekey, PZ.InLoc   --WL01
           INTO #LOADINLOC
           FROM LOC (NOLOCK) 
           JOIN DEVICEPROFILE DP (NOLOCK) ON LOC.Loc = DP.Loc 
@@ -344,14 +412,18 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
           AND DP.DeviceType = 'STATION'       
           AND PTL.Wavekey = @c_Wavekey
           
-          DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM, SUM(PD.UOMQty) AS UOMQty, 
-                    CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END, 
-                    CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END,                 
+          --WL01 S
+          IF @c_UDF02 = 'D'
+          BEGIN
+             DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, '6' AS UOM, SUM(PD.UOMQty) AS UOMQty, 
+                    '',   --WL01
+                    '',   --WL01                 
                     PACK.CaseCnt,
                     --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END
                     MAX(O.loadkey) AS Loadkey,
-                    ISNULL(IL.InLoc,'') AS InLoc 
+                    ISNULL(IL.InLoc,'') AS InLoc,
+                    MAX(O.Salesman) AS Salesman   --WL01
              FROM WAVEDETAIL WD (NOLOCK)
              JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey             
              JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey 
@@ -359,18 +431,53 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
              JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND PD.Loc = SL.Loc
              JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
-             LEFT JOIN #LOADINLOC IL ON O.Loadkey = IL.Loadkey
+             LEFT JOIN #LOADINLOC IL ON O.Orderkey = IL.Sourcekey   --WL01
              WHERE WD.Wavekey = @c_Wavekey
              AND PD.Status = '0'
              AND PD.WIP_RefNo = @c_SourceType
              AND SL.LocationType NOT IN('PICK','CASE')
              AND LOC.LocationType = 'OTHER'
-             GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, PACK.CaseCnt,
-                      CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END, 
-                      CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END,
+             AND PD.UOM NOT IN ('2')   --WL01
+             GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, LOC.LogicalLocation, PACK.CaseCnt,
+                      --CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END,          --WL01
+                      --CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END,   --WL01
                       ISNULL(IL.InLoc,'') --split the qty by inloc
-                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END                   
-             ORDER BY PD.Storerkey, PD.Sku, LOC.LogicalLocation, PD.Lot       
+                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END              
+             ORDER BY PD.Storerkey, PD.Sku, LOC.LogicalLocation, PD.Lot     
+          END
+          ELSE IF @c_UDF02 = 'C'
+          BEGIN
+             DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, '6' AS UOM, SUM(PD.UOMQty) AS UOMQty, 
+                    '',   --WL01
+                    '',   --WL01                 
+                    PACK.CaseCnt,
+                    --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END
+                    MAX(O.loadkey) AS Loadkey,
+                    ISNULL(IL.InLoc,'') AS InLoc,
+                    MAX(O.Salesman) AS Salesman   --WL01
+             FROM WAVEDETAIL WD (NOLOCK)
+             JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey             
+             JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey 
+             JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
+             JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
+             JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND PD.Loc = SL.Loc
+             JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+             LEFT JOIN #LOADINLOC IL ON O.Loadkey = IL.Sourcekey   --WL01
+             WHERE WD.Wavekey = @c_Wavekey
+             AND PD.Status = '0'
+             AND PD.WIP_RefNo = @c_SourceType
+             AND SL.LocationType NOT IN('PICK','CASE')
+             AND LOC.LocationType = 'OTHER'
+             AND PD.UOM NOT IN ('2')   --WL01
+             GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, LOC.LogicalLocation, PACK.CaseCnt,
+                      --CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END,          --WL01
+                      --CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END,   --WL01
+                      ISNULL(IL.InLoc,'') --split the qty by inloc
+                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END              
+             ORDER BY PD.Storerkey, PD.Sku, LOC.LogicalLocation, PD.Lot    
+          END
+          --WL01 E
        END   
        ELSE
        BEGIN     
@@ -381,7 +488,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                     PACK.CaseCnt,
                     --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END
                     MAX(O.loadkey) AS Loadkey,
-                    '' AS InLoc
+                    '' AS InLoc,
+                    MAX(O.Salesman) AS Salesman   --WL01
              FROM WAVEDETAIL WD (NOLOCK)
              JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
              JOIN PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey 
@@ -397,13 +505,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, PACK.CaseCnt,
                       CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END, 
                       CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END
-                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END                   
+                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END          
              ORDER BY PD.Storerkey, PD.Sku, LOC.LogicalLocation, PD.Lot       
        END
        
        OPEN cur_pick  
        
        FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_Orderkey, @c_OrderLineNumber, @n_CaseCnt, @c_Loadkey, @c_Inloc
+                                   , @c_Salesman   --WL01
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN             
@@ -419,7 +528,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              ELSE
                 SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM' 
              
-             WHILE @n_TotCtn > 0 AND @n_continue IN(1,2)             
+             WHILE @n_TotCtn > 0 AND @n_continue IN(1,2) AND @c_Salesman <> 'TRF'   --WL01           
              BEGIN
                 EXEC isp_InsertTaskDetail   
                     @c_TaskType              = @c_TaskType             
@@ -464,10 +573,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
            
            --Retail new launch(2) conso(uom6) and partial(uom7) carton to PTS. (1)(3) should not have UOM 6,7 from bulk and should overallocate at pick.
            --PTS booking by loadkey
-           IF @c_Short = '2' AND @c_UOM IN ('6','7') 
+           --Updated: All orders may choose PTS in wave, so we use WaveType to decide   --WL01
+           IF (@c_WaveType = 'PTS') AND @c_UOM IN ('6','7')   --WL01 
            BEGIN
              --SET @c_InLoc = ''
-             SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''OTHER'''  --make sure get pickdetial from bulk
+             --SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''OTHER'''  --make sure get pickdetial from bulk
+             SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM <> ''2'' AND LOC.LocationType = ''OTHER'' ORDER BY ORDERS.Loadkey, ORDERS.Orderkey, PICKDETAIL.UOM '   --WL01
   
              /*
              SELECT TOP 1 @c_InLoc = PZ.InLoc
@@ -485,8 +596,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              
              SET @c_ToLoc = @c_InLoc
              SET @n_TotCtn = CEILING(@n_Qty / (@n_CaseCnt * 1.00))
-             
-             WHILE @n_TotCtn > 0 AND @n_Qty > 0 AND @n_continue IN(1,2)             
+
+             WHILE @n_TotCtn > 0 AND @n_Qty > 0 AND @n_continue IN(1,2) AND @c_Salesman <> 'TRF'   --WL01                
              BEGIN
                  IF @n_Qty >= @n_CaseCnt
                     SET @n_InsertQty = @n_CaseCnt
@@ -494,7 +605,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                     SET @n_InsertQty = @n_Qty
                     
                  SET @n_Qty = @n_Qty - @n_InsertQty
-                 
+                
                 EXEC isp_InsertTaskDetail   
                     @c_TaskType              = @c_TaskType             
                    ,@c_Storerkey             = @c_Storerkey
@@ -524,6 +635,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                    ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
                    ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL  
                    ,@c_WIP_RefNo             = @c_SourceType
+                   --,@n_QtyReplen             = @n_QtyReplen   --WL01
+                   ,@c_ReserveQtyReplen      = 'ROUNDUP'   --WL01
                    ,@b_Success               = @b_Success OUTPUT
                    ,@n_Err                   = @n_err OUTPUT 
                    ,@c_ErrMsg                = @c_errmsg OUTPUT         
@@ -538,6 +651,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
            END
                                                       
           FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_Orderkey, @c_OrderLineNumber, @n_CaseCnt, @c_Loadkey, @c_InLoc
+                                      , @c_Salesman   --WL01
        END 
        CLOSE cur_pick  
        DEALLOCATE cur_pick                                                
@@ -766,9 +880,19 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
           SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Taskdetailkey To Pickdetail Failed. (ispRLWAV11)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                             
        END          
     END*/
-        
-    -----Generate Pickslip No------
+    
+    --WL01 START
     IF @n_continue = 1 or @n_continue = 2 
+    BEGIN
+       SELECT TOP 1 @c_DocType = OH.DocType
+       FROM WAVEDETAIL WD (NOLOCK)
+       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+       WHERE WD.WaveKey = @c_wavekey
+    END
+    --WL01 END
+       
+    -----Generate Pickslip No------
+    IF (@n_continue = 1 or @n_continue = 2) AND @c_DocType <> 'E'   --WL01
     BEGIN
        IF @c_UDF02 = 'D' --create discrete pickslip for the wave
        BEGIN
