@@ -43,6 +43,8 @@ GO
 /* 11-OCT-2016  Wan04      1.8   WMS-453:Number of Lines in Blank Count Sheet*/
 /* 24-NOV-2016  Wan05      1.8   WMS-648 - GW StockTake Parameter2          */
 /*                               Enhancement                                */
+/* 21-Jan-2021  WLChooi    1.9   WMS-15985 - Generate No. Of Loc by Count   */
+/*                               Sheet (WL01)                               */
 /****************************************************************************/
 
 CREATE PROC ispGenBlankSheet (
@@ -94,6 +96,8 @@ BEGIN
          , @n_RowRef                   BIGINT
          , @c_SQL2                     NVARCHAR(4000)
          --(Wan03) - END   
+         , @n_LOCPerPage               INT                  --WL01
+         , @c_IsLOCPerPage             NVARCHAR(10) = 'Y'   --WL01
 
    -- declare a select condition variable for parameters
    -- SOS42806 Changed NVARCHAR(120) and NVARCHAR(255) to NVARCHAR(800)
@@ -238,7 +242,8 @@ BEGIN
                               + ',' + CountSheetSortBy06
                               + ',' + CountSheetSortBy07
                               + ',' + CountSheetSortBy08
-         --(Wan03) - END    
+         --(Wan03) - END 
+         , @n_LOCPerPage          = LocPerPage   --WL01   
    FROM  StockTakeSheetParameters (NOLOCK)
    WHERE StockTakeKey = @c_StockTakeKey
    IF @c_StorerKey IS NULL 
@@ -256,6 +261,14 @@ BEGIN
       SELECT @n_LinesPerPage = 999
    END
 
+   --WL01 S
+   IF @n_LOCPerPage = 0 OR @n_LOCPerPage IS NULL OR @n_LOCPerPage = 999
+   BEGIN
+   	SET @c_IsLOCPerPage = 'N'
+      SET @n_LOCPerPage = 999
+   END
+   --WL01 E
+   
    SELECT @c_CCSheetNoKeyName = 'CSHEET'+LTRIM(RTRIM(@c_StockTakeKey)) --NJOW02
 
    IF @c_hideloc = 'Y'   --NJOW01
@@ -780,8 +793,7 @@ BEGIN
          BEGIN
             --IF @n_LineCount > @n_LinesPerPage OR @c_Aisle <> @c_prev_Aisle OR @n_loclevel <> @n_prev_loclevel 
             --OR @n_LineCount = 0 -- SOS66279
-         IF @n_LineCount > @n_LinesPerPage 
-            OR @n_SheetLineNo = 1  
+         IF (@n_LineCount > @n_LinesPerPage OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'N'   --WL01  
             BEGIN
                EXECUTE nspg_getkey
                      --'CCSheetNo'
@@ -791,7 +803,7 @@ BEGIN
                      , @b_success OUTPUT
                      , @n_err OUTPUT
                      , @c_errmsg OUTPUT
-   
+                     
                --(Wan03) - START
                --SELECT @c_prev_facility = @c_facility, 
                --       @c_prev_Aisle = @c_Aisle, 
@@ -799,6 +811,22 @@ BEGIN
                --(Wan03) - END
                SELECT @n_LineCount = 1
             END
+            
+            --WL01 S
+            IF (@n_LineCount > @n_LocPerPage OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'Y'
+            BEGIN
+               EXECUTE nspg_getkey
+                     --'CCSheetNo'
+                     @c_CCSheetNoKeyName
+                     , 10
+                     , @c_CCSheetNo OUTPUT
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+
+               SELECT @n_LineCount = 1
+            END
+            --WL01 E
    
             EXECUTE nspg_getkey
                      'CCDetailKey'
