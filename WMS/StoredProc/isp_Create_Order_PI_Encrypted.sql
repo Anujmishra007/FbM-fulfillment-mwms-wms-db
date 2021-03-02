@@ -23,6 +23,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 02-Mar-2021  Shong         Update EditWho and EditDate               */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Create_Order_PI_Encrypted]
@@ -247,6 +248,8 @@ BEGIN
         , M_Fax1     = EncryptByKey(Key_GUID('Smt_Key_Orders_PI'), ISNULL(@c_M_Fax1    , ''))
         , M_Fax2     = EncryptByKey(Key_GUID('Smt_Key_Orders_PI'), ISNULL(@c_M_Fax2    , ''))
         , M_State    = EncryptByKey(Key_GUID('Smt_Key_Orders_PI'), ISNULL(@c_M_State   , ''))
+        , EditDate = GETDATE()
+        , EditWho = SUSER_SNAME()
       WHERE Orderkey = @c_Orderkey
    END
 
