@@ -24,8 +24,9 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 22-JAN-21    CSCHONG   1.1 WMS-16120 add recgrp (CS01)               */
 /************************************************************************/  
-CREATE PROC isp_delivery_note_ctn02   
+CREATE PROC isp_delivery_note_ctn02  
             @c_orderkey     NVARCHAR(10)  
 AS  
 BEGIN  
@@ -42,9 +43,12 @@ BEGIN
          , @d_ShipDate4ETA    DATETIME  
          , @d_ETA             DATETIME  
          , @c_Rptsku          NVARCHAR(5)  
+         , @n_NoOfLine        INT              --CS01
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
+
+   SET @n_NoOfLine = 15                       --CS01
  
   
    CREATE TABLE #DELNOTECTN02  
@@ -71,7 +75,8 @@ BEGIN
       ,  C_Country         NVARCHAR(30) 
       ,  Storerkey         NVARCHAR(15)  
       ,  Lottable01        NVARCHAR(18)  
-      ,  ExpDate           DATETIME    NULL  
+      ,  ExpDate           DATETIME    NULL 
+      ,  RecGrp            INT                  --CS01
       )  
   
   INSERT INTO #DELNOTECTN02  
@@ -98,7 +103,8 @@ BEGIN
       ,  C_Country        
       ,  Storerkey         
       ,  Lottable01        
-      ,  ExpDate               
+      ,  ExpDate  
+      ,  RecGrp                           --CS01             
       )  
      SELECT    
          ORDERS.C_Address1,   
@@ -113,7 +119,42 @@ BEGIN
          ORDERS.C_Company,
          ISNULL(ORDERS.C_State,''), 
          SKU.DESCR,    
-         PD.qty,    
+         SUM(PD.qty),    
+         ORDERDETAIL.SKU,
+         SKU.SKUGROUP,
+         ISNULL(SKU.BUSR6,''),  
+         SKU.itemclass,  
+         ISNULL(ORDERS.C_Zip,''),
+         ISNULL(ORDERS.BuyerPO,''),
+         CASE WHEN sku.strategykey = 'PPDFEFO' THEN LOTT.lottable14 
+                 WHEN sku.strategykey = 'PPDSTD'  THEN LOTT.lottable05 ELSE '' END,
+       ORDERS.C_Country,ORDERS.Storerkey,LOTT.lottable01,
+       CASE WHEN sku.strategykey = 'PPDFEFO' THEN LOTT.lottable04 
+              WHEN sku.strategykey = 'PPDSTD'  THEN  LOTT.lottable04 ELSE '' END,
+      (Row_Number() OVER (PARTITION BY ORDERS.Orderkey ORDER BY ORDERS.Orderkey,ORDERDETAIL.SKU Asc)-1)/@n_NoOfLine                     --CS01
+    FROM ORDERS WITH (nolock) 
+    JOIN STORER WITH (nolock)      ON ( ORDERS.StorerKey = STORER.StorerKey )
+    JOIN ORDERDETAIL WITH (nolock) ON ( ORDERS.OrderKey = ORDERDETAIL.OrderKey )  
+    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = ORDERDETAIL.Orderkey AND PD.Sku = ORDERDETAIL.SKU
+                                   AND PD.Storerkey = ORDERDETAIL.storerkey AND PD.OrderLineNumber = ORDERDETAIL.OrderLineNumber
+    JOIN SKU         WITH (nolock) ON ( ORDERDETAIL.StorerKey = SKU.StorerKey ) and
+                                      ( ORDERDETAIL.Sku = SKU.Sku )    
+   JOIN lotattribute LOTT  WITH (nolock) ON ( LOTT.Lot = PD.lot ) 
+   JOIN STORER ST WITH (NOLOCK) ON (ST.Storerkey = ORDERS.Storerkey)         
+   WHERE  ( ORDERS.Orderkey = @c_orderkey)
+  GROUP BY ORDERS.C_Address1,   
+         ISNULL(ORDERS.C_Address2,''),   
+         ISNULL(ORDERS.C_Address3,''),   
+         ISNULL(ORDERS.C_Address4,''),   
+         ISNULL(ORDERS.Notes,''),   
+         STORER.Company,   
+         ORDERS.DeliveryDate,   
+         ORDERS.ExternOrderKey,   
+         ORDERS.OrderKey,   
+         ORDERS.C_Company,
+         ISNULL(ORDERS.C_State,''), 
+         SKU.DESCR,    
+    --     PD.qty,    
          ORDERDETAIL.SKU,
          SKU.SKUGROUP,
          ISNULL(SKU.BUSR6,''),  
@@ -125,23 +166,14 @@ BEGIN
        ORDERS.C_Country,ORDERS.Storerkey,LOTT.lottable01,
        CASE WHEN sku.strategykey = 'PPDFEFO' THEN LOTT.lottable04 
               WHEN sku.strategykey = 'PPDSTD'  THEN  LOTT.lottable04 ELSE '' END
-    FROM ORDERS WITH (nolock) 
-    JOIN STORER WITH (nolock)      ON ( ORDERS.StorerKey = STORER.StorerKey )
-    JOIN ORDERDETAIL WITH (nolock) ON ( ORDERS.OrderKey = ORDERDETAIL.OrderKey )  
-    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = ORDERDETAIL.Orderkey AND PD.Sku = ORDERDETAIL.SKU
-                                   AND PD.Storerkey = ORDERDETAIL.storerkey
-    JOIN SKU         WITH (nolock) ON ( ORDERDETAIL.StorerKey = SKU.StorerKey ) and
-                                      ( ORDERDETAIL.Sku = SKU.Sku )    
-   JOIN lotattribute LOTT  WITH (nolock) ON ( LOTT.Lot = PD.lot ) 
-   JOIN STORER ST WITH (NOLOCK) ON (ST.Storerkey = ORDERS.Storerkey)         
-   WHERE  ( ORDERS.Orderkey = @c_orderkey)
-   ORDER BY ORDERDETAIL.OrderLineNumber ASC   
+   --ORDER BY ORDERDETAIL.OrderLineNumber ASC   
  
  
   
    SELECT  *  
    FROM #DELNOTECTN02     
-   ORDER BY Orderkey  
+   ORDER BY Recgrp
+         ,  Orderkey  
          ,  Storerkey       
          ,  Sku  
   
