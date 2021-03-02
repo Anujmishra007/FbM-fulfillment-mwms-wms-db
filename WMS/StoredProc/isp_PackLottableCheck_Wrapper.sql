@@ -24,6 +24,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 27-OCT-2020  NJOW01   1.0  WMS-15190 Fix                             */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_PackLottableCheck_Wrapper]  
    @c_PickslipNo    NVARCHAR(10),    
@@ -87,9 +88,9 @@ BEGIN
               ': Storerconfig PackByLottableValidate_SP - Stored Proc name invalid ('+RTRIM(ISNULL(@c_SPCode,''))+') (isp_PackLottableCheck_Wrapper)'  
        GOTO QUIT_SP
    END
-   
-   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Pickslipno, @c_Storerkey, @c_Sku, @c_SerialNo, @b_Success OUTPUT, @n_Err OUTPUT,' +
-                ' @c_ErrMsg OUTPUT '
+      
+   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Pickslipno=@c_Pickslipno, @c_Storerkey=@c_Storerkey, @c_Sku=@c_Sku, @c_LottableValue=@c_LottableValue, 
+                 @n_Cartonno=@n_Cartonno, @n_PackingQty=@n_PackingQty, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_ErrMsg=@c_ErrMsg OUTPUT '
      
    EXEC sp_executesql @c_SQL, 
         N'@c_Pickslipno NVARCHAR(10), @c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_LottableValue NVARCHAR(60), @n_CartonNo INT, @n_PackingQty INT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 

@@ -32,12 +32,14 @@ GO
 /* 24-Feb-2016  CSCHONG 1.2   Revise Field logic (CS01)                 */
 /* 22-Mar-2018  CSCHONG 1.3   WMS-4311 - add lottable01 group by (CS02) */
 /* 17-SEP-2020  CSCHONG 1.4   WMS-15207 revised field logic (CS03)      */
+/* 07-Jan-2021  NJOW03  1.5   WMS-15811 lottable01 filtring by qty      */ 
 /************************************************************************/    
     
 CREATE PROC isp_importer_label (    
        @c_PickslipNo NVARCHAR(10),    
        @c_Sku NVARCHAR(15),
-       @c_Qty INT = '0'   
+       @c_Qty INT = '0',   
+       @c_Lottable01 NVARCHAR(18) = ''  --NJOW03
  )    
  AS    
  BEGIN    
@@ -87,6 +89,7 @@ CREATE PROC isp_importer_label (
    --AND LEFT(O.ExternOrderKey,3) = 'SOR' 
    --AND S.ISOCntryCode = 'SG' --NJOW01
    AND SKU.SkuGroup = 'STOCK' 
+   AND LA.Lottable01 = CASE WHEN ISNULL(@c_Lottable01,'') <> '' THEN @c_Lottable01 ELSE LA.Lottable01 END --NJOW03
    GROUP BY PD.Sku, ISNULL(SKU.ShelfLife,0),SKU.BUSR6,LA.lottable01           --CS02
    
    OPEN CUR_RESULT   
@@ -94,24 +97,26 @@ CREATE PROC isp_importer_label (
    FETCH NEXT FROM CUR_RESULT INTO @n_NoOfLabel, @dt_ExpDate,   @c_ColTitle
      
    WHILE @@FETCH_STATUS <> -1  
-   BEGIN   
-    
-   
-   SET @n_Cnt = 1--@@ROWCOUNT
-   /*CS02 start remove this part*/
-  /* IF @n_Qty > 0  
-   BEGIN
-      SET @n_NoOfLabel = @n_Qty
-   END  */
-	/*CS02 End*/
+   BEGIN  
+      SET @n_Cnt = 1--@@ROWCOUNT
+      /*CS02 start remove this part*/
+     /* IF @n_Qty > 0  
+      BEGIN
+         SET @n_NoOfLabel = @n_Qty
+      END  */
+	   /*CS02 End*/
 
-   WHILE @n_NoOfLabel > 0 AND @n_Cnt > 0
-   BEGIN
-   	  INSERT INTO #TMP_LABELS (ExpDate,coltitle) VALUES (@dt_ExpDate,@c_ColTitle)        --(CS01)
-   	  SELECT @n_NoOfLabel = @n_NoOfLabel - 1
-   END
-   
-   FETCH NEXT FROM CUR_RESULT INTO  @n_NoOfLabel, @dt_ExpDate,   @c_ColTitle
+      --NJOW03
+   	  IF ISNULL(@c_Lottable01,'') <> '' AND @n_Qty > 0
+   	     SET @n_NoOfLabel = @n_Qty
+
+      WHILE @n_NoOfLabel > 0 AND @n_Cnt > 0
+      BEGIN
+         INSERT INTO #TMP_LABELS (ExpDate,coltitle) VALUES (@dt_ExpDate,@c_ColTitle)        --(CS01)
+      	 SELECT @n_NoOfLabel = @n_NoOfLabel - 1
+      END
+      
+      FETCH NEXT FROM CUR_RESULT INTO  @n_NoOfLabel, @dt_ExpDate,   @c_ColTitle
    END   
       
    SELECT * 

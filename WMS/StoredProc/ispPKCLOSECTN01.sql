@@ -23,18 +23,22 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */   
+/* Date        Author   Ver   Purposes                                   */ 
+/* 27-Jan-2021 Wan01    1.1   WMS-16079 - RG - LEGO - EXCEED Packing    */   
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispPKCLOSECTN01]      
    @c_PickSlipNo  NVARCHAR(10),
    @c_Storerkey   NVARCHAR(15),  
    @c_ScanSkuCode NVARCHAR(50),
-   @c_Sku         NVARCHAR(20),    
+   @c_Sku         NVARCHAR(20),  
    @c_CloseCarton NVARCHAR(10) OUTPUT,
    @b_Success     INT      OUTPUT,
    @n_Err         INT      OUTPUT, 
-   @c_ErrMsg      NVARCHAR(250) OUTPUT
+   @c_ErrMsg      NVARCHAR(250) OUTPUT,
+   @n_CartonNo    INT          = 0,          -- Add default @n_CartonNo to SP 
+   @c_ScanColumn  NVARCHAR(50) = '',         -- Add default @c_ScanColumn to SP
+   @n_Qty         INT          = 0           -- Add default @n_Qty to SP  
  AS  
  BEGIN  
     SET NOCOUNT ON   
@@ -56,8 +60,8 @@ CREATE PROCEDURE [dbo].[ispPKCLOSECTN01]
     BEGIN
        IF LEN(RTRIM(@c_ScanSkuCode)) = 16
        BEGIN
-       	  IF EXISTS(SELECT 1 FROM UPC (NOLOCK) WHERE UPC = @c_ScanSkuCode AND StorerKey = @c_Storerkey)
-       	  BEGIN
+           IF EXISTS(SELECT 1 FROM UPC (NOLOCK) WHERE UPC = @c_ScanSkuCode AND StorerKey = @c_Storerkey)
+           BEGIN
              SET @c_CloseCarton = 'Y'
           END
        END

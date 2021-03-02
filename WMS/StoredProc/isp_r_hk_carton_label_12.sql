@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_carton_label_12]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_carton_label_12]') and OBJECTPROPERTY(Id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_carton_label_12]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,6 +33,7 @@ GO
 /* 12/03/2019   ML       1.4  WMS-8295 add PackInfo.CartonType           */
 /* 30/08/2019   ML       1.5  WMS-10451 If PTSLocation is blank then get */
 /*                            mapped PAZones                             */
+/* 22/01/2020   ML       1.6  Performance tunning                        */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_12] (
@@ -54,9 +55,75 @@ BEGIN
          , @c_ExecStatements NVARCHAR(4000)
          , @c_PickdetailKey  NVARCHAR(10)
 
+   IF OBJECT_ID('tempdb..#TEMP_ORDERS') IS NOT NULL
+      DROP TABLE #TEMP_ORDERS
+   IF OBJECT_ID('tempdb..#TEMP_PACKHEADER') IS NOT NULL
+      DROP TABLE #TEMP_PACKHEADER
+   IF OBJECT_ID('tempdb..#TEMP_PICKDETAIL') IS NOT NULL
+      DROP TABLE #TEMP_PICKDETAIL
    IF OBJECT_ID('tempdb..#TEMP_RESULT') IS NOT NULL
       DROP TABLE #TEMP_RESULT
 
+   -- #TEMP_ORDERS
+   SELECT DISTINCT
+          Orderkey   = RTRIM( OH.Orderkey )
+        , PickslipNo = RTRIM( PH.PickslipNo )
+        , LabelNo    = RTRIM( PD.LabelNo )
+     INTO #TEMP_ORDERS
+     FROM dbo.ORDERS          OH    (NOLOCK)
+     JOIN dbo.PACKHEADER      PH    (NOLOCK) ON OH.Orderkey = PH.Orderkey
+     JOIN dbo.PACKDETAIL      PD    (NOLOCK) ON PH.PickslipNo = PD.PickslipNo
+    WHERE PD.Storerkey = @as_storerkey
+      AND (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_pickslipno,'')<>'' OR ISNULL(@as_labelno,'')<>'')
+      AND (ISNULL(@as_wavekey   ,'')='' OR OH.Userdefine09 = @as_wavekey)
+      AND (ISNULL(@as_pickslipno,'')='' OR PH.PickslipNo = @as_pickslipno)
+      AND (ISNULL(@as_labelno   ,'')='' OR PD.LabelNo = @as_labelno)
+
+   INSERT INTO #TEMP_ORDERS (Orderkey, PickslipNo, LabelNo)
+   SELECT DISTINCT
+          Orderkey   = RTRIM( OH.Orderkey )
+        , PickslipNo = RTRIM( PH.PickslipNo )
+        , LabelNo    = RTRIM( PD.LabelNo )
+     FROM dbo.ORDERS          OH    (NOLOCK)
+     JOIN dbo.PACKHEADER      PH    (NOLOCK) ON OH.Loadkey = PH.Loadkey AND ISNULL(PH.Orderkey,'')=''
+     JOIN dbo.PACKDETAIL      PD    (NOLOCK) ON PH.PickslipNo = PD.PickslipNo
+    WHERE PD.Storerkey = @as_storerkey
+      AND OH.Loadkey <> ''
+      AND (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_pickslipno,'')<>'' OR ISNULL(@as_labelno,'')<>'')
+      AND (ISNULL(@as_wavekey   ,'')='' OR OH.Userdefine09 = @as_wavekey)
+      AND (ISNULL(@as_pickslipno,'')='' OR PH.PickslipNo = @as_pickslipno)
+      AND (ISNULL(@as_labelno   ,'')='' OR PD.LabelNo = @as_labelno)
+
+
+   -- #TEMP_PACKHEADER
+   SELECT PickslipNo    = PickslipNo
+        , FirstOrderkey = MIN(Orderkey)
+     INTO #TEMP_PACKHEADER
+     FROM #TEMP_ORDERS
+    GROUP BY PickslipNo
+
+
+   -- #TEMP_PICKDETAIL
+   SELECT Storerkey = RTRIM( PD.Storerkey )
+        , CaseID    = RTRIM( PD.CaseID )
+        , ToLoc     = RTRIM( MAX(PD.ToLoc) )
+        , OD_UDF06  = RTRIM( MAX(IIF(OD.Userdefine06 LIKE 'L%R', OD.Userdefine06, '')) )
+        , UOM       = MAX(CASE WHEN PD.UOM='2' THEN PD.UOM ELSE '' END)
+        , Zones     = ISNULL(STUFF((SELECT DISTINCT '-',LTRIM(RTRIM(z.Short))
+                             FROM dbo.PICKDETAIL x (NOLOCK)
+                             JOIN dbo.LOC        y (NOLOCK) ON x.Loc = y.Loc
+                             JOIN dbo.CODELKUP   z (NOLOCK) ON z.LISTNAME='PVHZONE' AND x.Storerkey=z.Storerkey AND y.PutawayZone=z.Code
+                             WHERE ISNULL(z.Short,'')<>'' AND x.CaseID=PD.CaseID
+                             ORDER BY 2 FOR XML PATH('')),1,1,''),'')
+     INTO #TEMP_PICKDETAIL
+     FROM dbo.PICKDETAIL  PD (NOLOCK)
+     JOIN dbo.ORDERDETAIL OD (NOLOCK) ON PD.Orderkey = OD.Orderkey AND PD.OrderLineNumber = OD.OrderLineNumber
+     JOIN #TEMP_ORDERS    ORD(NOLOCK) ON PD.CaseID = ORD.LabelNo
+    WHERE PD.Storerkey = @as_storerkey AND PD.CaseID<>''
+    GROUP BY PD.Storerkey, PD.CaseID
+
+
+   -- #TEMP_RESULT
    SELECT Pickslipno           = RTRIM(PD.Pickslipno)
         , CartonNo             = PD.CartonNo
         , LabelNo              = RTRIM(PD.LabelNo)
@@ -95,44 +162,15 @@ BEGIN
 
    INTO #TEMP_RESULT
 
-   FROM (
-      SELECT PickslipNo    = ISNULL(PH1.PickslipNo, PH2.PickslipNo)
-           , FirstOrderkey = MIN(OH.Orderkey)
-        FROM dbo.ORDERS           OH (NOLOCK)
-        LEFT JOIN dbo.PACKHEADER  PH1(NOLOCK) ON OH.Orderkey = PH1.Orderkey AND PH1.Orderkey<>''
-        LEFT JOIN dbo.PACKHEADER  PH2(NOLOCK) ON OH.Loadkey = PH2.Loadkey AND OH.Loadkey<>'' AND ISNULL(PH2.Orderkey,'')=''
-       WHERE OH.Storerkey = @as_storerkey
-         AND (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_pickslipno,'')<>'' OR ISNULL(@as_labelno,'')<>'')
-         AND (ISNULL(@as_wavekey,'')='' OR OH.Userdefine09 = @as_wavekey)
-         AND (ISNULL(@as_pickslipno,'')='' OR ISNULL(PH1.PickslipNo, PH2.PickslipNo) = @as_pickslipno)
-         AND ISNULL(PH1.PickslipNo, PH2.PickslipNo) IS NOT NULL
-      GROUP BY ISNULL(PH1.PickslipNo, PH2.PickslipNo)
-   ) PAK
-
+   FROM #TEMP_PACKHEADER PAK
    JOIN dbo.PACKDETAIL PD  (NOLOCK) ON PAK.PickslipNo = PD.PickslipNo
    JOIN dbo.SKU        SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
    JOIN dbo.ORDERS     OH  (NOLOCK) ON PAK.FirstOrderkey = OH.Orderkey
    JOIN dbo.FACILITY   FAC (NOLOCK) ON OH.Facility = FAC.Facility
 
-   LEFT JOIN dbo.PACKINFO   PIF (NOLOCK) ON PD.PickslipNo = PIF.PickslipNo AND PD.CartonNo = PIF.CartonNo
-   LEFT JOIN dbo.ROUTEMASTER RT (NOLOCK) ON OH.Route = RT.Route
-   LEFT JOIN (
-      SELECT Storerkey = RTRIM( a.Storerkey )
-           , CaseID    = RTRIM( a.CaseID )
-           , ToLoc     = RTRIM( MAX(a.ToLoc) )
-           , OD_UDF06  = RTRIM( MAX(IIF(b.Userdefine06 LIKE 'L%R', b.Userdefine06, '')) )
-           , UOM       = MAX(CASE WHEN a.UOM='2' THEN a.UOM ELSE '' END)
-           , Zones     = ISNULL(STUFF((SELECT DISTINCT '-',LTRIM(RTRIM(z.Short))
-                                FROM dbo.PICKDETAIL x (NOLOCK)
-                                JOIN dbo.LOC        y (NOLOCK) ON x.Loc = y.Loc
-                                JOIN dbo.CODELKUP   z (NOLOCK) ON z.LISTNAME='PVHZONE' AND x.Storerkey=z.Storerkey AND y.PutawayZone=z.Code
-                                WHERE ISNULL(z.Short,'')<>'' AND x.CaseID=a.CaseID
-                                ORDER BY 2 FOR XML PATH('')),1,1,''),'')
-        FROM dbo.PICKDETAIL  a (NOLOCK)
-        JOIN dbo.ORDERDETAIL b (NOLOCK) ON a.Orderkey = b.Orderkey AND a.OrderLineNumber = b.OrderLineNumber
-       WHERE a.Storerkey = @as_storerkey AND a.CaseID<>''
-       GROUP BY a.Storerkey, a.CaseID
-   ) PIKDT ON PD.Storerkey = PIKDT.Storerkey AND PD.LabelNo = PIKDT.CaseID
+   LEFT JOIN dbo.PACKINFO     PIF  (NOLOCK) ON PD.PickslipNo = PIF.PickslipNo AND PD.CartonNo = PIF.CartonNo
+   LEFT JOIN dbo.ROUTEMASTER  RT   (NOLOCK) ON OH.Route = RT.Route
+   LEFT JOIN #TEMP_PICKDETAIL PIKDT(NOLOCK) ON PD.Storerkey = PIKDT.Storerkey AND PD.LabelNo = PIKDT.CaseID
 
    LEFT JOIN dbo.STORER SHPTO (NOLOCK) ON 'PVH'+OH.ConsigneeKey = SHPTO.Storerkey
    LEFT JOIN dbo.CODELKUP  OG (NOLOCK) ON OG.LISTNAME = 'ORDERGROUP' AND OG.Code = OH.OrderGroup AND OG.Storerkey = OH.Storerkey

@@ -28,10 +28,11 @@ GO
 /* Updates:                                                                   */                
 /* Date         Author    Ver.  Purposes                                      */    
 /*30/05/2019    WLChooi   1.0   Fixed Qty issue (WL01)                        */  
+/*29/01/2021    WLChooi   1.1   WMS-16227 - Add Remark (WL02)                 */
 /******************************************************************************/       
     
 CREATE PROC [dbo].[isp_Packing_List_63]               
-       (@c_Orderkey NVARCHAR(20))                
+       (@c_Orderkey NVARCHAR(20), @c_Type NVARCHAR(1) = '' )   --WL02                
 AS              
 BEGIN              
    SET NOCOUNT ON              
@@ -49,6 +50,13 @@ BEGIN
          , @c_ExecStatementsMain  NVARCHAR(4000) = ''
          , @c_ExecArguments       NVARCHAR(4000) = ''
          , @c_GetOrderkey         NVARCHAR(20) = ''
+         --WL02 S
+         , @n_MaxRec              INT
+         , @n_CurrentRec          INT
+         , @n_MaxLineno           INT
+         , @c_Storerkey           NVARCHAR(15)
+         , @c_CLDescr             NVARCHAR(4000)
+         --WL02 E
     
    CREATE TABLE #PACKLIST63 
          ( Company          NVARCHAR(90) NULL  
@@ -64,8 +72,10 @@ BEGIN
          , Qty              INT  NULL  
          , Orderkey         NVARCHAR(20) NULL 
          , EditWho          NVARCHAR(80) NULL  
+         , ShowRemark       NVARCHAR(10) NULL   --WL02
+         , IsDummy          NVARCHAR(10) NULL   --WL02
          )
-
+   
     IF( @n_continue = 1 OR @n_continue = 2 )  
     BEGIN
       IF EXISTS(SELECT 1 FROM ORDERS (NOLOCK) WHERE Orderkey = @c_Orderkey AND Loadkey <> @c_Orderkey) --Orderkey
@@ -104,7 +114,9 @@ BEGIN
              , Descr          
              , Qty            
              , Orderkey       
-             , EditWho        
+             , EditWho   
+             , ShowRemark   --WL02  
+             , IsDummy      --WL02 
              )
                   
         SELECT DISTINCT ISNULL(ORD.C_Company,'''')
@@ -121,11 +133,13 @@ BEGIN
                        , SUM(PIDET.Qty)       --WL01
                        , ORD.OrderKey
                        , MAX(PIDET.EditWho)
+                       , ISNULL(CL.Short,''N'') AS ShowRemark,''N''   --WL02
        FROM ORDERS ORD WITH (NOLOCK)
        JOIN ORDERDETAIL ORDET WITH (NOLOCK) ON ORD.OrderKey=ORDET.OrderKey  
        JOIN SKU S WITH (NOLOCK) ON S.StorerKey = ORDET.StorerKey AND S.SKU = ORDET.SKU  
        JOIN PICKDETAIL PIDET WITH (NOLOCK) ON ORDET.Orderkey    = PIDET.Orderkey      
-                                           AND PIDET.OrderLineNumber = ORDET.OrderLineNumber ' 
+                                           AND PIDET.OrderLineNumber = ORDET.OrderLineNumber 
+       LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = ''REPORTCFG'' AND CL.Code = ''ShowRemark'' AND CL.Long = ''r_dw_packing_list_63'' AND CL.Storerkey = ORD.Storerkey'    --WL02
 
        IF(@c_IsOrderKey = 1 AND @c_IsLoadKey = 0)
        BEGIN
@@ -152,7 +166,8 @@ BEGIN
                                           , ISNULL(S.Color,'''')
                                           , ISNULL(S.Size,'''')
                                           , ISNULL(S.DESCR,'''')
-                                          , ORD.OrderKey '
+                                          , ORD.OrderKey 
+                                          , ISNULL(CL.Short,''N'') '   --WL02
 
     END
 
@@ -169,6 +184,67 @@ BEGIN
 
       EXEC sp_ExecuteSql @c_ExecStatementsMain, @c_ExecArguments, @c_Orderkey
     END
+    
+   --WL02 S
+   IF EXISTS (SELECT 1 FROM #PACKLIST63 WHERE ShowRemark = 'Y')
+   BEGIN
+   	SELECT @c_Storerkey = OH.Storerkey
+   	FROM ORDERS OH (NOLOCK)
+   	JOIN #PACKLIST63 T ON T.Orderkey = OH.OrderKey
+   	
+      SELECT @n_MaxLineno = CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 10 END
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'MaxLineNo'
+      AND CL.Long = 'r_dw_packing_list_63' AND CL.Code2 = 'r_dw_packing_list_63'
+      AND CL.Storerkey = @c_Storerkey
+      
+      IF ISNULL(@n_MaxLineno,0) = 0
+      BEGIN
+         SET @n_MaxLineno = 10
+      END
+      
+      SELECT @c_CLDescr = ISNULL(CL.[Description],'')
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'PACKPrint'
+      AND CL.Storerkey = @c_Storerkey
+    
+      SELECT @n_MaxRec = COUNT(1) FROM #PACKLIST63
+      
+      SET @n_CurrentRec = @n_MaxRec % @n_MaxLineno
+      
+      WHILE(@n_MaxRec % @n_MaxLineno <> 0 AND @n_CurrentRec < @n_MaxLineno)
+      BEGIN
+         INSERT INTO #PACKLIST63
+         SELECT TOP 1 
+                   Company        
+                 , Contact1       
+                 , [Address]      
+                 , Phone1         
+                 , UserDefine02   
+                 , ExternOrderKey 
+                 , NULL            
+                 , NULL          
+                 , NULL           
+                 , NULL          
+                 , NULL            
+                 , Orderkey       
+                 , EditWho
+                 , ShowRemark
+                 , 'Y'
+         FROM #PACKLIST63
+      
+         SET @n_CurrentRec = @n_CurrentRec + 1
+      END
+   END
+    
+   IF @c_Type = 'F'
+   BEGIN
+      SELECT TOP 1 Orderkey, ShowRemark, @c_CLDescr
+      FROM #PACKLIST63
+
+      GOTO QUIT_SP
+   END
+   --WL01 E
 
     SELECT  Company        
           , Contact1       
@@ -182,9 +258,10 @@ BEGIN
           , Descr          
           , Qty            
           , Orderkey       
-          , EditWho  
+          , EditWho
+          , ShowRemark   --WL02
+          , IsDummy      --WL02
     FROM #PACKLIST63
-    ORDER BY Orderkey
 
  QUIT_SP:                
 END  
