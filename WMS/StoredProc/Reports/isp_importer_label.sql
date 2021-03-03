@@ -33,11 +33,12 @@ GO
 /* 22-Mar-2018  CSCHONG 1.3   WMS-4311 - add lottable01 group by (CS02) */
 /* 17-SEP-2020  CSCHONG 1.4   WMS-15207 revised field logic (CS03)      */
 /* 07-Jan-2021  NJOW03  1.5   WMS-15811 lottable01 filtring by qty      */ 
+/* 03-Mar-2021  NJOW04  1.6   Fix sku to 20 characters                  */
 /************************************************************************/    
     
 CREATE PROC isp_importer_label (    
        @c_PickslipNo NVARCHAR(10),    
-       @c_Sku NVARCHAR(15),
+       @c_Sku NVARCHAR(20),
        @c_Qty INT = '0',   
        @c_Lottable01 NVARCHAR(18) = ''  --NJOW03
  )    
