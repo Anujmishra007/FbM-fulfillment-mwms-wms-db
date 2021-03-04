@@ -61,6 +61,7 @@ GO
 /* 23-NOV-2016  Wan06      WMS-648 - GW StockTake Parameter2 Enhancement*/
 /* 21-Jan-2021  WLChooi    WMS-15985 - Generate No. Of Loc by Count     */
 /*                         Sheet (WL01)                                 */
+/* 03-Mar-2021  WLChooi    WMS-15985 - Fix LocPerPage Logic (WL02)      */
 /************************************************************************/
 
 CREATE PROC ispGenCountSheetByUCC (
@@ -117,6 +118,7 @@ BEGIN
          --(Wan05) - END            
          , @n_LOCPerPage              INT                  --WL01
          , @c_IsLOCPerPage            NVARCHAR(10) = 'Y'   --WL01
+         , @n_LOCLineCount            INT = 0              --WL02
 
    SET @b_Debug = 0
    
@@ -2260,8 +2262,12 @@ BEGIN
          END
 
          --WL01 S
-         IF ((@n_LineCount > @n_LOCPerPage AND (ISNULL(@c_Loc,'') <> ISNULL(@c_prev_LOC,'') OR ISNULL(@c_ID,'') <> ISNULL(@c_prev_ID,'') ))
-            OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'Y'
+         --WL02 S
+         IF ((ISNULL(@c_Loc,'') <> ISNULL(@c_prev_LOC,'') OR ISNULL(@c_ID,'') <> ISNULL(@c_prev_ID,'') ) OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'Y'
+            SET @n_LOCLineCount = @n_LOCLineCount + 1
+            
+         IF (@n_LOCLineCount > @n_LOCPerPage
+            OR @n_SheetLineNo = 1) AND @c_IsLOCPerPage = 'Y'   --WL02 E
          BEGIN
             EXECUTE nspg_getkey
                   --'CCSheetNo'
@@ -2272,7 +2278,7 @@ BEGIN
                   , @n_err OUTPUT
                   , @c_errmsg OUTPUT
          
-            SELECT @n_LineCount = 1
+            SELECT @n_LOCLineCount = 1   --WL02
          END
          --WL01 E
       
