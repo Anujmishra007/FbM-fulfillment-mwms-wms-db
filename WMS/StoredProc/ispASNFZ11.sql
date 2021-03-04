@@ -29,6 +29,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 2019-01-10   CSCHONG 1.0   WMS-7547 (CS01)                              */
 /* 2020-11-26   CSCHONG 1.1   WMS-15569 revised report logic (CS02)        */
+/* 2021-03-02   CSCHONG 1.2   WMS-15569 revised field logic (CS03)         */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispASNFZ11]  
 (     @c_Receiptkey  NVARCHAR(10)   
@@ -545,6 +546,7 @@ BEGIN
       FROM CODELKUP WITH (NOLOCK)
       WHERE ListName = 'NONADJITF'
       AND   Storerkey = @c_Storerkey
+      AND short='1'                            --CS03
 
       SET @c_Lottable02 = '' 
       SET @c_AdjustmentType2 = '001'
