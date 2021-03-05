@@ -26,6 +26,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 2021-03-05   WLChooi   1.1 WMS-16005 - Add column and group detail   */
+/*                            records by PODetail.Userdefine02 (WL01)   */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptPreTallySheet08]  
@@ -58,9 +60,13 @@ BEGIN
            , RD.UOM
            , SUM(RD.QtyExpected) AS QtyExpected
            , S.Style
+           , ISNULL(PODET.UserDefine02,'') AS PODUserDefine02   --WL01
       FROM RECEIPT R (NOLOCK)
       JOIN RECEIPTDETAIL RD (NOLOCK)ON R.ReceiptKey = RD.ReceiptKey
       JOIN SKU S (NOLOCK) ON S.StorerKey = R.StorerKey AND S.Sku = RD.Sku
+      OUTER APPLY (SELECT TOP 1 P.UserDefine02 
+                   FROM PODETAIL P (NOLOCK)
+                   WHERE P.POKey = RD.POKey AND P.Storerkey = RD.Storerkey AND P.SKU = RD.SKU) AS PODET   --WL01
       WHERE R.StorerKey BETWEEN @c_StorerStart AND @c_StorerEnd
       AND R.ReceiptKey BETWEEN @c_ReceiptStart AND @c_ReceiptEnd
       GROUP BY R.Receiptkey
@@ -73,7 +79,8 @@ BEGIN
              , S.DESCR
              , RD.UOM
              , S.Style
-      ORDER BY R.ReceiptKey, S.Style, RD.Sku
+             , ISNULL(PODET.UserDefine02,'')   --WL01
+      ORDER BY R.ReceiptKey, ISNULL(PODET.UserDefine02,''), S.Style, RD.Sku   --WL01
    END
    
    IF @n_Continue=3  -- Error Occured - Process And Return  
