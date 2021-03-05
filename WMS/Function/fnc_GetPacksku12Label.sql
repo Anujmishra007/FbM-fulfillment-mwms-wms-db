@@ -239,5 +239,5 @@ BEGIN
    RETURN
 END
 GO                                                       
-GRANT EXECUTE ON [dbo].[fnc_GetPacksku12Label] TO nSQL       
+GRANT SELECT  ON [dbo].[fnc_GetPacksku12Label] TO nSQL       
 GO                                                       

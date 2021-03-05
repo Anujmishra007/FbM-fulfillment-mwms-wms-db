@@ -312,5 +312,5 @@ BEGIN
    RETURN
 END
 GO                                                            
-GRANT EXECUTE ON [dbo].[fnc_manifest_by_load13] TO nSQL       
+GRANT SELECT ON [dbo].[fnc_manifest_by_load13] TO nSQL       
 GO                                                            

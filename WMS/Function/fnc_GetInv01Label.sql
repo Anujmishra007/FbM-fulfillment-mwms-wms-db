@@ -422,5 +422,5 @@ BEGIN
    RETURN
 END
 GO                                                       
-GRANT EXECUTE ON [dbo].[fnc_GetInv01Label] TO nSQL 
+GRANT SELECT  ON [dbo].[fnc_GetInv01Label] TO nSQL 
 GO                                                       

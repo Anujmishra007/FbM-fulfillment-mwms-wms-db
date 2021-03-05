@@ -402,5 +402,5 @@ BEGIN
    RETURN
 END
 GO
-GRANT EXECUTE ON [dbo].[fnc_GetDManifestDETTH02] TO nSQL 
+GRANT SELECT ON [dbo].[fnc_GetDManifestDETTH02] TO nSQL 
 GO
