@@ -25,6 +25,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */ 
 /* 17-11-2020  WLChooi  1.2   WMS-15571 - Revise Logic (WL01)            */
+/* 04-03-2021  WLChooi  1.3   WMS-15571 - Fix Cater for Channel_ID (WL02)*/
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV11]      
@@ -224,7 +225,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
          EditDate,          EditWho,            TrafficCop,
          ArchiveCop,        OptimizeCop,        ShipFlag,
          PickSlipNo,        TaskDetailKey,      TaskManagerReasonKey,
-         Notes,             MoveRefKey,         WIP_RefNo 
+         Notes,             MoveRefKey,         WIP_RefNo,
+         Channel_ID   --WL02
        )
        SELECT PD.PickDetailKey,  CaseID,              PD.PickHeaderKey, 
          PD.OrderKey,            PD.OrderLineNumber,  PD.Lot,
@@ -238,7 +240,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
          PD.EditDate,            PD.EditWho,          PD.TrafficCop,
          PD.ArchiveCop,          PD.OptimizeCop,      PD.ShipFlag,
          PD.PickSlipNo,          PD.TaskDetailKey,    PD.TaskManagerReasonKey,
-         PD.Notes,               PD.MoveRefKey,       @c_SourceType 
+         PD.Notes,               PD.MoveRefKey,       @c_SourceType,
+         PD.Channel_ID   --WL02
        FROM WAVEDETAIL WD (NOLOCK) 
        JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
        WHERE WD.Wavekey = @c_Wavekey
@@ -838,13 +841,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                    DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                    ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
                    WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, 
-                   Taskdetailkey, TaskManagerReasonkey, Notes )
+                   Taskdetailkey, TaskManagerReasonkey, Notes, Channel_ID )   --WL02
              SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
                    Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
                    DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                    ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
                    WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, 
-                   Taskdetailkey, TaskManagerReasonkey, Notes
+                   Taskdetailkey, TaskManagerReasonkey, Notes, Channel_ID   --WL02
              FROM PICKDETAIL_WIP WITH (NOLOCK)
              WHERE PickDetailKey = @c_PickDetailKey
              

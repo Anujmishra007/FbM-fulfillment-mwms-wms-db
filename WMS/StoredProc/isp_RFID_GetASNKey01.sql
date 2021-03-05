@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,7 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */
-/* 26-Jan-2021 Wan      1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
+/* 26-Jan-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
+/* 03-MAR-2021 Wan02    1.2   WMS-16467 - [CN]NIKE_O2_RFID_Receiving_ChangeField_CR*/
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey01
            @c_Facility           NVARCHAR(5)  
@@ -49,7 +50,7 @@ BEGIN
 
          , @b_QRCode          INT = 0
          , @c_TrackingNo      NVARCHAR(40) = ''
-         , @c_WarehouseRef    NVARCHAR(18) = ''
+         , @c_CarrierName     NVARCHAR(45) = ''       --(Wan02)
          , @c_SellerPhone1    NVARCHAR(18) = ''
 
          , @c_ASNReason       NVARCHAR(10) = ''
@@ -61,7 +62,7 @@ BEGIN
          ( RowRef             INT            IDENTITY(1,1) PRIMARY KEY
          , ReceiptKey         NVARCHAR(10)   DEFAULT('')
          , TrackingNo         NVARCHAR(40)   DEFAULT('')
-         , WarehouseRef       NVARCHAR(18)   DEFAULT('')
+         , CarrierName        NVARCHAR(45)   DEFAULT('')       --(Wan02)
          , SellerPhone1       NVARCHAR(18)   DEFAULT('')
          , Orderdate          DATETIME                         --(Wan01)
          )
@@ -80,9 +81,9 @@ BEGIN
    
    -- FBR v2.2 2020-12-12
    SELECT @c_ReceiptKey   = RH.ReceiptKey
-        , @c_WarehouseRef = RH.WarehouseReference 
+        , @c_CarrierName = RH.CarrierName                --(Wan02)
         , @c_SellerPhone1 = ISNULL(RH.SellerPhone1,'')
-        , @dt_Orderdate   = RH.Userdefine07               --(Wan01)
+        , @dt_Orderdate   = RH.Userdefine07              --(Wan01)
    FROM RECEIPT RH WITH (NOLOCK)
    WHERE RH.Receiptkey = @c_RefNo
    AND RH.Storerkey = @c_Storerkey
@@ -91,12 +92,12 @@ BEGIN
    AND RH.[Status]  < '9'
    AND RH.[ASNStatus]  < '9'
    
-   IF @c_ReceiptKey = ''     -- Search WarehouseRef By QRCode, Get SellerPhone1 by matching WarehouseRef
+   IF @c_ReceiptKey = ''     -- Search CarrierName By QRCode, Get SellerPhone1 by matching CarrierName
    BEGIN
-   	SET @c_WarehouseRef = ''
-   	SET @c_SellerPhone1 = ''
+      SET @c_CarrierName = ''                                                             --(Wan02)
+      SET @c_SellerPhone1 = ''
 
-      SELECT TOP 1 @c_WarehouseRef = EOH.ExternOrderkey  --V2.4 2020-12-14
+      SELECT TOP 1 @c_CarrierName = EOH.ExternOrderkey  --V2.4 2020-12-14                 --(Wan02)
       FROM EXTERNORDERS EOH WITH (NOLOCK) 
       JOIN EXTERNORDERSDETAIL EOD WITH (NOLOCK) ON EOH.ExternOrderkey = EOD.ExternOrderkey
       WHERE EOD.QRCOde = @c_RefNo
@@ -104,14 +105,14 @@ BEGIN
       AND   EOD.[Status]  = '9'
       ORDER BY EOD.EditDate DESC
 
-      IF @c_WarehouseRef <> ''   --Get Receiptkey, SellerPhone1 by matching WarehouseRef
+      IF @c_CarrierName <> ''   --Get Receiptkey, SellerPhone1 by matching CarrierName    --(Wan02)
       BEGIN 
          INSERT INTO @tMATCHASN ( ReceiptKey, SellerPhone1, OrderDate ) --(Wan01)
          SELECT ReceiptKey   = RH.ReceiptKey
               , SellerPhone1 = ISNULL(RH.SellerPhone1,'')
               , Orderdate    = RH.Userdefine07                          --(Wan01)
          FROM RECEIPT RH WITH (NOLOCK)
-         WHERE RH.WarehouseReference = @c_WarehouseRef
+         WHERE RH.CarrierName = @c_CarrierName                          --(Wan02)
          AND RH.Storerkey = @c_Storerkey
          AND RH.Facility  = @c_Facility
          AND RH.DocType   = 'R'
@@ -140,14 +141,14 @@ BEGIN
       END
    END
   
-   IF @c_ReceiptKey = ''   -- Get WarehouseRef, Receiptkey, SellerPhone1 By TrackingNo
+   IF @c_ReceiptKey = ''   -- Get CarrierName, Receiptkey, SellerPhone1 By TrackingNo        
    BEGIN
-      SET @c_WarehouseRef = ''
+      SET @c_CarrierName = ''                                                       --(Wan02)
       SET @c_SellerPhone1 = ''
 
-      INSERT INTO @tMATCHASN ( ReceiptKey, WarehouseRef, SellerPhone1, OrderDate )  --(Wan01)
+      INSERT INTO @tMATCHASN ( ReceiptKey, CarrierName, SellerPhone1, OrderDate )   --(Wan01)--(Wan02)
       SELECT ReceiptKey = RH.ReceiptKey
-            ,WarehauseRef = ISNULL(RH.WarehouseReference,'')
+            ,WarehauseRef = ISNULL(RH.CarrierName,'')                               --(Wan02)
             ,SellerPhone1 = ISNULL(RH.SellerPhone1,'')
             ,OrderDate    = RH.Userdefine07                                         --(Wan01)
       FROM  RECEIPT RH WITH (NOLOCK)
@@ -171,7 +172,7 @@ BEGIN
       END
 
       SELECT TOP 1 @c_ReceiptKey   = T.ReceiptKey
-            , @c_WarehouseRef = ISNULL(T.WarehouseRef,'')
+            , @c_CarrierName = ISNULL(T.CarrierName,'')        --(Wan02)
             , @c_SellerPhone1 = ISNULL(T.SellerPhone1,'')
             , @dt_Orderdate   = T.OrderDate                    --(Wan01)
       FROM @tMATCHASN T
@@ -182,18 +183,18 @@ BEGIN
          SET @c_TrackingNo = @c_RefNo
          
          INSERT INTO @tTrackingNo (Receiptkey, TrackingNo)  --2021-01-07
-   	   VALUES (@c_ReceiptKey, @c_TrackingNo)
+         VALUES (@c_ReceiptKey, @c_TrackingNo)
       END 
    END 
 
-   IF @c_ReceiptKey = '' -- Get Receiptkey, SellerPhone1 By WarehouseRef 
+   IF @c_ReceiptKey = '' -- Get Receiptkey, SellerPhone1 By CarrierName 
    BEGIN
       INSERT INTO @tMATCHASN ( ReceiptKey, SellerPhone1, OrderDate )    --(Wan01)
       SELECT ReceiptKey = RH.ReceiptKey
             ,SellerPhone1= ISNULL(RH.SellerPhone1,'')
             ,Orderdate   = RH.Userdefine07                              --(Wan01)
       FROM RECEIPT RH WITH (NOLOCK)
-      WHERE RH.WarehouseReference = @c_RefNo
+      WHERE RH.CarrierName = @c_RefNo                                   --(Wan02)
       AND RH.Storerkey = @c_Storerkey
       AND RH.Facility  = @c_Facility
       AND RH.DocType   = 'R'
@@ -210,7 +211,7 @@ BEGIN
       END
 
       SELECT TOP 1 @c_ReceiptKey = T.ReceiptKey
-            , @c_WarehouseRef = ISNULL(T.WarehouseRef,'')
+            , @c_CarrierName = ISNULL(T.CarrierName,'')     --(Wan02)
             , @c_SellerPhone1 = ISNULL(T.SellerPhone1,'')
             , @dt_Orderdate   = T.OrderDate                 --(Wan01)
       FROM @tMATCHASN T
@@ -219,41 +220,41 @@ BEGIN
       IF @c_ReceiptKey <> ''
       BEGIN
          SET @b_QRCode = 0
-         SET @c_WarehouseRef = @c_RefNo
+         SET @c_CarrierName = @c_RefNo                      --(Wan02)    
       END
    END
 
-   --IF ReceiptKey is found and WarehouseRef/SellerPhone/TrackingNo in CHECKLIST Table, prompt error and update ASNReason
+   --IF ReceiptKey is found and CarrierName/SellerPhone/TrackingNo in CHECKLIST Table, prompt error and update ASNReason   
    IF @c_ReceiptKey <> ''            --2021-01-07
    BEGIN
-   	--(Wan01) - START
-   	SET @dt_Orderdate = CONVERT(DATETIME, CONVERT(NVARCHAR(10), @dt_Orderdate, 121))
-   	IF @dt_Orderdate IS NOT NULL AND CONVERT(NVARCHAR(10), @dt_Orderdate, 121) <> '1900-01-01'
-   	BEGIN 
-   		SET @n_ValidDay = 0
-   		SELECT TOP 1  @n_ValidDay = CASE WHEN ISNUMERIC(c.UDF02) = 1 THEN c.UDF02 ELSE 0 END
-   		FROM CODELKUP AS c WITH (NOLOCK)
-   	   WHERE c.ListName = 'RDATA'
-   	   AND   c.Code = '001'
-   	   AND c.Storerkey = @c_Storerkey
-   	   
-   	   SET @dt_today = CONVERT(DATETIME, CONVERT(NVARCHAR(10), @dt_today, 121))
-   	   IF  @n_ValidDay > 0 AND DATEDIFF(DAY, @dt_Orderdate, @dt_today) > @n_ValidDay  
-   	   BEGIN
+      --(Wan01) - START
+      SET @dt_Orderdate = CONVERT(DATETIME, CONVERT(NVARCHAR(10), @dt_Orderdate, 121))
+      IF @dt_Orderdate IS NOT NULL AND CONVERT(NVARCHAR(10), @dt_Orderdate, 121) <> '1900-01-01'
+      BEGIN 
+         SET @n_ValidDay = 0
+         SELECT TOP 1  @n_ValidDay = CASE WHEN ISNUMERIC(c.UDF02) = 1 THEN c.UDF02 ELSE 0 END
+         FROM CODELKUP AS c WITH (NOLOCK)
+         WHERE c.ListName = 'RDATA'
+         AND   c.Code = '001'
+         AND c.Storerkey = @c_Storerkey
+         
+         SET @dt_today = CONVERT(DATETIME, CONVERT(NVARCHAR(10), @dt_today, 121))
+         IF  @n_ValidDay > 0 AND DATEDIFF(DAY, @dt_Orderdate, @dt_today) > @n_ValidDay  
+         BEGIN
             SET @n_Continue = 3
             SET @n_Err      = 82025
             SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Order is Over ' + CAST(@n_ValidDay AS NVARCHAR) +' days .'
                             + ' (isp_RFID_GetASNKey01)'
             GOTO QUIT_SP
-   	   END
-   	END
-   	--(Wan01) - END
-   	
+         END
+      END
+      --(Wan01) - END
+      
       IF @c_TrackingNo = ''  
       BEGIN
-   	   INSERT INTO @tTrackingNo (Receiptkey, TrackingNo)
-   	   SELECT  DI.Key1
-   	         , DI.Key3
+         INSERT INTO @tTrackingNo (Receiptkey, TrackingNo)
+         SELECT  DI.Key1
+               , DI.Key3
          FROM  DOCINFO DI WITH (NOLOCK) 
          WHERE DI.TableName = 'RECEIPT' 
          AND   DI.[Key1]    = @c_ReceiptKey      
@@ -276,13 +277,13 @@ BEGIN
                            + ' (isp_RFID_GetASNKey01)'
       END  
 
-      IF @c_WarehouseRef <> '' AND @c_ASNReason = ''
+      IF @c_CarrierName <> '' AND @c_ASNReason = ''         --(Wan02)
       BEGIN
          IF EXISTS ( SELECT 1
                      FROM DOCINFO DI WITH (NOLOCK)
                      WHERE DI.TableName = 'CheckList'
                      AND   DI.Storerkey = @c_Storerkey
-                     AND   DI.Key2      = @c_WarehouseRef
+                     AND   DI.Key2      = @c_CarrierName    --(Wan02)
                 )
          BEGIN
             SET @c_ASNReason= 'CHECKLIST'

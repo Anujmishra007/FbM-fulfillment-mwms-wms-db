@@ -8,6 +8,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /******************************************************************************/  
 /* Store procedure: isp_ExtInfoVas01                                          */  
 /* Copyright      : LFLogistics                                               */  
@@ -45,7 +46,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.isp_GetPrinter TO NSQL
+GRANT EXECUTE ON api.isp_ExtInfoVas01 TO NSQL
 GO
 
 
