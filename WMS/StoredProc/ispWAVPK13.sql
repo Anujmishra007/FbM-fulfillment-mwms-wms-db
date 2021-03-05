@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 2021-03-01   WLChooi  1.1  WMS-15713 - AssignPackLabelToOrdCfg (WL01)*/
+/* 2021-03-04   WLChooi  1.2  WMS-16501 - Split Carton by Max LabelLine */
+/*                                        using Storerconfig (WL02)     */
 /************************************************************************/  
   
 CREATE PROC [dbo].[ispWAVPK13]  
@@ -54,7 +56,9 @@ BEGIN
            @c_Conso                        NVARCHAR(10) = 'N',
            @c_NewPickSlipNoGen             NVARCHAR(1) = 'N',
            @c_AllPickslipno                NVARCHAR(4000) = '',
-           @c_GetPickslipno                NVARCHAR(10) = ''   --WL01
+           @c_GetPickslipno                NVARCHAR(10) = '',   --WL01
+           @n_MaxLinePerCarton             INT,       --WL02
+           @n_TTLCTN                       INT = 1    --WL02
            
    DECLARE @n_Continue   INT,  
            @n_StartTCnt  INT,  
@@ -76,7 +80,24 @@ BEGIN
    
    IF @@TRANCOUNT = 0  
       BEGIN TRAN  
-  
+
+   --WL02 S
+   IF @n_continue IN(1,2)  
+   BEGIN  
+      SELECT TOP 1 @c_Storerkey = OH.Storerkey
+      FROM WAVEDETAIL WD (NOLOCK)
+      JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+      WHERE WD.Wavekey = @c_Wavekey
+
+      SELECT @n_MaxLinePerCarton = CASE WHEN ISNUMERIC(SC.OPTION2) = 1 THEN SC.OPTION2 ELSE 0 END   -- 0 as unlimited
+      FROM Storerconfig SC (NOLOCK)
+      WHERE SC.Storerkey = @c_Storerkey AND SC.Configkey = 'WAVGENPACKFROMPICKED_SP'
+      
+      IF ISNULL(@n_MaxLinePerCarton,0) = 0
+         SET @n_MaxLinePerCarton = 0
+   END 
+   --WL02 E
+    
    --Validation  
    IF @n_continue IN(1,2)  
    BEGIN  
@@ -211,11 +232,11 @@ BEGIN
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68050  
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKHEADER Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
          END  
-  
+         
          SET @c_LabelNo = ''  
          SET @n_CartonNo = 1  
          SET @n_LabelLineNo = 0  
-
+         
          EXEC isp_GenUCCLabelNo_Std  
             @cPickslipNo  = @c_Pickslipno,  
             @nCartonNo    = @n_CartonNo,  
@@ -240,9 +261,29 @@ BEGIN
   
          WHILE @@FETCH_STATUS<> -1  
          BEGIN  
+         	--WL02 S
+            IF @n_LabelLineNo = @n_MaxLinePerCarton AND @n_MaxLinePerCarton > 0
+            BEGIN
+               SET @c_LabelNo = ''  
+               SET @n_CartonNo = @n_CartonNo + 1 
+               SET @n_LabelLineNo = 0  
+               
+               EXEC isp_GenUCCLabelNo_Std  
+                  @cPickslipNo  = @c_Pickslipno,  
+                  @nCartonNo    = @n_CartonNo,  
+                  @cLabelNo     = @c_LabelNo OUTPUT,  
+                  @b_success    = @b_Success OUTPUT,  
+                  @n_err        = @n_err OUTPUT,  
+                  @c_errmsg     = @c_errmsg OUTPUT  
+               
+               IF @b_Success <> 1  
+                  SET @n_continue = 3  
+            END
+            --WL02 E
+            
             SET @n_LabelLineNo = @n_LabelLineNo + 1  
             SET @c_LabelLineNo = RIGHT('00000' + RTRIM(CAST(@n_LabelLineNo AS NVARCHAR)),5)  
-  
+            
             INSERT INTO PACKDETAIL  
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
             VALUES  
@@ -296,19 +337,20 @@ BEGIN
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68070  
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PICKINGINFO Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
          END  
+         
+         --WL02 Comment
+         --UPDATE PACKHEADER WITH (ROWLOCK)  
+         --SET Status = '9'  
+         --WHERE Pickslipno = @c_Pickslipno  
   
-         UPDATE PACKHEADER WITH (ROWLOCK)  
-         SET Status = '9'  
-         WHERE Pickslipno = @c_Pickslipno  
+         --SET @n_err = @@ERROR  
   
-         SET @n_err = @@ERROR  
-  
-         IF @n_err <> 0  
-         BEGIN  
-            SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68075  
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-         END  
+         --IF @n_err <> 0  
+         --BEGIN  
+         --   SELECT @n_continue = 3  
+         --   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68075  
+         --   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+         --END  
          
          SET @c_NewPickSlipNoGen = 'Y'
 
@@ -413,6 +455,26 @@ NEXT_LOOP:
   
          WHILE @@FETCH_STATUS<> -1  
          BEGIN  
+         	--WL02 S
+            IF @n_LabelLineNo = @n_MaxLinePerCarton AND @n_MaxLinePerCarton > 0
+            BEGIN
+               SET @c_LabelNo = ''  
+               SET @n_CartonNo = @n_CartonNo + 1 
+               SET @n_LabelLineNo = 0  
+               
+               EXEC isp_GenUCCLabelNo_Std  
+                  @cPickslipNo  = @c_Pickslipno,  
+                  @nCartonNo    = @n_CartonNo,  
+                  @cLabelNo     = @c_LabelNo OUTPUT,  
+                  @b_success    = @b_Success OUTPUT,  
+                  @n_err        = @n_err OUTPUT,  
+                  @c_errmsg     = @c_errmsg OUTPUT  
+               
+               IF @b_Success <> 1  
+                  SET @n_continue = 3  
+            END
+            --WL02 E
+            
             SET @n_LabelLineNo = @n_LabelLineNo + 1  
             SET @c_LabelLineNo = RIGHT('00000' + RTRIM(CAST(@n_LabelLineNo AS NVARCHAR)),5)  
   
@@ -469,19 +531,20 @@ NEXT_LOOP:
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68095 
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PICKINGINFO Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
          END  
+         
+         --WL02 Comment
+         --UPDATE PACKHEADER WITH (ROWLOCK)  
+         --SET Status = '9'  
+         --WHERE Pickslipno = @c_Pickslipno  
   
-         UPDATE PACKHEADER WITH (ROWLOCK)  
-         SET Status = '9'  
-         WHERE Pickslipno = @c_Pickslipno  
+         --SET @n_err = @@ERROR  
   
-         SET @n_err = @@ERROR  
-  
-         IF @n_err <> 0  
-         BEGIN  
-            SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68100  
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-         END  
+         --IF @n_err <> 0  
+         --BEGIN  
+         --   SELECT @n_continue = 3  
+         --   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68100  
+         --   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+         --END  
 
          IF ISNULL(@c_Pickslipno,'') <> ''
          BEGIN
@@ -538,12 +601,33 @@ NEXT_ConsoLOOP:
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Exec isp_AssignPackLabelToOrderByLoad. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
             GOTO QUIT_SP
          END  
+         
+         --WL02 S
+         SELECT @n_TTLCTN = MAX(CartonNo)
+         FROM PACKDETAIL (NOLOCK)
+         WHERE PickSlipNo = @c_GetPickslipno
+         
+         UPDATE PACKHEADER WITH (ROWLOCK) 
+         SET TTLCNTS  = @n_TTLCTN, 
+             [Status] = '9'  
+         WHERE PickSlipNo = @c_GetPickslipno
+         
+         SELECT @n_err = @@ERROR
+         
+         IF @n_err <> 0  
+         BEGIN  
+            SELECT @n_continue = 3  
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68110
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Updating PACKHEADER. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+            GOTO QUIT_SP
+         END  
+         --WL02 E
 
    	   FETCH NEXT FROM CUR_LOOP INTO @c_GetPickslipno
    	END
    END
    --WL01 E
-
+   
 QUIT_SP:  
    IF CURSOR_STATUS('LOCAL', 'CUR_DISCPACK') IN (0 , 1)
    BEGIN
