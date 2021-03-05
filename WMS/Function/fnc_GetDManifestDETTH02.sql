@@ -54,38 +54,38 @@ CREATE FUNCTION [dbo].[fnc_GetDManifestDETTH02] (
             ,  N              NVARCHAR(800) 
             ,  P              NVARCHAR(800)
             ,  Q              NVARCHAR(800)   
-			,  CD3            NVARCHAR(800)
-			,  CD4            NVARCHAR(800)
-			,  CD8            NVARCHAR(800)
-			,  CD8_1          NVARCHAR(800)
-			,  CD9            NVARCHAR(800)
-			,  CD9_1          NVARCHAR(800)
-			,  CD10           NVARCHAR(800)
-			,  CD10_1         NVARCHAR(800)
-			,  CD11           NVARCHAR(800)
-			,  CD18           NVARCHAR(800)
-			,  CD19           NVARCHAR(800)
-			,  CD20           NVARCHAR(800)
-			,  CD21           NVARCHAR(800)
-			,  CD22           NVARCHAR(800)
-			,  CD23           NVARCHAR(800)
-			,  CD23_1         NVARCHAR(800)
-			,  CD23_2         NVARCHAR(800)
-			,  CD23_3         NVARCHAR(800)
-			,  CD23_4         NVARCHAR(800)
-			,  CD23_5         NVARCHAR(800)
-			,  CD23_6         NVARCHAR(800)
-			,  CD23_7         NVARCHAR(800)
-			,  CD23_8         NVARCHAR(800)
-			,  CD23_9         NVARCHAR(800)
-			,  CD25           NVARCHAR(800)
-			,  CD26           NVARCHAR(800)         
+            ,  CD3            NVARCHAR(800)
+            ,  CD4            NVARCHAR(800)
+            ,  CD8            NVARCHAR(800)
+            ,  CD8_1          NVARCHAR(800)
+            ,  CD9            NVARCHAR(800)
+            ,  CD9_1          NVARCHAR(800)
+            ,  CD10           NVARCHAR(800)
+            ,  CD10_1         NVARCHAR(800)
+            ,  CD11           NVARCHAR(800)
+            ,  CD18           NVARCHAR(800)
+            ,  CD19           NVARCHAR(800)
+            ,  CD20           NVARCHAR(800)
+            ,  CD21           NVARCHAR(800)
+            ,  CD22           NVARCHAR(800)
+            ,  CD23           NVARCHAR(800)
+            ,  CD23_1         NVARCHAR(800)
+            ,  CD23_2         NVARCHAR(800)
+            ,  CD23_3         NVARCHAR(800)
+            ,  CD23_4         NVARCHAR(800)
+            ,  CD23_5         NVARCHAR(800)
+            ,  CD23_6         NVARCHAR(800)
+            ,  CD23_7         NVARCHAR(800)
+            ,  CD23_8         NVARCHAR(800)
+            ,  CD23_9         NVARCHAR(800)
+            ,  CD25           NVARCHAR(800)
+            ,  CD26           NVARCHAR(800)         
             ,  CD27           NVARCHAR(800)
-			,  CD28           NVARCHAR(800)
+            ,  CD28           NVARCHAR(800)
             ,  K2             NVARCHAR(800) 
-			,  C              NVARCHAR(800) 
-			,  CD22_1         NVARCHAR(800)
-         )                                   
+            ,  C              NVARCHAR(800) 
+            ,  CD22_1         NVARCHAR(800)
+            )                                   
 AS
 BEGIN
    SET QUOTED_IDENTIFIER OFF
@@ -117,36 +117,36 @@ BEGIN
          ,  @c_Q              NVARCHAR(800)      
          ,  @c_CD3            NVARCHAR(800)      
          ,  @c_shipperkey     NVARCHAR(20)       
-		 ,  @c_CD4            NVARCHAR(800)
-		 ,  @c_CD8            NVARCHAR(800)
-		 ,  @c_CD8_1          NVARCHAR(800)
-	  	 ,  @c_CD9            NVARCHAR(800)
-		 ,  @c_CD9_1          NVARCHAR(800)
-		 ,  @c_CD10           NVARCHAR(800)
-		 ,  @c_CD10_1         NVARCHAR(800)
-		 ,  @c_CD11           NVARCHAR(800)
-		 ,  @c_CD18           NVARCHAR(800)
-		 ,  @c_CD19           NVARCHAR(800)
-		 ,  @c_CD20           NVARCHAR(800)
-		 ,  @c_CD21           NVARCHAR(800)
-		 ,  @c_CD22           NVARCHAR(800)
-		 ,  @c_CD23           NVARCHAR(800)
-		 ,  @c_CD23_1         NVARCHAR(800)
-		 ,  @c_CD23_2         NVARCHAR(800)
-		 ,  @c_CD23_3         NVARCHAR(800)
-		 ,  @c_CD23_4         NVARCHAR(800)
-		 ,  @c_CD23_5         NVARCHAR(800)
-		 ,  @c_CD23_6         NVARCHAR(800)
-		 ,  @c_CD23_7         NVARCHAR(800)
-		 ,  @c_CD23_8         NVARCHAR(800)
-		 ,  @c_CD23_9         NVARCHAR(800)
-		 ,  @c_CD25           NVARCHAR(800)
-		 ,  @c_CD26           NVARCHAR(800)         
+         ,  @c_CD4            NVARCHAR(800)
+         ,  @c_CD8            NVARCHAR(800)
+         ,  @c_CD8_1          NVARCHAR(800)
+         ,  @c_CD9            NVARCHAR(800)
+         ,  @c_CD9_1          NVARCHAR(800)
+         ,  @c_CD10           NVARCHAR(800)
+         ,  @c_CD10_1         NVARCHAR(800)
+         ,  @c_CD11           NVARCHAR(800)
+         ,  @c_CD18           NVARCHAR(800)
+         ,  @c_CD19           NVARCHAR(800)
+         ,  @c_CD20           NVARCHAR(800)
+         ,  @c_CD21           NVARCHAR(800)
+         ,  @c_CD22           NVARCHAR(800)
+         ,  @c_CD23           NVARCHAR(800)
+         ,  @c_CD23_1         NVARCHAR(800)
+         ,  @c_CD23_2         NVARCHAR(800)
+         ,  @c_CD23_3         NVARCHAR(800)
+         ,  @c_CD23_4         NVARCHAR(800)
+         ,  @c_CD23_5         NVARCHAR(800)
+         ,  @c_CD23_6         NVARCHAR(800)
+         ,  @c_CD23_7         NVARCHAR(800)
+         ,  @c_CD23_8         NVARCHAR(800)
+         ,  @c_CD23_9         NVARCHAR(800)
+         ,  @c_CD25           NVARCHAR(800)
+         ,  @c_CD26           NVARCHAR(800)         
          ,  @c_CD27           NVARCHAR(800)
-		 ,  @c_CD28           NVARCHAR(800)
-		 ,  @c_K2             NVARCHAR(800)
-		 ,  @c_C              NVARCHAR(800)
-		 ,  @c_CD22_1         NVARCHAR(800)
+         ,  @c_CD28           NVARCHAR(800)
+         ,  @c_K2             NVARCHAR(800)
+         ,  @c_C              NVARCHAR(800)
+         ,  @c_CD22_1         NVARCHAR(800)
          
 
 
@@ -210,7 +210,7 @@ BEGIN
   
    DECLARE CUR_LBL CURSOR LOCAL FORWARD_ONLY STATIC READ_ONLY FOR
     SELECT CL.code
-	     , CL.LONG
+        , CL.LONG
          , CL.Notes
    FROM CODELKUP    CL WITH (NOLOCK) 
    WHERE (CL.ListName = 'JDRec')     
@@ -248,35 +248,35 @@ BEGIN
       SET @c_Q    =  CASE WHEN @c_LabelName = 'Q'    THEN @c_LabelValue ELSE @c_Q    END          
       SET @c_CD3  =  CASE WHEN @c_LabelName = 'CD3'  THEN @c_LabelValue ELSE @c_CD3  END          
       SET @c_CD4  =  CASE WHEN @c_LabelName = 'CD4'  THEN @c_LabelValue ELSE @c_CD4  END 
-	  SET @c_CD8  =  CASE WHEN @c_LabelName = 'CD8'  THEN @c_LabelValue ELSE @c_CD8  END          
+      SET @c_CD8  =  CASE WHEN @c_LabelName = 'CD8'  THEN @c_LabelValue ELSE @c_CD8  END          
       SET @c_CD8_1 = CASE WHEN @c_LabelName = 'CD8-1'  THEN @c_NOTES    ELSE @c_CD8_1  END 
-	  SET @c_CD9  =  CASE WHEN @c_LabelName = 'CD9'    THEN @c_LabelValue ELSE @c_CD9  END          
+      SET @c_CD9  =  CASE WHEN @c_LabelName = 'CD9'    THEN @c_LabelValue ELSE @c_CD9  END          
       SET @c_CD9_1 = CASE WHEN @c_LabelName = 'CD9-1'  THEN @c_NOTES      ELSE @c_CD9_1 END 
-	  SET @c_CD10  = CASE WHEN @c_LabelName = 'CD10'   THEN @c_LabelValue ELSE @c_CD10  END          
+      SET @c_CD10  = CASE WHEN @c_LabelName = 'CD10'   THEN @c_LabelValue ELSE @c_CD10  END          
       SET @c_CD10_1= CASE WHEN @c_LabelName = 'CD10-1' THEN @c_NOTES      ELSE @c_CD10_1 END 
-	  SET @c_CD11  = CASE WHEN @c_LabelName = 'CD11'   THEN @c_LabelValue ELSE @c_CD11  END 
-	  SET @c_CD18  = CASE WHEN @c_LabelName = 'CD18'   THEN @c_LabelValue ELSE @c_CD18  END  
-	  SET @c_CD19  = CASE WHEN @c_LabelName = 'CD19'   THEN @c_LabelValue ELSE @c_CD19  END  
-	  SET @c_CD20  = CASE WHEN @c_LabelName = 'CD20'   THEN @c_LabelValue ELSE @c_CD20  END  
-	  SET @c_CD21  = CASE WHEN @c_LabelName = 'CD21'   THEN @c_LabelValue ELSE @c_CD21  END  
-	  SET @c_CD22  = CASE WHEN @c_LabelName = 'CD22'   THEN @c_LabelValue ELSE @c_CD22  END  
-	  SET @c_CD23  = CASE WHEN @c_LabelName = 'CD23'   THEN @c_LabelValue ELSE @c_CD23  END 
-	  SET @c_CD23_1 = CASE WHEN @c_LabelName = 'CD23-1'THEN @c_LabelValue ELSE @c_CD23_1  END 
-	  SET @c_CD23_2 = CASE WHEN @c_LabelName = 'CD23-2'THEN @c_LabelValue ELSE @c_CD23_2  END 
-	  SET @c_CD23_3 = CASE WHEN @c_LabelName = 'CD23-3'THEN @c_LabelValue ELSE @c_CD23_3  END 
-	  SET @c_CD23_4 = CASE WHEN @c_LabelName = 'CD23-4'THEN @c_LabelValue ELSE @c_CD23_4  END 
-	  SET @c_CD23_5 = CASE WHEN @c_LabelName = 'CD23-5'THEN @c_LabelValue ELSE @c_CD23_5  END 
-	  SET @c_CD23_6 = CASE WHEN @c_LabelName = 'CD23-6'THEN @c_LabelValue ELSE @c_CD23_6  END 
-	  SET @c_CD23_7 = CASE WHEN @c_LabelName = 'CD23-7'THEN @c_LabelValue ELSE @c_CD23_7  END 
-	  SET @c_CD23_8 = CASE WHEN @c_LabelName = 'CD23-8'THEN @c_LabelValue ELSE @c_CD23_8  END 
-	  SET @c_CD23_9 = CASE WHEN @c_LabelName = 'CD23-9'THEN @c_LabelValue ELSE @c_CD23_9  END 
-	  SET @c_CD25   = CASE WHEN @c_LabelName = 'CD25'  THEN @c_NOTES      ELSE @c_CD25    END 
-	  SET @c_CD26   = CASE WHEN @c_LabelName = 'CD26'  THEN @c_LabelValue ELSE @c_CD26    END 
-	  SET @c_CD27   = CASE WHEN @c_LabelName = 'CD27'  THEN @c_LabelValue ELSE @c_CD27    END 
-	  SET @c_CD28   = CASE WHEN @c_LabelName = 'CD28'  THEN @c_NOTES      ELSE @c_CD28    END 
-	  SET @c_K2     = CASE WHEN @c_LabelName = 'K2'    THEN @c_LabelValue ELSE @c_K2      END 
-	  SET @c_C      = CASE WHEN @c_LabelName = 'C'     THEN @c_LabelValue ELSE @c_C    END
-	  SET @c_CD22_1 = CASE WHEN @c_LabelName = 'CD22-1'  THEN @c_LabelValue ELSE @c_CD22_1  END 
+      SET @c_CD11  = CASE WHEN @c_LabelName = 'CD11'   THEN @c_LabelValue ELSE @c_CD11  END 
+      SET @c_CD18  = CASE WHEN @c_LabelName = 'CD18'   THEN @c_LabelValue ELSE @c_CD18  END  
+      SET @c_CD19  = CASE WHEN @c_LabelName = 'CD19'   THEN @c_LabelValue ELSE @c_CD19  END  
+      SET @c_CD20  = CASE WHEN @c_LabelName = 'CD20'   THEN @c_LabelValue ELSE @c_CD20  END  
+      SET @c_CD21  = CASE WHEN @c_LabelName = 'CD21'   THEN @c_LabelValue ELSE @c_CD21  END  
+      SET @c_CD22  = CASE WHEN @c_LabelName = 'CD22'   THEN @c_LabelValue ELSE @c_CD22  END  
+      SET @c_CD23  = CASE WHEN @c_LabelName = 'CD23'   THEN @c_LabelValue ELSE @c_CD23  END 
+      SET @c_CD23_1 = CASE WHEN @c_LabelName = 'CD23-1'THEN @c_LabelValue ELSE @c_CD23_1  END 
+      SET @c_CD23_2 = CASE WHEN @c_LabelName = 'CD23-2'THEN @c_LabelValue ELSE @c_CD23_2  END 
+      SET @c_CD23_3 = CASE WHEN @c_LabelName = 'CD23-3'THEN @c_LabelValue ELSE @c_CD23_3  END 
+      SET @c_CD23_4 = CASE WHEN @c_LabelName = 'CD23-4'THEN @c_LabelValue ELSE @c_CD23_4  END 
+      SET @c_CD23_5 = CASE WHEN @c_LabelName = 'CD23-5'THEN @c_LabelValue ELSE @c_CD23_5  END 
+      SET @c_CD23_6 = CASE WHEN @c_LabelName = 'CD23-6'THEN @c_LabelValue ELSE @c_CD23_6  END 
+      SET @c_CD23_7 = CASE WHEN @c_LabelName = 'CD23-7'THEN @c_LabelValue ELSE @c_CD23_7  END 
+      SET @c_CD23_8 = CASE WHEN @c_LabelName = 'CD23-8'THEN @c_LabelValue ELSE @c_CD23_8  END 
+      SET @c_CD23_9 = CASE WHEN @c_LabelName = 'CD23-9'THEN @c_LabelValue ELSE @c_CD23_9  END 
+      SET @c_CD25   = CASE WHEN @c_LabelName = 'CD25'  THEN @c_NOTES      ELSE @c_CD25    END 
+      SET @c_CD26   = CASE WHEN @c_LabelName = 'CD26'  THEN @c_LabelValue ELSE @c_CD26    END 
+      SET @c_CD27   = CASE WHEN @c_LabelName = 'CD27'  THEN @c_LabelValue ELSE @c_CD27    END 
+      SET @c_CD28   = CASE WHEN @c_LabelName = 'CD28'  THEN @c_NOTES      ELSE @c_CD28    END 
+      SET @c_K2     = CASE WHEN @c_LabelName = 'K2'    THEN @c_LabelValue ELSE @c_K2      END 
+      SET @c_C      = CASE WHEN @c_LabelName = 'C'     THEN @c_LabelValue ELSE @c_C    END
+      SET @c_CD22_1 = CASE WHEN @c_LabelName = 'CD22-1'  THEN @c_LabelValue ELSE @c_CD22_1  END 
       
       FETCH NEXT FROM CUR_LBL INTO @c_LabelName
                                 ,  @c_LabelValue
@@ -312,38 +312,38 @@ BEGIN
          ,  N             
          ,  P  
          ,  Q  
-		 ,  CD3   
-		 ,  CD4
-		 ,  CD8
-		 ,  CD8_1
-		 ,  CD9
-		 ,  CD9_1
-		 ,  CD10
-		 ,  CD10_1  
-		 ,  CD11
-		 ,  CD18
-		 ,  CD19
-		 ,  CD20
-		 ,  CD21 
-		 ,  CD22
-		 ,  CD23 
-		 ,  CD23_1
-		 ,  CD23_2
-		 ,  CD23_3
-		 ,  CD23_4
-		 ,  CD23_5
-		 ,  CD23_6
-		 ,  CD23_7
-		 ,  CD23_8
-		 ,  CD23_9   
-		 ,  CD25
-		 ,  CD26
-		 ,  CD27
-		 ,  CD28  
-		 ,  K2 
-		 ,  C 
-		 ,  CD22_1   
-         )
+         ,  CD3   
+         ,  CD4
+         ,  CD8
+         ,  CD8_1
+         ,  CD9
+         ,  CD9_1
+         ,  CD10
+         ,  CD10_1  
+         ,  CD11
+         ,  CD18
+         ,  CD19
+         ,  CD20
+         ,  CD21 
+         ,  CD22
+         ,  CD23 
+         ,  CD23_1
+         ,  CD23_2
+         ,  CD23_3
+         ,  CD23_4
+         ,  CD23_5
+         ,  CD23_6
+         ,  CD23_7
+         ,  CD23_8
+         ,  CD23_9   
+         ,  CD25
+         ,  CD26
+         ,  CD27
+         ,  CD28  
+         ,  K2 
+         ,  C 
+         ,  CD22_1   
+           )
    SELECT @c_mbolkey
          ,  @c_A1 
          ,  @c_A2
@@ -367,37 +367,40 @@ BEGIN
          ,  @c_N    
          ,  @c_P          
          ,  @c_Q 
-		 ,  @c_CD3
-		 ,  @c_CD4
-		 ,  @c_CD8
-		 ,  @c_CD8_1
-		 ,  @c_CD9
-		 ,  @c_CD9_1
-		 ,  @c_CD10
-		 ,  @c_CD10_1
-		 ,  @C_CD11
-		 ,  @c_CD18
-		 ,  @C_CD19
-		 ,  @c_CD20
-		 ,  @C_CD21
-		 ,  @c_CD22
-		 ,  @C_CD23
-		 ,  @C_CD23_1
-		 ,  @c_CD23_2
-		 ,  @c_CD23_3
-		 ,  @C_CD23_4
-		 ,  @C_CD23_5                        
+         ,  @c_CD3
+         ,  @c_CD4
+         ,  @c_CD8
+         ,  @c_CD8_1
+         ,  @c_CD9
+         ,  @c_CD9_1
+         ,  @c_CD10
+         ,  @c_CD10_1
+         ,  @C_CD11
+         ,  @c_CD18
+         ,  @C_CD19
+         ,  @c_CD20
+         ,  @C_CD21
+         ,  @c_CD22
+         ,  @C_CD23
+         ,  @C_CD23_1
+         ,  @c_CD23_2
+         ,  @c_CD23_3
+         ,  @C_CD23_4
+         ,  @C_CD23_5                        
          ,  @C_CD23_6
-		 ,  @c_CD23_7
-		 ,  @c_CD23_8
-		 ,  @C_CD23_9
-		 ,  @C_CD25
-		 ,  @C_CD26
-		 ,  @C_CD27
-		 ,  @C_CD28
-		 ,  @c_K2
-		 ,  @c_C
-		 ,  @c_CD22_1
+         ,  @c_CD23_7
+         ,  @c_CD23_8
+         ,  @C_CD23_9
+         ,  @C_CD25
+         ,  @C_CD26
+         ,  @C_CD27
+         ,  @C_CD28
+         ,  @c_K2
+         ,  @c_C
+         ,  @c_CD22_1
 
    RETURN
 END
+GO
+GRANT EXECUTE ON [dbo].[fnc_GetDManifestDETTH02] TO nSQL 
+GO

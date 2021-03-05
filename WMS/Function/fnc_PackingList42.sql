@@ -336,4 +336,7 @@ BEGIN
          
   
    RETURN  
-END  
+END   
+GO                                                       
+GRANT EXECUTE ON [dbo].[fnc_PackingList42] TO nSQL       
+GO                                                       
