@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */
+/* 03-MAR-2021 Wan01    1.1   WMS-16467 - [CN]NIKE_O2_RFID_Receiving_ChangeField_CR*/
 /************************************************************************/
 CREATE PROC isp_RFID_ASNValidateRFIDNo
            @c_ReceiptKey         NVARCHAR(10)
@@ -53,7 +54,7 @@ BEGIN
 
          , @c_Facility        NVARCHAR(5)  = ''
          , @c_Storerkey       NVARCHAR(15) = ''
-         , @c_WarehouseRef    NVARCHAR(18) = ''
+         , @c_CarrierName     NVARCHAR(45) = ''    --Wan01
 
          , @c_Sku1            NVARCHAR(20) = ''
          , @c_Sku2            NVARCHAR(20) = ''
@@ -70,7 +71,7 @@ BEGIN
    
    SELECT   @c_Facility     = RH.Facility
          ,  @c_Storerkey    = RH.Storerkey
-         ,  @c_WarehouseRef = ISNULL(RH.WarehouseReference,'')
+         ,  @c_CarrierName = ISNULL(RH.CarrierName,'')   --(Wan01)
    FROM RECEIPT RH WITH (NOLOCK)
    WHERE RH.ReceiptKey = @c_ReceiptKey
   
@@ -83,7 +84,7 @@ BEGIN
    JOIN EXTERNORDERSDETAIL EOD WITH (NOLOCK) ON EOH.ExternOrderKey = EOD.ExternOrderKey
    WHERE EOD.RFIDNo IN ( @c_RFIDNo1, @c_RFIDNo2 )
    AND   EOD.Storerkey = @c_Storerkey
-   AND   EOH.Externorderkey = @c_WarehouseRef
+   AND   EOH.Externorderkey = @c_CarrierName                   --(Wan01)
    AND   EOH.[Status]  = '9'
    GROUP BY EOD.Storerkey
          ,  EOH.Externorderkey
@@ -93,7 +94,7 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 84010
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Both Left and Right RFIDNo For Receive''s Sales Order: ' + @c_WarehouseRef
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Both Left and Right RFIDNo For Receive''s Sales Order: ' + @c_CarrierName   --(Wan01)
                         + ' not found. (isp_RFID_ASNValidateRFIDNo)'
       GOTO QUIT_SP
    END

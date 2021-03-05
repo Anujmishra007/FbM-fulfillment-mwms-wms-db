@@ -1,9 +1,11 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_NIKEPODAlert]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[isp_NIKEPODAlert]
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS ON
+GO
+SET ANSI_WARNINGS ON
 GO
 /************************************************************************/          
 /* Stored Procedure: isp_NIKEPODAlert                                   */          
@@ -24,6 +26,10 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 09-Sep-2015  NJOW01   1.0  352330-add next two weeks                 */
+/* 05-Mar-2021  NJOW02   1.1  Fix datamart server name from VMHKWMSDMPD1*/
+/*                            to LINK_RGN_WMS_PROD_DM.                  */
+/*                            Need change to LINK_RGN_WMS_UAT_DM if     */
+/*                            deploy to UAT.                            */
 /************************************************************************/          
 CREATE PROC [dbo].[isp_NIKEPODAlert]          
 (  
@@ -56,7 +62,7 @@ BEGIN
   
          
  --=================================================Open function Running Date=====================================       
- with nums (i)  
+;with nums (i)  
 as  
 (  
 select i = 0  
@@ -129,9 +135,9 @@ case when count(distinct case when p.Status <>'1' then p.orderkey else NULL end)
 count(distinct case when p.Status <>'1' then p.orderkey else NULL end)- count(distinct case when P.Status <>'1' and P.Podreceiveddate is not null then p.orderkey else NULL end) PODNotReturn  
   
 into #tempMaser  
-from VMHKWMSDMPD1.TH_DATAMART.ODS.orders o (nolock)  join VMHKWMSDMPD1.TH_DATAMART.ODS.orderdetail od (nolock) on o.storerkey =od.storerkey and o.orderkey = od.orderkey  
-left outer join VMHKWMSDMPD1.TH_DATAMART.ODS.POD P (nolock) on o.orderkey = p.orderkey and o.mbolkey = p.mbolkey  
-left outer join VMHKWMSDMPD1.TH_DATAMART.ODS.RouteMaster R (nolock) on o.route = r.route  
+from LINK_RGN_WMS_PROD_DM.TH_DATAMART.ODS.orders o (nolock)  join LINK_RGN_WMS_PROD_DM.TH_DATAMART.ODS.orderdetail od (nolock) on o.storerkey =od.storerkey and o.orderkey = od.orderkey  
+left outer join LINK_RGN_WMS_PROD_DM.TH_DATAMART.ODS.POD P (nolock) on o.orderkey = p.orderkey and o.mbolkey = p.mbolkey  
+left outer join LINK_RGN_WMS_PROD_DM.TH_DATAMART.ODS.RouteMaster R (nolock) on o.route = r.route  
 where o.storerkey='NIKETH' and o.Deliverydate between   
 DATEADD(dd,0,DATEADD(mm, DATEDIFF(mm,0,CURRENT_TIMESTAMP),0)) and DATEADD(WK,2,DATEADD(dd,-1,DATEADD(mm, DATEDIFF(mm,0,CURRENT_TIMESTAMP)+1,0))) --NJOW01  
 group by convert(varchar,o.Deliverydate,103)  
@@ -347,6 +353,12 @@ FOR XML PATH('tr'), TYPE
 --   DEALLOCATE GEN_Email  
 
 END /* main procedure */  
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+SET ANSI_WARNINGS OFF
 GO
 
 GRANT EXECUTE ON ispRLWAV03 TO NSQL
