@@ -29,6 +29,7 @@ GO
 /* 24-FEB-2017  NJOW01   1.2 WMS-988 add post finalize call custom sp   */ 
 /*                           ispMBFZ??                                  */
 /* 13-SEP-2018  NJOW02   1.3 WMS-5961 add call From for validatembol    */
+/* 01-FEB-2021  NJOW03   1.4  WMS-16002 - LEGO add transmitlog2         */
 /************************************************************************/
 CREATE PROC ispFinalizeMBOL 
       @c_MBOLkey        NVARCHAR(10) 
@@ -71,6 +72,9 @@ BEGIN
    JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)
    JOIN ORDERS     WITH (NOLOCK) ON (MBOLDETAIL.Orderkey = ORDERS.Orderkey)
    WHERE MBOL.MBOLKey = @c_MBOLKey
+   
+   IF @@TRANCOUNT = 0  --NJOW03
+      BEGIN TRAN
 
    IF @b_ContFinalize = 1  
    BEGIN
@@ -288,6 +292,25 @@ BEGIN
    END
    CLOSE CUR_ORD
    DEALLOCATE CUR_ORD
+   
+   --NJOW03
+   IF EXISTS ( SELECT 1 FROM STORERCONFIG WITH (NOLOCK) 
+               WHERE storerkey = @c_StorerKey AND ConfigKey = 'WSEXCMBFNZ' )
+   BEGIN    
+      EXEC ispGenTransmitLog2 'WSEXCMBFNZ', @c_MBOLKey, '', @c_Storerkey, ''
+                           , @b_success   OUTPUT
+                           , @n_err       OUTPUT
+                           , @c_errmsg    OUTPUT
+
+      IF @n_err <> 0
+      BEGIN
+         SET @n_continue = 3
+         SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+         SET @n_err=72840   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': INSERT TRANMITLOG2 for ''WSEXCMBFNZ'' Failed. (ispFinalizeMBOL)'
+         GOTO QUIT
+      END  
+   END   
 
 QUIT:
    IF CURSOR_STATUS('LOCAL' , 'CUR_ORD') in (0 , 1)
