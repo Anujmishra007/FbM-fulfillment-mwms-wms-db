@@ -29,13 +29,14 @@ GO
 /* Date         Author        Purposes                                  */
 /* 02-Mar-2021  Shong         Update EditWho and EditDate               */
 /* 05-Mar-2021  Shong         Fixing Partial Encrypt Issues             */
+/* 08-Mar-2021  TLTING02 1.3  field length extend                       */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Create_Order_PI_Encrypted]
             @c_OrderKey       NVARCHAR(10)
-          , @c_C_Contact1     NVARCHAR(200) = ''
-          , @c_C_Contact2     NVARCHAR(200) = ''
-          , @c_C_Company      NVARCHAR(45)  = ''
+          , @c_C_Contact1     NVARCHAR(100) = ''
+          , @c_C_Contact2     NVARCHAR(100) = ''
+          , @c_C_Company      NVARCHAR(100)  = ''
           , @c_C_Address1     NVARCHAR(45)  = ''
           , @c_C_Address2     NVARCHAR(45)  = ''
           , @c_C_Address3     NVARCHAR(45)  = ''
@@ -48,9 +49,9 @@ CREATE PROC [dbo].[isp_Create_Order_PI_Encrypted]
           , @c_C_Zip          NVARCHAR(18)  = ''
           , @c_C_Fax1         NVARCHAR(18)  = ''
           , @c_C_Fax2         NVARCHAR(18)  = ''
-          , @c_B_Contact1     NVARCHAR(30)  = ''
-          , @c_B_Contact2     NVARCHAR(30)  = ''
-          , @c_B_Company      NVARCHAR(45)  = ''
+          , @c_B_Contact1     NVARCHAR(100)  = ''
+          , @c_B_Contact2     NVARCHAR(100)  = ''
+          , @c_B_Company      NVARCHAR(100)  = ''
           , @c_B_Address1     NVARCHAR(45)  = ''
           , @c_B_Address2     NVARCHAR(45)  = ''
           , @c_B_Address3     NVARCHAR(45)  = ''
@@ -63,9 +64,9 @@ CREATE PROC [dbo].[isp_Create_Order_PI_Encrypted]
           , @c_B_Fax1         NVARCHAR(18)  = ''
           , @c_B_Fax2         NVARCHAR(18)  = ''
           , @c_B_State        NVARCHAR(45)  = ''
-          , @c_M_Contact1     NVARCHAR(45)  = ''
-          , @c_M_Contact2     NVARCHAR(45)  = ''
-          , @c_M_Company      NVARCHAR(45)  = ''
+          , @c_M_Contact1     NVARCHAR(100)  = ''
+          , @c_M_Contact2     NVARCHAR(100)  = ''
+          , @c_M_Company      NVARCHAR(100)  = ''
           , @c_M_Address1     NVARCHAR(45)  = ''
           , @c_M_Address2     NVARCHAR(45)  = ''
           , @c_M_Address3     NVARCHAR(45)  = ''
