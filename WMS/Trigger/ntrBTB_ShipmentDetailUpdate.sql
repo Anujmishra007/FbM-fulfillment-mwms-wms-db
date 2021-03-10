@@ -16,13 +16,14 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 08-NOV-2017 Wan01    1.1   WMS-3321 - Triple - Back to Back FTA Entry*/
+/* 2021-FEB-09 WAN02    1.2   WMS-15957-SG-CBF - BTB Form E Declaration */
 /************************************************************************/
 CREATE TRIGGER [dbo].[ntrBTB_ShipmentDetailUpdate]
 ON  [dbo].[BTB_SHIPMENTDETAIL]
@@ -58,7 +59,11 @@ BEGIN
          , @c_HSCode_DEL      NVARCHAR(20)
          , @c_Sku_DEL         NVARCHAR(20)
          , @n_QtyExported_DEL INT         
-         , @c_BTBSHIPItem_DEL NVARCHAR(50)                                                         --(Wan01)     
+         , @c_BTBSHIPItem_DEL NVARCHAR(50)                                                         --(Wan01)  
+
+         , @c_CustomLotNo     NVARCHAR(20) = ''                                                    --(Wan02)
+         , @c_CustomLotNo_DEL NVARCHAR(20) = ''                                                    --(Wan02)
+         , @c_BTB_FTAKey      NVARCHAR(10) = ''                                                    --(Wan02)  
 
    SET @n_StartTCnt= @@TRANCOUNT
    SET @n_Continue = 1
@@ -111,14 +116,15 @@ BEGIN
                ,HSCode   = ISNULL(RTRIM(INSERTED.HSCode),'')
                ,Storerkey= ISNULL(RTRIM(INSERTED.Storerkey),'')
                ,Sku      = ISNULL(RTRIM(INSERTED.Sku),'')
-               ,QtyExported = ISNULL(SUM(INSERTED.QtyExported - CASE WHEN DELETED.FormNo = '' THEN 0 ELSE DELETED.QtyExported END),0)
+               ,QtyExported = ISNULL(SUM(INSERTED.QtyExported),0) -- - CASE WHEN DELETED.FormNo = '' THEN 0 ELSE DELETED.QtyExported END),0)
                ,BTBSHIPItem = INSERTED.BTBSHIPItem                                                 --(Wan01)
+               ,CustomLotNo = INSERTED.CustomLotNo                                                 --(Wan02)                 
          FROM INSERTED 
          JOIN DELETED  ON (INSERTED.BTB_ShipmentKey = DELETED.BTB_ShipmentKey)
                         AND(INSERTED.BTB_ShipmentListNo = DELETED.BTB_ShipmentListNo)
                         AND(INSERTED.BTB_ShipmentLineNo = DELETED.BTB_ShipmentLineNo)
          JOIN BTB_SHIPMENT WITH (NOLOCK) ON (INSERTED.BTB_ShipmentKey = BTB_SHIPMENT.BTB_ShipmentKey)
-         WHERE INSERTED.FormNo <> DELETED.FormNo
+         WHERE INSERTED.FormNo <> DELETED.FormNo 
          GROUP BY BTB_SHIPMENT.FormType
                ,  INSERTED.BTB_ShipmentKey
                ,  INSERTED.BTB_ShipmentListNo
@@ -127,12 +133,14 @@ BEGIN
                ,  INSERTED.Storerkey
                ,  INSERTED.Sku
                ,  INSERTED.BTBSHIPItem                                                             --(Wan01)
+               ,  INSERTED.CustomLotNo                                                             --(Wan02)               
          ) UPD ON (BTB_FTA.FormNo   = UPD.FormNo)
                AND(BTB_FTA.FormType = UPD.FormType)
                AND(BTB_FTA.HSCode   = UPD.HSCode)
                AND(BTB_FTA.Storerkey= UPD.Storerkey)
                AND(BTB_FTA.Sku      = UPD.Sku)
                AND(BTB_FTA.BTBSHIPItem= UPD.BTBSHIPItem)                                           --(Wan01)
+               AND(BTB_FTA.CustomLotNo= UPD.CustomLotNo)                                           --(Wan02)
    WHERE BTB_FTA.QtyImported - BTB_FTA.QtyExported - UPD.QtyExported < 0
 
    IF @c_ShipmentKey <> ''  
@@ -140,7 +148,7 @@ BEGIN
       SET @n_Continue = 3
       SET @n_err=80020
       SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Shipmentdetail Total Exported Qty > BTBFTA Balance Qty. '
-                   +'ShipmentListNo: ' + @c_ShipmentKey+ ', '
+                   +'ShipmentKey: ' + @c_ShipmentKey+ ', '
                    +'ShipmentListNo: ' + @c_ShipmentListNo + ', '
                    +'Sku: ' + @c_Sku + ' (ntrBTB_ShipmentDetailUpdate)'
       GOTO QUIT_TR
@@ -159,6 +167,8 @@ BEGIN
          ,ISNULL(DELETED.QtyExported,0) 
          ,INSERTED.BTBSHIPItem                                                                     --(Wan01)
          ,DELETED.BTBSHIPItem                                                                      --(Wan01)
+         ,INSERTED.CustomLotNo                                                                     --(Wan02)
+         ,DELETED.CustomLotNo                                                                      --(Wan02)         
    FROM INSERTED  
    JOIN DELETED  ON (INSERTED.BTB_ShipmentKey = DELETED.BTB_ShipmentKey)
                  AND(INSERTED.BTB_ShipmentListNo = DELETED.BTB_ShipmentListNo)
@@ -178,6 +188,8 @@ BEGIN
                                  , @n_QtyExported_DEL
                                  , @c_BTBSHIPItem                                                  --(Wan01)
                                  , @c_BTBSHIPItem_DEL                                              --(Wan01)
+                                 , @c_CustomLotNo                                                  --(Wan02)
+                                 , @c_CustomLotNo_DEL                                              --(Wan02)
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -185,53 +197,75 @@ BEGIN
       --IF @n_QtyExported <> @n_QtyExported_DEL AND @n_QtyExported_DEL > 0                         --(Wan01)  
       IF @c_FormNo_DEL <> '' AND  @n_QtyExported_DEL > 0                                           --(Wan01)                     
       BEGIN
-         UPDATE BTB_FTA WITH (ROWLOCK)
-         SET QtyExported = QtyExported - @n_QtyExported_DEL
-            ,EditWho = SUSER_NAME()
-            ,EditDate= GETDATE()
+      	--(Wan02) - START
+      	SET @c_BTB_FTAKey = ''
+      	SELECT TOP 1 @c_BTB_FTAKey = BTB_FTAKey
+      	FROM BTB_FTA WITH (NOLOCK) 
          WHERE BTB_FTA.FormNo   = @c_FormNo_DEL 
          AND   BTB_FTA.FormType = @c_FormType 
          AND   BTB_FTA.HSCode   = @c_HSCode_DEL 
          AND   BTB_FTA.Storerkey= @c_Storerkey
          AND   BTB_FTA.Sku      = @c_Sku_DEL 
-         AND   BTB_FTA.BTBSHIPItem = @c_BTBSHIPItem_DEL                                            --(Wan01)
-
-         SET @n_err = @@ERROR 
-         IF @n_err <> 0
+         AND   BTB_FTA.BTBSHIPItem = @c_BTBSHIPItem_DEL                                             --(Wan02)
+         AND   BTB_FTA.CustomLotNo = @c_CustomLotNo_DEL                                             --(Wan02) 
+         
+         IF @c_BTB_FTAKey <> ''
          BEGIN
-            SET @n_Continue = 3
-            SET @c_errmsg = CONVERT(CHAR(5),@n_err)
-            SET @n_err=80030
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table BTB_FTA. (ntrBTB_ShipmentDetailUpdate)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-            GOTO QUIT_TR
+            UPDATE BTB_FTA WITH (ROWLOCK)
+            SET QtyExported = QtyExported - @n_QtyExported_DEL
+               ,EditWho = SUSER_NAME()
+               ,EditDate= GETDATE()
+            WHERE BTB_FTA.BTB_FTAKey = @c_BTB_FTAKey 
+
+            SET @n_err = @@ERROR 
+            IF @n_err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @c_errmsg = CONVERT(CHAR(5),@n_err)
+               SET @n_err=80030
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table BTB_FTA. (ntrBTB_ShipmentDetailUpdate)' 
+                              + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+               GOTO QUIT_TR
+            END
          END
       END
 
       --IF @n_QtyExported <> @n_QtyExported_DEL AND @n_QtyExported > 0                             --(Wan01)                           
       IF @c_FormNo <> '' AND @n_QtyExported > 0                                                    --(Wan01)   
       BEGIN
-         UPDATE BTB_FTA WITH (ROWLOCK)
-         SET QtyExported = QtyExported + @n_QtyExported  
-            ,EditWho = SUSER_NAME()
-            ,EditDate= GETDATE()
+      	
+      	--(Wan02) - START
+      	SET @c_BTB_FTAKey = ''
+      	SELECT TOP 1 @c_BTB_FTAKey = BTB_FTAKey
+      	FROM BTB_FTA WITH (NOLOCK) 
          WHERE BTB_FTA.FormNo   = @c_FormNo 
          AND   BTB_FTA.FormType = @c_FormType 
          AND   BTB_FTA.HSCode   = @c_HSCode 
          AND   BTB_FTA.Storerkey= @c_Storerkey 
          AND   BTB_FTA.Sku      = @c_Sku 
-         AND   BTB_FTA.BTBSHIPItem = @c_BTBSHIPItem                                                --(Wan01)
-
-         SET @n_err = @@ERROR 
-         IF @n_err <> 0
+         AND   BTB_FTA.BTBShipItem = @c_BTBShipItem                                                --(Wan02)
+         AND   BTB_FTA.CustomLotNo = @c_CustomLotNo                                                --(Wan02) 
+         
+         IF @c_BTB_FTAKey <> ''
          BEGIN
-            SET @n_Continue = 3
-            SET @c_errmsg = CONVERT(CHAR(5),@n_err)
-            SET @n_err=80040
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table BTB_FTA. (ntrBTB_ShipmentDetailUpdate)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-            GOTO QUIT_TR
+            UPDATE BTB_FTA 
+            SET QtyExported = QtyExported + @n_QtyExported  
+               ,EditWho = SUSER_NAME()
+               ,EditDate= GETDATE()
+            WHERE BTB_FTA.BTB_FTAKey = @c_BTB_FTAKey 
+
+            SET @n_err = @@ERROR 
+            IF @n_err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @c_errmsg = CONVERT(CHAR(5),@n_err)
+               SET @n_err=80040
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table BTB_FTA. (ntrBTB_ShipmentDetailUpdate)' 
+                              + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+               GOTO QUIT_TR
+            END
          END
+         --(Wan02) - END
       END
 
       FETCH NEXT FROM CUR_SHPDET INTO @c_FormType
@@ -246,6 +280,8 @@ BEGIN
                                     , @n_QtyExported_DEL
                                     , @c_BTBSHIPItem                                               --(Wan01)
                                     , @c_BTBSHIPItem_DEL                                           --(Wan01)
+                                    , @c_CustomLotNo                                               --(Wan02)
+                                    , @c_CustomLotNo_DEL                                           --(Wan02)
 
    END
    CLOSE CUR_SHPDET

@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: nep_n_cst_btb_shipmentdetail.ue_populatefrombusobj        */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -30,6 +30,7 @@ GO
 /*                            Declaration for Form DE                   */        
 /* 2020-OCT-14 NJOW01   1.4   WMS-15167 add externorderkey to           */
 /*                            BTBShipmentdetail                         */
+/* 2021-JAN-13 WAN04    1.5   WMS-15957-SG-CBF - BTB Form E Declaration */
 /************************************************************************/
 CREATE PROC isp_INSERT_BTB_ShipmentDetail
            @c_Wavekey         NVARCHAR(10)
@@ -63,6 +64,18 @@ BEGIN
          , @n_QtyExported        INT
          , @n_TotalQtyExported   INT         = 0   --(Wan03)
          , @c_ExternOrderkey     NVARCHAR(50)  --NJOW01
+         
+         , @n_RowRef             INT          = 0           --(Wan04)
+         , @n_QtyBalance         INT          = 0           --(Wan04)
+         , @n_QtySplit           INT          = 0           --(Wan04)
+         , @c_FormType           NVARCHAR(20) = ''          --(Wan04)
+         , @c_FormNo             NVARCHAR(20) = ''          --(Wan04)     
+
+         , @c_PermitNo           NVARCHAR(20) = ''          --(Wan04)
+         , @dt_IssuedDate        DATETIME     = '1900-01-01'--(Wan04)
+         , @c_IssueCountry       NVARCHAR(30) = ''          --(Wan04)
+         , @c_IssueAuthority     NVARCHAR(100)= ''          --(Wan04)                                        --    
+         , @c_CustomLotNo        NVARCHAR(20) = ''          --(Wan04)
 
          --(Wan01) - START
          , @c_BTBShipItem        NVARCHAR(50)
@@ -75,6 +88,7 @@ BEGIN
          , @c_SQLHSCode          NVARCHAR(255)
          , @c_SQLCurrency        NVARCHAR(255)   
          , @c_SQLPrice           NVARCHAR(255) 
+         , @c_SQLCustomLotNo     NVARCHAR(255) = ''         --(Wan04)
 
          , @c_Facility           NVARCHAR(5)
          , @c_BTBShipmentByItem  NVARCHAR(30)
@@ -92,6 +106,20 @@ BEGIN
 
          , @n_MaxDetailPerCOO    INT
    --(Wan01) - END
+   
+   --(Wan04) - START
+   DECLARE @tFormNo           TABLE 
+      (  RowRef               INT          IDENTITY(1,1) PRIMARY KEY 
+      ,  FormNo               NVARCHAR(20) NOT NULL DEFAULT('')
+      ,  FormType             NVARCHAR(10) NOT NULL DEFAULT('')  
+      ,  PermitNo             NVARCHAR(20) NOT NULL DEFAULT('')       
+      ,  IssuedDate           DATETIME     
+      ,  IssueCountry         NVARCHAR(30) NOT NULL DEFAULT('')
+      ,  IssueAuthority       NVARCHAR(100)NOT NULL DEFAULT('')
+      ,  CustomLotNo          NVARCHAR(20) NOT NULL DEFAULT('')
+      ,  QtyBalance           INT          NOT NULL DEFAULT(0)
+      )
+   --(Wan04) - END
 
    --(Wan03) - START
    IF OBJECT_ID('tempdb..#BTBSHIPSKU','U') IS NOT NULL
@@ -108,9 +136,9 @@ BEGIN
       ,  BTBShipItem       NVARCHAR(50)   NOT NULL DEFAULT('')
       ,  TotalQtyExported  INT            NOT NULL DEFAULT(0)
       ,  ExternOrderkey    NVARCHAR(50)   NOT NULL DEFAULT('')  --NJOW01
+      ,  CustomLotNo       NVARCHAR(20)   NOT NULL DEFAULT('')    --(Wan04)
       )
    CREATE INDEX IX_TMP_BTBSHIPSKU on #BTBSHIPSKU ( Wavekey, Storerkey, Sku, HSCode, COO, BTBShipItem )
-
    --(Wan03) - END
 
    SET @n_StartTCnt = @@TRANCOUNT
@@ -324,9 +352,23 @@ BEGIN
       BEGIN
          SET @c_SQLCurrency = ' ISNULL(RTRIM( ' + @c_FrColName + ' ),'''')'
       END
+      
+      --(Wan04) - START
+      IF CHARINDEX('CustomLotNo', @c_ToColName) > 1   
+      BEGIN
+         SET @c_SQLCustomLotNo = ' ISNULL(RTRIM( ' + @c_FrColName + ' ),'''')'
+      END
+      --(Wan04) - END
+      
       FETCH NEXT FROM @CUR_COL INTO @c_ToColName
                                  ,  @c_FrColName 
    END
+
+   --(Wan04) - START
+   SELECT @c_FormType = bs.FormType 
+   FROM BTB_Shipment AS bs WITH (NOLOCK)
+   WHERE bs.BTB_ShipmentKey = @c_BTB_ShipmentKey
+   --(Wan04) - END
 
    --(Wan03) - START
    INSERT INTO #BTBSHIPSKU
@@ -338,6 +380,7 @@ BEGIN
       ,  BTBShipItem
       ,  TotalQtyExported
       ,  ExternOrderkey
+      ,  CustomLotNo                      --(Wan04)
       )
    SELECT BSD.Wavekey
          ,BSD.Storerkey
@@ -347,6 +390,7 @@ BEGIN
          ,BSD.BTBShipItem
          ,TotalQtyExported = ISNULL(SUM(BSD.QtyExported),0)
          ,ISNULL(BSD.ExternOrderkey,'') --NJOW01
+         ,BSD.CustomLotNo                 --(Wan04)
    FROM BTB_SHIPMENTDETAIL BSD WITH (NOLOCK)
    JOIN BTB_SHIPMENT       BSH WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSH.BTB_ShipmentKey
    JOIN BTB_SHIPMENTLIST   BSL WITH (NOLOCK) ON BSD.BTB_ShipmentKey = BSL.BTB_ShipmentKey
@@ -360,6 +404,7 @@ BEGIN
          ,  BSD.HSCode
          ,  BSD.BTBShipItem
          ,  ISNULL(BSD.ExternOrderkey,'')  --NJOW01
+         ,  BSD.CustomLotNo               --(Wan04)
 
    --(Wan03) - END
 
@@ -370,6 +415,7 @@ BEGIN
    IF @c_SQLHSCode   = '' SET @c_SQLHSCode   = ' ISNULL(RTRIM(SKUINFO.ExtendedField01),'''')'
    IF @c_SQLPrice    = '' SET @c_SQLPrice    = ' ISNULL(ORDERDETAIL.UnitPrice,0.00)'
    IF @c_SQLCurrency = '' SET @c_SQLCurrency = ' ISNULL(RTRIM(ORDERDETAIL.UserDefine03),'''')'
+
 
    SET @c_SQL =
          N'DECLARE CUR_BTB_SHIP CURSOR FAST_FORWARD READ_ONLY FOR'
@@ -387,6 +433,7 @@ BEGIN
       +  ' ,  QtyExported= SUM(PICKDETAIL.Qty)'
       +  CASE WHEN @c_ItemColNames = '' THEN  ' , BTBShipItem = ''''' ELSE ' , BTBShipItem = ' + @c_ItemColNames END
       +  ' ,  CASE WHEN CONS.Storerkey IS NOT NULL THEN ISNULL(ORDERS.ExternOrderkey,'''') ELSE '''' END ' --NJOW01
+      +  ' ,  CustomLotNo =' + CASE WHEN @c_SQLCustomLotNo = '' THEN '''''' ELSE @c_SQLCustomLotNo END     --(Wan04)    
       +  ' FROM WAVEDETAIL   WITH (NOLOCK)'
       +  ' JOIN ORDERDETAIL  WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERDETAIL.Orderkey)'
       +  ' JOIN PICKDETAIL   WITH (NOLOCK) ON (ORDERDETAIL.Orderkey = PICKDETAIL.Orderkey)'
@@ -410,6 +457,7 @@ BEGIN
       +  ' , ' + @c_SQLCurrency
       +  CASE WHEN @c_ItemColNames = '' THEN  '' ELSE ' , ' + @c_ItemColNames END
       + ' , CASE WHEN CONS.Storerkey IS NOT NULL THEN ISNULL(ORDERS.ExternOrderkey,'''') ELSE '''' END ' --NJOW01      
+      +  CASE WHEN @c_SQLCustomLotNo = '' THEN '' ELSE ', ' + @c_SQLCustomLotNo END   --(Wan04)
       +  ' ORDER BY COO'
       +        ' ,  Storerkey'
       +        ' ,  Sku'
@@ -417,7 +465,7 @@ BEGIN
    
    SET @c_SQLParms =
          N'@c_Wavekey   NVARCHAR(10)'
-   
+
    EXEC sp_executesql   @c_SQL
                      ,  @c_SQLParms   
                      ,  @c_Wavekey   
@@ -426,17 +474,18 @@ BEGIN
    OPEN CUR_BTB_SHIP
    
    FETCH NEXT FROM CUR_BTB_SHIP INTO @c_ListGroup             
-                              ,  @c_COO                   
-                              ,  @c_HSCode                
-                              ,  @c_Storerkey             
-                              ,  @c_Sku                   
-                              ,  @c_SkuDescr              
-                              ,  @c_UOM                   
-                              ,  @n_UnitPrice             
-                              ,  @c_Currency              
-                              ,  @n_QtyExported 
-                              ,  @c_BTBShipItem                      --(Wan01)          
-                              ,  @c_ExternOrderkey  --NJOW01
+                                 ,  @c_COO                   
+                                 ,  @c_HSCode                
+                                 ,  @c_Storerkey             
+                                 ,  @c_Sku                   
+                                 ,  @c_SkuDescr              
+                                 ,  @c_UOM                   
+                                 ,  @n_UnitPrice             
+                                 ,  @c_Currency              
+                                 ,  @n_QtyExported 
+                                 ,  @c_BTBShipItem                      --(Wan01)          
+                                 ,  @c_ExternOrderkey  --NJOW01
+                                 ,  @c_CustomLotNo                      --(Wan04) 
    BEGIN TRAN
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -451,6 +500,7 @@ BEGIN
       AND   T.HSCode = @c_HSCode
       AND   T.BTBShipItem = @c_BTBShipItem 
       AND   T.ExternOrderkey = @c_ExternOrderkey --NJOW01
+      AND   T.CustomLotNo = @c_CustomLotNo                              --(Wan04)
 
       IF @n_QtyExported <= @n_TotalQtyExported
       BEGIN
@@ -488,7 +538,6 @@ BEGIN
             FROM BTB_SHIPMENTLIST WITH (NOLOCK)
             WHERE BTB_ShipmentKey = @c_BTB_ShipmentKey
 
-
             INSERT INTO BTB_SHIPMENTLIST 
                   (  BTB_ShipmentKey
                   ,  BTB_ShipmentListNo
@@ -513,7 +562,89 @@ BEGIN
          END
       END 
       --(Wan01) - END
+      
+      --(Wan04) - START
+      SET @c_FormNo        = ''
+      SET @c_PermitNo      = ''
+      SET @dt_IssuedDate   = '1900-01-01'
+      SET @c_IssueCountry  = ''
+      SET @c_IssueAuthority= ''  
 
+      IF @c_CustomLotNo <> ''
+      BEGIN
+      	SELECT @c_FormNo       = ISNULL(MIN(FTA.FormNo),'')           
+            , @c_PermitNo       = ISNULL(MIN(FTA.PermitNo),'')         
+            , @dt_IssuedDate    = ISNULL(MIN(FTA.IssuedDate),'1900-01-01')     
+            , @c_IssueCountry   = ISNULL(MIN(FTA.IssueCountry),'')     
+            , @c_IssueAuthority = ISNULL(MIN(FTA.IssueAuthority),'')  
+            , @n_QtyBalance     = ISNULL(MIN(FTA.QtyImported - FTA.QtyExported),0)        
+      	FROM BTB_FTA FTA WITH (NOLOCK)
+      	WHERE FTA.FormType = @c_FormType
+         AND FTA.HSCode     = @c_HSCode 	
+      	AND FTA.Storerkey  = @c_Storerkey
+      	AND FTA.Sku        = @c_Sku    
+         AND FTA.BTBShipItem= @c_BTBShipItem     
+         AND FTA.CustomLotNo= @c_CustomLotNo 
+         AND FTA.IssuedDate > DATEADD(day, -365, GETDATE())
+	      AND FTA.EnabledFlag = 'Y' 
+	      AND  FTA.QtyImported - FTA.QtyExported > 0 
+      	HAVING COUNT(1) = 1	  	
+      	
+         IF @c_FormNo = ''  --Allocate Matching 1 CustomLotNo and CustomLotNo <> ''
+         BEGIN
+            SET @c_FormNo        = ''
+            SET @c_PermitNo      = ''
+            SET @dt_IssuedDate   = '1900-01-01'
+            SET @c_IssueCountry  = ''
+            SET @c_IssueAuthority= ''  
+            SET @n_QtyBalance    = 0
+         END
+         ELSE
+         BEGIN
+      	   SET @n_RowRef = 0
+      	   SELECT @n_RowRef = tfn.RowRef
+      	         ,@n_QtyBalance= tfn.QtyBalance
+      	   FROM @tFormNo AS tfn
+      	   WHERE tfn.FormNo        = @c_FormNo
+      	   AND tfn.FormType        = @c_FormType
+      	   AND tfn.PermitNo        = @c_PermitNo
+      	   AND tfn.IssuedDate      = @dt_IssuedDate
+      	   AND tfn.IssueCountry    = @c_IssueCountry
+      	   AND tfn.IssueAuthority  = @c_IssueAuthority
+      	   AND tfn.CustomLotNo     = @c_CustomLotNo
+      	
+      	   IF @n_RowRef = 0
+            BEGIN
+               INSERT INTO @tFormNo ( FormNo, FormType, PermitNo, IssuedDate, IssueCountry, IssueAuthority, CustomLotNo, QtyBalance )
+               VALUES (@c_FormNo, @c_FormType, @c_PermitNo, @dt_IssuedDate, @c_IssueCountry, @c_IssueAuthority, @c_CustomLotNo, @n_QtyBalance)
+            END
+            ELSE
+            BEGIN
+         	   UPDATE @tFormNo
+         	   SET QtyBalance = CASE WHEN QtyBalance > @n_QtyExported THEN QtyBalance - @n_QtyExported ELSE 0 END
+         	   WHERE RowRef = @n_RowRef
+         	   
+         	   IF @n_QtyBalance = 0  -- Not Enough to allocate, the unique form # already allocated for the same btb_Shipment
+               BEGIN
+                  SET @c_FormNo        = ''
+                  SET @c_PermitNo      = ''
+                  SET @dt_IssuedDate   = '1900-01-01'
+                  SET @c_IssueCountry  = ''
+                  SET @c_IssueAuthority= ''  
+               END
+            END
+         END
+      
+         SET @n_QtySplit = @n_QtyExported
+      
+         IF @n_QtyBalance > 0 AND @n_QtyExported > @n_QtyBalance
+         BEGIN
+            SET @n_QtyExported = @n_QtyBalance
+         END
+      END
+      --(Wan04) - END
+
+      INSERT_DETAIL:
       SET @n_MaxDetailPerCOO = @n_MaxDetailPerCOO + 1                      --(Wan01)
       --SET @c_BTB_ShipmentLineNo = '00001'
 
@@ -529,7 +660,7 @@ BEGIN
             ,  HSCode                
             ,  IssuedDate  
             ,  Storerkey             
-            ,  Sku                   
+            ,  Sku                    
             ,  SkuDescr              
             ,  UOM                   
             ,  Price             
@@ -538,12 +669,17 @@ BEGIN
             ,  BTBShipItem                                           --(Wan01)
             ,  Wavekey                                               --(Wan01)
             ,  ExternOrderkey  --NJOW01
+            ,  CustomLotNo                                           --(Wan04)
+            ,  FormNo                                                --(Wan04)  
+            ,  PermitNo                                              --(Wan04)
+            ,  IssueCountry                                          --(Wan04)
+            ,  IssueAuthority                                        --(Wan04)          
             )
       VALUES(  @c_BTB_ShipmentKey
             ,  @c_BTB_ShipmentListNo
             ,  @c_BTB_ShipmentLineNo
             ,  @c_HSCode  
-            ,  CONVERT(DATETIME, '1900-01-01')                
+            ,  @dt_IssuedDate                                        --(Wan04)--CONVERT(DATETIME, '1900-01-01')                
             ,  @c_Storerkey             
             ,  @c_Sku                   
             ,  @c_SkuDescr              
@@ -553,7 +689,12 @@ BEGIN
             ,  @n_QtyExported 
             ,  @c_BTBShipItem                                        --(Wan01)  
             ,  @c_Wavekey                                            --(Wan01)  
-            ,  @c_ExternOrderkey --NJOW01            
+            ,  @c_ExternOrderkey --NJOW01  
+            ,  @c_CustomLotNo                                        --(Wan04)  
+            ,  @c_FormNo                                             --(Wan04) 
+            ,  @c_PermitNo                                           --(Wan04)
+            ,  @c_IssueCountry                                       --(Wan04)
+            ,  @c_IssueAuthority                                     --(Wan04)
             )
 
       SET @n_err = @@ERROR 
@@ -567,6 +708,21 @@ BEGIN
          GOTO QUIT_SP
       END
 
+      --(Wan04) - START
+      SET @n_QtySplit = @n_QtySplit - @n_QtyExported
+      IF @n_QtySplit > 0 
+      BEGIN 
+         SET @c_FormNo        = ''
+         SET @c_PermitNo      = ''
+         SET @dt_IssuedDate   = '1900-01-01'
+         SET @c_IssueCountry  = ''
+         SET @c_IssueAuthority= ''  
+         SET @n_QtyBalance    = 0
+      	SET @n_QtyExported   = @n_QtySplit
+      	GOTO INSERT_DETAIL
+      END
+      --(Wan04) - END
+      
       SET @c_ListGroup_Prev = @c_ListGroup
       NEXT_REC:                                                      --(Wan03)
       FETCH NEXT FROM CUR_BTB_SHIP INTO @c_ListGroup             
@@ -581,6 +737,7 @@ BEGIN
                                  ,  @n_QtyExported 
                                  ,  @c_BTBShipItem                   --(Wan01)    
                                  ,  @c_ExternOrderkey  --NJOW01
+                                 ,  @c_CustomLotNo                   --(Wan04) 
    END
    CLOSE CUR_BTB_SHIP
    DEALLOCATE CUR_BTB_SHIP 
