@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenish_to_fpa_02]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenish_to_fpa_02]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -35,8 +35,16 @@ GO
 /* 04/06/2019   ML       1.9  Add ID to Replen From Stock for RDT Pick   */
 /*                            Disable Pending Replen checking            */
 /* 07/08/2019   ML       1.10 Bug fix on duplicate key in #TEMP_DPLOC    */
+/* 27/11/2020   ML       1.11 1. Add ShowFields field in result          */
+/*                            2. Add ShowField: ShowReplenkey            */
+/*                            3. Add MapField: Div*, Brand*, CaseCnt*    */
+/*                            4. Add MapValue: DPLoc_PAZone_*            */
+/* 12/01/2021   ML       1.12 Add ReserveLoc_Cond,                       */
+/*                            DPLoc_ReplenALL, DefaultGenReplenALL,      */
+/*                            GenReplenALL, ReGenReplenALL               */
+/*                            ShowReplenkeyBC,ShowToLocBC,ShowReplenQtyBC*/
+/*                            NoGenReplenAllWhenOtherReplenExist         */
 /*************************************************************************/
-
 CREATE PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02] (
        @as_Key_Type  NVARCHAR(13)
      , @b_debug      INT = 0
@@ -49,11 +57,24 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
 /* CODELKUP.REPORTCFG
+   [MAPFIELD]
+      Div, Brand, CaseCnt, Replen_Div, Replen_Brand, Replen_CaseCnt, ReserveLoc_Cond
+
+   [MAPVALUE]
+      DPLoc_PAZone_SEL, DPLoc_PAZone_VNA, DPLoc_PAZone_FPR, DPLoc_ReplenALL
+
    [SHOWFIELD]
-      DefaultNoGenReplen, DefaultGenReplen, ReplenMode2, ClearNoGenReplenFlag, NoResidualInDP
+      DefaultNoGenReplen, DefaultGenReplen, DefaultGenReplenALL, ReplenMode2, ClearNoGenReplenFlag, NoResidualInDP
       NoGenReplenSEL, NoGenReplenVNA, NoGenReplenFPR
       ReplenExactQtySEL, ReplenExactQtyVNA
       ReplenToPickFace, TopUpPickFace, AlwaysTopUpPickFace
+      ShowReplenkey, ShowReplenkeyBC, ShowToLocBC, ShowReplenQtyBC, NoGenReplenAllWhenOtherReplenExist
+
+   [WAVE/LOADPLAN-Userdefine02]
+      GenReplen, GenReplenALL, ReGenReplen, ReGenReplenALL, NoGenReplen
+
+   [SQLJOIN]
+      UDF02 = *Blank, Replen
 */
 
    IF OBJECT_ID('tempdb..#TEMP_PICKDETAILKEY') IS NOT NULL
@@ -68,6 +89,11 @@ BEGIN
       DROP TABLE #TEMP_REPLENISHMENT
    IF OBJECT_ID('tempdb..#TEMP_REPLENISHMENT_FINAL') IS NOT NULL
       DROP TABLE #TEMP_REPLENISHMENT_FINAL
+   IF OBJECT_ID('tempdb..#TEMP_RESULTSET') IS NOT NULL
+      DROP TABLE #TEMP_RESULTSET
+   IF OBJECT_ID('tempdb..#TEMP_ERROR') IS NOT NULL
+      DROP TABLE #TEMP_ERROR
+
 
    DECLARE @c_DataWindow         NVARCHAR(40)
          , @n_StartTCnt          INT
@@ -108,6 +134,7 @@ BEGIN
          , @c_ReGenReplen        NVARCHAR(1)
          , @c_NoGenReplen        NVARCHAR(1)
          , @c_NoGenReplenDft     NVARCHAR(1)
+         , @c_GenReplenALL       NVARCHAR(1)
          , @c_DP_LocationType    NVARCHAR(10)
          , @c_ReplenGroup        NVARCHAR(10)
          , @c_ReplenishmentKey   NVARCHAR(10)
@@ -121,7 +148,6 @@ BEGIN
          , @b_success            INT
          , @n_err                INT
          , @c_errmsg             NVARCHAR(255)
-         , @c_ShowFields         NVARCHAR(MAX)
          , @c_PickDetailKey      NVARCHAR(10)
          , @c_NewPickDetailKey   NVARCHAR(10)
          , @c_MoveRefKey         NVARCHAR(10)
@@ -138,33 +164,52 @@ BEGIN
          , @n_Temp               INT
          , @c_Temp               NVARCHAR(1000)
          , @c_LoseID             NVARCHAR(1)
+         , @c_CommingleSku       NVARCHAR(1)
+         , @b_UpdLoc             INT
          , @b_ReserveLocChanged  INT
          , @c_LastStorerkey      NVARCHAR(15)
 
-   SELECT @c_DataWindow      = 'r_hk_replenish_to_fpa_02'
-        , @n_StartTCnt       = @@TRANCOUNT
-        , @c_Key             = LEFT(@as_Key_Type, 10)
-        , @c_Type            = RIGHT(@as_Key_Type, 2)
-        , @c_ReGenReplen     = 'N'
-        , @c_DP_LocationType = 'DYNAMICPK'
-        , @c_ReplenGroup     = 'DYNAMIC'
-        , @n_ReplenCount     = 0
-        , @c_ReplenConfirmed = ''
-        , @n_ReplenKeyLen    = 7
-        , @n_REPLENISHKEY    = 0
-        , @c_REPLENISHKEY    = ''
-        , @c_ReplenKeyPrefix1= ''
-        , @c_ReplenKeyPrefix2= ''
-        , @b_ReserveLocChanged= 0
+   DECLARE @c_ExecStatements     NVARCHAR(MAX)
+         , @c_ExecArguments      NVARCHAR(MAX)
+         , @c_ShowFields         NVARCHAR(MAX)
+         , @c_DPLoc_PAZone_SEL   NVARCHAR(MAX)
+         , @c_DPLoc_PAZone_VNA   NVARCHAR(MAX)
+         , @c_DPLoc_PAZone_FPR   NVARCHAR(MAX)
+         , @c_DPLoc_ReplenALL    NVARCHAR(MAX)
+         , @c_JoinClause         NVARCHAR(MAX)
+         , @c_DivExp             NVARCHAR(MAX)
+         , @c_BrandExp           NVARCHAR(MAX)
+         , @c_CaseCntExp         NVARCHAR(MAX)
+         , @c_Replen_JoinClause  NVARCHAR(MAX)
+         , @c_Replen_DivExp      NVARCHAR(MAX)
+         , @c_Replen_BrandExp    NVARCHAR(MAX)
+         , @c_Replen_CaseCntExp  NVARCHAR(MAX)
+         , @c_ReserveLoc_Cond    NVARCHAR(MAX)
+
+   SELECT @c_DataWindow        = 'r_hk_replenish_to_fpa_02'
+        , @n_StartTCnt         = @@TRANCOUNT
+        , @c_Key               = LEFT(@as_Key_Type, 10)
+        , @c_Type              = RIGHT(@as_Key_Type, 2)
+        , @c_ReGenReplen       = 'N'
+        , @c_DP_LocationType   = 'DYNAMICPK'
+        , @c_ReplenGroup       = 'DYNAMIC'
+        , @n_ReplenCount       = 0
+        , @c_ReplenConfirmed   = ''
+        , @n_ReplenKeyLen      = 7
+        , @n_REPLENISHKEY      = 0
+        , @c_REPLENISHKEY      = ''
+        , @c_ReplenKeyPrefix1  = ''
+        , @c_ReplenKeyPrefix2  = ''
+        , @b_ReserveLocChanged = 0
+        , @c_Storerkey         = ''
+        , @c_ShowFields        = ''
+        , @c_ReserveLoc_Cond   = ''
 
    SET @c_MoveIDPrefix = CASE WHEN @c_Type='LP'
                               THEN 'LP' + LTRIM(RTRIM(SUBSTRING(@c_Key, PATINDEX('%[^0 ]%', @c_Key), LEN(@c_Key)+1))) +'-'
                               ELSE LTRIM(RTRIM(@c_Key)) + '-'
                          END
    SET @c_NewIDPattern =  REPLICATE('[0-9]', @n_ReplenKeyLen) + '*%'
-
-   IF ISNULL(@c_Type,'') NOT IN ('WP', 'LP') OR ISNULL(@c_Key,'')=''
-      GOTO REPORT_RESULTSET
 
 
    CREATE TABLE #TEMP_PICKDETAILKEY (
@@ -173,6 +218,7 @@ BEGIN
       , ToLoc            NVARCHAR(10)
       , DropID           NVARCHAR(20)
       , ReplenKey        NVARCHAR(20)
+      , Storerkey        NVARCHAR(15)
       , PRIMARY KEY (PickdetailKey)
    )
 
@@ -190,7 +236,7 @@ BEGIN
       , Div              NVARCHAR(100)
       , Brand            NVARCHAR(100)
       , StdCube          FLOAT
-      , CaseCnt          FLOAT
+      , CaseCnt          INT
       , Lottable02       NVARCHAR(20)
       , Lottable04       DATETIME
       , PA_Floor         NVARCHAR(3)
@@ -272,41 +318,111 @@ BEGIN
       , PRIMARY KEY (RowID)
    )
 
+   CREATE TABLE #TEMP_RESULTSET (
+        ReplenishmentKey   NVARCHAR(10)
+      , ReplenNo           NVARCHAR(10)
+      , Div                NVARCHAR(250)
+      , PutawayZone        NVARCHAR(10)
+      , Facility           NVARCHAR(5)
+      , StorerKey          NVARCHAR(15)
+      , Sku                NVARCHAR(20)
+      , Descr              NVARCHAR(60)
+      , AltSku             NVARCHAR(20)
+      , LogicalLocation    NVARCHAR(18)
+      , FromLoc            NVARCHAR(10)
+      , FromID             NVARCHAR(18)
+      , ToFacility         NVARCHAR(5)
+      , ToLoc              NVARCHAR(10)
+      , DropID             NVARCHAR(20)
+      , Lottable02         NVARCHAR(18)
+      , Lottable04         DATETIME
+      , PackKey            NVARCHAR(10)
+      , CaseCnt            INT
+      , PACKUOM1           NVARCHAR(10)
+      , PACKUOM3           NVARCHAR(10)
+      , AllocQty           INT
+      , ReplenQty          INT
+      , PA_LoosePiece      INT
+      , UserName           NVARCHAR(128)
+      , datawindow         NVARCHAR(40)
+      , ReplenType         NVARCHAR(2)
+      , PA_Descr           NVARCHAR(60)
+      , Brand              NVARCHAR(100)
+      , Lot                NVARCHAR(10)
+      , TOLOC_LocationType NVARCHAR(10)
+      , FromID_Long        NVARCHAR(30)
+      , ShowFields         NVARCHAR(4000)
+   )
+
+   CREATE TABLE #TEMP_ERROR (
+        ErrSeq             INT IDENTITY(1,1)
+      , ErrMsg             NVARCHAR(500)
+   )
+
+   IF ISNULL(@c_Type,'') NOT IN ('WP', 'LP') OR ISNULL(@c_Key,'')=''
+      GOTO REPORT_RESULTSET
+
+   -- Get Storerkey
+   SELECT @c_Storerkey       = ''
+        , @c_ShowFields      = ''
+        , @c_ReserveLoc_Cond = ''
+
+   IF @c_Type = 'WP'
+      SELECT @c_Storerkey = MAX(OH.Storerkey)
+        FROM dbo.ORDERS OH(NOLOCK)
+       WHERE OH.Userdefine08 = 'Y'
+         AND OH.Userdefine09 = @c_Key
+   ELSE
+   IF @c_Type = 'LP'
+      SELECT @c_Storerkey = MAX(OH.Storerkey)
+        FROM dbo.ORDERS OH(NOLOCK)
+       WHERE ISNULL(OH.Userdefine08,'') <> 'Y'
+         AND OH.Loadkey = @c_Key
+
+   -- Get ShowFields, ReserveLoc_Cond by Storerkey
+   IF ISNULL(@c_Storerkey,'')<>''
+   BEGIN
+      SELECT TOP 1
+             @c_ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_ReserveLoc_Cond  = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='ReserveLoc_Cond')), '' )
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+   END
 
    -- Check RegenReplen or not
    IF @c_Type = 'WP'
    BEGIN
-      SELECT @c_ReGenReplen    = IIF(X.Userdefine02 = 'ReGenReplen', 'Y', 'N')
-           , @c_NoGenReplen    = CASE WHEN Y.IsRDTOnly   =1             THEN 'N'
-                                      WHEN X.Userdefine02='NoGenReplen' THEN 'Y'
-                                      WHEN X.Userdefine02='GenReplen'   THEN 'N'
+      SELECT @c_ReGenReplen    = CASE WHEN X.Userdefine02='ReGenReplen'    THEN 'Y'
+                                      WHEN X.Userdefine02='ReGenReplenALL' THEN 'Y'
+                                      ELSE 'N'
+                                 END
+           , @c_NoGenReplen    = CASE WHEN X.Userdefine02='NoGenReplen'    THEN 'Y'
+                                      WHEN X.Userdefine02='GenReplen'      THEN 'N'
+                                      WHEN X.Userdefine02='GenReplenALL'   THEN 'N'
                                       ELSE ''
                                  END
-           , @c_NoGenReplenDft = CASE WHEN ISNULL(RptCfg.ShowFields,'') LIKE '%,DefaultNoGenReplen,%' THEN 'Y'
-                                      WHEN ISNULL(RptCfg.ShowFields,'') LIKE '%,DefaultGenReplen,%' THEN 'N'
-                                      ELSE '' END
+           , @c_NoGenReplenDft = CASE WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultNoGenReplen,%'  THEN 'Y'
+                                      WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultGenReplen,%'    THEN 'N'
+                                      WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultGenReplenALL,%' THEN 'N'
+                                      ELSE ''
+                                 END
+           , @c_GenReplenALL   = CASE WHEN X.Userdefine02='GenReplenALL'   THEN 'Y'
+                                      WHEN X.Userdefine02='ReGenReplenALL' THEN 'Y'
+                                      WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultGenReplenALL,%' THEN 'Y'
+                                      ELSE 'N'
+                                 END
         FROM dbo.WAVE X(NOLOCK)
-        LEFT JOIN (
-           SELECT TOP 1
-                  OH.Userdefine09
-                , Storerkey = MAX(OH.Storerkey)
-                , IsRDTOnly = MAX(IIF(BRD.UDF01='RDT',1,0))
-             FROM dbo.ORDERS OH(NOLOCK)
-             JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
-             JOIN dbo.SKU SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku
-             LEFT JOIN dbo.CODELKUP BRD (NOLOCK) ON BRD.LISTNAME = 'LORBRAND' AND BRD.Description = SKU.CLASS AND BRD.Short = SKU.BUSR3 AND BRD.Storerkey = SKU.Storerkey
-            WHERE OH.Userdefine08 = 'Y'
-              AND OH.Userdefine09 = @c_Key
-            GROUP BY OH.Userdefine09
-        ) Y ON X.Wavekey = Y.Userdefine09
-        LEFT JOIN (
-         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
-              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
-           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
-        ) RptCfg
-        ON RptCfg.Storerkey=Y.Storerkey AND RptCfg.SeqNo=1
        WHERE X.Wavekey = @c_Key
-
 
       SELECT @n_ReplenCount     = COUNT(1)
            , @c_ReplenConfirmed = ISNULL(MAX(IIF(Confirmed<>'N','Y','')),'')
@@ -324,79 +440,99 @@ BEGIN
             AND LEFT(PD.DropID,LEN(@c_MoveIDPrefix)) = @c_MoveIDPrefix
       END
 
-      IF EXISTS(SELECT TOP 1 1
-           FROM dbo.ORDERS     OH (NOLOCK)
-           JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-           JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc
-          WHERE OH.Userdefine08 = 'Y' AND LOC.LocationCategory = 'SELECTIVE'
-            AND (ISNULL(PD.DropID,'')='' OR ISNULL(PD.ToLoc,'')='')
-            AND OH.Userdefine09 =  @c_Key)
+      -- Check Reserve Loc Changed
+      SET @c_ExecStatements =
+         N'IF EXISTS(SELECT TOP 1 1'
+        +     ' FROM dbo.ORDERS     OH (NOLOCK)'
+        +     ' JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey'
+        +     ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
+        +    ' WHERE OH.Userdefine08 = ''Y'''
+        +      ' AND OH.Userdefine09 =  @c_Key'
+      IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
-         SET @b_ReserveLocChanged = 1
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' AND (' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + ')'
       END
-      ELSE IF EXISTS(SELECT TOP 1 1
-           FROM dbo.REPLENISHMENT RP(NOLOCK)
-           LEFT JOIN dbo.PICKDETAIL PD(NOLOCK) ON RP.Storerkey=PD.Storerkey AND RP.Lot=PD.Lot AND RP.FromLoc=PD.Loc AND RP.ID=PD.ID AND PD.Status<'9' AND PD.Qty>0
-          WHERE RP.Wavekey = @c_Key
-            AND RP.ReplenishmentGroup = @c_ReplenGroup
-            AND RP.ID LIKE @c_NewIDPattern
-            AND RP.Confirmed='N'
-            AND RP.Qty>0
-            AND PD.PickDetailKey IS NULL)
+      SET @c_ExecStatements = @c_ExecStatements
+        +      ' AND (ISNULL(PD.DropID,'''')='''' OR ISNULL(PD.ToLoc,'''')=''''))'
+        +' BEGIN'
+        +   ' SET @b_ReserveLocChanged = 1'
+        +' END'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +' ELSE IF EXISTS(SELECT TOP 1 1'
+        +     ' FROM dbo.REPLENISHMENT RP(NOLOCK)'
+        +     ' LEFT JOIN dbo.PICKDETAIL PD(NOLOCK) ON RP.Storerkey=PD.Storerkey AND RP.Lot=PD.Lot AND RP.FromLoc=PD.Loc AND RP.ID=PD.ID AND PD.Status<''9'' AND PD.Qty>0'
+        +    ' WHERE RP.Wavekey = @c_Key'
+        +      ' AND RP.ReplenishmentGroup = @c_ReplenGroup'
+        +      ' AND RP.ID LIKE @c_NewIDPattern'
+        +      ' AND RP.Confirmed=''N'''
+        +      ' AND RP.Qty>0'
+        +      ' AND PD.PickDetailKey IS NULL)'
+        +' BEGIN'
+        +   ' SET @b_ReserveLocChanged = 1'
+        +' END'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +' ELSE IF EXISTS(SELECT TOP 1 1'
+        +     ' FROM dbo.ORDERS     OH(NOLOCK)'
+        +     ' JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.OrderKey'
+        +     ' JOIN dbo.LOC       LOC(NOLOCK) ON PD.Loc=LOC.Loc'
+        +     ' LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) ON PD.Storerkey=RP.Storerkey AND PD.Lot=RP.Lot AND PD.Loc=RP.FromLoc AND PD.ID=RP.ID'
+        +                                           ' AND RP.Qty>0 AND RP.Confirmed=''N'' AND RP.ReplenishmentGroup=@c_ReplenGroup'
+        +    ' WHERE OH.Userdefine08 = ''Y'''
+        +      ' AND OH.Userdefine09 =  @c_Key'
+        +      ' AND PD.Status<''9'''
+        +      ' AND PD.Qty>0'
+        +      ' AND PD.ID LIKE @c_NewIDPattern'
+        +      ' AND ISNULL(PD.ToLoc,'''')<>'''''
+        +      ' AND ISNULL(PD.DropID,'''')<>'''''
+      IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
-         SET @b_ReserveLocChanged = 1
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' AND (' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + ')'
       END
-      ELSE IF EXISTS(SELECT TOP 1 1
-           FROM dbo.WAVEDETAIL WD(NOLOCK)
-           JOIN dbo.PICKDETAIL PD(NOLOCK) ON WD.Orderkey=PD.OrderKey
-           JOIN dbo.LOC       LOC(NOLOCK) ON PD.Loc=LOC.Loc
-           LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) ON PD.Storerkey=RP.Storerkey AND PD.Lot=RP.Lot AND PD.Loc=RP.FromLoc AND PD.ID=RP.ID
-                                                 AND RP.Qty>0 AND RP.Confirmed='N' AND RP.ReplenishmentGroup=@c_ReplenGroup
-           WHERE WD.Wavekey = @c_Key
-             AND PD.Status<'9'
-             AND PD.Qty>0
-             AND PD.ID LIKE @c_NewIDPattern
-             AND ISNULL(PD.ToLoc,'')<>''
-             AND ISNULL(PD.DropID,'')<>''
-             AND LOC.LocationCategory='SELECTIVE'
-             AND RP.ReplenishmentKey IS NULL)
-      BEGIN
-         SET @b_ReserveLocChanged = 1
-      END
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ' AND RP.ReplenishmentKey IS NULL)'
+        +' BEGIN'
+        +   ' SET @b_ReserveLocChanged = 1'
+        +' END'
+
+      SET @c_ExecArguments = N'@c_Key               NVARCHAR(10)'
+                           + ',@c_ReplenGroup       NVARCHAR(10)'
+                           + ',@c_NewIDPattern      NVARCHAR(100)'
+                           + ',@b_ReserveLocChanged INT OUTPUT'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_Key
+                       , @c_ReplenGroup
+                       , @c_NewIDPattern
+                       , @b_ReserveLocChanged OUTPUT
    END
    ELSE IF @c_Type = 'LP'
    BEGIN
-      SELECT @c_ReGenReplen    = IIF(X.Userdefine02 = 'ReGenReplen', 'Y', 'N')
-           , @c_NoGenReplen    = CASE WHEN Y.IsRDTOnly   =1             THEN 'N'
-                                      WHEN X.Userdefine02='NoGenReplen' THEN 'Y'
-                                      WHEN X.Userdefine02='GenReplen'   THEN 'N'
+      SELECT @c_ReGenReplen    = CASE WHEN X.Userdefine02='ReGenReplen'    THEN 'Y'
+                                      WHEN X.Userdefine02='ReGenReplenALL' THEN 'Y'
+                                      ELSE 'N'
+                                 END
+           , @c_NoGenReplen    = CASE WHEN X.Userdefine02='NoGenReplen'    THEN 'Y'
+                                      WHEN X.Userdefine02='GenReplen'      THEN 'N'
+                                      WHEN X.Userdefine02='GenReplenALL'   THEN 'N'
                                       ELSE ''
                                  END
-           , @c_NoGenReplenDft = CASE WHEN ISNULL(RptCfg.ShowFields,'') LIKE '%,DefaultNoGenReplen,%' THEN 'Y'
-                                      WHEN ISNULL(RptCfg.ShowFields,'') LIKE '%,DefaultGenReplen,%' THEN 'N'
-                                      ELSE '' END
+           , @c_NoGenReplenDft = CASE WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultNoGenReplen,%'  THEN 'Y'
+                                      WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultGenReplen,%'    THEN 'N'
+                                      WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultGenReplenALL,%' THEN 'N'
+                                      ELSE ''
+                                 END
+           , @c_GenReplenALL   = CASE WHEN X.Userdefine02='GenReplenALL'   THEN 'Y'
+                                      WHEN X.Userdefine02='ReGenReplenALL' THEN 'Y'
+                                      WHEN ISNULL(@c_ShowFields,'') LIKE '%,DefaultGenReplenALL,%' THEN 'Y'
+                                      ELSE ''
+                                 END
         FROM dbo.LOADPLAN X(NOLOCK)
-        LEFT JOIN (
-           SELECT TOP 1
-                  OH.Loadkey
-                , Storerkey = MAX(OH.Storerkey)
-                , IsRDTOnly = MAX(IIF(BRD.UDF01='RDT',1,0))
-             FROM dbo.ORDERS OH(NOLOCK)
-             JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
-             JOIN dbo.SKU SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku
-             LEFT JOIN dbo.CODELKUP BRD (NOLOCK) ON BRD.LISTNAME = 'LORBRAND' AND BRD.Description = SKU.CLASS AND BRD.Short = SKU.BUSR3 AND BRD.Storerkey = SKU.Storerkey
-            WHERE ISNULL(OH.Userdefine08,'')<>'Y'
-              AND OH.Loadkey = @c_Key
-            GROUP BY OH.Loadkey
-        ) Y ON X.Loadkey = Y.Loadkey
-        LEFT JOIN (
-         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
-              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
-           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
-        ) RptCfg
-        ON RptCfg.Storerkey=Y.Storerkey AND RptCfg.SeqNo=1
        WHERE X.Loadkey = @c_Key
-
 
       SELECT @n_ReplenCount     = COUNT(1)
            , @c_ReplenConfirmed = ISNULL(MAX(IIF(Confirmed<>'N','Y','')),'')
@@ -414,45 +550,75 @@ BEGIN
             AND LEFT(PD.DropID,LEN(@c_MoveIDPrefix)) = @c_MoveIDPrefix
       END
 
-      IF EXISTS(SELECT TOP 1 1
-           FROM dbo.ORDERS     OH (NOLOCK)
-           JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-           JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc
-          WHERE ISNULL(OH.Userdefine08,'') <> 'Y' AND LOC.LocationCategory = 'SELECTIVE'
-            AND (ISNULL(PD.DropID,'')='' OR ISNULL(PD.ToLoc,'')='')
-            AND OH.Loadkey = @c_Key)
+      -- Check Reserve Loc Changed
+      SET @c_ExecStatements =
+         N'IF EXISTS(SELECT TOP 1 1'
+        +     ' FROM dbo.ORDERS     OH (NOLOCK)'
+        +     ' JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey'
+        +     ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
+        +    ' WHERE ISNULL(OH.Userdefine08,'''') <> ''Y'''
+        +      ' AND OH.Loadkey = @c_Key'
+      IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
-         SET @b_ReserveLocChanged = 1
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' AND (' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + ')'
       END
-      ELSE IF EXISTS(SELECT TOP 1 1
-           FROM dbo.REPLENISHMENT RP(NOLOCK)
-           LEFT JOIN dbo.PICKDETAIL PD(NOLOCK) ON RP.Storerkey=PD.Storerkey AND RP.Lot=PD.Lot AND RP.FromLoc=PD.Loc AND RP.ID=PD.ID AND PD.Status<'9' AND PD.Qty>0
-          WHERE RP.Loadkey = @c_Key
-            AND RP.ReplenishmentGroup = @c_ReplenGroup
-            AND RP.ID LIKE @c_NewIDPattern
-            AND RP.Confirmed='N'
-            AND RP.Qty>0
-            AND PD.PickDetailKey IS NULL)
+      SET @c_ExecStatements = @c_ExecStatements
+        +      ' AND (ISNULL(PD.DropID,'''')='''' OR ISNULL(PD.ToLoc,'''')=''''))'
+        +' BEGIN'
+        +   ' SET @b_ReserveLocChanged = 1'
+        +' END'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +' ELSE IF EXISTS(SELECT TOP 1 1'
+        +     ' FROM dbo.REPLENISHMENT RP(NOLOCK)'
+        +     ' LEFT JOIN dbo.PICKDETAIL PD(NOLOCK) ON RP.Storerkey=PD.Storerkey AND RP.Lot=PD.Lot AND RP.FromLoc=PD.Loc AND RP.ID=PD.ID AND PD.Status<''9'' AND PD.Qty>0'
+        +    ' WHERE RP.Loadkey = @c_Key'
+        +      ' AND RP.ReplenishmentGroup = @c_ReplenGroup'
+        +      ' AND RP.ID LIKE @c_NewIDPattern'
+        +      ' AND RP.Confirmed=''N'''
+        +      ' AND RP.Qty>0'
+        +      ' AND PD.PickDetailKey IS NULL)'
+        +' BEGIN'
+        +   ' SET @b_ReserveLocChanged = 1'
+        +' END'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +' ELSE IF EXISTS(SELECT TOP 1 1'
+        +     ' FROM dbo.ORDERS     OH(NOLOCK)'
+        +     ' JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.OrderKey'
+        +     ' JOIN dbo.LOC       LOC(NOLOCK) ON PD.Loc=LOC.Loc'
+        +     ' LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) ON PD.Storerkey=RP.Storerkey AND PD.Lot=RP.Lot AND PD.Loc=RP.FromLoc AND PD.ID=RP.ID'
+        +                                           ' AND RP.Qty>0 AND RP.Confirmed=''N'' AND RP.ReplenishmentGroup=@c_ReplenGroup'
+        +    ' WHERE ISNULL(OH.Userdefine08,'''') <> ''Y'''
+        +      ' AND OH.Loadkey = @c_Key'
+        +      ' AND PD.Status<''9'''
+        +      ' AND PD.Qty>0'
+        +      ' AND PD.ID LIKE @c_NewIDPattern'
+        +      ' AND ISNULL(PD.ToLoc,'''')<>'''''
+        +      ' AND ISNULL(PD.DropID,'''')<>'''''
+      IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
-         SET @b_ReserveLocChanged = 1
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' AND (' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + ')'
       END
-      ELSE IF EXISTS(SELECT TOP 1 1
-           FROM dbo.LOADPLANDETAIL LD(NOLOCK)
-           JOIN dbo.PICKDETAIL PD(NOLOCK) ON LD.Orderkey=PD.OrderKey
-           JOIN dbo.LOC       LOC(NOLOCK) ON PD.Loc=LOC.Loc
-           LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) ON PD.Storerkey=RP.Storerkey AND PD.Lot=RP.Lot AND PD.Loc=RP.FromLoc AND PD.ID=RP.ID
-                                                 AND RP.Qty>0 AND RP.Confirmed='N' AND RP.ReplenishmentGroup=@c_ReplenGroup
-           WHERE LD.Loadkey = @c_Key
-             AND PD.Status<'9'
-             AND PD.Qty>0
-             AND PD.ID LIKE @c_NewIDPattern
-             AND ISNULL(PD.ToLoc,'')<>''
-             AND ISNULL(PD.DropID,'')<>''
-             AND LOC.LocationCategory='SELECTIVE'
-             AND RP.ReplenishmentKey IS NULL)
-      BEGIN
-         SET @b_ReserveLocChanged = 1
-      END
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ' AND RP.ReplenishmentKey IS NULL)'
+        +' BEGIN'
+        +   ' SET @b_ReserveLocChanged = 1'
+        +' END'
+
+      SET @c_ExecArguments = N'@c_Key               NVARCHAR(10)'
+                           + ',@c_ReplenGroup       NVARCHAR(10)'
+                           + ',@c_NewIDPattern      NVARCHAR(100)'
+                           + ',@b_ReserveLocChanged INT OUTPUT'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_Key
+                       , @c_ReplenGroup
+                       , @c_NewIDPattern
+                       , @b_ReserveLocChanged OUTPUT
    END
 
    IF ISNULL(@c_NoGenReplen,'')=''
@@ -465,13 +631,15 @@ BEGIN
    IF ISNULL(@c_ReplenConfirmed,'')<>'Y'
    BEGIN
       IF @c_Type = 'WP'
-         SELECT TOP 1 @c_ReplenConfirmed = 'Y'
+         SELECT TOP 1
+                @c_ReplenConfirmed = 'Y'
            FROM dbo.REPLENISHMENT (NOLOCK)
           WHERE Wavekey = @c_Key
             AND (ISNULL(Confirmed,'')<>'N' OR Remark LIKE N'Failed !%')
       ELSE
       IF @c_Type = 'LP'
-         SELECT TOP 1 @c_ReplenConfirmed = 'Y'
+         SELECT TOP 1
+                @c_ReplenConfirmed = 'Y'
            FROM dbo.REPLENISHMENT (NOLOCK)
           WHERE Loadkey = @c_Key
             AND (ISNULL(Confirmed,'')<>'N' OR Remark LIKE N'Failed !%')
@@ -496,43 +664,89 @@ BEGIN
 
    IF @c_Type = 'WP'
    BEGIN
-      INSERT INTO #TEMP_PICKDETAILKEY (PickdetailKey, ORD_Status, ToLoc, DropID, ReplenKey)
-      SELECT PD.PickdetailKey
-           , MAX( ISNULL( RTRIM( OH.Status ), '' ) )
-           , MAX( ISNULL( RTRIM( PD.ToLoc  ), '' ) )
-           , MAX( ISNULL( RTRIM( PD.DropID ), '' ) )
-           , MAX( CASE WHEN RP.ReplenishmentKey IS NOT NULL AND ISNULL(RP.ReplenNo,'')<>@c_Key
-                       THEN RP.ReplenishmentKey ELSE '' END)
-        FROM dbo.ORDERS     OH (NOLOCK)
-        JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-        JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc
-        LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON RP.Storerkey=OH.Storerkey AND PD.ID LIKE @c_NewIDPattern AND
-             RP.ReplenishmentKey = IIF(LEFT(PD.ID,@n_ReplenKeyLen)<=@c_REPLENISHKEY,@c_ReplenKeyPrefix1,@c_ReplenKeyPrefix2) + LEFT(PD.ID,@n_ReplenKeyLen)
-       WHERE OH.Userdefine08 = 'Y'
-         AND OH.Userdefine09 = @c_Key
-         AND LOC.LocationCategory = 'SELECTIVE'
-         AND PD.Qty > 0
-       GROUP BY PD.PickdetailKey
+      SET @c_ExecStatements =
+         N'INSERT INTO #TEMP_PICKDETAILKEY (PickdetailKey, ORD_Status, ToLoc, DropID, ReplenKey, Storerkey)'
+        +' SELECT PD.PickdetailKey'
+        +      ', MAX( ISNULL( RTRIM( OH.Status ), '''' ) )'
+        +      ', MAX( ISNULL( RTRIM( PD.ToLoc  ), '''' ) )'
+        +      ', MAX( ISNULL( RTRIM( PD.DropID ), '''' ) )'
+        +      ', MAX( CASE WHEN RP.ReplenishmentKey IS NOT NULL AND ISNULL(RP.ReplenNo,'''')<>@c_Key'
+        +                 ' THEN RP.ReplenishmentKey ELSE '''' END)'
+        +      ', MAX( ISNULL( RTRIM( PD.Storerkey ), '''' ) )'
+        +  ' FROM dbo.ORDERS     OH (NOLOCK)'
+        +  ' JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey'
+        +  ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
+        +  ' LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON RP.Storerkey=OH.Storerkey AND PD.ID LIKE @c_NewIDPattern AND'
+        +       ' RP.ReplenishmentKey = IIF(LEFT(PD.ID,@n_ReplenKeyLen)<=@c_REPLENISHKEY,@c_ReplenKeyPrefix1,@c_ReplenKeyPrefix2) + LEFT(PD.ID,@n_ReplenKeyLen)'
+        + ' WHERE OH.Userdefine08 = ''Y'''
+        +   ' AND OH.Userdefine09 = @c_Key'
+      IF ISNULL(@c_GenReplenALL,'')<>'Y'
+      BEGIN
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' AND (' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + ')'
+      END
+      SET @c_ExecStatements = @c_ExecStatements
+        +   ' AND PD.Qty > 0'
+        + ' GROUP BY PD.PickdetailKey'
+
+      SET @c_ExecArguments = N'@c_Key              NVARCHAR(10)'
+                           + ',@c_NewIDPattern     NVARCHAR(100)'
+                           + ',@n_ReplenKeyLen     INT'
+                           + ',@c_REPLENISHKEY     NVARCHAR(10)'
+                           + ',@c_ReplenKeyPrefix1 NVARCHAR(10)'
+                           + ',@c_ReplenKeyPrefix2 NVARCHAR(10)'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_Key
+                       , @c_NewIDPattern
+                       , @n_ReplenKeyLen
+                       , @c_REPLENISHKEY
+                       , @c_ReplenKeyPrefix1
+                       , @c_ReplenKeyPrefix2
    END
    ELSE IF @c_Type = 'LP'
    BEGIN
-      INSERT INTO #TEMP_PICKDETAILKEY (PickdetailKey, ORD_Status, ToLoc, DropID, ReplenKey)
-      SELECT PD.PickdetailKey
-           , MAX( ISNULL( RTRIM( OH.Status ), '' ) )
-           , MAX( ISNULL( RTRIM( PD.ToLoc  ), '' ) )
-           , MAX( ISNULL( RTRIM( PD.DropID ), '' ) )
-           , MAX( CASE WHEN RP.ReplenishmentKey IS NOT NULL AND ISNULL(RP.ReplenNo,'')<>@c_Key
-                       THEN RP.ReplenishmentKey ELSE '' END)
-        FROM dbo.ORDERS     OH (NOLOCK)
-        JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-        JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc
-        LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON RP.Storerkey=OH.Storerkey AND PD.ID LIKE @c_NewIDPattern AND
-             RP.ReplenishmentKey = IIF(LEFT(PD.ID,@n_ReplenKeyLen)<=@c_REPLENISHKEY,@c_ReplenKeyPrefix1,@c_ReplenKeyPrefix2) + LEFT(PD.ID,@n_ReplenKeyLen)
-       WHERE ISNULL(OH.Userdefine08,'') <> 'Y'
-         AND OH.Loadkey = @c_Key
-         AND LOC.LocationCategory = 'SELECTIVE'
-         AND PD.Qty > 0
-       GROUP BY PD.PickdetailKey
+      SET @c_ExecStatements =
+         N'INSERT INTO #TEMP_PICKDETAILKEY (PickdetailKey, ORD_Status, ToLoc, DropID, ReplenKey, Storerkey)'
+        +' SELECT PD.PickdetailKey'
+        +      ', MAX( ISNULL( RTRIM( OH.Status ), '''' ) )'
+        +      ', MAX( ISNULL( RTRIM( PD.ToLoc  ), '''' ) )'
+        +      ', MAX( ISNULL( RTRIM( PD.DropID ), '''' ) )'
+        +      ', MAX( CASE WHEN RP.ReplenishmentKey IS NOT NULL AND ISNULL(RP.ReplenNo,'''')<>@c_Key'
+        +                 ' THEN RP.ReplenishmentKey ELSE '''' END)'
+        +      ', MAX( ISNULL( RTRIM( PD.Storerkey ), '''' ) )'
+        +  ' FROM dbo.ORDERS     OH (NOLOCK)'
+        +  ' JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey'
+        +  ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
+        +  ' LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON RP.Storerkey=OH.Storerkey AND PD.ID LIKE @c_NewIDPattern AND'
+        +       ' RP.ReplenishmentKey = IIF(LEFT(PD.ID,@n_ReplenKeyLen)<=@c_REPLENISHKEY,@c_ReplenKeyPrefix1,@c_ReplenKeyPrefix2) + LEFT(PD.ID,@n_ReplenKeyLen)'
+        + ' WHERE ISNULL(OH.Userdefine08,'''') <> ''Y'''
+        +   ' AND OH.Loadkey = @c_Key'
+      IF ISNULL(@c_GenReplenALL,'')<>'Y'
+      BEGIN
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' AND (' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + ')'
+      END
+      SET @c_ExecStatements = @c_ExecStatements
+        +   ' AND PD.Qty > 0'
+        + ' GROUP BY PD.PickdetailKey'
+
+      SET @c_ExecArguments = N'@c_Key              NVARCHAR(10)'
+                           + ',@c_NewIDPattern     NVARCHAR(100)'
+                           + ',@n_ReplenKeyLen     INT'
+                           + ',@c_REPLENISHKEY     NVARCHAR(10)'
+                           + ',@c_ReplenKeyPrefix1 NVARCHAR(10)'
+                           + ',@c_ReplenKeyPrefix2 NVARCHAR(10)'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_Key
+                       , @c_NewIDPattern
+                       , @n_ReplenKeyLen
+                       , @c_REPLENISHKEY
+                       , @c_ReplenKeyPrefix1
+                       , @c_ReplenKeyPrefix2
    END
 
    IF NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_PICKDETAILKEY)
@@ -541,7 +755,6 @@ BEGIN
    -- If already started picking, then skip DP Loc Distribution
    IF EXISTS( SELECT TOP 1 1 FROM #TEMP_PICKDETAILKEY WHERE ORD_Status>='3')
       GOTO REPORT_RESULTSET
-
 
    -- Clean up Pickdetail ToLoc, DropID, MoveRefKey
    IF @c_Type = 'WP'
@@ -575,7 +788,7 @@ BEGIN
          AND (PD.ToLoc<>'' OR PD.DropID<>'' OR PD.MoveRefKey<>'')
    END
 
-   -- Retrieve ToLoc & DropID from another wave/loadplan
+   -- Retrieve ToLoc & DropID from other wave/loadplan
    IF EXISTS(SELECT TOP 1 1
         FROM #TEMP_PICKDETAILKEY a
         JOIN dbo.PICKDETAIL PD(NOLOCK) ON a.PickdetailKey=PD.PickdetailKey
@@ -591,50 +804,146 @@ BEGIN
         JOIN dbo.PICKDETAIL PD ON a.PickdetailKey=PD.PickdetailKey
         JOIN dbo.REPLENISHMENT RP(NOLOCK) ON a.ReplenKey=RP.ReplenishmentKey
        WHERE ISNULL(a.ReplenKey,'')<>'' AND PD.Status < '9' AND PD.ShipFlag<>'Y'
+
+      IF @c_GenReplenALL = 'Y' AND @c_ShowFields LIKE '%,NoGenReplenAllWhenOtherReplenExist,%'
+      BEGIN
+         INSERT INTO #TEMP_ERROR (ErrMsg) VALUES('ERROR: Pending Replen from other WavePlan / Loadplan')
+         GOTO REPORT_RESULTSET
+      END
    END
 
-   -- Get Outstanding Pickdetails
-   INSERT INTO #TEMP_OUTSTANDING (
-        PickdetailKey, Storerkey, Facility, SKU, LOT, LogicalLocation, LOC, ID, Original_DropID, Qty, Div, Brand
-      , StdCube, CaseCnt, Lottable02, Lottable04, PA_Floor, LocAisle, PackKey, PackUOM3
-   )
-   SELECT PickdetailKey    = RTRIM( PD.PickdetailKey )
-        , Storerkey        = RTRIM( PD.Storerkey )
-        , Facility         = RTRIM( OH.Facility )
-        , SKU              = RTRIM( PD.SKU )
-        , LOT              = RTRIM( PD.LOT )
-        , LogicalLocation  = RTRIM( MAX( LOC.LogicalLocation ) )
-        , LOC              = RTRIM( PD.LOC )
-        , ID               = RTRIM( PD.ID )
-        , Original_DropID  = RTRIM( MAX( PDK.DropID ) )
-        , Qty              = SUM(PD.Qty)
-        , Div              = RTRIM( MAX( ISNULL( IIF( BRD.Long='LPD', BRD.Notes, BRD.Long ), '') ) )
-        , Brand            = RTRIM( MAX( ISNULL( BRD.Notes, '') ) )
-        , StdCube          = MAX( ISNULL( SKU.StdCube, '') )
-        , CaseCnt          = MAX( ISNULL( CASE WHEN PACK.CaseCnt>0 THEN PACK.CaseCnt
-                                               WHEN TRY_PARSE( LA.Lottable06 AS INT)>0 THEN TRY_PARSE( LA.Lottable06 AS INT)
-                                               ELSE 0 END, 0) )
-        , Lottable02       = RTRIM( MAX( ISNULL( LA.Lottable02, '') ) )
-        , Lottable04       = MAX( ISNULL( LA.Lottable04, '') )
-        , PA_Floor         = RTRIM( MAX( ISNULL( PA.Floor, '') ) )
-        , LocAisle         = RTRIM( MAX( ISNULL( LOC.LocAisle, '') ) )
-        , PackKey          = RTRIM( MAX( ISNULL( SKU.PackKey, '') ) )
-        , PackUOM3         = RTRIM( MAX( ISNULL( PACK.PackUOM3, '') ) )
 
-     FROM #TEMP_PICKDETAILKEY PDK
-     JOIN dbo.PICKDETAIL       PD (NOLOCK) ON PDK.PickdetailKey = PD.PickdetailKey
-     JOIN dbo.ORDERS           OH (NOLOCK) ON PD.OrderKey = OH.OrderKey
-     JOIN dbo.SKU             SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.SKU = SKU.SKU
-     JOIN dbo.PACK            PACK(NOLOCK) ON SKU.Packkey = PACK.Packkey
-     JOIN dbo.LOTATTRIBUTE     LA (NOLOCK) ON PD.Lot = LA.Lot
-     JOIN dbo.LOC             LOC (NOLOCK) ON PD.Loc = LOC.Loc
-     LEFT JOIN dbo.PUTAWAYZONE PA (NOLOCK) ON LOC.PutawayZone = PA.PutawayZone
-     LEFT JOIN dbo.CODELKUP   BRD (NOLOCK) ON BRD.LISTNAME = 'LORBRAND' AND BRD.Description = SKU.CLASS AND BRD.Short = SKU.BUSR3 AND BRD.Storerkey = SKU.Storerkey
+   -- Storerkey Loop
+   DECLARE C_CUR_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT Storerkey
+     FROM #TEMP_PICKDETAILKEY
+    ORDER BY 1
 
-    WHERE ISNULL(PDK.ReplenKey,'')=''
+   OPEN C_CUR_STORERKEY
 
-    GROUP BY PD.PickdetailKey, PD.Storerkey, OH.Facility, PD.SKU, PD.LOT, PD.LOC, PD.ID
+   WHILE 1=1
+   BEGIN
+      FETCH NEXT FROM C_CUR_STORERKEY
+       INTO @c_Storerkey
 
+      IF @@FETCH_STATUS<>0
+         BREAK
+
+      SELECT @c_JoinClause         = ''
+           , @c_Replen_JoinClause  = ''
+           , @c_DivExp             = ''
+           , @c_BrandExp           = ''
+           , @c_CaseCntExp         = ''
+           , @c_Replen_DivExp      = ''
+           , @c_Replen_BrandExp    = ''
+           , @c_Replen_CaseCntExp  = ''
+
+      SELECT TOP 1
+             @c_JoinClause = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y' AND ISNULL(UDF02,'')=''
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_Replen_JoinClause = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y' AND ISNULL(UDF02,'')='Replen'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_DivExp             = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Div')), '' )
+           , @c_BrandExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Brand')), '' )
+           , @c_CaseCntExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='CaseCnt')), '' )
+           , @c_Replen_DivExp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Replen_Div')), '' )
+           , @c_Replen_BrandExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Replen_Brand')), '' )
+           , @c_Replen_CaseCntExp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Replen_CaseCnt')), '' )
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+
+      IF ISNULL(@c_Replen_JoinClause, '')='' SET @c_Replen_JoinClause = @c_JoinClause
+      IF ISNULL(@c_Replen_DivExp    , '')='' SET @c_Replen_DivExp     = @c_DivExp
+      IF ISNULL(@c_Replen_BrandExp  , '')='' SET @c_Replen_BrandExp   = @c_BrandExp
+      IF ISNULL(@c_Replen_CaseCntExp, '')='' SET @c_Replen_CaseCntExp = @c_CaseCntExp
+
+
+      -- Get Outstanding Pickdetails
+      SET @c_ExecStatements =
+         N'INSERT INTO #TEMP_OUTSTANDING ('
+           + ' PickdetailKey, Storerkey, Facility, SKU, LOT, LogicalLocation, LOC, ID, Original_DropID, Qty, Div, Brand,'
+           + ' StdCube, CaseCnt, Lottable02, Lottable04, PA_Floor, LocAisle, PackKey, PackUOM3)'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        + ' SELECT PickdetailKey    = RTRIM( PD.PickdetailKey )'
+        +       ', Storerkey        = RTRIM( PD.Storerkey )'
+        +       ', Facility         = RTRIM( LOC.Facility )'
+        +       ', SKU              = RTRIM( PD.SKU )'
+        +       ', LOT              = RTRIM( PD.LOT )'
+        +       ', LogicalLocation  = RTRIM( MAX( LOC.LogicalLocation ) )'
+        +       ', LOC              = RTRIM( PD.LOC )'
+        +       ', ID               = RTRIM( PD.ID )'
+        +       ', Original_DropID  = RTRIM( MAX( PDK.DropID ) )'
+        +       ', Qty              = SUM(PD.Qty)'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Div              = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_DivExp    ,'')<>'' THEN @c_Replen_DivExp     ELSE '''''' END + ','''')))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Brand            = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_BrandExp  ,'')<>'' THEN @c_Replen_BrandExp   ELSE '''''' END + ','''')))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', StdCube          = MAX( ISNULL( SKU.StdCube, '''') )'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', CaseCnt          = MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_CaseCntExp  ,'')<>'' THEN @c_Replen_CaseCntExp   ELSE 'PACK.CaseCnt' END + ',0))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Lottable02       = RTRIM( MAX( ISNULL( LA.Lottable02, '''') ) )'
+        +       ', Lottable04       = MAX( ISNULL( LA.Lottable04, '''') )'
+        +       ', PA_Floor         = RTRIM( MAX( ISNULL( PA.Floor, '''') ) )'
+        +       ', LocAisle         = RTRIM( MAX( ISNULL( LOC.LocAisle, '''') ) )'
+        +       ', PackKey          = RTRIM( MAX( ISNULL( SKU.PackKey, '''') ) )'
+        +       ', PackUOM3         = RTRIM( MAX( ISNULL( PACK.PackUOM3, '''') ) )'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +   ' FROM #TEMP_PICKDETAILKEY PDK'
+        +   ' JOIN dbo.PICKDETAIL       PD (NOLOCK) ON PDK.PickdetailKey = PD.PickdetailKey'
+        +   ' JOIN dbo.ORDERS           OH (NOLOCK) ON PD.OrderKey = OH.OrderKey'
+        +   ' JOIN dbo.SKU             SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.SKU = SKU.SKU'
+        +   ' JOIN dbo.PACK            PACK(NOLOCK) ON SKU.Packkey = PACK.Packkey'
+        +   ' JOIN dbo.LOTATTRIBUTE     LA (NOLOCK) ON PD.Lot = LA.Lot'
+        +   ' JOIN dbo.LOC             LOC (NOLOCK) ON PD.Loc = LOC.Loc'
+        +   ' LEFT JOIN dbo.PUTAWAYZONE PA (NOLOCK) ON LOC.PutawayZone = PA.PutawayZone'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +   CASE WHEN ISNULL(@c_Replen_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_Replen_JoinClause)),'') END
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +  ' WHERE PDK.Storerkey = @c_Storerkey'
+        +    ' AND ISNULL(PDK.ReplenKey,'''')='''''
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +  ' GROUP BY PD.PickdetailKey, PD.Storerkey, LOC.Facility, PD.SKU, PD.LOT, PD.LOC, PD.ID'
+
+      SET @c_ExecArguments = N'@c_Storerkey NVARCHAR(15)'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_Storerkey
+   END
+   CLOSE C_CUR_STORERKEY
+   DEALLOCATE C_CUR_STORERKEY
 
 
    -- Start DP Loc Distribution
@@ -677,7 +986,11 @@ BEGIN
       END
 
       -- Get ShowFields From ReportCfg
-      SET @c_ShowFields = ''
+      SELECT @c_ShowFields       = ''
+           , @c_DPLoc_PAZone_SEL = ''
+           , @c_DPLoc_PAZone_VNA = ''
+           , @c_DPLoc_PAZone_FPR = ''
+           , @c_DPLoc_ReplenALL  = ''
 
       SELECT TOP 1
              @c_ShowFields = RptCfg.ShowFields
@@ -688,115 +1001,238 @@ BEGIN
       ) RptCfg
       WHERE RptCfg.Storerkey=@c_Storerkey AND RptCfg.SeqNo=1
 
+      SELECT TOP 1
+             @c_DPLoc_PAZone_SEL = CAST( ISNULL(RTRIM( (select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='DPLoc_PAZone_SEL') ), '') AS NVARCHAR(MAX))
+           , @c_DPLoc_PAZone_VNA = CAST( ISNULL(RTRIM( (select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='DPLoc_PAZone_VNA') ), '') AS NVARCHAR(MAX))
+           , @c_DPLoc_PAZone_FPR = CAST( ISNULL(RTRIM( (select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='DPLoc_PAZone_FPR') ), '') AS NVARCHAR(MAX))
+           , @c_DPLoc_ReplenALL  = CAST( ISNULL(RTRIM( (select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='DPLoc_ReplenALL') ), '') AS NVARCHAR(MAX))
+      FROM (
+         SELECT Storerkey, Notes = RTRIM(Notes), Notes2 = RTRIM(Notes2), Delim = LTRIM(RTRIM(UDF01))
+              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='MAPVALUE' AND Long=@c_DataWindow AND Short='Y'
+      ) RptCfg3
+      WHERE RptCfg3.Storerkey=@c_Storerkey AND RptCfg3.SeqNo=1
+
 
       -- Get DPLoc
       TRUNCATE TABLE #TEMP_DPLOC
 
-      INSERT INTO #TEMP_DPLOC (
-         DPLoc, Sku, Lot, ID, DropID, Type,
-         Facility, LocAisle, PutawayZone, LogicalLocation,
-         PA_Descr, PA_Floor, CubicCapacity, CBM, Qty, MaxPallet,
-         Div, Brand, FullPalletReplen
-      )
-      SELECT DPLoc, Sku, Lot, ID, DropID, Type,
-             MAX(Facility), MAX(LocAisle), MAX(PutawayZone), MAX(LogicalLocation),
-             MAX(PA_Descr), MAX(PA_Floor), MAX(CubicCapacity), SUM(CBM), SUM(Qty), MAX(MaxPallet),
-             MAX(Div), MAX(Brand), MAX(FullPalletReplen)
-      FROM (
-         SELECT DPLoc           = RTRIM( LOC.Loc )
-              , Sku             = ISNULL(RTRIM( LLI.Sku ),'')
-              , Lot             = ISNULL(RTRIM( LLI.Lot ),'')
-              , ID              = ISNULL(RTRIM( LLI.ID  ),'')
-              , DropID          = ''
-              , Type            = '1'
-              , Facility        = RTRIM( MAX( LOC.Facility ) )
-              , LocAisle        = RTRIM( MAX( ISNULL(LOC.LocAisle,'') ) )
-              , PutawayZone     = RTRIM( MAX( LOC.PutawayZone ) )
-              , LogicalLocation = RTRIM( MAX( LOC.LogicalLocation ) )
-              , PA_Descr        = RTRIM( MAX( ISNULL(PA.Descr,'') ) )
-              , PA_Floor        = RTRIM( MAX( ISNULL(PA.Floor,'') ) )
-              , CubicCapacity   = MAX( ISNULL( LOC.CubicCapacity, 0) )
-              , CBM             = SUM( ISNULL(LLI.Qty - LLI.QtyPicked,0) * ISNULL(SKU.StdCube,0) )
-              , Qty             = SUM( ISNULL(LLI.Qty - LLI.QtyPicked,0) )
-              , MaxPallet       = MAX( ISNULL( LOC.MaxPallet, 0) )
-              , Div             = ISNULL(RTRIM( MAX( IIF( BRD.Long='LPD', BRD.Notes, BRD.Long ) ) ),'')
-              , Brand           = RTRIM( MAX( BRD.Notes ) )
-              , FullPalletReplen= 'N'
-           FROM dbo.LOC              LOC (NOLOCK)
-           JOIN dbo.PUTAWAYZONE       PA (NOLOCK) ON LOC.PutawayZone = PA.PutawayZone
-           LEFT JOIN dbo.LOTxLOCxID  LLI (NOLOCK) ON LOC.Loc = LLI.Loc AND LLI.Qty > 0
-           LEFT JOIN dbo.SKU         SKU (NOLOCK) ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku
-           LEFT JOIN dbo.CODELKUP    BRD (NOLOCK) ON BRD.LISTNAME = 'LORBRAND' AND BRD.Description = SKU.CLASS AND BRD.Short = SKU.BUSR3 AND BRD.Storerkey = SKU.Storerkey
-          WHERE LOC.Facility = @c_Facility
-            AND LOC.LocationType = @c_DP_LocationType
-          GROUP BY LOC.Loc, LLI.Sku, LLI.Lot, LLI.ID
+      SELECT @c_JoinClause         = ''
+           , @c_Replen_JoinClause  = ''
+           , @c_DivExp             = ''
+           , @c_BrandExp           = ''
+           , @c_CaseCntExp         = ''
+           , @c_Replen_DivExp      = ''
+           , @c_Replen_BrandExp    = ''
+           , @c_Replen_CaseCntExp  = ''
 
-         UNION ALL
+      SELECT TOP 1
+             @c_JoinClause = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y' AND ISNULL(UDF02,'')=''
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
 
-         SELECT DPLoc           = RTRIM( X.DPLoc )
-              , Sku             = ISNULL( RTRIM( X.Sku ),'')
-              , Lot             = ISNULL( RTRIM( X.Lot ),'')
-              , ID              = ISNULL( RTRIM( X.ID ),'')
-              , DropID          = ISNULL( RTRIM( X.DropID ),'')
-              , Type            = '1'
-              , Facility        = RTRIM( MAX( X.Facility ) )
-              , LocAisle        = RTRIM( MAX( X.LocAisle ) )
-              , PutawayZone     = RTRIM( MAX( X.PutawayZone ) )
-              , LogicalLocation = RTRIM( MAX( X.LogicalLocation ) )
-              , PA_Descr        = RTRIM( MAX( X.PA_Descr ) )
-              , PA_Floor        = RTRIM( MAX( X.PA_Floor ) )
-              , CubicCapacity   = MAX( X.CubicCapacity )
-              , CBM             = SUM( X.StdCube * X.Qty )
-              , Qty             = SUM( X.Qty )
-              , MaxPallet       = MAX( X.MaxPallet )
-              , Div             = ISNULL( RTRIM( MAX( X.Div ) ),'')
-              , Brand           = RTRIM( MAX( X.Brand ) )
-              , FullPalletReplen= MAX( X.FullPalletReplen )
-         FROM (
-            SELECT DPLoc           = RTRIM( PD.ToLoc )
-                 , Sku             = RTRIM( PD.Sku )
-                 , Lot             = RTRIM( PD.Lot )
-                 , ID              = RTRIM( PD.ID )
-                 , DropID          = RTRIM( PD.DropID )
-                 , ReplenishmentKey= RP.ReplenishmentKey
-                 , OH_Status       = OH.Status
-                 , Facility        = RTRIM( MAX( TOLOC.Facility ) )
-                 , LocAisle        = RTRIM( MAX( TOLOC.LocAisle ) )
-                 , PutawayZone     = RTRIM( MAX( TOLOC.PutawayZone ) )
-                 , LogicalLocation = RTRIM( MAX( TOLOC.LogicalLocation ) )
-                 , PA_Descr        = RTRIM( MAX( TOPA.Descr ) )
-                 , PA_Floor        = RTRIM( MAX( TOPA.Floor ) )
-                 , CubicCapacity   = MAX( TOLOC.CubicCapacity )
-                 , StdCube         = MAX( SKU.StdCube )
-                 , Qty             = CASE WHEN RP.ReplenishmentKey IS NULL THEN IIF(OH.Status < '3', SUM(PD.Qty), 0)
-                                          WHEN MAX(RP.Confirmed) <> 'Y'    THEN IIF(OH.Status < '3', MAX(RP.Qty), 0)
-                                          ELSE                                  IIF(OH.Status < '3', 0, -MAX(RP.Qty))
-                                     END
-                 , MaxPallet       = MAX( TOLOC.MaxPallet )
-                 , Div             = RTRIM( MAX( IIF( BRD.Long='LPD', BRD.Notes, BRD.Long ) ) )
-                 , Brand           = RTRIM( MAX( BRD.Notes ) )
-                 , FullPalletReplen= MAX( IIF(PD.DropID LIKE '%-F%', 'Y', 'N') )
-              FROM dbo.ORDERS          OH (NOLOCK)
-              JOIN dbo.PICKDETAIL      PD (NOLOCK) ON PD.Orderkey = OH.Orderkey
-              JOIN dbo.SKU            SKU (NOLOCK) ON SKU.Storerkey = PD.Storerkey AND SKU.SKU = PD.SKU
-              JOIN dbo.LOC          FRLOC (NOLOCK) ON FRLOC.Loc = PD.Loc
-              JOIN dbo.LOC          TOLOC (NOLOCK) ON TOLOC.Loc = PD.ToLoc
-              JOIN dbo.PUTAWAYZONE   TOPA (NOLOCK) ON TOLOC.PutawayZone = TOPA.PutawayZone
-              LEFT JOIN dbo.REPLENISHMENT   RP (NOLOCK) ON RP.Storerkey = PD.Storerkey AND RP.RefNo = PD.DropID AND RP.ReplenishmentGroup = @c_ReplenGroup
-              LEFT JOIN dbo.CODELKUP  BRD (NOLOCK) ON BRD.LISTNAME = 'LORBRAND' AND BRD.Description = SKU.CLASS AND BRD.Short = SKU.BUSR3 AND BRD.Storerkey = SKU.Storerkey
-             WHERE OH.Storerkey = @c_Storerkey
-               AND FRLOC.Facility = @c_Facility
-               AND FRLOC.LocationType <> @c_DP_LocationType
-               AND TOLOC.Facility = @c_Facility
-               AND TOLOC.LocationType = @c_DP_LocationType
-               AND @c_Key <> ''
-               AND IIF(@c_Type='WP', OH.Userdefine09, IIF(@c_Type='LP', OH.LoadKey, '')) <> @c_Key
-               AND PD.Status < '5'
-             GROUP BY PD.ToLoc, PD.Sku, PD.Lot, PD.ID, PD.DropID, RP.ReplenishmentKey, OH.Status
-         ) X
-         GROUP BY X.DPLoc, X.Sku, X.Lot, X.ID, X.DropID
-      ) Z
-      GROUP BY DPLoc, Sku, Lot, ID, DropID, Type
+      SELECT TOP 1
+             @c_Replen_JoinClause = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y' AND ISNULL(UDF02,'')='Replen'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_DivExp             = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Div')), '' )
+           , @c_BrandExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Brand')), '' )
+           , @c_CaseCntExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='CaseCnt')), '' )
+           , @c_Replen_DivExp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Replen_Div')), '' )
+           , @c_Replen_BrandExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Replen_Brand')), '' )
+           , @c_Replen_CaseCntExp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Replen_CaseCnt')), '' )
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+
+      IF ISNULL(@c_Replen_JoinClause, '')='' SET @c_Replen_JoinClause = @c_JoinClause
+      IF ISNULL(@c_Replen_DivExp    , '')='' SET @c_Replen_DivExp     = @c_DivExp
+      IF ISNULL(@c_Replen_BrandExp  , '')='' SET @c_Replen_BrandExp   = @c_BrandExp
+      IF ISNULL(@c_Replen_CaseCntExp, '')='' SET @c_Replen_CaseCntExp = @c_CaseCntExp
+
+
+      -- Get Outstanding Pickdetails
+      SET @c_ExecStatements =
+         N'INSERT INTO #TEMP_DPLOC ('
+           + ' DPLoc, Sku, Lot, ID, DropID, Type, Facility, LocAisle, PutawayZone, LogicalLocation,'
+           + ' PA_Descr, PA_Floor, CubicCapacity, CBM, Qty, MaxPallet, Div, Brand, FullPalletReplen)'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        + ' SELECT DPLoc, Sku, Lot, ID, DropID, Type,'
+        +      ' MAX(Facility), MAX(LocAisle), MAX(PutawayZone), MAX(LogicalLocation),'
+        +      ' MAX(PA_Descr), MAX(PA_Floor), MAX(CubicCapacity), SUM(CBM), SUM(Qty), MAX(MaxPallet),'
+        +      ' MAX(Div), MAX(Brand), MAX(FullPalletReplen)'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        + ' FROM ('
+        +    ' SELECT DPLoc           = RTRIM( LOC.Loc )'
+        +          ', Sku             = RTRIM( ISNULL(LLI.Sku,'''') )'
+        +          ', Lot             = RTRIM( ISNULL(LLI.Lot,'''') )'
+        +          ', ID              = RTRIM( ISNULL(LLI.ID ,'''') )'
+        +          ', DropID          = '''''
+        +          ', Type            = ''1'''
+        +          ', Facility        = RTRIM( MAX( LOC.Facility ) )'
+        +          ', LocAisle        = RTRIM( MAX( ISNULL(LOC.LocAisle,'''') ) )'
+        +          ', PutawayZone     = RTRIM( MAX( LOC.PutawayZone ) )'
+        +          ', LogicalLocation = RTRIM( MAX( LOC.LogicalLocation ) )'
+        +          ', PA_Descr        = RTRIM( MAX( ISNULL(PA.Descr,'''') ) )'
+        +          ', PA_Floor        = RTRIM( MAX( ISNULL(PA.Floor,'''') ) )'
+        +          ', CubicCapacity   = MAX( ISNULL( LOC.CubicCapacity, 0) )'
+        +          ', CBM             = SUM( ISNULL(LLI.Qty - LLI.QtyPicked,0) * ISNULL(SKU.StdCube,0) )'
+        +          ', Qty             = SUM( ISNULL(LLI.Qty - LLI.QtyPicked,0) )'
+        +          ', MaxPallet       = MAX( ISNULL( LOC.MaxPallet, 0) )'
+      SET @c_ExecStatements = @c_ExecStatements
+        +          ', Div             = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_DivExp    ,'')<>'' THEN @c_Replen_DivExp     ELSE '''''' END + ','''')))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +          ', Brand           = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_BrandExp  ,'')<>'' THEN @c_Replen_BrandExp   ELSE '''''' END + ','''')))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +          ', FullPalletReplen= ''N'''
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +      ' FROM dbo.LOC              LOC (NOLOCK)'
+        +      ' JOIN dbo.PUTAWAYZONE       PA (NOLOCK) ON LOC.PutawayZone = PA.PutawayZone'
+        +      ' LEFT JOIN dbo.LOTxLOCxID  LLI (NOLOCK) ON LOC.Loc = LLI.Loc AND LLI.Qty > 0'
+        +      ' LEFT JOIN dbo.SKU         SKU (NOLOCK) ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +   CASE WHEN ISNULL(@c_Replen_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_Replen_JoinClause)),'') END
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +     ' WHERE LOC.Facility = @c_Facility'
+        +       ' AND LOC.LocationType = @c_DP_LocationType'
+        +     ' GROUP BY LOC.Loc'
+        +             ', ISNULL(LLI.Sku,'''')'
+        +             ', ISNULL(LLI.Lot,'''')'
+        +             ', ISNULL(LLI.ID ,'''')'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +    ' UNION ALL'
+
+        +    ' SELECT DPLoc           = RTRIM( X.DPLoc )'
+        +          ', Sku             = RTRIM( ISNULL( X.Sku ,'''') )'
+        +          ', Lot             = RTRIM( ISNULL( X.Lot ,'''') )'
+        +          ', ID              = RTRIM( ISNULL( X.ID ,'''') )'
+        +          ', DropID          = RTRIM( ISNULL( X.DropID ,'''') )'
+        +          ', Type            = ''1'''
+        +          ', Facility        = RTRIM( MAX( X.Facility ) )'
+        +          ', LocAisle        = RTRIM( MAX( X.LocAisle ) )'
+        +          ', PutawayZone     = RTRIM( MAX( X.PutawayZone ) )'
+        +          ', LogicalLocation = RTRIM( MAX( X.LogicalLocation ) )'
+        +          ', PA_Descr        = RTRIM( MAX( X.PA_Descr ) )'
+        +          ', PA_Floor        = RTRIM( MAX( X.PA_Floor ) )'
+        +          ', CubicCapacity   = MAX( X.CubicCapacity )'
+        +          ', CBM             = SUM( X.StdCube * X.Qty )'
+        +          ', Qty             = SUM( X.Qty )'
+        +          ', MaxPallet       = MAX( X.MaxPallet )'
+        +          ', Div             = ISNULL( RTRIM( MAX( X.Div ) ),'''')'
+        +          ', Brand           = RTRIM( MAX( X.Brand ) )'
+        +          ', FullPalletReplen= MAX( X.FullPalletReplen )'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +    ' FROM ('
+        +       ' SELECT DPLoc           = RTRIM( PD.ToLoc )'
+        +             ', Sku             = RTRIM( PD.Sku )'
+        +             ', Lot             = RTRIM( PD.Lot )'
+        +             ', ID              = RTRIM( PD.ID )'
+        +             ', DropID          = RTRIM( PD.DropID )'
+        +             ', ReplenishmentKey= RP.ReplenishmentKey'
+        +             ', OH_Status       = OH.Status'
+        +             ', Facility        = RTRIM( MAX( TOLOC.Facility ) )'
+        +             ', LocAisle        = RTRIM( MAX( TOLOC.LocAisle ) )'
+        +             ', PutawayZone     = RTRIM( MAX( TOLOC.PutawayZone ) )'
+        +             ', LogicalLocation = RTRIM( MAX( TOLOC.LogicalLocation ) )'
+        +             ', PA_Descr        = RTRIM( MAX( TOPA.Descr ) )'
+        +             ', PA_Floor        = RTRIM( MAX( TOPA.Floor ) )'
+        +             ', CubicCapacity   = MAX( TOLOC.CubicCapacity )'
+        +             ', StdCube         = MAX( SKU.StdCube )'
+        +             ', Qty             = CASE WHEN RP.ReplenishmentKey IS NULL THEN IIF(OH.Status < ''3'', SUM(PD.Qty), 0)'
+        +                                     ' WHEN MAX(RP.Confirmed) <> ''Y''  THEN IIF(OH.Status < ''3'', MAX(RP.Qty), 0)'
+        +                                     ' ELSE                                  IIF(OH.Status < ''3'', 0, -MAX(RP.Qty))'
+        +                                ' END'
+        +             ', MaxPallet       = MAX( TOLOC.MaxPallet )'
+      SET @c_ExecStatements = @c_ExecStatements
+        +             ', Div             = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_DivExp    ,'')<>'' THEN @c_Replen_DivExp     ELSE '''''' END + ','''')))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +             ', Brand           = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_Replen_BrandExp  ,'')<>'' THEN @c_Replen_BrandExp   ELSE '''''' END + ','''')))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +             ', FullPalletReplen= MAX( IIF(PD.DropID LIKE ''%-F%'', ''Y'', ''N'') )'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +         ' FROM dbo.ORDERS          OH (NOLOCK)'
+        +         ' JOIN dbo.PICKDETAIL      PD (NOLOCK) ON PD.Orderkey = OH.Orderkey'
+        +         ' JOIN dbo.SKU            SKU (NOLOCK) ON SKU.Storerkey = PD.Storerkey AND SKU.SKU = PD.SKU'
+        +         ' JOIN dbo.LOC          FRLOC (NOLOCK) ON FRLOC.Loc = PD.Loc'
+        +         ' JOIN dbo.LOC          TOLOC (NOLOCK) ON TOLOC.Loc = PD.ToLoc'
+        +         ' JOIN dbo.PUTAWAYZONE   TOPA (NOLOCK) ON TOLOC.PutawayZone = TOPA.PutawayZone'
+        +         ' LEFT JOIN dbo.REPLENISHMENT   RP (NOLOCK) ON RP.Storerkey = PD.Storerkey AND RP.RefNo = PD.DropID AND RP.ReplenishmentGroup = @c_ReplenGroup'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +   CASE WHEN ISNULL(@c_Replen_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_Replen_JoinClause)),'') END
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +        ' WHERE OH.Storerkey = @c_Storerkey'
+        +          ' AND FRLOC.Facility = @c_Facility'
+        +          ' AND FRLOC.LocationType <> @c_DP_LocationType'
+        +          ' AND TOLOC.Facility = @c_Facility'
+        +          ' AND TOLOC.LocationType = @c_DP_LocationType'
+        +          ' AND @c_Key <> '''''
+        +          ' AND IIF(@c_Type=''WP'', OH.Userdefine09, IIF(@c_Type=''LP'', OH.LoadKey, '''')) <> @c_Key'
+        +          ' AND PD.Status < ''5'''
+        +        ' GROUP BY PD.ToLoc, PD.Sku, PD.Lot, PD.ID, PD.DropID, RP.ReplenishmentKey, OH.Status'
+        +    ' ) X'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +    ' GROUP BY X.DPLoc'
+        +            ', ISNULL( X.Sku ,'''')'
+        +            ', ISNULL( X.Lot ,'''')'
+        +            ', ISNULL( X.ID ,'''')'
+        +            ', ISNULL( X.DropID ,'''')'
+        + ' ) Z'
+        + ' GROUP BY DPLoc, Sku, Lot, ID, DropID, Type'
+
+      SET @c_ExecArguments = N'@c_Storerkey       NVARCHAR(15)'
+                           + ',@c_Facility        NVARCHAR(5)'
+                           + ',@c_Key             NVARCHAR(10)'
+                           + ',@c_Type            NVARCHAR(2)'
+                           + ',@c_DP_LocationType NVARCHAR(10)'
+                           + ',@c_ReplenGroup     NVARCHAR(10)'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_Storerkey
+                       , @c_Facility
+                       , @c_Key
+                       , @c_Type
+                       , @c_DP_LocationType
+                       , @c_ReplenGroup
 
 
       INSERT INTO #TEMP_DPLOC (
@@ -987,7 +1423,12 @@ BEGIN
          END
 
          -- Check Replen Zone
-         IF @c_PA_Floor = 'VNA'     -- VNA zones
+         IF @c_GenReplenALL = 'Y' AND ISNULL(@c_DPLoc_ReplenALL,'')<>'' -- Replen ALL
+         BEGIN
+            SET @c_ReplenType = 'A'
+            SET @n_ReplenQty  = @n_AllocQty
+         END
+         ELSE IF @c_PA_Floor = 'VNA'     -- VNA zones
          BEGIN
             SET @c_ReplenType = 'V'
             IF @c_ShowFields LIKE '%,ReplenExactQtyVNA,%' OR @c_ShowFields LIKE '%,NoGenReplenVNA,%'
@@ -1067,22 +1508,29 @@ BEGIN
             SET @n_ReplenQty = @n_AllocQty
 
          IF @b_debug=1
-            SELECT Action         = 'Replen'
-                 , c_SKU          = @c_SKU
-                 , c_LOT          = @c_LOT
-                 , c_LOC          = @c_LOC
-                 , c_ID           = @c_ID
-                 , n_CaseCnt      = @n_CaseCnt
-                 , n_AllocQty     = @n_AllocQty
-                 , c_Div          = @c_Div
-                 , c_Brand        = @c_Brand
-                 , n_StdCube      = @n_StdCube
-                 , c_PA_Floor     = @c_PA_Floor
-                 , c_LocAisle     = @c_LocAisle
-                 , c_PackKey      = @c_PackKey
-                 , c_PackUOM3     = @c_PackUOM3
-                 , n_AvailableQty = @n_AvailableQty
-                 , n_ReplenQty    = @n_ReplenQty
+            SELECT Action             = 'Replen'
+                 , c_ReplenType       = @c_ReplenType
+                 , c_Storerkey        = @c_Storerkey
+                 , c_Facility         = @c_Facility
+                 , c_SKU              = @c_SKU
+                 , c_LOT              = @c_LOT
+                 , c_LOC              = @c_LOC
+                 , c_ID               = @c_ID
+                 , n_CaseCnt          = @n_CaseCnt
+                 , n_AllocQty         = @n_AllocQty
+                 , c_Div              = @c_Div
+                 , c_Brand            = @c_Brand
+                 , n_StdCube          = @n_StdCube
+                 , c_PA_Floor         = @c_PA_Floor
+                 , c_LocAisle         = @c_LocAisle
+                 , c_PackKey          = @c_PackKey
+                 , c_PackUOM3         = @c_PackUOM3
+                 , n_AvailableQty     = @n_AvailableQty
+                 , n_ReplenQty        = @n_ReplenQty
+                 , c_DPLoc_PAZone_SEL = @c_DPLoc_PAZone_SEL
+                 , c_DPLoc_PAZone_VNA = @c_DPLoc_PAZone_VNA
+                 , c_DPLoc_PAZone_FPR = @c_DPLoc_PAZone_FPR
+                 , c_DPLoc_ReplenALL  = @c_DPLoc_ReplenALL
 
          SET @n_RemainReplenQty = @n_ReplenQty
 
@@ -1120,6 +1568,8 @@ BEGIN
                     ) RP ON DP.DPLoc = RP.DPLoc
                    WHERE DP.LocAisle = @c_LocAisle
                      AND ISNULL(DP.PA_Floor,'') = 'VNA'
+                     AND (ISNULL(@c_DPLoc_PAZone_VNA,'')=''
+                       OR DP.PutawayZone IN (SELECT DISTINCT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@c_DPLoc_PAZone_VNA, ',') WHERE value<>''))
                      AND ( ISNULL(DP.CubicCapacity,0) = 0 OR @n_ReplenCtnCBM <= ISNULL(DP.CubicCapacity,0) - ISNULL(DP.CBM,0) - ISNULL(RP.ReplenCBM,0) )
                      AND ( ISNULL(DP.MaxPallet,0) = 0 OR ISNULL(DP.NoOfMoveID,0) + ISNULL(RP.NoOfMoveID,0) <= ISNULL(DP.MaxPallet,0) )
                 ) X
@@ -1156,11 +1606,18 @@ BEGIN
                      GROUP BY DPLoc
                  ) RP ON DP.DPLoc = RP.DPLoc
                 WHERE ISNULL(DP.PA_Floor,'') <> 'VNA'
+                  AND (ISNULL(@c_DPLoc_PAZone_FPR,'')=''
+                    OR DP.PutawayZone IN (SELECT DISTINCT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@c_DPLoc_PAZone_FPR, ',') WHERE value<>''))
                   AND ( DP.CubicCapacity = 0
                      OR ISNULL(DP.Qty,0) + ISNULL(RP.ReplenQty,0) = 0
                       )
                 ORDER BY IIF(DP.CubicCapacity > 0, 1, 2)
                        , DP.LogicalLocation, DP.DPLoc
+            END
+
+            ELSE IF @c_ReplenType = 'A'     -- Replen ALL
+            BEGIN
+               SELECT @c_DPLoc = @c_DPLoc_ReplenALL
             END
 
             ELSE     -- Selective Zones
@@ -1193,6 +1650,8 @@ BEGIN
                    WHERE ISNULL(DP.PA_Floor,'') <> 'VNA'
                      AND ISNULL(DP.FullPalletReplen,'') <> 'Y'
                      AND ISNULL(RP.FullPalletReplen,'') <> 'Y'
+                     AND (ISNULL(@c_DPLoc_PAZone_SEL,'')=''
+                       OR DP.PutawayZone IN (SELECT DISTINCT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@c_DPLoc_PAZone_SEL, ',') WHERE value<>''))
                      AND ( ISNULL(DP.CubicCapacity,0) = 0 OR @n_ReplenCtnCBM <= ISNULL(DP.CubicCapacity,0) - ISNULL(DP.CBM,0) - ISNULL(RP.ReplenCBM,0) )
                      AND ( ISNULL(DP.MaxPallet,0) = 0 OR ISNULL(DP.NoOfMoveID,0) + ISNULL(RP.NoOfMoveID,0) <= ISNULL(DP.MaxPallet,0) )
                 ) X
@@ -1406,8 +1865,9 @@ BEGIN
                            DEALLOCATE C_CUR_PICKDETAIL
                            CLOSE C_CUR_REPLENISHMENT_FINAL
                            DEALLOCATE C_CUR_REPLENISHMENT_FINAL
-                           RAISERROR ('Update Pickdetail Fail', 16, 1) WITH SETERROR
-                           GOTO QUIT
+
+                           INSERT INTO #TEMP_ERROR (ErrMsg) VALUES('ERROR: Update Pickdetail Fail')
+                           GOTO REPORT_RESULTSET
                         END
 
                         UPDATE dbo.PickDetail WITH (ROWLOCK)
@@ -1424,8 +1884,9 @@ BEGIN
                            DEALLOCATE C_CUR_PICKDETAIL
                            CLOSE C_CUR_REPLENISHMENT_FINAL
                            DEALLOCATE C_CUR_REPLENISHMENT_FINAL
-                           RAISERROR ('Update Pickdetail Fail', 16, 1) WITH SETERROR
-                           GOTO QUIT
+
+                           INSERT INTO #TEMP_ERROR (ErrMsg) VALUES('ERROR: Update Pickdetail Fail')
+                           GOTO REPORT_RESULTSET
                         END
                      END
                   END
@@ -1554,12 +2015,32 @@ BEGIN
                              , c_UOM        = @c_PackUOM3
                              , c_MoveRefKey = @c_MoveRefKey
 
-                     SET @c_LoseID = ''
-                     SELECT @c_LoseID = LoseID FROM dbo.LOC (NOLOCK) WHERE Loc = @c_Loc
+                     SELECT @b_UpdLoc       = 0
+                          , @c_LoseID       = ''
+                          , @c_CommingleSku = ''
+
+
+                     SELECT @c_LoseID = LoseID
+                          , @c_CommingleSku = CommingleSku
+                       FROM dbo.LOC (NOLOCK)
+                      WHERE Loc = @c_Loc
 
                      IF ISNULL(@c_LoseID,'') = '1'
                      BEGIN
+                        SET @b_UpdLoc = 1
                         UPDATE dbo.LOC WITH(ROWLOCK) SET LoseID = '0' WHERE Loc = @c_Loc
+                     END
+
+                     IF ISNULL(@c_CommingleSku,'') NOT IN ('1', 'Y')
+                     BEGIN
+                        IF EXISTS (SELECT TOP 1 1 FROM LOTxLOCxID LLI WITH (NOLOCK)
+                                    WHERE LLI.Loc = @c_Loc
+                                      AND  (LLI.Storerkey <> @c_Storerkey OR  LLI.Sku <> @c_Sku)
+                                      AND   LLI.Qty - LLI.QtyPicked > 0)
+                        BEGIN
+                           SET @b_UpdLoc = 1
+                           UPDATE dbo.LOC WITH(ROWLOCK) SET CommingleSku = '1' WHERE Loc = @c_Loc
+                        END
                      END
 
                      EXECUTE nspItrnAddMove
@@ -1608,9 +2089,12 @@ BEGIN
                         , @c_ErrMsg     = @c_ErrMsg OUTPUT
                         , @c_MoveRefKey = @c_MoveRefKey
 
-                     IF ISNULL(@c_LoseID,'') = '1'
+                     IF @b_UpdLoc = 1
                      BEGIN
-                        UPDATE dbo.LOC WITH(ROWLOCK) SET LoseID = '1' WHERE Loc = @c_Loc
+                        UPDATE dbo.LOC WITH(ROWLOCK)
+                           SET LoseID       = @c_LoseID
+                             , CommingleSku = @c_CommingleSku
+                         WHERE Loc = @c_Loc
                      END
                   END
 
@@ -1661,20 +2145,20 @@ BEGIN
       DEALLOCATE C_CUR_REPLENISHMENT_FINAL
    END
 
-   -- Clear Waveplan/Loadplan ReGenReplen flag (Userdefine02)
+   -- Clear Waveplan/Loadplan ReGenReplen/ReGenReplenALL flag (Userdefine02)
    IF ISNULL(@c_ReGenReplen,'')='Y'
    BEGIN
       IF @c_Type = 'WP'
          UPDATE dbo.WAVE WITH (ROWLOCK)
-            SET Userdefine02 = 'GenReplen'
+            SET Userdefine02 = SUBSTRING(Userdefine02,3,LEN(Userdefine02))
           WHERE Wavekey = @c_Key
-            AND Userdefine02 = 'ReGenReplen'
+            AND Userdefine02 IN ('ReGenReplen', 'ReGenReplenALL')
       ELSE
       IF @c_Type = 'LP'
          UPDATE dbo.LOADPLAN WITH (ROWLOCK)
-            SET Userdefine02 = 'GenReplen'
+            SET Userdefine02 = SUBSTRING(Userdefine02,3,LEN(Userdefine02))
           WHERE Loadkey = @c_Key
-            AND Userdefine02 = 'ReGenReplen'
+            AND Userdefine02 IN ('ReGenReplen', 'ReGenReplenALL')
    END
 
    -- Clear Waveplan/Loadplan NoGenReplen flag (Userdefine02)
@@ -1695,67 +2179,181 @@ BEGIN
 
 
 REPORT_RESULTSET:
+   TRUNCATE TABLE #TEMP_PICKDETAILKEY
+   TRUNCATE TABLE #TEMP_RESULTSET
+
+   IF NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_ERROR)
+   BEGIN
+      INSERT INTO #TEMP_PICKDETAILKEY (PickdetailKey, Storerkey)
+      SELECT PickdetailKey = PD.PickdetailKey
+           , Storerkey     = MAX(PD.Storerkey)
+        FROM dbo.ORDERS          OH (NOLOCK)
+        JOIN dbo.PICKDETAIL      PD (NOLOCK) ON OH.Orderkey = PD.OrderKey
+        WHERE @c_Key <> ''
+         AND ( @c_Type = 'WP' OR @c_Type = 'LP' )
+         AND ((@c_Type = 'WP' AND OH.Userdefine09 = @c_Key)
+           OR (@c_Type = 'LP' AND OH.Loadkey      = @c_Key)
+             )
+         AND PD.DropID<>''
+         AND LEFT(PD.DropID,LEN(@c_MoveIDPrefix)) = @c_MoveIDPrefix
+       GROUP BY PD.PickdetailKey
+
+
+      -- Storerkey Loop
+      DECLARE C_CUR_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT Storerkey
+        FROM #TEMP_PICKDETAILKEY
+       ORDER BY 1
+
+      OPEN C_CUR_STORERKEY
+
+      WHILE 1=1
+      BEGIN
+         FETCH NEXT FROM C_CUR_STORERKEY
+          INTO @c_Storerkey
+
+         IF @@FETCH_STATUS<>0
+            BREAK
+
+         SELECT @c_JoinClause         = ''
+              , @c_DivExp             = ''
+              , @c_BrandExp           = ''
+              , @c_CaseCntExp         = ''
+
+         SELECT TOP 1
+                @c_JoinClause = Notes
+           FROM dbo.CodeLkup (NOLOCK)
+          WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y' AND ISNULL(UDF02,'')=''
+            AND Storerkey = @c_Storerkey
+          ORDER BY Code2
+
+         SELECT TOP 1
+                @c_DivExp             = ISNULL(RTRIM((select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='Div')), '' )
+              , @c_BrandExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='Brand')), '' )
+              , @c_CaseCntExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='CaseCnt')), '' )
+           FROM dbo.CodeLkup (NOLOCK)
+          WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
+            AND Storerkey = @c_Storerkey
+          ORDER BY Code2
+
+
+         SET @c_ExecStatements =
+            N'INSERT INTO #TEMP_RESULTSET ('
+              + ' ReplenishmentKey, ReplenNo, Div, PutawayZone, Facility, StorerKey, Sku, Descr, AltSku, LogicalLocation'
+              +', FromLoc, FromID, ToFacility, ToLoc, DropID, Lottable02, Lottable04, PackKey, CaseCnt, PACKUOM1'
+              +', PACKUOM3, AllocQty, ReplenQty, PA_LoosePiece, UserName, datawindow, ReplenType, PA_Descr, Brand, Lot'
+              +', TOLOC_LocationType, FromID_Long, ShowFields)'
+
+         SET @c_ExecStatements = @c_ExecStatements
+           + ' SELECT ReplenishmentKey = RTRIM ( ISNULL(RP.ReplenishmentKey, '''') )'
+           +       ', ReplenNo         = RTRIM ( @c_Key )'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', Div              = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_DivExp,'')<>'' THEN @c_DivExp ELSE '''''' END + ','''')))'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', PutawayZone      = RTRIM ( MAX ( FRLOC.PutawayZone ) )'
+           +       ', Facility         = RTRIM ( MAX ( FRLOC.Facility ) )'
+           +       ', StorerKey        = RTRIM ( MAX ( PD.StorerKey ) )'
+           +       ', Sku              = RTRIM ( MAX ( PD.Sku ) )'
+           +       ', Descr            = RTRIM ( MAX ( SKU.Descr ) )'
+           +       ', AltSku           = RTRIM ( MAX ( ISNULL(SKU.AltSku, '''') ) )'
+           +       ', LogicalLocation  = RTRIM ( MAX ( FRLOC.LogicalLocation ) )'
+           +       ', FromLoc          = RTRIM ( PD.Loc )'
+           +       ', FromID           = RTRIM ( PD.ID )'
+           +       ', ToFacility       = RTRIM ( MAX ( TOLOC.Facility ) )'
+           +       ', ToLoc            = RTRIM ( MAX ( PD.ToLoc ) )'
+           +       ', DropID           = RTRIM ( PD.DropID )'
+           +       ', Lottable02       = RTRIM ( MAX ( LA.Lottable02 ) )'
+           +       ', Lottable04       = MAX ( LA.Lottable04 )'
+           +       ', PackKey          = RTRIM ( MAX ( SKU.PackKey ) )'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', CaseCnt          = MAX( ISNULL(' + CASE WHEN ISNULL(@c_CaseCntExp  ,'')<>'' THEN @c_CaseCntExp ELSE 'PACK.CaseCnt' END + ',0))'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', PACKUOM1         = RTRIM ( IIF(ISNULL(MAX(PACK.PACKUOM1),'''')='''', ''CS'', MAX(PACK.PACKUOM1) ) )'
+           +       ', PACKUOM3         = RTRIM ( MAX ( PACK.PACKUOM3 ) )'
+           +       ', AllocQty         = SUM ( PD.Qty )'
+           +       ', ReplenQty        = ISNULL( MAX(RP.Qty), SUM(PD.Qty) )'
+           +       ', PA_LoosePiece    = ISNULL( MAX(RP.Qty), SUM(PD.Qty) ) - SUM ( PD.Qty )'
+           +       ', UserName         = RTRIM ( suser_sname() )'
+           +       ', datawindow       = @c_DataWindow'
+           +       ', ReplenType       = RTRIM ( @c_Type )'
+           +       ', PA_Descr         = RTRIM ( MAX ( FRPA.Descr ) )'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', Brand            = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_BrandExp,'')<>'' THEN @c_BrandExp ELSE '''''' END + ','''')))'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', Lot              = PD.Lot'
+           +       ', TOLOC_LocationType = MAX(TOLOC.LocationType)'
+           +       ', FromID_Long      = RTRIM ( MAX ( CASE WHEN ISNULL(ID.PalletFlag,'''')<>'''' AND LEFT(ID.PalletFlag,COLUMNPROPERTY(OBJECT_ID(''ID''), ''Id'', ''Precision''))=PD.ID'
+           +                                         ' THEN ID.PalletFlag ELSE PD.ID END ) )'
+           +       ', ShowFields       = MAX( RptCfg.ShowFields )'
+
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' FROM #TEMP_PICKDETAILKEY PDK'
+           +   ' JOIN dbo.PICKDETAIL      PD (NOLOCK) ON PDK.PickdetailKey = PD.PickdetailKey'
+           +   ' JOIN dbo.ORDERS          OH (NOLOCK) ON PD.Orderkey = OH.OrderKey'
+           +   ' JOIN dbo.SKU            SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.SKU = SKU.SKU'
+           +   ' JOIN dbo.PACK          PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey'
+           +   ' JOIN dbo.LOTATTRIBUTE    LA (NOLOCK) ON PD.Lot = LA.Lot'
+           +   ' JOIN dbo.LOC          FRLOC (NOLOCK) ON PD.Loc = FRLOC.Loc'
+           +   ' JOIN dbo.PUTAWAYZONE   FRPA (NOLOCK) ON FRLOC.PutawayZone = FRPA.PutawayZone'
+           +   ' JOIN dbo.LOC          TOLOC (NOLOCK) ON PD.ToLoc = TOLOC.Loc'
+           +   ' LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON PD.DropID = RP.RefNo'
+           +   ' LEFT JOIN dbo.ID            ID (NOLOCK) ON PD.Id = ID.Id'
+           +   ' LEFT JOIN ('
+           +   '    SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))'
+           +   '         , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+           +   '      FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWindow AND Short=''Y'''
+           +   ' ) RptCfg ON RptCfg.Storerkey=PD.Storerkey AND RptCfg.SeqNo=1'
+
+         SET @c_ExecStatements = @c_ExecStatements
+             + CASE WHEN ISNULL(@c_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_JoinClause)),'') END
+
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' WHERE PDK.Storerkey = @c_Storerkey'
+
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' GROUP BY RP.ReplenishmentKey, PD.Lot, PD.Loc, PD.ID, PD.DropID'
+
+
+         SET @c_ExecArguments = N'@c_DataWindow   NVARCHAR(40)'
+                              + ',@c_Key          NVARCHAR(10)'
+                              + ',@c_Type         NVARCHAR(2)'
+                              + ',@c_Storerkey    NVARCHAR(15)'
+
+         EXEC sp_ExecuteSql @c_ExecStatements
+                          , @c_ExecArguments
+                          , @c_DataWindow
+                          , @c_Key
+                          , @c_Type
+                          , @c_Storerkey
+      END
+      CLOSE C_CUR_STORERKEY
+      DEALLOCATE C_CUR_STORERKEY
+   END
 
    -- Result Set
-   SELECT ReplenishmentKey = RTRIM ( ISNULL(RP.ReplenishmentKey, '') )
-        , ReplenNo         = RTRIM ( @c_Key )
-        , Div              = RTRIM ( MAX ( BRD.Long ) )
-        , PutawayZone      = RTRIM ( MAX ( FRLOC.PutawayZone ) )
-        , Facility         = RTRIM ( MAX ( FRLOC.Facility ) )
-        , StorerKey        = RTRIM ( MAX ( PD.StorerKey ) )
-        , Sku              = RTRIM ( MAX ( PD.Sku ) )
-        , Descr            = RTRIM ( MAX ( SKU.Descr ) )
-        , AltSku           = RTRIM ( MAX ( ISNULL(SKU.AltSku, '') ) )
-        , LogicalLocation  = RTRIM ( MAX ( FRLOC.LogicalLocation ) )
-        , FromLoc          = RTRIM ( PD.Loc )
-        , FromID           = RTRIM ( PD.ID )
-        , ToFacility       = RTRIM ( MAX ( TOLOC.Facility ) )
-        , ToLoc            = RTRIM ( MAX ( PD.ToLoc ) )
-        , DropID           = RTRIM ( PD.DropID )
-        , Lottable02       = RTRIM ( MAX ( LA.Lottable02 ) )
-        , Lottable04       = MAX ( LA.Lottable04 )
-        , PackKey          = RTRIM ( MAX ( SKU.PackKey ) )
-        , CaseCnt          = MAX( CASE WHEN PACK.CaseCnt>0 THEN PACK.CaseCnt
-                                  WHEN TRY_PARSE( LA.Lottable06 AS INT)>0 THEN TRY_PARSE( LA.Lottable06 AS INT)
-                                  ELSE 0 END )
-        , PACKUOM1         = RTRIM ( IIF(ISNULL(MAX(PACK.PACKUOM1),'')='', 'CS', MAX(PACK.PACKUOM1) ) )
-        , PACKUOM3         = RTRIM ( MAX ( PACK.PACKUOM3 ) )
-        , AllocQty         = SUM ( PD.Qty )
-        , ReplenQty        = ISNULL( MAX(RP.Qty), SUM(PD.Qty) )
-        , PA_LoosePiece    = ISNULL( MAX(RP.Qty), SUM(PD.Qty) ) - SUM ( PD.Qty )
-        , UserName         = RTRIM ( suser_sname() )
-        , datawindow       = @c_DataWindow
-        , ReplenType       = RTRIM ( @c_Type )
-        , PA_Descr         = RTRIM ( MAX ( FRPA.Descr ) )
-        , Brand            = RTRIM ( MAX ( BRD.Notes ) )
-        , Lot              = PD.Lot
-        , TOLOC_LocationType = MAX(TOLOC.LocationType)
-        , FromID_Long      = RTRIM ( MAX ( CASE WHEN ISNULL(ID.PalletFlag,'')<>'' AND LEFT(ID.PalletFlag,COLUMNPROPERTY(OBJECT_ID('ID'), 'Id', 'Precision'))=PD.ID
-                                           THEN ID.PalletFlag ELSE PD.ID END ) )
+   SELECT ReplenishmentKey, ReplenNo, Div, PutawayZone, Facility, StorerKey, Sku, Descr, AltSku, LogicalLocation
+        , FromLoc, FromID, ToFacility, ToLoc, DropID, Lottable02, Lottable04, PackKey, CaseCnt, PACKUOM1
+        , PACKUOM3, AllocQty, ReplenQty, PA_LoosePiece, UserName, datawindow, ReplenType, PA_Descr, Brand, Lot
+        , TOLOC_LocationType, FromID_Long, ShowFields
+        , ErrSeq = NULL, ErrMsg = NULL
+     FROM #TEMP_RESULTSET
 
-     FROM dbo.ORDERS          OH (NOLOCK)
-     JOIN dbo.PICKDETAIL      PD (NOLOCK) ON OH.Orderkey = PD.OrderKey
-     JOIN dbo.SKU            SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.SKU = SKU.SKU
-     JOIN dbo.PACK          PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
-     JOIN dbo.LOTATTRIBUTE    LA (NOLOCK) ON PD.Lot = LA.Lot
-     JOIN dbo.LOC          FRLOC (NOLOCK) ON PD.Loc = FRLOC.Loc
-     JOIN dbo.PUTAWAYZONE   FRPA (NOLOCK) ON FRLOC.PutawayZone = FRPA.PutawayZone
-     JOIN dbo.LOC          TOLOC (NOLOCK) ON PD.ToLoc = TOLOC.Loc
-     LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON PD.DropID = RP.RefNo
-     LEFT JOIN dbo.CODELKUP     BRD (NOLOCK) ON BRD.LISTNAME = 'LORBRAND' AND BRD.Description = SKU.CLASS AND BRD.Short = SKU.BUSR3 AND BRD.Storerkey = SKU.Storerkey
-     LEFT JOIN dbo.ID            ID (NOLOCK) ON PD.Id = ID.Id
+   UNION ALL
 
-    WHERE @c_Key <> ''
-      AND ( @c_Type = 'WP' OR @c_Type = 'LP' )
-      AND ((@c_Type = 'WP' AND OH.Userdefine09 = @c_Key)
-        OR (@c_Type = 'LP' AND OH.Loadkey      = @c_Key)
-          )
-      AND PD.DropID<>''
-      AND LEFT(PD.DropID,LEN(@c_MoveIDPrefix)) = @c_MoveIDPrefix
+   SELECT NULL, RTRIM(@c_Key), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+        , NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+        , NULL, NULL, NULL, NULL, NULL, @c_DataWindow, RTRIM(@c_Type), NULL, NULL, NULL
+        , NULL, NULL, NULL
+        , ErrSeq, ErrMsg
+     FROM #TEMP_ERROR
 
-    GROUP BY RP.ReplenishmentKey, PD.Lot, PD.Loc, PD.ID, PD.DropID
-
-    ORDER BY ReplenNo, Div, PA_Descr, PutawayZone, LogicalLocation, FromLoc, DropID
+    ORDER BY ReplenNo, Div, PA_Descr, PutawayZone, LogicalLocation, FromLoc, DropID, ErrSeq
 
 QUIT:
    WHILE @@TRANCOUNT > @n_StartTCnt
