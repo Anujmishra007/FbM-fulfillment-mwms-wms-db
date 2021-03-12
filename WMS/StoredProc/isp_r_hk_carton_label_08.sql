@@ -23,14 +23,16 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 03/08/2020   Michael  1.1  Handle print from RDT                      */
+/*                            Add DocType, BuyerPO & Brand for EComm     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_08] (
        @as_PickSlipNo         NVARCHAR(40)
      , @as_StartCartonNo      NVARCHAR(40)
      , @as_EndCartonNo        NVARCHAR(40)
-     , @as_StartLabelNo       NVARCHAR(40)
-     , @as_EndLabelNo         NVARCHAR(40)
+     , @as_StartLabelNo       NVARCHAR(40) = ''
+     , @as_EndLabelNo         NVARCHAR(40) = ''
 )
 AS
 BEGIN
@@ -84,6 +86,9 @@ BEGIN
         , Qty            = PAK.Qty
         , ConsolPick     = RTRIM( ORD.ConsolPick )
         , Storer_Logo    = RTRIM( RL.Notes )
+        , DocType        = RTRIM( ORD.DocType )
+        , BuyerPO        = RTRIM( ORD.BuyerPO )
+        , Brand          = RTRIM( ORD.Brand )
    INTO #TEMP_PACKDETAIL
    FROM
    (
@@ -107,6 +112,14 @@ BEGIN
            , SUSR3          = ST2.SUSR3
            , ConsolPick     = PIKHD.ConsolPick
            , SeqNo          = ROW_NUMBER() OVER(PARTITION BY PIKHD.PickheaderKey ORDER BY OH.Orderkey)
+           , DocType        = OH.DocType
+           , BuyerPO        = OH.BuyerPO
+           , Brand          = (SELECT TOP 1 c.Notes
+                               FROM dbo.ORDERDETAIL a(NOLOCK)
+                               JOIN dbo.SKU         b(NOLOCK) ON a.Storerkey=b.Storerkey AND a.Sku=b.Sku
+                               JOIN dbo.CODELKUP    c(NOLOCK) ON c.LISTNAME='LORBRAND' AND b.Class=c.Description AND b.Storerkey=c.Storerkey
+                               WHERE a.Orderkey = PIKHD.Orderkey
+                               ORDER BY a.OrderLineNumber)
         FROM (
            SELECT DISTINCT
                   PickheaderKey = PH.PickheaderKey
@@ -143,8 +156,8 @@ BEGIN
          AND PD.PickSlipNo = @as_PickSlipNo
          AND PD.CartonNo >= CAST(@as_StartCartonNo AS INT)
          AND PD.CartonNo <= CAST(@as_EndCartonNo AS INT)
-         AND PD.LabelNo >= @as_StartLabelNo
-         AND PD.LabelNo <= @as_EndLabelNo
+--         AND PD.LabelNo >= @as_StartLabelNo
+--         AND PD.LabelNo <= @as_EndLabelNo
        GROUP BY PD.PickSlipNo
               , PD.CartonNo
               , PD.LabelNo
@@ -154,7 +167,7 @@ BEGIN
    LEFT JOIN dbo.CODELKUP RL (NOLOCK) ON RL.Listname = 'RPTLOGO' AND RL.Code='LOGO' AND RL.Storerkey = ORD.Storerkey AND RL.Long = @c_DataWidnow
 
 
-   IF @@ROWCOUNT > 0 AND ISNULL(@c_JobName,'')<>''
+   IF @@ROWCOUNT > 0 AND ISNULL(@c_JobName,'')<>'' AND ISNULL(@as_StartLabelNo,'') <> ''
    BEGIN
       DECLARE C_PRINTLOG CURSOR FAST_FORWARD READ_ONLY FOR
        SELECT DISTINCT a.PickslipNo, a.CartonNo, a.LabelNo, a.Orderkey, a.ExternOrderkey, a.Storerkey
@@ -222,6 +235,9 @@ BEGIN
         , Qty
         , ConsolPick
         , Storer_Logo
+        , DocType
+        , BuyerPO
+        , Brand
      FROM #TEMP_PACKDETAIL
     ORDER BY PickslipNo, CartonNo
 
