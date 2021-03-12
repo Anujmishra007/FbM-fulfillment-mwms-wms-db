@@ -30,7 +30,8 @@ GO
 /* 30-Aug-2017  Leong   1.2   fix @c_UOMBase to @n_uombase.             */
 /* 01-Jun-2018 NJOW01   1.3   WMS-5194 add lottable06-15                */  
 /* 18-Nov-2019  Wan01   1.4   Dynamic SQL review, impact SQL cache log  */  
-/* 03-Jan-2020  CheeMun 1.5   INC0994141 - Revised Dynamic SQL          */                          
+/* 03-Jan-2020  CheeMun 1.5   INC0994141 - Revised Dynamic SQL          */       
+/* 11-Mar-2021  LZG     1.6   INC1450421-Extended variable length (ZG01)*/                     
 /************************************************************************/
 
 CREATE PROC [dbo].[nspPR_HK4B]
@@ -63,8 +64,8 @@ DECLARE @b_success      int
       , @c_errmsg       NVARCHAR(250)
       , @b_debug        int
       , @c_manual       NVARCHAR(1)
-      , @c_LimitString  NVARCHAR(255) -- To limit the where clause based on the user input
-      , @c_Limitstring1 NVARCHAR(255)
+      , @c_LimitString  NVARCHAR(1000) -- ZG01 -- To limit the where clause based on the user input  
+      , @c_Limitstring1 NVARCHAR(1000) -- ZG01
       , @n_shelflife    int
 
 -- Added By SHONG 23.May.2002
