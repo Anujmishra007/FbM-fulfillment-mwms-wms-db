@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_stocktake_report_01c]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_stocktake_report_01c]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_stocktake_report_01c]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 21/11/2019   ML       1.1  Add Variance Filter 3=SKUxLOCxID           */
+/* 20/11/2019   ML       1.2  Remove DMQA Zone Filter                    */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_stocktake_report_01c] (
@@ -111,13 +112,14 @@ BEGIN
      AND @as_countno <= STP.FinalizeStage+1
      AND ( ISNULL(@as_facility,'')='' OR LOC.Facility IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@as_facility,char(13)+char(10),',')) WHERE ColValue<>'') )
      AND ( ISNULL(@as_sku,'')='' OR CC.Sku IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@as_sku,char(13)+char(10),',')) WHERE ColValue<>'') )
-     AND IIF(ISNULL(@as_dmqazone,'')='Y','Y','N') = IIF(ISNULL(@as_expect_dmqazone,'')='Y','Y','N')
+--     AND IIF(ISNULL(@as_dmqazone,'')='Y','Y','N') = IIF(ISNULL(@as_expect_dmqazone,'')='Y','Y','N')
      AND @as_var_filter IN ('1', '2', '3')
      AND ( IIF(ISNULL(@as_cntsht_bysku,'')='','N',@as_cntsht_bysku) = IIF(ISNULL(@as_expect_bysku,'')='','N',@as_expect_bysku) )
 
 
 
    -- Storerkey Loop
+/*
    DECLARE C_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT Storerkey
      FROM #TEMP_CCDETAIL
@@ -166,6 +168,7 @@ BEGIN
 
    CLOSE C_STORERKEY
    DEALLOCATE C_STORERKEY
+*/
 
 
    SELECT Z.*
