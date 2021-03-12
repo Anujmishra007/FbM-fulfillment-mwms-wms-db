@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenishment_fpa_pickslip]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenishment_fpa_pickslip]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_replenishment_fpa_pickslip]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 2019-10-04   ML       1.1  Check Userdefine08=N when Type=LP          */
+/* 2020-11-30   ML       1.2  Add ShowFields to result set               */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_replenishment_fpa_pickslip] (
@@ -42,6 +43,7 @@ BEGIN
 /* CODELKUP.REPORTCFG
    [SHOWFIELD]
       DefaultRDTPick, AllowUserChangePickMethod
+      Code39
 */
 
    DECLARE @c_DataWindow   NVARCHAR(40)
@@ -251,6 +253,7 @@ BEGIN
         , ExtendedField02   = RTRIM( SI.ExtendedField02 )
         , datawindow        = @as_DataWindow
         , Report_Logo       = CASE WHEN RL.Notes<>'' THEN RTRIM( RL.Notes ) END
+        , ShowFields        = RTRIM( ISNULL(RptCfg.ShowFields, '') )
         , UseRDT            = CASE WHEN (ISNULL(RptCfg.ShowFields,'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(IIF(PH2.PickHeaderKey IS NOT NULL, LP.Userdefine03, WAVE.Userdefine03),'')='RDT')
                                      OR (ISNULL(RptCfg.ShowFields,'') LIKE '%,DefaultRDTPick,%'
                                          AND NOT (ISNULL(RptCfg.ShowFields,'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(IIF(PH2.PickHeaderKey IS NOT NULL, LP.Userdefine03, WAVE.Userdefine03),'')='PICKSLIP'))
@@ -353,6 +356,7 @@ BEGIN
         , ExtendedField02 = MAX( ExtendedField02 )
         , datawindow      = MAX( datawindow )
         , Report_Logo     = MAX( Report_Logo )
+        , ShowFields      = MAX( ShowFields )
 
    FROM #TEMP_RESULT X
 
