@@ -20,6 +20,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 06-OCT-2020  CSCHONG   1.1 WMS-15277 revised field mapping (CS01)    */
 /************************************************************************/  
   
 CREATE PROC isp_GetPickSlipOrders109  
@@ -58,7 +59,7 @@ BEGIN
          , @n_MaxLineno       INT
          , @n_PrnQty          INT
          , @n_MaxId           INT
-			, @n_MaxRec          INT
+         , @n_MaxRec          INT
          , @n_CurrentRec      INT
          , @n_Page            INT
          , @n_getPageno       INT
@@ -365,7 +366,7 @@ QUIT_SP:
             , OS.C_CONTACT1  
             , (SKU.STYLE + SKU.COLOR)
            -- , SKU.RetailSKU
-            , OD.Userdefine03
+            , OD.Userdefine01                   --CS01
             , ISNULL(CL3.NOTES,'') 
             , SUM(PID.Qty)
             , ISNULL(CL1.UDF01,'')
@@ -386,10 +387,10 @@ QUIT_SP:
       JOIN ORDERDETAIL OD(NOLOCK) ON OD.ORDERKEY = OS.ORDERKEY
       JOIN PICKDETAIL PID (NOLOCk) ON PID.Orderkey = OD.Orderkey AND PID.SKU = OD.SKU AND PID.OrderLineNumber = OD.OrderLineNumber
       JOIN SKU (NOLOCK) ON OD.SKU = SKU.SKU AND OD.STORERKEY = SKU.STORERKEY
-      LEFT JOIN CODELKUP CL1 (NOLOCK) ON OS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECDLMODE' and CL1.Code = OS.Shipperkey
+      LEFT JOIN CODELKUP CL1 (NOLOCK) ON OS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECDLMODE' and CL1.Code = OS.Shipperkey AND CL1.code2=''   --CS01
       LEFT JOIN CODELKUP CL2 (NOLOCK) ON OS.STORERKEY = CL2.STORERKEY AND CL2.LISTNAME ='PLATFORM' and CL2.Code = OI.Platform
-      LEFT JOIN CODELKUP CL3 (NOLOCK) ON OS.STORERKEY = CL3.STORERKEY AND CL3.LISTNAME ='REPORTCFG' and CL3.Code = '01'
-      LEFT JOIN CODELKUP CL4 (NOLOCK) ON OS.STORERKEY = CL4.STORERKEY AND CL4.LISTNAME ='REPORTCFG' and CL4.Code = '02'
+      LEFT JOIN CODELKUP CL3 (NOLOCK) ON OS.STORERKEY = CL3.STORERKEY AND CL3.LISTNAME ='REPORTCFG' and CL3.Code = OI.Platform and CL3.code2='01'     --CS01
+      LEFT JOIN CODELKUP CL4 (NOLOCK) ON OS.STORERKEY = CL4.STORERKEY AND CL4.LISTNAME ='REPORTCFG' and CL4.Code = OI.Platform and CL4.code2='02'     --CS01
       WHERE t.Loadkey = @c_Loadkey
       GROUP BY OS.ORDERKEY 
             , OS.OrderDate
@@ -398,7 +399,7 @@ QUIT_SP:
             , OS.EditDate 
             , OS.C_CONTACT1  
             , (SKU.STYLE + SKU.COLOR)
-            , OD.Userdefine03
+            , OD.Userdefine01                         --CS01
             , ISNULL(CL3.NOTES,'')
             , ISNULL(CL1.UDF01,'')
             , OI.Ecomorderid
