@@ -9,7 +9,8 @@ GO
 /* Modifications log:                                                        */               
 /*                                                                           */               
 /* Date         Rev    Author    Purposes                                    */         
-/* 21-JAN-2021  1.0    CSCHONG   WMS-16082                                   */          
+/* 21-JAN-2021  1.0    CSCHONG   WMS-16082                                   */ 
+/* 05-MAR-2021  1.2    CSCHONG   Fix col11 mapping issue (CS02)              */         
 /*****************************************************************************/              
               
 CREATE PROC [dbo].[isp_BT_Bartender_UCCLBL_LEGO]                
@@ -454,8 +455,8 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
                
            
    UPDATE #Result              
-   SET  Col11 = @n_TTLpage,         
-     Col17 = @c_sku01,        
+   --SET  Col11 = @n_TTLpage,   --CS02      
+SET  Col17 = @c_sku01,        
      Col18 = @c_SKUQty01,              
      Col19 = @c_sku02,        
      Col20 = @c_SKUQty02,             
