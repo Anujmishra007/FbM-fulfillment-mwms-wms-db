@@ -25,6 +25,7 @@ GO
 /*                                     Orders.Type (WL01)               */
 /* 15-APR-2019  WLCHOOI   1.2 WMS-8682-Change MaxLineNo (WL02)          */
 /* 20-JAN-2021  WLCHOOI   1.3 WMS-16114 - Change MaxLineNo (WL03)       */
+/* 2021-03-05   CSCHONG   1.2 WMS-16402 - revised field logic (CS02)    */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_GetPickSlipOrders85_1]    
@@ -63,7 +64,7 @@ BEGIN
          , @n_MaxLineno       INT
          , @n_PrnQty          INT
          , @n_MaxId           INT
-			, @n_MaxRec          INT
+         , @n_MaxRec          INT
          , @n_CurrentRec      INT
          , @n_Page            INT
          , @n_getPageno       INT
@@ -111,7 +112,7 @@ BEGIN
       , Loadkey         NVARCHAR(10)   NOT NULL  
       , Orderkey        NVARCHAR(10)   NOT NULL  
       , DelDate         DATETIME
-	  , SHIPPERKEY      NVARCHAR(20)   NULL    
+     , SHIPPERKEY      NVARCHAR(20)   NULL    
       , ExternOrderkey  NVARCHAR(50)   NULL  
       , Notes           NVARCHAR(255)  NULL  
       , Loc             NVARCHAR(20)   NULL  
@@ -123,7 +124,7 @@ BEGIN
       , ODNotes2        NVARCHAR(255)  NULL  
       , Pageno          INT  
       , OIPlatform      NVARCHAR(40)  
-	   , CarrierCharges  FLOAT
+      , CarrierCharges  FLOAT
       )
       
       CREATE TABLE #TMP_PCK_185_1  
@@ -134,7 +135,7 @@ BEGIN
       , Loadkey         NVARCHAR(10)   NOT NULL  
       , Orderkey        NVARCHAR(10)   NOT NULL  
       , DelDate         DATETIME
-	   , SHIPPERKEY      NVARCHAR(20)   NULL    
+      , SHIPPERKEY      NVARCHAR(20)   NULL    
       , ExternOrderkey  NVARCHAR(50)   NULL  
       , Notes           NVARCHAR(255)  NULL  
       , Loc             NVARCHAR(20)   NULL  
@@ -146,7 +147,7 @@ BEGIN
       , ODNotes2        NVARCHAR(255)  NULL  
       , Pageno          INT  
       , OIPlatform      NVARCHAR(40)  
-	   , CarrierCharges  FLOAT
+      , CarrierCharges  FLOAT
       , recgroup        INT NULL
       , ShowNo          NVARCHAR(1)
       )    
@@ -384,7 +385,7 @@ QUIT_SP:
               , ODNotes2  
               , Pageno  
               , OIPlatform
-			  , CarrierCharges
+           , CarrierCharges
               )  
    SELECT #TMP_PCK_1.PickSlipNo  
          ,Contact1 = ISNULL(RTRIM(ORDERS.c_contact1),'')  
@@ -404,20 +405,21 @@ QUIT_SP:
          ,ODNotes2 =ISNULL(RTRIM(OD.Notes2),'')  
          ,pageno = 1  
          ,OIPlatform = ISNULL(CL1.UDF01,'')--ISNULL(OI.PLATFORM,'')    --CS01
-		   ,CarrierCharges = OI.CarrierCharges
+         ,CarrierCharges = OI.CarrierCharges
    FROM #TMP_PCK_1  
    JOIN STORER     WITH (NOLOCK) ON (#TMP_PCK_1.Storerkey = STORER.Storerkey)  
    JOIN ORDERS     WITH (NOLOCK) ON (#TMP_PCK_1.Orderkey  = ORDERS.Orderkey)  
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.orderkey = ORDERS.Orderkey  
    JOIN PICKDETAIL WITH (NOLOCK) ON (OD.Orderkey    = PICKDETAIL.Orderkey  
                                      AND PICKDETAIL.OrderLineNumber = OD.OrderLineNumber
-									 AND OD.SKU = PICKDETAIL.SKU)  
+                            AND OD.SKU = PICKDETAIL.SKU)  
    JOIN SKU        WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey)  
                                  AND(PICKDETAIL.Sku       = SKU.Sku)  
    LEFT JOIN ORDERINFO OI WITH (NOLOCK) ON OI.OrderKey = ORDERS.OrderKey  
    --LEFT JOIN CODELKUP CL1 (NOLOCK) ON ORDERS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECLOGISTP'       --(CS01)
    LEFT JOIN CODELKUP  CL1 (NOLOCK) ON OI.PLATFORM = CL1.CODE AND OD.LOTTABLE02 = CL1.CODE2                  --(CS01)
-   LEFT JOIN CODELKUP CL2 (NOLOCK) ON RTRIM(ORDERS.SHIPPERKEY) =  CL2.CODE AND CL2.LISTNAME = 'ECDLMODE'  AND CL2.STORERKEY = ORDERS.STORERKEY
+   LEFT JOIN CODELKUP CL2 (NOLOCK) ON RTRIM(ORDERS.SHIPPERKEY) =  CL2.CODE AND CL2.LISTNAME = 'ECDLMODE'  
+                                      AND CL2.STORERKEY = ORDERS.STORERKEY AND CL2.code2=''                   --(CS02)
    WHERE #TMP_PCK_1.PickSlipNo <> '' 
    --AND ORDERS.STATUS ='3'                  --CS01
    AND ORDERS.TYPE = 'ECOM' 
@@ -437,10 +439,10 @@ QUIT_SP:
          ,  ISNULL(CL2.UDF02,'')   
          ,  ISNULL(RTRIM(OD.Notes2),'')  
          ,  OI.CarrierCharges 
-		 ,  ISNULL(CL1.UDF01,'')--ISNULL(OI.PLATFORM,'')    --CS01  
+       ,  ISNULL(CL1.UDF01,'')--ISNULL(OI.PLATFORM,'')    --CS01  
    ORDER BY #TMP_PCK_1.PickSlipNo  
            ,#TMP_PCK_1.Orderkey 
-		   ,PICKDETAIL.Loc   
+         ,PICKDETAIL.Loc   
 
   DECLARE CUR_psno CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
   SELECT DISTINCT PICKSLIPNO,ORDERKEY
@@ -453,7 +455,7 @@ QUIT_SP:
   WHILE @@FETCH_STATUS <> -1
   BEGIN
       INSERT INTO #TMP_PCK_185_1
-		(PickSlipNo, Contact1, ODUDF03, Loadkey, Orderkey, DelDate, SHIPPERKEY, ExternOrderkey, Notes, Loc  
+      (PickSlipNo, Contact1, ODUDF03, Loadkey, Orderkey, DelDate, SHIPPERKEY, ExternOrderkey, Notes, Loc  
        , Storerkey, SKU, CUDF01, CUDF02, Qty, ODNotes2, Pageno, OIPlatform, CarrierCharges, RECGROUP, ShowNo)
       SELECT PickSlipNo, Contact1, ODUDF03, Loadkey, Orderkey, DelDate, SHIPPERKEY, ExternOrderkey, Notes, Loc  
        , Storerkey, SKU, CUDF01, CUDF02, Qty, ODNotes2, Pageno, OIPlatform, CarrierCharges,(Row_Number() OVER (PARTITION BY PickSlipNo,ORDERKEY  ORDER BY PickSlipNo,Orderkey,Loc Asc)-1)/@n_MaxLineno+1 AS recgroup
@@ -467,7 +469,7 @@ QUIT_SP:
   WHILE(@n_MaxRec % @n_MaxLineno <> 0 AND @n_CurrentRec < @n_MaxLineno)
   BEGIN
       INSERT INTO #TMP_PCK_185_1
-		(PickSlipNo, Contact1, Loadkey, Orderkey, DelDate, SHIPPERKEY, ExternOrderkey  
+      (PickSlipNo, Contact1, Loadkey, Orderkey, DelDate, SHIPPERKEY, ExternOrderkey  
        , Storerkey, CUDF01, CUDF02, Pageno, OIPlatform, CarrierCharges, RECGROUP,ShowNo)
       SELECT TOP 1 PickSlipNo, Contact1, Loadkey, Orderkey, DelDate, SHIPPERKEY, ExternOrderkey 
        , Storerkey, CUDF01, CUDF02, Pageno, OIPlatform, CarrierCharges, RECGROUP,'N'
