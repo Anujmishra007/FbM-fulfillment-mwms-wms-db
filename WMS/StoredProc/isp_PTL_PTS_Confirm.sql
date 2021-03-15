@@ -43,7 +43,8 @@ GO
 /* 11-06-2015 2.3  Ung      SOS337296 DPP PendingMoveIn booking by ID   */     
 /* 21-07-2016 2.4  ChewKP   SOS#373755-ANF WholeSale Project (ChewKP08) */  
 /* 24-02-2017 2.5  TLTING   Performance tune - Editwho, Editdate        */                            
-/* 30-07-2018 2.6  James    WMS-5814 Add eventlog (james01)             */                              
+/* 30-07-2018 2.6  James    WMS-5814 Add eventlog (james01)             */ 
+/* 26-02-2019 2.7  ChewKP   WMS-8056 - LF Light Link Migration          */                              
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_PTL_PTS_Confirm] (
@@ -141,6 +142,9 @@ BEGIN
           , @cLabelPrinter         NVARCHAR(10)
           , @cLabelType            NVARCHAR(30)
           , @cANFUserName          NVARCHAR(18) 
+          , @nFunc                 INT
+          , @bSuccess              INT
+          , @cIPAddress            NVARCHAR(40)
 
     DECLARE @c_NewLineChar NVARCHAR(2)
     SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharASCII(10) 
@@ -200,7 +204,7 @@ BEGIN
     SET @nRetryPA             = 0  -- (ChewKP07)  
     SET @cNoToLocFlag         = '' -- (ChewKP07)  
 
-
+    
     DECLARE @nMobile    INT
     DECLARE @nPD_Qty    INT
     DECLARE @nSUMPD_Qty INT
@@ -236,7 +240,8 @@ BEGIN
                   ,@nExpectedQty = PTL.ExpectedQty
                   ,@cSourceKey = SourceKey
                   ,@cUserName = EditWho
-    FROM dbo.PTLTran PTL WITH (NOLOCK)   
+                  ,@cIPAddress = IPAddress
+    FROM PTL.PTLTran PTL WITH (NOLOCK)   
     WHERE PTL.PTLKey = @nPTLKey
 
     SELECT @nMobile = Mobile
@@ -322,7 +327,7 @@ BEGIN
       AND Status = '5'
 
       SELECT @cToDropID = CaseID
-      FROM dbo.PTLTran WITH (NOLOCK)
+      FROM PTL.PTLTran WITH (NOLOCK)
       WHERE PTLKey = @nPTLKey
 
     SET @cDropIDType = 'TOTE'
@@ -331,7 +336,7 @@ BEGIN
 
     
 --    SELECT @nQty = Qty 
---    FROM dbo.PTLTRan WITH (NOLOCK)
+--    FROM PTL.PTLTran WITH (NOLOCK)
 --    WHERE PTLKey = @nPTLKey
     
     IF @cDropIDType = 'UCC'
@@ -340,7 +345,7 @@ BEGIN
                     , @cConsigneeKey = PTL.ConsigneeKey
                     , @cLoadKey = O.LoadKey
                     , @cOrderType = O.Type -- (ChewKP08)
-       FROM dbo.PTLTran PTL WITH (NOLOCK)
+       FROM PTL.PTLTran PTL WITH (NOLOCK)
        INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON  PD.DropID = PTL.DropID AND PD.SKU = PTL.SKU AND PTL.StorerKey = PD.StorerKey
        INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
        WHERE PTL.DeviceProfileLogKey = @cDeviceProfileLogKey
@@ -358,7 +363,7 @@ BEGIN
     ELSE IF @cDropIDType = 'TOTE'
     BEGIN
        SELECT @cConsigneeKey = PTL.ConsigneeKey
-       FROM dbo.PTLTran PTL WITH (NOLOCK)
+       FROM PTL.PTLTran PTL WITH (NOLOCK)
        INNER JOIN dbo.DeviceProfileLog DP WITH (NOLOCK) ON DP.DeviceProfileLogKey = PTL.DeviceProfileLogKey
        WHERE PTL.DeviceProfileLogKey = @cDeviceProfileLogKey
        AND PTL.StorerKey = @cStorerKey
@@ -424,7 +429,7 @@ BEGIN
 --       SELECT 
 --              PTL.SKU
 --            , PTL.CaseID
---       FROM dbo.PTLTran PTL WITH (NOLOCK)
+--       FROM PTL.PTLTran PTL WITH (NOLOCK)
 --       INNER JOIN dbo.DeviceProfileLog DL WITH (NOLOCK) ON DL.DeviceProfileLogKey = PTL.DeviceProfileLogKey AND DL.DropID = PTL.CaseID
 -- WHERE PTL.StorerKey           = @cStorerKey
 --         AND PTL.DropID              = @cDropID
@@ -438,7 +443,7 @@ BEGIN
        SELECT 
               PTL.SKU
             , PTL.CaseID
-       FROM dbo.PTLTran PTL WITH (NOLOCK)
+       FROM PTL.PTLTran PTL WITH (NOLOCK)
        WHERE 
          PTL.Status                  = '1'
          AND PTL.DeviceProfileLogKey = @cDeviceProfileLogKey
@@ -475,7 +480,7 @@ BEGIN
              
 --             SELECT @nTotalPackedQty = ISNULL(SUM(PTL.QTY),0)
 --             FROM   dbo.PACKDETAIL PCD WITH (NOLOCK)
---             INNER JOIN dbo.PTLTran PTL WITH (NOLOCK) ON PTL.CaseID = PCD.DropID
+--             INNER JOIN PTL.PTLTran PTL WITH (NOLOCK) ON PTL.CaseID = PCD.DropID
 --             --INNER JOIN dbo.DeviceProfileLog DL WITH (NOLOCK) ON DL.DeviceProfileLogKey = PTL.DeviceProfileLogKey
 --             WHERE  PCD.PickSlipNo          = @cPickSlipNo
 --             AND    PCD.StorerKey           = @cStorerKey 
@@ -526,7 +531,7 @@ BEGIN
                  AND SKU = @cSKU
                        
 
-            UPDATE PACKDETAIL WITH (ROWLOCK)
+                UPDATE PACKDETAIL WITH (ROWLOCK)
                   SET Qty = Qty + @nQty
                 WHERE PickSlipNo = @cPickSlipNo
                  AND DropID = @cCaseID
@@ -963,7 +968,7 @@ BEGIN
                         , PD.Lot
                         , PD.Loc
                         , Loc.LogicalLocation
-                , PD.ID
+                        , PD.ID
                         , O.UserDefine09
                      FROM dbo.PickDetail PD WITH (NOLOCK) 
                       INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
@@ -1121,7 +1126,7 @@ BEGIN
                            ,SystemQty  
                            ,Lot    
                            ,FromLoc 
-                         ,FromID    
+                           ,FromID    
                            ,ToLoc    
                            ,ToID    
                            ,SourceType    
@@ -1368,12 +1373,13 @@ BEGIN
       DECLARE CursorPackDetailTote CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
       
       SELECT DISTINCT PTL.DropID 
-      FROM dbo.PTLTran PTL WITH (NOLOCK)
+      FROM PTL.PTLTran PTL WITH (NOLOCK)
       WHERE PTL.DeviceProfileLogKey = @cDeviceProfileLogKey
       AND PTL.ConsigneeKey = @cConsigneeKey
       AND CaseID = @cToDropID
       AND PTL.Status = '1'
       AND PTL.PTLKey = @nPTLKey
+      AND PTL.StorerKey = @cStorerKey
       ORDER BY PTL.DropID
       
       
@@ -1389,7 +1395,7 @@ BEGIN
          
 --         SELECT PTL.SKU
 --         FROM dbo.DeviceProfileLog DL WITH (NOLOCK) 
---         INNER JOIN dbo.PTLTran PTL WITH (NOLOCK) ON PTL.DeviceProfileLogKey = DL.DeviceProfileLogKey AND PTL.ConsigneeKey = DL.ConsigneeKey
+--         INNER JOIN PTL.PTLTran PTL WITH (NOLOCK) ON PTL.DeviceProfileLogKey = DL.DeviceProfileLogKey AND PTL.ConsigneeKey = DL.ConsigneeKey
 --         WHERE DL.UserDefine02 = @cLoadKey
 --         AND DL.DropID = @cToDropID 
 --         AND PTL.DropID = @cDropID
@@ -1442,7 +1448,7 @@ BEGIN
              
 --             SELECT @nTotalPackedQty = ISNULL(SUM(PCD.QTY),0)
 --             FROM   dbo.PACKDETAIL PCD WITH (NOLOCK)
---             INNER JOIN dbo.PTLTran PTL WITH (NOLOCK) ON PTL.CaseID = PCD.DropID
+--             INNER JOIN PTL.PTLTran PTL WITH (NOLOCK) ON PTL.CaseID = PCD.DropID
 --             INNER JOIN dbo.DeviceProfileLog DL WITH (NOLOCK) ON DL.DeviceProfileLogKey = PTL.DeviceProfileLogKey
 --             WHERE  PCD.PickSlipNo          = @cPickSlipNo
 --             AND    PCD.StorerKey           = @cStorerKey 
@@ -1708,25 +1714,25 @@ BEGIN
       BEGIN
             IF @nExpectedQty > @nPTLQty 
             BEGIN
-                INSERT INTO PTLTran
+                INSERT INTO PTL.PTLTran
                      (
                         -- PTLKey -- this column value is auto-generated
                         IPAddress,  DeviceID,     DevicePosition,
-                        [Status],   PTL_Type,     DropID,
+                        [Status],   PTLType,     DropID,
                         OrderKey,   Storerkey,    SKU,
                         LOC,        ExpectedQty,  Qty,
-                        Remarks,    MessageNum,   Lot,
+                        Remarks,    Lot,
                         DeviceProfileLogKey, SourceKey, ConsigneeKey,
                         CaseID
                      )
                 SELECT  IPAddress,  DeviceID,     DevicePosition,
-                        '0',   PTL_Type,     DropID,
+                        '0',   PTLType,     DropID,
                         OrderKey,   Storerkey,    SKU,
                         LOC,        (@nExpectedQty - @nPTLQty),  0,
-                        @nPTLKey,    '',   Lot,
+                        @nPTLKey,   Lot,
                         DeviceProfileLogKey, SourceKey, ConsigneeKey,
                         CaseID
-                FROM dbo.PTLTran WITH (NOLOCK)
+                FROM PTL.PTLTran WITH (NOLOCK)
                 WHERE PTLKEy = @nPTLKey
 
                           
@@ -1742,7 +1748,7 @@ BEGIN
                       ,@cDeviceID       = DeviceID
                       ,@cDevicePosition = DevicePosition
                       ,@cDisplayValue   = ExpectedQty
-                FROM dbo.PTLTran WITH (NOLOCK)
+                FROM PTL.PTLTran WITH (NOLOCK)
                 WHERE Remarks = CAST(@nPTLKey AS NVARCHAR(10))
 
 
@@ -1753,16 +1759,28 @@ BEGIN
                 END
 
               -- RELIGHT Remaining Qty
-                EXEC [dbo].[isp_DPC_LightUpLoc] 
-                  @c_StorerKey = @cStorerKey 
-                 ,@n_PTLKey    = @nNewPTLTranKey    
-                 ,@c_DeviceID  = @cDeviceID  
-                 ,@c_DevicePos = @cDevicePosition 
-                 ,@n_LModMode  = @cLightMode  
-                 ,@n_Qty       = @cDisplayValue       
-                 ,@b_Success   = @b_Success   OUTPUT  
-                 ,@n_Err       = @nErrNo      OUTPUT
-                 ,@c_ErrMsg    = @cErrMsg     OUTPUT   
+--                EXEC [dbo].[isp_DPC_LightUpLoc] 
+--                  @c_StorerKey = @cStorerKey 
+--                 ,@n_PTLKey    = @nNewPTLTranKey    
+--                 ,@c_DeviceID  = @cDeviceID  
+--                 ,@c_DevicePos = @cDevicePosition 
+--                 ,@n_LModMode  = @cLightMode  
+--                 ,@n_Qty       = @cDisplayValue       
+--                 ,@b_Success   = @b_Success   OUTPUT  
+--                 ,@n_Err       = @nErrNo      OUTPUT
+--                 ,@c_ErrMsg    = @cErrMsg     OUTPUT   
+
+              EXEC PTL.isp_PTL_LightUpLoc  
+                        @n_Func           = 816  
+                       ,@n_PTLKey         = @nNewPTLTranKey  
+                       ,@c_DisplayValue   = @cDisplayValue   
+                       ,@b_Success        = @bSuccess    OUTPUT      
+                       ,@n_Err            = @nErrNo      OUTPUT    
+                       ,@c_ErrMsg         = @cErrMsg     OUTPUT  
+                       ,@c_DeviceID       = @cDeviceID  
+                       ,@c_DevicePos      = @cDevicePosition  
+                       ,@c_DeviceIP       = @cIPAddress    
+                       ,@c_LModMode       = @cLightMode  
                    
             END  
             ELSE
@@ -1937,9 +1955,9 @@ BEGIN
 
          SELECT @nSumTotalExpectedQty = SUM(ExpectedQty) 
                ,@nSumTotalPickedQty = SUM(Qty) 
-         FROM dbo.PTLTran WITH (NOLOCK)
+         FROM PTL.PTLTran WITH (NOLOCK)
          WHERE DropID = @cDropID
-            
+                    
          IF  ISNULL(@nSumTotalExpectedQty,0) = ISNULL(@nSumTotalPickedQty,0) 
          BEGIN
             IF @bDebug = 1 -- (Chee03)
@@ -1964,7 +1982,7 @@ BEGIN
             END  
          END
          
-         
+               
                 
       END
       ELSE IF @cDropIDType = 'TOTE'
@@ -1995,6 +2013,7 @@ BEGIN
                          + 'PTLKey : ' + CAST(@nPTLKey AS NVARCHAR(10))  + @c_NewLineChar
                          + 'Error Code: ' + CAST(@nErrNo AS VARCHAR) + @c_NewLineChar 
                          + ' Error Message: ' + @cErrMsg 
+    
     
     
     EXEC nspLogAlert

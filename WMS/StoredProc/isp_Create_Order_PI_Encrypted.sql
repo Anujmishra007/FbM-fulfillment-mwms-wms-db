@@ -207,40 +207,6 @@ BEGIN
    SELECT  @vb_M_Fax2     = CASE WHEN @c_M_Fax2     = '' THEN NULL ELSE EncryptByKey(Key_GUID('Smt_Key_Orders_PI'),ISNULL(@c_M_Fax2    , '')) END 
    SELECT  @vb_M_State    = CASE WHEN @c_M_State    = '' THEN NULL ELSE EncryptByKey(Key_GUID('Smt_Key_Orders_PI'),ISNULL(@c_M_State   , '')) END 
    
-   INSERT INTO TraceInfo
-   (
-      TraceName,
-      TimeIn,
-      [TimeOut],
-      TotalTime,
-      Step1,
-      Step2,
-      Step3,
-      Step4,
-      Step5,
-      Col1,
-      Col2,
-      Col3,
-      Col4,
-      Col5
-   )
-   VALUES
-   (  'isp_Create_Order_PI_Encrypted',
-      GETDATE(),
-      GETDATE(),
-      @c_Orderkey,
-      @c_Step1,
-      @c_Step2,
-      @c_Step3,
-      @c_Step4,
-      @c_Step5,      
-      ISNULL(CONVERT([NVARCHAR](200),   DecryptByKey(@vb_C_Contact1)),''),
-      ISNULL(CONVERT([NVARCHAR](200),   DecryptByKey(@vb_C_Address2)),''),
-      ISNULL(CONVERT([NVARCHAR](200),   DecryptByKey(@vb_C_Address3)),''),      
-      ISNULL(CONVERT([NVARCHAR](200),   DecryptByKey(@vb_C_City)),''),
-      ISNULL(CONVERT([NVARCHAR](200),   DecryptByKey(@vb_C_State)),'')
-   )
-   
    IF NOT EXISTS (SELECT 1 FROM Orders_PI_Encrypted WITH (NOLOCK) WHERE Orderkey = @c_OrderKey )
    BEGIN
       INSERT INTO Orders_PI_Encrypted (

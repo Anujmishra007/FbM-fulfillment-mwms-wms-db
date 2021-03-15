@@ -1,19 +1,19 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_packing_list_01]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_packing_list_01]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_packing_list_05]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
+   DROP PROCEDURE [dbo].[isp_r_hk_packing_list_05]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 /*************************************************************************/
-/* Stored Procedure: isp_r_hk_packing_list_01                            */
-/* Creation Date: 04-Nov-2017                                            */
+/* Stored Procedure: isp_r_hk_packing_list_05                            */
+/* Creation Date: 19-Aug-2020                                            */
 /* Copyright: LFL                                                        */
 /* Written by: Michael Lam (HK LIT)                                      */
 /*                                                                       */
-/* Purpose: Standard Packing List                                        */
+/* Purpose: Standard Packing List by SKU                                 */
 /*                                                                       */
-/* Called By: Report Module. Datawidnow r_hk_packing_list_01             */
+/* Called By: Report Module. Datawidnow r_hk_packing_list_05             */
 /*                                                                       */
 /* PVCS Version: 1.0                                                     */
 /*                                                                       */
@@ -23,36 +23,10 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
-/* 23/11/2017   ML       1.1  Fix duplicate order issue                  */
-/* 25/11/2017   ML       1.2  Add Codelkup.RPTLOGO config                */
-/* 28/11/2017   ML       1.3  Add OrderGrouping & CartonSort & LineSort  */
-/* 11/12/2017   ML       1.4  Add Configurable DocKey                    */
-/* 05/01/2018   ML       1.5  Add new field Barcode                      */
-/* 22/01/2018   ML       1.6  Performance tuning                         */
-/* 04/04/2018   ML       1.7  Add PVH requirements                       */
-/* 12/04/2018   ML       1.8  Performance Tuning                         */
-/* 30/04/2018   ML       1.9  Add new field SplitPrintKey                */
-/* 13/07/2018   ML       1.10 Add parameter MBOLKey                      */
-/* 04/10/2018   ML       1.11 Add CtnGrouping                            */
-/* 18/02/2019   ML       1.12 Handle Orderkey in parm1                   */
-/* 06/05/2019   ML       1.13 Add new fields - Xpos, Width for           */
-/*                              TotalCarton, TotalQty, InvoiceAmount     */
-/* 07/08/2019   ML       1.14 Add fields TotalWeight, T_HDR_Ref, HDR_Ref */
-/*                            Add join by OrderDetail, PickDetail        */
-/* 27/02/2020   ML       1.15 Add B_PhoneExp,B_FaxExp,B_ContactExp       */
-/*                                C_PhoneExp,C_FaxExp,C_ContactExp       */
-/* 08/05/2020   ML       1.16 WMS-13282 Split Line by BatchNo (11384)    */
-/* 06/07/2020   ML       1.17 WMS-14119 Add new field LBL_CartonNo       */
-/* 11/08/2020   ML       1.18 Add MAPFIELD: T_Wavekey, T_PickslipNo,     */
-/*                            T_DeliveryDate, T_BuyerPO, T_Brand         */
-/* 16/01/2021   ML       1.19 Add MAPFIELD: Orderkey, Orderkey_Conso     */
-/*                            Add MAPVALUE: T_Orderkey_Conso             */
-/*                                          N_Width1, N_Width2           */
-/*                            Add Output: WMSOrderKey, Lbl_Orderkey_Conso*/
-/*                                        N_Width1, N_Width2             */
+/* 19/08/2020   ML       1.0  Modify from isp_r_hk_packing_list_01 v1.18 */
 /*************************************************************************/
 
-CREATE PROCEDURE [dbo].[isp_r_hk_packing_list_01] (
+CREATE PROCEDURE [dbo].[isp_r_hk_packing_list_05] (
        @as_storerkey       NVARCHAR(15)
      , @as_wavekey         NVARCHAR(10)
      , @as_loadkey         NVARCHAR(10)
@@ -74,7 +48,7 @@ BEGIN
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
       DocKey, ReportHeading, ReportTitle, ReportTitle_M2, ReportTitle_M3
-      SplitPrintKey, OrderGrouping, Barcode, DocNumber, ExternOrderkey, Orderkey, Orderkey_Conso, Consigneekey
+      SplitPrintKey, OrderGrouping, Barcode, DocNumber, ExternOrderkey, Consigneekey
       T_Wavekey, T_PickslipNo, T_DeliveryDate, T_BuyerPO, T_Brand
       Wavekey, PickslipNo, DeliveryDate, BuyerPO, Brand
       B_Company, B_Address, B_Phone, B_Fax, B_Contact, C_Company, C_Address, C_Phone, C_Fax, C_Contact
@@ -86,7 +60,7 @@ BEGIN
       ExtOrdKey_Summary
 
    [MAPVALUE]
-      T_ExternOrderkey, T_DocNumber, T_Orderkey, T_Orderkey_Conso, T_ConsigneeKey
+      T_ExternOrderkey, T_DocNumber, T_Orderkey, T_ConsigneeKey
       T_Wavekey, T_PickslipNo, T_DeliveryDate, T_BuyerPO, T_Brand, T_BillTo, T_B_Phone
       T_ShipTo, T_C_Phone, T_Remark, T_PO_No, T_Total_CBM, T_Total_Weight, T_InvoiceAmount, T_WeightUnit, T_Total_Carton, T_Total_Qty, T_HDR_Ref
       T_CartonLabelNo, T_OriginalUCC, T_Carton_CBM, T_Carton_Weight, T_Dimension, T_LineNo, T_Style, T_Color, T_Size
@@ -97,7 +71,7 @@ BEGIN
       T_CartonLabelNo_M3, T_OriginalUCC_M3, T_Carton_CBM_M3, T_Carton_Weight_M3, T_Dimension_M3
       T_Exporter, T_ReportHeading, T_ReportTitle, T_ReportTitle_M2, T_ReportTitle_M3
       T_OrderGroupTitle, T_OrderGroupTotalCarton, T_OrderGroupTotalQty, T_OrderGroupTotalWeight, T_OrderGroupTotalCBM, T_CartonNo
-      N_Xpos1, N_Width1, N_Xpos2, N_Width2, N_Xpos_Remark
+      N_Xpos1, N_Xpos2, N_Xpos_Remark
       N_Xpos_T_BillTo, N_Xpos_BillTo, N_Xpos_T_B_Phone, N_Xpos_B_Phone, N_Xpos_T_ShipTo, N_Xpos_ShipTo, N_Xpos_T_C_Phone, N_Xpos_C_Phone
       N_Xpos_TotalCarton, N_Xpos_TotalQty, N_Xpos_InvoiceAmount, N_Xpos_T_HDR_Ref
       N_Xpos_LabelNo, N_Xpos_OriginalUCC, N_Xpos_CartonWeight, N_Xpos_CartonCBM, N_Xpos_Dimension
@@ -229,7 +203,7 @@ BEGIN
       DROP TABLE #TEMP_PAKDT
 
    DECLARE @c_DataWindow         NVARCHAR(40)
-         , @c_SizeList           NVARCHAR(4000)
+         , @c_SizeList           NVARCHAR(2000)
          , @c_DocKeyExp          NVARCHAR(4000)
          , @c_ReportHeadingExp   NVARCHAR(4000)
          , @c_ReportTitleExp     NVARCHAR(4000)
@@ -240,8 +214,6 @@ BEGIN
          , @c_BarcodeExp         NVARCHAR(4000)
          , @c_DocNumberExp       NVARCHAR(4000)
          , @c_ExternOrderkeyExp  NVARCHAR(4000)
-         , @c_OrderkeyExp        NVARCHAR(4000)
-         , @c_OrderkeyConsoExp   NVARCHAR(4000)
          , @c_ConsigneekeyExp    NVARCHAR(4000)
          , @c_T_WavekeyExp       NVARCHAR(4000)
          , @c_T_PickslipNoExp    NVARCHAR(4000)
@@ -307,7 +279,7 @@ BEGIN
          , @b_UsePickDetail      INT
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
-         , @c_JoinClause         NVARCHAR(MAX)
+         , @c_JoinClause         NVARCHAR(4000)
          , @n_Col                INT
          , @n_Cur_RowID          INT
          , @c_Cur_DocKey         NVARCHAR(10)
@@ -320,7 +292,7 @@ BEGIN
          , @c_Tmp_OrderLineNo    NVARCHAR(5)
          , @n_Tmp_Qty            INT
 
-   SELECT @c_DataWindow = 'r_hk_packing_list_01'
+   SELECT @c_DataWindow = 'r_hk_packing_list_05'
         , @c_SizeList   = N'|5XS|4XS|3XS|XXXS|2XS|XXS|XS|0XS|S|00S|YS|SM|0SM|S/M|M|00M|YM|ML|0ML|M/L|L|00L|YL|F|XL|0XL|XXL|2XL|XXXL|3XL|4XL|5XL|'
         , @n_Col        = 5
 
@@ -338,7 +310,6 @@ BEGIN
       , Barcode          NVARCHAR(500)
       , DocNumber        NVARCHAR(500)
       , ExternOrderkey   NVARCHAR(500)
-      , WMSOrderkey      NVARCHAR(500)
       , Consigneekey     NVARCHAR(500)
       , T_Wavekey        NVARCHAR(500)
       , T_PickslipNo     NVARCHAR(500)
@@ -574,8 +545,6 @@ BEGIN
            , @c_BarcodeExp         = ''
            , @c_DocNumberExp       = ''
            , @c_ExternOrderkeyExp  = ''
-           , @c_OrderkeyExp        = ''
-           , @c_OrderkeyConsoExp   = ''
            , @c_ConsigneekeyExp    = ''
            , @c_T_WavekeyExp       = ''
            , @c_T_PickslipNoExp    = ''
@@ -686,12 +655,6 @@ BEGIN
            , @c_ExternOrderkeyExp  = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='ExternOrderkey')), '' )
-           , @c_OrderkeyExp        = ISNULL(RTRIM((select top 1 b.ColValue
-                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
-                                     where a.SeqNo=b.SeqNo and a.ColValue='Orderkey')), '' )
-           , @c_OrderkeyConsoExp   = ISNULL(RTRIM((select top 1 b.ColValue
-                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
-                                     where a.SeqNo=b.SeqNo and a.ColValue='Orderkey_Conso')), '' )
            , @c_ConsigneekeyExp    = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='Consigneekey')), '' )
@@ -919,33 +882,16 @@ BEGIN
       SELECT RowID = IDENTITY(INT,1,1)
            , FOK.DocKey
            , FOK.ConsolPick
-           , PD.PickSlipNo
-           , PD.CartonNo
-           , PD.LabelNo
-           , PD.LabelLine
-           , PD.StorerKey
-           , PD.SKU
-           , PD.Qty
-           , PD.AddWho
-           , PD.AddDate
-           , PD.EditWho
-           , PD.EditDate
-           , PD.RefNo
-           , PD.ArchiveCop
-           , PD.ExpQty
-           , PD.UPC
-           , PD.DropID
-           , PD.RefNo2
-           , PD.LOTTABLEVALUE
+           , PD.*
            , OrderKey        = CAST(NULL AS NVARCHAR(10))
            , OrderLineNumber = CAST(NULL AS NVARCHAR(5))
         INTO #TEMP_PACKDETAIL2
         FROM #TEMP_FINALORDERKEY FOK
         JOIN dbo.PACKDETAIL PD(NOLOCK) ON FOK.PickslipNo = PD.PickSlipNo
        WHERE FOK.Storerkey = @c_Storerkey
-         AND PD.Qty > 0
+        AND PD.Qty > 0
 
-      SELECT *
+      SELECT DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, AddWho, AddDate, EditWho, EditDate, RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE, OrderKey, OrderLineNumber
         INTO #TEMP_PACKDETAIL
         FROM #TEMP_PACKDETAIL2
        WHERE 1=2
@@ -967,6 +913,7 @@ BEGIN
 
 
       -- PACKDETAIL Loop
+
       DECLARE C_PACKDETAIL CURSOR FOR
        SELECT RowID, DocKey, ConsolPick, Storerkey, Sku, Qty
          FROM #TEMP_PACKDETAIL2
@@ -994,23 +941,17 @@ BEGIN
                  , @c_Tmp_OrderLineNo = OrderLineNumber
                  , @n_Tmp_Qty         = Qty
               FROM #TEMP_PICKDETAIL
-             WHERE DocKey     = @c_Cur_DocKey
+             WHERE Qty > 0
+               AND DocKey     = @c_Cur_DocKey
                AND ConsolPick = @c_Cur_ConsolPick
                AND Storerkey  = @c_Cur_Storerkey
                AND Sku        = @c_Cur_Sku
-               AND Qty > 0
 
             IF @@ROWCOUNT <= 0
-               BREAK
+              BREAK
 
             IF @n_Tmp_Qty > @c_Cur_Qty
                SET @n_Tmp_Qty = @c_Cur_Qty
-
-            SET @c_Cur_Qty = @c_Cur_Qty - @n_Tmp_Qty
-
-            UPDATE #TEMP_PACKDETAIL2
-               SET Qty = Qty - @n_Tmp_Qty
-             WHERE CURRENT OF C_PACKDETAIL
 
             UPDATE #TEMP_PICKDETAIL
                SET Qty = Qty - @n_Tmp_Qty
@@ -1021,6 +962,12 @@ BEGIN
                  , @c_Tmp_Orderkey, @c_Tmp_OrderLineNo
               FROM #TEMP_PACKDETAIL2
              WHERE RowID = @n_Cur_RowID
+
+            UPDATE #TEMP_PACKDETAIL2
+               SET Qty = Qty - @n_Tmp_Qty
+             WHERE CURRENT OF C_PACKDETAIL
+
+            SET @c_Cur_Qty = @c_Cur_Qty - @n_Tmp_Qty
          END
       END
 
@@ -1035,7 +982,7 @@ BEGIN
       ----------
       SET @c_ExecStatements = N'INSERT INTO #TEMP_PAKDT'
           +' (Orderkey, Storerkey, ReportHeading, ReportTitle, ReportTitle_M2, ReportTitle_M3'
-          + ', SplitPrintKey, OrderGrouping, Barcode, DocNumber, ExternOrderkey, WMSOrderkey, Consigneekey'
+          + ', SplitPrintKey, OrderGrouping, Barcode, DocNumber, ExternOrderkey, Consigneekey'
           + ', T_Wavekey, T_PickslipNo, T_DeliveryDate, T_BuyerPO, T_Brand'
           + ', Wavekey, PickslipNo, PickslipNo_key, DeliveryDate, BuyerPO, Brand'
           + ', B_Company, B_Address, B_Phone, B_Fax, B_Contact, C_Company, C_Address, C_Phone, C_Fax, C_Contact'
@@ -1067,10 +1014,6 @@ BEGIN
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DocNumberExp      ,'')<>'' THEN @c_DocNumberExp       ELSE 'UPPER(IIF(FOK.ConsolPick=''Y'',FOK.DocKey,OH.ExternOrderkey))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExternOrderkeyExp ,'')<>'' THEN @c_ExternOrderkeyExp  ELSE 'UPPER(OH.ExternOrderkey)' END + '),'''')'
-      SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(CASE WHEN FOK.ConsolPick=''Y'' THEN (' + CASE WHEN ISNULL(@c_OrderkeyConsoExp,'')<>'' THEN @c_OrderkeyConsoExp ELSE ''''''        END + ')'
-      SET @c_ExecStatements = @c_ExecStatements
-               +                                              ' ELSE (' + CASE WHEN ISNULL(@c_OrderkeyExp     ,'')<>'' THEN @c_OrderkeyExp      ELSE 'OH.OrderKey' END + ') END),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ConsigneekeyExp   ,'')<>'' THEN @c_ConsigneekeyExp    ELSE 'UPPER(OH.Consigneekey)'   END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -1184,11 +1127,11 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Refno2Exp         ,'')<>'' THEN @c_Refno2Exp          ELSE IIF(@b_UsePickDetail=1,'NULL','PD.RefNo2')   END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', '              + CASE WHEN ISNULL(@c_QtyExp            ,'')<>'' THEN @c_QtyExp             ELSE 'PD.Qty'            END
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_QtyExp            ,'')<>'' THEN @c_QtyExp             ELSE 'PD.Qty'            END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UOMExp            ,'')<>'' THEN @c_UOMExp             ELSE 'PACK.PackUOM3'     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', '              + CASE WHEN ISNULL(@c_UnitPriceExp      ,'')<>'' THEN @c_UnitPriceExp       ELSE 'OD.UnitPrice'      END
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UnitPriceExp      ,'')<>'' THEN @c_UnitPriceExp       ELSE 'OD.UnitPrice'      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', SKU.StdCube'
                + ', SKU.PrePackIndicator'
@@ -1216,9 +1159,16 @@ BEGIN
            ELSE
               ' LEFT JOIN dbo.PACKINFO PI (NOLOCK) ON PD.PickslipNo=PI.PickslipNo AND PD.CartonNo=PI.CartonNo'
              +' LEFT JOIN ('
-             +   ' SELECT *, SeqNo = ROW_NUMBER() OVER(PARTITION BY CartonizationGroup,CartonType ORDER BY UseSequence)'
+             +' SELECT CartonType        = CartonType'
+                  + ', CartonDescription = MAX(CartonDescription)'
+                  + ', Cube              = MAX(Cube)'
+                  + ', CartonWeigth      = MAX(CartonWeight)'
+                  + ', CartonLength      = MAX(CartonLength)'
+                  + ', CartonWidth       = MAX(CartonWidth)'
+                  + ', CartonHeight      = MAX(CartonHeight)'
               + ' FROM dbo.CARTONIZATION (NOLOCK)'
-             + ') CT ON ST.CartonGroup = CT.CartonizationGroup AND PI.CartonType = CT.CartonType AND CT.SeqNo=1'
+              + ' GROUP BY CartonType'
+             + ') CT ON PI.CartonType = CT.CartonType'
              +' LEFT JOIN dbo.ORDERDETAIL OD (NOLOCK) ON PD.Orderkey=OD.Orderkey AND PD.OrderLineNumber=OD.OrderLineNumber'
            END
       SET @c_ExecStatements = @c_ExecStatements
@@ -1240,7 +1190,7 @@ BEGIN
       SET @c_ExecStatements = N'INSERT INTO #TEMP_PAKDT'
           +' (Orderkey, Storerkey, PickslipNo_key, ReportHeading, ReportTitle'
           +', ReportTitle_M2, ReportTitle_M3, SplitPrintKey, OrderGrouping, Barcode, DocNumber'
-          +', ExternOrderkey, WMSOrderkey, Consigneekey, Wavekey, PickslipNo, DeliveryDate'
+          +', ExternOrderkey, Consigneekey, Wavekey, PickslipNo, DeliveryDate'
           +', BuyerPO, Brand, B_Company, B_Address, B_Phone, B_Fax, B_Contact'
           +', C_Company, C_Address, C_Phone, C_Fax, C_Contact, B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3'
           +', Remark, TotalWeight, HDR_Ref, InvoiceAmount, ConsolPick, DocKey, FirstOrderkey, Sku'
@@ -1259,7 +1209,6 @@ BEGIN
           +      ', Barcode        = MAX(PAKDT.Barcode)'
           +      ', DocNumber      = MAX(PAKDT.DocNumber)'
           +      ', ExternOrderkey = MAX(PAKDT.ExternOrderkey)'
-          +      ', WMSOrderkey    = MAX(PAKDT.WMSOrderkey)'
           +      ', Consigneekey   = MAX(PAKDT.Consigneekey)'
           +      ', Wavekey        = MAX(PAKDT.Wavekey)'
           +      ', PickslipNo     = MAX(PAKDT.PickslipNo)'
@@ -1459,7 +1408,7 @@ BEGIN
         , Carton_Type        = MAX( RTRIM( PI.CartonType ) )
         , Carton_Descr       = MAX( RTRIM( CT.CartonDescription ) )
         , Carton_Weight      = MAX( PI.Weight )
-        , Carton_NetWeight   = MAX( PI.Weight - CT.CartonWeight )
+        , Carton_NetWeight   = MAX( PI.Weight - CT.CartonWeigth )
         , Carton_CBM         = MAX( PI.Cube )
         , Carton_Length      = MAX( PI.Length )
         , Carton_Width       = MAX( PI.Width )
@@ -2037,16 +1986,6 @@ BEGIN
         , LBL_CartonNo       = CAST( RTRIM( (select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='T_CartonNo') ) AS NVARCHAR(500))
-        , WMSOrderKey        = MAX( RTRIM( PAKDT.WMSOrderKey ) )
-        , Lbl_Orderkey_Conso = CAST( RTRIM( (select top 1 b.ColValue
-                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
-                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Orderkey_Conso') ) AS NVARCHAR(500))
-        , N_Width1           = CAST( RTRIM( (select top 1 b.ColValue
-                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
-                                     where a.SeqNo=b.SeqNo and a.ColValue='N_Width1') ) AS NVARCHAR(50))
-        , N_Width2           = CAST( RTRIM( (select top 1 b.ColValue
-                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
-                                     where a.SeqNo=b.SeqNo and a.ColValue='N_Width2') ) AS NVARCHAR(50))
 
    FROM #TEMP_PAKDT PAKDT
    JOIN dbo.ORDERS OH (NOLOCK) ON PAKDT.FirstOrderKey=OH.OrderKey
@@ -2056,9 +1995,16 @@ BEGIN
    LEFT JOIN dbo.STORER CX (NOLOCK) ON CX.Storerkey='PL-'+RTRIM(OH.Storerkey)+'-'+ ISNULL(OH.C_Country,'')
    LEFT JOIN dbo.PackInfo PI (NOLOCK) ON PAKDT.PickSlipNo_Key=PI.PickSlipNo AND PAKDT.CartonNo=PI.CartonNo
    LEFT JOIN (
-      SELECT *, SeqNo = ROW_NUMBER() OVER(PARTITION BY CartonizationGroup,CartonType ORDER BY UseSequence)
+      SELECT CartonType        = CartonType
+           , CartonDescription = MAX(CartonDescription)
+           , Cube              = MAX(Cube)
+           , CartonWeigth      = MAX(CartonWeight)
+           , CartonLength      = MAX(CartonLength)
+           , CartonWidth       = MAX(CartonWidth)
+           , CartonHeight      = MAX(CartonHeight)
       FROM dbo.CARTONIZATION (NOLOCK)
-   ) CT ON ST.CartonGroup = CT.CartonizationGroup AND PI.CartonType = CT.CartonType AND CT.SeqNo=1
+      GROUP BY CartonType
+   ) CT ON PI.CartonType = CT.CartonType
 
    LEFT JOIN (
         SELECT a.PickSlipNo, Total_Weight=SUM(a.Weight), Total_CBM=SUM(a.Cube), Total_NetWeight=SUM(a.Weight - b.CartonWeight)
@@ -2113,7 +2059,8 @@ BEGIN
           , PAKDT.LineSplit
 
    ORDER BY SortOrderkey, SeqPS, SeqEOK, SeqOK, DocKey, CtnGrouping, Section, CartonNo, LabelNo, Line_No
+
 END
 GO
-GRANT EXECUTE ON isp_r_hk_packing_list_01 TO NSQL
+GRANT EXECUTE ON isp_r_hk_packing_list_05 TO NSQL
 GO

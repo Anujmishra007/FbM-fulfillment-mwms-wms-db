@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2020-12-23 1.0  WLChooi    Created (WMS-15952)                             */          
+/* 2020-12-23 1.0  WLChooi    Created (WMS-15952)                             */    
+/* 2021-03-03 1.1  WLChooi    WMS-15952 No filter by ReceiptLineNumber (WL01) */      
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_PALLETLBL_RG_LEGO]                      
@@ -144,24 +145,25 @@ BEGIN
    SET @c_OrderBy = ''
    SET @c_reclinenumber = ''
    
-   SELECT TOP 1 @c_reclinenumber = RD.receiptlinenumber
-   FROM RECEIPTDETAIL RD WITH (NOLOCK)
-   WHERE RD.receiptkey =  @c_Sparm01  AND RD.toid = @c_Sparm02
-   AND RD.SKU = CASE WHEN ISNULL(@c_Sparm03,'') = '' THEN RD.SKU ELSE @c_Sparm03 END
-   AND RD.finalizeflag = 'Y'
-   ORDER BY RD.editdate desc
+   --WL01 Comment
+   --SELECT TOP 1 @c_reclinenumber = RD.receiptlinenumber
+   --FROM RECEIPTDETAIL RD WITH (NOLOCK)
+   --WHERE RD.receiptkey =  @c_Sparm01  AND RD.toid = @c_Sparm02
+   --AND RD.SKU = CASE WHEN ISNULL(@c_Sparm03,'') = '' THEN RD.SKU ELSE @c_Sparm03 END
+   --AND RD.finalizeflag = 'Y'
+   --ORDER BY RD.editdate desc
    
    SET @c_GroupBy =  ''
    
    SET @c_OrderBy = ' ORDER BY RD.EditDate desc'
             
    SET @c_SQLJOIN = + ' SELECT DISTINCT RD.SKU, ISNULL(S.Descr,''''), ' + CHAR(13)   --2
-                    + ' CASE WHEN ISNULL(P.Casecnt,0) > 0 THEN FLOOR(RD.QtyReceived / P.Casecnt) ELSE 0 END, ' + CHAR(13)   --3   
-                    + ' CASE WHEN ISNULL(P.Casecnt,0) > 0 THEN RD.QtyReceived - (FLOOR(RD.QtyReceived / P.Casecnt) * P.Casecnt) ELSE 0 END, ' + CHAR(13)   --4
+                    + ' CASE WHEN ISNULL(P.Casecnt,0) > 0 THEN FLOOR(SUM(RD.QtyReceived) / P.Casecnt) ELSE 0 END, ' + CHAR(13)   --3   --WL01   
+                    + ' CASE WHEN ISNULL(P.Casecnt,0) > 0 THEN SUM(RD.QtyReceived) - (FLOOR(SUM(RD.QtyReceived) / P.Casecnt) * P.Casecnt) ELSE 0 END, ' + CHAR(13)   --4   --WL01
                     + ' S.PutawayZone, ' + CHAR(13)   --5
                     + ' RD.Lottable03, RD.ToID, ISNULL(RD.Lottable01,''''), RD.Lottable05, ISNULL(RD.Lottable07,''''), ' + CHAR(13)   --10   
                     + ' ISNULL(RD.Lottable08,''''), ISNULL(RD.Lottable09,''''), R.ExternReceiptKey,' + CHAR(13)   --13         
-                    + ' RD.ExternPOKey, RD.POKey, S.SKUGroup, S.ItemClass, RD.QtyReceived,'''','''', ' + CHAR(13)   --20      
+                    + ' RD.ExternPOKey, RD.POKey, S.SKUGroup, S.ItemClass, SUM(RD.QtyReceived),'''','''', ' + CHAR(13)   --20   --WL01
                     + ' '''','''','''','''','''',' + CHAR(13)
                     + ' '''','''','''','''','''',' + CHAR(13)   --30
                     + ' '''','''','''','''','''',' + CHAR(13)
@@ -173,7 +175,16 @@ BEGIN
                     + ' JOIN SKU S (NOLOCK) ON S.SKU = RD.SKU AND S.StorerKey = RD.StorerKey ' + CHAR(13)
                     + ' JOIN PACK P (NOLOCK) ON P.PackKey = S.PACKKey ' + CHAR(13)
                     + ' WHERE RD.ReceiptKey =  @c_Sparm01 AND RD.ToID = @c_Sparm02 '   + CHAR(13) 
-                    + ' AND RD.ReceiptLineNumber = @c_reclinenumber '
+                    --WL01 S
+                    + ' GROUP BY RD.SKU, ISNULL(S.Descr,''''), ' + CHAR(13)   --2
+                    --+ '          CASE WHEN ISNULL(P.Casecnt,0) > 0 THEN FLOOR(RD.QtyReceived / P.Casecnt) ELSE 0 END, ' + CHAR(13)   --3   --WL01
+                    --+ '          CASE WHEN ISNULL(P.Casecnt,0) > 0 THEN RD.QtyReceived - (FLOOR(RD.QtyReceived / P.Casecnt) * P.Casecnt) ELSE 0 END, ' + CHAR(13)   --4   --WL01
+                    + '          S.PutawayZone, P.Casecnt,' + CHAR(13)   --5   --WL01
+                    + '          RD.Lottable03, RD.ToID, ISNULL(RD.Lottable01,''''), RD.Lottable05, ISNULL(RD.Lottable07,''''), ' + CHAR(13)   --10   
+                    + '          ISNULL(RD.Lottable08,''''), ISNULL(RD.Lottable09,''''), R.ExternReceiptKey,' + CHAR(13)   --13         
+                    + '          RD.ExternPOKey, RD.POKey, S.SKUGroup, S.ItemClass,RD.Receiptkey '   --20
+                    --WL01 E
+                    --+ ' AND RD.ReceiptLineNumber = @c_reclinenumber '   --WL01
                      
    IF @b_debug=1        
    BEGIN  

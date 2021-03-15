@@ -26,7 +26,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC from MBOL                                            */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -34,6 +34,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 2021-03-09   WLChooi   1.1   WMS-16031 - Print all MBOLKey under a   */
+/*                              same UserDefine05 (WL01)                */
 /************************************************************************/
 
 CREATE PROC isp_GetGatePass_03 (@c_mbolkey NVARCHAR(10)) 
@@ -44,114 +46,175 @@ BEGIN
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_continue          INT,
-             @c_errmsg          NVARCHAR(255),
-             @b_success         INT,
-             @n_err             INT,
-             @n_cnt             INT,
-             @c_OtherReference  NVARCHAR(30),
-             @c_facility        NVARCHAR(5),
-             @c_keyname         NVARCHAR(30),
-             @c_printflag       NVARCHAR(1)
+   DECLARE @n_continue            INT,
+           @c_errmsg              NVARCHAR(255),
+           @b_success             INT,
+           @n_err                 INT,
+           @n_cnt                 INT,
+           @c_OtherReference      NVARCHAR(30),
+           @c_facility            NVARCHAR(5),
+           @c_keyname             NVARCHAR(30),
+           @c_printflag           NVARCHAR(1),
+           @c_Containerkey        NVARCHAR(20),       --WL01
+           @c_Mode                NVARCHAR(20),       --WL01
+           @c_DRGenerated         NVARCHAR(1) = 'N',  --WL01
+           @c_GetOtherReference   NVARCHAR(30)        --WL01
    
-    SELECT @n_continue = 1, @n_err = 0, @c_errmsg = '', @b_success = 1, @n_cnt = 0, @c_printflag = 'Y'
-            
-   SELECT @c_OtherReference = MBOL.OtherReference, @c_facility = MBOL.Facility
+   SELECT @n_continue = 1, @n_err = 0, @c_errmsg = '', @b_success = 1, @n_cnt = 0, @c_printflag = 'Y'
+   
+   --WL01 S
+   CREATE TABLE [#TMP_ALLMBOL] (
+      MBOLKey           [NVARCHAR] (10) NULL,
+      Containerkey      [NVARCHAR] (20) NULL,
+      Mode              [NVARCHAR] (20) NULL
+   )
+   
+   SELECT @c_Containerkey = MBOL.UserDefine05
    FROM MBOL (NOLOCK)
-   WHERE Mbolkey = @c_mbolkey
+   WHERE MBOL.MbolKey = @c_mbolkey
    
-   SELECT @n_cnt = @@ROWCOUNT
-   
-   IF ISNULL(RTRIM(@c_OtherReference),'') = '' AND @n_cnt > 0
+   IF ISNULL(@c_Containerkey,'') = ''
    BEGIN
-       SELECT @c_printflag = 'N'
-       
-       SELECT @c_keyname = Code
-       FROM CODELKUP (NOLOCK)
-       WHERE ListName = 'GP_NCOUNT' 
-       AND Short = @c_facility
-      
-       IF ISNULL(RTRIM(@c_keyname),'') = ''
-       BEGIN
-        SELECT @n_continue = 3
-        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62313   
-        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': CODELKUP LISTNAME GP_NCOUNT Retrieving Failed For Facility '+RTRIM(@c_facility)+' (isp_GetGatePass_03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-       END 
-       
-       IF @n_continue = 1 or @n_continue = 2
-       BEGIN
-          EXECUTE nspg_GetKey 
-               @c_keyname,
-               10,   
-               @c_OtherReference OUTPUT,
-               @b_success      OUTPUT,
-               @n_err          OUTPUT,
-               @c_errmsg       OUTPUT
-               
-          IF @n_err <> 0 
-          BEGIN
-             SELECT @n_continue = 3
-          END
-          ELSE
-          BEGIN
-              --BEGIN TRAN
-              UPDATE MBOL WITH (ROWLOCK)
-              SET OtherReference = @c_OtherReference,
-                  EditDate   = GETDATE(),                                
-                  TrafficCop = NULL                
-              WHERE Mbolkey = @c_mbolkey
-              
-              SELECT @n_err = @@ERROR
-              IF @n_err <> 0 
-              --BEGIN
-                 --WHILE @@TRANCOUNT > 0 
-                       --COMMIT TRAN 
-              --END  
-              --ELSE
-                BEGIN
-                   --ROLLBACK TRAN 
-                   SELECT @n_continue = 3
-                   SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62314   
-                   SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update MBOL Failed. (isp_GetGatePass_03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-                END
-              END
-           END
+      INSERT INTO #TMP_ALLMBOL (MBOLKey, Containerkey, Mode)
+      SELECT @c_MBOLkey, '', 'By MBOL'
    END
+   ELSE
+   BEGIN
+      INSERT INTO #TMP_ALLMBOL (MBOLKey, Containerkey, Mode)   --Find all MBOL under same Userdefine05 (Containerkey)
+      SELECT DISTINCT MBOL.MBOLKey, @c_Containerkey, 'By Containerkey'
+      FROM MBOL (NOLOCK)
+      JOIN MBOLDETAIL (NOLOCK) ON MBOL.MbolKey = MBOLDETAIL.MbolKey
+      JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = MBOLDETAIL.OrderKey
+      WHERE MBOL.UserDefine05 = @c_Containerkey
+   END
+
+   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT MBOLKey, Mode
+   FROM #TMP_ALLMBOL
+   
+   OPEN CUR_LOOP
+      
+   FETCH NEXT FROM CUR_LOOP INTO @c_MBOLkey, @c_Mode
+   
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+   	IF @c_DRGenerated = 'Y'
+   	BEGIN
+   	   UPDATE MBOL WITH (ROWLOCK)
+   	   SET OtherReference = @c_GetOtherReference
+   	   WHERE MbolKey = @c_mbolkey
+   	END
+      --WL01 E
+          
+      SELECT @c_OtherReference = MBOL.OtherReference, @c_facility = MBOL.Facility
+      FROM MBOL (NOLOCK)
+      WHERE Mbolkey = @c_mbolkey
+
+      SELECT @n_cnt = @@ROWCOUNT
+
+      IF ISNULL(RTRIM(@c_OtherReference),'') = '' AND @n_cnt > 0 AND @c_DRGenerated = 'N'   --WL01
+      BEGIN
+         SELECT @c_printflag = 'N'
+          
+         SELECT @c_keyname = Code
+         FROM CODELKUP (NOLOCK)
+         WHERE ListName = 'GP_NCOUNT' 
+         AND Short = @c_facility
+         
+         IF ISNULL(RTRIM(@c_keyname),'') = ''
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62313   
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': CODELKUP LISTNAME GP_NCOUNT Retrieving Failed For Facility '+RTRIM(@c_facility)+' (isp_GetGatePass_03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+         END 
+
+         IF @n_continue = 1 or @n_continue = 2
+         BEGIN
+            EXECUTE nspg_GetKey 
+                  @c_keyname,
+                  10,   
+                  @c_OtherReference OUTPUT,
+                  @b_success      OUTPUT,
+                  @n_err          OUTPUT,
+                  @c_errmsg       OUTPUT
+                  
+            IF @n_err <> 0 
+            BEGIN
+               SELECT @n_continue = 3
+            END
+            ELSE
+            BEGIN
+            	SET @c_GetOtherReference = @c_OtherReference   --WL01
+            	
+               --BEGIN TRAN
+               UPDATE MBOL WITH (ROWLOCK)
+               SET OtherReference = @c_OtherReference,
+                   EditDate   = GETDATE(),                                
+                   TrafficCop = NULL                
+               WHERE Mbolkey = @c_mbolkey
+                 
+               SELECT @n_err = @@ERROR
+               IF @n_err <> 0 
+               --BEGIN
+                  --WHILE @@TRANCOUNT > 0 
+                        --COMMIT TRAN 
+               --END  
+               --ELSE
+               BEGIN
+                  --ROLLBACK TRAN 
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62314   
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update MBOL Failed. (isp_GetGatePass_03)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+               END
+            END
+         END
+         --WL01 S
+         IF @n_continue IN (1,2) AND @c_Mode = 'By Containerkey'
+         BEGIN
+            SET @c_DRGenerated = 'Y'
+         END
+      END
+      FETCH NEXT FROM CUR_LOOP INTO @c_MBOLkey, @c_Mode
+   END
+   CLOSE CUR_LOOP
+   DEALLOCATE CUR_LOOP
+   --WL01 E
                                     
    IF @n_continue = 1 OR @n_continue = 2                               
    BEGIN
-      SELECT MBOL.mbolkey
-             , MBOL.facility
+      SELECT   MBOL.mbolkey
+             , MAX(MBOL.facility)   --WL01
              , FACILITY.descr                             
-             , MBOL.carrieragent                                
+             , MAX(MBOL.carrieragent)   --WL01                                
              , HAULER.Company 
-             , MBOL.vesselqualifier AS trucktype 
-             , MBOL.vessel AS truckno
-             , MBOL.drivername
-             , MBOL.departuredate
+             , MAX(MBOL.Vehicle_Type) AS trucktype    --WL01 
+             , MAX(MBOL.vessel) AS truckno            --WL01 
+             , MAX(MBOL.drivername)                   --WL01 
+             , MAX(MBOL.departuredate)                --WL01 
              , ''
              , ''
-             , ORDERS.route 
-             , ROUTEMASTER.Descr 
-             , @c_OtherReference AS OtherReference 
-             , MBOL.UserDefine04                             
-             , MBOL.SealNo                                      
-             , MBOL.ContainerNo                                 
+             , MAX(ORDERS.[Route])        --WL01 
+             , MAX(ROUTEMASTER.Descr)     --WL01 
+             , MAX(MBOL.OtherReference)   --WL01 
+             , MAX(MBOL.UserDefine04)     --WL01                           
+             , MAX(MBOL.SealNo)           --WL01                              
+             , MAX(MBOL.ContainerNo)      --WL01                           
              , ''
              , ''
-             , MBOL.editwho
+             , MAX(MBOL.editwho)          --WL01 
              , ROUND(SUM(CASE WHEN PACK.casecnt > 0 THEN PICKDETAIL.qty / PACK.casecnt ELSE 0 END),2) AS totalcase
              , ROUND(SUM(CASE WHEN PACK.casecnt > 0 THEN ROUND(SKU.STDGROSSWGT * PACK.CaseCnt,3) * (PICKDETAIL.qty / PACK.casecnt) ELSE 0 END),2) AS grossweight
              , @c_printflag AS PrintFlag
              , ROUND(SUM(PICKDETAIL.qty * SKU.Stdcube),4) AS CBM   
-             , ORDERS.Loadkey  
-             , LEFT(ISNULL(MBOL.Remarks,''),250) AS Remark1  
-             , SUBSTRING(ISNULL(MBOL.Remarks,''),251,250) AS Remark2  
+             , ''   --ORDERS.Loadkey      --WL01 
+             , MAX(LEFT(ISNULL(MBOL.Remarks,''),250)) AS Remark1  --WL01 
+             , MAX(SUBSTRING(ISNULL(MBOL.Remarks,''),251,250)) AS Remark2   --WL01   
              , ''
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideExternLoadkey  
              , SUM(PICKDETAIL.qty) AS totalEaches
              , COUNT(DISTINCT PICKDETAIL.DropID) AS TTLCTN
              , CASE WHEN ISNULL(ORDERS.Shipperkey,'') = '' THEN 'STO' ELSE ORDERS.Shipperkey END
+             , @c_Containerkey AS Containerkey   --WL01
       FROM PICKDETAIL (NOLOCK) 
       INNER JOIN ORDERDETAIL (NOLOCK) ON (PICKDETAIL.orderkey  = ORDERDETAIL.Orderkey 
                                             AND PICKDETAIL.orderlinenumber = ORDERDETAIL.orderlinenumber)
@@ -171,25 +234,26 @@ BEGIN
       INNER JOIN FACILITY (NOLOCK) ON (MBOL.facility = FACILITY.facility)
       JOIN LOADPLAN WITH (NOLOCK) ON LOADPLAN.loadkey = ORDERDETAIL.loadkey     
       JOIN lotattribute LOTT WITH (NOLOCK) ON LOTT.lot=PICKDETAIL.Lot AND LOTT.sku = PICKDETAIL.sku AND LOTT.Storerkey = PICKDETAIL.Storerkey
-      WHERE ORDERDETAIL.mbolkey = @c_mbolkey  AND MBOL.status = '9'
+      JOIN #TMP_ALLMBOL t ON t.MBOLKey = MBOL.MBOLKey AND MBOL.[Status] = '9'  --WL01
+      --WHERE ORDERDETAIL.mbolkey = @c_mbolkey AND MBOL.status = '9'   --WL01
       GROUP BY MBOL.Mbolkey
-             , MBOL.facility                
-             , FACILITY.descr                                         
-             , MBOL.carrieragent                                         
-             , HAULER.Company               
-             , MBOL.vesselqualifier         
-             , MBOL.vessel                  
-             , MBOL.drivername              
-             , MBOL.departuredate                        
-             , ORDERS.route                 
-             , ROUTEMASTER.Descr            
-             , MBOL.UserDefine04            
-             , MBOL.SealNo                                    
-             , MBOL.ContainerNo                                                  
-             , MBOL.editwho
-             , ORDERS.Loadkey  
-             , LEFT(ISNULL(MBOL.Remarks,''),250)  
-             , SUBSTRING(ISNULL(MBOL.Remarks,''),251,250)                  
+             --, MBOL.facility                 
+             , FACILITY.descr                                           
+             --, MBOL.carrieragent     --WL01                                      
+             , HAULER.Company                 
+             --, MBOL.vesselqualifier  --WL01         
+             --, MBOL.vessel           --WL01         
+             --, MBOL.drivername       --WL01         
+             --, MBOL.departuredate    --WL01                      
+             --, ORDERS.route          --WL01          
+             --, ROUTEMASTER.Descr     --WL01          
+             --, MBOL.UserDefine04     --WL01         
+             --, MBOL.SealNo           --WL01                           
+             --, MBOL.ContainerNo      --WL01                                              
+             --, MBOL.editwho          --WL01 
+             --, ORDERS.Loadkey        --WL01 
+             --, LEFT(ISNULL(MBOL.Remarks,''),250)            --WL01  
+             --, SUBSTRING(ISNULL(MBOL.Remarks,''),251,250)   --WL01                   
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END  
              , CASE WHEN ISNULL(ORDERS.Shipperkey,'') = '' THEN 'STO' ELSE ORDERS.Shipperkey END
    END

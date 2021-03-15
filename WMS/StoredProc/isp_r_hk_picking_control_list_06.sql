@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_06]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_06]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_picking_control_list_06]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,6 +29,10 @@ GO
 /* 2019-09-16   ML       1.1  Split subtasks by Pickdetail.PickslipNo    */
 /*                            Add keywords SplitLine, ReSplitLine,       */
 /*                            AssignPicker, ReAssignPicker               */
+/* 2020-11-30   ML       1.2  Fix Divide by zero error (@n_AssignPicker) */
+/* 2021-01-29   ML       1.3  Add Fields C_City, C_Country               */
+/*                            Add ShowField DropID                       */
+/*                            Convert to Dynamic SQL                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_06] (
@@ -41,32 +45,56 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @c_DataWindow        NVARCHAR(40)
-         , @c_Key               NVARCHAR(10)
-         , @c_Type              NVARCHAR(2)
-         , @b_FirstPrint        INT
-         , @b_Success           INT
-         , @n_Err               INT
-         , @c_ErrMsg            NVARCHAR(250)
-         , @n_AssignPicker      INT
-         , @n_SplitLine         INT
-         , @b_ReAssign          INT
-         , @c_PickdetailKey     NVARCHAR(10)
-         , @c_LogicalLocation   NVARCHAR(10)
-         , @c_Loc               NVARCHAR(10)
-         , @c_Storerkey         NVARCHAR(15)
-         , @c_Sku               NVARCHAR(20)
-         , @n_Qty               INT
-         , @n_TotalTasks        INT
-         , @n_AvgTasks          FLOAT
-         , @n_Picker            INT
-         , @n_PrevPicker        INT
-         , @c_PickslipNo        NVARCHAR(20)
-         , @c_PickslipNoTemp    NVARCHAR(20)
-         , @c_PH_PickslipNo     NVARCHAR(20)
-         , @c_PrevPH_PickslipNo NVARCHAR(20)
-         , @c_OrderStatus       NVARCHAR(10)
-         , @c_PickStatus        NVARCHAR(10)
+/* CODELKUP.REPORTCFG
+   [MAPFIELD]
+      CustomerGroupCode, ShipToAddress, Notes, Div, Brand, Userdefine05, DropID
+
+   [MAPVALUE]
+      T_Notes_1, T_Notes_2, T_Userdefine05_1, T_Userdefine05_2
+
+   [SHOWFIELD]
+      DefaultRDTPick, AllowUserChangePickMethod, C_Country, DropID, Code39
+
+   [SQLJOIN]
+*/
+
+   DECLARE @c_DataWindow         NVARCHAR(40)
+         , @c_Key                NVARCHAR(10)
+         , @c_Type               NVARCHAR(2)
+         , @b_FirstPrint         INT
+         , @b_Success            INT
+         , @n_Err                INT
+         , @c_ErrMsg             NVARCHAR(250)
+         , @n_AssignPicker       INT
+         , @n_SplitLine          INT
+         , @b_ReAssign           INT
+         , @c_PickdetailKey      NVARCHAR(10)
+         , @c_LogicalLocation    NVARCHAR(10)
+         , @c_Loc                NVARCHAR(10)
+         , @c_Storerkey          NVARCHAR(15)
+         , @c_Sku                NVARCHAR(20)
+         , @n_Qty                INT
+         , @n_TotalTasks         INT
+         , @n_AvgTasks           FLOAT
+         , @n_Picker             INT
+         , @n_PrevPicker         INT
+         , @c_PickslipNo         NVARCHAR(20)
+         , @c_PickslipNoTemp     NVARCHAR(20)
+         , @c_PH_PickslipNo      NVARCHAR(20)
+         , @c_PrevPH_PickslipNo  NVARCHAR(20)
+         , @c_OrderStatus        NVARCHAR(10)
+         , @c_PickStatus         NVARCHAR(10)
+         , @c_ExecStatements     NVARCHAR(MAX)
+         , @c_ExecArguments      NVARCHAR(MAX)
+         , @c_JoinClause         NVARCHAR(MAX)
+         , @c_ShowFields         NVARCHAR(MAX)
+         , @c_CustGrpCodeExp     NVARCHAR(MAX)
+         , @c_ShipToAddressExp   NVARCHAR(MAX)
+         , @c_NotesExp           NVARCHAR(MAX)
+         , @c_DivExp             NVARCHAR(MAX)
+         , @c_BrandExp           NVARCHAR(MAX)
+         , @c_Userdefine05Exp    NVARCHAR(MAX)
+         , @c_DropIDExp          NVARCHAR(MAX)
 
 
    SELECT @c_DataWindow = 'r_hk_picking_control_list_06'
@@ -87,6 +115,9 @@ BEGIN
       DROP TABLE #TEMP_PICKTASK2
    IF OBJECT_ID('tempdb..#TEMP_PICKSLIPNO') IS NOT NULL
       DROP TABLE #TEMP_PICKSLIPNO
+   IF OBJECT_ID('tempdb..#TEMP_PIKDT') IS NOT NULL
+      DROP TABLE #TEMP_PIKDT
+
 
    CREATE TABLE #TEMP_PICKDETAIL (
         PickdetailKey   NVARCHAR(20) NULL
@@ -100,15 +131,60 @@ BEGIN
       , PH_PickslipNo   NVARCHAR(20) NULL
    )
 
+   CREATE TABLE #TEMP_PIKDT (
+        PickSlipNo        NVARCHAR(10)
+      , Storerkey         NVARCHAR(15)
+      , Orderkey          NVARCHAR(10)
+      , ExternOrderKey    NVARCHAR(50)
+      , Status            NVARCHAR(10)
+      , LoadKey           NVARCHAR(10)
+      , WaveKey           NVARCHAR(10)
+      , DeliveryDate      DATETIME
+      , Type              NVARCHAR(10)
+      , Notes2            NVARCHAR(4000)
+      , C_Company         NVARCHAR(45)
+      , C_Address1        NVARCHAR(45)
+      , C_Address2        NVARCHAR(45)
+      , C_Address3        NVARCHAR(45)
+      , C_Address4        NVARCHAR(45)
+      , C_City            NVARCHAR(45)
+      , C_Country         NVARCHAR(45)
+      , Route             NVARCHAR(10)
+      , AllocQty          INT
+      , CBM               FLOAT
+      , Sku               NVARCHAR(20)
+      , ToLoc             NVARCHAR(10)
+      , Loc               NVARCHAR(10)
+      , Lot               NVARCHAR(10)
+      , ID                NVARCHAR(20)
+      , PickdetailKey     NVARCHAR(10)
+      , ToteCBM           FLOAT
+      , IsConsol          NVARCHAR(1)
+      , HasReplen         NVARCHAR(1)
+      , PrintedFlag       NVARCHAR(1)
+      , LocationCategory  NVARCHAR(10)
+      , PD_DropID         NVARCHAR(20)
+      , PD_PickslipNo     NVARCHAR(10)
+      , Picker            NVARCHAR(20)
+      , ShowFields        NVARCHAR(4000)
+      , CustomerGroupCode NVARCHAR(500)
+      , ShipToAddress     NVARCHAR(500)
+      , Notes             NVARCHAR(4000)
+      , Div               NVARCHAR(500)
+      , Brand             NVARCHAR(500)
+      , Userdefine05      NVARCHAR(500)
+      , DropID            NVARCHAR(500)
+   )
+
 
    IF @c_Type = 'WP'
    BEGIN
+      -- Create PickHeader (WP)
       IF EXISTS(SELECT TOP 1 1
                 FROM dbo.WAVE     WAVE(NOLOCK)
                 JOIN dbo.ORDERS     OH(NOLOCK) ON WAVE.Wavekey=OH.Userdefine09
                 JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
                 JOIN dbo.SKU       SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku
-                LEFT JOIN dbo.CODELKUP BRD(NOLOCK) ON BRD.LISTNAME='LORBRAND' AND BRD.Storerkey=SKU.Storerkey AND BRD.Description=SKU.Class
                 LEFT JOIN (
                  SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
                       , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
@@ -119,16 +195,22 @@ BEGIN
                 HAVING (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(MAX(WAVE.Userdefine03),'')='RDT')
                     OR (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,DefaultRDTPick,%'
                         AND NOT (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(MAX(WAVE.Userdefine03),'')='PICKSLIP'))
-                    OR MAX(IIF(BRD.UDF01='RDT',1,0)) = 1
       )
       BEGIN
          IF EXISTS(SELECT TOP 1 1
                    FROM dbo.ORDERS     OH(NOLOCK)
                    JOIN dbo.PICKHEADER PH(NOLOCK) ON OH.Orderkey=PH.Orderkey
-                   WHERE OH.Userdefine09=@c_Key
+                   WHERE OH.Userdefine09=@c_Key AND PH.Zone='8' AND PH.PickType='0'
             )
          BEGIN
-            SET @b_FirstPrint = 0
+            UPDATE PH WITH(ROWLOCK)
+               SET PickType   = '1'
+                 , EditDate   = GETDATE()
+                 , EditWho    = SUSER_SNAME()
+                 , TrafficCop = NULL
+              FROM dbo.ORDERS     OH(NOLOCK)
+              JOIN dbo.PICKHEADER PH ON OH.Orderkey=PH.Orderkey
+             WHERE OH.Userdefine09=@c_Key AND PH.Zone='8' AND PH.PickType='0'
          END
 
          EXEC isp_CreatePickSlip
@@ -143,23 +225,9 @@ BEGIN
             , @b_Success            = @b_Success OUTPUT
             , @n_Err                = @n_Err     OUTPUT
             , @c_ErrMsg             = @c_ErrMsg  OUTPUT
-
-         IF @b_FirstPrint = 0 AND
-            EXISTS(SELECT TOP 1 1
-                   FROM dbo.ORDERS     OH(NOLOCK)
-                   JOIN dbo.PICKHEADER PH(NOLOCK) ON OH.Orderkey=PH.Orderkey
-                   WHERE OH.Userdefine09=@c_Key AND PH.Zone='8' AND PH.PickType='0'
-            )
-         BEGIN
-            UPDATE PH WITH(ROWLOCK)
-               SET PickType = '1'
-                 , TrafficCop = NULL
-              FROM dbo.ORDERS     OH(NOLOCK)
-              JOIN dbo.PICKHEADER PH ON OH.Orderkey=PH.Orderkey
-             WHERE OH.Userdefine09=@c_Key AND PH.Zone='8' AND PH.PickType='0'
-         END
       END
 
+      -- Prepare for Assigning Picker (WP)
       SELECT @n_AssignPicker = TRY_PARSE(REPLACE(REPLACE(UserDefine04,'ReAssignPicker=',''),'AssignPicker=','') AS FLOAT)
            , @n_SplitLine    = TRY_PARSE(REPLACE(REPLACE(UserDefine04,'ReSplitLine=',''),'SplitLine=','') AS FLOAT)
            , @b_ReAssign     = IIF(LTRIM(UserDefine04) LIKE 'ReAssignPicker=%' OR LTRIM(UserDefine04) LIKE 'ReSplitLine=%', 1, 0)
@@ -195,12 +263,12 @@ BEGIN
    END
    ELSE IF @c_Type = 'LP'
    BEGIN
+      -- Create PickHeader (LP)
       IF EXISTS(SELECT TOP 1 1
                 FROM dbo.LOADPLAN   LP(NOLOCK)
                 JOIN dbo.ORDERS     OH(NOLOCK) ON LP.Loadkey=OH.Loadkey
                 JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
                 JOIN dbo.SKU       SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku
-                LEFT JOIN dbo.CODELKUP BRD(NOLOCK) ON BRD.LISTNAME='LORBRAND' AND BRD.Storerkey=SKU.Storerkey AND BRD.Description=SKU.Class
                 LEFT JOIN (
                  SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
                       , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
@@ -211,16 +279,22 @@ BEGIN
                 HAVING (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(MAX(LP.Userdefine03),'')='RDT')
                     OR (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,DefaultRDTPick,%'
                         AND NOT (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(MAX(LP.Userdefine03),'')='PICKSLIP'))
-                    OR MAX(IIF(BRD.UDF01='RDT',1,0)) = 1
       )
       BEGIN
          IF EXISTS(SELECT TOP 1 1
                    FROM dbo.ORDERS     OH(NOLOCK)
                    JOIN dbo.PICKHEADER PH(NOLOCK) ON OH.Loadkey=PH.ExternOrderkey AND PH.Orderkey='' AND OH.Loadkey<>''
-                   WHERE OH.Loadkey=@c_Key
+                   WHERE OH.Loadkey=@c_Key AND PH.Zone='9' AND PH.PickType='0'
             )
          BEGIN
-            SET @b_FirstPrint = 0
+            UPDATE PH WITH(ROWLOCK)
+               SET PickType   = '1'
+                 , EditDate   = GETDATE()
+                 , EditWho    = SUSER_SNAME()
+                 , TrafficCop = NULL
+              FROM dbo.ORDERS     OH(NOLOCK)
+              JOIN dbo.PICKHEADER PH ON OH.Loadkey=PH.ExternOrderkey AND PH.Orderkey='' AND OH.Loadkey<>''
+             WHERE OH.Loadkey=@c_Key AND PH.Zone='9' AND PH.PickType='0'
          END
 
          IF NOT EXISTS(SELECT TOP 1 1 FROM dbo.ORDERS(NOLOCK) WHERE Loadkey=@c_Key AND ISNULL(Userdefine08,'')<>'N')
@@ -238,24 +312,9 @@ BEGIN
                , @n_Err                = @n_Err     OUTPUT
                , @c_ErrMsg             = @c_ErrMsg  OUTPUT
          END
-
-         IF @b_FirstPrint = 0 AND
-            EXISTS(SELECT TOP 1 1
-                   FROM dbo.ORDERS     OH(NOLOCK)
-                   JOIN dbo.PICKHEADER PH(NOLOCK) ON OH.Loadkey=PH.ExternOrderkey AND PH.Orderkey='' AND OH.Loadkey<>''
-                   WHERE OH.Loadkey=@c_Key AND PH.Zone='9' AND PH.PickType='0'
-            )
-         BEGIN
-            UPDATE PH WITH(ROWLOCK)
-               SET PickType = '1'
-                 , TrafficCop = NULL
-              FROM dbo.ORDERS     OH(NOLOCK)
-              JOIN dbo.PICKHEADER PH ON OH.Loadkey=PH.ExternOrderkey AND PH.Orderkey='' AND OH.Loadkey<>''
-             WHERE OH.Loadkey=@c_Key AND PH.Zone='9' AND PH.PickType='0'
-         END
       END
 
-
+      -- Prepare for Assigning Picker (LP)
       SELECT @n_AssignPicker = TRY_PARSE(REPLACE(REPLACE(UserDefine04,'ReAssignPicker=',''),'AssignPicker=','') AS FLOAT)
            , @n_SplitLine    = TRY_PARSE(REPLACE(REPLACE(UserDefine04,'ReSplitLine=',''),'SplitLine=','') AS FLOAT)
            , @b_ReAssign     = IIF(LTRIM(UserDefine04) LIKE 'ReAssignPicker=%' OR LTRIM(UserDefine04) LIKE 'ReSplitLine=%', 1, 0)
@@ -318,7 +377,7 @@ BEGIN
    GROUP BY OH.Orderkey
 
 
-   -- Assign Picker
+   -- Assigning Picker
    UPDATE a SET PH_PickslipNo = b.PickslipNo
      FROM #TEMP_PICKDETAIL a
      JOIN #TEMP_PICKHEADER b ON a.OrderKey = b.OrderKey
@@ -338,7 +397,8 @@ BEGIN
       IF ISNULL(@n_AssignPicker,0)<=0
          SET @n_AssignPicker = 1
    END
-   SET @n_AvgTasks = CAST(@n_TotalTasks AS FLOAT) / @n_AssignPicker
+   SET @n_AvgTasks = CASE WHEN @n_AssignPicker <= 0 THEN @n_TotalTasks
+                          ELSE CAST(@n_TotalTasks AS FLOAT) / @n_AssignPicker END
 
 
    IF ISNULL(@n_AssignPicker,0) <= 0 AND ISNULL(@n_SplitLine,0) <= 0
@@ -440,7 +500,7 @@ BEGIN
       DEALLOCATE C_PICKTASK
    END
 
-
+   -- Update PICKDETAIL PickslipNo & Picker # (PD.AltSku)
    IF EXISTS(SELECT TOP 1 1
                FROM #TEMP_PICKHEADER a
                JOIN dbo.PICKDETAIL b(NOLOCK) ON a.Orderkey=b.Orderkey
@@ -471,8 +531,6 @@ BEGIN
       WHERE ISNULL(PD.PickslipNo,'')=''
    END
 
-
-   TRUNCATE TABLE #TEMP_PICKDETAIL
    IF @c_Type = 'WP'
    BEGIN
       IF EXISTS(SELECT TOP 1 1 FROM dbo.WAVE (NOLOCK) WHERE Wavekey = @c_Key
@@ -483,13 +541,6 @@ BEGIN
           WHERE Wavekey = @c_Key
             AND (LTRIM(UserDefine04) LIKE 'ReAssignPicker=%' OR LTRIM(UserDefine04) LIKE 'ReSplitLine=%')
       END
-
-      INSERT INTO #TEMP_PICKDETAIL (PickdetailKey, PickslipNo)
-      SELECT PickdetailKey   = PD.PickdetailKey
-           , PickslipNo      = PD.PickslipNo
-        FROM dbo.ORDERS OH(NOLOCK)
-        JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
-       WHERE OH.Userdefine09 = @c_Key AND @c_Key<>'' AND PD.PickslipNo<>''
    END
    ELSE IF @c_Type = 'LP'
    BEGIN
@@ -501,71 +552,253 @@ BEGIN
           WHERE Loadkey = @c_Key
             AND (LTRIM(UserDefine04) LIKE 'ReAssignPicker=%' OR LTRIM(UserDefine04) LIKE 'ReSplitLine=%')
       END
+   END
 
-      INSERT INTO #TEMP_PICKDETAIL (PickdetailKey, PickslipNo)
+
+   -- Get PickdetailKey for Final Result
+   TRUNCATE TABLE #TEMP_PICKDETAIL
+
+   IF @c_Type = 'WP'
+   BEGIN
+      INSERT INTO #TEMP_PICKDETAIL (PickdetailKey, PickslipNo, Storerkey)
       SELECT PickdetailKey   = PD.PickdetailKey
            , PickslipNo      = PD.PickslipNo
+           , Storerkey       = PD.Storerkey
+        FROM dbo.ORDERS OH(NOLOCK)
+        JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
+       WHERE OH.Userdefine09 = @c_Key AND @c_Key<>'' AND PD.PickslipNo<>''
+   END
+   ELSE IF @c_Type = 'LP'
+   BEGIN
+      INSERT INTO #TEMP_PICKDETAIL (PickdetailKey, PickslipNo, Storerkey)
+      SELECT PickdetailKey   = PD.PickdetailKey
+           , PickslipNo      = PD.PickslipNo
+           , Storerkey       = PD.Storerkey
         FROM dbo.ORDERS OH(NOLOCK)
         JOIN dbo.PICKDETAIL PD(NOLOCK) ON OH.Orderkey=PD.Orderkey
        WHERE OH.Loadkey = @c_Key AND @c_Key<>'' AND PD.PickslipNo<>''
    END
 
 
+   -- Storerkey Loop
+   DECLARE C_CUR_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT Storerkey
+     FROM #TEMP_PICKDETAIL
+    ORDER BY 1
+
+   OPEN C_CUR_STORERKEY
+
+   WHILE 1=1
+   BEGIN
+      FETCH NEXT FROM C_CUR_STORERKEY
+       INTO @c_Storerkey
+
+      IF @@FETCH_STATUS<>0
+         BREAK
+
+      SELECT @c_JoinClause         = ''
+           , @c_ShowFields         = ''
+           , @c_CustGrpCodeExp     = ''
+           , @c_ShipToAddressExp   = ''
+           , @c_NotesExp           = ''
+           , @c_DivExp             = ''
+           , @c_BrandExp           = ''
+           , @c_Userdefine05Exp    = ''
+           , @c_DropIDExp          = ''
+
+      SELECT TOP 1
+             @c_JoinClause = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+      FROM dbo.CODELKUP (NOLOCK)
+      WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+
+      SELECT TOP 1
+             @c_CustGrpCodeExp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='CustomerGroupCode')), '' )
+           , @c_ShipToAddressExp= ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='ShipToAddress')), '' )
+           , @c_NotesExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Notes')), '' )
+           , @c_DivExp          = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Div')), '' )
+           , @c_BrandExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Brand')), '' )
+           , @c_Userdefine05Exp = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Userdefine05')), '' )
+           , @c_DropIDExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='DropID')), '' )
+        FROM dbo.CODELKUP (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+
+      SET @c_ExecStatements =
+        N'INSERT INTO #TEMP_PIKDT ('
+        +    ' PickSlipNo, Storerkey, Orderkey, ExternOrderKey, Status, LoadKey, WaveKey, DeliveryDate, Type'
+        +   ', Notes2, C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_City, C_Country, Route'
+        +   ', AllocQty, CBM, Sku, ToLoc, Loc, Lot, ID, PickdetailKey, ToteCBM, IsConsol, HasReplen'
+        +   ', PrintedFlag, LocationCategory, PD_DropID, PD_PickslipNo, Picker'
+        +   ', ShowFields, CustomerGroupCode, Notes, Div, Brand, Userdefine05, DropID, ShipToAddress)'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        + ' SELECT PickslipNo        = RTRIM( PH.PickslipNo )'
+        +       ', Storerkey         = RTRIM( PH.Storerkey )'
+        +       ', Orderkey          = RTRIM( IIF(PH.IsConsol=''Y'', '''', OH.Orderkey) )'
+        +       ', ExternOrderkey    = RTRIM( IIF(PH.IsConsol=''Y'', '''', OH.ExternOrderkey) )'
+        +       ', Status            = RTRIM( OH.Status )'
+        +       ', Loadkey           = RTRIM( IIF(PH.IsConsol=''Y'', OH.Loadkey, ''''))'
+        +       ', Wavekey           = RTRIM( IIF(PH.IsConsol=''Y'', '''', OH.Userdefine09) )'
+        +       ', DeliveryDate      = CONVERT(DATETIME, CONVERT(VARCHAR(10),OH.DeliveryDate,120))'
+        +       ', Type              = ISNULL(RTRIM( OH.Type), '''')'
+        +       ', Notes2            = ISNULL(RTRIM( OH.Notes2), '''')'
+        +       ', C_Company         = ISNULL(RTRIM( OH.C_Company), '''')'
+        +       ', C_Address1        = ISNULL(RTRIM( OH.C_Address1), '''')'
+        +       ', C_Address2        = ISNULL(RTRIM( OH.C_Address2), '''')'
+        +       ', C_Address3        = ISNULL(RTRIM( OH.C_Address3), '''')'
+        +       ', C_Address4        = ISNULL(RTRIM( OH.C_Address4), '''')'
+        +       ', C_City            = ISNULL(RTRIM( OH.C_City), '''')'
+        +       ', C_Country         = ISNULL(RTRIM( OH.C_Country), '''')'
+        +       ', Route             = ISNULL(RTRIM( OH.Route), '''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', AllocQty          = PD.Qty'
+        +       ', CBM               = PD.Qty * SKU.StdCube'
+        +       ', Sku               = ISNULL(RTRIM( PD.Sku), '''')'
+        +       ', ToLoc             = ISNULL(RTRIM( PD.ToLoc), '''')'
+        +       ', Loc               = ISNULL(RTRIM( PD.Loc), '''')'
+        +       ', Lot               = ISNULL(RTRIM( PD.Lot), '''')'
+        +       ', ID                = ISNULL(RTRIM( PD.ID), '''')'
+        +       ', PickdetailKey     = ISNULL(RTRIM( PD.PickdetailKey), '''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', ToteCBM           = CASE WHEN ISNULL(TRY_PARSE(ISNULL(CBM.Long,'''') AS FLOAT),0.0)=0.0'
+        +                                   ' OR ISNULL(TRY_PARSE(ISNULL(RTO.Long,'''') AS FLOAT),0.0)=0.0'
+        +                                 ' THEN 0.0'
+        +                                 ' ELSE ISNULL(TRY_PARSE(ISNULL(CBM.Long,'''') AS FLOAT),0.0) / ISNULL(TRY_PARSE(ISNULL(RTO.Long,'''') AS FLOAT),0.0)'
+        +                                 ' END'
+        +       ', IsConsol          = PH.IsConsol'
+        +       ', HasReplen         = IIF(ISNULL(LOC.LocationCategory,'''')=''SELECTIVE'',''Y'',''N'')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', PrintedFlag       = RTRIM( PH.PrintedFlag )'
+        +       ', LocationCategory  = ISNULL(RTRIM( LOC.LocationCategory), '''')'
+        +       ', PD_DropID         = ISNULL(RTRIM( PD.DropID), '''')'
+        +       ', PD_PickslipNo     = ISNULL(RTRIM( ISNULL(TPD.PickslipNo, PH.PickslipNo)), '''')'
+        +       ', Picker            = RTRIM( IIF( PD.AltSku LIKE ''Picker-%'', PD.AltSku, ''''))'
+        +       ', ShowFields        = ISNULL(@c_ShowFields,'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', CustomerGroupCode = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_CustGrpCodeExp  ,'')<>'' THEN @c_CustGrpCodeExp   ELSE 'ST.CustomerGroupCode' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Notes             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_NotesExp        ,'')<>'' THEN @c_NotesExp         ELSE 'OH.Notes' END + ',''''))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Div               = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DivExp          ,'')<>'' THEN @c_DivExp           ELSE ''''''     END + ',''''))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Brand             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_BrandExp        ,'')<>'' THEN @c_BrandExp         ELSE ''''''     END + ',''''))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Userdefine05      = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_Userdefine05Exp ,'')<>'' THEN @c_Userdefine05Exp  ELSE ''''''     END + ',''''))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', DropID            = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DropIDExp       ,'')<>'' THEN @c_DropIDExp        ELSE 'IIF(PH.IsConsol=''Y'','''',''ID''+OH.Orderkey+''001'')' END + ',''''))'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', ShipToAddress    =  RTRIM('        + CASE WHEN ISNULL(@c_ShipToAddressExp,'')<>'' THEN @c_ShipToAddressExp ELSE 'NULL'     END + ')'
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +   ' FROM #TEMP_PICKHEADER  PH'
+        +   ' JOIN dbo.ORDERS        OH (NOLOCK) ON PH.FOK=OH.Orderkey'
+        +   ' JOIN dbo.STORER        ST (NOLOCK) ON PH.Storerkey=ST.Storerkey'
+        +   ' JOIN dbo.PICKDETAIL    PD (NOLOCK) ON PH.Orderkey=PD.Orderkey'
+        +   ' JOIN dbo.LOC           LOC(NOLOCK) ON PD.Loc=LOC.Loc'
+        +   ' JOIN dbo.SKU           SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku'
+        +   ' LEFT JOIN #TEMP_PICKDETAIL TPD     ON PD.PickDetailKey=TPD.PickdetailKey'
+        +   ' LEFT JOIN dbo.CODELKUP CBM(NOLOCK) ON CBM.LISTNAME=''ToteCBM'' AND CBM.Storerkey=PH.Storerkey'
+        +   ' LEFT JOIN dbo.CODELKUP RTO(NOLOCK) ON RTO.LISTNAME=''Ratio'' AND RTO.Storerkey=PH.Storerkey'
+      SET @c_ExecStatements = @c_ExecStatements
+        +   CASE WHEN ISNULL(@c_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_JoinClause)),'') END
+
+      SET @c_ExecStatements = @c_ExecStatements
+        +  ' WHERE PD.Qty > 0'
+        +    ' AND ((ISNULL(@c_ShowFields,'''') LIKE ''%,AllowUserChangePickMethod,%'' AND ISNULL(PH.Userdefine03,'''')=''RDT'')'
+        +      ' OR (ISNULL(@c_ShowFields,'''') LIKE ''%,DefaultRDTPick,%'''
+        +       ' AND NOT (ISNULL(@c_ShowFields,'''') LIKE ''%,AllowUserChangePickMethod,%'' AND ISNULL(PH.Userdefine03,'''')=''PICKSLIP'')))'
+
+
+      SET @c_ExecArguments = N'@c_ShowFields  NVARCHAR(MAX)'
+                           + ',@c_Storerkey   NVARCHAR(15)'
+                           + ',@c_Type        NVARCHAR(2)'
+                           + ',@c_DataWindow  NVARCHAR(40)'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @c_ShowFields
+                       , @c_Storerkey
+                       , @c_Type
+                       , @c_DataWindow
+   END
+   CLOSE C_CUR_STORERKEY
+   DEALLOCATE C_CUR_STORERKEY
+
 
    -- Final Result
-   SELECT PickslipNo        = RTRIM( PH.PickslipNo )
-        , CustomerGroupCode = RTRIM( MAX( ST.CustomerGroupCode ) )
-        , Orderkey          = RTRIM( MAX( IIF(PH.IsConsol='Y', '', FOH.Orderkey) ) )
-        , ExternOrderkey    = RTRIM( MAX( IIF(PH.IsConsol='Y', '', FOH.ExternOrderkey) ) )
-        , Status            = RTRIM( MIN( FOH.Status ) )
-        , Loadkey           = RTRIM( MAX( IIF(PH.IsConsol='Y', FOH.Loadkey, '') ) )
-        , Wavekey           = RTRIM( MAX( IIF(PH.IsConsol='Y', '', FOH.Userdefine09) ) )
-        , DeliveryDate      = MAX( CONVERT(DATETIME, CONVERT(VARCHAR(10),FOH.DeliveryDate,120)) )
-        , Type              = RTRIM( ISNULL( MAX( FOH.Type ), '') )
-        , Notes             = RTRIM( ISNULL( MAX( FOH.Notes ), '') )
-        , Notes2            = RTRIM( ISNULL( MAX( FOH.Notes2 ), '') )
-        , Userdefine05      = RTRIM( ISNULL( MAX( FOH.Userdefine05 ), '') )
-        , C_Company         = RTRIM( ISNULL( MAX( FOH.C_Company ), '') )
-        , C_Address1        = RTRIM( ISNULL( MAX( FOH.C_Address1 ), '') )
-        , C_Address2        = RTRIM( ISNULL( MAX( FOH.C_Address2 ), '') )
-        , C_Address3        = RTRIM( ISNULL( MAX( FOH.C_Address3 ), '') )
-        , C_Address4        = RTRIM( ISNULL( MAX( FOH.C_Address4 ), '') )
-        , Route             = RTRIM( ISNULL( MAX( FOH.Route ), '') )
-        , AllocQty          = SUM( PD.Qty )
-        , CBM               = SUM( PD.Qty * SKU.StdCube )
-        , SkuCount          = COUNT( DISTINCT PD.Sku )
-        , LocCount          = COUNT( DISTINCT IIF(PD.ToLoc<>'', PD.ToLoc, PD.Loc) )
-        , PickDetailCount   = COUNT( DISTINCT IIF(PH.IsConsol='Y', RTRIM(PD.Lot)+'|'+RTRIM(PD.Loc)+'|'+RTRIM(PD.ID), PD.PickdetailKey ) )
-        , NoOfTotes         = CASE WHEN ISNULL(TRY_PARSE(ISNULL(MAX(CBM.Long),'') AS FLOAT),0.0)=0.0
-                                     OR ISNULL(TRY_PARSE(ISNULL(MAX(RTO.Long),'') AS FLOAT),0.0)=0.0
-                                   THEN 0.0
-                                   ELSE CEILING(ISNULL(SUM(PD.Qty * SKU.StdCube),0.0) /
-                                        ISNULL(TRY_PARSE(ISNULL(MAX(CBM.Long),'') AS FLOAT),0.0) * ISNULL(TRY_PARSE(ISNULL(MAX(RTO.Long),'') AS FLOAT),0.0))
-                                   END
-        , IsConsol          = MAX( PH.IsConsol )
-        , HasReplen         = IIF(ISNULL(MAX(LOC.LocationCategory),'')='SELECTIVE','Y','N')
+   SELECT PickslipNo        = X.PickslipNo
+        , CustomerGroupCode = MAX( X.CustomerGroupCode )
+        , Orderkey          = MAX( X.Orderkey )
+        , ExternOrderkey    = MAX( X.ExternOrderkey )
+        , Status            = MAX( X.Status )
+        , Loadkey           = MAX( X.Loadkey )
+        , Wavekey           = MAX( X.Wavekey )
+        , DeliveryDate      = MAX( X.DeliveryDate )
+        , Type              = MAX( X.Type )
+        , Notes             = MAX( X.Notes )
+        , Notes2            = MAX( X.Notes2 )
+        , Userdefine05      = MAX( X.Userdefine05 )
+        , C_Company         = MAX( X.C_Company )
+        , C_Address1        = MAX( X.C_Address1 )
+        , C_Address2        = MAX( X.C_Address2 )
+        , C_Address3        = MAX( X.C_Address3 )
+        , C_Address4        = MAX( X.C_Address4 )
+        , Route             = MAX( X.Route )
+        , AllocQty          = SUM( X.AllocQty )
+        , CBM               = SUM( X.CBM )
+        , SkuCount          = COUNT( DISTINCT X.Sku )
+        , LocCount          = COUNT( DISTINCT IIF(X.ToLoc<>'', X.ToLoc, X.Loc) )
+        , PickDetailCount   = COUNT( DISTINCT IIF(X.IsConsol='Y', RTRIM(X.Lot)+'|'+RTRIM(X.Loc)+'|'+RTRIM(X.ID), X.PickdetailKey ) )
+        , NoOfTotes         = CASE WHEN MAX(X.ToteCBM) = 0.0 THEN 0.0 ELSE CEILING(SUM( X.CBM ) / MAX(X.ToteCBM)) END
+        , IsConsol          = MAX( X.IsConsol )
+        , HasReplen         = MAX( X.HasReplen )
         , KeyType           = @c_Type
         , datawindow        = @c_DataWindow
-        , Div               = RTRIM( MAX( BRD.Long ) )
-        , Brand             = RTRIM( MAX( BRD.Notes ) )
-        , PrintedFlag       = RTRIM( MAX( PH.PrintedFlag ) )
-        , PickZones         = CAST( CASE MAX( PH.IsConsol )
+        , Div               = MAX( X.Div )
+        , Brand             = MAX( X.Brand )
+        , PrintedFlag       = MAX( X.PrintedFlag )
+        , PickZones         = CAST( CASE MAX( X.IsConsol )
                               WHEN 'N' THEN
-                                 STUFF((SELECT ', ', RTRIM(ISNULL(X.PickZone,'')), RTRIM(X.Replen)
+                                 STUFF((SELECT ', ', RTRIM(ISNULL(Y.PickZone,'')), RTRIM(Y.Replen)
                                  FROM (
                                     SELECT PickZone=IIF(c.ToLoc<>'',e.PickZone,d.PickZone), Replen=IIF(ISNULL(MAX(c.ToLoc),'')<>'', IIF(ISNULL(MIN(c.ToLoc),'')=ISNULL(MAX(c.ToLoc),''), N'■',N'▼'),'')
                                     FROM PICKHEADER      a(NOLOCK)
                                     LEFT JOIN PICKDETAIL c(NOLOCK) ON a.Orderkey=c.Orderkey
                                     LEFT JOIN LOC        d(NOLOCK) ON c.Loc=d.Loc
                                     LEFT JOIN LOC        e(NOLOCK) ON c.ToLoc=e.Loc AND c.ToLoc<>''
-                                    WHERE c.PickslipNo = ISNULL(ISNULL(TPD.PickslipNo, PH.PickslipNo), '') AND c.Qty>0
+                                    WHERE c.PickslipNo = X.PD_PickslipNo AND c.Qty>0
                                  GROUP BY IIF(c.ToLoc<>'',e.PickZone,d.PickZone)
-                                 ) X
-                                 ORDER BY IIF(X.Replen=N'■',3,IIF(X.Replen=N'▼',2,1)), 2
+                                 ) Y
+                                 ORDER BY IIF(Y.Replen=N'■',3,IIF(Y.Replen=N'▼',2,1)), 2
                                  FOR XML PATH('')), 1, 2, '')
-
                               WHEN 'Y' THEN
-                                 STUFF((SELECT ', ', RTRIM(ISNULL(X.PickZone,'')), RTRIM(X.Replen)
+                                 STUFF((SELECT ', ', RTRIM(ISNULL(Y.PickZone,'')), RTRIM(Y.Replen)
                                  FROM (
                                     SELECT PickZone=IIF(c.ToLoc<>'',e.PickZone,d.PickZone), Replen=IIF(ISNULL(MAX(c.ToLoc),'')<>'', IIF(ISNULL(MIN(c.ToLoc),'')=ISNULL(MAX(c.ToLoc),''), N'■',N'▼'),'')
                                     FROM PICKHEADER      a(NOLOCK)
@@ -573,46 +806,48 @@ BEGIN
                                     LEFT JOIN PICKDETAIL c(NOLOCK) ON b.Orderkey=c.Orderkey
                                     LEFT JOIN LOC        d(NOLOCK) ON c.Loc=d.Loc
                                     LEFT JOIN LOC        e(NOLOCK) ON c.ToLoc=e.Loc AND c.ToLoc<>''
-                                    WHERE c.PickslipNo = ISNULL(ISNULL(TPD.PickslipNo, PH.PickslipNo), '') AND c.Qty>0
+                                    WHERE c.PickslipNo = X.PD_PickslipNo AND c.Qty>0
                                  GROUP BY IIF(c.ToLoc<>'',e.PickZone,d.PickZone)
-                                 ) X
-                                 ORDER BY IIF(X.Replen=N'■',3,IIF(X.Replen=N'▼',2,1)), 2
+                                 ) Y
+                                 ORDER BY IIF(Y.Replen=N'■',3,IIF(Y.Replen=N'▼',2,1)), 2
                                  FOR XML PATH('')), 1, 2, '')
                               END AS NVARCHAR(4000))
-        , ReplenCount       = COUNT(DISTINCT CASE WHEN LOC.LocationCategory='SELECTIVE' THEN DropID END)
-        , PD_PickslipNo     = RTRIM( ISNULL(ISNULL(TPD.PickslipNo, PH.PickslipNo), '') )
-        , Picker            = RTRIM( IIF( PD.AltSku LIKE 'Picker-%', PD.AltSku, '') )
-        , PTL_TaskCount     = COUNT( DISTINCT RTRIM(PD.Loc)+'|'+RTRIM(PD.Sku) )
-        , PickSlip_SeqNo    = ROW_NUMBER() OVER(PARTITION BY PH.PickslipNo ORDER BY ISNULL(ISNULL(TPD.PickslipNo, PH.PickslipNo), '') )
-        , PickSlip_Count    = COUNT(1) OVER(PARTITION BY PH.PickslipNo)
+        , ReplenCount       = COUNT(DISTINCT CASE WHEN X.LocationCategory='SELECTIVE' THEN X.PD_DropID END)
+        , PD_PickslipNo     = UPPER( X.PD_PickslipNo )
+        , Picker            = X.Picker
+        , PTL_TaskCount     = COUNT( DISTINCT RTRIM(X.Loc) +'|'+ RTRIM(X.Sku) )
+        , PickSlip_SeqNo    = ROW_NUMBER() OVER(PARTITION BY X.PickslipNo ORDER BY PD_PickslipNo )
+        , PickSlip_Count    = COUNT(1)     OVER(PARTITION BY X.PickslipNo)
+        , ShowFields        = MAX( X.ShowFields )
+        , C_City            = MAX( X.C_City )
+        , C_Country         = MAX( X.C_Country )
+        , ShipToAddress     = MAX( X.ShipToAddress )
+        , DropID            = MAX( X.DropID )
+        , Lbl_Notes_1       = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Notes_1') ) AS NVARCHAR(500))
+        , Lbl_Notes_2       = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Notes_2') ) AS NVARCHAR(500))
+        , Lbl_Userdefine05_1= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Userdefine05_1') ) AS NVARCHAR(500))
+        , Lbl_Userdefine05_2= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Userdefine05_2') ) AS NVARCHAR(500))
 
-   FROM #TEMP_PICKHEADER PH
-   JOIN dbo.ORDERS        FOH(NOLOCK) ON PH.FOK=FOH.Orderkey
-   JOIN dbo.STORER         ST(NOLOCK) ON PH.Storerkey=ST.Storerkey
-   JOIN dbo.PICKDETAIL     PD(NOLOCK) ON PH.Orderkey=PD.Orderkey
-   JOIN dbo.LOC           LOC(NOLOCK) ON PD.Loc=LOC.Loc
-   JOIN dbo.SKU           SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku
-   LEFT JOIN #TEMP_PICKDETAIL TPD     ON PD.PickDetailKey=TPD.PickdetailKey
-   LEFT JOIN dbo.CODELKUP BRD(NOLOCK) ON BRD.LISTNAME='LORBRAND' AND BRD.Storerkey=SKU.Storerkey AND BRD.Description=SKU.Class
-   LEFT JOIN dbo.CODELKUP CBM(NOLOCK) ON CBM.LISTNAME='ToteCBM' AND CBM.Storerkey=PH.Storerkey
-   LEFT JOIN dbo.CODELKUP RTO(NOLOCK) ON RTO.LISTNAME='Ratio' AND RTO.Storerkey=PH.Storerkey
+   FROM #TEMP_PIKDT X
+
    LEFT JOIN (
-      SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+      SELECT Storerkey, Notes = RTRIM(Notes), Notes2 = RTRIM(Notes2), Delim = LTRIM(RTRIM(UDF01))
            , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
-        FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
-   ) RptCfg
-   ON RptCfg.Storerkey=PH.Storerkey AND RptCfg.SeqNo=1
+        FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='MAPVALUE' AND Long=@c_DataWindow AND Short='Y'
+   ) RptCfg3
+   ON RptCfg3.Storerkey=X.Storerkey AND RptCfg3.SeqNo=1
 
-   WHERE PD.Qty > 0
-
-   GROUP BY PH.PickslipNo
-          , ISNULL(ISNULL(TPD.PickslipNo, PH.PickslipNo), '')
-          , IIF( PD.AltSku LIKE 'Picker-%', PD.AltSku, '')
-
-   HAVING (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(MAX(PH.Userdefine03),'')='RDT')
-       OR (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,DefaultRDTPick,%'
-           AND NOT (ISNULL(MAX(RptCfg.ShowFields),'') LIKE '%,AllowUserChangePickMethod,%' AND ISNULL(MAX(PH.Userdefine03),'')='PICKSLIP'))
-       OR MAX(IIF(BRD.UDF01='RDT',1,0)) = 1
+   GROUP BY X.PickslipNo
+          , X.PD_PickslipNo
+          , X.Picker
 
    ORDER BY CustomerGroupCode, PickslipNo, PickSlip_SeqNo
 END

@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_10]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_10]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_10]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,6 +25,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 23/06/2020   ML       1.1  Add Total_Doc_Amount                       */
 /* 08/07/2020   ML       1.2  Add new fields                             */
+/* 01/09/2020   ML       1.3  Remvoe non-necessary join to PACKHEADER    */
+/*                            when inserting discrete #TEMP_FINALORDERKEY*/
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_10] (
@@ -303,8 +305,6 @@ BEGIN
                          +       ', Storerkey  = MAX( OH.Storerkey )'
                          +   ' FROM dbo.ORDERS        OH (NOLOCK)'
                          +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>'''''
-                         +   ' JOIN dbo.PACKHEADER    PH (NOLOCK) ON PIKHD.PickheaderKey = PH.PickslipNo'
-                         +   ' JOIN dbo.PACKDETAIL    PD (NOLOCK) ON PH.PickslipNo = PD.Pickslipno'
                          +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN

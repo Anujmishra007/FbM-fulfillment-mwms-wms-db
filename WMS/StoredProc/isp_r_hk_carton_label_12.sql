@@ -34,6 +34,7 @@ GO
 /* 30/08/2019   ML       1.5  WMS-10451 If PTSLocation is blank then get */
 /*                            mapped PAZones                             */
 /* 22/01/2020   ML       1.6  Performance tunning                        */
+/* 27/08/2020   ML       1.7  WMS-14990 Chg Fields definition            */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_12] (
@@ -141,22 +142,22 @@ BEGIN
         , C_State              = ISNULL(MAX(RTRIM(OH.C_State)),'')
         , Consigneekey         = ISNULL(MAX(RTRIM(OH.ConsigneeKey)),'')
         , Billtokey            = MAX(CASE WHEN OG.UDF01 = 'W' THEN ISNULL(RTRIM(OH.BillToKey),'')      ELSE ISNULL(RTRIM(OH.B_Country),'') END)
-        , OH_DELNotes          = MAX(CASE WHEN OG.UDF01 = 'W' THEN ISNULL(RTRIM(OH.UserDefine03),'')   ELSE '' END)
-        , OH_UDF01             = MAX(CASE WHEN OG.UDF01 = 'R' THEN ISNULL(RTRIM(OH.UserDefine01),'')   ELSE '' END)
+        , OH_DELNotes          = MAX(CASE WHEN OG.UDF01 = 'W' THEN ISNULL(RTRIM(OH.Salesman),'')       ELSE '' END)
+        , OH_UDF01             = MAX(CASE WHEN OG.UDF01 = 'R' THEN ISNULL(CONVERT(VARCHAR(10),OH.DeliveryDate,103),'') ELSE '' END)
         , Store_Code           = MAX(CASE WHEN OG.UDF01 = 'R' THEN ISNULL(RTRIM(SHPTO.[Secondary]),'') ELSE '' END)
         , OH_Type              = MAX(CASE WHEN OG.UDF01 = 'R' THEN ISNULL(RTRIM(OH.[Type]),'')         ELSE '' END)
         , SPRemarks            = MAX(CASE WHEN OG.UDF01 = 'R' THEN ISNULL(RTRIM(RM.Description),'')    ELSE '' END)
         , VAS                  = ISNULL(RTRIM(MAX(VAS.Long)),'')
-        , Div                  = ISNULL(RTRIM(MAX(SKU.BUSR5)),'')
-        , Brand                = ISNULL(RTRIM(MAX(SKU.BUSR6)),'')
+        , Div                  = ISNULL(RTRIM(MAX(SUBSTRING(SKU.BUSR2,3,2))),'')
+        , Brand                = ISNULL(RTRIM(MAX(CASE WHEN SUBSTRING(SKU.BUSR2,7,4)='A018' THEN 'P' ELSE DIV.Short END)),'')
         , PTSLocation          = CAST(ISNULL(RTRIM(MAX(IIF(ISNULL(PIKDT.ToLoc,'')<>'',PIKDT.ToLoc,PIKDT.Zones))),'') AS NVARCHAR(50))
-        , TW_ImportVAS         = MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND (OH.Type='R' OR (OH.Type='L' AND PIKDT.OD_UDF06 LIKE 'L%R'))               THEN '1' ELSE '' END)
-        , TW_BraVAS            = MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND OH.Type='R' AND OH.BuyerPO='BRA'                                           THEN '2' ELSE '' END)
-        , TW_CareLblVAS_NonBra = MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND OH.Type='L' AND PIKDT.OD_UDF06 LIKE 'L%R' AND ISNULL(OH.BuyerPO,'')<>'BRA' THEN '3' ELSE '' END)
-        , TW_CareLblVAS_Bra    = MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND OH.Type='L' AND PIKDT.OD_UDF06 LIKE 'L%R' AND OH.BuyerPO='BRA'             THEN '4' ELSE '' END)
+        , TW_ImportVAS         = '' --MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND (OH.Type='R' OR (OH.Type='L' AND PIKDT.OD_UDF06 LIKE 'L%R'))               THEN '1' ELSE '' END)
+        , TW_BraVAS            = MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND OH.Type='4' AND BRA.Code IS NOT NULL                                       THEN '2' ELSE '' END)
+        , TW_CareLblVAS_NonBra = '' --MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND OH.Type='L' AND PIKDT.OD_UDF06 LIKE 'L%R' AND ISNULL(OH.BuyerPO,'')<>'BRA' THEN '3' ELSE '' END)
+        , TW_CareLblVAS_Bra    = '' --MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BillToKey='TWRETAIL' AND OH.Type='L' AND PIKDT.OD_UDF06 LIKE 'L%R' AND OH.BuyerPO='BRA'             THEN '4' ELSE '' END)
         , SQL1                 = ISNULL(RTRIM(MAX(VAS.Notes)),'')
         , SQL2                 = ISNULL(RTRIM(MAX(RM.Notes2)),'')
-        , BRA                  = MAX(CASE WHEN OG.UDF01 = 'R' AND OH.BuyerPO='BRA' THEN 'B' ELSE '' END)
+        , BRA                  = MAX(CASE WHEN OG.UDF01 = 'R' AND BRA.Code IS NOT NULL THEN 'B' ELSE '' END)
         , RouteCode            = MAX(ISNULL(RTRIM(RT.ZipCodeFrom),''))
         , CartonType           = MAX(ISNULL(RTRIM(PIF.CartonType),''))
 
@@ -173,9 +174,11 @@ BEGIN
    LEFT JOIN #TEMP_PICKDETAIL PIKDT(NOLOCK) ON PD.Storerkey = PIKDT.Storerkey AND PD.LabelNo = PIKDT.CaseID
 
    LEFT JOIN dbo.STORER SHPTO (NOLOCK) ON 'PVH'+OH.ConsigneeKey = SHPTO.Storerkey
-   LEFT JOIN dbo.CODELKUP  OG (NOLOCK) ON OG.LISTNAME = 'ORDERGROUP' AND OG.Code = OH.OrderGroup AND OG.Storerkey = OH.Storerkey
-   LEFT JOIN dbo.CODELKUP VAS (NOLOCK) ON VAS.LISTNAME = 'PVHPXLBL' AND VAS.Storerkey = OH.StorerKey AND VAS.Code = OH.BillToKey AND VAS.Code2=''
-   LEFT JOIN dbo.CODELKUP  RM (NOLOCK) ON RM.LISTNAME = 'PVHREPORT' AND RM.Storerkey = OH.StorerKey AND RM.Code = OH.ConsigneeKey AND RM.Code2='SPREMARK'
+   LEFT JOIN dbo.CODELKUP  OG (NOLOCK) ON OG.LISTNAME  = 'ORDERGROUP' AND OG.Code = OH.OrderGroup AND OG.Storerkey = OH.Storerkey
+   LEFT JOIN dbo.CODELKUP VAS (NOLOCK) ON VAS.LISTNAME = 'PVHPXLBL'   AND VAS.Storerkey = OH.StorerKey AND VAS.Code = OH.BillToKey AND VAS.Code2=''
+   LEFT JOIN dbo.CODELKUP  RM (NOLOCK) ON RM.LISTNAME  = 'PVHREPORT'  AND RM.Storerkey = OH.StorerKey AND RM.Code = OH.ConsigneeKey AND RM.Code2='SPREMARK'
+   LEFT JOIN dbo.CODELKUP DIV (NOLOCK) ON DIV.LISTNAME = 'PVHDIV'     AND DIV.Storerkey = SKU.StorerKey AND DIV.Code = SKU.BUSR8
+   LEFT JOIN dbo.CODELKUP BRA (NOLOCK) ON BRA.LISTNAME = 'PVHBRA'     AND BRA.Storerkey = SKU.StorerKey AND BRA.Code = SKU.Tariffkey
 
    WHERE (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_pickslipno,'')<>'' OR ISNULL(@as_labelno,'')<>'')
      AND (ISNULL(@as_labelno,'')='' OR PD.LabelNo= @as_labelno)

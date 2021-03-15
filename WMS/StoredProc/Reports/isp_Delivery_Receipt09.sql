@@ -106,7 +106,7 @@ BEGIN
     , ContainerKey    NVARCHAR(10)
     , InvoiceNo       NVARCHAR(40)
     , C_State         NVARCHAR(45)
-    , ConsoOrderkey   NVARCHAR(30)
+    , Notes2          NVARCHAR(30)
    )
    --IF EXISTS (SELECT 1 FROM CONTAINER (NOLOCK) WHERE MBOLKey = @c_MBOLKey)
    --BEGIN
@@ -154,7 +154,7 @@ BEGIN
         , C.Containerkey
         , OH.UserDefine04
         , ISNULL(OH.C_State,'') AS C_State
-        , ISNULL(OD.ConsoOrderkey,'') AS ConsoOrderkey
+        , OD.Notes2
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
    CROSS APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes
@@ -209,7 +209,7 @@ BEGIN
           , C.Containerkey
           , OH.UserDefine04
           , ISNULL(OH.C_State,'')
-          , ISNULL(OD.ConsoOrderkey,'')
+          , OD.Notes2
    UNION ALL   --WithOUT Containerkey
    SELECT ST.Company
         , ISNULL(ST.Address1,'')   AS STAddress1
@@ -252,7 +252,7 @@ BEGIN
         , ''
         , OH.UserDefine04
         , ISNULL(OH.C_State,'') AS C_State
-        , ISNULL(OD.ConsoOrderkey,'') AS ConsoOrderkey
+        , OD.Notes2
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
    CROSS APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes
@@ -304,7 +304,7 @@ BEGIN
           , OH.StorerKey
           , OH.UserDefine04
           , ISNULL(OH.C_State,'')
-          , ISNULL(OD.ConsoOrderkey,'')
+          , OD.Notes2
 
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Orderkey, SKU, SUM(SUMInCtn), SUM(SUMInQty), Notes2A, Storerkey, Containerkey
