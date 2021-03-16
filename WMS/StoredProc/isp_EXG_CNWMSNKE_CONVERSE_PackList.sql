@@ -92,17 +92,17 @@ BEGIN
    --BEGIN  
    --   IF NOT EXISTS (  
    --   Select   1
-   --   From CNWMSNKE..Orders as t1(nolock)   
-   --   inner join CNWMSNKE..PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
-   --   inner join CNWMSNKE..PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
+   --   From dbo.Orders as t1(nolock)   
+   --   inner join dbo.PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
+   --   inner join dbo.PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
    --      inner join (select Distinct storerkey,Orderkey,SKU, userdefine06,Userdefine09   
-   --               from CNWMSNKE..Orderdetail(nolock)   
+   --               from dbo.Orderdetail(nolock)   
    --                  where Storerkey=@c_ParamVal1) as t8 on t2.Orderkey=t8.Orderkey and t3.SKU=t8.SKU    
-   --   inner join CNWMSNKE..SKU as t4(nolock) on t3.Storerkey=t4.Storerkey and t3.SKU=t4.SKU   
-   --   left  join CNWMSNKE..UCC as t5(nolock) on t3.Storerkey=t5.Storerkey and t3.SKU=t5.SKU and t3.UPC=t5.UCCNo   
-   --   left  join CNWMSNKE..Storer as t7(nolock) on ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t7.Storerkey   
-   --   --left  join CNWMSNKE..Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))='Converse' and (case when len(t1.Consigneekey)=10 and t1.Consigneekey=t6.code then 1 when len(t1.Consigneekey)=7 and ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t6.Code then 1 else 0 end)=1   
-   --   left  join CNWMSNKE..Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))=@c_ParamVal1 and t1.Consigneekey = t6.code   
+   --   inner join dbo.SKU as t4(nolock) on t3.Storerkey=t4.Storerkey and t3.SKU=t4.SKU   
+   --   left  join dbo.UCC as t5(nolock) on t3.Storerkey=t5.Storerkey and t3.SKU=t5.SKU and t3.UPC=t5.UCCNo   
+   --   left  join dbo.Storer as t7(nolock) on ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t7.Storerkey   
+   --   --left  join dbo.Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))='Converse' and (case when len(t1.Consigneekey)=10 and t1.Consigneekey=t6.code then 1 when len(t1.Consigneekey)=7 and ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t6.Code then 1 else 0 end)=1   
+   --   left  join dbo.Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))=@c_ParamVal1 and t1.Consigneekey = t6.code   
    --   Where t1.Mbolkey = @c_ParamVal2 and t1.Consigneekey = @c_ParamVal3 and t1.Status in('5','9'))  
    --   BEGIN  
    --      SET @n_Err = 200001  
@@ -115,13 +115,13 @@ BEGIN
    --BEGIN  
    --   IF NOT EXISTS (  
    --   Select   1      
-   --   From  CNWMSNKE..Orders as t1(nolock)   
-   --   inner join CNWMSNKE..PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
-   --   inner join CNWMSNKE..PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
-   --   inner join CNWMSNKE..SKU as t4(nolock) on t3.Storerkey=t4.Storerkey and t3.SKU=t4.SKU   
-   --   left  join CNWMSNKE..UCC as t5(nolock) on t3.Storerkey=t5.Storerkey and t3.SKU=t5.SKU and t3.UPC=t5.UCCNo   
-   --   left  join CNWMSNKE..Storer as t7(nolock) on ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t7.Storerkey   
-   --   left  join CNWMSNKE..Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))='Converse' and t1.Consigneekey = t6.code   
+   --   From  dbo.Orders as t1(nolock)   
+   --   inner join dbo.PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
+   --   inner join dbo.PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
+   --   inner join dbo.SKU as t4(nolock) on t3.Storerkey=t4.Storerkey and t3.SKU=t4.SKU   
+   --   left  join dbo.UCC as t5(nolock) on t3.Storerkey=t5.Storerkey and t3.SKU=t5.SKU and t3.UPC=t5.UCCNo   
+   --   left  join dbo.Storer as t7(nolock) on ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t7.Storerkey   
+   --   left  join dbo.Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))='Converse' and t1.Consigneekey = t6.code   
    --   Where t1.Mbolkey=@c_ParamVal2 and t1.Consigneekey = @c_ParamVal3 and t1.Status in('5','9'))  
    --   BEGIN  
    --      SET @n_Err = 200001  
@@ -306,17 +306,17 @@ BEGIN
                         else t1.Consigneekey   
                      end as Consigneekey  
                ,  '*'+ t3.LabelNo +'*'  AS [条码] -- add by ella 1/19  
-      From CNWMSNKE..Orders as t1(nolock)   
-      inner join CNWMSNKE..PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
-      inner join CNWMSNKE..PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
+      From dbo.Orders as t1(nolock)   
+      inner join dbo.PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
+      inner join dbo.PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
          inner join (select Distinct storerkey,Orderkey,SKU, userdefine06,Userdefine09   
-                  from CNWMSNKE..Orderdetail(nolock)   
+                  from dbo.Orderdetail(nolock)   
                      where Storerkey=@c_ParamVal1) as t8 on t2.Orderkey=t8.Orderkey and t3.SKU=t8.SKU    
-      inner join CNWMSNKE..SKU as t4(nolock) on t3.Storerkey=t4.Storerkey and t3.SKU=t4.SKU   
-      left  join CNWMSNKE..UCC as t5(nolock) on t3.Storerkey=t5.Storerkey and t3.SKU=t5.SKU and t3.UPC=t5.UCCNo   
-      left  join CNWMSNKE..Storer as t7(nolock) on ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t7.Storerkey   
-      --left  join CNWMSNKE..Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))='Converse' and (case when len(t1.Consigneekey)=10 and t1.Consigneekey=t6.code then 1 when len(t1.Consigneekey)=7 and ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t6.Code then 1 else 0 end)=1   
-      left  join CNWMSNKE..Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))=@c_ParamVal1 and t1.Consigneekey = t6.code   
+      inner join dbo.SKU as t4(nolock) on t3.Storerkey=t4.Storerkey and t3.SKU=t4.SKU   
+      left  join dbo.UCC as t5(nolock) on t3.Storerkey=t5.Storerkey and t3.SKU=t5.SKU and t3.UPC=t5.UCCNo   
+      left  join dbo.Storer as t7(nolock) on ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t7.Storerkey   
+      --left  join dbo.Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))='Converse' and (case when len(t1.Consigneekey)=10 and t1.Consigneekey=t6.code then 1 when len(t1.Consigneekey)=7 and ltrim(rtrim(t1.Billtokey))+ltrim(rtrim(t1.Consigneekey))=t6.Code then 1 else 0 end)=1   
+      left  join dbo.Codelkup as t6(nolock) on t6.ListName='CityLdTime' and cast(t6.Notes as varchar(20))=@c_ParamVal1 and t1.Consigneekey = t6.code   
          Where t1.Mbolkey = @c_ParamVal2 and t1.Consigneekey = @c_ParamVal3 and t1.Status in('5','9')    
          Group by t1.Mbolkey  
                ,  t1.ExternOrderkey   
