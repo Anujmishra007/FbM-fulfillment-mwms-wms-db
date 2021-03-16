@@ -6,7 +6,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Store procedure: isp_WSITF_GeekPlusRBT_Order_Outbound                */
 /* Creation Date: 22-Jun-2018                                           */
@@ -36,6 +35,9 @@ GO
 /* 2018-06-212    KCY            Initial - Jira #WMS-5290               */
 /* 2018-08-08     KCY            Enhance ORD.doctype filter (KCY01)     */
 /* 2018-08-10     Alex01         Default is_allow_lack to 1             */
+/* 2019-04-10     KCY            Handle multiple pickslipno SKU (KCY02) */
+/* 2019-06-19     Alex02         Jira #WMS-9484 change mapping          */
+/* 2021-03-16     Alex03         Remove hardcoded db                    */
 /************************************************************************/
 CREATE PROC [dbo].[isp_WSITF_GeekPlusRBT_Order_Outbound](
       @c_TransmitlogKey          NVARCHAR(10)      = ''
@@ -56,7 +58,7 @@ BEGIN
 
          , @c_Application                 NVARCHAR(50)
          , @c_MessageType                 NVARCHAR(10)
-         , @c_flag                        NVARCHAR(1)
+         , @c_flag                        NVARCHAR(10)
          , @c_flag0                       NVARCHAR(1)
          , @c_flag1                       NVARCHAR(1)
          , @c_flag5                       NVARCHAR(1)
@@ -129,11 +131,13 @@ BEGIN
          , @c_PickSlipNo                  NVARCHAR(10) 
          , @c_LoadKey                     NVARCHAR(10)
          , @n_CountCdlk                   INT
-
+         , @c_MsgValue                    NVARCHAR(250)     --KCY02
          , @n_IsAllowLack                 INT               --(Alex01)
 
    SET @n_Continue                        = 1
    SET @n_StartCnt                        = @@TRANCOUNT
+   SET @c_MsgValue                        = ''              --KCY02
+   SET @c_VBErrMsg                        = ''
 
    SET @b_Success                         = 0
    SET @n_Err                             = 0
@@ -164,6 +168,7 @@ BEGIN
 
    SET @c_transaction_id                  = ''
    SET @c_FullRequestString               = ''
+   SET @c_ResponseString                  = ''
    SET @c_JSON_HEADER                     = ''
    SET @c_JSON_BODY                       = ''
    SET @c_JSON_OrderList                  = ''
@@ -199,7 +204,7 @@ BEGIN
    SET @n_ORD_Count                       = 0
    SET @c_TableName                       = ''
    SET @c_StorerKey                       = ''
-   SET @c_DTSITF_DBName                   = ''
+   SET @c_DTSITF_DBName                   = 'CNDTSITF'
    SET @c_PickSlipNo                      = ''
    SET @c_LoadKey                         = ''
    SET @n_CountCdlk                       = 0
@@ -270,6 +275,36 @@ BEGIN
 
       IF @c_TLKey2 = 'LOAD'
       BEGIN
+            --check LoadPlanDetail, make sure location = robot ( <> robot ) --KCY02 START
+            IF NOT EXISTS (SELECT 1 from dbo.Orders WITH (NOLOCK) WHERE Orderkey = @c_TLKey1) 
+            BEGIN
+
+               --Insert LOG
+               SET @c_MessageType = 'WS_OUT, ERROR'
+               SET @c_FullRequestString = 'Orders Record Not found!, LoadKey: ' + @c_TLKey1
+
+               INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+               VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
+            END
+            --END KCY02 START
+
+            --check PICKDETAIL --KCY02 START
+            IF NOT EXISTS (SELECT 1 from dbo.PICKDETAIL WITH (NOLOCK) WHERE Orderkey IN 
+                            (SELECT OrderKey FROM  dbo.Orders WITH (NOLOCK) WHERE LoadKey = @c_TLKey1) and Loc IN 
+                             (SELECT Loc FROM dbo.LOC WITH (NOLOCK) where LocationCategory = 'ROBOT')
+                           )
+            BEGIN
+               
+               --Insert LOG
+               SET @c_MessageType = 'WS_OUT, ERROR'
+               SET @c_FullRequestString = 'PackTask Record Not found! PickDetail.Loc: ' + @c_MsgValue + ', LoadKey: ' + @c_TLKey1
+
+               INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+               VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
+            END --END KCY02 END
+
             --ORDER LIST
             DECLARE GEEKPLUS_ORDOUT_LOOPORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             --SELECT DISTINCT LoadKey, doctype, consigneekey,Facility
@@ -306,13 +341,15 @@ BEGIN
                   WHERE ListName = @c_ListName_WebService
                   AND Code2 ='ORD'
                   AND StorerKey = @c_StorerKey
-                  AND Code = (SELECT Short FROM CNWMS..CODELKUP (NOLOCK) WHERE LISTNAME = 'ROBOTFAC' AND Storerkey = @c_StorerKey AND Code = @c_CdlkFacility)
+                  AND Code = (SELECT Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'ROBOTFAC' AND Storerkey = @c_StorerKey AND Code = @c_CdlkFacility) --Alex03
                   GROUP BY Code, Long, UDF01, UDF02, Notes
                   --GET Header(END)
 
                   IF @n_CountCdlk > 2
                   BEGIN
                      SET @c_flag = @c_flag5
+                     SET  @b_SendAlert = 1 
+                     SET @c_ErrMsg = 'Codelkup is more than 2: ' + @n_CountCdlk + ', Facility: ' + @c_CdlkFacility
                      GOTO UPD_TL_AFTER_PROCESS
                   END
 
@@ -351,7 +388,8 @@ BEGIN
                            CASE WHEN EXISTS(SELECT 1 from dbo.CODELKUP C WITH (NOLOCK) WHERE C.ListName = 'VIPLIST' and C.CODE = ORD.ConsigneeKey)
                            THEN 2 ELSE 0 END
                      END AS 'priority' --KCY01
-                  , CASE WHEN @c_TLKey2 IN ('LOAD','BATCH') THEN '1' WHEN @c_TLKey2 = 'ORDER' THEN '2' ELSE '' END AS 'designated_container_type'
+                  --, CASE WHEN @c_TLKey2 IN ('LOAD','BATCH') THEN '1' WHEN @c_TLKey2 = 'ORDER' THEN '2' ELSE '' END AS 'designated_container_type' 
+                  , '3' As 'designated_container_type' --(Alex02)
                   ,  @c_TLKey2 AS 'reservation1'
                   , (
                
@@ -377,6 +415,43 @@ BEGIN
       END
       ELSE IF @c_TLKey2 = 'BATCH'
       BEGIN
+            --check pickdetail location, make sure location = robot ( <> robot ) --KCY02 START
+            IF NOT EXISTS (SELECT 1 from dbo.PICKDETAIL WITH (NOLOCK) WHERE Orderkey IN 
+                           (SELECT OrderKey FROM  dbo.LoadPlanDetail WITH (NOLOCK) WHERE LoadKey = @c_TLKey1) and Loc IN 
+                            (SELECT Loc FROM dbo.LOC WITH (NOLOCK) where LocationCategory = 'ROBOT')
+                           )
+            BEGIN
+
+               select @c_MsgValue = Loc from dbo.PICKDETAIL WITH (NOLOCK) WHERE Orderkey IN 
+               (SELECT OrderKey FROM  dbo.LoadPlanDetail WITH (NOLOCK) WHERE LoadKey = @c_TLKey1)
+
+               SET @c_MessageType = 'WS_OUT, ERROR'
+               SET @c_FullRequestString = 'PICKDETAIL Record Not found! PickDetail.Loc is ' + @c_MsgValue + ', LoadKey: ' + @c_TLKey1
+
+               --Insert Log
+               INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+               VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
+            END
+            --END KCY02 START
+
+            --check packtask --KCY02 START
+            IF NOT EXISTS (SELECT 1 from dbo.PackTask WITH (NOLOCK) WHERE TaskBatchNo IN 
+                           (SELECT PickSlipNo FROM  dbo.PICKDETAIL WITH (NOLOCK) WHERE OrderKey IN 
+                            (SELECT OrderKey FROM  dbo.LoadPlanDetail WITH (NOLOCK) WHERE  LoadKey = @c_TLKey1) and Loc IN 
+                             (SELECT Loc FROM dbo.LOC WITH (NOLOCK) where LocationCategory = 'ROBOT'))
+                           )
+            BEGIN
+               
+               --Insert LOG
+               SET @c_MessageType = 'WS_OUT, ERROR'
+               SET @c_FullRequestString = 'PackTask Record Not found! LoadKey: ' + @c_TLKey1
+
+               INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+               VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
+            END --END KCY02 END
+
             --ORDER LIST
             DECLARE GEEKPLUS_ORDOUT_LOOPORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT DISTINCT PK.PickSlipNo, OD.DocType, OD.consigneekey,OD.Facility
@@ -412,13 +487,15 @@ BEGIN
                   WHERE ListName = @c_ListName_WebService
                   AND Code2 ='ORD'
                   AND StorerKey = @c_StorerKey
-                  AND Code = (SELECT Short FROM CNWMS..CODELKUP (NOLOCK) WHERE LISTNAME = 'ROBOTFAC' AND Storerkey = @c_StorerKey AND Code = @c_CdlkFacility)
+                  AND Code = (SELECT Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'ROBOTFAC' AND Storerkey = @c_StorerKey AND Code = @c_CdlkFacility) --Alex03
                   GROUP BY Code, Long, UDF01, UDF02, Notes
                   --GET Header(END)
 
                   IF @n_CountCdlk > 2
                   BEGIN
                      SET @c_flag = @c_flag5
+                     SET  @b_SendAlert = 1 
+                     SET @c_ErrMsg = 'Codelkup is more than 2: ' + @n_CountCdlk + ', Facility: ' + @c_CdlkFacility
                      GOTO UPD_TL_AFTER_PROCESS
                   END
 
@@ -456,7 +533,8 @@ BEGIN
                            CASE WHEN EXISTS(SELECT 1 from dbo.CODELKUP C WITH (NOLOCK) WHERE C.ListName = 'VIPLIST' and C.CODE = ORD.ConsigneeKey)
                            THEN 2 ELSE 0 END
                      END AS 'priority' --KCY01
-                  , CASE WHEN @c_TLKey2 IN ('LOAD','BATCH') THEN '1' WHEN @c_TLKey2 = 'ORDER' THEN '2' ELSE '' END AS 'designated_container_type'
+                  --, CASE WHEN @c_TLKey2 IN ('LOAD','BATCH') THEN '1' WHEN @c_TLKey2 = 'ORDER' THEN '2' ELSE '' END AS 'designated_container_type'
+                  , '1' As 'designated_container_type' --(Alex02)
                   ,  @c_TLKey2 AS 'reservation1'
                   , (
                
@@ -467,7 +545,8 @@ BEGIN
                      FROM PickDetail PD WITH (NOLOCK) INNER JOIN loc L WITH (NOLOCK) ON L.LOC = PD.LOC 
                      WHERE PD.Orderkey IN (SELECT OrderKey 
                                           From PackTask WITH (NOLOCK) 
-                                       WHERE TaskBatchNo= @c_PickSlipNo)
+                                       --WHERE TaskBatchNo= @c_PickSlipNo)
+                                       WHERE TaskBatchNo= ORD.OrderKey) --KCY02
                                        AND L.LocationCategory = 'ROBOT'
                      GROUP BY SKU
                      FOR JSON PATH
@@ -481,6 +560,38 @@ BEGIN
       END
       ELSE IF @c_TLKey2 = 'ORDER'
       BEGIN
+            --check LoadPlanDetail, make sure location = robot ( <> robot ) --KCY02 START
+            IF NOT EXISTS (SELECT 1 from dbo.LoadPlanDetail WITH (NOLOCK) WHERE Orderkey IN 
+                           (SELECT OrderKey FROM  dbo.Orders WITH (NOLOCK) WHERE LoadKey = @c_TLKey1) 
+                           )
+            BEGIN
+
+               --Insert LOG
+               SET @c_MessageType = 'WS_OUT, ERROR'
+               SET @c_FullRequestString = 'LoadPlanDetail Record Not found!, LoadKey: ' + @c_TLKey1
+
+               INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+               VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
+            END
+            --END KCY02 START
+
+            --check PICKDETAIL --KCY02 START
+            IF NOT EXISTS (SELECT 1 from dbo.PICKDETAIL WITH (NOLOCK) WHERE Orderkey IN 
+                            (SELECT OrderKey FROM  dbo.Orders WITH (NOLOCK) WHERE LoadKey = @c_TLKey1) and Loc IN 
+                             (SELECT Loc FROM dbo.LOC WITH (NOLOCK) where LocationCategory = 'ROBOT')
+                           )
+            BEGIN
+               
+               --Insert LOG
+               SET @c_MessageType = 'WS_OUT, ERROR'
+               SET @c_FullRequestString = 'PackTask Record Not found! PickDetail.Loc: ' + @c_MsgValue + ', LoadKey: ' + @c_TLKey1
+
+               INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+               VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
+            END --END KCY02 END
+
             --ORDER LIST
             DECLARE GEEKPLUS_ORDOUT_LOOPORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             --SELECT LPD.OrderKey, OD.doctype, OD.consigneekey,OD.Facility
@@ -520,13 +631,15 @@ BEGIN
                   WHERE ListName = @c_ListName_WebService
                   AND Code2 ='ORD'
                   AND StorerKey = @c_StorerKey
-                  AND Code = (SELECT Short FROM CNWMS..CODELKUP (NOLOCK) WHERE LISTNAME = 'ROBOTFAC' AND Storerkey = @c_StorerKey AND Code = @c_CdlkFacility)
+                  AND Code = (SELECT Short FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'ROBOTFAC' AND Storerkey = @c_StorerKey AND Code = @c_CdlkFacility) --Alex03
                   GROUP BY Code, Long, UDF01, UDF02, Notes
                   --GET Header(END)
 
                   IF @n_CountCdlk > 2
                   BEGIN
                      SET @c_flag = @c_flag5
+                     SET  @b_SendAlert = 1 
+                     SET @c_ErrMsg = 'Codelkup is more than 2: ' + @n_CountCdlk + ', Facility: ' + @c_CdlkFacility
                      GOTO UPD_TL_AFTER_PROCESS
                   END
 
@@ -564,7 +677,8 @@ BEGIN
                            CASE WHEN EXISTS(SELECT 1 from dbo.CODELKUP C WITH (NOLOCK) WHERE C.ListName = 'VIPLIST' and C.CODE = ORD.ConsigneeKey)
                            THEN 2 ELSE 0 END
                      END AS 'priority' --KCY01
-                  , CASE WHEN @c_TLKey2 IN ('LOAD','BATCH') THEN '1' WHEN @c_TLKey2 = 'ORDER' THEN '2' ELSE '' END AS 'designated_container_type'
+                  --, CASE WHEN @c_TLKey2 IN ('LOAD','BATCH') THEN '1' WHEN @c_TLKey2 = 'ORDER' THEN '2' ELSE '' END AS 'designated_container_type'
+                  , '2' As 'designated_container_type' --(Alex02)
                   ,  @c_TLKey2 AS 'reservation1'
                   , (
                
@@ -611,7 +725,14 @@ BEGIN
          --Invalid URL
          IF ISNULL(RTRIM(@c_WS_url), '') = ''
          BEGIN
-            SET @c_flag = @c_flag5
+            SET @c_flag = 'IGNOR'
+
+            SET @c_MessageType = 'WS_OUT, IGNOR'
+            SET @c_FullRequestString = 'WS URL is Empty! Order.faciliy: >>' + @c_CdlkFacility + ' , LoadKey: ' + @c_TLKey1
+
+            INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
+            VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
+               
             GOTO UPD_TL_AFTER_PROCESS
          END
 
@@ -737,7 +858,7 @@ BEGIN
 
          --INSERT LOG
          INSERT INTO dbo.TCPSocket_OUTLog ( [Application], RemoteEndPoint, MessageType, ErrMsg, [Data], MessageNum, StorerKey, ACKData, [Status] )
-         VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, '', @c_StorerKey, @c_ResponseString, '9' )
+         VALUES ( @c_Application, @c_WS_url, @c_MessageType, @c_VBErrMsg, @c_FullRequestString, @c_TransmitlogKey, @c_StorerKey, @c_ResponseString, '9' )
 
          IF @@ERROR <> 0
          BEGIN
