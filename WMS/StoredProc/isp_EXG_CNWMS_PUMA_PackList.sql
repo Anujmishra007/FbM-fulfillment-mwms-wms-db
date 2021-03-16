@@ -90,7 +90,7 @@ BEGIN
   
    BEGIN TRAN  
    BEGIN TRY  
-      INSERT INTO [CNWMS].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -143,7 +143,7 @@ BEGIN
       ,  'Labelno' AS Labelno) AS TEMP1  
         
   
-      INSERT INTO [CNWMS].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -209,7 +209,7 @@ BEGIN
                     ELSE 'O'      
                  END    
         + O.LoadKey + RIGHT('00000' + RTRIM(CAST(PAD.CartonNo AS NCHAR)) ,5)  
-       FROM  CNWMS..PACKHEADER PH WITH (NOLOCK)   
+       FROM  dbo.PACKHEADER PH WITH (NOLOCK)   
        JOIN (  
        SELECT Storerkey    
        ,Pickslipno  
@@ -217,7 +217,7 @@ BEGIN
        ,LabelNo      
        ,SKU   
        ,SUM(Qty) AS Qty     
-       FROM   CNWMS..PACKDETAIL(NOLOCK)    
+       FROM   dbo.PACKDETAIL(NOLOCK)    
        WHERE  Storerkey = @c_ParamVal1        
        GROUP BY    
        Storerkey  
@@ -228,7 +228,7 @@ BEGIN
        ) AS PAD     
        ON  PH.PickSlipNo = PAD.PickSlipNo    
        AND  PH.StorerKey = PAD.StorerKey     
-       JOIN CNWMS..ORDERS O WITH(NOLOCK)     
+       JOIN dbo.ORDERS O WITH(NOLOCK)     
        ON  (  
        O.Loadkey = PH.Loadkey  
        AND ISNULL(RTRIM(PH.Orderkey) ,'') = ''  
@@ -236,18 +236,18 @@ BEGIN
        O.Orderkey = PH.Orderkey     
        AND ISNULL(RTRIM(PH.Orderkey) ,'') <> ''     
        )    
-       JOIN CNWMS..SKU SKU(NOLOCK)    
+       JOIN dbo.SKU SKU(NOLOCK)    
        ON  PAD.Storerkey = SKU.Storerkey     
        AND PAD.SKU = SKU.SKU    
-       JOIN CNWMS..ORDERDETAIL OD WITH (NOLOCK)      
+       JOIN dbo.ORDERDETAIL OD WITH (NOLOCK)      
        ON  OD.SKU = PAD.SKU    
        AND OD.OrderKey = O.OrderKey     
-       JOIN CNWMS..MBOLDetail MD WITH(NOLOCK)     
+       JOIN dbo.MBOLDetail MD WITH(NOLOCK)     
        ON  O.OrderKey = MD.OrderKEy    
-       JOIN CNWMS..MBOL M WITH(NOLOCK)      
+       JOIN dbo.MBOL M WITH(NOLOCK)      
        ON  MD.MbolKey = M.Mbolkey     
       --------------------------------------------------------------Modify Start By Song Jian on 2002-04-29  
-       LEFT OUTER JOIN CNWMS..Codelkup CL2 WITH (NOLOCK)      
+       LEFT OUTER JOIN dbo.Codelkup CL2 WITH (NOLOCK)      
        ON (CL2.Listname = 'CityLdTime' AND --substring(CL2.code,1,4) = 'PUMA'   
        CL2.Storerkey = @c_ParamVal1 AND  
       -- O.c_city LIKE N'%' + ISNULL(LTRIM(RTRIM(CL2.description)), '') +'%')     
@@ -260,7 +260,7 @@ BEGIN
         ,SKU      
         ,DropId      
         ,SUM(Qty) AS Qty      
-        FROM   CNWMS..PICKDETAIL(NOLOCK)   
+        FROM dbo.PICKDETAIL(NOLOCK)   
         WHERE  StorerKey = @c_ParamVal1      
         GROUP BY   
         Storerkey    
