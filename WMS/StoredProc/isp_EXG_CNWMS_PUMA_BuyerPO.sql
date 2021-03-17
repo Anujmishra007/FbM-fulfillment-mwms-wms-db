@@ -89,7 +89,7 @@ BEGIN
   
    BEGIN TRAN  
    BEGIN TRY  
-      INSERT INTO [CNWMS].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -115,7 +115,7 @@ BEGIN
          ,  'Size' AS Size  
          ,  'Qty' AS Qty) AS TEMP1  
   
-      INSERT INTO [CNWMS].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -141,13 +141,13 @@ BEGIN
         + LTRIM(RTRIM(SKU.Color))), '') AS Article  
         ,ISNULL(RTRIM(SKU.Size), '') AS Size  
         ,SUM(ISNULL(PD.Qty ,0)) AS Qty  
-        FROM  CNWMS..ORDERS O WITH(NOLOCK)  
-        JOIN CNWMS..PickDetail PD WITH(NOLOCK)   
+        FROM dbo.ORDERS O WITH(NOLOCK)  
+        JOIN dbo.PickDetail PD WITH(NOLOCK)   
         ON  O.Orderkey = PD.Orderkey  
-        JOIN CNWMS..SKU SKU(NOLOCK)   
+        JOIN dbo.SKU SKU(NOLOCK)   
         ON  PD.Storerkey = SKU.Storerkey  
         AND PD.SKU = SKU.SKU  
-        JOIN CNWMS..MBOLDetail MD WITH(NOLOCK)  
+        JOIN dbo.MBOLDetail MD WITH(NOLOCK)  
         ON  O.OrderKey = MD.OrderKey  
         WHERE O.Storerkey = @c_ParamVal1   
         AND    MD.MbolKey = @c_ParamVal2   

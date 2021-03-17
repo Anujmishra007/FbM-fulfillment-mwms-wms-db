@@ -90,7 +90,7 @@ BEGIN
   
    BEGIN TRAN  
    BEGIN TRY  
-      INSERT INTO [CNWMSUAM].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -132,7 +132,7 @@ BEGIN
       ) AS TEMP1  
         
   
-      INSERT INTO [CNWMSUAM].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -170,17 +170,17 @@ BEGIN
              ISNULL(RTRIM(SKU.Altsku), '')         AS Altsku,  
              ISNULL(RTRIM(O.C_Address3), '')       AS Address3,  
              ISNULL(RTRIM(O.M_address1), '')       AS 备注  
-      FROM CNWMSUAM.dbo.Packheader PD WITH(NOLOCK)  
-      JOIN CNWMSUAM.dbo.PackDetail PT WITH(NOLOCK)  
+      FROM dbo.Packheader PD WITH(NOLOCK)  
+      JOIN dbo.PackDetail PT WITH(NOLOCK)  
       ON PD.pickslipno = PT.pickslipno  
-    JOIN CNWMSUAM.dbo.ORDERS O WITH(NOLOCK)  
+    JOIN dbo.ORDERS O WITH(NOLOCK)  
     ON  PD.ORDERKEY = O.ORDERKEY  
-      JOIN CNWMSUAM.dbo.SKU SKU WITH(NOLOCK)  
+      JOIN dbo.SKU SKU WITH(NOLOCK)  
       ON PD.Storerkey = SKU.Storerkey  
       AND PT.SKU = SKU.SKU  
-      JOIN CNWMSUAM.dbo.MBOLDetail MD WITH(NOLOCK)  
+      JOIN dbo.MBOLDetail MD WITH(NOLOCK)  
       ON O.OrderKey = MD.OrderKEy  
-      JOIN CNWMSUAM.dbo.CODELKUP CD WITH(NOLOCK)  
+      JOIN dbo.CODELKUP CD WITH(NOLOCK)  
     ON PD.Storerkey = CD.Storerkey   
     AND CD.LISTNAME='UAPOD'  
       WHERE  O.Storerkey = @c_ParamVal1  
