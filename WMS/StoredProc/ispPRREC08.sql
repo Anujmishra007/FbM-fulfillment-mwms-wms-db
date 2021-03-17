@@ -20,7 +20,7 @@ GO
 /* Called By:                                                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: 7.0                                                            */
 /*                                                                         */
@@ -28,6 +28,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 2021-03-16   WLChooi 1.1   WMS-16573 - Avoid updating Receiptdetail     */
+/*                                        table multiple times (WL01)      */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPRREC08]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -74,6 +76,7 @@ BEGIN
    	      Userdefine01 = ToId
    	  WHERE Receiptkey = @c_Receiptkey
    	  AND LEFT(ToID, 2) = 'PS'
+   	  AND ISNULL(Userdefine02, '') = ''   --WL01                    
    END          
       
    SET @n_err = @@ERROR  
