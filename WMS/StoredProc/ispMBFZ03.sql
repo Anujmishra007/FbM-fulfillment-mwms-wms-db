@@ -28,6 +28,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 10-Mar-2021  NJOW01  1.0   Include zone max rate calculation            */  
 /***************************************************************************/  
 CREATE PROC [dbo].[ispMBFZ03]  
 (     @c_MBOLKey     NVARCHAR(10)   
@@ -49,7 +50,8 @@ BEGIN
            @n_DelNo INT,
            @c_OrderList NVARCHAR(250),
            @c_Consigneekey NVARCHAR(15), 
-           @c_Zone NVARCHAR(50), 
+           @c_Zone NVARCHAR(50),
+           @n_ZoneMaxRate DECIMAL(15,2),
            @c_Containerkey NVARCHAR(20), 
            @c_Orderkey NVARCHAR(10),
            @n_NoofPallet_ord DECIMAL(15,3), 
@@ -157,8 +159,9 @@ BEGIN
    	  JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey
    	  JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
    	  LEFT JOIN PALLETDETAIL PLD(NOLOCK) ON PD.LabelNo = PLD.CaseID
+   	  LEFT JOIN CONTAINERDETAIL CD (NOLOCK) ON PLD.Palletkey = CD.PalletKey 
    	  WHERE MD.Mbolkey = @c_Mbolkey
-   	  AND PLD.Palletkey IS NULL
+   	  AND (PLD.Palletkey IS NULL OR CD.Palletkey IS NULL)
    	  AND O.Consigneekey IN(SELECT DISTINCT O.Consigneekey   	  
    	                        FROM MBOLDETAIL MD (NOLOCK)
    	                        JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
@@ -278,22 +281,24 @@ BEGIN
    BEGIN   	      	     	
    	  --loop consignee
    	  DECLARE CURSOR_CONSIGNEE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone
+         SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone,
+                CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END  --NJOW01
    	     FROM MBOLDETAIL MD (NOLOCK)
    	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
-   	     OUTER APPLY (SELECT TOP 1 CL.Long FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' 
+   	     OUTER APPLY (SELECT TOP 1 CL.Long, CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' 
    	                  AND CL.Code = 'FMS_ZONE' AND CAST(CL.UDF01 AS BIGINT) <= CAST(O.C_Zip AS BIGINT) AND  CAST(CL.UDF02 AS BIGINT) >= CAST(O.C_Zip AS BIGINT) ) AS Z
    	     JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey
    	     JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
    	     JOIN PALLETDETAIL PLD (NOLOCK) ON PD.LabelNo = PLD.CaseID
    	     JOIN CONTAINERDETAIL CTD (NOLOCK) ON PLD.Palletkey = CTD.Palletkey
    	     WHERE MD.Mbolkey = @c_Mbolkey
-   	     GROUP BY O.Consigneekey, ISNULL(Z.Long,'')
+   	     GROUP BY O.Consigneekey, ISNULL(Z.Long,''),
+   	              CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END  --NJOW01   
    	     ORDER BY O.Consigneekey    	         
    	  
       OPEN CURSOR_CONSIGNEE
       
-      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone      
+      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
       
       WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
       BEGIN      	       	       	      	 
@@ -436,7 +441,10 @@ BEGIN
                IF @c_FreightType = 'FIXED'
                   SET @n_FreightAmt = @n_FreightRate
                ELSE 
-                  SET @n_FreightAmt = ROUND(@n_TotContainerVol * @n_FreightRate,2)   
+                  SET @n_FreightAmt = ROUND((CASE WHEN (@n_TotContainerVol - ROUND(@n_TotContainerVol,2,1)) > 0 THEN ROUND(@n_TotContainerVol,2,1) + 0.01 ELSE ROUND(@n_TotContainerVol,2,1) END) * @n_FreightRate,2) --NJOW01                  
+                  
+               IF @n_FreightAmt > @n_ZoneMaxRate  --NJOW01
+                  SET @n_FreightAmt = @n_ZoneMaxRate
                                     
                SET @c_RateString = FORMAT(@n_FreightRate,'0.######') + '|' + RTRIM(@c_FreightType) + '|' + FORMAT(@n_SurchargeRate,'0.######') + '|' + FORMAT(@n_VATRate,'0.######')  
                             
@@ -684,7 +692,7 @@ BEGIN
          CLOSE CURSOR_CONSCONTAINER
          DEALLOCATE CURSOR_CONSCONTAINER      	
       	
-         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone      
+         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
       END
       CLOSE CURSOR_CONSIGNEE
       DEALLOCATE CURSOR_CONSIGNEE   	               
@@ -695,15 +703,16 @@ BEGIN
    BEGIN   	      	     	
    	  --loop consignee
    	  DECLARE CURSOR_CONSIGNEE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone
+         SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone,
+                CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END  --NJOW01         
    	     FROM MBOLDETAIL MD (NOLOCK)
    	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
-   	     OUTER APPLY (SELECT TOP 1 CL.Long FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' AND CL.Code = 'FMS_ZONE' AND CAST(CL.UDF01 AS BIGINT) <= CAST(O.C_Zip AS BIGINT) AND  CAST(CL.UDF02 AS BIGINT) >= CAST(O.C_Zip AS BIGINT) ) AS Z
+   	     OUTER APPLY (SELECT TOP 1 CL.Long, CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' AND CL.Code = 'FMS_ZONE' AND CAST(CL.UDF01 AS BIGINT) <= CAST(O.C_Zip AS BIGINT) AND  CAST(CL.UDF02 AS BIGINT) >= CAST(O.C_Zip AS BIGINT) ) AS Z
    	     JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey
    	     JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
    	     LEFT JOIN PALLETDETAIL PLD (NOLOCK) ON PD.LabelNo = PLD.CaseID
    	     WHERE MD.Mbolkey = @c_Mbolkey
-   	     AND PLD.PalletKey IS NULL
+   	     --AND PLD.PalletKey IS NULL
    	     AND O.Consigneekey NOT IN(SELECT DISTINCT O.Consigneekey   	  
    	                               FROM MBOLDETAIL MD (NOLOCK)
    	                               JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
@@ -712,12 +721,13 @@ BEGIN
    	                               JOIN PALLETDETAIL PLD(NOLOCK) ON PD.LabelNo = PLD.CaseID
    	                               JOIN CONTAINERDETAIL CD (NOLOCK) ON PLD.Palletkey = CD.PalletKey 
    	                               WHERE MD.Mbolkey = @c_Mbolkey)
-   	     GROUP BY O.Consigneekey, ISNULL(Z.Long,'')
+   	     GROUP BY O.Consigneekey, ISNULL(Z.Long,''),
+   	              CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END  --NJOW01   
    	     ORDER BY O.Consigneekey    	         
    	  
       OPEN CURSOR_CONSIGNEE
       
-      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone      
+      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
       
       WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
       BEGIN      	       	       	      	 
@@ -776,7 +786,7 @@ BEGIN
             --calculate total loose carton & volume     
             --loop consignee->label                
             DECLARE CURSOR_CONSLOOSECARTON CURSOR LOCAL FAST_FORWARD READ_ONLY FOR       	             
-   	           SELECT PD.LabelNo, ROUND(MAX(Sku.Cube),6) AS CtnVolume                       
+   	           SELECT PD.LabelNo, ROUND(SUM(SKU.StdCube * PD.Qty),6) AS CtnVolume                       
                FROM MBOLDETAIL MD (NOLOCK)                                                  
                JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey                           
                JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey                      
@@ -824,7 +834,10 @@ BEGIN
             IF @c_FreightType = 'FIXED'
                SET @n_FreightAmt = @n_FreightRate
             ELSE 
-               SET @n_FreightAmt = ROUND(@n_TotConsigneeVol * @n_FreightRate,2)               
+               SET @n_FreightAmt = ROUND((CASE WHEN (@n_TotConsigneeVol - ROUND(@n_TotConsigneeVol,2,1)) > 0 THEN ROUND(@n_TotConsigneeVol,2,1) + 0.01 ELSE ROUND(@n_TotConsigneeVol,2,1) END) * @n_FreightRate,2) --NJOW01                  
+                              
+            IF @n_FreightAmt > @n_ZoneMaxRate  --NJOW01
+               SET @n_FreightAmt = @n_ZoneMaxRate
                
             SET @c_RateString = FORMAT(@n_FreightRate,'0.######') + '|' + RTRIM(@c_FreightType) + '|' + FORMAT(@n_SurchargeRate,'0.######') + '|' + FORMAT(@n_VATRate,'0.######')  
             
@@ -1032,7 +1045,7 @@ BEGIN
             DEALLOCATE CURSOR_CONSORDER             
          END 
       	       	           	
-         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone      
+         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
       END
       CLOSE CURSOR_CONSIGNEE
       DEALLOCATE CURSOR_CONSIGNEE   	               

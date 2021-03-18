@@ -1,6 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPVH3]')
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPVH3B]')
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALPVH3]
+DROP PROCEDURE [dbo].[nspALPVH3B]
 GO
 
 SET ANSI_NULLS OFF
@@ -8,13 +8,13 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/    
-/* Stored Procedure: nspALPVH3                                          */    
-/* Creation Date: 17-OCT-2019                                           */    
+/* Stored Procedure: nspALPVH3B                                         */    
+/* Creation Date: 12-JAN-2021                                           */    
 /* Copyright: LFL                                                       */    
 /* Written by:                                                          */    
 /*                                                                      */    
-/* Purpose: WMS-10919 CN PVH QHW Allocation for lottable02 = 'R'        */
-/*          SkipPreallocation = '1'                                     */
+/* Purpose: WMS-16073 CN PVH QHW Allocation for lottable02 = 'A'        */
+/*          SkipPreallocation = '1' (Original WMS-10919)                */
 /*                                                                      */
 /* Called By: Wave                                                      */    
 /*                                                                      */    
@@ -26,10 +26,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
-/* 12-Jan-2021  NJOW01  1.0   WMS-16073 Change allocation logic by      */
-/*                            lottable02.                               */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspALPVH3]        
+CREATE  PROC [dbo].[nspALPVH3B]        
    @c_DocumentNo NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -79,7 +77,7 @@ BEGIN
            @c_BillToKey          NVARCHAR(15),
            @c_SortBy             NVARCHAR(2000),
            @c_UDF02              NVARCHAR(30),
-           @n_LocQtyAvailable    INT,
+           @n_LocQtyAvailable    INT,  
            @n_OrderQty           INT,
            @n_TotalOrderQty      INT,
            @c_cond2              NVARCHAR(250)
@@ -151,9 +149,8 @@ BEGIN
      END
    END
    
-   --NJOW01 S
    SET @n_TotalOrderQty = 0
-         
+
    IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')=''
    BEGIN 
       DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -269,9 +266,8 @@ BEGIN
    END 
    CLOSE CUR_ORD
    DEALLOCATE CUR_ORD
-   --NJOW01 E
    
-   SET @c_Cond = RTRIM(ISNULL(@c_Cond,'')) + ' AND LOTATTRIBUTE.Lottable02 = ''R'' '  --NJOW01
+   SET @c_Cond =  RTRIM(ISNULL(@c_Cond,'')) + ' AND LOTATTRIBUTE.Lottable02 = ''A'' '  --NJOW01
    
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
@@ -329,7 +325,7 @@ BEGIN
    EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @n_QtyLeftToFulfill, @n_UOMBase, @c_Lottable01, @c_Lottable02, @c_Lottable03,
                       @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12,
                       @d_Lottable13, @d_Lottable14, @d_Lottable15
-            
+                      
    WHILE @n_QtyLeftToFulfill > 0
    BEGIN
       SELECT TOP 1 @c_Loc = LOC, @n_LocQtyAvailable = SUM(Qty)
@@ -342,7 +338,7 @@ BEGIN
       
       IF @@ROWCOUNT = 0
          BREAK
-                
+          
       DECLARE CURSOR_AVAILABLE CURSOR FAST_FORWARD READ_ONLY FOR
          SELECT I.Lot, I.ID, I.Qty         
          FROM #TMP_INV I
@@ -354,7 +350,7 @@ BEGIN
       FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_ID, @n_QtyAvailable   
                 
       SET @c_SQL = ''    
-      WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)    
+      WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)          
       BEGIN
    	     IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
    	     BEGIN
@@ -420,7 +416,7 @@ BEGIN
             ,  @c_OtherValue = @c_OtherValue
             
             SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake       
-            SET @n_TotalOrderQty = @n_TotalOrderQty - @n_QtyToTake
+            SET @n_TotalOrderQty = @n_TotalOrderQty - @n_QtyToTake 
          END
         	 
          FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_ID, @n_QtyAvailable   
@@ -569,5 +565,5 @@ BEGIN
    */
 END -- Procedure
 GO
-GRANT EXECUTE ON [dbo].[nspALPVH3] TO nSQL
+GRANT EXECUTE ON [dbo].[nspALPVH3B] TO nSQL
 GO

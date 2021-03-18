@@ -39,6 +39,8 @@ GO
 /* 07-Sep-2020  WLChooi   1.7  WMS-15063 - Codelkup to remove some      */
 /*                             columns (WL01)                           */
 /* 30-Sep-2020  WLChooi   1.8  WMS-15063 - Fixed bugs (WL02)            */
+/* 16-Mar-2021  WLChooi   1.9  WMS-15063 - Take C_Phone1 + / + C_Phone2 */
+/*                                         (WL03)                       */
 /************************************************************************/
 CREATE  PROCEDURE isp_pod_01
         @c_mbolkey NVARCHAR(10), 
@@ -70,20 +72,20 @@ BEGIN
     C_Contact         NVARCHAR(60)  null,
     C_Address         NVARCHAR(180) null,
     C_Phone           NVARCHAR(36)  null,
-    CaseCnt           int       null,
+    CaseCnt           int        null,
     Qty               int 			null,
-    TotalCaseCnt      int       null,
+    TotalCaseCnt      int        null,
     TotalQty          int 			null,
-    Address         NVARCHAR(180) null,
-    Phone           NVARCHAR(36)  null,
-    Fax             NVARCHAR(36)  null,
-    Contact         NVARCHAR(60)  null,
-    leadtime        int null,
-    Domain          NVARCHAR(10)  null, --GOH01
-    Notes1          NVARCHAR(250) NULL,  --NJOW01
-    Transportmode   NVARCHAR(100) NULL,  --NJOW02 
-    SUSR1           NVARCHAR(20)  NULL,  --NJOW03
-    RemoveCol       NVARCHAR(10)  NULL)  --WL01
+    Address           NVARCHAR(180) null,
+    Phone             NVARCHAR(36)  null,
+    Fax               NVARCHAR(36)  null,
+    Contact           NVARCHAR(60)  null,
+    leadtime          int null,
+    Domain            NVARCHAR(10)  null, --GOH01
+    Notes1            NVARCHAR(250) NULL,  --NJOW01
+    Transportmode     NVARCHAR(100) NULL,  --NJOW02 
+    SUSR1             NVARCHAR(20)  NULL,  --NJOW03
+    RemoveCol         NVARCHAR(10)  NULL)  --WL01
 
     --WL02 START
     SELECT @c_RemoveCol = ISNULL(CL.Short,'N')
@@ -119,7 +121,9 @@ BEGIN
               ltrim(rtrim(c.consigneekey)) + '('+ ltrim(rtrim(c.C_Company)) + ')',        
               ltrim(rtrim(isnull(c.C_Contact1,''))) + ltrim(rtrim(isnull(c.C_Contact2,''))),
               ltrim(rtrim(isnull(c.C_Address1,''))) + ltrim(rtrim(isnull(c.C_Address2,''))) + ltrim(rtrim(isnull(c.C_Address3,''))) + ltrim(rtrim(isnull(c.C_Address4,''))),
-              ltrim(rtrim(isnull(c.C_Phone1,''))) + ltrim(rtrim(isnull(c.C_Phone2,''))), 0 ,0  ,0,0,
+              --ltrim(rtrim(isnull(c.C_Phone1,''))) + ltrim(rtrim(isnull(c.C_Phone2,''))),   --WL03
+              LTRIM(RTRIM(ISNULL(c.C_Phone1,''))) + CASE WHEN LTRIM(RTRIM(ISNULL(c.C_Phone2,''))) = '' THEN '' ELSE '/' + LTRIM(RTRIM(ISNULL(c.C_Phone2,''))) END,   --WL03
+              0 ,0  ,0,0,
               d.Address1, d.phone1, d.fax1, d.contact1, isnull(cast(e.Short as int),0), 
               isnull(f.Short,''), --GOH01
               CONVERT(NVARCHAR(250), g.notes1), --NJOW01
