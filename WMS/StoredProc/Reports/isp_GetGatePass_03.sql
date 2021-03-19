@@ -36,6 +36,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2021-03-09   WLChooi   1.1   WMS-16031 - Print all MBOLKey under a   */
 /*                              same UserDefine05 (WL01)                */
+/* 2021-03-19   WLChooi   1.2   WMS-16031 Change Shipperkey to Salesman */
+/*                              (WL02)                                  */
 /************************************************************************/
 
 CREATE PROC isp_GetGatePass_03 (@c_mbolkey NVARCHAR(10)) 
@@ -213,7 +215,7 @@ BEGIN
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideExternLoadkey  
              , SUM(PICKDETAIL.qty) AS totalEaches
              , COUNT(DISTINCT PICKDETAIL.DropID) AS TTLCTN
-             , CASE WHEN ISNULL(ORDERS.Shipperkey,'') = '' THEN 'STO' ELSE ORDERS.Shipperkey END
+             , CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02
              , @c_Containerkey AS Containerkey   --WL01
       FROM PICKDETAIL (NOLOCK) 
       INNER JOIN ORDERDETAIL (NOLOCK) ON (PICKDETAIL.orderkey  = ORDERDETAIL.Orderkey 
@@ -255,7 +257,7 @@ BEGIN
              --, LEFT(ISNULL(MBOL.Remarks,''),250)            --WL01  
              --, SUBSTRING(ISNULL(MBOL.Remarks,''),251,250)   --WL01                   
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END  
-             , CASE WHEN ISNULL(ORDERS.Shipperkey,'') = '' THEN 'STO' ELSE ORDERS.Shipperkey END
+             , CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02
    END
             
    IF @n_continue = 3
