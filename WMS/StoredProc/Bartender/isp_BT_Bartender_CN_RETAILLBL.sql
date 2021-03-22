@@ -380,7 +380,7 @@ BEGIN
 							(
 								CharCount
 							)
-							SELECT CNLOCAL.dbo.IndexOf(@n_Notes2,'|',@i)
+							SELECT dbo.IndexOf(@n_Notes2,'|',@i)     --CS01
 							
 							SET @i = @i + 1
 							
