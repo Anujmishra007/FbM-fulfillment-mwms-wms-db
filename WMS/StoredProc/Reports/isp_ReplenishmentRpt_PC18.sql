@@ -32,6 +32,7 @@ GO
 /*                            release task                                 */
 /* 22-Feb-2018  NJOW03  1.4   WMS-4043 Add stock filtering.                */
 /* 05-MAR-2018  Wan01   1.5   WM - Add Functype                            */
+/* 18-JAN-2021  Wan02   1.6   Follow Parameters to follow Datawindow Seq   */
 /***************************************************************************/
 
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC18]
@@ -49,8 +50,8 @@ CREATE PROC [dbo].[isp_ReplenishmentRpt_PC18]
 ,              @c_zone12           NVARCHAR(10)
 ,              @c_storerkey        NVARCHAR(15)
 ,              @c_ReplGrp          NVARCHAR(30)       --PickZone
-,              @c_backendjob       NVARCHAR(10) = 'N' --NJOW02
-,              @c_Functype         NCHAR(1) = ''      --(Wan01) 
+,              @c_Functype         NCHAR(1) = ''      --(Wan01)   --Wan02
+,              @c_backendjob       NVARCHAR(10) = 'N' --NJOW02    --Wan02
 AS
 BEGIN
    SET NOCOUNT ON
@@ -676,6 +677,13 @@ BEGIN
       END
       --(Wan01) - END
 
+      --(Wan02) - START
+      IF @c_FuncType IN ( 'P' )                                     
+      BEGIN
+         SET @c_ReplenishmentGroup = @c_ReplGrp 
+      END
+      --(Wan02) - END
+      
       SELECT R.FromLoc
             ,R.Id
             ,R.ToLoc
@@ -702,14 +710,15 @@ BEGIN
       JOIN  LOC             WITH (NOLOCK) ON (LOC.Loc = R.ToLoc)
       JOIN  PACK            WITH (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
       JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (R.Lot = LA.Lot)
-      WHERE R.ReplenishmentGroup = @c_ReplenishmentGroup --@c_ReplGrp NJOW02
+      WHERE (R.Replenishmentgroup = @c_ReplenishmentGroup OR @c_ReplenishmentGroup = 'ALL')  --(Wan01) --(Wan02) 
+      --WHERE R.ReplenishmentGroup = @c_ReplenishmentGroup --@c_ReplGrp NJOW02   --(Wan02) 
       AND  (LOC.PickZone = @c_ReplGrp OR @c_ReplGrp = 'ALL')
       AND   LOC.facility = @c_zone01
       AND  (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')
       AND  (LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
       OR  @c_zone02 = 'ALL')
       AND R.Confirmed = 'N'
-      AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')  --(Wan01)     
+   
       ORDER BY LOC.PutawayZone
             ,  R.FromLoc
             ,  R.Id
