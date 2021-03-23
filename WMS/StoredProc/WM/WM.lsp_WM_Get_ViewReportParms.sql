@@ -29,11 +29,16 @@ GO
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 22-Feb-2021 mingle01 1.2   LFWM-2354 - PROD  Australia  View reports */
+/*                            to default storerkey and facility based on*/
+/*                            user restrictions -> Return the Username  */
+/*                            as default value for parmLabel = 'userid' */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Get_ViewReportParms]
+CREATE PROC [WM].[lsp_WM_Get_ViewReportParms] 
            @c_ModuleID           NVARCHAR(30) = 'ViewReport'
          , @c_ReportID           NVARCHAR(10)
          , @c_UserName           NVARCHAR(128) 
+         
 AS
 BEGIN
    SET NOCOUNT ON
@@ -46,6 +51,7 @@ BEGIN
          , @n_Continue        INT 
          , @n_err             INT
          , @c_ErrMsg          NVARCHAR(255)
+         , @c_ori_username    NVARCHAR(128)   --(mingle01) - START
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -53,7 +59,8 @@ BEGIN
    SET @c_errmsg   = ''
 
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
+   SET @c_ori_username = @c_UserName
+   IF SUSER_SNAME() <> @c_username        --(Wan01) - START
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT 
@@ -65,7 +72,7 @@ BEGIN
          GOTO EXIT_SP
       END
       
-      EXECUTE AS LOGIN = @c_UserName
+      EXECUTE AS LOGIN = @c_UserName  
    END                                    --(Wan01) - END
    
    BEGIN TRY                              --(Wan01) - START                                 
@@ -125,6 +132,7 @@ BEGIN
                                            WHEN parm_datatype = 'datetime' AND Parm_default = 'startofyear' THEN @c_startofyear_dt
                                            WHEN parm_datatype = 'datetime' AND Parm_default = 'endofyear'   THEN @c_endtofyear_dt
                                            WHEN parm_datatype = 'datetime'                                  THEN @c_now_dt  
+                                           WHEN parm_datatype = 'string' AND parm_label = 'userid'          THEN @c_ori_username      --(mingle01) - END
                                            --WHEN parm_datatype = 'string' AND CHARINDEX('Storer',Parm_label) > 0 AND  @c_RestrictStorerkey <> '' THEN @c_RestrictStorerkey
                                            ELSE ISNULL(RTRIM(Parm_default),'') 
                                            END

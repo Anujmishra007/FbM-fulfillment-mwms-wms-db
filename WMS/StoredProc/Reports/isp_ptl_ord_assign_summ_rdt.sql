@@ -13,7 +13,7 @@ GO
 /* Copyright: LF Logistics                                              */
 /* Written by: CSCHONG                                                  */
 /*                                                                      */
-/* Purpose: WMS-5950 - [PH] - Adidas Ecom - Order Summary Report        */
+/* Purpose: WMS-15950 - [PH] - Adidas Ecom - Order Summary Report       */
 /*        :                                                             */
 /* Called By: r_dw_ptl_ord_assign_summ_rdt                              */
 /*          :                                                           */
@@ -23,6 +23,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 01-MAR-2021  CSCHONG   1.1  WMS-15950 Add new field (CS01)           */
 /************************************************************************/
 CREATE PROC isp_ptl_ord_assign_summ_rdt
            @c_waveKey   NVARCHAR(20)
@@ -86,13 +87,35 @@ BEGIN
       ,  PickZone       NVARCHAR(20)   NULL  DEFAULT('')
       ,  OHDELDate      NVARCHAR(10)   NULL  DEFAULT('')
       ,  ExtOrdkey      NVARCHAR(50)   NULL  DEFAULT('')
+      ,  courier        NVARCHAR(50)   NULL  DEFAULT('')             --CS01
      )
+  /*CS01 START*/
+   CREATE TABLE #TMP_PTORDBYSGRP
+      (  RowID          INT IDENTITY (1,1) NOT NULL 
+      ,  Orderkey       NVARCHAR(20)   NULL  DEFAULT('')
+      ,  Wavekey        NVARCHAR(10)   NULL  DEFAULT('')
+      ,  loadkey        NVARCHAR(20)   NULL  DEFAULT('')
+      ,  SKUGRP         NVARCHAR(50)   NULL  DEFAULT('')
+      )
 
 
-      INSERT INTO #TMP_PTORDSUMMRDT(Orderkey,Wavekey,Loadkey,Pqty,Pickzone,OHDELDATE,ExtOrdkey)
+
+   INSERT INTO #TMP_PTORDBYSGRP(orderkey,wavekey,loadkey,SKUGRP)
+    SELECT DISTINCT oh.orderkey,WV.wavekey as Wavekey,oh.loadkey,c.udf01 as SKUGRP
+      FROM WAVE WV WITH (NOLOCK)
+      JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.wavekey = WV.wavekey
+      JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = WD.Orderkey
+      JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = OH.Orderkey
+      JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = OD.Orderkey AND PD.SKU = OD.SKU
+                                AND PD.OrderLineNumber = OD.OrderLineNumber
+      JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.sku=PD.sku
+      LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname ='skugroup' AND C.storerkey = OH.Storerkey AND C.code = s.skugroup
+      WHERE WV.Wavekey=@c_wavekey
+  /*CS01 END*/
+      INSERT INTO #TMP_PTORDSUMMRDT(Orderkey,Wavekey,Loadkey,Pqty,Pickzone,OHDELDATE,ExtOrdkey,courier)     --CS01
       SELECT oh.orderkey,WV.wavekey as Wavekey,oh.loadkey,PD.qty,
              case when c.short='Y' THEN L.pickzone else '' END as pickzone,
-             CONVERT(NVARCHAR(10),OH.deliverydate,101),oh.externorderkey
+             CONVERT(NVARCHAR(10),OH.deliverydate,101),oh.externorderkey,ISNULL(C1.code2,'')                --CS01
       FROM WAVE WV WITH (NOLOCK)
       JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.wavekey = WV.wavekey
       JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = WD.Orderkey
@@ -102,6 +125,10 @@ BEGIN
       JOIN LOC L WITH (NOLOCK) ON L.loc = PD.LOC
       LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'ordertype' AND C.code=OH.type 
                                 AND C.storerkey = OH.Storerkey
+      --CS01 START
+      LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.listname = 'courierlbl' AND C1.code=OH.salesman 
+                                AND C1.storerkey = OH.Storerkey
+      --CS01 END
       WHERE WV.Wavekey=@c_wavekey
 
       SELECT Orderkey as Orderkey,
@@ -110,13 +137,18 @@ BEGIN
              sum(Pqty) as PQTY,
              Pickzone as PickZone,
              OHDELDATE as OHDELDATE,
-             ExtOrdkey as ExtOrdkey
+             ExtOrdkey as ExtOrdkey,
+             Courier AS Courier              --CS01
+             ,CAST(STUFF((SELECT ',' + RTRIM(a.skugrp) FROM #TMP_PTORDBYSGRP a 
+                          where a.orderkey = #TMP_PTORDSUMMRDT.orderkey and a.wavekey=#TMP_PTORDSUMMRDT.wavekey 
+               ORDER BY a.wavekey, a.orderkey,a.skugrp FOR XML PATH('')),1,1,'' ) AS NVARCHAR(250)) AS SKUGRP
       FROM #TMP_PTORDSUMMRDT
       WHERE Wavekey = @c_wavekey
-      GROUP BY Orderkey,Wavekey,Loadkey,Pickzone,OHDELDATE,ExtOrdkey
+      GROUP BY Orderkey,Wavekey,Loadkey,Pickzone,OHDELDATE,ExtOrdkey,Courier        --CS01
       ORDER BY wavekey,orderkey
 
      DROP TABLE #TMP_PTORDSUMMRDT
+     DROP TABLE #TMP_PTORDBYSGRP
    
  QUIT_SP:
 
