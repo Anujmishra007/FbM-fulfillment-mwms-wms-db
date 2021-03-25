@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_delivery_receipt09                                   */  
 /*          :                                                           */  
-/* GitLab Version: 1.1                                                  */  
+/* GitLab Version: 1.2                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */ 
 /* 2021-03-16   WLChooi   1.1 WMS-16276 - Add new columns (WL01)        */
+/* 2021-03-22   WLChooi   1.2 WMS-16276 - Change sorting and column     */
+/*                            logic (WL02)                              */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
@@ -109,6 +111,7 @@ BEGIN
     , C_State         NVARCHAR(45)
     , Notes2          NVARCHAR(30)
     , SumQty          INT   --WL01
+    , TotalCarton     INT   --WL02
    )
    --IF EXISTS (SELECT 1 FROM CONTAINER (NOLOCK) WHERE MBOLKey = @c_MBOLKey)
    --BEGIN
@@ -158,6 +161,7 @@ BEGIN
         , ISNULL(OH.C_State,'') AS C_State
         , OD.Notes2
         , MAX(PIDET.Qty)   --WL01
+        , MAX(PAD.LabelNo) AS TotalCarton   --WL02
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
    CROSS APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes
@@ -176,7 +180,9 @@ BEGIN
    JOIN ExternOrders EXO2 (NOLOCK) ON EXO2.EXTERNORDERKEY = EXO1.ExternOrdersKey AND EXO2.ORDERKEY =  OH.OrderKey  
    CROSS APPLY (SELECT SUM(Qty) AS Qty FROM PICKDETAIL (NOLOCK) WHERE OrderKey = OD.OrderKey AND SKU = OD.SKU AND OrderLineNumber = OD.OrderLineNumber) AS PIDET   --WL01
    LEFT JOIN CODELKUP CK (NOLOCK) ON CK.LISTNAME = 'ISOCOUNTRY' AND CK.CODE = OH.C_COUNTRY  
-   LEFT JOIN CODELKUP CK1 (NOLOCK) ON CK1.LISTNAME = 'ISOCOUNTRY' AND CK1.CODE = ST.COUNTRY  
+   LEFT JOIN CODELKUP CK1 (NOLOCK) ON CK1.LISTNAME = 'ISOCOUNTRY' AND CK1.CODE = ST.COUNTRY 
+   JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey   --WL02 
+   CROSS APPLY (SELECT COUNT(DISTINCT LabelNo) AS LabelNo FROM PACKDETAIL (NOLOCK) WHERE Pickslipno = PH.PickSlipNo) AS PAD   --WL02
    WHERE M.MbolKey = @c_MBOLKey
    GROUP BY ST.Company
           , ISNULL(ST.Address1,'')  
@@ -258,6 +264,7 @@ BEGIN
         , ISNULL(OH.C_State,'') AS C_State
         , OD.Notes2
         , MAX(PIDET.Qty)   --WL01
+        , MAX(PAD.LabelNo) AS TotalCarton   --WL02
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
    CROSS APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes
@@ -271,6 +278,8 @@ BEGIN
    CROSS APPLY (SELECT SUM(Qty) AS Qty FROM PICKDETAIL (NOLOCK) WHERE OrderKey = OD.OrderKey AND SKU = OD.SKU AND OrderLineNumber = OD.OrderLineNumber) AS PIDET   --WL01
    LEFT JOIN CODELKUP CK (NOLOCK) ON CK.LISTNAME = 'ISOCOUNTRY' AND CK.CODE = OH.C_COUNTRY  
    LEFT JOIN CODELKUP CK1 (NOLOCK) ON CK1.LISTNAME = 'ISOCOUNTRY' AND CK1.CODE = ST.COUNTRY  
+   JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey   --WL02
+   CROSS APPLY (SELECT COUNT(DISTINCT LabelNo) AS LabelNo FROM PACKDETAIL (NOLOCK) WHERE Pickslipno = PH.PickSlipNo) AS PAD   --WL02
    WHERE M.MbolKey = @c_MBOLKey  
    AND NOT EXISTS (SELECT 1 FROM CONTAINERDETAIL CTD1 (NOLOCK)
                    JOIN PALLETDETAIL PLTD1 (NOLOCK) ON CTD1.PalletKey = PLTD1.PalletKey
@@ -391,7 +400,7 @@ BEGIN
       FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_SKU, @n_SumInCtn, @n_SumInQty, @c_Notes2, @c_Storerkey, @c_Containerkey
    END
    
-   SELECT * FROM #TMP_DATA ORDER BY Containerkey, OrderKey, UserDefine04  
+   SELECT * FROM #TMP_DATA ORDER BY Containerkey, OrderKey, UserDefine02   --WL02  
    
 QUIT_SP:  
    IF OBJECT_ID('tempdb..#TMP_DATA') IS NOT NULL
