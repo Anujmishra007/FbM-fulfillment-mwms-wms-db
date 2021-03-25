@@ -62,6 +62,7 @@ GO
 /* 19Feb2016    TLTING        Loop cater on over range setup            */
 /* 10Jan2017    TLTING        WMS-695 CT setup grouping                 */
 /* 25Apr2017    TLTING        Bug fix - CTgroup filtering               */
+/* 23Mar2021    TLTING01 1.1  New checkdigit method                     */
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[isp_CartonTrack_PoolReGen] ( @c_CTgroup  Nvarchar(10) = '%', @c_CheckDigitType NCHAR(1) = '')
 AS  
@@ -77,6 +78,8 @@ BEGIN
    DECLARE @n_CntCartonTrack BIGINT, @n_TrackingNumber BIGINT
    DECLARE @n_err INT, @n_cnt int  
    DECLARE @c_SQL NVARCHAR(2000), @n_debug int  
+   DECLARE @n_SumDigit INT = 0   -- TLTING01
+   DECLARE @n_CheckNumber BIGINT = 0
   
   SET @n_debug = 0
    --IF OBJECT_ID('tempdb..#TrackingNo') IS NOT NULL  
@@ -196,9 +199,29 @@ BEGIN
             	 --NJOW01
                SET @c_TrackingNumber = CONVERT( NVARCHAR(11), @n_TrackingNumber) + CONVERT(NCHAR(1), (CAST(SUBSTRING(LTRIM(CONVERT(NVARCHAR(11), @n_TrackingNumber)),3,9) AS BIGINT) % 7))
             END
-            ELSE
+            ELSE IF ISNULL(@c_CheckDigitType,'') = '2' 
             BEGIN
                SET @c_TrackingNumber = CONVERT( NVARCHAR(11), @n_TrackingNumber) + CONVERT(NCHAR(1), (@n_TrackingNumber % 7))
+            END
+            ELSE IF ISNULL(@c_CheckDigitType,'') = '3'  -- TLTING01
+            BEGIN
+               -- 30001210999 , SET 3+0+0+0+1+2+1+0+9+9+9 = 34 
+               -- Check digit - 34 % 7 = 6 
+
+               SET @n_CheckNumber = @n_TrackingNumber
+               SET @n_SumDigit = 0
+               WHILE @n_CheckNumber > 0
+               BEGIN
+                  SET @n_SumDigit  = @n_SumDigit + @n_CheckNumber % 10
+                  SET @n_CheckNumber =  @n_CheckNumber / 10  
+               END
+
+               SET @c_TrackingNumber = CONVERT( NVARCHAR(11), @n_TrackingNumber) + CONVERT(NCHAR(1), (@n_SumDigit % 7))
+
+            END
+            ELSE
+            BEGIN
+               Break
             END
 
              IF @n_debug = '1'   
