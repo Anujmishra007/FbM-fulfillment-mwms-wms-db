@@ -27,10 +27,12 @@ GO
 /* 2020-09-02   WLChooi   1.1   WMS-14919 - Modify Sorting & Logic(WL01)*/    
 /* 2020-09-10   WLChooi   1.2   WMS-14919 - Add ISNULL (WL02)           */  
 /* 2020-10-23   WLChooi   1.3   Bug fix                                 */  
+/* 2021-02-19   CSCHONG   1.3  WMS-16343 add additional parameter(CS01) */
 /************************************************************************/      
       
 CREATE PROC isp_Packing_List_70 (      
   @cMBOLKey NVARCHAR( 10)      
+, @c_consigneekey NVARCHAR(45) = ''   --CS01  
 )      
 AS      
 BEGIN      
@@ -49,7 +51,7 @@ BEGIN
            @c_RptName            NVARCHAR(150),    
            @c_ST_Secondary       NVARCHAR(15),    
            @c_storerkey          NVARCHAR(20),    
-           @c_Consigneekey       NVARCHAR(45),    
+           @c_GetConsigneekey    NVARCHAR(45),    --CS01
            @c_CCompany           NVARCHAR(45),    
            @c_Loadkey            NVARCHAR(20),    
            @c_ExtOrderkey        NVARCHAR(50),    
@@ -140,6 +142,7 @@ BEGIN
                                      AND C.code = ORDERS.c_country    
    LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.listname = 'PVHQHW' and C1.code = ORDERS.Facility    
    WHERE ORDERS.MBOLKey = @cMBOLKey    
+   AND ORDERS.ConsigneeKey = CASE WHEN ISNULL(@c_Consigneekey,'') <> '' THEN @c_Consigneekey ELSE ORDERS.ConsigneeKey END  --CS01
    GROUP by CASE WHEN LEFT(ORDERS.Ordergroup,1) = 'R' THEN ISNULL(C.notes,'') ELSE ST.company END ,    
       ORDERS.c_Company ,      
       ORDERS.c_Address1 ,      
@@ -169,7 +172,7 @@ BEGIN
          
    FETCH NEXT FROM CUR_RESULT INTO @c_CompanyName ,@c_RptName , @c_CCompany , @c_CAddress1, @c_CAddress2 , @c_CAddress3 ,@c_CAddress4 ,@c_Ccity ,    
                                    @c_Ccountry , @n_cntExtOrdkey,@n_cntloadkey,@c_mbolkey , @c_salesman , @c_storerkey,@c_labelno ,     
-                                   @c_susr1 ,@c_ssize ,@c_style , @c_color ,  @c_measurement , @c_sku ,@c_ST_Secondary , @c_Consigneekey, @n_Pqty     
+                                   @c_susr1 ,@c_ssize ,@c_style , @c_color ,  @c_measurement , @c_sku ,@c_ST_Secondary , @c_GetConsigneekey, @n_Pqty   --CS01  
          
    WHILE @@FETCH_STATUS <> -1      
    BEGIN     
@@ -183,7 +186,7 @@ BEGIN
       SET @c_GetSize  = ''      
           
       SET @c_FullAddress = @c_CAddress1 + SPACE(2) +  @c_CAddress2 + SPACE(2) + @c_CAddress3 + SPACE(2) + @c_CAddress4 + SPACE(2) + @c_Ccity + SPACE(2) +  @c_Ccountry     
-      SET @c_storeCode = ISNULL(@c_ST_Secondary,'') + SPACE(2) + @c_Consigneekey   --WL01    
+      SET @c_storeCode = ISNULL(@c_ST_Secondary,'') + SPACE(2) + @c_GetConsigneekey   --WL01    --CS01
       SET @c_GetStyle = @c_style + @c_susr1    
     
       IF @n_cntLoadkey = 1    
@@ -260,7 +263,7 @@ BEGIN
     
       FETCH NEXT FROM CUR_RESULT INTO  @c_CompanyName ,@c_RptName , @c_CCompany , @c_CAddress1, @c_CAddress2 , @c_CAddress3 ,@c_CAddress4 ,@c_Ccity ,    
                                        @c_Ccountry , @n_cntExtOrdkey,@n_cntloadkey,@c_mbolkey , @c_salesman , @c_storerkey, @c_labelno ,     
-                                       @c_susr1 ,@c_ssize ,@c_style , @c_color ,  @c_measurement , @c_sku ,@c_ST_Secondary , @c_Consigneekey, @n_Pqty     
+                                       @c_susr1 ,@c_ssize ,@c_style , @c_color ,  @c_measurement , @c_sku ,@c_ST_Secondary , @c_GetConsigneekey, @n_Pqty     --CS01
       
    END      
     
