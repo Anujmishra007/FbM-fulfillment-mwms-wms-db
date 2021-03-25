@@ -19,6 +19,7 @@ GO
 /* 03-Oct-2019    1.0  WLChooi    WMS-10789 (Created)                         */ 
 /* 29-Apr-2020    1.1  WLChooi    WMS-13194 - Don't print labelno label from  */
 /*                                second SKU onwards (WL01)                   */
+/* 13-JAN-2021   1.2   CSCHONG    WMS-16053 revised field mapping (CS01)      */
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_CN_PVHLBL1_label]                     
@@ -210,7 +211,7 @@ BEGIN
    END      
     
    SET @c_SQLJOIN = +' SELECT DISTINCT @c_Sparm4,SKU.Style,SKU.BUSR1,SKU.Color,SKU.Measurement,'
-                    +' SKU.[Size],'''', ' --7 --OD.userdefine08
+                    +' SKU.[Size],Right(SKU.class,2) + Right(SKU.Itemclass,3), ' --7 --OD.userdefine08       --CS01
                     +' ISNULL(C1.Short,''''),'                           --CS01
                     +' CASE WHEN orders.B_Country IN (''SG'',''MY'',''CN'',''HK'',''MO'') THEN '
                     +' CONVERT(NVARCHAR(10),CAST(OD.Tax01 AS Decimal(10,2))) ELSE CONVERT(NVARCHAR(10),CAST(OD.Tax01 AS Decimal(10,0)))  END,'   --9
@@ -252,9 +253,9 @@ BEGIN
   -- SELECT @c_SQL  '@c_SQL' 
    
    SET @c_ExecArguments =  N'  @c_Sparm1         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm2         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm3         NVARCHAR(80)'  
-	                       + ' ,@c_Sparm4         NVARCHAR(80)'  
+                          + ' ,@c_Sparm2         NVARCHAR(80)'  
+                          + ' ,@c_Sparm3         NVARCHAR(80)'  
+                          + ' ,@c_Sparm4         NVARCHAR(80)'  
                          
                                        
    EXEC sp_ExecuteSql     @c_SQL     
@@ -275,135 +276,135 @@ BEGIN
    
    WHILE @n_copy > 1
    BEGIN
-   	INSERT INTO #Result
-   	(
-   		-- ID -- this column value is auto-generated
-   		Col01,
-   		Col02,
-   		Col03,
-   		Col04,
-   		Col05,
-   		Col06,
-   		Col07,
-   		Col08,
-   		Col09,
-   		Col10,
-   		Col11,
-   		Col12,
-   		Col13,
-   		Col14,
-   		Col15,
-   		Col16,
-   		Col17,
-   		Col18,
-   		Col19,
-   		Col20,
-   		Col21,
-   		Col22,
-   		Col23,
-   		Col24,
-   		Col25,
-   		Col26,
-   		Col27,
-   		Col28,
-   		Col29,
-   		Col30,
-   		Col31,
-   		Col32,
-   		Col33,
-   		Col34,
-   		Col35,
-   		Col36,
-   		Col37,
-   		Col38,
-   		Col39,
-   		Col40,
-   		Col41,
-   		Col42,
-   		Col43,
-   		Col44,
-   		Col45,
-   		Col46,
-   		Col47,
-   		Col48,
-   		Col49,
-   		Col50,
-   		Col51,
-   		Col52,
-   		Col53,
-   		Col54,
-   		Col55,
-   		Col56,
-   		Col57,
-   		Col58,
-   		Col59,
-   		Col60
-   	)
-   	SELECT TOP 1 Col01,
-   		Col02,
-   		Col03,
-   		Col04,
-   		Col05,
-   		Col06,
-   		Col07,
-   		Col08,
-   		Col09,
-   		Col10,
-   		Col11,
-   		Col12,
-   		Col13,
-   		Col14,
-   		Col15,
-   		Col16,
-   		Col17,
-   		Col18,
-   		Col19,
-   		Col20,
-   		Col21,
-   		Col22,
-   		Col23,
-   		Col24,
-   		Col25,
-   		Col26,
-   		Col27,
-   		Col28,
-   		Col29,
-   		Col30,
-   		Col31,
-   		Col32,
-   		Col33,
-   		Col34,
-   		Col35,
-   		Col36,
-   		Col37,
-   		Col38,
-   		Col39,
-   		Col40,
-   		Col41,
-   		Col42,
-   		Col43,
-   		Col44,
-   		Col45,
-   		Col46,
-   		Col47,
-   		Col48,
-   		Col49,
-   		Col50,
-   		Col51,
-   		Col52,
-   		Col53,
-   		Col54,
-   		Col55,
-   		Col56,
-   		Col57,
-   		Col58,
-   		Col59,
-   		Col60
-   		FROM #Result AS r
-			where isnull(Col01,'') <> ''
-   	ORDER BY r.ID
-   	
-   	SET @n_copy = @n_copy - 1
+      INSERT INTO #Result
+      (
+         -- ID -- this column value is auto-generated
+         Col01,
+         Col02,
+         Col03,
+         Col04,
+         Col05,
+         Col06,
+         Col07,
+         Col08,
+         Col09,
+         Col10,
+         Col11,
+         Col12,
+         Col13,
+         Col14,
+         Col15,
+         Col16,
+         Col17,
+         Col18,
+         Col19,
+         Col20,
+         Col21,
+         Col22,
+         Col23,
+         Col24,
+         Col25,
+         Col26,
+         Col27,
+         Col28,
+         Col29,
+         Col30,
+         Col31,
+         Col32,
+         Col33,
+         Col34,
+         Col35,
+         Col36,
+         Col37,
+         Col38,
+         Col39,
+         Col40,
+         Col41,
+         Col42,
+         Col43,
+         Col44,
+         Col45,
+         Col46,
+         Col47,
+         Col48,
+         Col49,
+         Col50,
+         Col51,
+         Col52,
+         Col53,
+         Col54,
+         Col55,
+         Col56,
+         Col57,
+         Col58,
+         Col59,
+         Col60
+      )
+      SELECT TOP 1 Col01,
+         Col02,
+         Col03,
+         Col04,
+         Col05,
+         Col06,
+         Col07,
+         Col08,
+         Col09,
+         Col10,
+         Col11,
+         Col12,
+         Col13,
+         Col14,
+         Col15,
+         Col16,
+         Col17,
+         Col18,
+         Col19,
+         Col20,
+         Col21,
+         Col22,
+         Col23,
+         Col24,
+         Col25,
+         Col26,
+         Col27,
+         Col28,
+         Col29,
+         Col30,
+         Col31,
+         Col32,
+         Col33,
+         Col34,
+         Col35,
+         Col36,
+         Col37,
+         Col38,
+         Col39,
+         Col40,
+         Col41,
+         Col42,
+         Col43,
+         Col44,
+         Col45,
+         Col46,
+         Col47,
+         Col48,
+         Col49,
+         Col50,
+         Col51,
+         Col52,
+         Col53,
+         Col54,
+         Col55,
+         Col56,
+         Col57,
+         Col58,
+         Col59,
+         Col60
+         FROM #Result AS r
+         where isnull(Col01,'') <> ''
+      ORDER BY r.ID
+      
+      SET @n_copy = @n_copy - 1
    END
 
 EXIT_SP:  

@@ -40,6 +40,7 @@ GO
 /*                              INDEX file (Chee03)                     */
 /* 13-Nov-2015  Alex          - Enhancement - Setup storerkey in        */
 /*                              Codelkup by EPODStorer ListName         */
+/* 16-Mar-2021  Alex01        - Dynamic SQL for cross db execution      */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_PH_EPOD_Update] (
@@ -87,7 +88,7 @@ BEGIN
       @cType                   NVARCHAR(2),
       @cFinalizeFlag           NVARCHAR(1),
       @cPODDef07               NVARCHAR(30),
-    @cStampNotes             NVARCHAR(4000),
+      @cStampNotes             NVARCHAR(4000),
       @cEPODStatusDescr        NVARCHAR(30),
       @cRejectReasonCodeDescr  NVARCHAR(30)
 
@@ -109,6 +110,13 @@ BEGIN
       @cGenKeyRef4          NCHAR(30),
       @cGenKeyRef5          NCHAR(30),
       @cWMSStorerKey        NVARCHAR(15)
+
+   --Alex01 Begin
+   DECLARE
+      @cSQLQuery            NVARCHAR(MAX) = '',
+      @cSQLArgs             NVARCHAR(2000) = '',
+      @cDBName              NVARCHAR(30) = REPLACE(DB_NAME(), 'WMS', 'EPOD')
+   --Alex01 End
 
    SET @cWMSStorerKey = ''
 
@@ -153,10 +161,19 @@ BEGIN
    BEGIN
       SET @cEPOD_Date = @cEPODAddDate
 
+      --Alex01 Begin
       -- Update epod.adddate to epod.deliveryDate 
-      UPDATE PHePOD.dbo.EPOD WITH (ROWLOCK)
-      SET DeliveryDate = AddDate
-      WHERE ePODKey = @nePODKey
+      --UPDATE PHePOD.dbo.EPOD WITH (ROWLOCK)
+      --SET DeliveryDate = AddDate
+      --WHERE ePODKey = @nePODKey
+
+      SET @cSQLQuery = 'UPDATE ' + @cDBName + '.dbo.EPOD WITH (ROWLOCK) ' + CHAR(13) +
+                     + 'SET DeliveryDate = AddDate ' + CHAR(13) +
+                     + 'WHERE ePODKey = @nePODKey '
+      SET @cSQLArgs = '@nePODKey BIGINT'
+
+      EXEC sys.sp_executesql @cSQLQuery, @cSQLArgs, @nePODKey
+      --Alex01 End
    END
 
    -- Get ImgKey (Chee02)
@@ -222,40 +239,88 @@ BEGIN
 
    -- Get EPOD Status Description
 	SELECT @cEPODStatusDescr = @cEPODStatus, @cFinalizeFlag = 'N'
-	SELECT 
-      @cEPODStatusDescr = @cEPODStatusDescr + ' - ' + Description, 
-      @cFinalizeFlag = CASE UDF05 WHEN 'Y' THEN 'Y' ELSE 'N' END
-	FROM PHePOD.dbo.CODELKUP PODSTATUS WITH (NOLOCK)
-	WHERE LISTNAME = 'PODSTATUS'
-	  AND Code = @cEPODStatus
-	  AND PODSTATUS.StorerKey = CASE WHEN EXISTS(SELECT 1 FROM PHePOD.dbo.CODELKUP WITH (NOLOCK)
-																WHERE ListName=PODSTATUS.Listname
-																  AND Code=PODSTATUS.Code
-																  AND StorerKey=@cAccountID) THEN @cWMSStorerKey
-										 ELSE '' END
+   --Alex01 Begin
+	--SELECT 
+ --     @cEPODStatusDescr = @cEPODStatusDescr + ' - ' + Description, 
+ --     @cFinalizeFlag = CASE UDF05 WHEN 'Y' THEN 'Y' ELSE 'N' END
+	--FROM PHePOD.dbo.CODELKUP PODSTATUS WITH (NOLOCK)
+	--WHERE LISTNAME = 'PODSTATUS'
+ --     AND Code = @cEPODStatus
+ --     AND PODSTATUS.StorerKey = CASE WHEN EXISTS(SELECT 1 FROM PHePOD.dbo.CODELKUP WITH (NOLOCK)
+ --        WHERE ListName=PODSTATUS.Listname
+ --        AND Code=PODSTATUS.Code
+ --        AND StorerKey=@cAccountID) THEN @cWMSStorerKey
+ --        ELSE '' END
+
+   SET @cSQLQuery = ' SELECT ' + CHAR(13) +
+                  + '    @cEPODStatusDescr = @cEPODStatusDescr + '' - '' + Description, ' + CHAR(13) +
+                  + '    @cFinalizeFlag = CASE UDF05 WHEN ''Y'' THEN ''Y'' ELSE ''N'' END ' + CHAR(13) +
+	               + ' FROM ' + @cDBName + '.dbo.CODELKUP PODSTATUS WITH (NOLOCK) '
+	               + ' WHERE LISTNAME = ''PODSTATUS'' ' + CHAR(13) +
+                  + '    AND Code = @cEPODStatus ' + CHAR(13) +
+                  + '    AND PODSTATUS.StorerKey = CASE WHEN EXISTS(SELECT 1 FROM ' + @cDBName + '.dbo.CODELKUP WITH (NOLOCK) ' + CHAR(13) +
+                  + '       WHERE ListName=PODSTATUS.Listname ' + CHAR(13) +
+                  + '       AND Code=PODSTATUS.Code ' + CHAR(13) +
+                  + '       AND StorerKey=@cAccountID) THEN @cWMSStorerKey ' + CHAR(13) +
+                  + '       ELSE '''' END '
+
+   SET @cSQLArgs = '@cEPODStatus NVARCHAR(10), @cAccountID NVARCHAR(30), @cWMSStorerKey NVARCHAR(15), '
+                 + '@cEPODStatusDescr NVARCHAR(30) OUTPUT, @cFinalizeFlag NVARCHAR(1) OUTPUT'
+   
+   EXEC sys.sp_executesql @cSQLQuery, @cSQLArgs, @cEPODStatus, @cAccountID, @cWMSStorerKey, @cEPODStatusDescr OUTPUT, @cFinalizeFlag OUTPUT
 
    -- Get Reject Reason Code Description
 	SET @cRejectReasonCodeDescr = @cRejectReasonCode
-	SELECT @cRejectReasonCodeDescr = @cRejectReasonCodeDescr + ' - ' + Description
-	FROM PHePOD.dbo.CODELKUP REASONCODE WITH (NOLOCK)
-	WHERE Code = @cRejectReasonCode
-	  AND REASONCODE.LISTNAME = CASE WHEN EXISTS(SELECT 1 FROM PHePOD.dbo.CODELKUP WITH (NOLOCK)
-																WHERE ListName='L2REASON'
-																  AND Code=REASONCODE.Code) THEN 'L2REASON'
-												ELSE 'REASONCODE' END
-	AND REASONCODE.StorerKey = CASE WHEN EXISTS(SELECT 1 FROM PHePOD.dbo.CODELKUP WITH (NOLOCK)
-																 WHERE ListName=REASONCODE.LISTNAME
-																	AND Code=REASONCODE.Code
-																	AND StorerKey=@cAccountID) THEN @cWMSStorerKey
-												 ELSE '' END
+   --SELECT 
+   --   @cRejectReasonCodeDescr = @cRejectReasonCodeDescr + ' - ' + Description
+   --FROM PHePOD.dbo.CODELKUP REASONCODE WITH (NOLOCK)
+   --WHERE Code = @cRejectReasonCode
+   --AND REASONCODE.LISTNAME = CASE WHEN EXISTS(SELECT 1 FROM PHePOD.dbo.CODELKUP WITH (NOLOCK)
+   --   WHERE ListName='L2REASON'
+   --   AND Code=REASONCODE.Code) THEN 'L2REASON'
+   --   ELSE 'REASONCODE' END
+   --AND REASONCODE.StorerKey = CASE WHEN EXISTS(SELECT 1 FROM PHePOD.dbo.CODELKUP WITH (NOLOCK)
+   --   WHERE ListName=REASONCODE.LISTNAME
+   --   AND Code=REASONCODE.Code
+   --   AND StorerKey=@cAccountID) THEN @cWMSStorerKey
+   --   ELSE '' END
+
+     SET @cSQLQuery = ' SELECT ' + CHAR(13) +
+                    + '    @cRejectReasonCodeDescr = @cRejectReasonCodeDescr + '' - '' + Description ' + CHAR(13) +
+                    + ' FROM ' + @cDBName + '.dbo.CODELKUP REASONCODE WITH (NOLOCK) ' + CHAR(13) +
+                    + ' WHERE Code = @cRejectReasonCode ' + CHAR(13) +
+                    + ' AND REASONCODE.LISTNAME = CASE WHEN EXISTS(SELECT 1 FROM ' + @cDBName + '.dbo.CODELKUP WITH (NOLOCK) ' + CHAR(13) +
+                    + '    WHERE ListName=''L2REASON'' ' + CHAR(13) +
+                    + '    AND Code=REASONCODE.Code) THEN ''L2REASON'' ' + CHAR(13) +
+                    + '    ELSE ''REASONCODE'' END ' + CHAR(13) +
+                    + ' AND REASONCODE.StorerKey = CASE WHEN EXISTS(SELECT 1 FROM ' + @cDBName + '.dbo.CODELKUP WITH (NOLOCK) ' + CHAR(13) +
+                    + '    WHERE ListName=REASONCODE.LISTNAME ' + CHAR(13) +
+                    + '    AND Code=REASONCODE.Code ' + CHAR(13) +
+                    + '    AND StorerKey=@cAccountID) THEN @cWMSStorerKey ' + CHAR(13) +
+                    + '    ELSE '''' END '
+
+   SET @cSQLArgs = '@cRejectReasonCode NVARCHAR(20), @cAccountID NVARCHAR(30), @cWMSStorerKey NVARCHAR(15), '
+                 + '@cRejectReasonCodeDescr NVARCHAR(30) OUTPUT'
+   
+   EXEC sys.sp_executesql @cSQLQuery, @cSQLArgs, @cRejectReasonCode, @cAccountID, @cWMSStorerKey, @cRejectReasonCodeDescr OUTPUT
 
    -- If Contain Image (Chee02)
    IF @cContainImage = '1'
    BEGIN
       -- Get Country Code (Chee02)
-      SELECT @cCountry = Code
-      FROM PHePOD.dbo.CODELKUP (NOLOCK)
-      WHERE LISTNAME = 'COUNTRY'
+      --SELECT @cCountry = Code
+      --FROM PHePOD.dbo.CODELKUP (NOLOCK)
+      --WHERE LISTNAME = 'COUNTRY'
+
+      SET @cSQLQuery = ' SELECT ' + CHAR(13) +
+                     + ' SELECT @cCountry = Code ' + CHAR(13) +
+                     + ' FROM ' + @cDBName + '.dbo.CODELKUP (NOLOCK) ' + CHAR(13) +
+                     + ' WHERE LISTNAME = ''COUNTRY'' '
+
+      SET @cSQLArgs = '@cCountry NCHAR(2) OUTPUT'
+      
+      EXEC sys.sp_executesql @cSQLQuery, @cSQLArgs, @cCountry OUTPUT
+
 
       IF ISNULL(@cCountry, '') = ''
       BEGIN
@@ -267,10 +332,18 @@ BEGIN
       END
 
       -- Get Storer Code (Chee02)
-      SELECT @cStorerCode = Code, @cCSVFilePath = Long
-      FROM PHePOD.dbo.CODELKUP (NOLOCK)
-      WHERE LISTNAME = 'DMSSTORER'
-        AND StorerKey = @cStorerKey
+      --SELECT @cStorerCode = Code, @cCSVFilePath = Long
+      --FROM PHePOD.dbo.CODELKUP (NOLOCK)
+      --WHERE LISTNAME = 'DMSSTORER'
+      --  AND StorerKey = @cStorerKey
+      SET @cSQLQuery = ' SELECT @cStorerCode = Code, @cCSVFilePath = Long ' + CHAR(13) +
+                     + ' FROM ' + @cDBName + '.dbo.CODELKUP (NOLOCK) ' + CHAR(13) +
+                     + ' WHERE LISTNAME = ''DMSSTORER'' '
+                     + ' AND StorerKey = @cStorerKey '
+
+      SET @cSQLArgs = '@cStorerKey NVARCHAR(15), @cStorerCode NCHAR(3) OUTPUT'
+      
+      EXEC sys.sp_executesql @cSQLQuery, @cSQLArgs, @cStorerKey, @cStorerCode OUTPUT
 
       IF ISNULL(@cStorerCode, '') = ''
       BEGIN
@@ -291,11 +364,20 @@ BEGIN
       END
 
       -- Get Version (Chee02)
-      SELECT @cVersion = RIGHT('00' + CAST(COUNT(1) AS NVARCHAR), 2)
-      FROM PHePOD.dbo.EPOD (NOLOCK)
-      WHERE OrderKey = CASE WHEN @cType IN ('MB', 'LP') THEN @cImgKey
-                            ELSE @cEPOD_OrderKey
-                        END
+      --SELECT @cVersion = RIGHT('00' + CAST(COUNT(1) AS NVARCHAR), 2)
+      --FROM PHePOD.dbo.EPOD (NOLOCK)
+      --WHERE OrderKey = CASE WHEN @cType IN ('MB', 'LP') THEN @cImgKey
+      --                      ELSE @cEPOD_OrderKey
+      --                  END
+      
+      SET @cSQLQuery = ' SELECT @cVersion = RIGHT(''00'' + CAST(COUNT(1) AS NVARCHAR), 2) ' + CHAR(13) +
+                     + ' FROM ' + @cDBName + '.dbo.EPOD (NOLOCK) ' + CHAR(13) +
+                     + ' WHERE OrderKey = CASE WHEN @cType IN (''MB'', ''LP'') THEN @cImgKey '
+                     + ' ELSE @cEPOD_OrderKey END '
+
+      SET @cSQLArgs = '@cType NVARCHAR(2), @cImgKey NCHAR(12), @cEPOD_OrderKey NVARCHAR(50), @cVersion NCHAR(2) OUTPUT'
+      
+      EXEC sys.sp_executesql @cSQLQuery, @cSQLArgs, @cType, @cImgKey, @cEPOD_OrderKey, @cVersion OUTPUT
 
       -- Build Image File Name (Chee02)
       IF ISNULL(@cImageFileName, '') = ''

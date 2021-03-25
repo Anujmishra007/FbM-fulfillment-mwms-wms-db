@@ -16,6 +16,7 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2016-11-18 1.0  CSCHONG    Created (WMS-2129)                              */ 
+/* 2021-03-22 1.1  CSCHONG    Remove hardcode DB name (CS01)                  */
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_CN_RETAILLBL]                      
@@ -349,9 +350,9 @@ BEGIN
     SET @c_col57 = ''
   
   
-  
-  SELECT TOP 1 @n_Notes2 = ISNULL(o.Notes2,'')  FROM CNWMS.dbo.ORDERS o WITH (NOLOCK) JOIN CNWMS.dbo.PICKDETAIL pid WITH (NOLOCK) ON pid.OrderKey = o.OrderKey
-				JOIN CNWMS.dbo.PackDetail  pad WITH (NOLOCK) ON pad.LabelNo = pid.CaseID
+  --CS01
+  SELECT TOP 1 @n_Notes2 = ISNULL(o.Notes2,'')  FROM ORDERS o WITH (NOLOCK) JOIN PICKDETAIL pid WITH (NOLOCK) ON pid.OrderKey = o.OrderKey
+				JOIN PackDetail  pad WITH (NOLOCK) ON pad.LabelNo = pid.CaseID
 				WHERE pad.Pickslipno=@c_Sparm02 AND   pad.Storerkey = @c_Sparm01
 				AND pad.CartonNo between CONVERT(INT,@c_Sparm03) AND CONVERT(INT,@c_Sparm04)
   
@@ -379,7 +380,7 @@ BEGIN
 							(
 								CharCount
 							)
-							SELECT CNLOCAL.dbo.IndexOf(@n_Notes2,'|',@i)
+							SELECT dbo.IndexOf(@n_Notes2,'|',@i)     --CS01
 							
 							SET @i = @i + 1
 							

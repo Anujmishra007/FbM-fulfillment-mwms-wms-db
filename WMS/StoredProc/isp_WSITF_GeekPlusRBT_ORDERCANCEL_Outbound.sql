@@ -230,6 +230,16 @@ BEGIN
          GOTO UPD_TL3_FLAG
       END
 
+      IF NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
+         WHERE OrderKey = @c_Key1
+         AND EXISTS ( SELECT 1 FROM dbo.LOC L WITH (NOLOCK) 
+         WHERE L.Facility = @c_Facility AND PD.Loc = L.Loc AND L.LocationCategory = 'ROBOT' )
+      )
+      BEGIN
+         SET @c_flag = 'IGNOR'
+         GOTO UPD_TL3_FLAG
+      END
+
       SET @n_Exists = 0
       SELECT @n_Exists = (1)
             ,@c_warehouse_code = ISNULL(RTRIM(Short), '')
@@ -240,10 +250,10 @@ BEGIN
       
       IF @c_warehouse_code = '' OR @n_Exists = 0
       BEGIN
-         SET @c_flag = '5'
+         SET @c_flag = 'IGNOR'
          GOTO UPD_TL3_FLAG
       END
-      
+
       SET @n_Exists = 0
       SELECT 
          @n_Exists = (1)

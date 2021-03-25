@@ -122,9 +122,9 @@ BEGIN
                when (t3.measurement = '' or t3.measurement='U') then t3.Size else t3.measurement   
            end,   
       sum(t2.ShippedQty+t2.QtyPicked) as Qty   
-      from CNWMSNKE..Orders as t1 (nolock)   
-      inner join CNWMSNKE..Orderdetail as t2(nolock) on t1.Orderkey=t2.Orderkey   
-      inner join CNWMSNKE..SKU as t3(nolock) on t2.Storerkey=t3.Storerkey and t2.SKU=t3.SKU   
+      from dbo.Orders as t1 (nolock)   
+      inner join dbo.Orderdetail as t2(nolock) on t1.Orderkey=t2.Orderkey   
+      inner join dbo.SKU as t3(nolock) on t2.Storerkey=t3.Storerkey and t2.SKU=t3.SKU   
       where t1.Storerkey=@c_ParamVal1   
       and t1.Status in('5','9')   
       and t1.Mbolkey=@c_ParamVal2   
@@ -197,7 +197,7 @@ BEGIN
       CLOSE C_APPENDCOL    
       DEALLOCATE C_APPENDCOL  
   
-      INSERT INTO [CNWMSNKE].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -223,7 +223,7 @@ BEGIN
    
       set @SQL =left(@SQL,len(@SQL)-1)+' from ##tempConvReport order by 1 ' -- order by index of the column in the select statement (MbolKey)  
   
-      SET @SQL = 'INSERT INTO [CNWMSNKE].[dbo].[EXG_FileDet] (file_key, EXG_Hdr_ID, [FileName], SheetName, [Status], LineText1) '  
+      SET @SQL = 'INSERT INTO [dbo].[EXG_FileDet] (file_key, EXG_Hdr_ID, [FileName], SheetName, [Status], LineText1) '  
                + 'SELECT '   
                + CAST(@n_FileKey AS nvarchar(10))   
                + ', '   

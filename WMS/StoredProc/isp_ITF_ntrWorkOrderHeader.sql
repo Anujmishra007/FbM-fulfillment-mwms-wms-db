@@ -1,6 +1,6 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_ITF_ntrWorkOrderHeader]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_ITF_ntrWorkOrderHeader]
-GO
+--IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_ITF_ntrWorkOrderHeader]') AND type in (N'P', N'PC'))
+--DROP PROCEDURE [dbo].[isp_ITF_ntrWorkOrderHeader]
+--GO
 
 SET ANSI_NULLS OFF
 GO
@@ -34,10 +34,11 @@ GO
 /* Version: 5.4                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
-/* Date         Author    Ver.  Purposes                                */  
+/* Date         Author    Ver.  Purposes                                */
+/* 09-Dec-2020  KHChan    1.1   Add Transmitlog2 (KH01)                 */  
 /************************************************************************/  
 
-CREATE PROC isp_ITF_ntrWorkOrderHeader  
+ALTER PROC isp_ITF_ntrWorkOrderHeader  
             @c_TriggerName          NVARCHAR(120)  
           , @c_SourceTable          NVARCHAR(60)  
           , @c_WorkOrderKey         NVARCHAR(10)  
@@ -242,6 +243,25 @@ BEGIN
                      GOTO QUIT  
                   END   
                END -- IF @c_TargetTable = 'TRANSMITLOG3'  
+               --(KH01) - S
+               ELSE IF @c_TargetTable = 'TRANSMITLOG2'   
+               BEGIN  
+                  EXEC ispGenTransmitLog2 @c_Tablename, @c_WorkOrderKey, @c_Key2, @c_StorerKey, ''  
+                                          , @b_success OUTPUT  
+                                          , @n_err OUTPUT  
+                                          , @c_errmsg OUTPUT  
+                       
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     SET @n_err = 68001  
+                     SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +   
+                                       ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrWorkOrderHeader) ( SQLSvr MESSAGE = ' +   
+                                       ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '  
+                     GOTO QUIT  
+                  END   
+               END -- IF @c_TargetTable = 'TRANSMITLOG2'  
+               --(KH01) - E
             END -- IF @b_Success = 1
 
             SET @c_Key2 = ''

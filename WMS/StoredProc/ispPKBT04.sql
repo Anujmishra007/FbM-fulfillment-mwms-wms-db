@@ -27,6 +27,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 01-MAR-2021 CSCHONG  1.1   WMS-16414 revised print logic (CS01)      */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPKBT04]
    @c_printerid  NVARCHAR(50) = '',  
@@ -88,24 +89,24 @@ BEGIN
          , @n_starttcnt       INT
          , @c_JobID           NVARCHAR(10) 
          , @c_PrintData       NVARCHAR(MAX) 
-		 , @c_OrdNotes2       NVARCHAR(150)   
-		 , @n_IsExists        INT = 0  
-		 , @c_PDFFilePath     NVARCHAR(500) = ''
+         , @c_OrdNotes2       NVARCHAR(150)   
+         , @n_IsExists        INT = 0  
+         , @c_PDFFilePath     NVARCHAR(500) = ''
          , @c_ArchivePath     NVARCHAR(200) = ''  
-		 , @c_defaultPrn      NVARCHAR(20) = ''
-		 , @c_defaultPaperprn NVARCHAR(20) = '' 
-		 , @n_ttlcarton       NVARCHAR(150) = 1 
-		 , @c_getstorerkey    NVARCHAR(20) = ''
-		 , @c_PackLFileName   NVARCHAR( 150)
-		 , @c_CLFileName      NVARCHAR( 150)
-		 , @c_PrnFileName     NVARCHAR( 150)
-		 , @n_counter         INT = 1
+         , @c_defaultPrn      NVARCHAR(20) = ''
+         , @c_defaultPaperprn NVARCHAR(20) = '' 
+         , @n_ttlcarton       NVARCHAR(150) = 1 
+         , @c_getstorerkey    NVARCHAR(20) = ''
+         , @c_PackLFileName   NVARCHAR( 150)
+         , @c_CLFileName      NVARCHAR( 150)
+         , @c_PrnFileName     NVARCHAR( 150)
+         , @n_counter         INT = 1
                                                               
               
    CREATE TABLE #TEMPPRINTJOB (
       RowId            int identity(1,1),
-	  PrnFilename      NVARCHAR(50)
-	  )   
+     PrnFilename      NVARCHAR(50)
+     )   
 
                                                       
    SET @n_err = 0
@@ -119,7 +120,7 @@ BEGIN
 
    SELECT TOP 1 @c_Facility = DefaultFacility
                ,@c_defaultPrn = defaultprinter
-			   ,@c_defaultPaperprn = defaultprinter_paper
+               ,@c_defaultPaperprn = defaultprinter_paper
    FROM RDT.RDTUser (NOLOCK)   
    WHERE UserName = @c_userid
 
@@ -130,9 +131,9 @@ BEGIN
         , @c_OrdType  = ORDERS.Type
         , @c_ExtOrderkey = ORDERS.ExternOrderKey
         , @c_Shipperkey = ORDERS.ShipperKey
-		, @c_OrdNotes2 = RTRIM(ORDERS.notes2)
-		, @n_ttlcarton = CASE WHEN ISNULL(ORDERS.notes,'') <> '' AND ISNUMERIC(ORDERS.notes) = 1 THEN CONVERT(int,ORDERS.notes) else 0 END
-		,@c_getstorerkey = ORDERS.Storerkey
+        , @c_OrdNotes2 = RTRIM(ORDERS.notes2)
+        , @n_ttlcarton = CASE WHEN ISNULL(ORDERS.notes,'') <> '' AND ISNUMERIC(ORDERS.notes) = 1 THEN CONVERT(int,ORDERS.notes) else 0 END
+        ,@c_getstorerkey = ORDERS.Storerkey
    FROM PACKHEADER (NOLOCK)
    JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
    WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
@@ -141,19 +142,61 @@ BEGIN
    BEGIN
      SET @c_storerkey = @c_getstorerkey
    END
-   
-   IF @c_DocType = 'E' AND @n_ttlcarton = 1
+
+  --CS01 START
+
+    --select @c_DocType '@c_DocType' , @n_ttlcarton '@n_ttlcarton', @c_Shipperkey  '@c_Shipperkey', @c_PrinterID '@c_PrinterID',
+    --       @c_LabelType '@c_LabelType' , @c_userid '@c_userid',@c_Parm01 '@c_Parm01',@c_Parm02 '@c_Parm02',@c_Parm03 '@c_Parm03',@c_Storerkey '@c_Storerkey'
+   IF @c_DocType = 'E' AND @n_ttlcarton = 1  AND @c_Shipperkey  = 'SF'   
    BEGIN
+      --select 'print bartender'
+      EXEC isp_BT_GenBartenderCommand       
+                     @cPrinterID = @c_PrinterID
+                  ,  @c_LabelType = @c_LabelType
+                  ,  @c_userid = @c_UserId
+                  ,  @c_Parm01 = @c_Parm01 --pickslipno
+                  ,  @c_Parm02 = @c_Parm02 --carton from
+                  ,  @c_Parm03 = @c_Parm03 --carton to
+                  ,  @c_Parm04 = @c_Parm04 
+                  ,  @c_Parm05 = @c_Parm05
+                  ,  @c_Parm06 = @c_Parm06
+                  ,  @c_Parm07 = @c_Parm07
+                  ,  @c_Parm08 = @c_Parm08
+                  ,  @c_Parm09 = @c_Parm09
+                  ,  @c_Parm10 = @c_Parm10
+                  ,  @c_Storerkey = @c_Storerkey
+                  ,  @c_NoCopy = @c_NoOfCopy
+                  ,  @c_Returnresult = 'N' 
+                  ,  @n_err = @n_Err OUTPUT
+                  ,  @c_errmsg = @c_ErrMsg OUTPUT     
+             
+        --    select @n_err '@n_err' , @c_errmsg '@c_errmsg'
+                     
+            IF @n_Err <> 0 
+            BEGIN
+               SET @n_continue = 3
+            END   
+       --  END 
 
-      SELECT @c_FilePath = Long, 
-             @c_PrintFilePath = Notes,
-             @c_ReportType = Code2
-   FROM dbo.CODELKUP WITH (NOLOCK)      
-   WHERE LISTNAME = 'PrtbyShipK'      
-   AND   Code = @c_ShipperKey 
+         GOTO QUIT_SP  
+   END
+ -- CS01 END
+
+--select @c_DocType '@c_DocType',@n_ttlcarton '@n_ttlcarton'
+   ELSE
+   BEGIN
+     IF @c_DocType = 'E' AND @n_ttlcarton = 1  AND @c_Shipperkey  <> 'SF'   
+     BEGIN
+     
+        SELECT @c_FilePath = Long, 
+               @c_PrintFilePath = Notes,
+               @c_ReportType = Code2
+     FROM dbo.CODELKUP WITH (NOLOCK)      
+     WHERE LISTNAME = 'PrtbyShipK'      
+     AND   Code = @c_ShipperKey 
 
 
-   IF ISNULL(@c_FilePath,'') = '' 
+    IF ISNULL(@c_FilePath,'') = '' 
     BEGIN
       SELECT @n_continue = 3
       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60011   
@@ -161,17 +204,17 @@ BEGIN
       GOTO QUIT_SP
    END
      /*
-	SET @n_IsExists = 0
+    SET @n_IsExists = 0
     SET @c_PDFFilePath = @c_FilePath + '\courier_' + RTRIM(@c_ExtOrderkey) + '.PDF'
     SET @c_ArchivePath = @c_FilePath + '\Archive\courier_' + RTRIM(@c_ExtOrderkey) + '.PDF' 
     EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT
     IF @n_IsExists = 0
     BEGIN
-    	 SET @c_PDFFilePath = @c_FilePath + '\Archive\courier_' + RTRIM(@c_ExtOrderkey) + '.PDF'
-    	 SET @c_ArchivePath = '' 
-    	 EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT 
+       SET @c_PDFFilePath = @c_FilePath + '\Archive\courier_' + RTRIM(@c_ExtOrderkey) + '.PDF'
+       SET @c_ArchivePath = '' 
+       EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT 
     END
-	 */
+    */
      IF OBJECT_ID('tempdb..#DirPDFTree') IS NULL
       BEGIN      
          CREATE TABLE #DirPDFTree (
@@ -188,7 +231,7 @@ BEGIN
        FROM #DirPDFTree
        WHERE SubDirectory like 'courier_' + @c_ExtOrderkey + '%'     --CS01
 
-	   SELECT TOP 1 @c_PackLFileName = SubDirectory
+       SELECT TOP 1 @c_PackLFileName = SubDirectory
        FROM #DirPDFTree
        WHERE SubDirectory like 'packlist_' + @c_ExtOrderkey + '%'     --CS01
 
@@ -198,15 +241,15 @@ BEGIN
             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60003   
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': PDF filename with externorderkey: ' + @c_ExtOrderkey + ' not found. (ispPKBT04)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             GOTO QUIT_SP
-		  END
+         END
 
-		   INSERT INTO #TEMPPRINTJOB(PrnFilename)
-		   VALUES(@c_PackLFileName)
+         INSERT INTO #TEMPPRINTJOB(PrnFilename)
+         VALUES(@c_PackLFileName)
 
-		   INSERT INTO #TEMPPRINTJOB(PrnFilename)
-		   VALUES(@c_CLFileName)
+         INSERT INTO #TEMPPRINTJOB(PrnFilename)
+         VALUES(@c_CLFileName)
 
-	DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
     SELECT DISTINCT PrnFilename   
     FROM   #TEMPPRINTJOB 
   
@@ -218,32 +261,32 @@ BEGIN
     BEGIN 
 
     IF @c_PrnFileName like 'courier_%'
-	BEGIN
-		 IF @c_OrdNotes2 = '4x6'
-		 BEGIN   
-		 SELECT @c_WinPrinter = WinPrinter  
-				,@c_SpoolerGroup = ISNULL(RTRIM(SpoolerGroup),'') 
-		  FROM rdt.rdtPrinter WITH (NOLOCK)  
-		  WHERE PrinterID =  @c_defaultPrn 
-		 END
-	     ELSE 
-		 --IF @c_OrdNotes2='A4'
-		 BEGIN
-	     SELECT @c_WinPrinter = WinPrinter  
+    BEGIN
+       IF @c_OrdNotes2 = '4x6'
+       BEGIN   
+       SELECT @c_WinPrinter = WinPrinter  
+             ,@c_SpoolerGroup = ISNULL(RTRIM(SpoolerGroup),'') 
+        FROM rdt.rdtPrinter WITH (NOLOCK)  
+        WHERE PrinterID =  @c_defaultPrn 
+       END
+        ELSE 
+       --IF @c_OrdNotes2='A4'
+       BEGIN
+        SELECT @c_WinPrinter = WinPrinter  
                ,@c_SpoolerGroup = ISNULL(RTRIM(SpoolerGroup),'') 
          FROM rdt.rdtPrinter WITH (NOLOCK)  
          WHERE PrinterID =  @c_defaultPaperprn 
-	     END
+        END
     END
-	ELSE
-	BEGIN
-	 SELECT @c_WinPrinter = WinPrinter  
-            ,@c_SpoolerGroup = ISNULL(RTRIM(SpoolerGroup),'') 
+    ELSE
+    BEGIN
+    SELECT @c_WinPrinter = WinPrinter  
+          ,@c_SpoolerGroup = ISNULL(RTRIM(SpoolerGroup),'') 
       FROM rdt.rdtPrinter WITH (NOLOCK)  
       WHERE PrinterID =  @c_defaultPaperprn 
-	END
+   END
 
-     IF CHARINDEX(',' , @c_WinPrinter) > 0 
+      IF CHARINDEX(',' , @c_WinPrinter) > 0 
       BEGIN
          SET @c_PrinterName = LEFT( @c_WinPrinter , (CHARINDEX(',' , @c_WinPrinter) - 1) )    
       END
@@ -259,12 +302,12 @@ BEGIN
        SET @c_PrintJobName = 'PRINT_' + @c_ReportType
        SET @c_TargetDB = DB_NAME()  
 
-     IF @c_SpoolerGroup = ''  
+      IF @c_SpoolerGroup = ''  
       BEGIN  
          SET @n_Continue = 3      
          SET @n_Err = 63545     
          SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Spooler Group Not Setup for printerid: ' 
-		                     + RTRIM(@c_defaultPrn) + ' Or Printerid :' + RTRIM(@c_defaultPaperprn) +' (ispPKBT04)'  
+                           + RTRIM(@c_defaultPrn) + ' Or Printerid :' + RTRIM(@c_defaultPaperprn) +' (ispPKBT04)'  
          GOTO QUIT_SP      
       END 
 
@@ -387,12 +430,12 @@ BEGIN
  
     --END
 
-	  FETCH NEXT FROM CUR_RESULT INTO @c_PrnFileName    
-	  END
+     FETCH NEXT FROM CUR_RESULT INTO @c_PrnFileName    
+     END
 
     END
   END
-
+ END
    SET @b_success = 2
                       
    QUIT_SP:
@@ -429,10 +472,6 @@ BEGIN
    END
 END  
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO
 
 GRANT EXECUTE ON ispPKBT04 TO NSQL
 GO

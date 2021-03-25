@@ -83,8 +83,9 @@ GO
 /* 18-MAY-2015  YTWan         2.1   SOS#341733 - ToryBurch HK SAP - Allow     */
 /*                                  CommingleSKU with NoMixLottablevalidation */
 /*                                  to Exceed and RDT (Wan03)                 */
-/* 01-JUN-2015  YTWan         2.1   SOS#343525 - UA – NoMixLottable validation*/
+/* 01-JUN-2015  YTWan         2.1   SOS#343525 - UA - NoMixLottable validation*/
 /*                                  CR(Wan04)                                 */
+/* 23-Mar-2021  WLChooi       2.2   Correct table name to LOTxLOCxID (WL01)   */
 /******************************************************************************/
 
 CREATE PROCEDURE nspASNPASTD
@@ -399,7 +400,8 @@ DECLARE @b_CurrIDMultiLot01   INT
       AND @b_MultiProductID = 0
    BEGIN
       SELECT @n_Qty = SUM(Qty)
-      FROM LOTxLOCxID.ID (NOLOCK)
+      --FROM LOTxLOCxID.ID (NOLOCK)   --WL01
+      FROM LOTxLOCxID (NOLOCK)   --WL01
       WHERE ID = @c_ID
    END
 

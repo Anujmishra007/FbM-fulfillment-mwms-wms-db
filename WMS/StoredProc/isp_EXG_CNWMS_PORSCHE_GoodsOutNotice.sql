@@ -92,7 +92,7 @@ BEGIN
       
    BEGIN TRAN  
    BEGIN TRY      
-      INSERT INTO [CNWMS].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -128,7 +128,7 @@ BEGIN
          ,  'Ship Date' AS [Ship Date]  
          ,  'Tracking Number' AS [Tracking Number]) AS TEMP1  
   
-      INSERT INTO [CNWMS].[dbo].[EXG_FileDet](  
+      INSERT INTO [dbo].[EXG_FileDet](  
            file_key  
          , EXG_Hdr_ID  
          , [FileName]  
@@ -162,16 +162,16 @@ BEGIN
       ,ISNULL(RTRIM(OH.OrderKey), '') AS [LF Order Number]  
       ,CONVERT(NVARCHAR(10),MH.ShipDate,120) as [Ship Date]      
       ,ISNULL(RTRIM(OH.UserDefine04), '') AS [Tracking Number]    
-       FROM CNWMS..MBOL MH WITH (NOLOCK)  
-       INNER JOIN CNWMS..MBOLDetail MD (NOLOCK)  
+       FROM dbo.MBOL MH WITH (NOLOCK)  
+       INNER JOIN dbo.MBOLDetail MD (NOLOCK)  
        ON MD.MBOLKey = MH.MBOLKey  
-       INNER JOIN CNWMS..Orders OH (NOLOCK)  
+       INNER JOIN dbo.Orders OH (NOLOCK)  
        ON OH.OrderKey = MD.OrderKey  
-       INNER JOIN CNWMS..OrderDetail OD (NOLOCK)  
+       INNER JOIN dbo.OrderDetail OD (NOLOCK)  
        ON OD.OrderKey = OH.OrderKey  
-       INNER JOIN CNWMS..SKU SKU (NOLOCK)  
+       INNER JOIN dbo.SKU SKU (NOLOCK)  
        ON SKU.StorerKey = OD.StorerKey AND SKU.SKU = OD.SKU  
-       INNER JOIN CNWMS..SKUInfo SI (NOLOCK)  
+       INNER JOIN dbo.SKUInfo SI (NOLOCK)  
        ON SI.StorerKey = OD.StorerKey AND SI.SKU = OD.SKU  
        WHERE  OH.Facility =  @c_ParamVal2  
        AND    MH.Mbolkey = @c_ParamVal3  

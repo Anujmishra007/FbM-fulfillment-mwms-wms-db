@@ -8,7 +8,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO   
 
-
 /******************************************************************************/                 
 /* Copyright: IDS                                                             */                 
 /* Purpose: isp_BT_Bartender_HK_SHIPYMTJP_AEO                                 */                 
@@ -16,7 +15,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2020-06-04 1.0  CSCHONG    Created (WMS-13576)                             */ 
+/* 2020-06-04 1.0  CSCHONG    Created (WMS-13576)                             */
+/* 2021-03-16 1.1  WLChooi    WMS-16581 - Add Col16 (WL01)                    */ 
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_HK_SHIPYMTJP_AEO]                               
@@ -62,32 +62,32 @@ BEGIN
       @c_PUPC              NVARCHAR(30),
       @c_contact1          NVARCHAR(30), 
       @c_contact2          NVARCHAR(30), 
-      @c_phone1            NVARCHAR(30) 
+      @c_phone1            NVARCHAR(30),
+      @c_Col16             NVARCHAR(80) = ''  --WL01
   
- Declare                           
+   Declare                           
       @c_SQL             NVARCHAR(4000),                
       @c_SQLSORT         NVARCHAR(4000),                
       @c_SQLJOIN         NVARCHAR(4000),                    
       @n_TTLpage         INT          
           
-  DECLARE  @d_Trace_StartTime   DATETIME,           
-           @d_Trace_EndTime    DATETIME,          
-           @c_Trace_ModuleName NVARCHAR(20),           
-           @d_Trace_Step1      DATETIME,           
-           @c_Trace_Step1      NVARCHAR(20),          
-           @c_UserName         NVARCHAR(20)            
+   DECLARE  @d_Trace_StartTime   DATETIME,           
+            @d_Trace_EndTime    DATETIME,          
+            @c_Trace_ModuleName NVARCHAR(20),           
+            @d_Trace_Step1      DATETIME,           
+            @c_Trace_Step1      NVARCHAR(20),          
+            @c_UserName         NVARCHAR(20)            
           
    SET @d_Trace_StartTime = GETDATE()          
    SET @c_Trace_ModuleName = ''          
                 
     -- SET RowNo = 0                     
-    SET @c_SQL = ''                
+   SET @c_SQL = ''                
                  
-                      
 --    IF OBJECT_ID('tempdb..#Result','u') IS NOT NULL        
 --      DROP TABLE #Result;        
           
-    CREATE TABLE [#Result] (                     
+   CREATE TABLE [#Result] (                     
       [ID]    [INT] IDENTITY(1,1) NOT NULL,                                    
       [Col01] [NVARCHAR] (80) NULL,                      
       [Col02] [NVARCHAR] (80) NULL,                      
@@ -149,62 +149,68 @@ BEGIN
       [Col58] [NVARCHAR] (80) NULL,                      
       [Col59] [NVARCHAR] (80) NULL,    
       [Col60] [NVARCHAR] (80) NULL                     
-     )                    
+   )                    
                                         
-      IF @b_debug=1                
-      BEGIN                  
-        PRINT 'start'                  
-      END          
+   IF @b_debug=1                
+   BEGIN                  
+      PRINT 'start'                  
+   END    
+   
+   --WL01 S
+   SELECT @c_OHCCountry = C_Country
+   FROM ORDERS (NOLOCK)
+   WHERE OrderKey = @c_Sparm4
+   
+   IF ISNULL(@c_OHCCountry,'') = 'TW'
+   BEGIN
+      SELECT @c_Col16 = CASE WHEN SUM(PD.Qty * ISNULL(OD.UnitPrice, 0) ) > 2001 THEN N'高價' ELSE N'低價' END
+      FROM ORDERDETAIL OD (NOLOCK)
+      JOIN PICKDETAIL PD (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.Sku = PD.Sku AND OD.OrderLineNumber = PD.OrderLineNumber
+      WHERE OD.OrderKey = @c_Sparm4
+   END
+   --WL01 E      
           
-    DECLARE CUR_StartRecLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR            
-          
-     
-    
-    SELECT distinct o.C_Company,ISNULL(o.C_Address1,'') , ISNULL(o.C_Address2,'') , ISNULL(o.C_Address3,''),ISNULL(o.C_Address4,''),
-    ISNULL(o.C_city,''),ISNULL(o.c_state,''),ISNULL(o.c_country,''), o.ExternOrderkey,ISNULL(o.Userdefine04,''),  --10
-    ISNULL(o.Trackingno,''),ISNULL(pd.UPC,''),ISNULL(o.C_contact1,''),ISNULL(o.C_Contact2,''),ISNULL(o.C_phone1,'')
-    FROM PackHeader AS ph WITH (NOLOCK) 
-    JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
-    JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
-    JOIN Storer ST WITH (NOLOCK) ON ST.storerkey=o.storerkey  
-    WHERE o.StorerKey = @c_Sparm3
-    AND PH.Orderkey = @c_Sparm4 
-    AND pd.LabelNo =@c_Sparm2 AND pd.CartonNo = @c_Sparm5   
+   DECLARE CUR_StartRecLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR            
+   SELECT distinct o.C_Company,ISNULL(o.C_Address1,'') , ISNULL(o.C_Address2,'') , ISNULL(o.C_Address3,''),ISNULL(o.C_Address4,''),
+   ISNULL(o.C_city,''),ISNULL(o.c_state,''),ISNULL(o.c_country,''), o.ExternOrderkey,ISNULL(o.Userdefine04,''),  --10
+   ISNULL(o.Trackingno,''),ISNULL(pd.UPC,''),ISNULL(o.C_contact1,''),ISNULL(o.C_Contact2,''),ISNULL(o.C_phone1,'')
+   FROM PackHeader AS ph WITH (NOLOCK) 
+   JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
+   JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
+   JOIN Storer ST WITH (NOLOCK) ON ST.storerkey=o.storerkey  
+   WHERE o.StorerKey = @c_Sparm3
+   AND PH.Orderkey = @c_Sparm4 
+   AND pd.LabelNo =@c_Sparm2 AND pd.CartonNo = @c_Sparm5   
           
    OPEN CUR_StartRecLoop                    
                
    FETCH NEXT FROM CUR_StartRecLoop INTO  @c_OHCompany,@c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@c_OHccity,
                                           @c_OHState,@c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC,
                                           @c_contact1,@c_contact2,@c_phone1
-                           
-                                                       
-                 
    WHILE @@FETCH_STATUS <> -1                    
    BEGIN           
-          
       IF @b_debug=1                
       BEGIN                  
-        PRINT 'Cur start'                  
+         PRINT 'Cur start'                  
       END          
           
-   INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09                   
-                            ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22                 
-                            ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                  
-                            ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                   
-                            ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54                 
-                            ,Col55,Col56,Col57,Col58,Col59,Col60)             
-     VALUES(@c_OHCompany,@c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@c_OHccity,@c_OHState,        --7 
-            @c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC,@c_contact1,       --13  
-            @c_contact2,@c_phone1,'','','','','',                                             --20       
-            '','' ,'','','','',       --26
-            '','','','', '','','','','','','','','',   --39
-            '','','','','','','','','','',''        --50   
-            ,'','','','','','','','','','O')          
-          
-          
+      INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09                   
+                          ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22                 
+                          ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                  
+                          ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                   
+                          ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54                 
+                          ,Col55,Col56,Col57,Col58,Col59,Col60)             
+      VALUES(@c_OHCompany,@c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@c_OHccity,@c_OHState,        --7 
+             @c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC,@c_contact1,       --13  
+             @c_contact2,@c_phone1,@c_Col16,'','','','',                                        --20   --WL01       
+             '','' ,'','','','',       --26
+             '','','','', '','','','','','','','','',   --39
+             '','','','','','','','','','',''        --50   
+             ,'','','','','','','','','','O')          
+           
    IF @b_debug=1                
    BEGIN                
-     SELECT * FROM #Result (nolock)                
+      SELECT * FROM #Result (nolock)                
    END      
    
    FETCH NEXT FROM CUR_StartRecLoop INTO  @c_OHCompany,@c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@c_OHccity,
@@ -212,13 +218,10 @@ BEGIN
                                           @c_contact1,@c_contact2,@c_phone1
    
    END                                     
-                 
-       
+                     
    SELECT * from #result WITH (NOLOCK)  
-         
-          
-   EXIT_SP:            
-          
+                 
+EXIT_SP:            
    SET @d_Trace_EndTime = GETDATE()          
    SET @c_UserName = SUSER_SNAME()          
              

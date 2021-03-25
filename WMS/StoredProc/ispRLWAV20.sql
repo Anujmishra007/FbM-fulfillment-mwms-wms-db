@@ -48,7 +48,10 @@ GO
 /* 01-04-2020  Wan01    1.7   Sync Exceed & SCE                         */ 
 /* 2020-09-23  Wan02    1.8   Sku Bundle CR                             */          
 /* 2020-09-19  NJOW01   1.9   WMS-15204 change taskdetail mapping       */  
-/* 2020-11-27  Wan03    2.0   Add SkuStdGrossWgt TO #PICKDETAIL_WIP     */      
+/* 2020-11-27  Wan03    2.0   Add SkuStdGrossWgt TO #PICKDETAIL_WIP     */   
+/* 2021-03-08  Bee Tin        INC1444738-commented @c_TransitLoc =       */
+/*                            'NK'+LTRIM(ISNULL(LocAisle,''))           */
+/*                            added c_TransitLoc = PICKZONE.InLoc       */
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV20]  
         @c_wavekey      NVARCHAR(10)    
@@ -1918,13 +1921,23 @@ BEGIN
             SET @c_TransitLoc = @c_Toloc  
          ELSE IF @c_ToLocType IN('DP','DPP') AND @c_TaskType = 'RPF'  
          BEGIN  
-            SELECT @c_TransitLoc = 'NK'+LTRIM(ISNULL(LocAisle,''))  
-            FROM LOC(NOLOCK)  
-            WHERE Loc = @c_ToLoc   
+       /*SELECT @c_TransitLoc = 'NK'+LTRIM(ISNULL(LocAisle,''))  -- INC1444738 
+               FROM LOC(NOLOCK)  
+               WHERE Loc = @c_ToLoc*/  
+                 
+               SELECT @c_TransitLoc = PICKZONE.InLoc               -- INC1444738 
+               FROM LOC (NOLOCK)  
+               JOIN PICKZONE (NOLOCK) ON LOC.Pickzone = PICKZONE.Pickzone  
+               WHERE LOC.Loc = @c_Toloc 
+			   
+			      
+               IF @c_TransitLoc IS NULL  
+                  SET @c_TransitLoc = ''
+			
               
             SET @c_FinalLoc = @c_LogicalToLoc  
             SET @c_FinalID = @c_ID                                               
-         END      
+         END         
   
          INSERT TASKDETAIL    
             (    
