@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_delivery_receipt09                                   */  
 /*          :                                                           */  
-/* GitLab Version: 1.2                                                  */  
+/* GitLab Version: 1.3                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -28,6 +28,8 @@ GO
 /* 2021-03-16   WLChooi   1.1 WMS-16276 - Add new columns (WL01)        */
 /* 2021-03-22   WLChooi   1.2 WMS-16276 - Change sorting and column     */
 /*                            logic (WL02)                              */
+/* 2021-03-25   WLChooi   1.3 Change date column due to urgent request  */
+/*                            from LIT (WL03)                           */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
@@ -138,8 +140,8 @@ BEGIN
         , OH.OrderKey
         --, OH.ExternOrderKey  Get New DeliveryNo  
         , CASE ISNULL(EXO2.UserDefine09,'') WHEN '' THEN OH.ExternOrderKey ELSE EXO2.UserDefine09 END  
-        , OH.EffectiveDate
-        , OH.DeliveryDate
+        , OH.DeliveryDate   --WL03
+        , OH.OrderDate      --WL03
         , OH.Notes
         , Notes2A = OH.Notes2
         , Notes2B = ''
@@ -202,8 +204,8 @@ BEGIN
           , M.MbolKey
           , OH.OrderKey
           , CASE ISNULL(EXO2.UserDefine09,'') WHEN '' THEN OH.ExternOrderKey ELSE EXO2.UserDefine09 END  
-          , OH.EffectiveDate
-          , OH.DeliveryDate
+          , OH.DeliveryDate   --WL03
+          , OH.OrderDate      --WL03
           , OH.Notes
           , OH.Notes2
           , OD.UserDefine02
@@ -241,8 +243,8 @@ BEGIN
         , M.MbolKey
         , OH.OrderKey
         , OH.ExternOrderKey
-        , OH.EffectiveDate
-        , OH.DeliveryDate
+        , OH.DeliveryDate   --WL03
+        , OH.OrderDate      --WL03
         , OH.Notes
         , Notes2A = OH.Notes2
         , Notes2B = ''
@@ -303,8 +305,8 @@ BEGIN
           , M.MbolKey
           , OH.OrderKey
           , OH.ExternOrderKey
-          , OH.EffectiveDate
-          , OH.DeliveryDate
+          , OH.DeliveryDate   --WL03
+          , OH.OrderDate      --WL03
           , OH.Notes
           , OH.Notes2
           , OD.UserDefine02
