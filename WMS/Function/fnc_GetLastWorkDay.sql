@@ -1,5 +1,5 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetNextWorkDay]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
-DROP FUNCTION [dbo].[fnc_GetNextWorkDay]
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetLastWorkDay]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
+DROP FUNCTION [dbo].[fnc_GetLastWorkDay]
 GO
 
 SET ANSI_NULLS OFF
@@ -10,10 +10,10 @@ GO
 
 
 /************************************************************************/
-/* Function:  fnc_GetNextWorkDay                                        */
-/* Creation Date: 17-June-2019                                           */
+/* Function:  fnc_GetLastWorkDay                                        */
+/* Creation Date: 17-June-2019                                          */
 /* Copyright: LF                                                        */
-/* Written by: linklin                                                     */
+/* Written by: linklin                                                  */
 /*                                                                      */
 /* Purpose: 337773-Get last working day exclude holiday / weekend       */
 /*                                                                      */
@@ -57,5 +57,5 @@ GO
 
 
 
-GRANT EXECUTE ON [dbo].[fnc_GetSKUConfig] TO nSQL 
+GRANT EXECUTE ON [dbo].[fnc_GetLastWorkDay] TO nSQL 
 GO
