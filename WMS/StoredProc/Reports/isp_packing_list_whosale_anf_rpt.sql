@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 19-NOV-2020  CSCHONG 1.1   WMS-15501 revised field logic (CS01)      */
+/* 27-JAN-2021  CSCHONG 1.1   WMS-15501 revised field logic (CS02)      */
 /************************************************************************/
 
 CREATE PROC isp_packing_list_whosale_anf_rpt
@@ -145,7 +146,8 @@ BEGIN
                 WHEN OD.Userdefine06 <> '' THEN OD.Userdefine06
                 WHEN OD.altsku <> '' THEN OD.altsku  
                 Else S.Altsku END,
-           SUM(PD.qty),S.STDGROSSWGT,CAST(C.udf02 as FLOAT),PD.CaseID,@c_wavekey--PD.CaseID
+          CASE WHEN S.Prepackindicator='N' THEN SUM(PD.qty) ELSE  SUM(PD.qty) * (BM.Qty) END,         --CS02
+          S.STDGROSSWGT,CAST(C.udf02 as FLOAT),PD.CaseID,@c_wavekey--PD.CaseID
 FROM ORDERS OH (nolock)
 JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = OH.Orderkey
 LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'AFWSPRTNER' and C.code=OH.ConsigneeKey
@@ -153,6 +155,11 @@ LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.listname='ANFDIV' and C1.code=substrin
 JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.orderkey=OD.orderkey AND PD.orderlinenumber=OD.Orderlinenumber AND PD.SKU = OD.SKU
 JOIN SKU S WITH (NOLOCK) ON S.storerkey = PD.Storerkey and S.SKU = PD.sku
 LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = OH.Storerkey
+--LEFT JOIN BillOfMaterial BOM WITH (NOLOCK) ON BOM.storerkey = S.storerkey AND BOM.sku=S.sku
+   OUTER APPLY (SELECT BOM.sku as sku,sum(bom.qty) as qty  
+                FROM BillOfMaterial BOM WITH (NOLOCK) 
+                WHERE  BOM.storerkey = S.storerkey AND BOM.sku=S.sku
+                group by bom.sku) AS BM 
 WHERE OH.UserDefine09 = @c_wavekey
 GROUP BY --OH.Orderkey,
          ISNULL(ST.B_Company,''),ISNULL(ST.B_Address1,''),ISNULL(ST.B_City,''),ISNULL(ST.B_Address2,''),ISNULL(M_Company,''),
@@ -166,7 +173,7 @@ GROUP BY --OH.Orderkey,
                 WHEN OD.altsku <> '' THEN OD.altsku  
                 Else S.Altsku END,
          S.STDGROSSWGT,CAST(C.udf02 as FLOAT),
-         ISNULL(C.Long,''),ISNULL(C.udf01,''),PD.Caseid
+         ISNULL(C.Long,''),ISNULL(C.udf01,''),PD.Caseid,S.Prepackindicator,(BM.Qty)
 --ORDER BY pd.caseid,OH.Orderkey
 
 
