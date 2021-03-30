@@ -29,6 +29,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 10-Mar-2021  NJOW01  1.0   Include zone max rate calculation            */  
+/* 24-Mar-2021	NJOW02  1.1   WMS-16644 include export order calculation   */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispMBFZ03]  
 (     @c_MBOLKey     NVARCHAR(10)   
@@ -68,6 +69,7 @@ BEGIN
            @n_TotLooseCarton INT, 
            @n_TotLooseCartonVol DECIMAL(15,6),
            @n_TotContainerVol DECIMAL(15,6), 
+           @n_TotContainerVolRounded DECIMAL(15,2), 
            @n_TotContainerCarton INT,
            @n_FreightRate DECIMAL(15,4), 
            @c_FreightType NVARCHAR(10), 
@@ -93,6 +95,7 @@ BEGIN
            @n_Vat DECIMAL(15,2),
            @n_TotConsigneeCarton DECIMAL(15,6),
            @n_TotConsigneeVol DECIMAL(15,6),
+           @n_TotConsigneeVolRounded DECIMAL(15,2),   
            @c_CallSource NVARCHAR(30),
            @c_Sku NVARCHAR(10),
            @c_OrderLineNumber NVARCHAR(5),
@@ -102,7 +105,8 @@ BEGIN
            @n_QtyTake INT,
            @n_TotCarton INT,
            @n_DistirbutePltVol DECIMAL(15,6),
-           @n_CaseCnt INT
+           @n_CaseCnt INT,
+           @n_ExportOrdCnt INT
                                                                      
    SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT
    
@@ -282,11 +286,14 @@ BEGIN
    	  --loop consignee
    	  DECLARE CURSOR_CONSIGNEE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone,
-                CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END  --NJOW01
+                CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END,  --NJOW01
+                SUM(CASE WHEN ISNULL(O.C_Country,'') <> ISNULL(S.Country,'') THEN 1 ELSE 0 END) --NJOW02
    	     FROM MBOLDETAIL MD (NOLOCK)
    	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
-   	     OUTER APPLY (SELECT TOP 1 CL.Long, CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' 
-   	                  AND CL.Code = 'FMS_ZONE' AND CAST(CL.UDF01 AS BIGINT) <= CAST(O.C_Zip AS BIGINT) AND  CAST(CL.UDF02 AS BIGINT) >= CAST(O.C_Zip AS BIGINT) ) AS Z
+   	     JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey  --NJOW02
+   	     OUTER APPLY (SELECT TOP 1 CL.Long, CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' AND CL.Code = 'FMS_ZONE' 
+   	                  AND CAST(CL.UDF01 AS BIGINT) <= CAST(CASE WHEN ISNUMERIC(O.C_Zip) = 1 THEN O.C_Zip ELSE 1 END AS BIGINT) 
+   	                  AND CAST(CL.UDF02 AS BIGINT) >= CAST(CASE WHEN ISNUMERIC(O.C_Zip) = 1 THEN O.C_Zip ELSE 1 END AS BIGINT)) AS Z
    	     JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey
    	     JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
    	     JOIN PALLETDETAIL PLD (NOLOCK) ON PD.LabelNo = PLD.CaseID
@@ -298,10 +305,17 @@ BEGIN
    	  
       OPEN CURSOR_CONSIGNEE
       
-      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
+      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt      
       
       WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
-      BEGIN      	       	       	      	 
+      BEGIN
+      	 --NJOW02
+      	 IF @n_ExportOrdCnt > 0
+      	 BEGIN
+      	 	  SET @c_Zone = 'NA'
+      	 	  SET @n_ZoneMaxRate = 1
+      	 END
+      	       	       	       	      	 
       	 --loop consignee->container
    	     DECLARE CURSOR_CONSCONTAINER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT CTD.Containerkey
@@ -420,6 +434,7 @@ BEGIN
                
                --calculate total container volume
                SET @n_TotContainerVol = ISNULL(@n_TotPalletVol,0) + ISNULL(@n_TotFullCartonVol,0) + ISNULL(@n_TotLooseCartonVol,0)
+               SET @n_TotContainerVolRounded = CASE WHEN (@n_TotContainerVol - ROUND(@n_TotContainerVol,2,1)) > 0 THEN ROUND(@n_TotContainerVol,2,1) + 0.01 ELSE ROUND(@n_TotContainerVol,2,1) END --NJOW02
                
                --calculate total container carton
                SET @n_TotContainerCarton = @n_TotFullCarton + @n_TotLooseCarton
@@ -434,14 +449,21 @@ BEGIN
    	           WHERE CL.ListName = 'CUSTPARAM'
    	           AND CL.Storerkey = @c_Storerkey
    	           AND CL.Code = 'FMS_FRTCHARGE'
-   	           AND CAST(CL.UDF01 AS DECIMAL(15,4)) < @n_TotContainerVol
-   	           AND CAST(CL.UDF02 AS DECIMAL(15,4)) >= @n_TotContainerVol
+   	           AND CAST(CL.UDF01 AS DECIMAL(15,4)) < @n_TotContainerVolRounded
+   	           AND CAST(CL.UDF02 AS DECIMAL(15,4)) >= @n_TotContainerVolRounded
    	           AND CL.UDF03 = @c_Zone 
+   	           
+   	           --NJOW02
+   	           IF @n_ExportOrdCnt > 0
+   	           BEGIN
+   	              SET @n_FreightRate = 1
+   	              SET @c_FreightType = 'FIXED'
+   	           END
                
                IF @c_FreightType = 'FIXED'
                   SET @n_FreightAmt = @n_FreightRate
                ELSE 
-                  SET @n_FreightAmt = ROUND((CASE WHEN (@n_TotContainerVol - ROUND(@n_TotContainerVol,2,1)) > 0 THEN ROUND(@n_TotContainerVol,2,1) + 0.01 ELSE ROUND(@n_TotContainerVol,2,1) END) * @n_FreightRate,2) --NJOW01                  
+                  SET @n_FreightAmt = ROUND(@n_TotContainerVolRounded * @n_FreightRate,2) --NJOW01                  
                   
                IF @n_FreightAmt > @n_ZoneMaxRate  --NJOW01
                   SET @n_FreightAmt = @n_ZoneMaxRate
@@ -692,7 +714,7 @@ BEGIN
          CLOSE CURSOR_CONSCONTAINER
          DEALLOCATE CURSOR_CONSCONTAINER      	
       	
-         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
+         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt      
       END
       CLOSE CURSOR_CONSIGNEE
       DEALLOCATE CURSOR_CONSIGNEE   	               
@@ -704,10 +726,14 @@ BEGIN
    	  --loop consignee
    	  DECLARE CURSOR_CONSIGNEE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone,
-                CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END  --NJOW01         
+                CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END,  --NJOW01         
+                SUM(CASE WHEN ISNULL(O.C_Country,'') <> ISNULL(S.Country,'') THEN 1 ELSE 0 END) --NJOW02
    	     FROM MBOLDETAIL MD (NOLOCK)
-   	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
-   	     OUTER APPLY (SELECT TOP 1 CL.Long, CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' AND CL.Code = 'FMS_ZONE' AND CAST(CL.UDF01 AS BIGINT) <= CAST(O.C_Zip AS BIGINT) AND  CAST(CL.UDF02 AS BIGINT) >= CAST(O.C_Zip AS BIGINT) ) AS Z
+   	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey --NJOW02
+   	     JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey
+   	     OUTER APPLY (SELECT TOP 1 CL.Long, CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'CUSTPARAM' AND CL.Code = 'FMS_ZONE' 
+   	                  AND CAST(CL.UDF01 AS BIGINT) <= CAST(CASE WHEN ISNUMERIC(O.C_Zip) = 1 THEN O.C_Zip ELSE 1 END AS BIGINT) 
+   	                  AND CAST(CL.UDF02 AS BIGINT) >= CAST(CASE WHEN ISNUMERIC(O.C_Zip) = 1 THEN O.C_Zip ELSE 1 END AS BIGINT)) AS Z
    	     JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey
    	     JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
    	     LEFT JOIN PALLETDETAIL PLD (NOLOCK) ON PD.LabelNo = PLD.CaseID
@@ -727,7 +753,7 @@ BEGIN
    	  
       OPEN CURSOR_CONSIGNEE
       
-      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
+      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt  
       
       WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
       BEGIN      	       	       	      	 
@@ -816,6 +842,7 @@ BEGIN
             --Calculate total consignee carton & volume
             SET @n_TotConsigneeCarton = @n_TotFullCarton + @n_TotLooseCarton
             SET @n_TotConsigneeVol = @n_totpalletvol + @n_TotFullCartonVol + @n_TotLooseCartonVol
+            SET @n_TotConsigneeVolRounded = CASE WHEN (@n_TotConsigneeVol - ROUND(@n_TotConsigneeVol,2,1)) > 0 THEN ROUND(@n_TotConsigneeVol,2,1) + 0.01 ELSE ROUND(@n_TotConsigneeVol,2,1) END --NJOW02
             
             --calculate freight amount
    	        SET @n_FreightRate = 0.00
@@ -827,14 +854,21 @@ BEGIN
    	        WHERE CL.ListName = 'CUSTPARAM'
    	        AND CL.Storerkey = @c_Storerkey
    	        AND CL.Code = 'FMS_FRTCHARGE'
-   	        AND CAST(CL.UDF01 AS DECIMAL(15,4)) < @n_TotConsigneeVol
-   	        AND CAST(CL.UDF02 AS DECIMAL(15,4)) >= @n_TotConsigneeVol
+   	        AND CAST(CL.UDF01 AS DECIMAL(15,4)) < @n_TotConsigneeVolRounded
+   	        AND CAST(CL.UDF02 AS DECIMAL(15,4)) >= @n_TotConsigneeVolRounded
    	        AND CL.UDF03 = @C_Zone
+   	        
+   	        --NJOW02
+   	        IF @n_ExportOrdCnt > 0 
+   	        BEGIN
+   	           SET @n_FreightRate = 1
+   	           SET @c_FreightType = 'FIXED'
+   	        END
             
             IF @c_FreightType = 'FIXED'
                SET @n_FreightAmt = @n_FreightRate
             ELSE 
-               SET @n_FreightAmt = ROUND((CASE WHEN (@n_TotConsigneeVol - ROUND(@n_TotConsigneeVol,2,1)) > 0 THEN ROUND(@n_TotConsigneeVol,2,1) + 0.01 ELSE ROUND(@n_TotConsigneeVol,2,1) END) * @n_FreightRate,2) --NJOW01                  
+               SET @n_FreightAmt = ROUND(@n_TotConsigneeVolRounded * @n_FreightRate,2) --NJOW01                  
                               
             IF @n_FreightAmt > @n_ZoneMaxRate  --NJOW01
                SET @n_FreightAmt = @n_ZoneMaxRate
@@ -1045,7 +1079,7 @@ BEGIN
             DEALLOCATE CURSOR_CONSORDER             
          END 
       	       	           	
-         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate      
+         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt      
       END
       CLOSE CURSOR_CONSIGNEE
       DEALLOCATE CURSOR_CONSIGNEE   	               
