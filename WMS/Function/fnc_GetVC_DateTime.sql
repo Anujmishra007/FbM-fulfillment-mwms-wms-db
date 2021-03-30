@@ -8,6 +8,25 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+/***************************************************************************/
+/* Function: fnc_GetVC_DateTime                                            */
+/* Creation Date: 30-Mar-2021                                              */
+/* Copyright: LFL                                                          */
+/* Written by:                                                             */
+/*                                                                         */
+/* Purpose: Check-in fnc_GetVC_DateTime from PD                            */
+/*                                                                         */
+/* Called By:                                                              */
+/*                                                                         */
+/* GitLab Version: 1.0                                                     */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date         Author  Ver   Purposes                                     */
+/***************************************************************************/ 
 CREATE FUNCTION [dbo].[fnc_GetVC_DateTime] 
   ( 
     @d_Date          DATETIME, 
@@ -85,5 +104,5 @@ BEGIN
 END
 GO
  
-GRANT EXECUTE ON [dbo].[fnc_GetSKUConfig] TO nSQL 
+GRANT EXECUTE ON [dbo].[fnc_GetVC_DateTime] TO nSQL 
 GO
