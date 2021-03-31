@@ -21,6 +21,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Purposes                                       */ 
+/* 26-MAR-21    CSCHONG  WMS-15994 fix split line carton issue (CS01)   */
 /************************************************************************/  
   
 CREATE PROC dbo.isp_GetPickSlipWave29 (  
@@ -577,15 +578,30 @@ QUIT:
       ,  UPPER(#TMP_PICK.LOC) AS LOC                 
       ,  #TMP_PICK.SKU                
       ,  #TMP_PICK.SkuDesc            
-      ,  #TMP_PICK.Qty                       
+      ,  SUM(#TMP_PICK.Qty) AS Qty                   --CS01                       
       ,  #TMP_PICK.LOCZone
       ,  #TMP_PICK.packcasecnt                     
-      ,  #TMP_PICK.Cartons_cal                 
-      ,  #TMP_PICK.Each_cal        
+      ,  SUM(#TMP_PICK.Cartons_cal) AS  Cartons_cal    --CS01                 
+      ,  SUM(#TMP_PICK.Each_cal) AS Each_cal           --CS01        
       ,  #TMP_PICK.SKUGROUP           
       ,  #TMP_PICK.Storerkey          
       ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey     
    FROM   #TMP_PICK  
+   --CS01 START
+   GROUP BY  #TMP_PICK.PickSlipNo     
+      ,  #TMP_PICK.LoadKey            
+      ,  #TMP_PICK.OrderKey           
+      ,  #TMP_PICK.ConsigneeKey       
+      ,  #TMP_PICK.Company                       
+      ,  UPPER(#TMP_PICK.LOC)            
+      ,  #TMP_PICK.SKU                
+      ,  #TMP_PICK.SkuDesc                           
+      ,  #TMP_PICK.LOCZone
+      ,  #TMP_PICK.packcasecnt                            
+      ,  #TMP_PICK.SKUGROUP           
+      ,  #TMP_PICK.Storerkey          
+      ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey     
+   --CS01 END
    ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.LOCZone,UPPER(#TMP_PICK.LOC),  #TMP_PICK.SKU
      
   --SELECT '1' AS PickSlipNo
