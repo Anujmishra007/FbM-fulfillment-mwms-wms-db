@@ -26,6 +26,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver   Purposes                                  */
+/* 03-MAR-21    CSCHONG  1.1   WMS-16418 add new field (CS01)            */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_Delivery_Note42_RDT] 
@@ -262,6 +263,7 @@ BEGIN
             ,  C3            NVARCHAR(50)       
             ,  loadkey       NVARCHAR(20) 
             ,  Storerkey     NVARCHAR(10)
+            ,  D01           NVARCHAR(250)     --CS01  
             )
 
         
@@ -311,7 +313,8 @@ BEGIN
             ',C1=ISNULL(MAX(CASE WHEN CL.Code = ''C1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' + 
             ',C2=ISNULL(MAX(CASE WHEN CL.Code = ''C2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +  
             ',C3=ISNULL(MAX(CASE WHEN CL.Code = ''C3'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
-            ',OH.loadkey,OH.Storerkey' 
+            ',OH.loadkey,OH.Storerkey' +
+            ',D01=ISNULL(MAX(CASE WHEN CL.Code =''D01'' THEN RTRIM(CL.Description) ELSE '''' END),'''') '   --CS01
          SET @c_ExecStatements2 =  ' FROM #TMP_ORDH TMP '+
             ' JOIN ORDERS OH WITH (NOLOCK) ON (TMP.Orderkey = OH.Orderkey AND TMP.loadkey = OH.loadkey)' +  
             'JOIN STORER ST WITH (NOLOCK) ON OH.Storerkey = ST.Storerkey ' + 
@@ -391,7 +394,8 @@ BEGIN
            ',  C2        '+                           
            ',  C3        '+  
            ',  loadkey   '+      
-           ',  Storerkey '+                   
+           ',  Storerkey '+    
+           ',  D01       '+           --CS01               
            ')            '                          
                
                                   
@@ -404,7 +408,7 @@ BEGIN
                             +   ',@c_Storerkey         NVARCHAR(20)'
                             +   ',@c_Type             NVARCHAR(20)' 
                        
-                         
+     --  print  @c_SQL                 
    EXEC sp_ExecuteSql     @c_SQL     
                         , @c_ExecArguments    
                         , @c_country    
@@ -520,6 +524,7 @@ INSERT INTO #TMP_HDR(Orderkey
             , C3  
             , loadkey  
             , Storerkey
+            , D01                   --CS01
              )
 SELECT Orderkey  
             ,  A1            
@@ -562,11 +567,12 @@ SELECT Orderkey
             ,  A26              
             ,  A27              
             ,  A28              
-            , C1
-            , C2
-            , C3  
-            , loadkey
-            , storerkey
+            ,  C1
+            ,  C2
+            ,  C3  
+            ,  loadkey
+            ,  storerkey
+            ,  D01                  --CS01
   FROM #TMP_HDR
   WHERE seqno = 1
 
@@ -664,6 +670,7 @@ END
             ,  C3  
             ,  loadkey
             ,  Storerkey
+            ,  D01                        --CS01
             )
          SELECT Orderkey  
             ,  A1            
@@ -709,8 +716,9 @@ END
             ,  C1
             ,  C2
             ,  C3  
-            , loadkey
-            , Storerkey
+            ,  loadkey
+            ,  Storerkey
+            ,  D01                      --CS01
          FROM #TMP_HDR 
          WHERE ORDERKEY = @c_GetOrderkey 
          AND loadkey = @c_Getloadkey
@@ -950,10 +958,6 @@ END
    QUIT_SP:
 END       
       
-GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
 GO
        
 GRANT EXECUTE ON isp_Delivery_Note42_RDT TO NSQL

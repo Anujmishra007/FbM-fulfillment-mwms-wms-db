@@ -32,6 +32,7 @@ GO
 /* 2019-11-27  CSCHONG  1.2   WMS-11125 revised parameter list (CS01)      */
 /* 2020-03-23  CSCHONG  1.3   WMS-12435 revised replen logic (CS02)        */
 /* 2020-06-04  NJOW01   1.4   WMS-13603 Custom sorting by config           */
+/* 18-JAN-2021 Wan02    1.5   Follow Parameters to follow Datawindow Seq   */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC27]
                @c_zone01            NVARCHAR(10)
@@ -47,9 +48,9 @@ CREATE PROC [dbo].[isp_ReplenishmentRpt_PC27]
 ,              @c_zone11            NVARCHAR(500) --location Aisle      --CS01
 ,              @c_zone12            NVARCHAR(10)   --SKU.ABC
 ,              @c_storerkey         NVARCHAR(15)
-,              @c_ReplGrp           NVARCHAR(30)     
-,              @c_backendjob        NVARCHAR(10)= 'N'  
-,              @c_Functype          NCHAR(1)    = ''  
+,              @c_ReplGrp           NVARCHAR(30)
+,              @c_Functype          NCHAR(1)    = ''     -- Wan02
+,              @c_backendjob        NVARCHAR(10)= 'N'    -- Wan02 
 AS
 BEGIN
    SET NOCOUNT ON

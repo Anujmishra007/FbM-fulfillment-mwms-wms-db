@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
+/* 26-MAR-2021 CSCHONG  1.1   WMS-16673 revised logic (CS01)            */
 /************************************************************************/  
 CREATE PROC ispADJCHK01  
            @c_AdjustmentKey  NVARCHAR(10)   
@@ -210,11 +211,27 @@ BEGIN
               , @c_hostwhcode '@c_hostwhcode', @c_Channel '@c_Channel'  
               , @c_Sku '@c_Sku'  , @n_ADJQTY '@n_ADJQTY',@n_CHQty '@n_CHQty', @n_BLQTY '@n_BLQTY', @c_lineErr '@c_lineErr', @c_SetErrMsg '@c_SetErrMsg'
       END 
+          --CS01 START
+          --IF ISNULL(@n_CHQty,0) - ISNULL(@n_BLQTY,0) + ISNULL(@n_ADJQTY,0) < 0
+          -- BEGIN        
+          --       SET @c_lineErr = 'Y'   
+          -- END
 
-          IF ISNULL(@n_CHQty,0) - ISNULL(@n_BLQTY,0) + ISNULL(@n_ADJQTY,0) < 0
-           BEGIN        
+          IF  @c_hostwhcode = 'UR'  
+          BEGIN 
+           IF ISNULL(@n_CHQty,0) - ISNULL(@n_BLQTY,0) + ISNULL(@n_ADJQTY,0) < 0
+            BEGIN        
                  SET @c_lineErr = 'Y'   
-           END
+            END
+        END
+         ELSE 
+         BEGIN 
+           IF  ISNULL(@n_BLQTY,0) + ISNULL(@n_ADJQTY,0) < 0
+            BEGIN        
+                 SET @c_lineErr = 'Y'   
+            END
+        END
+        --CS01 END
 
       IF @b_debug = 1  
       BEGIN  

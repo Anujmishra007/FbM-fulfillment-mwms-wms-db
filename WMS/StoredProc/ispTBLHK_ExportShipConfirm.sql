@@ -12,6 +12,7 @@ GO
 --
 
 /* 28-Jan-2019  TLTING_ext 2.9  enlarge externorderkey field length              */
+/* 23-Mar-2021  WLChooi    3.0  Remove Harcoded DB Name (WL01)                   */
 
 CREATE PROC [ispTBLHK_ExportShipConfirm] (
 	@c_openflag  NVARCHAR(1),
@@ -54,8 +55,8 @@ BEGIN
 	BEGIN
 		SELECT @c_key = MIN(key1) --, 
 --				 @c_ExternOrderkey = ORDERS.ExternOrderkey
-		FROM   IDSHK.dbo.TRANSMITLOG2 TRANSMITLOG2 (NOLOCK)
-      JOIN   IDSHK.dbo.ORDERS ORDERS (NOLOCK) ON (ORDERS.Orderkey = TRANSMITLOG2.Key1
+		FROM   TRANSMITLOG2 TRANSMITLOG2 (NOLOCK)   --WL01
+      JOIN   ORDERS ORDERS (NOLOCK) ON (ORDERS.Orderkey = TRANSMITLOG2.Key1   --WL01
 															 AND ORDERS.Storerkey = TRANSMITLOG2.Key3
 														 	 AND ORDERS.Storerkey = @c_storerkey )
 		WHERE  TRANSMITLOG2.Transmitflag = '1'
@@ -67,7 +68,7 @@ BEGIN
 			BREAK
 
       SELECT @c_externorderkey = externorderkey 
-      FROM   IDSHK.dbo.orders (nolock) 
+      FROM   orders (nolock)   --WL01
 		WHERE  orderkey = @c_key
 		IF @b_debug = 1
 		BEGIN
@@ -120,16 +121,16 @@ BEGIN
 					 CONVERT(NCHAR(3), RIGHT(dbo.fnc_LTRIM(dbo.fnc_RTRIM(Facility.userdefine05)), 3)),   
 					 RIGHT(REPLICATE('0', 9) + CONVERT(NCHAR(8), ISNULL(MBOL.DepartureDate , 0), 112), 9),  
 					 TRANSMITLOG2.TransmitLogKey 
-			  FROM IDSHK.dbo.MBOL MBOL (NOLOCK) 
-			  JOIN IDSHK.dbo.MBOLDETAIL MBOLDETAIL (NOLOCK) ON (MBOL.MbolKey = MBOLDETAIL.MbolKey)
-			  JOIN IDSHK.dbo.ORDERS ORDERS (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey
+			  FROM MBOL MBOL (NOLOCK)   --WL01 
+			  JOIN MBOLDETAIL MBOLDETAIL (NOLOCK) ON (MBOL.MbolKey = MBOLDETAIL.MbolKey)   --WL01
+			  JOIN ORDERS ORDERS (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey   --WL01
 			  																 -- Start: SOS29742
 			  		  														 AND MBOLDETAIL.Mbolkey = ORDERS.Mbolkey)
 			  		  														 -- End: SOS29742	
-           JOIN IDSHK.dbo.Facility Facility (NOLOCK) ON (ORDERS.Facility = FACILITY.facility)
-			  JOIN IDSHK.dbo.TRANSMITLOG2 TRANSMITLOG2 (NOLOCK) ON (ORDERS.OrderKey = TRANSMITLOG2.Key1 
+           JOIN Facility Facility (NOLOCK) ON (ORDERS.Facility = FACILITY.facility)   --WL01
+			  JOIN TRANSMITLOG2 TRANSMITLOG2 (NOLOCK) ON (ORDERS.OrderKey = TRANSMITLOG2.Key1   --WL01 
 																				 AND ORDERS.StorerKey = TRANSMITLOG2.Key3) 
-			  JOIN IDSHK.dbo.ORDERDETAIL ORDERDETAIL (NOLOCK) ON (ORDERS.Orderkey = ORDERDETAIL.Orderkey)
+			  JOIN ORDERDETAIL ORDERDETAIL (NOLOCK) ON (ORDERS.Orderkey = ORDERDETAIL.Orderkey)   --WL01
 			 WHERE MBOLDETAIL.OrderKey = @c_key 
 				AND ORDERS.StorerKey = @c_storerkey 
 				AND ORDERS.ExternOrderKey = @c_ExternOrderkey 
@@ -203,27 +204,27 @@ BEGIN
 								RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), ORDERS.AddDate, 108), 1, 2), 2) + 
 								RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), ORDERS.AddDate, 108), 4, 2), 2) + 
 								RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), ORDERS.AddDate, 108), 7, 2), 2) )  
-				  FROM IDSHK.dbo.MBOL MBOL (NOLOCK) 
-				  JOIN IDSHK.dbo.MBOLDETAIL MBOLDETAIL (NOLOCK) ON (MBOL.MbolKey = MBOLDETAIL.MbolKey)
-				  JOIN IDSHK.dbo.ORDERS ORDERS (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey
+				  FROM MBOL MBOL (NOLOCK)   --WL01 
+				  JOIN MBOLDETAIL MBOLDETAIL (NOLOCK) ON (MBOL.MbolKey = MBOLDETAIL.MbolKey)   --WL01
+				  JOIN ORDERS ORDERS (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey   --WL01
 				  																-- Start: SOS29742
 				  			  													AND MBOLDETAIL.Mbolkey = ORDERS.Mbolkey)			  																  
 																				-- End: SOS29742
-	           JOiN IDSHK.dbo.FACILITY FACILITY (NOLOCK) ON (ORDERS.Facility = FACILITY.Facility)
-				  JOIN IDSHK.dbo.ORDERDETAIL ORDERDETAIL (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey) 
+	           JOiN FACILITY FACILITY (NOLOCK) ON (ORDERS.Facility = FACILITY.Facility)   --WL01
+				  JOIN ORDERDETAIL ORDERDETAIL (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)   --WL01 
 				  																  -- Start: SOS29742
 				  																  -- AND ORDERS.StorerKey = ORDERDETAIL.StorerKey)
 																				  -- End: SOS29742
-				  JOIN IDSHK.dbo.PACKHEADER PACKHEADER (NOLOCK) ON (ORDERS.OrderKey = PACKHEADER.OrderKey)
+				  JOIN PACKHEADER PACKHEADER (NOLOCK) ON (ORDERS.OrderKey = PACKHEADER.OrderKey)   --WL01
 				  																-- Start: SOS29742
 																				-- AND ORDERS.StorerKey = PACKHEADER.StorerKey)
 																				-- End: SOS29742
-				  JOIN IDSHK.dbo.PACKDETAIL PACKDETAIL (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
+				  JOIN PACKDETAIL PACKDETAIL (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)   --WL01
 				  																-- Start: SOS29742
 																				-- AND PACKHEADER.StorerKey = PACKDETAIL.StorerKey)
 																				-- End: SOS29742
-				  JOIN IDSHK.dbo.LOADPLAN LOADPLAN (NOLOCK) ON (ORDERDETAIL.LoadKey = LOADPLAN.LoadKey) 
-				  JOIN IDSHK.dbo.SKU SKU (NOLOCK) ON (ORDERDETAIL.Sku = SKU.Sku
+				  JOIN LOADPLAN LOADPLAN (NOLOCK) ON (ORDERDETAIL.LoadKey = LOADPLAN.LoadKey)   --WL01 
+				  JOIN SKU SKU (NOLOCK) ON (ORDERDETAIL.Sku = SKU.Sku   --WL01
 															 AND ORDERDETAIL.StorerKey = SKU.StorerKey) 
 				 WHERE MBOLDETAIL.OrderKey = @c_key 
 					AND ORDERS.StorerKey = @c_storerkey 
@@ -301,9 +302,9 @@ BEGIN
 								RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), ORDERDETAIL.AddDate, 108), 1, 2), 2) + 
 								RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), ORDERDETAIL.AddDate, 108), 4, 2), 2) + 
 								RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), ORDERDETAIL.AddDate, 108), 7, 2), 2) )  
-				  FROM IDSHK.dbo.ORDERDETAIL ORDERDETAIL (NOLOCK) 
-				  JOIN IDSHK.dbo.LOADPLAN LOADPLAN (NOLOCK) ON (ORDERDETAIL.LoadKey = LOADPLAN.LoadKey) 
-				  JOIN IDSHK.dbo.SKU SKU (NOLOCK) ON (ORDERDETAIL.Sku = SKU.Sku
+				  FROM ORDERDETAIL ORDERDETAIL (NOLOCK)   --WL01 
+				  JOIN LOADPLAN LOADPLAN (NOLOCK) ON (ORDERDETAIL.LoadKey = LOADPLAN.LoadKey)   --WL01 
+				  JOIN SKU SKU (NOLOCK) ON (ORDERDETAIL.Sku = SKU.Sku   --WL01
 															 AND ORDERDETAIL.StorerKey = SKU.StorerKey) 
 				 WHERE ORDERDETAIL.OrderKey = @c_key 
 					AND ORDERDETAIL.StorerKey = @c_storerkey 
@@ -393,21 +394,21 @@ BEGIN
 							RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), max(PACKDETAIL.AddDate), 108), 1, 2), 2) + 
 							RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), max(PACKDETAIL.AddDate), 108), 4, 2), 2) + 
 							RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), max(PACKDETAIL.AddDate), 108), 7, 2), 2) )  
-			  FROM IDSHK.dbo.ORDERS ORDERS (NOLOCK) 
-			  JOIN IDSHK.dbo.ORDERDETAIL ORDERDETAIL (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
+			  FROM ORDERS ORDERS (NOLOCK)   --WL01 
+			  JOIN ORDERDETAIL ORDERDETAIL (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)   --WL01
 			  																  -- Start: SOS29742
 																			  -- AND ORDERS.StorerKey = ORDERDETAIL.StorerKey)
 																			  -- End: SOS29742
-			  JOIN IDSHK.dbo.MBOL MBOL (NOLOCK) ON (ORDERS.MbolKey = MBOL.MbolKey)
-			  JOIN IDSHK.dbo.PACKHEADER PACKHEADER (NOLOCK) ON (ORDERS.OrderKey = PACKHEADER.OrderKey)
+			  JOIN MBOL MBOL (NOLOCK) ON (ORDERS.MbolKey = MBOL.MbolKey)   --WL01
+			  JOIN PACKHEADER PACKHEADER (NOLOCK) ON (ORDERS.OrderKey = PACKHEADER.OrderKey)   --WL01
 			  																-- Start: SOS29742 
 																			-- AND ORDERS.StorerKey = PACKHEADER.StorerKey)
 																			-- End: SOS29742 
-			  JOIN IDSHK.dbo.PACKDETAIL PACKDETAIL (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
+			  JOIN PACKDETAIL PACKDETAIL (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)   --WL01
 			  																-- Start: SOS29742 
 																			-- AND PACKHEADER.StorerKey = PACKDETAIL.StorerKey)
 																			-- End: SOS29742 
-			  JOIN IDSHK.dbo.SKU SKU (NOLOCK) ON (ORDERDETAIL.Sku = SKU.Sku
+			  JOIN SKU SKU (NOLOCK) ON (ORDERDETAIL.Sku = SKU.Sku   --WL01
 														 AND ORDERDETAIL.StorerKey = SKU.StorerKey) 
 			 WHERE ORDERDETAIL.OrderKey = @c_key 
 				AND ORDERDETAIL.StorerKey = @c_storerkey 
@@ -492,13 +493,13 @@ BEGIN
 									RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), PACKDETAIL.AddDate, 108), 1, 2), 2) + 
 									RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), PACKDETAIL.AddDate, 108), 4, 2), 2) + 
 									RIGHT('0' + SUBSTRING(CONVERT(NCHAR(7), PACKDETAIL.AddDate, 108), 7, 2), 2) )  
-					  FROM IDSHK.dbo.PACKDETAIL PACKDETAIL (NOLOCK)
-					  JOIN IDSHK.dbo.PACKHEADER PACKHEADER (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
+					  FROM PACKDETAIL PACKDETAIL (NOLOCK)   --WL01
+					  JOIN PACKHEADER PACKHEADER (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)   --WL01
 					  																-- Start: SOS29742  
 																					-- AND PACKHEADER.StorerKey = PACKDETAIL.StorerKey )
 																					-- End: SOS29742 
-					  JOIN IDSHK.dbo.ORDERS ORDERS (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
-					  JOIN IDSHK.dbo.SKU SKU (NOLOCK) ON (PACKDETAIL.SKU = SKU.Sku
+					  JOIN ORDERS ORDERS (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)   --WL01
+					  JOIN SKU SKU (NOLOCK) ON (PACKDETAIL.SKU = SKU.Sku   --WL01
 																 AND PACKDETAIL.StorerKey = SKU.StorerKey) 
 					  WHERE ORDERS.OrderKey = @c_key 
 						AND ORDERS.StorerKey = @c_storerkey 

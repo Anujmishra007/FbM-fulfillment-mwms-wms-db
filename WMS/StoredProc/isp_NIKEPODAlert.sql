@@ -59,7 +59,9 @@ BEGIN
      @ImgName  nvarchar(Max),  
      @ColorDate   nvarchar(150)  
   
-  
+/*  --***************script suspend notice*******************
+    --this SQL Job script was stop running in TH production for many years. Due to the hardcoded link server caused devops jenkin failure, 
+    --we have remark the script until TH request to use this again in future and enhance to use dynamic SQL.
          
  --=================================================Open function Running Date=====================================       
 ;with nums (i)  
@@ -352,6 +354,8 @@ FOR XML PATH('tr'), TYPE
 --   CLOSE GEN_Email  
 --   DEALLOCATE GEN_Email  
 
+*/ --suspened********
+
 END /* main procedure */  
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -361,7 +365,7 @@ GO
 SET ANSI_WARNINGS OFF
 GO
 
-GRANT EXECUTE ON ispRLWAV03 TO NSQL
+GRANT EXECUTE ON isp_NIKEPODAlert TO NSQL
 GO  
   
   

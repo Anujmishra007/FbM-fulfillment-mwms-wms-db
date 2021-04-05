@@ -1,6 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_TW_NONECOM_shipLabel_POI]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_TW_NONECOM_shipLabel_POI_2]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_BT_Bartender_TW_NONECOM_shipLabel_POI]
+DROP PROCEDURE [dbo].[isp_BT_Bartender_TW_NONECOM_shipLabel_POI_2]
 GO
 
 SET ANSI_NULLS OFF
@@ -11,7 +11,7 @@ GO
 
 /******************************************************************************/                 
 /* Copyright: IDS                                                             */                 
-/* Purpose: isp_BT_Bartender_TW_NONECOM_shipLabel_POI                         */                 
+/* Purpose: isp_BT_Bartender_TW_NONECOM_shipLabel_POI_2                       */                 
 /*                                                                            */                 
 /* Modifications log:                                                         */                 
 /*                                                                            */                 

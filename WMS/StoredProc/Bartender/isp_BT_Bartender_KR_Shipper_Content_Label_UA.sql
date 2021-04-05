@@ -15,6 +15,7 @@ GO
 /* 2015-06-08 1.0  CSCHONG    Created(WMS-2044 )                              */
 /* 2019-04-24 1.1  WinSern    INC0667544 -Sum pickdetail instead of packdetail*/
 /* 2019-06-25 1.2  LZG        INC0751609 -Cater for split Order line (ZG01)   */
+/* 2021-03-19 1.3  mingle01   Add ORD.Notes to col45                          */
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_BT_Bartender_KR_Shipper_Content_Label_UA]
@@ -89,7 +90,8 @@ BEGIN
       @c_skuGrp          NCHAR(5),
       @c_SkuStyle        NCHAR(5),
       @n_cntOrdUDef04    INT,
-      @c_getOrdUdef04    NVARCHAR(80)
+      @c_getOrdUdef04    NVARCHAR(80),
+      @c_notes           NVARCHAR(20)          --mingle01
 
  DECLARE
       @c_colORDDETSKU1     NVARCHAR(60),
@@ -247,7 +249,7 @@ DECLARE
    DECLARE CUR_StartRecLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT ORD.ExternOrderKey AS ORD_ExternOrdKey,ORD.ExternPOKey AS ORD_EXTPOKey,
           ORD.BuyerPO AS ORD_BuyerPO,ORD.OrderKey AS ORD_ORDKey,ORD.Type AS ORD_Type,
-          PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo)
+          PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo),ORD.Notes          --mingle01                     
    FROM ORDERS ORD WITH (NOLOCK)
    INNER JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = ORD.OrderKey
    JOIN PACKHEADER PH WITH (NOLOCK) ON PH.OrderKey = ORD.OrderKey
@@ -259,10 +261,10 @@ DECLARE
    AND PDET.CartonNo <= CONVERT(INT,@c_Sparm3)
    GROUP BY ORD.ExternOrderKey ,ORD.ExternPOKey,
             ORD.BuyerPO ,ORD.OrderKey ,ORD.Type,
-            PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo)
+            PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo),ORD.Notes          --mingle01
 
    OPEN CUR_StartRecLoop
-   FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo
+   FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo,@c_Notes          --mingle01
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @b_debug = 1
@@ -278,7 +280,7 @@ DECLARE
                            ,Col55,Col56,Col57,Col58,Col59,Col60)
       VALUES(@c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,
             '1',@c_LabelNo,'','','','','','','','','','','','',
-            '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,'','','','',''
+            '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,@c_Notes,'','','',''                   --mingle01
             ,'','','','','','','','','','O')
 
       IF @b_debug = 1
@@ -460,7 +462,7 @@ DECLARE
                                     ,Col55,Col56,Col57,Col58,Col59,Col60)
                VALUES(@c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,
                      '1',@c_LabelNo,'','','','','','','','','','','','',
-                     '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,'','','','',''
+                     '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,@c_Notes,'','','',''          --mingle01
                      ,'','','','','','','','','','O')
 
                IF @b_debug = '1'
@@ -678,7 +680,7 @@ DECLARE
       CLOSE CUR_RowNoLoop
       DEALLOCATE CUR_RowNoLoop
 
-      FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo
+      FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo,@c_Notes          --mingle01
    END -- While
    CLOSE CUR_StartRecLoop
    DEALLOCATE CUR_StartRecLoop

@@ -25,8 +25,10 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
+/* Date        Author   Ver   Purposes                                  */ 
+/*15-MAR-2021  CSCHONG  1.1   WMS-16525 new sub report (CS01)           */
 /************************************************************************/  
-CREATE PROC isp_GetPickSlipWave26  
+CREATE PROC isp_GetPickSlipWave26
            @c_wavekey_type       NVARCHAR(15)  
 
 AS  
@@ -94,9 +96,12 @@ BEGIN
          , @cGroupBy               NVARCHAR (2000)
          , @cSQL                   NVARCHAR(MAX)
          , @cSQL2                  NVARCHAR(MAX)
+         , @c_OrdDocType           NVARCHAR(5)            --CS01
+         , @n_cntOrdtype           INT                    --CS01
 
    CREATE TABLE #TEMPORDKEY(
-      orderkey NVARCHAR(10)
+      orderkey             NVARCHAR(10)
+     ,OrdDocType           NVARCHAR(5)           --CS01
       )
 
       CREATE TABLE #TMPOSK(
@@ -105,6 +110,7 @@ BEGIN
           
    SET @cGroupBy  = N' GROUP BY  
                     ORDERS.OrderKey  
+                   ,isnull(ORDERS.DocType,'''')
                    ,ORDERS.ExternOrderkey  
                    ,ORDERS.OpenQty'  
   
@@ -130,6 +136,7 @@ BEGIN
       ,  NoOfPickLines     INT            NULL
       ,  OrdSelectkey      NVARCHAR(20)   NULL
       ,  ColorCode         NVARCHAR(20)   NULL  
+      ,  ORDDoctype        NVARCHAR(10)   NULL    --CS01
       )  
   
     
@@ -158,7 +165,8 @@ BEGIN
       JOIN WAVEDETAIL (NOLOCK) ON (ORDERS.ORDERKEY = WAVEDETAIL.ORDERKEY)
       JOIN ORDERSELECTIONCONDITION (NOLOCK) ON (ORDERSELECTIONCONDITION.ORDERSELECTIONKEY = ORDERSELECTION.ORDERSELECTIONKEY)
       LEFT JOIN V_StorerConfig2 SC WITH (NOLOCK) ON ORDERS.Storerkey = SC.Storerkey AND SC.Configkey = 'WaveSkipUserdefine08Chk'
-      LEFT JOIN ORDERINFO WITH (NOLOCK) ON (ORDERS.Orderkey = ORDERINFO.Orderkey)          
+      LEFT JOIN ORDERINFO WITH (NOLOCK) ON (ORDERS.Orderkey = ORDERINFO.Orderkey)  
+      JOIN WAVE (NOLOCK) ON WAVE.WaveKey = WAVEDETAIL.WaveKey --CS01        
       WHERE (ORDERS.UserDefine08 = 'Y' OR ISNULL(SC.Svalue,'')='1')  
        AND (NOT ORDERS.Status IN ('8', '9') )  
        AND (ORDERS.ConsigneeKey >= OrderSelection.consigneekeystart)  
@@ -208,7 +216,7 @@ BEGIN
        AND WAVEDETAIL.WAVEKEY = @c_wavekey 
 
     DECLARE CUR_NOOFCOND CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-    SELECT DISTINCT ORDERSELECTIONKEY FROM #TEMPOSK
+    SELECT DISTINCT ORDERSELECTIONKEY FROM #TEMPOSK WHERE  ORDERSELECTIONKEY =@c_wavetype
     OPEN CUR_NOOFCOND
     FETCH NEXT FROM CUR_NOOFCOND INTO @c_tmpOrderSelectionKey
     WHILE @@FETCH_STATUS <> -1 
@@ -226,11 +234,8 @@ BEGIN
     FETCH NEXT FROM CUR_NOOFCOND INTO @c_tmpOrderSelectionKey
     END
 
-   --SELECT  ORDERSELECTIONKEY FROM #TEMPOSK
-   -- ORDER BY NoOfCond DESC
-
     DECLARE CUR_OSK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-    SELECT  ORDERSELECTIONKEY FROM #TEMPOSK
+    SELECT  ORDERSELECTIONKEY FROM #TEMPOSK WHERE ORDERSELECTIONKEY = @c_wavetype     --CS01a
     ORDER BY NoOfCond DESC
     OPEN CUR_OSK
     FETCH NEXT FROM CUR_OSK INTO @c_tmpOrderSelectionKey
@@ -342,13 +347,10 @@ BEGIN
       BEGIN  
          SET @cSQL2 = @cSQL2 + N') '  
          SET @nPreCondLevel = @nPreCondLevel - 1  
-      END  
-  
-      
-      
+      END     
       
       set @cSQL = N' INSERT INTO #TEMPORDKEY '+
-      'select DISTINCT isnull(ORDERS.orderkey,'''') from wavedetail ' +
+      'select DISTINCT isnull(ORDERS.orderkey,''''),isnull(ORDERS.DocType,'''') from wavedetail WITH (NOLOCK)' +
       'JOIN ORDERS WITH (NOLOCK) ON wavedetail.ORDERKEY = ORDERS.ORDERKEY '  +  
       'JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERS.Orderkey = ORDERDETAIL.Orderkey) '+  
       'LEFT JOIN ORDERINFO WITH (NOLOCK) ON (ORDERS.Orderkey = ORDERINFO.Orderkey) '+  
@@ -356,6 +358,52 @@ BEGIN
       SET @cSQL2 = RTRIM(@cSQL2) + CHAR(13) + @cGroupBy
 
       exec( @cSQL + ' ' +  @cSQL2 )
+
+      --CS01a START
+        SET @n_cntOrdtype = 1
+        SET @c_OrdDocType = ''
+
+      SELECT @n_cntOrdtype = COUNT(DISTINCT OrdDocType)
+      FROM #TEMPORDKEY
+
+      IF @n_cntOrdtype = 0 
+      BEGIN
+       --SET @n_cntOrdtype = 1  --CS01a
+         SET @n_continue = 3        
+         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)      
+         SET @n_err = 81090  -- Should Be Set To The SQL Errmessage but I don't know how to do so.        
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': wave not had doctype (isp_GetPickSlipWave26)'     
+                           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
+         GOTO QUIT_SP   
+      END
+
+      IF @n_cntOrdtype = 1
+      BEGIN
+
+         SELECT TOP 1 @c_OrdDocType = OrdDocType
+         FROM #TEMPORDKEY
+
+         IF ISNULL(@c_OrdDocType,'') = ''
+         BEGIN
+           --SET @c_OrdDocType = 'N'
+         SET @n_continue = 3        
+         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)      
+         SET @n_err = 81090  -- Should Be Set To The SQL Errmessage but I don't know how to do so.        
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': wave not had doctype (isp_GetPickSlipWave26)'     
+                           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
+         GOTO QUIT_SP   
+         END
+      END
+      ELSE
+      BEGIN
+         SET @n_continue = 3        
+         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)      
+         SET @n_err = 81080  -- Should Be Set To The SQL Errmessage but I don't know how to do so.        
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': wave consists more than 1 doctype (isp_GetPickSlipWave26)'     
+                           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
+         GOTO QUIT_SP       
+      END
+     --CS01a END
 
       SELECT @noOfOrdKeyTmp = count(orderkey) FROM #TEMPORDKEY
 
@@ -365,6 +413,7 @@ BEGIN
          VALUES(@c_tmpOrderSelectionKey)
          TRUNCATE TABLE #TEMPORDKEY
       END
+
       TRUNCATE TABLE #TEMPORDKEY
       
       SET @csql2 =''
@@ -404,38 +453,45 @@ BEGIN
       ,  NoOfSku          
       ,  NoOfPickLines 
       ,  OrdSelectkey
-      ,  ColorCode       
+      ,  ColorCode 
+      ,  ORDDoctype         --CS01      
       )                             
    SELECT PD.Storerkey  
          ,WD.Wavekey  
-         ,PickHeaderKey = ISNULL(RTRIM(PH.PickHeaderkey), '')  
+         ,PickHeaderKey = CASE WHEN ISNULL(RTRIM(PH.PickHeaderkey),'') <> '' THEN ISNULL(RTRIM(PH.PickHeaderkey),'')
+                           ELSE ISNULL(RTRIM(PHORD.PickHeaderkey),'') END  
          ,LOC.PutawayZone                                                  
          ,Printedflag = CASE WHEN ISNULL(RTRIM(PH.PickHeaderkey), '') =  '' THEN 'N' ELSE 'Y' END  
          ,NoOfSku= COUNT(DISTINCT PD.Sku)  
          ,NoOfPickLines= COUNT(DISTINCT PD.PickDetailkey)
          ,Orderselectionkey = CASE WHEN @c_orderSelectionKey = '0' THEN '' ELSE @c_orderSelectionKey END 
          ,ColorCode = ISNULL(CLR.CODE,'')   --WL01
+         ,OrdDoctype = @c_OrdDocType        --CS01
    FROM WAVEDETAIL WD   WITH (NOLOCK)    
    JOIN PICKDETAIL PD   WITH (NOLOCK) ON (WD.Orderkey= PD.Orderkey)  
    JOIN LOC        LOC  WITH (NOLOCK) ON (PD.Loc = LOC.Loc)               
    LEFT JOIN REFKEYLOOKUP RL WITH (NOLOCK) ON (PD.PickDetailKey = RL.PickDetailkey)  
-   LEFT JOIN PICKHEADER   PH WITH (NOLOCK) ON (RL.PickSlipNo = PH.PickHeaderkey)  
+   LEFT JOIN PICKHEADER   PH WITH (NOLOCK) ON (RL.PickSlipNo = PH.PickHeaderkey) 
+   LEFT JOIN PICKHEADER   PHORD WITH (NOLOCK) ON (PD.Orderkey = PHORD.orderkey)
    LEFT JOIN CODELKUP CLR WITH (NOLOCK) ON CLR.LISTNAME = 'OSKCOLOR' AND CLR.LONG = @c_orderSelectionKey  
    WHERE WD.Wavekey = @c_Wavekey  
    AND   PD.Status < '5'  
    GROUP BY PD.Storerkey  
          ,  WD.Wavekey  
          ,  ISNULL(RTRIM(PH.PickHeaderkey), '')  
+         ,  ISNULL(RTRIM(PHORD.PickHeaderkey),'')
          ,  LOC.PutawayZone                                                 
        , ISNULL(CLR.CODE,'')    
-   ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), '')   
-         ,  LOC.PutawayZone                                                   
-  
+   ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), ''),ISNULL(RTRIM(PHORD.PickHeaderkey),'')   
+         ,  LOC.PutawayZone     
+
+
    SET @CUR_PSLIP = CURSOR FAST_FORWARD READ_ONLY FOR  
    SELECT   RowNum  
          ,  PickHeaderKey   
          ,  PutawayZone  
    FROM #TMP_PSLIP  
+   WHERE OrdDoctype = 'E'                    --CS01
    ORDER BY RowNum  
   
    OPEN @CUR_PSLIP  
@@ -577,13 +633,13 @@ BEGIN
    END  
    CLOSE @CUR_PSLIP  
    DEALLOCATE @CUR_PSLIP  
-  
+
    SET @CUR_PACKSLIP = CURSOR FAST_FORWARD READ_ONLY FOR  
    SELECT OH.Orderkey     
          ,OH.LoadKey  
    FROM WAVEDETAIL WD      WITH (NOLOCK)  
    JOIN ORDERS     OH      WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)  
-   LEFT JOIN PICKHEADER PH WITH (NOLOCK) ON (OH.Orderkey = PH.Orderkey)  
+   LEFT OUTER JOIN PICKHEADER PH WITH (NOLOCK) ON (OH.Orderkey = PH.Orderkey)  
                                          AND(OH.Loadkey  = PH.ExternOrderkey)  
    WHERE WD.Wavekey = @c_Wavekey   
    AND   PH.PickHeaderKey IS NULL  
@@ -649,13 +705,17 @@ BEGIN
                         + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
          GOTO QUIT_SP       
       END    
+
+      UPDATE #TMP_PSLIP
+      SET PickHeaderKey = @c_PickSlipNo
+      WHERE Wavekey = @c_Wavekey
+      AND PickHeaderKey = ''
   
       FETCH NEXT FROM @CUR_PACKSLIP INTO @c_Orderkey  
                                        , @c_Loadkey  
    END  
    CLOSE @CUR_PACKSLIP  
    DEALLOCATE @CUR_PACKSLIP  
-   
 
 
 QUIT_SP:  
@@ -668,6 +728,7 @@ QUIT_SP:
          ,  TMP.NoOfPickLines   
          ,  TMP.OrdSelectkey
          ,  TMP.ColorCode 
+         ,  TMP.ORDDoctype           --CS01
    FROM #TMP_PSLIP TMP  
    ORDER BY TMP.PickHeaderKey  
          ,  TMP.PutawayZone  
@@ -719,10 +780,6 @@ QUIT_SP:
       END  
    END  
 END -- procedure
-GO
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
 GO
 GRANT EXECUTE ON [dbo].[isp_GetPickSlipWave26] TO nSQL 
 GO
