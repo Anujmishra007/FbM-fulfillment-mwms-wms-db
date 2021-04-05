@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2021-03-12 1.0  WLChooi    Created (WMS-16545)                             */                                 
+/* 2021-03-12 1.0  WLChooi    Created (WMS-16545)                             */ 
+/* 2021-04-05 1.1  WLChooi    WMS-16545 - Add Storerkey to validate (WL01)    */                                
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_PRICELBL01_GetParm]                      
@@ -86,7 +87,7 @@ BEGIN
     , Qty               INT NULL
    )
 
-   IF EXISTS (SELECT 1 FROM RECEIPTDETAIL (NOLOCK) WHERE ToId = @parm02)
+   IF EXISTS (SELECT 1 FROM RECEIPTDETAIL (NOLOCK) WHERE ToId = @parm02 AND Storerkey = @parm01)   --WL01
    BEGIN
       INSERT INTO #TMP_SKU(Storerkey, SKU, Qty)
       SELECT DISTINCT RD.Storerkey, RD.SKU
