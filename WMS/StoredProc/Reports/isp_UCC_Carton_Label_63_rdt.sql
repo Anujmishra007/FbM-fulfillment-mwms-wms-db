@@ -32,10 +32,11 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 16/04/2019   WLCHOOI  1.0  WMS-8727 - Add ExternOrderKey (WL01)      */
+/* 25/03/2021   CSCHONG  1.1  WMS-16583 - add loc field (CS01)          */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_UCC_Carton_Label_63_rdt] (
-	     -- @c_StorerKey      NVARCHAR(20) 
+        -- @c_StorerKey      NVARCHAR(20) 
            @c_PickSlipNo     NVARCHAR(20)
       --,  @c_StartCartonNo  NVARCHAR(20)
       --,  @c_EndCartonNo    NVARCHAR(20)
@@ -68,15 +69,15 @@ BEGIN
          , @n_CntOrderkey     INT
          , @c_SKUStyle        NVARCHAR(20)
          , @n_CntSize         INT
-			, @n_Page            INT
-			, @c_ordkey          NVARCHAR(20)
-			, @n_PrnQty          INT
-			, @n_MaxId           INT
-			, @n_MaxRec          INT
-			, @n_getPageno       INT
-			, @n_MaxLineno       INT
-			, @n_CurrentRec      INT
-			, @c_StorerKey      NVARCHAR(20) 
+         , @n_Page            INT
+         , @c_ordkey          NVARCHAR(20)
+         , @n_PrnQty          INT
+         , @n_MaxId           INT
+         , @n_MaxRec          INT
+         , @n_getPageno       INT
+         , @n_MaxLineno       INT
+         , @n_CurrentRec      INT
+         , @c_StorerKey      NVARCHAR(20) 
 
 
    SET @c_ExternOrderkey  = ''
@@ -96,10 +97,10 @@ BEGIN
    SET @c_SKUStyle        = ''
    SET @n_CntSize         = 1
    SET @c_GrpExtOrderkey = ''
-	SET @n_Page            = 1
-	SET @n_PrnQty          = 1
-	SET @n_PrnQty          = 1
-	SET @n_MaxLineno       = 17            
+   SET @n_Page            = 1
+   SET @n_PrnQty          = 1
+   SET @n_PrnQty          = 1
+   SET @n_MaxLineno       = 17            
 
 
   CREATE TABLE #TMP_LCartonLABEL63 (
@@ -116,28 +117,29 @@ BEGIN
           PDQty           INT,
           PICtnType       NVARCHAR(10) NULL,
           BUSR1           NVARCHAR(30)  NULL,
-			 PageNo          INT,
-			 sku             NVARCHAR(20),
+          PageNo          INT,
+          sku             NVARCHAR(20),
           BAdd1           NVARCHAR(45) NULL,
           BAdd2           NVARCHAR(45) NULL,            
           BCity           NVARCHAR(45) NULL ,
           Bcountry        NVARCHAR(45) NULL,
-          ExternOrderKey  NVARCHAR(50) NULL)        --WL01
+          ExternOrderKey  NVARCHAR(50) NULL,        --WL01
+          PLOC            NVARCHAR(10) NULL)        --CS01
 
           --IF ISNULL(@c_StorerKey,'') = ''
           --BEGIN
-				 SELECT TOP 1 @c_StorerKey = PAH.storerkey
-				 FROM PACKHEADER PAH WITH (NOLOCK)
-				 JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno
-				 WHERE PAH.Pickslipno = @c_PickSlipNo
-				  AND PADET.LabelNo = @c_labelno
-				-- AND PADET.CartonNo between CONVERT(INT,@c_StartCartonNo) AND CONVERT(INT,@c_EndCartonNo)
+             SELECT TOP 1 @c_StorerKey = PAH.storerkey
+             FROM PACKHEADER PAH WITH (NOLOCK)
+             JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno
+             WHERE PAH.Pickslipno = @c_PickSlipNo
+             AND PADET.LabelNo = @c_labelno
+            -- AND PADET.CartonNo between CONVERT(INT,@c_StartCartonNo) AND CONVERT(INT,@c_EndCartonNo)
           --END
           
           
    INSERT INTO #TMP_LCartonLABEL63(Pickslipno,BContact1,OrdExtOrdKey,OrdBuyerPO,cartonno,
                                    PDLabelNo,SKUColor,SKUStyle,SKUSize,PDQty,PICtnType,BUSR1,PageNo,
-                                   sku,BAdd1,BAdd2,BCity,Bcountry,ExternOrderKey )   --WL01
+                                   sku,BAdd1,BAdd2,BCity,Bcountry,ExternOrderKey,PLOC )   --WL01  --CS01
    SELECT    PAH.Pickslipno--,ISNULL(RTRIM(ORDERS.Stop),'')
          ,  ISNULL(RTRIM(ORDERS.B_Contact1),'')
          ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
@@ -150,18 +152,19 @@ BEGIN
          ,  PADET.qty
          ,  ISNULL(PAIF.CartonType,'')
          ,  ISNULL(RTRIM(S.BUSR1),'')
-			,  @n_Page
-			,  PADET.SKU
-			,  ISNULL(RTRIM(ORDERS.B_Address1),'')
-			,  ISNULL(RTRIM(ORDERS.B_Address2),'')             
-			,  ISNULL(RTRIM(ORDERS.B_City),'')  
-			,  ISNULL(RTRIM(ORDERS.B_Country),'') 
-         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')      --WL01                           
+         ,  @n_Page
+         ,  PADET.SKU
+         ,  ISNULL(RTRIM(ORDERS.B_Address1),'')
+         ,  ISNULL(RTRIM(ORDERS.B_Address2),'')             
+         ,  ISNULL(RTRIM(ORDERS.B_City),'')  
+         ,  ISNULL(RTRIM(ORDERS.B_Country),'') 
+         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')      --WL01   
+         ,  PIDET.LOC                                    --CS01                        
    FROM PACKHEADER PAH WITH (NOLOCK)
    JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno
    JOIN PICKHEADER PIHD WITH (NOLOCK) ON PIHD.PICKHEADERKEY=PAH.PICKSLIPNO
-   --JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.CaseId = PADET.Labelno
-	  --                                     AND PIDET.SKU = PADET.SKU
+   JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.CaseId = PADET.Labelno           --CS01
+                                          AND PIDET.SKU = PADET.SKU
    -- JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = PIDET.Orderkey
    --                                       AND ORDDET.Orderlinenumber=PIDET.Orderlinenumber
    JOIN ORDERS     WITH (NOLOCK) ON ORDERS.ORDERKEY=PIHD.ORDERKEY--(ORDDET.Orderkey = ORDERS.Orderkey)
@@ -178,13 +181,13 @@ BEGIN
 
         SELECT Pickslipno,BContact1,OrdExtOrdKey,OrdBuyerPO,cartonno,
                PDLabelNo,SKUColor,SKUStyle,SKUSize,PDQty,PICtnType,BUSR1,PageNo,
-               sku,BAdd1,BAdd2,BCity,Bcountry,ExternOrderKey --WL01
-        FROM 	#TMP_LCartonLABEL63
+               sku,BAdd1,BAdd2,BCity,Bcountry,ExternOrderKey,PLOC --WL01   --CS01
+        FROM   #TMP_LCartonLABEL63
         ORDER BY Pickslipno,cartonno,SKUStyle,SKUColor,SKUSize
 
 
 END
-SET QUOTED_IDENTIFIER OFF
+
 GO
 GRANT EXECUTE ON [dbo].[isp_UCC_Carton_Label_63_rdt] TO nSQL 
 GO
