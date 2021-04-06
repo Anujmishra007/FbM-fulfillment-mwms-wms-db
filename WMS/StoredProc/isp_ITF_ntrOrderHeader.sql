@@ -52,6 +52,7 @@ GO
 /* 16-Nov-2018  MCTang    2.4   OTM Remove PKHCFMOTM (MC08)             */ 
 /* 04-Feb-2019  MCTang    2.5   Add GVTITF (MC09)                       */
 /* 13-Mar-2019  YTKuek    2.6   Add GVTITF Event (YT01)                 */
+/* 06-Apr-2021  MCTang    2.7   Add SOPICKOTM (MC10)                    */
 /************************************************************************/    
     
 CREATE PROC [dbo].[isp_ITF_ntrOrderHeader]    
@@ -419,13 +420,14 @@ BEGIN
                IF @c_Status = '5'   
                BEGIN  
                   SET @c_TableName = 'SOPNPOTM'  
-                  --SET @c_TableName2 = 'PKHCFMOTM'     --(MC07)  --(MC08)
-                SET @b_Success = 1 
+                  --SET @c_TableName2 = 'PKHCFMOTM'      --(MC07)  --(MC08)
+                  SET @c_TableName2 =  'SOPICKOTM'       --(MC10)
+                  SET @b_Success = 1 
                END   
                ELSE IF @c_Status = '9'   
                BEGIN  
                   SET @c_TableName = 'SOCFMOTM'  
-                  SET @c_TableName2 = 'SOSHPOTM'      --(MC05)  
+                  SET @c_TableName2 = 'SOSHPOTM'         --(MC05)  
                   SET @b_Success = 1  
                END  
                ELSE IF @c_Status = 'CANC' OR @c_SOStatus = 'CANC'  
@@ -441,33 +443,12 @@ BEGIN
   
                IF @b_Success = 1  
                BEGIN  
-  
-                IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)      --(MC06)  
-                            WHERE STC.StorerKey = @c_Storerkey   
-                            AND   STC.ConfigKey = @c_Tablename  
-                            AND   STC.SValue    = '1' )  
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)      --(MC06)  
+                              WHERE STC.StorerKey = @c_Storerkey   
+                              AND   STC.ConfigKey = @c_Tablename  
+                              AND   STC.SValue    = '1' )  
                   BEGIN  
-                     EXEC ispGenOTMLog @c_Tablename, @c_OrderKey, @c_Status, @c_StorerKey, ''    
-                                     , @b_success   OUTPUT    
-                                     , @n_err       OUTPUT    
-                                     , @c_errmsg    OUTPUT   
-  
-                     IF @b_success <> 1  
-                     BEGIN  
-                        SET @n_continue = 3  
-                        GOTO QUIT   
-                     END  
-                  END  
-  
-                  --(MC05) - S  
-                  IF @c_TableName2 <> ''  
-                  BEGIN  
-                   IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)   --(MC06)  
-                               WHERE STC.StorerKey = @c_Storerkey   
-                                 AND   STC.ConfigKey = @c_TableName2  
-                               AND   STC.SValue    = '1' )  
-                     BEGIN  
-                        EXEC ispGenOTMLog @c_TableName2, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                        EXEC ispGenOTMLog @c_Tablename, @c_OrderKey, @c_Status, @c_StorerKey, ''    
                                         , @b_success   OUTPUT    
                                         , @n_err       OUTPUT    
                                         , @c_errmsg    OUTPUT   
@@ -477,10 +458,29 @@ BEGIN
                            SET @n_continue = 3  
                            GOTO QUIT   
                         END  
+                  END  
+  
+                  --(MC05) - S  
+                  IF @c_TableName2 <> ''  
+                  BEGIN  
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)   --(MC06)  
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = @c_TableName2  
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenOTMLog @c_TableName2, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                          , @b_success   OUTPUT    
+                                          , @n_err       OUTPUT    
+                                          , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
                      END  
                   END  
                   --(MC05) - E  
-  
                END -- IF @b_Success = 1  
             END -- ColValue IN ('STATUS','SOSTATUS')  
          END -- IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate')    
