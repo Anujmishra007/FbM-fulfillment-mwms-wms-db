@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: nspPrealLOCateOrderProcessing                             */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -28,6 +28,7 @@ GO
 /* 16-Jun-2020  NJOW01  1.0  Fix sorting and grouping                   */
 /* 03-Dec-2020  WLChooi 1.1  WMS-15808 - Add new sorting based on config*/
 /*                           (WL01)                                     */
+/* 12-Mar-2021  WLChooi 1.2  WMS-16550 - Consider QtyReplen (WL02)      */
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspPR_PH09]  
@@ -87,7 +88,7 @@ BEGIN
    BEGIN  
       DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR  
       SELECT LOT.StorerKey, LOT.SKU, LOT.LOT,   
-           QtyAvailable = SUM(LOTXLOCXID.Qty-LOTXLOCXID.QtyAllocated-LOTXLOCXID.QtyPicked) - MIN(ISNULL(P.QtyPreallocated, 0))  
+           QtyAvailable = SUM(LOTXLOCXID.Qty-LOTXLOCXID.QtyAllocated-LOTXLOCXID.QtyPicked-LOTXLOCXID.QtyReplen) - MIN(ISNULL(P.QtyPreallocated, 0))   --WL02
       FROM LOTXLOCXID (NOLOCK)   
       JOIN LOT (NOLOCK) ON LOTXLOCXID.LOT = LOT.LOT  
       JOIN LOTATTRIBUTE (NOLOCK) ON LOTXLOCXID.LOT = LOTATTRIBUTE.LOT  
@@ -107,7 +108,7 @@ BEGIN
             AND LOC.Facility = @c_facility  
             AND LOC.Status = 'OK' AND LOC.LocationFlag = 'NONE'  
          GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT  
-         HAVING SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked) - MIN(ISNULL(P.QtyPreallocated, 0)) > 0  
+         HAVING SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked-LOTXLOCXID.QtyReplen) - MIN(ISNULL(P.QtyPreallocated, 0)) > 0   --WL02
    END  
    ELSE  
    BEGIN  
@@ -297,7 +298,7 @@ BEGIN
        -- Form Preallocate cursor  
       SELECT @c_SQLStmt = 'DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR ' +  
       ' SELECT LOT.StorerKey, LOT.SKU, LOT.LOT, ' +  
-      ' QtyAvailable = SUM(LOTXLOCXID.Qty-LOTXLOCXID.QtyAllocated-LOTXLOCXID.QtyPicked) - MIN(ISNULL(P.QtyPreallocated, 0)) ' +  
+      ' QtyAvailable = SUM(LOTXLOCXID.Qty-LOTXLOCXID.QtyAllocated-LOTXLOCXID.QtyPicked-LOTXLOCXID.QtyReplen) - MIN(ISNULL(P.QtyPreallocated, 0)) ' +   --WL02
       ' FROM LOTXLOCXID (NOLOCK) ' +  
       ' JOIN LOT (NOLOCK) ON LOTXLOCXID.LOT = LOT.LOT ' +  
       ' JOIN LOTATTRIBUTE (NOLOCK) ON LOTXLOCXID.LOT = LOTATTRIBUTE.LOT ' +  
@@ -328,7 +329,7 @@ BEGIN
          ' GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, CASE WHEN LOTATTRIBUTE.LOTTABLE04 IS NULL OR LOTATTRIBUTE.LOTTABLE04 = ''1900-01-01'' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END, LOC.LocationType ' 
        END +  
        CASE WHEN @c_SortMode = 'ADISORT' THEN ', LOTATTRIBUTE.LOTTABLE05 ' ELSE '' END +   --WL01
-      ' HAVING SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked ) - MIN(ISNULL(P.QtyPreallocated, 0)) >= @n_uombase ' +  
+      ' HAVING SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked-LOTXLOCXID.QtyReplen) - MIN(ISNULL(P.QtyPreallocated, 0)) >= @n_uombase ' +   --WL02  
       RTRIM(@c_OrderBy)  
       
   --   EXEC (@c_SQLStmt)  
