@@ -25,6 +25,7 @@ GO
 /* Date        Author   Ver  Purposes                                       */  
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                             */
 /* 28-12-2020  NJOW01   1.2   WMS-15891 add logic cater for new brand       */
+/* 07-04-2021  NJOW02   1.3   Fix error control and transaction             */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV31]      
@@ -98,6 +99,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
             ,@n_CurrCartonCube DECIMAL(12,5)
                               
     SET @c_SourceType = 'ispRLWAV31'    
+
+    IF @@TRANCOUNT = 0  --NJOW02
+       BEGIN TRAN
 
     -----Wave Validation-----                  
     IF @n_continue = 1 OR @n_continue = 2
@@ -854,7 +858,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
             DEALLOCATE CUR_PICKDETAIL         	         	   
          END
          
-         IF @c_AssignPackLabelToOrdCfg = '1'
+         IF @c_AssignPackLabelToOrdCfg = '1' AND @n_continue IN(1,2)  --NJOW02
          BEGIN         
             EXEC isp_AssignPackLabelToOrderByLoad
               @c_PickslipNo = @c_PickslipNo,     
