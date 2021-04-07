@@ -30,6 +30,8 @@ GO
 /*                            logic (WL02)                              */
 /* 2021-03-25   WLChooi   1.3 Change date column due to urgent request  */
 /*                            from LIT (WL03)                           */
+/* 2021-04-06   WLChooi   1.4 WMS-16276 - Change to 6 d.p for Total CBM */
+/*                            and Weight (WL04)                         */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
@@ -52,13 +54,13 @@ BEGIN
          , @n_SumInQty        INT
          , @c_Notes           NVARCHAR(4000)
          , @c_Notes2          NVARCHAR(4000)
-         , @n_STDGROSSWGT     DECIMAL(10,2)
-         , @n_GrossWgt        DECIMAL(10,2)
+         , @n_STDGROSSWGT     DECIMAL(30,6) = 0.000000   --WL04 
+         , @n_GrossWgt        DECIMAL(30,6) = 0.000000   --WL04 
          , @c_PrevOrderkey    NVARCHAR(10)
-         , @n_TTLWeight       DECIMAL(10,2) = 0.00
-         , @n_TTLCBM          DECIMAL(10,2) = 0.00
-         , @n_Cube            DECIMAL(10,2) = 0.00
-         , @n_StdCube         DECIMAL(10,2) = 0.00
+         , @n_TTLWeight       DECIMAL(30,6) = 0.000000   --WL04
+         , @n_TTLCBM          DECIMAL(30,6) = 0.000000   --WL04
+         , @n_Cube            DECIMAL(30,6) = 0.000000   --WL04
+         , @n_StdCube         DECIMAL(30,6) = 0.000000   --WL04
          , @c_Storerkey       NVARCHAR(15)
          , @c_Notes2A         NVARCHAR(4000) = ''
          , @c_Notes2B         NVARCHAR(4000) = ''
@@ -106,8 +108,8 @@ BEGIN
     , SUMInQty        INT
     , UserDefine04    NVARCHAR(50)
     , StorerKey       NVARCHAR(15)
-    , TTLWeight       DECIMAL(10,2)
-    , TTLCBM          DECIMAL(10,2)
+    , TTLWeight       DECIMAL(30,6)   --WL04 
+    , TTLCBM          DECIMAL(30,6)   --WL04 
     , ContainerKey    NVARCHAR(10)
     , InvoiceNo       NVARCHAR(40)
     , C_State         NVARCHAR(45)
@@ -156,8 +158,8 @@ BEGIN
         , MAX(PIDET.Qty) -  CASE WHEN P.CaseCnt > 0 THEN (FLOOR(MAX(PIDET.Qty)/P.CaseCnt) * P.CaseCnt) ELSE 0 END AS SUMInQty   --WL01
         , OD.UserDefine04
         , OH.StorerKey
-        , TTLWeight = CAST(0.00 AS DECIMAL(10,2))
-        , TTLCBM    = CAST(0.00 AS DECIMAL(10,2))
+        , TTLWeight = CAST(0.000000 AS DECIMAL(30,6))   --WL04
+        , TTLCBM    = CAST(0.000000 AS DECIMAL(30,6))   --WL04
         , C.Containerkey
         , OH.UserDefine04
         , ISNULL(OH.C_State,'') AS C_State
@@ -259,8 +261,8 @@ BEGIN
         , MAX(PIDET.Qty) -  CASE WHEN P.CaseCnt > 0 THEN (FLOOR(MAX(PIDET.Qty)/P.CaseCnt) * P.CaseCnt) ELSE 0 END AS SUMInQty   --WL01
         , OD.UserDefine04
         , OH.StorerKey
-        , TTLWeight = CAST(0.00 AS DECIMAL(10,2))
-        , TTLCBM    = CAST(0.00 AS DECIMAL(10,2))
+        , TTLWeight = CAST(0.000000 AS DECIMAL(30,6))   --WL04
+        , TTLCBM    = CAST(0.000000 AS DECIMAL(30,6))   --WL04
         , ''
         , OH.UserDefine04
         , ISNULL(OH.C_State,'') AS C_State
