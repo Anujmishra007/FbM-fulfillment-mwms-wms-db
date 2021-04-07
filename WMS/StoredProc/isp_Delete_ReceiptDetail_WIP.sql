@@ -16,21 +16,24 @@ GO
 /* Purpose: WMS-14739 - CN NIKE O2 WMS RFID Receiving Module             */
 /*          ASN Header                                                   */  
 /*                                                                       */  
-/* Called By:                                                            */  
+/* Called By: ue_delete_receiptdetail_wip                                */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
-/* 09-OCT-2020 Wan      1.0   Created                                   */
+/* 09-OCT-2020 Wan      1.0   Created                                    */
+/* 2021-03-19  Wan01    1.1   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
+/*                           _Overall_CR                                 */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_Delete_ReceiptDetail_WIP] 
-   @n_RowID    BIGINT         = 0 
-,  @b_Success  INT            = 1   OUTPUT   
-,  @n_Err      INT            = 0   OUTPUT
-,  @c_Errmsg   NVARCHAR(255)  = ''  OUTPUT
+   @n_RowID       BIGINT         = 0            -- If Value = 0, call from close window
+,  @n_SessionID   BIGINT         = 0            --(Wan01)
+,  @b_Success     INT            = 1   OUTPUT   
+,  @n_Err         INT            = 0   OUTPUT
+,  @c_Errmsg      NVARCHAR(255)  = ''  OUTPUT
 AS  
 BEGIN  
    SET NOCOUNT ON
@@ -41,15 +44,22 @@ BEGIN
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
 
-     SET NOCOUNT ON
-   SET ANSI_NULLS OFF
-   SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
-
-  
-   DELETE RECEIPTDETAIL_WIP
-   WHERE RowID = @n_RowID
-
+   --(Wan01) - START
+   IF @n_RowID = 0
+   BEGIN
+      ; WITH R_WIP (RowID) AS 
+      ( SELECT r.RowID FROM RECEIPTDETAIL_WIP r WITH (NOLOCK) WHERE r.SessionID = @n_SessionID)
+      
+      DELETE R_WIP
+      FROM R_WIP 
+      JOIN RECEIPTDETAIL_WIP r1 ON R_WIP.RowID = r1.RowID
+   END 
+   ELSE
+   BEGIN
+      DELETE RECEIPTDETAIL_WIP
+      WHERE RowID = @n_RowID
+   END
+   --(Wan01) - END
    IF @@ERROR <> 0
    BEGIN
       SET @n_continue = 3      

@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,12 +28,15 @@ GO
 /* 09-OCT-2020 Wan      1.0   Created                                   */
 /* 26-Jan-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
 /* 03-MAR-2021 Wan02    1.2   WMS-16467 - [CN]NIKE_O2_RFID_Receiving_ChangeField_CR*/
+/* 2021-03-19  Wan03    1.3   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
+/*                           _Overall_CR                                */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey01
            @c_Facility           NVARCHAR(5)  
          , @c_Storerkey          NVARCHAR(15)
          , @c_RefNo              NVARCHAR(50)
          , @c_ReceiptKey         NVARCHAR(10) = '' OUTPUT
+         , @n_SessionID          BIGINT = 0        OUTPUT   --(Wan03)        
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -47,6 +50,7 @@ BEGIN
    DECLARE  
            @n_StartTCnt       INT = @@TRANCOUNT
          , @n_Continue        INT = 1
+         , @n_RowID           BIGINT = 0              --(Wan03)
 
          , @b_QRCode          INT = 0
          , @c_TrackingNo      NVARCHAR(40) = ''
@@ -57,6 +61,9 @@ BEGIN
          , @dt_Orderdate      DATETIME     = NULL
          , @dt_today          DATETIME     = GETDATE()   
          , @n_ValidDay        INT          = 0
+         
+         , @c_CurrentUser     NVARCHAR(128)= SUSER_SNAME()     --(Wan03)
+         , @c_Sku             NVARCHAR(20) = ''                --(Wan03)
 
    DECLARE @tMATCHASN         TABLE
          ( RowRef             INT            IDENTITY(1,1) PRIMARY KEY
@@ -80,67 +87,104 @@ BEGIN
    SET @c_ReceiptKey = ''
    
    -- FBR v2.2 2020-12-12
-   SELECT @c_ReceiptKey   = RH.ReceiptKey
+   SELECT TOP 1
+          @c_ReceiptKey   = RH.ReceiptKey
         , @c_CarrierName = RH.CarrierName                --(Wan02)
         , @c_SellerPhone1 = ISNULL(RH.SellerPhone1,'')
         , @dt_Orderdate   = RH.Userdefine07              --(Wan01)
    FROM RECEIPT RH WITH (NOLOCK)
+   --JOIN DOCINFO DI WITH (NOLOCK) ON  DI.TableName = 'RECEIPT'  --(Wan03)
+   --                              AND RH.ReceiptKey = DI.Key1
    WHERE RH.Receiptkey = @c_RefNo
    AND RH.Storerkey = @c_Storerkey
    AND RH.Facility  = @c_Facility
    AND RH.DocType   = 'R'
    AND RH.[Status]  < '9'
    AND RH.[ASNStatus]  < '9'
-   
+   AND NOT EXISTS ( SELECT 1 FROM RECEIPTDETAIL_WIP WIP WITH (NOLOCK)                     --(Wan03)
+                    WHERE WIP.Receiptkey  = RH.ReceiptKey 
+                    AND WIP.LockDocKey = 'Y' AND WIP.AddWho <> @c_CurrentUser
+                  )
+ 
    IF @c_ReceiptKey = ''     -- Search CarrierName By QRCode, Get SellerPhone1 by matching CarrierName
    BEGIN
       SET @c_CarrierName = ''                                                             --(Wan02)
       SET @c_SellerPhone1 = ''
 
-      SELECT TOP 1 @c_CarrierName = EOH.ExternOrderkey  --V2.4 2020-12-14                 --(Wan02)
-      FROM EXTERNORDERS EOH WITH (NOLOCK) 
-      JOIN EXTERNORDERSDETAIL EOD WITH (NOLOCK) ON EOH.ExternOrderkey = EOD.ExternOrderkey
-      WHERE EOD.QRCOde = @c_RefNo
-      AND   EOD.Storerkey = @c_Storerkey
-      AND   EOD.[Status]  = '9'
-      ORDER BY EOD.EditDate DESC
+      --(Wan03) - START
+      ; WITH CR ( CarrierName, Sku, ShippedDate ) AS
+      (
+         SELECT TOP 1 EOH.PlatformOrderNo                                  
+               ,EOD.SKU
+               ,EOH.ShippedDate                                               
+         FROM EXTERNORDERS EOH WITH (NOLOCK) 
+         JOIN EXTERNORDERSDETAIL EOD WITH (NOLOCK) ON EOH.ExternOrderkey = EOD.ExternOrderkey
+         WHERE EOD.QRCOde = @c_RefNo
+         AND   EOD.Storerkey = @c_Storerkey
+         AND   EOD.[Status]  <= '9'
+         ORDER BY EOH.ShippedDate DESC
+      )                                                                        
 
-      IF @c_CarrierName <> ''   --Get Receiptkey, SellerPhone1 by matching CarrierName    --(Wan02)
-      BEGIN 
-         INSERT INTO @tMATCHASN ( ReceiptKey, SellerPhone1, OrderDate ) --(Wan01)
-         SELECT ReceiptKey   = RH.ReceiptKey
-              , SellerPhone1 = ISNULL(RH.SellerPhone1,'')
-              , Orderdate    = RH.Userdefine07                          --(Wan01)
-         FROM RECEIPT RH WITH (NOLOCK)
-         WHERE RH.CarrierName = @c_CarrierName                          --(Wan02)
-         AND RH.Storerkey = @c_Storerkey
-         AND RH.Facility  = @c_Facility
+      --IF @c_CarrierName <> ''   --Get Receiptkey, SellerPhone1 by matching CarrierName  --(Wan03) --(Wan02)
+      --BEGIN                                                                             --(Wan03)
+         INSERT INTO @tMATCHASN ( ReceiptKey, CarrierName, SellerPhone1, OrderDate )      --(Wan03)--(Wan01)
+         SELECT TOP 1                                                                     --(Wan03) Get Max ShippedDate
+                ReceiptKey   = RH.ReceiptKey                                              
+              , CarrierName  = ISNULL(RH.CarrierName,'')                                  --(Wan03)
+              , SellerPhone1 = ISNULL(RH.SellerPhone1,'')                                 --(Wan03)
+              , Orderdate    = ISNULL(RH.Userdefine07,'')                                 --(Wan01)
+         FROM CR
+         LEFT JOIN RECEIPT RH WITH (NOLOCK) ON  RH.Storerkey   = @c_Storerkey             --(Wan03)  Get Max ShippedDate's Receiptkey
+                                                AND RH.CarrierName = CR.CarrierName
+         WHERE RH.Facility  = @c_Facility
          AND RH.DocType   = 'R'
          AND RH.[Status]  < '9'
-         AND RH.[ASNStatus]  < '9'
+         AND RH.[ASNStatus]  = '0'                                      --(Wan03) -- Only ASNStatus = '0'                                
+         AND EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)   --(Wan03)
+                     WHERE RD.ReceiptKey = RH.ReceiptKey   
+                     AND RD.Sku = CR.Sku)
+         AND NOT EXISTS ( SELECT 1                                      --(Wan03)
+                          FROM RECEIPTDETAIL_WIP WIP WITH (NOLOCK)
+                          WHERE WIP.Receiptkey  = RH.ReceiptKey 
+                          AND WIP.LockDocKey = 'Y' 
+                          AND WIP.AddWho <> @c_CurrentUser
+                        )           
+         ORDER BY CR.ShippedDate DESC                                   --(Wan03)
+               ,  RH.AddDate DESC                                       --(Wan03)
 
-         IF EXISTS (SELECT 1 FROM @tMATCHASN WHERE RowRef > 1)
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_Err      = 82010
-            SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Duplicate ASN # for QRCode: ' + @c_RefNo
-                            + ' (isp_RFID_GetASNKey01)'
-            GOTO QUIT_SP
-         END
+         --There are multiple CarrirerName per QRCode & Multiple ReceiptKey per CarrirerName
+         --IF EXISTS (SELECT 1 FROM @tMATCHASN WHERE RowRef > 1)
+         --BEGIN
+         --   SET @n_Continue = 3
+         --   SET @n_Err      = 82010
+         --   SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Duplicate ASN # for QRCode: ' + @c_RefNo
+         --                   + ' (isp_RFID_GetASNKey01)'
+         --   GOTO QUIT_SP
+         --END
+         
+         --(Wan03) - END
       
          SELECT TOP 1 @c_ReceiptKey   = T.ReceiptKey
+              , @c_CarrierName  = T.CarrierName                --(Wan03)
               , @c_SellerPhone1 = ISNULL(T.SellerPhone1,'')
               , @dt_Orderdate   = T.OrderDate                  --(Wan01)
          FROM @tMATCHASN T
          ORDER BY RowRef
 
+         --(Wan03) - START - Max shipped Date found but no ASN #
+         IF @c_ReceiptKey IS NULL 
+         BEGIN
+            SET @c_ReceiptKey = ''
+            GOTO VALIDATE_ASN
+         END
+         --(Wan03) - END
          IF @c_ReceiptKey <> ''
          BEGIN
             SET @b_QRCode = 1 
          END 
-      END
+      --END                                                                         --(Wan03)
    END
-  
+   
    IF @c_ReceiptKey = ''   -- Get CarrierName, Receiptkey, SellerPhone1 By TrackingNo        
    BEGIN
       SET @c_CarrierName = ''                                                       --(Wan02)
@@ -161,8 +205,14 @@ BEGIN
       AND   RH.[ASNStatus]  < '9'  
       AND   DI.[Key2]    = 'TrackingNo'
       AND   DI.[Key3]    = @c_RefNo
+      AND NOT EXISTS (  SELECT 1                                                    --(Wan03)
+                        FROM RECEIPTDETAIL_WIP WIP WITH (NOLOCK)
+                        WHERE WIP.Receiptkey  = RH.ReceiptKey 
+                        AND WIP.LockDocKey = 'Y' 
+                        AND WIP.AddWho <> @c_CurrentUser
+               )   
 
-      IF EXISTS (SELECT 1 FROM @tMATCHASN WHERE RowRef > 1)
+      IF EXISTS (SELECT 1 FROM @tMATCHASN HAVING COUNT(DISTINCT ReceiptKey) > 1)   --(Wan03)
       BEGIN
          SET @n_Continue = 3
          SET @n_Err      = 82020
@@ -189,8 +239,9 @@ BEGIN
 
    IF @c_ReceiptKey = '' -- Get Receiptkey, SellerPhone1 By CarrierName 
    BEGIN
-      INSERT INTO @tMATCHASN ( ReceiptKey, SellerPhone1, OrderDate )    --(Wan01)
+      INSERT INTO @tMATCHASN ( ReceiptKey, CarrierName, SellerPhone1, OrderDate )    --(Wan03)--(Wan01)
       SELECT ReceiptKey = RH.ReceiptKey
+            ,CarrierName= RH.CarrierName                                --(Wan03)
             ,SellerPhone1= ISNULL(RH.SellerPhone1,'')
             ,Orderdate   = RH.Userdefine07                              --(Wan01)
       FROM RECEIPT RH WITH (NOLOCK)
@@ -199,13 +250,19 @@ BEGIN
       AND RH.Facility  = @c_Facility
       AND RH.DocType   = 'R'
       AND RH.[Status]  < '9'
-      AND RH.[ASNStatus]  < '9'  
+      AND RH.[ASNStatus]  < '9'
+      AND NOT EXISTS (  SELECT 1                                        --(Wan03)
+                        FROM RECEIPTDETAIL_WIP WIP WITH (NOLOCK)
+                        WHERE WIP.Receiptkey  = RH.ReceiptKey 
+                        AND WIP.LockDocKey = 'Y' 
+                        AND WIP.AddWho <> @c_CurrentUser
+         )     
 
       IF EXISTS (SELECT 1 FROM @tMATCHASN WHERE RowRef > 1)
       BEGIN
          SET @n_Continue = 3
          SET @n_Err      = 82040
-         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Duplicate ASN # for Warehouse Reference: ' + @c_RefNo
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Duplicate ASN # for Plat Form #: ' + @c_RefNo
                          + ' (isp_RFID_GetASNKey01)'
          GOTO QUIT_SP
       END
@@ -224,7 +281,33 @@ BEGIN
       END
    END
 
-   --IF ReceiptKey is found and CarrierName/SellerPhone/TrackingNo in CHECKLIST Table, prompt error and update ASNReason   
+   --(Wan03) - START
+   -- Get CS System Return Order
+   IF @c_ReceiptKey = ''   -- Get CarrierName, Receiptkey, SellerPhone1 By TrackingNo        
+   BEGIN
+      SET @c_CarrierName = ''                                                      
+      SET @c_SellerPhone1 = ''
+      
+      SELECT TOP 1
+          @c_ReceiptKey   = RH.ReceiptKey
+        , @c_CarrierName  = RH.CarrierName               
+        , @c_SellerPhone1 = ISNULL(RH.SellerPhone1,'')
+        , @dt_Orderdate   = RH.Userdefine07             
+      FROM RECEIPT RH WITH (NOLOCK)
+      WHERE RH.Storerkey = @c_Storerkey
+      AND RH.Facility  = @c_Facility
+      AND RH.CarrierAddress2 = @c_RefNo
+      AND RH.DocType   = 'R'
+      AND RH.[Status]  < '9'
+      AND RH.[ASNStatus]  < '9'
+      AND NOT EXISTS ( SELECT 1 FROM RECEIPTDETAIL_WIP WIP WITH (NOLOCK)                   
+                       WHERE WIP.Receiptkey  = RH.ReceiptKey 
+                       AND WIP.LockDocKey = 'Y' AND WIP.AddWho <> @c_CurrentUser
+                     )
+   END
+   
+   VALIDATE_ASN:                                                           --(Wan03)
+   --IF ReceiptKey is found and CarrierName/SellerPhone/TrackingNo in CHECKLIST Table, prompt error and update ASNReason 
    IF @c_ReceiptKey <> ''            --2021-01-07
    BEGIN
       --(Wan01) - START
@@ -338,15 +421,88 @@ BEGIN
                             + ' (isp_RFID_GetASNKey01) (' + @c_ErrMsg + ')'
             GOTO QUIT_SP
          END 
-      END   
+      END 
+      
+      --Check CarrierName / QRCode from GroupList
+      IF EXISTS (SELECT 1 
+                  FROM  DOCINFO DI WITH (NOLOCK) 
+                  WHERE DI.TableName = 'GROUPLIST' 
+                  AND   DI.[Key2]    = @c_CarrierName
+                  AND   DI.StorerKey = @c_Storerkey
+                  ) 
+      BEGIN           
+         SET @n_Continue = 3
+         SET @n_Err      = 82045
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Plat FROM #: ' + @c_CarrierName +' Found in Customer GroupList.'
+                           + ' (isp_RFID_GetASNKey01)'    
+         GOTO QUIT_SP
+      END
+               
+      IF @b_QRCode = 1 AND 
+         EXISTS ( SELECT 1 
+                  FROM  DOCINFO DI WITH (NOLOCK) 
+                  WHERE DI.TableName = 'GROUPLIST' 
+                  AND   DI.[Key2]    = @c_RefNo
+                  AND   DI.StorerKey = @c_Storerkey
+                  ) 
+      BEGIN           
+         SET @n_Continue = 3
+         SET @n_Err      = 82046
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': QRCode #: ' + RTRIM(@c_RefNo) +' Found in Customer GroupList.'
+                           + ' (isp_RFID_GetASNKey01)'    
+         GOTO QUIT_SP
+      END
+   --(Wan03) - END  
    END
    ELSE IF @c_ReceiptKey = ''  
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 82080
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': ReceiptKey Not Found/ASN Received/ ASN Closed.'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': ReceiptKey Not Found/ASN Received/ASN Cancelled/ASN Closed.'
                         + ' (isp_RFID_GetASNKey01)'
       GOTO QUIT_SP
+   END
+   
+   IF @n_SessionID = 0 
+   BEGIN 
+      INSERT INTO RECEIPTDETAIL_WIP
+      (
+         -- Rowref -- this column value is auto-generated
+         ReceiptKey
+      ,  LockDocKey
+      )
+      VALUES
+      (
+         @c_ReceiptKey
+      ,  'Y'
+      )
+      
+      SET @n_Err = @@ERROR  
+      IF @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @c_ErrMsg   = CONVERT(CHAR(250),@n_err)  
+         SET @n_Err      = 82090
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': INSERT Into RECEIPTDETAIL_WIP Table fail.'
+                         + ' (isp_RFID_GetASNKey01) (' + @c_ErrMsg + ')'
+         GOTO QUIT_SP
+      END
+      
+      SET @n_RowID = SCOPE_IDENTITY()  
+      SET @n_SessionID = @n_RowID  
+    
+      UPDATE RECEIPTDETAIL_WIP  
+         SET SessionID = @n_SessionID  
+      WHERE RowID = @n_RowID  
+  
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @n_continue = 3        
+         SET @n_err = 82100  
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(5),@n_err) + ': Update RECEIPTDETAIL_WIP Failed.'  
+                       + ' (isp_RFID_GetASNKey01) (' + @c_ErrMsg + ')' 
+         GOTO QUIT_SP  
+      END  
    END
    
 QUIT_SP:

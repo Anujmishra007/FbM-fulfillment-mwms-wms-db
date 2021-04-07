@@ -25,6 +25,8 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 09-OCT-2020 Wan      1.0   Created                                    */
+/* 2021-03-19  Wan01    1.1   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
+/*                           _Overall_CR                                */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_RFID_Receiving_Confirm] 
    @n_SessionID         BIGINT         = 0   
@@ -139,8 +141,9 @@ BEGIN
       ,     RD.UserDefine02
       ,     RD.UserDefine04
    FROM RECEIPTDETAIL_WIP RD WITH (NOLOCK)
-   WHERE RD.SessionID = @n_SessionID
+   WHERE RD.SessionID  = @n_SessionID
    AND   RD.ReceiptKey = @c_ReceiptKey
+   AND   RD.LockDocKey  IN ('','N')
 
    OPEN @CUR_CFMREC
 
@@ -284,7 +287,6 @@ BEGIN
          COMMIT TRAN
       END
    END
-   REVERT      
 END  
 GO
 GRANT EXECUTE ON [dbo].[isp_RFID_Receiving_Confirm] TO nSQL 

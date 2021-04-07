@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */
+/* 2021-03-19  Wan01    1.1   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
+/*                           _Overall_CR                                */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey_Wrapper
            @c_Facility           NVARCHAR(5)  
@@ -34,6 +36,7 @@ CREATE PROC isp_RFID_GetASNKey_Wrapper
          , @c_ReceiptKey         NVARCHAR(10) = '' OUTPUT
          , @n_TotalQtyExpected   INT = 0           OUTPUT
          , @n_TotalQtyReceived   INT = 0           OUTPUT
+         , @n_SessionID          BIGINT = 0        OUTPUT   --(Wan01)
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -114,6 +117,7 @@ BEGIN
                  +', @c_Storerkey  = @c_Storerkey' 
                  +', @c_RefNo      = @c_RefNo'     
                  +', @c_ReceiptKey = @c_ReceiptKey OUTPUT'
+                 +', @n_SessionID  = @n_SessionID  OUTPUT'     --(Wan01)
                  +', @b_Success    = @b_Success OUTPUT'
                  +', @n_Err        = @n_Err     OUTPUT'
                  +', @c_ErrMsg     = @c_ErrMsg  OUTPUT'
@@ -122,6 +126,7 @@ BEGIN
                      +', @c_Storerkey   NVARCHAR(15)'
                      +', @c_RefNo       NVARCHAR(50)'
                      +', @c_ReceiptKey  NVARCHAR(10) OUTPUT'
+                     +', @n_SessionID   BIGINT       OUTPUT'   --(Wan01)
                      +', @b_Success     INT          OUTPUT'
                      +', @n_Err         INT          OUTPUT'
                      +', @c_ErrMsg      NVARCHAR(255)OUTPUT'
@@ -131,7 +136,8 @@ BEGIN
                         , @c_Facility     
                         , @c_Storerkey   
                         , @c_RefNo       
-                        , @c_ReceiptKey   OUTPUT 
+                        , @c_ReceiptKey   OUTPUT
+                        , @n_SessionID    OUTPUT               --(Wan01)
                         , @b_Success      OUTPUT
                         , @n_Err          OUTPUT
                         , @c_ErrMsg       OUTPUT
