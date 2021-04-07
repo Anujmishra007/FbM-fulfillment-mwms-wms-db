@@ -24,7 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver  Purposes                                    */ 
-/* 12-OCT-2020 Wan      1.0   Created                                    */         
+/* 12-OCT-2020 Wan      1.0   Created                                    */
+/* 2021-02-25  Wan01    1.1   Add Big Outer Try/Catch                    */         
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_Loc_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -57,111 +58,119 @@ BEGIN
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
 
-   IF OBJECT_ID('tempdb..#LOC') IS NOT NULL
-   BEGIN
-      DROP TABLE #LOC 
-   END
+   --(Wan01) - START
+   BEGIN TRY
+      IF OBJECT_ID('tempdb..#LOC') IS NOT NULL
+      BEGIN
+         DROP TABLE #LOC 
+      END
 
-   CREATE TABLE #LOC( Rowid  INT NOT NULL IDENTITY(1,1) )   
+      CREATE TABLE #LOC( Rowid  INT NOT NULL IDENTITY(1,1) )   
 
-   SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-   SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
 
-   DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
-         ,x.value('@DataType','NVARCHAR(128)') AS datatype
-   FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
+            ,x.value('@DataType','NVARCHAR(128)') AS datatype
+      FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
       
-   OPEN CUR_SCHEMA
+      OPEN CUR_SCHEMA
 
-   FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_TableName = ''
-      IF CHARINDEX('.', @c_ColumnName) > 0 
-      BEGIN
-         SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-         SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
-      END
-
-      SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-      SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-      SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
-         
       FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-   END
-   CLOSE CUR_SCHEMA
-   DEALLOCATE CUR_SCHEMA
-       
-   IF LEN(@c_SQLSchema) > 0 
-   BEGIN
-      SET @c_SQL = N'ALTER TABLE #LOC  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
-         
-      EXEC (@c_SQL)
 
-      SET @c_SQL = N' INSERT INTO #LOC' --+  @c_UpdateTable 
-                  + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                  + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                  + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
-         
-      EXEC sp_executeSQl @c_SQL
-                        , N'@x_XMLData xml'
-                        , @x_XMLData
-   END
-
-   DECLARE 
-         @c_Loc                  NVARCHAR(10) = ''
-      ,  @c_Facility             NVARCHAR(5)  = ''
-      ,  @c_LocAisle             NVARCHAR(10) = ''
-      ,  @c_LocLevel             INT = 0
-      ,  @c_PutawayZone          NVARCHAR(10) = ''
-      ,  @c_HostWHCode           NVARCHAR(10) = ''
-      ,  @c_Facility_DB          NVARCHAR(5)  = ''
-      ,  @c_LocAisle_DB          NVARCHAR(10) = ''
-      ,  @c_LocLevel_DB          INT = 0
-      ,  @c_PutawayZone_DB       NVARCHAR(10) = ''
-      ,  @c_HostWHCode_DB        NVARCHAR(10) = ''
-      ,  @c_CCKey                NVARCHAR(10) = ''
-
-   SELECT TOP 1 
-         @c_Loc         = L.Loc
-      ,  @c_Facility    = L.Facility
-      ,  @c_LocAisle    = ISNULL(L.LocAisle,'')
-      ,  @c_LocLevel    = L.LocLevel
-      ,  @c_PutawayZone = L.PutawayZone
-      ,  @c_HostWHCode  = ISNULL(L.HostWHCode,'')
-   FROM  #LOC L 
-   
-   SET @c_CCKey = ''
-   SELECT @c_CCKey = CCD.CCKey 
-   FROM CCDETAIL CCD WITH (NOLOCK) 
-   WHERE CCD.Loc = @c_Loc
-   AND CCD.FinalizeFlag = 'N'
-   AND CCD.FinalizeFlag_Cnt2 = 'N'
-   AND CCD.FinalizeFlag_Cnt3 = 'N'
-
-   IF @c_CCKey <> ''
-   BEGIN
-      SELECT @c_Facility_DB   = L.Facility
-         ,  @c_LocAisle_DB    = ISNULL(L.LocAisle,'')
-         ,  @c_LocLevel_DB    = L.LocLevel
-         ,  @c_PutawayZone_DB = L.PutawayZone
-         ,  @c_HostWHCode_DB  = ISNULL(L.HostWHCode,'')
-      FROM LOC L WITH (NOLOCK)
-      WHERE L.Loc = @c_Loc  
-
-      IF @c_Facility <> @c_Facility_DB OR @c_LocAisle <> @c_LocAisle_DB OR 
-         @c_LocLevel <> @c_LocLevel_DB OR @c_PutawayZone_DB <> @c_PutawayZone OR @c_HostWHCode_DB <> @c_HostWHCode
+      WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 558701
-         SET @c_errmsg = 'Location is involved in Cycle Count Reference #: ' + @c_CCKey
-                       + '. (lsp_Validate_Loc_Std) |' + @c_CCKey
-         GOTO EXIT_SP
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
+         BEGIN
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         END
+
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+         
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
       END
-   END
-  
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+       
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #LOC  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+         
+         EXEC (@c_SQL)
+
+         SET @c_SQL = N' INSERT INTO #LOC' --+  @c_UpdateTable 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+         
+         EXEC sp_executeSQl @c_SQL
+                           , N'@x_XMLData xml'
+                           , @x_XMLData
+      END
+
+      DECLARE 
+            @c_Loc                  NVARCHAR(10) = ''
+         ,  @c_Facility             NVARCHAR(5)  = ''
+         ,  @c_LocAisle             NVARCHAR(10) = ''
+         ,  @c_LocLevel             INT = 0
+         ,  @c_PutawayZone          NVARCHAR(10) = ''
+         ,  @c_HostWHCode           NVARCHAR(10) = ''
+         ,  @c_Facility_DB          NVARCHAR(5)  = ''
+         ,  @c_LocAisle_DB          NVARCHAR(10) = ''
+         ,  @c_LocLevel_DB          INT = 0
+         ,  @c_PutawayZone_DB       NVARCHAR(10) = ''
+         ,  @c_HostWHCode_DB        NVARCHAR(10) = ''
+         ,  @c_CCKey                NVARCHAR(10) = ''
+
+      SELECT TOP 1 
+            @c_Loc         = L.Loc
+         ,  @c_Facility    = L.Facility
+         ,  @c_LocAisle    = ISNULL(L.LocAisle,'')
+         ,  @c_LocLevel    = L.LocLevel
+         ,  @c_PutawayZone = L.PutawayZone
+         ,  @c_HostWHCode  = ISNULL(L.HostWHCode,'')
+      FROM  #LOC L 
+   
+      SET @c_CCKey = ''
+      SELECT @c_CCKey = CCD.CCKey 
+      FROM CCDETAIL CCD WITH (NOLOCK) 
+      WHERE CCD.Loc = @c_Loc
+      AND CCD.FinalizeFlag = 'N'
+      AND CCD.FinalizeFlag_Cnt2 = 'N'
+      AND CCD.FinalizeFlag_Cnt3 = 'N'
+
+      IF @c_CCKey <> ''
+      BEGIN
+         SELECT @c_Facility_DB   = L.Facility
+            ,  @c_LocAisle_DB    = ISNULL(L.LocAisle,'')
+            ,  @c_LocLevel_DB    = L.LocLevel
+            ,  @c_PutawayZone_DB = L.PutawayZone
+            ,  @c_HostWHCode_DB  = ISNULL(L.HostWHCode,'')
+         FROM LOC L WITH (NOLOCK)
+         WHERE L.Loc = @c_Loc  
+
+         IF @c_Facility <> @c_Facility_DB OR @c_LocAisle <> @c_LocAisle_DB OR 
+            @c_LocLevel <> @c_LocLevel_DB OR @c_PutawayZone_DB <> @c_PutawayZone OR @c_HostWHCode_DB <> @c_HostWHCode
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 558701
+            SET @c_errmsg = 'Location is involved in Cycle Count Reference #: ' + @c_CCKey
+                          + '. (lsp_Validate_Loc_Std) |' + @c_CCKey
+            GOTO EXIT_SP
+         END
+      END
+   END TRY
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(Wan01) - END
    EXIT_SP:
    
    IF @n_Continue = 3

@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                  */                                                                                  
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/* Date        Author   Ver.  Purposes                                  */ 
+/* 2021-02-15  mingle01 1.1   Add Big Outer Begin try/Catch             */ 
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveAnalysis]                                                                                                                     
       @c_Wavekey        NVARCHAR(10)                                                                                                                     
@@ -52,33 +53,41 @@ BEGIN
          ,  @c_Facility          NVARCHAR(5)    = ''
          ,  @c_Storerkey         NVARCHAR(15)   = ''
          ,  @c_BuildParmKey      NVARCHAR(10)   = ''
+   
+   --(mingle01) - START
+   BEGIN TRY
+      SELECT @c_Facility = BWL.Facility
+            ,@c_Storerkey= BWL.Storerkey
+            ,@c_BuildParmKey = BWL.BuildParmKey
+      FROM   WAVE  WH WITH (NOLOCK)
+      JOIN   BUILDWAVELOG BWL WITH (NOLOCK) ON (WH.BatchNo = BWL.BatchNo)                                                                                                                          
+      WHERE  WH.Wavekey = @c_Wavekey
 
-   SELECT @c_Facility = BWL.Facility
-         ,@c_Storerkey= BWL.Storerkey
-         ,@c_BuildParmKey = BWL.BuildParmKey
-   FROM   WAVE  WH WITH (NOLOCK)
-   JOIN   BUILDWAVELOG BWL WITH (NOLOCK) ON (WH.BatchNo = BWL.BatchNo)                                                                                                                          
-   WHERE  WH.Wavekey = @c_Wavekey
+      SELECT @n_NOOfOrders      = COUNT(DISTINCT OH.Orderkey)
+            ,@n_NoOfOpen        = SUM(CASE WHEN OH.[Status] = '0' THEN 1 ELSE 0 END)
+            ,@n_NoOfPartialAlloc= SUM(CASE WHEN OH.[Status] = '1' THEN 1 ELSE 0 END)
+            ,@n_NoOfAllocated   = SUM(CASE WHEN OH.[Status] = '2' THEN 1 ELSE 0 END)
+            ,@n_TotalAllocate   = SUM(CASE WHEN OH.[Status] <='2' THEN 1 ELSE 0 END)
+            ,@n_NoOfPicked      = SUM(CASE WHEN OH.[Status] = '5' THEN 1 ELSE 0 END)
+      FROM WAVE WH WITH (NOLOCK)
+      JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)
+      JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)
+      WHERE WH.Wavekey = @c_Wavekey
 
-   SELECT @n_NOOfOrders      = COUNT(DISTINCT OH.Orderkey)
-         ,@n_NoOfOpen        = SUM(CASE WHEN OH.[Status] = '0' THEN 1 ELSE 0 END)
-         ,@n_NoOfPartialAlloc= SUM(CASE WHEN OH.[Status] = '1' THEN 1 ELSE 0 END)
-         ,@n_NoOfAllocated   = SUM(CASE WHEN OH.[Status] = '2' THEN 1 ELSE 0 END)
-         ,@n_TotalAllocate   = SUM(CASE WHEN OH.[Status] <='2' THEN 1 ELSE 0 END)
-         ,@n_NoOfPicked      = SUM(CASE WHEN OH.[Status] = '5' THEN 1 ELSE 0 END)
-   FROM WAVE WH WITH (NOLOCK)
-   JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)
-   JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)
-   WHERE WH.Wavekey = @c_Wavekey
-
-   SELECT @n_NoOfTasks         = COUNT(1)
-         ,@n_NoOfTaskInProg    = SUM(DISTINCT CASE WHEN TD.Status < '9' THEN 1 ELSE NULL END)
-         ,@n_NoOfTaskCompleted = SUM(DISTINCT CASE WHEN TD.Status = '9' THEN 1 ELSE NULL END)
-   FROM WAVE WH WITH (NOLOCK)
-   JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)
-   JOIN PICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey= PD.Orderkey)
-   JOIN TASKDETAIL TD WITH (NOLOCK) ON (PD.TaskDetailKey = TD.TaskDetailKey)
-   WHERE WH.Wavekey = @c_Wavekey
+      SELECT @n_NoOfTasks         = COUNT(1)
+            ,@n_NoOfTaskInProg    = SUM(DISTINCT CASE WHEN TD.Status < '9' THEN 1 ELSE NULL END)
+            ,@n_NoOfTaskCompleted = SUM(DISTINCT CASE WHEN TD.Status = '9' THEN 1 ELSE NULL END)
+      FROM WAVE WH WITH (NOLOCK)
+      JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)
+      JOIN PICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey= PD.Orderkey)
+      JOIN TASKDETAIL TD WITH (NOLOCK) ON (PD.TaskDetailKey = TD.TaskDetailKey)
+      WHERE WH.Wavekey = @c_Wavekey
+   END TRY
+   
+   BEGIN CATCH
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END 
 
 EXIT_SP:
 

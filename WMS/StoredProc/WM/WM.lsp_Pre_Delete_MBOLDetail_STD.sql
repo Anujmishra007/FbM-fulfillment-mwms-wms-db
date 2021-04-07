@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date        Author   Ver   Purposes                                  */ 
+/* 2021-02-25  Wan01    1.1   Add Big Outer Try/Catch                   */ 
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_MBOLDetail_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -40,13 +42,11 @@ CREATE PROCEDURE [WM].[lsp_Pre_Delete_MBOLDetail_STD]
    ,  @c_IsSupervisor      CHAR(1) = 'N' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
-
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   
    DECLARE @n_Continue                 INT = 1
          , @n_StartTCnt                INT = @@TRANCOUNT
 
@@ -61,26 +61,48 @@ BEGIN
    SET @c_errmsg='' 
    SET @c_RefreshDetail = 'Y'
    
-   SET @c_MBOLKey = ISNULL(@c_RefKey1,'')
-   SET @c_MBOLLineNumber = ISNULL(@c_RefKey2,'')
-
-   IF @c_MBOLKey = '' AND @c_MBOLLineNumber = ''
+   --(Wan01) - START
+   IF SUSER_SNAME() <> @c_UserName 
    BEGIN
-      GOTO EXIT_SP  
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END
+      EXECUTE AS LOGIN = @c_UserName
    END
-         
-   IF EXISTS(  SELECT 1 
-               FROM MBOL WITH (NOLOCK)
-               WHERE MBOLkey = @c_MBOLkey
-               AND [Status] = '9' 
-               )
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 557451
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete shipped ' + @c_MBOLkey + ' (lsp_Pre_Delete_MBOLDetail_STD) |' + @c_MBOLkey    
-      GOTO EXIT_SP             
-   END    
    
+   BEGIN TRY
+      SET @c_MBOLKey = ISNULL(@c_RefKey1,'')
+      SET @c_MBOLLineNumber = ISNULL(@c_RefKey2,'')
+
+      IF @c_MBOLKey = '' AND @c_MBOLLineNumber = ''
+      BEGIN
+         GOTO EXIT_SP  
+      END
+         
+      IF EXISTS(  SELECT 1 
+                  FROM MBOL WITH (NOLOCK)
+                  WHERE MBOLkey = @c_MBOLkey
+                  AND [Status] = '9' 
+                  )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 557451
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Cannot delete shipped ' + @c_MBOLkey + ' (lsp_Pre_Delete_MBOLDetail_STD) |' + @c_MBOLkey    
+         GOTO EXIT_SP             
+      END    
+   END TRY
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(Wan01) - END
 EXIT_SP:
 
    IF @n_continue=3  -- Error Occured - Process And Return  
@@ -98,7 +120,7 @@ EXIT_SP:
          END  
       END  
       execute nsp_logerror @n_err, @c_errmsg, 'lsp_Pre_Delete_MBOLDetail_STD'
-      RETURN  
+      --RETURN             --(Wan01)
    END  
    ELSE  
    BEGIN  
@@ -107,8 +129,9 @@ EXIT_SP:
       BEGIN  
          COMMIT TRAN  
       END  
-      RETURN  
-   END              
+      --RETURN             --(Wan01)
+   END    
+   REVERT          
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_Pre_Delete_MBOLDetail_STD] TO nSQL 

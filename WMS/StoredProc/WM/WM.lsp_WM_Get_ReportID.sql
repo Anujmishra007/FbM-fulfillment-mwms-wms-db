@@ -27,6 +27,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-02-15  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /************************************************************************/
 
 CREATE PROC [WM].[lsp_WM_Get_ReportID]
@@ -54,15 +55,23 @@ BEGIN
    SET @c_errmsg   = ''  
 
    SET @c_ReportID = ISNULL(@c_ReportID,'')
-
-   SELECT @c_ReportID = ISNULL(WMRH.ReportID,'')
-   FROM dbo.WMREPORT WMRH WITH (NOLOCK)  
-   WHERE WMRH.ReportType = @c_ReportType
-   AND WMRH.ModuleID = @c_ModuleID 
-   AND EXISTS (   SELECT 1   
-                  FROM WM.fnc_Get_WMReportDetail (WMRH.ReportID, @c_Storerkey, @c_Facility, '', '', 'N')  
-              )
-
+   
+   --(mingle01) - START
+   BEGIN TRY
+      SELECT @c_ReportID = ISNULL(WMRH.ReportID,'')
+      FROM dbo.WMREPORT WMRH WITH (NOLOCK)  
+      WHERE WMRH.ReportType = @c_ReportType
+      AND WMRH.ModuleID = @c_ModuleID 
+      AND EXISTS (   SELECT 1   
+                     FROM WM.fnc_Get_WMReportDetail (WMRH.ReportID, @c_Storerkey, @c_Facility, '', '', 'N')  
+                 )
+   END TRY
+   
+   BEGIN CATCH
+      SET @c_ReportID = ''
+      GOTO EXIT_SP
+   END CATCH
+   --(mingle01) - END
    EXIT_SP:
 END
 GO

@@ -18,7 +18,7 @@ GO
 /*                                                                      */      
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
+/* 2021-02-25  Wan01    1.2   Add Big Outer Try/Catch                   */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveLoadDetail_Delete] 
       @c_LoadKey              NVARCHAR(10)                                                                                                                    
@@ -61,67 +62,74 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   -- SWT02
+
+   -- SWT02 --Wan01 Move UP
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                
+      IF @n_Err <> 0 
+      BEGIN
+         GOTO EXIT_SP
+      END 
+      
       EXECUTE AS LOGIN = @c_UserName      
    END
 
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
-
-   IF @n_ErrGroupKey IS NULL
-   BEGIN 
-      SET @n_ErrGroupKey = 0
-   END
- 
    BEGIN TRY
-      DELETE FROM LOADPLANDETAIL
-      WHERE Loadkey = @c_Loadkey
-      AND  LoadLineNumber = @c_LoadLineNumber
-   END TRY
+      
+      IF @n_ErrGroupKey IS NULL
+      BEGIN 
+         SET @n_ErrGroupKey = 0
+      END
+ 
+      BEGIN TRY
+         DELETE FROM LOADPLANDETAIL
+         WHERE Loadkey = @c_Loadkey
+         AND  LoadLineNumber = @c_LoadLineNumber
+      END TRY
 
-   BEGIN CATCH
-      SET @n_Err = 557201
-      SET @c_ErrMsg = ERROR_MESSAGE()
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete Loadplandetail Fail. (lsp_WaveLoadDetail_Delete)'   
-                     + '(' + @c_ErrMsg + ')' 
+      BEGIN CATCH
+         SET @n_Err = 557201
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete Loadplandetail Fail. (lsp_WaveLoadDetail_Delete)'   
+                        + '(' + @c_ErrMsg + ')' 
 
-      IF (XACT_STATE()) = -1  
-      BEGIN
-         ROLLBACK TRAN
-
-         WHILE @@TRANCOUNT < @n_StartTCnt
+         IF (XACT_STATE()) = -1  
          BEGIN
-            BEGIN TRAN
-         END
-      END 
+            ROLLBACK TRAN
 
-      EXEC [WM].[lsp_WriteError_List] 
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_LoadKey
-         ,  @c_Refkey2     = @c_LoadLineNumber
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR' 
-         ,  @n_err2        = @n_err 
-         ,  @c_errmsg2     = @c_errmsg 
-         ,  @b_Success     = @b_Success   OUTPUT 
-         ,  @n_err         = @n_err       OUTPUT 
-         ,  @c_errmsg      = @c_errmsg    OUTPUT
+            WHILE @@TRANCOUNT < @n_StartTCnt
+            BEGIN
+               BEGIN TRAN
+            END
+         END 
 
+         EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_LoadKey
+            ,  @c_Refkey2     = @c_LoadLineNumber
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'ERROR' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+         GOTO EXIT_SP
+      END CATCH
+   END TRY
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-
  
 EXIT_SP:
    IF @b_Deleted = 1
