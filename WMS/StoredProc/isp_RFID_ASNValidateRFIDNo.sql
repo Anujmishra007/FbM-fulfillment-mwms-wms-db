@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */
 /* 03-MAR-2021 Wan01    1.1   WMS-16467 - [CN]NIKE_O2_RFID_Receiving_ChangeField_CR*/
+/* 08-APR-2021 Wan02    1.2   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
+/*                           _Overall_CR                                */
 /************************************************************************/
 CREATE PROC isp_RFID_ASNValidateRFIDNo
            @c_ReceiptKey         NVARCHAR(10)
@@ -84,7 +86,7 @@ BEGIN
    JOIN EXTERNORDERSDETAIL EOD WITH (NOLOCK) ON EOH.ExternOrderKey = EOD.ExternOrderKey
    WHERE EOD.RFIDNo IN ( @c_RFIDNo1, @c_RFIDNo2 )
    AND   EOD.Storerkey = @c_Storerkey
-   AND   EOH.Externorderkey = @c_CarrierName                   --(Wan01)
+   AND   EOH.PlatFormorderNo = @c_CarrierName                   --Wan02--(Wan01)
    AND   EOH.[Status]  = '9'
    GROUP BY EOD.Storerkey
          ,  EOH.Externorderkey
