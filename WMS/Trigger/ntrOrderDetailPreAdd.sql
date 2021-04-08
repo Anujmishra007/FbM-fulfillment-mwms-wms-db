@@ -37,6 +37,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  ver  Purposes                                   */
 /* 27-Jan-2021  TLTING01 1.1 Add new column                             */
+/* 25-Mar-2021  LZG      1.2 Included new columns while insert (ZG01)   */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrOrderDetailPreAdd]
@@ -152,7 +153,13 @@ BEGIN
 	   [Notes2] [nvarchar](500) NULL DEFAULT '',
 	   [Channel] [nvarchar](20) NULL DEFAULT '',
 	   [HashValue] [TinyInt] NULL DEFAULT 0, 
-	   [SalesChannel]  	[nvarchar](100) DEFAULT ''	 	  
+	   [SalesChannel]  	[nvarchar](100) DEFAULT '',
+	   [AddDate] [datetime] NULL,      -- ZG01
+    [AddWho] [nvarchar](128),       -- ZG01
+    [EditDate] [datetime] NULL,     -- ZG01
+    [EditWho] [nvarchar](128),      -- ZG01
+    [ArchiveCop][nvarchar](1),      -- ZG01
+    [TrafficCop][nvarchar](1)       -- ZG01
       )
 
    INSERT INTO @t_OrderDetail 
@@ -170,7 +177,8 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel, HashValue, SalesChannel )
+        Channel, HashValue, SalesChannel, 
+        AddDate, AddWho, EditDate, EditWho, ArchiveCop, TrafficCop )    -- ZG01
    SELECT OrderKey, OrderLineNumber, ExternOrderKey,
         ExternLineNo, Sku, StorerKey, ManufacturerSku, RetailSku, AltSku,
         OriginalQty, OpenQty, ShippedQty, AdjustedQty, QtyPreAllocated,
@@ -185,7 +193,8 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel, HashValue, SalesChannel
+        Channel, HashValue, SalesChannel,
+        AddDate, AddWho, EditDate, EditWho, ArchiveCop, TrafficCop      -- ZG01
    FROM INSERTED                
    
    SELECT TOP 1 
@@ -378,7 +387,8 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel, HashValue, SalesChannel)
+        Channel, HashValue, SalesChannel, 
+        AddDate, AddWho, EditDate, EditWho, ArchiveCop, TrafficCop)     -- ZG01
    SELECT OrderKey, OrderLineNumber, ExternOrderKey,
         ExternLineNo, Sku, StorerKey, ManufacturerSku, RetailSku, AltSku,
         OriginalQty, OpenQty, ShippedQty, AdjustedQty, QtyPreAllocated,
@@ -393,11 +403,9 @@ BEGIN
         ConsoOrderKey, ExternConsoOrderKey, ConsoOrderLineNo, Lottable06,
         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11,
         Lottable12, Lottable13, Lottable14, Lottable15, Notes, Notes2,
-        Channel, HashValue, SalesChannel
+        Channel, HashValue, SalesChannel,
+        AddDate, AddWho, EditDate, EditWho, ArchiveCop, TrafficCop      -- ZG01
    FROM @t_OrderDetail                 
    
 END -- Trigger
 GO
- 
-
-
