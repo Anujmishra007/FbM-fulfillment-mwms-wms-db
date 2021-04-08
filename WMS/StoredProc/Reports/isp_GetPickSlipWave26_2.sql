@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */   
+/* 2021-03-31  WLChooi  1.1   WMS-16733 - Get the Distinct SKU of the   */
+/*                            whole Wave (WL01)                         */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave26_2
             @c_Wavekey        NVARCHAR(10)
@@ -172,6 +174,14 @@ BEGIN
    SELECT @n_TTLSeq = COUNT(1)
    FROM #TMP_WaveSeq
    WHERE DateRelease <= @dt_Adddate
+   
+   --WL01 S
+   SELECT @n_NoOfSku = COUNT(DISTINCT OD.SKU)
+   FROM WAVEDETAIL WD (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON WD.OrderKey = OH.OrderKey
+   JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.Orderkey
+   WHERE WD.WaveKey = @c_Wavekey
+   --WL01 E
                         
    SELECT PH.Wavekey
          ,AddDate = @dt_Adddate
