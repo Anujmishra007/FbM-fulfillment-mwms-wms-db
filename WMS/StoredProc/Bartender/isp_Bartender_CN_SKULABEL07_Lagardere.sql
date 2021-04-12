@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */              
+/* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */        
+/* 2021-04-08 1.1  WLChooi    WMS-16426 - Add Col16 & Col17 (WL01)            */       
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CN_SKULABEL07_Lagardere]                      
@@ -126,7 +127,7 @@ BEGIN
    SET @c_SQLJOIN = + ' SELECT TOP 1 ISNULL(S.BUSR6,''''), RTRIM(S.SKU), ISNULL(SI.ExtendedField02,''''), ISNULL(SI.ExtendedField03,''''),'   + CHAR(13) +   --4    
                     + ' LEFT(ISNULL(SI.ExtendedField21,''''),80), ISNULL(SI.ExtendedField04,''''), ISNULL(SI.ExtendedField05,''''), ISNULL(SI.ExtendedField06,''''), '   + CHAR(13) +   --8
                     + ' ISNULL(SI.ExtendedField07,''''), ISNULL(ST.Company,''''), ISNULL(ST.Address2,''''), ISNULL(ST.Zip,''''), ISNULL(ST.Phone1,''''), S.Price, ISNULL(U.UPC,''''), '   + CHAR(13)   --15          
-                    + ' '''','''','''','''','''','   + CHAR(13)     --20      
+                    + ' ISNULL(SI.ExtendedField08,''''), ISNULL(SI.ExtendedField09,''''),'''','''','''','   + CHAR(13)     --20   --WL01
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --30  
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --40       
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --50       
