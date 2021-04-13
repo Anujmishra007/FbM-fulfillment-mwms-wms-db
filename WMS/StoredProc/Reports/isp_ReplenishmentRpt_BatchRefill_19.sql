@@ -26,6 +26,8 @@ GO
 /*                                                                          */  
 /* Updates:                                                                 */  
 /* Date         Author  Ver.  Purposes                                      */  
+/* 26-Mar-2021  NJOW01  1.0   WMS-16631 Trigger replenishment calculation   */
+/*                            cater for individual lot over allocated.      */
 /****************************************************************************/  
 CREATE PROC  [dbo].[isp_ReplenishmentRpt_BatchRefill_19] 
                @c_Zone01           NVARCHAR(10)  -- Facility  
@@ -107,8 +109,8 @@ BEGIN
          , @n_RowNo              INT  
          , @n_ECOM_QtyExpected   INT = 0 
          , @n_PendingMoveIn      INT = 0 
-         , @c_ReplenishmentGroup NVARCHAR(10)  --NJOW01        
-         , @c_ReleaseReplenTaskCode NVARCHAR(10) --NJOW01
+         , @c_ReplenishmentGroup NVARCHAR(10)       
+         , @c_ReleaseReplenTaskCode NVARCHAR(10) 
          
    DECLARE @c_Lottable01         NVARCHAR(18)
           ,@c_Lottable02         NVARCHAR(18)
@@ -179,9 +181,9 @@ BEGIN
   
    SET @c_SortColumn       = ''  
    SET @n_GroupTypePrev    = 0  
-   SET @c_ReplenishmentGroup = '' --NJOW01
+   SET @c_ReplenishmentGroup = '' 
    
-   SELECT @c_ReleaseReplenTaskCode = dbo.fnc_GetRight(@c_Zone01, @c_Storerkey, '', 'ReleaseReplenTaskCode') --NJOW01 
+   SELECT @c_ReleaseReplenTaskCode = dbo.fnc_GetRight(@c_Zone01, @c_Storerkey, '', 'ReleaseReplenTaskCode') 
   
   -- SET @c_Functype = ''
   
@@ -282,10 +284,11 @@ BEGIN
                            + ',Storerkey = ISNULL(RTRIM(SKUxLOC.Storerkey),'''')'  
                            + ',Sku = ISNULL(RTRIM(SKUxLOC.SKU),'''')'  
                            + ',Loc = ISNULL(RTRIM(SKUxLOC.LOC),'''')'  
-                           + ',QtyExpected = ISNULL(SKUxLOC.QtyExpected,0) '  
+                           --+ ',QtyExpected = ISNULL(SKUxLOC.QtyExpected,0) '  
+                           + ',QtyExpected = ISNULL(SLE.QtyExpected,0) ' --NJOW01 
                            + ',Qty = ISNULL(SKUxLOC.Qty,0)'  
-						   + ',TotalQtyPicked = ISNULL(SKUxLOC.QtyPicked,0)'  
-						   + ',TotalQtyAllocated = ISNULL(SKUxLOC.QtyAllocated,0)' 
+						               + ',TotalQtyPicked = ISNULL(SKUxLOC.QtyPicked,0)'  
+						               + ',TotalQtyAllocated = ISNULL(SKUxLOC.QtyAllocated,0)' 
                            + ',QtyPicked = SUM(ISNULL(CASE WHEN PKD.Status = ''5'' AND ORD.DocType = ''N'' THEN PKD.Qty ELSE 0 END, 0))'  
                            + ',QtyAllocated = SUM(ISNULL(CASE WHEN PKD.Status = ''0'' AND ORD.DocType = ''N'' THEN PKD.Qty ELSE 0 END, 0))' 
                            + ',QtyLocationLimit = ISNULL(SKUxLOC.QtyLocationLimit,0)'  
@@ -299,22 +302,24 @@ BEGIN
                            +                            ' AND(SKU.SKU = SKUxLOC.SKU)'  
                            + ' JOIN    PACK WITH (NOLOCK) ON (PACK.PackKey = SKU.PACKKey)'  
                            + ' LEFT JOIN    PICKDETAIL PKD WITH (NOLOCK) ON (SKUxLoc.Storerkey = PKD.StorerKey AND SKUxLoc.SKU = PKD.SKU AND SKUxLoc.Loc = PKD.Loc AND PKD.Status IN (''0'',''5''))'
-						   + ' LEFT JOIN    ORDERS ORD WITH (NOLOCK) ON  (PKD.Orderkey = ORD.Orderkey)'
+						               + ' LEFT JOIN    ORDERS ORD WITH (NOLOCK) ON  (PKD.Orderkey = ORD.Orderkey)'
                            + ' OUTER APPLY dbo.fnc_skuxloc_extended(SKUxLOC.StorerKey, SKUxLOC.Sku, SKUxLOC.Loc) AS SLE ' --NJOW01                           
                            + ' WHERE   LOC.Facility = ISNULL(RTRIM(@c_Zone01),'''') '   -- tlting
                            + ' AND SKUxLOC.LocationType IN ( ''PICK'', ''CASE'' )'  
                            + ' AND LOC.LocationFlag NOT IN ( ''DAMAGE'', ''HOLD'' )'  
                            --+ ' AND ( SKUxLOC.Qty < (SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked) '
                            --+ ' OR ( ISNULL(SKUxLOC.QtyLocationMinimum,0) > (ISNULL(SKUxLOC.Qty,0) - ISNULL(SKUxLOC.QtyAllocated,0) - ISNULL(SKUxLOC.QtyPicked,0))) ) '
-                           + ' AND ( (SKUxLOC.Qty + ISNULL(SLE.PendingMoveIn, 0)) < (SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked) '  --NJOW01
-                           + ' OR ( ISNULL(SKUxLOC.QtyLocationMinimum,0) > ((ISNULL(SKUxLOC.Qty,0) + ISNULL(SLE.PendingMoveIn, 0))- ISNULL(SKUxLOC.QtyAllocated,0) - ISNULL(SKUxLOC.QtyPicked,0))) ) '  --NJOW01
+                           + ' AND ( (SKUxLOC.Qty + ISNULL(SLE.PendingMoveIn, 0)) < (SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked) '  
+                           + ' OR ( ISNULL(SKUxLOC.QtyLocationMinimum,0) > ((ISNULL(SKUxLOC.Qty,0) + ISNULL(SLE.PendingMoveIn, 0))- ISNULL(SKUxLOC.QtyAllocated,0) - ISNULL(SKUxLOC.QtyPicked,0))) ' 
+                           + ' OR  SLE.QtyExpected > 0) ' --NJOW01
                            +  RTRIM(ISNULL(@c_SQLConditions,''))  
                            + ' GROUP BY '  
                            + ' ISNULL(RTRIM(SKUxLOC.ReplenishmentPriority),'''')'  
                            + ',ISNULL(RTRIM(SKUxLOC.Storerkey),'''')'  
                            + ',ISNULL(RTRIM(SKUxLOC.SKU),'''')'  
                            + ',ISNULL(RTRIM(SKUxLOC.LOC),'''')'  
-          				   + ',ISNULL(SKUxLOC.QtyExpected,0)'
+          				         --+ ',ISNULL(SKUxLOC.QtyExpected,0)'
+          				         + ',ISNULL(SLE.QtyExpected,0)' --NJOW01
                            + ',ISNULL(SKUxLOC.Qty,0)'  
                            + ',ISNULL(SKUxLOC.QtyPicked,0)'  
                            + ',ISNULL(SKUxLOC.QtyAllocated,0)'  
@@ -353,8 +358,8 @@ BEGIN
                                  ,  @c_CurrentLoc  
                                  ,  @n_QtyExpected  
                                  ,  @n_Qty  
-								 ,  @n_TotalQtyPicked
-								 ,  @n_TotalQtyAllocated
+								                 ,  @n_TotalQtyPicked
+								                 ,  @n_TotalQtyAllocated
                                  ,  @n_QtyPicked  
                                  ,  @n_QtyAllocated  
                                  ,  @n_QtyLocationLimit  
@@ -366,7 +371,7 @@ BEGIN
    WHILE @@FETCH_STATUS <> -1  
    BEGIN     	  
    	
-      IF ISNULL(@c_ReplenishmentGroup,'') = '' --NJOW01
+      IF ISNULL(@c_ReplenishmentGroup,'') = '' 
       BEGIN
       	 IF LEN(ISNULL(@c_ReleaseReplenTaskCode,'')) > 1
       	 BEGIN
@@ -410,7 +415,7 @@ BEGIN
          AND   R.Confirmed = 'N'  
          AND   SL.LocationType = @c_LocationType  
          AND   R.ReplenishmentGroup NOT IN('DYNAMIC')  
-         AND  (R.ReplenishmentGroup = 'IDS' OR LEN(ISNULL(@c_ReleaseReplenTaskCode,'')) > 1) --NJOW01   
+         AND  (R.ReplenishmentGroup = 'IDS' OR LEN(ISNULL(@c_ReleaseReplenTaskCode,'')) > 1)  
       END  
       
       IF @n_CaseCnt = 0 SET @n_CaseCnt = 1  
@@ -584,7 +589,7 @@ BEGIN
           AND  SL.LOC <> @c_CurrentLOC  
           AND  SL.LocationType  NOT IN ('CASE','PICK','FASTPICK')  
           AND  LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')  
-          AND  LOC.LocationCategory <> 'ROBOT' --NJOW01
+          AND  LOC.LocationCategory <> 'ROBOT' 
 		  AND  LOC.Locationtype <> 'FASTPICK' 
           AND  LOC.Facility = @c_Zone01  
           AND  LOC.Status = 'OK'  
@@ -702,7 +707,7 @@ BEGIN
          DECLARE CUR_REPLEN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT LLI.LOC  
                ,LLI.ID  
-               ,OnHandQty = (LLI.Qty - LLI.QtyPicked - LLI.QtyAllocated - LLI.QtyReplen) --NJOW01
+               ,OnHandQty = (LLI.Qty - LLI.QtyPicked - LLI.QtyAllocated - LLI.QtyReplen)
          FROM LOTxLOCxID LLI WITH (NOLOCK)  
          JOIN LOT LOT        WITH (NOLOCK) ON (LLI.Lot = LOT.Lot)  
          JOIN LOC LOC        WITH (NOLOCK) ON (LLI.LOC = LOC.Loc)  
@@ -718,8 +723,8 @@ BEGIN
          AND   ID.Status  = 'OK'  
          AND   SL.Locationtype NOT IN ('CASE','PICK','FASTPICK') 
 		 AND   loc.Locationtype <> 'FASTPICK' 
-         AND   LOC.LocationCategory <> 'ROBOT' --NJOW01
-         AND  (LLI.Qty - LLI.QtyPicked - LLI.QtyAllocated - LLI.QtyReplen) > 0  --NJOW01
+         AND   LOC.LocationCategory <> 'ROBOT' 
+         AND  (LLI.Qty - LLI.QtyPicked - LLI.QtyAllocated - LLI.QtyReplen) > 0  
          ORDER BY CASE WHEN @n_GroupType = 1 AND LLI.Qty % CONVERT(INT,@n_CaseCnt) = 0 THEN 0  
                        WHEN @n_GroupType = 1 AND LLI.Qty % CONVERT(INT,@n_CaseCnt) > 0 THEN 1  
                        WHEN @n_GroupType = 2 AND LLI.Qty % CONVERT(INT,@n_CaseCnt) = 0 THEN 0  
@@ -972,10 +977,10 @@ BEGIN
          ,  UOM  
          ,  PackKey  
          ,  Confirmed
-         ,  RefNo  --NJOW01  
+         ,  RefNo    
          )  
       SELECT  
-            @c_ReplenishmentGroup  --NJOW01 
+            @c_ReplenishmentGroup  
          ,  RIGHT ( '000000000' + LTRIM(RTRIM(STR( CAST(@c_ReplenishmentKey AS INT) +  
                    (SELECT COUNT(DISTINCT RowRef)  
                                           FROM #REPLENISHMENT AS RANK  
@@ -992,7 +997,7 @@ BEGIN
          ,  R.UOM  
          ,  R.PackKey  
          ,  'N'  
-         ,  'BR16' --NJOW01
+         ,  'BR16' 
       FROM #REPLENISHMENT R  
       GROUP BY ReplenishmentGrp  
             ,  Storerkey  
@@ -1109,7 +1114,7 @@ BEGIN
    --            , QtyAvailableCS = FLOOR(SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked) / ISNULL(PK.CaseCnt,1))       --(Wan02)  
    --            , QtyAvailableEA = SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked) % CONVERT(INT, ISNULL(PK.CaseCnt,1))--(Wan02)  
                , ReplQty = SUM(R.Qty)                                                                 --(Wan01)  
-               , QtyAvailable =  SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked - LLT.QtyReplen)      --(Wan01)   --NJOW01
+               , QtyAvailable =  SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked - LLT.QtyReplen)      --(Wan01)   
          FROM  REPLENISHMENT R  with (NOLOCK) 
          JOIN  SKU  SKU  WITH (NOLOCK) ON (R.Storerkey = SKU.Storerkey) AND (R.Sku = SKU.Sku)  
          JOIN  PACK PK   WITH (NOLOCK) ON (SKU.Packkey = PK.Packkey)  
@@ -1182,7 +1187,7 @@ BEGIN
    --            , QtyAvailableCS = FLOOR(SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked) / ISNULL(PK.CaseCnt,1))          --(Wan02)  
    --            , QtyAvailableEA = SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked) % CONVERT(INT, ISNULL(PK.CaseCnt,1))   --(Wan02)  
                , ReplQty = SUM(R.Qty)                                                                 --(Wan01)  
-               , QtyAvailable =  SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked - LLT.QtyReplen)                      --(Wan01)  --NJOW01
+               , QtyAvailable =  SUM(LLT.Qty - LLT.QtyAllocated - LLT.QtyPicked - LLT.QtyReplen)                      --(Wan01) 
          FROM  REPLENISHMENT R with (NOLOCK)  
          JOIN  SKU  SKU  WITH (NOLOCK) ON (R.Storerkey = SKU.Storerkey) AND (R.Sku = SKU.Sku)  
          JOIN  PACK PK   WITH (NOLOCK) ON (SKU.Packkey = PK.Packkey)  
