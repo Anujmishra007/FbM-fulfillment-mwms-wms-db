@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,6 +30,8 @@ GO
 /* 03-MAR-2021 Wan02    1.2   WMS-16467 - [CN]NIKE_O2_RFID_Receiving_ChangeField_CR*/
 /* 2021-03-19  Wan03    1.3   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
 /*                           _Overall_CR                                */
+/* 2021-04-13  Wan03    1.4   Fixed Record insert into Receiptdetail_wip*/
+/*                            when fial on checklist                    */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey01
            @c_Facility           NVARCHAR(5)  
@@ -463,7 +465,7 @@ BEGIN
       GOTO QUIT_SP
    END
    
-   IF @n_SessionID = 0 
+   IF @n_SessionID = 0 AND @n_Continue = 1         --2021-04-13 Wan: Fixed Record Inserted to RECEIPTDETAIL_WIP when fail on checklist
    BEGIN 
       INSERT INTO RECEIPTDETAIL_WIP
       (
