@@ -26,7 +26,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC from MBOL                                            */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.3                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -38,6 +38,7 @@ GO
 /*                              same UserDefine05 (WL01)                */
 /* 2021-03-19   WLChooi   1.2   WMS-16031 Change Shipperkey to Salesman */
 /*                              (WL02)                                  */
+/* 2021-04-13   WLChooi   1.3   WMS-16790 Modify logic of TTLCTN (WL03) */
 /************************************************************************/
 
 CREATE PROC isp_GetGatePass_03 (@c_mbolkey NVARCHAR(10)) 
@@ -214,7 +215,8 @@ BEGIN
              , ''
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideExternLoadkey  
              , SUM(PICKDETAIL.qty) AS totalEaches
-             , COUNT(DISTINCT PICKDETAIL.DropID) AS TTLCTN
+             --, COUNT(DISTINCT PICKDETAIL.DropID) AS TTLCTN   --WL03
+             , MAX(TN.TTLCTN)   --WL03
              , CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02
              , @c_Containerkey AS Containerkey   --WL01
       FROM PICKDETAIL (NOLOCK) 
@@ -238,6 +240,11 @@ BEGIN
       JOIN lotattribute LOTT WITH (NOLOCK) ON LOTT.lot=PICKDETAIL.Lot AND LOTT.sku = PICKDETAIL.sku AND LOTT.Storerkey = PICKDETAIL.Storerkey
       JOIN #TMP_ALLMBOL t ON t.MBOLKey = MBOL.MBOLKey AND MBOL.[Status] = '9'  --WL01
       --WHERE ORDERDETAIL.mbolkey = @c_mbolkey AND MBOL.status = '9'   --WL01
+      CROSS APPLY (SELECT COUNT(DISTINCT OH.TrackingNo) AS TTLCTN 
+                   FROM ORDERS OH (NOLOCK) 
+                   WHERE OH.MBOLKey = MBOL.MBOLKey
+                   AND OH.Salesman = ORDERS.Salesman
+                   AND OH.Shipperkey = ORDERS.Shipperkey) AS TN   --WL03
       GROUP BY MBOL.Mbolkey
              --, MBOL.facility                 
              , FACILITY.descr                                           
