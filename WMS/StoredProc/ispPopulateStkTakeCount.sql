@@ -26,6 +26,7 @@ GO
 /* Date         Author    Purposes                                      */  
 /* 01-Mar-2011  Shong     Skip Count 2 If System Qty = Counted Qty      */  
 /* 27-May-2014  TKLIM     Added Lottables 06-15                         */
+/* 13-Apr-2021  NJOW01    Fix retrieve storerkey and facility           */
 /************************************************************************/  
   
 CREATE PROCEDURE [dbo].[ispPopulateStkTakeCount]  
@@ -59,7 +60,7 @@ AS
       @c_StorerKey = CCDETAIL.StorerKey,   
       @c_Facility  = LOC.Facility     
    FROM CCDETAIL WITH (NOLOCK)      
-   JOIN LOC WITH (NOLOCK) ON CCDETAIL.LOC = CCDETAIL.LOC   
+   JOIN LOC WITH (NOLOCK) ON CCDETAIL.LOC = LOC.LOC    --NJOW01
    WHERE CCDETAIL.CCKEY = @c_StockTakeKey   
      AND CCDETAIL.StorerKey > ''   
      AND CCDETAIL.LOC > ''    

@@ -40,6 +40,7 @@ GO
 /* 29-JUN-2016  Wan03    1.3  SOS#370874 - TW Add Cycle Count Strategy  */
 /* 24-NOV-2016  Wan04    1.6  WMS-648 - GW StockTake Parameter2         */
 /*                            Enhancement                               */
+/* 13-APR-2021  NJOW02   17   Fix join UCC condition                    */
 /************************************************************************/  
   
 CREATE PROC ispCheckUCCbal (  
@@ -379,12 +380,12 @@ BEGIN
       + '    GROUP BY Storerkey, sku, lot, loc, id) AS LOTXLOCXID ON LOC.LOC = LOTXLOCXID.LOC '  
       + 'INNER JOIN SKU (NOLOCK) ON LOTXLOCXID.StorerKey = SKU.StorerKey AND LOTXLOCXID.SKU = SKU.SKU '   
       + 'INNER JOIN UCC (NOLOCK) ON LOTXLOCXID.StorerKey = UCC.StorerKey AND LOTXLOCXID.Sku = UCC.Sku AND LOTXLOCXID.Lot = UCC.Lot '
-      + 'INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOTATTRIBUTE.Lot = LOTXLOCXID.Lot '                   --(Wan01)          
       + 'AND LOTXLOCXID.Loc = UCC.Loc '   
       + 'AND LOTXLOCXID.Id = UCC.Id '   
       + 'AND UCC.Status BETWEEN "1" AND "2" '   
 --      + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "OTHER") THEN 2 ELSE 1 END '  -- SOS#44960  
                   + 'AND 1 = CASE WHEN LOC.LOSEUCC = "0" THEN 1 ELSE 2 END '   -- (james02)  
+      + 'INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOTATTRIBUTE.Lot = LOTXLOCXID.Lot '                   --(Wan01)          
       + 'WHERE 1 = 1  ' +  
       -- SOS42806 Add in RTRIM  
       + ISNULL(dbo.fnc_RTrim(@c_StorerSQL), '') + ' ' + ISNULL(dbo.fnc_RTrim(@c_StorerSQL2), '') + ' '  
@@ -416,12 +417,12 @@ BEGIN
       + '    GROUP BY Storerkey, sku, lot, loc, id) AS LOTXLOCXID ON LOC.LOC = LOTXLOCXID.LOC '  
       + 'INNER JOIN SKU (NOLOCK) ON LOTXLOCXID.StorerKey = SKU.StorerKey AND LOTXLOCXID.SKU = SKU.SKU '   
       + 'INNER JOIN UCC (NOLOCK) ON LOTXLOCXID.StorerKey = UCC.StorerKey AND LOTXLOCXID.Sku = UCC.Sku AND LOTXLOCXID.Lot = UCC.Lot '
-      + 'INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOTATTRIBUTE.Lot = LOTXLOCXID.Lot '                   --(Wan01)        
       + 'AND LOTXLOCXID.Loc = UCC.Loc '   
       + 'AND LOTXLOCXID.Id = UCC.Id '   
       + 'AND UCC.Status BETWEEN "1" AND "2" '   
 --      + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "OTHER") THEN 2 ELSE 1 END '  -- SOS#44960  
                   + 'AND 1 = CASE WHEN LOC.LOSEUCC = "0" THEN 1 ELSE 2 END '   -- (james02)  
+      + 'INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOTATTRIBUTE.Lot = LOTXLOCXID.Lot '                   --(Wan01)        
    --(Wan04) - START
    SET @c_sql = @c_sql + @c_StocktakeParm2SQL
    SET @c_sqlOther = @c_sqlOther + @c_StocktakeParm2OtherSQL
