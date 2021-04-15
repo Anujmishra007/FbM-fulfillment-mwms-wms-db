@@ -18,14 +18,17 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-09   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2021-02-09  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-03-31  Wan01    1.2   LFWM-2693 - UAT  Philippines  SCE  Zone 10 */
+/*                            Only First Sort Gets Generated; Zone 11 no */
+/*                            result                                     */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]  
    @c_Storerkey            NVARCHAR(15) = ''
@@ -40,8 +43,8 @@ CREATE PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]
 ,  @c_Zone07               NVARCHAR(10) = ''
 ,  @c_Zone08               NVARCHAR(10) = ''
 ,  @c_Zone09               NVARCHAR(10) = ''
-,  @c_Zone10               NVARCHAR(10) = ''
-,  @c_Zone11               NVARCHAR(10) = ''
+,  @c_Zone10               NVARCHAR(500)= ''         --Wan01 Increase Length
+,  @c_Zone11               NVARCHAR(500)= ''         --Wan01 Increase Length
 ,  @c_Zone12               NVARCHAR(10) = ''
 ,  @n_WarningNo            INT          = 0  OUTPUT
 ,  @c_ProceedWithWarning   CHAR(1)      = 'N' 
