@@ -27,6 +27,7 @@ GO
 /* 2020-06-05  KHLim    1.2  ReturnURLStorer                            */
 /* 2020-12-29  SWT01    1.3  Missing Execute Login As                   */
 /* 15-Jan-2021 Wan01    1.4   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 15-Apr-2021 KHL05 1.5 https://jiralfl.atlassian.net/browse/LFWM-2727 ,8*/
 /************************************************************************/
 CREATE  PROC  WM.lsp_WM_Get_JReport_URL
      @c_CountryName        NVARCHAR(50)  =''
@@ -53,6 +54,16 @@ BEGIN
          , @c_FolderPath         NVARCHAR(128)  = ''
          --, @c_JReportURL         NVARCHAR(1000) = ''
          , @c_SecondLvl          NVARCHAR(15)   = ''
+         , @n_RowCnt              INT            = 0   --KHL05 START
+         , @c_ParamOut            NVARCHAR(4000) = ''
+         , @c_ParamIn             NVARCHAR(4000) = '{ "c_CountryName":"'+@c_CountryName+'"'
+                                                + ', "c_Application":"'+@c_Application+'"'
+                                                + ', "c_UserName":"'   +@c_UserName+'"'
+                                                + ' }'
+   IF @c_Storerkey IS NULL 
+      SET @c_Storerkey = ''
+   DECLARE @tVarLogId TABLE (LogId INT);
+   INSERT dbo.ExecutionLog (ClientId, ParamIn) OUTPUT INSERTED.LogId INTO @tVarLogId VALUES (@c_Storerkey, @c_ParamIn);   --KHL05 END
 
    SET @n_err      = 0
    SET @c_errmsg   = ''
@@ -89,7 +100,7 @@ BEGIN
    	GOTO EXIT_SP
    END 
    
-   IF ISNULL(@c_CountryName,'') <> 'Regional'
+   IF ISNULL(@c_CountryName,'') NOT IN ('Regional', 'Global') --KHL05
    BEGIN
       SELECT TOP 1 @c_CountryName = n.NSQLDescrip
       FROM NSQLCONFIG AS n WITH (NOLOCK)
@@ -117,6 +128,7 @@ BEGIN
    FROM JREPORTFOLDER WITH (NOLOCK)
    WHERE Storerkey = @c_Storerkey
    --AND   SecondLvl = @c_Application
+   SET @n_RowCnt = @@ROWCOUNT; --KHL05
 
    SET @c_ReturnURL = ''
    --BEGIN
@@ -129,6 +141,12 @@ BEGIN
    END 
 
    SET @c_ReturnURLStorer=@c_URLTemplate+ '/' + @c_CountryName + '/' + @c_Application + '/' + @c_Storerkey  -- default to this format if no JReportFolder config
+
+   SET @c_ParamOut = '{ "c_ReturnURL": "'+@c_ReturnURL+'"'
+                    + ', "c_ReturnURLStorer":"'+@c_ReturnURLStorer+'"'
+                    + ' }'; --KHL05
+
+   UPDATE dbo.ExecutionLog SET TimeEnd = GETDATE(), RowCnt = @n_RowCnt, ParamOut = @c_ParamOut WHERE LogId = (SELECT TOP 1 LogId FROM @tVarLogId);
 
    EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
@@ -158,5 +176,36 @@ BEGIN
    END
    REVERT
 END -- procedure
+/* test script
+JReport Folder  https://jiralfl.atlassian.net/browse/LFWM-2099
+URL Composer SP https://jiralfl.atlassian.net/browse/LFWM-2100
+
+DECLARE @return_value int,
+      @b_Success int,
+      @n_err int,
+      @c_ErrMsg nvarchar(255),
+      @c_ReturnURL nvarchar(1000),
+      @c_ReturnURLStorer nvarchar(1000)
+
+EXEC  @return_value = [WM].[lsp_WM_Get_JReport_URL]
+      @c_CountryName=N'Global',
+      @c_Storerkey = N'CARTERSZ',
+      @c_Application = N'GVT',
+      @c_UserName = N'KahHweeLim',
+      @b_Success = @b_Success OUTPUT,
+      @n_err = @n_err OUTPUT,
+      @c_ErrMsg = @c_ErrMsg OUTPUT,
+      @c_ReturnURL = @c_ReturnURL OUTPUT,
+      @c_ReturnURLStorer = @c_ReturnURLStorer OUTPUT
+
+SELECT @b_Success as N'@b_Success',
+      @n_err as N'@n_err',
+      @c_ErrMsg as N'@c_ErrMsg',
+      @c_ReturnURL as N'@c_ReturnURL',
+      @c_ReturnURLStorer as N'@c_ReturnURLStorer'
+
+SELECT TOP 99 * FROM ExecutionLog ORDER BY 1 DESC
+
+*/
 GO
 
