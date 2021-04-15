@@ -29,6 +29,8 @@ GO
 /* 2020-12-08  Wan      1.0   LFWM-2410 - UAT  Philippines  PH SCE No    */
 /*                            Prompt For Entering Expired Stocks         */
 /* 2021-02-19  Wan01    1.1   Execute Login @c_Username if <> SUSER_SNAME()*/
+/* 2021-03-31  Wan02    1.2   LFWM-2666 - PROD PH MNC LOTTABLE04 defaulting*/
+/*                            to 01011900                                */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lspLottableRule_Wrapper]  
         @c_SPName                NVARCHAR(250)
@@ -351,6 +353,24 @@ BEGIN
       BEGIN
          SET @c_WarningMsg = @c_WarningMsg + ', ' +  @c_Errmsg
       END
+      
+      --(Wan02) - START
+      IF @c_Lottable01 = '' OR @c_Lottable01 IS NULL SET @c_Lottable01 = ISNULL(RTRIM(@c_Lottable01Value),'')   
+      IF @c_Lottable02 = '' OR @c_Lottable02 IS NULL SET @c_Lottable02 = ISNULL(RTRIM(@c_Lottable02Value),'')   
+      IF @c_Lottable03 = '' OR @c_Lottable03 IS NULL SET @c_Lottable03 = ISNULL(RTRIM(@c_Lottable03Value),'')    
+      IF @dt_Lottable04= '1900-01-01' OR @dt_Lottable04 IS NULL SET @dt_Lottable04= @dt_Lottable04Value   
+      IF @dt_Lottable05= '1900-01-01' OR @dt_Lottable05 IS NULL SET @dt_Lottable05= @dt_Lottable05Value  
+      IF @c_Lottable06 = '' OR @c_Lottable06 IS NULL SET @c_Lottable06 = ISNULL(RTRIM(@c_Lottable06Value),'')   
+      IF @c_Lottable07 = '' OR @c_Lottable07 IS NULL SET @c_Lottable07 = ISNULL(RTRIM(@c_Lottable07Value),'')   
+      IF @c_Lottable08 = '' OR @c_Lottable08 IS NULL SET @c_Lottable08 = ISNULL(RTRIM(@c_Lottable08Value),'') 
+      IF @c_Lottable09 = '' OR @c_Lottable09 IS NULL SET @c_Lottable09 = ISNULL(RTRIM(@c_Lottable09Value),'')   
+      IF @c_Lottable10 = '' OR @c_Lottable10 IS NULL SET @c_Lottable10 = ISNULL(RTRIM(@c_Lottable10Value),'')       
+      IF @c_Lottable11 = '' OR @c_Lottable11 IS NULL SET @c_Lottable11 = ISNULL(RTRIM(@c_Lottable11Value),'')   
+      IF @c_Lottable12 = '' OR @c_Lottable12 IS NULL SET @c_Lottable12 = ISNULL(RTRIM(@c_Lottable12Value),'')       
+      IF @dt_Lottable13= '1900-01-01' OR @dt_Lottable13 IS NULL SET @dt_Lottable13= @dt_Lottable13Value    
+      IF @dt_Lottable14= '1900-01-01' OR @dt_Lottable14 IS NULL SET @dt_Lottable14= @dt_Lottable14Value   
+      IF @dt_Lottable15= '1900-01-01' OR @dt_Lottable15 IS NULL SET @dt_Lottable15= @dt_Lottable15Value        
+      --(Wan02) - END
    END TRY
 
    BEGIN CATCH
