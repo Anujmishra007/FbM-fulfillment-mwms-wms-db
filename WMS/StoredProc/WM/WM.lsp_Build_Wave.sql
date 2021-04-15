@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,11 @@ GO
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
 /* 2021-01-15  Wan01    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-03-23  Wan02    1.3   LFWM-2663 - UAT CN Customer Order Parameter*/
+/*                            Build Parameter Add sql statement         */
+/* 2021-04-08  Wan02    1.3   Exclude ORders.Userdefine08='Y'=> discrete */
+/*                            order checking. it is standard initially  */
+/*                            Refer to LFWM-2619 Shong comment          */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -617,10 +622,17 @@ AS
          BEGIN                                                                                                                                                    
             SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd                                                                   
          END                                                               
-                                                                                                                                                            
+         
+         --(Wan02 - START
+         IF @c_Operator = 'IN SQL'
+         BEGIN
+         	SET @c_Operator = 'IN'
+         END
+         --(Wan02 - END
+                                                                                                                                                   
          IF @c_ColType IN ('char', 'nvarchar', 'varchar', 'nchar')                                                                                                     
             SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator +                                                                                 
-                  CASE WHEN @c_Operator IN ( 'IN', 'NOT IN' ) THEN               --2020-04-24 - fixed                                                                                              
+                  CASE WHEN @c_Operator IN ( 'IN', 'NOT IN') THEN               --2020-04-24 - fixed                                                                                              
                      CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +                                                       
                      RTRIM(LTRIM(@c_Value)) +                                                                                                                      
                      CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END                                                                        
@@ -632,7 +644,7 @@ AS
          ELSE IF @c_ColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 'real', 'bigint')                                                        
             SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator  + 
                   CASE 
-                  WHEN @c_Operator IN ( 'IN', 'NOT IN' )  THEN                   --2020-04-24 - fixed                                                                                                         
+                  WHEN @c_Operator IN ( 'IN', 'NOT IN')  THEN                  --2020-04-24 - fixed                                                                                                         
                      CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +                                                                        
                      RTRIM(LTRIM(@c_Value)) +                                                                                                                      
                      CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END    
@@ -755,12 +767,14 @@ AS
       ------------------------------------------------------
       -- Construct Build Wave SQL
       ------------------------------------------------------                                                                                                                                       
-      SET @c_OWITF = '0'    
-      SELECT TOP 1 @c_OWITF = sValue 
-      FROM  STORERCONFIG AS sc WITH(NOLOCK)
-      WHERE sc.StorerKey = @c_StorerKey
-      AND   sc.ConfigKey = 'OWITF'
-      AND   sc.SValue = '1' 
+      SET @c_OWITF = '0'
+      --Wan02 - START - SCE able to populate any Orders.userdefine08 value to Wave even if storerconfig turn on    
+      --SELECT TOP 1 @c_OWITF = sValue 
+      --FROM  STORERCONFIG AS sc WITH(NOLOCK)
+      --WHERE sc.StorerKey = @c_StorerKey
+      --AND   sc.ConfigKey = 'OWITF'
+      --AND   sc.SValue = '1'
+      --Wan02 - END 
 
       SET @c_SQL = ''
 
@@ -807,12 +821,12 @@ AS
          + CHAR(13) +                 'WHERE CODELKUP.Code = ORDERS.SOStatus' 
          + CHAR(13) +                 'AND CODELKUP.Listname = ''LBEXCSOSTS'''
          + CHAR(13) +                 'AND CODELKUP.Storerkey = ORDERS.Storerkey)' 
-         + CASE WHEN @c_OWITF = '0' THEN '' 
-                ELSE 
-           CHAR(13) + 'AND (ORDERS.UserDefine08 = ''Y'' ' 
-         + CHAR(13) + 'AND NOT EXISTS(SELECT 1 FROM TRANSMITLOG (NOLOCK) WHERE ORDERS.OrderKey = TRANSMITLOG.Key1' 
-         + CHAR(13) +                'AND TableName IN (''OWORDALLOC'', ''OWDPREPICK''))) '  
-                END  
+         --+ CASE WHEN @c_OWITF = '0' THEN ''                                             --Wan02 - SCE able to populate any Orders.userdefine08 value to Wave even if storerconfig turn on
+         --       ELSE 
+         --  CHAR(13) + 'AND (ORDERS.UserDefine08 = ''Y'' ' 
+         --+ CHAR(13) + 'AND NOT EXISTS(SELECT 1 FROM TRANSMITLOG (NOLOCK) WHERE ORDERS.OrderKey = TRANSMITLOG.Key1' 
+         --+ CHAR(13) +                'AND TableName IN (''OWORDALLOC'', ''OWDPREPICK''))) '  
+         --       END  
          + RTRIM(@c_SQLCond)
 
       SET @c_SQLWhere = @c_SQLWhere + @c_SQLBuildByGroupWhere
