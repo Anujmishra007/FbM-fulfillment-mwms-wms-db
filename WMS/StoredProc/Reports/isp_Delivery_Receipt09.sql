@@ -32,6 +32,7 @@ GO
 /*                            from LIT (WL03)                           */
 /* 2021-04-06   WLChooi   1.4 WMS-16276 - Change to 6 d.p for Total CBM */
 /*                            and Weight (WL04)                         */
+/* 2021-04-15   WLChooi   1.5 Fix Sorting (WL05)                        */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
@@ -404,7 +405,7 @@ BEGIN
       FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_SKU, @n_SumInCtn, @n_SumInQty, @c_Notes2, @c_Storerkey, @c_Containerkey
    END
    
-   SELECT * FROM #TMP_DATA ORDER BY Containerkey, OrderKey, UserDefine02   --WL02  
+   SELECT * FROM #TMP_DATA ORDER BY Containerkey, OrderKey, CASE WHEN ISNUMERIC(UserDefine02) = 1 THEN CAST(UserDefine02 AS INT) ELSE UserDefine02 END   --WL02   --WL05
    
 QUIT_SP:  
    IF OBJECT_ID('tempdb..#TMP_DATA') IS NOT NULL
