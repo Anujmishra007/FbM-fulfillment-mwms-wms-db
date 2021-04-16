@@ -52,6 +52,7 @@ GO
 /* 05-06-2020  WLChooi  2.0   WMS-13654 - Add ReportCFG to show Salesman*/
 /*                            (WL03)                                    */
 /* 26-10-2020  NJOW04   2.1   Performance tuning.                       */
+/* 12-JAN-2020 CSCHONG  2.2   WMS-16010 add config (CS03)               */
 /************************************************************************/
 
 CREATE PROC isp_batching_task_pickslip (
@@ -62,7 +63,7 @@ CREATE PROC isp_batching_task_pickslip (
            ,@c_Mode NVARCHAR(10) = ''  -- 1=Multi-S 4=Multi-M 5=BIG 9=Single
            ,@c_ReportType NVARCHAR(10) = '0' -- 0=Main   1=Single & BIG   2=Multi S & M   3=Sub report of Multi S & M(pick detail)  4=Sub report of Multi S & M(zone summary) 
            ,@c_ReGen NVARCHAR(10) = 'N' --Regnerate flag Y/N           -- 5=Sub report of Multi S & M(Conso Pick when MultiConsoTaskPick=1)                                             
-           ,@c_updatepick  NCHAR(1) = 'N' --(Wan02)
+           ,@c_updatepick  NCHAR(5) = 'N' --(Wan02)
  )
  AS
  BEGIN
@@ -95,6 +96,9 @@ CREATE PROC isp_batching_task_pickslip (
            ,@c_LogicalName        NVARCHAR(10)
            ,@c_altsku             NVARCHAR(20)
            ,@c_Showloadkeybarcode NVARCHAR(10)
+
+           ,@c_PickByVP           NVARCHAR(30)             --CS03
+           ,@c_LPUDF10            NVARCHAR(20)             --CS03
           
     SELECT @b_Success = 1, @n_Err = 0, @c_Errmsg = '', @c_ZoneList = '', @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1  
 
@@ -131,12 +135,13 @@ CREATE PROC isp_batching_task_pickslip (
       END
     END       
 
-    IF @c_ReportType IN ('2','3','5')
-    BEGIN
-       SELECT TOP 1 @c_Storerkey = Storerkey,
+   SELECT TOP 1 @c_Storerkey = Storerkey,
                     @c_Facility = Facility
        FROM ORDERS (NOLOCK) 
        WHERE Loadkey = @c_Loadkey       
+
+    IF @c_ReportType IN ('2','3','5')
+    BEGIN
              
        SET @c_MultiConsoTaskPick = ''
        Execute nspGetRight 
@@ -149,6 +154,54 @@ CREATE PROC isp_batching_task_pickslip (
        @n_err                OUTPUT,
        @c_errmsg             OUTPUT              
     END         
+
+     --CS03 START
+       --INSERT INTO TRACEINFO (TraceName, Step1, Step2, Step3,step4,step5,col1)      
+       --VALUES( 'isp_batching_task_pickslip', @c_OrderCount, @c_TaskBatchNo, @c_Pickzone, @c_Mode ,@c_ReGen,@c_updatepick)
+
+      IF UPPER(@c_updatepick) = 'VP'
+      BEGIN
+                SET @c_PickByVP = ''
+                SET @c_LPUDF10 = ''
+
+                Execute nspGetRight 
+                @c_facility,  
+                @c_StorerKey,              
+                '', --@c_Sku                    
+                'PickByVoicePicking', -- Configkey
+                @b_success            OUTPUT,
+                @c_PickByVP           OUTPUT,
+                @n_err                OUTPUT,
+                @c_errmsg             OUTPUT             
+          
+        IF ISNULL(@c_PickByVP,'') = '1'
+        BEGIN
+            SELECT @c_LPUDF10 = LP.Userdefine10
+            FROM LOADPLAN LP WITH (NOLOCK)
+            WHERE LP.Loadkey = @c_loadkey
+
+            IF ISNULL(@c_LPUDF10,'') = ''
+            BEGIN
+
+                UPDATE Loadplan WITH (ROWLOCK)
+                SET Userdefine10 = UPPER(@c_updatepick) 
+                  , EditWho    = SUSER_SNAME()
+                  , EditDate   = GETDATE()
+                    WHERE Loadplan.loadkey = @c_loadkey
+                    
+                SELECT @n_err = @@ERROR
+                
+                IF @n_err <> 0 
+                BEGIN
+                  SELECT @n_Continue = 3  
+                  SELECT @n_Err = 63210  
+                  SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update Loadplan (isp_batching_task_pickslip)' 
+                  GOTO Quit
+                END
+            END 
+        END     
+   END
+    --CS03 END
     
     IF @c_ReportType = '0'
     BEGIN
