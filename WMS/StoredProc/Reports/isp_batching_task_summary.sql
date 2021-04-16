@@ -41,6 +41,7 @@ GO
 /*                           loc.descr instead of pickzone              */ 
 /* 11-06-2020  WLChooi 1.4   WMS-13654 - Add ReportCFG to show Salesman */
 /*                           (WL01)                                     */
+/* 16-MAR-2020 CSCHONG  2.2   WMS-16446 add config (CS01)               */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_batching_task_summary] (
@@ -49,7 +50,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
            ,@c_Pickzone NVARCHAR(1000) = ''
            ,@c_Mode NVARCHAR(10) = ''  -- 1=Multi-S 4=Multi-M 5=BIG 9=Single
            ,@c_ReGen NVARCHAR(10) = 'N' --Regnerate flag Y/N   --NJOW01
-           ,@c_updatepick  NCHAR(1) = 'N' --(Wan02)
+           ,@c_updatepick  NCHAR(5) = 'N' --(Wan02)
  )
  AS
  BEGIN
@@ -67,11 +68,14 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
            ,@c_CallSource NVARCHAR(10)        
     
     --NJOW02          
-    DECLARE @c_OrderBatchBylocdescr    NVARCHAR(10)
+    DECLARE @c_OrderBatchBylocdescr      NVARCHAR(10)
            ,@c_OrderBatchByLocDescr_OPT1 NVARCHAR(50) 
-           ,@c_Storerkey  NVARCHAR(15) 
-           ,@c_Facility   NVARCHAR(5) 
-           
+           ,@c_Storerkey                 NVARCHAR(15) 
+           ,@c_Facility                  NVARCHAR(5) 
+           ,@c_PickByVP                  NVARCHAR(30)             --CS01
+           ,@c_LPUDF10                   NVARCHAR(20)             --CS01
+                     
+
     SELECT @n_OrderCount = CONVERT(INT, @c_OrderCount)
     SELECT @c_ZoneList = '', @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT 
             
@@ -108,19 +112,19 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
       
     IF @c_OrderBatchBylocdescr = '1'
     BEGIN
-    	  IF @c_OrderBatchByLocDescr_OPT1 = 'TMALL' 
-    	  BEGIN
-    	     IF NOT EXISTS(SELECT 1 
-    	                   FROM LOADPLANDETAIL LPD (NOLOCK)
-    	                   JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
-    	                   JOIN ORDERINFO OI (NOLOCK) ON O.Orderkey = OI.Orderkey
-    	                   WHERE LPD.Loadkey = @c_Loadkey 
-    	                   AND OI.StoreName = '618'
-    	                   AND O.Shipperkey = 'SN')   	                   
-    	     BEGIN
-    	        SET @c_OrderBatchBylocdescr = '0'
-    	     END             
-    	  END
+        IF @c_OrderBatchByLocDescr_OPT1 = 'TMALL' 
+        BEGIN
+           IF NOT EXISTS(SELECT 1 
+                         FROM LOADPLANDETAIL LPD (NOLOCK)
+                         JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+                         JOIN ORDERINFO OI (NOLOCK) ON O.Orderkey = OI.Orderkey
+                         WHERE LPD.Loadkey = @c_Loadkey 
+                         AND OI.StoreName = '618'
+                         AND O.Shipperkey = 'SN')                        
+           BEGIN
+              SET @c_OrderBatchBylocdescr = '0'
+           END             
+        END
     END
     --NJOW02 End
        
@@ -128,7 +132,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
     BEGIN
       IF @c_OrderBatchBylocdescr = '1'  
       BEGIN   
-      	 --NJOW02   	
+          --NJOW02      
          SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','
          FROM ORDERS O (NOLOCK)
          JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
@@ -147,7 +151,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
          JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
          WHERE LPD.Loadkey = @c_Loadkey
          GROUP BY LOC.PickZone
-         ORDER BY LOC.PickZone      	
+         ORDER BY LOC.PickZone         
       END
       
       IF ISNULL(@c_ZoneList,'') <> ''
@@ -156,6 +160,54 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
           SET @c_PickZone = @c_ZoneList
       END
     END       
+
+    --CS01 START
+       --INSERT INTO TRACEINFO (TraceName, Step1, Step2, Step3,step4,step5,col1)      
+       --VALUES( 'isp_batching_task_pickslip', @c_OrderCount, @c_TaskBatchNo, @c_Pickzone, @c_Mode ,@c_ReGen,@c_updatepick)
+
+      IF UPPER(@c_updatepick) = 'VP'
+      BEGIN
+                SET @c_PickByVP = ''
+                SET @c_LPUDF10 = ''
+
+                Execute nspGetRight 
+                @c_facility,  
+                @c_StorerKey,              
+                '', --@c_Sku                    
+                'PickByVoicePicking', -- Configkey
+                @b_success            OUTPUT,
+                @c_PickByVP           OUTPUT,
+                @n_err                OUTPUT,
+                @c_errmsg             OUTPUT             
+          
+        IF ISNULL(@c_PickByVP,'') = '1'
+        BEGIN
+            SELECT @c_LPUDF10 = LP.Userdefine10
+            FROM LOADPLAN LP WITH (NOLOCK)
+            WHERE LP.Loadkey = @c_loadkey
+
+            IF ISNULL(@c_LPUDF10,'') = ''
+            BEGIN
+
+                UPDATE Loadplan WITH (ROWLOCK)
+                SET Userdefine10 = UPPER(@c_updatepick) 
+                  , EditWho    = SUSER_SNAME()
+                  , EditDate   = GETDATE()
+                    WHERE Loadplan.loadkey = @c_loadkey
+                    
+                SELECT @n_err = @@ERROR
+                
+                IF @n_err <> 0 
+                BEGIN
+                  SELECT @n_Continue = 3  
+                  SELECT @n_Err = 63210  
+                  SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to Update Loadplan (isp_batching_task_summary)' 
+                  GOTO Quit
+                END
+            END 
+        END     
+   END
+    --CS03 END
 
     --NJOW01
     IF @c_ReGen = 'Y'
@@ -193,7 +245,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
 
     IF @c_OrderBatchBylocdescr = '1'  
     BEGIN
-    	 --NJOW02
+       --NJOW02
        SELECT PT.TaskBatchNo, 
               PD.Notes, 
               LP.Loadkey, 
