@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By: R_dw_print_wave_pickslip_26_2                             */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */   
 /* 2021-03-31  WLChooi  1.1   WMS-16733 - Get the Distinct SKU of the   */
 /*                            whole Wave (WL01)                         */
+/* 2021-04-16  WLChooi  1.2   WMS-16380 - Take QtyAllocated (WL02)      */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave26_2
             @c_Wavekey        NVARCHAR(10)
@@ -215,7 +216,7 @@ BEGIN
    JOIN SKU        SKU  WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
                                       AND(PD.Sku = SKU.Sku)
    --JOIN REFKEYLOOKUP RL WITH (NOLOCK) ON (PD.PickDetailKey = RL.PickDetailkey)
-   JOIN (SELECT OD.Orderkey, Openqty = SUM(OD.OpenQty) FROM ORDERS OH WITH (NOLOCK)
+   JOIN (SELECT OD.Orderkey, Openqty = SUM(OD.QtyAllocated) FROM ORDERS OH WITH (NOLOCK)   --WL02
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey) 
          WHERE OH.UserDefine09 = @c_Wavekey
          AND OH.DocType='N'
