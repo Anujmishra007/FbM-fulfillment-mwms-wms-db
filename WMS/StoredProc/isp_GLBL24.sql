@@ -30,6 +30,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
+/* 2021-04-21   WLChooi 1.1   WMS-16869 Fix Generate Wrong LabelNo when */
+/*                            RealTimePacking is turned on (WL01)       */
 /************************************************************************/
 
 CREATE PROC isp_GLBL24 ( 
@@ -64,7 +66,7 @@ BEGIN
    SET @n_Err              = 0
    SET @c_ErrMsg           = ''
    
-   SET @c_LabelNo = ''
+   --SET @c_LabelNo = ''   --WL01
    SET @n_Cntno = 0
    SET @n_GetCntNo = 1
 
@@ -73,11 +75,29 @@ BEGIN
    JOIN ORDERS O (NOLOCK) ON PH.OrderKey = O.OrderKey 
    WHERE PH.PickSlipNo = @c_PickSlipNo
 
-   SELECT @n_MaxCartonNo = MAX(Cartonno)
-   FROM PackDetail (NOLOCK)
-   WHERE PickSlipNo = @c_Pickslipno
+   --WL01 - S
+   --SELECT @n_MaxCartonNo = MAX(Cartonno)
+   --FROM PackDetail (NOLOCK)
+   --WHERE PickSlipNo = @c_Pickslipno
    
-   SET @n_CartonNo = ISNULL(@n_MaxCartonNo,0) + 1    
+   --SET @n_CartonNo = ISNULL(@n_MaxCartonNo,0) + 1    
+
+   --IF ISNULL(@n_CartonNo, 0) = 0
+   --   SET @n_CartonNo = 1 
+   
+   IF @c_LabelNo <> 'REGEN'
+   BEGIN
+      EXECUTE nspg_GetKey    
+            'PACKNO_LOR',     
+            20 ,    
+            @c_LabelNo  OUTPUT,    
+            @b_success  OUTPUT,    
+            @n_err      OUTPUT,    
+            @c_errmsg   OUTPUT  
+
+      GOTO QUIT_SP
+   END
+   --WL01 - E
 
    IF @c_ContainerType = 'C'
    BEGIN 
