@@ -1,4 +1,4 @@
- IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_08b]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_08b]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_picking_control_list_08b]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 2020-10-22   ML       1.1  WMS-15310 Add Replen check, First PAZone   */
+/* 2021-03-23   ML       1.2  WMS-16586 Add Sku Descr, ShowFields        */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_08b] (
@@ -36,7 +37,10 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-
+/*
+   [SHOWFIELD]
+      SkuDescr
+*/
    DECLARE @c_DataWindow        NVARCHAR(40)
 
    SELECT @c_DataWindow = 'r_hk_picking_control_list_08b'
@@ -66,10 +70,6 @@ BEGIN
 
    GROUP BY OH.Orderkey
 
-
-
-
-
    -- Final Result
    SELECT PickslipNo        = X.PickslipNo
         , CustomerGroupCode = MAX( X.CustomerGroupCode )
@@ -86,7 +86,7 @@ BEGIN
         , AllocQty          = MAX( X.AllocQty )
         , SkuCount          = MAX( X.SkuCount )
         , LocCount          = MAX( X.LocCount )
-        , datawindow        = MAX( X.datawindow )
+        , datawindow        = @c_DataWindow
         , PAZoneCount       = MAX( X.PAZoneCount )
         , FirstPAZone       = MAX( X.FirstPAZone )
         , MarketPlace       = MAX( X.MarketPlace )
@@ -101,6 +101,8 @@ BEGIN
         , ID                = RTRIM( PD.ID )
         , Sku               = RTRIM( PD.Sku )
         , Qty               = SUM( PD.Qty )
+        , Descr             = RTRIM( MAX( SKU.Descr ) )
+        , ShowFields        = MAX( RptCfg.ShowFields )
 
    FROM (
       SELECT PickslipNo        = RTRIM( PH.PickslipNo )
@@ -118,7 +120,6 @@ BEGIN
            , AllocQty          = SUM( PD.Qty )
            , SkuCount          = COUNT( DISTINCT PD.Sku )
            , LocCount          = COUNT( DISTINCT IIF(PD.ToLoc<>'', PD.ToLoc, PD.Loc) )
-           , datawindow        = @c_DataWindow
            , PAZoneCount       = COUNT(DISTINCT LOC.PutawayZone)
            , FirstPAZone       = RTRIM( ISNULL( MIN( LOC.PutawayZone ), '') )
            , MarketPlace       = RTRIM( ISNULL( MAX( RTRIM(ISNULL(FOH.OrderGroup,''))+'-'+ISNULL(MKT.Long,'') ), '') )
@@ -142,6 +143,14 @@ BEGIN
    JOIN #TEMP_PICKHEADER  PH (NOLOCK) ON X.PickslipNo=PH.PickslipNo
    JOIN dbo.PICKDETAIL    PD (NOLOCK) ON PH.Orderkey=PD.Orderkey
    JOIN dbo.LOC           LOC(NOLOCK) ON PD.Loc=LOC.Loc
+   JOIN dbo.SKU           SKU(NOLOCK) ON PD.Storerkey=SKU.Storerkey AND PD.Sku=SKU.Sku
+
+   LEFT JOIN (
+      SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+           , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+        FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+   ) RptCfg
+   ON RptCfg.Storerkey=PH.Storerkey AND RptCfg.SeqNo=1
 
    WHERE PD.Qty > 0
 
