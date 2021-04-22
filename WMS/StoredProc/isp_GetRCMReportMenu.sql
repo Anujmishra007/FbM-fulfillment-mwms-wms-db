@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 22-04-2021   WLChooi   1.1 Missing NOLOCK (WL01)                     */
 /************************************************************************/
 CREATE PROC [isp_GetRCMReportMenu] 
             @c_Storerkey      NVARCHAR(10)
@@ -85,10 +86,10 @@ BEGIN
                       + CASE WHEN Row_Number() OVER (PARTITION by RT.ReportType ORDER BY RT.ReportType) = 2  
                         THEN '_all' ELSE'' END 
    FROM #TMP_RPTTYPE RT
-   JOIN RCMREPORT RCMR ON (RT.ReportType = RCMR.ReportType)
-                       AND(RT.ComputerName = RCMR.ComputerName)
-   LEFT JOIN CODELKUP  CL   ON (CL.listname = 'RCMREPORT')
-                           AND(RCMR.ReportType = CL.Code)
+   JOIN RCMREPORT RCMR WITH (NOLOCK) ON (RT.ReportType = RCMR.ReportType)   --WL01
+                                     AND(RT.ComputerName = RCMR.ComputerName)
+   LEFT JOIN CODELKUP  CL WITH (NOLOCK) ON (CL.listname = 'RCMREPORT')   --WL01
+                                        AND(RCMR.ReportType = CL.Code)
    WHERE RCMR.Storerkey = @c_Storerkey
    ORDER BY RT.ReportType
 
