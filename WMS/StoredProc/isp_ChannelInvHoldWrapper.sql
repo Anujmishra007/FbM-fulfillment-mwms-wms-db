@@ -8,7 +8,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
-/* Stored Proc: isp_ChannelInvHoldWrapper                                */
+/* Stored Proc: isp_ChannelInvHoldWrapper                               */
 /* Creation Date: 26-JUL-2019                                           */
 /* Copyright: LF Logistics                                              */
 /* Written by: Wan                                                      */
@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-02-26  Wan01    1.1   WMS-16094 - [CN] ANFQHW_WMS_TransferAllocation*/
+/* 2021-02-26  Wan02    1.1   WMS-16295 - [CN] ANF - RCM Upload HoldUnHold*/
+/*                            Detail and Show HoldUnHold Qty in Channel */
+/*                            Hold Module                               */
 /************************************************************************/
 CREATE PROC isp_ChannelInvHoldWrapper
            @c_HoldType           NVARCHAR(10) 
@@ -42,6 +46,10 @@ CREATE PROC isp_ChannelInvHoldWrapper
          , @n_Channel_ID         BIGINT       = 0
          , @c_Hold               NVARCHAR(1)  = '0'
          , @c_Remarks            NVARCHAR(255)= ''
+         , @c_HoldTRFType        CHAR(1)      = '' --Wan01 --'F' - HOld Transfer From Channel, 'T' - HOld Transfer To Channel 
+         , @n_DelQty             INT          = 0  --Wan01 --'F' - For @c_HoldType IN ('ASN', 'ADJ', 'TRF') if any   
+         , @n_QtyHoldToAdj       INT          = 0  --Wan02 -- QtyHold adjusment for Hold/unhols by Channel ID only 
+         , @n_ChannelTran_ID_Ref BIGINT       = 0  OUTPUT --Wan02 -- ChannelTran_ID_Ref for Import Hold/unhold by Channel ID only 
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -54,30 +62,42 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE  
-           @n_StartTCnt       INT   = @@TRANCOUNT
-         , @n_Continue        INT   = 1
+           @n_StartTCnt             INT   = @@TRANCOUNT
+         , @n_Continue              INT   = 1
 
-         , @b_InsertHeader    BIT   = 0
-         , @b_InsertDetail    BIT   = 0
-         , @b_UpdateDetail    BIT   = 0
+         , @b_InsertHeader          BIT   = 0
+         , @b_InsertDetail          BIT   = 0
+         , @b_UpdateDetail          BIT   = 0
 
-         , @n_FetchStatus     INT   = 0
-         --, @n_InvHoldKey      BIGINT= 0
-         , @n_RefID           BIGINT= 0
-         , @n_Qty             INT   = 0
-         , @n_QtyOnHold       INT   = 0
-         , @c_DataHold        NVARCHAR(1) = '0'
+         , @n_FetchStatus           INT   = 0
+         , @n_RefID                 BIGINT= 0
+         , @n_Qty                   INT   = 0
+         , @n_QtyOnHold             INT   = 0
+         
+         , @n_QtyAvailToHold        INT   = 0   --(Wan02)
+         , @n_QtyHoldChannelID      INT   = 0   --(Wan02)
+         , @n_RecCnt                INT   = 0   --(Wan02)
+         , @n_HoldByChannelID       BIT   = 0   --(Wan02)
 
-         , @c_SQL             NVARCHAR(1000) = ''
-         , @c_SQLParms        NVARCHAR(1000) = ''
-         , @CUR_CHANNEL       CURSOR
+         , @c_DataHold              NVARCHAR(1) = '0'
+         , @c_ChannelInvHold        CHAR(1)     = '0'          
 
-   DECLARE @t_ChannelInv      TABLE
-            (  RowId          INT         NOT NULL IDENTITY(1,1)  PRIMARY KEY
-            ,  Channel_ID     BIGINT      NOT NULL DEFAULT(0)
-            ,  SourceLineNo   NVARCHAR(5) NOT NULL DEFAULT('')
-            ,  Qty            INT         NOT NULL DEFAULT(0)
-            ,  QtyOnHold      INT         NOT NULL DEFAULT(0)
+         , @n_ChannelTran_ID        INT   = 0                                    --(Wan02)
+         , @c_ChannelTranRefNo      NVARCHAR(20) = ''                            --(Wan02)
+         , @c_SourceType            NVARCHAR(60) = 'isp_ChannelInvHoldWrapper'   --(Wan02)
+         , @c_CustomerRef           NVARCHAR(30) = ''                            --(Wan02)
+      
+         , @c_SQL                   NVARCHAR(1000) = ''
+         , @c_SQLParms              NVARCHAR(1000) = ''
+         
+         , @CUR_CHANNEL             CURSOR
+
+   DECLARE @t_ChannelInv            TABLE
+            (  RowId                INT         NOT NULL IDENTITY(1,1)  PRIMARY KEY
+            ,  Channel_ID           BIGINT      NOT NULL DEFAULT(0)
+            ,  SourceLineNo         NVARCHAR(5) NOT NULL DEFAULT('')
+            ,  Qty                  INT         NOT NULL DEFAULT(0)
+            ,  QtyOnHold            INT         NOT NULL DEFAULT(0)
             )
 
    SET @n_err      = 0
@@ -103,6 +123,8 @@ BEGIN
    BEGIN
       SET @c_Hold = '0'
    END
+   
+   SET @c_ChannelInvHold = @c_Hold                    --(Wan02)
 
    IF ( @c_SourceKey     = '' 
       ) AND 
@@ -121,7 +143,7 @@ BEGIN
       SET @n_Continue = 3
       SET @n_Err = 70010
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) 
-                    + ': Etiher Source Document/channel Attribute/ChannelID type is required'
+                    + ': Either Source Document/channel Attribute/ChannelID type is required'
                     + '. (isp_ChannelInvHoldWrapper)' 
       GOTO QUIT_SP
    END
@@ -130,10 +152,21 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 70020
-      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid Hold Type' + @c_HoldType 
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid Hold Type: ' + @c_HoldType 
                     + '. (isp_ChannelInvHoldWrapper)' 
       GOTO QUIT_SP  
    END 
+
+   --(Wan01) - START
+   IF @c_HoldTRFType IN ( '' ) AND @c_HoldType = 'TRF'
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 70022
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid Hold Transfer Type: ' + @c_HoldTRFType 
+                    + '. (isp_ChannelInvHoldWrapper)' 
+      GOTO QUIT_SP  
+   END 
+   --(Wan01) - END
 
    IF @c_HoldType IN ( 'ASN', 'ADJ', 'TRF' ) AND @c_SourceKey = ''
    BEGIN
@@ -155,7 +188,25 @@ BEGIN
       END
       ELSE IF @n_Channel_ID > 0
       BEGIN
-         IF NOT EXISTS (SELECT 1 FROM ChannelInv WITH (NOLOCK) WHERE Channel_ID = @n_Channel_ID)
+         --(Wan02) - START
+         SET @n_HoldByChannelID = 1
+         
+         SET @n_RecCnt = 0
+         SELECT @n_RecCnt = 1
+            , @n_QtyAvailToHold = CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold
+            , @c_Facility       = CINV.Facility     
+            , @c_Storerkey      = CINV.Storerkey    
+            , @c_Sku            = CINV.Sku          
+            , @c_Channel        = CINV.Channel      
+            , @c_C_Attribute01  = CINV.C_Attribute01
+            , @c_C_Attribute02  = CINV.C_Attribute02
+            , @c_C_Attribute03  = CINV.C_Attribute03
+            , @c_C_Attribute04  = CINV.C_Attribute04
+            , @c_C_Attribute05  = CINV.C_Attribute05
+         FROM ChannelInv CINV WITH (NOLOCK) 
+         WHERE CINV.Channel_ID = @n_Channel_ID
+         
+         IF @n_RecCnt = 0 --IF NOT EXISTS (SELECT 1 FROM ChannelInv WITH (NOLOCK) WHERE Channel_ID = @n_Channel_ID)
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 70050
@@ -163,6 +214,41 @@ BEGIN
                           + '. (isp_ChannelInvHoldWrapper)' 
             GOTO QUIT_SP
          END
+         
+         IF @n_QtyHoldToAdj < 0 
+         BEGIN
+            SELECT TOP 1 @n_QtyHoldChannelID = cid.Qty
+            FROM ChannelInvHold AS cih  WITH (NOLOCK)
+            JOIN ChannelInvHoldDetail AS cid WITH (NOLOCK) ON cih.InvHoldkey = cid.InvHoldkey
+            WHERE cih.HoldType   = 'TranHold'
+            AND   cih.SourceKey  = ''
+            AND   cih.Channel_ID = @n_Channel_ID
+            
+            IF @n_QtyHoldChannelID + @n_QtyHoldToAdj < 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 70051
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Cannot Reduce Qty more than Hold By Channel ID Qty.' 
+                             + '. (isp_ChannelInvHoldWrapper)' 
+               GOTO QUIT_SP
+            END
+            
+            IF @n_QtyHoldChannelID + @n_QtyHoldToAdj = 0
+            BEGIN
+               SET @c_ChannelInvHold = '0'
+            END
+         END
+         
+         IF @n_QtyHoldToAdj > @n_QtyAvailToHold
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 70052
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Qty To Hold More than Channel Available Qty.' 
+                          + '. (isp_ChannelInvHoldWrapper)' 
+            GOTO QUIT_SP
+         END
+         
+         --(Wan02) - END
       END
       ELSE
       BEGIN
@@ -311,6 +397,79 @@ BEGIN
                AND AD.Qty > 0
          END
       END
+      ELSE
+      IF @c_HoldType = 'TRF'
+      BEGIN
+         IF @c_SourceLineNo = ''
+         BEGIN
+            IF @c_HoldTRFType = 'F' 
+            BEGIN            
+               SET @CUR_CHANNEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT ChannelID = TD.FromChannel_ID
+                     ,SourceKeyLineNo = TD.TransferLineNumber
+                     ,Qty = TD.FromQty
+                     ,QtyOnHold = ISNULL(CINV.QtyOnHold,0)               
+               FROM TRANSFERDETAIL TD WITH (NOLOCK)
+               JOIN ChannelInv CINV WITH (NOLOCK)
+                  ON TD.FromChannel_ID = CINV.Channel_ID
+               WHERE TD.TransferKey = @c_SourceKey
+               AND TD.FromQty > 0
+            END
+            ELSE
+            BEGIN
+               SET @CUR_CHANNEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                  SELECT ChannelID = TD.ToChannel_ID
+                        ,SourceKeyLineNo = TD.TransferLineNumber
+                        ,Qty = TD.ToQty
+                        ,QtyOnHold = ISNULL(CINV.QtyOnHold,0)               
+                  FROM TRANSFERDETAIL TD WITH (NOLOCK)
+                  JOIN ChannelInv CINV WITH (NOLOCK)
+                     ON TD.ToChannel_ID = CINV.Channel_ID
+                  WHERE TD.TransferKey = @c_SourceKey
+                  AND TD.[Status] = '9'
+                  AND TD.ToQty > 0
+            END
+         END
+         ELSE
+         BEGIN
+            IF @c_HoldTRFType = 'F' 
+            BEGIN            
+               SET @CUR_CHANNEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT ChannelID = TD.FromChannel_ID
+                     ,SourceKeyLineNo = TD.TransferLineNumber
+                     ,Qty = TD.FromQty
+                     ,QtyOnHold = ISNULL(CINV.QtyOnHold,0)               
+               FROM TRANSFERDETAIL TD WITH (NOLOCK)
+               JOIN ChannelInv CINV WITH (NOLOCK)
+                  ON TD.FromChannel_ID = CINV.Channel_ID
+               WHERE TD.TransferKey = @c_SourceKey
+               AND TD.TransferLineNumber = @c_SourceLineNo
+               AND TD.FromQty > 0
+               UNION                                        --For Delete Transfer Line
+               SELECT ChannelID = @n_Channel_ID
+                     ,SourceKeyLineNo = @c_SourceLineNo
+                     ,Qty = @n_DelQty
+                     ,QtyOnHold = ISNULL(CINV.QtyOnHold,0)               
+               FROM ChannelInv CINV WITH (NOLOCK)
+               WHERE CINV.Channel_ID = @n_Channel_ID
+            END
+            ELSE
+            BEGIN
+               SET @CUR_CHANNEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                  SELECT ChannelID = TD.ToChannel_ID
+                        ,SourceKeyLineNo = TD.TransferLineNumber
+                        ,Qty = TD.ToQty
+                        ,QtyOnHold = ISNULL(CINV.QtyOnHold,0)               
+                  FROM TRANSFERDETAIL TD WITH (NOLOCK)
+                  JOIN ChannelInv CINV WITH (NOLOCK)
+                     ON TD.ToChannel_ID = CINV.Channel_ID
+                  WHERE TD.TransferKey = @c_SourceKey
+                  AND TD.TransferLineNumber = @c_SourceLineNo
+                  AND TD.[Status] = '9'
+                  AND TD.ToQty > 0
+            END
+         END
+      END
    END
    ELSE
    BEGIN
@@ -329,7 +488,7 @@ BEGIN
          SET @CUR_CHANNEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT ChannelID = @n_Channel_ID
                   ,SourceKeyLineNo = ''
-                  ,Qty       = Qty - QtyOnHold 
+                  ,Qty       = @n_QtyHoldToAdj           --(Wan02)
                   ,QtyOnHold = QtyOnHold
             FROM CHANNELINV WITH (NOLOCK)
             WHERE Channel_ID = @n_Channel_ID
@@ -351,6 +510,7 @@ BEGIN
          AND   HH.C_Attribute03 = @c_C_Attribute03
          AND   HH.C_Attribute04 = @c_C_Attribute04
          AND   HH.C_Attribute05 = @c_C_Attribute05
+         AND   HH.Channel_ID    = 0
 
          SET @CUR_CHANNEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT Channel_ID  
@@ -416,10 +576,10 @@ BEGIN
    BEGIN
       UPDATE ChannelInvHold 
       SET Hold = @c_Hold
-         ,DateOn  = CASE WHEN @c_Hold  = '1' THEN GETDATE()    ELSE DateOn END
-         ,WhoOn   = CASE WHEN @c_Hold  = '1' THEN SUSER_NAME() ELSE WhoOn END
-         ,DateOff = CASE WHEN @c_Hold  = '0' THEN GETDATE()    ELSE DateOff END    
-         ,WhoOff  = CASE WHEN @c_Hold  = '0' THEN SUSER_NAME() ELSE WhoOff END
+         ,DateOn  = CASE WHEN @c_ChannelInvHold  = '1' THEN GETDATE()    ELSE DateOn END     --(Wan02)
+         ,WhoOn   = CASE WHEN @c_ChannelInvHold  = '1' THEN SUSER_NAME() ELSE WhoOn END      --(Wan02)
+         ,DateOff = CASE WHEN @c_ChannelInvHold  = '0' THEN GETDATE()    ELSE DateOff END    --(Wan02) 
+         ,WhoOff  = CASE WHEN @c_ChannelInvHold  = '0' THEN SUSER_NAME() ELSE WhoOff END     --(Wan02)
          ,Remarks = @c_Remarks
       WHERE InvHoldKey = @n_InvHoldKey
 
@@ -450,7 +610,7 @@ BEGIN
       ELSE
       BEGIN
          SELECT TOP 1 @n_RefID = RefID
-               ,@n_Qty = CASE WHEN @c_Hold = '0' THEN Qty ELSE @n_Qty END
+               ,@n_Qty = CASE WHEN @c_Hold = '0' AND @n_HoldByChannelID = 0 THEN Qty ELSE @n_Qty END  -- (Wan02)
          FROM ChannelInvHoldDetail WITH (NOLOCK)
          WHERE InvHoldkey  = @n_InvHoldkey
          AND   SourceLineNo= @c_SourceLineNo
@@ -500,17 +660,18 @@ BEGIN
                           + '. (isp_ChannelInvHoldWrapper)' 
             GOTO QUIT_SP
          END
+         SET @n_RefID = SCOPE_IDENTITY()  
       END 
 
       IF @b_UpdateDetail = 1 
       BEGIN
          UPDATE ChannelInvHoldDetail
          SET Hold = @c_Hold
-            ,Qty  = @n_Qty
-            ,DateOn  = CASE WHEN @c_Hold  = '1' THEN GETDATE()    ELSE DateOn END
-            ,WhoOn   = CASE WHEN @c_Hold  = '1' THEN SUSER_NAME() ELSE WhoOn END
-            ,DateOff = CASE WHEN @c_Hold  = '0' THEN GETDATE()    ELSE DateOff END    
-            ,WhoOff  = CASE WHEN @c_Hold  = '0' THEN SUSER_NAME() ELSE WhoOff END
+            ,Qty  = CASE WHEN @c_Hold  = '1' THEN Qty ELSE 0 END + @n_Qty                       --(Wan02)
+            ,DateOn  = CASE WHEN @c_ChannelInvHold  = '1' THEN GETDATE()    ELSE DateOn END     --(Wan02)
+            ,WhoOn   = CASE WHEN @c_ChannelInvHold  = '1' THEN SUSER_NAME() ELSE WhoOn END      --(Wan02)
+            ,DateOff = CASE WHEN @c_ChannelInvHold  = '0' THEN GETDATE()    ELSE DateOff END    --(Wan02) 
+            ,WhoOff  = CASE WHEN @c_ChannelInvHold  = '0' THEN SUSER_NAME() ELSE WhoOff END     --(Wan02)
          WHERE RefID = @n_RefID
 
          SET @n_Err = @@ERROR
@@ -525,7 +686,7 @@ BEGIN
          END
       END
 
-      IF @c_Hold = '0'
+      IF @c_Hold = '0' AND @n_Qty > 0                                            --(Wan02)
       BEGIN
          SET @n_Qty = -1 * @n_Qty
       END 
@@ -547,6 +708,69 @@ BEGIN
                         + '. (isp_ChannelInvHoldWrapper)' 
          GOTO QUIT_SP
       END
+      
+      ------------------------------------------------------------
+      -- Log ChannelInvHoldDetail's Channel to CHANNELTRAN - START
+      ------------------------------------------------------------
+      
+      SET @c_ChannelTranRefNo = CONVERT(NVARCHAR(10), @n_RefID)
+      SET @c_SourceType = 'isp_ChannelInvHoldWrapper'
+      SET @c_CustomerRef = @c_Remarks   
+      INSERT INTO CHANNELITRAN  
+            (  
+            TranType,            ChannelTranRefNo,       SourceType,  
+            StorerKey,           SKU,                    Facility,  
+            Channel_ID,          Channel,  
+            C_Attribute01,       C_Attribute02,          C_Attribute03,  
+            C_Attribute04,       C_Attribute05,  
+            Qty,                 QtyOnHold,  
+            Reasoncode,          CustomerRef  
+            )  
+      SELECT   'HOLD',              @c_ChannelTranRefNo, @c_SourceType,  
+               ci.StorerKey,        ci.SKU,              ci.Facility,     
+               ci.Channel_ID,       ci.Channel,  
+               ci.C_Attribute01,    ci.C_Attribute02,    ci.C_Attribute03,  
+               ci.C_Attribute04,    ci.C_Attribute05,  
+               @n_Qty,              0,  
+               '',                  @c_CustomerRef  
+      FROM ChannelInv AS ci WITH (NOLOCK)
+      WHERE ci.Channel_ID = @n_Channel_ID
+      
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err      = 70120  
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Insert Into CHANNELITRAN fail'  
+                         + '. (isp_ChannelInvHoldWrapper)'  
+         GOTO QUIT_SP  
+      END  
+      
+      SET @n_ChannelTran_ID = SCOPE_IDENTITY()  
+      
+      IF @n_ChannelTran_ID_Ref = 0
+      BEGIN
+         SET @n_ChannelTran_ID_Ref = @n_ChannelTran_ID 
+      END   
+           
+      UPDATE CHANNELITRAN
+         SET CustomerRef = CONVERT(NVARCHAR(10),@n_ChannelTran_ID_Ref) + ' ' + CustomerRef
+            ,EditWho = SUSER_SNAME()
+            ,EditDate= GETDATE()
+            ,TrafficCop = NULL
+      WHERE ChannelTran_ID = @n_ChannelTran_ID
+         
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err      = 70130  
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Update Into CHANNELITRAN fail'  
+                         + '. (isp_ChannelInvHoldWrapper)'  
+         GOTO QUIT_SP  
+      END  
+      
+      ------------------------------------------------------------
+      -- Log ChannelInvHoldDetail's Channel to CHANNELTRAN - END
+      ------------------------------------------------------------ 
 
       FETCH NEXT FROM @CUR_CHANNEL INTO @n_Channel_ID, @c_SourceLineNo, @n_Qty, @n_QtyOnHold
    END 
