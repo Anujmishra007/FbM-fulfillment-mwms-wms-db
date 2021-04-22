@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Purposes                                       */ 
 /* 26-MAR-21    CSCHONG  WMS-15994 fix split line carton issue (CS01)   */
+/* 14-APR-21    MINGLE   WMS-16758 add new mappings(ML01)               */
 /************************************************************************/  
   
 CREATE PROC dbo.isp_GetPickSlipWave29 (  
@@ -59,9 +60,9 @@ BEGIN
          , @c_BuyerPO            NVARCHAR(20)  
          , @c_OrderGroup         NVARCHAR(20)  
          , @c_Sectionkey         NVARCHAR(10)  
-         , @c_DeliveryDate       NVARCHAR(10)  
+         , @c_DeliveryDate       DATE 
          , @c_Consigneekey       NVARCHAR(15)  
-         , @c_C_Company          NVARCHAR(45)                                                  
+         , @c_C_Company          NVARCHAR(50)                                                  
          , @n_TotalCBM           FLOAT     
          , @n_TotalGrossWgt      FLOAT  
          , @n_noOfTotes          INT    
@@ -155,7 +156,19 @@ BEGIN
       Wavekey            NVARCHAR(10) NULL,
       Pickdetailkey      NVARCHAR(20) NULL,
       packcasecnt        FLOAT,
-      ExtOrderkey        NVARCHAR(50) NULL 
+      ExtOrderkey        NVARCHAR(50) NULL,
+      --ML01 START
+      DeliveryDate       DATE,
+      Route              NVARCHAR(20),
+      Address1           NVARCHAR(45),
+      Address2           NVARCHAR(45),
+      Address3           NVARCHAR(45),
+      Address4           NVARCHAR(45),
+      Zip                NVARCHAR(10),
+      City               NVARCHAR(45),
+      State              NVARCHAR(10),
+      Country            NVARCHAR(10)
+      --ML01 END 
 )    
       
       
@@ -188,7 +201,23 @@ BEGIN
            Each_cal,  
            SKUGROUP,  
            Storerkey,  
-           wavekey,Pickdetailkey,packcasecnt,ExtOrderkey)                
+           wavekey,
+           Pickdetailkey,
+           packcasecnt,
+           ExtOrderkey,
+           --ML01 START
+           DeliveryDate,
+           Route,
+           Address1,
+           Address2,
+           Address3,
+           Address4,
+           Zip,
+           City,
+           State,
+           Country
+           --ML01 END
+           )                
    SELECT DISTINCT RefKeyLookup.PickSlipNo,  
           ORDERS.LoadKey,ORDERS.OrderKey,
           ISNULL(ORDERS.ConsigneeKey, '') AS ConsigneeKey,  
@@ -208,7 +237,23 @@ BEGIN
                        END,   
           SKU.SKUGROUP,  
           ORDERS.Storerkey,  
-          wd.WaveKey,pickdetail.PickDetailKey,pack.casecnt,orders.externorderkey
+          wd.WaveKey,
+          pickdetail.PickDetailKey,
+          pack.casecnt,
+          orders.externorderkey,
+          --ML01 START
+          ISNULL(ORDERS.DeliveryDate, '') AS DeliveryDate,
+          orders.Route,
+          ISNULL(ORDERS.c_Address1, '')   AS Address1,
+          ISNULL(ORDERS.c_Address2, '')   AS Address2,
+          ISNULL(ORDERS.c_Address3, '')   AS Address3,
+          ISNULL(ORDERS.c_Address4, '')   AS Address4,
+          ISNULL(ORDERS.c_Zip, '')   AS Zip,
+          ISNULL(ORDERS.c_City, '')   AS City,
+          ISNULL(ORDERS.c_State, '')   AS State,
+          ISNULL(ORDERS.c_Country, '')   AS Country
+          --ML01 END
+
    FROM WAVEDETAIL      WD  WITH (NOLOCK) 
    JOIN pickdetail WITH (NOLOCK)  ON pickdetail.OrderKey = WD.OrderKey --AND  pickdetail.WaveKey=wd.WaveKey
    LEFT JOIN Pickheader WITH (NOLOCK) ON PickHeader.ExternOrderkey = pickdetail.PickSlipNo
@@ -223,7 +268,7 @@ BEGIN
    JOIN pack WITH (NOLOCK) ON  pickdetail.packkey = pack.packkey  
    JOIN loc WITH (NOLOCK) ON  pickdetail.loc = loc.loc  
    left outer join RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey) 
-    WHERE  PickDetail.Status <= '5'  
+    WHERE  PickDetail.Status <= '5' AND orders.status >= '2'  
    AND WD.WaveKey = @c_waveKey  
    GROUP BY RefKeyLookup.PickSlipNo,
            ORDERS.LoadKey,ORDERS.OrderKey,
@@ -236,7 +281,19 @@ BEGIN
           PACK.CaseCnt,    
           SKU.SKUGROUP,  
           ORDERS.Storerkey,  
-          wd.WaveKey,pickdetail.PickDetailKey,orders.externorderkey
+          wd.WaveKey,pickdetail.PickDetailKey,orders.externorderkey,
+          ISNULL(ORDERS.DeliveryDate, ''),
+          --ML01 START
+          orders.Route,
+          ISNULL(ORDERS.c_Address1, ''),   
+          ISNULL(ORDERS.c_Address2, ''), 
+          ISNULL(ORDERS.c_Address3, ''),   
+          ISNULL(ORDERS.c_Address4, ''),   
+          ISNULL(ORDERS.c_Zip, ''),   
+          ISNULL(ORDERS.c_City, ''),   
+          ISNULL(ORDERS.c_State, ''),   
+          ISNULL(ORDERS.c_Country, '') 
+          --ML01 END
                
    WHILE @@TRANCOUNT > 0  
    BEGIN  
@@ -585,7 +642,17 @@ QUIT:
       ,  SUM(#TMP_PICK.Each_cal) AS Each_cal           --CS01        
       ,  #TMP_PICK.SKUGROUP           
       ,  #TMP_PICK.Storerkey          
-      ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey     
+      ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey 
+      ,  #TMP_PICK.DeliveryDate
+      ,  #TMP_PICK.Route     --ML01 START
+      ,  #TMP_PICK.Address1
+      ,  #TMP_PICK.Address2 
+      ,  #TMP_PICK.Address3
+      ,  #TMP_PICK.Address4
+      ,  #TMP_PICK.Zip
+      ,  #TMP_PICK.City
+      ,  #TMP_PICK.State
+      ,  #TMP_PICK.Country
    FROM   #TMP_PICK  
    --CS01 START
    GROUP BY  #TMP_PICK.PickSlipNo     
@@ -600,7 +667,17 @@ QUIT:
       ,  #TMP_PICK.packcasecnt                            
       ,  #TMP_PICK.SKUGROUP           
       ,  #TMP_PICK.Storerkey          
-      ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey     
+      ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey 
+      ,  #TMP_PICK.DeliveryDate   
+      ,  #TMP_PICK.Route
+      ,  #TMP_PICK.Address1
+      ,  #TMP_PICK.Address2 
+      ,  #TMP_PICK.Address3
+      ,  #TMP_PICK.Address4
+      ,  #TMP_PICK.Zip
+      ,  #TMP_PICK.City
+      ,  #TMP_PICK.State
+      ,  #TMP_PICK.Country  --ML01 END
    --CS01 END
    ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.LOCZone,UPPER(#TMP_PICK.LOC),  #TMP_PICK.SKU
      

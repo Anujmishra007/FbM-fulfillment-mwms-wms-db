@@ -25,6 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 2021-04-21   WLChooi  1.1  Enhance ErrorMSG to show InvoiceNo (WL01) */
 /************************************************************************/   
 
 CREATE PROCEDURE [dbo].[isp_UpdateInvoiceNo]
@@ -64,7 +65,7 @@ BEGIN
          BEGIN 
    	      SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 77000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Invoice already exists. (isp_UpdateInvoiceNo)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Invoice # ' + LTRIM(RTRIM(@c_InvoiceNo)) + ' already exists. (isp_UpdateInvoiceNo)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '   --WL01
             GOTO QUIT_SP 
          END
          ELSE
