@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_06]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_06]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_picking_control_list_06]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +31,13 @@ GO
 /*                            AssignPicker, ReAssignPicker               */
 /* 2020-11-30   ML       1.2  Fix Divide by zero error (@n_AssignPicker) */
 /* 2021-01-29   ML       1.3  Add Fields C_City, C_Country               */
-/*                            Add ShowField DropID                       */
+/*                            Add ShowField: DropID                      */
 /*                            Convert to Dynamic SQL                     */
+/* 2021-03-06   ML       1.4  Add MapField: DeliveryDate, OrderType,     */
+/*                                          Route, ToteCBM, Notes2       */
+/*                            Add MapValue: T_DeliveryDate*,T_OrderType* */
+/*                            T_Route*, T_Notes2*, T_ShipTo*, T_DropID*  */
+/* 2021-03-17   ML       1.5  Exclude blank PickZone                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_06] (
@@ -47,10 +52,12 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      CustomerGroupCode, ShipToAddress, Notes, Div, Brand, Userdefine05, DropID
+      ReserveLoc_Cond, CustomerGroupCode, DeliveryDate, OrderType, Userdefine05, Route, ShipToAddress, ToteCBM, Notes, Notes2
+      DropID, Div, Brand
 
    [MAPVALUE]
-      T_Notes_1, T_Notes_2, T_Userdefine05_1, T_Userdefine05_2
+      T_DeliveryDate_1, T_DeliveryDate_2, T_OrderType_1, T_OrderType_2, T_Userdefine05_1, T_Userdefine05_2, T_Route_1 , T_Route_2
+      T_Notes_1, T_Notes_2, T_Notes2_1, T_Notes2_2, T_ShipTo_1, T_ShipTo_2
 
    [SHOWFIELD]
       DefaultRDTPick, AllowUserChangePickMethod, C_Country, DropID, Code39
@@ -87,6 +94,7 @@ BEGIN
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
          , @c_JoinClause         NVARCHAR(MAX)
+         , @c_ReserveLoc_Cond    NVARCHAR(MAX)
          , @c_ShowFields         NVARCHAR(MAX)
          , @c_CustGrpCodeExp     NVARCHAR(MAX)
          , @c_ShipToAddressExp   NVARCHAR(MAX)
@@ -95,6 +103,11 @@ BEGIN
          , @c_BrandExp           NVARCHAR(MAX)
          , @c_Userdefine05Exp    NVARCHAR(MAX)
          , @c_DropIDExp          NVARCHAR(MAX)
+         , @c_DeliveryDateExp    NVARCHAR(MAX)
+         , @c_OrderTypeExp       NVARCHAR(MAX)
+         , @c_RouteExp           NVARCHAR(MAX)
+         , @c_ToteCBMExp         NVARCHAR(MAX)
+         , @c_Notes2Exp          NVARCHAR(MAX)
 
 
    SELECT @c_DataWindow = 'r_hk_picking_control_list_06'
@@ -140,7 +153,7 @@ BEGIN
       , LoadKey           NVARCHAR(10)
       , WaveKey           NVARCHAR(10)
       , DeliveryDate      DATETIME
-      , Type              NVARCHAR(10)
+      , Type              NVARCHAR(500)
       , Notes2            NVARCHAR(4000)
       , C_Company         NVARCHAR(45)
       , C_Address1        NVARCHAR(45)
@@ -149,7 +162,7 @@ BEGIN
       , C_Address4        NVARCHAR(45)
       , C_City            NVARCHAR(45)
       , C_Country         NVARCHAR(45)
-      , Route             NVARCHAR(10)
+      , Route             NVARCHAR(500)
       , AllocQty          INT
       , CBM               FLOAT
       , Sku               NVARCHAR(20)
@@ -529,6 +542,7 @@ BEGIN
          WHERE X.SeqNo=1
       ) X ON PD.Orderkey = X.Orderkey
       WHERE ISNULL(PD.PickslipNo,'')=''
+        AND PD.Status<'9'
    END
 
    IF @c_Type = 'WP'
@@ -597,6 +611,7 @@ BEGIN
          BREAK
 
       SELECT @c_JoinClause         = ''
+           , @c_ReserveLoc_Cond    = ''
            , @c_ShowFields         = ''
            , @c_CustGrpCodeExp     = ''
            , @c_ShipToAddressExp   = ''
@@ -605,6 +620,11 @@ BEGIN
            , @c_BrandExp           = ''
            , @c_Userdefine05Exp    = ''
            , @c_DropIDExp          = ''
+           , @c_DeliveryDateExp    = ''
+           , @c_OrderTypeExp       = ''
+           , @c_RouteExp           = ''
+           , @c_ToteCBMExp         = ''
+           , @c_Notes2Exp          = ''
 
       SELECT TOP 1
              @c_JoinClause = Notes
@@ -622,7 +642,10 @@ BEGIN
 
 
       SELECT TOP 1
-             @c_CustGrpCodeExp  = ISNULL(RTRIM((select top 1 b.ColValue
+             @c_ReserveLoc_Cond = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='ReserveLoc_Cond')), '' )
+           , @c_CustGrpCodeExp  = ISNULL(RTRIM((select top 1 b.ColValue
                                   from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                   where a.SeqNo=b.SeqNo and a.ColValue='CustomerGroupCode')), '' )
            , @c_ShipToAddressExp= ISNULL(RTRIM((select top 1 b.ColValue
@@ -643,6 +666,21 @@ BEGIN
            , @c_DropIDExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                   from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                   where a.SeqNo=b.SeqNo and a.ColValue='DropID')), '' )
+           , @c_DeliveryDateExp = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='DeliveryDate')), '' )
+           , @c_OrderTypeExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='OrderType')), '' )
+           , @c_RouteExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Route')), '' )
+           , @c_ToteCBMExp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='ToteCBM')), '' )
+           , @c_Notes2Exp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Notes2')), '' )
         FROM dbo.CODELKUP (NOLOCK)
        WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
          AND Storerkey = @c_Storerkey
@@ -665,9 +703,13 @@ BEGIN
         +       ', Status            = RTRIM( OH.Status )'
         +       ', Loadkey           = RTRIM( IIF(PH.IsConsol=''Y'', OH.Loadkey, ''''))'
         +       ', Wavekey           = RTRIM( IIF(PH.IsConsol=''Y'', '''', OH.Userdefine09) )'
-        +       ', DeliveryDate      = CONVERT(DATETIME, CONVERT(VARCHAR(10),OH.DeliveryDate,120))'
-        +       ', Type              = ISNULL(RTRIM( OH.Type), '''')'
-        +       ', Notes2            = ISNULL(RTRIM( OH.Notes2), '''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', DeliveryDate      = '              + CASE WHEN ISNULL(@c_DeliveryDateExp ,'')<>'' THEN @c_DeliveryDateExp  ELSE 'CONVERT(DATETIME, CONVERT(VARCHAR(10),OH.DeliveryDate,120))' END
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Type              = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_OrderTypeExp    ,'')<>'' THEN @c_OrderTypeExp     ELSE 'OH.Type'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Notes2            = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_Notes2Exp       ,'')<>'' THEN @c_Notes2Exp        ELSE 'OH.Notes2' END + ',''''))'
+      SET @c_ExecStatements = @c_ExecStatements
         +       ', C_Company         = ISNULL(RTRIM( OH.C_Company), '''')'
         +       ', C_Address1        = ISNULL(RTRIM( OH.C_Address1), '''')'
         +       ', C_Address2        = ISNULL(RTRIM( OH.C_Address2), '''')'
@@ -675,7 +717,8 @@ BEGIN
         +       ', C_Address4        = ISNULL(RTRIM( OH.C_Address4), '''')'
         +       ', C_City            = ISNULL(RTRIM( OH.C_City), '''')'
         +       ', C_Country         = ISNULL(RTRIM( OH.C_Country), '''')'
-        +       ', Route             = ISNULL(RTRIM( OH.Route), '''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Route             = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RouteExp        ,'')<>'' THEN @c_RouteExp         ELSE 'OH.Route'  END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', AllocQty          = PD.Qty'
         +       ', CBM               = PD.Qty * SKU.StdCube'
@@ -686,14 +729,13 @@ BEGIN
         +       ', ID                = ISNULL(RTRIM( PD.ID), '''')'
         +       ', PickdetailKey     = ISNULL(RTRIM( PD.PickdetailKey), '''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', ToteCBM           = CASE WHEN ISNULL(TRY_PARSE(ISNULL(CBM.Long,'''') AS FLOAT),0.0)=0.0'
-        +                                   ' OR ISNULL(TRY_PARSE(ISNULL(RTO.Long,'''') AS FLOAT),0.0)=0.0'
-        +                                 ' THEN 0.0'
+        +       ', ToteCBM           = '              + CASE WHEN ISNULL(@c_ToteCBMExp      ,'')<>'' THEN @c_ToteCBMExp       ELSE
+                                      'CASE WHEN ISNULL(TRY_PARSE(ISNULL(CBM.Long,'''') AS FLOAT),0.0)=0.0 OR ISNULL(TRY_PARSE(ISNULL(RTO.Long,'''') AS FLOAT),0.0)=0.0 THEN 0.0'
         +                                 ' ELSE ISNULL(TRY_PARSE(ISNULL(CBM.Long,'''') AS FLOAT),0.0) / ISNULL(TRY_PARSE(ISNULL(RTO.Long,'''') AS FLOAT),0.0)'
-        +                                 ' END'
-        +       ', IsConsol          = PH.IsConsol'
-        +       ', HasReplen         = IIF(ISNULL(LOC.LocationCategory,'''')=''SELECTIVE'',''Y'',''N'')'
+        +                                 ' END' END
       SET @c_ExecStatements = @c_ExecStatements
+        +       ', IsConsol          = PH.IsConsol'
+        +       ', HasReplen         = IIF((' + CASE WHEN ISNULL(@c_ReserveLoc_Cond,'')<>'' THEN @c_ReserveLoc_Cond ELSE 'LOC.LocationCategory=''SELECTIVE''' END + '),''Y'',''N'')'
         +       ', PrintedFlag       = RTRIM( PH.PrintedFlag )'
         +       ', LocationCategory  = ISNULL(RTRIM( LOC.LocationCategory), '''')'
         +       ', PD_DropID         = ISNULL(RTRIM( PD.DropID), '''')'
@@ -703,17 +745,17 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         +       ', CustomerGroupCode = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_CustGrpCodeExp  ,'')<>'' THEN @c_CustGrpCodeExp   ELSE 'ST.CustomerGroupCode' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Notes             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_NotesExp        ,'')<>'' THEN @c_NotesExp         ELSE 'OH.Notes' END + ',''''))'
+        +       ', Notes             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_NotesExp        ,'')<>'' THEN @c_NotesExp         ELSE 'OH.Notes'  END + ',''''))'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Div               = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DivExp          ,'')<>'' THEN @c_DivExp           ELSE ''''''     END + ',''''))'
+        +       ', Div               = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DivExp          ,'')<>'' THEN @c_DivExp           ELSE ''''''      END + ',''''))'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Brand             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_BrandExp        ,'')<>'' THEN @c_BrandExp         ELSE ''''''     END + ',''''))'
+        +       ', Brand             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_BrandExp        ,'')<>'' THEN @c_BrandExp         ELSE ''''''      END + ',''''))'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Userdefine05      = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_Userdefine05Exp ,'')<>'' THEN @c_Userdefine05Exp  ELSE ''''''     END + ',''''))'
+        +       ', Userdefine05      = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_Userdefine05Exp ,'')<>'' THEN @c_Userdefine05Exp  ELSE ''''''      END + ',''''))'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', DropID            = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DropIDExp       ,'')<>'' THEN @c_DropIDExp        ELSE 'IIF(PH.IsConsol=''Y'','''',''ID''+OH.Orderkey+''001'')' END + ',''''))'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', ShipToAddress    =  RTRIM('        + CASE WHEN ISNULL(@c_ShipToAddressExp,'')<>'' THEN @c_ShipToAddressExp ELSE 'NULL'     END + ')'
+        +       ', ShipToAddress    =  RTRIM('        + CASE WHEN ISNULL(@c_ShipToAddressExp,'')<>'' THEN @c_ShipToAddressExp ELSE 'NULL'      END + ')'
 
       SET @c_ExecStatements = @c_ExecStatements
         +   ' FROM #TEMP_PICKHEADER  PH'
@@ -795,6 +837,7 @@ BEGIN
                                     WHERE c.PickslipNo = X.PD_PickslipNo AND c.Qty>0
                                  GROUP BY IIF(c.ToLoc<>'',e.PickZone,d.PickZone)
                                  ) Y
+                                 WHERE Y.PickZone<>''
                                  ORDER BY IIF(Y.Replen=N'■',3,IIF(Y.Replen=N'▼',2,1)), 2
                                  FOR XML PATH('')), 1, 2, '')
                               WHEN 'Y' THEN
@@ -809,10 +852,11 @@ BEGIN
                                     WHERE c.PickslipNo = X.PD_PickslipNo AND c.Qty>0
                                  GROUP BY IIF(c.ToLoc<>'',e.PickZone,d.PickZone)
                                  ) Y
+                                 WHERE Y.PickZone<>''
                                  ORDER BY IIF(Y.Replen=N'■',3,IIF(Y.Replen=N'▼',2,1)), 2
                                  FOR XML PATH('')), 1, 2, '')
                               END AS NVARCHAR(4000))
-        , ReplenCount       = COUNT(DISTINCT CASE WHEN X.LocationCategory='SELECTIVE' THEN X.PD_DropID END)
+        , ReplenCount       = COUNT(DISTINCT CASE WHEN X.HasReplen='Y' THEN X.PD_DropID END)
         , PD_PickslipNo     = UPPER( X.PD_PickslipNo )
         , Picker            = X.Picker
         , PTL_TaskCount     = COUNT( DISTINCT RTRIM(X.Loc) +'|'+ RTRIM(X.Sku) )
@@ -835,6 +879,42 @@ BEGIN
         , Lbl_Userdefine05_2= CAST( RTRIM( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_Userdefine05_2') ) AS NVARCHAR(500))
+        , Lbl_DeliveryDate_1= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_DeliveryDate_1') ) AS NVARCHAR(500))
+        , Lbl_DeliveryDate_2= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_DeliveryDate_2') ) AS NVARCHAR(500))
+        , Lbl_OrderType_1   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_OrderType_1') ) AS NVARCHAR(500))
+        , Lbl_OrderType_2   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_OrderType_2') ) AS NVARCHAR(500))
+        , Lbl_Route_1       = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Route_1') ) AS NVARCHAR(500))
+        , Lbl_Route_2       = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Route_2') ) AS NVARCHAR(500))
+        , Lbl_Notes2_1      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Notes2_1') ) AS NVARCHAR(500))
+        , Lbl_Notes2_2      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Notes2_2') ) AS NVARCHAR(500))
+        , Lbl_ShipTo_1      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_ShipTo_1') ) AS NVARCHAR(500))
+        , Lbl_ShipTo_2      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_ShipTo_2') ) AS NVARCHAR(500))
+        , Lbl_DropID_1      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_DropID_1') ) AS NVARCHAR(500))
+        , Lbl_DropID_2      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_DropID_2') ) AS NVARCHAR(500))
 
    FROM #TEMP_PIKDT X
 
