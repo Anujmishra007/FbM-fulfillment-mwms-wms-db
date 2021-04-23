@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_delivery_receipt09                                   */  
 /*          :                                                           */  
-/* GitLab Version: 1.3                                                  */  
+/* GitLab Version: 1.5                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -32,7 +32,9 @@ GO
 /*                            from LIT (WL03)                           */
 /* 2021-04-06   WLChooi   1.4 WMS-16276 - Change to 6 d.p for Total CBM */
 /*                            and Weight (WL04)                         */
-/* 2021-04-15   WLChooi   1.5 Fix Sorting (WL05)                        */
+/* 2021-04-15   WLChooi   1.5 Fix Sorting (WL05)                        */  
+/* 2021-04-12   WLChooi   1.6 WMS-16789 - Logic Fix For LEGO and add new*/
+/*                            columns to cater for LEGOP (WL06)         */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
@@ -70,7 +72,11 @@ BEGIN
          , @n_Notes2BStart    INT
          , @n_Notes2BEnd      INT
          , @c_Containerkey    NVARCHAR(10)
-              
+         , @n_SumQty          INT   --WL06
+         , @c_GetContainerkey NVARCHAR(10)   --WL06
+         , @n_GetShipmentNo   BIGINT   --WL06
+         , @c_OrderkeyForLoop NVARCHAR(10) = 'C888888888'   --WL06
+
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue  = 1  
    SET @b_Success   = 1  
@@ -121,6 +127,54 @@ BEGIN
    --IF EXISTS (SELECT 1 FROM CONTAINER (NOLOCK) WHERE MBOLKey = @c_MBOLKey)
    --BEGIN
    
+   --WL06 S
+   CREATE TABLE #TMP_Qty (
+      ExternOrderskey   BIGINT
+    , Orderkey          NVARCHAR(10)
+    , SKU               NVARCHAR(20)
+    , SumInCtn          INT
+    , SumInQty          INT
+    , Containerkey      NVARCHAR(10) NULL
+    , TotalQty          INT
+   )
+
+   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT EXO.ExternOrdersKey, EXO.[Source]
+   FROM ExternOrders EXO (NOLOCK)
+   WHERE EXO.ExternOrderKey = @c_MBOLKey
+   AND EXO.OrderKey = @c_OrderkeyForLoop
+
+   OPEN CUR_LOOP
+
+   FETCH NEXT FROM CUR_LOOP INTO @n_GetShipmentNo, @c_GetContainerkey
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN 
+      INSERT INTO #TMP_Qty   --With Containerkey  
+      SELECT @n_GetShipmentNo
+           , EXOD.OrderKey
+           , EXOD.SKU
+           , CASE WHEN P.CaseCnt > 0 THEN SUM((CAST(EXOD.Userdefine03 AS INT))/P.CaseCnt) ELSE 0 END
+           , SUM(CAST(EXOD.Userdefine03 AS INT)) -  CASE WHEN P.CaseCnt > 0 THEN (((SUM(CAST(EXOD.Userdefine03 AS INT))/P.CaseCnt)) * P.CaseCnt) ELSE 0 END
+           , @c_GetContainerkey
+           , SUM(CAST(EXOD.Userdefine03 AS INT))
+      FROM ExternOrders EXO1 (NOLOCK)
+      JOIN ExternOrdersDetail EXOD (NOLOCK) ON EXOD.ExternOrderKey = EXO1.ExternOrderKey AND EXOD.OrderKey = EXO1.OrderKey
+      JOIN SKU S (NOLOCK) ON S.SKU = EXOD.SKU AND S.StorerKey = EXOD.StorerKey  
+      JOIN PACK P (NOLOCK) ON P.PackKey = S.PACKKey  
+      WHERE EXO1.ExternOrderKey = @n_GetShipmentNo
+      AND EXO1.OrderKey <> 'C88888888'
+      GROUP BY P.CaseCnt
+             , EXOD.OrderKey
+             , EXOD.SKU
+
+      FETCH NEXT FROM CUR_LOOP INTO @n_GetShipmentNo, @c_GetContainerkey
+   END
+   CLOSE CUR_LOOP
+   DEALLOCATE CUR_LOOP
+   --SELECT * FROM #TMP_Qty
+   --WL06 E
+
    INSERT INTO #TMP_DATA   --With Containerkey
    SELECT ST.Company
         , ISNULL(ST.Address1,'')   AS STAddress1
@@ -148,15 +202,18 @@ BEGIN
         , OH.Notes
         , Notes2A = OH.Notes2
         , Notes2B = ''
-        , OD.UserDefine02
+        , CASE WHEN OH.Storerkey = 'LEGOP' THEN OD.OrderLineNumber ELSE OD.UserDefine02 END   --WL06
         , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END AS SKU
-        , CASE WHEN ISNULL(OD.UserDefine03,'') = 'Y' 
-               THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
-               ELSE CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
+        , CASE WHEN OH.Storerkey = 'LEGOP'   --WL06  
+                    THEN S.AltSKU            --WL06 
+               WHEN ISNULL(OD.UserDefine03,'') = 'Y'
+                    THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
+               ELSE 
+                    CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
           END AS UPC
         , S.DESCR
-        , CASE WHEN P.CaseCnt > 0 THEN FLOOR(MAX(PIDET.Qty)/P.CaseCnt) ELSE 0 END AS SUMInCtn   --WL01
-        , MAX(PIDET.Qty) -  CASE WHEN P.CaseCnt > 0 THEN (FLOOR(MAX(PIDET.Qty)/P.CaseCnt) * P.CaseCnt) ELSE 0 END AS SUMInQty   --WL01
+        , MAX(t.SumInCtn) AS SUMInCtn   --WL01   --WL06
+        , MAX(t.SumInQty) AS SUMInQty   --WL01   --WL06
         , OD.UserDefine04
         , OH.StorerKey
         , TTLWeight = CAST(0.000000 AS DECIMAL(30,6))   --WL04
@@ -165,8 +222,8 @@ BEGIN
         , OH.UserDefine04
         , ISNULL(OH.C_State,'') AS C_State
         , OD.Notes2
-        , MAX(PIDET.Qty)   --WL01
-        , MAX(PAD.LabelNo) AS TotalCarton   --WL02
+        , MAX(t.TTLQty)   --WL01   --WL06
+        , MAX(t1.TTLCtn) AS TotalCarton   --WL02   --WL06
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
    CROSS APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes
@@ -188,6 +245,14 @@ BEGIN
    LEFT JOIN CODELKUP CK1 (NOLOCK) ON CK1.LISTNAME = 'ISOCOUNTRY' AND CK1.CODE = ST.COUNTRY 
    JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey   --WL02 
    CROSS APPLY (SELECT COUNT(DISTINCT LabelNo) AS LabelNo FROM PACKDETAIL (NOLOCK) WHERE Pickslipno = PH.PickSlipNo) AS PAD   --WL02
+   CROSS APPLY (SELECT Orderkey, SKU, SUM(SumInCtn) AS SumInCtn, SUM(SumInQty) AS SumInQty, SUM(TotalQty) AS TTLQty
+                FROM #TMP_Qty 
+                WHERE Orderkey = OH.OrderKey AND SKU = S.SKU AND Containerkey = C.Containerkey
+                GROUP BY Orderkey, SKU) AS t   --WL06
+   CROSS APPLY (SELECT Orderkey, SUM(SumInCtn) AS TTLCtn
+                FROM #TMP_Qty 
+                WHERE Orderkey = OH.OrderKey AND Containerkey = C.Containerkey
+                GROUP BY Orderkey) AS t1   --WL06
    WHERE M.MbolKey = @c_MBOLKey
    GROUP BY ST.Company
           , ISNULL(ST.Address1,'')  
@@ -211,11 +276,14 @@ BEGIN
           , OH.OrderDate      --WL03
           , OH.Notes
           , OH.Notes2
-          , OD.UserDefine02
+          , CASE WHEN OH.Storerkey = 'LEGOP' THEN OD.OrderLineNumber ELSE OD.UserDefine02 END   --WL06
           , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END
-          , CASE WHEN ISNULL(OD.UserDefine03,'') = 'Y' 
-                 THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
-                 ELSE CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
+          , CASE WHEN OH.Storerkey = 'LEGOP'   --WL06  
+                      THEN S.AltSKU            --WL06 
+                 WHEN ISNULL(OD.UserDefine03,'') = 'Y'
+                      THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
+                 ELSE 
+                      CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
             END
           , S.DESCR
           , P.CaseCnt
@@ -251,7 +319,7 @@ BEGIN
         , OH.Notes
         , Notes2A = OH.Notes2
         , Notes2B = ''
-        , OD.UserDefine02
+        , CASE WHEN OH.Storerkey = 'LEGOP' THEN OD.OrderLineNumber ELSE OD.UserDefine02 END   --WL06
         , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END AS SKU
         , CASE WHEN ISNULL(OD.UserDefine03,'') = 'Y' 
                THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
@@ -272,7 +340,7 @@ BEGIN
         , MAX(PAD.LabelNo) AS TotalCarton   --WL02
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
-   CROSS APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes
+   OUTER APPLY (SELECT TOP 1 ExternOrdersDetail.Orderkey, ExternOrdersDetail.OrderLineNumber, ExternOrdersDetail.Notes   --WL06
                 FROM ExternOrdersDetail (NOLOCK) 
                 WHERE ExternOrdersDetail.OrderKey = OD.OrderKey AND ExternOrdersDetail.OrderLineNumber = OD.OrderLineNumber) AS EOD
    JOIN MBOL M (NOLOCK) ON OH.MBOLKey = M.MbolKey
@@ -312,7 +380,7 @@ BEGIN
           , OH.OrderDate      --WL03
           , OH.Notes
           , OH.Notes2
-          , OD.UserDefine02
+          , CASE WHEN OH.Storerkey = 'LEGOP' THEN OD.OrderLineNumber ELSE OD.UserDefine02 END   --WL06
           , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END
           , CASE WHEN ISNULL(OD.UserDefine03,'') = 'Y' 
                  THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
@@ -327,14 +395,14 @@ BEGIN
           , OD.Notes2
 
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT Orderkey, SKU, SUM(SUMInCtn), SUM(SUMInQty), Notes2A, Storerkey, Containerkey
+      SELECT Orderkey, SKU, SUM(SUMInCtn), SUM(SUMInQty), Notes2A, Storerkey, Containerkey, SUM(SumQty)   --WL06
       FROM #TMP_DATA 
       GROUP BY Orderkey, SKU, Notes2A, Storerkey, Containerkey
       ORDER BY Orderkey, SKU
    
    OPEN CUR_LOOP
    	
-   FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_SKU, @n_SumInCtn, @n_SumInQty, @c_Notes2, @c_Storerkey, @c_Containerkey
+   FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_SKU, @n_SumInCtn, @n_SumInQty, @c_Notes2, @c_Storerkey, @c_Containerkey, @n_SumQty   --WL06
                                                                                
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -370,46 +438,61 @@ BEGIN
          --SELECT @c_Notes2B = ColValue FROM dbo.fnc_delimsplit ('|',@c_Notes2) WHERE SeqNo = 5
    	END
    	
-   	SELECT @n_STDGROSSWGT = SKU.STDGROSSWGT
+      SELECT @n_STDGROSSWGT = SKU.STDGROSSWGT
    	     , @n_GrossWgt    = SKU.GrossWgt   
    	     , @n_Cube        = SKU.[Cube]       
    	     , @n_StdCube     = SKU.StdCube    
    	FROM SKU (NOLOCK)
    	WHERE SKU.SKU = @c_SKU AND SKU.StorerKey = @c_Storerkey
-   	
-   	SET @n_TTLWeight = (@n_SumInCtn * @n_GrossWgt)      --Full Case
-   	SET @n_TTLWeight = @n_TTLWeight + (@n_SumInQty * @n_STDGROSSWGT)   --Loose
-   	
-      SET @n_TTLCBM = (@n_SumInCtn * @n_Cube)      --Full Case
-   	SET @n_TTLCBM = @n_TTLCBM + (@n_SumInQty * @n_StdCube)   --Loose
-   	
-      --SELECT @n_TTLWeight 
-      --     , @n_TTLCBM
-      --     , @n_STDGROSSWGT
-      --     , @n_GrossWgt   
-      --     , @n_Cube       
-      --     , @n_StdCube    
-   	
-   	UPDATE #TMP_DATA
-   	SET TTLWeight = TTLWeight + @n_TTLWeight
-   	  , TTLCBM    = TTLCBM + @n_TTLCBM
-   	  , Notes2A   = @c_Notes2A
-   	  , Notes2B   = @c_Notes2B
-   	WHERE Orderkey = @c_Orderkey AND SKU = @c_SKU AND ContainerKey = @c_Containerkey
-   	
+
+      --WL06 S
+      IF @c_Storerkey = 'LEGO'
+      BEGIN
+   	   SET @n_TTLWeight = (@n_SumInCtn * @n_GrossWgt)      --Full Case
+   	   SET @n_TTLWeight = @n_TTLWeight + (@n_SumInQty * @n_STDGROSSWGT)   --Loose
+   	   
+         SET @n_TTLCBM = (@n_SumInCtn * @n_Cube)      --Full Case
+   	   SET @n_TTLCBM = @n_TTLCBM + (@n_SumInQty * @n_StdCube)   --Loose
+   	   
+   	   UPDATE #TMP_DATA
+   	   SET TTLWeight = TTLWeight + @n_TTLWeight
+   	     , TTLCBM    = TTLCBM + @n_TTLCBM
+   	     , Notes2A   = @c_Notes2A
+   	     , Notes2B   = @c_Notes2B
+   	   WHERE Orderkey = @c_Orderkey AND SKU = @c_SKU AND ContainerKey = @c_Containerkey
+   	END
+      ELSE IF @c_Storerkey = 'LEGOP'
+      BEGIN
+         SET @n_TTLWeight = (@n_SumQty * @n_GrossWgt)
+         SET @n_TTLCBM    = (@n_SumQty * @n_Cube)
+         
+         UPDATE #TMP_DATA
+         SET TTLWeight = TTLWeight + @n_TTLWeight
+           , TTLCBM    = TTLCBM + @n_TTLCBM
+           , Notes2A   = @c_Notes2A
+           , Notes2B   = @c_Notes2B
+         WHERE Orderkey = @c_Orderkey AND SKU = @c_SKU AND ContainerKey = @c_Containerkey
+      END
+      --WL06 E
+
    	SET @n_TTLWeight = 0.00
    	SET @n_TTLCBM    = 0.00
    	SET @c_Notes2A   = ''
    	SET @c_Notes2B   = ''
    	                            
-      FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_SKU, @n_SumInCtn, @n_SumInQty, @c_Notes2, @c_Storerkey, @c_Containerkey
+      FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_SKU, @n_SumInCtn, @n_SumInQty, @c_Notes2, @c_Storerkey, @c_Containerkey, @n_SumQty   --WL06
    END
    
-   SELECT * FROM #TMP_DATA ORDER BY Containerkey, OrderKey, CASE WHEN ISNUMERIC(UserDefine02) = 1 THEN CAST(UserDefine02 AS INT) ELSE UserDefine02 END   --WL02   --WL05
+   SELECT * FROM #TMP_DATA ORDER BY Containerkey, OrderKey, CASE WHEN ISNUMERIC(UserDefine02) = 1 THEN CAST(UserDefine02 AS INT) ELSE UserDefine02 END   --WL05   --WL06 
    
 QUIT_SP:  
    IF OBJECT_ID('tempdb..#TMP_DATA') IS NOT NULL
       DROP TABLE #TMP_DATA
+
+   --WL06
+   IF OBJECT_ID('tempdb..#TMP_Qty') IS NOT NULL
+      DROP TABLE #TMP_Qty
+
 END -- procedure
 GO
 

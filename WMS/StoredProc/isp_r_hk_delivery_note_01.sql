@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_delivery_note_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_r_hk_delivery_note_01]
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_01]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
+   DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_01]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -32,6 +32,7 @@ GO
 /*                            - Add fields S_Fax2, S_B_Fax2, ...         */
 /* 05/02/2018   ML       1.7  Add new Show Fields                        */
 /* 30/04/2018   ML       1.8  Add new field SplitPrintKey                */
+/* 19/04/2021   ML       1.9  Performance tuning                         */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_01] (
@@ -226,7 +227,6 @@ BEGIN
          , @c_ExecArguments      NVARCHAR(MAX)
          , @c_JoinClause         NVARCHAR(4000)
 
-
    SELECT @c_DataWidnow = 'r_hk_delivery_note_01'
         , @c_SizeList   = N'|5XS|4XS|3XS|XXXS|2XS|XXS|XS|0XS|S|00S|YS|SM|0SM|S/M|M|00M|YM|ML|0ML|M/L|L|00L|YL|F|XL|0XL|XXL|2XL|XXXL|3XL|4XL|5XL|'
         , @n_Col        = 24
@@ -339,7 +339,7 @@ BEGIN
         , DocKey         = MAX( CASE WHEN RptCfg.ShowFields LIKE '%,PrintByOrder,%' OR ISNULL(OH.Userdefine09,'')='' THEN OH.Orderkey ELSE OH.Loadkey END )
         , Storerkey      = MAX( OH.Storerkey )
      FROM dbo.ORDERS        OH (NOLOCK)
-     JOIN dbo.PICKHEADER PIKHD WITH(NOLOCK, INDEX(IDX_PICKHD_LOADKEY) ) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'')=''
+     JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'')=''
      LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey
      LEFT JOIN (
         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
@@ -1325,6 +1325,5 @@ BEGIN
 
 END
 GO
-
 GRANT EXECUTE ON isp_r_hk_delivery_note_01 TO NSQL
 GO

@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenish_to_fpa_02]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenish_to_fpa_02]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -44,6 +44,7 @@ GO
 /*                            GenReplenALL, ReGenReplenALL               */
 /*                            ShowReplenkeyBC,ShowToLocBC,ShowReplenQtyBC*/
 /*                            NoGenReplenAllWhenOtherReplenExist         */
+/* 17/03/2021   ML       1.13 Fix LogicalLocation lenght issue           */
 /*************************************************************************/
 CREATE PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02] (
        @as_Key_Type  NVARCHAR(13)
@@ -228,7 +229,7 @@ BEGIN
       , Facility         NVARCHAR(5)
       , SKU              NVARCHAR(20)
       , LOT              NVARCHAR(10)
-      , LogicalLocation  NVARCHAR(10)
+      , LogicalLocation  NVARCHAR(20)
       , LOC              NVARCHAR(10)
       , ID               NVARCHAR(20)
       , Original_DropID  NVARCHAR(20)
@@ -328,13 +329,13 @@ BEGIN
       , Sku                NVARCHAR(20)
       , Descr              NVARCHAR(60)
       , AltSku             NVARCHAR(20)
-      , LogicalLocation    NVARCHAR(18)
+      , LogicalLocation    NVARCHAR(20)
       , FromLoc            NVARCHAR(10)
-      , FromID             NVARCHAR(18)
+      , FromID             NVARCHAR(20)
       , ToFacility         NVARCHAR(5)
       , ToLoc              NVARCHAR(10)
       , DropID             NVARCHAR(20)
-      , Lottable02         NVARCHAR(18)
+      , Lottable02         NVARCHAR(20)
       , Lottable04         DATETIME
       , PackKey            NVARCHAR(10)
       , CaseCnt            INT

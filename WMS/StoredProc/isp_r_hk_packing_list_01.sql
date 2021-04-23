@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_packing_list_01]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_packing_list_01]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
    DROP PROCEDURE [dbo].[isp_r_hk_packing_list_01]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -50,6 +50,10 @@ GO
 /*                                          N_Width1, N_Width2           */
 /*                            Add Output: WMSOrderKey, Lbl_Orderkey_Conso*/
 /*                                        N_Width1, N_Width2             */
+/* 19/03/2021   ML       1.20 Exclude PD.Qty=0 when calc Total Carton    */
+/* 13/04/2021   ML       1.21 Add new field LineAmount                   */
+/* 17/04/2021   ML       1.22 Fix duplicate record in #TEMP_PACKDETAIL2  */
+/* 19/04/2021   ML       1.23 Insert errolog when Pick/Pack Unmatch      */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_packing_list_01] (
@@ -229,6 +233,7 @@ BEGIN
       DROP TABLE #TEMP_PAKDT
 
    DECLARE @c_DataWindow         NVARCHAR(40)
+         , @c_SP_Name            NVARCHAR(40)
          , @c_SizeList           NVARCHAR(4000)
          , @c_DocKeyExp          NVARCHAR(4000)
          , @c_ReportHeadingExp   NVARCHAR(4000)
@@ -321,6 +326,7 @@ BEGIN
          , @n_Tmp_Qty            INT
 
    SELECT @c_DataWindow = 'r_hk_packing_list_01'
+        , @c_SP_Name    = 'isp_r_hk_packing_list_01'
         , @c_SizeList   = N'|5XS|4XS|3XS|XXXS|2XS|XXS|XS|0XS|S|00S|YS|SM|0SM|S/M|M|00M|YM|ML|0ML|M/L|L|00L|YL|F|XL|0XL|XXL|2XL|XXXL|3XL|4XL|5XL|'
         , @n_Col        = 5
 
@@ -549,16 +555,16 @@ BEGIN
 
 
    -- Storerkey Loop
-   DECLARE C_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
+   DECLARE C_CURSOR_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT Storerkey
      FROM #TEMP_FINALORDERKEY
     ORDER BY 1
 
-   OPEN C_STORERKEY
+   OPEN C_CURSOR_STORERKEY
 
    WHILE 1=1
    BEGIN
-      FETCH NEXT FROM C_STORERKEY
+      FETCH NEXT FROM C_CURSOR_STORERKEY
        INTO @c_Storerkey
 
       IF @@FETCH_STATUS<>0
@@ -940,10 +946,9 @@ BEGIN
            , OrderKey        = CAST(NULL AS NVARCHAR(10))
            , OrderLineNumber = CAST(NULL AS NVARCHAR(5))
         INTO #TEMP_PACKDETAIL2
-        FROM #TEMP_FINALORDERKEY FOK
+        FROM #TEMP_FINALPICKSLIPNO FOK
         JOIN dbo.PACKDETAIL PD(NOLOCK) ON FOK.PickslipNo = PD.PickSlipNo
-       WHERE FOK.Storerkey = @c_Storerkey
-         AND PD.Qty > 0
+       WHERE PD.Qty > 0
 
       SELECT *
         INTO #TEMP_PACKDETAIL
@@ -1341,8 +1346,8 @@ BEGIN
                        , @n_Col
    END
 
-   CLOSE C_STORERKEY
-   DEALLOCATE C_STORERKEY
+   CLOSE C_CURSOR_STORERKEY
+   DEALLOCATE C_CURSOR_STORERKEY
 
 
    ----------
@@ -1387,6 +1392,76 @@ BEGIN
           FROM #TEMP_PAKDT
      ) b ON a.DocKey = b.DocKey AND b.SeqNo = 1
 
+
+
+   -- Check Pick / Pack Un-match
+   IF EXISTS(SELECT TOP 1 1
+      FROM #TEMP_FINALORDERKEY FOK
+      JOIN dbo.CodeLkup RptCfg(NOLOCK) ON RptCfg.Listname='REPORTCFG' AND RptCfg.Code='SHOWFIELD' AND RptCfg.Long=@c_DataWindow AND RptCfg.Short='Y' AND RptCfg.Storerkey=FOK.Storerkey
+      WHERE LTRIM(RTRIM(RptCfg.UDF01)) + LOWER(LTRIM(RTRIM(RptCfg.Notes))) + LTRIM(RTRIM(RptCfg.UDF01)) LIKE '%,check_pick_pack_unmatch,%')
+   BEGIN
+      IF OBJECT_ID('tempdb..#TEMP_PD1') IS NOT NULL
+         DROP TABLE #TEMP_PD1
+      IF OBJECT_ID('tempdb..#TEMP_PD2') IS NOT NULL
+         DROP TABLE #TEMP_PD2
+
+      SELECT PickSlipNo=PickSlipNo_Key, CartonNo, LabelNo, Sku, Qty = SUM(Qty)
+      INTO #TEMP_PD1
+      FROM #TEMP_PAKDT
+      WHERE Section = 1
+      GROUP BY PickSlipNo_Key, CartonNo, LabelNo, Sku
+
+      SELECT PickSlipNo, CartonNo, LabelNo, Sku, Qty = SUM(Qty)
+      INTO #TEMP_PD2
+      FROM dbo.PACKDETAIL(NOLOCK)
+      WHERE PickslipNo IN (SELECT DISTINCT PickslipNo FROM #TEMP_FINALPICKSLIPNO)
+        AND Qty>0
+      GROUP BY PickSlipNo, CartonNo, LabelNo, Sku
+
+      IF EXISTS (SELECT TOP 1 1
+         FROM      #TEMP_PD1 a
+         FULL JOIN #TEMP_PD2 b ON a.PickslipNo=b.PickslipNo AND a.CartonNo=b.CartonNo AND a.LabelNo=b.LabelNo AND a.Sku=b.Sku
+         WHERE ISNULL(a.Qty,0)<>ISNULL(b.Qty,0) )
+      BEGIN
+         IF EXISTS(SELECT TOP 1 1 FROM sys.tables (NOLOCK) WHERE NAME='errlog')
+         BEGIN
+            INSERT INTO errlog (ErrorID, Module, ErrorText)
+            SELECT ErrorID   = -1
+                 , Module    = @c_SP_Name
+                 , ErrorText = 'Pick / Pack Un-match'
+            UNION
+            SELECT 0
+                 , @c_SP_Name
+                 , CONVERT(NCHAR(11), 'PickslipNo')
+                 + CONVERT(NCHAR(11), 'CartonNo'  )
+                 + CONVERT(NCHAR(21), 'LabelNo'   )
+                 + CONVERT(NCHAR(21), 'Sku'       )
+                 + CONVERT(NCHAR(11), 'PickQty'   )
+                 + CONVERT(NCHAR(11), 'PackQty'   )
+                 + 'Variance'
+            UNION
+            SELECT ROW_NUMBER() OVER(ORDER BY ISNULL(a.PickSlipNo, b.PickSlipNo), ISNULL(a.CartonNo, b.CartonNo), ISNULL(a.LabelNo, b.LabelNo), ISNULL(a.Sku, b.SKu))
+                 , @c_SP_Name
+                 , CONVERT(NCHAR(11), ISNULL(a.PickSlipNo, b.PickSlipNo))
+                 + CONVERT(NCHAR(11), ISNULL(a.CartonNo, b.CartonNo))
+                 + CONVERT(NCHAR(21), ISNULL(a.LabelNo, b.LabelNo))
+                 + CONVERT(NCHAR(21), ISNULL(a.Sku, b.SKu))
+                 + CONVERT(NCHAR(11), ISNULL(a.Qty, 0))
+                 + CONVERT(NCHAR(11), ISNULL(b.Qty, 0))
+                 + CONVERT(NVARCHAR(10), ISNULL(a.Qty, 0) - ISNULL(b.Qty, 0))
+              FROM      #TEMP_PD1 a
+              FULL JOIN #TEMP_PD2 b ON a.PickslipNo=b.PickslipNo AND a.CartonNo=b.CartonNo AND a.LabelNo=b.LabelNo AND a.Sku=b.Sku
+            ORDER BY ErrorID
+         END
+
+         DELETE FROM #TEMP_PAKDT
+         WHERE PickSlipNo_Key IN (
+            SELECT DISTINCT ISNULL(a.PickSlipNo, b.PickSlipNo)
+              FROM      #TEMP_PD1 a
+              FULL JOIN #TEMP_PD2 b ON a.PickslipNo=b.PickslipNo AND a.CartonNo=b.CartonNo AND a.LabelNo=b.LabelNo AND a.Sku=b.Sku
+            WHERE ISNULL(a.Qty,0)<>ISNULL(b.Qty,0) )
+      END
+   END
 
 
    ----------
@@ -2047,6 +2122,7 @@ BEGIN
         , N_Width2           = CAST( RTRIM( (select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='N_Width2') ) AS NVARCHAR(50))
+        , LineAmount         = SUM(PAKDT.Qty) * MAX( ISNULL( PAKDT.UnitPrice, 0 ) )
 
    FROM #TEMP_PAKDT PAKDT
    JOIN dbo.ORDERS OH (NOLOCK) ON PAKDT.FirstOrderKey=OH.OrderKey
@@ -2071,6 +2147,7 @@ BEGIN
    LEFT JOIN (
         SELECT PickSlipNo, Total_Carton=COUNT(DISTINCT LabelNo)
           FROM dbo.PackDetail (NOLOCK)
+         WHERE Qty > 0
          GROUP BY PickSlipNo
    ) PD_TTL ON PAKDT.PickSlipNo_Key=PD_TTL.PickSlipNo
 
@@ -2115,5 +2192,5 @@ BEGIN
    ORDER BY SortOrderkey, SeqPS, SeqEOK, SeqOK, DocKey, CtnGrouping, Section, CartonNo, LabelNo, Line_No
 END
 GO
-GRANT EXECUTE ON isp_r_hk_packing_list_01 TO NSQL
+GRANT EXECUTE ON isp_r_hk_packing_list_01 TO NSQL, JReportRole
 GO
