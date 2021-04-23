@@ -19,16 +19,15 @@ GO
 /* Called By: r_dw_delivery_note43_rpt                                  */
 /*          : Copy from r_hk_delivery_note_04                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.0                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author    Ver   Purposes                                */  
+/* Date         Author    Ver Purposes                                  */  
 /* 08-May-2020  WLChooi   1.1   WMS-13263 - Revised field logic (WL01)  */
-/* 15-Apr-2021  WLChooi   1.2   WMS-16822 - Modify Field Logic (WL02)   */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_delivery_note43_rpt]  
@@ -120,7 +119,7 @@ BEGIN
          LEFT JOIN dbo.PICKHEADER PIKHDD (NOLOCK) ON PIKHDD.Orderkey = OH.Orderkey AND PIKHDD.Orderkey<>''
          LEFT JOIN dbo.PICKHEADER PIKHDC (NOLOCK) ON PIKHDC.ExternOrderkey = OH.Loadkey AND PIKHDC.ExternOrderkey<>'' AND ISNULL(PIKHDC.Orderkey,'')=''
          LEFT JOIN dbo.STORER     BT     (NOLOCK) ON OH.BillToKey = BT.Storerkey AND BT.[Type]='2'
-         LEFT JOIN dbo.STORER     SR     (NOLOCK) ON SR.Storerkey = 'QHW-' + LTRIM(RTRIM(OH.ConsigneeKey)) AND SR.ConsigneeFor = @c_storerkey AND SR.[Type] = '2'   --WL01   --WL02
+         LEFT JOIN dbo.STORER     SR     (NOLOCK) ON SR.Storerkey = 'QHW-' + LTRIM(RTRIM(OH.ConsigneeKey)) AND SR.ConsigneeFor = 'PVHQHW' AND SR.[Type] = '2'   --WL01
          WHERE OH.Storerkey  = @c_storerkey
           --AND (ISNULL(:as_mbolkey,'')<>'' AND OH.MBOLKey 
          AND (MBOL.MBOLKey IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@c_Mbolkey,char(13)+char(10),',')) WHERE ColValue <> ''))
@@ -128,14 +127,11 @@ BEGIN
       LEFT JOIN (
          SELECT PickSlipNo     = PD.PickSlipNo
               , NoOfCtn        = COUNT( DISTINCT PD.LabelNo )
-              , MBOLKey        = MD.MBOLKey   --WL02
-         FROM PACKDETAIL PD (NOLOCK)
-         JOIN PICKDETAIL PIDET (NOLOCK) ON PD.LabelNo = PIDET.CaseID AND PD.StorerKey = PIDET.Storerkey   --WL02
-         JOIN MBOLDETAIL MD (NOLOCK) ON MD.OrderKey = PIDET.OrderKey   --WL02
-         WHERE PD.Storerkey = @c_storerkey
-         GROUP BY PD.PickSlipNo, MD.MBOLKey   --WL02
+           FROM PACKDETAIL PD (NOLOCK)
+          WHERE PD.Storerkey = @c_storerkey
+          GROUP BY PD.PickSlipNo
       ) PAK
-      ON ORD.PickSlipNo = PAK.PickSlipNo AND ORD.MBOLKey = PAK.MBOLKey   --WL02
+      ON ORD.PickSlipNo = PAK.PickSlipNo
       
       LEFT JOIN dbo.CodeLkup PVHRPT(NOLOCK) ON PVHRPT.Listname='PVHREPORT' AND PVHRPT.Storerkey=ORD.Storerkey AND PVHRPT.Code='LFL' AND PVHRPT.Code2=''
       
