@@ -18,7 +18,7 @@ GO
 /*                                                                         */
 /* Called By: SQL Job                                                      */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -26,6 +26,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 2021-04-12   WLChooi 1.1   WMS-16040 - Modify logic to cater for other  */
+/*                            storers (WL01)                               */
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_BackendVoicePickRelease]  
 (     @c_Storerkey   NVARCHAR(15)
@@ -50,6 +52,14 @@ BEGIN
          , @c_Pickslipno      NVARCHAR(10)
          , @c_TransmitLogKey  NVARCHAR(10)
          , @c_LoadLine        NVARCHAR(5)
+
+   --WL01 S
+   DECLARE @c_Code           NVARCHAR(100) = ''
+         , @c_Short          NVARCHAR(100) = ''
+         , @c_UDF01          NVARCHAR(100) = ''
+         , @n_RowCount       INT = 0
+   --WL01 E
+
        
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -72,7 +82,6 @@ BEGIN
          JOIN LOADPLAN LP (NOLOCK) ON LP.LoadKey = LPD.LoadKey
          JOIN PACKTASK PT (NOLOCK) ON PT.Orderkey = OH.Orderkey
          WHERE OH.StorerKey = @c_Storerkey AND LP.[Status] < '5'
-         --AND LPD.LoadKey = '0002095155'
          AND LP.UserDefine10 = 'VP'
          AND LP.EditDate <= CONVERT(DATETIME, DATEADD(MINUTE, -2, GETDATE() ) , 120 )
       
@@ -95,13 +104,34 @@ BEGIN
          
          WHILE @@FETCH_STATUS <> -1
          BEGIN
-         	IF EXISTS (SELECT 1
-                       FROM PICKDETAIL PD (NOLOCK)
-                       JOIN LOC LOC (NOLOCK) ON LOC.Loc = PD.Loc
-                       LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'BlocLocCat' AND CL.Storerkey = PD.Storerkey
-                                                     AND CL.Code2 = @c_Facility  AND CL.Short = LOC.LocationCategory
-                       WHERE PD.PickSlipNo = @c_Pickslipno AND CL.Short IS NULL)
-            BEGIN
+            --WL01 S
+            SET @c_Short = ''
+            SET @c_UDF01 = ''
+            SET @n_RowCount = 0
+
+            SELECT TOP 1 @c_Short     = ISNULL(CL.Short,'')   --LocationCategory
+                       , @c_UDF01     = ISNULL(CL.UDF01,'')   --LocationType
+            FROM CODELKUP CL (NOLOCK)
+            WHERE CL.LISTNAME = 'BlocLocCat' AND CL.Code = @c_Facility
+            AND CL.Storerkey = @c_Storerkey
+
+            --Multiple Orderkey may appear in 1 Pickslipno/TaskBatchno
+            --If one of the orderkey can link with Codelkup, which mean do not generate Transmitlog2 for this Pickslipno
+            SELECT @n_RowCount = COUNT(1)
+            FROM PICKDETAIL PD (NOLOCK)
+            JOIN LOC (NOLOCK) ON LOC.Loc = PD.Loc
+            WHERE PD.PickSlipNo = @c_Pickslipno
+            AND (LOC.LocationCategory IN (SELECT ColValue from dbo.fnc_delimsplit (',',@c_Short)) 
+                  OR LOC.LocationType IN (SELECT ColValue from dbo.fnc_delimsplit (',',@c_UDF01)))
+            
+         	--IF EXISTS (SELECT 1
+            --           FROM PICKDETAIL PD (NOLOCK)
+            --           JOIN LOC LOC (NOLOCK) ON LOC.Loc = PD.Loc
+            --           LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'BlocLocCat' AND CL.Storerkey = PD.Storerkey
+            --                                         AND CL.Code2 = @c_Facility  AND CL.Short = LOC.LocationCategory
+            --           WHERE PD.PickSlipNo = @c_Pickslipno AND CL.Short IS NULL)
+            IF @n_RowCount = 0
+            BEGIN   --WL01 E
             	IF NOT EXISTS (SELECT 1 
             	               FROM LOADPLANDETAIL LPD (NOLOCK) 
             	               JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = LPD.OrderKey
