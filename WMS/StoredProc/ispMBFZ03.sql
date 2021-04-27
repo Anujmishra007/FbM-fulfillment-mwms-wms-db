@@ -30,6 +30,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 10-Mar-2021  NJOW01  1.0   Include zone max rate calculation            */  
 /* 24-Mar-2021	NJOW02  1.1   WMS-16644 include export order calculation   */
+/* 15-Apr-2021  NJOW03  1.2   WMS-16834 Change VAT formula                 */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispMBFZ03]  
 (     @c_MBOLKey     NVARCHAR(10)   
@@ -693,7 +694,7 @@ BEGIN
                   SET @n_TotOrderCarton = @n_TotFullCarton + @n_TotLooseCarton
                   SET @n_OrderFreightAmt = ROUND(@n_FreightAmt * (@n_TotOrderVol / @n_TotContainerVol),2)  --ROUND(@n_FreightAmt / @n_TotOrderVol,2)
                   SET @n_FreightSurcharge = @n_OrderFreightAmt * @n_SurChargeRate
-                  SET @n_Vat = @n_OrderFreightAmt * @n_VATRate
+                  SET @n_Vat = (@n_OrderFreightAmt + @n_FreightSurcharge) * @n_VATRate  --NJOW03
                   SET @c_RateString = FORMAT(@n_TotOrderGrossWgt,'0.######') + '|' + FORMAT(@n_TotOrderNetWgt,'0.######') + '|' + FORMAT(@n_TotPallet,'0.######')                                   
                   
                   INSERT INTO EXTERNORDERS (ExternOrderkey, Orderkey, Storerkey, Source, PlatformName, PlatformOrderNo, Userdefine01, 
@@ -1063,7 +1064,7 @@ BEGIN
                SET @n_TotOrderCarton = @n_TotFullCarton + @n_TotLooseCarton
                SET @n_OrderFreightAmt = ROUND(@n_FreightAmt * (@n_TotOrderVol / @n_TotConsigneeVol),2)  --ROUND(@n_FreightAmt / @n_TotOrderVol,2)
                SET @n_FreightSurcharge = @n_OrderFreightAmt * @n_SurChargeRate
-               SET @n_Vat = @n_OrderFreightAmt * @n_VATRate
+               SET @n_Vat = (@n_OrderFreightAmt + @n_FreightSurcharge)  * @n_VATRate  --NJOW03
                SET @c_RateString = FORMAT(@n_TotOrderGrossWgt,'0.######') + '|' + FORMAT(@n_TotOrderNetWgt,'0.######') + '|' + FORMAT(@n_TotPallet,'0.######') 
                
                INSERT INTO EXTERNORDERS (ExternOrderkey, Orderkey, Storerkey, Source, PlatformName, PlatformOrderNo, Userdefine01, 
