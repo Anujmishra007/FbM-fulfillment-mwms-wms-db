@@ -19,15 +19,16 @@ GO
 /* Called By: r_dw_delivery_note43_rpt                                  */
 /*          : Copy from r_hk_delivery_note_04                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author    Ver Purposes                                  */  
+/* Date         Author    Ver   Purposes                                */  
 /* 08-May-2020  WLChooi   1.1   WMS-13263 - Revised field logic (WL01)  */
+/* 15-Apr-2021  WLChooi   1.2   WMS-16822 - Modify Logic (WL02)         */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_delivery_note43_rpt]  
@@ -48,8 +49,8 @@ BEGIN
    DECLARE @c_DataWindow NVARCHAR(100)
    SET @c_DataWindow = 'r_dw_delivery_note43_rpt'
 
-   SELECT MBOLKey           = X.MBOLKey
-        , BookingReference  = MAX( IIF(X.BookingReference<>'', X.BookingReference, X.MBOLKey) )
+   SELECT Loadkey           = X.Loadkey   --WL02
+        , BookingReference  = MAX( IIF(X.BookingReference<>'', X.BookingReference, X.MBOLKey) )   --WL02
         , Storerkey         = MAX( X.Storerkey )
         , Company           = MAX( X.Company )
         , C_Company         = MAX( CASE WHEN X.SeqNo=1 THEN IIF(X.CarrierAgent<>'', X.CarrierAgent, X.ConsigneeKey +' - '+ X.C_Company) END )
@@ -65,8 +66,9 @@ BEGIN
         , LFLContactName    = MAX( X.LFLContactName )
         , LFLContactAddress = MAX( X.LFLContactAddress )
         , LFLContactPhone   = MAX( X.LFLContactPhone )
+        , MBOLKey           = MAX( X.MBOLKey )  --WL02
    FROM (
-      SELECT MBOLKey          = ORD.MBOLKey
+      SELECT Loadkey          = ORD.Loadkey   --WL02
            , BookingReference = ORD.BookingReference
            , PickSlipNo       = ORD.PickSlipNo
            , Storerkey        = ORD.Storerkey
@@ -81,13 +83,14 @@ BEGIN
            , ExternOrderKey   = ORD.ExternOrderKey
            , CarrierAgent     = ORD.CarrierAgent
            , NoOfCtn          = PAK.NoOfCtn
-           , SeqNo            = ROW_NUMBER() OVER(PARTITION BY ORD.MBOLKey ORDER BY ORD.PickslipNo)
+           , SeqNo            = ROW_NUMBER() OVER(PARTITION BY ORD.Loadkey ORDER BY ORD.PickslipNo)   --WL02
            , LFLContactName   = ISNULL( RTRIM( PVHRPT.Description ), '' )
            , LFLContactAddress= ISNULL( RTRIM( PVHRPT.Notes ), '' )
            , LFLContactPhone  = ISNULL( RTRIM( PVHRPT.Long ), '' )
+           , MBOLKey          = ORD.MBOLKey   --WL02
       FROM
       (
-         SELECT MBOLKey          = RTRIM( OH.MBOLKey )
+         SELECT Loadkey          = RTRIM( OH.Loadkey )   --WL02
               , BookingReference = ISNULL( RTRIM( MBOL.BookingReference ), '')
               , PickSlipNo       = ISNULL( RTRIM( ISNULL(PIKHDD.PickheaderKey, PIKHDC.PickheaderKey) ), '')
               , Storerkey        = ISNULL( RTRIM( OH.Storerkey ), '')
@@ -113,13 +116,14 @@ BEGIN
               , ExternOrderKey   = ISNULL( RTRIM( CASE WHEN PIKHDD.PickheaderKey IS NULL THEN OH.Loadkey ELSE OH.ExternOrderKey END ), '')
               , CarrierAgent     = ISNULL( RTRIM( MBOL.CarrierAgent ), '')
               , SeqNo            = ROW_NUMBER() OVER(PARTITION BY ISNULL(PIKHDD.PickheaderKey, PIKHDC.PickheaderKey) ORDER BY OH.Orderkey)
+              , MBOLKey          = OH.MBOLKey   --WL02
          FROM dbo.ORDERS OH (NOLOCK)
          JOIN dbo.MBOL MBOL (NOLOCK) ON OH.MBOLKey = MBOL.MBOLKey
          JOIN dbo.STORER ST (NOLOCK) ON (ST.Storerkey = OH.Storerkey)
          LEFT JOIN dbo.PICKHEADER PIKHDD (NOLOCK) ON PIKHDD.Orderkey = OH.Orderkey AND PIKHDD.Orderkey<>''
          LEFT JOIN dbo.PICKHEADER PIKHDC (NOLOCK) ON PIKHDC.ExternOrderkey = OH.Loadkey AND PIKHDC.ExternOrderkey<>'' AND ISNULL(PIKHDC.Orderkey,'')=''
          LEFT JOIN dbo.STORER     BT     (NOLOCK) ON OH.BillToKey = BT.Storerkey AND BT.[Type]='2'
-         LEFT JOIN dbo.STORER     SR     (NOLOCK) ON SR.Storerkey = 'QHW-' + LTRIM(RTRIM(OH.ConsigneeKey)) AND SR.ConsigneeFor = 'PVHQHW' AND SR.[Type] = '2'   --WL01
+         LEFT JOIN dbo.STORER     SR     (NOLOCK) ON SR.Storerkey = 'QHW-' + LTRIM(RTRIM(OH.ConsigneeKey)) AND SR.ConsigneeFor = @c_storerkey AND SR.[Type] = '2'   --WL01   --WL02
          WHERE OH.Storerkey  = @c_storerkey
           --AND (ISNULL(:as_mbolkey,'')<>'' AND OH.MBOLKey 
          AND (MBOL.MBOLKey IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@c_Mbolkey,char(13)+char(10),',')) WHERE ColValue <> ''))
@@ -127,17 +131,20 @@ BEGIN
       LEFT JOIN (
          SELECT PickSlipNo     = PD.PickSlipNo
               , NoOfCtn        = COUNT( DISTINCT PD.LabelNo )
-           FROM PACKDETAIL PD (NOLOCK)
-          WHERE PD.Storerkey = @c_storerkey
-          GROUP BY PD.PickSlipNo
+              , MBOLKey        = MD.MBOLKey   --WL02
+         FROM PACKDETAIL PD (NOLOCK)
+         JOIN PICKDETAIL PIDET (NOLOCK) ON PD.LabelNo = PIDET.CaseID AND PD.StorerKey = PIDET.Storerkey   --WL02
+         JOIN MBOLDETAIL MD (NOLOCK) ON MD.OrderKey = PIDET.OrderKey   --WL02
+         WHERE PD.Storerkey = @c_storerkey
+         GROUP BY PD.PickSlipNo, MD.MBOLKey   --WL02
       ) PAK
-      ON ORD.PickSlipNo = PAK.PickSlipNo
+      ON ORD.PickSlipNo = PAK.PickSlipNo AND ORD.MBOLKey = PAK.MBOLKey   --WL02
       
       LEFT JOIN dbo.CodeLkup PVHRPT(NOLOCK) ON PVHRPT.Listname='PVHREPORT' AND PVHRPT.Storerkey=ORD.Storerkey AND PVHRPT.Code='LFL' AND PVHRPT.Code2=''
       
       WHERE ORD.SeqNo = 1
    ) X
-   GROUP BY X.MBOLKey, FLOOR((X.SeqNo-1)/2)
+   GROUP BY X.Loadkey, FLOOR((X.SeqNo-1)/2)   --WL02
 
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return  
