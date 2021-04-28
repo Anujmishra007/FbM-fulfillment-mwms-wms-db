@@ -25,7 +25,9 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */ 
 /* 17-11-2020  WLChooi  1.2   WMS-15571 - Revise Logic (WL01)            */
-/* 04-03-2021  WLChooi  1.3   WMS-15571 - Fix Cater for Channel_ID (WL02)*/
+/* 04-03-2021  WLChooi  1.3   WMS-15571 - Fix Cater for Channel_ID (WL02)*/ 
+/* 21-04-2021  WLChooi  1.4   WMS-16849 - Fix UOM 2 not sent to Pack     */
+/*                            Station (WL03)                             */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV11]      
@@ -226,7 +228,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
          ArchiveCop,        OptimizeCop,        ShipFlag,
          PickSlipNo,        TaskDetailKey,      TaskManagerReasonKey,
          Notes,             MoveRefKey,         WIP_RefNo,
-         Channel_ID   --WL02
+         Channel_ID   --WL02   
        )
        SELECT PD.PickDetailKey,  CaseID,              PD.PickHeaderKey, 
          PD.OrderKey,            PD.OrderLineNumber,  PD.Lot,
@@ -241,7 +243,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
          PD.ArchiveCop,          PD.OptimizeCop,      PD.ShipFlag,
          PD.PickSlipNo,          PD.TaskDetailKey,    PD.TaskManagerReasonKey,
          PD.Notes,               PD.MoveRefKey,       @c_SourceType,
-         PD.Channel_ID   --WL02
+         PD.Channel_ID   --WL02   
        FROM WAVEDETAIL WD (NOLOCK) 
        JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
        WHERE WD.Wavekey = @c_Wavekey
@@ -419,7 +421,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
           IF @c_UDF02 = 'D'
           BEGIN
              DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, '6' AS UOM, SUM(PD.UOMQty) AS UOMQty, 
+             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,
+                    CASE WHEN PD.UOM = '2' THEN '2' ELSE '6' END AS UOM,   --WL03 
+                    SUM(PD.UOMQty) AS UOMQty, 
                     '',   --WL01
                     '',   --WL01                 
                     PACK.CaseCnt,
@@ -440,18 +444,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              AND PD.WIP_RefNo = @c_SourceType
              AND SL.LocationType NOT IN('PICK','CASE')
              AND LOC.LocationType = 'OTHER'
-             AND PD.UOM NOT IN ('2')   --WL01
+             --AND PD.UOM NOT IN ('2')   --WL01   --WL03
              GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, LOC.LogicalLocation, PACK.CaseCnt,
                       --CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END,          --WL01
                       --CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END,   --WL01
-                      ISNULL(IL.InLoc,'') --split the qty by inloc
-                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END              
+                      ISNULL(IL.InLoc,''), --split the qty by inloc
+                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END    
+                      CASE WHEN PD.UOM = '2' THEN '2' ELSE '6' END   --WL03             
              ORDER BY PD.Storerkey, PD.Sku, LOC.LogicalLocation, PD.Lot     
           END
           ELSE IF @c_UDF02 = 'C'
           BEGIN
              DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, '6' AS UOM, SUM(PD.UOMQty) AS UOMQty, 
+             SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, 
+                    CASE WHEN PD.UOM = '2' THEN '2' ELSE '6' END AS UOM,   --WL03 
+                    SUM(PD.UOMQty) AS UOMQty, 
                     '',   --WL01
                     '',   --WL01                 
                     PACK.CaseCnt,
@@ -472,12 +479,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              AND PD.WIP_RefNo = @c_SourceType
              AND SL.LocationType NOT IN('PICK','CASE')
              AND LOC.LocationType = 'OTHER'
-             AND PD.UOM NOT IN ('2')   --WL01
+             --AND PD.UOM NOT IN ('2')   --WL01   --WL03
              GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, LOC.LogicalLocation, PACK.CaseCnt,
                       --CASE WHEN @c_UDF02 = 'D' THEN PD.Orderkey ELSE '' END,          --WL01
                       --CASE WHEN @c_UDF02 = 'D' THEN PD.OrderLineNumber ELSE '' END,   --WL01
-                      ISNULL(IL.InLoc,'') --split the qty by inloc
-                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END              
+                      ISNULL(IL.InLoc,''), --split the qty by inloc
+                      --CASE WHEN @c_Short = '2' THEN O.Loadkey ELSE '' END       
+                      CASE WHEN PD.UOM = '2' THEN '2' ELSE '6' END   --WL03       
              ORDER BY PD.Storerkey, PD.Sku, LOC.LogicalLocation, PD.Lot    
           END
           --WL01 E
@@ -841,13 +849,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                    DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                    ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
                    WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, 
-                   Taskdetailkey, TaskManagerReasonkey, Notes, Channel_ID )   --WL02
+                   Taskdetailkey, TaskManagerReasonkey, Notes, Channel_ID )   --WL02 
              SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
                    Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
                    DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                    ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
                    WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, 
-                   Taskdetailkey, TaskManagerReasonkey, Notes, Channel_ID   --WL02
+                   Taskdetailkey, TaskManagerReasonkey, Notes, Channel_ID   --WL02  
              FROM PICKDETAIL_WIP WITH (NOLOCK)
              WHERE PickDetailKey = @c_PickDetailKey
              
