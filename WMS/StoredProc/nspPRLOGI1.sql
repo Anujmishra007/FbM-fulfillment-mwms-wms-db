@@ -29,6 +29,7 @@ GO
 /* 03-Jul-2017 NJOW01   1.0  if same lottable 05 & 08 allocate uom 2    */
 /*                           from case location first                   */ 
 /* 02-Jan-2020 Wan01    1.1  Dynamic SQL review, impact SQL cache log   */ 
+/* 07-Apr-2021 NJOW02   1.2  WMS-16775 Cater for ecom allocation        */
 /************************************************************************/
 
 CREATE PROC nspPRLOGI1
@@ -70,10 +71,12 @@ BEGIN
            @n_PLTDays            INT,
            @n_Days               INT,
            @dt_Lottable05        DATETIME,
-           @dt_FirstLottable05   DATETIME
+           @dt_FirstLottable05   DATETIME,
+           @c_SQLParms           NVARCHAR(4000) = '',     --(Wan01)   
+           @c_ECOM_Mode         NCHAR(1)
 
-         , @c_SQLParms           NVARCHAR(4000) = ''     --(Wan01)   
-                                             
+   SET @c_ECOM_Mode = 'N'
+                                                         
    IF LEN(@c_OtherParms) > 0  -- when storerconfig 'Orderinfo4PreAllocation' is turned on
    BEGIN
       SELECT @c_Orderkey = LEFT(@c_OtherParms, 10)
@@ -84,16 +87,36 @@ BEGIN
       JOIN ORDERDETAIL (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey
       WHERE ORDERS.Orderkey = @c_Orderkey
       AND ORDERDETAIL.OrderLineNumber = @c_OrderLineNumber        
+      
+      --NJOW02
+      IF ISNULL(@c_Lottable08,'') = 'AP1BCH'       
+      BEGIN                              
+         IF EXISTS(SELECT 1
+                   FROM ORDERS O (NOLOCK)
+                   JOIN CODELKUP CL (NOLOCK) ON O.Consigneekey = CL.Code AND CL.Listname = 'LOGICCLG'
+                   WHERE O.Orderkey = @c_Orderkey)          
+         BEGIN
+         	  SET @c_ECOM_Mode = 'Y'
+         END    
+         ELSE
+         BEGIN                  
+            DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+               SELECT TOP 0 NULL, NULL, NULL, NULL    
+         
+            RETURN      
+         END      
+      END          
                   
       IF EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) 
                 WHERE Listname = 'LOGIORDTYP' 
                 AND Storerkey = @c_Storerkey
                 AND Short = 'CASE'
                 AND Code = @c_Type) AND @c_UOM IN('3','6','7') 
+         AND @c_ECOM_Mode = 'N' --NJOW01
       BEGIN
       	  --Not allow loose allocation
           DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
-          SELECT TOP 0 NULL, NULL, NULL, NULL    
+             SELECT TOP 0 NULL, NULL, NULL, NULL    
           
           RETURN 
       END                
@@ -211,7 +234,11 @@ BEGIN
           SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTxLOCxID.Id = @c_ID "  --(Wan01)
       END
       
-      IF @c_UOM IN ('1','2')
+      IF @c_ECOM_Mode = 'Y' --NJOW02
+      BEGIN
+   	     SELECT @c_Condition = " AND LOC.LocationType= 'PICK' "
+      END
+      ELSE IF @c_UOM IN ('1','2')
       BEGIN
           SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOC.LocationType NOT IN ('DYNPPICK','PICK') AND LOC.LocationCategory <> 'DYNPPICK' "
       END
