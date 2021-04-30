@@ -90,20 +90,22 @@ BEGIN
    WHERE [filename] = @c_FileName
    AND [status] ='9'
 
-   SELECT @c_EmailToList = 'guanhaochan@lflogistics.com'
-         ,@c_EmailCCList = 'shunghoeloh@lflogistics.com'
-         ,@c_EmailBCCList = ''
+   --SELECT @c_EmailToList = 'guanhaochan@lflogistics.com'
+   --      ,@c_EmailCCList = 'shunghoeloh@lflogistics.com'
+   --      ,@c_EmailBCCList = ''
    
-  --SELECT  @c_EmailToList = RTRIM(ISNULL(c.Email1,'')) + CASE WHEN RIGHT(RTRIM(c.Email1), 1) = ';' THEN '' ELSE ';' END + RTRIM(ISNULL(c.Email2,''))
-  --     ,  @c_EmailCCList = CASE 
-  --                            WHEN @c_StorerKey = 'NIKEMY' 
-  --                            THEN 'MYSNikeTeam@lflogistics.com;MY.track.it@nike.com;' 
-  --                         END + RTRIM(ISNULL(c.Notes2,''))
-  --     ,  @c_EmailBCCList = CASE 
-  --                            WHEN @c_StorerKey = 'NIKESG' 
-  --                            THEN 'TehSuYu@lflogistics.com;NurfitriBujang@LFLogistics.com;SG.track.it@nike.com;NoorlinaSulaiman@LFLogistics.com;VincentCheang@LFLogistics.com;MohamadMasni@LFLogistics.com;SGPLFLogNIKE@LFLogistics.com;' 
-  --                            ELSE '' 
-  --                         END
+  SELECT  @c_EmailToList = RTRIM(ISNULL(c.Email1,'')) + CASE WHEN RIGHT(RTRIM(c.Email1), 1) = ';' THEN '' ELSE ';' END + RTRIM(ISNULL(c.Email2,''))
+       ,  @c_EmailCCList = CASE 
+                              WHEN @c_StorerKey = 'NIKEMY' 
+                              THEN 'MYSNikeTeam@lflogistics.com;MY.track.it@nike.com;' 
+                           END + RTRIM(ISNULL(c.Notes2,''))
+       ,  @c_EmailBCCList = CASE 
+                              WHEN @c_StorerKey = 'NIKESG' 
+                              THEN 'CalvinKhor@LiFung.com;JayChua@LFLogistics.com;JoshuaHoong@LFLogistics.com;TehSuYu@lflogistics.com;NurfitriBujang@LFLogistics.com;SG.track.it@nike.com;NoorlinaSulaiman@LFLogistics.com;VincentCheang@LFLogistics.com;MohamadMasni@LFLogistics.com;SGPLFLogNIKE@LFLogistics.com;' 
+                              WHEN @c_StorerKey = 'NIKEMY'
+                              THEN 'CalvinKhor@LiFung.com;JayChua@LFLogistics.com;JoshuaHoong@LFLogistics.com;'
+                              ELSE '' 
+                           END
          , @c_EmailSubject = 'Auto Email ' + RTRIM(c.Company) + ' ' + RTRIM(c.Address2) + ' Nike Delivery Report ' + CONVERT(VARCHAR, o.DeliveryDate,106)
          , @c_Company = RTRIM(o.C_Company) 
          , @c_TotalCartons = RTRIM(COUNT(DISTINCT o.loadkey + pd.DropID))
