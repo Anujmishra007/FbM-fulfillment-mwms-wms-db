@@ -16,7 +16,8 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2019-10-29 1.0  CSCHONG    Created (WMS-10955)                             */     
-/* 2020-02-20 1.1  WLChooi    WMS-12122 - Filter by SKU (WL01)                */          
+/* 2020-02-20 1.1  WLChooi    WMS-12122 - Filter by SKU (WL01)                */     
+/* 2021-04-19 1.2  CSCHONG    WMS-16825 - Add new field (CS02)                */     
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_PALLETLBL_SG_IDSMED]                      
@@ -60,13 +61,13 @@ BEGIN
            @c_sku               NVARCHAR(20), 
            @c_condition         NVARCHAR(150) ,
            @c_GroupBy           NVARCHAR(4000),
-		   @c_OrderBy           NVARCHAR(4000),
+           @c_OrderBy           NVARCHAR(4000),
            @c_ExecStatements    NVARCHAR(4000),   
            @c_ExecArguments     NVARCHAR(4000),
            @c_RDTOID            NVARCHAR(20),
            @c_Putawayzone       NVARCHAR(30),
            @c_LocAisle          NVARCHAR(30),
-		   @c_reclinenumber     NVARCHAR(20)
+           @c_reclinenumber     NVARCHAR(20)
                
   
    SET @d_Trace_StartTime = GETDATE()  
@@ -148,20 +149,25 @@ BEGIN
  
      SET @c_condition = ''
      SET @c_GroupBy = ''
-	 SET @c_OrderBy = ''
-	 SET @c_reclinenumber = ''
+     SET @c_OrderBy = ''
+     SET @c_reclinenumber = ''
 
-	 SELECT TOP 1 @c_reclinenumber = RD.receiptlinenumber
-	 FROM RECEIPTDETAIL RD WITH (NOLOCK)
-	 WHERE RD.receiptkey =  @c_Sparm01  AND RD.toid = @c_Sparm02
+    SELECT TOP 1 @c_reclinenumber = RD.receiptlinenumber
+    FROM RECEIPTDETAIL RD WITH (NOLOCK)
+    WHERE RD.receiptkey =  @c_Sparm01  AND RD.toid = @c_Sparm02
     AND RD.SKU = CASE WHEN ISNULL(@c_Sparm03,'') = '' THEN RD.SKU ELSE @c_Sparm03 END   --WL01
-	 AND RD.finalizeflag = 'Y'
-	 ORDER BY RD.editdate desc
+    AND RD.finalizeflag = 'Y'
+    ORDER BY RD.editdate desc
 
     SET @c_GroupBy = ' GROUP BY RECDET.SKU,substring(S.descr,1,80),RECDET.Lottable02,CONVERT(NVARCHAR(80),RECDET.Lottable04,103),'
                     +' CONVERT(NVARCHAR(80),RECDET.Lottable05,103),RECDET.toid,RECDET.UOM,'
                     + ' RECDET.Lottable01 ,RECDET.Lottable03,RECDET.Receiptkey, '
-                    + ' RECDET.Lottable06,RECDET.Lottable07,RECDET.Lottable08,RECDET.Lottable09,RECDET.Lottable10,RECDET.Lottable11,RECDET.Lottable12'
+                    + ' RECDET.Lottable06,RECDET.Lottable07,RECDET.Lottable08,RECDET.Lottable09,RECDET.Lottable10,RECDET.Lottable11,RECDET.Lottable12,'
+                    --CS02 START
+                    + ' RECDET.Lottable13,RECDET.Lottable14,RECDET.Lottable15,S.Altsku,S.ManufacturerSKU,S.RETAILSKU,RECDET.UserDefine01,RECDET.UserDefine02, '
+                    + ' RECDET.UserDefine03,RECDET.UserDefine04,RECDET.UserDefine05,RECDET.UserDefine06,RECDET.UserDefine07,'         
+                    + ' RECDET.UserDefine08,RECDET.UserDefine09,RECDET.UserDefine10 '
+                    --CS02 END
 
     SET @c_OrderBy = ' ORDER BY RECDET.editdate desc'
              
@@ -171,10 +177,10 @@ BEGIN
              + ' RECDET.Lottable01 ,RECDET.Lottable03, '      --10   
              + ' RECDET.Lottable06,RECDET.Lottable07,RECDET.Lottable08,RECDET.Lottable09,RECDET.Lottable10,'     --15       
              + CHAR(13) +      
-             + ' RECDET.Lottable11,RECDET.Lottable12,'''','''','''','         --20      
-             + ' '''','''','''','''','''','
-             + ' '''','''','''','''','''','         --30
-             + ' '''','''','''','''','''','
+             + ' RECDET.Lottable11,RECDET.Lottable12,RECDET.Lottable13,RECDET.Lottable14,RECDET.Lottable15,'         --20     --CS02 START 
+             + ' S.Altsku,S.ManufacturerSKU,S.RETAILSKU,RECDET.UserDefine01,RECDET.UserDefine02,'
+             + ' RECDET.UserDefine03,RECDET.UserDefine04,RECDET.UserDefine05,RECDET.UserDefine06,RECDET.UserDefine07,'         --30
+             + ' RECDET.UserDefine08,RECDET.UserDefine09,RECDET.UserDefine10,'''','''','                                      --CS02 END
              + ' '''','''','''','''','''','         --40      
              + ' '''','''','''','''','''','''','''','''','''','''', '  --50       
              + ' '''','''','''','''','''','''','''','''','''',RECDET.Receiptkey '   --60          
@@ -190,7 +196,7 @@ BEGIN
                        
       IF @b_debug=1        
       BEGIN  
-	     SELECT  @c_SQLJOIN + @c_GroupBy         
+        SELECT  @c_SQLJOIN + @c_GroupBy         
          PRINT @c_SQLJOIN + @c_GroupBy   
       END                
               
