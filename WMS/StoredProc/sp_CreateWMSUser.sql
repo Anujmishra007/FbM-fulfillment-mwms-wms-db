@@ -29,10 +29,11 @@ GO
 /* 04-Apr-2012    Shong       1.1   Check DB Exists before create user           */  
 /* 10-Oct-2013    TLTING      1.2   Alter with check policy off                  */  
 /* 13-Mar-2015    TLTING      1.3   RDT user no need alter password              */  
-/* 09-Feb-2018    SHONG       1.4   Windows User No need alter password          */  
+/* 09-Feb-2018    SHONG       1.4   Windows User No need alter password          */
+/* 03-May-2021    LZG         1.5`  INC1487464 - Extended @cUserName length(ZG01)*/
 /*********************************************************************************/      
 CREATE PROC [dbo].[sp_CreateWMSUser] (    
-   @cUserName VARCHAR(20),    
+   @cUserName VARCHAR(128),       -- ZG01
    @cPassword NVARCHAR(20),    
    @cWMS_DBName VARCHAR(50),     
    @cWCS_DBName VARCHAR(50) = '',    
