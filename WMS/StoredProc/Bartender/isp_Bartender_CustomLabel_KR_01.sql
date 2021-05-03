@@ -17,7 +17,8 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2016-05-09 1.0  CSCHONG    Created (WMS-14850)                             */    
-/* 2020-10-15 1.1  CSCHONG    WMS-14850 revised field logic (CS01)            */        
+/* 2020-10-15 1.1  CSCHONG    WMS-14850 revised field logic (CS01)            */   
+/* 2021-04-23 1.2  CSCHONG    WMS-16793 - revised field logic (CS02)          */     
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CustomLabel_KR_01]                      
@@ -158,7 +159,7 @@ BEGIN
                            Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,
                            Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50,
                            Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60)
-       VALUES(@c_Sparm01,'','','','','','',@n_cntsku,'1','',
+       VALUES(@c_Sparm01,'','',@n_cntsku,'','','','','1','',           --CS01
               '','','','','','','','','','',
               '','','','','','','','','','',
               '','','','','','','','','','',
