@@ -94,10 +94,11 @@ BEGIN
    --      ,@c_EmailCCList = 'shunghoeloh@lflogistics.com'
    --      ,@c_EmailBCCList = ''
    
-  SELECT  @c_EmailToList = RTRIM(ISNULL(c.Email1,'')) + CASE WHEN RIGHT(RTRIM(c.Email1), 1) = ';' THEN '' ELSE ';' END + RTRIM(ISNULL(c.Email2,''))
+  SELECT  @c_EmailToList = RTRIM(ISNULL(c.Email1,'')) + CASE WHEN RIGHT(RTRIM(ISNULL(c.Email1,'')), 1) = ';' THEN '' ELSE ';' END + RTRIM(ISNULL(c.Email2,''))
        ,  @c_EmailCCList = CASE 
                               WHEN @c_StorerKey = 'NIKEMY' 
                               THEN 'MYSNikeTeam@lflogistics.com;MY.track.it@nike.com;' 
+                              ELSE ''
                            END + RTRIM(ISNULL(c.Notes2,''))
        ,  @c_EmailBCCList = CASE 
                               WHEN @c_StorerKey = 'NIKESG' 
@@ -106,8 +107,8 @@ BEGIN
                               THEN 'CalvinKhor@LiFung.com;JayChua@LFLogistics.com;JoshuaHoong@LFLogistics.com;'
                               ELSE '' 
                            END
-         , @c_EmailSubject = 'Auto Email ' + RTRIM(c.Company) + ' ' + RTRIM(c.Address2) + ' Nike Delivery Report ' + CONVERT(VARCHAR, o.DeliveryDate,106)
-         , @c_Company = RTRIM(o.C_Company) 
+         , @c_EmailSubject = 'Auto Email ' + RTRIM(ISNULL(c.Company,'')) + ' ' + RTRIM(ISNULL(c.Address2,'')) + ' Nike Delivery Report ' + CONVERT(VARCHAR, o.DeliveryDate,106)
+         , @c_Company = RTRIM(ISNULL(o.C_Company,'')) 
          , @c_TotalCartons = RTRIM(COUNT(DISTINCT o.loadkey + pd.DropID))
    FROM dbo.transmitlog3   AS t  WITH (NOLOCK)  
    JOIN dbo.orders         AS o  WITH (NOLOCK) ON t.key1  = o.orderkey  
