@@ -1,3 +1,14 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'isp_Packing_List_99_1') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE isp_Packing_List_99_1  
+END
+GO 
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
     
 /************************************************************************/      
 /* Stored Proc: isp_Packing_List_99_1                                   */      
@@ -269,3 +280,8 @@ QUIT_SP:
    DROP TABLE #TMP_PACK_58_1    
        
 END -- procedure    
+GO
+
+
+GRANT EXECUTE ON isp_Packing_List_99_1 TO NSQL  
+GO 
