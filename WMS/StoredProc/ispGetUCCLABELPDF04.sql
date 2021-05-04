@@ -19,7 +19,7 @@ GO
 /*                                                                      */
 /* Called By: isp_GetPrint2PDFConfig                                    */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 27-Apr-2021 WLChooi  1.1   WMS-16817 Modify Logic to decide print to */
+/*                            which printer type (WL01)                 */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispGetUCCLABELPDF04]
@@ -100,6 +102,7 @@ BEGIN
          , @c_Option3         NVARCHAR(50) = '' 
          , @c_GetDefaultPrinter       NVARCHAR(20) = ''
          , @c_GetDefaultPrinter_Paper NVARCHAR(20) = ''
+         , @c_Short           NVARCHAR(10) = ''   --WL01
           
    --CREATE TABLE #DirPDFTree (
    --   ID INT IDENTITY(1,1),
@@ -160,14 +163,21 @@ BEGIN
       SET @n_PrintAction = 0
       GOTO QUIT_SP
    END
-
+   
    IF (@n_continue = 1 OR @n_continue = 2)
    BEGIN
+      --WL01 S
+      SELECT @c_Short = ISNULL(CL.Short,'')
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'MOMOLABEL' 
+      AND CL.Storerkey = @c_Storerkey
+      AND CL.Code = @c_Shipperkey
+      --WL01 E
 
       SELECT @c_GetDefaultPrinter = DefaultPrinter
             ,@c_GetDefaultPrinter_Paper = DefaultPrinter_Paper
-       FROM RDT.RDTUser (NOLOCK)   
-       WHERE UserName = @c_userid
+      FROM RDT.RDTUser (NOLOCK)   
+      WHERE UserName = @c_userid
 
 
       --IF ISNULL(@c_Printer,'') = ''
@@ -178,30 +188,42 @@ BEGIN
       --   WHERE UserName = @c_userid
       --END
       --ELSE
-      IF @c_shipperkey in ('MP711','MPCVS')
+
+      --WL01 S
+      --IF @c_shipperkey in ('MP711','MPCVS')
+      --BEGIN
+      --   SET @c_PrinterID = @c_GetDefaultPrinter
+      --END
+      --ELSE IF @c_shipperkey in ('MPTCAT','MPPelican')
+      --BEGIN
+      --   SET @c_PrinterID = @c_GetDefaultPrinter_Paper 
+      --END
+
+      IF @c_Short = 'STORE'
       BEGIN
          SET @c_PrinterID = @c_GetDefaultPrinter
       END
-      ELSE IF @c_shipperkey in ('MPTCAT','MPPelican')
+      ELSE IF @c_Short = 'HOME'
       BEGIN
          SET @c_PrinterID = @c_GetDefaultPrinter_Paper 
       END
+      --WL01 E
 
-         --IF EXISTS (SELECT 1 FROM RDT.RDTPRINTER (NOLOCK) WHERE PRINTERID = @c_Printer)
-         --BEGIN
-         --   SET @c_PrinterID = @c_Printer
-         --END
-         IF ISNULL(@c_PrinterID,'') = ''
-         --ELSE
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60010  
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) 
-                  + ': PrinterID not setup. (' + @c_PrinterID + ')' 
+      --IF EXISTS (SELECT 1 FROM RDT.RDTPRINTER (NOLOCK) WHERE PRINTERID = @c_Printer)
+      --BEGIN
+      --   SET @c_PrinterID = @c_Printer
+      --END
+      IF ISNULL(@c_PrinterID,'') = ''
+      --ELSE
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60010  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) 
+                         + ': PrinterID not setup. (' + @c_PrinterID + ')' 
                   + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-            SET @n_PrintAction = 0
-            GOTO QUIT_SP
-         END
+         SET @n_PrintAction = 0
+         GOTO QUIT_SP
+      END
       --END
    END
 
