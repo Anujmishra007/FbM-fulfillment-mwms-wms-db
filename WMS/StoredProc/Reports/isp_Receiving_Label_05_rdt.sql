@@ -18,7 +18,7 @@ GO
 /*                                                                         */
 /* Called By: PB: r_dw_receivinglabel05_rdt                                */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -26,6 +26,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author    Ver.  Purposes                                   */
+/* 2021-04-28   WLChooi   1.1   WMS-16533 - Add ExternPOKey (WL01)         */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_Receiving_Label_05_rdt]
          @c_ReceiptKey        NVARCHAR(10) 
@@ -88,7 +89,8 @@ BEGIN
           CASE WHEN ISNULL(CLR4.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showbarcode,
           ISNULL(CLR5.Short,'N') AS ShowLott06,
           RECEIPTDETAIL.Lottable06,
-          SKU.LOTTABLE06LABEL
+          SKU.LOTTABLE06LABEL,
+          (SELECT MAX(ExternPOKey) FROM PO (NOLOCK) WHERE POKey = RECEIPTDETAIL.POKey) AS ExternPOKey   --WL01
    FROM RECEIPTDETAIL (NOLOCK)    
    JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey 
                     AND SKU.Sku = RECEIPTDETAIL.Sku
