@@ -53,6 +53,8 @@ GO
 /*                            (WL03)                                    */
 /* 26-10-2020  NJOW04   2.1   Performance tuning.                       */
 /* 12-JAN-2020 CSCHONG  2.2   WMS-16010 add config (CS03)               */
+/* 05-04-2021  WLChooi  2.3   WMS-16752 Add ReportCFG to show Shipperkey*/
+/*                            (WL04)                                    */
 /************************************************************************/
 
 CREATE PROC isp_batching_task_pickslip (
@@ -269,6 +271,8 @@ CREATE PROC isp_batching_task_pickslip (
          , CASE WHEN ISNULL(CL6.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Userdefine10,'')) FROM Orders (NOLOCK) WHERE Orders.Orderkey = PD.Orderkey) END AS Userdefine10   --WL02
          , ISNULL(CL5.Short,'N') AS ShowSalesman   --WL03
          , CASE WHEN ISNULL(CL5.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Orderkey = PD.Orderkey) END AS Salesman   --WL03
+         , ISNULL(CL7.Short,'N') AS ShowCourier   --WL04
+         , CASE WHEN ISNULL(CL7.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Shipperkey,'')) FROM Orders (NOLOCK) WHERE Orders.Orderkey = PD.Orderkey) END AS Shipperkey   --WL04
     INTO #TMP_TASK
     FROM LOADPLANDETAIL LP (NOLOCK)
     JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
@@ -287,6 +291,8 @@ CREATE PROC isp_batching_task_pickslip (
                                               AND CL5.Listname = 'REPORTCFG' AND CL5.Long = 'r_dw_batching_task_pickslip' AND ISNULL(CL5.Short,'') <> 'N')  --WL03
     LEFT JOIN Codelkup CL6 (NOLOCK) ON (PD.Storerkey = CL6.Storerkey AND CL6.Code = 'ShowVAS' 
                                               AND CL6.Listname = 'REPORTCFG' AND CL6.Long = 'r_dw_batching_task_pickslip' AND ISNULL(CL6.Short,'') <> 'N')  --WL02
+    LEFT JOIN Codelkup CL7 (NOLOCK) ON (PD.Storerkey = CL7.Storerkey AND CL7.Code = 'ShowCourier' 
+                                              AND CL7.Listname = 'REPORTCFG' AND CL7.Long = 'r_dw_batching_task_pickslip' AND ISNULL(CL7.Short,'') <> 'N')  --WL04
     WHERE LP.Loadkey = @c_Loadkey
     AND PT.TaskBatchNo = CASE WHEN @c_TaskBatchNo <> '' THEN @c_TaskBatchNo ELSE PT.TaskBatchNo END
     AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
@@ -315,6 +321,7 @@ CREATE PROC isp_batching_task_pickslip (
           ,  ISNULL(CL4.Short,'N')  --WL01
           ,  ISNULL(CL6.Short,'N')  --WL02
           ,  ISNULL(CL5.Short,'N')  --WL03
+          ,  ISNULL(CL7.Short,'N')  --WL04
                               
     IF @c_ReportType = '0'
     BEGIN
@@ -359,6 +366,8 @@ CREATE PROC isp_batching_task_pickslip (
             , Userdefine10  --WL02
             , ShowSalesman  --WL03
             , Salesman      --WL03
+            , ShowCourier   --WL04
+            , Shipperkey    --WL04
         FROM #TMP_TASK     
         GROUP BY TaskBatchNo,
                  Notes, 
@@ -384,6 +393,8 @@ CREATE PROC isp_batching_task_pickslip (
                 , Userdefine10  --WL02
                 , ShowSalesman  --WL03
                 , Salesman      --WL03
+                , ShowCourier   --WL04
+                , Shipperkey    --WL04
          ORDER BY TaskBatchNo, LogicalLocation, Loc, Sku                 
     END
            
@@ -441,6 +452,8 @@ CREATE PROC isp_batching_task_pickslip (
              , Userdefine10  --WL02
              , ShowSalesman  --WL03
              , Salesman      --WL03
+             , ShowCourier   --WL04
+             , Shipperkey    --WL04
         FROM #TMP_TASK     
         GROUP BY TaskBatchNo,
                  Notes, 
@@ -456,6 +469,8 @@ CREATE PROC isp_batching_task_pickslip (
                 , Userdefine10  --WL02
                 , ShowSalesman  --WL03
                 , Salesman      --WL03
+                , ShowCourier   --WL04
+                , Shipperkey    --WL04
          ORDER BY TaskBatchNo
     END
     
@@ -533,7 +548,8 @@ CREATE PROC isp_batching_task_pickslip (
     BEGIN
        SELECT T.Pickzone,
               SUM(T.Qty) AS TotalQty,
-              COUNT(DISTINCT T.Sku) AS TotalSku
+              COUNT(DISTINCT T.Sku) AS TotalSku,
+              MAX(ShowCourier)   --WL04
         FROM #TMP_TASK T      
         GROUP BY T.Pickzone
         ORDER BY T.PickZone
@@ -567,6 +583,8 @@ CREATE PROC isp_batching_task_pickslip (
             , Userdefine10  --WL02 
             , ShowSalesman  --WL03
             , Salesman      --WL03
+            , ShowCourier   --WL04
+            , Shipperkey    --WL04
        FROM #TMP_TASK TTS
        JOIN SKU S WITH (NOLOCK) ON S.sku=TTS.sku AND  s.storerkey=@c_Storerkey         
        GROUP BY TTS.Loc,
@@ -587,6 +605,8 @@ CREATE PROC isp_batching_task_pickslip (
               , Userdefine10  --WL02
               , ShowSalesman  --WL03
               , Salesman      --WL03
+              , ShowCourier   --WL04
+              , Shipperkey    --WL04
        ORDER BY TTS.LogicalLocation, TTS.Loc, TTS.Sku      
     END   
 
