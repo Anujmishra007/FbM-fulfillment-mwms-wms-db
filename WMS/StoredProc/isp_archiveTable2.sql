@@ -1,10 +1,15 @@
-  IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_archiveTable2' AND type = 'P')
-   DROP PROC isp_archiveTable2
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'isp_archiveTable2') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+BEGIN 
+   DROP PROCEDURE isp_archiveTable2  
+END
+GO 
+
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+
 
 /************************************************************************/    
 /* Store Procedure:  isp_archiveTable2                                  */    

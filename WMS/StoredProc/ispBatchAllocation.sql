@@ -33,6 +33,7 @@ GO
 /* 2014-11-11  Shong          Added Extern Parameter for SP                */
 /* 2019-10-04  Shong          Filter RecipientList By BckEndAloc           */  
 /* 2020-01-21  Wan01          Added Wavekey, AllocateCmd For WM/SCE        */
+/* 2021-04-19  Wan02          Fixed not to check pickheader                */
 /***************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispBatchAllocation]
@@ -212,9 +213,10 @@ BEGIN
             SELECT @cExecStatements
          END
 
-         EXEC sp_executesql @cSQLSelect, N'@n_RecCount INT OUTPUT, @c_SourceKey NVARCHAR(10) ',
-                            @n_RecCount OUTPUT, @c_SourceKey
-
+         --(Wan02) - START
+         --EXEC sp_executesql @cSQLSelect, N'@n_RecCount INT OUTPUT, @c_SourceKey NVARCHAR(10) ',
+         --                   @n_RecCount OUTPUT, @c_SourceKey
+         --(Wan02) - END
     
          IF @cExecStatements <> ''              --(Wan01)   
          BEGIN                                  --(Wan01)  
@@ -231,16 +233,16 @@ BEGIN
                                END + RTRIM(@c_SourceKey) + '. The Order Lines not exist! '
             SELECT @c_EmailMsg = @c_ErrMsg
          END
-         ELSE
-         IF ISNULL(@n_RecCount, 0) > 0
-         BEGIN
-            SELECT @c_UpStatus = '9' ,
-                   @c_ErrMsg = CASE @c_SourceType WHEN 'W' THEN 'Wave: '
-                                                  WHEN 'O' THEN 'Shipment Order: '
-                                                  WHEN 'L' THEN 'Load Plan: '
-                               END + RTRIM(@c_SourceKey) + '. Pick Slip Printed, No Allocation Allow.'
-            SELECT @c_EmailMsg = @c_ErrMsg
-         END
+         --ELSE               --(Wan02) -START
+         --IF ISNULL(@n_RecCount, 0) > 0
+         --BEGIN
+         --   SELECT @c_UpStatus = '9' ,
+         --          @c_ErrMsg = CASE @c_SourceType WHEN 'W' THEN 'Wave: '
+         --                                         WHEN 'O' THEN 'Shipment Order: '
+         --                                         WHEN 'L' THEN 'Load Plan: '
+         --                      END + RTRIM(@c_SourceKey) + '. Pick Slip Printed, No Allocation Allow.'
+         --   SELECT @c_EmailMsg = @c_ErrMsg
+         --END                --(Wan02) -END
          ELSE  -- @c_OrderStatus >= 2 No Require Allocation
          IF ISNULL(RTRIM(@c_OrderStatus),'') = '2'
          BEGIN

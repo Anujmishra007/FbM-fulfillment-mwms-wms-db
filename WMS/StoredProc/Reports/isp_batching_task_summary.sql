@@ -42,6 +42,8 @@ GO
 /* 11-06-2020  WLChooi 1.4   WMS-13654 - Add ReportCFG to show Salesman */
 /*                           (WL01)                                     */
 /* 16-MAR-2020 CSCHONG  2.2   WMS-16446 add config (CS01)               */
+/* 05-04-2021  WLChooi 1.6   WMS-16751 Add ReportCFG to show Shipperkey */
+/*                           and Loadkey Barcode (WL02)                 */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_batching_task_summary] (
@@ -112,19 +114,19 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
       
     IF @c_OrderBatchBylocdescr = '1'
     BEGIN
-        IF @c_OrderBatchByLocDescr_OPT1 = 'TMALL' 
-        BEGIN
-           IF NOT EXISTS(SELECT 1 
-                         FROM LOADPLANDETAIL LPD (NOLOCK)
-                         JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
-                         JOIN ORDERINFO OI (NOLOCK) ON O.Orderkey = OI.Orderkey
-                         WHERE LPD.Loadkey = @c_Loadkey 
-                         AND OI.StoreName = '618'
-                         AND O.Shipperkey = 'SN')                        
-           BEGIN
-              SET @c_OrderBatchBylocdescr = '0'
-           END             
-        END
+    	  IF @c_OrderBatchByLocDescr_OPT1 = 'TMALL' 
+    	  BEGIN
+    	     IF NOT EXISTS(SELECT 1 
+    	                   FROM LOADPLANDETAIL LPD (NOLOCK)
+    	                   JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+    	                   JOIN ORDERINFO OI (NOLOCK) ON O.Orderkey = OI.Orderkey
+    	                   WHERE LPD.Loadkey = @c_Loadkey 
+    	                   AND OI.StoreName = '618'
+    	                   AND O.Shipperkey = 'SN')   	                   
+    	     BEGIN
+    	        SET @c_OrderBatchBylocdescr = '0'
+    	     END             
+    	  END
     END
     --NJOW02 End
        
@@ -132,7 +134,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
     BEGIN
       IF @c_OrderBatchBylocdescr = '1'  
       BEGIN   
-          --NJOW02      
+      	 --NJOW02   	
          SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','
          FROM ORDERS O (NOLOCK)
          JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
@@ -151,7 +153,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
          JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
          WHERE LPD.Loadkey = @c_Loadkey
          GROUP BY LOC.PickZone
-         ORDER BY LOC.PickZone         
+         ORDER BY LOC.PickZone      	
       END
       
       IF ISNULL(@c_ZoneList,'') <> ''
@@ -245,7 +247,7 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
 
     IF @c_OrderBatchBylocdescr = '1'  
     BEGIN
-       --NJOW02
+    	 --NJOW02
        SELECT PT.TaskBatchNo, 
               PD.Notes, 
               LP.Loadkey, 
@@ -257,7 +259,10 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
               ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
               COUNT(DISTINCT PD.Orderkey) AS NoOfOrder,
               ISNULL(CL1.Short,'N') AS ShowSalesman,   --WL01
-              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman   --WL01
+              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman,  --WL01
+              ISNULL(CL2.Short,'N') AS ShowSalesman,   --WL02
+              CASE WHEN ISNULL(CL2.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Shipperkey,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Shipperkey,   --WL02
+              ISNULL(CL3.Short,'N') AS ShowLoadkeyBarcode   --WL02
        FROM LOADPLANDETAIL LP (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
        JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
@@ -265,6 +270,10 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
        LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
        LEFT JOIN Codelkup CL1 (NOLOCK) ON (PD.Storerkey = CL1.Storerkey AND CL1.Code = 'ShowSalesman' 
                                        AND CL1.Listname = 'REPORTCFG' AND CL1.Long = 'r_dw_batching_task_summary' AND ISNULL(CL1.Short,'') <> 'N')  --WL01
+       LEFT JOIN Codelkup CL2 (NOLOCK) ON (PD.Storerkey = CL2.Storerkey AND CL2.Code = 'ShowCourier' 
+                                       AND CL2.Listname = 'REPORTCFG' AND CL2.Long = 'r_dw_batching_task_summary' AND ISNULL(CL2.Short,'') <> 'N')  --WL02
+       LEFT JOIN Codelkup CL3 (NOLOCK) ON (PD.Storerkey = CL3.Storerkey AND CL3.Code = 'ShowLoadkeyBarcode' 
+                                       AND CL3.Listname = 'REPORTCFG' AND CL3.Long = 'r_dw_batching_task_summary' AND ISNULL(CL3.Short,'') <> 'N')  --WL02
        WHERE LP.Loadkey = @c_Loadkey
        AND L.Descr IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
@@ -275,7 +284,9 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
                 CASE WHEN ISNULL(CL.Long,'') <> '' THEN
                    CL.Long
                 ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END,
-                ISNULL(CL1.Short,'N')   --WL01
+                ISNULL(CL1.Short,'N'),  --WL01
+                ISNULL(CL2.Short,'N'),  --WL02
+                ISNULL(CL3.Short,'N')   --WL02
        ORDER BY L.Descr, PD.NOTES    
     END               
     ELSE
@@ -291,7 +302,10 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
               ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
               COUNT(DISTINCT PD.Orderkey) AS NoOfOrder,
               ISNULL(CL1.Short,'N') AS ShowSalesman,   --WL01
-              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman   --WL01
+              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman,   --WL01
+              ISNULL(CL2.Short,'N') AS ShowSalesman,   --WL02
+              CASE WHEN ISNULL(CL2.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Shipperkey,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Shipperkey,   --WL02
+              ISNULL(CL3.Short,'N') AS ShowLoadkeyBarcode   --WL02
        FROM LOADPLANDETAIL LP (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
        JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
@@ -299,6 +313,10 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
        LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
        LEFT JOIN Codelkup CL1 (NOLOCK) ON (PD.Storerkey = CL1.Storerkey AND CL1.Code = 'ShowSalesman' 
                                        AND CL1.Listname = 'REPORTCFG' AND CL1.Long = 'r_dw_batching_task_summary' AND ISNULL(CL1.Short,'') <> 'N')  --WL01
+       LEFT JOIN Codelkup CL2 (NOLOCK) ON (PD.Storerkey = CL2.Storerkey AND CL2.Code = 'ShowCourier' 
+                                       AND CL2.Listname = 'REPORTCFG' AND CL2.Long = 'r_dw_batching_task_summary' AND ISNULL(CL2.Short,'') <> 'N')  --WL02
+       LEFT JOIN Codelkup CL3 (NOLOCK) ON (PD.Storerkey = CL3.Storerkey AND CL3.Code = 'ShowLoadkeyBarcode' 
+                                       AND CL3.Listname = 'REPORTCFG' AND CL3.Long = 'r_dw_batching_task_summary' AND ISNULL(CL3.Short,'') <> 'N')  --WL02
        WHERE LP.Loadkey = @c_Loadkey
        AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
@@ -309,7 +327,9 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
                 CASE WHEN ISNULL(CL.Long,'') <> '' THEN
                    CL.Long
                 ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END,
-                ISNULL(CL1.Short,'N')   --WL01
+                ISNULL(CL1.Short,'N'),  --WL01
+                ISNULL(CL2.Short,'N'),  --WL02
+                ISNULL(CL3.Short,'N')   --WL02
        ORDER BY L.PickZone, PD.NOTES    
     END
         

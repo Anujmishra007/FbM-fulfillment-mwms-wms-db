@@ -28,8 +28,11 @@ GO
 /* 11-Oct-2017  TKLIM     1.0   Initial                                 */    
 /* 26-Oct-2017  TKLIM     1.0   Bug Fix                                 */    
 /* 27-Sep-2018  TKLIM     1.0   Set status to 0 after send Socket Msg   */      
-/************************************************************************/    
-      
+/* 28-Jun-2019  TKLIM     1.0   Add Priority (TK01)                     */      
+/* 01-Oct-2019  TKLIM     1.0   Fixed Typo (TK02)                       */        
+/* 18-Oct-2019  TKLIM     1.0   Add support WSC (TK02)                  */        
+/************************************************************************/      
+        
 CREATE PROC [dbo].[isp_AutoResubmitQueueTask]      
             @cSourceDB           NVARCHAR(15)      
           , @cSourceDBSchema     NVARCHAR(15)       
@@ -60,13 +63,14 @@ BEGIN
          , @cStorerKey        NVARCHAR(15)    
          , @cIP               NVARCHAR(20)     
          , @cPORT             NVARCHAR(5)      
+         , @nPriority         INT        
     
    SET @cStatusR = 'R'    
    SET @cAddDate = DATEADD(minute, -10, GETDATE())    
    SET @cIniFilePath = 'C:\COMObject\GenericTCPSocketClient\config.ini'    
     
    SET @cExecStatement = N'DECLARE CUR_QueueTask CURSOR FAST_FORWARD READ_ONLY FOR '    
-                        + ' SELECT  CAST(ID as NVARCHAR(20)), CmdType, TargetDB, CMD, StorerKey, IP, Port'    
+                        + ' SELECT  CAST(ID as NVARCHAR(20)), CmdType, TargetDB, CMD, StorerKey, IP, Port, Priority'    --(TK01)   
                         + ' FROM ' + @cSourceDB + '.' + @cSourceDBSchema + '.TCPSocket_QueueTask WITH (NOLOCK) '    
                         + ' WHERE ISNULL(RTRIM(Port),'''') <> '''' '    
                         --+ ' AND ISNULL(RTRIM(StorerKey),'''') <> '''' '    
@@ -87,14 +91,14 @@ BEGIN
                      , @cAddDate    
                            
    OPEN CUR_QueueTask     
-   FETCH NEXT FROM CUR_QueueTask INTO @cID, @cCmdType, @cTargetDB, @cCMD, @cStorerKey, @cIP, @cPort    
+   FETCH NEXT FROM CUR_QueueTask INTO @cID, @cCmdType, @cTargetDB, @cCMD, @cStorerKey, @cIP, @cPort, @nPriority   --(TK01)
    WHILE @@FETCH_STATUS <> -1    
    BEGIN    
     
-      IF @cCmdType = 'CMD'    
-         SET @cData = @cCmdType + '|' +  @cID + '|' + @cTargetDB + '|' + @cCMD  
+      IF @cCmdType IN ('CMD','WSC')    --(TK03)
+         SET @cData = @cCmdType + '|' +  @cID + '|' + @cTargetDB + '|' + @cCMD + '|' + CONVERT(NVARCHAR(1),ISNULL(@nPriority,0))    --(TK01) --(TK02) 
       ELSE     --SQL, TCL    
-         SET @cData = @cCmdType + '|' +  @cID + '|' + @cTargetDB + '|' + 'EXEC ' + @cTargetDB + '..isp_QCmd_ExecuteSQL @cTargetDB=''' + @cSourceDB + ''', @nQTaskID=' + @cID  
+         SET @cData = @cCmdType + '|' +  @cID + '|' + @cTargetDB + '|' + 'EXEC ' + @cTargetDB + '..isp_QCmd_ExecuteSQL @cTargetDB=''' + @cSourceDB + ''', @nQTaskID=' + @cID + '|' + CONVERT(NVARCHAR(1),ISNULL(@nPriority,0))   --(TK01)  --(TK02)
     
     
       EXEC isp_QCmd_SendTCPSocketMsg      
@@ -110,8 +114,23 @@ BEGIN
           , @nErr             = @nErr           OUTPUT    
           , @cErrMsg          = @cErrMsg        OUTPUT    
     
-    
-      FETCH NEXT FROM CUR_QueueTask INTO @cID, @cCmdType, @cTargetDB, @cCMD, @cStorerKey, @cIP, @cPort    
+      IF @bSuccess = 1
+      BEGIN
+         SET @cExecStatement = N'UPDATE ' + @cSourceDB + '.' + @cSourceDBSchema + '.TCPSocket_QueueTask WITH (ROWLOCK)'      
+                             + ' SET Status = ''0'' '
+                             + ' WHERE ID = @cID '
+                             + ' AND Status = @cStatusR '       
+
+         SET @cExecArguments =  N'@cStatusR  NVARCHAR(1)'       
+                             + ', @cID      NVARCHAR(20)'      
+      
+         EXEC sp_ExecuteSql @cExecStatement       
+                           , @cExecArguments        
+                           , @cStatusR       
+                           , @cID      
+      END
+
+      FETCH NEXT FROM CUR_QueueTask INTO @cID, @cCmdType, @cTargetDB, @cCMD, @cStorerKey, @cIP, @cPort, @nPriority   --(TK01)      
        
    END    
    CLOSE CUR_QueueTask  
