@@ -17,6 +17,7 @@ GO
 /*02-Apr-2020 1.0  CSCHONG   WMS-12603 TH-UA_Ecom_Shipping label              */  
 /*28-Apr-2020 1.1  CSCHONG   WMS-12603 add table link logic (CS01)            */
 /*12-Mar-2021 1.2  WLChooi   WMS-16549 - New Data Source for KerryTH (WL01)   */
+/*05-May-2021 1.3  WLChooi   WMS-16549 - Bug Fix (WL01)                       */
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_UCCLBL_TH_UA]                            
@@ -285,6 +286,15 @@ BEGIN
    UPDATE #Result    
    SET COL18 = @n_qty, COL21 = @n_Weight    
    WHERE COL01 = @c_sparm02    
+
+   --WL02 S
+   IF @c_Shipperkey = 'KerryTH'
+   BEGIN
+      UPDATE #Result    
+      SET COL18 = @n_qty, COL21 = @n_Weight    
+      WHERE COL59 = @c_sparm01    
+   END
+   --WL02 E
       
                  
    IF @b_debug=1              
