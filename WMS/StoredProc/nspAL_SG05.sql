@@ -27,6 +27,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */   
+/*2020-05-22    WLChooi 1.1   WMS-12902 - Sort by LOC.LocationCategory  */
+/*                            <> 'ASRS' (WL01)                          */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspAL_SG05]        
    @c_Orderkey    NVARCHAR(10),  
@@ -146,7 +148,7 @@ BEGIN
 
    IF @c_UOM = '2'
    BEGIN      
-      IF ISNULL(@C_UDF01,'') <> '' 
+      IF ISNULL(@C_UDF01,'') <> ''   
       BEGIN       
          IF NOT EXISTS (SELECT 1
                         FROM ORDERS (NOLOCK)
@@ -162,7 +164,7 @@ BEGIN
       END           	     
    END   
 
-   IF @c_UOM IN('1','6')
+   IF @c_UOM = '1'   --WL01
    BEGIN      
       IF ISNULL(@C_UDF01,'') <> '' 
       BEGIN       
@@ -177,8 +179,18 @@ BEGIN
    END    
    --NJOW06 E
 
-   SET @c_SORTUOM1 = 'ORDER BY LXLXI.Lottable05, LXLXI.ID, LA.Lot, LOC.LogicalLocation, LOC.LOC '
-   SET @c_SORTNOTUOM1 = 'ORDER BY (LXLXI.Qty - ISNULL(TRFLLI.FromQty,0)) - @n_QtyLeftToFulfill , LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC '
+   --WL01 START
+   SET @c_SORTUOM1 = 'ORDER BY LA.Lottable05,
+                               CASE WHEN LOC.LocationCategory <> ''ASRS'' THEN 1 
+                                    WHEN LOC.LocationCategory = ''ASRS''  THEN 2 ELSE 3 END,
+                               (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) - @n_QtyLeftToFulfill,
+                               LOTxLOCxID.ID, LA.Lot, LOC.LogicalLocation, LOC.LOC '   
+   SET @c_SORTNOTUOM1 = 'ORDER BY LA.Lottable05, 
+                                  CASE WHEN LOC.LocationCategory <> ''ASRS'' THEN 1 
+                                       WHEN LOC.LocationCategory = ''ASRS''  THEN 2 ELSE 3 END,
+                                  (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) - @n_QtyLeftToFulfill,
+                                  LA.Lot, LOC.LogicalLocation, LOC.LOC '
+   --WL01 END
 
    SELECT TOP 1 @n_RestrictDays = CASE WHEN (CON.Susr1 = 'DCNM1' OR CON.Susr2 = 'DCNM1' OR CON.Susr3 = 'DCNM1' OR CON.Susr4 = 'DCNM1' OR CON.Susr5 = 'DCNM1') AND
                                             (SKU.Skugroup IN ('AG','AR','CE','CH','CS','CM','GP')) THEN 82
@@ -248,11 +260,13 @@ BEGIN
                ' GROUP BY TD.FromLot, TD.FromLoc, TD.FromID) AS TRFLLI ON LOTXLOCXID.Lot = TRFLLI.FromLot 
                                                                           AND LOTXLOCXID.Loc = TRFLLI.FromLoc 
                                                                           AND LOTXLOCXID.ID = TRFLLI.FromID         
-      CROSS APPLY (SELECT LOC, ID, SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) AS Qty, MIN(LA.Lottable05) AS Lottable05
+      CROSS APPLY (SELECT LLI.LOC, LLI.ID, SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) AS Qty, MIN(LA.Lottable05) AS Lottable05,   --WL01
+                   L.LocationCategory   --WL01
                    FROM LOTxLOCxID LLI (NOLOCK)
                    JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.LOT = LA.LOT
+                   JOIN LOC L (NOLOCK) ON LLI.LOC = L.LOC   --WL01
                    WHERE LLI.Storerkey = @c_Storerkey AND LLI.SKU = @c_SKU AND LLI.LOC = LOTxLOCxID.LOC AND LLI.ID = LOTxLOCxID.ID
-                   GROUP BY LOC, ID
+                   GROUP BY LLI.LOC, LLI.ID, L.LocationCategory   --WL01
                    --HAVING SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) <= @n_QtyLeftToFulfill
                    ) AS LXLXI 
       WHERE LOC.LocationFlag <> ''HOLD''
@@ -282,8 +296,8 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
-      CASE WHEN @c_UOM = '1' THEN ' AND (LXLXI.Qty - ISNULL(TRFLLI.FromQty,0)) <= @n_QtyLeftToFulfill ' ELSE ' ' END + 
-      CASE WHEN @c_UOM <> '1' THEN ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) >= @n_UOMBase ' ELSE ' ' END  +
+      --CASE WHEN @c_UOM = '1' THEN ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) <= @n_QtyLeftToFulfill ' ELSE ' ' END +   --WL01
+      CASE WHEN @c_UOM <> '1' THEN ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) >= @n_UOMBase ' ELSE ' ' END  + CHAR(13) +   --WL01
       ' ' + RTRIM(ISNULL(@c_Conditions,'')) + ' ' + --NJOW04 
       CASE WHEN @c_UOM = '1' THEN @c_SORTUOM1 ELSE ' ' END +   --NJOW07
       CASE WHEN @c_UOM <> '1' THEN @c_SORTNOTUOM1 ELSE ' ' END   --NJOW07
@@ -302,7 +316,7 @@ BEGIN
    SET @n_LotQtyAvailable = 0
 
    OPEN CURSOR_AVAILABLE                    
-   FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable, @n_PalletQTYAvail 
+   FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable, @n_PalletQTYAvail
           
    WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)          
    BEGIN    
@@ -326,8 +340,9 @@ BEGIN
       	 ELSE
             SET @n_QtyAvailable = @n_LotQtyAvailable
       END
-               	                  
-      IF @c_UOM = '1' --Pallet
+      
+      --WL01 S    	                  
+      /*IF @c_UOM = '1' --Pallet
       BEGIN
      	   
      	   SELECT @n_LocQty = 0, @n_NoOfLot = 0
@@ -377,7 +392,8 @@ BEGIN
          	  SET @n_QtyToTake = 0
             --GOTO EXIT_SP
          END
-      END
+      END*/
+      --WL01 E
 
       IF @c_UOM <> '1' --Case/Piece 
       BEGIN
