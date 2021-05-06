@@ -54,6 +54,7 @@ GO
 /* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
 /* 30-Sep-2020  WLChooi       WMS-15203 - Modify calculate Case, Inner, */
 /*                            EA logic (WL01)                           */
+/* 26-Apr-2021  WLChooi       WMS-16848 - Modify Sorting (WL02)         */
 /************************************************************************/
 
 CREATE PROC dbo.nsp_GetPickSlipOrders06 (@c_loadkey NVARCHAR(10))
@@ -118,6 +119,7 @@ BEGIN
       @c_Lottable02        NVARCHAR(18),
       @c_DeliveryNote      NVARCHAR(10),
       @c_ShowCustomFormula NVARCHAR(10), --WL01
+      @c_SortByLogicalLoc  NVARCHAR(10), --WL02
       @d_DeliveryDate      datetime     -- ONG01   
    
    DECLARE @c_PrevOrderKey     NVARCHAR(10),
@@ -208,6 +210,7 @@ BEGIN
    ,  CustCol03           INT             --(Wan03)
    ,  CustCol03_Text      NVARCHAR(60)    --(Wan03)
    ,  ShowCustomFormula   NVARCHAR(10)    --WL01
+   ,  LogicalLoc          NVARCHAR(20)    --WL02
        )      -- ONG01
        
    SELECT @n_continue = 1 
@@ -492,6 +495,16 @@ BEGIN
          AND   Storerkey = @c_Storerkey
          AND   Long = 'r_dw_print_pickorder06'
          --(WL01) - END
+
+         --WL02 S
+         SET @c_SortByLogicalLoc = 'N'
+         SELECT @c_SortByLogicalLoc = ISNULL(Short,'N')
+         FROM CODELKUP WITH (NOLOCK) 
+         WHERE ListName = 'REPORTCFG'
+         AND   Code = 'SortByLogicalLoc'
+         AND   Storerkey = @c_Storerkey
+         AND   Long = 'r_dw_print_pickorder06'
+         --WL02 E
          
          INSERT INTO #Temp_Pick
             (PickSlipNo,         LoadKey,          OrderKey,         ConsigneeKey,
@@ -510,6 +523,7 @@ BEGIN
           , CustCol02,           CustCol02_Text,   CustCol03         --(Wan03)
           , CustCol03_Text                                           --(Wan03)
           , ShowCustomFormula   --WL01
+          , LogicalLoc   --WL02
             )
          VALUES 
             (@c_pickheaderkey,   @c_LoadKey,       @c_OrderKey,     @c_ConsigneeKey,
@@ -531,12 +545,13 @@ BEGIN
           , @n_CustCol02,        @c_CustCol02_Text,@n_CustCol03         --(Wan03)
           , @c_CustCol03_Text                                           --(Wan03)
           , @c_ShowCustomFormula   --WL01
+          , CASE WHEN @c_SortByLogicalLoc = 'Y' THEN @c_logicalloc ELSE '' END   --WL02
              )
              
          SELECT @c_PrevOrderKey = @c_OrderKey
           
          FETCH NEXT FROM pick_cur INTO @c_sku, @c_loc, @n_Qty, @n_uom3, @c_storerkey,
-                                           @c_orderkey, @c_UOM, @c_logicalloc, @c_LOT
+                                       @c_orderkey, @c_UOM, @c_logicalloc, @c_LOT
       END
        
    CLOSE pick_cur   
@@ -710,8 +725,9 @@ BEGIN
             (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1 ELSE 0 END) -   --WL01
             (CASE WHEN TempQty2 > 0 THEN FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1 ELSE 0 END) ) / TempQty2) ELSE 0 END * TempQty2) ELSE 0 END AS EA   --WL01
          ,  ShowCustomFormula   --WL01
+         ,  LogicalLoc   --WL02
      FROM #TEMP_PICK 
-     ORDER BY OrderKey, LOC, SKU	--IN00354492 
+     ORDER BY OrderKey, LogicalLoc, LOC, SKU	--IN00354492   --WL02
      DROP Table #TEMP_PICK  
 
  END
