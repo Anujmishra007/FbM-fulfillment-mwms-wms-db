@@ -150,7 +150,7 @@ BEGIN
                   +  ' ORD.C_Company, ORD.C_Address1, ORD.C_Address2, ORD.C_Address3, ' + CHAR(13) --10
                   +  ' ORD.C_City, ORD.C_State, ORD.C_Zip, ISNULL(CL2.CODE2,''''), ISNULL(CL1.Short,''''), ISNULL(CL1.CODE2,''''), ' + CHAR(13) --16
                   +  ' SUBSTRING(PD.LabelNo,11,9), ISNULL(CL2.Short,''''), ORD.Ordergroup, SUBSTRING(ISNULL(ORD.NOTES,''''),1,80), ' + CHAR(13) --20
-                  +  ' ORD.ExternOrderKey, ORD.BuyerPO + ORD.Type, SUBSTRING(ISNULL(CL1.DESCRIPTION,''''),1,80), SUBSTRING(ORD.Notes2,1,80), ' + CHAR(13) --24
+                  +  ' ORD.ExternOrderKey, ORD.BuyerPO + ORD.UserDefine05, SUBSTRING(ISNULL(CL1.DESCRIPTION,''''),1,80), SUBSTRING(ORD.Notes2,1,80), ' + CHAR(13) --24
 
                   +  ' LEFT( (LEFT(LTRIM(RTRIM(ISNULL(PD.LabelNo,''''))) + REPLICATE('' '',80), 32) ' --25
                   +  ' + LEFT(LTRIM(RTRIM(ISNULL(CL1.Notes,''''))) + REPLICATE('' '',80), 2) ' --25
