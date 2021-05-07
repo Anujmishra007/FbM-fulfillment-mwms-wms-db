@@ -28,6 +28,8 @@ GO
 /* 04-03-2021  WLChooi  1.3   WMS-15571 - Fix Cater for Channel_ID (WL02)*/ 
 /* 21-04-2021  WLChooi  1.4   WMS-16849 - Fix UOM 2 not sent to Pack     */
 /*                            Station (WL03)                             */
+/* 30-04-2021  WLChooi  1.5   WMS-16849 - Fix UOM 2 Stamp Taskdetailkey  */
+/*                            to Pickdetail table (WL04)                 */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV11]      
@@ -534,10 +536,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
              SET @n_TotCtn = FLOOR(@n_Qty / @n_CaseCnt)            
              
              --additional condition to search pickdetail
+             --WL04 S
+             --IF @c_UDF02 = 'D' --discrete
+             --   SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.Orderkey = @c_Orderkey AND PICKDETAIL.UOM = @c_UOM' 
+             --ELSE
+             --   SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM' 
              IF @c_UDF02 = 'D' --discrete
-                SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.Orderkey = @c_Orderkey AND PICKDETAIL.UOM = @c_UOM' 
+                SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM NOT IN (''6'',''7'') ORDER BY ORDERS.Loadkey, ORDERS.Orderkey, PICKDETAIL.UOM ' 
              ELSE
-                SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM' 
+                SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM NOT IN (''6'',''7'') ORDER BY ORDERS.Loadkey' 
+             --WL04 E
              
              WHILE @n_TotCtn > 0 AND @n_continue IN(1,2) AND @c_Salesman <> 'TRF'   --WL01           
              BEGIN
