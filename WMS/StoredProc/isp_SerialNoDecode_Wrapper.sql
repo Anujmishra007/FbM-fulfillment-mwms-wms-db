@@ -23,6 +23,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 10-May-2021  NJOW01   1.0  Fix storerconfig                          */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_SerialNoDecode_Wrapper]
    @c_PickslipNo  NVARCHAR(10),
@@ -50,15 +51,14 @@ BEGIN
    SELECT @c_SPCode = '', @n_err=0, @b_success=1, @c_errmsg=''
    SELECT @c_NewSerialNo = @c_Serialno 
       
-   SELECT @c_SPCode = dbo.fnc_GetRight('', @c_Storerkey, '', 'SerialNoDecode_SP')
-   
-          
-   SELECT @c_SPCode = sVALUE 
+   --SELECT @c_SPCode = dbo.fnc_GetRight('', @c_Storerkey, '', 'SerialNoDecode_SP')
+             
+   SELECT TOP 1 @c_SPCode = sVALUE 
    FROM   StorerConfig WITH (NOLOCK) 
    WHERE  StorerKey = @c_StorerKey
-   AND    ConfigKey = 'SerialNoDecode_SP'  
+   AND    ConfigKey = 'SerialNoDecode_SP'    
 
-   IF ISNULL(RTRIM(@c_SPCode),'') = ''
+   IF ISNULL(RTRIM(@c_SPCode),'') IN ('','0')
    BEGIN
        SELECT @n_continue = 4  
        GOTO QUIT_SP
