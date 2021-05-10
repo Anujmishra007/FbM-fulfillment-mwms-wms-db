@@ -122,7 +122,7 @@ BEGIN
   BEGIN              
    SET @c_SQLGroup = ' GROUP BY P.OrderKey,Ord.shipperkey ' +          
                      ' HAVING SUM(P.Qty) = 1 '          
-   SET @c_SQLOrdBy = ' ORDER BY MAX(l.LogicalLocation), MAX(P.Loc), P.OrderKey   '                            
+   SET @c_SQLOrdBy = ' ORDER BY MIN(l.LogicalLocation), MIN(P.Loc), P.OrderKey   '                            
   END  
   IF @parm04 = '2'  
   BEGIN  
