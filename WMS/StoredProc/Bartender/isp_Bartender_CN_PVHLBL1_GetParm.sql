@@ -16,7 +16,8 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2020-04-29 1.0  WLChooi    Created (WMS-13194)                             */    
-/* 2021-02-23 1.1  CSCHONG    WMS-16053 revised field mapping (CS01)          */             
+/* 2021-02-23 1.1  CSCHONG    WMS-16053 revised field mapping (CS01)          */  
+/* 2021-04-08 1.2  Mingle     WMS-16760 modify logic(ML01)                    */           
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CN_PVHLBL1_GetParm]                      
@@ -147,7 +148,7 @@ BEGIN
            select @n_ctnrec '@n_ctnrec'
          END
        
-            IF @n_ctnrec = 0
+            IF @n_ctnrec = 0 and @c_OrdGRP <> 'W'      --(ML01)
             BEGIN  
                   SELECT @c_htscode = LEFT(SC.data,2)
                   FROM SKUConfig SC WITH (NOLOCK)
