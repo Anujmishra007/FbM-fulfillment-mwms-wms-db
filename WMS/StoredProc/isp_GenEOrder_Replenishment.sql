@@ -45,6 +45,8 @@ GO
 /*                              full case issue                            */
 /* 05-Mar-2020  TLTING02  2.7   Performance tune                           */
 /* 15-Dec-2020  WWANG02   2.8   Setting Movement Ref Key                   */
+/* 10-May-2021  WLChooi   2.9   WMS-17000 Insert Channel_ID into Pickdetail*/
+/*                              Table (WL01)                               */
 /***************************************************************************/    
 CREATE PROCEDURE [dbo].[isp_GenEOrder_Replenishment]  
    @c_LoadKeyList NVARCHAR(1000),  
@@ -620,6 +622,7 @@ BEGIN
                      ,DoCartonize      ,PickMethod       ,WaveKey
                      ,EffectiveDate    ,TrafficCop       ,ArchiveCop
                      ,OptimizeCop      ,ShipFlag         ,PickSlipNo
+                     ,Channel_ID   --WL01
                      )
                   SELECT @c_NewPickDetailKey  AS PickDetailKey
                         ,CaseID           ,PickHeaderKey    ,OrderKey
@@ -633,6 +636,7 @@ BEGIN
                         ,DoCartonize      ,PickMethod       ,WaveKey      
                         ,EffectiveDate    ,TrafficCop   		,ArchiveCop      
                         ,'9'              ,ShipFlag         ,PickSlipNo   
+                        ,Channel_ID   --WL01
                   FROM   dbo.PickDetail WITH (NOLOCK)
                   WHERE  PickDetailKey = @c_PickDetailKey 
 
@@ -1428,6 +1432,7 @@ BEGIN
                   ,DoCartonize      ,PickMethod       ,WaveKey
                   ,EffectiveDate    ,TrafficCop       ,ArchiveCop
                   ,OptimizeCop      ,ShipFlag         ,PickSlipNo
+                  ,Channel_ID   --WL01
                   )
                SELECT @c_NewPickDetailKey  AS PickDetailKey
                      ,CaseID           ,PickHeaderKey    ,OrderKey
@@ -1441,8 +1446,9 @@ BEGIN
                      ,UpdateSource     ,CartonGroup      ,CartonType      
                      ,@c_PickDetailKey ,@c_DoReplenish   ,ReplenishZone='SplitPD'      
                      ,DoCartonize      ,PickMethod       ,WaveKey      
-                     ,EffectiveDate    ,TrafficCop    ,ArchiveCop      
-                     ,NULL             ,ShipFlag         ,PickSlipNo   
+                     ,EffectiveDate    ,TrafficCop       ,ArchiveCop      
+                     ,NULL             ,ShipFlag         ,PickSlipNo  
+                     ,Channel_ID   --WL01 
                FROM   dbo.PickDetail WITH (NOLOCK)
                WHERE  PickDetailKey = @c_PickDetailKey -- Fix (SWT01)
                --WHERE  PickDetailKey = @c_SwapPickDetailKey 
@@ -1535,6 +1541,7 @@ BEGIN
                      ,DoCartonize      ,PickMethod       ,WaveKey
                      ,EffectiveDate    ,TrafficCop       ,ArchiveCop
                      ,OptimizeCop      ,ShipFlag         ,PickSlipNo
+                     ,Channel_ID   --WL01
                     )
                   SELECT @c_NewPickDetailKey  AS PickDetailKey
                         ,CaseID           ,PickHeaderKey    ,OrderKey
@@ -1548,6 +1555,7 @@ BEGIN
                         ,DoCartonize      ,PickMethod       ,WaveKey      
                         ,EffectiveDate    ,TrafficCop       ,ArchiveCop      
                         ,'1'              ,ShipFlag         ,PickSlipNo
+                        ,Channel_ID   --WL01
                   FROM   dbo.PickDetail WITH (NOLOCK)
                   WHERE  PickDetailKey = @c_SwapPickDetailKey 
                   IF @@ERROR <> 0 
@@ -1613,6 +1621,7 @@ BEGIN
                      ,DoCartonize      ,PickMethod       ,WaveKey
                      ,EffectiveDate    ,TrafficCop       ,ArchiveCop
                      ,OptimizeCop      ,ShipFlag         ,PickSlipNo
+                     ,Channel_ID   --WL01
                     )
                   SELECT @c_NewPickDetailKey  AS PickDetailKey
                         ,CaseID           ,PickHeaderKey    ,OrderKey
@@ -1626,6 +1635,7 @@ BEGIN
                         ,DoCartonize      ,PickMethod       ,WaveKey      
                         ,EffectiveDate    ,TrafficCop       ,ArchiveCop      
                         ,'1'              ,ShipFlag         ,PickSlipNo
+                        ,Channel_ID   --WL01
                   FROM   dbo.PickDetail WITH (NOLOCK)
                   WHERE  PickDetailKey = @c_PickDetailKey 
                   IF @@ERROR <> 0 
@@ -2260,19 +2270,21 @@ BEGIN
                             ,DoCartonize      ,PickMethod       ,WaveKey  
                             ,EffectiveDate    ,TrafficCop       ,ArchiveCop  
                             ,OptimizeCop      ,ShipFlag         ,PickSlipNo  
+                            ,Channel_ID   --WL01
                             )  
                          SELECT @c_NewPickDetailKey  AS PickDetailKey  
                                ,CaseID           ,PickHeaderKey    ,OrderKey  
-                               ,OrderLineNumber  ,Lot          ,Storerkey  
+                               ,OrderLineNumber  ,Lot              ,Storerkey  
                                ,Sku              ,AltSku           ,UOM
                                ,UOMQty           ,@n_SplitQty  
                                ,QtyMoved         ,[STATUS]         ,DropID         
-                               ,Loc             ,ID               ,PackKey        
+                               ,Loc             ,ID                ,PackKey        
                                ,UpdateSource     ,CartonGroup      ,CartonType        
                                ,@c_PickDetailKey ,DoReplenish      ,ReplenishZone='SplitFrMoveRef'        
                                ,DoCartonize      ,PickMethod       ,WaveKey        
-                               ,EffectiveDate    ,TrafficCop     ,ArchiveCop        
-                               ,'9'              ,ShipFlag         ,PickSlipNo  
+                               ,EffectiveDate    ,TrafficCop       ,ArchiveCop        
+                               ,'9'              ,ShipFlag         ,PickSlipNo 
+                               ,Channel_ID   --WL01 
                          FROM   PICKDETAIL WITH (NOLOCK)  
                          WHERE  PickDetailKey = @c_PickDetailKey   
                   

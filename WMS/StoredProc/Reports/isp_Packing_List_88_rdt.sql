@@ -26,10 +26,11 @@ GO
 /* Date         Author     Ver. Purposes                                 */    
 /* 04-DEC-2020  CSCHONG    1.1  WMS-15451 revised field logic (CS01)     */  
 /* 13-JAN-2021  CheeJunYan 1.2  Discrete pickslip; CartonNo sort (CJY01) */  
+/* 11-May-2021  WLChooi    1.3  WMS-16878 - Add new column (WL01)        */
 /*************************************************************************/    
     
 CREATE PROC [dbo].[isp_Packing_List_88_rdt] (    
- @c_PickSlipNo      NVARCHAR(10)  
+   @c_PickSlipNo      NVARCHAR(10)  
 )    
 AS    
 BEGIN    
@@ -44,49 +45,50 @@ BEGIN
            @n_cnt             int    
   
   
-  DECLARE @c_CompanyName        NVARCHAR(45),  
-          @c_RptName            NVARCHAR(150),  
-          @c_ST_Secondary       NVARCHAR(15),  
-          @c_storerkey          NVARCHAR(20),  
-          @c_Consigneekey       NVARCHAR(45),  
-          @c_CCompany           NVARCHAR(45),  
-          @c_Loadkey            NVARCHAR(20),  
-          @c_ExtOrderkey        NVARCHAR(50),  
-          @c_CAddress1          NVARCHAR(45),  
-          @c_CAddress2          NVARCHAR(45),  
-          @c_CAddress3          NVARCHAR(45),  
-          @c_CAddress4          NVARCHAR(45),  
-          @c_Ccity              NVARCHAR(45),  
-          @c_Ccountry           NVARCHAR(45),  
-          @c_mbolkey            NVARCHAR(20),  
-          @c_salesman           NVARCHAR(30),  
-          @c_labelno            NVARCHAR(20),  
-          @c_sku                NVARCHAR(20),  
-          @c_susr1              NVARCHAR(20),  
-          @c_style              NVARCHAR(20),  
-          @c_color              NVARCHAR(10),  
-          @c_ssize              NVARCHAR(10),  
-          @c_measurement        NVARCHAR(10),  
-          @c_Getmeasurement     NVARCHAR(10),  
-          @c_FullAddress        NVARCHAR(250),  
-          @n_Pqty               INT,  
-          @n_cntExtOrdkey       INT,  
-          @n_cntLoadkey         INT,  
-          @c_storeCode          NVARCHAR(100),  
-          @c_GetStyle           NVARCHAR(80),  
-          @c_GetSize            NVARCHAR(50),  
-          @n_TTLCTN             INT,  
-          @n_TTLQTY             INT,  
-          @n_TTLCBM             FLOAT,  
-          @n_TTLGWGT            FLOAT,  
-          @n_LooseCTN           INT,  
-          @n_pltvol             FLOAT,  
-          @n_pltwgt             FLOAT,  
-          @n_picube             FLOAT,  
-          @n_piweight           FLOAT,  
-          @n_Convertpltvol      INT,           --CS01  
-          @n_Convertctnvol      INT,           --CS01  
-          @n_TTLNETWGT          FLOAT          --CS01  
+   DECLARE @c_CompanyName        NVARCHAR(45),  
+           @c_RptName            NVARCHAR(150),  
+           @c_ST_Secondary       NVARCHAR(15),  
+           @c_storerkey          NVARCHAR(20),  
+           @c_Consigneekey       NVARCHAR(45),  
+           @c_CCompany           NVARCHAR(45),  
+           @c_Loadkey            NVARCHAR(20),  
+           @c_ExtOrderkey        NVARCHAR(50),  
+           @c_CAddress1          NVARCHAR(45),  
+           @c_CAddress2          NVARCHAR(45),  
+           @c_CAddress3          NVARCHAR(45),  
+           @c_CAddress4          NVARCHAR(45),  
+           @c_Ccity              NVARCHAR(45),  
+           @c_Ccountry           NVARCHAR(45),  
+           @c_mbolkey            NVARCHAR(20),  
+           @c_salesman           NVARCHAR(30),  
+           @c_labelno            NVARCHAR(20),  
+           @c_sku                NVARCHAR(20),  
+           @c_susr1              NVARCHAR(20),  
+           @c_style              NVARCHAR(20),  
+           @c_color              NVARCHAR(10),  
+           @c_ssize              NVARCHAR(10),  
+           @c_measurement        NVARCHAR(10),  
+           @c_Getmeasurement     NVARCHAR(10),  
+           @c_FullAddress        NVARCHAR(250),  
+           @n_Pqty               INT,  
+           @n_cntExtOrdkey       INT,  
+           @n_cntLoadkey         INT,  
+           @c_storeCode          NVARCHAR(100),  
+           @c_GetStyle           NVARCHAR(80),  
+           @c_GetSize            NVARCHAR(50),  
+           @n_TTLCTN             INT,  
+           @n_TTLQTY             INT,  
+           @n_TTLCBM             FLOAT,  
+           @n_TTLGWGT            FLOAT,  
+           @n_LooseCTN           INT,  
+           @n_pltvol             FLOAT,  
+           @n_pltwgt             FLOAT,  
+           @n_picube             FLOAT,  
+           @n_piweight           FLOAT,  
+           @n_Convertpltvol      INT,           --CS01  
+           @n_Convertctnvol      INT,           --CS01  
+           @n_TTLNETWGT          FLOAT,         --CS01  
+           @c_ShowSO             NVARCHAR(10) = 'N'   --WL01
   
    SET  @n_LooseCTN = 0  
    SET  @n_TTLCTN = 0  
@@ -167,6 +169,8 @@ BEGIN
          , RPTFLD21        NVARCHAR(500) NULL      --CS01  
          , NetWGT          FLOAT                   --CS01  
          , TTLNETWGT       FLOAT                   --CS01  
+         , ExternPOKey     NVARCHAR(20) NULL       --WL01
+         , RPTFLD22        NVARCHAR(500) NULL      --WL01
          )      
   
   
@@ -187,25 +191,31 @@ BEGIN
     )  
   
     --CS01 START  
-     SET @c_storerkey = ''  
-  
-     SELECT @c_storerkey = PH.Storerkey   
-     FROM PACKHEADER PH WITH (NOLOCK)  
-     WHERE PH.PickSlipNo = @c_PickSlipNo   
-  
-     SELECT @n_Convertpltvol = CASE WHEN ISNUMERIC(C.short) = 1  THEN CAST(C.short as INT) ELSE 0 END  
-     FROM CODELKUP C WITH (NOLOCK)  
-     WHERE C.Listname = 'REPORTCFG' AND C.long = 'r_dw_packing_list_88_rdt'  
-     AND C.storerkey = @c_storerkey AND C.code ='CONVPLTVOL'  
-  
-  
-     SELECT @n_Convertctnvol = CASE WHEN ISNUMERIC(C.short) = 1  THEN CAST(C.short as INT) ELSE 0 END  
-     FROM CODELKUP C WITH (NOLOCK)  
-     WHERE C.Listname = 'REPORTCFG' AND C.long = 'r_dw_packing_list_88_rdt'  
-     AND C.storerkey = @c_storerkey AND C.code ='CONVCTNVOL'  
+   SET @c_storerkey = ''  
+   
+   SELECT @c_storerkey = PH.Storerkey   
+   FROM PACKHEADER PH WITH (NOLOCK)  
+   WHERE PH.PickSlipNo = @c_PickSlipNo   
+   
+   SELECT @n_Convertpltvol = CASE WHEN ISNUMERIC(C.short) = 1  THEN CAST(C.short as INT) ELSE 0 END  
+   FROM CODELKUP C WITH (NOLOCK)  
+   WHERE C.Listname = 'REPORTCFG' AND C.long = 'r_dw_packing_list_88_rdt'  
+   AND C.storerkey = @c_storerkey AND C.code ='CONVPLTVOL'  
+   
+   
+   SELECT @n_Convertctnvol = CASE WHEN ISNUMERIC(C.short) = 1  THEN CAST(C.short as INT) ELSE 0 END  
+   FROM CODELKUP C WITH (NOLOCK)  
+   WHERE C.Listname = 'REPORTCFG' AND C.long = 'r_dw_packing_list_88_rdt'  
+   AND C.storerkey = @c_storerkey AND C.code ='CONVCTNVOL'  
   
    
-    --CS01 END  
+   --CS01 END  
+
+   --WL01
+   SELECT @c_ShowSO = ISNULL(C.Short,'N')
+   FROM CODELKUP C WITH (NOLOCK)  
+   WHERE C.Listname = 'REPORTCFG' AND C.long = 'r_dw_packing_list_88_rdt'  
+   AND C.Storerkey = @c_storerkey AND C.Code ='ShowSO'
   
    INSERT INTO #PACKLIST88 (    C_Address1         
                               , C_Address2         
@@ -271,6 +281,8 @@ BEGIN
                               , RPTFLD21                 --CS01  
                               , NetWGT                   --CS01  
                               , TTLNETWGT                --CS01  
+                              , ExternPOKey              --WL01
+                              , RPTFLD22                 --WL01
                            )  
    SELECT  ORDERS.c_Address1 AS ord_address1,    
       ISNULL(ORDERS.c_Address2,'') AS ord_Address2,  
@@ -321,7 +333,9 @@ BEGIN
       PACKDETAIL.CartonNo,        
       ISNULL(MAX(CASE WHEN C.Code ='18' THEN RTRIM(C.long) ELSE '' END),'N.Weight') ,                 --CS01  
       ISNULL(MAX(CASE WHEN C.Code ='19' THEN RTRIM(C.long) ELSE '' END),'TOTAL NETT WEIGHT'),         --CS01  
-      (PACKDETAIL.qty*SKU.STDNETWGT) as netwgt, 0 AS TTLNETWGT                                        --CS01  
+      (PACKDETAIL.qty*SKU.STDNETWGT) as netwgt, 0 AS TTLNETWGT,                                       --CS01  
+      ISNULL(OD.ExternPOKey,''),   --WL01
+      ISNULL(MAX(CASE WHEN C.Code ='22' THEN RTRIM(C.long) ELSE '' END),'SO#')   --WL01  
    FROM ORDERS WITH (NOLOCK) --ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)    
    JOIN ORDERDETAIL OD (NOLOCK) ON (ORDERS.OrderKey = OD.OrderKey)    
    JOIN SKU WITH (NOLOCK) ON (OD.StorerKey = SKU.StorerKey AND OD.Sku = SKU.Sku)    
@@ -364,43 +378,43 @@ BEGIN
       ISNULL(PLT.PalletKey,''),  
       ISNULL(PLT.Length,0) , ISNULL(PLT.Width,0) , ISNULL(PLT.Height,0),  
       ISNULL(PLT.GrossWgt,0),ISNULL(ORDERS.C_Address4,'') ,ISNULL(ORDERS.B_Address4,''),packdetail.CartonNo,  
-      SKU.STDNETWGT                                           --CS01      
+      SKU.STDNETWGT, ISNULL(OD.ExternPOKey,'')      --CS01   --WL01
    ORDER BY PACKHEADER.PickSlipNo,CASE WHEN ISNULL(PLT.PalletKey,'') <> '' THEN 1 ELSE 2 END,  
    PACKDETAIL.labelno,PACKDETAIL.SKU  
      
     
-  SELECT @n_LooseCTN = count(DISTINCT labelno)  
-  FROM #PACKLIST88  
-  WHERE pltid = ''   
+   SELECT @n_LooseCTN = count(DISTINCT labelno)  
+   FROM #PACKLIST88  
+   WHERE pltid = ''   
   
-  SELECT @n_TTLCTN = count(DISTINCT pltid )  
+   SELECT @n_TTLCTN = count(DISTINCT pltid )  
       --  ,@n_TTLQTY = sum(pqty)  
-  FROM #PACKLIST88  
-  WHERE pltid <> ''   
+   FROM #PACKLIST88  
+   WHERE pltid <> ''   
   
-SELECT @n_TTLQTY = sum(pqty)  
-       ,@n_TTLNETWGT = sum(netwgt)  
-  FROM #PACKLIST88  
+   SELECT @n_TTLQTY = sum(pqty)  
+         ,@n_TTLNETWGT = sum(netwgt)  
+   FROM #PACKLIST88  
+   
+   INSERT INTO #PACKLIST88WPLT (PLTID,PLTVOL,PLTWGT)  
+   SELECT DISTINCT Pltid,PLTVOL,PLTWGT  
+   FROM #PACKLIST88  
+   WHERE pltid <> ''   
   
-  INSERT INTO #PACKLIST88WPLT (PLTID,PLTVOL,PLTWGT)  
-  SELECT DISTINCT Pltid,PLTVOL,PLTWGT  
-  FROM #PACKLIST88  
-  WHERE pltid <> ''   
+   INSERT INTO #PACKLIST88WOPLT (PLTID,CartonNo,PICUBE,PIWeight)  
+   SELECT DISTINCT Pltid,CartonNo,(PICUBE),(PIWeight)  
+   FROM #PACKLIST88  
+   WHERE pltid = ''  
+   GROUP by  Pltid,CartonNo,(PICUBE),(PIWeight)  
   
- INSERT INTO #PACKLIST88WOPLT (PLTID,CartonNo,PICUBE,PIWeight)  
-  SELECT DISTINCT Pltid,CartonNo,(PICUBE),(PIWeight)  
-  FROM #PACKLIST88  
-  WHERE pltid = ''  
-  group by  Pltid,CartonNo,(PICUBE),(PIWeight)  
-  
-  SELECT @n_pltvol = CASE WHEN  @n_Convertpltvol > 1 THEN SUM(PLTVOL)/@n_Convertpltvol ELSE SUM(PLTVOL) END  
+   SELECT @n_pltvol = CASE WHEN  @n_Convertpltvol > 1 THEN SUM(PLTVOL)/@n_Convertpltvol ELSE SUM(PLTVOL) END  
          ,@n_pltwgt = SUM(PLTWGT)  
-  FROM #PACKLIST88WPLT  
+   FROM #PACKLIST88WPLT  
   
   
-  SELECT  @n_picube = CASE WHEN @n_Convertctnvol > 1 THEN SUM(picube)/@n_Convertctnvol ELSE SUM(picube) END  
-        , @n_piweight = SUM(piweight)   
-  FROM #PACKLIST88WOPLT  
+   SELECT  @n_picube = CASE WHEN @n_Convertctnvol > 1 THEN SUM(picube)/@n_Convertctnvol ELSE SUM(picube) END  
+         , @n_piweight = SUM(piweight)   
+   FROM #PACKLIST88WOPLT  
   
 --select * from #PACKLIST88WOPLT  
   
@@ -473,7 +487,10 @@ SELECT @n_TTLQTY = sum(pqty)
          , CASE WHEN ISNULL(RPTFLD20,'') <> '' THEN RPTFLD20 ELSE 'N.Weight' END AS  RPTFLD20                    --CS01        
          , CASE WHEN ISNULL(RPTFLD21,'') <> '' THEN RPTFLD21 ELSE 'TOTAL NETT WEIGHT' END AS RPTFLD21            --CS01     
          , CAST(NetWGT as decimal(10,2)) as NetWGT,@n_TTLNETWGT as TTLNETWGT                                     --CS01      
-   , CartonNo                                                                                     -- CJY01                             
+         , CartonNo                                                                                     -- CJY01       
+         , CASE WHEN ISNULL(RPTFLD22,'') <> '' THEN RPTFLD22 ELSE 'SO#' END AS RPTFLD22            --WL01   
+         , ExternPOKey   --WL01
+         , @c_ShowSO AS ShowSO   --WL01                    
    FROM #PACKLIST88 (nolock)  
    ORDER BY ROWID  
   

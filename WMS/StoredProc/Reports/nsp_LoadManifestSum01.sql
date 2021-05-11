@@ -41,6 +41,7 @@ GO
 /*                         to 99999999.99                               */  
 /* 19-Feb-2008  HFLiew     SOS#97833 Add new fields in the report       */ 
 /* 11-Aug-2020  WLChooi    WMS-14656 - Show MBOLKey Barcode (WL01)      */
+/* 1-May-2021   Mingle     WMS-16929 - Show OrdGroup and add codelkup(ML01)*/
 /************************************************************************/  
   
 CREATE PROC nsp_LoadManifestSum01 (  
@@ -97,7 +98,9 @@ CREATE PROC nsp_LoadManifestSum01 (
           MBOL.TransMethod,     -- Added by HFLiew on 19 Feb 2008 SOS Ticket#97833  
           MBOL.PlaceOfLoading,  -- Added by HFLiew on 19 Feb 2008 SOS Ticket#97833  
           MBOL.Remarks,         -- Added by HFLiew on 19 Feb 2008 SOS Ticket#97833  
-          ISNULL(CL.Short,'N') AS ShowBarcode   --WL01
+          ISNULL(CL.Short,'N') AS ShowBarcode,   --WL01
+          CASE WHEN Orders.StorerKey = 'IDSMED' THEN Orders.OrderGroup ELSE MBOLDETAIL.orderkey END AS ShowOrdGrp,   --ML01
+          ISNULL(CL.Short,'N') AS RepOrdKeybyOrdGrp   --ML01
    INTO #RESULT  
    FROM MBOL (NOLOCK) INNER JOIN MBOLDETAIL (NOLOCK)  
    ON MBOL.mbolkey = MBOLDETAIL.mbolkey  
@@ -106,6 +109,8 @@ CREATE PROC nsp_LoadManifestSum01 (
    MBOLDETAIL.OrderKey = ORDERS.OrderKey-- Added by HFLiew on 19 Feb 2008 SOS Ticket#97833  
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname =  'REPORTCFG' AND CL.Storerkey = ORDERS.Storerkey   --WL01
                                  AND CL.Code = 'ShowBarcode' AND CL.Long = 'r_dw_dmanifest_sum01'     --WL01
+   LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.Listname =  'REPORTCFG' AND CL1.Storerkey = ORDERS.Storerkey   --ML01
+                                 AND CL1.Code = 'RepOrdKeybyOrdGrp' AND CL1.Long = 'r_dw_dmanifest_sum01'     --ML01
    WHERE MBOL.mbolkey = @c_mbolkey  
   
    SELECT @n_totalorders = COUNT(*), @n_totalcust = COUNT(DISTINCT description)  
