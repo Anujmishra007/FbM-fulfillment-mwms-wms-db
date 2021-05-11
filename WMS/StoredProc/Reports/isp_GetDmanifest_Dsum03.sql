@@ -39,6 +39,8 @@ GO
 /* 2020-Jun-09  WLChooi  1.4  Performance Tunning (WL02)                */
 /* 2020-Aug-27  WLChooi  1.5  WMS-14831 - Modify Logic (WL03)           */
 /* 2021-Jan-05  WLChooi  1.6  WMS-15980 - Modify Logic (WL04)           */
+/* 2021-Apr-08  WLChooi  1.7  WMS-16786 - Modify ETA and ShowCRD Logic  */
+/*                            (WL05)                                    */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_GetDmanifest_Dsum03] (  
@@ -150,20 +152,23 @@ BEGIN
          '0' AS APPQTY,  
          '0' AS EQQTY,  
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN Orders.C_Company ELSE '' END,  
-         ETA =CASE WHEN  bb.pick_qty=cc.pack_qty THEN   
+         ETA = CASE WHEN  bb.pick_qty=cc.pack_qty THEN   
               (         
-                CASE WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0 THEN  --NJOW01  
-                         DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                     WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  THEN --NJOW01  
-                        CASE WHEN DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10)) >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) THEN   
-                          DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))   
-                            ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) END    
-                   WHEN CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1 THEN MBOL.EditDate    
-                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' THEN   
-                            DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)  
-                          ELSE  
-                            DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate )  
-                          END  
+                CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   --WL05
+                     WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0   --NJOW01   --WL05  
+                     THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05    
+                     WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1   --NJOW01   --WL05    
+                     THEN CASE WHEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05   
+                                    >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                               THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05     
+                               ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                               END    
+                     WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate   --WL05    
+                     ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' 
+                               THEN DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)  
+                               ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )      --WL05 
+                                                                          ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END   --WL05 
+                               END  
                 END  
               )   
                    ELSE '' END,  /* Added ETA = ETD (MBOL.EditDate) + LeadTime */       
@@ -177,7 +182,8 @@ BEGIN
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN CODELKUP.Short ELSE '' END AS Domain,  
          ShowField = CASE WHEN  bb.pick_qty=cc.pack_qty THEN (CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END) ELSE '' END  ,  
          ShowCRD  = CASE WHEN  bb.pick_qty=cc.pack_qty THEN (CASE WHEN ((ISNULL(STORER.SUSR1,'') = 'CRD' AND ISNULL(ORDERS.userdefine10,'') <> ''  
-                    AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + CONVERT(INT,ORDERS.Userdefine01)),111),'/',''),8))   
+                    AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + 
+                    CONVERT(INT,CASE WHEN CLC1.Short IS NULL AND ORDERS.StorerKey = 'NIKECN' THEN 0 WHEN CLC1.Short IS NULL THEN ORDERS.Userdefine01 ELSE CLC1.Short END)),111),'/',''),8))   --WL05
                     <  LEFT(ORDERS.ExternPOKey,8))) THEN   
          CASE WHEN ISNUMERIC(LEFT(ORDERS.ExternPOKey,4))=1 THEN   
          -- CASE WHEN CONVERT(INT,REPLACE)  
@@ -217,6 +223,12 @@ BEGIN
                                                 CLC.Description = ORDERS.c_City AND  
                                                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                                 CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)   
+      --WL05 S
+      LEFT OUTER JOIN CODELKUP CLC1 (NOLOCK) ON (CLC1.LONG = ORDERS.Facility AND   
+                                                 CLC1.[Description] = ORDERS.C_City AND  
+                                                 CLC1.ListName = @c_CodeCityLdTime AND
+                                                 CLC1.Storerkey = ORDERS.StorerKey) 
+      --WL05 E
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
                                             CODELKUP.Code = ORDERS.StorerKey)   
       LEFT OUTER JOIN STORER (NOLOCK) ON (STORER.StorerKey = ORDERS.ConsigneeKey)  
@@ -302,20 +314,23 @@ BEGIN
           FROM packdetail(NOLOCK),sku(NOLOCK) WHERE packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku AND sku.skugroup = 'EQUIPMENT'  
           AND packdetail.Storerkey =PackHeader.Storerkey AND packdetail.Pickslipno =PackHeader.Pickslipno  AND PACKDETAIL.RefNo = @c_Zone)   AS EQQTY,  
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN Orders.C_company ELSE ''  END ,  
-         ETA =CASE WHEN  bb.pick_qty=cc.pack_qty THEN(  
-              CASE WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0 THEN  --NJOW01  
-                  DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))   
-                     WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  THEN --NJOW01  
-                    CASE WHEN DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10)) >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) THEN   
-                        DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                    ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) END    
-                  WHEN CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1 THEN MBOL.EditDate    
-                 ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' THEN   
-                           DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)  
-                           ELSE  
-                           DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate )  
-                           END  
-             END)ELSE '' END  , /* Added ETA = ETD (MBOL.EditDate) + LeadTime */  
+         ETA = CASE WHEN  bb.pick_qty=cc.pack_qty THEN(  
+               CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   --WL05
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0   --NJOW01   --WL05  
+                    THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05    
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1   --NJOW01   --WL05   
+                    THEN CASE WHEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05  
+                                   >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05   
+                              ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              END    
+                    WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate   --WL05      
+                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' 
+                              THEN DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)  
+                              ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )      --WL05 
+                                                                         ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END   --WL05 
+                              END  
+               END)ELSE '' END  , /* Added ETA = ETD (MBOL.EditDate) + LeadTime */  
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN CASE WHEN ISNULL(CLR5.Short,'N') = 'Y' THEN LTRIM(RTRIM(ISNULL(ORDERS.C_contact1,''))) + ' ' + LTRIM(RTRIM(ISNULL(ORDERS.C_Phone1,'')))   --WL03
                                                                                         ELSE CAST(ORDERS.Notes AS CHAR(255)) END   --WL03
                                             ELSE '' END AS Notes,   
@@ -326,7 +341,8 @@ BEGIN
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN CODELKUP.Short ELSE ''  END ,  
          ShowField = CASE WHEN  bb.pick_qty=cc.pack_qty THEN (CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END) ELSE '' END  ,  
          ShowCRD  = CASE WHEN  bb.pick_qty=cc.pack_qty THEN (CASE WHEN ((ISNULL(STORER.SUSR1,'') = 'CRD' AND ISNULL(ORDERS.userdefine10,'') <> ''  
-                    AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + CONVERT(INT,ORDERS.Userdefine01)),111),'/',''),8))   
+                    AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + 
+                    CONVERT(INT,CASE WHEN CLC1.Short IS NULL AND ORDERS.StorerKey = 'NIKECN' THEN 0 WHEN CLC1.Short IS NULL THEN ORDERS.Userdefine01 ELSE CLC1.Short END)),111),'/',''),8))   --WL05  
                     <  LEFT(ORDERS.ExternPOKey,8))) THEN   
                     CASE WHEN ISNUMERIC(LEFT(ORDERS.ExternPOKey,4))=1 THEN   
                     -- CASE WHEN CONVERT(INT,REPLACE)  
@@ -367,7 +383,13 @@ BEGIN
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                                                 CLC.Description = ORDERS.c_City AND  
                                                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
-                                                CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)   
+                                                CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)  
+      --WL05 S
+      LEFT OUTER JOIN CODELKUP CLC1 (NOLOCK) ON (CLC1.LONG = ORDERS.Facility AND   
+                                                 CLC1.[Description] = ORDERS.C_City AND  
+                                                 CLC1.ListName = @c_CodeCityLdTime AND
+                                                 CLC1.Storerkey = ORDERS.StorerKey) 
+      --WL05 E
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
                                             CODELKUP.Code = ORDERS.StorerKey)   
       LEFT OUTER JOIN STORER (NOLOCK) ON (STORER.StorerKey = ORDERS.ConsigneeKey)  
@@ -455,20 +477,23 @@ BEGIN
           FROM packdetail(NOLOCK),sku(NOLOCK) WHERE packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku AND sku.skugroup = 'EQUIPMENT'  
           AND packdetail.Storerkey =PackHeader.Storerkey AND packdetail.Pickslipno =PackHeader.Pickslipno  AND PACKDETAIL.RefNo = @c_Zone )    AS EQQTY,  
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN MAX(Orders.C_company)  ELSE '' END ,  
-         ETA =CASE WHEN  bb.pick_qty=cc.pack_qty THEN(  
-                CASE WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0 THEN  --NJOW01  
-                       DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))   
-                     WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  THEN --NJOW01  
-                    CASE WHEN DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10)) >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) THEN   
-                        DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                    ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) END    
-                 WHEN CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1 THEN MBOL.EditDate    
-                ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' THEN   
-                          DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)  
-                          ELSE  
-                          DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate )   
-                          END  
-              END)ELSE '' END  ,  /* Added ETA = ETD (MBOL.EditDate) + LeadTime */  
+         ETA = CASE WHEN  bb.pick_qty=cc.pack_qty THEN(  
+               CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   --WL05
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0   --NJOW01   --WL05  
+                    THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05     
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1   --NJOW01   --WL05    
+                    THEN CASE WHEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05   
+                                   >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05    
+                              ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              END    
+                    WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate   --WL05     
+                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' 
+                              THEN DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)  
+                              ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )      --WL05 
+                                                                         ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END   --WL05 
+                         END  
+               END)ELSE '' END  ,  /* Added ETA = ETD (MBOL.EditDate) + LeadTime */  
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN CASE WHEN ISNULL(CLR5.Short,'N') = 'Y' THEN LTRIM(RTRIM(ISNULL(MAX(ORDERS.C_contact1),''))) + ' ' + LTRIM(RTRIM(ISNULL(MAX(ORDERS.C_Phone1),'')))   --WL03
                                                                                         ELSE CAST(ORDERS.Notes AS CHAR(255)) END   --WL03
                                             ELSE '' END AS Notes,   
@@ -479,7 +504,8 @@ BEGIN
          CASE WHEN  bb.pick_qty=cc.pack_qty THEN CODELKUP.Short  ELSE '' END ,  
          ShowField = CASE WHEN  bb.pick_qty=cc.pack_qty THEN (CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END) ELSE '' END  ,  
          ShowCRD  = CASE WHEN  bb.pick_qty=cc.pack_qty THEN (CASE WHEN ((ISNULL(STORER.SUSR1,'') = 'CRD' AND ISNULL(ORDERS.userdefine10,'') <> ''  
-                    AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + CONVERT(INT,ORDERS.Userdefine01)),111),'/',''),8))   
+                    AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + 
+                    CONVERT(INT,CASE WHEN CLC1.Short IS NULL AND ORDERS.StorerKey = 'NIKECN' THEN 0 WHEN CLC1.Short IS NULL THEN ORDERS.Userdefine01 ELSE CLC1.Short END)),111),'/',''),8))   --WL05
                     <  LEFT(ORDERS.ExternPOKey,8))) THEN   
                     CASE WHEN ISNUMERIC(LEFT(ORDERS.ExternPOKey,4))=1 THEN   
                     -- CASE WHEN CONVERT(INT,REPLACE)  
@@ -520,7 +546,13 @@ BEGIN
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                                                 CLC.Description = ORDERS.c_City AND  
                                                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
-                                                CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)   
+                                                CAST(CLC.Notes AS CHAR(30)) = Orders.intermodalvehicle)  
+      --WL05 S
+      LEFT OUTER JOIN CODELKUP CLC1 (NOLOCK) ON (CLC1.LONG = ORDERS.Facility AND   
+                                                 CLC1.[Description] = ORDERS.C_City AND  
+                                                 CLC1.ListName = @c_CodeCityLdTime AND
+                                                 CLC1.Storerkey = ORDERS.StorerKey) 
+      --WL05 E
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
                                             CODELKUP.Code = ORDERS.StorerKey)   
       LEFT OUTER JOIN STORER (NOLOCK) ON (STORER.StorerKey = ORDERS.ConsigneeKey)   
@@ -616,8 +648,10 @@ BEGIN
                --WL03 S
                ISNULL(CLR5.Short,'N'),
                ORDERS.ExternPOKey,
-               CASE WHEN ISNULL(CLR6.Short,'N') = 'Y' AND ISNUMERIC(CLC.Short) = 1 THEN CONVERT(NVARCHAR(30), DATEADD(d,CAST(CLC.Short AS INT),MBOL.AddDate), 121) ELSE NULL END
+               CASE WHEN ISNULL(CLR6.Short,'N') = 'Y' AND ISNUMERIC(CLC.Short) = 1 THEN CONVERT(NVARCHAR(30), DATEADD(d,CAST(CLC.Short AS INT),MBOL.AddDate), 121) ELSE NULL END,
                --WL03 E      
+               CLC1.Short,        --WL05
+               ORDERS.StorerKey   --WL05
    END  
    ELSE  
    BEGIN  
@@ -658,18 +692,21 @@ BEGIN
          '0' as APPQTY,  
          '0' as EQQTY,  
          Orders.C_Company,  
-         ETA = CASE WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0 THEN  --NJOW01  
-                          DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                       WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  THEN --NJOW01  
-                            CASE WHEN DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10)) >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) THEN   
-                                DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))   
-                            ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) END    
-                     WHEN CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1 THEN MBOL.EditDate    
-                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' THEN   
-                              DateAdd(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)  
-                            ELSE  
-                              DateAdd(day, Ceiling(Cast(CLC.Short as real)), MBOL.EditDate )  
-                            END  
+         ETA = CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   --WL05
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0   --NJOW01   --WL05  
+                    THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05  
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1   --NJOW01   --WL05  
+                    THEN CASE WHEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05 
+                                   >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05   
+                              ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              END    
+                    WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate   --WL05     
+                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' 
+                         THEN DATEADD(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)  
+                         ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )      --WL05 
+                                                                    ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END   --WL05 
+                    END  
                END, /* Added ETA = ETD (MBOL.EditDate) + LeadTime */   
          CASE WHEN ISNULL(CLR5.Short,'N') = 'Y' THEN LTRIM(RTRIM(ISNULL(ORDERS.C_contact1,''))) + ' ' + LTRIM(RTRIM(ISNULL(ORDERS.C_Phone1,'')))   --WL03
                                                 ELSE CAST(ORDERS.Notes as Char(255)) END as Notes,   --WL03   
@@ -680,7 +717,8 @@ BEGIN
          CODELKUP.Short AS Domain,  
          ShowField = CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END ,  
          ShowCRD  = CASE WHEN ((ISNULL(STORER.SUSR1,'') = 'CRD' AND ISNULL(ORDERS.userdefine10,'') <> ''  
-                        AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + CONVERT(INT,ORDERS.Userdefine01)),111),'/',''),8))   
+                              AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + 
+                              CONVERT(INT,CASE WHEN CLC1.Short IS NULL AND ORDERS.StorerKey = 'NIKECN' THEN 0 WHEN CLC1.Short IS NULL THEN ORDERS.Userdefine01 ELSE CLC1.Short END)),111),'/',''),8))   --WL05   
                      < LEFT(ORDERS.ExternPOKey,8))) THEN   
                    CASE WHEN ISNUMERIC(LEFT(ORDERS.ExternPOKey,4))=1 THEN   
                   -- CASE WHEN CONVERT(INT,REPLACE)  
@@ -708,6 +746,12 @@ BEGIN
                                                 CLC.Description = ORDERS.c_City AND  
                                                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
                                                 CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)   
+      --WL05 S
+      LEFT OUTER JOIN CODELKUP CLC1 (NOLOCK) ON (CLC1.LONG = ORDERS.Facility AND   
+                                                 CLC1.[Description] = ORDERS.C_City AND  
+                                                 CLC1.ListName = @c_CodeCityLdTime AND
+                                                 CLC1.Storerkey = ORDERS.StorerKey) 
+      --WL05 E
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
                                             CODELKUP.Code = ORDERS.StorerKey)   
       LEFT OUTER JOIN STORER (NOLOCK) ON (STORER.StorerKey = ORDERS.ConsigneeKey)  
@@ -776,18 +820,21 @@ BEGIN
           from packdetail(nolock),sku(nolock) where packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku and sku.skugroup = 'EQUIPMENT'  
           and packdetail.Storerkey =PackHeader.Storerkey and packdetail.Pickslipno =PackHeader.Pickslipno ) AS EQQTY,  
          Orders.C_company,  
-         ETA = CASE WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0 THEN  --NJOW01  
-                          DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                       WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  THEN --NJOW01  
-                          CASE WHEN DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10)) >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) THEN   
-                             DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                          ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) END    
-                     WHEN CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1 THEN MBOL.EditDate    
-                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' THEN   
-                              DateAdd(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)  
-                              ELSE  
-                              DateAdd(day, Ceiling(Cast(CLC.Short as real)), MBOL.EditDate )  
-                            END  
+         ETA = CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   --WL05
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0  --NJOW01   --WL05  
+                    THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))     --WL05  
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  --NJOW01   --WL05  
+                    THEN CASE WHEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05    
+                                   >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                         THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05   
+                         ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                         END    
+                    WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate   --WL05    
+                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' 
+                              THEN DATEADD(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)  
+                              ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )      --WL05 
+                                                                         ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END   --WL05 
+                         END  
                END,  /* Added ETA = ETD (MBOL.EditDate) + LeadTime */  
          CASE WHEN ISNULL(CLR5.Short,'N') = 'Y' THEN LTRIM(RTRIM(ISNULL(ORDERS.C_contact1,''))) + ' ' + LTRIM(RTRIM(ISNULL(ORDERS.C_Phone1,'')))   --WL03
                                                 ELSE CAST(ORDERS.Notes as Char(255)) END as Notes,   --WL03     
@@ -798,7 +845,8 @@ BEGIN
          CODELKUP.Short,  
          ShowField = CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END ,  
          ShowCRD  = CASE WHEN ((ISNULL(STORER.SUSR1,'') = 'CRD' AND ISNULL(ORDERS.userdefine10,'') <> ''  
-                        AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + CONVERT(INT,ORDERS.Userdefine01)),111),'/',''),8))   
+                              AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + 
+                              CONVERT(INT,CASE WHEN CLC1.Short IS NULL AND ORDERS.StorerKey = 'NIKECN' THEN 0 WHEN CLC1.Short IS NULL THEN ORDERS.Userdefine01 ELSE CLC1.Short END)),111),'/',''),8))   --WL05   
                      <  LEFT(ORDERS.ExternPOKey,8))) THEN   
                    CASE WHEN ISNUMERIC(LEFT(ORDERS.ExternPOKey,4))=1 THEN   
                   -- CASE WHEN CONVERT(INT,REPLACE)  
@@ -828,6 +876,12 @@ BEGIN
                                                 CLC.Description = ORDERS.c_City AND  
                                                 CLC.ListName = @c_CodeCityLdTime AND   --WL02  
                                                 CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)   
+      --WL05 S
+      LEFT OUTER JOIN CODELKUP CLC1 (NOLOCK) ON (CLC1.LONG = ORDERS.Facility AND   
+                                                 CLC1.[Description] = ORDERS.C_City AND  
+                                                 CLC1.ListName = @c_CodeCityLdTime AND
+                                                 CLC1.Storerkey = ORDERS.StorerKey) 
+      --WL05 E
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
                                             CODELKUP.Code = ORDERS.StorerKey)   
       LEFT OUTER JOIN STORER (NOLOCK) ON (STORER.StorerKey = ORDERS.ConsigneeKey)  
@@ -896,18 +950,21 @@ BEGIN
           from packdetail(nolock),sku(nolock) where packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku and sku.skugroup = 'EQUIPMENT'  
           and packdetail.Storerkey =PackHeader.Storerkey and packdetail.Pickslipno =PackHeader.Pickslipno ) AS EQQTY,  
          MAX(Orders.C_company),  
-         ETA = CASE WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0 THEN  --NJOW01  
-                          DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))   
-                       WHEN ISDATE(ORDERS.Userdefine10) = 1 AND ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1  THEN --NJOW01  
-                          CASE WHEN DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10)) >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) THEN   
-                             DATEADD(DAY, CONVERT(INT, ISNULL(ORDERS.Userdefine01,'0')), CONVERT(DATETIME, ORDERS.Userdefine10))  
-                          ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) END    
-                      WHEN CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1 THEN MBOL.EditDate    
-                     ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' THEN   
-                               DateAdd(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)  
-                               ELSE  
-                               DateAdd(day, Ceiling(Cast(CLC.Short as real)), MBOL.EditDate )  
-                            END  
+         ETA = CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   --WL05
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 0   --NJOW01   --WL05
+                    THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05    
+                    WHEN ISDATE(ORDERS.Userdefine10) = 1 AND (ISNUMERIC(ISNULL(ORDERS.Userdefine01,'0')) = 1 OR ISNUMERIC(ISNULL(CLC1.Short,'0')) = 1) AND ISDATE(LEFT(ORDERS.ExternPokey,8)) = 1   --NJOW01   --WL05  
+                    THEN CASE WHEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05  
+                                   >= CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              THEN DATEADD(DAY, CONVERT(INT, CASE WHEN CLC1.Short IS NULL THEN ISNULL(ORDERS.Userdefine01,'0') ELSE ISNULL(CLC1.Short,'0') END), CONVERT(DATETIME, ORDERS.Userdefine10))   --WL05   
+                              ELSE CONVERT(DATETIME, LEFT(ORDERS.ExternPokey,8)) 
+                              END    
+                    WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate   --WL05    
+                    ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE' 
+                              THEN DateAdd(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)  
+                              ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )      --WL05 
+                                                                         ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END   --WL05  
+                         END  
                END,  /* Added ETA = ETD (MBOL.EditDate) + LeadTime */  
          CASE WHEN ISNULL(CLR5.Short,'N') = 'Y' THEN LTRIM(RTRIM(ISNULL(MAX(ORDERS.C_Contact1),''))) + ' ' + LTRIM(RTRIM(ISNULL(MAX(ORDERS.C_Phone1),'')))   --WL03
                                                 ELSE CAST(ORDERS.Notes as Char(255)) END as Notes,   --WL03   
@@ -918,7 +975,8 @@ BEGIN
          CODELKUP.Short,  
          ShowField = CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END ,  
          ShowCRD  = CASE WHEN ((ISNULL(STORER.SUSR1,'') = 'CRD' AND ISNULL(ORDERS.userdefine10,'') <> ''  
-                        AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + CONVERT(INT,ORDERS.Userdefine01)),111),'/',''),8))   
+                              AND (LEFT(REPLACE(CONVERT(NVARCHAR(10),(CONVERT(DATETIME,ORDERS.userdefine10) + 
+                              CONVERT(INT,CASE WHEN CLC1.Short IS NULL AND ORDERS.StorerKey = 'NIKECN' THEN 0 WHEN CLC1.Short IS NULL THEN ORDERS.Userdefine01 ELSE CLC1.Short END)),111),'/',''),8))   --WL05   
                      <  LEFT(ORDERS.ExternPOKey,8))) THEN   
                    CASE WHEN ISNUMERIC(LEFT(ORDERS.ExternPOKey,4))=1 THEN   
                   -- CASE WHEN CONVERT(INT,REPLACE)  
@@ -947,7 +1005,13 @@ BEGIN
       LEFT OUTER JOIN CODELKUP CLC (NOLOCK) ON (CLC.LONG = ORDERS.Facility AND   
                                                 CLC.Description = ORDERS.c_City AND  
                                                 CLC.ListName = @c_CodeCityLdTime AND   --WL02   
-                                                CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)   
+                                                CAST(CLC.Notes AS char(30)) = Orders.intermodalvehicle)
+      --WL05 S
+      LEFT OUTER JOIN CODELKUP CLC1 (NOLOCK) ON (CLC1.LONG = ORDERS.Facility AND   
+                                                 CLC1.[Description] = ORDERS.C_City AND  
+                                                 CLC1.ListName = @c_CodeCityLdTime AND
+                                                 CLC1.Storerkey = ORDERS.StorerKey) 
+      --WL05 E
       LEFT OUTER JOIN CODELKUP (NOLOCK) ON (CODELKUP.Listname = 'STRDOMAIN' AND  
                                             CODELKUP.Code = ORDERS.StorerKey)   
       LEFT OUTER JOIN STORER (NOLOCK) ON (STORER.StorerKey = ORDERS.ConsigneeKey)   
@@ -1008,8 +1072,10 @@ BEGIN
                ,ORDERS.userdefine10,
                --WL03 S
                ISNULL(CLR5.Short,'N'),
-               CASE WHEN ISNULL(CLR6.Short,'N') = 'Y' AND ISNUMERIC(CLC.Short) = 1 THEN CONVERT(NVARCHAR(30), DATEADD(d,CAST(CLC.Short AS INT),MBOL.AddDate), 121) ELSE NULL END
-               --WL03 E                 
+               CASE WHEN ISNULL(CLR6.Short,'N') = 'Y' AND ISNUMERIC(CLC.Short) = 1 THEN CONVERT(NVARCHAR(30), DATEADD(d,CAST(CLC.Short AS INT),MBOL.AddDate), 121) ELSE NULL END,
+               --WL03 E       
+               CLC1.Short,        --WL05
+               ORDERS.StorerKey   --WL05      
    END      
 END  
 SET QUOTED_IDENTIFIER OFF  
