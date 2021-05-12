@@ -18,7 +18,7 @@ GO
 /*                                                                      */  
 /* Called By: r_receipt_tallysheet71                                    */  
 /*          :                                                           */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -26,6 +26,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */ 
+/* 2021-05-11   WLChooi   1.1 WMS-16953 - Add Receiptdetail.Userdefine01*/
+/*                            (WL01)                                    */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_ReceiptTallySheet71]
@@ -63,7 +65,8 @@ BEGIN
    	[Box]               FLOAT NULL,
    	QtyExpected         FLOAT NULL,
    	InspectionQty       FLOAT NULL,
-   	[Getdate]           NVARCHAR(16)  NULL
+   	[Getdate]           NVARCHAR(16)  NULL,
+      UCCNo               NVARCHAR(20)  NULL   --WL01
    )
 
    INSERT INTO #TMP_TS71
@@ -77,6 +80,7 @@ BEGIN
         , SUM(RD.QtyExpected) AS QtyExpected
         , CEILING(SUM(RD.QtyExpected) * 0.03) AS InspectionQty
         , CONVERT(CHAR(16), GetDate(), 120) AS [GetDate]
+        , ISNULL(RD.UserDefine01,'')   --WL01
    FROM RECEIPT R (NOLOCK)
    JOIN RECEIPTDETAIL RD (NOLOCK) ON RD.Receiptkey = R.Receiptkey
    JOIN SKU (NOLOCK) ON RD.SKU = SKU.SKU AND RD.Storerkey = SKU.Storerkey
@@ -89,10 +93,11 @@ BEGIN
         , RD.SKU
         , SKU.DESCR
         , PACK.CaseCnt
+        , ISNULL(RD.UserDefine01,'')   --WL01
    ORDER BY R.ReceiptKey, RD.Sku
    
    SELECT * FROM #TMP_TS71 (NOLOCK)
-   ORDER BY ReceiptKey, Sku
+   ORDER BY ReceiptKey, Sku, UCCNo   --WL01
 
 QUIT_SP:  
    IF OBJECT_ID('tempdb..#TMP_TS71') IS NOT NULL
