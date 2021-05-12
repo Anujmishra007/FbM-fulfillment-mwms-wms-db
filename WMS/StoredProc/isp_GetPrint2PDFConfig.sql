@@ -29,6 +29,8 @@ GO
 /* Date           Ver    Author   Purposes                                 */  
 /* 07-01-2020     1.1    WLChooi  WMS-13933 & WMS-12449 & WMS-12443 - Print*/
 /*                                PDF Enhancement - New Function (WL01)    */
+/* 06-04-2021     1.2    WLChooi  WMS-16755 - Add Function to Print From   */
+/*                                Order Screen (WL02)                      */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_GetPrint2PDFConfig]    
 (     
@@ -318,6 +320,15 @@ BEGIN
                              +' WHERE LOADPLAN.Loadkey = @c_Param01 '
          END
       END
+      --WL02 S
+      ELSE IF @c_FromModule = 'ORDER'
+      BEGIN
+         SET @c_SQL = N' SELECT @n_RecFound = COUNT(1)'
+         SET @c_SQLFrom =  ' FROM ORDERS (NOLOCK) '
+                          +' LEFT JOIN ORDERINFO (NOLOCK) ON ORDERINFO.Orderkey = ORDERS.Orderkey '
+                          +' WHERE ORDERS.Orderkey = @c_Param01 '
+      END
+      --WL02 E
 
       SET @c_SQL = @c_SQL + @c_SQLFrom
           
