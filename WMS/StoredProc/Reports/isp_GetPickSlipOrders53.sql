@@ -141,7 +141,7 @@ CREATE PROC dbo.isp_GetPickSlipOrders53 (@c_loadkey NVARCHAR(10))
         @c_LoadKey as LoadKey,                   
         Orders.OrderKey,                              
          -- SOS82873 Change company info from MBOL level to LOAD level  
-         -- NOTE: In ECCO case,2 style, the English information saved in C_company, C_Address…and Chinese Information saved in B_company,B_Address  
+         -- NOTE: In ECCO case,2 style, the English information saved in C_company, C_Addressnd Chinese Information saved in B_company,B_Address  
         (CASE WHEN StorerConfig.sValue = '1' THEN IsNull(ORDERS.CONSIGNEEKEY , '')  
         ELSE IsNull(ORDERS.BillToKey , '')  END  ) as ConsigneeKey ,  
         (CASE WHEN StorerConfig.sValue = '1' THEN IsNull(ORDERS.B_Company , '')  
