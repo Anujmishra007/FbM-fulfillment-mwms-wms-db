@@ -44,7 +44,8 @@ GO
 /* 25-Mar-2014  Leong     1.3   SOS#305979 - Remove TrafficCop when     */
 /*                                           update Orders.             */
 /* 25-Sep-2017  TLTING    1.4   SET ANSI                                */
-/* 11-03-2020  MCTang     2.3   Add scanin2log (MC03)                   */
+/* 11-03-2020   MCTang    1.5   Add scanin2log (MC03)                   */
+/* 26-Mar-2021  NJOW01    1.6   WMS-16663 add transmitlog2 interface    */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickingInfoAdd]
@@ -107,7 +108,10 @@ BEGIN
       DECLARE @c_PickSlipType  NVARCHAR(10),
               @c_OrderKey      NVARCHAR(10),
               @c_LPOrderKey    NVARCHAR(10),
-              @c_LoadKey       NVARCHAR(10)
+              @c_LoadKey       NVARCHAR(10),
+              @c_Facility      NVARCHAR(5),
+              @c_WSSIOption1   NVARCHAR(50),
+              @c_WSScanInLog   NVARCHAR(30)
 
       DECLARE @c_xdOrderKey        NVARCHAR(10),
               @c_OrderLineNumber   NVARCHAR(5),
@@ -283,6 +287,7 @@ BEGIN
 
                SELECT @c_StorerKey = StorerKey
                     , @c_OrderType = Type  -- (MC01)
+                    , @c_Facility = Facility --NJOW01
                  FROM ORDERS WITH (NOLOCK)
                 WHERE OrderKey = @c_OrderKey
 
@@ -626,6 +631,7 @@ BEGIN
             -- Added for SOS#41737
             SELECT @c_StorerKey = StorerKey
                  , @c_OrderType = Type     --(MC01)
+                 , @c_Facility = Facility --NJOW01                 
               FROM ORDERS WITH (NOLOCK)
              WHERE OrderKey = @c_LPOrderKey
 
@@ -790,11 +796,13 @@ BEGIN
 
             WHILE @@FETCH_STATUS = 0
             BEGIN
-               SELECT @c_LoadKey = LoadKey,
-                      @c_StorerKey = StorerKey
+               SELECT @c_LoadKey = ORDERDETAIL.LoadKey,
+                      @c_StorerKey = ORDERDETAIL.StorerKey,
+                      @c_Facility = ORDERS.Facility --NJOW01
                FROM ORDERDETAIL WITH (NOLOCK)
-               WHERE OrderKey = @c_xdOrderKey
-               AND OrderLinenumber = @c_OrderLineNumber
+               JOIN ORDERS WITH (NOLOCK) ON ORDERDETAIL.Orderkey = ORDERS.Orderkey
+               WHERE ORDERDETAIL.OrderKey = @c_xdOrderKey
+               AND ORDERDETAIL.OrderLinenumber = @c_OrderLineNumber
 
                IF @c_PrevOrderKey <> @c_xdOrderKey
                BEGIN
@@ -1260,6 +1268,54 @@ BEGIN
             DEALLOCATE C_PI_PickDetail
          END
          -- endW
+         
+         --NJOW01 S                  
+         IF LEFT(@c_Pickslipno,1) <> 'P'
+         BEGIN
+         	  SELECT TOP 1 @c_Storerkey = O.Storerkey,
+         	               @c_Facility = O.Facility
+         	  FROM STORERCONFIG SC (NOLOCK) 
+         	  JOIN ORDERS O (NOLOCK) ON O.Storerkey = SC.Storerkey 
+         	  JOIN PICKDETAIL PD (NOLOCK) ON PD.Orderkey = O.Orderkey     
+         	  WHERE PD.Pickslipno = @c_Pickslipno
+         	  AND SC.Configkey = 'WSScanInLog'       
+         	  AND (SC.Facility = O.Facility OR ISNULL(SC.Facility,'') = '')
+         	  AND SC.Svalue = '1'  	  
+         	  AND O.Status <> '9'
+         END
+         
+         SET @c_WSScanInLog = ''
+         Execute nspGetRight                                
+            @c_Facility  = @c_facility,                     
+            @c_StorerKey = @c_StorerKey,                    
+            @c_sku       = '',                          
+            @c_ConfigKey = 'WSScanInLog', -- Configkey         
+            @b_Success   = @b_success     OUTPUT,             
+            @c_authority = @c_WSScanInLog OUTPUT,             
+            @n_err       = @n_err         OUTPUT,             
+            @c_errmsg    = @c_errmsg      OUTPUT,             
+            @c_Option1 = @c_WSSIOption1 OUTPUT              
+            
+         IF ISNULL(@c_WSScanInLog,'') = '1' AND ISNULL(@c_WSSIOption1,'') <> '' AND
+            NOT EXISTS(SELECT 1 FROM INSERTED WHERE Pickslipno = @c_Pickslipno AND PickerID = 'VoicePicking')        
+         BEGIN         
+         	  SET @b_success = 0
+            EXEC dbo.ispGenTransmitLog2 @c_WSSIOption1, @c_pickslipno, '', @c_StorerKey, ''
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+            
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12814
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0))
+                                + ': Insert into TransmitLog2 Failed (ntrPickingInfoAdd)'
+                                + ' ( SQLSvr MESSAGE=' + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+            END         	
+         END       
+         --NJOW01 E
+
          FETCH NEXT FROM C_PickInfo_Add_01 INTO  @c_pickslipno
       END -- while pickslip no
       CLOSE C_PickInfo_Add_01
