@@ -28,6 +28,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author      Ver   Purposes                                  */
+/* 12-MAY-2021 CSCHONG     1.1   WMS-16820 Fix dulicated line (CS01)       */
 /***************************************************************************/
 
 CREATE PROC dbo.isp_GetPickSlipOrders03i
@@ -300,7 +301,8 @@ BEGIN TRAN
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = ORDERS.orderkey
          JOIN STORER        WITH (NOLOCK) ON ( ORDERS.StorerKey = Storer.StorerKey )
          LEFT OUTER JOIN ROUTEMASTER WITH (NOLOCK) ON ( ROUTEMASTER.Route = ORDERS.Route )
-         JOIN PICKDETAIL    WITH (NOLOCK) ON ( PICKDETAIL.OrderKey = ORDERS.Orderkey )
+         JOIN PICKDETAIL    WITH (NOLOCK) ON ( PICKDETAIL.OrderKey = OD.Orderkey AND PICKDETAIL.sku = OD.sku
+                                              AND PICKDETAIL.storerkey = OD.Storerkey AND PICKDETAIL.Orderlinenumber = OD.OrderLineNumber)   --CS01
          JOIN LOTATTRIBUTE  WITH (NOLOCK) ON ( PICKDETAIL.Lot = LOTATTRIBUTE.Lot )
          JOIN SKU           WITH (NOLOCK) ON ( Sku.StorerKey = PICKDETAIL.StorerKey )
                                           AND( Sku.Sku = PICKDETAIL.Sku )
