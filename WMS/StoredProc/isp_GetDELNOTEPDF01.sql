@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: isp_GetPrint2PDFConfig                                    */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-05-17  WLChooi  1.1   WMS-16755 - Do not allow Reprint (WL01)   */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_GetDELNOTEPDF01]
@@ -165,14 +166,16 @@ BEGIN
          SET @c_PdfFile = @c_PDFFilePath
          EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT
          
-         IF @n_IsExists = 0
-         BEGIN
-            SET @c_PDFFilePath = @c_ArchiveFolder + @c_PdfName
-            SET @c_PdfFile = @c_PDFFilePath
-            SET @c_ArchivePath = '' 
-            SET @c_ActionType = '2'
-            EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT 
-         END
+         --WL01 S
+         --IF @n_IsExists = 0
+         --BEGIN
+         --   SET @c_PDFFilePath = @c_ArchiveFolder + @c_PdfName
+         --   SET @c_PdfFile = @c_PDFFilePath
+         --   SET @c_ArchivePath = '' 
+         --   SET @c_ActionType = '2'
+         --   EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT 
+         --END
+         --WL01 E
          
          IF @n_IsExists = 0 
          BEGIN
