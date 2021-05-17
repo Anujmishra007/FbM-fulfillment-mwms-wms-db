@@ -30,6 +30,7 @@ GO
 /* 2020-11-03  WLChooi  1.2   WMS-15598 - New Storerconfig to skip      */  
 /*                            Trackingno validation (WL01)              */   
 /* 2020-10-09  Wan02    1.3   WMS-14948 - PH_Benby_Ecom_Packing_Filter  */  
+/* 2021-01-20  Wan03    1.4   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/    
 CREATE PROC isp_ECOM_PackSaveEnd    
            @c_PickSlipNo         NVARCHAR(10)    
@@ -54,8 +55,8 @@ BEGIN
          , @n_CartonNo_PD     INT            = 0    
          , @n_CartonNo        INT            = 0    
          , @c_Storerkey       NVARCHAR(15)   = ''    
-         , @c_RefNo           NVARCHAR(40)   = ''    
-         , @c_TrackingNo      NVARCHAR(30)   = ''    
+         , @c_TrackingNo      NVARCHAR(40)   = ''           --(Wan03) -- Change @c_TrackingNo to @c_TrackingNo 
+         , @c_TrackingNo_ORD  NVARCHAR(40)   = ''           --(Wan03) -- Change @c_TrackingNo to @c_TrackingNo_ORD 
          , @c_WarningMsg      NVARCHAR(255)  = ''    
     
          , @c_ValidateTrackNo NVARCHAR(10)   = ''    
@@ -72,10 +73,11 @@ BEGIN
       COMMIT TRAN    
    END    
     
-   SELECT @c_TrackingNo = CASE WHEN ISNULL(RTRIM(OH.TrackingNo),'') <> ''     
-                               THEN OH.TrackingNo     
-                               ELSE ISNULL(RTRIM(OH.UserDefine04),'')     
-                               END    
+   SELECT 
+          @c_TrackingNo_ORD =CASE WHEN ISNULL(RTRIM(OH.TrackingNo),'') <> ''        --(Wan03)     
+                                 THEN OH.TrackingNo     
+                                 ELSE ISNULL(RTRIM(OH.UserDefine04),'')     
+                                 END  
       ,   @c_Storerkey  = OH.Storerkey    
    FROM ORDERS OH WITH (NOLOCK)    
    WHERE OH.Orderkey = @c_Orderkey    
@@ -86,7 +88,7 @@ BEGIN
    SET @CUR_PIF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
    SELECT DISTINCT PD.CartonNo                  --(Wan01)    
          ,PIF.CartonNo    
-         ,RefNo = ISNULL(PIF.RefNo,'')     
+         ,TrackingNo = CASE WHEN ISNULL(PIF.TrackingNo,'') <> '' THEN RTRIM(PIF.TrackingNo) ELSE ISNULL(RTRIM(PIF.RefNo),'') END --(Wan03) 
    FROM PACKDETAIL PD WITH (NOLOCK)    
    LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON (PD.PickSlipNo = PIF.PickSlipNo)    
                                         AND(PD.CartonNo = PIF.CartonNo)    
@@ -96,20 +98,23 @@ BEGIN
    OPEN @CUR_PIF    
    FETCH NEXT FROM @CUR_PIF INTO @n_CartonNo_PD    
                                , @n_CartonNo    
-                               , @c_RefNo                                     
+                               , @c_TrackingNo                    --(Wan03)                               
                                         
    WHILE @@FETCH_STATUS <> -1    
    BEGIN    
-      -- Update Refno if ECOM Packing successfully Saved, 0:NOWORK, 1:SUCCESS, 2:No Save When Prompt To Save and ResetData    
+      -- Update TrackingNo if ECOM Packing successfully Saved, 0:NOWORK, 1:SUCCESS, 2:No Save When Prompt To Save and ResetData    
       IF @n_SaveResult = 1 AND @c_ValidateTrackNo= '0' AND @n_CartonNo IS NOT NULL    
       BEGIN    
-         IF @c_RefNo = '' AND @c_TrackingNo <> ''    
+         IF @c_TrackingNo = '' AND @c_TrackingNo_ORD <> ''        --(Wan03) 
          BEGIN    
             UPDATE PACKINFO     
-            SET RefNo = @c_TrackingNo    
+            SET TrackingNo = @c_TrackingNo_ORD                    --(Wan03)  
+               ,Trafficcop = NULL                                 --(Wan03)
+               ,EditWho   = SUSER_SNAME()                         --(Wan03)
+               ,EditDate   = GETDATE()                            --(Wan03)
             WHERE PickSlipNo = @c_PickSlipNo    
             AND CartonNo = @n_CartonNo    
-            AND (RefNo = '' OR RefNo IS NULL)    
+            AND (TrackingNo = '' OR TrackingNo IS NULL)           --(Wan03)
     
             IF @@ERROR <> 0    
             BEGIN    
@@ -122,7 +127,7 @@ BEGIN
                GOTO QUIT_SP    
             END    
     
-            SET @c_RefNo = @c_TrackingNo    
+            SET @c_TrackingNo = @c_TrackingNo_ORD                 --(Wan03) 
          END    
       END    
     
@@ -134,13 +139,13 @@ BEGIN
             SET @c_WarningMsg = 'Missing Carton #: ' + CONVERT(NVARCHAR(10), @n_CartonNo_PD) + ' in PackInfo'    
          END    
     
-         IF @n_Continue = 1 AND @n_RowId = 1 AND @c_RefNo <> @c_TrackingNo AND @c_TrackingNo <> ''   --(Wan01)    
+         IF @n_Continue = 1 AND @n_RowId = 1 AND @c_TrackingNo <> @c_TrackingNo_ORD AND @c_TrackingNo_ORD <> ''   --(Wan01)  --(Wan03)    
          BEGIN    
             SET @n_Continue = 2    
             SET @c_WarningMsg = 'Tracking # not match on first CartonNo. Carton #: ' + CONVERT(NVARCHAR(10), @n_CartonNo)    
          END    
     
-         IF @n_Continue = 1 AND @c_RefNo = '' AND ISNULL(@c_EPackSkipTracknoCheck,'') IN ('','0')   --WL01  
+         IF @n_Continue = 1 AND @c_TrackingNo = '' AND ISNULL(@c_EPackSkipTracknoCheck,'') IN ('','0')   --WL01   --(Wan03)
          BEGIN    
             SET @n_Continue = 2    
             SET @c_WarningMsg = 'Tracking # is required. Carton #: ' + CONVERT(NVARCHAR(10), @n_CartonNo)    
@@ -157,7 +162,7 @@ BEGIN
       SET @n_RowId = @n_RowId + 1    
       FETCH NEXT FROM @CUR_PIF INTO @n_CartonNo_PD    
                                  ,  @n_CartonNo    
-                                 ,  @c_RefNo      
+                                 ,  @c_TrackingNo                 --(Wan03)      
    END    
    CLOSE @CUR_PIF    
    DEALLOCATE @CUR_PIF     

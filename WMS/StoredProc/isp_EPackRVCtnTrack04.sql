@@ -26,6 +26,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
+/* 2021-04-12  Wan01    1.1   WMS-16026 - PB-Standardize TrackingNo -Dup*/
 /************************************************************************/  
 CREATE PROC isp_EPackRVCtnTrack04  
          @c_PickSlipNo  NVARCHAR(10)   
@@ -40,12 +41,13 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
-   DECLARE @n_StartTCnt    INT  
-         , @n_Continue     INT  
+   DECLARE @n_StartTCnt       INT  
+         , @n_Continue        INT  
            
-         , @n_RowRef       BIGINT  
-         , @c_Orderkey     NVARCHAR(10)  
-         , @c_RefNo        NVARCHAR(40)  
+         , @n_RowRef          BIGINT  
+         , @c_Orderkey        NVARCHAR(10)  
+         , @c_TrackingNo_PI   NVARCHAR(40)
+         , @c_TrackingNo_ORD  NVARCHAR(40) 
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -62,30 +64,44 @@ BEGIN
       GOTO QUIT_SP  
    END   
      
-   SET @c_RefNo = ''  
-   SELECT @c_RefNo = ISNULL(RTRIM(RefNo),'')  
+   SET @c_TrackingNo_PI = ''  
+   SELECT @c_TrackingNo_PI = CASE WHEN ISNULL(TrackingNo,'') <> '' THEN RTRIM(TrackingNo) ELSE ISNULL(RTRIM(RefNo),'') END --(Wan01) 
    FROM PACKINFO WITH (NOLOCK)  
    WHERE PickSlipNo = @c_PickSlipNo  
    AND   CartonNo = @n_CartonNo   
   
-   IF @c_RefNo = ''  
+   IF @c_TrackingNo_PI = ''  
    BEGIN  
       GOTO QUIT_SP  
    END   
   
-   IF EXISTS ( SELECT 1  
-               FROM ORDERS WITH (NOLOCK)   
-               WHERE Orderkey = @c_Orderkey  
-               AND  (TrackingNo = @c_RefNo OR UserDefine04 = @c_RefNo)  
-             )  
-   BEGIN  
-      GOTO QUIT_SP  
-   END                 
-  
+   --(Wan01) - START
+   --IF EXISTS ( SELECT 1  
+   --            FROM ORDERS WITH (NOLOCK)   
+   --            WHERE Orderkey = @c_Orderkey  
+   --            AND  (TrackingNo = @c_TrackingNo_PI OR UserDefine04 = @c_TrackingNo_PI)  
+   --          )  
+   --BEGIN  
+   --   GOTO QUIT_SP  
+   --END                 
+   SELECT 
+         @c_TrackingNo_ORD = CASE WHEN ISNULL(RTRIM(TrackingNo),'') <> ''        --(Wan01)     
+                                  THEN TrackingNo     
+                                  ELSE ISNULL(RTRIM(UserDefine04),'')     
+                                  END                                     
+   FROM ORDERS WITH (NOLOCK) 
+   WHERE Orderkey = @c_Orderkey    
+   
+   IF @c_TrackingNo_PI = @c_TrackingNo_ORD
+   BEGIN
+      GOTO QUIT_SP   
+   END          
+   --(Wan01) - END 
+   
    SELECT TOP 1   
          @n_RowRef = RowRef  
    FROM CARTONTRACK WITH (NOLOCK)  
-   WHERE TrackingNo = @c_RefNo  
+   WHERE TrackingNo = @c_TrackingNo_PI  
    AND   LabelNo = @c_Orderkey  
      
    BEGIN TRAN  

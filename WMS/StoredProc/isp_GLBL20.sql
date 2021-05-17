@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenLabelNo_Wrapper                              */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -33,6 +33,7 @@ GO
 /*                            order CR                                  */
 /* 2020-03-23  Wan02    1.2   Fixed. Not to gen label if previous or    */
 /*                            Fully Pack                                */
+/* 2021-04-12  Wan03    1.3   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/
 CREATE PROC isp_GLBL20 ( 
          @c_PickSlipNo   NVARCHAR(10) 
@@ -104,7 +105,7 @@ BEGIN
    IF @c_Orderkey <> ''
    BEGIN
       SELECT @c_ShipperKey = O.ShipperKey
-            ,@c_CTNTrackNo = ISNULL(RTRIM(O.Userdefine04),'')
+            ,@c_CTNTrackNo = CASE WHEN ISNULL(RTRIM(O.TrackingNo),'') <> '' THEN O.TrackingNo ELSE ISNULL(RTRIM(O.UserDefine04),'') END   --Wan03
       FROM ORDERS O WITH (NOLOCK)
       WHERE O.Orderkey = @c_Orderkey
 
@@ -180,7 +181,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         SELECT @c_LabelNo = ISNULL(RTRIM(RefNo),'')
+         SELECT @c_LabelNo = CASE WHEN ISNULL(TrackingNo,'') <> '' THEN RTRIM(TrackingNo) ELSE ISNULL(RTRIM(RefNo),'') END --(Wan03)
          FROM PACKINFO WITH (NOLOCK)
          WHERE PickSlipNo = @c_PickSlipNo
          AND   CartonNo = @n_CartonNo

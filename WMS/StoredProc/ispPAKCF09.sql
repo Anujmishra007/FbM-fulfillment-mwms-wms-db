@@ -7,8 +7,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
- 
-     
+      
 /***************************************************************************/      
 /* Stored Procedure: ispPAKCF09                                            */      
 /* Creation Date: 25-JAN-2019                                              */      
@@ -21,7 +20,7 @@ GO
 /* Called By:                                                              */      
 /*                                                                         */      
 /*                                                                         */      
-/* PVCS Version: 1.0                                                       */      
+/* PVCS Version: 1.1                                                       */      
 /*                                                                         */      
 /* Version: 7.0                                                            */      
 /*                                                                         */      
@@ -29,7 +28,8 @@ GO
 /*                                                                         */      
 /* Updates:                                                                */      
 /* Date         Author  Ver   Purposes                                     */      
-/* 12-03-2019   CSCHONG 1.1   WMS-8292-CN_Ecom-Packing_For JD_CR (CS01)    */    
+/* 12-03-2019   CSCHONG 1.1   WMS-8292-CN_Ecom-Packing_For JD_CR (CS01)    */  
+/* 09-04-2021   Wan01   1.2   WMS-16026 - PB-Standardize TrackingNo        */  
 /***************************************************************************/        
 CREATE PROC [dbo].[ispPAKCF09]        
 (     @c_PickSlipNo  NVARCHAR(10)         
@@ -66,7 +66,7 @@ BEGIN
          , @c_CartonTo        NVARCHAR(10)      --(CS01)    
          , @c_CarrierName     NVARCHAR(30)      --(CS01)      
          , @c_DropID          NVARCHAR(20)      --(CS01)      
-         , @c_refno           NVARCHAR(50)     
+         , @c_TrackingNo_PI   NVARCHAR(50) =''  --(Wan01)    
       
          , @CUR_PACKSN        CURSOR      
          , @CUR_TrackingNo    CURSOR        --(CS01)    
@@ -208,7 +208,8 @@ BEGIN
  SET @CUR_PD =CURSOR FAST_FORWARD READ_ONLY FOR      
       SELECT PD.LabelLine      
          ,   DropID = ISNULL(RTRIM(PD.DropID),'')      
-         ,   RefNo = PF.RefNo                   
+         ,   TrackingNo_PI = CASE WHEN ISNULL(PF.TrackingNo,'') <> '' THEN PF.TrackingNo ELSE '' END    --(Wan01)   
+         --,   TrackingNo_PI = CASE WHEN ISNULL(PF.TrackingNo,'') <> '' THEN PF.TrackingNo ELSE ISNULL(PF.RefNo,'') END    --(Wan01)                                                                                                                                   
       FROM   PACKDETAIL PD WITH (NOLOCK)      
    JOIN PackInfo PF WITH (NOLOCK) ON PF.PickSlipNo=PD.PickSlipNo and PF.CartonNo=PD.CartonNo    
       WHERE  PD.PickSlipNo = @c_PickSlipNo      
@@ -219,7 +220,7 @@ BEGIN
          
       FETCH NEXT FROM @CUR_PD INTO @c_LabelLine      
                                   ,@c_DropID         
-                                  ,@c_refno                     
+                                  ,@c_TrackingNo_PI                     
       WHILE @@FETCH_STATUS <> -1      
       BEGIN      
       
@@ -243,10 +244,12 @@ BEGIN
             END      
          END        
        
-   IF @c_refno <> @c_TrackingNo                
+   IF @c_TrackingNo_PI <> @c_TrackingNo                
    BEGIN                                                                 
      UPDATE PACKINFO WITH (ROWLOCK)      
-     SET refno = @c_TrackingNo     
+     SET --refno = @c_TrackingNo 
+        --,TrackingNo = @c_TrackingNo        --(Wan01)     
+        TrackingNo = @c_TrackingNo           --(Wan01)   
      WHERE PickSlipNo = @c_PickSlipNo      
      AND   CartonNo = @n_TCartonNo      
      
@@ -264,7 +267,7 @@ BEGIN
       
     FETCH NEXT FROM @CUR_PD INTO @c_LabelLine      
                                , @c_DropID     
-                               , @c_refno                 
+                               , @c_TrackingNo_PI                 
       END      
       CLOSE @CUR_PD      
       DEALLOCATE @CUR_PD      
