@@ -29,7 +29,7 @@ GO
 /* 24-Mar-2014  TLTING   1.1  SQL2012 Bug                               */
 /************************************************************************/
 
-CREATE PROC ispLPPK03   
+CREATE PROC [dbo].[ispLPPK03]   
    @cLoadKey    NVARCHAR(10),  
    @bSuccess    INT      OUTPUT,
    @nErr        INT      OUTPUT, 
@@ -350,7 +350,7 @@ BEGIN
             SELECT @cCartonType = @cPrevCartonType
             SELECT @cLabelNo = @cPrevLabelNo 
          END              
-         
+   
          --WHILE (@nSkuCube > 0 OR @nSkuGrossWgt > 0 OR @nSkuQty > 0)  -- sku got Balance
          WHILE @nSkuQty > 0  -- sku got Balance
          BEGIN         	  
@@ -413,7 +413,7 @@ BEGIN
                   
                   IF @@ROWCOUNT > 0   -- the remaining order's sku can fit in the carton
                      SET @cOneCartonFit = 'Y'      
-               END                    
+        END                    
                
                IF ISNULL(@nCartonCube,0) <= 0 
                BEGIN
@@ -646,7 +646,7 @@ BEGIN
       IF @cFullCaseCheck = 'Y' 
       BEGIN
          SELECT PD.CartonNo, CZ.CartonType, CZ.CartonizationGroup,
-                SUM(PD.Qty * CONVERT(DECIMAL(18,4),SKU.StdCube)) AS Cube, 
+                SUM(PD.Qty * CONVERT(DECIMAL(18,4),SKU.StdCube)) AS 'Cube', 
                 SUM(PD.Qty * CONVERT(DECIMAL(18,4),SKU.StdGrossWgt)) AS Weight, SUM(PD.Qty) AS Qty
          INTO #CARTONSUMM
          FROM PACKDETAIL PD (NOLOCK)
@@ -756,7 +756,7 @@ BEGIN
      --retrieve prepack component sku
      WHILE @@FETCH_STATUS<>-1  
      BEGIN  
-     	  IF EXISTS(SELECT 1 FROM PACKDETAIL PD (NOLOCK) WHERE PD.Pickslipno = @cPickslipno AND LabelNo = @cLabelno AND Sku = @cComponentSKU) 
+	  IF EXISTS(SELECT 1 FROM PACKDETAIL PD (NOLOCK) WHERE PD.Pickslipno = @cPickslipno AND LabelNo = @cLabelno AND Sku = @cComponentSKU) 
      	  BEGIN
      	     UPDATE PACKDETAIL WITH (ROWLOCK)
      	     SET Qty = Qty + (@nPackQty * @nComponentQty)
