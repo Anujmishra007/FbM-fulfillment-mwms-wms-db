@@ -19,7 +19,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : ue_getcartontrackno                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.0                                                    */        
+/* PVCS Version: 1.2                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -27,7 +27,8 @@ GO
 /*                                                                      */        
 /* Updates:                                                             */        
 /* Date        Author   Ver   Purposes                                  */        
-/* 2020-03-25  Wan01    1.1   Ikea Fixed Issue - Duplicate Tracking#    */          
+/* 2020-03-25  Wan01    1.1   Ikea Fixed Issue - Duplicate Tracking#    */
+/* 2021-04-09  Wan02    1.2   WMS-16026 - PB-Standardize TrackingNo     */          
 /************************************************************************/        
 CREATE PROC [dbo].[isp_EPackCtnTrack04]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -43,18 +44,19 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF        
    SET CONCAT_NULL_YIELDS_NULL OFF        
         
-   DECLARE @n_StartTCnt    INT        
-         , @n_Continue     INT        
+   DECLARE @n_StartTCnt       INT        
+         , @n_Continue        INT        
                  
-         , @n_Cnt          INT        
-         , @n_RowRef       BIGINT        
-         , @c_Orderkey     NVARCHAR(10)        
-         , @c_Storerkey    NVARCHAR(15)        
+         , @n_Cnt             INT        
+         , @n_RowRef          BIGINT        
+         , @c_Orderkey        NVARCHAR(10)        
+         , @c_Storerkey       NVARCHAR(15)        
         
-         , @c_Shipperkey   NVARCHAR(10)        
-         , @c_ShipperName  NVARCHAR(250) 
+         , @c_Shipperkey      NVARCHAR(10)        
+         , @c_ShipperName     NVARCHAR(250) 
          
-         , @c_TrackingNo   NVARCHAR(20) = ''       
+         , @c_TrackingNo_ORD  NVARCHAR(40) = ''         --(Wan02)
+         , @c_TrackingNo      NVARCHAR(40) = ''             --(Wan02)
         
    SET @n_StartTCnt = @@TRANCOUNT        
    SET @n_Continue = 1        
@@ -84,7 +86,7 @@ BEGIN
    END           
   
    SELECT @c_Shipperkey = ShipperKey   
-         ,@c_TrackingNo = ISNULL(UserDefine04,'')  --(Wan01)      
+         ,@c_TrackingNo_ORD = CASE WHEN ISNULL(RTRIM(TrackingNo),'') <> '' THEN TrackingNo ELSE ISNULL(RTRIM(UserDefine04),'') END   --(Wan02)      
    FROM ORDERS WITH (NOLOCK)       
    WHERE OrderKey = @c_Orderkey       
       
@@ -95,21 +97,32 @@ BEGIN
   
    SET @n_Cnt = 0        
    
-   IF @c_TrackingNo <> @c_CTNTrackNo               --(Wan01)
+   IF @c_TrackingNo_ORD <> @c_CTNTrackNo              --(Wan02)--(Wan01)
    BEGIN
-      IF EXISTS ( SELECT 1        
-                  FROM PACKINFO PIF WITH (NOLOCK)        
-                  WHERE PIF.PickSlipNo = @c_PickSlipNo        
-                  AND  PIF.RefNo = @c_CTNTrackNo        
-                  AND  PIF.CartonNo = @n_CartonNo      
-                  AND  EXISTS (  SELECT 1 FROM CARTONTRACK CT WITH (NOLOCK)
-                                 WHERE CT.TrackingNo = PIF.RefNo
-                                 AND LabelNo = @c_Orderkey
-                              )
-                )        
-      BEGIN        
+      --IF EXISTS ( SELECT 1                          --(Wan02)
+      --            FROM PACKINFO PIF WITH (NOLOCK)        
+      --            WHERE PIF.PickSlipNo = @c_PickSlipNo        
+      --            AND  PIF.RefNo = @c_CTNTrackNo        
+      --            AND  PIF.CartonNo = @n_CartonNo      
+      --            AND  EXISTS (  SELECT 1 FROM CARTONTRACK CT WITH (NOLOCK)
+      --                           WHERE CT.TrackingNo = PIF.RefNo
+      --                           AND LabelNo = @c_Orderkey
+      --                        )
+      --          )   
+      --          
+      SELECT @c_TrackingNo = CASE WHEN ISNULL(PIF.TrackingNo,'') <> '' THEN RTRIM(PIF.TrackingNo) ELSE ISNULL(RTRIM(PIF.RefNo),'') END  --(Wan02)  
+      FROM PACKINFO PIF WITH (NOLOCK)        
+      WHERE PIF.PickSlipNo = @c_PickSlipNo        
+      AND  PIF.CartonNo = @n_CartonNo   
+   
+      IF @c_TrackingNo = @c_CTNTrackNo AND EXISTS
+         (  SELECT 1 FROM CARTONTRACK CT WITH (NOLOCK)
+            WHERE CT.TrackingNo = @c_TrackingNo
+            AND LabelNo = @c_Orderkey
+         )                         
+      BEGIN
          GOTO QUIT_SP        
-      END        
+      END
    END
           
    BEGIN TRAN        
@@ -145,7 +158,7 @@ BEGIN
       END        
         
       UPDATE PACKINFO WITH (ROWLOCK)        
-      SET RefNo = @c_CTNTrackNo        
+      SET TrackingNo = @c_CTNTrackNo              
          ,TrafficCop = NULL        
          ,EditWho = SUSER_SNAME()        
          ,EditDate= GETDATE()        
@@ -167,21 +180,23 @@ BEGIN
       INSERT INTO PACKINFO         
             (  PickSlipNo        
             ,  CartonNo        
-            ,  RefNo        
+            --,  RefNo                          --(Wan02)
             ,  Weight        
             ,  Cube        
             ,  Height        
             ,  Length        
-            ,  Width          
+            ,  Width 
+            ,  TrackingNo                       --(Wan02)                        
             )        
       VALUES(  @c_PickSlipNo        
             ,  @n_CartonNo        
-            ,  @c_CTNTrackNo        
+            --,  @c_CTNTrackNo                  --(Wan02)
             ,  0.00        
             ,  0.00        
             ,  0.00        
             ,  0.00        
-            ,  0.00          
+            ,  0.00 
+            ,  @c_CTNTrackNo                    --(Wan02)                    
             )        
       SET @n_err = @@ERROR        
       IF @n_err <> 0        

@@ -19,7 +19,7 @@ GO
 /* Called By: PostPackConfirmSP                                            */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.2                                                       */
+/* PVCS Version: 1.3                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -33,6 +33,7 @@ GO
 /* 16/08/2019   WAN01   1.2   WMS-10243 - CN UA EcomPacking_For JD ORD CR  */
 /* 03/01/2020   NJOW02  1.3   WMS-10647 update packdetail labelno=dropid   */
 /*                            for JD                                       */
+/* 09/042021    Wan02   1.4   WMS-16026 - PB-Standardize TrackingNo        */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPAKCF08]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -73,7 +74,7 @@ BEGIN
           @c_CartonTo         NVARCHAR(10),       
           @c_CarrierName      NVARCHAR(30),         
           @c_GetDropID        NVARCHAR(20),         
-          @c_refno            NVARCHAR(50),  
+          @c_TrackingNo_PI    NVARCHAR(50),     --(Wan02)
           @c_TotalCtn         VARCHAR(10),  
           @c_GetStorerkey     NVARCHAR(15),   --CS01
           @c_LabelLine        NVARCHAR(5)  = '',
@@ -165,6 +166,7 @@ BEGIN
             BEGIN
                UPDATE ORDERS WITH (ROWLOCK)
                SET Userdefine04 = @c_TrackingNo,
+                  TrackingNo = @c_TrackingNo,            --(Wan02)
                   TrafficCop = NULL
                WHERE Orderkey = @c_Orderkey
                 
@@ -364,15 +366,25 @@ BEGIN
             CLOSE @CUR_UPD
             DEALLOCATE @CUR_UPD
 
-            IF EXISTS ( SELECT 1
-                        FROM PACKINFO WITH (NOLOCK)
-                        WHERE PickSlipNo = @c_PickSlipNo  
-                        AND   CartonNo = @n_TCartonNo  
-                        AND   Refno <> @c_GetTrackingNo
-                     )                                    
+            
+            --IF EXISTS ( SELECT 1                       --(Wan02) - START
+            --            FROM PACKINFO WITH (NOLOCK)
+            --            WHERE PickSlipNo = @c_PickSlipNo  
+            --            AND   CartonNo = @n_TCartonNo  
+            --            AND   Refno <> @c_GetTrackingNo
+            --         )   
+            SELECT @c_TrackingNo_PI = CASE WHEN TrackingNo <> '' THEN TrackingNo ELSE '' END
+                  --@c_TrackingNo_PI = CASE WHEN TrackingNo <> '' THEN TrackingNo ELSE ISNULL(RefNo,'') END
+            FROM PACKINFO WITH (NOLOCK)
+            WHERE PickSlipNo = @c_PickSlipNo  
+            AND   CartonNo = @n_TCartonNo  
+            
+            IF @c_TrackingNo_PI <> @c_GetTrackingNo      --(Wan02) - END                              
             BEGIN                                                             
                UPDATE PACKINFO WITH (ROWLOCK)  
-               SET refno = @c_GetTrackingNo 
+               SET --refno = @c_GetTrackingNo 
+                   --,Trackingno = @c_GetTrackingNo       --(Wan02) - 
+                   Trackingno = @c_GetTrackingNo         --(Wan02) - 
                   ,TrafficCop = NULL
                WHERE PickSlipNo = @c_PickSlipNo  
                AND   CartonNo = @n_TCartonNo  
@@ -785,7 +797,7 @@ BEGIN
      
             FETCH NEXT FROM @CUR_PD INTO @c_LabelLine  
                                         ,@c_GetDropID     
-                                        ,@c_refno  
+                                        ,@c_TrackingNo_PI  
                                                  
             WHILE @@FETCH_STATUS <> -1  
             BEGIN  
@@ -809,7 +821,7 @@ BEGIN
                   END  
                END    
        
-               IF @c_refno <> @c_GetTrackingNo            
+               IF @c_TrackingNo_PI <> @c_GetTrackingNo            
                BEGIN                                                             
                   UPDATE PACKINFO WITH (ROWLOCK)  
                   SET refno = @c_GetTrackingNo 
@@ -851,7 +863,7 @@ BEGIN
   
                FETCH NEXT FROM @CUR_PD INTO @c_LabelLine  
                                           , @c_DropID 
-                                          , @c_refno             
+                                          , @c_TrackingNo_PI             
             END  
             CLOSE @CUR_PD  
             DEALLOCATE @CUR_PD  

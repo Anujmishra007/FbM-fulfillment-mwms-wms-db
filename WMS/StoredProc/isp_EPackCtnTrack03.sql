@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By: isp_GenLabelNo_Wrapper                                    */
 /*        :                                                             */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,6 +30,7 @@ GO
 /*                            due to empty orderkey/no packheader       */
 /* 2018-01-26  Wan02    1.1   Log Tracking # issue &                    */
 /* 2019-04-08  James    1.2   Add rdtIsRDT (james01)                    */
+/* 2021-04-12  Wan03    1.3   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/
 CREATE PROC [dbo].[isp_EPackCtnTrack03]
          @c_PickSlipNo  NVARCHAR(10) 
@@ -45,15 +46,15 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_StartTCnt    INT
-         , @n_Continue     INT
+   DECLARE @n_StartTCnt       INT
+         , @n_Continue        INT
          
-         , @n_Cnt          INT
-         , @n_RowRef       BIGINT
-         , @c_Orderkey     NVARCHAR(10)
-         , @c_Storerkey    NVARCHAR(15)
-         , @c_DocType      NVARCHAR(10)
-         , @c_TrackingNo   NVARCHAR(40)
+         , @n_Cnt             INT
+         , @n_RowRef          BIGINT
+         , @c_Orderkey        NVARCHAR(10)
+         , @c_Storerkey       NVARCHAR(15)
+         , @c_DocType         NVARCHAR(10)
+         , @c_TrackingNo_ORD  NVARCHAR(40)                           --(Wan03)
 
          , @c_OrigCartonNo NVARCHAR(10)                              --(Wan02)                                   
 
@@ -98,7 +99,7 @@ BEGIN
 
    SET @c_DocType = ''
    SELECT @c_DocType = OH.Doctype
-         ,@c_TrackingNo = ISNULL(RTRIM(OH.UserDefine04),'')
+         ,@c_TrackingNo_ORD = CASE WHEN ISNULL(RTRIM(OH.TrackingNo),'') <> '' THEN OH.TrackingNo ELSE ISNULL(RTRIM(OH.UserDefine04),'') END  --Wan03
    FROM ORDERS OH WITH(NOLOCK)
    WHERE OH.Orderkey = @c_Orderkey
                   
@@ -118,7 +119,7 @@ BEGIN
       GOTO QUIT_SP
    END
 
-   SET @c_CTNTrackNo = @c_TrackingNo
+   SET @c_CTNTrackNo = @c_TrackingNo_ORD                                                                                                     --(Wan03)
    IF @c_CTNTrackNo <> ''
    BEGIN
       IF NOT EXISTS (SELECT 1 
@@ -156,10 +157,10 @@ BEGIN
 
    QUIT_SP:
 
-   --(Wan02) - START
-   INSERT INTO TRACEINFO (TraceName, TimeIn, TimeOut,Step1, Step2, Step3, Step4, Step5, col1, col2)
-   VALUES ('isp_EPackCtnTrack03', GETDATE(), GETDATE(), @c_PickSlipNo, @c_OrigCartonNo, @c_Orderkey, @c_DocType, @c_CTNTrackNo, @c_TrackingNo, @c_Storerkey)
-   --(Wan02) - END
+   --(Wan03) - START
+   --INSERT INTO TRACEINFO (TraceName, TimeIn, TimeOut,Step1, Step2, Step3, Step4, Step5, col1, col2)
+   --VALUES ('isp_EPackCtnTrack03', GETDATE(), GETDATE(), @c_PickSlipNo, @c_OrigCartonNo, @c_Orderkey, @c_DocType, @c_CTNTrackNo, @c_TrackingNo_ORD, @c_Storerkey)
+   --(Wan03) - END
 
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

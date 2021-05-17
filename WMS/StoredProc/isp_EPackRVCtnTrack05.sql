@@ -19,7 +19,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */  
 /*          : ue_getcartontrackno                                       */  
 /*        :                                                             */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -29,6 +29,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2020-03-11  Wan01    1.1   WMS-12330 - CN IKEA NormalPacking for SN  */
 /*                            order CR                                  */
+/* 2021-04-12  Wan02    1.1   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/  
 CREATE PROC isp_EPackRVCtnTrack05
          @c_PickSlipNo  NVARCHAR(10) 
@@ -43,14 +44,15 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_StartTCnt    INT
-         , @n_Continue     INT
+   DECLARE @n_StartTCnt       INT
+         , @n_Continue        INT
          
-         , @n_RowRef       BIGINT
-         , @c_Orderkey     NVARCHAR(10)
-         , @c_RefNo        NVARCHAR(40)
+         , @n_RowRef          BIGINT
+         , @c_Orderkey        NVARCHAR(10)
+         , @c_TrackingNo_PI   NVARCHAR(40) = ''  --(Wan02)
+         , @c_TrackingNo_ORD  NVARCHAR(40) = ''  --(Wan02)         
 
-         , @c_TaskBatchNo  NVARCHAR(10) = '' --(Wan01)
+         , @c_TaskBatchNo     NVARCHAR(10) = '' --(Wan01)
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -74,7 +76,7 @@ BEGIN
       GOTO QUIT_SP  
    END   
    
-   SET @c_RefNo = ''
+   SET @c_TrackingNo_PI = ''
    --(Wan01) - START
    IF @c_TaskBatchNo = ''
    BEGIN
@@ -84,7 +86,7 @@ BEGIN
                   AND O.ShipperKey = 'SN'
                 ) 
       BEGIN
-         SELECT @c_RefNo = PD.LabelNo
+         SELECT @c_TrackingNo_PI = PD.LabelNo
          FROM PACKDETAIL PD WITH (NOLOCK)
          WHERE PickSlipNo = @c_PickSlipNo
          AND   CartonNo = @n_CartonNo   
@@ -92,36 +94,50 @@ BEGIN
    END
    ELSE
    BEGIN
-      SET @c_RefNo = ''
-      SELECT @c_RefNo = ISNULL(RTRIM(RefNo),'')
+      SET @c_TrackingNo_PI = ''
+      SELECT @c_TrackingNo_PI = CASE WHEN ISNULL(TrackingNo,'') <> '' THEN RTRIM(TrackingNo) ELSE ISNULL(RTRIM(RefNo),'') END --(Wan01)
       FROM PACKINFO WITH (NOLOCK)
       WHERE PickSlipNo = @c_PickSlipNo
       AND   CartonNo = @n_CartonNo 
    END
    --(Wan01) - END
 
-   IF @c_RefNo = ''
+   IF @c_TrackingNo_PI = ''
    BEGIN
       GOTO QUIT_SP
    END 
 
-   IF EXISTS ( SELECT 1
-               FROM ORDERS WITH (NOLOCK) 
-               WHERE Orderkey = @c_Orderkey
-               AND   (TrackingNo = @c_RefNo OR UserDefine04 = @c_RefNo)
-             )
+    --(Wan02) - START 
+   --IF EXISTS ( SELECT 1
+   --            FROM ORDERS WITH (NOLOCK) 
+   --            WHERE Orderkey = @c_Orderkey
+   --            AND   (TrackingNo = @c_TrackingNo_PI OR UserDefine04 = @c_TrackingNo_PI)
+   --          )
+   --BEGIN
+   --   GOTO QUIT_SP
+   --END 
+   
+   SELECT @c_TrackingNo_ORD= CASE WHEN ISNULL(RTRIM(TrackingNo),'') <> ''        --(Wan02)     
+                                  THEN TrackingNo     
+                                  ELSE ISNULL(RTRIM(UserDefine04),'')     
+                                  END                                     
+   FROM ORDERS WITH (NOLOCK) 
+   WHERE Orderkey = @c_Orderkey    
+   
+   IF @c_TrackingNo_PI = @c_TrackingNo_ORD
    BEGIN
-      GOTO QUIT_SP
-   END               
+      GOTO QUIT_SP   
+   END          
+   --(Wan02) - END               
 
    SELECT TOP 1 
          @n_RowRef = RowRef
    FROM CARTONTRACK WITH (NOLOCK)
-   WHERE TrackingNo = @c_RefNo
+   WHERE TrackingNo = @c_TrackingNo_PI
    AND   LabelNo = @c_Orderkey
   
    EXEC ispClearAsgnTNo
-         @c_TrackingNo  = @c_RefNo
+         @c_TrackingNo  = @c_TrackingNo_PI
       ,  @c_OrderKey    = @c_Orderkey  
       ,  @b_ChildFlag   = 1 
       ,  @b_Success     = @b_Success   OUTPUT      
