@@ -31,6 +31,7 @@ GO
 /* 25-Feb-2015  Leong   1.2   SOS# 333519 - Prompt error for shipped CaseId*/
 /* 06-Jan-2015  NJOW01  1.3   359849 - Child Order's Shipperkey Mapping    */
 /* 08-Mar-2016  SPChin  1.4   SOS365643 - Bug Fixed                        */
+/* 11-MAR-2021  Wan02   1.5   WMS-16026 - PB-Standardize TrackingNo        */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ChildOrder_CreateMBOL]
 (     @c_MBOLKey  NVARCHAR(10)
@@ -1098,6 +1099,7 @@ BEGIN
                ,  Qty
                ,  CartonType
                ,  RefNo
+               ,  TrackingNo              --(Wan02)
                )
             SELECT @c_CPickSlipNo
                ,  @n_CCartonNo
@@ -1106,6 +1108,7 @@ BEGIN
                ,  Qty
                ,  CartonType
                ,  RefNo
+               ,  TrackingNo              --(Wan02)
             FROM PACKINFO WITH (NOLOCK)
             WHERE PickSlipNo = @c_PickSlipNo
             AND   CartonNo   = @n_CartonNo
@@ -1175,7 +1178,7 @@ IF @@TRANCOUNT > 0
    ROLLBACK TRAN
 
 --RAISERROR (N'SQL Error: %s ErrorNo: %d.',16, 1) WITH SETERROR    -- SQL2012
-RAISERROR (N'SQL Error: %s',16, 1, @c_errmsg) WITH SETERROR		-- SQL2012, SOS365643
+RAISERROR (N'SQL Error: %s',16, 1, @c_errmsg) WITH SETERROR    -- SQL2012, SOS365643
 QUIT:
 
    IF CURSOR_STATUS('LOCAL' , 'CUR_CASE') in (0 , 1)
