@@ -45,7 +45,7 @@ BEGIN
    IF ISNULL(RTRIM(@c_OrderKey), '') = ''
    BEGIN
       SET @n_Error = 65006
-      SET @c_ErrMsg = 'OrderKey is BLANK'
+      SET @c_ErrMsg = 'OrderKey is BLANK.'
       GOTO EXIT_SP      
    END
 
@@ -58,11 +58,11 @@ BEGIN
    IF @c_StorerKey=''
    BEGIN
       SET @n_Error = 65007
-      SET @c_ErrMsg = 'StorerKey is Exists'
+      SET @c_ErrMsg = 'StorerKey is Exists.'
       GOTO EXIT_SP            
    END
 
-   IF @c_SOStatus = 'CANC' OR @c_Status = 'CANC'
+   IF @c_SOStatus = 'CANC' OR @c_Status = 'CANC.'
    BEGIN
       SET @n_Error = 65001
       SET @c_ErrMsg = 'Canceled Order(s) Not Allow to Delete.'
@@ -74,7 +74,7 @@ BEGIN
              AND ( p.[Status]='9' OR p.ShipFlag='Y'))
    BEGIN
       SET @n_Error = 65002
-      SET @c_ErrMsg = 'Order Already Shipped, Not allow to delete'
+      SET @c_ErrMsg = 'Order Already Shipped, Not allow to delete.'
       GOTO EXIT_SP      
    END
    
@@ -94,7 +94,7 @@ BEGIN
       IF @@ERROR <> 0 
       BEGIN
          SET @n_Error = 65003
-         SET @c_ErrMsg = 'Delete PackDetail Failed'
+         SET @c_ErrMsg = 'Delete PackDetail Failed.'
          GOTO EXIT_SP      
       END         
       
@@ -103,7 +103,7 @@ BEGIN
       IF @@ERROR <> 0 
       BEGIN
          SET @n_Error = 65004
-         SET @c_ErrMsg = 'Delete PackInfo Failed'
+         SET @c_ErrMsg = 'Delete PackInfo Failed.'
          GOTO EXIT_SP      
       END       
             
@@ -112,7 +112,7 @@ BEGIN
       IF @@ERROR <> 0 
       BEGIN
          SET @n_Error = 65005
-         SET @c_ErrMsg = 'Delete PackHeader Failed'
+         SET @c_ErrMsg = 'Delete PackHeader Failed.'
          GOTO EXIT_SP      
       END             
    END
@@ -136,7 +136,7 @@ BEGIN
       IF @@ERROR <> 0 
       BEGIN
          SET @n_Error = 65006
-         SET @c_ErrMsg = 'Delete TaskDetail Failed'
+         SET @c_ErrMsg = 'Delete TaskDetail Failed.'
          GOTO EXIT_SP      
       END             
    
@@ -154,7 +154,7 @@ BEGIN
       IF @@ERROR <> 0 
       BEGIN
          SET @n_Error = 65007
-         SET @c_ErrMsg = 'Delete ShortPickLog Failed'
+         SET @c_ErrMsg = 'Delete ShortPickLog Failed.'
          GOTO EXIT_SP      
       END                
    END
@@ -164,7 +164,7 @@ BEGIN
    IF @@ERROR <> 0 
    BEGIN
       SET @n_Error = 65008
-      SET @c_ErrMsg = 'Delete ORDERS Failed'
+      SET @c_ErrMsg = 'Delete ORDERS Failed.'
       GOTO EXIT_SP      
    END          
    
