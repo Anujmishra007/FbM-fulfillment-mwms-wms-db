@@ -26,7 +26,7 @@ GO
 /* Date         Author  Ver.  Purposes                                     */
 /* 04-AUG-2014  YTWan   1.1   Fixed. Sum (Step Qty) for Multi WO to 1 job  */
 /*                              (Wan01)                                    */
-/* 28-JAN-2016  Wan02   1.2   SOS#361845 -Project Merlion – VAP Workstation*/
+/* 28-JAN-2016  Wan02   1.2   SOS#361845 -Project Merlion VAP Workstation*/
 /*                            Inloc Assigned to Staging Lane               */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_InsertWorkOrderJobOperation]
