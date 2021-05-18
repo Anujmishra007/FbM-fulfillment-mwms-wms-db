@@ -5,6 +5,28 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+/*************************************************************************/  
+/* Stored Procedure: nspASNPASTDTH                                       */  
+/* Creation Date:                                                        */  
+/* Copyright: LFL                                                        */  
+/* Written by:                                                           */  
+/*                                                                       */  
+/* Purpose:                                                              */
+/*                                                                       */
+/*                                                                       */  
+/* Called By: Wave                                                       */  
+/*                                                                       */  
+/* PVCS Version: 1.0                                                     */  
+/*                                                                       */  
+/* Version: 7.0                                                          */  
+/*                                                                       */  
+/* Data Modifications:                                                   */  
+/*                                                                       */  
+/* Updates:                                                              */  
+/* Date         Author   Ver  Purposes                                   */  
+/*************************************************************************/
+
 CREATE PROC    nspASNPASTDTH
 @c_userid           NVARCHAR(18)
 ,              @c_StorerKey        NVARCHAR(15)
