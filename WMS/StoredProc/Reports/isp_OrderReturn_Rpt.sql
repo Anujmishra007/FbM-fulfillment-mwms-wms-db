@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)*/
 /************************************************************************/
 CREATE PROC isp_OrderReturn_Rpt
             @c_Orderkey NVARCHAR(10) = ''
@@ -160,7 +161,7 @@ BEGIN
          ,Contact    = ISNULL(RTRIM(OH.C_Contact1),'')
          ,OrderDate  = OH.OrderDate
          ,Remarks    = ISNULL(RTRIM(OH.Notes),'')
-         ,ExpressNo  = ISNULL(RTRIM(OH.UserDefine04),'')
+         ,ExpressNo  = ISNULL(RTRIM(OH.TrackingNo),'')--ISNULL(RTRIM(OH.UserDefine04),'')   --CS01
          ,[Type]     = OH.Type
          ,OrderType  = N'È±»õ²¹·¢¶©µ¥' 
          ,TotalOrderQty = 0

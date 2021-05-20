@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)*/
 /************************************************************************/
 CREATE PROC isp_packing_list_94
            @c_PickSlipNo      NVARCHAR(10)
@@ -72,7 +73,7 @@ BEGIN
          , SkuDesr = ISNULL(RTRIM(SKU.Descr),'')
          , Qty = ISNULL(SUM(PD.Qty),0)
          , Loc = PD.Loc
-         , TrackingNo = OH.UserDefine04    --WL01
+         , TrackingNo = OH.TrackingNo --OH.UserDefine04    --WL01  --CS01
          , AddDate = CONVERT(NVARCHAR(10),OH.AddDate,120)   --WL02
          , SKUSize = CASE WHEN ISNULL(RTRIM(SKU.BUSR8),'') = '10' THEN ISNULL(RTRIM(SKU.Measurement),'')   --WL02
                                                                   ELSE ISNULL(RTRIM(SKU.Size),'') END      --WL02
@@ -101,7 +102,8 @@ BEGIN
          ,  ISNULL(RTRIM(SKU.Manufacturersku),'')
          ,  ISNULL(RTRIM(SKU.Descr),'')
          ,  PD.Loc
-         ,  OH.UserDefine04      --WL01
+         --,  OH.UserDefine04      --WL01   --CS01
+         ,  OH.TrackingNo          --CS01
          ,  CONVERT(NVARCHAR(10),OH.AddDate,120)   --WL02
          ,  CASE WHEN ISNULL(RTRIM(SKU.BUSR8),'') = '10' THEN ISNULL(RTRIM(SKU.Measurement),'')   --WL02
                                                          ELSE ISNULL(RTRIM(SKU.Size),'') END      --WL02

@@ -1,4 +1,4 @@
- IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Sorting_Summary_hm]') AND type in (N'P', N'PC'))
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Sorting_Summary_hm]') AND type in (N'P', N'PC'))
 DROP PROCEDURE [dbo].[isp_Sorting_Summary_hm]
 GO
 
@@ -24,6 +24,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author        Purposes                                  */  
+/* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)*/
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[isp_Sorting_Summary_hm] (  
                  @c_pickslipno NVARCHAR(20)  
@@ -39,7 +40,8 @@ BEGIN
       OH.LoadKey AS Loadkey,  
       OH.orderkey as orderkey ,  
        --'*'+ OH.OrderKey + '*' as orderkeybar,  
-      OH.userdefine04 as trackingnum,   
+      --OH.userdefine04 as trackingnum,   --CS01
+      OH.TrackingNo AS trackingnum,       --CS01
      -- '*'+ OH.userdefine04 + '*' as trackingbar,  
       PD.pickslipno as pickslipno,  
       PD.Notes as Taskname,  
@@ -50,7 +52,7 @@ BEGIN
   left join packtask(nolock) PT on PT.OrderKey=PD.OrderKey    
   -- left join DeviceProfile(nolock) CP on CP.DeviceID=PT.Station and CP.DevicePosition=PT.DevicePosition  
   where PD.pickslipno=@c_pickslipno    
-  group by OH.LoadKey, OH.orderkey,OH.userdefine04,PD.pickslipno,PD.Notes,PT.logicalname  
+  group by OH.LoadKey, OH.orderkey,OH.TrackingNo,PD.pickslipno,PD.Notes,PT.logicalname  --CS01
    
 END
 
