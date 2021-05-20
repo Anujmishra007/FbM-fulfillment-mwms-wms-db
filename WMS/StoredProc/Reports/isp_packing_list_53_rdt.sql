@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_packing_list_53_rdt                                  */
 /*          :                                                           */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.0                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,8 +32,6 @@ GO
 /*                            columns (WL02)                            */
 /* 27-Feb-2020 WLChooi  1.3   WMS-12039 - Fix-Use Orders.Loadkey and Qty*/
 /*                            and remove Summary (WL03)                 */
-/* 12-May-2021 WLChooi  1.4   WMS-17031 - Add AltSKU based on Codelkup  */
-/*                            (WL04)                                    */
 /************************************************************************/
 CREATE PROC isp_packing_list_53_rdt
          @c_PickSlipNo  NVARCHAR(10)
@@ -122,7 +120,6 @@ BEGIN
       ,  TotalQtyShipped   NVARCHAR(18)   NULL
       ,  M_Company         NVARCHAR(45)   NULL  --NJOW01
       ,  BuyerPO           NVARCHAR(20)   NULL  --WL02
-      ,  AltSKU            NVARCHAR(20)   NULL  --WL04
       )  
 
   --WL02
@@ -282,7 +279,6 @@ BEGIN
          ,  TotalQtyShipped
          ,  M_Company --NJOW01
          ,  BuyerPO   --WL02
-         ,  AltSKU    --WL04
          )  
    SELECT  SortBy  = ROW_NUMBER() OVER (ORDER BY LP.Loadkey
                                                 ,OH.Orderkey
@@ -327,15 +323,11 @@ BEGIN
          , TotalQtyShipped = ''
          , M_Company= ISNULL(RTRIM(OH.M_Company),'')  --NJOW01
          , BuyerPO = ISNULL(OH.BuyerPO,'')            --WL02
-         , AltSKU = CASE WHEN ISNULL(CL.Code,'') = '' THEN '' ELSE SKU.ALTSKU END   --WL04   
    FROM #TMP_ORDERS LP
    JOIN ORDERS      OH WITH (NOLOCK) ON (LP.Orderkey = OH.Orderkey)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey)
    JOIN SKU       SKU  WITH (NOLOCK) ON (OD.Storerkey= SKU.Storerkey)
                                      AND(OD.Sku = SKU.Sku)
-   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'DWWHSDN')     --WL04
-                                      AND (CL.Storerkey = OH.StorerKey) --WL04
-                                      AND (CL.Code = OH.ConsigneeKey)   --WL04
    GROUP BY OH.Storerkey
          ,  LP.Loadkey
          ,  OH.Orderkey
@@ -367,7 +359,6 @@ BEGIN
          ,  ISNULL(RTRIM(OH.M_Company),'') --NJOW01
          ,  ISNULL(OH.BuyerPO,'')   --WL02
          ,  OH.[Status]  --WL03
-         ,  CASE WHEN ISNULL(CL.Code,'') = '' THEN '' ELSE SKU.ALTSKU END   --WL04   
 
    UPDATE INV
       SET Summary = (SELECT TOP 1 TMP.Summary FROM #TMP_INV TMP WHERE TMP.orderkey = INV.Orderkey) 
@@ -603,7 +594,6 @@ QUIT_SP:
          ,  C44= @c_C44  --WL02             
          ,  C45= @c_C45  --WL02 
          ,  BuyerPO      --WL02 
-         ,  AltSKU       --WL04
    FROM #TMP_INV  --WL01 --WL02
    ORDER BY RowRef
    --ORDER BY SortBy, Loadkey, Orderkey, CASE WHEN ISNULL(SKU,'') = '' THEN 1 ELSE 0 END, SKU, SkuDescr --WL01 --WL02
