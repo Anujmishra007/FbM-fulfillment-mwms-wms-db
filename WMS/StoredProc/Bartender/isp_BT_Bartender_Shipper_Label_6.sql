@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2017-10-02 1.0  CSCHONG    Created(WMS-3002)                               */        
+/* 2017-10-02 1.0  CSCHONG    Created(WMS-3002)                               */     
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */  
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_6]                       
@@ -40,7 +41,7 @@ BEGIN
                               
    DECLARE                  
       @c_OrderKey        NVARCHAR(10),                    
-      @c_ExternOrderKey  NVARCHAR(10),              
+      @c_ExternOrderKey  NVARCHAR(50),              
       @c_Deliverydate    DATETIME,              
       @c_ConsigneeKey    NVARCHAR(15),              
       @c_Company         NVARCHAR(45),              
@@ -207,7 +208,7 @@ BEGIN
       SET @c_SQLJOIN = +' SELECT DISTINCT ORD.orderkey,ISNULL(C1.UDF01,''''),ISNULL(ORD.c_Address2,''''),ISNULL(ORD.c_Address3,''''),ORD.C_Zip,'   --5
                 +' ORD.C_Contact1,ISNULL(ORD.C_Phone1,''''),ISNULL(ORD.C_Phone2,''''),'    --8        
                 + CHAR(13) +           
-                +'ORD.Userdefine04,CASE WHEN ORD.Storerkey=''Carter'' THEN (ORD.InvoiceAmount/7) ELSE  ORD.InvoiceAmount END,'   --10
+                +'ORD.trackingno,CASE WHEN ORD.Storerkey=''Carter'' THEN (ORD.InvoiceAmount/7) ELSE  ORD.InvoiceAmount END,'   --10 --CS01
                 + 'ISNULL(C.long,''''),ISNULL(C.UDF01,''''),C.short,ISNULL(C.UDF02,''''),ORD.Grossweight,'  --15        
                 + CHAR(13) +          
                 +''''','''','''','''','''','''','''','''','+ CHAR(13) +          

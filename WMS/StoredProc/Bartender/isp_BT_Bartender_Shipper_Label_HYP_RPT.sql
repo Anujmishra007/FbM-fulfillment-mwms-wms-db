@@ -18,6 +18,7 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2018-08-10 1.0  CSCHONG    Created (WMS-5004)                              */ 
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo(CS01)       */  
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_HYP_RPT]                      
@@ -152,7 +153,7 @@ BEGIN
              + ' ISNULL(ST.Address1,''''),ISNULL(ST.Address2,''''),ISNULL(ST.Phone2,''''),ISNULL(ST.Zip,''''),'   --40       
              + ' SUM(OD.ShippedQty),(SUM(OD.ShippedQty)*MIN(S.StdGrossWgt)),OD.SKU,SUM(OD.ShippedQty +OD.Qtypicked),PD.Loc, '
              + ' SUM(PD.Qty),PD.SKU,S.DESCR,S.Manufacturersku,S.Style, '  --50       
-             + ' P.Packkey,P.Casecnt,ORD.userdefine04,'''','''','''','''','''','''',''O'' '   --60          
+             + ' P.Packkey,P.Casecnt,ORD.trackingno,'''','''','''','''','''','''',''O'' '   --60          --CS01
              + CHAR(13) +                  
              + ' FROM ORDERS ORD WITH (NOLOCK) '
              +'  JOIN ORDERDETAIL OD WITH (Nolock) ON ORD.Orderkey=OD.Orderkey'
@@ -173,7 +174,7 @@ BEGIN
              + ' ISNULL(ORD.C_Address3,''''),ISNULL(ORD.C_Address4,''''),ORD.Orderdate,'   
              + ' ORD.Editdate,ORD.Shipperkey,ORD.OrderGroup,ISNULL(ST.Phone1,''''),ISNULL(ST.Company,''''),ISNULL(ST.Contact1,''''), '
              + ' ISNULL(ST.Address1,''''),ISNULL(ST.Address2,''''),ISNULL(ST.Phone2,''''),ISNULL(ST.Zip,''''),OD.SKU,PD.Loc,' 
-             + ' PD.SKU,S.DESCR,S.Manufacturersku,S.Style,P.Packkey,P.Casecnt,ORD.userdefine04 '
+             + ' PD.SKU,S.DESCR,S.Manufacturersku,S.Style,P.Packkey,P.Casecnt,ORD.trackingno '   --CS01
 
           
              IF @b_debug=1        

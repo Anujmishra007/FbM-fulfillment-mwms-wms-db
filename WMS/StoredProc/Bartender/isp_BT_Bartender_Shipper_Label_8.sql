@@ -14,7 +14,8 @@ GO
 /* Date       Rev  Author     Purposes                                        */                   
 /* 2018-07-30 1.0  CSCHONG    Created(WMS-5828)                               */  
 /* 2018-11-07 1.1  CSCHONG    Remove insert traceinfo (CS01)                  */      
-/* 2020-10-27 1.2  CSCHONG    Performance tunning (CS02)                      */    
+/* 2020-10-27 1.2  CSCHONG    Performance tunning (CS02)                      */  
+/* 2021-04-02 1.3  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS03)      */  
 /******************************************************************************/                                    
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_8]       
 (  @c_Sparm1            NVARCHAR(250),                
@@ -38,7 +39,7 @@ BEGIN
                                 
    DECLARE                    
       @c_OrderKey        NVARCHAR(10),                      
-      @c_ExternOrderKey  NVARCHAR(10),                
+      @c_ExternOrderKey  NVARCHAR(50),                
       @c_Deliverydate    DATETIME,                
       @c_ConsigneeKey    NVARCHAR(15),                
       @c_Company         NVARCHAR(45),                
@@ -270,7 +271,7 @@ BEGIN
              +'ISNULL(ORD.C_Phone2,''''),CASE WHEN STO.VAT=''LEV'' THEN ORD.Notes2 ELSE ORD.M_Company END,'                       
              +'ORD.Userdefine01,'--ORD.Userdefine02,  
              +' CASE WHEN STO.StorerKey = ''18354'' THEN ORDIF.DeliveryCategory ELSE ORD.Userdefine02 END, '                                         
-             +' CASE WHEN STO.VAT=''ITX'' THEN ORD.Door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,' --ORD.PmtTerm,'          
+             +' CASE WHEN STO.VAT=''ITX'' THEN ORD.Door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,' --ORD.PmtTerm,'     --CS03     
              + CHAR(13) +   
              +' CASE WHEN STO.StorerKey IN (''ANF'',''18354'',''18677'') THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'               
              +'ORD.InvoiceAmount,'''','''','             
@@ -299,7 +300,7 @@ BEGIN
              +'ISNULL(ORD.C_Phone2,''''),CASE WHEN STO.VAT=''LEV'' THEN ORD.Notes2 ELSE ORD.M_Company END,'        --34               
              +'ORD.Userdefine01,'--ORD.Userdefine02,  
              +' CASE WHEN STO.StorerKey = ''18354'' THEN ORDIF.DeliveryCategory ELSE ORD.Userdefine02 END, '                                         
-             +' CASE WHEN STO.VAT=''ITX'' THEN ORD.Door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,' --ORD.PmtTerm,'   --39      
+             +' CASE WHEN STO.VAT=''ITX'' THEN ORD.Door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,' --ORD.PmtTerm,'   --39  --CS03    
              + CHAR(13) +   
              +' CASE WHEN STO.StorerKey IN (''ANF'',''18354'',''18677'') THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'               
              +'ORD.InvoiceAmount,'''','''','       --43        

@@ -17,6 +17,7 @@ GO
 /* 2019-01-29 1.2  CSCHONG    WMS-7794 Created (CS01)                         */   
 /* 2021-01-14 1.3  CSCHONG    Performance tunning (CS02)                      */  
 /* 2021-04-19 1.4  CSCHONG    WMS-16813 extend getcol55 length (CS03)         */     
+/* 2021-04-02 1.5  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS04)      */  
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_11]                       
@@ -100,10 +101,10 @@ BEGIN
           @c_OHUdef01          NVARCHAR(20),
           @c_condition         NVARCHAR(150),
           @c_cartonNo          NVARCHAR(5),
-          @c_packstatus        NVARCHAR(5),
-          @c_Col60             NVARCHAR(20),
-          @n_SumPickQTY        INT,
-          @n_SumPackQTY        INT,
+		    @c_packstatus        NVARCHAR(5),
+		    @c_Col60             NVARCHAR(20),
+		    @n_SumPickQTY        INT,
+		    @n_SumPackQTY        INT,
           @c_GrpBy             NVARCHAR(4000)             --CS02
           
   DECLARE @d_Trace_StartTime   DATETIME,   
@@ -114,7 +115,7 @@ BEGIN
            @c_UserName         NVARCHAR(20),
            @c_condition1       NVARCHAR(150),    
            @c_condition2       NVARCHAR(150)     
-             
+		       
   
    SET @d_Trace_StartTime = GETDATE()  
    SET @c_Trace_ModuleName = ''  
@@ -129,8 +130,8 @@ BEGIN
     SET @c_deliveryNote = ''
     SET @c_GetCodelkup = 'N'    
     SET @c_SVAT = ''          
-    SET @c_Col60 = '0'  
-    SET @c_packstatus = '0'
+	SET @c_Col60 = '0'  
+	SET @c_packstatus = '0'
                
     CREATE TABLE [#Result]  
     (  
@@ -217,17 +218,17 @@ BEGIN
    
    IF ISNULL(@c_Sparm5,'') <> '' AND ISNULL(@c_Sparm6,'') <> ''
    BEGIN
-      SET @c_condition = ' AND PD.CartonNo >= CONVERT(INT,@c_Sparm5) AND PD.CartonNo <= CONVERT(INT,@c_Sparm6 )'   --Cs01  
+   	SET @c_condition = ' AND PD.CartonNo >= CONVERT(INT,@c_Sparm5) AND PD.CartonNo <= CONVERT(INT,@c_Sparm6 )'   --Cs01  
    END    
    
    IF ISNULL(RTRIM(@c_Sparm2),'') <> ''
    BEGIN
-      SET @c_condition1 = 'AND ORD.OrderKey =RTRIM(@c_Sparm2)'
+   	SET @c_condition1 = 'AND ORD.OrderKey =RTRIM(@c_Sparm2)'
    END   
    
    IF ISNULL(RTRIM(@c_Sparm3),'') <> ''
    BEGIN
-      SET @c_condition2 = 'AND ORD.ShipperKey =RTRIM(@c_Sparm3)'
+   	SET @c_condition2 = 'AND ORD.ShipperKey =RTRIM(@c_Sparm3)'
    END      
 
   --CS02 START
@@ -236,7 +237,7 @@ BEGIN
          +' STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,' +CHAR(13)
          +' ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,' +CHAR(13)
          +' ORD.C_Phone1,ISNULL(ORD.C_Phone2,''''),CASE WHEN STO.VAT=''LEV'' THEN ORD.Notes2 ELSE ORD.M_Company END,ORD.Userdefine01,' +CHAR(13)
-         +' ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,' +CHAR(13)  
+         +' ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,' +CHAR(13)  --CS04
          +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,ORD.InvoiceAmount,ORD.ShipperKey,' +CHAR(13)
          +' STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,Substring(OI.Notes,1,80),ORD.DeliveryPlace,' +CHAR(13)
          +' ORD.M_Address1,ORD.M_Address2,ORD.M_City,Substring(ORD.Notes,1,80),ORD.Userdefine10,PD.CartonNo' +CHAR(13)
@@ -249,7 +250,7 @@ BEGIN
                 +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +          
                 +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'          
                 +'ISNULL(ORD.C_Phone2,''''),CASE WHEN STO.VAT=''LEV'' THEN ORD.Notes2 ELSE ORD.M_Company END,ORD.Userdefine01,ORD.Userdefine02,'         
-                +'CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,'        
+                +'CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,'         --CS04
                 + CHAR(13) +   
                 +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'     
                 +'ORD.InvoiceAmount,'''','''','           
@@ -382,21 +383,21 @@ BEGIN
      WHERE PD.OrderKey=@c_OrderKey
 
 
-    SELECT @n_SumPackQTY = SUM(PD.QTY)
-    FROM PACKHEADER PH (NOLOCK)
+	 SELECT @n_SumPackQTY = SUM(PD.QTY)
+	 FROM PACKHEADER PH (NOLOCK)
        JOIN PACKDETAIL PD (NOLOCK) ON PH.PickSlipNo=PD.PickSlipNo
       -- JOIN ORDERS ORD (NOLOCK) ON ORD.OrderKey = PH.OrderKey       
-      WHERE  PH.OrderKey = @c_OrderKey
+	   WHERE  PH.OrderKey = @c_OrderKey
 
-   -- select @n_SumPickQTY '@n_SumPickQTY', @n_SumPackQTY '@n_SumPackQTY'
+	-- select @n_SumPickQTY '@n_SumPickQTY', @n_SumPackQTY '@n_SumPackQTY'
 
-    IF @n_SumPickQTY = @n_SumPackQTY
-    BEGIN
-       SELECT @c_Col60 = MAX(PAD.CartonNo)
-       FROM PACKHEADER PH (NOLOCK)
-       JOIN PACKDETAIL PAD (NOLOCK) ON PH.PickSlipNo=PAD.PickSlipNo   
-       WHERE  PH.OrderKey = @c_OrderKey
-    END
+	 IF @n_SumPickQTY = @n_SumPackQTY
+	 BEGIN
+	    SELECT @c_Col60 = MAX(PAD.CartonNo)
+	    FROM PACKHEADER PH (NOLOCK)
+        JOIN PACKDETAIL PAD (NOLOCK) ON PH.PickSlipNo=PAD.PickSlipNo   
+	   WHERE  PH.OrderKey = @c_OrderKey
+	 END
 
   END
 
@@ -412,22 +413,22 @@ BEGIN
    WHERE  PH.OrderKey = @c_OrderKey    
    AND    PAD.CartonNo=CONVERT(INT,@c_cartonNo)   
    
-         IF @b_debug='1'        
+   IF @b_debug='1'        
          BEGIN        
             SELECT @n_PackInfoWgt '@n_PackInfoWgt'          
          END   
  
    SELECT TOP 1 @c_col35 = CAST(SUM(CAST(PKI.[Cube] as NUMERIC(10,6))) as NVARCHAR(30))  
    FROM   PACKHeader PH WITH (NOLOCK)  
-   JOIN Orders ORD WITH (NOLOCK)                                
+          JOIN Orders ORD WITH (NOLOCK)                                
                ON  ORD.OrderKey = PH.OrderKey  
-   JOIN PACKINFO PKI WITH (NOLOCK)  
+          JOIN PACKINFO PKI WITH (NOLOCK)  
                ON  PKI.Pickslipno = PH.pickslipno  
-   JOIN Storer S WITH (NOLOCK) ON S.Storerkey = PH.Storerkey       
+          JOIN Storer S WITH (NOLOCK) ON S.Storerkey = PH.Storerkey       
    WHERE  PH.OrderKey = @c_OrderKey 
    GROUP BY S.VAT,PKI.[Cube],ORD.Userdefine01 
 
-         IF @b_debug='1'        
+	 IF @b_debug='1'        
          BEGIN        
             SELECT @c_col35 '@c_col35'          
          END  
@@ -441,8 +442,8 @@ BEGIN
     SELECT TOP 1 @c_getstorerkey = storerkey
                 ,@c_doctype = DocType
                 ,@c_OHUdef01=UserDefine01
-    FROM   ORDERS WITH (NOLOCK)  
-    WHERE  OrderKey = @c_OrderKey  
+        FROM   ORDERS WITH (NOLOCK)  
+       WHERE  OrderKey = @c_OrderKey  
       
    IF @c_getstorerkey = 'ANF' AND @c_doctype = 'DTC' AND @c_OHUdef01='COD'
    BEGIN
@@ -451,11 +452,12 @@ BEGIN
                                  SUM(CASE WHEN ISNUMERIC(ORDDET.UserDefine05) = 1 THEN CAST(ORDDET.UserDefine05 AS INT) ELSE 0 END) + ORDDET.ExtendedPrice
                                +SUM(ORDDET.Tax01)
                                +sum(CASE WHEN ISNUMERIC(ORDDET.UserDefine06) = 1 THEN CAST(ORDDET.UserDefine06 AS INT) ELSE 0 END) 
-   FROM   PICKDETAIL PD(NOLOCK)  
-   JOIN ORDERDETAIL ORDDET(NOLOCK)  ON  PD.OrderKey = ORDDET.OrderKey  
-                                    AND PD.OrderLineNumber = ORDDET.OrderLineNumber  
-   JOIN ORDERS ORD (NOLOCK) ON ORD.OrderKey=ORDDET.OrderKey     
-   WHERE  PD.OrderKey = @c_OrderKey  
+       FROM   PICKDETAIL PD(NOLOCK)  
+       JOIN ORDERDETAIL ORDDET(NOLOCK)  
+       ON  PD.OrderKey = ORDDET.OrderKey  
+       AND PD.OrderLineNumber = ORDDET.OrderLineNumber  
+      JOIN ORDERS ORD (NOLOCK) ON ORD.OrderKey=ORDDET.OrderKey     
+       WHERE  PD.OrderKey = @c_OrderKey  
    GROUP BY ORD.Storerkey,ORD.[Type],ORD.UserDefine01,ORD.UserDefine05, ORDDET.ExtendedPrice
    
    SET @c_col39 = CONVERT(NVARCHAR(50),@n_getcol39)
@@ -468,7 +470,7 @@ BEGIN
        Col56 = @n_PackInfoWgt,    
        Col35 = @c_Col35,               
        Col39 = CASE WHEN ISNULL(@c_col39,'') <> '' THEN @c_col39 ELSE Col39 END,
-       Col60 = @c_Col60         
+	   Col60 = @c_Col60         
    WHERE Col02=@c_OrderKey  
    AND col59 = @c_cartonNo       
      
@@ -485,9 +487,9 @@ BEGIN
     
    FETCH NEXT FROM CUR_RowNoLoop INTO @c_OrderKey,@c_Udef04,@c_cartonNo        
     
-   END -- While             
-   CLOSE CUR_RowNoLoop            
-   DEALLOCATE CUR_RowNoLoop          
+END -- While             
+CLOSE CUR_RowNoLoop            
+DEALLOCATE CUR_RowNoLoop          
       
 SET @c_ORDAdd = ''   
      
@@ -527,38 +529,40 @@ BEGIN
    JOIN Storer S WITH (NOLOCK) ON S.storerkey=Ord.Shipperkey   
    WHERE Ord.Orderkey=@c_OrderKey  
   
-    IF @b_debug='1'  
+   IF @b_debug='1'  
     BEGIN  
       Print ' consigneeFor : ' + @c_consigneeFor  
     END  
     
      
-    IF  @c_consigneeFor = 'A'   
+   IF  @c_consigneeFor = 'A'   
     BEGIN  
 
           SELECT TOP 1 @c_cnotes = c.notes,
                         @c_short = C.short
           FROM Codelkup C WITH (NOLOCK)   
           WHERE C.short =  @c_getshipperkey      
-          AND C.Listname='COURIERMAP'     
-          AND C.UDF01='ELABEL'   
+           AND C.Listname='COURIERMAP'     
+           AND C.UDF01='ELABEL'   
 
 
-          SELECT TOP 1  @c_CLong = C.Long      
+          SELECT TOP 1    
+            @c_CLong = C.Long      
          FROM Codelkup C WITH (NOLOCK)      
          WHERE C.short =  @c_getshipperkey      
          AND C.Listname='COURIERMAP'     
          AND C.UDF01='ELABEL'         
          AND c.notes like N'%' + @c_City + '%'  
   
-          IF @b_debug='1'  
+        IF @b_debug='1'  
           BEGIN  
             Print ' c_long : ' + @c_CLong  
           END  
   
         IF ISNULL(@c_CLong,'') = ''  
         BEGIN  
-        SELECT TOP 1  @c_City = Ord.c_city  
+        SELECT TOP 1         
+              @c_City = Ord.c_city  
          FROM ORDERS ORD WITH (NOLOCK)        
          WHERE ORD.Orderkey =  @c_OrderKey  
          AND  ORD.ShipperKey = @c_short                        
@@ -577,14 +581,15 @@ BEGIN
     ELSE  
     BEGIN  
   
-       SELECT TOP 1  @c_CLong = C.Long      
-       FROM Codelkup C WITH (NOLOCK)     
-       WHERE C.Short=@c_GetShipperKey
-       AND C.Listname='COURIERMAP'     
-       AND C.UDF01='ELABEL'        
-       AND c.Notes like N'%'+@c_State+'%' and c.Notes2 like N'%'+@c_City+'%' and c.Description like N'%'+@c_Address1+'%'  
+       SELECT TOP 1    
+            @c_CLong = C.Long      
+         FROM Codelkup C WITH (NOLOCK)     
+         WHERE C.Short=@c_GetShipperKey
+         AND C.Listname='COURIERMAP'     
+         AND C.UDF01='ELABEL'        
+          AND c.Notes like N'%'+@c_State+'%' and c.Notes2 like N'%'+@c_City+'%' and c.Description like N'%'+@c_Address1+'%'  
 
-          IF @b_debug='1'  
+       IF @b_debug='1'  
           BEGIN  
             Print ' c_long : ' +  @c_CLong
           END  
@@ -606,19 +611,20 @@ BEGIN
   BEGIN
    
   SELECT TOP 1 @c_notes2 = C.Notes2         
-  FROM   Codelkup C WITH (NOLOCK)   
-  WHERE C.Short = @c_GetShipperkey               
-  AND C.Storerkey = @c_storerkey           
-  AND C.Listname = 'WSCourier'
+   FROM   Codelkup C WITH (NOLOCK)   
+     WHERE C.Short = @c_GetShipperkey               
+          AND C.Storerkey = @c_storerkey           
+          AND C.Listname = 'WSCourier'
 
   END
 
    SET @c_UDF01 = ''   
-   SELECT TOP 1  @c_UDF01 = C.UDF01  
+   SELECT TOP 1   
+          @c_UDF01 = C.UDF01  
    FROM   Codelkup C WITH (NOLOCK)    
    WHERE C.Short = @c_GetShipperkey              
-   AND C.Storerkey = @c_storerkey            
-   AND C.Listname = 'WSCourier'   
+          AND C.Storerkey = @c_storerkey            
+          AND C.Listname = 'WSCourier'   
  
   
     SET @c_GetCol55 = ''  
@@ -628,7 +634,7 @@ BEGIN
     WHERE C.listname='ELCOL55'   
     AND c.Storerkey = @c_Storerkey           
   
-        IF @b_debug = '1'  
+    IF @b_debug = '1'  
         BEGIN  
           PRINT ' Get Col55 : ' + @c_GetCol55   
         END     
@@ -661,7 +667,7 @@ BEGIN
                       , @c_col55 OUTPUT  
   
   
-        IF @b_debug = '1'  
+    IF @b_debug = '1'  
         BEGIN  
           PRINT ' Col55 : ' + @c_Col55   
         END    

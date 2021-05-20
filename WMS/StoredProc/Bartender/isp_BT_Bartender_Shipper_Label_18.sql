@@ -1,4 +1,4 @@
- IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_18]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_18]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
    DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_18]
 GO
@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */ 
-/* 2020-05-28 1.0  CSCHONG    WMS-13518 (Created)                             */         
+/* 2020-05-28 1.0  CSCHONG    WMS-13518 (Created)                             */  
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */         
 /******************************************************************************/                     
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_18]                           
 (  @c_Sparm1            NVARCHAR(250),                  
@@ -38,7 +39,7 @@ BEGIN
                                   
    DECLARE                      
       @c_OrderKey        NVARCHAR(10),                        
-      @c_ExternOrderKey  NVARCHAR(10),                  
+      @c_ExternOrderKey  NVARCHAR(50),                  
       @c_Deliverydate    DATETIME,                  
       @c_ConsigneeKey    NVARCHAR(15),                  
       @c_Company         NVARCHAR(45),                  
@@ -234,7 +235,7 @@ BEGIN
                 +' STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +              
                 +' ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'              
                 +' ISNULL(ORD.C_Phone2,''''),CASE WHEN STO.VAT=''LEV'' THEN ORD.Notes2 ELSE ORD.M_Company END,ORD.Userdefine01,ORD.Userdefine02,'             
-                +' CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,'           
+                +' CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,'   --CS01        
                 +  CHAR(13) +       
                 +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'         
                 +' ORD.InvoiceAmount,'''','''','               

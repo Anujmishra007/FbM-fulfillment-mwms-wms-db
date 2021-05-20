@@ -19,6 +19,7 @@ GO
 /* 14-Sep-2018  1.0  CSCHONG    WMS-5363-add new field (CS01)                 */
 /* 29-Jan-2019  1.1  AikLiang   INC0566427 - Removed OrderDetail JOIN to fix  */
 /*                              incorrect Qty issue (AL01)                    */
+/* 2021-04-02   1.2 CSCHONG     WMS-16024 PB-Standardize TrackingNo (CS02)    */
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_7]
@@ -43,7 +44,7 @@ BEGIN
 
    DECLARE
       @c_OrderKey        NVARCHAR(10),
-      @c_ExternOrderKey  NVARCHAR(10),
+      @c_ExternOrderKey  NVARCHAR(50),
       @c_Deliverydate    DATETIME,
       @c_ConsigneeKey    NVARCHAR(15),
       @c_Company         NVARCHAR(45),
@@ -213,7 +214,7 @@ BEGIN
 
 
      SET @c_SQLJOIN = +' SELECT DISTINCT ORD.loadkey,ORD.orderkey,ORD.externorderkey,ORD.type,ORD.Storerkey,'
-	             + ' ORD.C_Contact1,ORD.C_Phone1,ORD.Userdefine04,substring((STO.Address1+STO.Address2+STO.Address3),1,80),'    --9
+	             + ' ORD.C_Contact1,ORD.C_Phone1,ORD.trackingno,substring((STO.Address1+STO.Address2+STO.Address3),1,80),'    --9  --CS02
                 + CHAR(13) +
                 +'ORD.DeliveryPlace,SUM(PD.QTY),'''','''','''','''','''','  --16
                 + CHAR(13) +
@@ -240,7 +241,7 @@ BEGIN
                -- + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(@c_Sparm3),'''') <> '''' THEN @c_Sparm3 ELSE ORD.ShipperKey END'
              --   + ' AND PD.QTY = ''1'' '
 				   + ' GROUP BY ORD.loadkey,ORD.orderkey,ORD.externorderkey,ORD.type,ORD.Storerkey,'
-					+ ' ORD.C_Contact1,ORD.C_Phone1,ORD.Userdefine04,substring((STO.Address1+STO.Address2+STO.Address3),1,80),ORD.DeliveryPlace'
+					+ ' ORD.C_Contact1,ORD.C_Phone1,ORD.trackingno,substring((STO.Address1+STO.Address2+STO.Address3),1,80),ORD.DeliveryPlace'  --CS02
 
 
       IF @b_debug = 1

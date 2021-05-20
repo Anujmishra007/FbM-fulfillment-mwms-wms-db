@@ -18,6 +18,7 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2018-06-18 1.0  CSCHONG    Created (WMS-7510)                              */ 
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */  
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_CN_SKESHIPLBL]                      
@@ -160,7 +161,7 @@ BEGIN
       [Qty]         INT , 
       [Retrieve]    [NVARCHAR] (1) default 'N')         
   	        
-  SET @c_SQLJOIN = +' SELECT DISTINCT ORD.Orderkey,PD.loc,PD.sku,ORD.Userdefine04,PT.Taskbatchno,'+ CHAR(13)      --5      
+  SET @c_SQLJOIN = +' SELECT DISTINCT ORD.Orderkey,PD.loc,PD.sku,ORD.trackingno,PT.Taskbatchno,'+ CHAR(13)      --5   --CS01   
              + ' PT.Logicalname,ORD.loadkey,@c_Sparm04,'''','''','     --10  
              + ' '''','''','''','''','''','     --15  
              + ' '''','''','''','''','''','     --20       
@@ -177,7 +178,7 @@ BEGIN
              + ' WHERE ORD.loadkey = @c_Sparm01 AND'    
              + ' ORD.orderkey= @c_Sparm02 '   
 			 + ' AND PD.sku =  @c_Sparm03 '
-			 + ' GROUP BY  ORD.Orderkey,PD.loc,PD.sku,ORD.Userdefine04,PT.Taskbatchno,PT.Logicalname,ORD.loadkey' 
+			 + ' GROUP BY  ORD.Orderkey,PD.loc,PD.sku,ORD.trackingno,PT.Taskbatchno,PT.Logicalname,ORD.loadkey' --CS01
 
           
 IF @b_debug=1        

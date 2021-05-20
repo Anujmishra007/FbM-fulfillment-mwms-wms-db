@@ -18,6 +18,7 @@ GO
 /* 2019-08-01 1.0  WLCHOOI    Created (WMS-10039)                             */   
 /* 2020-01-17 1.1  CSCHONG    WMS-11764 revised field mapping (CS01)          */
 /* 2020-10-27 1.2  CSCHONG    Performance tunning (CS02)                      */  
+/* 2021-04-02 1.3  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS03)      */  
 /******************************************************************************/        
           
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_VIP]               
@@ -41,7 +42,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF        
                       
    DECLARE @c_OrderKey          NVARCHAR(10),                    
-           @c_ExternOrderKey    NVARCHAR(10),              
+           @c_ExternOrderKey    NVARCHAR(50),              
            @c_Deliverydate      DATETIME,              
            @c_ConsigneeKey      NVARCHAR(15),              
            @c_Company           NVARCHAR(45),              
@@ -257,7 +258,7 @@ BEGIN
                       + CHAR(13)    
                       + ' ISNULL(RTRIM(LTRIM(ORD.M_Company)),''''), ' --34
                       + CHAR(13)
-                      + ' STO.VAT, ISNULL(ORD.UserDefine02,''''), '''', ISNULL(ORD.UserDefine04,''''), ' --38
+                      + ' STO.VAT, ISNULL(ORD.UserDefine02,''''), '''', ISNULL(ORD.trackingno,''''), ' --38  --CS03
                       + CHAR(13)
                       + ' ISNULL(ORD.UserDefine05,''''), ISNULL(ORD.PmtTerm,''''), ' --40
                       + CHAR(13)
@@ -277,7 +278,7 @@ BEGIN
                       + ' INNER JOIN STORER STO WITH (NOLOCK) ON STO.StorerKey = ORD.StorerKey '    + CHAR(13)    
                       + ' INNER JOIN FACILITY F WITH (NOLOCK) ON F.FACILITY = ORD.FACILITY ' + CHAR(13)
                       + ' LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey = ORD.Orderkey '  + CHAR(13) 
-                      + ' LEFT JOIN CARTONTRACK CT WITH (NOLOCK) ON CT.Trackingno = ORD.Userdefine04 ' + CHAR(13)    --CS01
+                      + ' LEFT JOIN CARTONTRACK CT WITH (NOLOCK) ON CT.Trackingno = ORD.trackingno ' + CHAR(13)    --CS01 --CS03
                       + ' WHERE ORD.StorerKey = @c_StorerKey '             
                 
 

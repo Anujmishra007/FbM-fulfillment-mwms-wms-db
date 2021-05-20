@@ -45,7 +45,8 @@ GO
 /* 2015-05-06 26.0 CSCHONG    Performance tunning (CS25)                      */            
 /* 2015-06-11 27.0 CSCHONG    change col35 logic (CS26)                       */ 
 /* 2015-10-22 27.1 CSCHONG    SOS#355128 Add logic for qty=8 (CS27)           */  
-/* 2017-08-30 27.2 CSCHONG    Scripts tunning (CS28)                         */         
+/* 2017-08-30 27.2 CSCHONG    Scripts tunning (CS28)                          */    
+/* 2021-04-02 27.3 CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS29)      */       
 /******************************************************************************/                            
                               
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_ENIKE]                                   
@@ -71,7 +72,7 @@ BEGIN
                                           
    DECLARE                              
       @c_OrderKey        NVARCHAR(10),                                
-      @c_ExternOrderKey  NVARCHAR(10),                          
+      @c_ExternOrderKey  NVARCHAR(50),                          
       @c_Deliverydate    DATETIME,                          
       @c_ConsigneeKey    NVARCHAR(15),                          
       @c_Company  NVARCHAR(45),                          
@@ -241,7 +242,8 @@ BEGIN
                 + CHAR(13) +              
                 +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +                      
                 +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'                      
-                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,ORD.PmtTerm,'     --CS19                   
+                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,'
+                +' CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,ORD.PmtTerm,'     --CS19         --CS29          
                 + CHAR(13) +                      
                 +'ORD.InvoiceAmount,'''','''','                       
                 +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', '  --50  --CS03                  
@@ -265,7 +267,8 @@ BEGIN
                 + CHAR(13) +                      
                 +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +                      
                 +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'                      
-                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,ORD.PmtTerm,'   --CS19                     
+                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,'
+                +' CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,ORD.PmtTerm,'   --CS19   --CS29                  
                 + CHAR(13) +                      
                 +'ORD.InvoiceAmount,'''','''','                       
                 +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', '  --50 --CS03                   
@@ -286,7 +289,8 @@ BEGIN
              + CHAR(13) +                      
              +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +                      
              +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'                      
-             +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,ORD.PmtTerm,'     --CS19                   
+             +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,'
+             +' CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,ORD.PmtTerm,'     --CS19  --CS29                 
              + CHAR(13) +                      
              +'ORD.InvoiceAmount,'''','''','                       
              +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', '  --50  --CS03                  

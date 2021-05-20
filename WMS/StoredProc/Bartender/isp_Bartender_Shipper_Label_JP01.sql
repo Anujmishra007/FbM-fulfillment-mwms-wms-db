@@ -20,6 +20,7 @@ GO
 /* 2017-01-24 1.1  TLTING01   SET ANSI NULLS Option                           */
 /* 2018-04-20 1.0  TLTING01   Dynamic SQL                                     */
 /* 2018-08-09 1.2  CSCHONG    WMS-5791 - add new field (CS01)                 */
+/* 2021-04-02 1.3  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS02)      */ 
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_Bartender_Shipper_Label_JP01]
@@ -174,7 +175,8 @@ BEGIN
                    + ' (ORD.Dischargeplace - (CONVERT(INT,ORD.Dischargeplace / 7) * 7))) ELSE '''' END ,'      --7
                    + 'CASE WHEN ISNULL(ORD.Dischargeplace,'''') <> '''' THEN (Substring(ORD.Dischargeplace,2,2) +''-'' + Substring(ORD.Dischargeplace,4,2) '
                    + ' + ''-'' + Substring(ORD.Dischargeplace,6,2)) ELSE '''' END,'     --8
-                   + ' ORD.USERDEFINE04,(Substring(ORD.USERDEFINE04,1,4) + ''-'' + Substring(ORD.USERDEFINE04,5,4)  +''-'' +  Substring(ORD.USERDEFINE04,9,4)),'            --10
+                  -- + ' ORD.USERDEFINE04,(Substring(ORD.USERDEFINE04,1,4) + ''-'' + Substring(ORD.USERDEFINE04,5,4)  +''-'' +  Substring(ORD.USERDEFINE04,9,4)),'  --10 --CS02
+                   + ' ORD.trackingno,(Substring(ORD.trackingno,1,4) + ''-'' + Substring(ORD.trackingno,5,4)  +''-'' +  Substring(ORD.trackingno,9,4)),'  --10 --CS02
                    + '  STO.company,STO.Phone1,(STO.Address1 + STO.Address2),STO.Zip,STO.B_Company, '                       --15
                    + CHAR(13) +
                    + ' STO.B_Phone1,STO.Susr2,STO.Susr3,STO.Susr5,STO.Notes1,'         --20
@@ -191,7 +193,7 @@ BEGIN
                    --+ ' JOIN PACKHEADER PACKH WITH (NOLOCK) ON PACKH.OrderKey= ORD.OrderKey'
                    --+ ' JOIN PACKDETAIL PACKDET WITH (NOLOCK) ON PACKH.Pickslipno = PACKDET.Pickslipno'
                    --+ ' JOIN PICKDETAIL PICKDET WITH (NOLOCK) ON PICKDET.caseid = PACKDET.labelno'
-                   + ' LEFT JOIN CARTONTRACK CT WITH (NOLOCK) ON CT.Trackingno = ORD.USERDEFINE04  '
+                   + ' LEFT JOIN CARTONTRACK CT WITH (NOLOCK) ON CT.Trackingno = ORD.trackingno  '            --CS02
                    + ' JOIN STORER STO WITH (NOLOCK) ON ORD.Storerkey=STO.Storerkey'
                    --+ ' LEFT JOIN PACKINFO PI WITH (NOLOCK) ON PI.Pickslipno = PACKDET.Pickslipno and PI.cartonno =  PACKDET.CartonNo'
                    + ' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.Listname = ''Timeslot'' AND C1.Short = ORD.UserDefine10'
