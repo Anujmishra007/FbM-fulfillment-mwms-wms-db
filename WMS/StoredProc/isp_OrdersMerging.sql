@@ -1,3 +1,5 @@
+
+
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_OrdersMerging]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_OrdersMerging]
@@ -39,7 +41,8 @@ GO
 /* 09-Jan-2019  kocy      1.9 Combine order Orders.UserDefine04 map to Child orders Orders.UserDefine04                 */  
 /* 28-Jan-2019  TLTING_ext 2.0  enlarge externorderkey field length                                                     */  
 /* 17-May-2019  kocy05    2.1  Ensure the combined child orders did not perform combined multiple time                  */          
-/* 09-Oct-2020  Josh      2.2  Split order change referance                                                             */    
+/* 09-Oct-2020  Josh      2.2  Split order change referance                                                             */          
+/* 23-Apr-2021  TLTING01  2.3  WMS-16887 handle case-sensitive on recipients - C_contact1                               */    
 /*----------------------------------------------------------------------------------------------------------------------*/                      
 CREATE PROCEDURE [dbo].[isp_OrdersMerging]                      
 (                      
@@ -232,7 +235,15 @@ BEGIN
                       +'WHERE StorerKey = @c_StorerKey '                      
                       +'AND Status = ''0'' AND SOStatus=''PENDCOMB'' '                      
                       +'AND ISNULL(ECOM_PRESALE_FLAG, '''')   <> ''PH'' '   --tlting           
-        +'AND ISNULL(OrderGroup,'''') <> ''CHILD_ORD'' '  -- kocy05          
+        +'AND ISNULL(OrderGroup,'''') <> ''CHILD_ORD'' '  -- kocy05    
+  
+  -- TLTING01
+  IF CHARINDEX ( 'C_contact1' , @c_AllColumns ) > 0
+  BEGIN    
+      SET @c_ExecSttmt = @c_ExecSttmt  + CHAR(13)
+                  + 'ALTER TABLE #Temp_Orders ALTER COLUMN C_contact1 NVARCHAR(100) COLLATE Chinese_PRC_CS_AS '+ CHAR(13)
+  END
+              
    SET @c_ExecSttmt = @c_ExecSttmt                      
                       +'SELECT '+@c_AllColumns+ ', ROW_NUMBER() OVER (ORDER BY ' +@c_AllColumns+') AS [Row_No]'                      
                       +'INTO #Temp_CombOrders '             --(search for combinable orders and set its row_no)                      
@@ -631,3 +642,5 @@ END
                                             
                       
 END 
+
+
