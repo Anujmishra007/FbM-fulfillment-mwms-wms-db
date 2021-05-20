@@ -17,6 +17,7 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2018-10-16 1.0  CSCHONG    Created (WMS-6445)                              */ 
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */  
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_HK_SHIPYMTJP_LULU]                               
@@ -50,16 +51,16 @@ BEGIN
       @n_MaxLineRec        INT, 
       @c_OHCompany         NVARCHAR(45),
       @c_OHAddress1        NVARCHAR(45),
-	  @c_OHAddress2        NVARCHAR(45),
-	  @c_OHAddress3        NVARCHAR(45),
-	  @c_OHAddress4        NVARCHAR(45),
+      @c_OHAddress2        NVARCHAR(45),
+      @c_OHAddress3        NVARCHAR(45),
+      @c_OHAddress4        NVARCHAR(45),
       @c_OHState           NVARCHAR(45),
       @c_ExtOrderkey       NVARCHAR(30),
       @c_OHTrackingno      NVARCHAR(45),
       @c_OHUDF04           NVARCHAR(45),
       @c_OHccity           NVARCHAR(45),
-	  @c_OHCCountry        NVARCHAR(45),
-	  @c_PUPC              NVARCHAR(30) 
+      @c_OHCCountry        NVARCHAR(45),
+      @c_PUPC              NVARCHAR(30) 
   
  Declare                           
       @c_SQL             NVARCHAR(4000),                
@@ -158,15 +159,15 @@ BEGIN
      
     
     SELECT distinct o.C_Company,ISNULL(o.C_Address1,'') , ISNULL(o.C_Address2,'') , ISNULL(o.C_Address3,''),ISNULL(o.C_Address4,''),
-    ISNULL(o.C_city,''),ISNULL(o.c_state,''),ISNULL(o.c_country,''), o.ExternOrderkey,ISNULL(o.Userdefine04,''),  --10
+    ISNULL(o.C_city,''),ISNULL(o.c_state,''),ISNULL(o.c_country,''), o.ExternOrderkey,ISNULL(o.trackingno,''),  --10  --CS01
     ISNULL(o.Trackingno,''),ISNULL(pd.UPC,'')
-     FROM PackHeader AS ph WITH (NOLOCK) 
-     JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
-     JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
-     JOIN Storer ST WITH (NOLOCK) ON ST.storerkey=o.storerkey  
-      WHERE o.StorerKey = @c_Sparm3
-	  AND PH.Orderkey = @c_Sparm4 
-	  AND pd.LabelNo =@c_Sparm2 AND pd.CartonNo = @c_Sparm5 
+    FROM PackHeader AS ph WITH (NOLOCK) 
+    JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
+    JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
+    JOIN Storer ST WITH (NOLOCK) ON ST.storerkey=o.storerkey  
+    WHERE o.StorerKey = @c_Sparm3
+    AND PH.Orderkey = @c_Sparm4 
+    AND pd.LabelNo =@c_Sparm2 AND pd.CartonNo = @c_Sparm5 
  
      
     
@@ -175,8 +176,8 @@ BEGIN
    OPEN CUR_StartRecLoop                    
                
    FETCH NEXT FROM CUR_StartRecLoop INTO  @c_OHCompany,@c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@c_OHccity,
-										  @c_OHState,@c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC
-								   
+                                @c_OHState,@c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC
+                           
                                                        
                  
    WHILE @@FETCH_STATUS <> -1                    
@@ -208,9 +209,9 @@ BEGIN
    END      
    
    FETCH NEXT FROM CUR_StartRecLoop INTO  @c_OHCompany,@c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@c_OHccity,
-										  @c_OHState,@c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC
+                                @c_OHState,@c_OHCCountry,@c_ExtOrderkey,@c_OHUDF04,@c_OHTrackingno,@c_PUPC
    
-   END										       
+   END                                     
                  
        
    SELECT * from #result WITH (NOLOCK)  

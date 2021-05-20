@@ -46,6 +46,7 @@ GO
 /* 2015-08-12 27.2 CSCHONG    SOS#349823 Change col40 logic (CS28)            */
 /* 2015-10-22 27.3 CSCHONG    SOS#355128 Add logic for qty=8 (CS29)           */
 /* 2015-11-04 27.4 CSCHONG    Change logic for col48 to barcode font (CS30)   */
+/* 2021-04-02 27.5 CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS31)      */ 
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_3]                       
@@ -71,7 +72,7 @@ BEGIN
                               
    DECLARE                  
       @c_OrderKey        NVARCHAR(10),                    
-      @c_ExternOrderKey  NVARCHAR(10),              
+      @c_ExternOrderKey  NVARCHAR(50),              
       @c_Deliverydate    DATETIME,              
       @c_ConsigneeKey    NVARCHAR(15),              
       @c_Company  NVARCHAR(45),              
@@ -229,20 +230,20 @@ IF ISNULL(@c_Sparm4,'0') > '0'
                 + CHAR(13) +          
                 +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +          
                 +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'          
-                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,' --ORD.PmtTerm,'     --CS19 --CS28      
+                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,' --ORD.PmtTerm,'   --CS19 --CS28 --CS31     
                 + CHAR(13) +   
                 +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'      --CS28 
                 +'ORD.InvoiceAmount,'''','''','           
-                +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,dbo.fn_Encode_IDA_Code128(ORD.userdefine04),ORD.DeliveryPlace,'''', '  --50  --CS03  --CS30    
+                +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,dbo.fn_Encode_IDA_Code128(ORD.trackingno),ORD.DeliveryPlace,'''', '  --50  --CS03  --CS30 --CS31   
                 +' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,LOC.Logicallocation,LOC.LOC '      --CS07   --CS09 --CS10 --CS13    
                 + CHAR(13) +            
                 + ' FROM ORDERS ORD WITH (NOLOCK) INNER JOIN ORDERDETAIL ORDDET WITH (NOLOCK)  ON ORD.ORDERKEY = ORDDET.ORDERKEY   '       
                 + ' INNER JOIN STORER STO WITH (NOLOCK) ON STO.STORERKEY = ORD.STORERKEY '        
                 + ' INNER JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.OrderKey = ORD.OrderKey and PD.OrderLineNumber = ORDDET.OrderLineNumber'        
                 + ' INNER JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = PD.LOC '    --CS07      
-                + ' WHERE ORD.LoadKey =''' + @c_Sparm1+ ''' '        
-                + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm2+ '''),'''') <> '''' THEN ''' + @c_Sparm2+ ''' ELSE ORD.OrderKey END'   --(CS02)        
-                + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm3+ '''),'''') <> '''' THEN ''' + @c_Sparm3+ ''' ELSE ORD.ShipperKey END'   --(CS02)        
+                + ' WHERE ORD.LoadKey = @c_Sparm1 '        
+                + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(@c_Sparm2),'''') <> '''' THEN  @c_Sparm2 ELSE ORD.OrderKey END'   --(CS02)        
+                + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(@c_Sparm3),'''') <> '''' THEN @c_Sparm3 ELSE ORD.ShipperKey END'   --(CS02)        
              --   + ' AND PD.QTY = ''1'' '        
               
    END           
@@ -254,18 +255,18 @@ IF ISNULL(@c_Sparm4,'0') > '0'
                 + CHAR(13) +          
                 +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +          
                 +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'          
-                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,'--ORD.PmtTerm,'   --CS19    --CS28     
+                +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,'--ORD.PmtTerm,'  --CS19  --CS28 --CS31     
                 + CHAR(13) +
                 +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'      --CS28           
                 +'ORD.InvoiceAmount,'''','''','           
-                +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,dbo.fn_Encode_IDA_Code128(ORD.userdefine04),ORD.DeliveryPlace,'''', '  --50 --CS03   --CS30    
+                +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,dbo.fn_Encode_IDA_Code128(ORD.trackingno),ORD.DeliveryPlace,'''', '  --50 --CS03   --CS30  --CS31  
                 +' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,'''','''' '   --CS10    --CS13    
                 + CHAR(13) +            
                 + ' FROM ORDERS ORD WITH (NOLOCK) '      
                 + ' INNER JOIN STORER STO WITH (NOLOCK) ON STO.STORERKEY = ORD.STORERKEY '       
-                + ' WHERE ORD.LoadKey =''' + @c_Sparm1+ ''' '        
-                + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm2+ '''),'''') <> '''' THEN ''' + @c_Sparm2+ ''' ELSE ORD.OrderKey END'   --(CS02)        
-                + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm3+ '''),'''') <> '''' THEN ''' + @c_Sparm3+ ''' ELSE ORD.ShipperKey END'   --(CS02)        
+                + ' WHERE ORD.LoadKey = @c_Sparm1 '        
+                + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(@c_Sparm2),'''') <> '''' THEN  @c_Sparm2 ELSE ORD.OrderKey END'   --(CS02)        
+                + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(@c_Sparm3),'''') <> '''' THEN @c_Sparm3 ELSE ORD.ShipperKey END'   --(CS02)        
   END         
  END        
  ELSE        
@@ -276,17 +277,17 @@ IF ISNULL(@c_Sparm4,'0') > '0'
              + CHAR(13) +          
              +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,ORD.c_Company,ORD.c_Address1,'+ CHAR(13) +          
              +'ISNULL(ORD.c_Address2,''''),ISNULL(ORD.C_Address3,''''),ORD.C_Address4,ORD.C_State,ORD.C_City,ORD.C_Zip,ORD.C_Contact1,ORD.C_Phone1,'          
-             +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.Userdefine04,ORD.Userdefine05,' --ORD.PmtTerm,'     --CS19   --CS28    
+             +'ISNULL(ORD.C_Phone2,''''),ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,CASE WHEN STO.VAT=''ITX'' THEN ORD.door ELSE  ORD.Userdefine03 END,ORD.trackingno,ORD.Userdefine05,' --ORD.PmtTerm,'  --CS19 --CS28 --CS31   
              + CHAR(13) + 
              +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'      --CS28          
              +'ORD.InvoiceAmount,'''','''','           
-             +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,dbo.fn_Encode_IDA_Code128(ORD.userdefine04),ORD.DeliveryPlace,'''', '  --50  --CS03 --CS30     
+             +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,dbo.fn_Encode_IDA_Code128(ORD.trackingno),ORD.DeliveryPlace,'''', '  --50  --CS03 --CS30 --CS31    
              +' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,'''','''' '     --CS10     --CS13  
              + CHAR(13) +            
              + ' FROM ORDERS ORD (NOLOCK) INNER JOIN STORER STO (NOLOCK) ON STO.STORERKEY = ORD.STORERKEY '        
-             + ' WHERE ORD.LoadKey =''' + @c_Sparm1+ ''' '        
-              + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm2+ '''),'''') <> '''' THEN ''' + @c_Sparm2+ ''' ELSE ORD.OrderKey END'   --(CS02)        
-             + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm3+ '''),'''') <> '''' THEN ''' + @c_Sparm3+ ''' ELSE ORD.ShipperKey END'   --(CS02)        
+             + ' WHERE ORD.LoadKey = @c_Sparm1'        
+             + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM( @c_Sparm2),'''') <> '''' THEN @c_Sparm2 ELSE ORD.OrderKey END'   --(CS02)        
+             + ' AND ORD.ShipperKey = CASE WHEN ISNULL(RTRIM(@c_Sparm3),'''') <> '''' THEN @c_Sparm3 ELSE ORD.ShipperKey END'   --(CS02)        
  END        
 --END          
       IF @b_debug = 1  
@@ -301,9 +302,20 @@ IF ISNULL(@c_Sparm4,'0') > '0'
              +',Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54'+ CHAR(13) +           
              + ',Col55,Col56,Col57,Col58,Col59,Col60) '          
     
-   SET @c_SQL = @c_SQL + @c_SQLJOIN        
+   SET @c_SQL = @c_SQL + @c_SQLJOIN    
+   --CS31 Start
+    SET @c_ExecArguments = N'  @c_Sparm1           NVARCHAR(80)'    
+                          + ', @c_Sparm2           NVARCHAR(80) '    
+                          + ', @c_Sparm3           NVARCHAR(80)'   
+                         
+                         
+   EXEC sp_ExecuteSql     @c_SQL     
+                        , @c_ExecArguments    
+                        , @c_Sparm1    
+                        , @c_Sparm2    
+                        , @c_Sparm3     
         
-   EXEC sp_executesql @c_SQL          
+  -- EXEC sp_executesql @c_SQL          
         
    IF @b_debug = 1  
    BEGIN  

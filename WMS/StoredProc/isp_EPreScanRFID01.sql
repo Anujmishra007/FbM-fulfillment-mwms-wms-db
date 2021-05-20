@@ -19,7 +19,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : of_getprescanrfidsp                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.0                                                    */        
+/* PVCS Version: 1.1                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -27,7 +27,9 @@ GO
 /*                                                                      */        
 /* Updates:                                                             */        
 /* Date        Author   Ver   Purposes                                  */        
-/* 13-OCT-2020 Wan      1.0   Created                                   */         
+/* 13-OCT-2020 Wan      1.0   Created                                   */  
+/* 11-MAY-2021 Wan01    1.1   WMS-17001 - [CN] NIKE_O2_Ecompacking_None */
+/*                            RFID SKU Skip Validation_CR               */
 /************************************************************************/        
 CREATE PROC [dbo].[isp_EPreScanRFID01]        
          @c_TaskBatchNo NVARCHAR(10)         
@@ -52,7 +54,27 @@ BEGIN
    SET @b_Success  = 0        
    SET @n_err      = 0        
    SET @c_errmsg   = ''        
-        
+   
+   --(Wan01) - START
+   IF @c_Sku = ''
+   BEGIN
+      IF EXISTS (SELECT 1
+                 FROM dbo.PackTask AS pt WITH (NOLOCK)
+                 JOIN dbo.PICKDETAIL AS p WITH (NOLOCK)  ON pt.OrderKey = p.Orderkey
+                 JOIN dbo.SkuInfo    AS si WITH (NOLOCK) ON  si.Storerkey = p.Storerkey
+                                                         AND si.Sku = p.Sku
+                 WHERE pt.TaskBatchNo = @c_TaskBatchNo
+                 AND si.ExtendedField03 = 'rfid'
+                 )
+                 
+      BEGIN
+         SET @b_Success = 1         
+      END
+      
+      GOTO QUIT_SP      
+   END
+   --(Wan01) - END
+     
    SET @c_ExtendedField03 = ''        
    SELECT @c_ExtendedField03 = SIF.ExtendedField03        
    FROM SKUINFO SIF WITH (NOLOCK)        

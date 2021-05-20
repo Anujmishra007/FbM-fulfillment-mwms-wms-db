@@ -18,7 +18,7 @@ GO
 /*          : isp_Ecom_QueryRules                                       */
 /*          : isp_Ecom_GetValidQtyPacked                                */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,8 @@ GO
 /* 21-Jul-2017 Shong    1.1  Performance Tuning                         */
 /* 02-Oct-2017 Wan01    1.2  Performance Tuning                         */
 /* 28-AUG-2017 Wan02    1.3  Performance Tuning                         */
+/* 04-MAR-2021 Wan03    1.4  WMS-16390 - [CN] NIKE_O2_Ecompacking_Check */
+/*                           _Pickdetail_status_CR                      */
 /************************************************************************/
 CREATE FUNCTION [dbo].[fnc_ECOM_GetPackOrderStatus] 
   ( 
@@ -163,7 +165,7 @@ BEGIN
       FROM PACKTASKDETAIL AS PTD WITH (NOLOCK)
       WHERE PTD.TaskBatchNo = @c_TaskBatchNo
       AND PTD.Orderkey = @c_OrderKey
-      AND PTD.[Status] NOT IN ('X','9')
+      AND PTD.[Status] NOT IN ('P','X','9')        --(Wan03)
       GROUP BY PTD.SKU
 
       UNION ALL

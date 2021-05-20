@@ -27,7 +27,8 @@ GO
 /*                            tote Consolidation (CS06)                       */  
 /* 2017-02-27 2.5  CSCHONG    Remove SET ANSI_WARNINGS OFF (CS07)             */  
 /* 2017-08-30 2.6  CSCHONG    Scripts tunning (CS08)                          */ 
-/* 2020-03-19 2.7  WLChooi    WMS-12525 - Modify Col02, Add Col37-40 (WL01)   */             
+/* 2020-03-19 2.7  WLChooi    WMS-12525 - Modify Col02, Add Col37-40 (WL01)   */ 
+/* 2021-04-02 2.8  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS09)      */             
 /******************************************************************************/                          
                             
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_DSTORE_1]                                 
@@ -77,7 +78,7 @@ BEGIN
       @C_FromCity1       NVARCHAR(45),            
       @C_FromCountry1    NVARCHAR(30),            
       @c_OrderKey        NVARCHAR(10),                              
-      @c_ExternOrderKey  NVARCHAR(10),                        
+      @c_ExternOrderKey  NVARCHAR(50),                        
       @c_Deliverydate    DATETIME,                        
       @c_caseid          NVARCHAR(20),             
       @c_ORDUDef10       NCHAR(2),            
@@ -696,7 +697,7 @@ BEGIN
             
             SET @n_cntOrdUdef04 = 0        
             INSERT INTO #Order (userdefine04)        
-            SELECT DISTINCT ORD.userdefine04  
+            SELECT DISTINCT ORD.trackingno             --CS09
             FROM pickdetail PD WITH (nolock)  
             JOIN orders ORD WITH (nolock) on ord.orderkey=pd.orderkey  
             WHERE caseid=@c_caseid        

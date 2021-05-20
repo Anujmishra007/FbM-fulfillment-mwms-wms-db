@@ -17,15 +17,16 @@ GO
 /*                                                                      */
 /* Parameters:                                                          */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author Ver.  Purposes                                   */
-/* 13-MAY-2106  Wan01  1.1   Specify SP parameters                      */  
+/* Date        Author Ver.  Purposes                                    */
+/* 13-MAY-2016 Wan01  1.1   Specify SP parameters                       */  
+/* 11-MAR-2021 Wan02  1.2   WMS-16026 - PB-Standardize TrackingNo       */
 /************************************************************************/
 
 CREATE PROC isp_DuplicateCarton
@@ -163,14 +164,15 @@ BEGIN
               DELETE FROM PACKINFO WHERE Pickslipno = @c_Pickslipno AND Cartonno = @n_NewCartonNo
          END
 
-         INSERT INTO PACKINFO (Pickslipno, Cartonno, Weight, Cube, Qty, CartonType, Refno)
+         INSERT INTO PACKINFO (Pickslipno, Cartonno, Weight, Cube, Qty, CartonType, Refno, TrackingNo)   --(Wan02)
          SELECT Pickslipno, 
                 @n_NewCartonNo, 
                 Weight, 
                 Cube, 
                 Qty, 
                 CartonType, 
-                Refno
+                Refno,
+                TrackingNo                                                                               --(Wan02)
          FROM PACKINFO (NOLOCK)
          WHERE Pickslipno = @c_Pickslipno
          AND CartonNo = @n_FromCartonNo

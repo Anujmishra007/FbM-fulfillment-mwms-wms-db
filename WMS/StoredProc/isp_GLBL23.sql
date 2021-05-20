@@ -20,7 +20,7 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenLabelNo_Wrapper                              */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
+/* 2021-04-12  Wan02    1.1   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/
 CREATE PROC isp_GLBL23 ( 
          @c_PickSlipNo   NVARCHAR(10) 
@@ -98,7 +99,7 @@ BEGIN
    IF @c_Orderkey <> ''
    BEGIN
       SELECT @c_ShipperKey = O.ShipperKey
-            ,@c_CTNTrackNo = ISNULL(RTRIM(O.Userdefine04),'')
+            ,@c_CTNTrackNo = CASE WHEN ISNULL(RTRIM(O.TrackingNo),'') <> '' THEN O.TrackingNo ELSE ISNULL(RTRIM(O.UserDefine04),'') END   --Wan02
       FROM ORDERS O WITH (NOLOCK)
       WHERE O.Orderkey = @c_Orderkey
 
@@ -168,14 +169,6 @@ BEGIN
             END 
          END
          SET @c_LabelNo = @c_CTNTrackNo 
-      --END
-      --ELSE
-      --BEGIN
-      --   SELECT @c_LabelNo = ISNULL(RTRIM(RefNo),'')
-      --   FROM PACKINFO WITH (NOLOCK)
-      --   WHERE PickSlipNo = @c_PickSlipNo
-      --   AND   CartonNo = @n_CartonNo
-      --END
    END
    ELSE  
    BEGIN  
@@ -206,7 +199,7 @@ BEGIN
             SET @c_errmsg = 'NSQL ' + CONVERT(NCHAR(5),@n_Err) + ': Vat is not a numeric value. (isp_GLBL23)'    
             GOTO QUIT_SP    
          END     
-         --(Wan02) - Fixed if not numeric    
+         --(Wan01) - Fixed if not numeric    
     
          SELECT @c_PackNo_Long = Long     
          FROM  CODELKUP (NOLOCK)    

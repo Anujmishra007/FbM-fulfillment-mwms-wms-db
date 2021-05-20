@@ -20,14 +20,15 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenLabelNo_Wrapper                              */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Ver.  Purposes                                  */
+/* Date        Author   Ver.  Purposes                                  */
+/* 2021-04-12  Wan01    1.1   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/
 
 CREATE PROC isp_GLBL10 ( 
@@ -59,7 +60,7 @@ BEGIN
    SET @c_ErrMsg           = ''
    
    SET @c_LabelNo = ''
-   SELECT @c_LabelNo = ISNULL(RTRIM(RefNo),'')
+   SELECT @c_LabelNo = CASE WHEN ISNULL(TrackingNo,'') <> '' THEN RTRIM(TrackingNo) ELSE ISNULL(RTRIM(RefNo),'') END --(Wan01)
    FROM PACKINFO WITH (NOLOCK)
    WHERE PickSlipNo = @c_PickSlipNo
    AND   CartonNo = @n_CartonNo

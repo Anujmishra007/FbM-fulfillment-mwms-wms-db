@@ -17,6 +17,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 17-07-2020  James     1.0  WMS-14152. Created                        */
+/* 2021-05-18  James     1.1  Perf tune (james01)                       */
 /************************************************************************/
 CREATE PROC [dbo].[nspTTMRP16]
     @c_UserID    NVARCHAR(18)
@@ -74,6 +75,7 @@ BEGIN
       ,@c_LastFromLoc   NVARCHAR( 10)
       ,@c_LastPririoty  NVARCHAR( 10)
       ,@n_NoOfUserWorkingOnAisle   INT
+      ,@cTempTaskDetailKey NVARCHAR( 10)
       
     SELECT 
        @b_debug = 0
@@ -92,17 +94,38 @@ BEGIN
    WHERE UserName = @c_UserID
       
    -- Reset in-progress task, to be refetch, if connection broken
-   UPDATE TaskDetail SET
-      Status = '0'
+   -- (james01)
+   DECLARE @cCurUpdTask CURSOR
+   SET @cCurUpdTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+   SELECT TaskDetailKey
+   FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE UserKey = @c_UserID
-      AND Status = '3'
-   IF @@ERROR <> 0
+   AND   [Status] = '3'
+   OPEN @cCurUpdTask
+   FETCH NEXT FROM @cCurUpdTask INTO @cTempTaskDetailKey
+   WHILE @@FETCH_STATUS = 0
    BEGIN
-      SET @n_continue = 3
-      SET @n_err = 128851
-      SET @c_errmsg = rdt.rdtgetmessage( @n_err, @c_LangCode, 'DSP') --UpdTaskDetFail
-      GOTO Quit 
+      UPDATE TaskDetail SET
+         Status = '0',
+         EditWho = @c_UserID,
+         EditDate = GETDATE()
+      WHERE TaskDetailKey = @cTempTaskDetailKey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 128851
+         SET @c_errmsg = rdt.rdtgetmessage( @n_err, @c_LangCode, 'DSP') --UpdTaskDetFail
+         GOTO Quit 
+      END
+   
+      FETCH NEXT FROM @cCurUpdTask INTO @cTempTaskDetailKey
    END
+   --UPDATE TaskDetail SET
+   --   Status = '0'
+   --WHERE UserKey = @c_UserID
+   --   AND Status = '3'
+
 
    
 

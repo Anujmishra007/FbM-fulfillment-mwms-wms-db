@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */
+/* 12-APR-2021 Wan01    1.1   WMS-16026 - PB-Standardize TrackingNo     */
 /************************************************************************/
 CREATE PROC ispEPAKSaveEnd01
            @c_PickSlipNo   NVARCHAR(10)
@@ -44,18 +45,30 @@ BEGIN
    DECLARE  
            @n_StartTCnt       INT   = @@TRANCOUNT
          , @n_Continue        INT   = 1
+         
+         , @n_ExistCnt        INT   = 0                                           --Wan01
 
    SET @n_err      = 0
    SET @c_errmsg   = ''
-   IF EXISTS ( SELECT 1
-               FROM PACKINFO PIF WITH (NOLOCK)
-               JOIN ORDERS OH WITH (NOLOCK) ON PIF.RefNo = OH.UserDefine04
-               WHERE PIF.PickSlipNo = @c_PickSlipNo
-               AND   PIF.RefNo <> '' AND PIF.RefNo IS NOT NULL
-               AND   OH.Storerkey = @c_Storerkey
-               AND   OH.TrackingNo <> ''
-               AND   OH.[Status] = '5'
-             ) 
+   
+   --(Wan01) 
+   ; WITH PIF ( PickSlipNo, TrackingNo ) AS 
+   ( SELECT PI.PickSlipNo
+           ,TrackingNo = CASE WHEN ISNULL(PI.TrackingNo,'') <> '' THEN RTRIM(PI.TrackingNo) ELSE ISNULL(RTRIM(PI.RefNo),'') END  --(Wan01)
+     FROM dbo.PackInfo AS PI WITH (NOLOCK)
+     WHERE PI.PickSlipNo = @c_PickSlipNo
+   )
+   
+   SELECT TOP 1 @n_ExistCnt = 1                                                  --Wan01                                                   
+   FROM PIF WITH (NOLOCK)
+   JOIN ORDERS OH WITH (NOLOCK) ON PIF.TrackingNo = OH.UserDefine04              --Wan01
+   --WHERE PIF.PickSlipNo = @c_PickSlipNo                                        --Wan01
+   WHERE PIF.TrackingNo <> ''                                                    --Wan01
+   AND   OH.Storerkey = @c_Storerkey
+   AND   OH.TrackingNo <> ''
+   AND   OH.[Status] = '5'
+               
+   IF @n_ExistCnt = 1                                                            --Wan01
    BEGIN
       SET @c_WarningMsg = 'Duplicate Tracking No # Found.'  
    END

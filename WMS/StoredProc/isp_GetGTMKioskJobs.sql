@@ -31,7 +31,7 @@ GO
 /* 21-DEC-2015  WAN03   1.22  Project Merlion - GTM Kiosk Enhancement   */ 
 /* 26-FEB-2016  WAN04   1.3   Get status '5' job if B pallet had been   */
 /*                            released & move out but C released  fail  */
-/* 04-JAN-2018  Wan05   1.4   WMS-7286-PRHK ¨C GTM Picking For COPACK Sku*/
+/* 04-JAN-2018  Wan05   1.4   WMS-7286-PRHK - GTM Picking For COPACK Sku*/
 /************************************************************************/
 CREATE PROC isp_GetGTMKioskJobs
             @c_GTMWorkStation NVARCHAR(10) 

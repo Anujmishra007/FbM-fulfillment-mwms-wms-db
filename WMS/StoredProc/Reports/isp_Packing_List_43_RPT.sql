@@ -23,6 +23,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)*/
 /************************************************************************/
 CREATE PROC isp_Packing_List_43_rpt
             (@c_loadkey NVARCHAR(10),
@@ -153,7 +154,7 @@ BEGIN
                                     WHEN 'JD' THEN N'JD-京东'
                                     END                                               
               ,   Ploc           = PD.Loc                            
-              ,   ordudef04   = ISNULL(RTRIM(O.userdefine04), '')                        
+              ,   ordudef04      = ISNULL(RTRIM(O.TrackingNo), '') --ISNULL(RTRIM(O.userdefine04), '')               --CS01         
               ,   SKU            = OD.Sku
               ,   SDESCR         = S.descr
               ,   Altsku         = S.altsku
@@ -191,7 +192,8 @@ BEGIN
                                     WHEN 'JD' THEN N'JD-京东'
                                     END                                               
                  ,  PD.Loc        
-                 ,  ISNULL(RTRIM(O.userdefine04), '')    
+                 --,  ISNULL(RTRIM(O.userdefine04), '')      --CS01
+                 ,  ISNULL(RTRIM(O.TrackingNo), '')          --CS01
                  , OD.sku 
                  , S.descr
                  ,s.altsku

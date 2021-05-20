@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver.  Purposes                                        */    
 /* 28-MAR-2017 Wan01    1.1   WMS-1448 - Levis - CR for ECOM packing list     */
 /* 03-JUL-2017 CSCHONG  1.2   MMS-2287 - Revise field logic (CS01)            */
+/* 09-Apr-2021 CSCHONG  1.3   WMS-16024 PB-Standardize TrackingNo (CS02)      */
 /******************************************************************************/     
   
 CREATE PROC [dbo].[isp_Packing_List_31_rdt]             
@@ -117,7 +118,7 @@ BEGIN
                         )             
    SELECT ISNULL(OH.c_Contact1,''),(OH.C_address2 + OH.C_address3 + OH.C_address4),
                    ISNULL(OH.Notes2,''),CONVERT(NVARCHAR(10),OH.OrderDate,111),
-                   C.UDF01,PD.LOC,s.size,ISNULL(OH.Userdefine04,''),S.MANUFACTURERSKU,PD.qty,OH.OrderKey,
+                   C.UDF01,PD.LOC,s.size,ISNULL(OH.TrackingNo,''),S.MANUFACTURERSKU,PD.qty,OH.OrderKey,   --CS02
                    S.Style,
                    /*CS01 star*/
                    CASE WHEN OH.shipperkey = 'SF' THEN N'顺丰速运'

@@ -23,7 +23,8 @@ GO
 /* Data Modifications:                                                     */          
 /*                                                                         */          
 /* Updates:                                                                */          
-/* Date         Author     Ver  Purposes                                   */           
+/* Date         Author     Ver  Purposes                                   */   
+/* 2021-Apr-09  CSCHONG    1.1  WMS-16024 PB-Standardize TrackingNo (CS01) */        
 /***************************************************************************/          
 CREATE PROC [dbo].[isp_ecom_express_delivery_rpt]          
            @c_ContainerKey    NVARCHAR(60),          
@@ -61,7 +62,8 @@ BEGIN
                        ' ExternMbolKey  =   MBOL.ExternMbolKey,  ' +
                        ' CtnCaseID      =   COUNT(PAD.CaseId), ' +
                        ' Shipperkey     =   ORD.ShipperKey, ' +
-                       ' OHUDF04        =   ORD.UserDefine04, ' +
+                      -- ' OHUDF04        =   ORD.UserDefine04, ' +    --CS01
+                       ' OHUDF04        = ORD.Trackingno, ' +  --CS01
                        ' ExtOrdKey      =   ORD.ExternOrderKey, ' +
                        ' PIWGT          =   PI.Weight  ' +
                        ' FROM CONTAINERDETAIL COD WITH (NOLOCK)  ' +
@@ -88,7 +90,7 @@ BEGIN
   END
             --WHERE COD.ContainerKey=@c_ContainerKey
             --AND   COD.PalletKey=@c_PalletKey
-  SET @c_SQLGroup=N' GROUP BY  MBOL.MbolKey,MBOL.ExternMbolKey,ORD.ShipperKey,ORD.UserDefine04,ORD.ExternOrderKey,PI.Weight '
+  SET @c_SQLGroup=N' GROUP BY  MBOL.MbolKey,MBOL.ExternMbolKey,ORD.ShipperKey,ORD.trackingno,ORD.ExternOrderKey,PI.Weight '   --CS01
   SET @c_SQLOrdBy= N' ORDER BY ORD.ExternOrderKey '
 
    SET @c_ExecArguments = N'@c_ContainerKey     NVARCHAR(60),'

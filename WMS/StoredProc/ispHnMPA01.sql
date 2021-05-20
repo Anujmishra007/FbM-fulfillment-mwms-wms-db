@@ -83,7 +83,7 @@ BEGIN
    BEGIN
       /* Rules
          There are 4 input parameters to search the suggest Loc.
-         1#---Loc.Category=’other’
+         1#---Loc.Category=other
          2#---SKU.SKU 
          3#--- Lotattribute.Lottable01 
          4#--- Lotattribute.Lottable02 

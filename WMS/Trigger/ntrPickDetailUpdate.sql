@@ -26,7 +26,7 @@ GO
 /*                                                                      */
 /* Called By: When records updated                                      */
 /*                                                                      */
-/* PVCS Version: 3.8                                                    */
+/* PVCS Version: 3.9                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -97,6 +97,8 @@ GO
 /* 16-May-2019  CheeMun 3.7   INC0683213 - Cater for ShowPicks update   */
 /*                            status syn ChannelInv.QtyAllocated        */ 
 /* 23-JUL-2019  Wan03   3.8   ChannelInventoryMgmt use fnc_SelectGetRight*/
+/* 04-MAR-2021  Wan04   3.9   WMS-16390 - [CN] NIKE_O2_Ecompacking_Check*/
+/*                            _Pickdetail_status_CR                     */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -152,6 +154,8 @@ DECLARE   @cPickDetailKey NVARCHAR(10)     -- (james02)
         , @cTD_DropID     NVARCHAR(18)     -- (james02)
         , @cTaskDetailKey NVARCHAR(10)     -- (james02)
         , @c_PDKey        NVARCHAR(10)     -- SOS# 264916
+        
+        , @c_EPACK4PickedOrder         NVARCHAR(30)   --(Wan04)
 
 --(Wan01) - START
          ,@c_AllocateByConsNewExpiry   NVARCHAR(10)
@@ -1306,6 +1310,76 @@ BEGIN
      GOTO QUIT
    END
 END -- UPDATE ORDERDETAIL
+
+--(Wan04) - START
+IF @n_Continue IN ( 1 ,2 ) AND UPDATE(STATUS) AND  -- UPDATE PACKTASKDETAIL
+   EXISTS (SELECT 1 FROM INSERTED INS JOIN DELETED DEL ON INS.PickdetailKey = DEL.PickDetailKey 
+           WHERE INS.[STATUS] <> DEL.[STATUS] 
+           AND INS.[STATUS] = '3'
+           )
+BEGIN
+   
+   DECLARE @tPickOrd TABLE (Orderkey   NVARCHAR(10) NOT NULL DEFAULT(''))
+   
+   DECLARE @tFullPickOrd TABLE (Orderkey   NVARCHAR(10) NOT NULL DEFAULT(''))
+   
+   INSERT INTO @tPickOrd (Orderkey)
+   SELECT INS.Orderkey 
+   FROM INSERTED INS JOIN DELETED DEL ON INS.PickdetailKey = DEL.PickDetailKey 
+   JOIN LOC L WITH (NOLOCK) ON INS.Loc = L.Loc
+   CROSS APPLY fnc_SelectGetRight (L.Facility, INS.Storerkey, '', 'EPACK4PickedOrder') SC
+   WHERE INS.[STATUS] <> DEL.[STATUS]
+   AND INS.[STATUS] = '3'   
+   AND SC.Authority = '1'
+   GROUP BY INS.Orderkey 
+     
+   IF EXISTS (SELECT 1 
+              FROM @tPickOrd pck
+              JOIN PACKTASKDETAIL AS p WITH (NOLOCK) ON pck.Orderkey = p.Orderkey
+              WHERE p.[Status] = 'P')
+   BEGIN
+      INSERT INTO @tFullPickOrd ( Orderkey )
+      SELECT pd.Orderkey
+      FROM @tPICKORD pck
+      JOIN PICKDETAIL AS pd WITH (NOLOCK) ON pd.OrderKey = pck.Orderkey
+      GROUP BY pd.OrderKey
+      HAVING MIN(pd.[Status]) BETWEEN '3' AND '5'
+      AND MAX(pd.[Status]) < '9' 
+      AND MAX(pd.ShipFlag) NOT IN ('Y')
+
+      IF EXISTS (  SELECT 1 FROM @tFullPickOrd fpck JOIN PACKTASKDETAIL AS p WITH (NOLOCK) ON fpck.Orderkey = p.Orderkey
+                   WHERE  p.[Status] = 'P'
+      )
+      BEGIN
+         ;WITH PTD ( RowRef )
+          AS ( SELECT RowRef FROM @tFullPickOrd fpck JOIN PACKTASKDETAIL AS p WITH (NOLOCK) ON fpck.Orderkey = p.Orderkey
+               WHERE  p.[Status] = 'P'
+             )
+                 
+         UPDATE p
+            SET [Status] = '0'
+            , Editwho  = SUSER_SNAME()
+            , Editdate = GETDATE()
+            , Trafficcop = NULL
+         FROM PACKTASKDETAIL AS p 
+         JOIN PTD ON PTD.RowRef = p.RowRef
+         WHERE p.[Status] = 'P'
+               
+         SET @n_err = @@ERROR
+         IF @n_err <> 0
+         BEGIN
+            SET @n_continue = 3
+            SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+            SET @n_err=61621   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0))
+                              + ': Update Failed On PACKTASKDETAIL. (ntrPickDetailUpdate) ( SQLSvr MESSAGE='
+                              + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+         END
+      END
+   END
+END 
+--(Wan04) - END
+
 IF @b_debug=1
 BEGIN
     SELECT 'Should We Update Inventory Here??'

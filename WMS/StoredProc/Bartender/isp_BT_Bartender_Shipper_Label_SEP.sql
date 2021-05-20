@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */               
 /*                                                                            */               
 /* Date       Rev  Author     Purposes                                        */               
-/* 2020-05-14 1.0  CSCHONG    Created(WMS-13020)                              */               
+/* 2020-05-14 1.0  CSCHONG    Created(WMS-13020)                              */    
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */           
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_SEP]                     
@@ -39,7 +40,7 @@ BEGIN
                             
    DECLARE                
       @c_OrderKey        NVARCHAR(10),                  
-      @c_ExternOrderKey  NVARCHAR(10),            
+      @c_ExternOrderKey  NVARCHAR(50),            
       @c_Deliverydate    DATETIME,            
       @c_ConsigneeKey    NVARCHAR(15),            
       @c_Company         NVARCHAR(45),            
@@ -198,7 +199,7 @@ IF ISNULL(@c_Sparm4,'0') > '0'
              + CHAR(13) +        
              +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,'''','''','+ CHAR(13) +        
              +''''','''','''','''','''','''','''','''','        
-             +''''',ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,ORD.Userdefine03,ORD.Userdefine04,ORD.Userdefine05,ORD.PmtTerm,'          
+             +''''',ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,ORD.Userdefine03,ORD.trackingno,ORD.Userdefine05,ORD.PmtTerm,'      --CS01    
              + CHAR(13) +        
              +'ORD.InvoiceAmount,'''','''','         
              +'ORD.ShipperKey,'''','''','''','''',ORD.DeliveryPlace,'''', '  --50       
@@ -222,7 +223,7 @@ IF ISNULL(@c_Sparm4,'0') > '0'
              + CHAR(13) +        
              +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,'''','''','+ CHAR(13) +        
              +''''','''','''','''','''','''','''','''','        
-             +''''',ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,ORD.Userdefine03,ORD.Userdefine04,ORD.Userdefine05,ORD.PmtTerm,'          
+             +''''',ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,ORD.Userdefine03,ORD.trackingno,ORD.Userdefine05,ORD.PmtTerm,'       --CS01   
              + CHAR(13) +       
              +'ORD.InvoiceAmount,'''','''','         
              +'ORD.ShipperKey,'''','''','''','''',ORD.DeliveryPlace,'''', '  --50        
@@ -243,7 +244,7 @@ IF ISNULL(@c_Sparm4,'0') > '0'
              + CHAR(13) +        
              +'STO.City,STO.Zip,STO.Contact1,STO.Phone1,STO.phone2,ORD.Consigneekey,'''','''','+ CHAR(13) +        
              +''''','''','''','''','''','''','''','''','        
-             +''''',ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,ORD.Userdefine03,ORD.Userdefine04,ORD.Userdefine05,ORD.PmtTerm,'          
+             +''''',ORD.M_Company,ORD.Userdefine01,ORD.Userdefine02,ORD.Userdefine03,ORD.trackingno,ORD.Userdefine05,ORD.PmtTerm,'    --CS01     
              + CHAR(13) +        
              +'ORD.InvoiceAmount,'''','''','         
              +'ORD.ShipperKey,'''','''','''','''',ORD.DeliveryPlace,'''', '  --50        
@@ -376,40 +377,40 @@ BEGIN
        SET  @c_Col45     = @c_sku
        SET  @c_Col46     = @c_PLOC
    END
+   --CS01 START --remove
+   --IF ISNULL(@c_Udef04,'') = ''    
+   --BEGIN    
+   --   SET @c_TrackingNo = ''    
+   --   SET @n_RowRef = 0    
 
-   IF ISNULL(@c_Udef04,'') = ''    
-   BEGIN    
-      SET @c_TrackingNo = ''    
-      SET @n_RowRef = 0    
-
-      SELECT TOP 1 @c_TrackingNo = CT.TrackingNO,    
-                   @n_RowRef     = CT.RowRef    
-      FROM ORDERS ORD WITH (NOLOCK)   
-      JOIN CARTONTRACK CT WITH (NOLOCK) ON ORD.ShipperKey = CT.CarrierName    
-      JOIN STORER STO WITH (NOLOCK) ON STO.Secondary = CT.Keyname and STO.Storerkey=ORD.Storerkey    
-      WHERE ORD.OrderKey = @c_OrderKey    
-      AND Isnull(CT.CarrierRef2,'')=''    
-      ORDER BY CT.RowRef     
+   --   SELECT TOP 1 @c_TrackingNo = CT.TrackingNO,    
+   --                @n_RowRef     = CT.RowRef    
+   --   FROM ORDERS ORD WITH (NOLOCK)   
+   --   JOIN CARTONTRACK CT WITH (NOLOCK) ON ORD.ShipperKey = CT.CarrierName    
+   --   JOIN STORER STO WITH (NOLOCK) ON STO.Secondary = CT.Keyname and STO.Storerkey=ORD.Storerkey    
+   --   WHERE ORD.OrderKey = @c_OrderKey    
+   --   AND Isnull(CT.CarrierRef2,'')=''    
+   --   ORDER BY CT.RowRef     
         
-       IF @b_debug = '1'    
-       BEGIN    
-         PRINT 'Tracking no : ' + @c_TrackingNo + ' For Orderkey : ' + @c_OrderKey    
-         PRINT ' RowRef No : ' + convert(varchar(10),@n_RowRef)      
-       END    
+   --    IF @b_debug = '1'    
+   --    BEGIN    
+   --      PRINT 'Tracking no : ' + @c_TrackingNo + ' For Orderkey : ' + @c_OrderKey    
+   --      PRINT ' RowRef No : ' + convert(varchar(10),@n_RowRef)      
+   --    END    
   
-      UPDATE ORDERS WITH (ROWLOCK)    
-      SET Userdefine04 = @c_TrackingNo, TrafficCop = NULL      
-      WHERE ORDERKEY = @c_OrderKey    
+   --   UPDATE ORDERS WITH (ROWLOCK)    
+   --   SET Userdefine04 = @c_TrackingNo, TrafficCop = NULL      
+   --   WHERE ORDERKEY = @c_OrderKey    
   
-      UPDATE CARTONTRACK WITH (ROWLOCK)    
-      SET LabelNo = @c_OrderKey, CarrierRef2 = 'GET'     
-      WHERE RowRef = @n_RowRef    
+   --   UPDATE CARTONTRACK WITH (ROWLOCK)    
+   --   SET LabelNo = @c_OrderKey, CarrierRef2 = 'GET'     
+   --   WHERE RowRef = @n_RowRef    
   
-      UPDATE #Result          
-      SET Col38 = @c_TrackingNo                  
-      WHERE Col02=@c_OrderKey     
-   END    
-             
+   --   UPDATE #Result          
+   --   SET Col38 = @c_TrackingNo                  
+   --   WHERE Col02=@c_OrderKey     
+   --END    
+   --CS01 END          
    UPDATE #Result          
    SET Col23 = @c_Company,
        Col24 = @C_Address1,

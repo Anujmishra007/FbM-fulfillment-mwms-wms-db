@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2020-12-23 1.0  WLChooi    Created (WMS-15889)                             */                 
+/* 2020-12-23 1.0  WLChooi    Created (WMS-15889)                             */            
+/* 2021-04-02 1.3  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */      
 /******************************************************************************/                              
 CREATE PROC [dbo].[isp_Bartender_HK_SHIPSFBZLB_GetParm]                      
 (  @parm01            NVARCHAR(250),              
@@ -79,7 +80,7 @@ BEGIN
                     ' JOIN ORDERS ORD (NOLOCK) ON ORD.ORDERKEY = PH.ORDERKEY ' + CHAR(13) +
                     ' WHERE ORD.Storerkey = @Parm01 '+ CHAR(13) +
                     ' AND PH.Orderkey = @Parm02 ' + CHAR(13) + 
-                    ' AND ORD.UserDefine04 = @Parm03 AND PDET.LabelNo = @Parm04'-- AND PDET.CartonNo = @Parm05 '
+                    ' AND ORD.trackingno = @Parm03 AND PDET.LabelNo = @Parm04'-- AND PDET.CartonNo = @Parm05 '  --CS01
     
    SET @c_ExecArguments = N' @parm01          NVARCHAR(80),'
                          + ' @parm02          NVARCHAR(80),' 

@@ -24,7 +24,8 @@ GO
 /* 2014-05-20 2.3  SHONG      Fixing Total Page Calculation issues (SHONG01)  */ 
 /* 2014-05-28 2.4  CSCHONG    Fix total page = 1 (CS05)                       */ 
 /* 2014-12-02 2.5  CSCHONG    Remove SET ANSI_WARNINGS OFF (CS06)             */ 
-/* 2017-08-29 2.6  CSCHONG    Scripts tunning (CS07)                          */             
+/* 2017-08-29 2.6  CSCHONG    Scripts tunning (CS07)                          */    
+/* 2021-04-02 2.7  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS08)      */           
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_DSTORE]                             
@@ -74,7 +75,7 @@ BEGIN
       @C_FromCity1       NVARCHAR(45),        
       @C_FromCountry1    NVARCHAR(30),        
       @c_OrderKey        NVARCHAR(10),                          
-      @c_ExternOrderKey  NVARCHAR(10),                    
+      @c_ExternOrderKey  NVARCHAR(50),                    
       @c_Deliverydate    DATETIME,                    
       @c_caseid          NVARCHAR(20),         
       @c_ORDUDef10       NCHAR(2),        
@@ -772,7 +773,7 @@ END
   
     SET @n_cntOrdUdef04 = 0      
     INSERT INTO #Order (userdefine04)      
-    SELECT DISTINCT ORD.userdefine04
+    SELECT DISTINCT ORD.trackingno   --CS08
     FROM pickdetail PD WITH (nolock)
     JOIN orders ORD WITH (nolock) on ord.orderkey=pd.orderkey
     WHERE caseid=@c_caseid      

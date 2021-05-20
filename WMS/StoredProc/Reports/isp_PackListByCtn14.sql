@@ -25,6 +25,7 @@ GO
 /* Date         Author       Ver Purposes                               */
 /* 8-11-2018    Joseph Yu    WMS-6807 D1MPackingList                    */
 /* 07-12-2018   Leong        INC0499752 - Revise Left Join PackSerialNo.*/
+/* 09-04-2021   CSCHONG      WMS-16024 PB-Standardize TrackingNo (CS01)*/
 /************************************************************************/
 
 CREATE PROC isp_PackListByCtn14
@@ -48,7 +49,8 @@ BEGIN
    SET @n_Temp = ''
 
    SELECT
-        ISNULL(ORD.UserDefine04,'') AS OHUDF04
+        --ISNULL(ORD.UserDefine04,'') AS OHUDF04   --CS01
+        ISNULL(ORD.TrackingNo,'') AS OHUDF04       --CS01
       , ISNULL(ORD.OrderDate,'') AS ORDERDATE
       , ISNULL(RTRIM(ORD.C_ADDRESS1),'') + ' ' + ISNULL(RTRIM(ORD.C_ADDRESS2),'') + ' ' +
         ISNULL(RTRIM(ORD.C_ADDRESS3),'') + ' '+ ISNULL(RTRIM(ORD.C_ADDRESS4),'') AS C_ADDRESS
@@ -80,7 +82,8 @@ BEGIN
    JOIN ORDERDETAIL ORDT WITH (NOLOCK) ON (ORD.Orderkey = ORDT.OrderKey AND ORDT.Sku = PD.Sku AND ORDT.StorerKey = PD.StorerKey)
    WHERE PH.Pickslipno = @c_PickSlipNo
    GROUP BY ISNULL(ORD.ExternOrderKey,'')
-          , ISNULL(ORD.UserDefine04,'')
+        --  , ISNULL(ORD.UserDefine04,'')
+          , ISNULL(ORD.TrackingNo,'')   --CS01
           , ISNULL(ORD.OrderDate,'')
           , ISNULL(CLKUP.Short,'')
           , ISNULL(ORD.C_contact1,'')

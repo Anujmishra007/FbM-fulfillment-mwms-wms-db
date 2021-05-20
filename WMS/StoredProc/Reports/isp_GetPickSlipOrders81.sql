@@ -1,4 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipOrders81]') 
+ÔªøIF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipOrders81]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_GetPickSlipOrders81]
 GO
@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)*/
 /************************************************************************/
 CREATE PROC isp_GetPickSlipOrders81
             @c_Loadkey        NVARCHAR(10) = ''
@@ -112,7 +113,7 @@ BEGIN
       ,  Qty = SUM(PD.Qty)             
       ,  OpenQty   = OD.OpenQty 
       ,  Busr1     = CASE WHEN ISNULL(RTRIM(SKU.Busr1),'') = 'Y' 
-                          THEN N' «'  
+                          THEN N'√ä√á'  
                           ELSE '' 
                           END
    FROM LOADPLAN        LP WITH (NOLOCK)
@@ -169,17 +170,17 @@ BEGIN
          ,Contact    = ISNULL(RTRIM(OH.C_Contact1),'')
          ,OrderDate  = OH.OrderDate
          ,Remarks    = ISNULL(RTRIM(OH.Notes),'')
-         ,ExpressNo  = ISNULL(RTRIM(OH.UserDefine04),'')
+         ,ExpressNo  = ISNULL(RTRIM(OH.TrackingNo),'') --ISNULL(RTRIM(OH.UserDefine04),'')   --CS01
          ,[Type]     = OH.Type
-         ,OrderType  = CASE WHEN OH.Type = 'Normal'
-                            THEN N'Ω”ø⁄∂‘Ω”∂©µ•'  
-                            WHEN OH.Type = 'TF'
-                            THEN N'µ˜≤¶µ•'   
-                            WHEN OH.Type = 'APY'
-                            THEN N'…Í«Îµ•'   
-                            WHEN OH.Type = 'Add'
-                            THEN N'»±ªı≤π∑¢∂©µ•' 
-                            END
+        ,OrderType  = CASE WHEN OH.Type = 'Normal'  
+                            THEN N'Êé•Âè£ÂØπÊé•ËÆ¢Âçï'    
+                            WHEN OH.Type = 'TF'  
+                            THEN N'Ë∞ÉÊã®Âçï'     
+                            WHEN OH.Type = 'APY'  
+                            THEN N'Áî≥ËØ∑Âçï'     
+                            WHEN OH.Type = 'Add'  
+                            THEN N'Áº∫Ë¥ßË°•ÂèëËÆ¢Âçï'   
+                            END  
          ,TotalOrderQty = 0
          ,PrintList  = ''         
    FROM #TMP_PICK TMP
@@ -187,25 +188,25 @@ BEGIN
    LEFT JOIN PICKHEADER PH WITH (NOLOCK) ON (OH.Orderkey = PH.Orderkey)
 
    UPDATE ORD
-      SET PrintList = CASE WHEN ORD.[Type] = 'Normal'
-                           THEN N'«Âµ•¥Ú”°£∫01π∫ŒÔ«Âµ•' + CHAR(13) + 
-                                N'        02«∑ªıµ•'
-                           WHEN ORD.[Type] = 'Add'  
-                           THEN N'«Âµ•¥Ú”°£∫01ªπ«∑µ•' + CHAR(13) + 
-                                N'        02«∑ªıµ•'
-                           ELSE ''
-                           END
+       SET PrintList = CASE WHEN ORD.[Type] = 'Normal'  
+                           THEN N'Ê∏ÖÂçïÊâìÂç∞Ôºö01Ë¥≠Áâ©Ê∏ÖÂçï' + CHAR(13) +   
+                                N'        02Ê¨†Ë¥ßÂçï'  
+                           WHEN ORD.[Type] = 'Add'    
+                           THEN N'Ê∏ÖÂçïÊâìÂç∞Ôºö01ËøòÊ¨†Âçï' + CHAR(13) +   
+                                N'        02Ê¨†Ë¥ßÂçï'  
+                           ELSE ''  
+                           END  
    FROM #TMP_ORD  ORD
    JOIN #TMP_PICK PICK  ON (ORD.Orderkey = PICK.Orderkey)
    WHERE PICK.OpenQty > PICK.Qty
 
    UPDATE ORD
-      SET PrintList =CASE WHEN ORD.[Type] = 'Normal'
-                           THEN N'«Âµ•¥Ú”°£∫01π∫ŒÔ«Âµ•' 
-                           WHEN ORD.[Type] = 'Add'  
-                           THEN N'«Âµ•¥Ú”°£∫01ªπ«∑µ•'
-                           ELSE ''
-                           END
+      SET PrintList =CASE WHEN ORD.[Type] = 'Normal'  
+             THEN N'Ê∏ÖÂçïÊâìÂç∞Ôºö01Ë¥≠Áâ©Ê∏ÖÂçï'   
+                           WHEN ORD.[Type] = 'Add'    
+                           THEN N'Ê∏ÖÂçïÊâìÂç∞Ôºö01ËøòÊ¨†Âçï'  
+                           ELSE ''  
+                           END  
    FROM #TMP_ORD  ORD
    JOIN #TMP_PICK PICK  ON (ORD.Orderkey = PICK.Orderkey)
    WHERE PICK.OpenQty = PICK.Qty

@@ -34,7 +34,8 @@ GO
 /* 14-Sep-2016  CSCHONG   1.4   WMS-255 - Change GTIN field logic (CS04)      */
 /* 14-Feb-2017  CSCHONG   1.5   WMS-1072 - Revise field logic (CS05)          */  
 /* 29-Jan-2019  TLTING_ext 1.6  enlarge externorderkey field length           */   
-/* 20-Sep-2019  CSCHONG   1.7   WMS-10392 Performance tunning (CS06)          */ 
+/* 20-Sep-2019  CSCHONG   1.7   WMS-10392 Performance tunning (CS06)          */
+/* 10-May-2021  CheeMun   1.8  INC1472814 - Revise to fulfill FBR requirement */  
 /******************************************************************************/  
   
 CREATE PROC dbo.isp_carton_shipping_label_walmart (@c_LabelNo NVARCHAR(20))  
@@ -68,6 +69,7 @@ BEGIN
            @c_Getlabelno         NVARCHAR(20),
            @c_GetStorer          NVARCHAR(20), 
            @c_GetSKU             NVARCHAR(20),
+           @c_SKU                NVARCHAR(20),  --INC1472814
            @c_busr1              NVARCHAR(30) ,
            @n_PQty               INT,
            @n_CntSKU             INT,
@@ -167,7 +169,7 @@ BEGIN
       OrdBuyerPo                       
      )
    
-SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +FAC.address1 + ' ' +FAC.Address2 + ' ' +FAC.Address3 + ' ' +FAC.Address4 + ' ' +
+   SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +FAC.address1 + ' ' +FAC.Address2 + ' ' +FAC.Address3 + ' ' +FAC.Address4 + ' ' +
                           FAC.City + ' ' +  FAC.State + ' ' + FAC.Zip + ' ' + FAC.Country) AS COl01,    --(CS05)
          (ORD.M_Company + CHAR(13) +
          ORD.M_Address1 + CHAR(13) +
@@ -230,17 +232,17 @@ SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +
    SET @c_ODUdef03 = ''
    SET @n_cntBOMSku = 1
    
-  SELECT DISTINCT @c_ODNotes2=   OD.Notes2
-         --,@n_CntDelimiters = (LEN(OD.Notes2)-LEN(REPLACE(OD.Notes2, '|', '')))
-         ,@c_ODUdef03 = RIGHT(RTRIM(OD.UserDefine03),LEN(RTRIM(OD.UserDefine03))-CHARINDEX('-',RTRIM(OD.UserDefine03)))
-    FROM PICKDETAIL PD (NOLOCK)
-    JOIN PackDetail AS PADET WITH (NOLOCK) ON padet.LabelNo=pd.CaseID 
-    JOIN orderdetail OD (NOLOCK) ON OD.OrderKey = pd.OrderKey AND OD.Sku = PD.Sku 
-    AND od.OrderLineNumber = pd.OrderLineNumber
-    WHERE PD.caseid = @c_LabelNo
+   SELECT DISTINCT @c_ODNotes2=   OD.Notes2
+      --,@n_CntDelimiters = (LEN(OD.Notes2)-LEN(REPLACE(OD.Notes2, '|', '')))
+      ,@c_ODUdef03 = RIGHT(RTRIM(OD.UserDefine03),LEN(RTRIM(OD.UserDefine03))-CHARINDEX('-',RTRIM(OD.UserDefine03)))
+   FROM PICKDETAIL PD (NOLOCK)
+   JOIN PackDetail AS PADET WITH (NOLOCK) ON padet.LabelNo=pd.CaseID 
+   JOIN orderdetail OD (NOLOCK) ON OD.OrderKey = pd.OrderKey AND OD.Sku = PD.Sku 
+   AND od.OrderLineNumber = pd.OrderLineNumber
+   WHERE PD.caseid = @c_LabelNo
   --GROUP BY ORD.notes2,OD.Notes2
     
-    SELECT @n_cntRow = @@ROWCOUNT
+   SELECT @n_cntRow = @@ROWCOUNT
     
    IF @c_ODNotes2 LIKE '%MU-04-%'
    BEGIN
@@ -274,61 +276,144 @@ SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +
    END 
    ELSE
    BEGIN
-      IF EXISTS (SELECT 1 FROM BillOfMaterial AS bom WITH (NOLOCK)
-                 WHERE bom.UDF01 = @c_ODUdef03)                      --(CS06)
-      BEGIN --check BOM exists
-         SELECT @n_cntBOMSku = COUNT(1)
-         FROM BillOfMaterial AS bom WITH (NOLOCK)
-         WHERE UDF01 = @c_ODUdef03                                   --(CS06)
-         
-         IF @n_cntBOMSku > 1
-         BEGIN
-            SELECT @c_Altsku = S.altsku
-            FROM Billofmaterial BOM WITH (NOLOCK)
-            JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.ComponentSku
-            WHERE BOM.UDF01 = @c_ODUdef03                           --(CS06)
+      --Assortment_No
+      IF ISNULL(@c_ODUdef03,'') <> '' AND (RTRIM(@c_ODUdef03) NOT IN ('P','P-') AND ISNULL(CHARINDEX('-',RTRIM(@c_ODUdef03)),0) > 1)  --INC1472814    
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM BillOfMaterial AS bom WITH (NOLOCK)
+                  WHERE bom.UDF01 = @c_ODUdef03)                      --(CS06)
+         BEGIN --check BOM exists
+            SELECT @n_cntBOMSku = COUNT(1)
+            FROM BillOfMaterial AS bom WITH (NOLOCK)
+            WHERE UDF01 = @c_ODUdef03                                   --(CS06)
             
-            
-            IF @@ROWCOUNT > 1
+            IF @n_cntBOMSku > 1
             BEGIN
-                SET  @c_Altsku = ''
+               SELECT @c_Altsku = S.altsku
+               FROM Billofmaterial BOM WITH (NOLOCK)
+               JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.ComponentSku
+               WHERE BOM.UDF01 = @c_ODUdef03                           --(CS06)
+               
+               
+               IF @@ROWCOUNT > 1
+               BEGIN
+                  SET  @c_Altsku = ''
+               END
             END
-         END
+            ELSE
+            BEGIN
+               SELECT @c_Altsku = S.altsku
+               FROM Billofmaterial BOM WITH (NOLOCK)
+               JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.sku
+               WHERE BOM.UDF01 = @c_ODUdef03                           --(CS06)
+               
+               IF @@ROWCOUNT > 1
+               BEGIN
+                  SET  @c_Altsku = ''
+               END
+               
+            END   
+         END --End check BOM exists
          ELSE
-         BEGIN
-            SELECT @c_Altsku = S.altsku
-            FROM Billofmaterial BOM WITH (NOLOCK)
-            JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.sku
-            WHERE BOM.UDF01 = @c_ODUdef03                           --(CS06)
+         BEGIN --start check BOM not exists
+            SET @n_CntSKU = 1
             
-            IF @@ROWCOUNT > 1
+            SELECT @n_CntSKU = COUNT(SKU)
+            FROM PACKDETAIL WITH (NOLOCK)
+            WHERE Labelno = @c_Getlabelno
+            
+            IF @n_CntSKU > 1
             BEGIN
-                SET  @c_Altsku = ''
+               SET @c_Altsku = ''
             END
-            
-         END   
-      END --End check BOM exists
-      ELSE
-      BEGIN
-          SET @n_CntSKU = 1
-          
-          SELECT @n_CntSKU = COUNT(SKU)
-          FROM PACKDETAIL WITH (NOLOCK)
-          WHERE Labelno = @c_Getlabelno
-          
-           IF @n_CntSKU > 1
-           BEGIN
-           SET @c_Altsku = ''
-           END
-           ELSE
-           BEGIN
-             SELECT @c_Altsku = S.ALTSKU
-             FROM SKU S WITH (NOLOCK)
-             JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Sku = S.Sku
-             WHERE PDET.LabelNo = @c_Getlabelno
-           END 
+            --INC1472814 (START)
+            ELSE   --1 SKU in 1 carton
+            BEGIN
+               SELECT @c_SKU = SKU
+               FROM PACKDETAIL WITH (NOLOCK)
+               WHERE Labelno = @c_Getlabelno
+               
+               IF EXISTS (SELECT 1 FROM BillOfMaterial AS bom WITH (NOLOCK) WHERE SKU = @c_SKU)                          
+               BEGIN --check BOM exists
+                  SELECT @n_cntBOMSku = COUNT(1)
+                  FROM BillOfMaterial AS bom WITH (NOLOCK)
+                  WHERE SKU = @c_SKU                                       
+                  
+                  IF @n_cntBOMSku > 1
+                  BEGIN
+                     SELECT TOP 1 @c_Altsku = S.altsku
+                     FROM Billofmaterial BOM WITH (NOLOCK)
+                     JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.sku
+                     WHERE BOM.SKU = @c_SKU                                 
+                  END
+                  ELSE
+                  BEGIN
+                     SELECT @c_Altsku = S.altsku
+                     FROM Billofmaterial BOM WITH (NOLOCK)
+                     JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.ComponentSku
+                     WHERE BOM.SKU = @c_SKU                                
+                  END
+               END
+               --INC1472814 (END)            
+               ELSE    --SKU not in BillOfMaterial.SKU
+               BEGIN
+                  SELECT @c_Altsku = S.ALTSKU
+                  FROM SKU S WITH (NOLOCK)
+                  JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Sku = S.Sku
+                  WHERE PDET.LabelNo = @c_Getlabelno
+               END 
+            END 
+         END      
       END
-      
+      ELSE 
+      BEGIN --start no assortment no  
+         SET @n_CntSKU = 1    
+               
+         SELECT @n_CntSKU = COUNT(SKU)    
+         FROM PACKDETAIL WITH (NOLOCK)    
+         WHERE Labelno = @c_Getlabelno    
+               
+         IF @n_CntSKU > 1    
+         BEGIN    
+            SET @c_Altsku = ''    
+         END    
+         --INC1472814 (START)    
+         ELSE   --1 SKU in 1 carton    
+         BEGIN    
+            SELECT @c_SKU = SKU    
+            FROM PACKDETAIL WITH (NOLOCK)    
+            WHERE Labelno = @c_Getlabelno    
+                  
+            IF EXISTS (SELECT 1 FROM BillOfMaterial AS bom WITH (NOLOCK) WHERE SKU = @c_SKU)                              
+            BEGIN --check BOM exists    
+               SELECT @n_cntBOMSku = COUNT(1)    
+               FROM BillOfMaterial AS bom WITH (NOLOCK)    
+               WHERE SKU = @c_SKU                                           
+                     
+               IF @n_cntBOMSku > 1    
+               BEGIN    
+                  SELECT TOP 1 @c_Altsku = S.altsku    
+                  FROM Billofmaterial BOM WITH (NOLOCK)    
+                  JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.sku    
+                  WHERE BOM.SKU = @c_SKU                                     
+               END    
+               ELSE    
+               BEGIN    
+                  SELECT @c_Altsku = S.altsku    
+                  FROM Billofmaterial BOM WITH (NOLOCK)    
+                  JOIN SKU S WITH (NOLOCK) ON S.sku = BOM.ComponentSku    
+                  WHERE BOM.SKU = @c_SKU                                    
+               END    
+            END    
+            --INC1472814 (END)                
+            ELSE    --SKU not in BillOfMaterial.SKU    
+            BEGIN    
+               SELECT @c_Altsku = S.ALTSKU    
+               FROM SKU S WITH (NOLOCK)    
+               JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Sku = S.Sku    
+               WHERE PDET.LabelNo = @c_Getlabelno    
+            END     
+         END     
+      END
       
         /*CS04 Start*/ 
         SET @c_BarcodeGTIN = ''

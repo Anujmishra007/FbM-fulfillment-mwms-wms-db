@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */         
 /*                                                                            */         
 /* Date       Rev  Author     Purposes                                        */         
-/* 2019-08-07 1.0  WLCHOOI    Created (WMS-10174)                             */   
+/* 2019-08-07 1.0  WLCHOOI    Created (WMS-10174)                             */ 
+/* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */    
 /******************************************************************************/        
           
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_14]               
@@ -214,7 +215,7 @@ BEGIN
                       + CHAR(13)   
                       +' ORD.Loadkey, ORD.Orderkey, ORD.ExternOrderKey, ORD.Type, ORD.Storerkey, ' --5    
                       + CHAR(13)    
-                      +' ISNULL(RTRIM(LTRIM(ORD.C_Contact1)),''''), ISNULL(RTRIM(LTRIM(ORD.C_Phone1)),''''), ISNULL(ORD.Userdefine04,''''), ' --8
+                      +' ISNULL(RTRIM(LTRIM(ORD.C_Contact1)),''''), ISNULL(RTRIM(LTRIM(ORD.C_Phone1)),''''), ISNULL(ORD.trackingno,''''), ' --8  --CS01
                       + CHAR(13)
                       +' ISNULL(RTRIM(LTRIM(STO.Address1)),'''') + ISNULL(RTRIM(LTRIM(STO.Address2)),'''') + ISNULL(RTRIM(LTRIM(STO.Address3)),''''), '   --9      
                       + CHAR(13)

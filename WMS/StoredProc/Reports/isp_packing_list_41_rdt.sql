@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 23-MAR-2018 CSCHONG  1.0   WMS-4289 - revised field mapping (CS01)   */
+/* 09-Apr-2021 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS02)*/
 /************************************************************************/
 CREATE PROC isp_packing_list_41_rdt
            @c_PickSlipNo   NVARCHAR(10) 
@@ -71,7 +72,8 @@ BEGIN
             ,@c_Orderkey   = PH.Orderkey
       FROM PACKHEADER PH WITH (NOLOCK)
       JOIN ORDERS     OH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)
-      WHERE OH.UserDefine04 = @c_TrackingNo
+      --WHERE OH.UserDefine04 = @c_TrackingNo   --CS01
+      WHERE OH.TrackingNo = @c_TrackingNo     --CS01
    END
 
    IF @c_Orderkey = '' AND @c_PickSlipNo <> ''

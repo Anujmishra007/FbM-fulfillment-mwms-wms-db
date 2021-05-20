@@ -25,7 +25,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author  Ver   Purposes                                  */  
 /* 01-JUL-2009  SHONG   1.0   SOS#140789 Insert CMSLOG When Print POD   */
-/* 23-Jul-2009  SHONG   1.1   Rework-Change to StorerConfig ‘LPPnPodCMS’*/
+/* 23-Jul-2009  SHONG   1.1   Rework-Change to StorerConfig PPnPodCMS’*  */
 /* 28-SEP-2009  Leong   1.2   Bug Fix - Not allow re-trigger CMSLog for */
 /*                                      same MBOLKey (Ref: SOS#140789)  */
 /************************************************************************/  

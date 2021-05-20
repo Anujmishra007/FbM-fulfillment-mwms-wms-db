@@ -16,7 +16,7 @@ GO
 /* Purpose: SOS#374686 - CN CNA Packing list                                  */  
 /*                                                                            */              
 /*                                                                            */              
-/* Called By:  r_dw_packing_list_215_rdt                                       */              
+/* Called By:  r_dw_packing_list_215_rdt                                      */              
 /*                                                                            */              
 /* PVCS Version: 1.0                                                          */              
 /*                                                                            */              
@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                        */              
 /*                                                                            */              
 /* Updates:                                                                   */              
-/* Date         Author    Ver.  Purposes                                      */    
+/* Date         Author    Ver.  Purposes                                      */ 
+/* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)      */   
 /******************************************************************************/     
   
 CREATE PROC [dbo].[isp_Packing_List_25_rdt]             
@@ -88,41 +89,41 @@ BEGIN
    IF EXISTS (SELECT 1 FROM ORDERS WITH (NOLOCK)
               WHERE Orderkey = @c_Orderkey)
    BEGIN
-   	SET @c_getOrdKey = @c_Orderkey 
+      SET @c_getOrdKey = @c_Orderkey 
    END           
    ELSE
    BEGIN
-   	SELECT DISTINCT @c_getOrdKey = OrderKey
-   	FROM PackHeader AS ph WITH (NOLOCK)
-   	WHERE ph.PickSlipNo=@c_Orderkey
-   END 	
+      SELECT DISTINCT @c_getOrdKey = OrderKey
+      FROM PackHeader AS ph WITH (NOLOCK)
+      WHERE ph.PickSlipNo=@c_Orderkey
+   END   
    
    /*CS01 END*/      
   
    INSERT INTO #PACKLIST25 ( c_Contact1    
-									, C_Addresses   
-									, OrdPmtTerm    
-									, OrdAddDate    
-									, M_Company     
-									, PickLOC       
-									, SKUSize       
-									, ORDUdef04     
-									, PSKU          
-									, Pqty          
-									, OrderKey      
-									, Loadkey       
-									, Salesman      
-									, Shipperkey    
-									, SDescr        
-									, UnitPrice     
-									, ORDUdef01     
-									, ORDUdef05     
-									, InvAmount     
-									, RecGrp        
-								)             
+                           , C_Addresses   
+                           , OrdPmtTerm    
+                           , OrdAddDate    
+                           , M_Company     
+                           , PickLOC       
+                           , SKUSize       
+                           , ORDUdef04     
+                           , PSKU          
+                           , Pqty          
+                           , OrderKey      
+                           , Loadkey       
+                           , Salesman      
+                           , Shipperkey    
+                           , SDescr        
+                           , UnitPrice     
+                           , ORDUdef01     
+                           , ORDUdef05     
+                           , InvAmount     
+                           , RecGrp        
+                        )             
    SELECT ISNULL(OH.c_Contact1,''),(OH.C_address2 + OH.C_address3 + OH.C_address4),
                    ISNULL(OH.PmtTerm,''),CONVERT(NVARCHAR(10),OH.OrderDate,111),ISNULL(OH.M_Company,''),
-                   PD.LOC,s.size,ISNULL(OH.Userdefine04,''),PD.SKU,PD.qty,OH.OrderKey,
+                   PD.LOC,s.size,ISNULL(OH.TrackingNo,''),PD.SKU,PD.qty,OH.OrderKey,     --CS01
                    OH.Loadkey,OH.Salesman,OH.shipperkey,S.Descr,ORDDET.UnitPrice,ISNULL(OH.Userdefine01,''),
                    ISNULL(OH.Userdefine05,''),OH.InvoiceAmount,
                    (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine 
@@ -138,25 +139,25 @@ BEGIN
   
   
                    SELECT c_Contact1    
-									, C_Addresses   
-									, OrdPmtTerm    
-									, OrdAddDate    
-									, M_Company     
-									, PickLOC       
-									, SKUSize       
-									, ORDUdef04     
-									, PSKU          
-									, Pqty          
-									, OrderKey      
-									, Loadkey       
-									, Salesman      
-									, Shipperkey    
-									, SDescr        
-									, UnitPrice     
-									, ORDUdef01     
-									, ORDUdef05     
-									, InvAmount     
-									, RecGrp 
+                           , C_Addresses   
+                           , OrdPmtTerm    
+                           , OrdAddDate    
+                           , M_Company     
+                           , PickLOC       
+                           , SKUSize       
+                           , ORDUdef04     
+                           , PSKU          
+                           , Pqty          
+                           , OrderKey      
+                           , Loadkey       
+                           , Salesman      
+                           , Shipperkey    
+                           , SDescr        
+                           , UnitPrice     
+                           , ORDUdef01     
+                           , ORDUdef05     
+                           , InvAmount     
+                           , RecGrp 
    FROM #PACKLIST25  
    ORDER BY PickLoc  
                
