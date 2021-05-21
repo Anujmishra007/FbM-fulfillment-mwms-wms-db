@@ -18,7 +18,7 @@ GO
 /* 2021-04-02 1.1  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS01)      */           
 /******************************************************************************/              
                 
-CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_SEP]                     
+ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_SEP]                     
 (  @c_Sparm1            NVARCHAR(250),            
    @c_Sparm2            NVARCHAR(250),            
    @c_Sparm3            NVARCHAR(250),            
@@ -357,7 +357,7 @@ BEGIN
             ,@C_City      = C_City
             ,@C_State     = C_State
             ,@c_zip       = C_Zip
-            ,@C_Phone1    = C_Phone1
+            ,@C_Phone1    = CASE WHEN ISNULL(RTRIM(@c_Sparm3),'') = 'SF' THEN left(c_phone1,3)+'****'+ right(c_phone1,4) ELSE c_phone1 END   
             ,@C_Phone2    = C_Phone2 
           --  ,@C_Country   = C_Country  
     FROM fnc_GetDecryptedOrderPI (@c_orderkey)  
