@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-05-17  WLChooi  1.1   Fix Inserting Channel_ID into Pickdetail  */
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC ispManningsConsoFP6
      @c_WaveKey            NVARCHAR(10)
@@ -635,14 +637,14 @@ BEGIN
                      Lot, StorerKey, Sku, UOM, UOMQty, Qty, DropID,
                      Loc, Id, PackKey, CartonGroup, DoReplenish,  
                      replenishzone, doCartonize, Trafficcop, PickMethod,
-                     Wavekey
+                     Wavekey, Channel_ID   --WL01
                      ) 
                VALUES (  
                      @c_PickDetailKey, '', '', @c_OrderKey, @c_OrderLineNumber,  
                      @c_Lot, @c_StorerKey, @c_SKU, @c_UOM, @n_UOMQty, @n_QtyToInsert, @c_UCCNo,
                      @c_Loc, @c_ID, @c_PackKey, '', 'N',  
                      '', NULL, 'U', @c_PickMethod,
-                     @c_Wavekey
+                     @c_Wavekey, @n_Channel_ID   --WL01
                      )  
                   
                IF @@ERROR <> 0
