@@ -26,6 +26,8 @@ GO
 /* Updates:                                                                */  
 /* Date         Author  Ver   Purposes                                     */  
 /* 11-NOV-2020  YTWan   1.0   Creation                                     */  
+/* 22-02-2021   Wan01   1.1   WMS-16094 - [CN] ANFQHW_WMS_TransferAllocation*/
+/*                            - Add/Create default @c_Facility pass in parm*/
 /***************************************************************************/  
   
 CREATE PROC [dbo].[ispTransferAllocation01](  
@@ -34,8 +36,8 @@ CREATE PROC [dbo].[ispTransferAllocation01](
 ,  @b_Success        INT          = 1   OUTPUT   
 ,  @n_Err            INT          = 0   OUTPUT   
 ,  @c_ErrMsg         NVARCHAR(250)= ''  OUTPUT   
-,  @c_Code           NVARCHAR(30) = ''           
-  
+,  @c_Code           NVARCHAR(30) = '' 
+,  @c_Facility       NVARCHAR(5)  = ''          --(Wan01)                     
 )  
 AS  
 BEGIN  

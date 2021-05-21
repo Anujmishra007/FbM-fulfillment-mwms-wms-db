@@ -48,6 +48,8 @@ GO
 /*                            (CN) (WL01)                                  */
 /* 15-Oct-2020  WLChooi 2.3   Remove Traceinfo Insertion (WL02)            */ 
 /* 04-NOV-2020  Wan06   2.4   WMS-15612 - ANF - CR on Transfer Allocation  */  
+/* 22-02-2021   Wan07   2.5   WMS-16094 - [CN] ANFQHW_WMS_TransferAllocation*/
+/*                            - Add @c_Facility when call Sub SP           */
 /***************************************************************************/  
   
 CREATE PROC [dbo].[ispTransferAllocation](  
@@ -177,14 +179,16 @@ BEGIN
                +', @b_Success       = @b_Success        OUTPUT'
                +', @n_Err           = @n_Err            OUTPUT'
                +', @c_ErrMsg        = @c_ErrMsg         OUTPUT'
-               +', @c_Code          = @c_Code  '
+               +', @c_Code          = @c_Code'
+               +', @c_Facility      = @c_Facility'
 
          SET @c_SQLParms= N' @c_FromStorerkey  NVARCHAR(10)'    
                         +',  @c_TransferKey    NVARCHAR(10)'         
                         +',  @b_Success        INT             OUTPUT'
                         +',  @n_Err            INT             OUTPUT'
                         +',  @c_ErrMsg         NVARCHAR(250)   OUTPUT'
-                        +',  @c_Code           NVARCHAR(30)'         
+                        +',  @c_Code           NVARCHAR(30)'  
+                        +',  @c_Facility       NVARCHAR(30)'                          
         
          EXEC sp_ExecuteSQL  @c_SQL
                            , @c_SQLParms
@@ -193,7 +197,8 @@ BEGIN
                            , @b_Success        OUTPUT 
                            , @n_Err            OUTPUT
                            , @c_ErrMsg         OUTPUT
-                           , @c_Code          
+                           , @c_Code 
+                           , @c_Facility         
 
          RETURN
       END
