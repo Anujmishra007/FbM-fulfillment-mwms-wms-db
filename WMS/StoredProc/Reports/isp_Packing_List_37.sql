@@ -41,7 +41,8 @@ GO
 /* 23-APR-2020  WLChooi   2.4   WMS-13021 - ShowModelNumber by ReportCFG*/
 /*                              (WL02)                                  */ 
 /* 23-JUL-2020  WLChooi   2.5   WMS-14384 - Add new condition to show   */
-/*                              remark for CN only (WL03)               */                                           
+/*                              remark for CN only (WL03)					*/
+/* 19-MAY-2021	 ADRIAN    2.6   WMS-17007 - Add new facility (AC01) 		*/  
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_Packing_List_37] (  
@@ -468,7 +469,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
            SET @n_PrevCtnQty = 0  
           
         /*CS03a Start*/     
-         IF @c_facility IN ('BULIM','WGQAP','WGQBL') --(WL01) New Facility 
+         IF @c_facility IN ('BULIM','WGQAP','WGQBL','WGQUS') --(WL01) New Facility --AC(01)
          BEGIN  
            INSERT INTO #TEMP_CTNTYPE37 (CartonType, SKU, QTY, TotalCtn, TotalQty, CartonNo,Palletkey,CLKUPUDF01)              
             SELECT 'SINGLE' , PD.SKU, SUM(PD.Qty)/COUNT(DISTINCT PD.CartonNo) , COUNT(DISTINCT PD.CartonNo) , SUM(PD.Qty) ,0   
@@ -679,7 +680,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         SET @n_EPWGT_Value = 0.00  
         SET @n_EPCBM_Value = 0.00  
           
-       IF @c_facility in ('WGQAP','YPCN1’','WGQBL') --(WL01) New Facility 
+       IF @c_facility in ('WGQAP','YPCN1','WGQBL','WGQUS') --(WL01) New Facility --AC(01)
        BEGIN  
           
         SELECT @n_EPWGT_Value = CASE WHEN ISNUMERIC(c.udf02) = 1   
