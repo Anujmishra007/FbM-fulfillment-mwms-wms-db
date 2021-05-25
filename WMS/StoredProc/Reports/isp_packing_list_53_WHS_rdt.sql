@@ -18,7 +18,7 @@ GO
 /* Called By: r_dw_packing_list_53_WHS_rdt                              */
 /*            copy from r_dw_packing_list_53_rdt                        */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /*2020-10-05   WLChooi  1.1   WMS-15423 - Modify Extended Price Logic   */
 /*                            (WL01)                                    */
+/*2021-05-18   WLChooi  1.2   WMS-17031 - Add AltSKU based on Codelkup  */
+/*                            (WL02)                                    */
 /************************************************************************/
 CREATE PROC isp_packing_list_53_WHS_rdt
          @c_PickSlipNo  NVARCHAR(10)
@@ -124,6 +126,7 @@ BEGIN
       ,  ExtendedPrice     FLOAT
       ,  TTLExtendedPrice  FLOAT
       ,  BuyerPO           NVARCHAR(20)   NULL
+      ,  AltSKU            NVARCHAR(20)   NULL  --WL02
       )  
 
  CREATE TABLE #TMP_INV53WHS_Final
@@ -163,6 +166,7 @@ BEGIN
       ,  ExtendedPrice     FLOAT
       ,  TTLExtendedPrice  FLOAT
       ,  BuyerPO           NVARCHAR(20)   NULL
+      ,  AltSKU            NVARCHAR(20)   NULL  --WL02
       ) 
 
    CREATE TABLE #TMP_ORDERS 
@@ -292,6 +296,7 @@ BEGIN
          ,  ExtendedPrice
          ,  TTLExtendedPrice
          ,  BuyerPO
+         ,  AltSKU   --WL02
          )  
    SELECT  SortBy  = ROW_NUMBER() OVER (ORDER BY LP.Loadkey
                                                 ,OH.Orderkey
@@ -341,11 +346,15 @@ BEGIN
          , ExtendedPrice = SUM(OD.ExtendedPrice)   --WL01
          , TTLExtendedPrice   = 0
          , OH.buyerpo
+         , AltSKU = CASE WHEN ISNULL(CL.Code,'') = '' THEN '' ELSE SKU.ALTSKU END   --WL02  
    FROM #TMP_ORDERS LP
    JOIN ORDERS      OH WITH (NOLOCK) ON (LP.Orderkey = OH.Orderkey)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey)
    JOIN SKU       SKU  WITH (NOLOCK) ON (OD.Storerkey= SKU.Storerkey)
                                      AND(OD.Sku = SKU.Sku)
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'DWWHSDN')     --WL02
+                                      AND (CL.Storerkey = OH.StorerKey) --WL02
+                                      AND (CL.Code = OH.ConsigneeKey)   --WL02
    WHERE ISNULL(OD.notes,'') = ''
    GROUP BY OH.Storerkey
          ,  LP.Loadkey
@@ -379,6 +388,7 @@ BEGIN
          ,  CASE WHEN ISNUMERIC(OD.userdefine04) = 1 AND CAST(OD.userdefine04 as int) > 0 THEN OD.userdefine04 ELSE '' END 
          ,  CASE WHEN ISNUMERIC(OD.userdefine05) = 1 AND CAST(OD.userdefine05 as int) > 0 THEN OD.userdefine05 ELSE '' END 
          ,  OH.buyerpo
+         ,  CASE WHEN ISNULL(CL.Code,'') = '' THEN '' ELSE SKU.ALTSKU END   --WL02   
 
    UPDATE INV
       SET Summary = (SELECT TOP 1 TMP.Summary FROM #TMP_INV53WHS TMP WHERE TMP.orderkey = INV.Orderkey) 
@@ -435,6 +445,7 @@ BEGIN
          ,  ExtendedPrice
          ,  TTLExtendedPrice
          ,  BuyerPO
+         ,  AltSKU       --WL02
          )                
       SELECT             
             SortBy         
@@ -471,7 +482,8 @@ BEGIN
          ,  Unitprice
          ,  ExtendedPrice 
          ,  TTLExtendedPrice 
-         ,  BuyerPO             
+         ,  BuyerPO         
+         ,  AltSKU       --WL02    
       FROM  #TMP_INV53WHS              
       WHERE Loadkey = @c_GetLoadkey                
       AND OrderKey = @c_GetOrderkey                
@@ -521,6 +533,7 @@ BEGIN
          ,  ExtendedPrice 
          ,  TTLExtendedPrice 
          ,  BuyerPO
+         ,  AltSKU       --WL02
          )
          SELECT TOP 1            
             SortBy         
@@ -557,6 +570,7 @@ BEGIN
          ,  ''
          ,  TTLExtendedPrice   
          ,  BuyerPO        
+         ,  ''       --WL02
          FROM #TMP_INV53WHS_Final                 
          WHERE Loadkey = @c_GetLoadkey                
          AND OrderKey = @c_GetOrderkey             
@@ -644,7 +658,8 @@ QUIT_SP:
          ,  C48= @c_C48             
          ,  C49= @c_C49             
          ,  C50= @c_C50 
-         ,  BuyerPO	    
+         ,  BuyerPO
+         ,  AltSKU       --WL02
    FROM #TMP_INV53WHS_Final 
    ORDER BY SortBy, Loadkey, Orderkey, CASE WHEN ISNULL(SKU,'') = '' THEN 1 ELSE 0 END, SKU, SkuDescr 
 

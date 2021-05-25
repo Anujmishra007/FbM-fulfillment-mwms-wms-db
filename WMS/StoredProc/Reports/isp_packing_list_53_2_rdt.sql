@@ -35,7 +35,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author   Ver.  Purposes                                 */
+/* 2021-05-18   WLChooi  1.1   WMS-17031 - Add AltSKU based on Codelkup */
+/*                             (WL01)                                   */
 /************************************************************************/
 
 CREATE PROC isp_packing_list_53_2_rdt (@c_pickslipno NVARCHAR(10))
@@ -71,24 +73,24 @@ BEGIN
           @c_lastrec         NVARCHAR(5),
           @c_GMergeSku       NVARCHAR(20)
 
-		 SET @c_DelimiterSign = '|'
+   SET @c_DelimiterSign = '|'
 
-		 CREATE table #TMP_ODNotes (
+   CREATE table #TMP_ODNotes (
 		 Pickslipno NVARCHAR(20),
 		 Orderkey   NVARCHAR(20),
 		 ODNotes    NVARCHAR(250),
 		 mergesku   NVARCHAR(500)
 
 		 )
-		 --CS01 START
-		 CREATE table #TMP_PACKINST (
+   --CS01 START
+   CREATE table #TMP_PACKINST (
 		 Orderkey   NVARCHAR(20),
 		 pcode      NVARCHAR(20),
 		 storerkey  NVARCHAR(20),
 		 PackInst   NVARCHAR(50)
 
 		 )
-    --CS01 END
+   --CS01 END
 
    /*INSERT INTO #TMP_PACKINST (orderkey,pcode,storerkey,PackInst)
    SELECT DISTINCT od.orderkey,c.code, od.storerkey,c.code + '(' + c.short + ')'
@@ -144,9 +146,10 @@ BEGIN
       CODELKUP.description as principal,
       ORDERS.Facility, -- Add by June 11.Jun.03 (SOS11736)
       FacilityDescr = Facility.Descr, -- Add by June 11.Jun.03 (SOS11736)
-	  Custbarcode = CONVERT(NVARCHAR(15),BILLTO.Notes1), -- SOS37766
-	  ISNULL(SKU.Busr6, 0) as Busr6,  -- SOS37766
-	  CONVERT(NVARCHAR(250),ORDERS.Notes) as splitohnotes
+	   Custbarcode = CONVERT(NVARCHAR(15),BILLTO.Notes1), -- SOS37766
+	   ISNULL(SKU.Busr6, 0) as Busr6,  -- SOS37766
+	   CONVERT(NVARCHAR(250),ORDERS.Notes) as splitohnotes,
+      AltSKU = CASE WHEN ISNULL(CL.Code,'') = '' THEN '' ELSE SKU.ALTSKU END   --WL01  
 	INTO	#RESULT
 	FROM 	PACKHEADER (Nolock)
    JOIN PACKDETAIL (NOLOCK) 
@@ -169,6 +172,9 @@ BEGIN
          codelkup.code = sku.susr3
    INNER JOIN FACILITY (nolock) 
       ON Facility.Facility = ORDERS.Facility -- Add by June 11.Jun.03 (SOS11736)
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'DWWHSDN')         --WL01
+                                      AND (CL.Storerkey = ORDERS.StorerKey) --WL01
+                                      AND (CL.Code = ORDERS.ConsigneeKey)   --WL01
 	WHERE	PACKHEADER.PickSlipNo = @c_pickslipno
 	GROUP BY 
       PACKDETAIL.PickSlipNo,   
@@ -215,7 +221,8 @@ BEGIN
       ORDERS.Facility, -- Add by June 11.Jun.03 (SOS11736)
       Facility.Descr, -- Add by June 11.Jun.03 (SOS11736)
 		CONVERT(NVARCHAR(15), BILLTO.Notes1), -- SOS37766
-		SKU.Busr6 -- SOS37766
+		SKU.Busr6, -- SOS37766
+      CASE WHEN ISNULL(CL.Code,'') = '' THEN '' ELSE SKU.ALTSKU END   --WL01  
 
    /*
    select @c_orderkey = ''
@@ -503,7 +510,8 @@ BEGIN
           R.FacilityDescr, -- Add by June 11.Jun.03 (SOS11736)
           R.Custbarcode , -- SOS37766
           R.Busr6,  -- SOS37766
-          R.splitohnotes
+          R.splitohnotes,
+          R.ALTSKU   --WL01
 	FROM #RESULT R
 	LEFT JOIN #TMP_ODNotes ODN ON ODN.orderkey = R.orderkey 
 	group by R.PickSlipNo,     
@@ -552,7 +560,8 @@ BEGIN
 		      R.FacilityDescr, -- Add by June 11.Jun.03 (SOS11736)
 		      R.Custbarcode , -- SOS37766
 		      R.Busr6,  -- SOS37766
-		      R.splitohnotes
+		      R.splitohnotes,
+            R.ALTSKU   --WL01
 	order by r.pickslipno,r.orderkey,r.sku
 
 	-- drop table
