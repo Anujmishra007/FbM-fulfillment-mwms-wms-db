@@ -1,0 +1,161 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_ASNException_Validate_ColValue]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_ASNException_Validate_ColValue]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/************************************************************************/
+/* Stored Proc: isp_ASNException_Validate_ColValue                      */
+/* Creation Date: 2021-05-10                                            */
+/* Copyright: LF Logistics                                              */
+/* Written by: Wan                                                      */
+/*                                                                      */
+/* Purpose:  WMS-16957 - [CN]Nike_Phoeix_B2C_Exceed_Exception_Tracking  */
+/*        :                                                             */
+/* Called By:                                                           */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 7.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/* 2020-05-10  Wan      1.0   Created                                   */
+/************************************************************************/
+CREATE PROC isp_ASNException_Validate_ColValue
+     @n_RowRef             BIGINT
+   , @c_Facility           NVARCHAR(5)  = ''
+   , @c_Storerkey          NVARCHAR(15) = ''
+   , @c_DocumentNo         NVARCHAR(10) = ''
+   , @c_ColName            NVARCHAR(50) = ''
+   , @c_ColValue           NVARCHAR(50) = '' 
+   , @c_ColName01_RDF      NVARCHAR(50) = ''    OUTPUT
+   , @c_ColVal01_RDF       NVARCHAR(50) = ''    OUTPUT   
+   , @c_ColName02_RDF      NVARCHAR(50) = ''    OUTPUT
+   , @c_ColVal02_RDF       NVARCHAR(50) = ''    OUTPUT   
+   , @c_ColName03_RDF      NVARCHAR(50) = ''    OUTPUT
+   , @c_ColVal03_RDF       NVARCHAR(50) = ''    OUTPUT      
+   , @b_Success            INT          = 1     OUTPUT
+   , @n_Err                INT          = 0     OUTPUT
+   , @c_ErrMsg             NVARCHAR(255)= ''    OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE  
+           @n_StartTCnt       INT = @@TRANCOUNT
+         , @n_Continue        INT = 1
+         
+   SET @n_err      = 0
+   SET @c_errmsg   = ''
+
+   SET @c_DocumentNo = ISNULL(@c_DocumentNo,'')
+   SET @c_ColName = ISNULL(@c_ColName,'')
+   SET @c_ColValue= ISNULL(@c_ColValue,'')
+   
+   IF @c_ColName = ''
+   BEGIN
+      GOTO QUIT_SP
+   END
+   
+      
+   IF @c_ColName = 'facility' AND @c_ColValue = ''
+   BEGIN
+      SET @n_Continue = 3 
+      SET @n_Err = 88110
+      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Facility is Required. (isp_ASNException_Validate_ColValue)'
+      GOTO QUIT_SP
+   END
+   
+   IF @c_ColName = 'storerkey' AND @c_ColValue = ''
+   BEGIN
+      SET @n_Continue = 3 
+      SET @n_Err = 88120
+      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Storerkey is Required. (isp_ASNException_Validate_ColValue)'
+      GOTO QUIT_SP
+   END
+   
+   IF @c_ColName = 'Userdefine01' AND @c_ColValue <> ''
+   BEGIN
+      
+      SET @c_ColName01_RDF = 'Userdefine04'
+      SET @c_ColVal01_RDF  = 'Y'
+      IF NOT EXISTS (SELECT 1 
+                     FROM RDT.rdtDataCapture AS rdc WITH (NOLOCK)
+                     WHERE rdc.StorerKey = @c_Storerkey
+                     AND rdc.Facility = @c_Facility
+                     AND rdc.V_String1= @c_ColValue
+      )
+      BEGIN
+         SET @c_ErrMsg = 'Invalid Tracking #'
+         SET @c_ColVal01_RDF  = 'N'
+      END
+      
+      SET @c_ColName02_RDF = 'Userdefine05'
+      
+      SELECT TOP 1 @c_ColVal02_RDF = r.CarrierName
+      FROM dbo.DocInfo AS di WITH (NOLOCK)
+      JOIN dbo.RECEIPT AS r  WITH (NOLOCK) ON di.Key1 = r.ReceiptKey
+      WHERE di.TableName = 'RECEIPT'
+      AND di.Key3 = @c_ColValue
+      ORDER BY di.AddDate DESC
+   END
+   
+   IF @c_ColName = 'Userdefine03' AND @c_ColValue <> ''
+   BEGIN
+      IF ISNUMERIC(@c_ColValue) = 0
+      BEGIN
+         SET @n_Continue = 3 
+         SET @n_Err = 88130
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Invalid Quantity Type. Only Number is allowed. (isp_ASNException_Validate_ColValue)'
+         GOTO QUIT_SP
+      END
+      
+      IF CONVERT(INT, @c_ColValue) <= 0
+      BEGIN
+         SET @n_Continue = 3 
+         SET @n_Err = 88140
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Invalid Quantity. Quantity <= 0. (isp_ASNException_Validate_ColValue)'
+         GOTO QUIT_SP
+      END
+   END
+   
+QUIT_SP:
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SET @b_Success = 0
+      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'isp_ASNException_Validate_ColValue'
+      --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+   END
+   ELSE
+   BEGIN
+      SET @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+END -- procedure
+GO
+GRANT EXECUTE ON [dbo].[isp_ASNException_Validate_ColValue] TO nSQL 
+GO
