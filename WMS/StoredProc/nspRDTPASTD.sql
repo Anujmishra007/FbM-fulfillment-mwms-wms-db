@@ -134,6 +134,7 @@ GO
 /* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic */
 /*                                  SQL Statement                             */  
 /* 08-Jul-2020  Shong         4.6   Bug Fixing                                */
+/* 15-Dec-2020  NJOW01        4.7   WMS-15776 TH Michelin PA                  */
 /* 12-Jan-2021  NJOW02        4.8   WMS-16023 type 07 cater for pendingmovein */
 /******************************************************************************/
 CREATE PROCEDURE [dbo].[nspRDTPASTD]
@@ -172,7 +173,7 @@ BEGIN
 
    -- Added By Shong
    DECLARE @n_RowCount            INT,
-     @c_ToLoc                    NVARCHAR(10) = '',
+           @c_ToLoc                    NVARCHAR(10) = '',
            @n_IdCnt                    INT,
            @b_MultiProductID           INT,
            @b_MultiLotID               INT,
@@ -190,7 +191,11 @@ BEGIN
            @n_PalletQty                INT,
            @n_StackFactor              INT, -- SOS36712 KCPI
            @n_MaxPalletStackFactor     INT, -- SOS36712 KCPI
-           @c_ToHostWhCode             NVARCHAR(10) -- SOS69388 KFP
+           @c_ToHostWhCode             NVARCHAR(10), -- SOS69388 KFP
+           @c_Color                    NVARCHAR(10), --NJOW01
+           @dt_Lottable05              DATETIME,  --NJOW01
+           @c_Class                    NVARCHAR(10)  --NJOW01
+
 
    -- TITAN Project
    DECLARE @c_NextPnDLocation NVARCHAR(10),
@@ -286,10 +291,10 @@ BEGIN
    CREATE TABLE #t_LocationFlagInclude (LocationFlagInclude NVARCHAR(10))
       
    DECLARE @t_SKUList TABLE (StorerKey NVARCHAR(15), SKU NVARCHAR(20))
-
+ 
    DECLARE @n_IsRDT Int
    EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
-
+ 
     IF ISNULL(RTRIM(@c_SKU), '')<>'' AND @n_Qty > 0
        SET @b_PutawayBySKU = 'Y'
     ELSE
@@ -479,7 +484,6 @@ ELSE
                LLI.Sku = @c_SKU AND
                LLI.Qty > 0
    END
-
 
    /* -- CALCULATE BY BOMSKU Start (ChewKP02)--*/
    DECLARE @c_CalculateByBOM         NVARCHAR(1),
@@ -799,7 +803,14 @@ ELSE
       PRINT ' Putaway StrategyKey : ' + @c_PutawayStrategyKey
       PRINT ' Facility: ' + @c_Facility 
    END
-      
+   
+   IF @c_userid='TEST1'
+   BEGIN
+      SET @b_Debug = 1
+      PRINT '---- Trace On ----'
+      PRINT ' Putaway StrategyKey : ' + @c_PutawayStrategyKey
+      PRINT ' Facility: ' + @c_Facility 
+   END
 
    IF @b_Debug IS NULL
    BEGIN
@@ -1090,7 +1101,7 @@ ELSE
              @cpa_PutawayZone03     = PutawayZone03,
              @cpa_PutawayZone04     = PutawayZone04,
              @cpa_PutawayZone05     = PutawayZone05,
- @cpa_PutawayZoneExt    = '',
+             @cpa_PutawayZoneExt    = '',
              @cpa_PutCode           = PutCode, --(ung06)
              @cpa_PutCodeSQL        = ''       --(ung06)
        FROM  PUTAWAYSTRATEGYDETAIL WITH (NOLOCK)
@@ -1163,8 +1174,8 @@ ELSE
                         ',@npa_LocLevelInclude01   INT = 0' +
                         ',@npa_LocLevelInclude02   INT = 0' +
                         ',@npa_LocLevelInclude03   INT = 0' +
-          ',@npa_LocLevelInclude04   INT = 0' +
-           ',@npa_LocLevelInclude05   INT = 0' +
+                        ',@npa_LocLevelInclude04   INT = 0' +
+                        ',@npa_LocLevelInclude05   INT = 0' +
                         ',@npa_LocLevelInclude06   INT = 0' +
                         ',@npa_LocLevelExclude01   INT = 0' +
                         ',@npa_LocLevelExclude02   INT = 0' +
@@ -1812,7 +1823,9 @@ ELSE
          @cpa_PAType = '58' OR -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do NOT mix sku)
          @cpa_PAType = '59' OR -- SOS133180 UK Project - IF ID Held, PUT TO Specified ZONE
          @cpa_PAType = '61' OR -- SOS157089 TITAN Project - Search Specified Zone with Empty Pick & Drop Location
-         @cpa_PAType = '62'    -- SOS292706 - Search Empty Location Within Sku Zone Considering PendingMoveIn -- (ChewKP07)
+         @cpa_PAType = '62' OR -- SOS292706 - Search Empty Location Within Sku Zone Considering PendingMoveIn -- (ChewKP07)
+         @cpa_PAType = '63'    --step1: Search Location With the same Sku consider shelflife by locationgroup, pallet type(sku.color) & max pallet per loc configure in codelkup. --NJOW01
+                               --step2: Search empty Location by locationgroup, pallet type(sku.color) & max pallet per loc configure in codelkup
       BEGIN
          IF @cpa_PAType = '02' OR
             @cpa_PAType = '55' OR -- SOS69388 KFP - Cross facility - search location within specified zone
@@ -1932,7 +1945,7 @@ ELSE
                   @cpa_PAType = '12' OR
                   @cpa_PAType = '61'    -- SOS157089 TITAN Project - Search Specified Zone with Empty Pick & Drop Location
                BEGIN
-   DECLARE @n_StdCube                float
+                  DECLARE @n_StdCube                float
                         , @c_SelectSQL              nvarchar(4000)
                         , @n_NoOfInclude            int
                         , @c_DimRestSQL             nvarchar(3000)
@@ -2070,8 +2083,8 @@ ELSE
                   ' WHERE   LOC.Facility = @c_Facility' +
                   CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
                   ISNULL( RTRIM(@c_SQL_LocationFlagInclude), '') +
-               ISNULL( RTRIM(@c_SQL_LocationFlagExclude), '') +
-   ISNULL( RTRIM(@c_SQL_LocationTypeExclude), '') +
+                  ISNULL( RTRIM(@c_SQL_LocationFlagExclude), '') +
+                  ISNULL( RTRIM(@c_SQL_LocationTypeExclude), '') +
                   ISNULL( RTRIM(@c_SQL_LocLevelInclude    ), '') +
                   ISNULL( RTRIM(@c_SQL_LocLevelExclude    ), '') +
                   ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
@@ -2131,7 +2144,7 @@ ELSE
                         SELECT @c_DimRestSQL = RTRIM(@c_DimRestSQL) + ' MAX(LOC.WeightCapacity) - ' +
                                              ' SUM((ISNULL(LOTxLOCxID.Qty, 0) - ISNULL(LOTxLOCxID.QtyPicked,0) + ISNULL(LOTxLOCxID.PendingMoveIn,0))* ISNULL(SKU.STDGROSSWGT,1)) >= ' +
                                             ' @npa_TotalWeight '
-      END
+                     END
 
 
                      
@@ -2783,7 +2796,7 @@ ELSE
                      , @c_Facility
                      , @c_SKU       
                      , @c_LOT       
-       , @c_FromLoc   
+                     , @c_FromLoc   
                      , @c_ID        
                      , @n_Qty       
                      , @n_StdGrossWgt
@@ -2994,7 +3007,7 @@ ELSE
 
                END -- END of PAType = 02, 04, 12, 61
                ELSE IF @cpa_PAType IN ('16', '17', '18', '19', '21', '22', '23', '24', '30', '32', '34', '42', '44', '52', '54',
-                                       '55', '56', '57', '58','62') -- (ChewKP07)
+                                       '55', '56', '57', '58','62','63') -- (ChewKP07) --NJOW01
                BEGIN
                   SELECT @cpa_ToLoc = SPACE(10)
                   SELECT @n_RowCount = 0
@@ -3024,7 +3037,7 @@ ELSE
                                        @c_SQL_LocationCategoryInclude + 
                                        @c_SQL_LocationFlagInclude     + 
                                   @c_SQL_LocationFlagExclude     +
-    @c_SQL_LocationTypeExclude     +
+                                  @c_SQL_LocationTypeExclude     +
                                        ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +   
                                        CASE WHEN 'DRIVEIN' IN (@cpa_LocationCategoryInclude01, @cpa_LocationCategoryInclude02,
                                                                @cpa_LocationCategoryInclude03)
@@ -3699,7 +3712,7 @@ ELSE
                      , @c_Facility
                      , @c_SKU       
                      , @c_LOT       
-          , @c_FromLoc   
+                     , @c_FromLoc   
                      , @c_ID        
                      , @n_Qty  
                      , @n_StdGrossWgt     
@@ -3770,6 +3783,155 @@ ELSE
                         + ', @cpa_ToLoc: ' + @cpa_ToLoc                               
                      END
                   END -- END of @cpa_PAType = '30'
+                  
+                  --NJOW01 
+                  --step1: Search Location With the same Sku consider shelflife by locationgroup, pallet type(sku.color) & max pallet per loc configure in codelkup
+                  --step2: Search empty Location by locationgroup, pallet type(sku.color) & max pallet per loc configure in codelkup
+                  IF @cpa_PAType = '63'
+                  BEGIN
+                     SELECT @cpa_ToLoc = SPACE(10)
+                     
+                     SELECT @c_Color = Color,
+                            @c_Class = Class
+                     FROM SKU (NOLOCK)
+                     WHERE Storerkey = @c_Storerkey
+                     AND Sku = @c_Sku
+                                          
+                     SELECT @dt_Lottable05 = MAX(LA.Lottable05)                     
+                     FROM LOTXLOCXID  LLI (NOLOCK)
+                     JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot
+                     WHERE LLI.Storerkey = @c_Storerkey
+                     AND LLI.Sku = @c_Sku
+                     AND LLI.ID = @c_ID
+                     AND LLI.Loc = @c_FromLoc
+                     AND LLI.QTY - LLI.QTYPicked > 0
+
+                     SELECT @c_SelectSQL = N' DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                                       ' SELECT LOC.loc, '''' AS HostWhCode    ' +
+                                       ' FROM LOC (NOLOCK) ' 
+                                       
+                     IF EXISTS (SELECT 1 FROM #t_PutawayZone)
+                     BEGIN
+                        SELECT @c_SelectSQL = @c_SelectSQL + ' JOIN #t_PutawayZone PZ ON LOC.PutawayZone = PZ.PutawayZone ' 
+                     END                                  
+                           
+                     SELECT @c_SelectSQL = @c_SelectSQL + 
+                                       ' JOIN CODELKUP CL (NOLOCK) ON CL.Listname = ''MATAPALLET'' AND LOC.LocationGroup = CL.Short AND CL.Code2 = @c_Color ' +
+                                       ' OUTER APPLY (SELECT COUNT(DISTINCT LLI.ID) NoofID ' +
+                                       '              FROM LOTXLOCXID LLI (NOLOCK) JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = LLI.LOT  ' +
+                                       '              WHERE LLI.Loc = LOC.Loc AND (LLI.Qty > 0 OR LLI.PendingMoveIn > 0) AND LLI.sku = @c_SKU AND LLI.StorerKey = @c_StorerKey ' +
+                                       '              HAVING COUNT(DISTINCT LLI.ID) < CAST(CL.UDF01 AS INT) 
+                                                             AND (DATEDIFF(day, MIN(LA.Lottable05), GETDATE()) < 90 OR @c_Class <> ''N'')) AS INV ' +
+                                       ' OUTER APPLY (SELECT SUM(LLI.Qty+LLI.PendingMoveIn) Qty FROM LOTXLOCXID LLI (NOLOCK) WHERE LLI.Loc = LOC.Loc) AS BAL ' +
+                                       ' OUTER APPLY (SELECT TOP 1 L.Loc 
+                                                      FROM LOC L (NOLOCK) 
+                                                      JOIN LOTXLOCXID LLI (NOLOCK) ON L.Loc = LLI.LOC     
+                                                      JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot                                    
+                                                      JOIN SKU (NOLOCK) ON LLI.Storerkey = SKU.Storerkey AND LLI.Sku = SKU.Sku             
+                                                      WHERE LLI.Storerkey = @c_Storerkey 
+                                                      AND SKU.Class = ''N''
+                                                      AND @c_Class = ''N''
+                                                      AND L.Loc = LOC.Loc 
+                                                      AND L.LocationGroup NOT IN(''GA'',''RACK'') 
+                                                      AND LA.Lottable05 <> @dt_Lottable05) AS MIXL5 ' +                                                                         
+                                       ' WHERE LOC.Facility = @c_Facility ' +
+                                       ' AND MIXL5.Loc IS NULL ' +
+                                       ' AND (ISNULL(BAL.Qty,0) = 0 OR ISNULL(INV.NoofID,0) > 0) ' +
+                                       @c_SQL_LocationCategoryExclude + 
+                                       @c_SQL_LocationCategoryInclude + 
+                                       @c_SQL_LocationFlagInclude     + 
+                                       @c_SQL_LocationFlagExclude     +
+                                       @c_SQL_LocationTypeExclude     +
+                                       ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +   
+                                       CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' 
+                                       END +
+                                       ' GROUP BY LOC.PALogicalLoc, LOC.LOC, ISNULL(INV.NoofID,0) ' +
+                                       ' ORDER BY CASE WHEN ISNULL(INV.NoofID,0) > 0 THEN 1 ELSE 2 END, LOC.PALogicalLoc, LOC.LOC '
+
+                     SET @c_SQLParms = RTRIM(@c_SQLParms) + 
+                                        ', @c_Color NVARCHAR(18), @dt_Lottable05 DATETIME, @c_Class NVARCHAR(10)' 
+
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT 'PA Type: ' + @cpa_PAType 
+                        PRINT '>> SQL: ' + @c_SelectSQL
+                        PRINT '>> Parm: ' + @c_SQLParms 
+                     END
+                                                          
+                     EXEC sp_ExecuteSql @c_SelectSQL
+                     , @c_SQLParms
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty       
+                     , @n_StdGrossWgt
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationFlagExclude01
+                     , @cpa_LocationFlagExclude02
+                     , @cpa_LocationFlagExclude03   
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06  
+                     , @npa_TotalCube 
+                     , @npa_TotalWeight 
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     , @c_Color
+                     , @dt_Lottable05
+                     , @c_Class
+
+                     -- Chekcing
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT '>> Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_SKU + ', Facility is ' + @c_Facility
+                        PRINT '>> PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc + ', color is ' + @c_Color + ', class is ' + @c_Class
+                        PRINT '>> PutCodeSQL: ' + @cpa_PutCodeSQL + ', Lottable05 is ' + CAST(@dt_Lottable05 AS NVARCHAR)
+                     END                  	
+                  END -- END of @cpa_PAType = '63'
 
                   IF @b_Debug = 2
                   BEGIN                     
@@ -3798,6 +3960,7 @@ ELSE
                         GOTO PA_CHECKRESTRICTIONS
 
                         PATYPE02_BYLOC_B:
+
                         IF @b_RestrictionsPassed = 1
                         BEGIN
                            SELECT @b_GotLoc = 1
@@ -3809,6 +3972,7 @@ ELSE
                         SELECT @b_GotLoc = 1
                         BREAK
                      END
+
                      FETCH NEXT FROM CUR_PUTAWAYLOCATION INTO @cpa_ToLoc, @c_ToHostWhCode
                   END -- @@FETCH_STATUS <> -1
                   CLOSE CUR_PUTAWAYLOCATION
@@ -3980,7 +4144,7 @@ ELSE
                         AND LOC.Facility = @c_Facility -- CDC Migration
                         AND LOC.LocationFlag = 'NONE'
                         AND LOC.LocationCategory <> 'VIRTUAL'
-                        AND SKUxLOC.LOC <> @c_FromLoc) > 0 -- vicky               	
+                        AND SKUxLOC.LOC <> @c_FromLoc) > 0 -- vicky
                   BEGIN
                      IF @b_Debug = 1
                      BEGIN
@@ -4981,7 +5145,7 @@ ELSE
                   IF @b_Debug = 2
                      PRINT '>> Reason: ' + 'FAILED Location category DRIVEIN ' + RTRIM(@c_loc_category) + ' Contain Different LOT AttributeS.'
                                           
-     SELECT @b_RestrictionsPassed = 0
+                  SELECT @b_RestrictionsPassed = 0
                   GOTO RESTRICTIONCHECKDONE
                END
             END
@@ -5097,7 +5261,7 @@ ELSE
             PRINT '>> Reason: ' + 'PASSED Location handling ' + RTRIM(@c_loc_handling) + ' was one of the specified values'         
       END
    END
-
+   
    IF @b_MultiProductID = 1
    BEGIN
       SELECT @n_CurrLocMultiSku = 1
@@ -5252,9 +5416,9 @@ ELSE
             AND LOTxLOCxID.ID = @c_ID
             AND (LOTxLOCxID.QTY-LOTxLOCxID.QTYPicked > 0)
             AND EXISTS (SELECT TOP 1 1
-               FROM LOTxLOCxID ToLLI WITH (NOLOCK)
+                  FROM LOTxLOCxID ToLLI WITH (NOLOCK)
                   JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)
-    WHERE ToLLI.LOC = @c_ToLoc
+                  WHERE ToLLI.LOC = @c_ToLoc
                   AND (ToLLI.StorerKey <> LOTxLOCxID.StorerKey OR ToLLI.SKU <> LOTxLOCxID.SKU)
                   AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))
 
@@ -7335,7 +7499,8 @@ ELSE
       @cpa_PAType = '58' OR -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do NOT mix sku)
       @cpa_PAType = '59' OR -- SOS133180
       @cpa_PAType = '61' OR
-      @cpa_PAType = '62'    -- (ChewKP07)
+      @cpa_PAType = '62' OR   -- (ChewKP07)
+      @cpa_PAType = '63' --NJOW01
    BEGIN
       IF @cpa_LocSearchType = '1'
       BEGIN
