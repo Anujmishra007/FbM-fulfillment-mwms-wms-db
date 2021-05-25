@@ -28,7 +28,8 @@ GO
 /*                                                                         */    
 /* Updates:                                                                */    
 /* Date         Author  Ver   Purposes                                     */    
-/* 13-Apr-2021  WLChooi 1.0   Created                                      */    
+/* 13-Apr-2021  WLChooi 1.0   Created                                      */  
+/* 25-May-2021  WLChooi 1.1   Fix - Not able to allocate fully (WL01)      */
 /***************************************************************************/    
 CREATE PROC [dbo].[ispTransferAllocation03](    
    @c_FromStorerkey  NVARCHAR(10) = ''            
@@ -778,11 +779,13 @@ BEGIN
               
          WHILE  @@FETCH_STATUS <> -1 AND @n_FromQty > 0    
          BEGIN    
-            SET @n_QtyToTake = 0    
+         	--WL01 S
+            --SET @n_QtyToTake = 0    
   
-            SET @c_UCCNo       = ''    
-            SET @n_FromChannel_ID = 0  
-            SET @n_PABookingKey= 0   
+            --SET @c_UCCNo       = ''    
+            --SET @n_FromChannel_ID = 0  
+            --SET @n_PABookingKey= 0   
+            --WL01 E
   
             SET @n_QtyAvail_LLI=0    
             SELECT @n_QtyAvail_LLI = LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen  
@@ -795,562 +798,575 @@ BEGIN
             IF @n_QtyAvail_LLI = 0  
             BEGIN  
                GOTO NEXT_LLI  
-            END  
+            END 
+            
+            --WL01 S
+            WHILE @n_FromQty > 0 AND @n_QtyAvail_LLI > 0   
+            BEGIN 
+            	SET @n_QtyToTake = 0    
   
-            IF @c_LocationCategory = 'BULK'  
-            BEGIN  
-               SELECT TOP 1   
-                     @c_UCCNo = u.UCCNo  
-                  ,  @n_QtyUCC= u.Qty   
-                  ,  @n_UCC_RowRef = u.UCC_RowRef        
-               FROM UCC u WITH (NOLOCK)  
-               WHERE u.Storerkey = @c_FromStorerkey  
-               AND u.Lot = @c_FromLot  
-               AND u.Loc = @c_FromLoc  
-               AND u.ID = @c_FromID  
-               AND u.Qty > 0  
-               AND u.Qty <= @n_QtyAvail_LLI  
-               AND u.[Status] = '1'  
-  
+               SET @c_UCCNo       = ''    
+               SET @n_FromChannel_ID = 0  
+               SET @n_PABookingKey= 0   
+            --WL01 E
+               IF @c_LocationCategory = 'BULK'  
+               BEGIN  
+                  SELECT TOP 1   
+                        @c_UCCNo = u.UCCNo  
+                     ,  @n_QtyUCC= u.Qty   
+                     ,  @n_UCC_RowRef = u.UCC_RowRef        
+                  FROM UCC u WITH (NOLOCK)  
+                  WHERE u.Storerkey = @c_FromStorerkey  
+                  AND u.Lot = @c_FromLot  
+                  AND u.Loc = @c_FromLoc  
+                  AND u.ID = @c_FromID  
+                  AND u.Qty > 0  
+                  AND u.Qty <= @n_QtyAvail_LLI  
+                  AND u.[Status] = '1'  
+               
+                  IF @c_UCCNo = ''  
+                  BEGIN  
+                     GOTO NEXT_LLI  
+                  END  
+               END  
+                 
+               -- 2021-04-02 Get Channel ID By All Channel Attribute   
+               IF @c_FromChannel <> ''  
+               BEGIN  
+                  SET @n_Attribute_Cnt = 1  
+                  WHILE @n_Attribute_Cnt <= 5  
+                  BEGIN  
+                     IF @n_Attribute_Cnt = 1 SET @c_C_AttributeLbl = @c_C_AttributeLbl01  
+                     IF @n_Attribute_Cnt = 2 SET @c_C_AttributeLbl = @c_C_AttributeLbl02  
+                     IF @n_Attribute_Cnt = 3 SET @c_C_AttributeLbl = @c_C_AttributeLbl03  
+                     IF @n_Attribute_Cnt = 4 SET @c_C_AttributeLbl = @c_C_AttributeLbl04  
+                     IF @n_Attribute_Cnt = 5 SET @c_C_AttributeLbl = @c_C_AttributeLbl05    
+               
+                     SET @c_C_AttributeLbl_value = CASE WHEN @c_C_AttributeLbl = 'Lottable01' THEN @c_Lottable01   
+                                                        WHEN @c_C_AttributeLbl = 'Lottable02' THEN @c_Lottable02   
+                                                        WHEN @c_C_AttributeLbl = 'Lottable03' THEN @c_Lottable03   
+                                                        WHEN @c_C_AttributeLbl = 'Lottable04' THEN CONVERT(NVARCHAR(30), @dt_Lottable04, 112)  
+                                                        WHEN @c_C_AttributeLbl = 'Lottable05' THEN CONVERT(NVARCHAR(30), @dt_Lottable05, 112)  
+                                                        WHEN @c_C_AttributeLbl = 'Lottable06' THEN @c_Lottable06                                            
+                                                        WHEN @c_C_AttributeLbl = 'Lottable07' THEN @c_Lottable07    
+                                                        WHEN @c_C_AttributeLbl = 'Lottable08' THEN @c_Lottable08                                                    
+                                                        WHEN @c_C_AttributeLbl = 'Lottable09' THEN @c_Lottable09                                            
+                                                        WHEN @c_C_AttributeLbl = 'Lottable10' THEN @c_Lottable10   
+                                                        WHEN @c_C_AttributeLbl = 'Lottable11' THEN @c_Lottable11   
+                                                        WHEN @c_C_AttributeLbl = 'Lottable12' THEN @c_Lottable12   
+                                                        WHEN @c_C_AttributeLbl = 'Lottable13' THEN CONVERT(NVARCHAR(30), @dt_Lottable13, 112)  
+                                                        WHEN @c_C_AttributeLbl = 'Lottable14' THEN CONVERT(NVARCHAR(30), @dt_Lottable14, 112)  
+                                                        WHEN @c_C_AttributeLbl = 'Lottable15' THEN CONVERT(NVARCHAR(30), @dt_Lottable15, 112)   
+                                                        ELSE ''  
+                                                   END    
+                     IF @n_Attribute_Cnt = 1 SET @c_C_AttributeLbl01_Value = @c_C_AttributeLbl_Value  
+                     IF @n_Attribute_Cnt = 2 SET @c_C_AttributeLbl02_Value = @c_C_AttributeLbl_Value  
+                     IF @n_Attribute_Cnt = 3 SET @c_C_AttributeLbl03_Value = @c_C_AttributeLbl_Value  
+                     IF @n_Attribute_Cnt = 4 SET @c_C_AttributeLbl04_Value = @c_C_AttributeLbl_Value  
+                     IF @n_Attribute_Cnt = 5 SET @c_C_AttributeLbl05_Value = @c_C_AttributeLbl_Value      
+               
+                     SET @n_Attribute_Cnt = @n_Attribute_Cnt + 1                                                                                                                                                         
+                  END  
+               
+                  SELECT TOP 1  
+                        @n_FromChannel_ID =  chni.Channel_ID    
+                     ,  @n_QtyChannel = chni.Qty - chni.QtyAllocated - chni.QtyOnHold  
+                  FROM CHANNELINV chni WITH (NOLOCK)  
+                  WHERE chni.Facility = @c_FromFacility  
+                  AND chni.Storerkey = @c_FromStorerkey  
+                  AND chni.Sku = @c_FromSku  
+                  AND chni.Channel = @c_FromChannel  
+                  --AND chni.C_Attribute01 = @c_Lottable07  
+                  AND chni.C_Attribute01 = @c_C_AttributeLbl01_Value  
+                  AND chni.C_Attribute02 = @c_C_AttributeLbl02_Value  
+                  AND chni.C_Attribute03 = @c_C_AttributeLbl03_Value  
+                  AND chni.C_Attribute04 = @c_C_AttributeLbl04_Value  
+                  AND chni.C_Attribute05 = @c_C_AttributeLbl05_Value      
+                  AND chni.Qty - chni.QtyAllocated - chni.QtyOnHold > 0  
+               
+                  IF @n_FromChannel_ID = 0  
+                  BEGIN  
+                     GOTO NEXT_LLI   
+                  END  
+               END   
+                    
                IF @c_UCCNo = ''  
                BEGIN  
-                  GOTO NEXT_LLI  
+                  SET @n_Qty = CASE WHEN @n_QtyChannel <= @n_QtyAvail_LLI THEN @n_QtyChannel ELSE @n_QtyAvail_LLI END  
                END  
-            END  
-              
-            -- 2021-04-02 Get Channel ID By All Channel Attribute   
-            IF @c_FromChannel <> ''  
-            BEGIN  
-               SET @n_Attribute_Cnt = 1  
-               WHILE @n_Attribute_Cnt <= 5  
+               ELSE  
                BEGIN  
-                  IF @n_Attribute_Cnt = 1 SET @c_C_AttributeLbl = @c_C_AttributeLbl01  
-                  IF @n_Attribute_Cnt = 2 SET @c_C_AttributeLbl = @c_C_AttributeLbl02  
-                  IF @n_Attribute_Cnt = 3 SET @c_C_AttributeLbl = @c_C_AttributeLbl03  
-                  IF @n_Attribute_Cnt = 4 SET @c_C_AttributeLbl = @c_C_AttributeLbl04  
-                  IF @n_Attribute_Cnt = 5 SET @c_C_AttributeLbl = @c_C_AttributeLbl05    
-      
-                  SET @c_C_AttributeLbl_value = CASE WHEN @c_C_AttributeLbl = 'Lottable01' THEN @c_Lottable01   
-                                                     WHEN @c_C_AttributeLbl = 'Lottable02' THEN @c_Lottable02   
-                                                     WHEN @c_C_AttributeLbl = 'Lottable03' THEN @c_Lottable03   
-                                                     WHEN @c_C_AttributeLbl = 'Lottable04' THEN CONVERT(NVARCHAR(30), @dt_Lottable04, 112)  
-                                                     WHEN @c_C_AttributeLbl = 'Lottable05' THEN CONVERT(NVARCHAR(30), @dt_Lottable05, 112)  
-                                                     WHEN @c_C_AttributeLbl = 'Lottable06' THEN @c_Lottable06                                            
-                                                     WHEN @c_C_AttributeLbl = 'Lottable07' THEN @c_Lottable07    
-                                                     WHEN @c_C_AttributeLbl = 'Lottable08' THEN @c_Lottable08                                                    
-                                                     WHEN @c_C_AttributeLbl = 'Lottable09' THEN @c_Lottable09                                            
-                                                     WHEN @c_C_AttributeLbl = 'Lottable10' THEN @c_Lottable10   
-                                                     WHEN @c_C_AttributeLbl = 'Lottable11' THEN @c_Lottable11   
-                                                     WHEN @c_C_AttributeLbl = 'Lottable12' THEN @c_Lottable12   
-                                                     WHEN @c_C_AttributeLbl = 'Lottable13' THEN CONVERT(NVARCHAR(30), @dt_Lottable13, 112)  
-                                                     WHEN @c_C_AttributeLbl = 'Lottable14' THEN CONVERT(NVARCHAR(30), @dt_Lottable14, 112)  
-                                                     WHEN @c_C_AttributeLbl = 'Lottable15' THEN CONVERT(NVARCHAR(30), @dt_Lottable15, 112)   
-                                                     ELSE ''  
-                                                END    
-                  IF @n_Attribute_Cnt = 1 SET @c_C_AttributeLbl01_Value = @c_C_AttributeLbl_Value  
-                  IF @n_Attribute_Cnt = 2 SET @c_C_AttributeLbl02_Value = @c_C_AttributeLbl_Value  
-                  IF @n_Attribute_Cnt = 3 SET @c_C_AttributeLbl03_Value = @c_C_AttributeLbl_Value  
-                  IF @n_Attribute_Cnt = 4 SET @c_C_AttributeLbl04_Value = @c_C_AttributeLbl_Value  
-                  IF @n_Attribute_Cnt = 5 SET @c_C_AttributeLbl05_Value = @c_C_AttributeLbl_Value      
-      
-                  SET @n_Attribute_Cnt = @n_Attribute_Cnt + 1                                                                                                                                                         
+                  SET @n_Qty = CASE WHEN @n_QtyChannel < @n_QtyUCC THEN 0 ELSE @n_QtyUCC END  
                END  
-  
-               SELECT TOP 1  
-                     @n_FromChannel_ID =  chni.Channel_ID    
-                  ,  @n_QtyChannel = chni.Qty - chni.QtyAllocated - chni.QtyOnHold  
-               FROM CHANNELINV chni WITH (NOLOCK)  
-               WHERE chni.Facility = @c_FromFacility  
-               AND chni.Storerkey = @c_FromStorerkey  
-               AND chni.Sku = @c_FromSku  
-               AND chni.Channel = @c_FromChannel  
-               --AND chni.C_Attribute01 = @c_Lottable07  
-               AND chni.C_Attribute01 = @c_C_AttributeLbl01_Value  
-               AND chni.C_Attribute02 = @c_C_AttributeLbl02_Value  
-               AND chni.C_Attribute03 = @c_C_AttributeLbl03_Value  
-               AND chni.C_Attribute04 = @c_C_AttributeLbl04_Value  
-               AND chni.C_Attribute05 = @c_C_AttributeLbl05_Value      
-               AND chni.Qty - chni.QtyAllocated - chni.QtyOnHold > 0  
-  
-               IF @n_FromChannel_ID = 0  
+               
+               IF @n_Qty = 0  
                BEGIN  
                   GOTO NEXT_LLI   
                END  
-            END   
+               
+               IF @n_QtyRemaining >= @n_Qty   
+               BEGIN    
+                  SET @n_QtyToTake = @n_Qty  
+               END    
+               ELSE    
+               BEGIN    
+                  SET @n_QtyToTake = @n_QtyRemaining    
+               END    
+               
+               IF @n_QtyToTake <= 0    
+               BEGIN    
+                  GOTO NEXT_LLI  
+               END 
                  
-            IF @c_UCCNo = ''  
-            BEGIN  
-               SET @n_Qty = CASE WHEN @n_QtyChannel <= @n_QtyAvail_LLI THEN @n_QtyChannel ELSE @n_QtyAvail_LLI END  
-            END  
-            ELSE  
-            BEGIN  
-               SET @n_Qty = CASE WHEN @n_QtyChannel < @n_QtyUCC THEN 0 ELSE @n_QtyUCC END  
-            END  
-  
-            IF @n_Qty = 0  
-            BEGIN  
-               GOTO NEXT_LLI   
-            END  
-  
-            IF @n_QtyRemaining >= @n_Qty   
-            BEGIN    
-               SET @n_QtyToTake = @n_Qty  
-            END    
-            ELSE    
-            BEGIN    
-               SET @n_QtyToTake = @n_QtyRemaining    
-            END    
-  
-            IF @n_QtyToTake <= 0    
-            BEGIN    
-               GOTO NEXT_LLI  
-            END 
-              
-            --ToLoc = FromLoc
-            SET @c_ToLoc = @c_FromLoc 
-            SET @c_ToID = @c_FromID   
-            
-            --Status = 9 - Finalize Line  
-            --Status = 3 - Do Not Finalize Line
-            SET @c_TransferStatus_D = '9'  
-
-            SET @n_QtyRemaining = @n_QtyRemaining - @n_QtyToTake    
-              
-            SET @c_ToUCCNo = ''  
-            IF EXISTS ( SELECT 1 FROM LOC TL WITH (NOLOCK) WHERE TL.Loc = @c_ToLoc AND TL.LoseUCC = '0')  
-            BEGIN  
-               SET @c_ToUCCNo = @c_UCCNo                   
-            END    
-            -----------------------------------------------  
-            -- Populate Inventory to Transferdetail - START  
-            -----------------------------------------------  
-            IF @n_QtyRemaining <= 0    
-            BEGIN    
-               UPDATE TRANSFERDETAIL WITH (ROWLOCK)    
-               SET FromLot        = @c_FromLot    
-                  ,FromLoc        = @c_FromLoc    
-                  ,FromID         = @c_FromID    
-                  ,FromQty        = @n_QtyToTake       
-                  ,Lottable01     = @c_Lottable01   
-                  ,Lottable02     = @c_Lottable02                      
-                  ,Lottable03     = @c_Lottable03    
-                  ,Lottable04     = @dt_Lottable04    
-                  ,Lottable05     = @dt_Lottable05    
-                  ,Lottable06     = @c_Lottable06        
-                  ,Lottable07     = @c_Lottable07           
-                  ,Lottable08     = @c_Lottable08        
-                  ,Lottable09     = @c_Lottable09        
-                  ,Lottable10     = @c_Lottable10        
-                  ,Lottable11     = @c_Lottable11        
-                  ,Lottable12     = @c_Lottable12        
-                  ,Lottable13     = @dt_Lottable13       
-                  ,Lottable14     = @dt_Lottable14       
-                  ,Lottable15     = @dt_Lottable15       
-                  ,ToLoc          = @c_ToLoc   
-                  ,ToID           = @c_ToID    
-                  ,ToQty          = @n_QtyToTake     
-                  ,ToLottable01   = @c_Lottable01    
-                  ,ToLottable02   = @c_Lottable02            
-                  ,ToLottable03   = @c_Lottable03    
-                  ,ToLottable04   = @dt_Lottable04    
-                  ,ToLottable05   = @dt_Lottable05    
-                  ,ToLottable06   = @c_Lottable06      
-                  ,ToLottable07   = @c_Lottable07       
-                  ,ToLottable08   = @c_Lottable08      
-                  ,ToLottable09   = @c_Lottable09      
-                  ,ToLottable10   = @c_Lottable10      
-                  ,ToLottable11   = @c_Lottable11      
-                  ,ToLottable12   = @c_Lottable12      
-                  ,ToLottable13   = @dt_Lottable13     
-                  ,ToLottable14   = @dt_Lottable14     
-                  ,ToLottable15   = @dt_Lottable15     
-                  ,UserDefine01   = @c_UCCNo   
-                  ,UserDefine02   = @c_ToUCCNo    
-                  ,FromChannel_ID = @n_FromChannel_ID  
-                  ,EditWho        = @c_UserID  
-                  ,EditDate       = GETDATE()  
-               WHERE Transferkey = @c_Transferkey    
-               AND TransferLineNumber = @c_TransferLineNumber   
-    
-               SET @n_err = @@ERROR    
-    
-               IF @n_err <> 0    
-               BEGIN    
-                  SET @n_continue = 3    
-                  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-                  SET @n_err = 81080   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSFERDETAIL Failed. (ispTransferAllocation03)'    
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-                  GOTO NEXT_TRF    
-               END    
-    
-               SET @c_NewTransferLineNo = @c_TransferLineNumber    
-            END    
-            ELSE    
-            BEGIN    
-               ----------------------------------  
-               -- Populate to New Line  
-               ----------------------------------  
-               SELECT @c_NewTransferLineNo = RIGHT('00000' + CONVERT(VARCHAR(5), MAX(CONVERT(INT, TransferLineNumber)) + 1),5)    
-               FROM TRANSFERDETAIL WITH (NOLOCK)    
-               WHERE Transferkey = @c_Transferkey    
-    
-               INSERT INTO TRANSFERDETAIL    
-                  (  TransferKey    
-                  ,  TransferLineNumber    
-                  ,  FromStorerkey    
-                  ,  FromSku    
-                  ,  FromLot    
-                  ,  FromLoc    
-                  ,  FromID    
-                  ,  FromPackkey    
-                  ,  FromUOM    
-                  ,  Lottable01    
-                  ,  Lottable02    
-                  ,  Lottable03    
-                  ,  Lottable04    
-                  ,  Lottable05    
-                  ,  Lottable06           
-                  ,  Lottable07           
-                  ,  Lottable08           
-                  ,  Lottable09           
-                  ,  Lottable10           
-                  ,  Lottable11           
-                  ,  Lottable12           
-                  ,  Lottable13           
-                  ,  Lottable14           
-                  ,  Lottable15           
-                  ,  FromQty    
-                  ,  ToStorerkey    
-                  ,  ToSku    
-                  ,  ToLoc    
-                  ,  ToID    
-                  ,  ToPackkey    
-                  ,  ToUOM    
-                  ,  ToLottable01    
-                  ,  ToLottable02    
-                  ,  ToLottable03    
-                  ,  ToLottable04    
-                  ,  ToLottable05    
-                  ,  ToLottable06              
-                  ,  ToLottable07              
-                  ,  ToLottable08              
-                  ,  ToLottable09              
-                  ,  ToLottable10              
-                  ,  ToLottable11              
-                  ,  ToLottable12              
-                  ,  ToLottable13              
-                  ,  ToLottable14              
-                  ,  ToLottable15              
-                  ,  ToQty    
-                  ,  [Status]    
-                  ,  UserDefine01   -- FromUCC  
-                  ,  UserDefine02   -- ToUCC  
-                  ,  FromCHannel_ID -- FromChannel ID  
-                  ,  FromChannel    -- FromChannel   
-                  ,  ToChannel      -- ToChannel  
-                  )    
-               VALUES    
-                  (  @c_TransferKey    
-                  ,  @c_NewTransferLineNo    
-                  ,  @c_FromStorerkey    
-                  ,  @c_FromSku    
-                  ,  @c_FromLot    
-                  ,  @c_FromLoc    
-                  ,  @c_FromID    
-                  ,  @c_FromPackkey    
-                  ,  @c_FromUOM    
-                  ,  @c_Lottable01    
-                  ,  @c_Lottable02    
-                  ,  @c_Lottable03    
-                  ,  @dt_Lottable04    
-                  ,  @dt_Lottable05    
-                  ,  @c_Lottable06               
-                  ,  @c_Lottable07               
-                  ,  @c_Lottable08               
-                  ,  @c_Lottable09               
-                  ,  @c_Lottable10               
-                  ,  @c_Lottable11            
-                  ,  @c_Lottable12               
-                  ,  @dt_Lottable13              
-                  ,  @dt_Lottable14              
-                  ,  @dt_Lottable15              
-                  ,  @n_QtyToTake     
-                  ,  @c_ToStorerkey    
-                  ,  @c_ToSku    
-                  ,  @c_ToLoc    
-                  ,  @c_ToID    
-                  ,  @c_ToPackkey    
-                  ,  @c_ToUOM    
-                  ,  @c_Lottable01    
-                  ,  @c_Lottable02    
-                  ,  @c_Lottable03    
-                  ,  @dt_Lottable04    
-                  ,  @dt_Lottable05    
-                  ,  @c_Lottable06                
-                  ,  @c_Lottable07                
-                  ,  @c_Lottable08                
-                  ,  @c_Lottable09                
-                  ,  @c_Lottable10                
-                  ,  @c_Lottable11                
-                  ,  @c_Lottable12                
-                  ,  @dt_Lottable13               
-                  ,  @dt_Lottable14               
-                  ,  @dt_Lottable15    
-                  ,  @n_QtyToTake     
-                  ,  '0'               -- Let ispFinalizeTransfer to finalize  
-                  ,  @c_UCCNo   
-                  ,  @c_ToUCCNo   
-                  ,  @n_FromChannel_ID  -- FromChannel ID  
-                  ,  @c_FromChannel    -- FromChannel   
-                  ,  @c_ToChannel      -- ToChannel  
-                  )    
-               SET @n_err = @@ERROR    
-    
-               IF @n_err <> 0    
-               BEGIN    
-                  SET @n_continue = 3    
-                  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-                  SET @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': INSERT TRANSFERDETAIL Failed. (ispTransferAllocation03)'    
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-                  GOTO NEXT_TRF    
-               END    
-            END    
-    
-            --------------------------------------------------  
-            -- Finalize Transfer Line is Status = '9' - START  
-            --------------------------------------------------  
-            IF @c_TransferStatus_D = '9'   
-            BEGIN  
-               EXEC dbo.ispFinalizeTransfer   
-                       @c_TransferKey = @c_TransferKey    
-                     , @b_Success     = @b_Success     OUTPUT    
-                     , @n_Err         = @n_err         OUTPUT    
-                     , @c_ErrMsg      = @c_errmsg      OUTPUT    
-                     , @c_TransferLineNumber = @c_NewTransferLineNo  
-    
-               IF @n_err <> 0    
-               BEGIN    
-                  SET @n_Continue= 3    
-                  SET @n_err  = 81100    
-                  SET @c_errmsg = 'Execute ispFinalizeTransfer Failed. (ispTransferAllocation03)'    
-                                 + '(' + @c_errmsg + ')'    
-                  GOTO NEXT_TRF    
-               END           
-            END  
-            --------------------------------------------------  
-            -- Finalize Transfer Line is Status = '9' - END  
-            --------------------------------------------------  
-            SET @c_Sourcekey = @c_Transferkey + @c_NewTransferLineNo    
-  
-            ---------------------------------------  
-            -- Lock Channel id: + qtyonhold - START  
-            ---------------------------------------  
-            IF @c_TransferStatus_D < '9' AND @c_FromChannel <> '' AND @c_TRFAllocHoldChannel = '1'    
-            BEGIN  
-               EXEC isp_ChannelInvHoldWrapper    
-                    @c_HoldType     = 'TRF'           
-                  , @c_SourceKey    = @c_Transferkey      
-                  , @c_SourceLineNo = @c_NewTransferLineNo                                   
-                  , @c_Facility     = ''         
-                  , @c_Storerkey    = ''         
-                  , @c_Sku          = ''         
-                  , @c_Channel      = ''         
-                  , @c_C_Attribute01= ''         
-                  , @c_C_Attribute02= ''         
-                  , @c_C_Attribute03= ''         
-                  , @c_C_Attribute04= ''         
-                  , @c_C_Attribute05= ''         
-                  , @n_Channel_ID   = 0         
-                  , @c_Hold         = '1'         
-                  , @c_Remarks      = ''    
-                  , @c_HoldTRFType  = 'F'         
-                  , @b_Success      = @b_Success   OUTPUT    
-                  , @n_Err          = @n_Err       OUTPUT    
-                  , @c_ErrMsg       = @c_ErrMsg    OUTPUT    
-    
-               IF @b_Success = 0    
-               BEGIN    
-                  SET @n_continue = 3    
-                  SET @n_err = 81110    
-                  SET @c_errmsg  = CONVERT(char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (ispTransferAllocation03)'    
-               END    
-            END  
-            ---------------------------------------  
-            -- Lock Channel id: + qtyonhold - END  
-            ---------------------------------------  
-  
-            ---------------------------------------  
-            -- Lock UCC: Update Status ='3' - START  
-            ---------------------------------------  
-            IF @c_UCCno <> ''   
-            BEGIN  
-               UPDATE UCC  
-               SET [Status] = '3'  
-               WHERE UCC_RowRef = @n_UCC_RowRef  
+               --ToLoc = FromLoc
+               SET @c_ToLoc = @c_FromLoc 
+               SET @c_ToID = @c_FromID   
+               
+               --Status = 9 - Finalize Line  
+               --Status = 3 - Do Not Finalize Line
+               SET @c_TransferStatus_D = '9'  
+               
+               SET @n_QtyRemaining = @n_QtyRemaining - @n_QtyToTake    
                  
-               SET @n_err = @@ERROR    
-    
-               IF @n_err <> 0    
-               BEGIN    
-                  SET @n_continue = 3    
-                  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-                  SET @n_err = 81120   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE UCC Failed. (ispTransferAllocation03)'    
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-                  GOTO NEXT_TRF    
-               END    
-            END  
-            ---------------------------------------  
-            -- Lock UCC: Update Status ='3'- END  
-            ---------------------------------------  
-            -----------------------------------------------  
-            -- Insert Into TASKDETAIL - START  
-            -- To Lock QtyReplen to LOTxLOCxID  
-            -----------------------------------------------  
-            /*IF @c_TransferStatus_D = '3' AND @c_FromLoc <> @c_ToLoc AND @c_TransOrder = 'ECOM'-- Not finalize  
-            BEGIN  
-               SET @b_success = 1    
-               EXECUTE   nspg_getkey    
-                     'TaskDetailKey'    
-                        , 10    
-                        , @c_TaskdetailKey OUTPUT    
-                        , @b_success       OUTPUT    
-                        , @n_err           OUTPUT    
-                        , @c_errmsg        OUTPUT    
-    
-               IF NOT @b_success = 1    
-               BEGIN    
-                  SET @n_continue = 3    
-                  SET @n_err = 81130   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Executing nsp_GetKey - Taskdetailkey. (ispTransferAllocation03)'    
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-                  GOTO NEXT_TRF    
-               END    
-    
-               SET @c_FromUOM = CASE WHEN @c_LocationCategory = 'BULK' THEN '2' ELSE '7' END  
-               SET @c_ToID = ''  
-               SET @c_LogicalToLoc = @c_ToLoc   
-               SET @c_Areakey = ''    
-   
-               SELECT TOP 1    
-                        @c_Areakey  = ISNULL(AD.AreaKey,'')    
-               FROM LOC  WITH (NOLOCK)    
-               LEFT JOIN AREADETAIL AD WITH (NOLOCK) ON (LOC.Putawayzone = AD.Putawayzone)    
-               WHERE Loc = @c_FromLoc    
-   
-               SELECT @c_ToLoc = PAZ.InLoc  
-               FROM LOC l WITH (NOLOCK)  
-               JOIN PUTAWAYZONE PAZ WITH (NOLOCK) ON L.PutawayZone = PAZ.Putawayzone  
-               WHERE l.Loc = @c_ToLoc  
-  
-               IF @c_ToLoc = ''  
+               SET @c_ToUCCNo = ''  
+               IF EXISTS ( SELECT 1 FROM LOC TL WITH (NOLOCK) WHERE TL.Loc = @c_ToLoc AND TL.LoseUCC = '0')  
                BEGIN  
-                  SET @n_continue = 3    
-                  SET @n_err = 81140   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': PutawayZone''s InLoc not found. (ispTransferAllocation03)'    
-                  GOTO NEXT_TRF    
-               END  
-  
-               INSERT INTO TASKDETAIL    
-                  (    
-                     TaskDetailKey    
-                  ,  TaskType    
-                  ,  Storerkey    
-                  ,  Sku    
-                  ,  UOM    
-                  ,  UOMQty    
-                  ,  Qty    
-                  ,  SystemQty    
-                  ,  Lot    
-                  ,  FromLoc    
-                  ,  FromID    
-                  ,  ToLoc    
-                  ,  ToID    
-                  ,  CaseID    
-                  ,  PickMethod    
-                  ,  SourceType    
-                  ,  SourceKey    
-                  ,  [Priority]    
-                  ,  SourcePriority    
-                  ,  [Status]    
-                  ,  Areakey    
-                  ,  LogicalFromLoc    
-                  ,  LogicalToLoc    
-                  ,  Message01    
-                  ,  Message02    
-                  ,  QtyReplen  
-                  )    
-               VALUES    
-                  (    
-                     @c_Taskdetailkey    
-                  ,  'RPF'                --Tasktype    
-                  ,  @c_FromStorerkey    
-                  ,  @c_FromSku    
-                  ,  @c_FromUOM           --UOM,    
-                  ,  @n_QtyToTake    
-                  ,  @n_QtyToTake    
-                  ,  0                    --systemqty    
-                  ,  @c_FromLot    
-                  ,  @c_Fromloc    
-                  ,  @c_FromID            -- from id    
-                  ,  @c_ToLoc    
-                  ,  @c_ToID              -- to id    
-                  ,  @c_UCCNo    
-                  ,  'PP'    
-                  ,  'ispTransferAllocation03' --Sourcetype    
-                  ,  @c_Sourcekey    
-                  ,  '5'                  -- Priority    
-                  ,  '9'                  -- Sourcepriority    
-                  ,  'S'                  -- 11-AUG-2014 CR    
-                  ,  @c_Areakey    
-                  ,  @c_LogicalLoc        --Logical from loc    
-                  ,  @c_LogicalToLoc      --Logical to loc    
-                  ,  'TRANSFER'    
-                  ,  @c_ToLoc    
-                  ,  @n_QtyToTake  
-                  )    
-    
-               SET @n_err = @@ERROR    
-    
-               IF @n_err <> 0    
-               BEGIN    
-                  SET @n_continue = 3    
-                  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-                  SET @n_err = 81150   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert TASKDETAIL Failed. (ispTransferAllocation03)'    
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-    
-                  GOTO NEXT_TRF    
+                  SET @c_ToUCCNo = @c_UCCNo                   
                END    
-    
-               IF @n_PABookingKey > 0  
+               -----------------------------------------------  
+               -- Populate Inventory to Transferdetail - START  
+               -----------------------------------------------  
+               IF @n_QtyRemaining <= 0    
                BEGIN    
-                  UPDATE RFPutaway WITH (ROWLOCK)    
-                  SET Taskdetailkey = @c_Taskdetailkey    
-                  WHERE RowRef = @n_PABookingKey    
-                  AND PABookingKey = @n_PABookingKey    
-    
+                  UPDATE TRANSFERDETAIL WITH (ROWLOCK)    
+                  SET FromLot        = @c_FromLot    
+                     ,FromLoc        = @c_FromLoc    
+                     ,FromID         = @c_FromID    
+                     ,FromQty        = @n_QtyToTake       
+                     ,Lottable01     = @c_Lottable01   
+                     ,Lottable02     = @c_Lottable02                      
+                     ,Lottable03     = @c_Lottable03    
+                     ,Lottable04     = @dt_Lottable04    
+                     ,Lottable05     = @dt_Lottable05    
+                     ,Lottable06     = @c_Lottable06        
+                     ,Lottable07     = @c_Lottable07           
+                     ,Lottable08     = @c_Lottable08        
+                     ,Lottable09     = @c_Lottable09        
+                     ,Lottable10     = @c_Lottable10        
+                     ,Lottable11     = @c_Lottable11        
+                     ,Lottable12     = @c_Lottable12        
+                     ,Lottable13     = @dt_Lottable13       
+                     ,Lottable14     = @dt_Lottable14       
+                     ,Lottable15     = @dt_Lottable15       
+                     ,ToLoc          = @c_ToLoc   
+                     ,ToID           = @c_ToID    
+                     ,ToQty          = @n_QtyToTake     
+                     ,ToLottable01   = @c_Lottable01    
+                     ,ToLottable02   = @c_Lottable02            
+                     ,ToLottable03   = @c_Lottable03    
+                     ,ToLottable04   = @dt_Lottable04    
+                     ,ToLottable05   = @dt_Lottable05    
+                     ,ToLottable06   = @c_Lottable06      
+                     ,ToLottable07   = @c_Lottable07       
+                     ,ToLottable08   = @c_Lottable08      
+                     ,ToLottable09   = @c_Lottable09      
+                     ,ToLottable10   = @c_Lottable10      
+                     ,ToLottable11   = @c_Lottable11      
+                     ,ToLottable12   = @c_Lottable12      
+                     ,ToLottable13   = @dt_Lottable13     
+                     ,ToLottable14   = @dt_Lottable14     
+                     ,ToLottable15   = @dt_Lottable15     
+                     ,UserDefine01   = @c_UCCNo   
+                     ,UserDefine02   = @c_ToUCCNo    
+                     ,FromChannel_ID = @n_FromChannel_ID  
+                     ,EditWho        = @c_UserID  
+                     ,EditDate       = GETDATE()  
+                  WHERE Transferkey = @c_Transferkey    
+                  AND TransferLineNumber = @c_TransferLineNumber   
+               
                   SET @n_err = @@ERROR    
-    
-                  IF @n_Err <> 0    
+               
+                  IF @n_err <> 0    
                   BEGIN    
-                     SET @n_Continue = 3    
+                     SET @n_continue = 3    
                      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-                     SET @n_Err = 81160    
-                     SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Error Updating RFPutaway Table (ispTransferAllocation03)'    
-                                    + ' for transferkey: ' + @c_Transferkey    
+                     SET @n_err = 81080   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSFERDETAIL Failed. (ispTransferAllocation03)'    
+                                    + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                     GOTO NEXT_TRF    
+                  END    
+               
+                  SET @c_NewTransferLineNo = @c_TransferLineNumber    
+               END    
+               ELSE    
+               BEGIN    
+                  ----------------------------------  
+                  -- Populate to New Line  
+                  ----------------------------------  
+                  SELECT @c_NewTransferLineNo = RIGHT('00000' + CONVERT(VARCHAR(5), MAX(CONVERT(INT, TransferLineNumber)) + 1),5)    
+                  FROM TRANSFERDETAIL WITH (NOLOCK)    
+                  WHERE Transferkey = @c_Transferkey    
+               
+                  INSERT INTO TRANSFERDETAIL    
+                     (  TransferKey    
+                     ,  TransferLineNumber    
+                     ,  FromStorerkey    
+                     ,  FromSku    
+                     ,  FromLot    
+                     ,  FromLoc    
+                     ,  FromID    
+                     ,  FromPackkey    
+                     ,  FromUOM    
+                     ,  Lottable01    
+                     ,  Lottable02    
+                     ,  Lottable03    
+                     ,  Lottable04    
+                     ,  Lottable05    
+                     ,  Lottable06           
+                     ,  Lottable07           
+                     ,  Lottable08           
+                     ,  Lottable09           
+                     ,  Lottable10           
+                     ,  Lottable11           
+                     ,  Lottable12           
+                     ,  Lottable13           
+                     ,  Lottable14           
+                     ,  Lottable15           
+                     ,  FromQty    
+                     ,  ToStorerkey    
+                     ,  ToSku    
+                     ,  ToLoc    
+                     ,  ToID    
+                     ,  ToPackkey    
+                     ,  ToUOM    
+                     ,  ToLottable01    
+                     ,  ToLottable02    
+                     ,  ToLottable03    
+                     ,  ToLottable04    
+                     ,  ToLottable05    
+                     ,  ToLottable06              
+                     ,  ToLottable07              
+                     ,  ToLottable08              
+                     ,  ToLottable09              
+                     ,  ToLottable10              
+                     ,  ToLottable11              
+                     ,  ToLottable12              
+                     ,  ToLottable13              
+                     ,  ToLottable14              
+                     ,  ToLottable15              
+                     ,  ToQty    
+                     ,  [Status]    
+                     ,  UserDefine01   -- FromUCC  
+                     ,  UserDefine02   -- ToUCC  
+                     ,  FromCHannel_ID -- FromChannel ID  
+                     ,  FromChannel    -- FromChannel   
+                     ,  ToChannel      -- ToChannel  
+                     )    
+                  VALUES    
+                     (  @c_TransferKey    
+                     ,  @c_NewTransferLineNo    
+                     ,  @c_FromStorerkey    
+                     ,  @c_FromSku    
+                     ,  @c_FromLot    
+                     ,  @c_FromLoc    
+                     ,  @c_FromID    
+                     ,  @c_FromPackkey    
+                     ,  @c_FromUOM    
+                     ,  @c_Lottable01    
+                     ,  @c_Lottable02    
+                     ,  @c_Lottable03    
+                     ,  @dt_Lottable04    
+                     ,  @dt_Lottable05    
+                     ,  @c_Lottable06               
+                     ,  @c_Lottable07               
+                     ,  @c_Lottable08               
+                     ,  @c_Lottable09               
+                     ,  @c_Lottable10               
+                     ,  @c_Lottable11            
+                     ,  @c_Lottable12               
+                     ,  @dt_Lottable13              
+                     ,  @dt_Lottable14              
+                     ,  @dt_Lottable15              
+                     ,  @n_QtyToTake     
+                     ,  @c_ToStorerkey    
+                     ,  @c_ToSku    
+                     ,  @c_ToLoc    
+                     ,  @c_ToID    
+                     ,  @c_ToPackkey    
+                     ,  @c_ToUOM    
+                     ,  @c_Lottable01    
+                     ,  @c_Lottable02    
+                     ,  @c_Lottable03    
+                     ,  @dt_Lottable04    
+                     ,  @dt_Lottable05    
+                     ,  @c_Lottable06                
+                     ,  @c_Lottable07                
+                     ,  @c_Lottable08                
+                     ,  @c_Lottable09                
+                     ,  @c_Lottable10                
+                     ,  @c_Lottable11                
+                     ,  @c_Lottable12                
+                     ,  @dt_Lottable13               
+                     ,  @dt_Lottable14               
+                     ,  @dt_Lottable15    
+                     ,  @n_QtyToTake     
+                     ,  '0'               -- Let ispFinalizeTransfer to finalize  
+                     ,  @c_UCCNo   
+                     ,  @c_ToUCCNo   
+                     ,  @n_FromChannel_ID  -- FromChannel ID  
+                     ,  @c_FromChannel    -- FromChannel   
+                     ,  @c_ToChannel      -- ToChannel  
+                     )    
+                  SET @n_err = @@ERROR    
+               
+                  IF @n_err <> 0    
+                  BEGIN    
+                     SET @n_continue = 3    
+                     SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+                     SET @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': INSERT TRANSFERDETAIL Failed. (ispTransferAllocation03)'    
                                     + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
                      GOTO NEXT_TRF    
                   END    
                END    
-            -----------------------------------------------  
-            -- Insert Into TASKDETAIL - END  
-            -----------------------------------------------  
-            END*/
-    
-            SET @n_FromQty = @n_FromQty - @n_QtyToTake    
+               
+               --------------------------------------------------  
+               -- Finalize Transfer Line is Status = '9' - START  
+               --------------------------------------------------  
+               IF @c_TransferStatus_D = '9'   
+               BEGIN  
+                  EXEC dbo.ispFinalizeTransfer   
+                          @c_TransferKey = @c_TransferKey    
+                        , @b_Success     = @b_Success     OUTPUT    
+                        , @n_Err         = @n_err         OUTPUT    
+                        , @c_ErrMsg      = @c_errmsg      OUTPUT    
+                        , @c_TransferLineNumber = @c_NewTransferLineNo  
+               
+                  IF @n_err <> 0    
+                  BEGIN    
+                     SET @n_Continue= 3    
+                     SET @n_err  = 81100    
+                     SET @c_errmsg = 'Execute ispFinalizeTransfer Failed. (ispTransferAllocation03)'    
+                                    + '(' + @c_errmsg + ')'    
+                     GOTO NEXT_TRF    
+                  END           
+               END
+               --------------------------------------------------  
+               -- Finalize Transfer Line is Status = '9' - END  
+               --------------------------------------------------  
+               SET @c_Sourcekey = @c_Transferkey + @c_NewTransferLineNo    
+               
+               ---------------------------------------  
+               -- Lock Channel id: + qtyonhold - START  
+               ---------------------------------------  
+               IF @c_TransferStatus_D < '9' AND @c_FromChannel <> '' AND @c_TRFAllocHoldChannel = '1'    
+               BEGIN  
+                  EXEC isp_ChannelInvHoldWrapper    
+                       @c_HoldType     = 'TRF'           
+                     , @c_SourceKey    = @c_Transferkey      
+                     , @c_SourceLineNo = @c_NewTransferLineNo                                   
+                     , @c_Facility     = ''         
+                     , @c_Storerkey    = ''         
+                     , @c_Sku          = ''         
+                     , @c_Channel      = ''         
+                     , @c_C_Attribute01= ''         
+                     , @c_C_Attribute02= ''         
+                     , @c_C_Attribute03= ''         
+                     , @c_C_Attribute04= ''         
+                     , @c_C_Attribute05= ''         
+                     , @n_Channel_ID   = 0         
+                     , @c_Hold         = '1'         
+                     , @c_Remarks      = ''    
+                     , @c_HoldTRFType  = 'F'         
+                     , @b_Success      = @b_Success   OUTPUT    
+                     , @n_Err          = @n_Err       OUTPUT    
+                     , @c_ErrMsg       = @c_ErrMsg    OUTPUT    
+               
+                  IF @b_Success = 0    
+                  BEGIN    
+                     SET @n_continue = 3    
+                     SET @n_err = 81110    
+                     SET @c_errmsg  = CONVERT(char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (ispTransferAllocation03)'    
+                  END    
+               END  
+               ---------------------------------------  
+               -- Lock Channel id: + qtyonhold - END  
+               ---------------------------------------  
+               
+               ---------------------------------------  
+               -- Lock UCC: Update Status ='3' - START  
+               --------------------------------------- 
+               IF @c_UCCno <> ''   
+               BEGIN  
+                  UPDATE UCC  
+                  SET [Status] = '3'  
+                  WHERE UCC_RowRef = @n_UCC_RowRef  
+                    
+                  SET @n_err = @@ERROR    
+               
+                  IF @n_err <> 0    
+                  BEGIN    
+                     SET @n_continue = 3    
+                     SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+                     SET @n_err = 81120   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE UCC Failed. (ispTransferAllocation03)'    
+                                    + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                     GOTO NEXT_TRF    
+                  END    
+               END 
+               ---------------------------------------  
+               -- Lock UCC: Update Status ='3'- END  
+               ---------------------------------------  
+               -----------------------------------------------  
+               -- Insert Into TASKDETAIL - START  
+               -- To Lock QtyReplen to LOTxLOCxID  
+               -----------------------------------------------  
+               /*IF @c_TransferStatus_D = '3' AND @c_FromLoc <> @c_ToLoc AND @c_TransOrder = 'ECOM'-- Not finalize  
+               BEGIN  
+                  SET @b_success = 1    
+                  EXECUTE   nspg_getkey    
+                        'TaskDetailKey'    
+                           , 10    
+                           , @c_TaskdetailKey OUTPUT    
+                           , @b_success       OUTPUT    
+                           , @n_err           OUTPUT    
+                           , @c_errmsg        OUTPUT    
+               
+                  IF NOT @b_success = 1    
+                  BEGIN    
+                     SET @n_continue = 3    
+                     SET @n_err = 81130   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Executing nsp_GetKey - Taskdetailkey. (ispTransferAllocation03)'    
+                                    + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                     GOTO NEXT_TRF    
+                  END    
+               
+                  SET @c_FromUOM = CASE WHEN @c_LocationCategory = 'BULK' THEN '2' ELSE '7' END  
+                  SET @c_ToID = ''  
+                  SET @c_LogicalToLoc = @c_ToLoc   
+                  SET @c_Areakey = ''    
+               
+                  SELECT TOP 1    
+                           @c_Areakey  = ISNULL(AD.AreaKey,'')    
+                  FROM LOC  WITH (NOLOCK)    
+                  LEFT JOIN AREADETAIL AD WITH (NOLOCK) ON (LOC.Putawayzone = AD.Putawayzone)    
+                  WHERE Loc = @c_FromLoc    
+               
+                  SELECT @c_ToLoc = PAZ.InLoc  
+                  FROM LOC l WITH (NOLOCK)  
+                  JOIN PUTAWAYZONE PAZ WITH (NOLOCK) ON L.PutawayZone = PAZ.Putawayzone  
+                  WHERE l.Loc = @c_ToLoc  
+               
+                  IF @c_ToLoc = ''  
+                  BEGIN  
+                     SET @n_continue = 3    
+                     SET @n_err = 81140   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': PutawayZone''s InLoc not found. (ispTransferAllocation03)'    
+                     GOTO NEXT_TRF    
+                  END  
+               
+                  INSERT INTO TASKDETAIL    
+                     (    
+                        TaskDetailKey    
+                     ,  TaskType    
+                     ,  Storerkey    
+                     ,  Sku    
+                     ,  UOM    
+                     ,  UOMQty    
+                     ,  Qty    
+                     ,  SystemQty    
+                     ,  Lot    
+                     ,  FromLoc    
+                     ,  FromID    
+                     ,  ToLoc    
+                     ,  ToID    
+                     ,  CaseID    
+                     ,  PickMethod    
+                     ,  SourceType    
+                     ,  SourceKey    
+                     ,  [Priority]    
+                     ,  SourcePriority    
+                     ,  [Status]    
+                     ,  Areakey    
+                     ,  LogicalFromLoc    
+                     ,  LogicalToLoc    
+                     ,  Message01    
+                     ,  Message02    
+                     ,  QtyReplen  
+                     )    
+                  VALUES    
+                     (    
+                        @c_Taskdetailkey    
+                     ,  'RPF'                --Tasktype    
+                     ,  @c_FromStorerkey    
+                     ,  @c_FromSku    
+                     ,  @c_FromUOM           --UOM,    
+                     ,  @n_QtyToTake    
+                     ,  @n_QtyToTake    
+                     ,  0                    --systemqty    
+                     ,  @c_FromLot    
+                     ,  @c_Fromloc    
+                     ,  @c_FromID            -- from id    
+                     ,  @c_ToLoc    
+                     ,  @c_ToID              -- to id    
+                     ,  @c_UCCNo    
+                     ,  'PP'    
+                     ,  'ispTransferAllocation03' --Sourcetype    
+                     ,  @c_Sourcekey    
+                     ,  '5'                  -- Priority    
+                     ,  '9'                  -- Sourcepriority    
+                     ,  'S'                  -- 11-AUG-2014 CR    
+                     ,  @c_Areakey    
+                     ,  @c_LogicalLoc        --Logical from loc    
+                     ,  @c_LogicalToLoc      --Logical to loc    
+                     ,  'TRANSFER'    
+                     ,  @c_ToLoc    
+                     ,  @n_QtyToTake  
+                     )    
+               
+                  SET @n_err = @@ERROR    
+               
+                  IF @n_err <> 0    
+                  BEGIN    
+                     SET @n_continue = 3    
+                     SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+                     SET @n_err = 81150   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert TASKDETAIL Failed. (ispTransferAllocation03)'    
+                                    + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+               
+                     GOTO NEXT_TRF    
+                  END    
+               
+                  IF @n_PABookingKey > 0  
+                  BEGIN    
+                     UPDATE RFPutaway WITH (ROWLOCK)    
+                     SET Taskdetailkey = @c_Taskdetailkey    
+                     WHERE RowRef = @n_PABookingKey    
+                     AND PABookingKey = @n_PABookingKey    
+               
+                     SET @n_err = @@ERROR    
+               
+                     IF @n_Err <> 0    
+                     BEGIN    
+                        SET @n_Continue = 3    
+                        SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+                        SET @n_Err = 81160    
+                        SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Error Updating RFPutaway Table (ispTransferAllocation03)'    
+                                       + ' for transferkey: ' + @c_Transferkey    
+                                       + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                        GOTO NEXT_TRF    
+                     END    
+                  END    
+               -----------------------------------------------  
+               -- Insert Into TASKDETAIL - END  
+               -----------------------------------------------  
+               END*/
+               
+               SET @n_FromQty = @n_FromQty - @n_QtyToTake  
+               --WL01 S
+               SET @n_QtyAvail_LLI = @n_QtyAvail_LLI - @n_QtyToTake  
+            END -- END Lotxlocxid QtyAvailable 
+            --WL01 E  
             NEXT_LLI:  
             FETCH NEXT FROM @CUR_LLI INTO @c_FromLot    
                                        ,  @c_FromLoc    
@@ -1715,29 +1731,30 @@ BEGIN
       BEGIN  
          BEGIN TRAN    
       END  
-         UPDATE TRANSMITLOG3 WITH (ROWLOCK)    
-         SET Transmitflag = @c_Transmitflag    
-            ,TransmitBatch= @c_TransmitBatch   
-            ,EditDate = GETDATE()  
-            ,EditWho = SUSER_SNAME()  
-            ,TrafficCop = NULL       
-         WHERE Transmitlogkey = @c_Transmitlogkey    
+
+      UPDATE TRANSMITLOG3 WITH (ROWLOCK)    
+      SET Transmitflag = @c_Transmitflag    
+         ,TransmitBatch= @c_TransmitBatch   
+         ,EditDate = GETDATE()  
+         ,EditWho = SUSER_SNAME()  
+         ,TrafficCop = NULL       
+      WHERE Transmitlogkey = @c_Transmitlogkey    
     
-         SET @n_err = @@ERROR    
+      SET @n_err = @@ERROR    
     
-         IF @n_err <> 0    
-         BEGIN    
-            SET @n_continue = 3    
-            SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-            SET @n_err = 81210   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSMITLOG3 Failed. (ispTransferAllocation03)'    
-                         + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
-                            
-            IF @@TRANCOUNT > 0  
-            BEGIN  
-               ROLLBACK TRAN    
-            END  
-         END   
+      IF @n_err <> 0    
+      BEGIN    
+         SET @n_continue = 3    
+         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+         SET @n_err = 81210   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSMITLOG3 Failed. (ispTransferAllocation03)'    
+                      + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '   
+                         
+         IF @@TRANCOUNT > 0  
+         BEGIN  
+            ROLLBACK TRAN    
+         END  
+      END   
             
       WHILE @@TRANCOUNT > 0  
       BEGIN  
