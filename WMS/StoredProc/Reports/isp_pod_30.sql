@@ -183,7 +183,8 @@ BEGIN
    AND   Storerkey= @c_Storerkey    
    AND   Long = 'r_dw_pod_30'    
    AND   ISNULL(Short,'') <> 'N'    
-     
+   
+   SET @n_CountCntByLabelno = 1  
         
     
  SELECT @c_IncFontSize = ISNULL(SHORT,'')    
@@ -234,7 +235,7 @@ BEGIN
       Notes1,         Descr,              Lottable02,            Lottable04,                       
       Lottable13,     Uom,                Shippedqty,             Notes            
       )        
-    SELECT     
+    SELECT DISTINCT      
       a.mbolkey,     b.MbolLineNumber,    b.ExternOrderKey,    b.Orderkey,    c.type,            
       a.editdate,    f.company,           0,                   0,    
       0,             0,                   ISNULL(CAST(e.Short AS int),0),     f.logo,    
@@ -489,8 +490,8 @@ BEGIN
          WHERE #POD.Orderkey = @c_Orderkey    
       END    
     
-      IF @n_WgtCubeFromPackInfo = 1    
-      BEGIN    
+      --IF @n_WgtCubeFromPackInfo = 1    
+      --BEGIN    
          SET @n_Weight = 0.00    
          SET @n_Cube   = 0.00    
     
@@ -515,7 +516,7 @@ BEGIN
             , TotalCube   = @n_Cube     
          FROM #POD     
          WHERE Orderkey = @c_Orderkey    
-      END    
+      --END    
          
     
       UPDATE #POD    
@@ -620,5 +621,4 @@ GO
 
 GRANT EXECUTE ON isp_pod_30 TO NSQL
 GO
-
-
+ 
