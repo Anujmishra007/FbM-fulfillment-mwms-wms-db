@@ -30,6 +30,8 @@ GO
 /* Updates:                                                                */  
 /* Date        Author   Ver   Purposes                                     */  
 /* 02-Dec-2020 LZG      1.1   INC1369468 - Remove hardcoded SKU (ZG01)     */
+/* 05-May-2021 WLChooi  1.2   WMS-16971 - Add TotalIDQty and modify sorting*/
+/*                            (WL01)                                       */
 /***************************************************************************/  
   
 CREATE PROC isp_ReplenishmentRpt_BatchRefill_20  
@@ -59,8 +61,8 @@ AS
  3=failed do not continue processing   
  4=successful but skip furthur processing */,  
          @n_starttcnt INT   
-      SELECT   @n_starttcnt = @@TRANCOUNT  
-      DECLARE @b_debug INT,  
+   SELECT   @n_starttcnt = @@TRANCOUNT  
+   DECLARE @b_debug INT,  
          @c_Packkey NVARCHAR(10),  
          @c_UOM NVARCHAR(10), -- SOS 8935 wally 13.dec.2002 from NVARCHAR(5) to NVARCHAR(10)  
          @n_qtytaken INT,  
@@ -210,7 +212,7 @@ AS
                  @c_FromLot2                   NVARCHAR(10),  
                  @b_DoneCheckOverAllocatedLots INT,  
                  @n_SKULocAvailableQty         INT,  
-  @n_LotSKUQTY                  INT,  
+                 @n_LotSKUQTY                  INT,  
                  @c_SQLStatement               NVARCHAR(4000),  
                  @c_SQLCondition               NVARCHAR(2000),  
                  @c_SQLStatement1              NVARCHAR(4000),  
@@ -441,7 +443,7 @@ AS
                WHERE LLL.StorerKey = @c_CurrentStorer  
                AND   LLL.SKU = @c_CurrentSKU  
                AND   LLL.LOC = @c_CurrentLOC  
-  AND   LLL.Qty - QtyAllocated - QtyPicked < 0  
+               AND   LLL.Qty - QtyAllocated - QtyPicked < 0  
                AND   LOC.LocLevel = 1 AND Loc.Putawayzone LIKE 'PICK2PLTZ%'  
             END  
             --SELECT * FROM #LOT_SORT  
@@ -510,7 +512,7 @@ AS
                          LOTxLOCxID.LOT,  
                          CASE WHEN LOTTABLE04 IS NULL THEN '00000000'  
                               ELSE CONVERT(CHAR(4), DATEPART(year, LOTTABLE04)) +  
-               RIGHT('0' + CONVERT(NVARCHAR(2), DATEPART(month, LOTTABLE04)),2) +  
+                                   RIGHT('0' + CONVERT(NVARCHAR(2), DATEPART(month, LOTTABLE04)),2) +  
                                    RIGHT('0' + CONVERT(NVARCHAR(2), DATEPART(day, LOTTABLE04)),2)  
                          END +  
                          CASE WHEN LOTTABLE05 IS NULL THEN '00000000'  
@@ -1036,7 +1038,8 @@ RESULT:
                   R.ReplenishmentKey,  
                   ( LT.Qty - LT.QtyAllocated - LT.QtyPicked ),  
                   LA.Lottable02,  
-                  LA.Lottable04  
+                  LA.Lottable04,
+                  (SELECT SUM(LLI.Qty) FROM LOTxLOCxID LLI (NOLOCK) WHERE R.LOT = LLI.LOT AND R.FromLOC = LLI.LOC AND R.SKU = LLI.SKU AND R.Storerkey = LLI.StorerKey) AS TotalIDQty   --WL01 
          FROM     REPLENISHMENT R WITH (NOLOCK), -- (Jay01)  
                   SKU (NOLOCK),  
                   LOC L1 ( NOLOCK ),  
@@ -1058,8 +1061,11 @@ RESULT:
                   R.confirmed = 'N' AND  
                   L1.Facility = @c_zone01  
              AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)    
-         ORDER BY L1.PutawayZone,  
-                  R.Priority  
+         ORDER BY --L1.PutawayZone,   --WL01    
+                  R.Sku,   --WL01
+                  LA.Lottable04,   --WL01
+                  LA.Lottable02,   --WL01
+                  R.FromLoc   --WL01
       END       
       ELSE  
       BEGIN  
@@ -1080,7 +1086,8 @@ RESULT:
                   R.ReplenishmentKey,  
                   ( LT.Qty - LT.QtyAllocated - LT.QtyPicked ),  
                   LA.Lottable02,  
-                  LA.Lottable04  
+                  LA.Lottable04,
+                  (SELECT SUM(LLI.Qty) FROM LOTxLOCxID LLI (NOLOCK) WHERE R.LOT = LLI.LOT AND R.FromLOC = LLI.LOC AND R.SKU = LLI.SKU AND R.Storerkey = LLI.StorerKey) AS TotalIDQty   --WL01 
          FROM     REPLENISHMENT R WITH (NOLOCK), -- (Jay01)  
                   SKU (NOLOCK),  
                   LOC L1 ( NOLOCK ),  
@@ -1103,8 +1110,11 @@ RESULT:
                   L1.Facility = @c_zone01 AND   
                   LT.STorerkey = @c_storerkey  
              AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)    
-         ORDER BY L1.PutawayZone,  
-                  R.Priority  
+         ORDER BY --L1.PutawayZone,   --WL01   
+                  R.Sku,   --WL01
+                  LA.Lottable04,   --WL01
+                  LA.Lottable02,   --WL01
+                  R.FromLoc   --WL01
       END          
    END  
    ELSE   
@@ -1128,7 +1138,8 @@ RESULT:
                   R.ReplenishmentKey,  
                   ( LT.Qty - LT.QtyAllocated - LT.QtyPicked ),  
                   LA.Lottable02,  
-                  LA.Lottable04  
+                  LA.Lottable04,
+                  (SELECT SUM(LLI.Qty) FROM LOTxLOCxID LLI (NOLOCK) WHERE R.LOT = LLI.LOT AND R.FromLOC = LLI.LOC AND R.SKU = LLI.SKU AND R.Storerkey = LLI.StorerKey) AS TotalIDQty   --WL01 
          FROM     REPLENISHMENT R WITH (NOLOCK), -- (Jay01)  
                   SKU (NOLOCK),  
                   LOC L1 ( NOLOCK ),  
@@ -1154,8 +1165,11 @@ RESULT:
                                        @c_zone11, @c_zone12 ) AND  
                   L1.Facility = @c_zone01   
              AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)    
-         ORDER BY L1.PutawayZone,  
-                  R.Priority  
+         ORDER BY --L1.PutawayZone,   --WL01   
+                  R.Sku,   --WL01
+                  LA.Lottable04,   --WL01
+                  LA.Lottable02,   --WL01
+                  R.FromLoc   --WL01
       END           
       ELSE  
       BEGIN  
@@ -1176,7 +1190,8 @@ RESULT:
                   R.ReplenishmentKey,  
                   ( LT.Qty - LT.QtyAllocated - LT.QtyPicked ),  
                   LA.Lottable02,  
-                  LA.Lottable04  
+                  LA.Lottable04,
+                  (SELECT SUM(LLI.Qty) FROM LOTxLOCxID LLI (NOLOCK) WHERE R.LOT = LLI.LOT AND R.FromLOC = LLI.LOC AND R.SKU = LLI.SKU AND R.Storerkey = LLI.StorerKey) AS TotalIDQty   --WL01 
          FROM     REPLENISHMENT R WITH (NOLOCK), -- (Jay01)  
                   SKU (NOLOCK),  
                   LOC L1 ( NOLOCK ),  
@@ -1197,14 +1212,17 @@ RESULT:
                   SKU.PackKey = PACK.PackKey AND  
                   R.confirmed = 'N' AND  
                   L1.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,  
-                 @c_zone05, @c_zone06, @c_zone07,  
-                                       @c_zone08, @c_zone09, @c_zone10,  
-                                       @c_zone11, @c_zone12 ) AND  
+                                      @c_zone05, @c_zone06, @c_zone07,  
+                                      @c_zone08, @c_zone09, @c_zone10,  
+                                      @c_zone11, @c_zone12 ) AND  
                   L1.Facility = @c_zone01  AND   
                   LT.STORERKEY = @c_storerkey  
              AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)    
-         ORDER BY L1.PutawayZone,  
-                  R.Priority  
+         ORDER BY --L1.PutawayZone,   --WL01  
+                  R.Sku,   --WL01
+                  LA.Lottable04,   --WL01
+                  LA.Lottable02,   --WL01
+                  R.FromLoc   --WL01
       END    
    END  
 QUIT_SP:                                                    
