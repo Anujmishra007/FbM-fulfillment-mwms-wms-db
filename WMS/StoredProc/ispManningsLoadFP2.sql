@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-05-17  WLChooi  1.1   Fix Inserting Channel_ID into Pickdetail  */
 /*                            (WL01)                                    */
+/* 2021-05-27  WLChooi  1.2   Skip check condition for B2B (WL02)       */
 /************************************************************************/
 CREATE PROC ispManningsLoadFP2
      @c_WaveKey            NVARCHAR(10)
@@ -227,7 +228,7 @@ BEGIN
       LEFT OUTER JOIN ORDERINFO OIF WITH (NOLOCK) ON OH.Orderkey = OIF.Orderkey
       WHERE WH.Wavekey = @c_WaveKey
       AND OH.[Type] NOT IN ( 'M', 'I' ) 
-      AND OH.ECOM_SINGLE_Flag NOT IN ('M') -- Only B2C Single or B2B  
+      AND (OH.DocType = 'N' OR (OH.DocType = 'E' AND OH.ECOM_SINGLE_Flag NOT IN ('M') ) )   -- Only B2C Single or B2B   --WL02   
       AND OH.SOStatus <> 'CANC'   
       AND OH.[Status] < '9' 
    )   
