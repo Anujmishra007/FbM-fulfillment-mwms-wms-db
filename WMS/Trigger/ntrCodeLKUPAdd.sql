@@ -28,6 +28,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 26-Jun-2018  NJOW01   1.0  WMS-5221 disallow insert code PHYSICAL for*/
 /*                            listname DCTYPE                           */
+/* 12-Dec-2020  TLTING   1.1  Update Editdate column update             */ 
 /************************************************************************/  
   
 CREATE TRIGGER [dbo].[ntrCodeLKUPAdd]  
@@ -55,6 +56,31 @@ BEGIN
          , @n_cnt int                    
   
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
+
+   IF ( @n_continue = 1 OR @n_continue = 2  )   AND
+      EXISTS ( SELECT 1 FROM  INSERTED  WHERE   editdate < dateadd( mi, -5, getdate() ) ) 
+   BEGIN  
+      UPDATE CodeLKUP  
+         SET EditDate = GETDATE(),  
+             EditWho = SUSER_SNAME(),  
+             TrafficCop = NULL  
+        FROM CodeLKUP, INSERTED  
+       WHERE CodeLKUP.LISTNAME = INSERTED.LISTNAME
+         AND CodeLKUP.Code     = INSERTED.Code
+         AND CodeLKUP.Storerkey= INSERTED.Storerkey   -- KHLim01
+         AND CodeLKUP.code2    = INSERTED.code2       -- KHLim02
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
+      IF @n_err <> 0  
+      BEGIN  
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85803   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),ISNULL(@n_err,0))  
+                         +': Update Failed On Table CodeLKUP. (ntrCodeLKUPAdd)' + ' ( '   
+                         +' SQLSvr MESSAGE=' + ISNULL(LTrim(RTrim(@c_errmsg)),'') + ' ) '  
+      END  
+   END
+
 
    IF ( @n_continue = 1 OR @n_continue = 2  ) --NJOW01
    BEGIN  
