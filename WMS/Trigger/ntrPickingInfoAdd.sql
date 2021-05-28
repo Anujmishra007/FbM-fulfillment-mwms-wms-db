@@ -45,7 +45,8 @@ GO
 /*                                           update Orders.             */
 /* 25-Sep-2017  TLTING    1.4   SET ANSI                                */
 /* 11-03-2020   MCTang    1.5   Add scanin2log (MC03)                   */
-/* 26-Mar-2021  NJOW01    1.6   WMS-16663 add transmitlog2 interface    */
+/* 11-May-2020  MCTang    1.6   Add scanin3log (MC04)                   */
+/* 26-Mar-2021  NJOW01    1.7   WMS-16663 add transmitlog2 interface    */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickingInfoAdd]
@@ -70,6 +71,7 @@ BEGIN
    ,         @c_PickerID             NVARCHAR(18)
    ,         @c_authority_scaninlog  NVARCHAR(1)   -- SOS41737
    ,         @c_authority_scanin2log NVARCHAR(1)   -- MC03
+   ,         @c_authority_scanin3log NVARCHAR(1)   -- MC04
    ,         @c_StorerKey            NVARCHAR(15)  -- SOS41737
    ,         @c_cfgvalue             NVARCHAR(1)   -- SOS41737
    ,         @c_authority_pickinprog NVARCHAR(1)   -- (YokeBeen02)
@@ -262,6 +264,50 @@ BEGIN
                End
             END
             --(MC03) - E
+
+            --(MC04) - S
+            SET @c_authority_scanin3log = ''
+            Execute dbo.nspGetRight '',
+                  @c_StorerKey,   -- Storer
+                  '',             -- Sku
+                  'ScanIn3Log',     -- ConfigKey
+                  @b_success              OUTPUT,
+                  @c_authority_scanin3log  OUTPUT,
+                  @n_err                  OUTPUT,
+                  @c_errmsg               OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12801   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(RTRIM(@n_err),0))
+                                + ': Retrieve of Right (ScanIn3Log) Failed (ntrPickingInfoAdd) ( '
+                                + ' SQLSvr MESSAGE=' + ISNULL(LTrim(RTRIM(@c_errmsg)),'') + ' ) '
+            End
+
+            IF @c_authority_scanin3log = '1'
+            BEGIN
+               SELECT @c_cfgvalue = svalue
+                 FROM StorerConfig WITH (NOLOCK)
+                WHERE StorerKey = @c_StorerKey
+                  AND Configkey = 'WitronOL'
+
+               IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+               BEGIN
+                  SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+               END
+
+               EXEC dbo.ispGenTransmitLog3 'ScanIn3Log', @c_LPOrderKey, @c_cfgvalue , @c_StorerKey, ''
+                           , @b_success OUTPUT
+                           , @n_err OUTPUT
+                           , @c_errmsg OUTPUT
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+               End
+            END
+            --(MC04) - E
+
          END -- PS Type = '1' AND 1st Char of PS# = 'C'
 
          -- Consolidated PickSlip Zone = '5'
@@ -460,6 +506,55 @@ BEGIN
                   END
                END -- (continue =1)
                --(MC03) - E
+
+               --(MC04) - S
+               IF @n_Continue = 1 OR @n_Continue = 2
+               BEGIN
+                  SET @c_authority_scanin3log = ''
+                  EXECUTE dbo.nspGetRight '',
+                          @c_StorerKey,   -- Storer
+                          '',             -- Sku
+                          'ScanIn3Log',    -- ConfigKey
+                          @b_success              OUTPUT,
+                          @c_authority_scanin3log  OUTPUT,
+                          @n_err                  OUTPUT,
+                          @c_errmsg               OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12805   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                     SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(RTRIM(@n_err),0))
+                                      + ': Retrieve of Right (ScanIn3Log) Failed (ntrPickingInfoAdd) ( '
+                                      + ' SQLSvr MESSAGE=' + ISNULL(LTrim(RTRIM(@c_errmsg)),'') + ' ) '
+                  End
+
+                  IF @c_authority_scanin3log = '1'
+                  BEGIN
+                     SELECT @c_cfgvalue = svalue
+                       FROM StorerConfig WITH (NOLOCK)
+                      WHERE StorerKey = @c_StorerKey
+                        AND Configkey = 'WitronOL'
+
+                     -- (MC01) S
+                     IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                     BEGIN
+                        SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                     END
+                     -- (MC01) E
+
+                     EXEC dbo.ispGenTransmitLog3 'ScanIn3Log', @c_OrderKey, @c_cfgvalue, @c_StorerKey, ''
+                           , @b_success OUTPUT
+                           , @n_err OUTPUT
+                           , @c_errmsg OUTPUT
+
+                     IF @b_success <> 1
+                     BEGIN
+                        SELECT @n_Continue = 3
+                     End
+                  END
+               END -- (continue =1)
+               --(MC04) - E
 
                -- ScanInPickLog
                IF @n_Continue = 1 OR @n_Continue = 2
@@ -723,6 +818,52 @@ BEGIN
                End
             END
             --(MC03) - E
+
+            --(MC04) - S
+            SET @c_authority_scanin3log = ''
+            EXECUTE dbo.nspGetRight '',
+                  @c_StorerKey,   -- Storer
+                  '',             -- Sku
+                  'ScanIn3Log',     -- ConfigKey
+                  @b_success              OUTPUT,
+                  @c_authority_scanin3log OUTPUT,
+                  @n_err                  OUTPUT,
+                  @c_errmsg               OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12811   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),ISNULL(RTRIM(@n_err),0))
+                               +': Retrieve of Right (ScanIn3Log) Failed (ntrPickingInfoAdd)' + ' ( '
+                               + ' SQLSvr MESSAGE=' + ISNULL(LTrim(RTRIM(@c_errmsg)),'') + ' ) '
+            END
+
+            IF @c_authority_scanin3log = '1'
+            BEGIN
+               SELECT @c_cfgvalue = svalue
+                 FROM StorerConfig (NOLOCK)
+                WHERE StorerKey = @c_StorerKey
+                  AND Configkey = 'WitronOL'
+
+               -- (MC01) S
+               IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+               BEGIN
+                  SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+               END
+               -- (MC01) E
+
+               EXEC dbo.ispGenTransmitLog3 'ScanIn3Log', @c_LPOrderKey, @c_cfgvalue, @c_StorerKey, ''
+                           , @b_success OUTPUT
+                           , @n_err OUTPUT
+                           , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+               End
+            END
+            --(MC04) - E
 
             -- ScanInPickLog
             IF @n_Continue = 1 OR @n_Continue = 2
@@ -1009,6 +1150,55 @@ BEGIN
                END
                --(MC03) - E
 
+               --(MC04) - S
+               SET @c_authority_scanin3log = ''
+               EXECUTE dbo.nspGetRight '',
+                  @c_StorerKey,   -- Storer
+                  '',             -- Sku
+                  'ScanIn3Log',     -- ConfigKey
+                  @b_success              OUTPUT,
+                  @c_authority_scanin3log OUTPUT,
+                  @n_err                  OUTPUT,
+                  @c_errmsg               OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12818   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(RTRIM(@n_err),0))
+                                   + ': Retrieve of Right (ScanIn3Log) Failed (ntrPickingInfoAdd) ( '
+                                   + ' SQLSvr MESSAGE=' + ISNULL(LTrim(RTRIM(@c_errmsg)),'') + ' ) '
+               END
+
+               IF @c_authority_scanin3log = '1'
+               BEGIN
+                  SELECT @c_cfgvalue = svalue
+                    FROM StorerConfig WITH (NOLOCK)
+                   WHERE StorerKey = @c_StorerKey
+                     AND Configkey = 'WitronOL'
+
+                  -- (MC01) S
+                  SELECT @c_OrderType = Type
+                  FROM ORDERS WITH (NOLOCK)
+                  WHERE Orderkey = @c_xdorderkey
+
+                  IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                  BEGIN
+                     SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                  END
+                  -- (MC01) E
+
+                  EXEC dbo.ispGenTransmitLog3 'ScanIn3Log', @c_xdOrderKey, @c_cfgvalue, @c_StorerKey, ''
+                           , @b_success OUTPUT
+                           , @n_err OUTPUT
+                           , @c_errmsg OUTPUT
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                  End
+               END
+               --(MC04) - E
+
                -- (YokeBeen02) Start
                IF @n_Continue = 1 OR @n_Continue = 2
                BEGIN
@@ -1219,6 +1409,52 @@ BEGIN
                   END
                END
                --(MC03) - E
+
+               --(MC04) - S
+               SET @c_authority_scanin3log = ''
+               EXECUTE dbo.nspGetRight '',
+                     @c_StorerKey,   -- Storer
+                     '',             -- Sku
+                     'ScanIn3Log',     -- ConfigKey
+                     @b_success              OUTPUT,
+                     @c_authority_scanin3log  OUTPUT,
+                     @n_err                  OUTPUT,
+                     @c_errmsg               OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                      SELECT @n_Continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12823   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
+                                       + ': Retrieve of Right (ScanIn3Log) Failed (ntrPickingInfoAdd) ( '
+                                       + ' SQLSvr MESSAGE=' + LTrim(RTRIM(@c_errmsg)) + ' ) '
+               END
+
+               IF @c_authority_scanin3log = '1'
+               BEGIN
+                  SELECT @c_cfgvalue = svalue
+                    FROM StorerConfig WITH (NOLOCK)
+                   WHERE StorerKey = @c_StorerKey
+                     AND Configkey = 'WitronOL'
+
+                  -- (MC01) S
+                  IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                  BEGIN
+                     SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                  END
+                  -- (MC01) E
+
+                  EXEC dbo.ispGenTransmitLog3 'ScanIn3Log', @c_OrderKey, @c_cfgvalue, @c_StorerKey, ''
+                          , @b_success OUTPUT
+                          , @n_err OUTPUT
+                          , @c_errmsg OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                  END
+               END
+               --(MC04) - E
 
                -- (YokeBeen02) Start
                IF @n_Continue = 1 OR @n_Continue = 2
