@@ -45,7 +45,7 @@ GO
 /*                            Preallocate data from pickcode            */    
 /* 22-Oct-2020  Shong   2.4   LWP-193 Performance Tuning                */
 /* 01-Dec-2020  Shong   2.5   Handle Pending Cancel Orders (SWT04)      */
-/* 01-Dec-2020  NJOW01  2.6   WMS-15746 get channel hold qty by config  */  
+/* 12-May-2021  Shong   2.6   Performance Tuning SWT-2021-05-12         */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -2658,7 +2658,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                      SELECT @c_caseid = 'C'+ @c_OPRun  
                   END  
   
-                  INSERT PICKDETAIL  
+                  INSERT INTO dbo.PICKDETAIL  
                     (  
                       PickDetailKey,    PickHeaderKey,  OrderKey,  
                       OrderLineNumber,  Lot,            StorerKey,  
@@ -2681,10 +2681,10 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
   
                SELECT @n_Err = @@ERROR, @n_cnt_sql = @@ROWCOUNT  
                -- LWP-193 Performance Tuning                
-               --SELECT @n_cnt = COUNT(1)   
-               --FROM PICKDETAIL WITH (NOLOCK)   
-               --WHERE PickDetailKey = @c_PickDetailKey  
-               IF EXISTS (SELECT 1 FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)
+               -- Performance Tuning (SWT-2021-05-12)
+               --IF @n_Err=0 AND @n_cnt_sql = 1
+               --IF EXISTS (SELECT 1 FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)               
+               IF @n_Err=0 AND @n_cnt_sql = 1
                BEGIN
                   SET @n_cnt = 1
                END 
