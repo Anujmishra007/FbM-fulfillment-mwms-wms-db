@@ -35,6 +35,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 31-May-2021  Mingle        Add state and showstate(ML01)             */
 /************************************************************************/
 CREATE PROC dbo.isp_GetPickSlipOrders118 (@c_LoadKey NVARCHAR(10))
  AS
@@ -99,7 +100,9 @@ BEGIN
             @c_OrderType       NVARCHAR(250),
             @c_Packkey         NVARCHAR(10), 
             @c_Pickzone        NVARCHAR(10),
-            @c_retailsku       NVARCHAR(20)
+            @c_retailsku       NVARCHAR(20),
+            @c_state           NVARCHAR(45),    --ML01
+            @c_SHOWSTATE       NVARCHAR(10)    --ML01
     
     DECLARE @c_PrevOrderKey    NVARCHAR(10),
             @n_Pallets         INT,
@@ -187,6 +190,8 @@ BEGIN
     ,  LUdef01          NVARCHAR(20) NULL 
     ,  Lottable06       NVARCHAR(30) NULL  
     ,  RetailSKU        NVARCHAR(20) NULL
+    ,  State            NVARCHAR(45)    --ML01
+    ,  SHOWSTATE        NVARCHAR(10)    --ML01
     ) 
     
     SELECT @n_continue = 1,
@@ -242,7 +247,7 @@ BEGIN
                JOIN PACK (NOLOCK) ON  PickDetail.Packkey = PACK.Packkey
                JOIN LOC (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc
                LEFT JOIN STORERCONFIG (NOLOCK) ON PickDetail.Storerkey = STORERCONFIG.Storerkey AND STORERCONFIG.Configkey = 'PICKORD02_HIDEZONE'
-               JOIN SKU S WITH (NOLOCK) ON S.StorerKey = pickdetail.storerkey AND S.sku = Pickdetail.sku
+               JOIN SKU S WITH (NOLOCK) ON S.StorerKey = pickdetail.storerkey AND S.sku = Pickdetail.sku                               
         WHERE  PickDetail.Status < '9' AND 
                LoadPlanDetail.LoadKey = @c_LoadKey               
         GROUP BY
@@ -260,6 +265,7 @@ BEGIN
                Loadplan.Externloadkey,                
                Loadplan.Priority,                    
                REPLACE(CONVERT(NVARCHAR(12),Loadplan.LPuserdefDate01,106),' ','/') ,s.RETAILSKU
+               
         ORDER BY
                PickDetail.ORDERKEY
     
@@ -350,7 +356,8 @@ BEGIN
                    @c_Route_Desc = '',
                    @c_Notes1 = '',
                    @c_Notes2 = '',
-                   @c_InvoiceNo = ''
+                   @c_InvoiceNo = '',
+                   @c_state = ''    --ML01
         END
         ELSE
         BEGIN
@@ -366,7 +373,8 @@ BEGIN
                    @c_LabelPrice = ISNULL(ORDERS.LabelPrice, 'N'),              
                    @c_InvoiceNo = ORDERS.InvoiceNo,  
                    @d_DeliveryDate = ORDERS.deliverydate,
-                   @c_OrderType = CODELKUP.DESCRIPTION
+                   @c_OrderType = CODELKUP.DESCRIPTION,
+                   @c_state = ORDERS.C_State    --ML01
             FROM   ORDERS(NOLOCK),
                    CODELKUP(NOLOCK)
             WHERE  ORDERS.OrderKey = @c_OrderKey AND
@@ -384,7 +392,8 @@ BEGIN
         
          SELECT @n_OrderRoute = ISNULL(MAX(CASE WHEN CODE = 'ORDERROUTE' THEN 1 ELSE 0 END),0)  
                ,@n_ShowUOMQty = ISNULL(MAX(CASE WHEN CODE = 'SHOWUOMQTY' THEN 1 ELSE 0 END),0)    
-               ,@c_showdisdate = ISNULL(MAX(CASE WHEN CODE = 'SHOWDISPATCHDATE' THEN 1 ELSE 0 END),0) 
+               ,@c_showdisdate = ISNULL(MAX(CASE WHEN CODE = 'SHOWDISPATCHDATE' THEN 1 ELSE 0 END),0)
+               ,@c_SHOWSTATE = ISNULL(MAX(CASE WHEN CODE = 'SHOWSTATE' THEN 1 ELSE 0 END),0)       --ML01         
          FROM CODELKUP WITH (NOLOCK)
          WHERE LISTNAME = 'REPORTCFG'
          AND   Storerkey = @c_Storerkey
@@ -472,6 +481,9 @@ BEGIN
         
         IF @c_SuperOrderFlag='Y'
             SELECT @c_OrderKey = ''
+
+        IF @c_State IS NULL
+            SELECT @c_State = ''    --ML01
         
         SELECT @n_RowNo = @n_RowNo+1
         SELECT @n_Pallets = 0,
@@ -556,7 +568,9 @@ BEGIN
           , LPriority                        
           , LUDef01 
           , Lottable06   
-          ,  RetailSKU                     
+          ,  RetailSKU     
+          , State    --ML01
+          , SHOWSTATE    --ML01           
           )
         VALUES
           (
@@ -612,6 +626,8 @@ BEGIN
           , CASE WHEN @c_showdisdate=1 THEN @c_OHUDF06 ELSE @c_LUDef01  END   
           , @c_Lottable06  
           , @c_retailsku
+          , @c_state    --ML01
+          , @c_showstate    --ML01
           )
         
         SELECT @c_PrevOrderKey = @c_OrderKey
@@ -702,6 +718,8 @@ BEGIN
           , #temp_pick118.LUdef01     
           , #temp_pick118.Lottable06 
           , #temp_pick118.RetailSKU 
+          , #temp_pick118.State    --ML01
+          , #temp_pick118.SHOWSTATE    --ML01
     FROM   #temp_pick118,
            pickheader(NOLOCK),
            ORDERS(NOLOCK) 
