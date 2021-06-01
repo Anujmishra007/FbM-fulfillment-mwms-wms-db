@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-05-10  Wan      1.0   Created                                   */
+/* 2020-05-31  Wan01    1.1   CR1.5 - Use Script to Block first         */
 /************************************************************************/
 CREATE PROC isp_ASNException_Validate_ColValue
      @n_RowRef             BIGINT
@@ -54,6 +55,8 @@ BEGIN
            @n_StartTCnt       INT = @@TRANCOUNT
          , @n_Continue        INT = 1
          
+         , @n_Cnt             INT = 0           --(Wan01) - CR1.5
+         , @c_TrackingNo      NVARCHAR(40) = '' --(Wan01) - CR1.5
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
@@ -85,6 +88,22 @@ BEGIN
    
    IF @c_ColName = 'Userdefine01' AND @c_ColValue <> ''
    BEGIN
+   	--Wan01 - START
+      SET @n_Cnt = 0
+      SELECT @c_TrackingNo = ISNULL(dst.Userdefine01,'')
+            ,@n_Cnt = 1
+      FROM dbo.DocStatusTrack AS dst WITH (NOLOCK)
+      WHERE DocumentNo = @c_DocumentNo
+      
+      IF @c_TrackingNo <> '' AND @c_TrackingNo <> @c_ColValue
+      BEGIN
+      	SET @n_Continue = 3 
+         SET @n_Err = 88125
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Not Allow to change Tracking #'
+                       + '. (isp_ASNException_Validate_ColValue)'
+         GOTO QUIT_SP
+      END
+     --Wan01 - END
       
       SET @c_ColName01_RDF = 'Userdefine04'
       SET @c_ColVal01_RDF  = 'Y'
