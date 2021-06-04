@@ -28,6 +28,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
+/* 09-APR-2021  LZG     1.1   INC1470702 - Initialize @n_CartonNo (ZG01)*/
 /************************************************************************/
 
 CREATE PROC isp_GLBL16 ( 
@@ -80,7 +81,8 @@ BEGIN
    END 
    */
    --CS01 End
-   
+   IF ISNULL(@n_CartonNo, 0) = 0 SET @n_CartonNo = 1   -- ZG01
+
    SELECT @c_LabelNo = @c_PickSlipNo + CONVERT(NVARCHAR(10),@n_CartonNo)--CONVERT(NVARCHAR(10),@n_GetCntNo)   --CS01 
    --FROM PACKHEADER WITH (NOLOCK)
    --WHERE PickSlipNo = @c_PickSlipNo
