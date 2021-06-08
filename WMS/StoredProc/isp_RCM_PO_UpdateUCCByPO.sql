@@ -29,6 +29,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 12-May-2021  WLChooi   1.1   WMS-17032 - Modify Logic to Update      */
 /*                              Userdefine10 (WL01)                     */
+/* 08-Jun-2021  WLChooi   1.2   Remove Filter by ExternPOKey (WL02)     */
 /************************************************************************/
 CREATE PROCEDURE isp_RCM_PO_UpdateUCCByPO
    @c_POKey    NVARCHAR(10),   
@@ -134,7 +135,7 @@ BEGIN
       JOIN #TMP_UCC TU ON TU.UCCNo = UCC.UCCNo
       WHERE UCC.SKU = @c_GetSKU AND UCC.Storerkey = @c_Storerkey
       AND UCC.Qty = @n_SumQty
-      AND UCC.ExternKey = @c_ExternPOKey
+      --AND UCC.ExternKey = @c_ExternPOKey   --WL02
       
       SELECT @n_FUDF01 = CASE WHEN ISNUMERIC(F.UserDefine01) = 1 THEN CAST(F.UserDefine01 AS INT) ELSE 0 END
            , @n_FUDF02 = CASE WHEN ISNUMERIC(F.UserDefine02) = 1 THEN CAST(F.UserDefine02 AS INT) ELSE 0 END
