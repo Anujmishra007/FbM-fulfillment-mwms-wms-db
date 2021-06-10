@@ -3818,10 +3818,10 @@ ELSE
                      SELECT @c_SelectSQL = @c_SelectSQL + 
                                        ' JOIN CODELKUP CL (NOLOCK) ON CL.Listname = ''MATAPALLET'' AND LOC.LocationGroup = CL.Short AND CL.Code2 = @c_Color ' +
                                        ' OUTER APPLY (SELECT COUNT(DISTINCT LLI.ID) NoofID ' +
-                                       '              FROM LOTXLOCXID LLI (NOLOCK) JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = LLI.LOT  ' +
+                                       '              FROM LOTXLOCXID LLI (NOLOCK) JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = LLI.LOT  ' +                                       
                                        '              WHERE LLI.Loc = LOC.Loc AND (LLI.Qty > 0 OR LLI.PendingMoveIn > 0) AND LLI.sku = @c_SKU AND LLI.StorerKey = @c_StorerKey ' +
-                                       '              HAVING COUNT(DISTINCT LLI.ID) < CAST(CL.UDF01 AS INT) 
-                                                             AND (DATEDIFF(day, MIN(LA.Lottable05), GETDATE()) < 90 OR @c_Class <> ''N'')) AS INV ' +
+                                       '              HAVING COUNT(DISTINCT LLI.ID) < CAST(CL.UDF01 AS INT) ) AS INV ' +
+                                                             --AND (DATEDIFF(day, MIN(LA.Lottable05), GETDATE()) < 90 OR @c_Class <> ''N'')) AS INV ' +
                                        ' OUTER APPLY (SELECT SUM(LLI.Qty+LLI.PendingMoveIn) Qty FROM LOTXLOCXID LLI (NOLOCK) WHERE LLI.Loc = LOC.Loc) AS BAL ' +
                                        ' OUTER APPLY (SELECT TOP 1 L.Loc 
                                                       FROM LOC L (NOLOCK) 
@@ -3833,7 +3833,9 @@ ELSE
                                                       AND @c_Class = ''N''
                                                       AND L.Loc = LOC.Loc 
                                                       AND L.LocationGroup NOT IN(''GA'',''RACK'') 
-                                                      AND LA.Lottable05 <> @dt_Lottable05) AS MIXL5 ' +                                                                         
+                                                      AND LA.Lottable05 <> @dt_Lottable05
+                                                      AND LLI.Qty - LLI.QtyPicked > 0
+                                                      AND DATEDIFF(day, LA.Lottable05, GETDATE()) >= 90) AS MIXL5 ' +                                                                         
                                        ' WHERE LOC.Facility = @c_Facility ' +
                                        ' AND MIXL5.Loc IS NULL ' +
                                        ' AND (ISNULL(BAL.Qty,0) = 0 OR ISNULL(INV.NoofID,0) > 0) ' +
