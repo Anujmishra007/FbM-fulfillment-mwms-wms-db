@@ -3833,8 +3833,7 @@ ELSE
                                                       AND @c_Class = ''N''
                                                       AND L.Loc = LOC.Loc 
                                                       AND L.LocationGroup NOT IN(''GA'',''RACK'') 
-                                                      AND LA.Lottable05 <> @dt_Lottable05
-                                                      AND DATEDIFF(day, LA.Lottable05, GETDATE()) >= 90) AS MIXL5 ' +                                                                         
+                                                      AND LA.Lottable05 <> @dt_Lottable05) AS MIXL5 ' +                                                                         
                                        ' WHERE LOC.Facility = @c_Facility ' +
                                        ' AND MIXL5.Loc IS NULL ' +
                                        ' AND (ISNULL(BAL.Qty,0) = 0 OR ISNULL(INV.NoofID,0) > 0) ' +
