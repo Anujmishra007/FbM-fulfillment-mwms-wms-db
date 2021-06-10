@@ -55,6 +55,7 @@ GO
 /* 04-Jul-2018  MCTang   1.5  Change UPDSKULOG Key2 value (MC03)           */
 /* 11-Nov-2020  WLChooi  1.6  WMS-15671 - SKUTrigger_SP - call custom SP   */
 /*                            when UPDATE record (WL01)                    */
+/* 15-Mar-2021  KHChan   1.7  LFI-1646 - Trigger for Webservice (KH01)     */
 /***************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrSKUUpdate] ON [dbo].[SKU]
@@ -116,9 +117,14 @@ BEGIN
          , @c_Found                 NVARCHAR(1)        --(MC02)
          , @c_ListName_UpdSkuLog    NVARCHAR(10)       --(MC02)
          , @c_ConfigKey_UpdSkuLog   NVARCHAR(30)       --(MC02)
+         , @c_Authority_WSUpdSku    NVARCHAR(1)        --(KH01)
+         , @c_ListName_WSUpdSku     NVARCHAR(10)       --(KH01)
+         , @c_ConfigKey_WSUpdSku    NVARCHAR(30)       --(KH01)
 
    SET @c_ListName_UpdSkuLog  = 'TRTL3SKU'             --(MC02)
    SET @c_ConfigKey_UpdSkuLog = 'UPDSKULOG'            --(MC02)
+   SET @c_ListName_WSUpdSku  = 'WSTRTL2SKU'            --(KH01)
+   SET @c_ConfigKey_WSUpdSku = 'WSUPDSKU'              --(KH01)
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
       
@@ -732,6 +738,141 @@ BEGIN
             END --IF @c_UpdateColumn <> ''
          END --IF @c_Authority_UpdSkuLog = '1'
          -- (MC02) - E
+
+         --(KH01) - S
+         SELECT @b_success = 0
+         SELECT @c_Authority_WSUpdSku = '0'
+
+         EXECUTE dbo.nspGetRight
+                   ''                     -- Facility
+                 , @c_StorerKey           -- Storer
+                 , ''                     -- Sku
+                 , @c_ConfigKey_WSUpdSku  -- ConfigKey
+                 , @b_success             OUTPUT
+                 , @c_Authority_WSUpdSku  OUTPUT
+                 , @n_err                 OUTPUT
+                 , @c_errmsg              OUTPUT
+
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=63801
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_err,0))
+                             + ': Retrieve of Right (WSUPDSKU) Failed (ntrSkuUpdate) ( SQLSvr MESSAGE='
+                             + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+         END
+
+         IF @c_Authority_WSUpdSku = '1'
+         BEGIN
+            SET @c_UpdateColumn = ''
+
+            SELECT @c_UpdateColumn = CASE WHEN INSERTED.DESCR <> DELETED.DESCR THEN 'DESCR|' ELSE '' END
+                                   + CASE WHEN INSERTED.SUSR1 <> DELETED.SUSR1 THEN 'SUSR1|' ELSE '' END
+                                   + CASE WHEN INSERTED.SUSR2 <> DELETED.SUSR2 THEN 'SUSR2|' ELSE '' END
+                                   + CASE WHEN INSERTED.SUSR3 <> DELETED.SUSR3 THEN 'SUSR3|' ELSE '' END
+                                   + CASE WHEN INSERTED.SUSR4 <> DELETED.SUSR4 THEN 'SUSR4|' ELSE '' END
+                                   + CASE WHEN INSERTED.SUSR5 <> DELETED.SUSR5 THEN 'SUSR5|' ELSE '' END
+                                   + CASE WHEN INSERTED.MANUFACTURERSKU <> DELETED.MANUFACTURERSKU THEN 'MANUFACTURERSKU|' ELSE '' END
+                                   + CASE WHEN INSERTED.STDGROSSWGT <> DELETED.STDGROSSWGT THEN 'STDGROSSWGT|' ELSE '' END
+                                   + CASE WHEN INSERTED.STDNETWGT <> DELETED.STDNETWGT THEN 'STDNETWGT|' ELSE '' END
+                                   + CASE WHEN INSERTED.STDCUBE <> DELETED.STDCUBE THEN 'STDCUBE|' ELSE '' END
+                                   + CASE WHEN INSERTED.CLASS <> DELETED.CLASS THEN 'CLASS|' ELSE '' END
+                                   + CASE WHEN INSERTED.ACTIVE <> DELETED.ACTIVE THEN 'ACTIVE|' ELSE '' END
+                                   + CASE WHEN INSERTED.SKUGROUP <> DELETED.SKUGROUP THEN 'SKUGROUP|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR1 <> DELETED.BUSR1 THEN 'BUSR1|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR2 <> DELETED.BUSR2 THEN 'BUSR2|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR3 <> DELETED.BUSR3 THEN 'BUSR3|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR4 <> DELETED.BUSR4 THEN 'BUSR4|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR5 <> DELETED.BUSR5 THEN 'BUSR5|' ELSE '' END
+                                   + CASE WHEN INSERTED.LOTTABLE01LABEL <> DELETED.LOTTABLE01LABEL THEN 'LOTTABLE01LABEL|' ELSE '' END
+                                   + CASE WHEN INSERTED.LOTTABLE02LABEL <> DELETED.LOTTABLE02LABEL THEN 'LOTTABLE02LABEL|' ELSE '' END
+                                   + CASE WHEN INSERTED.LOTTABLE03LABEL <> DELETED.LOTTABLE03LABEL THEN 'LOTTABLE03LABEL|' ELSE '' END
+                                   + CASE WHEN INSERTED.LOTTABLE04LABEL <> DELETED.LOTTABLE04LABEL THEN 'LOTTABLE04LABEL|' ELSE '' END
+                                   + CASE WHEN INSERTED.ABC <> DELETED.ABC THEN 'ABC|' ELSE '' END
+                                   + CASE WHEN INSERTED.ReorderPoint <> DELETED.ReorderPoint THEN 'ReorderPoint|' ELSE '' END
+                                   + CASE WHEN INSERTED.ReorderQty <> DELETED.ReorderQty THEN 'ReorderQty|' ELSE '' END
+                                   + CASE WHEN INSERTED.Price <> DELETED.Price THEN 'Price|' ELSE '' END
+                                   + CASE WHEN INSERTED.Cost <> DELETED.Cost THEN 'Cost|' ELSE '' END
+                                   + CASE WHEN INSERTED.SkuStatus <> DELETED.SkuStatus THEN 'SkuStatus|' ELSE '' END
+                                   + CASE WHEN INSERTED.Itemclass <> DELETED.Itemclass THEN 'Itemclass|' ELSE '' END
+                                   + CASE WHEN INSERTED.ShelfLife <> DELETED.ShelfLife THEN 'ShelfLife|' ELSE '' END
+                                   + CASE WHEN INSERTED.Facility <> DELETED.Facility THEN 'Facility|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR6 <> DELETED.BUSR6 THEN 'BUSR6|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR7 <> DELETED.BUSR7 THEN 'BUSR7|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR8 <> DELETED.BUSR8 THEN 'BUSR8|' ELSE '' END
+                                   + CASE WHEN INSERTED.Style <> DELETED.Style THEN 'Style|' ELSE '' END
+                                   + CASE WHEN INSERTED.Color <> DELETED.Color THEN 'Color|' ELSE '' END
+                                   + CASE WHEN INSERTED.Size <> DELETED.Size THEN 'Size|' ELSE '' END
+                                   + CASE WHEN INSERTED.Measurement <> DELETED.Measurement THEN 'Measurement|' ELSE '' END
+                                   + CASE WHEN INSERTED.RetailSku <> DELETED.RetailSku THEN 'RetailSku|' ELSE '' END
+                                   + CASE WHEN INSERTED.AltSku <> DELETED.AltSku THEN 'AltSku|' ELSE '' END
+                                   + CASE WHEN INSERTED.CartonGroup <> DELETED.CartonGroup THEN 'CartonGroup|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR9 <> DELETED.BUSR9 THEN 'BUSR9|' ELSE '' END
+                                   + CASE WHEN INSERTED.BUSR10 <> DELETED.BUSR10 THEN 'BUSR10|' ELSE '' END
+                                   + CASE WHEN INSERTED.IVAS <> DELETED.IVAS THEN 'IVAS|' ELSE '' END
+                                   + CASE WHEN INSERTED.OVAS <> DELETED.OVAS THEN 'OVAS|' ELSE '' END
+                                   + CASE WHEN INSERTED.IOFlag <> DELETED.IOFlag THEN 'IOFlag|' ELSE '' END
+                                   + CASE WHEN INSERTED.StdOrderCost <> DELETED.StdOrderCost THEN 'StdOrderCost|' ELSE '' END
+                                   + CASE WHEN INSERTED.CarryCost <> DELETED.CarryCost THEN 'CarryCost|' ELSE '' END
+                                   + CASE WHEN INSERTED.GROSSWGT <> DELETED.GROSSWGT THEN 'GROSSWGT|' ELSE '' END
+                                   + CASE WHEN INSERTED.NETWGT <> DELETED.NETWGT THEN 'NETWGT|' ELSE '' END
+                                   + CASE WHEN INSERTED.CUBE <> DELETED.CUBE THEN 'CUBE|' ELSE '' END
+            FROM  INSERTED, DELETED
+            WHERE INSERTED.StorerKey = DELETED.StorerKey
+            AND   INSERTED.SKU       = DELETED.SKU
+            AND   INSERTED.Storerkey = @c_Storerkey
+            AND   INSERTED.SKU       = @c_SKU
+
+            IF @c_UpdateColumn <> ''
+            BEGIN
+               SET @c_Found = 'N'
+
+               DECLARE C_CodeLkUp CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT ISNULL(RTRIM(Code), '')
+               FROM   CodeLkUp WITH (NOLOCK)
+               WHERE  ListName  = @c_ListName_WSUpdSku
+               AND    StorerKey = @c_StorerKey
+
+               OPEN C_CodeLkUp
+               FETCH NEXT FROM C_CodeLkUp INTO @c_FieldName
+
+               WHILE @@FETCH_STATUS <> -1
+               BEGIN
+
+                  SET @c_FieldName = '%' + UPPER(@c_FieldName) + '|' + '%'
+
+                  SELECT @c_Found = CASE WHEN UPPER(@c_UpdateColumn) like @c_FieldName THEN 'Y' ELSE 'N' END
+
+                  IF @c_Found  = 'Y'
+                  BEGIN
+                     BREAK
+                  END
+
+                  FETCH NEXT FROM C_CodeLkUp INTO @c_FieldName
+               END -- WHILE @@FETCH_STATUS <> -1
+               CLOSE C_CodeLkUp
+               DEALLOCATE C_CodeLkUp
+
+               IF @c_Found = 'Y'
+               BEGIN
+                  SET @c_Key2 = CONVERT(CHAR(8), Getdate(), 112) + REPLACE(CONVERT(CHAR(8), Getdate(), 108), ':','') 
+
+                  EXEC dbo.ispGenTransmitLog2 @c_ConfigKey_WSUpdSku, @c_StorerKey, @c_Key2, @c_SKU, '' 
+                                            , @b_success OUTPUT
+                                            , @n_err OUTPUT
+                                            , @c_errmsg OUTPUT
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_continue = 3
+                     SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=63802
+                     SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_err,0))
+                                      + ': Insert Into TransmitLog2 Table (WSUPDSKU) Failed (ntrSkuUpdate)( SQLSvr MESSAGE='
+                                      + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                  END
+               END
+            END --IF @c_UpdateColumn <> ''
+         END --IF @c_Authority_WSUpdSku = '1'
+         --(KH01) - E
 
          IF @n_continue=1 OR @n_continue=2
          BEGIN
