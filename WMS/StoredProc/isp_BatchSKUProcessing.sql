@@ -42,10 +42,11 @@ GO
 /*                            Inventory Ignore QtyOnHold - CR           */  
 /* 25-Mar-2020  Shong   2.2   WMS-12596 TW Add HostWHCOde               */
 /* 12-Feb-2020  Wan04   2.3   SQLBindParm. Create Temp table to Store   */
-/*                            Preallocate data from pickcode            */    
-/* 22-Oct-2020  Shong   2.4   LWP-193 Performance Tuning                */
-/* 01-Dec-2020  Shong   2.5   Handle Pending Cancel Orders (SWT04)      */
-/* 01-Dec-2020  NJOW01  2.6   WMS-15746 get channel hold qty by config  */  
+/*                            Preallocate data from pickcode            */
+/* 03-Jul-2020  CheeMun 2.4   INC1192122 - Initialize ChannelID = 0     */    
+/* 22-Oct-2020  Shong   2.5   LWP-193 Performance Tuning                */
+/* 01-Dec-2020  Shong   2.6   Handle Pending Cancel Orders (SWT04)      */
+/* 12-May-2021  Shong   2.7   Performance Tuning SWT-2021-05-12         */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -119,6 +120,14 @@ BEGIN
    DECLARE   
          @c_ParameterName NVARCHAR(200),          @n_OrdinalPosition INT   
             
+   --INC1192122(START)
+   DECLARE
+     @c_sPrevStorerKey	NVARCHAR(15)
+   , @c_sPrevSKU  		NVARCHAR(20)
+   , @c_PrevFACILITY  	NVARCHAR(5)
+   , @c_PrevChannel   	NVARCHAR(20)
+   , @c_sPrevLOT      	NVARCHAR(10)
+   --INC1192122(END) 			 
               
    DECLARE  @c_PHeaderKey NVARCHAR(18),  
             @c_CaseId     NVARCHAR(10),  
@@ -1532,7 +1541,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                            PRINT ''  
                            PRINT '**** No Location Found ****'  
                         END  
-           BREAK  
+                        BREAK  
                      END  
                                             
                      IF @n_Fetch_Status = 0  
@@ -1543,7 +1552,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                            SET @n_LotAvailableQty = 0  
                            SELECT @n_LotAvailableQty = Qty - QtyAllocated - QtyPicked - QtyPreAllocated  
                            FROM LOT (NOLOCK)   
-  WHERE Lot = @c_aLOT     
+                           WHERE Lot = @c_aLOT     
               
                            IF @n_cQtyAvailable > @n_LotAvailableQty   
                               SET @n_cQtyAvailable = @n_LotAvailableQty    
@@ -1562,6 +1571,15 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
   
                            IF @c_ChannelInventoryMgmt = '1'         
                            BEGIN  
+							  --INC1192122(START)
+							  IF ((@c_aStorerKey <> @c_sPrevStorerKey) OR (@c_aSKU <> @c_sPrevSKU) 
+							  	OR (@c_aFacility <> @c_PrevFACILITY) OR (@c_Channel <> @c_PrevChannel)
+							  	OR (@c_aLOT <> @c_sPrevLOT))
+							  BEGIN
+							  	SET @n_Channel_ID = 0 
+							  END
+                              --INC1192122(END)
+                              
                               IF ISNULL(RTRIM(@c_Channel), '') <> ''  AND  
                                  ISNULL(@n_Channel_ID,0) = 0  
                               BEGIN  
@@ -1587,7 +1605,16 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                                        SELECT @n_continue = 3  
                                        SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspLoadProcessing)'   
                                  END CATCH                                            
-                              END   
+                              END  
+                              
+							  --INC1192122(START)
+							  SET @c_sPrevStorerKey     =  @c_aStorerKey  
+							  SET @c_sPrevSKU  		    =  @c_aSKU  
+							  SET @c_PrevFACILITY       =  @c_aFacility  
+							  SET @c_PrevChannel        =  @c_Channel  
+							  SET @c_sPrevLOT           =  @c_aLOT  		   
+                              --INC1192122(END)
+                              
                               IF @n_Channel_ID > 0   
                               BEGIN  
                                  SET @n_Channel_Qty_Available = 0                  
@@ -2658,7 +2685,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                      SELECT @c_caseid = 'C'+ @c_OPRun  
                   END  
   
-                  INSERT PICKDETAIL  
+                  INSERT INTO dbo.PICKDETAIL  
                     (  
                       PickDetailKey,    PickHeaderKey,  OrderKey,  
                       OrderLineNumber,  Lot,            StorerKey,  
@@ -2681,10 +2708,10 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
   
                SELECT @n_Err = @@ERROR, @n_cnt_sql = @@ROWCOUNT  
                -- LWP-193 Performance Tuning                
-               --SELECT @n_cnt = COUNT(1)   
-               --FROM PICKDETAIL WITH (NOLOCK)   
-               --WHERE PickDetailKey = @c_PickDetailKey  
-               IF EXISTS (SELECT 1 FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)
+               -- Performance Tuning (SWT-2021-05-12)
+               --IF @n_Err=0 AND @n_cnt_sql = 1
+               --IF EXISTS (SELECT 1 FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)               
+               IF @n_Err=0 AND @n_cnt_sql = 1
                BEGIN
                   SET @n_cnt = 1
                END 

@@ -22,7 +22,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date        Author   Ver   Purposes                                  */
+/* 2021-05-10  Wan01    1.1   Fixed- Skip Archive checking              */
 /************************************************************************/
 CREATE TRIGGER [dbo].[ntrChannelInvHoldDelete]
 ON  [dbo].[ChannelInvHold]
@@ -49,17 +50,17 @@ BEGIN
           
          , @CUR_DET           CURSOR
 
-   IF UPDATE(ArchiveCop)
+   IF (SELECT COUNT(1) FROM DELETED) = (SELECT COUNT(1) FROM DELETED WHERE DELETED.ArchiveCop = '9') -- Wan01  
    BEGIN
       SET @n_continue = 4 
       GOTO QUIT_TR
    END
 
-   IF UPDATE(TrafficCop)
-   BEGIN
-      SET @n_continue = 4 
-      GOTO QUIT_TR
-   END
+   --IF UPDATE(TrafficCop)    --(Wan01)
+   --BEGIN
+   --   SET @n_continue = 4 
+   --   GOTO QUIT_TR
+   --END
  
    IF EXISTS ( SELECT 1
                FROM   DELETED

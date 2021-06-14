@@ -1,5 +1,5 @@
 IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrTransferDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrTransferDetailDelete]
+   DROP TRIGGER [dbo].[ntrTransferDetailDelete]
 GO
 
 SET QUOTED_IDENTIFIER OFF 
@@ -18,7 +18,7 @@ GO
 /* Called By:                                                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.3                                                       */
+/* PVCS Version: 1.5                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -34,6 +34,7 @@ GO
 /* 24-NOV-2014  YTWan   1.4   SOS#315609 - Project Merlion - Transfer      */
 /*                            Release Task.(Wan02)                         */  
 /* 13-OCT-2015  YTWan   1.4   SOS#345583 - cn_update tranfer header (Wan03)*/
+/* 23-FEB-2021  Wan04   1.5   WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
 /***************************************************************************/
 CREATE TRIGGER ntrTransferDetailDelete
 ON TRANSFERDETAIL
@@ -62,24 +63,30 @@ BEGIN
       PRINT @profiler
    END
    DECLARE @b_Success       int,       -- Populated by calls to stored procedures - was the proc successful?
-      @n_err              int,       -- Error number returned by stored procedure or this trigger
-      @c_errmsg           NVARCHAR(250), -- Error message returned by stored procedure or this trigger
-      @n_continue         int,       -- continuation flag: 1 = Continue, 2 = failed but continue processsing, 3 = failed do not continue processing, 4 = successful but skip further processing
-      @n_starttcnt        int,       -- Holds the current transaction count
-      @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
-      ,@c_authority        NVARCHAR(1)  -- KHLim02
+           @n_err              int,       -- Error number returned by stored procedure or this trigger
+           @c_errmsg           NVARCHAR(250), -- Error message returned by stored procedure or this trigger
+           @n_continue         int,       -- continuation flag: 1 = Continue, 2 = failed but continue processsing, 3 = failed do not continue processing, 4 = successful but skip further processing
+           @n_starttcnt        int,       -- Holds the current transaction count
+           @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
+         , @c_authority        NVARCHAR(1)  -- KHLim02
 
-      ,@c_Facility            NVARCHAR(5)   -- (Wan02)
-      ,@c_FromStorerkey       NVARCHAR(15)  -- (Wan02)
-      ,@c_AllowDelete         NVARCHAR(15)  -- (Wan02)
-      ,@c_AllowDelRelTrfID    NVARCHAR(10)  -- (Wan02)
-      ,@c_SPCode              NVARCHAR(10)  -- (Wan02)
-      ,@c_Transferkey         NVARCHAR(10)  -- (Wan02)
-      ,@c_TransferLineNumber  NVARCHAR(5)   -- (Wan02)
-      ,@c_FromLoc             NVARCHAR(10)  -- (Wan02)
-      ,@c_FromID              NVARCHAR(18)  -- (Wan02)
-      ,@c_Status              NVARCHAR(10)  -- (Wan02)
-      ,@c_SQL                 NVARCHAR(MAX) -- (Wan02) 
+         , @c_Facility              NVARCHAR(5)   -- (Wan02)
+         , @c_FromStorerkey         NVARCHAR(15)  -- (Wan02)
+         , @c_AllowDelete           NVARCHAR(15)  -- (Wan02)
+         , @c_AllowDelRelTrfID      NVARCHAR(10)  -- (Wan02)
+         , @c_SPCode                NVARCHAR(10)  -- (Wan02)
+         , @c_Transferkey           NVARCHAR(10)  -- (Wan02)
+         , @c_TransferLineNumber    NVARCHAR(5)   -- (Wan02)
+         , @c_FromLoc               NVARCHAR(10)  -- (Wan02)
+         , @c_FromID                NVARCHAR(18)  -- (Wan02)
+         , @c_Status                NVARCHAR(10)  -- (Wan02)
+         , @c_SQL                   NVARCHAR(MAX) -- (Wan02) 
+         
+         , @c_HoldChannel           NVARCHAR(10)   = ''  --(Wan04)
+         , @c_HoldTRFType           CHAR(1)        = ''  --(Wan04)
+         , @c_TRFAllocHoldChannel   NVARCHAR(30)   = ''  --(Wan04)
+         , @n_FromChannel_ID        BIGINT         = 0   --(Wan04)
+         , @n_FromQty               INT            = 0   --(Wan04)
 
    SELECT @n_continue = 1, @n_starttcnt = @@TRANCOUNT
       /* #INCLUDE <TRTDD1.SQL> */     
@@ -200,6 +207,14 @@ BEGIN
                   END
                END
             END 
+            
+            --(Wan04) - START
+            IF @n_continue = 1 OR @n_continue = 2
+            BEGIN
+               SELECT @c_TRFAllocHoldChannel = SC.Authority
+               FROM fnc_SelectGetRight (@c_Facility, @c_FromStorerKey, '', 'TRFAllocHoldChannel') SC
+            END
+            --(Wan04) - END
 
             IF @n_continue = 1 OR @n_continue = 2
             BEGIN
@@ -208,7 +223,9 @@ BEGIN
                      ,TransferLineNumber
                      ,FromLoc
                      ,FromID
-                     ,Status
+                     ,STATUS
+                     ,FromChannel_ID                                 --(Wan04)
+                     ,FromQty                                        --(Wan04)    
                FROM DELETED
                WHERE DELETED.TransferKey = @c_Transferkey
                ORDER BY TransferLineNumber
@@ -220,11 +237,65 @@ BEGIN
                                              , @c_FromLoc
                                              , @c_FromID
                                              , @c_Status
+                                             , @n_FromChannel_ID     --(Wan04)
+                                             , @n_FromQty            --(Wan04)
 
                WHILE @@FETCH_STATUS <> -1 AND @n_continue = 1
                BEGIN
+                  --(Wan04) - START
+                  ---------------------------------------------------------------------------------
+                  -- Release From Channel Hold that was hold at transfer allocation process (START)
+                  ---------------------------------------------------------------------------------
+                  IF @n_continue = 1 AND @c_TRFAllocHoldChannel = '1' AND @n_FromChannel_ID > 0 AND
+                     EXISTS ( SELECT 1 
+                              FROM ChannelInvHold AS cih WITH (NOLOCK)
+                              JOIN ChannelInvHoldDetail AS cihd WITH (NOLOCK) ON  cihd.InvHoldkey = cih.InvHoldkey
+                              WHERE cih.HoldType = 'TRF'
+                              AND cih.Sourcekey = @c_TransferKey
+                              AND cihd.SourceLineNo = @c_TransferLineNumber
+                              AND CIHD.Channel_ID = @n_FromChannel_ID
+                              AND cihd.Hold = '1'
+                           )
+                  BEGIN
+                     SET @c_HoldTRFType = 'F'
+                     SET @c_HoldChannel = '0'
+                     EXEC isp_ChannelInvHoldWrapper  
+                          @c_HoldType     = 'TRF'         
+                        , @c_SourceKey    = @c_Transferkey    
+                        , @c_SourceLineNo = @c_TransferLineNumber                                 
+                        , @c_Facility     = ''       
+                        , @c_Storerkey    = ''       
+                        , @c_Sku          = ''       
+                        , @c_Channel      = ''       
+                        , @c_C_Attribute01= ''       
+                        , @c_C_Attribute02= ''       
+                        , @c_C_Attribute03= ''       
+                        , @c_C_Attribute04= ''       
+                        , @c_C_Attribute05= ''       
+                        , @n_Channel_ID   = @n_FromChannel_ID       
+                        , @c_Hold         = @c_HoldChannel     
+                        , @c_Remarks      = ''  
+                        , @c_HoldTRFType  = @c_HoldTRFType 
+                        , @n_DelQty       = @n_FromQty
+                        , @n_QtyHoldToAdj = 0   
+                        , @n_ChannelTran_ID_Ref = 0      
+                        , @b_Success      = @b_Success   OUTPUT  
+                        , @n_Err          = @n_Err       OUTPUT  
+                        , @c_ErrMsg       = @c_ErrMsg    OUTPUT  
+  
+                     IF @b_Success = 0  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        SET @n_err = 68116 
+                        SET @c_errmsg  = CONVERT(char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (ntrTransferDetailDelete)'  
+                     END 
+                  END               
+                  ---------------------------------------------------------------------------------
+                  -- Release From Channel Hold that was hold at transfer allocation process (END)
+                  ---------------------------------------------------------------------------------
+                  --(Wan04) - END
 
-                  IF @c_Status IN ('4', '5') AND @c_AllowDelRelTrfID = '1' 
+                  IF @c_Status IN ('4', '5') AND @c_AllowDelRelTrfID = '1' AND @n_continue = 1  --(Wan04)
                   BEGIN
                      IF NOT EXISTS ( SELECT 1
                                      FROM TRANSFERDETAIL WITH (NOLOCK)
@@ -286,6 +357,8 @@ BEGIN
                                                 , @c_FromLoc
                                                 , @c_FromID
                                                 , @c_Status
+                                                , @n_FromChannel_ID  --(Wan04)
+                                                , @n_FromQty         --(Wan04)
                END
                CLOSE CUR_DELDET
                DEALLOCATE CUR_DELDET
@@ -303,7 +376,7 @@ BEGIN
       BEGIN
          IF @b_debug = 2
          BEGIN
-            SELECT @profiler = "PROFILER,701,02,0,TRANSFER 	                                   ," + CONVERT(char(12), getdate(), 114)
+            SELECT @profiler = "PROFILER,701,02,0,TRANSFER                                     ," + CONVERT(char(12), getdate(), 114)
             PRINT @profiler
          END
          DECLARE @n_deletedcount int
@@ -314,7 +387,7 @@ BEGIN
             SET  TRANSFER.OpenQty = TRANSFER.OpenQty - DELETED.FromQty,
             EditDate = GETDATE(),  -- SOS102519
             EditWho = SUSER_SNAME(), -- SOS102519
-            Trafficcop = Null			 -- SOS102519
+            Trafficcop = Null        -- SOS102519
             FROM TRANSFER,
             DELETED
             WHERE TRANSFER.TransferKey = DELETED.TransferKey
@@ -333,7 +406,7 @@ BEGIN
             ),
             EditDate = GETDATE(),  -- SOS102519
             EditWho = SUSER_SNAME(), -- SOS102519
-            Trafficcop = Null 		 -- SOS102519
+            Trafficcop = Null        -- SOS102519
             FROM TRANSFER,DELETED
             WHERE TRANSFER.Transferkey IN (SELECT Distinct Transferkey From DELETED)
             AND TRANSFER.Transferkey = DELETED.Transferkey

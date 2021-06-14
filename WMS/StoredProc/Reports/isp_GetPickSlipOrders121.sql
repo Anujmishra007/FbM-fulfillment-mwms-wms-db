@@ -37,6 +37,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author    Ver.  Purposes                                 */
+/* 31-May-2021 Mingle    1.1   Add orders.ordergroup                    */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_GetPickSlipOrders121] (@c_loadkey NVARCHAR(10)) 
@@ -284,6 +285,7 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders121] (@c_loadkey NVARCHAR(10))
      UPC              NVARCHAR(255),
      SNotes1          NVARCHAR(255),
      Lottable08       NVARCHAR(30) NULL,
+     Ordergroup       NVARCHAR(30)     --ML01
    )
    INSERT INTO #TEMP_PICK (
       PickSlipNo,          LoadKey,         OrderKey,         ConsigneeKey,
@@ -300,7 +302,7 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders121] (@c_loadkey NVARCHAR(10))
       DeliveryDate,        Lottable01,      Lottable10,       Lottable05 ,
       DischargePlace,      InvoiceNo,       Addr4,            City, 
       Storerkey,           showbarcode,     showcontactphone, c_contact1,       c_phone1,
-      UPC,                 SNotes1,         Lottable08
+      UPC,                 SNotes1,         Lottable08,       Ordergroup     --ML01
    )
    SELECT
       (SELECT PICKHEADERKEY FROM PICKHEADER WITH (NOLOCK)
@@ -370,7 +372,8 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders121] (@c_loadkey NVARCHAR(10))
       ISNULL(orders.c_phone1,'')  as c_phone1,
       CAST(STUFF((SELECT TOP 3 '/' + RTRIM(UPC) FROM UPC (NOLOCK) WHERE UPC.SKU = PickDetail.SKU AND UPC.StorerKey = ORDERS.Storerkey ORDER BY UPC.UPC FOR XML PATH('')),1,1,'' ) AS NVARCHAR(255)),
       CAST(ISNULL(S.Notes1,'') AS NVARCHAR(255)),
-      ISNULL(LotAttribute.Lottable08,'')
+      ISNULL(LotAttribute.Lottable08,''),
+      ORDERS.Ordergroup     --ML01
    FROM pickdetail WITH (NOLOCK)
    JOIN ORDERS WITH (NOLOCK) ON pickdetail.orderkey = orders.orderkey
    JOIN lotattribute WITH (NOLOCK) ON pickdetail.lot = lotattribute.lot
@@ -437,7 +440,8 @@ CREATE PROC [dbo].[isp_GetPickSlipOrders121] (@c_loadkey NVARCHAR(10))
             ISNULL(orders.c_contact1,''),                                 
             ISNULL(orders.c_phone1,''),
             ISNULL(S.Notes1,''),
-            ISNULL(LotAttribute.Lottable08,'')
+            ISNULL(LotAttribute.Lottable08,''),
+            ORDERS.Ordergroup     --ML01
 
    -- commented the cursor below and instead update directly the temp table
    -- update CASE qty

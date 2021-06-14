@@ -25,6 +25,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 19-MAY-2021  CSCHONG   1.1 Temporary Rollback (CS01)                 */
+/* 03-MAY-2021  CSCHONG   1.1 WMS-16902 - support multi order (CS01)    */
+/* 19-MAY-2021  CSCHONG   1.2 WMS-16902 - Fix single order issue (CS02) */
 /************************************************************************/
 CREATE PROC isp_PackListByCtn08
            @c_PickSlipNo      NVARCHAR(10)
@@ -41,13 +44,70 @@ BEGIN
          , @n_Continue              INT
          
          , @n_PrintOrderAddresses   INT
+
+           --CS01 START
+          , @c_storerkey  NVARCHAR(20)
+          , @c_loadkey    NVARCHAR(20)
+          , @c_Company    NVARCHAR(45)
+          , @n_CtnOrder   INT
+        --CS01 END
+          ,@c_MergeORD     NVARCHAR(1)  --CS02  
+
+    CREATE TABLE #TMPPACKCTN08ORD
+    ( Pickslipno    NVARCHAR(20)
+     ,storerkey     NVARCHAR(20)
+     ,loadkey       NVARCHAR(20)
+     ,Orderkey      NVARCHAR(20)
+     ,MergeORD      NVARCHAR(1)
+    )
          
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
 
+   SET @c_MergeORD = 'N'
+   SET @n_CtnOrder = ''
+
+   --CS02 START
+    IF  EXISTS(SELECT 1 FROM PackHeader PH (nolock) WHERE PH.pickslipno=@c_PickSlipNo AND ISNULL(PH.OrderKey,'') = '')
+    BEGIN
+       SET @n_CtnOrder = 2
+     --SET @c_MergeORD = 'Y'
+      INSERT INTO #TMPPACKCTN08ORD
+      (
+          Pickslipno,
+          storerkey,
+          loadkey,
+          Orderkey,
+          MergeORD
+      )
+       SELECT PH.pickslipno,MAX(OH.storerkey),OH.loadkey,MAX(OH.orderkey),'Y'
+       FROM PackHeader PH (nolock) 
+       JOIN ORDERS OH WITH (NOLOCK) ON OH.LoadKey=PH.LoadKey
+       WHERE PH.pickslipno=@c_PickSlipNo 
+       GROUP BY PH.pickslipno,OH.loadkey
+    END
+    ELSE
+    BEGIN
+
+     SET @n_CtnOrder = 1 
+     INSERT INTO #TMPPACKCTN08ORD
+      (
+          Pickslipno,
+          storerkey,
+          loadkey,
+          Orderkey,
+          MergeORD
+      )
+       SELECT PH.pickslipno,OH.storerkey,OH.loadkey,OH.orderkey,'N'
+       FROM PackHeader PH (nolock) 
+       JOIN ORDERS OH WITH (NOLOCK) ON OH.orderkey=PH.orderkey
+       WHERE PH.pickslipno=@c_PickSlipNo 
+    END
+   --CS02 END
+
   	SELECT  dbo.ORDERS.Storerkey
-         , dbo.ORDERS.Orderkey
-         , ExternOrderkey= ISNULL(RTRIM(dbo.ORDERS.ExternOrderkey),'')
+         , CASE WHEN TPO.MergeORD='N' THEN TPO.Orderkey ELSE TPO.loadkey END    --CS02
+         , ExternOrderkey= CASE WHEN TPO.MergeORD='N' THEN ISNULL(RTRIM(dbo.ORDERS.ExternOrderkey),'') ELSE '' END  --CS02
          , ConsigneeKey  = ISNULL(RTRIM(dbo.ORDERS.ConsigneeKey),'')
          , C_Company     = ISNULL(RTRIM(dbo.ORDERS.C_Company),'')
          , C_Address1    = ISNULL(RTRIM(dbo.ORDERS.C_Address1),'') 
@@ -69,18 +129,19 @@ BEGIN
          , Descr         = ISNULL(RTRIM(dbo.SKU.Notes1),'') 
          , Size          = ISNULL(RTRIM(dbo.SKU.Size),'') 
          , Qty           = SUM(dbo.PACKDETAIL.Qty) 
-     FROM dbo.PACKHEADER WITH (NOLOCK) 
+         , CtnOrder      = @n_CtnOrder                           --CS01
+     FROM #TMPPACKCTN08ORD TPO (NOLOCK)                --CS02
      JOIN dbo.ORDERS WITH (NOLOCK)   
-	    ON (dbo.PACKHEADER.Orderkey = dbo.ORDERS.Orderkey) 
+	    ON (TPO.Orderkey = dbo.ORDERS.Orderkey) 
      JOIN dbo.PACKDETAIL WITH (NOLOCK) 
-	    ON (dbo.PACKHEADER.PickSlipNo = dbo.PACKDETAIL.PickSlipNo) 
+	    ON (TPO.PickSlipNo = dbo.PACKDETAIL.PickSlipNo) 
      JOIN dbo.SKU WITH (NOLOCK) 
 	    ON (dbo.PACKDETAIL.Storerkey = dbo.SKU.Storerkey) 
        AND(dbo.PACKDETAIL.Sku = dbo.SKU.Sku)
-    WHERE (dbo.PACKHEADER.PickSlipNo= @c_PickSlipNo)
+    WHERE (TPO.PickSlipNo= @c_PickSlipNo)
  GROUP BY dbo.ORDERS.Storerkey
-        , dbo.ORDERS.Orderkey
-        , ISNULL(RTRIM(dbo.ORDERS.ExternOrderkey),'')
+        , CASE WHEN TPO.MergeORD='N' THEN TPO.Orderkey ELSE TPO.loadkey END    --CS02
+        , CASE WHEN TPO.MergeORD='N' THEN ISNULL(RTRIM(dbo.ORDERS.ExternOrderkey),'') ELSE '' END --CS02
 		  , ISNULL(RTRIM(dbo.ORDERS.ConsigneeKey),'')
 	  	  , ISNULL(RTRIM(dbo.ORDERS.C_Company),'')
 	  	  , ISNULL(RTRIM(dbo.ORDERS.C_Address1),'') 

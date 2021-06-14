@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-05-17  WLChooi  1.1   Fix Inserting Channel_ID into Pickdetail  */
 /*                            (WL01)                                    */
+/* 2021-06-08  WLChooi  1.2   Remove Hardcoded WaveType (WL02)          */
 /************************************************************************/
 CREATE PROC ispManningsConsoLQ7
      @c_WaveKey            NVARCHAR(10)
@@ -267,7 +268,7 @@ BEGIN
    + CASE WHEN ISNULL(@c_Lottable01,'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01' END
    + CASE WHEN ISNULL(@c_Lottable02,'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02' END
    + CASE WHEN ISNULL(@c_Lottable03,'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03' END
-   + CASE WHEN @c_WaveType IN ('SEPB2CAGV','SEPB2B_AGV') THEN '' ELSE ' AND LA.Lottable04 = @dt_InvLot04'  END
+   + ' AND LA.Lottable04 = @dt_InvLot04'   --WL02
    + CASE WHEN ISNULL(@c_Lottable06,'') = '' THEN '' ELSE ' AND LA.Lottable06 = @c_Lottable06' END
    + CASE WHEN ISNULL(@c_Lottable07,'') = '' THEN '' ELSE ' AND LA.Lottable07 = @c_Lottable07' END
    + CASE WHEN ISNULL(@c_Lottable08,'') = '' THEN '' ELSE ' AND LA.Lottable08 = @c_Lottable08' END

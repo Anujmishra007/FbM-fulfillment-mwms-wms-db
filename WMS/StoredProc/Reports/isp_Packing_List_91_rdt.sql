@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
+/* 06-May-2021  Mingle  1.1   WMS-16940 show sku.busr4                  */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Packing_List_91_rdt] (
@@ -59,6 +60,7 @@ BEGIN
         , SKU.size
         , SUM(PICKDETAIL.qty) AS Qty
         , ORDERS.c_phone1
+        , busr4 = CASE WHEN ORDERS.Storerkey = 'GANT' THEN SKU.Busr4 ELSE SKU.Descr END
    FROM PICKHEADER (NOLOCK)
    JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = PICKHEADER.OrderKey
    JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey
@@ -80,6 +82,7 @@ BEGIN
           , SKU.Color
           , SKU.size
           , ORDERS.c_phone1
+          , CASE WHEN ORDERS.Storerkey = 'GANT' THEN SKU.Busr4 ELSE SKU.Descr END
 
 END     
 GO

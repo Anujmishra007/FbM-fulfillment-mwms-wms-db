@@ -63,8 +63,9 @@ GO
 /* 21-Nov-2019  TLTING02 3.0  Dynamic SQL - cache issue                 */   
 /* 08-Jan-2020  NJOW06  3.1   WMS-10420 add strategykey parameter       */ 
 /* 12-Feb-2020  Wan07   3.2   SQLBindParm. Create Temp table to Store   */
-/*                            Preallocate data from pickcode            */     
-/* 01-Dec-2020  NJOW07  3.3   WMS-15746 get channel hold qty by config  */  
+/*                            Preallocate data from pickcode            */ 
+/* 03-Jul-2020  CheeMun 3.3   INC1192122 - Initialize ChannelID = 0     */    
+/* 01-Dec-2020  NJOW07  3.4   WMS-15746 get channel hold qty by config  */  
 /************************************************************************/  
   
 CREATE PROC  [dbo].[nspPreAllocateLoadProcessing]  
@@ -620,6 +621,14 @@ BEGIN
    DECLARE  
       @c_ParameterName NVARCHAR(200),          @n_OrdinalPosition INT  
   
+	--INC1192122(START)
+   DECLARE
+     @c_sPrevStorerKey	NVARCHAR(15)
+   , @c_sPrevSKU  		NVARCHAR(20)
+   , @c_PrevFACILITY  	NVARCHAR(5)
+   , @c_PrevChannel   	NVARCHAR(20)
+   , @c_sPrevLOT      	NVARCHAR(10)
+   --INC1192122(END)				  
   
    SELECT  @n_MinShelfLife = 0 -- Added by mmlee for fbr50  
    SELECT  @c_OrdUOM = ''  
@@ -1246,6 +1255,16 @@ BEGIN
   
                IF @c_ChannelInventoryMgmt = '1'   
                BEGIN  
+               
+                  --INC1192122(START)
+				  IF ((@c_sStorerKey <> @c_sPrevStorerKey) OR (@c_sSKU <> @c_sPrevSKU) 
+					 OR (@c_FACILITY <> @c_PrevFACILITY) OR (@c_Channel <> @c_PrevChannel)
+					 OR (@c_sLOT <> @c_sPrevLOT))
+				  BEGIN
+					 SET @n_Channel_ID = 0 
+				  END
+				  --INC1192122(END)
+                  
                   IF ISNULL(RTRIM(@c_Channel), '') <> ''  AND  
                      ISNULL(@n_Channel_ID,0) = 0  
                   BEGIN  
@@ -1271,6 +1290,15 @@ BEGIN
                            SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspPreAllocateLoadProcessing)'  
                      END CATCH  
                   END  
+                  
+                  --INC1192122(START)
+				  SET @c_sPrevStorerKey     =  @c_sStorerKey  
+				  SET @c_sPrevSKU  		    =  @c_sSKU  
+				  SET @c_PrevFACILITY       =  @c_FACILITY  
+				  SET @c_PrevChannel        =  @c_Channel  
+				  SET @c_sPrevLOT           =  @c_sLOT  		   
+				  --INC1192122(END)
+                  
                   IF @n_Channel_ID > 0  
                   BEGIN  
                      SET @n_Channel_Qty_Available = 0  

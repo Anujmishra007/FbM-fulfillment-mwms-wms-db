@@ -1,7 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave19]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetPickSlipWave19]
-GO
+--IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave19]') 
+--AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+--   DROP PROCEDURE [dbo].[isp_GetPickSlipWave19]
+--GO
 
 SET ANSI_NULLS OFF
 GO
@@ -26,8 +26,9 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
+/* 10-MAY-2021 CSCHONG  1.1   WMS-16974 add new sub report (CS01)       */
 /************************************************************************/  
-CREATE PROC isp_GetPickSlipWave19  
+alter PROC isp_GetPickSlipWave19 
            @c_wavekey_type       NVARCHAR(15)  
 
 AS  
@@ -84,6 +85,7 @@ BEGIN
       ,  Printedflag       NCHAR(1)       NULL  
       ,  NoOfSku           INT            NULL  
       ,  NoOfPickLines     INT            NULL 
+      ,  RptType           NVARCHAR(5)    NULL   --CS01
       )  
   
     
@@ -98,27 +100,32 @@ BEGIN
       ,  Printedflag    
       ,  NoOfSku          
       ,  NoOfPickLines     
+      ,  RptType                        --CS01
       )                             
    SELECT PD.Storerkey  
          ,WD.Wavekey  
          ,PickHeaderKey = ISNULL(RTRIM(PH.PickHeaderkey), '')  
-         ,LOC.PutawayZone                                              
+         ,'' --LOC.PutawayZone                                                       --CS01                                              
          ,Printedflag = CASE WHEN ISNULL(RTRIM(PH.PickHeaderkey), '') =  '' THEN 'N' ELSE 'Y' END  
          ,NoOfSku= COUNT(DISTINCT PD.Sku)  
          ,NoOfPickLines= COUNT(DISTINCT PD.PickDetailkey)
-   FROM WAVEDETAIL WD   WITH (NOLOCK)    
+         ,RptType = CASE WHEN ISNULL(C.udf01,'S') = 'S' THEN 'S' ELSE 'M' END          --CS01
+   FROM WAVE WV   WITH (NOLOCK)    
+   JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.WaveKey = WV.WaveKey
    JOIN PICKDETAIL PD   WITH (NOLOCK) ON (WD.Orderkey= PD.Orderkey)  
    JOIN LOC        LOC  WITH (NOLOCK) ON (PD.Loc = LOC.Loc)         
    LEFT JOIN REFKEYLOOKUP RL WITH (NOLOCK) ON (PD.PickDetailKey = RL.PickDetailkey)  
    LEFT JOIN PICKHEADER   PH WITH (NOLOCK) ON (RL.PickSlipNo = PH.PickHeaderkey)  
+    LEFT JOIN dbo.CODELKUP C WITH (NOLOCK) ON C.LISTNAME = 'wavetype' AND C.code = WV.WaveType AND c.Storerkey =PD.Storerkey   --CS01
    WHERE WD.Wavekey = @c_Wavekey  
    AND   PD.Status < '5'  
    GROUP BY PD.Storerkey  
          ,  WD.Wavekey  
          ,  ISNULL(RTRIM(PH.PickHeaderkey), '')  
-         ,  LOC.PutawayZone                                                --(Wan01)    
+     --    ,  LOC.PutawayZone                                                --CS01                            
+         ,CASE WHEN ISNULL(C.udf01,'S') = 'S' THEN 'S' ELSE 'M' END          --CS01  
    ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), '')   
-         ,  LOC.PutawayZone                                                --(Wan01)  
+       --  ,  LOC.PutawayZone                                                 --CS01                       
   
    SET @CUR_PSLIP = CURSOR FAST_FORWARD READ_ONLY FOR  
    SELECT   RowNum  
@@ -202,7 +209,7 @@ BEGIN
       JOIN PICKDETAIL PD  WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)  
       JOIN LOC        LOC WITH (NOLOCK) ON (PD.Loc = LOC.Loc)            
       WHERE WD.Wavekey = @c_Wavekey  
-      AND   LOC.PutawayZone = @c_Zone                                      
+      --AND   LOC.PutawayZone = @c_Zone                                      
       ORDER BY PD.PickDetailKey         
   
       OPEN @CUR_PD  
@@ -353,6 +360,7 @@ QUIT_SP:
          ,  TMP.Printedflag  
          ,  TMP.NoOfSku          
          ,  TMP.NoOfPickLines   
+         ,  TMP.RptType            --CS01
    FROM #TMP_PSLIP TMP  
    ORDER BY TMP.PickHeaderKey  
          ,  TMP.PutawayZone  

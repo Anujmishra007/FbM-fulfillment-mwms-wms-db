@@ -27,6 +27,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 12-May-2021  WLChooi   1.1   WMS-17032 - Modify Logic to Update      */
+/*                              Userdefine10 (WL01)                     */
+/* 08-Jun-2021  WLChooi   1.2   Remove Filter by ExternPOKey (WL02)     */
 /************************************************************************/
 CREATE PROCEDURE isp_RCM_PO_UpdateUCCByPO
    @c_POKey    NVARCHAR(10),   
@@ -132,7 +135,7 @@ BEGIN
       JOIN #TMP_UCC TU ON TU.UCCNo = UCC.UCCNo
       WHERE UCC.SKU = @c_GetSKU AND UCC.Storerkey = @c_Storerkey
       AND UCC.Qty = @n_SumQty
-      AND UCC.ExternKey = @c_ExternPOKey
+      --AND UCC.ExternKey = @c_ExternPOKey   --WL02
       
       SELECT @n_FUDF01 = CASE WHEN ISNUMERIC(F.UserDefine01) = 1 THEN CAST(F.UserDefine01 AS INT) ELSE 0 END
            , @n_FUDF02 = CASE WHEN ISNUMERIC(F.UserDefine02) = 1 THEN CAST(F.UserDefine02 AS INT) ELSE 0 END
@@ -163,8 +166,10 @@ BEGIN
       END
 
       --If UCC.Userdefine07 <> '1' AND (LEFT(UCCNo, 2) = 'BZ' OR PO.OtherReference = '1039')
-      --Continue to proceed
+      --If sum(UCC.qty) > get @UDF01 = Facility.UserDefine01 where Facility = PODetail.Facility   --WL01 
+      --group by UCC.UCCNo, continue to proceed   --WL01
       IF @c_GetUCCUDF07 <> '1' AND (LEFT(LTRIM(RTRIM(@c_GetUCCNo)), 2) = 'BZ' OR @c_GetOtherReference = '1039')
+         AND @n_SumQty > @n_FUDF01   --WL01
       BEGIN
          UPDATE UCC WITH (ROWLOCK)
          SET Userdefined10 = '1'

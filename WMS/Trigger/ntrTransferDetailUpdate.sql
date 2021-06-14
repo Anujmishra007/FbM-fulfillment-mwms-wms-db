@@ -37,6 +37,7 @@ GO
 /* 16-Jun-2017  TLTING      1.6      Remove SETROWCOUNT, missing (NOLOCK)             */
 /* 07-Feb-2016  SWT02       1.7      Channel Management                               */
 /* 23-JUL-2019  Wan03       1.8      WMS-9872 - CN_NIKESDC_Exceed_Channel             */
+/* 23-FEB-2021  Wan04       1.9      WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
 /**************************************************************************************/
 CREATE TRIGGER [dbo].[ntrTransferDetailUpdate]
 ON  [dbo].[TRANSFERDETAIL]
@@ -78,6 +79,18 @@ BEGIN
 
          , @c_FrStorerkey     NVARCHAR(15)  --(Wan02)
          , @c_IDTaskRelease   NVARCHAR(10)  --(Wan02)
+         
+  --(Wan04) - START
+         , @c_HoldChannel     NVARCHAR(10)   = ''
+         , @c_HoldTRFType     CHAR(1)        = ''
+         
+  DECLARE @tSTRCFG  TABLE 
+         ( Facility           NVARCHAR(5)    NOT NULL DEFAULT('')
+         , FromStorerkey      NVARCHAR(15)   NOT NULL DEFAULT('')
+         , Configkey          NVARCHAR(30)   NOT NULL DEFAULT('')
+         , SValue             NVARCHAR(30)   NOT NULL DEFAULT('')
+         )
+   --(Wan04) - END
    SELECT @n_continue = 1, @n_starttcnt = @@TRANCOUNT
    
    IF UPDATE(ArchiveCop)
@@ -295,6 +308,7 @@ BEGIN
                SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 91004   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Retrieve Failed On GetRight. (ntrTransferDetailUpdate)" + " ( " + " SQLSvr MESSAGE = " + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
             END
+         END
             --(Wan03) - START
             -- (SWT02)
             --SET @c_ChannelInventoryMgmt = '0'
@@ -318,253 +332,362 @@ BEGIN
             --     + " ( " + " SQLSvr MESSAGE = " + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
             --   END
             --END 
-            If @n_continue = 1 or @n_continue = 2
+         If @n_continue = 1 or @n_continue = 2
+         BEGIN
+            IF EXISTS (
+                        SELECT 1
+                        FROM INSERTED
+                        JOIN TRANSFER TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
+                        CROSS APPLY fnc_SelectGetRight (TFH.Facility, TFH.FromStorerKey, '', 'ChannelInventoryMgmt') SC
+                        WHERE SC.Authority = '1' 
+                        AND (INSERTED.FromChannel = '' OR INSERTED.FromChannel IS NULL)
+                     )
             BEGIN
-               IF EXISTS (
-                           SELECT 1
-                           FROM INSERTED
-                           JOIN TRANSFER TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
-                           CROSS APPLY fnc_SelectGetRight (TFH.Facility, TFH.FromStorerKey, '', 'ChannelInventoryMgmt') SC
-                           WHERE SC.Authority = '1' 
-                           AND (INSERTED.FromChannel = '' OR INSERTED.FromChannel IS NULL)
-                        )
-               BEGIN
-                  SET @n_err = 91006
-                  SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Channel Management Turn On, From Channel Not Allow Blank. (ntrTransferDetailUpdate)'
-                  SET @n_continue = 3
-               END
+               SET @n_err = 91006
+               SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Channel Management Turn On, From Channel Not Allow Blank. (ntrTransferDetailUpdate)'
+               SET @n_continue = 3
             END
-
-            If @n_continue = 1 or @n_continue = 2
-            BEGIN
-               IF EXISTS (
-                           SELECT 1
-                           FROM INSERTED
-                           JOIN TRANSFER TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
-                           CROSS APPLY fnc_SelectGetRight (TFH.ToFacility, TFH.ToStorerKey, '', 'ChannelInventoryMgmt') SC
-                           WHERE SC.Authority = '1' 
-                           AND (INSERTED.ToChannel = '' OR INSERTED.ToChannel IS NULL)
-                        )
-               BEGIN
-                  SET @n_err = 91007
-                  SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Channel Management Turn On, To Channel Not Allow Blank. (ntrTransferDetailUpdate)'
-                  SET @n_continue = 3
-               END
-            END
-            --(Wan03) - END                    
          END
 
-         SELECT @c_TransferPrimaryKey = ' '
-         WHILE (1 = 1)
+         If @n_continue = 1 or @n_continue = 2
          BEGIN
-            SELECT TOP 1   
-                     @c_TransferPrimaryKey     = TransferKey + TransferLineNumber,
-                     @c_TransferKey            = TransferKey, -- (SWT02)
-                     @c_TransferLineNumber     = TransferLineNumber, -- (SWT02)
-                     @c_FromStorerKey          = FromStorerKey,
-                     @c_FromSku                = FromSku,
-                     @c_FromLoc                = FromLoc,
-                     @c_FromLot                = FromLot,
-                     @c_FromId                 = FromId,
-                     @n_FromQty                = FromQty,
-                     @c_FromPackKey            = FromPackKey,
-                     @c_FromUOM                = FromUOM,
-                     @c_ToStorerKey            = ToStorerKey,
-                     @c_ToSku                  = ToSku,
-                     @c_ToLoc                  = ToLoc,
-                     @c_ToLot                  = ToLot,
-                     @c_ToId                   = ToId,
-                     @n_ToQty                  = ToQty,
-                     @c_ToPackKey              = ToPackKey,
-                     @c_ToUOM                  = ToUOM,
-                     @c_lottable01             = lottable01,
-                     @c_lottable02             = lottable02,
-                     @c_lottable03             = lottable03,
-                     @d_lottable04             = lottable04,
-                     @d_lottable05             = lottable05,
-                     @c_Lottable06             = Lottable06,
-                     @c_Lottable07             = Lottable07,
-                     @c_Lottable08             = Lottable08,
-                     @c_Lottable09             = Lottable09,
-                     @c_Lottable10             = Lottable10,
-                     @c_Lottable11             = Lottable11,
-                     @c_Lottable12             = Lottable12,
-                     @d_Lottable13             = Lottable13,
-                     @d_Lottable14             = Lottable14,
-                     @d_Lottable15             = Lottable15,
-                     @d_EffectiveDate          = EffectiveDate,
-                     @c_tolottable01           = tolottable01,
-                     @c_tolottable02           = tolottable02,
-                     @c_tolottable03           = tolottable03,
-                     @d_tolottable04           = tolottable04,
-                     @d_tolottable05           = tolottable05,
-                     @c_ToLottable06           = ToLottable06,
-                     @c_ToLottable07           = ToLottable07,
-                     @c_ToLottable08           = ToLottable08,
-                     @c_ToLottable09           = ToLottable09,
-                     @c_ToLottable10           = ToLottable10,
-                     @c_ToLottable11           = ToLottable11,
-                     @c_ToLottable12           = ToLottable12,
-                     @d_ToLottable13           = ToLottable13,
-                     @d_ToLottable14           = ToLottable14,
-                     @d_ToLottable15           = ToLottable15,
-                     @c_FromChannel            = FromChannel, -- (SWT02)
-                     @c_ToChannel              = ToChannel    -- (SWT02)
+            IF EXISTS (
+                        SELECT 1
+                        FROM INSERTED
+                        JOIN TRANSFER TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
+                        CROSS APPLY fnc_SelectGetRight (TFH.ToFacility, TFH.ToStorerKey, '', 'ChannelInventoryMgmt') SC
+                        WHERE SC.Authority = '1' 
+                        AND (INSERTED.ToChannel = '' OR INSERTED.ToChannel IS NULL)
+                     )
+            BEGIN
+               SET @n_err = 91007
+               SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Channel Management Turn On, To Channel Not Allow Blank. (ntrTransferDetailUpdate)'
+               SET @n_continue = 3
+            END
+         END
+         --(Wan03) - END                    
+ 
+         --(Wan04) - START
+         IF @n_continue = 1 OR @n_continue = 2
+         BEGIN
+            INSERT INTO @tSTRCFG ( Facility, FromStorerkey, Configkey, SValue )
+            SELECT TFH.Facility, TFH.FromStorerKey, 'TRFAllocHoldChannel', SC.Authority
             FROM INSERTED
-            WHERE TransferKey + TransferLineNumber > @c_TransferPrimaryKey
-            AND Status = '9'
-            ORDER BY TransferKey, TransferLineNumber
+            JOIN [TRANSFER] TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
+            CROSS APPLY fnc_SelectGetRight (TFH.Facility, TFH.FromStorerKey, '', 'TRFAllocHoldChannel') SC
+            WHERE SC.Authority = '1' 
+         END 
+ 
+         IF @n_continue = 1 OR @n_continue = 2 
+         BEGIN        
+            IF EXISTS ( SELECT 1
+                        FROM INSERTED i
+                        JOIN DELETED  d ON  i.Transferkey = d.Transferkey
+                                        AND i.TransferLineNumber = d.TransferLineNumber
+                        JOIN [TRANSFER] AS t WITH (NOLOCK) ON i.Transferkey = t.TransferKey
+                        JOIN @tSTRCFG SC ON t.Facility = SC.Facility AND SC.FromStorerkey = t.FromStorerKey
+                                         AND SC.Configkey = 'TRFAllocHoldChannel'
+                        WHERE d.FromChannel_ID > 0
+                        AND i.FromQty <> d.FromQty
+                        AND i.[status] < '9'
+                        AND SC.SValue = '1'
+                        AND EXISTS (SELECT 1
+                                    FROM ChannelInvHold AS cih WITH (NOLOCK)
+                                    JOIN ChannelInvHoldDetail AS cihd WITH (NOLOCK) ON  cihd.InvHoldkey = cih.InvHoldkey
+                                    WHERE cih.HoldType = 'TRF'
+                                    AND cih.Sourcekey = d.TransferKey
+                                    AND cihd.SourceLineNo = d.TransferLineNumber
+                                    AND CIHD.Channel_ID = d.FromChannel_ID
+                                    AND cihd.Hold = '1'
+                                   )
+                        )
+            BEGIN
+               SET @n_continue = 3  
+               SET @n_err = 91013 
+               SET @c_errmsg  = CONVERT(char(5),@n_err)+': From Channel ID is hold by Transfer Line. Reject to change From Qty. (ntrTransferDetailUpdate)'  
+            END  
+         END  
+         --(Wan04) - END
+         
+         IF @n_continue = 1 OR @n_continue = 2
+         BEGIN         
+            SELECT @c_TransferPrimaryKey = ' '
+            WHILE (1 = 1) AND @n_continue IN (1,2)       --(Wan04)
+            BEGIN
+               SELECT TOP 1   
+                        @c_TransferPrimaryKey     = TransferKey + TransferLineNumber,
+                        @c_TransferKey            = TransferKey, -- (SWT02)
+                        @c_TransferLineNumber     = TransferLineNumber, -- (SWT02)
+                        @c_FromStorerKey          = FromStorerKey,
+                        @c_FromSku                = FromSku,
+                        @c_FromLoc                = FromLoc,
+                        @c_FromLot                = FromLot,
+                        @c_FromId                 = FromId,
+                        @n_FromQty                = FromQty,
+                        @c_FromPackKey            = FromPackKey,
+                        @c_FromUOM                = FromUOM,
+                        @c_ToStorerKey            = ToStorerKey,
+                        @c_ToSku                  = ToSku,
+                        @c_ToLoc                  = ToLoc,
+                        @c_ToLot                  = ToLot,
+                        @c_ToId                   = ToId,
+                        @n_ToQty                  = ToQty,
+                        @c_ToPackKey              = ToPackKey,
+                        @c_ToUOM                  = ToUOM,
+                        @c_lottable01             = lottable01,
+                        @c_lottable02             = lottable02,
+                        @c_lottable03             = lottable03,
+                        @d_lottable04             = lottable04,
+                        @d_lottable05             = lottable05,
+                        @c_Lottable06             = Lottable06,
+                        @c_Lottable07             = Lottable07,
+                        @c_Lottable08             = Lottable08,
+                        @c_Lottable09             = Lottable09,
+                        @c_Lottable10             = Lottable10,
+                        @c_Lottable11             = Lottable11,
+                        @c_Lottable12             = Lottable12,
+                        @d_Lottable13             = Lottable13,
+                        @d_Lottable14             = Lottable14,
+                        @d_Lottable15             = Lottable15,
+                        @d_EffectiveDate          = EffectiveDate,
+                        @c_tolottable01           = tolottable01,
+                        @c_tolottable02           = tolottable02,
+                        @c_tolottable03           = tolottable03,
+                        @d_tolottable04           = tolottable04,
+                        @d_tolottable05           = tolottable05,
+                        @c_ToLottable06           = ToLottable06,
+                        @c_ToLottable07           = ToLottable07,
+                        @c_ToLottable08           = ToLottable08,
+                        @c_ToLottable09           = ToLottable09,
+                        @c_ToLottable10           = ToLottable10,
+                        @c_ToLottable11           = ToLottable11,
+                        @c_ToLottable12           = ToLottable12,
+                        @d_ToLottable13           = ToLottable13,
+                        @d_ToLottable14           = ToLottable14,
+                        @d_ToLottable15           = ToLottable15,
+                        @c_FromChannel            = FromChannel, -- (SWT02)
+                        @c_ToChannel              = ToChannel    -- (SWT02)
+                     ,  @n_FromChannel_ID         = FromChannel_ID --(Wan04)
+               FROM INSERTED
+               WHERE TransferKey + TransferLineNumber > @c_TransferPrimaryKey
+               AND Status = '9'
+               ORDER BY TransferKey, TransferLineNumber
 
-            IF @@ROWCOUNT = 0
-            BEGIN                
-               BREAK
-            END
+               IF @@ROWCOUNT = 0
+               BEGIN                
+                  BREAK
+               END
              
-            -- (TLTING02) start
-            IF @c_Bondedflag = '1' AND
-               EXISTS ( SELECT 1 FROM Inventoryhold WITH (NOLOCK)
-                        WHERE Hold = '1'
-                        AND Storerkey  = @c_FromStorerKey
-                        AND Sku        = @c_FromSku
-                        AND lottable02 = @c_lottable02
-                        AND LEN(RTRIM(lottable02)) > 0 )
-            BEGIN
-               SELECT @n_err = 91005
-               SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Bond-locked Stock. Withdrawal Stock not allow. (ntrTransferDetailUpdate)"
-               SELECT @n_continue = 3
-               BREAK
-            END
+               -- (TLTING02) start
+               IF @c_Bondedflag = '1' AND
+                  EXISTS ( SELECT 1 FROM Inventoryhold WITH (NOLOCK)
+                           WHERE Hold = '1'
+                           AND Storerkey  = @c_FromStorerKey
+                           AND Sku        = @c_FromSku
+                           AND lottable02 = @c_lottable02
+                           AND LEN(RTRIM(lottable02)) > 0 )
+               BEGIN
+                  SELECT @n_err = 91005
+                  SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Bond-locked Stock. Withdrawal Stock not allow. (ntrTransferDetailUpdate)"
+                  SELECT @n_continue = 3
+                  BREAK
+               END
             
-            --(Wan01) - START
-            --IF @c_ChannelInventoryMgmt = '1'
-            --BEGIN
-            --   IF ISNULL(@c_FromChannel,'') = '' OR 
-            --      ISNULL(@c_ToChannel,'') = ''
-            --   BEGIN
-            --      SELECT @n_err = 91005
-            --      SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Channel Management Turn On, Channel Not Allow Blank. (ntrTransferDetailUpdate)"
-            --      SELECT @n_continue = 3
-            --      GOTO QUIT_TR                  
-            --   END    
-            --END
-            --(Wan01) - END
-
-            EXECUTE nspItrnAddWithdrawal
-                     @n_ItrnSysId  = NULL,
-                     @c_StorerKey  = @c_FromStorerKey,
-                     @c_Sku        = @c_FromSku,
-                     @c_Lot        = @c_FromLot,
-                     @c_ToLoc      = @c_FromLoc,
-                     @c_ToID       = @c_FromId,
-                     @c_Status     = '',
-                     @c_lottable01 = @c_lottable01,
-                     @c_lottable02 = @c_lottable02,
-                     @c_lottable03 = @c_lottable03,
-                     @d_lottable04 = @d_lottable04,
-                     @d_lottable05 = @d_lottable05,
-                     @c_Lottable06 = @c_Lottable06,
-                     @c_Lottable07 = @c_Lottable07,
-                     @c_Lottable08 = @c_Lottable08,
-                     @c_Lottable09 = @c_Lottable09,
-                     @c_Lottable10 = @c_Lottable10,
-                     @c_Lottable11 = @c_Lottable11,
-                     @c_Lottable12 = @c_Lottable12,
-                     @d_Lottable13 = @d_Lottable13,
-                     @d_Lottable14 = @d_Lottable14,
-                     @d_Lottable15 = @d_Lottable15,
-                     @c_Channel    = @c_FromChannel, 
-                     @n_Channel_ID = @n_FromChannel_ID OUTPUT,
-                     @n_casecnt    = 0,
-                     @n_innerpack  = 0,
-                     @n_Qty        = @n_FromQty,
-                     @n_pallet     = 0,
-                     @f_cube       = 0,
-                     @f_grosswgt   = 0,
-                     @f_netwgt     = 0,
-                     @f_otherunit1 = 0,
-                     @f_otherunit2 = 0,
-                     @c_SourceKey  = @c_TransferPrimaryKey,
-                     @c_SourceType = 'ntrTransferDetailUpdate',
-                     @c_PackKey    = @c_FromPackKey,
-                     @c_UOM        = @c_FromUOM,
-                     @b_UOMCalc    = 0,
-                     @d_EffectiveDate = @d_EffectiveDate,
-                     @c_ItrnKey    = '',
-                     @b_Success    = @b_Success OUTPUT,
-                     @n_err        = @n_err     OUTPUT,
-                     @c_errmsg     = @c_errmsg  OUTPUT
-
-            IF @b_success <> 1
-            BEGIN
-               SELECT @n_continue = 3
-               BREAK
-            END
-
-            EXECUTE nspItrnAddDeposit
-                     @n_ItrnSysId  = NULL,
-                     @c_StorerKey  = @c_ToStorerKey,
-                     @c_Sku        = @c_ToSku,
-                     @c_Lot        = @c_ToLot,
-                     @c_ToLoc      = @c_ToLoc,
-                     @c_ToID       = @c_ToId,
-                     @c_Status     = '',
-                     @c_lottable01 = @c_tolottable01,
-                     @c_lottable02 = @c_tolottable02,
-                     @c_lottable03 = @c_tolottable03,
-                     @d_lottable04 = @d_tolottable04,
-                     @d_lottable05 = @d_tolottable05,
-                     @c_Lottable06 = @c_ToLottable06,
-                     @c_Lottable07 = @c_ToLottable07,
-                     @c_Lottable08 = @c_ToLottable08,
-                     @c_Lottable09 = @c_ToLottable09,
-                     @c_Lottable10 = @c_ToLottable10,
-                     @c_Lottable11 = @c_ToLottable11,
-                     @c_Lottable12 = @c_ToLottable12,
-                     @d_Lottable13 = @d_ToLottable13,
-                     @d_Lottable14 = @d_ToLottable14,
-                     @d_Lottable15 = @d_ToLottable15, 
-                     @c_Channel    = @c_ToChannel, 
-                     @n_Channel_ID = @n_ToChannel_ID OUTPUT,
-                     @n_casecnt    = 0,
-                     @n_innerpack  = 0,
-                     @n_Qty        = @n_ToQty,
-                     @n_pallet     = 0,
-                     @f_cube       = 0,
-                     @f_grosswgt   = 0,
-                     @f_netwgt     = 0,
-                     @f_otherunit1 = 0,
-                     @f_otherunit2 = 0,
-                     @c_SourceKey  = @c_TransferPrimaryKey,
-                     @c_SourceType = 'ntrTransferDetailUpdate',
-                     @c_PackKey    = @c_ToPackKey,
-                     @c_UOM  = @c_ToUOM,
-                     @b_UOMCalc    = 0,
-                     @d_EffectiveDate = @d_EffectiveDate,
-                     @c_ItrnKey    = '',
-                     @b_Success    = @b_Success OUTPUT,
-                     @n_err        = @n_err     OUTPUT,
-                     @c_errmsg     = @c_errmsg  OUTPUT
-
-            IF @b_success <> 1
-            BEGIN
-               SELECT @n_continue = 3
-               BREAK
-            END
+               --(Wan01) - START
+               --IF @c_ChannelInventoryMgmt = '1'
+               --BEGIN
+               --   IF ISNULL(@c_FromChannel,'') = '' OR 
+               --      ISNULL(@c_ToChannel,'') = ''
+               --   BEGIN
+               --      SELECT @n_err = 91005
+               --      SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Channel Management Turn On, Channel Not Allow Blank. (ntrTransferDetailUpdate)"
+               --      SELECT @n_continue = 3
+               --      GOTO QUIT_TR                  
+               --   END    
+               --END
+               --(Wan01) - END
             
-            IF @n_continue IN (1,2)
-            BEGIN
-               UPDATE TRANSFERDETAIL WITH (ROWLOCK) 
-               SET FromChannel_ID = @n_FromChannel_ID, 
-                   ToChannel_ID  = @n_ToChannel_ID, 
-                   TrafficCop = NULL, 
-                   EditDate = GETDATE(),
-                   EditWho = SUSER_SNAME() 
-               WHERE TransferKey = @c_TransferKey            
-                 AND TransferLineNumber = @c_TransferLineNumber    
+               --(Wan04) - START
+               ---------------------------------------------------------------------------------
+               -- Release From Channel Hold that was hold at transfer allocation process (START)
+               ---------------------------------------------------------------------------------
+               SELECT @c_FromFacility = t.Facility
+               FROM [TRANSFER] AS t WITH (NOLOCK)
+               WHERE t.TransferKey = @c_TransferKey
+            
+               IF EXISTS ( SELECT 1 FROM @tSTRCFG AS ts 
+                           WHERE ts.Facility = @c_FromFacility AND ts.FromStorerkey = ts.FromStorerkey 
+                           AND ts.Configkey = 'TRFAllocHoldChannel' AND ts.SValue = '1'
+               )  
+               BEGIN
+                  IF @n_FromChannel_ID > 0 AND 
+                     EXISTS ( SELECT 1 
+                              FROM ChannelInvHold AS cih WITH (NOLOCK)
+                              JOIN ChannelInvHoldDetail AS cihd WITH (NOLOCK) ON  cihd.InvHoldkey = cih.InvHoldkey
+                              WHERE cih.HoldType = 'TRF'
+                              AND cih.Sourcekey = @c_TransferKey
+                              AND cihd.SourceLineNo = @c_TransferLineNumber
+                              AND CIHD.Channel_ID = @n_FromChannel_ID
+                              AND cihd.Hold = '1'
+                              )
+                  BEGIN 
+                     SET @c_HoldTRFType = 'F'
+                     SET @c_HoldChannel = '0'
+                     EXEC isp_ChannelInvHoldWrapper  
+                          @c_HoldType     = 'TRF'         
+                        , @c_SourceKey    = @c_Transferkey    
+                        , @c_SourceLineNo = @c_TransferLineNumber                                 
+                        , @c_Facility     = ''       
+                        , @c_Storerkey    = ''       
+                        , @c_Sku          = ''       
+                        , @c_Channel      = ''       
+                        , @c_C_Attribute01= ''       
+                        , @c_C_Attribute02= ''       
+                        , @c_C_Attribute03= ''       
+                        , @c_C_Attribute04= ''       
+                        , @c_C_Attribute05= ''       
+                        , @n_Channel_ID   = 0       
+                        , @c_Hold         = @c_HoldChannel     
+                        , @c_Remarks      = ''  
+                        , @c_HoldTRFType  = @c_HoldTRFType    
+                        , @n_DelQty       = 0
+                        , @n_QtyHoldToAdj = 0  
+                        , @n_ChannelTran_ID_Ref = 0
+                        , @b_Success      = @b_Success   OUTPUT  
+                        , @n_Err          = @n_Err       OUTPUT  
+                        , @c_ErrMsg       = @c_ErrMsg    OUTPUT  
+  
+                     IF @b_Success = 0  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        SET @n_err = 91014 
+                        SET @c_errmsg  = CONVERT(char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (ntrTransferDetailUpdate)'  
+                        BREAK
+                     END 
+                  END               
+               END
+               ---------------------------------------------------------------------------------
+               -- Release From Channel Hold that was hold at transfer allocation process (END)
+               ---------------------------------------------------------------------------------
+               --(Wan04) - END
+
+               EXECUTE nspItrnAddWithdrawal
+                        @n_ItrnSysId  = NULL,
+                        @c_StorerKey  = @c_FromStorerKey,
+                        @c_Sku        = @c_FromSku,
+                        @c_Lot        = @c_FromLot,
+                        @c_ToLoc      = @c_FromLoc,
+                        @c_ToID       = @c_FromId,
+                        @c_Status     = '',
+                        @c_lottable01 = @c_lottable01,
+                        @c_lottable02 = @c_lottable02,
+                        @c_lottable03 = @c_lottable03,
+                        @d_lottable04 = @d_lottable04,
+                        @d_lottable05 = @d_lottable05,
+                        @c_Lottable06 = @c_Lottable06,
+                        @c_Lottable07 = @c_Lottable07,
+                        @c_Lottable08 = @c_Lottable08,
+                        @c_Lottable09 = @c_Lottable09,
+                        @c_Lottable10 = @c_Lottable10,
+                        @c_Lottable11 = @c_Lottable11,
+                        @c_Lottable12 = @c_Lottable12,
+                        @d_Lottable13 = @d_Lottable13,
+                        @d_Lottable14 = @d_Lottable14,
+                        @d_Lottable15 = @d_Lottable15,
+                        @c_Channel    = @c_FromChannel, 
+                        @n_Channel_ID = @n_FromChannel_ID OUTPUT,
+                        @n_casecnt    = 0,
+                        @n_innerpack  = 0,
+                        @n_Qty        = @n_FromQty,
+                        @n_pallet     = 0,
+                        @f_cube       = 0,
+                        @f_grosswgt   = 0,
+                        @f_netwgt     = 0,
+                        @f_otherunit1 = 0,
+                        @f_otherunit2 = 0,
+                        @c_SourceKey  = @c_TransferPrimaryKey,
+                        @c_SourceType = 'ntrTransferDetailUpdate',
+                        @c_PackKey    = @c_FromPackKey,
+                        @c_UOM        = @c_FromUOM,
+                        @b_UOMCalc    = 0,
+                        @d_EffectiveDate = @d_EffectiveDate,
+                        @c_ItrnKey    = '',
+                        @b_Success    = @b_Success OUTPUT,
+                        @n_err        = @n_err     OUTPUT,
+                        @c_errmsg     = @c_errmsg  OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+                  BREAK
+               END
+
+               EXECUTE nspItrnAddDeposit
+                        @n_ItrnSysId  = NULL,
+                        @c_StorerKey  = @c_ToStorerKey,
+                        @c_Sku        = @c_ToSku,
+                        @c_Lot        = @c_ToLot,
+                        @c_ToLoc      = @c_ToLoc,
+                        @c_ToID       = @c_ToId,
+                        @c_Status     = '',
+                        @c_lottable01 = @c_tolottable01,
+                        @c_lottable02 = @c_tolottable02,
+                        @c_lottable03 = @c_tolottable03,
+                        @d_lottable04 = @d_tolottable04,
+                        @d_lottable05 = @d_tolottable05,
+                        @c_Lottable06 = @c_ToLottable06,
+                        @c_Lottable07 = @c_ToLottable07,
+                        @c_Lottable08 = @c_ToLottable08,
+                        @c_Lottable09 = @c_ToLottable09,
+                        @c_Lottable10 = @c_ToLottable10,
+                        @c_Lottable11 = @c_ToLottable11,
+                        @c_Lottable12 = @c_ToLottable12,
+                        @d_Lottable13 = @d_ToLottable13,
+                        @d_Lottable14 = @d_ToLottable14,
+                        @d_Lottable15 = @d_ToLottable15, 
+                        @c_Channel    = @c_ToChannel, 
+                        @n_Channel_ID = @n_ToChannel_ID OUTPUT,
+                        @n_casecnt    = 0,
+                        @n_innerpack  = 0,
+                        @n_Qty        = @n_ToQty,
+                        @n_pallet     = 0,
+                        @f_cube       = 0,
+                        @f_grosswgt   = 0,
+                        @f_netwgt     = 0,
+                        @f_otherunit1 = 0,
+                        @f_otherunit2 = 0,
+                        @c_SourceKey  = @c_TransferPrimaryKey,
+                        @c_SourceType = 'ntrTransferDetailUpdate',
+                        @c_PackKey    = @c_ToPackKey,
+                        @c_UOM  = @c_ToUOM,
+                        @b_UOMCalc    = 0,
+                        @d_EffectiveDate = @d_EffectiveDate,
+                        @c_ItrnKey    = '',
+                        @b_Success    = @b_Success OUTPUT,
+                        @n_err        = @n_err     OUTPUT,
+                        @c_errmsg     = @c_errmsg  OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+                  BREAK
+               END
+            
+               IF @n_continue IN (1,2)
+               BEGIN
+                  UPDATE TRANSFERDETAIL WITH (ROWLOCK) 
+                  SET FromChannel_ID = @n_FromChannel_ID, 
+                      ToChannel_ID  = @n_ToChannel_ID, 
+                      TrafficCop = NULL, 
+                      EditDate = GETDATE(),
+                      EditWho = SUSER_SNAME() 
+                  WHERE TransferKey = @c_TransferKey            
+                    AND TransferLineNumber = @c_TransferLineNumber    
                  
-            END
-         END -- WHILE (1 = 1)
-
+               END
+            END -- WHILE (1 = 1)
+         END
+         
          IF @b_debug = 2
          BEGIN
             SELECT @profiler = 'PROFILER,700,01,9,ITRN Process                                      ,' + CONVERT(char(12), GetDate(), 114)

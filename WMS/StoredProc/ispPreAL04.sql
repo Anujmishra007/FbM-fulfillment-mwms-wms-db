@@ -28,6 +28,8 @@ GO
 /* 30-SEP-2020 NJOW01   1.0   WMS-15380 Aging zone allocation qty limit */
 /*                            per order and qty limit per sku per day   */
 /* 08-JAN-2021 NJOW02   1.1   WMS-15923 Filter out zone by consignee    */
+/* 04-May-2021 NJOW03   1.2   WMS-16977 Set orderdetail.EnteredQTY to 0 */
+/*                            for new split line                        */
 /************************************************************************/
 CREATE PROC dbo.ispPreAL04                      
            @c_OrderKey NVARCHAR(10) 
@@ -99,7 +101,8 @@ BEGIN
          , @n_Pallet             FLOAT                   --(Wan01)
          , @c_Consigneekey       NVARCHAR(15)            --(Wan01)
          , @n_skucnt             INT
-   
+         , @n_NewOpenQty         INT  --Fix NJOW03
+
    --NJOW01
    DECLARE      
            @n_AgingQtyPerOrd     INT                     
@@ -692,6 +695,21 @@ BEGIN
             UPDATE #TMP_PREALLOC
                SET QtyLeftToFulfill = @n_QtyLeftToFulfill
             WHERE ALTSKU = @c_AltSku
+            AND   Lottable01 = @c_Lottable01   --fix lottable filter NJOW03
+            AND   Lottable02 = @c_Lottable02
+            AND   Lottable03 = @c_Lottable03
+            AND   ISNULL(Lottable04,'19000101') = @dt_Lottable04
+            AND   ISNULL(Lottable05,'19000101') = @dt_Lottable05
+            AND   Lottable06 = @c_Lottable06
+            AND   Lottable07 = @c_Lottable07
+            AND   Lottable08 = @c_Lottable08
+            AND   Lottable09 = @c_Lottable09
+            AND   Lottable10 = @c_Lottable10
+            AND   Lottable11 = @c_Lottable11
+            AND   Lottable12 = @c_Lottable12
+            AND   ISNULL(Lottable13,'19000101') = @dt_Lottable13
+            AND   ISNULL(Lottable14,'19000101') = @dt_Lottable14
+            AND   ISNULL(Lottable15,'19000101') = @dt_Lottable15            
             
             IF @@ERROR <> 0 
             BEGIN
@@ -908,6 +926,7 @@ BEGIN
                                  , @dt_Lottable15 
                                  , @n_OpenQty
                                  , @n_QtyLeftToFulfill
+   
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @c_AltSku_Prev <> @c_AltSku 
@@ -928,6 +947,76 @@ BEGIN
       OR @dt_Lottable15_Prev <> @dt_Lottable15   
       BEGIN
          SET @n_OpenQty = @n_OpenQty + @n_QtyLeftToFulfill
+
+         --Fix NJOW03
+         DECLARE CUR_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+            SELECT OD.OrderLineNumber, OD.QtyAllocated + OD.QtyPicked + OD.QtyPreAllocated + ISNULL(AL.ALQty,0) AS OpenQty
+            FROM ORDERDETAIL OD WITH (NOLOCK)
+            OUTER APPLY (SELECT SUM (TL.Qty) AS ALQty
+                         FROM  #TMP_PREALLOC TL WITH (NOLOCK) 
+                         WHERE TL.Orderkey = OD.Orderkey
+                         AND   TL.ALTSku   = OD.AltSku
+                         AND   TL.Sku      = OD.Sku
+                         AND   TL.Lottable01 = @c_Lottable01
+                         AND   TL.Lottable02 = @c_Lottable02
+                         AND   TL.Lottable03 = @c_Lottable03
+                         AND   TL.Lottable04 = @dt_Lottable04
+                         AND   TL.Lottable05 = @dt_Lottable05
+                         AND   TL.Lottable06 = @c_Lottable06
+                         AND   TL.Lottable07 = @c_Lottable07
+                         AND   TL.Lottable08 = @c_Lottable08
+                         AND   TL.Lottable09 = @c_Lottable09
+                         AND   TL.Lottable10 = @c_Lottable10
+                         AND   TL.Lottable11 = @c_Lottable11
+                         AND   TL.Lottable12 = @c_Lottable12
+                         AND   TL.Lottable13 = @dt_Lottable13
+                         AND   TL.Lottable14 = @dt_Lottable14
+                         AND   TL.Lottable15 = @dt_Lottable15) AL
+            WHERE OD.Orderkey = @c_Orderkey
+            AND   OD.Storerkey= @c_Storerkey
+            AND   OD.AltSku   = @c_AltSku
+            AND   OD.Lottable01 = @c_Lottable01
+            AND   OD.Lottable02 = @c_Lottable02
+            AND   OD.Lottable03 = @c_Lottable03
+            AND   ISNULL(OD.Lottable04,'19000101') = @dt_Lottable04
+            AND   ISNULL(OD.Lottable05,'19000101') = @dt_Lottable05
+            AND   OD.Lottable06 = @c_Lottable06
+            AND   OD.Lottable07 = @c_Lottable07
+            AND   OD.Lottable08 = @c_Lottable08
+            AND   OD.Lottable09 = @c_Lottable09
+            AND   OD.Lottable10 = @c_Lottable10
+            AND   OD.Lottable11 = @c_Lottable11
+            AND   OD.Lottable12 = @c_Lottable12
+            AND   ISNULL(OD.Lottable13,'19000101') = @dt_Lottable13
+            AND   ISNULL(OD.Lottable14,'19000101') = @dt_Lottable14
+            AND   ISNULL(OD.Lottable15,'19000101') = @dt_Lottable15
+            AND   OD.QtyAllocated + OD.QtyPicked + OD.QtyPreAllocated + ISNULL(AL.ALQty,0) <> OD.OpenQty
+            
+            OPEN CUR_ORDLINE  
+            
+            FETCH NEXT FROM CUR_ORDLINE INTO @c_OrderLineNumber, @n_NewOpenQty  
+            
+            WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+            BEGIN            	
+               UPDATE ORDERDETAIL WITH (ROWLOCK)
+               SET OpenQty = @n_NewOpenQty
+                  ,OriginalQty = @n_NewOpenQty
+                  ,EditDate= GETDATE()
+                  ,EditWho = SUSER_NAME()
+               WHERE Orderkey = @c_Orderkey
+               AND OrderLineNumber = @c_OrderLineNumber 
+
+               IF @@ERROR <> 0 
+               BEGIN
+                  SET @n_Continue = 3    
+                  SET @n_Err = 63515    
+                  SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Update Failed On Table ORDERDETAIL. (ispPreAL04)'
+               END
+               
+               FETCH NEXT FROM CUR_ORDLINE INTO @c_OrderLineNumber, @n_NewOpenQty              	
+            END
+            CLOSE CUR_ORDLINE
+            DEALLOCATE CUR_ORDLINE                    
       END
 
       IF @b_debug = 1
@@ -995,7 +1084,7 @@ BEGIN
          AND   Sku      <> @c_Sku
          AND   QtyAllocated + QtyPicked + QtyPreAllocated = 0
       END
-
+      
       IF @c_OrderLineNumber <> ''
       BEGIN
          UPDATE ORDERDETAIL WITH (ROWLOCK)
@@ -1003,6 +1092,7 @@ BEGIN
                ,PackKey = @c_Packkey
                ,UOM     = @c_UOM 
                ,OpenQty = QtyAllocated + QtyPicked + QtyPreAllocated + @n_OpenQty
+               ,OriginalQty = QtyAllocated + QtyPicked + QtyPreAllocated + @n_OpenQty --fix NJOW03               
                ,EditDate= GETDATE()
                ,EditWho = SUSER_NAME()
          WHERE Orderkey = @c_Orderkey
@@ -1124,7 +1214,7 @@ BEGIN
          AND   Lottable03 = @c_Lottable03
          AND   ISNULL(Lottable04,'19000101') = @dt_Lottable04
          AND   ISNULL(Lottable05,'19000101') = @dt_Lottable05
-     AND   Lottable06 = @c_Lottable06
+         AND   Lottable06 = @c_Lottable06
          AND   Lottable07 = @c_Lottable07
          AND   Lottable08 = @c_Lottable08
          AND   Lottable09 = @c_Lottable09
@@ -1141,6 +1231,15 @@ BEGIN
             SET @n_Err = 63540    
             SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Insert Failed INTO Table ORDERDETAIL. (ispPreAL04)'
             GOTO QUIT_SP  
+         END
+         ELSE
+         BEGIN
+         	  --NJOW03
+         	  UPDATE ORDERDETAIL WITH (ROWLOCK)
+         	  SET EnteredQTY = 0,
+         	      TrafficCop = NULL
+         	  WHERE Orderkey = @c_Orderkey
+         	  AND OrderLineNumber = @c_OrderLineNumber
          END
       END
       
