@@ -27,6 +27,8 @@ GO
 /* 2020-03-03  Wan01    1.1   Validate Lot                               */
 /* 2020-08-24  Wan02    1.2   LFWM-2296 - UAT[CN] SKE_ADJ_Lottable05     */
 /* 2021-02-10  mingle01 1.2   Add Big Outer Begin try/Catch              */
+/* 2021-04-23  Wan03    1.3   LFWM-2569 - UAT - TW  Finalize Adjustment  */
+/*                            Alert                                      */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -128,6 +130,8 @@ BEGIN
          ,  @c_Loc                  NVARCHAR(10) = ''
          ,  @c_UDF05                NVARCHAR(20) = ''
          ,  @c_UCCNo                NVARCHAR(20) = ''
+         ,  @c_Packkey              NVARCHAR(10) = ''       --(Wan03)           
+         ,  @c_ReasonCode           NVARCHAR(30) = ''       --(Wan03)  
          ,  @n_Qty                  INT          = 0
 
          ,  @c_LottableLabel        NVARCHAR(20) = ''
@@ -175,6 +179,7 @@ BEGIN
          ,  @c_AdjStatusControl     NVARCHAR(30) = ''
          ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
          ,  @c_SkipUDF05UccChkInAdj NVARCHAR(30) = ''
+         ,  @c_AdjAllowZeroQty      NVARCHAR(30) = ''       --(Wan03)  
 
       SELECT TOP 1 
             @c_AdjustmentKey     = AD.AdjustmentKey
@@ -201,6 +206,9 @@ BEGIN
          ,  @dt_Lottable15       = AD.Lottable15
          ,  @c_UDF05             = ISNULL(AD.UserDefine05,'')
          ,  @c_UCCNo             = ISNULL(AD.UCCNo,'')
+         ,  @c_Packkey           = ISNULL(AD.Packkey,'')       --(Wan03) 
+         ,  @c_ReasonCode        = ISNULL(AD.ReasonCode,'')    --(Wan03)  
+         ,  @n_Qty               = ISNULL(AD.Qty,0)            --(Wan03)                                                                 --                                                              -- 
       FROM  #ADJUSTMENTDETAIL AD  
 
       SELECT TOP 1 
@@ -221,6 +229,20 @@ BEGIN
          FROM LOC L WITH (NOLOCK)
          WHERE L.Loc = @c_Loc
       END
+      
+      --(Wan03) - START      
+      SELECT @c_AdjAllowZeroQty = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AdjAllowZeroQty')  
+
+      IF @c_AdjAllowZeroQty NOT IN ('1') AND @n_Qty = 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 552062
+         SET @c_ErrMsg = ERROR_MESSAGE()
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Disallow to adjust 0 qty'
+                       + '. (lsp_Validate_AdjustmentDetail_Std)'
+         GOTO EXIT_SP               
+      END
+      --(Wan03) - END    
 
       BEGIN TRY
          EXECUTE dbo.nspGetRight 
