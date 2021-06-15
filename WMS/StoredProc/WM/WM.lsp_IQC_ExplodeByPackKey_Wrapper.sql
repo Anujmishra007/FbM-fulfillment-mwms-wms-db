@@ -15,7 +15,7 @@ GO
 /*                                                                                        */
 /* Purpose: Dynamic lottable                                                              */                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 /*                                                                                        */ 
-/* Version: 1.1                                                                           */  
+/* Version: 1.2                                                                           */  
 /*                                                                                        */  
 /* Data Modifications:                                                                    */  
 /*                                                                                        */  
@@ -27,6 +27,8 @@ GO
 /*                                 statement                                              */
 /* 18-DEC-2020 Wan01    1.1   LFWM-2420 - UAT - TW Getting Quantity should be Greater than*/
 /*                            1000 to Explode error in Inventory QC when Explore by Packkey*/
+/* 25-MAY-2012 Wan02    1.2   LFWM-2806 - UAT - TW  Inventory QC  Explode by Packkey      */
+/*                            Original Qty not updated                                    */
 /******************************************************************************************/
 CREATE PROCEDURE [WM].[lsp_IQC_ExplodeByPackKey_Wrapper]
     @c_QC_Key NVARCHAR(10) 
@@ -64,7 +66,8 @@ BEGIN
          ,  @n_RemainingQty               INT = 0 
          ,  @n_InsertOriginalQty          INT = 0 
          ,  @n_InsertQty                  INT = 0 
-         ,  @n_RemainOriginalQy           INT = 0
+         ,  @n_RemainOriginalQty          INT = 0
+         ,  @n_RemainQtyEntered           INT = 0     --(Wan02)
 
          ,  @b_GenID                      BIT          = 0
          ,  @b_exploded                   BIT          = 0
@@ -190,6 +193,8 @@ BEGIN
          END
  
          SET @n_RemainQty = @n_QtyToBeSplitted
+         SET @n_RemainOriginalQty = @n_OriginalQty    --(Wan02)
+         SET @n_RemainQtyEntered  = @n_Qty            --(Wan02)
         
          IF @n_QtyToBeSplitted > 0  
          BEGIN
@@ -317,30 +322,32 @@ BEGIN
                      GOTO FETCH_NEXT 
                END
 
-               IF @b_ByOriginal = 1 
-               BEGIN
-                  SET @n_InsertOriginalQty = @n_PalletCnt 
-                  SET @n_RemainQty = @n_RemainQty - @n_PalletCnt
-               END 
+               --(Wan02) - START
+               --IF @b_ByOriginal = 1 
+               -- BEGIN
+               --   SET @n_InsertOriginalQty = @n_PalletCnt 
+               --   SET @n_RemainQty = @n_RemainQty - @n_PalletCnt
+               --END
                    
                IF @b_ZeroOriginal = 0 
                BEGIN
-                  IF @n_RemainingQty >= @n_PalletCnt 
+                  IF @n_RemainOriginalQty >= @n_PalletCnt 
                   BEGIN
-                     SET @n_InsertQty = @n_PalletCnt
-                     SET @n_RemainingQty = @n_RemainingQty - @n_PalletCnt
+                     SET @n_InsertOriginalQty = @n_PalletCnt
+                     SET @n_RemainOriginalQty = @n_RemainOriginalQty - @n_PalletCnt
                   END               
-                  ELSE IF @n_RemainingQty <= 0 
-                  SET @n_InsertQty = 0 
+                  ELSE IF @n_RemainOriginalQty <= 0 
+                     SET @n_InsertOriginalQty = 0 
                   ELSE 
                   BEGIN
-                     SET @n_InsertQty = @n_RemainingQty
-                     SET @n_RemainingQty = 0
+                     SET @n_InsertOriginalQty = @n_RemainOriginalQty
+                     SET @n_RemainOriginalQty = 0
                   END                
                END
                ELSE 
-                  SET @n_InsertQty = 0 
+                  SET @n_InsertOriginalQty = 0 
                    
+               --(Wan02) - END
 
                IF @n_RemainQty - @n_PalletCnt > 0           
                BEGIN
@@ -435,9 +442,12 @@ BEGIN
                   -- Update Original Line
                   BEGIN TRY
                      UPDATE InventoryQCDetail 
-                     SET Qty = @n_InsertQty,             --(Wan02) --Qty -  @n_InsertQty,  
-                        EditDate = GETDATE(), 
-                        EditWho = @c_UserName 
+                     SET Qty = @n_InsertQty                       --(Wan02) --Qty -  @n_InsertQty 
+                       , ToQty = @n_InsertQty                     --(Wan02) 
+                       , OriginalQty = @n_InsertOriginalQty       --(Wan02) 
+                       , ToID = @c_ToId                           --(Wan02) 
+                       , EditDate = GETDATE()
+                       , EditWho = @c_UserName 
                      WHERE QC_Key = @c_QC_Key
                      AND   QCLineNo = @c_QCLineNo 
                   END TRY
