@@ -27,6 +27,8 @@ GO
 /* 04-DEC-2020  CSCHONG    1.1  WMS-15451 revised field logic (CS01)     */  
 /* 13-JAN-2021  CheeJunYan 1.2  Discrete pickslip; CartonNo sort (CJY01) */  
 /* 11-May-2021  WLChooi    1.3  WMS-16878 - Add new column (WL01)        */
+/* 04-Jun-2021  Mingle     1.4  WMS-17177 - Change packdetail.qty to     */
+/*                                          pickdetail.qty & add notes2  */                               
 /*************************************************************************/    
     
 CREATE PROC [dbo].[isp_Packing_List_88_rdt] (    
@@ -171,6 +173,7 @@ BEGIN
          , TTLNETWGT       FLOAT                   --CS01  
          , ExternPOKey     NVARCHAR(20) NULL       --WL01
          , RPTFLD22        NVARCHAR(500) NULL      --WL01
+         , notes2          NVARCHAR(50) NULL       --ML01
          )      
   
   
@@ -283,6 +286,7 @@ BEGIN
                               , TTLNETWGT                --CS01  
                               , ExternPOKey              --WL01
                               , RPTFLD22                 --WL01
+                              , notes2                   --ML01
                            )  
    SELECT  ORDERS.c_Address1 AS ord_address1,    
       ISNULL(ORDERS.c_Address2,'') AS ord_Address2,  
@@ -297,7 +301,7 @@ BEGIN
       ORDERS.b_Address1 AS ord_baddress1,   
       SKU.DESCR as Sdescr,  
       PACKDETAIL.SKU as sku,  
-      (PACKDETAIL.qty) as Pqty,   
+      (PICKDETAIL.qty) as Pqty,   
       PACKDETAIL.labelno AS Labelno,    
       PACKHEADER.PickSlipNo,     
       ISNULL(ORDERS.b_Address2,'') AS ord_baddress2,     
@@ -333,9 +337,10 @@ BEGIN
       PACKDETAIL.CartonNo,        
       ISNULL(MAX(CASE WHEN C.Code ='18' THEN RTRIM(C.long) ELSE '' END),'N.Weight') ,                 --CS01  
       ISNULL(MAX(CASE WHEN C.Code ='19' THEN RTRIM(C.long) ELSE '' END),'TOTAL NETT WEIGHT'),         --CS01  
-      (PACKDETAIL.qty*SKU.STDNETWGT) as netwgt, 0 AS TTLNETWGT,                                       --CS01  
+      (PICKDETAIL.qty*SKU.STDNETWGT) as netwgt, 0 AS TTLNETWGT,                                       --CS01  
       ISNULL(OD.ExternPOKey,''),   --WL01
-      ISNULL(MAX(CASE WHEN C.Code ='22' THEN RTRIM(C.long) ELSE '' END),'SO#')   --WL01  
+      ISNULL(MAX(CASE WHEN C.Code ='22' THEN RTRIM(C.long) ELSE '' END),'SO#'),   --WL01 
+      ORDERS.notes2   --ML01 
    FROM ORDERS WITH (NOLOCK) --ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)    
    JOIN ORDERDETAIL OD (NOLOCK) ON (ORDERS.OrderKey = OD.OrderKey)    
    JOIN SKU WITH (NOLOCK) ON (OD.StorerKey = SKU.StorerKey AND OD.Sku = SKU.Sku)    
@@ -345,11 +350,14 @@ BEGIN
    JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo AND    
                                             OD.Storerkey = PACKDETAIL.Storerkey AND    
                                              OD.Sku = PACKDETAIL.Sku)    
-   JOIN PACKINFO WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = PACKINFO.PickSlipNo AND PACKDETAIL.CartonNo = PackInfo.CartonNo)    
+   JOIN PACKINFO WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = PACKINFO.PickSlipNo AND PACKDETAIL.CartonNo = PackInfo.CartonNo) 
+   JOIN PICKDETAIL   WITH (NOLOCK) ON  (OD.Orderkey = PICKDETAIL.Orderkey AND PICKDETAIL.sku = OD.sku AND PICKDETAIL.OrderLineNumber = OD.OrderLineNumber)
+   --join pickdetail WITH (nolock) on ( ORDERS.orderkey = pickdetail.orderkey and ORDERS.sku = pickdetail.sku and ORDERS.orderlinenumber = pickdetail.orderlinenumber)      
    LEFT JOIN PALLETDETAIL PLTD (NOLOCK) ON PLTD.Storerkey = PACKDETAIL.StorerKey AND PLTD.CaseId=PACKDETAIL.LabelNo   
                                          --  AND PLTD.sku = PACKDETAIL.SKU  
    LEFT JOIN PALLET PLT WITH (NOLOCK) ON PLT.PalletKey = PLTD.PalletKey  
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON c.listname = 'REPORTFLD' AND c.storerkey = ORDERS.storerkey  
+
    WHERE PACKHEADER.PickSlipNo  = @c_PickSlipNo  
    group by ORDERS.c_Address1 ,    
       ISNULL(ORDERS.c_Address2,''),  
@@ -372,13 +380,15 @@ BEGIN
       ISNULL(ORDERS.B_zip,''),   
       ISNULL(ORDERS.b_state,''),    
       ISNULL(ORDERS.b_country,''),   
-      PACKDETAIL.qty,  
+      PICKDETAIL.qty,  
       CASE WHEN PACKINFO.[cube] = 0 THEN (PACKINFO.length*PACKINFO.width*PACKINFO.height) ELSE PACKINFO.[cube] END,  
       PACKINFO.length,PACKINFO.width,PACKINFO.height,PACKINFO.weight,  
       ISNULL(PLT.PalletKey,''),  
       ISNULL(PLT.Length,0) , ISNULL(PLT.Width,0) , ISNULL(PLT.Height,0),  
       ISNULL(PLT.GrossWgt,0),ISNULL(ORDERS.C_Address4,'') ,ISNULL(ORDERS.B_Address4,''),packdetail.CartonNo,  
-      SKU.STDNETWGT, ISNULL(OD.ExternPOKey,'')      --CS01   --WL01
+      SKU.STDNETWGT, ISNULL(OD.ExternPOKey,''),      --CS01   --WL01
+      ORDERS.notes2   --ML01
+
    ORDER BY PACKHEADER.PickSlipNo,CASE WHEN ISNULL(PLT.PalletKey,'') <> '' THEN 1 ELSE 2 END,  
    PACKDETAIL.labelno,PACKDETAIL.SKU  
      
@@ -490,7 +500,8 @@ BEGIN
          , CartonNo                                                                                     -- CJY01       
          , CASE WHEN ISNULL(RPTFLD22,'') <> '' THEN RPTFLD22 ELSE 'SO#' END AS RPTFLD22            --WL01   
          , ExternPOKey   --WL01
-         , @c_ShowSO AS ShowSO   --WL01                    
+         , @c_ShowSO AS ShowSO   --WL01  
+         , notes2   --ML01                  
    FROM #PACKLIST88 (nolock)  
    ORDER BY ROWID  
   
