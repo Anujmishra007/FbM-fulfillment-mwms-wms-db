@@ -13,11 +13,11 @@ GO
 /* Copyright: LFL                                                       */                                                                                  
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
-/* Purpose: Duplicate Receipt Line Number                               */
+/* Purpose: Duplicate Receipt Line                                      */
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                           
@@ -27,23 +27,38 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 03-May-2021 Wan02    1.2   LFWM-2756 - UAT - TW  QtyExpected not     */
+/*                            deducted when using Duplicate Line function*/
+/*                            in Receipt  Trade Return module            */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_DuplicateReceiptLine]
     @c_ReceiptKey             NVARCHAR(10)
    ,@c_OriginalLineNumber     NVARCHAR(5) 
    ,@c_NewLineNumber          NVARCHAR(5) OUTPUT 
-   ,@c_IncludeFinalizedItem   CHAR(1) = 'N'
+   --,@c_IncludeFinalizedItem   CHAR(1) = 'N'            --(Wan02)  --Not Need for ue_explode                   
    ,@b_Success                INT=1 OUTPUT 
    ,@n_Err                    INT=0 OUTPUT
    ,@c_ErrMsg                 NVARCHAR(250)='' OUTPUT
    ,@c_UserName               NVARCHAR(128)=''
+   ,@n_WarningNo              INT          = 0  OUTPUT
+   ,@c_ProceedWithWarning     CHAR(1)      = 'N'         --(Wan02)  -- Pass In 'Y' if continue to call SP when increased warning # return  
+   ,@n_ErrGroupKey            INT          = 0  OUTPUT   --(Wan02)  -- Capture Warnings/Questions/Errors/Meassage into WMS_ERROR_LIST Table           
 AS
 BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-    
+   
+   DECLARE @n_QtyExpected           INT = 0
+         , @n_QtyExpected_All       INT = 0
+         , @n_BeforeReceivedQty     INT = 0
+         , @n_QtyReceived           INT = 0
+          
+         , @c_LastReceiveLineNo     NVARCHAR(10) = ''
+         , @c_TableName             NVARCHAR(10) = 'RECEIPT'
+         , @c_SourceType            NVARCHAR(10) = 'lsp_DuplicateReceiptLine'
+                                    
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
@@ -62,25 +77,61 @@ BEGIN
    END                                   --(Wan01) - END
     
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
-    
-      IF NOT EXISTS(
-      SELECT 1 FROM RECEIPTDETAIL RD WITH (NOLOCK)
+      SELECT @n_QtyExpected = RD.QtyExpected
+            ,@n_QtyExpected_All = RD.QtyExpected + RD.FreeGoodQtyExpected 
+            ,@n_BeforeReceivedQty = RD.BeforeReceivedQty
+            ,@n_QtyReceived = RD.QtyReceived
+      FROM RECEIPTDETAIL RD WITH (NOLOCK)
       WHERE ReceiptKey = @c_ReceiptKey 
       AND   RD.ReceiptLineNumber = @c_OriginalLineNumber
-      AND   RD.FinalizeFlag = CASE WHEN @c_IncludeFinalizedItem = 'Y' 
-                                       THEN RD.FinalizeFlag 
-                                    ELSE 'N' 
-                              END    
-      AND   RD.QtyExpected > RD.BeforeReceivedQty )   
+      
+      IF @n_WarningNo < 1 AND @c_ProceedWithWarning = 'N'
       BEGIN
-         SET @b_Success = 0
-         SET @n_Err = 550701
-         SET @c_ErrMsg = 'Cannot duplicate from Receipt# ' + @c_ReceiptKey + 
-               ': No receipt line items with more Quantity Expected than Quantity Received.'
-         GOTO EXIT_SP
-      END                               
-    
-       DECLARE @c_StorerKey             NVARCHAR(15) = ''
+         IF @n_QtyExpected_All <= @n_QtyReceived
+         BEGIN
+            SET @b_success = 0
+            SET @n_Err = 550701
+            SET @c_ErrMsg = 'Quantity Expected Less then ZERO!'
+         
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_Receiptkey
+               ,  @c_Refkey2     = ''
+               ,  @c_Refkey3     = '' 
+               ,  @c_WriteType   = 'Error' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success    
+               ,  @n_err         = @n_err        
+               ,  @c_errmsg      = @c_errmsg    
+            GOTO EXIT_SP
+         END
+         
+         IF @n_QtyExpected <= 0 
+         BEGIN
+            SET @n_WarningNo = 1
+            SET @c_ErrMsg = 'Quantity Expected Less then ZERO, Still want to proceed?'
+         
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_ReceiptKey
+               ,  @c_Refkey2     = ''
+               ,  @c_Refkey3     = '' 
+               ,  @c_WriteType   = 'Question' 
+               ,  @n_err2        = @n_err 
+               ,  @c_errmsg2     = @c_errmsg 
+               ,  @b_Success     = @b_Success    
+               ,  @n_err         = @n_err        
+               ,  @c_errmsg      = @c_errmsg    
+            GOTO EXIT_SP
+         END
+      END 
+      /* (Wan02) - START                           
+      DECLARE @c_StorerKey             NVARCHAR(15) = ''
               ,@c_Sku                   NVARCHAR(20) = ''
               ,@c_UOM                   NVARCHAR(10) = ''
               ,@c_PackKey               NVARCHAR(10) = ''
@@ -99,9 +150,8 @@ BEGIN
               ,@n_RemainQtyReceived     INT = 0 
               ,@n_InsertBeforeReceivedQty INT = 0 
               ,@n_InsertQtyExpected       INT = 0
-              ,@c_ReceiptLineNumber       NVARCHAR(5)=''   
-           --,@c_NewReceiptKey           NVARCHAR(10) = ''
-    
+              ,@c_ReceiptLineNumber       NVARCHAR(5)=''  
+      (Wan02) - END */
       
       SET @c_LastReceiveLineNo = ''
       SELECT @c_LastReceiveLineNo = MAX(RD.ReceiptLineNumber) 
@@ -111,73 +161,77 @@ BEGIN
       IF @c_LastReceiveLineNo <> '' 
       BEGIN
          SET @c_NewLineNumber = RIGHT('0000' + 
-                                            CONVERT(VARCHAR(5), CAST(@c_LastReceiveLineNo AS INT) + 1), 
-                                            5)
+                                       CONVERT(VARCHAR(5), CAST(@c_LastReceiveLineNo AS INT) + 1), 
+                                       5)
 
 
-           INSERT INTO RECEIPTDETAIL
-           (
-            ReceiptKey,          ReceiptLineNumber,      ExternReceiptKey,
-            ExternLineNo,        StorerKey,              POKey,
-            Sku,                 AltSku,                 Id,
-            [Status],            DateReceived,           QtyExpected,
-            QtyAdjusted,         QtyReceived,            UOM,
-            PackKey,             VesselKey,              VoyageKey,
-            XdockKey,            ContainerKey,           ToLoc,
-            ToLot,               ToId,                   ConditionCode,
-            Lottable01,          Lottable02,             Lottable03,
-            Lottable04,          Lottable05,             CaseCnt,
-            InnerPack,           Pallet,                 [Cube],
-            GrossWgt,            NetWgt,                 OtherUnit1,
-            OtherUnit2,          UnitPrice,              ExtendedPrice,
-            TariffKey,           FreeGoodQtyExpected,    FreeGoodQtyReceived,
-            SubReasonCode,       FinalizeFlag,           DuplicateFrom,
-            BeforeReceivedQty,   PutawayLoc,             ExportStatus,
-            SplitPalletFlag,     POLineNumber,           LoadKey,
-            ExternPoKey,         UserDefine01,           UserDefine02,
-            UserDefine03,        UserDefine04,           UserDefine05,
-            UserDefine06,        UserDefine07,           UserDefine08,
-            UserDefine09,        UserDefine10,           Lottable06,
-            Lottable07,          Lottable08,             Lottable09,
-            Lottable10,          Lottable11,             Lottable12,
-            Lottable13,          Lottable14,             Lottable15, 
-            AddWho,              EditWho
-           )
-           SELECT 
-            @c_ReceiptKey,       @c_NewLineNumber,      ExternReceiptKey,
-            ExternLineNo,        StorerKey,              POKey,
-            Sku,                 AltSku,                 Id,
-            [Status]='0',        DateReceived,           [QtyExpected]=(QtyExpected - BeforeReceivedQty),
-            QtyAdjusted=0,       QtyReceived=0,          UOM,
-            PackKey,             VesselKey,              VoyageKey,
-            XdockKey,            ContainerKey,           ToLoc,
-            ToLot='',            ToId='',                ConditionCode='OK',
-            Lottable01,          Lottable02,             Lottable03,
-            Lottable04,          Lottable05,             CaseCnt,
-            InnerPack,           Pallet,                 [Cube],
-            GrossWgt,            NetWgt,                 OtherUnit1,
-            OtherUnit2,          UnitPrice,              ExtendedPrice,
-            TariffKey,           FreeGoodQtyExpected,    FreeGoodQtyReceived,
-            SubReasonCode='',    FinalizeFlag='N',       DuplicateFrom='',
-            BeforeReceivedQty=0, PutawayLoc='',          ExportStatus,
-            SplitPalletFlag,     POLineNumber,           LoadKey='',
-            ExternPoKey,         UserDefine01,           UserDefine02,
-            UserDefine03,        UserDefine04,           UserDefine05,
-            UserDefine06,        UserDefine07,           UserDefine08,
-            UserDefine09,        UserDefine10,           Lottable06,
-            Lottable07,          Lottable08,             Lottable09,
-            Lottable10,          Lottable11,             Lottable12,
-            Lottable13,          Lottable14,             Lottable15, 
-            @c_UserName,         @c_UserName
-           FROM RECEIPTDETAIL AS r WITH(NOLOCK) 
-           WHERE r.ReceiptKey = @c_ReceiptKey 
-           AND   r.ReceiptLineNumber = @c_OriginalLineNumber
-           AND  r.QtyExpected > r.QtyReceived            
-           AND  r.FinalizeFlag = 
-                              CASE WHEN @c_IncludeFinalizedItem = 'Y' 
-                                       THEN FinalizeFlag 
-                                   ELSE 'N' 
-                              END
+         INSERT INTO RECEIPTDETAIL
+         (
+         ReceiptKey,          ReceiptLineNumber,      ExternReceiptKey,
+         ExternLineNo,        StorerKey,              POKey,
+         Sku,                 AltSku,                 Id,
+         [Status],            DateReceived,           QtyExpected,
+         QtyAdjusted,         QtyReceived,            UOM,
+         PackKey,             VesselKey,              VoyageKey,
+         XdockKey,            ContainerKey,           ToLoc,
+         ToLot,               ToId,                   ConditionCode,
+         Lottable01,          Lottable02,             Lottable03,
+         Lottable04,          Lottable05,             CaseCnt,
+         InnerPack,           Pallet,                 [Cube],
+         GrossWgt,            NetWgt,                 OtherUnit1,
+         OtherUnit2,          UnitPrice,              ExtendedPrice,
+         TariffKey,           FreeGoodQtyExpected,    FreeGoodQtyReceived,
+         SubReasonCode,       FinalizeFlag,           DuplicateFrom,
+         BeforeReceivedQty,   PutawayLoc,             ExportStatus,
+         SplitPalletFlag,     POLineNumber,           LoadKey,
+         ExternPoKey,         UserDefine01,           UserDefine02,
+         UserDefine03,        UserDefine04,           UserDefine05,
+         UserDefine06,        UserDefine07,           UserDefine08,
+         UserDefine09,        UserDefine10,           Lottable06,
+         Lottable07,          Lottable08,             Lottable09,
+         Lottable10,          Lottable11,             Lottable12,
+         Lottable13,          Lottable14,             Lottable15, 
+         AddWho,              EditWho
+         )
+         SELECT 
+         @c_ReceiptKey,       @c_NewLineNumber,      ExternReceiptKey,
+         ExternLineNo,        StorerKey,              POKey,
+         Sku,                 AltSku,                 Id,
+         [Status]='0',        DateReceived,           [QtyExpected]=CASE WHEN BeforeReceivedQty > 0 THEN QtyExpected - BeforeReceivedQty ELSE 0 END,    --(Wan02)
+         QtyAdjusted=0,       QtyReceived=0,          UOM,
+         PackKey,             VesselKey,              VoyageKey,
+         XdockKey,            ContainerKey,           ToLoc,
+         ToLot='',            ToId='',                ConditionCode='OK',
+         Lottable01,          Lottable02,             Lottable03,
+         Lottable04,          Lottable05,             CaseCnt,
+         InnerPack,           Pallet,                 [Cube],
+         GrossWgt,            NetWgt,                 OtherUnit1,
+         OtherUnit2,          UnitPrice,              ExtendedPrice,
+         TariffKey,           FreeGoodQtyExpected,    FreeGoodQtyReceived,
+         SubReasonCode='',    FinalizeFlag='N',       DuplicateFrom='',
+         BeforeReceivedQty=0, PutawayLoc='',          ExportStatus,
+         SplitPalletFlag,     POLineNumber,           LoadKey='',
+         ExternPoKey,         UserDefine01,           UserDefine02,
+         UserDefine03,        UserDefine04,           UserDefine05,
+         UserDefine06,        UserDefine07,           UserDefine08,
+         UserDefine09,        UserDefine10,           Lottable06,
+         Lottable07,          Lottable08,             Lottable09,
+         Lottable10,          Lottable11,             Lottable12,
+         Lottable13,          Lottable14,             Lottable15, 
+         @c_UserName,         @c_UserName
+         FROM RECEIPTDETAIL AS r WITH(NOLOCK) 
+         WHERE r.ReceiptKey = @c_ReceiptKey 
+         AND   r.ReceiptLineNumber = @c_OriginalLineNumber
+         
+         --(Wan02) - START
+         UPDATE RECEIPTDETAIL 
+            SET QtyExpected = CASE WHEN BeforeReceivedQty > 0 THEN BeforeReceivedQty ELSE 0 END
+               ,TrafficCop =  NULL
+               , EditWho  = SUSER_SNAME()
+               , EditDate = GETDATE()
+         WHERE ReceiptKey = @c_ReceiptKey 
+         AND   ReceiptLineNumber = @c_OriginalLineNumber
+         --(Wan02) - END
                   
       END -- IF @c_LastReceiveLineNo <> ''                
 
@@ -188,7 +242,6 @@ BEGIN
       END
       ELSE
       BEGIN
-
          SET @b_Success = 0
          SET @c_ErrMsg = 'Failed to Duplicates the ReceiptLine: ' + @c_OriginalLineNumber
       END
