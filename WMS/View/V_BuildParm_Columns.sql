@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -24,6 +24,10 @@ GO
 /*                            paratype                                  */
 /* 2019-12-03  Wan02    1.5   SCE - WM 1) Add 'Max_Qty_Per_Load'        */
 /*                            2) Add 'BUILDWAVEPARM'                    */
+/* 2021-05-17  Wan03    1.6   LFWM-2788 - UAT  CNOrder parameterBuild   */
+/*                            param Details - Field values not getting  */
+/*                            displayed for Build types - wavebuildload */
+/*                            and wavebuildmbol                         */
 /************************************************************************/
 CREATE VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -166,6 +170,38 @@ WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
 AND Col.COLUMN_NAME IN ('SKU')   
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType  = 'GROUP' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+UNION ALL
+SELECT BuildParmType = 'WAVEBUILDLOAD'                                        --(Wan03)
+      ,CondType  = 'SORT' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
+AND Col.COLUMN_NAME IN ('SKU')   
+UNION ALL
+SELECT BuildParmType = 'WAVEBUILDLOAD'                                        --(Wan03)
+      ,CondType  = 'GROUP' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+UNION ALL
+SELECT BuildParmType = 'WAVEBUILDMBOL'                                        --(Wan03)
+      ,CondType  = 'SORT' 
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
+FROM INFORMATION_SCHEMA.COLUMNS Col     
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
+AND Col.COLUMN_NAME IN ('SKU')   
+UNION ALL
+SELECT BuildParmType = 'WAVEBUILDMBOL'                                        --(Wan03)
       ,CondType  = 'GROUP' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
 FROM INFORMATION_SCHEMA.COLUMNS Col     
