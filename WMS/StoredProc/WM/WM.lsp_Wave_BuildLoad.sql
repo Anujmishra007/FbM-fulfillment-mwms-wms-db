@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -30,6 +30,8 @@ GO
 /*                            changed                                   */
 /* 2021-02-24  Wan01    1.2   Fixed to call lsp_SetUser SP & Quip SP    */
 /*                            if @c_UserName <> SUSER_SNAME()           */
+/* 2021-03-23  Wan02    1.3   LWMS-2664 - [CN] Allocation_After_Generate*/
+/*                            _Load                                     */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -818,8 +820,10 @@ START_BUILDLOAD:
       BEGIN 
          GOTO EXIT_SP
       END
-
-      BEGIN TRAN                                                                                                                                      
+      
+      IF @@TRANCOUNT = 0            --(Wan02)                                                                                                                                     
+         BEGIN TRAN;                --(Wan02) 
+                                                                                                                                           
       SET @d_EditDate = GETDATE()   
       
       --SET @b_success = 1                                                                                                                                    

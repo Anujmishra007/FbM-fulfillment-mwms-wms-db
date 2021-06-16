@@ -8,7 +8,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
-/* Store procedure: WMS                                                 */
+/* Store procedure: lsp_FinalizeReceipt_Wrapper                         */
 /* Creation Date:                                                       */
 /* Copyright : LFLogistics                                              */
 /* Written by: Wan                                                      */  
@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,9 @@ GO
 /*                            Revert when Sub SP Raise error            */
 /* 2020-12-15  Wan02    1.2   LFWM-2303 - UAT - TW  ASN Finalize issues */
 /* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-04-26  Wan04    1.3   LFWM-2706 - UAT - TW   Storerconfig       */
+/*                            FinalizeASNPromptSaveID' does not work in */
+/*                            ASN and Trade                             */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
       @c_ReceiptKey              NVARCHAR(10)
@@ -40,6 +43,7 @@ CREATE PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
     , @c_ProceedWithWarning      CHAR(1)        = 'N' 
     , @c_UserName                NVARCHAR(128)  =''
     , @n_ErrGroupKey             INT            = 0  OUTPUT
+    , @n_SkipGenID               INT            = 0  OUTPUT             --(Wan04)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -196,6 +200,7 @@ BEGIN
          , @c_HoldLot02ByUDF08         NVARCHAR(30)   = ''    
          , @c_HoldByLottable02         NVARCHAR(30)   = '' 
          , @c_AllowASNLot2Rehold       NVARCHAR(30)   = ''
+         , @c_FinalizeASNPromptSaveID  NVARCHAR(30)   = ''     --Wan04
        
          , @CUR_RD                     CURSOR
 
@@ -734,7 +739,7 @@ BEGIN
             ,  @b_Success     = @b_Success   OUTPUT
             ,  @n_err         = @n_err       OUTPUT
             ,  @c_errmsg      = @c_errmsg    OUTPUT
-
+            
          IF @n_WarningNo = 1
          BEGIN
             GOTO EXIT_SP
@@ -743,32 +748,69 @@ BEGIN
          -- Proceed Question If @n_continue<>3 (END)
          ---------------------------------------------
       END
+      --(Wan04) - START
+      IF @n_WarningNo < 2   
+      BEGIN
+         SELECT @c_MUID = ISNULL(RTRIM(nsqlvalue),'') 
+         FROM NSQLCONFIG WITH (NOLOCK)
+         WHERE ConfigKey = 'MUID_Enable'
+         
+         SELECT @c_FinalizeASNPromptSaveID  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeASNPromptSaveID')
+         SELECT @c_GenID  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'GenID')
+         SELECT @c_RF_Enable  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'RF_Enable')
+  
+         SET @n_SkipGenID = 1
+         IF @c_FinalizeASNPromptSaveID = '1' AND ((@c_MUID = '1' AND @c_GenID = '1') OR @c_RF_Enable <> '1')
+         BEGIN
+            SET @n_SkipGenID = 0
+            SET @n_WarningNo = 2
+ 
+            SET @c_ErrMsg = 'Skip Generate Pallet ID for : ' + @c_Receiptkey + '?'
+            EXEC [WM].[lsp_WriteError_List] 
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+               ,  @c_TableName   = @c_TableName
+               ,  @c_SourceType  = @c_SourceType
+               ,  @c_Refkey1     = @c_Receiptkey
+               ,  @c_Refkey2     = ''
+               ,  @c_Refkey3     = ''
+               ,  @c_WriteType   = 'QUESTION'
+               ,  @n_err2        = @n_err
+               ,  @c_errmsg2     = @c_errmsg
+               ,  @b_Success     = @b_Success   OUTPUT
+               ,  @n_err         = @n_err       OUTPUT
+               ,  @c_errmsg      = @c_errmsg    OUTPUT
+            
+            GOTO EXIT_SP
+         END
+      END
+      --(Wan04) - END
       -------------------------------------------------
       -- PreFinalze Receipt Validation (START) 
       -------------------------------------------------   
-      IF @c_ASNStatus = '9'
-      BEGIN
-         SET @n_continue= 3
-         SET @n_err     = 550006
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                        + ': Receipt #:' + @c_ReceiptKey + ' Has Been Closed'
-                        + '. Not Allow To Finalize. (lsp_FinalizeReceipt_Wrapper)'
+      --IF @c_ASNStatus = '9'
+      --BEGIN
+      --   SET @n_continue= 3
+      --   SET @n_err     = 550006
+      --   SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+      --                  + ': Receipt #:' + @c_ReceiptKey + ' Has Been Closed'
+      --                  + '. Not Allow To Finalize. (lsp_FinalizeReceipt_Wrapper)'
 
-         EXEC [WM].[lsp_WriteError_List] 
-               @i_iErrGroupKey= @n_ErrGroupKey output,
-               @c_TableName   = @c_TableName,
-               @c_SourceType  = @c_SourceType,
-               @c_Refkey1     = @c_ReceiptKey,
-               @c_Refkey2     = @c_ReceiptLineNumber,
-               @c_Refkey3     = '',
-               @c_WriteType   = 'ERROR',
-               @n_err2        = @n_err,
-               @c_errmsg2     = @c_errmsg,
-               @b_Success     = @b_Success OUTPUT,
-               @n_err         = @n_err OUTPUT,
-               @c_errmsg      = @c_errmsg OUTPUT
-      END
-      ELSE IF @c_ASNStatus = 'CANC'
+      --   EXEC [WM].[lsp_WriteError_List] 
+      --         @i_iErrGroupKey= @n_ErrGroupKey output,
+      --         @c_TableName   = @c_TableName,
+      --         @c_SourceType  = @c_SourceType,
+      --         @c_Refkey1     = @c_ReceiptKey,
+      --         @c_Refkey2     = @c_ReceiptLineNumber,
+      --         @c_Refkey3     = '',
+      --         @c_WriteType   = 'ERROR',
+      --         @n_err2        = @n_err,
+      --         @c_errmsg2     = @c_errmsg,
+      --         @b_Success     = @b_Success OUTPUT,
+      --         @n_err         = @n_err OUTPUT,
+      --         @c_errmsg      = @c_errmsg OUTPUT
+      --END
+      --ELSE IF @c_ASNStatus = 'CANC'
+      IF @c_ASNStatus = 'CANC'
       BEGIN
          SET @n_continue= 3
          SET @n_err     = 550007
@@ -1494,7 +1536,7 @@ BEGIN
             ,  @c_Sku      = ''
             ,  @c_Configkey= 'NikeRegITF'
             ,  @b_Success  = @b_Success         OUTPUT
-            ,  @c_Authority= @c_NikeRegITF   OUTPUT
+            ,  @c_Authority= @c_NikeRegITF      OUTPUT
             ,  @n_Err      = @n_Err             OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg          OUTPUT 
       END TRY
@@ -1580,7 +1622,7 @@ BEGIN
                ,@c_ASNReason          = ISNULL(RTRIM(RD.UserDefine03),'')
          FROM @tRECEIPTDETAIL t
          JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
-                               AND t.ReceiptLineNumber = RD.ReceiptLineNumber
+                                 AND t.ReceiptLineNumber = RD.ReceiptLineNumber
          WHERE RD.ReceiptLineNumber > @c_ReceiptLineNo
          AND    RD.FinalizeFlag <> 'Y'                     
          ORDER BY RD.ReceiptLineNumber
@@ -1696,7 +1738,7 @@ BEGIN
                ,@n_SumFreeGoodQtyReceived= ISNULL(SUM(RD.FreeGoodQtyReceived),0)
          FROM @tRECEIPTDETAIL t
          JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
-                               AND t.ReceiptLineNumber = RD.ReceiptLineNumber
+                                 AND t.ReceiptLineNumber = RD.ReceiptLineNumber
          WHERE RD.ExternReceiptKey > @c_ExternReceiptKey
          AND   RD.ExternLineNo > @c_ExternLineNo
          AND   RD.POkey > @c_POKey
@@ -1725,7 +1767,7 @@ BEGIN
                      ,@n_QtyReceived= ISNULL(SUM(PD.QtyReceived),0)
                FROM PODETAIL PD WITH (NOLOCK)
                JOIN SKU      S  WITH (NOLOCK) ON (PD.Storerkey = S.Storerkey)
-                                              AND(PD.Sku = S.Sku)
+                                                AND(PD.Sku = S.Sku)
                WHERE PD.POKey = @c_POKey
                AND   PD.ExternPOKey = @c_ExternReceiptkey
                AND   PD.ExternLineNo= @c_ExternLineNo
@@ -1756,149 +1798,154 @@ BEGIN
       -------------------------------------------------
       -- PreFinalze Receipt Validation (END) 
       -------------------------------------------------  
-   
-      -------------------------------------------------
-      -- Generate ToID Before Finalize Receipt (START) 
-      -------------------------------------------------    
-      SET @c_MUID = ''
-      SELECT @c_MUID = ISNULL(RTRIM(nsqlvalue),'') 
-      FROM NSQLCONFIG WITH (NOLOCK)
-      WHERE ConfigKey = 'MUID_Enable'
+      
+      --(Wan03)
+      IF @n_SkipGenID = 0 
+      BEGIN  
+         -------------------------------------------------
+         -- Generate ToID Before Finalize Receipt (START) 
+         ------------------------------------------------- 
+         /* (Wan04) - START
+         SET @c_MUID = ''
+         SELECT @c_MUID = ISNULL(RTRIM(nsqlvalue),'') 
+         FROM NSQLCONFIG WITH (NOLOCK)
+         WHERE ConfigKey = 'MUID_Enable'
   
-      BEGIN TRY
-         EXEC nspGetRight
-               @c_Facility = @c_Facility
-            ,  @c_Storerkey= @c_Storerkey
-            ,  @c_Sku      = ''
-            ,  @c_Configkey= 'GenID'
-            ,  @b_Success  = @b_Success   OUTPUT
-            ,  @c_Authority= @c_GenID     OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         BEGIN TRY
+            EXEC nspGetRight
+                  @c_Facility = @c_Facility
+               ,  @c_Storerkey= @c_Storerkey
+               ,  @c_Sku      = ''
+               ,  @c_Configkey= 'GenID'
+               ,  @b_Success  = @b_Success   OUTPUT
+               ,  @c_Authority= @c_GenID     OUTPUT
+               ,  @n_Err      = @n_Err       OUTPUT
+               ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
       
-      END TRY
+         END TRY
 
-      BEGIN CATCH
-         SET @n_err = 550036
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                        + ': Error Executing nspg_GetKey - GenID. (lsp_FinalizeReceipt_Wrapper)'
-                        + ' (' + @c_ErrMsg + ')'
-      END CATCH
+         BEGIN CATCH
+            SET @n_err = 550036
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                           + ': Error Executing nspg_GetKey - GenID. (lsp_FinalizeReceipt_Wrapper)'
+                           + ' (' + @c_ErrMsg + ')'
+         END CATCH
 
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_Continue = 3      
-         GOTO EXIT_SP
-      END         
+         IF @b_success = 0 OR @n_Err <> 0        
+         BEGIN        
+            SET @n_Continue = 3      
+            GOTO EXIT_SP
+         END         
          
-      BEGIN TRY
-         EXEC nspGetRight
-               @c_Facility = @c_Facility
-            ,  @c_Storerkey= @c_Storerkey
-            ,  @c_Sku      = ''
-            ,  @c_Configkey= 'RF_Enable'
-            ,  @b_Success  = @b_Success   OUTPUT
-            ,  @c_Authority= @c_RF_Enable OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT 
-      END TRY
+         BEGIN TRY
+            EXEC nspGetRight
+                  @c_Facility = @c_Facility
+               ,  @c_Storerkey= @c_Storerkey
+               ,  @c_Sku      = ''
+               ,  @c_Configkey= 'RF_Enable'
+               ,  @b_Success  = @b_Success   OUTPUT
+               ,  @c_Authority= @c_RF_Enable OUTPUT
+               ,  @n_Err      = @n_Err       OUTPUT
+               ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT 
+         END TRY
       
-      BEGIN CATCH
-         SET @n_err = 550037
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                        + ': Error Executing nspGetRight - RF_Enable. (lsp_FinalizeReceipt_Wrapper)'
-                        + ' (' + @c_ErrMsg + ')'
-      END CATCH
+         BEGIN CATCH
+            SET @n_err = 550037
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                           + ': Error Executing nspGetRight - RF_Enable. (lsp_FinalizeReceipt_Wrapper)'
+                           + ' (' + @c_ErrMsg + ')'
+         END CATCH
 
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN   
-         SET @n_continue = 3
-         GOTO EXIT_SP      
-      END       
+         IF @b_success = 0 OR @n_Err <> 0        
+         BEGIN   
+            SET @n_continue = 3
+            GOTO EXIT_SP      
+         END       
    
-      IF  @c_MUID = '1' AND @c_GenID = 1
-      BEGIN
-         SET @b_GenID = 1
-      END     
-   
-      SET @c_ReceiptLineNo = ''
-      WHILE 1 = 1
-      BEGIN
-         SELECT TOP 1                                                --(Wan02)
-                @c_ReceiptLineNo     = RD.ReceiptLineNumber
-               ,@n_BeforeReceivedQty = RD.BeforeReceivedQty
-               ,@n_FreeGoodQtyReceived = ISNULL(RD.FreeGoodQtyReceived,0)
-         FROM @tRECEIPTDETAIL t
-         JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
-                               AND t.ReceiptLineNumber = RD.ReceiptLineNumber
-         WHERE RD.ReceiptLineNumber >  @c_ReceiptLineNo
-         AND  ( RD.ToID = '' OR RD.ToID IS NULL)
-         AND  ( RD.Putawayloc = '' OR RD.Putawayloc IS NULL)  
-         AND    RD.FinalizeFlag <> 'Y'                     
-         ORDER BY RD.ReceiptLineNumber
-      
-         IF @@ROWCOUNT = 0
-         BEGIN
-            BREAK
-         END
-   
-         IF @c_RF_Enable <> '1' AND @n_BeforeReceivedQty + @n_FreeGoodQtyReceived > 0
+         IF @c_MUID = '1' AND @c_GenID = '1' 
          BEGIN
             SET @b_GenID = 1
-         END
-   
-         IF @b_GenID = 1  
+         END     
+         --(Wan04) - END*/
+         SET @c_ReceiptLineNo = ''
+         WHILE 1 = 1
          BEGIN
-            BEGIN TRAN
-            BEGIN TRY            
-               EXEC dbo.nspg_GetKey   
-                     @KeyName     = 'ID'
-                  ,  @fieldlength =  0
-                  ,  @keystring   = @c_ToID        OUTPUT
-                  ,  @b_Success   = @b_Success     OUTPUT
-                  ,  @n_Err       = @n_Err         OUTPUT
-                  ,  @c_Errmsg    = @c_Errmsg      OUTPUT   
-            
-            END TRY
-
-            BEGIN CATCH
-               SET @n_err = 550038
-               SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                              + ': Error Executing nspg_GetKey - ID. (lsp_FinalizeReceipt_Wrapper)'
-                              + ' (' + @c_ErrMsg + ')'
-            END CATCH
-
-            IF @b_success = 0 OR @n_Err <> 0        
-            BEGIN        
-               SET @n_Continue = 3      
-               GOTO EXIT_SP
-            END 
-         
-            IF @c_ToID <> '' 
+            SELECT TOP 1                                                --(Wan02)
+                   @c_ReceiptLineNo     = RD.ReceiptLineNumber
+                  ,@n_BeforeReceivedQty = RD.BeforeReceivedQty
+                  ,@n_FreeGoodQtyReceived = ISNULL(RD.FreeGoodQtyReceived,0)
+            FROM @tRECEIPTDETAIL t
+            JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
+                                  AND t.ReceiptLineNumber = RD.ReceiptLineNumber
+            WHERE RD.ReceiptLineNumber >  @c_ReceiptLineNo
+            AND  ( RD.ToID = '' OR RD.ToID IS NULL)
+            AND  ( RD.Putawayloc = '' OR RD.Putawayloc IS NULL)  
+            AND    RD.FinalizeFlag <> 'Y'                     
+            ORDER BY RD.ReceiptLineNumber
+      
+            IF @@ROWCOUNT = 0
             BEGIN
-               UPDATE RECEIPTDETAIL 
-                  SET ToId = @c_ToID
-                     ,EditWho = @c_UserName
-                     ,EditDate= GETDATE()
-                     ,Trafficcop = NULL
-               WHERE ReceiptKey = @c_ReceiptKey
-               AND   ReceiptLineNumber = @c_ReceiptLineNo
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @n_continue = 3  
-                  SET @n_err = 550039   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL fail. (lsp_FinalizeReceipt_Wrapper)' 
-                  GOTO EXIT_SP
-               END            
+               BREAK
             END
-            COMMIT TRAN
-         END
-      END   
-      -------------------------------------------------
-      -- Generate ToID Before Finalize Receipt (START) 
-      -------------------------------------------------    
-    
+   
+            --IF @c_RF_Enable <> '1' AND @n_BeforeReceivedQty + @n_FreeGoodQtyReceived > 0   --(Wan04)
+            --BEGIN                                                                          --(Wan04)
+               SET @b_GenID = 1
+            --END                                                                            --(Wan04)
+   
+            IF @b_GenID = 1  
+            BEGIN
+               BEGIN TRAN
+               BEGIN TRY            
+                  EXEC dbo.nspg_GetKey   
+                        @KeyName     = 'ID'
+                     ,  @fieldlength =  0
+                     ,  @keystring   = @c_ToID        OUTPUT
+                     ,  @b_Success   = @b_Success     OUTPUT
+                     ,  @n_Err       = @n_Err         OUTPUT
+                     ,  @c_Errmsg    = @c_Errmsg      OUTPUT   
+            
+               END TRY
+
+               BEGIN CATCH
+                  SET @n_err = 550038
+                  SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                                 + ': Error Executing nspg_GetKey - ID. (lsp_FinalizeReceipt_Wrapper)'
+                                 + ' (' + @c_ErrMsg + ')'
+               END CATCH
+
+               IF @b_success = 0 OR @n_Err <> 0        
+               BEGIN        
+                  SET @n_Continue = 3      
+                  GOTO EXIT_SP
+               END 
+         
+               IF @c_ToID <> '' 
+               BEGIN
+                  UPDATE RECEIPTDETAIL 
+                     SET ToId = @c_ToID
+                        ,EditWho = @c_UserName
+                        ,EditDate= GETDATE()
+                        ,Trafficcop = NULL
+                  WHERE ReceiptKey = @c_ReceiptKey
+                  AND   ReceiptLineNumber = @c_ReceiptLineNo
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_continue = 3  
+                     SET @n_err = 550039   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL fail. (lsp_FinalizeReceipt_Wrapper)' 
+                     GOTO EXIT_SP
+                  END            
+               END
+               COMMIT TRAN
+            END
+         END  
+         -------------------------------------------------
+         -- Generate ToID Before Finalize Receipt (END) 
+         -------------------------------------------------    
+      END
+      
       IF @n_continue = 1
       BEGIN
          BEGIN TRY
