@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */ 
 /* 29/04/2021   Mingle    1.1 Add new mappings(ML01)                    */ 
+/* 04/06/2021   Mingle    1.1 Add toloc and showtoloc(ML02)             */ 
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptTallySheet77]  
@@ -101,14 +102,18 @@ BEGIN
          RECEIPTDETAIL.Lottable11,
          RECEIPTDETAIL.ExternPOKey,
          RECEIPTDETAIL.Userdefine02,
-         SKUGroup = CASE WHEN RECEIPTDETAIL.StorerKey = 'IDSMED' THEN SKU.SKUGroup ELSE '' END
+         SKUGroup = CASE WHEN RECEIPTDETAIL.StorerKey = 'IDSMED' THEN SKU.SKUGroup ELSE '' END,
          --END (ML01)
+         RECEIPTDETAIL.toloc,     --ML02
+         ISNULL(CL.SHORT,'') as ShowToLoc --ML02
    FROM RECEIPT (nolock)  
    JOIN RECEIPTDETAIL (nolock) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey 
    JOIN STORER (nolock) ON RECEIPTDETAIL.StorerKey = STORER.StorerKey 
    JOIN SKU (nolock) ON  SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku 
    JOIN PACK (nolock) ON SKU.PackKey = PACK.PackKey    
    LEFT OUTER JOIN PO (NOLOCK) ON (PO.Pokey = RECEIPTDETAIL.POKEY)
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'REPORTCFG' AND CL.CODE = 'ShowToLoc'      --M01
+                                             AND CL.LONG = 'r_receipt_tallysheet77' AND CL.STORERKEY = RECEIPTDETAIL.STORERKEY ) --ML02
    WHERE ( RECEIPT.ReceiptKey >= @c_ReceiptKeyStart ) AND  
 		   ( REceipt.receiptkey <= @c_ReceiptKeyEnd ) AND
 			( RECEIPT.Storerkey >= @c_StorerKeyStart ) AND
@@ -154,8 +159,10 @@ BEGIN
             RECEIPTDETAIL.Lottable11,
             RECEIPTDETAIL.ExternPOKey,
             RECEIPTDETAIL.Userdefine02,
-            CASE WHEN RECEIPTDETAIL.StorerKey = 'IDSMED' THEN SKU.SKUGroup ELSE '' END
+            CASE WHEN RECEIPTDETAIL.StorerKey = 'IDSMED' THEN SKU.SKUGroup ELSE '' END,
             --END (ML01)
+            RECEIPTDETAIL.toloc,     --ML02
+            ISNULL(CL.SHORT,'')      --ML02
    
      ORDER BY RECEIPT.ReceiptKey, RECEIPTDETAIL.ReceiptLineNumber 
 
