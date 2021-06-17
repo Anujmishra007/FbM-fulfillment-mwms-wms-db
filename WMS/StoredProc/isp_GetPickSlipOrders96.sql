@@ -42,6 +42,7 @@ GO
 /*25-SEP-2020  WLChooi     1.9   WMS-15300 - Show Pick Location only (WL04)*/     
 /*01-Oct-2020  WLChooi     2.0   WMS-15300 - Fix sorting (WL05)            */    
 /*19-Oct-2020  CSCHONG     2.1   WMS-15513 - Revised sorting (CS07)        */ 
+/*02-Jun-2021  Mingle      2.2   WMS-17190 - Add and sort bfax2(ML01)      */
 /***************************************************************************/          
           
 CREATE PROC [dbo].[isp_GetPickSlipOrders96] (@c_loadkey NVARCHAR(10),       
@@ -104,7 +105,8 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
         @c_externorderkey   NVARCHAR(30),            
         @n_pickslips_required int,            
         @c_areakey          NVARCHAR(10),          
-        @c_skugroup         NVARCHAR(10) -- SOS144415           
+        @c_skugroup         NVARCHAR(10), -- SOS144415   
+        @c_bfax2            NVARCHAR(10)     --ML01
                             
     DECLARE @c_PrevOrderKey NVARCHAR(10),          
             @n_Pallets      int,          
@@ -137,8 +139,9 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
       PUOM3         NVARCHAR(10) NULL,  --CS03     
       CASEID        NVARCHAR(20) NULL, --CS05    
       Wavekey       NVARCHAR(10) NULL, --CS05 
-      LocType       NVARCHAR(10) NULL  --WL04   
-    --PickerID      NVARCHAR(15) NULL  --CS04      
+      LocType       NVARCHAR(10) NULL,  --WL04   
+    --PickerID      NVARCHAR(15) NULL  --CS04     
+      bfax2         NVARCHAR(10) NULL     --ML01
      )       --CS01   
      
    --WL04 START        
@@ -158,7 +161,8 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
      PickerID      NVARCHAR(10) NULL,
      CASEID        NVARCHAR(20) NULL,
      Wavekey       NVARCHAR(10) NULL,
-     LocType       NVARCHAR(10) NULL 
+     LocType       NVARCHAR(10) NULL,
+     bfax2         NVARCHAR(10) NULL     --ML01
    )       
    --WL04 END 
         
@@ -201,7 +205,7 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
                 
        INSERT INTO #TEMP_PICK96          
             (LoadKey,PickSlipNo, Storerkey, LOC,SKU,OrderKey,        
-             LocPickZone,Qty, LogicalLoc,ReprintFlag,Altsku,PUOM3,CASEID,Wavekey) --WL02   --CS02  --CS03   --CS04  --CS05    
+             LocPickZone,Qty, LogicalLoc,ReprintFlag,Altsku,PUOM3,CASEID,Wavekey,bfax2) --WL02   --CS02  --CS03   --CS04  --CS05     --ML01    
         SELECT DISTINCT @c_LoadKey as LoadKey,        
          (SELECT PICKHEADERKEY FROM PICKHEADER WITH (NOLOCK)          
                    WHERE ExternOrderKey = @c_LoadKey           
@@ -218,7 +222,8 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
      ,P.PackUOM3                                  --CS03      
       ,pickdetail.caseid as caseid                --CS05    
       ,(wd.wavekey) as wavekey                    --CS05      
- -- ,'PK' + space(2) + CAST(T96D.PICKERNo as nvarchar(8))                       
+ -- ,'PK' + space(2) + CAST(T96D.PICKERNo as nvarchar(8))
+      ,orders.b_fax2 AS bfax2     --ML01                       
       
      FROM pickdetail (nolock)          
      join orders (nolock)          
@@ -248,7 +253,8 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
              ,P.PackUOM3                      --CS03        
              ,pickdetail.caseid               --CS05      
              ,(wd.wavekey)                    --CS05    
-   -- , CAST(T96D.PICKERNo as nvarchar(8))   --CS04        
+   -- , CAST(T96D.PICKERNo as nvarchar(8))   --CS04  
+             ,orders.b_fax2      
           
     --select * from #TEMP_PICK96      
     --goto QUIT_SP       
@@ -374,6 +380,7 @@ SUCCESS:
         --,CAST(CAST(RIGHT(t1.CASEID,2) AS INT)%2 as nvarchar(8)) as 'caseid%2'
         -- ,CAST(RIGHT(t1.CASEID,2) AS INT)
         --     ,substring(SL.LOC,charindex('-',SL.LOC)+1,LEN(SL.LOC))
+         ,t1.bfax2 AS bfax2     --ML01
    FROM #TEMP_PICK96 t1    
    JOIN #TEMPTABLELOC t2 ON t2.PickSlipNo = t1.PickSlipNo   
    JOIN #TEMP_PICK96ID t3 ON t3.rowid = t2.rowid
@@ -396,14 +403,14 @@ SUCCESS:
             PUOM3,                            
             'PK' + space(2) + CAST(t3.PICKERNo as nvarchar(8)),
             t1.CASEID,
-            t1.Wavekey, t1.LocPickZone, t1.LogicalLoc   --WL05  
+            t1.Wavekey,t1.bfax2--, t1.LocPickZone, t1.LogicalLoc   --WL05     --ML01  
             ,LOC.LogicalLocation 
           --    ,t3.PICKERNo                                --CS07
           -- ,CAST(RIGHT(t1.CASEID,2) AS INT)
           --          ,CAST(CAST(RIGHT(t1.CASEID,2) AS INT)%2 as nvarchar(8))
             ,substring(SL.LOC,charindex('-',SL.LOC)+1,LEN(SL.LOC))
    --WL04 END     
-   ORDER BY t1.caseid, t1.OrderKey--, t1.LocPickZone --, T1.LogicalLoc
+   ORDER BY t1.caseid,t1.bfax2, t1.OrderKey--, t1.LocPickZone --, T1.LogicalLoc
    --CS07 START
    ,CASE WHEN CAST(CAST(RIGHT(t1.CASEID,2) AS INT)%2 as nvarchar(8)) = '0' THEN LOC.LogicalLocation END desc ,
    CASE WHEN  CAST(CAST(RIGHT(t1.CASEID,2) AS INT)%2 as nvarchar(8)) <> '0' THEN LOC.LogicalLocation  END asc--WL02   --CS06   --WL04   --WL05

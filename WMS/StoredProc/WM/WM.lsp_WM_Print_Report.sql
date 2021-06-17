@@ -30,6 +30,9 @@ GO
 /*                            Phase 2  Backend Setup  SPs Setup         */
 /* 2021-02-15  Wan01    1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-06-17  Wan02    1.2   LFWM-2841 - SCE JReport Phase 1 & Phase 2 */
+/*                            SCE JReport Rebrand to Logi Report in UAT &*/
+/*                            PROD                                      */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -682,7 +685,7 @@ BEGIN
 
          --(Wan01) - START
          PRINT_START:
-         IF @c_PrintType = 'JReport' 
+         IF @c_PrintType IN ( 'JReport', 'LogiReport')   --Wan02
          BEGIN
             EXEC WM.lsp_WM_Get_WebReport_URL
                @c_ReportID    = @c_ReportID
