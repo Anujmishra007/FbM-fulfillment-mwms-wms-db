@@ -27,6 +27,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 20-May-2021  Mingle    1.1   Add new mapping(ML01)                   */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_invoice_06]  (
@@ -218,7 +219,9 @@ BEGIN
             ,  COUNTRYORI           NVARCHAR(30)    
             ,  COUNTRYDEST          NVARCHAR(30) 
             ,  E17                  NVARCHAR(4000)        
-            ,  E18                  NVARCHAR(4000) 
+            ,  E18                  NVARCHAR(4000)
+            ,  showBComp            NVARCHAR(45)      --ML01
+            ,  SHOWBCOMPANY         NVARCHAR(10)      --ML01
             )   
               
 
@@ -306,7 +309,9 @@ BEGIN
             , COUNTRYORI
             , COUNTRYDEST  
             , E17 
-            , E18                 
+            , E18
+            , showBComp          --ML01
+            , SHOWBCOMPANY       --ML01                
                  
             ) 
                                                                                       
@@ -388,7 +393,9 @@ BEGIN
             ,COUNTRYORI = ISNULL(OH.CountryOfOrigin,'')
             ,COUNTRYDEST = ISNULL(OH.CountryDestination,'')  
             ,LBL.E17                                                 
-            ,LBL.E18  
+            ,LBL.E18
+            ,showBComp = CASE WHEN OH.B_Company <> '' THEN ISNULL(RTRIM(OH.B_Company),'') ELSE ISNULL(RTRIM(OH.M_Company),'') END      --ML01
+            ,SHOWBCOMPANY = ISNULL(CL1.SHORT,'')      --ML01
 	   FROM ORDERS OH WITH (NOLOCK)
       JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey)
       JOIN PICKDETAIL  PD WITH (NOLOCK) ON (OD.Orderkey = PD.Orderkey)
@@ -396,6 +403,8 @@ BEGIN
       JOIN dbo.fnc_GetInv03Label (@c_orderkey) lbl ON (lbl.Orderkey = OH.Orderkey)
       LEFT JOIN CODELKUP    CL WITH (NOLOCK) ON (CL.ListName = 'ANFBrand' AND CL.Code = OH.Sectionkey)
       LEFT JOIN ORDERINFO OI WITH (NOLOCK) ON (OH.Orderkey = OI.Orderkey)
+      LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.ListName = 'REPORTCFG' AND CL1.Code = 'SHOWBCOMPANY' AND CL1.Long = 'r_dw_invoice_06_rdt'    
+                                             AND CL1.Storerkey = OH.StorerKey )       --ML01
 	   WHERE OH.Orderkey = @c_orderkey
       AND (QtyAllocated+OD.ShippedQty + OD.QtyPicked) > 0      --CS01
       AND OD.UserDefine01 <> 'Backordered'
@@ -458,8 +467,8 @@ BEGIN
            ,  ISNULL(OH.CountryDestination,'')  
            ,  LBL.E17                                                 
            ,  LBL.E18            	
-  
-      
+           ,  CASE WHEN OH.B_Company <> '' THEN ISNULL(RTRIM(OH.B_Company),'') ELSE ISNULL(RTRIM(OH.M_Company),'') END
+           ,  ISNULL(CL1.SHORT,'')
       IF EXISTS ( SELECT 1
                   FROM ORDERDETAIL WITH (NOLOCK)
                   WHERE Orderkey = @c_Orderkey
@@ -558,7 +567,10 @@ BEGIN
             ,T_INV.COUNTRYORI
             ,T_INV.COUNTRYDEST   
             ,E17
-            ,E18                                                                                                                                                               
+            ,E18
+            --,CASE WHEN T_INV.B_Company <> '' THEN ISNULL(RTRIM(T_INV.B_Company),'') ELSE ISNULL(RTRIM(T_INV.M_Company),'') END
+            ,T_INV.showBComp         --ML01
+            ,T_INV.SHOWBCOMPANY      --ML01                                                                                                                                                               
       FROM #TMP_INVHDR T_INV
       JOIN #TMP_RECGRP T_GRP ON (T_INV.Orderkey = T_GRP.Orderkey)
 
