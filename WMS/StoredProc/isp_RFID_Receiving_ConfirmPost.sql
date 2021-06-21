@@ -25,6 +25,7 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 09-OCT-2020 Wan      1.0   Created                                    */
+/* 10-Jun-2021 WLChooi  1.1   WMS-16736 Copy UDF08&09 to new line (WL01) */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_RFID_Receiving_ConfirmPost] 
   @c_StorerKey       NVARCHAR(15)  
@@ -524,6 +525,8 @@ BEGIN
          SELECT TOP 1  
                @c_ReceiptLineNumber = ReceiptLineNumber 
             ,  @n_LineBal = (QtyExpected - BeforeReceivedQty) 
+            ,  @c_Userdefine08 = UserDefine08   --WL01 
+            ,  @c_Userdefine09 = UserDefine09   --WL01 
          FROM @tRD  
          WHERE (QtyExpected - BeforeReceivedQty) > 0  
          AND ReceiptLineNumber > @c_ReceiptLineNumber  
@@ -569,7 +572,8 @@ BEGIN
                ,  Lottable06, Lottable07, Lottable08, Lottable09, Lottable10       
                ,  Lottable11, Lottable12, Lottable13 ,Lottable14, Lottable15                               
                ,  UserDefine01, UserDefine02, UserDefine04
-               ,  ReceiptLineNumber_Org, ActionFlag, EditDate )   
+               ,  ReceiptLineNumber_Org, ActionFlag, EditDate
+               ,  UserDefine08, UserDefine09 )   --WL01 
             SELECT   
                @c_Receiptkey, @c_NewReceiptLineNumber, @c_POKey
             ,  @n_Qty, @n_Qty , @c_ToLoc, @c_ToID
@@ -589,6 +593,7 @@ BEGIN
             ,  Lottable15 = CASE WHEN @n_Lottable15Input  = 1 THEN @dt_Lottable15 ELSE Lottable15 END  
             ,  @c_UserDefine01, @c_UserDefine02, @c_UserDefine04  
             ,  @c_ReceiptLineNumber, 'I', GetDate() 
+            ,  @c_Userdefine08, @c_Userdefine09   --WL01 
             FROM @tRD AS tr
             WHERE  ReceiptLineNumber =  @c_ReceiptLineNumber 
          END
@@ -612,7 +617,8 @@ BEGIN
          ,  Lottable06, Lottable07, Lottable08, Lottable09, Lottable10       
          ,  Lottable11, Lottable12, Lottable13 ,Lottable14, Lottable15                               
          ,  UserDefine01, UserDefine02, UserDefine04
-         ,  ReceiptLineNumber_Org, ActionFlag, EditDate )   
+         ,  ReceiptLineNumber_Org, ActionFlag, EditDate
+         ,  UserDefine08, UserDefine09 )   --WL01   
       VALUES  
       (  @c_Receiptkey, @c_NewReceiptLineNumber, @c_POKey
       ,  @n_Qty, @n_Qty , @c_ToLoc, @c_ToID
@@ -621,6 +627,7 @@ BEGIN
       ,  @c_Lottable11 ,@c_Lottable12, @dt_Lottable13,@dt_Lottable14, @dt_Lottable15 
       ,  @c_UserDefine01, @c_UserDefine02, @c_UserDefine04 
       ,  '', 'I', GetDate() 
+      ,  @c_Userdefine08, @c_Userdefine09   --WL01 
          )    
    END   
     

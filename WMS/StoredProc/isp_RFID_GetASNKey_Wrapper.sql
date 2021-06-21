@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,8 @@ GO
 /* 09-OCT-2020 Wan      1.0   Created                                   */
 /* 2021-03-19  Wan01    1.1   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
 /*                           _Overall_CR                                */
+/* 2021-05-20  WLChooi  1.2   WMS-16736 - [CN]NIKE_GWP_RFID_Receiving_CR*/
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey_Wrapper
            @c_Facility           NVARCHAR(5)  
@@ -227,7 +229,8 @@ QUIT_SP:
    END
    ELSE
    BEGIN
-      SET @b_Success = 1
+      IF @b_Success <> 2   --WL01 - Return b_success = 2 back to PB to show warning/information message box
+         SET @b_Success = 1
       WHILE @@TRANCOUNT > @n_StartTCnt
       BEGIN
          COMMIT TRAN

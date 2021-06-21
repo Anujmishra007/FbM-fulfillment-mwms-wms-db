@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,6 +32,8 @@ GO
 /*                           _Overall_CR                                */
 /* 2021-04-13  Wan03    1.4   Fixed Record insert into Receiptdetail_wip*/
 /*                            when fial on checklist                    */
+/* 2021-05-20  WLChooi  1.5   WMS-16736 - [CN]NIKE_GWP_RFID_Receiving_CR*/
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey01
            @c_Facility           NVARCHAR(5)  
@@ -66,6 +68,8 @@ BEGIN
          
          , @c_CurrentUser     NVARCHAR(128)= SUSER_SNAME()     --(Wan03)
          , @c_Sku             NVARCHAR(20) = ''                --(Wan03)
+
+         , @c_UserDefine02    NVARCHAR(30) = ''                --WL01  
 
    DECLARE @tMATCHASN         TABLE
          ( RowRef             INT            IDENTITY(1,1) PRIMARY KEY
@@ -508,6 +512,24 @@ BEGIN
    END
    
 QUIT_SP:
+   --WL01 S
+   SELECT @c_UserDefine02 = UserDefine02  
+   FROM RECEIPT (NOLOCK)  
+   WHERE Receiptkey =  @c_ReceiptKey  
+
+   IF @n_Continue = 3 AND @c_UserDefine02 IN ('21','2')  
+   BEGIN
+      SET @c_errmsg = @c_errmsg + CHAR(13) + CHAR(13) + CHAR(13) + 'NSQL'+CONVERT(char(5),@n_err)+': Program orders must receive. (isp_RFID_GetASNKey01)'   
+   END
+   ELSE IF @n_Continue IN (1,2) AND @c_UserDefine02 IN ('21','2')  
+   BEGIN
+      SET @n_Continue = 2
+      SET @b_Success = @n_Continue
+      SET @n_err = 81025
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Program orders must receive. (isp_RFID_GetASNKey01)'   
+   END
+   --WL01 E
+
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
@@ -533,7 +555,8 @@ QUIT_SP:
    END
    ELSE
    BEGIN
-      SET @b_Success = 1
+      IF @b_Success <> 2   --WL01
+         SET @b_Success = 1
       WHILE @@TRANCOUNT > @n_StartTCnt
       BEGIN
          COMMIT TRAN
