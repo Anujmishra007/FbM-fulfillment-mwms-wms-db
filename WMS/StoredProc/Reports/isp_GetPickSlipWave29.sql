@@ -23,6 +23,7 @@ GO
 /* Date         Author   Purposes                                       */ 
 /* 26-MAR-21    CSCHONG  WMS-15994 fix split line carton issue (CS01)   */
 /* 14-APR-21    MINGLE   WMS-16758 add new mappings(ML01)               */
+/* 31-MAY-21    MINGLE   WMS-17131 add new mappings(ML02)               */
 /************************************************************************/  
   
 CREATE PROC dbo.isp_GetPickSlipWave29 (  
@@ -140,7 +141,7 @@ BEGIN
       LoadKey            NVARCHAR(10),  
       OrderKey           NVARCHAR(10),  
       ConsigneeKey       NVARCHAR(15),  
-      Company            NVARCHAR(45),  
+      c_Company            NVARCHAR(45),  
       LOC                NVARCHAR(10) NULL,  
       SKU                NVARCHAR(20),  
       SkuDesc            NVARCHAR(60),  
@@ -160,15 +161,27 @@ BEGIN
       --ML01 START
       DeliveryDate       DATE,
       Route              NVARCHAR(20),
-      Address1           NVARCHAR(45),
-      Address2           NVARCHAR(45),
-      Address3           NVARCHAR(45),
-      Address4           NVARCHAR(45),
-      Zip                NVARCHAR(10),
-      City               NVARCHAR(45),
-      State              NVARCHAR(10),
-      Country            NVARCHAR(10)
-      --ML01 END 
+      c_Address1           NVARCHAR(45),
+      c_Address2           NVARCHAR(45),
+      c_Address3           NVARCHAR(45),
+      c_Address4           NVARCHAR(45),
+      c_Zip                NVARCHAR(10),
+      c_City               NVARCHAR(45),
+      c_State              NVARCHAR(10),
+      c_Country            NVARCHAR(10),
+      --ML01 END
+      --ML02 START
+      BillToKey            NVARCHAR(20),
+      b_Company            NVARCHAR(45),    
+      b_Address1           NVARCHAR(45),
+      b_Address2           NVARCHAR(45),
+      b_Address3           NVARCHAR(45),
+      b_Address4           NVARCHAR(45),
+      b_Zip                NVARCHAR(10),
+      b_City               NVARCHAR(45),
+      b_State              NVARCHAR(10),
+      b_Country            NVARCHAR(10),
+      --ML02 END 
 )    
       
       
@@ -191,7 +204,7 @@ BEGIN
            PickSlipNo, 
            loadkey,OrderKey, 
            ConsigneeKey,  
-           Company,  
+           c_Company,  
            LOC,   
            SKU,  
            SkuDesc,  
@@ -208,20 +221,32 @@ BEGIN
            --ML01 START
            DeliveryDate,
            Route,
-           Address1,
-           Address2,
-           Address3,
-           Address4,
-           Zip,
-           City,
-           State,
-           Country
+           c_Address1,
+           c_Address2,
+           c_Address3,
+           c_Address4,
+           c_Zip,
+           c_City,
+           c_State,
+           c_Country,
            --ML01 END
+           --ML02 START
+           BillToKey,
+           b_Company,
+           b_Address1,
+           b_Address2,
+           b_Address3,
+           b_Address4,
+           b_Zip,
+           b_City,
+           b_State,
+           b_Country
+           --ML02 END
            )                
    SELECT DISTINCT RefKeyLookup.PickSlipNo,  
           ORDERS.LoadKey,ORDERS.OrderKey,
           ISNULL(ORDERS.ConsigneeKey, '') AS ConsigneeKey,  
-          ISNULL(ORDERS.c_Company, '')   AS Company,   
+          ISNULL(ORDERS.c_Company, ''),     
           PickDetail.loc,   
           PickDetail.sku,  
           ISNULL(Sku.Descr, '')  AS  SkuDescr,  
@@ -242,17 +267,29 @@ BEGIN
           pack.casecnt,
           orders.externorderkey,
           --ML01 START
-          ISNULL(ORDERS.DeliveryDate, '') AS DeliveryDate,
+          ISNULL(ORDERS.DeliveryDate, ''), 
           orders.Route,
-          ISNULL(ORDERS.c_Address1, '')   AS Address1,
-          ISNULL(ORDERS.c_Address2, '')   AS Address2,
-          ISNULL(ORDERS.c_Address3, '')   AS Address3,
-          ISNULL(ORDERS.c_Address4, '')   AS Address4,
-          ISNULL(ORDERS.c_Zip, '')   AS Zip,
-          ISNULL(ORDERS.c_City, '')   AS City,
-          ISNULL(ORDERS.c_State, '')   AS State,
-          ISNULL(ORDERS.c_Country, '')   AS Country
+          ISNULL(ORDERS.c_Address1, ''),   
+          ISNULL(ORDERS.c_Address2, ''),   
+          ISNULL(ORDERS.c_Address3, ''),  
+          ISNULL(ORDERS.c_Address4, ''),   
+          ISNULL(ORDERS.c_Zip, ''),   
+          ISNULL(ORDERS.c_City, ''),   
+          ISNULL(ORDERS.c_State, ''),   
+          ISNULL(ORDERS.c_Country, ''),
           --ML01 END
+          --ML02 START 
+          ISNULL(ORDERS.BillToKey,''),
+          ISNULL(ORDERS.b_Company, ''),
+          ISNULL(ORDERS.b_Address1, ''),   
+          ISNULL(ORDERS.b_Address2, ''), 
+          ISNULL(ORDERS.b_Address3, ''),   
+          ISNULL(ORDERS.b_Address4, ''),   
+          ISNULL(ORDERS.b_Zip, ''),   
+          ISNULL(ORDERS.b_City, ''),   
+          ISNULL(ORDERS.b_State, ''),   
+          ISNULL(ORDERS.b_Country, '')
+          --ML02 END
 
    FROM WAVEDETAIL      WD  WITH (NOLOCK) 
    JOIN pickdetail WITH (NOLOCK)  ON pickdetail.OrderKey = WD.OrderKey --AND  pickdetail.WaveKey=wd.WaveKey
@@ -292,8 +329,20 @@ BEGIN
           ISNULL(ORDERS.c_Zip, ''),   
           ISNULL(ORDERS.c_City, ''),   
           ISNULL(ORDERS.c_State, ''),   
-          ISNULL(ORDERS.c_Country, '') 
+          ISNULL(ORDERS.c_Country, ''),
           --ML01 END
+          --ML02 START
+          ISNULL(ORDERS.BillToKey,''),
+          ISNULL(ORDERS.b_Company, ''),
+          ISNULL(ORDERS.b_Address1, ''),   
+          ISNULL(ORDERS.b_Address2, ''), 
+          ISNULL(ORDERS.b_Address3, ''),   
+          ISNULL(ORDERS.b_Address4, ''),   
+          ISNULL(ORDERS.b_Zip, ''),   
+          ISNULL(ORDERS.b_City, ''),   
+          ISNULL(ORDERS.b_State, ''),   
+          ISNULL(ORDERS.b_Country, '') 
+          --ML02 END
                
    WHILE @@TRANCOUNT > 0  
    BEGIN  
@@ -631,7 +680,7 @@ QUIT:
       ,  #TMP_PICK.LoadKey            
       ,  #TMP_PICK.OrderKey           
       ,  #TMP_PICK.ConsigneeKey       
-      ,  #TMP_PICK.Company                       
+      ,  #TMP_PICK.c_Company                       
       ,  UPPER(#TMP_PICK.LOC) AS LOC                 
       ,  #TMP_PICK.SKU                
       ,  #TMP_PICK.SkuDesc            
@@ -644,22 +693,36 @@ QUIT:
       ,  #TMP_PICK.Storerkey          
       ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey 
       ,  #TMP_PICK.DeliveryDate
-      ,  #TMP_PICK.Route     --ML01 START
-      ,  #TMP_PICK.Address1
-      ,  #TMP_PICK.Address2 
-      ,  #TMP_PICK.Address3
-      ,  #TMP_PICK.Address4
-      ,  #TMP_PICK.Zip
-      ,  #TMP_PICK.City
-      ,  #TMP_PICK.State
-      ,  #TMP_PICK.Country
+      --ML01 START
+      ,  #TMP_PICK.Route     
+      ,  #TMP_PICK.c_Address1
+      ,  #TMP_PICK.c_Address2 
+      ,  #TMP_PICK.c_Address3
+      ,  #TMP_PICK.c_Address4
+      ,  #TMP_PICK.c_Zip
+      ,  #TMP_PICK.c_City
+      ,  #TMP_PICK.c_State
+      ,  #TMP_PICK.c_Country
+      --ML01 END
+      --ML02 START
+      ,  #TMP_PICK.BillToKey
+      ,  #TMP_PICK.b_Company
+      ,  #TMP_PICK.b_Address1
+      ,  #TMP_PICK.b_Address2 
+      ,  #TMP_PICK.b_Address3
+      ,  #TMP_PICK.b_Address4
+      ,  #TMP_PICK.b_Zip
+      ,  #TMP_PICK.b_City
+      ,  #TMP_PICK.b_State
+      ,  #TMP_PICK.b_Country
+      --ML02 END
    FROM   #TMP_PICK  
    --CS01 START
    GROUP BY  #TMP_PICK.PickSlipNo     
       ,  #TMP_PICK.LoadKey            
       ,  #TMP_PICK.OrderKey           
       ,  #TMP_PICK.ConsigneeKey       
-      ,  #TMP_PICK.Company                       
+      ,  #TMP_PICK.c_Company                       
       ,  UPPER(#TMP_PICK.LOC)            
       ,  #TMP_PICK.SKU                
       ,  #TMP_PICK.SkuDesc                           
@@ -668,16 +731,30 @@ QUIT:
       ,  #TMP_PICK.SKUGROUP           
       ,  #TMP_PICK.Storerkey          
       ,  #TMP_PICK.Wavekey,#TMP_Pick.ExtOrderkey 
-      ,  #TMP_PICK.DeliveryDate   
+      ,  #TMP_PICK.DeliveryDate 
+      --ML01 START  
       ,  #TMP_PICK.Route
-      ,  #TMP_PICK.Address1
-      ,  #TMP_PICK.Address2 
-      ,  #TMP_PICK.Address3
-      ,  #TMP_PICK.Address4
-      ,  #TMP_PICK.Zip
-      ,  #TMP_PICK.City
-      ,  #TMP_PICK.State
-      ,  #TMP_PICK.Country  --ML01 END
+      ,  #TMP_PICK.c_Address1
+      ,  #TMP_PICK.c_Address2 
+      ,  #TMP_PICK.c_Address3
+      ,  #TMP_PICK.c_Address4
+      ,  #TMP_PICK.c_Zip
+      ,  #TMP_PICK.c_City
+      ,  #TMP_PICK.c_State
+      ,  #TMP_PICK.c_Country
+      --ML01 END
+      --ML02 START
+      ,  #TMP_PICK.BillToKey
+      ,  #TMP_PICK.b_Company
+      ,  #TMP_PICK.b_Address1
+      ,  #TMP_PICK.b_Address2 
+      ,  #TMP_PICK.b_Address3
+      ,  #TMP_PICK.b_Address4
+      ,  #TMP_PICK.b_Zip
+      ,  #TMP_PICK.b_City
+      ,  #TMP_PICK.b_State
+      ,  #TMP_PICK.b_Country  
+      --ML02 END
    --CS01 END
    ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.LOCZone,UPPER(#TMP_PICK.LOC),  #TMP_PICK.SKU
      
