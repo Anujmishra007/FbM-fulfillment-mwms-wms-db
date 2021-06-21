@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.5                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,9 @@ GO
 /* 2020-09-15  Wan01    1.2   Fixed Nullable column insert into detail  */ 
 /* 28-Dec-2020 SWT01    1.3   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan02    1.4   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-06-08  Wan03    1.5   LFWM-2831-UAT - TW Missing ExternReceiptKey*/
+/*                            in detail lines when Populate PO to Receipt*/
+/*                            1 PO - 1 ASN                              */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -525,6 +528,14 @@ BEGIN
          BEGIN
             BREAK
          END
+         
+         --(Wan03) = START
+         IF @n_RowRef_PH > 1 
+         BEGIN
+            SET @c_ExternReceiptkey = ''
+         END
+         --(Wan03) = END
+         
          SET @c_ExternPOKey = ''
          SELECT TOP 1 @c_ExternPOKey = ISNULL(PD.ExternPOkey,'')
          FROM #tPODETAIL PD WITH (NOLOCK)
