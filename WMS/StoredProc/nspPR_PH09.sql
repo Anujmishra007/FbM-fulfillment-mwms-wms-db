@@ -29,6 +29,7 @@ GO
 /* 03-Dec-2020  WLChooi 1.1  WMS-15808 - Add new sorting based on config*/
 /*                           (WL01)                                     */
 /* 12-Mar-2021  WLChooi 1.2  WMS-16550 - Consider QtyReplen (WL02)      */
+/* 14-May-2021  NJOW02  1.3  WMS-17043 PH YLEO No partial allocate line */
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspPR_PH09]  
@@ -78,6 +79,10 @@ BEGIN
           ,@c_key1                        NVARCHAR(10)  
           ,@c_key2                        NVARCHAR(5)  
           ,@c_key3                        NCHAR(1)    
+          ,@C_FullLineAlloc               NVARCHAR(30)
+          ,@n_QtyAvai                     INT
+          ,@n_OrderLineQty                INT
+          ,@c_OrdDetUserdefine02          NVARCHAR(18)
     
    SELECT @b_debug = 0 
    SELECT @c_SQLStmt = ''  
@@ -211,7 +216,17 @@ BEGIN
             SELECT @n_ConsigneeShelfLife = ISNULL( STORER.MinShelfLife, 0)  
             FROM STORER (NOLOCK)   
             WHERE Storerkey = @c_Consigneekey               
-         END                             
+         END                            
+         
+         --NJOW02
+         IF ISNULL(@c_key1,'')<>'' AND ISNULL(@c_key2,'')<>''
+         BEGIN
+            SELECT @n_OrderLineQty = OpenQty - QtyAllocated - QtyPicked,
+                   @c_OrdDetUserdefine02 = Userdefine02
+            FROM ORDERDETAIL (NOLOCK)
+            WHERE Orderkey = @c_Key1
+            AND OrderLineNumber = @c_Key2
+         END 
       END  
          
       --Sorting  
@@ -295,6 +310,64 @@ BEGIN
          SELECT @c_Where = ' AND (LOTATTRIBUTE.Lottable04 >= ISNULL(CONSIGNEESKU.AddDate,CONVERT(DATETIME,''19000101''))) '         
       END  
       
+      --NJOW02 S
+      SELECT TOP 1 @C_FullLineAlloc = ISNULL(CL.Code,'')
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'PKCODECFG'
+      AND CL.Long = 'nspPR_PH09'
+      AND CL.Code = 'FULLLINEALLOC'
+      AND CL.Storerkey = @c_storerkey
+      AND CL.Short = 'Y'
+      AND (CL.Code2 = @c_Facility OR CL.Code2 = '')      
+
+      IF @c_UOM IN('2','6') AND ISNULL(@c_SortMode,'') <> 'LEFO' AND ISNULL(@c_FullLineAlloc,'') = 'FULLLINEALLOC'
+      BEGIN
+         SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND LOC.LocationType IN (''CASE'',''PICK'') '
+      END
+      
+      IF ISNULL(@c_FullLineAlloc,'') = 'FULLLINEALLOC' AND @c_OrdDetUserdefine02 IN('S','K')
+      BEGIN      	       	 
+         SELECT @c_SQLStmt  = 'SELECT @n_QtyAvai = SUM(LOTXLOCXID.Qty-LOTXLOCXID.QtyAllocated-LOTXLOCXID.QtyPicked-LOTXLOCXID.QtyReplen) ' +  
+         ' FROM LOTXLOCXID (NOLOCK) ' +  
+         ' JOIN LOT (NOLOCK) ON LOTXLOCXID.LOT = LOT.LOT ' +  
+         ' JOIN LOTATTRIBUTE (NOLOCK) ON LOTXLOCXID.LOT = LOTATTRIBUTE.LOT ' +  
+         ' JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC ' +  
+         ' JOIN ID (NOLOCK) ON LOTXLOCXID.ID = ID.ID ' +    
+         ' JOIN SKUXLOC (NOLOCK) ON LOTXLOCXID.Storerkey = SKUXLOC.Storerkey AND LOTXLOCXID.Sku = SKUXLOC.Sku AND LOTXLOCXID.Loc = SKUXLOC.Loc ' +    
+          RTRIM(@c_FromTableJoin) + ' ' +  
+         ' WHERE LOTXLOCXID.StorerKey = @c_storerkey ' +  
+         ' AND LOTXLOCXID.SKU = @c_sku ' +  
+         ' AND LOTXLOCXID.Qty > 0 ' +  
+         ' AND LOT.Status = ''OK'' ' +  
+         ' AND LOC.Facility = @c_facility ' +  
+         ' AND LOC.Status = ''OK'' AND LOC.LocationFlag = ''NONE'' ' +  
+         ' AND ID.Status = ''OK'' ' +               
+          RTRIM(@c_Where) +  ' ' +  
+          RTRIM(@c_LimitString)   
+
+         SET @c_SQLParm =  N'@c_facility   NVARCHAR(5),  @c_storerkey  NVARCHAR(15), @c_SKU NVARCHAR(20), ' +     
+            '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), ' +  
+            '@c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME,     @d_Lottable05 DATETIME,  ' +  
+            '@c_Lottable06 NVARCHAR(30), ' +  
+            '@c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), ' +   
+            '@c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), ' +   
+            '@d_Lottable13 DATETIME,     @d_Lottable14 DATETIME,     @d_Lottable15 DATETIME, ' +  
+            '@n_ConsigneeShelfLife INT, @n_SkuOutgoingShelfLife INT , @n_uombase INT, @c_Consigneekey NVARCHAR(15), @n_QtyAvai INT OUTPUT'       
+           
+         EXEC sp_ExecuteSQL @c_SQLStmt, @c_SQLParm, @c_facility, @c_storerkey, @c_SKU,  @c_Lottable01, @c_Lottable02, @c_Lottable03,  
+                            @d_Lottable04, @d_Lottable05,  @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09,   
+                            @c_Lottable10, @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15,    
+                            @n_ConsigneeShelfLife , @n_SkuOutgoingShelfLife, @n_uombase, @c_Consigneekey, @n_QtyAvai OUTPUT            
+         
+         IF @n_OrderLineQty > @n_QtyAvai
+         BEGIN
+         	  DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
+         	    SELECT TOP 0 NULL, NULL, NULL, 0
+         	  RETURN  
+         END
+      END
+      --NJOW02 E
+            
        -- Form Preallocate cursor  
       SELECT @c_SQLStmt = 'DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR ' +  
       ' SELECT LOT.StorerKey, LOT.SKU, LOT.LOT, ' +  
