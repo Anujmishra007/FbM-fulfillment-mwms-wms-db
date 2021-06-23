@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */        
 /*                                                                      */        
 /* Updates:                                                             */        
-/* Date         Author    Ver Purposes                                  */       
+/* Date         Author    Ver Purposes                                  */ 
+/* 18-Jun-2021  Mingle    1.1 WMS-17272 modify logic(ML01)              */      
 /************************************************************************/        
 --EXEC isp_Packing_List_97_rdt 'P000136620'
 CREATE PROC [dbo].[isp_Packing_List_97_rdt]     
@@ -43,9 +44,9 @@ BEGIN
          SKU.Descr,    
          SKU.BUSR6,    
          SKU.Size,    
-         packdetail.SKU,    
+         packdetail.SKU,     
          CAST(Orderdetail.Unitprice AS INT) AS Unitprice,    
-         SUM(Packdetail.QTY) AS qty,    
+         Packdetail.QTY AS qty,     --ML01   
          (SELECT CAST(CAST(sum(od.Unitprice*od.OriginalQty)AS INT)AS NVARCHAR(10))    FROM dbo.ORDERDETAIL (NOLOCK) od  WHERE od.OrderKey=orderdetail.OrderKey AND od.StorerKey=orderdetail.StorerKey ) as totalmara
          --(SELECT CASE WHEN oh.UserDefine03 LIKE '%co%' then CAST(CAST(sum(od.Unitprice)AS INT)AS NVARCHAR(10))  ELSE ' ' END  FROM dbo.ORDERDETAIL (NOLOCK) od JOIN dbo.ORDERS (NOLOCK) oh ON oh.OrderKey = od.OrderKey AND oh.StorerKey = od.StorerKey WHERE od.OrderKey=orderdetail.OrderKey AND od.StorerKey=orderdetail.StorerKey GROUP BY oh.UserDefine03) as totalco,
 		   --(SELECT CASE WHEN oh.UserDefine03 LIKE '%mara%' then CAST(CAST(sum(od.Unitprice)AS INT)AS NVARCHAR(10))  ELSE ' ' END  FROM dbo.ORDERDETAIL (NOLOCK) od JOIN dbo.ORDERS (NOLOCK) oh ON oh.OrderKey = od.OrderKey AND oh.StorerKey = od.StorerKey WHERE od.OrderKey=orderdetail.OrderKey AND od.StorerKey=orderdetail.StorerKey GROUP BY oh.UserDefine03) as totalmara   
