@@ -25,6 +25,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 12-May-2021  NJOW01  1.0   WMS-16938 delete pending taskdetail when in  */
+/*                            generating mode                              */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC32]
                @c_zone01           NVARCHAR(10)
@@ -76,7 +78,8 @@ BEGIN
 
    DECLARE @c_priority        NVARCHAR(5)
          , @c_ReplLottable02  NVARCHAR(18)
-         , @c_ReplenishmentGroup NVARCHAR(10)  --NJOW01
+         , @c_ReplenishmentGroup NVARCHAR(10)  
+         , @c_SourceType      NVARCHAR(30) --NJOW01
 
    SET @n_continue=1
    SET @b_debug = 0
@@ -92,7 +95,6 @@ BEGIN
    BEGIN
       GOTO QUIT_SP    
    END
-
 
    SELECT StorerKey
          ,SKU
@@ -148,6 +150,22 @@ BEGIN
       SET @c_NoMixLottable02  = '0'
       SET @c_Lottable02       = ''
       SET @d_Lottable05 = NULL 
+
+      --NJOW01
+      SELECT @c_SourceType = dbo.fnc_GetRight(@c_Zone01, @c_Storerkey, '', 'ReleaseReplenTaskCode')
+      
+      DELETE TASKDETAIL 
+      FROM TASKDETAIL  (NOLOCK)
+      JOIN LOC (NOLOCK) ON TASKDETAIL.ToLoc = LOC.Loc                 
+      WHERE (LOC.putawayZone IN (@c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10, @c_Zone11, @c_Zone12)
+              OR @c_Zone02 = 'ALL')
+      AND (LOC.Facility = @c_Zone01 OR ISNULL(@c_Zone01,'') = '') 
+      AND TASKDETAIL.StorerKey = CASE WHEN @c_StorerKey = 'ALL' OR @c_StorerKey = '' THEN  
+                                      TASKDETAIL.StorerKey ELSE @c_StorerKey END 
+      AND TASKDETAIL.TaskType = 'RPF'
+      AND TASKDETAIL.Status = '0'                         
+      AND TASKDETAIL.SourceType = @c_SourceType
+
       /* Make a temp version of SKUxLOC */
       SELECT ReplenishmentPriority
             ,ReplenishmentSeverity
@@ -727,22 +745,21 @@ BEGIN
 
    IF @c_backendjob <> 'Y' 
    BEGIN
-
       IF @c_FuncType IN ( 'G' )                                     
       BEGIN
          RETURN
       END
 --select @c_ReplenishmentGroup '@c_ReplenishmentGroup', @c_ReplGrp '@c_ReplGrp',@c_zone02 '@c_zone02'
 
-if isnull(@c_ReplGrp,'') = ''
-BEGIN
-  SET @c_ReplGrp = 'ALL'
-END
-
-if isnull(@c_zone02,'') = ''
-BEGIN
-  SET @c_zone02 = 'ALL'
-END
+      if isnull(@c_ReplGrp,'') = ''
+      BEGIN
+        SET @c_ReplGrp = 'ALL'
+      END
+      
+      if isnull(@c_zone02,'') = ''
+      BEGIN
+        SET @c_zone02 = 'ALL'
+      END
 
       SELECT R.FromLoc
             ,UPPER(R.Id) AS ID
@@ -799,7 +816,6 @@ END
             --,  LA.Lottable02
             ,  R.Sku
    END
-
 END
 GO
 
