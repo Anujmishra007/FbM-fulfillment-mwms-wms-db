@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 16-June-2021 Mingle    1.1 Add ShowWaveKey(ML01)                     */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipOrders116
             @c_Loadkey   NVARCHAR(10)
@@ -88,11 +89,12 @@ BEGIN
       , UOM                NVARCHAR(10)  NULL
       , PrintedFlag        NVARCHAR(10)  NULL
       , Wavekey            NVARCHAR(10)  NULL      
-      , ExternOrderKey     NVARCHAR(50)  NULL           
+      , ExternOrderKey     NVARCHAR(50)  NULL  
+      , ShowWaveKey        NVARCHAR(5)   NULL      --ML01  
    )
 
    INSERT INTO #TMP_PD116 ( [Type], PickSlipNo, StorerKey, Loadkey, Salesman, 
-                            LocationCategory, Facility, OrderKey, Loc, SKU, DESCR, Qty, UOM, PrintedFlag, Wavekey, ExternOrderKey)
+                            LocationCategory, Facility, OrderKey, Loc, SKU, DESCR, Qty, UOM, PrintedFlag, Wavekey, ExternOrderKey,ShowWaveKey) --ML01
    SELECT OH.[Type]
          ,PH.PickHeaderKey
          ,OH.StorerKey
@@ -109,6 +111,7 @@ BEGIN
          ,'N'
          ,OH.UserDefine09
          ,OH.ExternOrderKey
+         ,ISNULL(CL.SHORT,'') AS ShowWaveKey      --ML01 
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey
    JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
@@ -117,6 +120,8 @@ BEGIN
    JOIN SKU S (NOLOCK) ON S.SKU = PD.SKU AND S.StorerKey = PD.Storerkey
    JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.OrderKey = OH.OrderKey
    LEFT JOIN PICKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey AND PH.ConsoOrderKey = L.LocationCategory
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'REPORTCFG' AND CL.CODE = 'ShowWaveKey'      --M01
+                                             AND CL.LONG = 'r_dw_print_pickorder116' AND CL.STORERKEY = PD.STORERKEY )
    WHERE LPD.LoadKey = @c_Loadkey
    GROUP BY OH.[Type]
            ,PH.PickHeaderKey
@@ -132,6 +137,7 @@ BEGIN
            ,OD.UOM
            ,OH.UserDefine09
            ,OH.ExternOrderKey
+           ,ISNULL(CL.SHORT,'')      --ML01 
 
    IF NOT EXISTS (SELECT 1
                   FROM #TMP_PD116
@@ -276,7 +282,9 @@ BEGIN
          ,TP.Qty             
          ,TP.UOM             
          ,TP.PrintedFlag  
-         ,TP.ExternOrderKey   
+         ,TP.ExternOrderKey
+         ,TP.Wavekey   
+         ,TP.ShowWaveKey      --ML01 
    FROM #TMP_PD116 AS TP
    ORDER BY TP.RowNo
 
