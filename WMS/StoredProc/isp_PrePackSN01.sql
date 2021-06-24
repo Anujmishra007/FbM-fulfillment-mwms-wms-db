@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-May-2021 NJOW01   1.0   WMS-17141 add order type LOGIVMI          */
 /************************************************************************/
 CREATE PROC [dbo].[isp_PrePackSN01] 
             @c_PickSlipNo  NVARCHAR(10)      
@@ -86,6 +87,7 @@ BEGIN
                                 WHEN @c_OrderType = 'LOGIDIS' THEN '92'  
                                 WHEN @c_OrderType = 'IR' THEN '14'  
                                 WHEN @c_OrderType = 'WR' THEN '26' 
+                                WHEN @c_OrderType = 'LOGIVMI' THEN '9' --NJOW01
                                 ELSE '20'
                                 END
    IF OBJECT_ID('tempdb..#TMP_SNInfo','U') IS NOT NULL
