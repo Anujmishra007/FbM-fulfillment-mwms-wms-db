@@ -31,12 +31,14 @@ GO
 /* 14-MAY-2013  YTWan   1.1   Dummy PickslipNo to child order(Wan01)       */
 /* 30-JUN-2013  YTWan   1.1   SOS#314538 - Modify Child Order Reverse:Clean*/
 /*                            Up RDTScanToTruck Table (Wan02)              */
+/* 28-Jan-2019  TLTING_ext 1.2  enlarge externorderkey field length        */    
+/* 15-Mar-2021  WLChooi 1.3   WMS-16338 - Add new logic for ANFQHW (WL01)  */
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_ChildOrder_Reverse]  
 (     @c_MBOLKey           NVARCHAR(10)  
   ,   @c_Orderkey          NVARCHAR(10)   
   ,   @c_Store             NVARCHAR(30)
-  ,   @c_pExternOrderkey   NVARCHAR(30)
+  ,   @c_pExternOrderkey   NVARCHAR(50)  --tlting_ext  
   ,   @c_CaseID            NVARCHAR(20) 
   ,   @b_Success           INT            OUTPUT
   ,   @n_Err               INT            OUTPUT
@@ -91,6 +93,8 @@ BEGIN
          , @n_PCartonNo          INT            --(Wan01)
          , @c_PLoadkey           NVARCHAR(10)   --(Wan01)
          , @c_Sku                NVARCHAR(20)   --(Wan01)
+         
+         , @c_MBOLCreateChildOrdChkPallet   NVARCHAR(50)   --WL01
 
    SET @b_Success        = 1
    SET @c_ErrMsg         = ''
@@ -117,6 +121,26 @@ BEGIN
    WHERE ExternOrderKey = @c_LoadKey  
    AND   Zone = 'LP'
    --(Wan01) - END
+   
+   --WL01 S
+   EXEC nspGetRight  
+      @c_Facility  = @c_Facility,  
+      @c_StorerKey = NULL,  
+      @c_sku       = NULL,  
+      @c_ConfigKey = 'MBOLCreateChildOrdChkPallet',  
+      @b_Success   = @b_Success                     OUTPUT,  
+      @c_authority = @c_MBOLCreateChildOrdChkPallet OUTPUT,  
+      @n_err       = @n_err                         OUTPUT,  
+      @c_errmsg    = @c_errmsg                      OUTPUT 
+      
+   IF @n_err <> 0  
+   BEGIN
+      SET @n_continue = 3    
+      SET @n_err = 81085 
+      SET @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+ ': Execute nspGetRight Failed. (isp_ChildOrder_CreateMBOL)' 
+      GOTO QUIT_WITH_ERROR
+   END
+   --WL01 E
  
    DECLARE CUR_CASE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT Pickdetailkey    = PD.Pickdetailkey
@@ -538,7 +562,26 @@ BEGIN
       JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON (PD.CaseID = DPD.ChildID)
       WHERE LPD.Loadkey = @c_LoadKey
       AND   DPD.UserDefine01 = @c_MBOLKey
-
+      
+      --WL01 S
+      IF @c_MBOLCreateChildOrdChkPallet = '1'
+      BEGIN
+         -- GET New Load Info
+         SELECT @n_LoadWeight   = SUM(PD.Qty * SKU.StdGrossWgt)
+               ,@n_LoadCube     = SUM(PD.Qty * SKU.StdCube)
+               ,@n_TotalPallets = COUNT(DISTINCT PD.ID)
+         FROM LOADPLANDETAIL LPD  WITH (NOLOCK) 
+         JOIN PICKDETAIL PD  WITH (NOLOCK) ON (LPD.Orderkey = PD.Orderkey)
+         JOIN SKU        SKU WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
+                                           AND(PD.Sku = SKU.SKU)
+         JOIN PALLET      P WITH (NOLOCK) ON (PD.ID = P.Palletkey)
+         JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON (PLTD.Palletkey = P.Palletkey)
+         --JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON (PD.CaseID = DPD.ChildID)
+         WHERE LPD.Loadkey = @c_LoadKey
+         AND   PLTD.UserDefine01 = @c_MBOLKey
+      END
+      --WL01 E
+      
       UPDATE LOADPLAN WITH (ROWLOCK) 
       SET   Weight = @n_LoadWeight   
         ,   Cube   = @n_LoadCube 
@@ -575,20 +618,41 @@ BEGIN
                   WHERE Orderkey = @c_Orderkey
                   AND   CaseID = @c_CaseID)
    BEGIN
-      UPDATE DROPIDDETAIL WITH (ROWLOCK)
-      SET UserDefine01 = ''
-        , EditDate = GETDATE() 
-        , EditWho  = SUSER_NAME()     
-        , TrafficCop = NULL 
-      WHERE ChildID = @c_CaseID
-      
-      IF @@ERROR <> 0  
-      BEGIN  
-         SET @n_Continue = 3  
-         SET @n_err = 81075
-         SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+ ': Update DROPIDDETAIL Failed. (isp_ChildOrder_Reverse)'  
-         GOTO QUIT_WITH_ERROR  
-      END
+   	--WL01 S
+   	IF @c_MBOLCreateChildOrdChkPallet = '1'
+   	BEGIN
+   	   UPDATE PALLETDETAIL WITH (ROWLOCK)
+         SET UserDefine01 = ''
+           , EditDate = GETDATE() 
+           , EditWho  = SUSER_NAME()     
+           , TrafficCop = NULL 
+         WHERE CaseID = @c_CaseID
+         
+         IF @@ERROR <> 0  
+         BEGIN  
+            SET @n_Continue = 3  
+            SET @n_err = 81075
+            SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+ ': Update PALLETDETAIL Failed. (isp_ChildOrder_Reverse)'  
+            GOTO QUIT_WITH_ERROR  
+         END
+   	END
+   	ELSE
+   	BEGIN   --WL01 E
+         UPDATE DROPIDDETAIL WITH (ROWLOCK)
+         SET UserDefine01 = ''
+           , EditDate = GETDATE() 
+           , EditWho  = SUSER_NAME()     
+           , TrafficCop = NULL 
+         WHERE ChildID = @c_CaseID
+         
+         IF @@ERROR <> 0  
+         BEGIN  
+            SET @n_Continue = 3  
+            SET @n_err = 81075
+            SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+ ': Update DROPIDDETAIL Failed. (isp_ChildOrder_Reverse)'  
+            GOTO QUIT_WITH_ERROR  
+         END
+      END   --WL01
    END
 
    --(Wan02) - START

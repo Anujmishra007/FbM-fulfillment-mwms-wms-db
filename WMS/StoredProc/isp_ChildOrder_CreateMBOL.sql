@@ -31,7 +31,9 @@ GO
 /* 25-Feb-2015  Leong   1.2   SOS# 333519 - Prompt error for shipped CaseId*/
 /* 06-Jan-2015  NJOW01  1.3   359849 - Child Order's Shipperkey Mapping    */
 /* 08-Mar-2016  SPChin  1.4   SOS365643 - Bug Fixed                        */
-/* 11-MAR-2021  Wan02   1.5   WMS-16026 - PB-Standardize TrackingNo        */
+/* 11-MAR-2021  Wan02   1.5   WMS-16026 - PB-Standardize TrackingNo        */  
+/* 15-Mar-2021  WLChooi 1.6   WMS-16338 - Add Orderdetail.Channel and new  */
+/*                                        logic for ANFQHW (WL01)          */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ChildOrder_CreateMBOL]
 (     @c_MBOLKey  NVARCHAR(10)
@@ -106,6 +108,8 @@ BEGIN
          , @c_CPickSlipNoPrev    NVARCHAR(10)   --(Wan01)
          , @c_Sku                NVARCHAR(20)   --(Wan01)
          , @c_SkuPrev            NVARCHAR(20)   --(Wan01)
+         
+         , @c_MBOLCreateChildOrdChkPallet   NVARCHAR(50)   --WL01
 
 
    SET @b_Success        = 1
@@ -189,6 +193,26 @@ BEGIN
    LEFT JOIN STORERSODEFAULT SOD WITH (NOLOCK) ON (ST.Storerkey = SOD.Storerkey)
    WHERE ST.Storerkey = @c_Store
 
+   --WL01 S
+   EXEC nspGetRight  
+      @c_Facility  = @c_Facility,  
+      @c_StorerKey = NULL,  
+      @c_sku       = NULL,  
+      @c_ConfigKey = 'MBOLCreateChildOrdChkPallet',  
+      @b_Success   = @b_Success                     OUTPUT,  
+      @c_authority = @c_MBOLCreateChildOrdChkPallet OUTPUT,  
+      @n_err       = @n_err                         OUTPUT,  
+      @c_errmsg    = @c_errmsg                      OUTPUT 
+      
+   IF @n_err <> 0  
+   BEGIN
+      SET @n_continue = 3    
+      SET @n_err = 80140 
+      SET @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+ ': Execute nspGetRight Failed. (isp_ChildOrder_CreateMBOL)' 
+      GOTO QUIT_WITH_ERROR
+   END
+   --WL01 E
+   
    IF NOT EXISTS( SELECT 1
                   FROM MBOLDETAIL WITH (NOLOCK)
                   WHERE MBOLKey = @c_MBOLkey )
@@ -249,7 +273,7 @@ BEGIN
             ,@c_C_Fax1         = ISNULL(RTRIM(ST.Fax1),'')
             ,@c_C_Fax2         = ISNULL(RTRIM(ST.Fax2),'')
             ,@c_C_Vat          = ISNULL(RTRIM(ST.Vat),'')
-            ,@c_Route          = SOD.Route
+            ,@c_Route          = CASE WHEN @c_MBOLCreateChildOrdChkPallet = '1' THEN ISNULL(RTRIM(SOD.[Route]),'99') ELSE SOD.[Route] END   --WL01
       FROM STORER  ST          WITH (NOLOCK)
       LEFT JOIN STORERSODEFAULT SOD WITH (NOLOCK) ON (ST.Storerkey = SOD.Storerkey)
       WHERE ST.Storerkey = @c_Store
@@ -407,7 +431,7 @@ BEGIN
          UserDefine03,          UserDefine04,     UserDefine05,          UserDefine06,
          UserDefine07,          UserDefine08,     UserDefine09,          UserDefine10,
          POkey,                 ExternPOKey,      EnteredQTY,            ConsoOrderKey,
-         ExternConsoOrderKey,   ConsoOrderLineNo
+         ExternConsoOrderKey,   ConsoOrderLineNo, Channel   --WL01
          )
          SELECT
          @c_COrderKey,          @c_COrderLineNumber,OrderDetailSysId,    ExternOrderKey,
@@ -428,7 +452,7 @@ BEGIN
          UserDefine03,          UserDefine04,     UserDefine05,          UserDefine06,
          UserDefine07,          UserDefine08,     Orderkey,              OrderLineNumber,
          POkey,                 ExternPOKey,      EnteredQTY=0,          ConsoOrderKey,
-         ExternConsoOrderKey,   ConsoOrderLineNo
+         ExternConsoOrderKey,   ConsoOrderLineNo, Channel   --WL01
          FROM ORDERDETAIL o WITH (NOLOCK)
          WHERE o.OrderKey = @c_OrderKey
          AND   o.OrderLineNumber = @c_OrderLineNumber
@@ -686,6 +710,24 @@ BEGIN
       JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON (PD.CaseID = DPD.ChildID)
       WHERE LPD.Loadkey = @c_CLoadkey
 
+      --WL01 S
+      IF @c_MBOLCreateChildOrdChkPallet = '1'
+      BEGIN
+         -- GET New Load Info
+         SELECT @n_LoadWeight   = SUM(PD.Qty * SKU.StdGrossWgt)
+               ,@n_LoadCube     = SUM(PD.Qty * SKU.StdCube)
+               ,@n_TotalPallets = COUNT(DISTINCT PD.ID)
+         FROM LOADPLANDETAIL LPD  WITH (NOLOCK) 
+         JOIN PICKDETAIL PD  WITH (NOLOCK) ON (LPD.Orderkey = PD.Orderkey)
+         JOIN SKU        SKU WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
+                                           AND(PD.Sku = SKU.SKU)
+         JOIN PALLET      P WITH (NOLOCK) ON (PD.ID = P.Palletkey)
+         --JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON (PLTD.Palletkey = P.Palletkey)
+         --JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON (PD.CaseID = DPD.ChildID)
+         WHERE LPD.Loadkey = @c_CLoadkey
+      END
+      --WL01 E
+      
       UPDATE LOADPLAN WITH (ROWLOCK)
       SET   Weight = @n_LoadWeight
         ,   Cube   = @n_LoadCube
@@ -862,19 +904,40 @@ BEGIN
       GOTO QUIT_WITH_ERROR
    END
 
-   UPDATE DROPIDDETAIL WITH (ROWLOCK)
-   SET UserDefine01 = @c_MBOLKey
-     , EditDate = GETDATE()
-     , EditWho  = SUSER_NAME()
-     , TrafficCop = NULL
-   WHERE ChildID = @c_CaseID
-
-   IF @@ERROR <> 0
+   --WL01
+   IF @c_MBOLCreateChildOrdChkPallet = '1'
    BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 80085
-      SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+ ': Update DROPIDDETAIL Failed. (isp_ChildOrder_CreateMBOL)'
-      GOTO QUIT_WITH_ERROR
+   	UPDATE PALLETDETAIL WITH (ROWLOCK)
+      SET UserDefine01 = @c_MBOLKey
+        , EditDate = GETDATE() 
+        , EditWho  = SUSER_NAME()     
+        , TrafficCop = NULL 
+      WHERE CaseID = @c_CaseID
+      
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 80085
+         SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+ ': Update PALLETDETAIL Failed. (isp_ChildOrder_CreateMBOL)'
+         GOTO QUIT_WITH_ERROR
+      END
+   END
+   ELSE
+   BEGIN
+      UPDATE DROPIDDETAIL WITH (ROWLOCK)
+      SET UserDefine01 = @c_MBOLKey
+        , EditDate = GETDATE()
+        , EditWho  = SUSER_NAME()
+        , TrafficCop = NULL
+      WHERE ChildID = @c_CaseID
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 80085
+         SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+ ': Update DROPIDDETAIL Failed. (isp_ChildOrder_CreateMBOL)'
+         GOTO QUIT_WITH_ERROR
+      END
    END
 
    --(Wan01) PickSlip , Packing Handling - START
@@ -1099,7 +1162,7 @@ BEGIN
                ,  Qty
                ,  CartonType
                ,  RefNo
-               ,  TrackingNo              --(Wan02)
+               ,  TrackingNo              --(Wan02)  
                )
             SELECT @c_CPickSlipNo
                ,  @n_CCartonNo
@@ -1108,7 +1171,7 @@ BEGIN
                ,  Qty
                ,  CartonType
                ,  RefNo
-               ,  TrackingNo              --(Wan02)
+               ,  TrackingNo              --(Wan02)  
             FROM PACKINFO WITH (NOLOCK)
             WHERE PickSlipNo = @c_PickSlipNo
             AND   CartonNo   = @n_CartonNo
@@ -1178,7 +1241,7 @@ IF @@TRANCOUNT > 0
    ROLLBACK TRAN
 
 --RAISERROR (N'SQL Error: %s ErrorNo: %d.',16, 1) WITH SETERROR    -- SQL2012
-RAISERROR (N'SQL Error: %s',16, 1, @c_errmsg) WITH SETERROR    -- SQL2012, SOS365643
+RAISERROR (N'SQL Error: %s',16, 1, @c_errmsg) WITH SETERROR		-- SQL2012, SOS365643
 QUIT:
 
    IF CURSOR_STATUS('LOCAL' , 'CUR_CASE') in (0 , 1)
