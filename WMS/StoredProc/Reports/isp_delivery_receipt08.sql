@@ -37,6 +37,7 @@ GO
 /* Date        Author  Ver.  Purposes                                   */ 
 /* 2021-03-16  WLChooi 1.1   WMS-15921 - Print all MBOLKey under a same */
 /*                                       UserDefine05 (WL01)            */
+/* 2021-06-08  LZG     1.2   INC1524666 - Fixed doubled Qty (ZG01)      */
 /************************************************************************/  
 CREATE PROC isp_delivery_receipt08 (@cMBOLkey NVARCHAR(10) )  
 AS  
@@ -342,8 +343,14 @@ BEGIN
          JOIN Storer (NOLOCK) ON ORDERS.Storerkey = Storer.Storerkey  
          JOIN SKU (NOLOCK) ON SKU.SKU = OrderDetail.SKU AND SKU.StorerKey = Storer.StorerKey
          JOIN MBOL (NOLOCK) ON MBOL.MBOLKey = MBOLDETAIL.MBOLKey  
-         JOIN Pickdetail (NOLOCK) ON (PickDetail.OrderKey = OrderDetail.OrderKey  
-                                 AND PICKDETAIL.orderlinenumber = ORDERDETAIL.orderlinenumber AND ORDERDETAIL.Sku = PICKDETAIL.SKU)  
+         --JOIN Pickdetail (NOLOCK) ON (PickDetail.OrderKey = OrderDetail.OrderKey  
+         --                        AND PICKDETAIL.orderlinenumber = ORDERDETAIL.orderlinenumber AND ORDERDETAIL.Sku = PICKDETAIL.SKU) -- ZG01
+         JOIN (SELECT DISTINCT PD.OrderKey, OrderLineNumber, Sku, ID FROM Pickdetail PD (NOLOCK)                                      -- ZG01
+               JOIN Orders O (NOLOCK) ON O.OrderKey = PD.OrderKey
+               WHERE MBOLKey = @cMBOLKey
+               GROUP BY ID, SKU, PD.OrderKey, OrderLineNumber
+              ) AS PickDetail ON (PickDetail.OrderKey = OrderDetail.OrderKey    
+                                 AND PICKDETAIL.orderlinenumber = ORDERDETAIL.orderlinenumber AND ORDERDETAIL.Sku = PICKDETAIL.SKU)    
          JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.PackKey  
          LEFT JOIN CODELKUP (NOLOCK) ON Orders.Storerkey = CODELKUP.Short AND CODELKUP.Listname = 'DR_NCOUNT'
          LEFT OUTER JOIN #Temp_Flag ON #Temp_Flag.MBOLKey = ORDERS.MBOLKey  
@@ -479,4 +486,3 @@ SET ANSI_NULLS OFF
 GO
 GRANT EXECUTE ON isp_delivery_receipt08 to nSQL
 GO
-
