@@ -1,0 +1,181 @@
+if exists (select * from  dbo.sysobjects where id = object_id(N'[dbo].[isp_CartonManifestLabel36_RDT]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+   drop procedure [dbo].[isp_CartonManifestLabel36_RDT]
+GO
+
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO
+/************************************************************************/
+/* Store Procedure:  isp_CartonManifestLabel36_RDT                      */
+/* Creation Date: 04-MAY-2021                                           */
+/* Copyright: IDS                                                       */
+/* Written by: CSCHONG                                                  */
+/*                                                                      */
+/* Purpose:  WMS-16910 WMS-16910_PH_YLEO_Shipment_Label_Report          */
+/*                                                                      */
+/* Input Parameters: @c_Orderkey                                        */                                     
+/*                                                                      */
+/* Called By:  dw = r_dw_carton_manifest_label_36_Rdt                   */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author        Purposes                                  */
+/* 15-Jun-2021  CSCHONG       WMS-16910 revised field logic (CS01)      */
+/************************************************************************/
+CREATE PROC [dbo].[isp_CartonManifestLabel36_RDT] (
+      @c_Orderkey      NVARCHAR(10) 
+ 
+) 
+AS
+BEGIN
+   SET NOCOUNT ON 
+   SET QUOTED_IDENTIFIER OFF 
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @n_IsRDT        INT
+         , @n_StartTCnt    INT
+         , @c_sku          NVARCHAR(20)
+         , @c_ODUDF02      NVARCHAR(18)
+         , @c_DeliveryMode NVARCHAR(30)
+         , @n_CAMT         FLOAT
+
+   SET @n_IsRDT     = 0
+   SET @n_StartTCnt = @@TRANCOUNT
+
+   WHILE @@TRANCOUNT > 0 
+   BEGIN
+      COMMIT TRAN
+   END
+
+
+  SET @c_sku = ''
+  SET @c_ODUDF02 = ''
+  SET @c_DeliveryMode = ''
+  SET @n_CAMT = 0
+
+   SELECT @c_sku = MAX(OD.SKU)
+         ,@c_ODUDF02 = MAX(ISNULL(OD.Userdefine02,''))
+   FROM ORDERDETAIL OD WITH (NOLOCK)
+   WHERE OD.Orderkey = @c_Orderkey
+
+  IF EXISTS (SELECT 1 FROM dbo.ORDERDETAIL OD WITH (NOLOCK)
+             WHERE orderkey = @c_Orderkey AND SKU LIKE '%COD%')
+  BEGIN
+     SET @c_sku = 'COD'
+  END
+
+   SELECT @n_CAMT = ISNULL(SUM(OD.unitprice),0)
+   FROM ORDERDETAIL OD WITH (NOLOCK)
+   WHERE OD.Orderkey = @c_Orderkey
+   AND OD.sku LIKE '%COD%'
+   AND OD.Userdefine02 = 'PN' 
+
+  SELECT @c_DeliveryMode = OIF.DeliveryMode
+  FROM dbo.OrderInfo OIF WITH (NOLOCK) 
+  WHERE OIF.Orderkey = @c_Orderkey
+
+ SELECT     Orderkey = ORDERS.Orderkey
+         ,  ConsigneeKey = ISNULL(RTRIM(ORDERS.ConsigneeKey),'') 
+         ,  C_Company  = ISNULL(RTRIM(ORDERS.C_Company),'') 
+         ,  F_Address1 = ISNULL(RTRIM(FA.notes),'')  
+         ,  C_Address1 = ISNULL(RTRIM(ORDERS.C_ADDRESS1),'')      
+         ,  C_Address2 = ISNULL(RTRIM(ORDERS.C_ADDRESS2),'') 
+         ,  C_Address3 = ISNULL(RTRIM(ORDERS.C_Address3),'')   
+         ,  C_Address4 = ISNULL(RTRIM(ORDERS.C_Address4),'')  
+         ,  C_City     = ISNULL(RTRIM(ORDERS.C_City),'')  
+         ,  C_Zip      = ISNULL(RTRIM(ORDERS.C_Zip),'')   
+         ,  c_phone1      = ISNULL(RTRIM(ORDERS.c_phone1),'')   
+         ,  Trackingno    = ISNULL(RTRIM(ORDERS.trackingno),'')  
+         ,  ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')    
+         ,  ZCUDF02    = ISNULL(RTRIM(SHPC.UDF03),'')                      --CS01
+         ,  ZCUDF03    = ISNULL(RTRIM(ZC.UDF03),'')  
+         ,  ZCUDF04    = ISNULL(RTRIM(ZC.UDF04),'')  
+         ,  PVALUE     = ISNULL(ABS(CAST(@n_CAMT AS DECIMAL(10,2))),0) --CASE WHEN @c_sku='COD' AND @c_ODUDF02 = 'PN' THEN ISNULL(OIF.OrderInfo03,'') ELSE '' END  
+         ,  PickSlipNo = PACKHEADER.PickSlipNo 
+      --   ,  EditWho  = CASE WHEN  ISNULL(RDT.RDTUSER.FullName,'') = '' THEN PACKHEADER.EditWho ELSE ISNULL(RDT.RDTUSER.FullName,'') END 
+         ,  CartonNo = PACKDETAIL.CartonNo  
+      --   ,  SKU = PACKDETAIL.SKU  
+         ,  CODVALUE = CASE WHEN @c_sku LIKE '%COD%' THEN 'COD'  ELSE CASE WHEN @c_DeliveryMode LIKE '%PICK-UP%' THEN 'PICK-UP' ELSE 'REG' END  END 
+         ,  QTY = SUM(PACKDETAIL.QTY)
+       --  ,  UOM = PACK.PackUOM3
+         ,  Labelno = ISNULL(RTRIM(PACKDETAIL.Labelno),'')
+         ,  TotalOrderQty = (SELECT SUM(PD.Qty)   FROM PACKDETAIL PD WITH (NOLOCK) WHERE PD.PickSlipNo = PACKHEADER.PickSlipNo)
+         ,  TotalCarton   = (SELECT MAX(CartonNo) FROM PACKDETAIL PD WITH (NOLOCK) WHERE PD.PickSlipNo = PACKHEADER.PickSlipNo)                   
+      --   ,  CartonLBL = CASE WHEN CL.Code IS NOT NULL THEN RIGHT(ISNULL(RTRIM(ORDERS.ExternOrderkey),''),4) ELSE '' END  
+      --   ,  showskudesc = CL1.Short
+      --   ,  DESCR = SKU.DESCR
+        -- ,  SumNetWgt =  (SKU.NetWgt * PACKDETAIL.QTY)
+         ,  CBM = PACKHEADER.TOTCTNCUBE
+         ,  Carton_Wgt = PACKHEADER.TotCtnWeight
+         ,  C_State     = ISNULL(RTRIM(ORDERS.C_State),'')  
+         ,  VOLWGT = CAST((PACKHEADER.TOTCTNCUBE/3500) AS DECIMAL(10,7))
+   FROM  PACKDETAIL  WITH (NOLOCK) 
+   JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
+   JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
+   JOIN  SKU         WITH (NOLOCK)  ON (PACKDETAIL.Storerkey = SKU.Storerkey)
+                                   AND (PACKDETAIL.Sku = SKU.Sku)
+   JOIN  PACK        WITH (NOLOCK)  ON (SKU.Packkey = PACK.Packkey)
+   LEFT JOIN  ORDERINFO OIF WITH (NOLOCK)  ON (OIF.OrderKey = ORDERS.Orderkey)
+   LEFT JOIN  CODELKUP FA WITH (NOLOCK)  ON (FA.ListName = 'BRANCHCODE') 
+                                         AND(FA.short = ORDERS.Facility)
+                                         AND(FA.Storerkey = ORDERS.Storerkey)
+   LEFT JOIN  CODELKUP ZC WITH (NOLOCK)  ON (ZC.ListName = 'ZipCode') 
+                                         AND(ZC.Code = ORDERS.c_zip)
+                                         AND(ZC.Storerkey = ORDERS.Storerkey)
+   --CS01 START
+    LEFT JOIN  CODELKUP SHPC WITH (NOLOCK)  ON (SHPC.ListName = 'SHIPMETHOD') 
+                                         AND(SHPC.Code = ORDERS.shipperkey)
+                                         AND(SHPC.Storerkey = ORDERS.Storerkey)
+   --CS01 END
+   WHERE PACKHEADER.Orderkey = @c_orderkey  
+  -- AND   PACKDETAIL.DropID   = CASE WHEN @c_dropid = '' THEN PACKDETAIL.DropID ELSE @c_dropid END 
+  -- AND   PACKHEADER.Status = '9'
+   AND ISNULL(ORDERS.shipperkey,'') <> '' AND ISNULL(ORDERS.trackingno,'') <> ''
+   GROUP BY ORDERS.Orderkey
+         ,  ISNULL(RTRIM(ORDERS.ConsigneeKey),'')
+         ,  ISNULL(RTRIM(ORDERS.C_Company),'')
+         ,  ISNULL(RTRIM(FA.notes),'') 
+         ,  ISNULL(RTRIM(ORDERS.C_ADDRESS1),'')     
+         ,  ISNULL(RTRIM(ORDERS.C_ADDRESS2),'')
+         ,  ISNULL(RTRIM(ORDERS.C_Address3),'')
+         ,  ISNULL(RTRIM(ORDERS.C_Address4),'') 
+         ,  ISNULL(RTRIM(ORDERS.C_City),'')  
+         ,  ISNULL(RTRIM(ORDERS.C_Zip),'')        
+         ,  ISNULL(RTRIM(ORDERS.c_phone1),'') 
+         ,  ISNULL(RTRIM(ORDERS.trackingno),'')   
+         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
+        -- ,  ISNULL(RTRIM(ZC.UDF02),'')      --CS01
+         , ISNULL(RTRIM(SHPC.UDF03),'')       --CS01 
+         ,  ISNULL(RTRIM(ZC.UDF03),'')   
+         ,  ISNULL(RTRIM(ZC.UDF04),'')   
+      --   ,  CONVERT(NVARCHAR(60), ORDERS.Notes) 
+         ,  PACKHEADER.PickSlipNo 
+         ,  CASE WHEN @c_sku='COD' AND @c_ODUDF02 = 'PN' THEN ISNULL(OIF.OrderInfo03,'') ELSE '' END
+         ,  PACKDETAIL.CartonNo  
+       --  ,  PACKDETAIL.SKU  
+       --  ,  SUBSTRING(SKU.SkuGroup, 1, 2)   
+     --    ,  SKU.Packkey  
+        -- ,  PACKDETAIL.QTY
+    --     ,  PACK.PackUOM3
+         ,  ISNULL(RTRIM(PACKDETAIL.Labelno),'')
+         --,  CL.Code
+         --,  CL1.short
+         --,  SKU.DESCR
+         --,  SKU.NetWgt
+         ,  PACKHEADER.TOTCTNCUBE
+         ,PACKHEADER.TotCtnWeight
+         , ISNULL(RTRIM(ORDERS.C_State),'') 
+
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END
+END
+GO
+GRANT EXECUTE ON dbo.isp_CartonManifestLabel36_RDT TO NSQL
+GO
