@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -25,6 +25,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
+/* 2021-06-18  Wan01    1.1   LFWM-2811 - UATPhilippines  Populate of PO*/
+/*                            in ASN (RECTYPE)                          */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Populate_GetDocFieldsMap] 
       @c_SourceTable          NVARCHAR(30) 
@@ -44,25 +46,23 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF                                                                                                                                
    SET CONCAT_NULL_YIELDS_NULL OFF       
 
-   DECLARE @n_Cnt             INT  
-         , @c_SQL             NVARCHAR(4000)  
-         , @c_SQLParm         NVARCHAR(4000)  
+   DECLARE @n_Cnt             INT            = 0
+         , @c_SQL             NVARCHAR(4000) = '' 
+         , @c_SQLParm         NVARCHAR(4000) = '' 
   
-         , @c_ToTable         NVARCHAR(30)  
-         , @c_FromTable       NVARCHAR(30)  
-         , @c_FromTableCol    NVARCHAR(100)  
-         , @c_ToTableCol      NVARCHAR(100)  
-         , @c_FromCol         NVARCHAR(30)  
-         , @c_ToCol           NVARCHAR(30)  
-         , @c_KeyCol          NVARCHAR(30) 
-         , @n_FromColType     INT  
+         , @c_ToTable         NVARCHAR(30)   = ''
+         , @c_FromTable       NVARCHAR(30)   = ''
+         , @c_FromTableCol    NVARCHAR(100)  = ''
+         , @c_ToTableCol      NVARCHAR(100)  = ''
+         , @c_FromCol         NVARCHAR(30)   = ''
+         , @c_ToCol           NVARCHAR(30)   = ''
+         , @c_KeyCol          NVARCHAR(30)   = ''
+         , @n_FromColType     INT            = 0
   
-         , @c_TableAttribute  NVARCHAR(10)    
-         , @c_Rule            NVARCHAR(255)       
-         , @c_SPName          NVARCHAR(255)   
-         , @c_CustomSQL       NVARCHAR(4000)   
-  
-
+         , @c_TableAttribute  NVARCHAR(10)   = '' 
+         , @c_Rule            NVARCHAR(255)  = ''     
+         , @c_SPName          NVARCHAR(255)  = '' 
+         , @c_CustomSQL       NVARCHAR(4000) = ''  
   
    IF @c_SourceLineNumber = ''  
    BEGIN  
@@ -94,7 +94,8 @@ BEGIN
    BEGIN  
       GOTO EXIT_SP  
    END  
-         
+      
+   SET @c_UpdateCol =  @c_ToTableCol                        --(Wan01)       
    IF CHARINDEX('.', @c_ToTableCol) > 0   
    BEGIN  
       SET @c_ToTable  = SUBSTRING(@c_ToTableCol, 1, CHARINDEX('.', @c_ToTableCol) - 1)  
@@ -102,6 +103,7 @@ BEGIN
                                 , LEN(@c_ToTableCol) -  CHARINDEX('.', @c_ToTableCol))  
    END  
   
+   SET @c_FromCol =  @c_FromTableCol                        --(Wan01)
    IF CHARINDEX('.', @c_FromTableCol) > 0   
    BEGIN  
       SET @c_FromTable = SUBSTRING(@c_FromTableCol, 1, CHARINDEX('.', @c_FromTableCol) - 1)  
@@ -109,24 +111,37 @@ BEGIN
                                   , LEN(@c_FromTableCol) -  CHARINDEX('.', @c_FromTableCol))  
    END  
 
-   IF @c_FromTable <> @c_SourceTable  
+   IF @c_FromTable <> '' AND @c_FromTable <> @c_SourceTable --(Wan01) 
    BEGIN  
       GOTO EXIT_SP  
    END  
- 
-   SET @n_Cnt = 0  
-   SELECT @n_Cnt         = 1  
-   FROM Sys.Objects O WITH (NOLOCK)  
-   JOIN Sys.Columns C WITH (NOLOCK) ON (O.Object_Id = C.Object_Id)  
-   WHERE O.[Name] = @c_ToTable  
-   AND   O.[Type] = 'U' 
-   AND   C.[Name] = @c_UpdateCol   
+   
+   IF @c_FromCol = ''                                       --(Wan01)
+   BEGIN    
+      GOTO EXIT_SP    
+   END   
+   
+   IF @c_UpdateCol = ''                                     --(Wan01)
+   BEGIN    
+      GOTO EXIT_SP    
+   END   
+   
+   IF @c_ToTable <> ''                                      --(Wan01)
+   BEGIN
+      SET @n_Cnt = 0  
+      SELECT @n_Cnt         = 1  
+      FROM Sys.Objects O WITH (NOLOCK)  
+      JOIN Sys.Columns C WITH (NOLOCK) ON (O.Object_Id = C.Object_Id)  
+      WHERE O.[Name] = @c_ToTable  
+      AND   O.[Type] = 'U' 
+      AND   C.[Name] = @c_UpdateCol   
   
-   IF @n_Cnt = 0  
-   BEGIN  
-      GOTO EXIT_SP  
-   END  
-  
+      IF @n_Cnt = 0  
+      BEGIN  
+         GOTO EXIT_SP  
+      END  
+   END                                                      --(Wan01)
+   
    IF @c_Rule IN ('', 'MAPPING')  
    BEGIN  
   
