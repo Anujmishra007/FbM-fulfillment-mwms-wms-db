@@ -13,7 +13,7 @@ GO
 /* Copyright: LFL                                                       */    
 /* Written by:                                                          */    
 /*                                                                      */    
-/* Purpose: WMS-10420 CN PUMA Allocation                                 */
+/* Purpose: WMS-10420 CN PUMA Allocation                                */
 /*         	Full case by load from Bulk uom 2                           */
 /*          SkipPreallocation = '1'                                     */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 25-May-2021  NJOW01  1.0   WMS-17120 Change logic                    */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPMA1]        
    @c_DocumentNo NVARCHAR(10),  
@@ -163,8 +164,8 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
-      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
-      ' ORDER BY LOC.LocationRoom, LA.Lottable05, LOC.LogicalLocation, LOC.LOC ' 
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +     
+      ' ORDER BY CASE WHEN LA.Lottable07 = '''' THEN 0 ELSE 1 END, LA.Lottable07 DESC, LA.Lottable05, LOC.LocationRoom, LOC.LogicalLocation, LOC.LOC ' --NJOW01
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +

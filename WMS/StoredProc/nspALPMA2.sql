@@ -28,6 +28,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 25-May-2021  NJOW01  1.0   WMS-17120 Change logic                    */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPMA2]        
    @c_DocumentNo NVARCHAR(10),  
@@ -154,7 +155,7 @@ BEGIN
       AND LOTxLOCxID.SKU = @c_SKU       
       AND LOC.LocationFlag = ''NONE'' ' + 
       CASE WHEN @c_UOM = '2' THEN ' AND LOC.LocationType =''OTHER'' '
-           WHEN @c_UOM = '7' THEN ' AND LOC.LocationType = ''DYNPPICK'' ' 
+           WHEN @c_UOM = '7' THEN ' AND LOC.LocationType = ''DYNPPICK'' AND LOC.PickZone <> ''9876'' '  --NJOW01
            ELSE ' ' END +
       CASE WHEN @c_UOM = '7' AND ISNULL(@c_LocationGroup,'') <> '' THEN ' AND LOC.LocationGroup <> @c_LocationGroup '
            ELSE ' ' END +    
@@ -174,7 +175,7 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
-      ' ORDER BY LOC.LocationRoom, LA.Lottable05, LOC.LogicalLocation, LOC.LOC ' 
+      ' ORDER BY CASE WHEN LA.Lottable07 = '''' THEN 0 ELSE 1 END, LA.Lottable07 DESC, LA.Lottable05, LOC.LocationRoom, LOC.LogicalLocation, LOC.LOC ' --NJOW01
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +

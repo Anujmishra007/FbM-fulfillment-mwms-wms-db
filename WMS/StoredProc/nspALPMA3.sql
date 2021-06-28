@@ -27,6 +27,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 25-May-2021  NJOW01  1.0   WMS-17120 Change logic                    */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPMA3]        
    @c_DocumentNo NVARCHAR(10),  
@@ -213,10 +214,10 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
-      CASE WHEN ISNULL(@n_QtyAvailable,0) >= @n_QtyLeftToFulfill THEN
-           ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 ELSE 2 END, LOC.LocationRoom, LA.Lottable05, LOC.LogicalLocation, LOC.LOC ' 
+      CASE WHEN ISNULL(@n_QtyAvailable,0) >= @n_QtyLeftToFulfill THEN  
+           ' ORDER BY CASE WHEN LOC.LocationType = ''PICK'' THEN 1 ELSE 2 END, CASE WHEN LA.Lottable07 = '''' THEN 1 ELSE 0 END, LA.LOTTABLE07 DESC, LA.Lottable05, LOC.LocationRoom, LOC.LogicalLocation, LOC.LOC ' ---NJOW01
            ELSE 
-           ' ORDER BY CASE WHEN LOC.LocationType = ''OTHER'' THEN 1 ELSE 2 END, LOC.LocationRoom, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '
+           ' ORDER BY CASE WHEN LOC.LocationType = ''OTHER'' THEN 1 ELSE 2 END, CASE WHEN LA.Lottable07 = '''' THEN 1 ELSE 0 END, LA.LOTTABLE07 DESC, LA.Lottable05, LOC.LocationRoom, LOC.LogicalLocation, LOC.LOC ' --NJOW01
            END 
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +

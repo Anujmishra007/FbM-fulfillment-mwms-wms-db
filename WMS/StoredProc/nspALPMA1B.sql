@@ -27,6 +27,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 25-May-2021  NJOW01  1.0   WMS-17120 Change logic                    */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPMA1B]        
    @c_DocumentNo NVARCHAR(10),  
@@ -72,7 +73,8 @@ BEGIN
            @c_OtherValue         NVARCHAR(20),
            @n_QtyToTake          INT,
            @n_StorerMinShelfLife INT,
-           @n_LotQtyAvailable    INT
+           @n_LotQtyAvailable    INT,
+           @c_Busr8              NVARCHAR(30)
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
@@ -118,7 +120,8 @@ BEGIN
          GOTO EXIT_SP         
    END
       
-   SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
+   SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1),
+          @c_Busr8  = SKU.Busr8
    FROM Sku (nolock)
    JOIN Storer (nolock) ON Sku.Storerkey = Storer.Storerkey
    WHERE Sku.Sku = @c_sku
@@ -164,7 +167,11 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
-      ' ORDER BY LOC.LocationRoom, LA.Lottable05 DESC, LOC.LogicalLocation, LOC.LOC ' 
+      CASE WHEN ISNULL(@c_Busr8,'') <> 'Y' THEN  --NJOW01
+          ' ORDER BY CASE WHEN LA.Lottable07 = '''' THEN 0 ELSE 1 END, LA.LOTTABLE07 DESC, LA.Lottable05, LOC.LocationRoom, LOC.LogicalLocation, LOC.LOC ' 
+           ELSE 
+          ' ORDER BY CASE WHEN LA.Lottable07 = '''' THEN 1 ELSE 0 END, LA.LOTTABLE07, LA.Lottable05 DESC, LOC.LocationRoom, LOC.LogicalLocation, LOC.LOC ' 
+      END 
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
