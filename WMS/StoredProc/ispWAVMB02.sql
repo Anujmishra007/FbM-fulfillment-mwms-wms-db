@@ -40,6 +40,7 @@ GO
 /* 24-Dec-2019 CSCHONG    1.3  fix mbol no group by consigneekey (CS03) */
 /* 17-Mar-2020 NJOW01     1.4  WMS-12452 fix not to hardcode consignkeey*/
 /*                             and filter by storer                     */
+/* 28-Jun-2021 NJOW02     1.5  Fix datatime to datetime                 */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispWAVMB02]
@@ -193,7 +194,7 @@ BEGIN
                                  WHEN @n_cnt = 10 THEN '@c_Field10' END
          END
 
-         IF @c_ColumnType IN ('datatime')
+         IF @c_ColumnType IN ('datetime') --NJOW02
          BEGIN
             SELECT @c_SQLField = @c_SQLField + ', CONVERT(VarChar(10),' + RTRIM(@c_TableColumnName) + ',112)'
             SELECT @c_SQLWhere = @c_SQLWhere + ' AND CONVERT(VarChar(10),' + RTRIM(@c_TableColumnName) + ',112)=' +

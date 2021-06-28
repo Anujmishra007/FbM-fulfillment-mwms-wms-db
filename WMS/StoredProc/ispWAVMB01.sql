@@ -35,8 +35,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author     Ver  Purposes                                 */
-/* 28-Jan-2019 TLTING_ext 1.1  enlarge externorderkey field length     	*/
-/* 14-Mar-2019 NJOW01     1.0  Fix join bug                             */
+/* 28-Jan-2019 TLTING_ext 1.0  enlarge externorderkey field length     	*/
+/* 14-Mar-2019 NJOW01     1.1  Fix join bug                             */
+/* 28-Jun-2021 NJOW02     1.2  Fix datatime to datetime                 */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispWAVMB01]
@@ -186,7 +187,7 @@ BEGIN
                                  WHEN @n_cnt = 10 THEN '@c_Field10' END
          END
 
-         IF @c_ColumnType IN ('datatime')
+         IF @c_ColumnType IN ('datetime')--NJOW02
          BEGIN
             SELECT @c_SQLField = @c_SQLField + ', CONVERT(VarChar(10),' + RTRIM(@c_TableColumnName) + ',112)'
             SELECT @c_SQLWhere = @c_SQLWhere + ' AND CONVERT(VarChar(10),' + RTRIM(@c_TableColumnName) + ',112)=' +

@@ -7,43 +7,44 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store Procedure: ispLPMB01                                           */
-/* Creation Date:  05-Mar-2011                                          */
-/* Copyright: IDS                                                       */
-/* Written by:  NJOW                                                    */
-/*                                                                      */
-/* Purpose:  Load Plan Generate Mbol (SOS#238090)                       */
-/*                                                                      */
-/* Input Parameters:  @c_Loadkey  - (LoadKey)                           */
-/*                                                                      */
-/* Output Parameters:  None                                             */
-/*                                                                      */
-/* Return Status:  None                                                 */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By:  RMC Generate MBOL From Load Plan                         */
-/*                                                                      */
-/* PVCS Version: 1.2                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver  Purposes                                   */
-/* 17-Apr-2012 NJOW01   1.0  238090-Default mbol.userdefine02 & 04 to Y */
-/* 22-Jun-2012 NJOW02   1.1  243856-Add vendor validation               */
-/* 16-Aug-2012 Leong    1.2  SOS# 253552 - Check MBOLDetail when config */
-/*                                         key MBOLBYVENDOR turn on     */
-/* 25-Sep-2013 lau	  	1.3	 SOS# 290784 - correct check vendor id      */
-/*                                         Add check customer id        */
-/* 27-Jun-2018 NJOW03   1.4  Fix - include NCHAR                        */
-/* 28-Jan-2019 TLTING_ext 1.5  enlarge externorderkey field length     */
-/************************************************************************/
+/**************************************************************************/
+/* Store Procedure: ispLPMB01                                             */
+/* Creation Date:  05-Mar-2011                                            */
+/* Copyright: IDS                                                         */
+/* Written by:  NJOW                                                      */
+/*                                                                        */
+/* Purpose:  Load Plan Generate Mbol (SOS#238090)                         */
+/*                                                                        */
+/* Input Parameters:  @c_Loadkey  - (LoadKey)                             */
+/*                                                                        */
+/* Output Parameters:  None                                               */
+/*                                                                        */
+/* Return Status:  None                                                   */
+/*                                                                        */
+/* Usage:                                                                 */
+/*                                                                        */
+/* Local Variables:                                                       */
+/*                                                                        */
+/* Called By:  RMC Generate MBOL From Load Plan                           */
+/*                                                                        */
+/* PVCS Version: 1.2                                                      */
+/*                                                                        */
+/* Version: 5.4                                                           */
+/*                                                                        */
+/* Data Modifications:                                                    */
+/*                                                                        */
+/* Updates:                                                               */
+/* Date        Author     Ver  Purposes                                   */
+/* 17-Apr-2012 NJOW01     1.0  238090-Default mbol.userdefine02 & 04 to Y */
+/* 22-Jun-2012 NJOW02     1.1  243856-Add vendor validation               */
+/* 16-Aug-2012 Leong      1.2  SOS# 253552 - Check MBOLDetail when config */
+/*                                           key MBOLBYVENDOR turn on     */
+/* 25-Sep-2013 lau	  	  1.3	 SOS# 290784 - correct check vendor id      */
+/*                                           Add check customer id        */
+/* 27-Jun-2018 NJOW03     1.4  Fix - include NCHAR                        */
+/* 28-Jan-2019 TLTING_ext 1.5  enlarge externorderkey field length        */
+/* 28-Jun-2021 NJOW04     1.6  Fix datatime to datetime                   */
+/**************************************************************************/
 
 CREATE PROC [dbo].[ispLPMB01]
    @c_LoadKey NVARCHAR(10),
@@ -234,7 +235,7 @@ BEGIN
                                  WHEN @n_cnt = 10 THEN '@c_Field10' END
          END
 
-         IF @c_ColumnType IN ('datatime')
+         IF @c_ColumnType IN ('datetime') --NJOW04
          BEGIN
             SELECT @c_SQLField = @c_SQLField + ', CONVERT(VarChar(10),' + RTRIM(@c_TableColumnName) + ',112)'
             SELECT @c_SQLWhere = @c_SQLWhere + ' AND CONVERT(VarChar(10),' + RTRIM(@c_TableColumnName) + ',112)=' +
