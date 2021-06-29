@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 21-SEP-2017 Wan01    1.0   WMS-2934 - [CR] CN_DYSON_EXCEED_ECOM      */
 /*                            Packing_CR                                */
+/* 18-May-2021 WLChooi  1.1   WMS-17004 SerialNo Support Outbound (WL01)*/
 /************************************************************************/
 CREATE PROC isp_Ecom_PackValidateSerialNo
            @c_PickSlipNo         NVARCHAR(30)
@@ -49,6 +50,8 @@ BEGIN
 
          , @n_Cnt          INT
          , @c_Status       NVARCHAR(10)         --(Wan01)
+  
+   DECLARE @c_SerialNoCapture   NVARCHAR(10)   --WL01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -64,6 +67,19 @@ BEGIN
    AND   Storerkey= @c_Storerkey
    AND   Sku = @c_Sku
    --AND   Status = '1'                --(Wan01)
+
+   --WL01 S
+   SELECT @c_SerialNoCapture = SerialNoCapture
+   FROM SKU (NOLOCK)
+   WHERE SKU = @c_Sku
+   AND StorerKey = @c_Storerkey
+
+   IF @c_SerialNoCapture = '3'   --For Outbound, there is no record in serialno table until we scan serialno in ECOM Packing
+   BEGIN
+      SET @n_Cnt    = 1
+      SET @c_Status = '1'
+   END
+   --WL01 E
 
    --(Wan01) - START
    IF @n_Cnt = 1 AND @c_Status = 'H'   
