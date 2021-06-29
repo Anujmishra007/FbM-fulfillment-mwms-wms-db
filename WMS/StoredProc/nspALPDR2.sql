@@ -13,12 +13,11 @@ GO
 /* Copyright: LFL                                                       */    
 /* Written by:                                                          */    
 /*                                                                      */    
-/* Purpose: WMS-8341 CN Pandora Allocation (Normal B2B/ E2B Transfer)   */
+/* Purpose: WMS-8341 CN Pandora Allocation (Normal B2B Transfer)        */
 /*          Allocate from fastpick (uom7)                               */
 /*          OverAllocate bulk from pick (uom6)                          */
-/*          order type N,NIF,PDATRFE2B                                  */
+/*          order type N,NIF                                            */
 /*          N,NIF - Lottable02 = 'RETAIL'                               */
-/*          PDATRFE2B - Lottable02 = 'ECOM'                             */
 /*          SkipPreallocation = '1'                                     */
 /*                                                                      */
 /* Called By: Wave                                                      */    
@@ -33,6 +32,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */    
 /* 16-Apr-2019 NJOW01   1.0   Fix LOC.LocationFlag = 'NONE'             */
 /* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */  
+/* 23-Jun-2021 NJOW02   1.2   WMS-17123 Change logic                    */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPDR2]        
    @c_DocumentNo NVARCHAR(10),  
@@ -145,7 +145,7 @@ BEGIN
    END
    
    IF @c_DocType = 'E' OR 
-      (@c_DocType <> 'E' AND @c_OrderType NOT IN('0','NIF','PDATRFE2B'))  --skip if B2C or Not Normal B2B
+      (@c_DocType <> 'E' AND @c_OrderType NOT IN('0','NIF'))  --skip if B2C or Not Normal B2B
    BEGIN
        GOTO EXIT_SP
    END   
@@ -162,11 +162,6 @@ BEGIN
    IF @c_OrderType IN ('0','NIF')
    BEGIN
        SELECT @c_Condition = RTRIM(@c_Condition) +  ' AND LA.Lottable02 = ''RETAIL'' '
-       --SELECT @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''FASTPICK'' THEN 1 ELSE 2 END, CASE WHEN SKUXLOC.LocationType = ''PICK'' THEN 1 ELSE 2 END, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.Loc '
-   END
-   ELSE IF @c_OrderType IN ('PADTRE2B')
-   BEGIN
-       SELECT @c_Condition = RTRIM(@c_Condition) +  ' AND LA.Lottable02 = ''ECOM'' '
        --SELECT @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''FASTPICK'' THEN 1 ELSE 2 END, CASE WHEN SKUXLOC.LocationType = ''PICK'' THEN 1 ELSE 2 END, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.Loc '
    END
    

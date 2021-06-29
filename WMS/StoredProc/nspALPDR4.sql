@@ -1,6 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPDR3]')
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPDR4]')
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALPDR3]
+DROP PROCEDURE [dbo].[nspALPDR4]
 GO
 
 SET ANSI_NULLS OFF
@@ -8,17 +8,17 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/    
-/* Stored Procedure: nspALPDR3                                          */    
-/* Creation Date: 25-MAR-2019                                           */    
+/* Stored Procedure: nspALPDR4                                          */    
+/* Creation Date: 23-JUN-2021                                           */    
 /* Copyright: LFL                                                       */    
 /* Written by:                                                          */    
 /*                                                                      */    
-/* Purpose: WMS-8341 CN Pandora Allocation  (B2E Transfer)              */
-/*          Allocate from pick, bulk and pick (uom7)                    */
-/*          order type PDATRFB2E                                        */
-/*          PDATRFB2E - Lottable02 = 'RETAIL'                           */
+/* Purpose: WMS-17123 CN Pandora Allocation  (E2B Transfer)             */
+/*          Allocate from fast pick, pick and bulk (uom7)               */
+/*          order type PDATRFE2B                                        */
+/*          PDATRFB2E - Lottable02 = 'ECOM'                             */
 /*          SkipPreallocation = '1'                                     */
-/*                                                                      */
+/*          (REF: WMS-8341)                                             */
 /* Called By: Wave                                                      */    
 /*                                                                      */    
 /* PVCS Version: 1.0                                                    */    
@@ -29,11 +29,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author   Ver.  Purposes                                  */    
-/* 16-Apr-2019 NJOW01   1.0   Fix LOC.LocationFlag = 'NONE'             */
-/* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */  
-/* 23-Jun-2021 NJOW02   1.2   WMS-17123 Change logic                    */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspALPDR3]        
+CREATE  PROC [dbo].[nspALPDR4]        
    @c_DocumentNo NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -144,7 +141,7 @@ BEGIN
    END
    
    IF @c_DocType = 'E' OR 
-      (@c_DocType <> 'E' AND @c_OrderType NOT IN('PDATRFB2E'))  --skip if B2C or Not B2B B2E Transfer
+      (@c_DocType <> 'E' AND @c_OrderType NOT IN('PDATRFE2B'))  --skip if B2C or Not E2B Transfer
    BEGIN
        GOTO EXIT_SP
    END   
@@ -158,7 +155,7 @@ BEGIN
    IF @n_StorerMinShelfLife IS NULL
       SELECT @n_StorerMinShelfLife = 0
 
-    SELECT @c_Condition = RTRIM(@c_Condition) +  ' AND LA.Lottable02 = ''RETAIL'' '
+    SELECT @c_Condition = RTRIM(@c_Condition) +  ' AND LA.Lottable02 = ''ECOM'' '
      
    --IF @c_UOM = '7'  --Fastpick
    --BEGIN
@@ -168,8 +165,8 @@ BEGIN
 
    --IF @c_UOM = '6' --pick and bulk
    --BEGIN
-       SELECT @c_OrderBy = ' ORDER BY CASE WHEN SL.LocationType = ''PICK'' THEN 1 WHEN LOC.LocationType <> ''FASTPICK'' THEN 2 ELSE 3 END, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.Loc '
-     --  SELECT @c_Condition = RTRIM(@c_Condition) +  ' AND LOC.LocationType <> ''FASTPICK'' '
+       SELECT @c_OrderBy = ' ORDER BY CASE WHEN LOC.LocationType = ''FASTPICK'' THEN 1 WHEN SL.LocationType = ''PICK'' THEN 2 ELSE 3 END, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.Loc '
+       --SELECT @c_Condition = RTRIM(@c_Condition) +  ' AND LOC.LocationType <> ''FASTPICK'' '
    --END
          
    SET @c_SQL = N'   
@@ -321,5 +318,5 @@ BEGIN
    --(Wan01) - END
 END -- Procedure
 GO
-GRANT EXECUTE ON [dbo].[nspALPDR3] TO nSQL
+GRANT EXECUTE ON [dbo].[nspALPDR4] TO nSQL
 GO
