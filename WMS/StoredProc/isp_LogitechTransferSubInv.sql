@@ -28,6 +28,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 04-May-2021  NJOW01  1.0   WMS-16777 - Set BTRXTEM1 as transfer to      */
+/*                            location                                     */
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_LogitechTransferSubInv]    
 AS  
@@ -61,12 +63,24 @@ BEGIN
            @n_SuvInv_QtyToTake    INT,
            @n_QtyTransfer         INT,
            @c_Lottable08          NVARCHAR(30),
-           @c_Remark              NVARCHAR(200)
+           @c_Remark              NVARCHAR(200),
+           @c_ToLoc               NVARCHAR(10),
+           @n_SubInv_Qty          INT
        
    SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT
 
    --IF @@TRANCOUNT = 0
    --   BEGIN TRAN
+   
+   IF NOT EXISTS(SELECT 1 FROM LOC (NOLOCK) WHERE LOC = 'BTRXTEM1')
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': To Loc BTRXTEM1 is not exist in loc table. (isp_LogitechTransferSubInv)' + ' ( '
+                     + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   	  
+      GOTO QUIT_SP               
+   END
+   
    
    CREATE TABLE #TMP_LOGIORQ (Rowid INT IDENTITY(1,1), Code2 NVARCHAR(30))
    INSERT INTO #TMP_LOGIORQ (Code2) VALUES ('AP1BFG')
@@ -123,7 +137,9 @@ BEGIN
         WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) AND @n_BCH_QtyToReplen > 0 
         BEGIN        	 
         	 SET @n_SuvInv_QtyAvailable = 0
-     	     SELECT @n_SuvInv_QtyAvailable = SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
+        	 SET @n_SubInv_Qty = 0
+     	     SELECT @n_SuvInv_QtyAvailable = SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked),
+     	            @n_SubInv_Qty = SUM(LLI.Qty) --NJOW01
      	     FROM LOTXLOCXID LLI (NOLOCK)
      	     JOIN ID (NOLOCK) ON LLI.Id = ID.Id
      	     JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc
@@ -137,7 +153,8 @@ BEGIN
      	     AND LLI.Sku = @c_Sku     	   
      	     AND LA.Lottable08 = @c_SubInv
      	     
-     	     SET @n_SuvInv_QtyToTake = @n_SuvInv_QtyAvailable - @n_SubInv_RsvQty_CORQ
+     	     --SET @n_SuvInv_QtyToTake = @n_SuvInv_QtyAvailable - @n_SubInv_RsvQty_CORQ
+     	     SET @n_SuvInv_QtyToTake = @n_SubInv_Qty - @n_SubInv_RsvQty_CORQ  --NJOW01
         	
         	 DECLARE CUR_SUBINV_LLI CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
      	        SELECT LLI.Lot, LLI.Loc, LLI.Id, (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) AS QtyAvailable,
@@ -162,7 +179,7 @@ BEGIN
            FETCH NEXT FROM CUR_SUBINV_LLI INTO @c_Lot, @c_Loc, @c_Id, @n_LLIQtyAvailable, @c_Facility, @c_Lottable08
          
            WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) AND @n_BCH_QtyToReplen > 0 AND @n_SuvInv_QtyToTake > 0
-           BEGIN       	     	
+           BEGIN       	     	           	  
            	  IF @n_LLIQtyAvailable > @n_SuvInv_QtyToTake 
            	     SET @n_LLIQtyAvailable = @n_SuvInv_QtyToTake
            	  
@@ -172,6 +189,8 @@ BEGIN
            	     SET @n_QtyTransfer = @n_LLIQtyAvailable
            	     
            	  SET @n_QtyTransfer = FLOOR(@n_QtyTransfer / @n_Casecnt) * @n_Casecnt
+           	  
+           	  SET @c_ToLoc = 'BTRXTEM1'
            	  
            	  IF @n_QtyTransfer > 0
            	  BEGIN
@@ -185,6 +204,7 @@ BEGIN
                     @c_FromLoc = @c_Loc,
                     @c_FromID = @c_ID,
                     @n_FromQty = @n_QtyTransfer,      	           
+                    @c_ToLoc = @c_ToLoc,
                     @c_ToLottable08 = 'AP1BCH',
                     @c_ToLottable09 = @c_Lottable08,
       	            @c_CopyLottable = 'Y',
@@ -231,7 +251,7 @@ BEGIN
       IF @b_Success <> 1
       BEGIN
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
+         SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63210
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_LogitechTransferSubInv)' + ' ( '
                                 + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
       END   	
