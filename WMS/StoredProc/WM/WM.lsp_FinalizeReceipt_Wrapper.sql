@@ -32,6 +32,8 @@ GO
 /* 2021-04-26  Wan04    1.3   LFWM-2706 - UAT - TW   Storerconfig       */
 /*                            FinalizeASNPromptSaveID' does not work in */
 /*                            ASN and Trade                             */
+/* 2021-06-25  BeeTin         JSM-5512 - Generate TOID without prompt    */  
+/*                            dialog to confirm.                         */ 
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
       @c_ReceiptKey              NVARCHAR(10)
@@ -760,9 +762,15 @@ BEGIN
          SELECT @c_RF_Enable  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'RF_Enable')
   
          SET @n_SkipGenID = 1
-         IF @c_FinalizeASNPromptSaveID = '1' AND ((@c_MUID = '1' AND @c_GenID = '1') OR @c_RF_Enable <> '1')
+         
+         --IF @c_FinalizeASNPromptSaveID = '1' AND ((@c_MUID = '1' AND @c_GenID = '1') OR @c_RF_Enable <> '1')   -- JSM-5512    
+         IF (@c_MUID = '1' AND @c_GenID = '1') OR @c_RF_Enable <> '1'                                            -- JSM-5512    
+         BEGIN    
+            SET @n_SkipGenID = 0    
+                
+            IF @c_FinalizeASNPromptSaveID = '1'                                           --JSM-5512    
          BEGIN
-            SET @n_SkipGenID = 0
+           
             SET @n_WarningNo = 2
  
             SET @c_ErrMsg = 'Skip Generate Pallet ID for : ' + @c_Receiptkey + '?'
@@ -781,6 +789,7 @@ BEGIN
                ,  @c_errmsg      = @c_errmsg    OUTPUT
             
             GOTO EXIT_SP
+             END                                                  --JSM-5512   
          END
       END
       --(Wan04) - END
