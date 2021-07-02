@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -25,8 +25,11 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
-/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-05-05  Wan01    1.2   LFWM-2723 - RGMigrate Allocation schedule */
+/*                            job to QCommander                         */
+/* 2021-05-21  Wan02    1.3   LFWM-2803 - UATCN Allocate error          */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -84,6 +87,18 @@ BEGIN
 
          ,  @c_TableName                  NVARCHAR(50)   = 'WAVE'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_WaveAllocation'
+         
+         ,  @n_ThreadPerAcct              INT            = 0   --(Wan01)    
+         ,  @n_ThreadPerStream            INT            = 0   --(Wan01)
+         ,  @n_MilisecondDelay            INT            = 0   --(Wan01)
+         ,  @c_IP                         NVARCHAR(20)   = ''  --(Wan01)
+         ,  @c_PORT                       NVARCHAR(5)    = ''  --(Wan01)
+         ,  @c_IniFilePath                NVARCHAR(200)  = ''  --(Wan01)
+         ,  @c_APP_DB_Name                NVARCHAR(20)   = ''  --(Wan01)
+         ,  @c_DataStream                 NVARCHAR(10)   = ''  --(Wan01) 
+         ,  @c_CmdType                    NVARCHAR(10)   = ''  --(Wan01)
+         ,  @c_TaskType                   NVARCHAR(1)    = ''  --(Wan01)
+         ,  @c_TransmitLogKey             NVARCHAR(10)   = ''  --(Wan01)
 
          ,  @CUR_WAVELOAD                 CURSOR
          ,  @CUR_ORD                      CURSOR
@@ -458,18 +473,19 @@ BEGIN
                      WHERE CL.ListName = @c_AllocateValidationRules
                    )
          BEGIN
-            SET @c_AllocateValidationRules = 'isp_Allocate_ExtendedValidation'
+
             SET @c_SQLVLD = N'EXEC isp_Allocate_ExtendedValidation @c_Orderkey = @c_ValidateOrderKey'
                             + ', @c_Loadkey = @c_ValidateLoadkey'
                             + ', @c_Wavekey = @c_ValidateWaveKey'
                             + ', @c_Mode = ''PRE'''  
                             + ', @c_AllocateValidationRules=@c_AllocateValidationRules'
                             + ', @b_Success = @b_Success OUTPUT'
-                            + ', @n_Err = @n_Err OUTPUT'
+                            --+ ', @n_Err = @n_Err OUTPUT'                             --(Wan02)
                             + ', @c_ErrMsg = @c_ErrMsg OUTPUT ' 
          END
          ELSE
          BEGIN
+            SET @c_AllocateValidationRules = 'isp_Allocate_ExtendedValidation'         --(Wan02)
             IF EXISTS (SELECT 1 FROM sys.objects WHERE name = RTRIM(@c_AllocateValidationRules) AND type = 'P')            
             BEGIN  
                SET @c_SQLVLD = N'EXEC ' + @c_AllocateValidationRules 
@@ -538,23 +554,71 @@ BEGIN
       ------------------------------------------
       -- PreAllocate Validation For Wave - END
       ------------------------------------------          
-
+      --(Wan01) - START
+      SELECT @c_APP_DB_Name     = ISNULL(qcfg.APP_DB_Name,'')  
+          ,  @c_DataStream      = qcfg.DataStream     --BACKENDALC
+          ,  @n_ThreadPerAcct   = qcfg.ThreadPerAcct  
+          ,  @n_ThreadPerStream = qcfg.ThreadPerStream  
+          ,  @n_MilisecondDelay = qcfg.MilisecondDelay  
+          ,  @c_IP              = qcfg.[IP]           --Service Box IP
+          ,  @c_PORT            = qcfg.[PORT]         --xx801: Backend Allocation, xx:please refer to country's used xx number.
+          ,  @c_IniFilePath     = qcfg.IniFilePath    --'C:\COMObject\GenericTCPSocketClient\config.ini'
+          ,  @c_CmdType         = qcfg.CmdType        --'SQL' 
+          ,  @c_TaskType        = qcfg.TaskType       --'O'
+      FROM   QCmd_TransmitlogConfig qcfg WITH (NOLOCK)  
+      WHERE qcfg.TableName      = 'MANUALALLOC'
+      AND   qcfg.[App_Name]     = 'WMS'  
+      AND   qcfg.StorerKey      = 'ALL'  
+      
+      IF @c_PORT = ''
+      BEGIN
+         SET @n_Err = 555769
+        SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Q-Commander TCP Socket not setup! (lsp_WaveAllocation)'
+                        + '|' + @c_WaveKey
+        EXEC [WM].[lsp_WriteError_List] 
+               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            ,  @c_TableName   = @c_TableName
+            ,  @c_SourceType  = @c_SourceType
+            ,  @c_Refkey1     = @c_WaveKey
+            ,  @c_Refkey2     = @c_Loadkey
+            ,  @c_Refkey3     = ''
+            ,  @c_WriteType   = 'MESSAGE' 
+            ,  @n_err2        = @n_err 
+            ,  @c_errmsg2     = @c_errmsg 
+            ,  @b_Success     = @b_Success   OUTPUT 
+            ,  @n_err         = @n_err       OUTPUT 
+            ,  @c_errmsg      = @c_errmsg    OUTPUT 
+                                           
+         GOTO EXIT_SP
+      END
+      --(Wan01) - END
+      
       WAVE_ALLOCATION:
          IF @c_AllocateType = 'WAVE' 
          BEGIN
             IF @c_allocatemode = '#WC'
             BEGIN
                SET @n_Cnt = 0 
+               
+               --(Wan01) - START
+               SET @c_DataStream = 'WaveALC' 
+               --SELECT @n_Cnt = 1 
+               --FROM IDSAllocationPool WITH (NOLOCK)
+               --WHERE Sourcekey = @c_WaveKey
+               --AND SourceType = 'WP'
+               --AND Status IN ('0', '1')
+            
                SELECT @n_Cnt = 1 
-               FROM IDSAllocationPool WITH (NOLOCK)
-               WHERE Sourcekey = @c_WaveKey
-               AND SourceType = 'WP'
-               AND Status IN ('0', '1')
-
+               FROM dbo.TCPSocket_QueueTask AS tsqt (NOLOCK)
+               WHERE tsqt.TransmitLogKey = @c_WaveKey
+               AND tsqt.DataStream = @c_DataStream
+               AND tsqt.[Port] = @c_Port
+               AND tsqt.[Status] IN ('0', '1')
+            
                IF @n_Cnt = 1 
                BEGIN
                   SET @c_ErrMsg = 'WP - Wave #: ' + @c_WaveKey
-                                + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                                + ' had submitted to QCommander & Pending allocation/In Progress. (lsp_WaveAllocation)'   
 
                   EXEC [WM].[lsp_WriteError_List] 
                         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -574,32 +638,74 @@ BEGIN
 
                SET @c_ExecCmd = '[dbo].[ispWaveProcessing] @c_WaveKey=''' + @c_WaveKey + ''',@b_Success=1,@n_Err=0,@c_ErrMsg='''''
                BEGIN TRY
-                  INSERT INTO IDSAllocationPool
-                     (
-                        Sourcekey
-                     ,  SourceType
-                     ,  Wavekey
-                     ,  AllocateCmd
-                     ,  WinComputerName
-                     )
-                  VALUES
-                     (
-                        @c_WaveKey
-                     ,  'WP'
-                     ,  @c_WaveKey
-                     ,  @c_ExecCmd
-                     , ''
-                     )
+                  --INSERT INTO IDSAllocationPool
+                  --   (
+                  --      Sourcekey
+                  --   ,  SourceType
+                  --   ,  Wavekey
+                  --   ,  AllocateCmd
+                  --   ,  WinComputerName
+                  --   )
+                  --VALUES
+                  --   (
+                  --      @c_WaveKey
+                  --   ,  'WP'
+                  --   ,  @c_WaveKey
+                  --   ,  @c_ExecCmd
+                  --   , ''
+                  --   )
+                  
+                  EXEC isp_QCmd_SubmitTaskToQCommander     
+                           @cTaskType         = @c_TaskType -- D=By Datastream, T=Transmitlog, O=Others           
+                        ,  @cStorerKey        = @c_StorerKey                                                
+                        ,  @cDataStream       = @c_DataStream                                                     
+                        ,  @cCmdType          = @c_CmdType                                                    
+                        ,  @cCommand          = @c_ExecCmd                                                  
+                        ,  @cTransmitlogKey   = @c_Wavekey                                         
+                        ,  @nThreadPerAcct    = @n_ThreadPerAcct                                                    
+                        ,  @nThreadPerStream  = @n_ThreadPerStream                                                          
+                        ,  @nMilisecondDelay  = @n_MilisecondDelay                                                          
+                        ,  @nSeq              = 1                           
+                        ,  @cIP               = @c_IP                                             
+                        ,  @cPORT             = @c_PORT                                                    
+                        ,  @cIniFilePath      = @c_IniFilePath           
+                        ,  @cAPPDBName        = @c_APP_DB_Name                                                   
+                        ,  @bSuccess          = @b_Success   OUTPUT      
+                        ,  @nErr              = @n_Err       OUTPUT      
+                        ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
                END TRY
                BEGIN CATCH
                   SET @n_Err = 555760
                   SET @c_ErrMsg = ERROR_MESSAGE()
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Wave #: ' + @c_WaveKey
-                                 + ' to IDSAllocationPool Fail - Wave Consolidate. (lsp_WaveAllocation)'   
+                                 + ' to QCommander Fail - Wave Consolidate. (lsp_WaveAllocation)'   
                                  + '(' + @c_ErrMsg + ')' 
                                  + '|' + @c_WaveKey
                                    
-                  EXEC [WM].[lsp_WriteError_List] 
+                  --EXEC [WM].[lsp_WriteError_List] 
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_WaveKey
+                  --   ,  @c_Refkey2     = @c_Loadkey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR' 
+                  --   ,  @n_err2        = @n_err 
+                  --   ,  @c_errmsg2     = @c_errmsg 
+                  --   ,  @b_Success     = @b_Success   OUTPUT 
+                  --   ,  @n_err         = @n_err       OUTPUT 
+                  --   ,  @c_errmsg      = @c_errmsg    OUTPUT    
+                  --GOTO EXIT_SP                                     
+               END CATCH
+                                                
+               IF @b_Success = 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
+            
+               IF @n_Continue = 3
+               BEGIN
+                     EXEC [WM].[lsp_WriteError_List] 
                         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                      ,  @c_TableName   = @c_TableName
                      ,  @c_SourceType  = @c_SourceType
@@ -611,9 +717,9 @@ BEGIN
                      ,  @c_errmsg2     = @c_errmsg 
                      ,  @b_Success     = @b_Success   OUTPUT 
                      ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT    
-                  GOTO EXIT_SP                                     
-               END CATCH
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT                                
+               END
+               --(Wan01) - END
                GOTO EXIT_SP
             END
 
@@ -730,23 +836,36 @@ BEGIN
                   END                      
 
                   SET @n_Cnt = 0
+               
+                  --(Wan01) - START
                   IF @c_Loadkey = ''
                   BEGIN
-                     SELECT @n_Cnt = 1 
-                     FROM IDSAllocationPool WITH (NOLOCK)
-                     WHERE Sourcekey = @c_Orderkey
-                     AND SourceType = 'O'
-                     AND Status IN ('0', '1')
+                     SET @c_DataStream = 'ORDAlc'
+                     SET @c_TransmitLogKey = @c_Orderkey 
+                     --SELECT @n_Cnt = 1 
+                     --FROM IDSAllocationPool WITH (NOLOCK)
+                     --WHERE Sourcekey = @c_Orderkey
+                     --AND SourceType = 'O'
+                     --AND Status IN ('0', '1')
                   END
                   ELSE
                   BEGIN
-                     SELECT @n_Cnt = 1 
-                     FROM IDSAllocationPool WITH (NOLOCK)
-                     WHERE Sourcekey = @c_Loadkey
-                     AND SourceType = 'LP'
-                     AND Status IN ('0', '1')
+                     SET @c_DataStream = 'LOADAlc'
+                     SET @c_TransmitLogKey = @c_Loadkey  
+                     --SELECT @n_Cnt = 1 
+                     --FROM IDSAllocationPool WITH (NOLOCK)
+                     --WHERE Sourcekey = @c_Loadkey
+                     --AND SourceType = 'LP'
+                     --AND Status IN ('0', '1')
                   END
-
+                  
+                  SELECT @n_Cnt = 1 
+                  FROM dbo.TCPSocket_QueueTask AS tsqt (NOLOCK)
+                  WHERE tsqt.TransmitLogKey = @c_TransmitLogKey
+                  AND tsqt.DataStream = @c_DataStream
+                  AND tsqt.[Port] = @c_Port
+                  AND tsqt.[Status] IN ('0', '1')
+          
                   IF @n_Cnt = 0
                   BEGIN
                      SET @c_ExecCmd = '[dbo].[nsp_OrderProcessing_Wrapper] @c_orderkey=''' + @c_orderkey + ''''
@@ -756,22 +875,41 @@ BEGIN
                                     + ',@c_tblprefix=''XX'''
                                     + ',@c_extendparms=''WP'''
                      BEGIN TRY
-                        INSERT INTO IDSAllocationPool
-                           (
-                              Sourcekey
-                           ,  SourceType
-                           ,  Wavekey
-                           ,  AllocateCmd
-                           ,  WinComputerName
-                           )
-                        VALUES
-                           (
-                              CASE WHEN @c_Loadkey = '' THEN @c_Orderkey ELSE @c_Loadkey END
-                           ,  CASE WHEN @c_Loadkey = '' THEN 'O' ELSE 'LP' END
-                           ,  @c_WaveKey
-                           ,  @c_ExecCmd
-                           ,  ''
-                           )
+                        --INSERT INTO IDSAllocationPool
+                        --   (
+                        --      Sourcekey
+                        --   ,  SourceType
+                        --   ,  Wavekey
+                        --   ,  AllocateCmd
+                        --   ,  WinComputerName
+                        --   )
+                        --VALUES
+                        --   (
+                        --      CASE WHEN @c_Loadkey = '' THEN @c_Orderkey ELSE @c_Loadkey END
+                        --   ,  CASE WHEN @c_Loadkey = '' THEN 'O' ELSE 'LP' END
+                        --   ,  @c_WaveKey
+                        --   ,  @c_ExecCmd
+                        --   ,  ''
+                        --   )
+                           
+                        EXEC isp_QCmd_SubmitTaskToQCommander     
+                           @cTaskType         = @c_TaskType -- D=By Datastream, T=Transmitlog, O=Others           
+                        ,  @cStorerKey        = @c_StorerKey                                                
+                        ,  @cDataStream       = @c_DataStream                                                     
+                        ,  @cCmdType          = @c_CmdType                                                    
+                        ,  @cCommand          = @c_ExecCmd                                                  
+                        ,  @cTransmitlogKey   = @c_TransmitLogKey                                          
+                        ,  @nThreadPerAcct    = @n_ThreadPerAcct                                                    
+                        ,  @nThreadPerStream  = @n_ThreadPerStream                                                          
+                        ,  @nMilisecondDelay  = @n_MilisecondDelay                                                          
+                        ,  @nSeq              = 1                           
+                        ,  @cIP               = @c_IP                                             
+                        ,  @cPORT             = @c_PORT                                                    
+                        ,  @cIniFilePath      = @c_IniFilePath           
+                        ,  @cAPPDBName        = @c_APP_DB_Name                                                   
+                        ,  @bSuccess          = @b_Success   OUTPUT      
+                        ,  @nErr              = @n_Err       OUTPUT      
+                        ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
                      END TRY
 
                      BEGIN CATCH
@@ -780,11 +918,33 @@ BEGIN
                         SET @c_ErrMsg = ERROR_MESSAGE()
                         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit '
                                        + CASE WHEN @c_Orderkey = '' THEN 'Load #: ' +  @c_Loadkey ELSE 'Order #: '  + @c_Orderkey END
-                                       + ' to IDSAllocationPool Fail - Load Consolidate. (lsp_WaveAllocation)'   
+                                       + ' to QCommander Fail - Load Consolidate. (lsp_WaveAllocation)'   
                                        + '(' + @c_ErrMsg + ')'  
                                       + '|' + CASE WHEN @c_Orderkey = '' THEN 'Load #: ' +  @c_Loadkey ELSE 'Order #: ' + @c_Orderkey END
 
-                        EXEC [WM].[lsp_WriteError_List] 
+                        --EXEC [WM].[lsp_WriteError_List] 
+                        --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        --   ,  @c_TableName   = @c_TableName
+                        --   ,  @c_SourceType  = @c_SourceType
+                        --   ,  @c_Refkey1     = @c_WaveKey
+                        --   ,  @c_Refkey2     = @c_Loadkey
+                        --   ,  @c_Refkey3     = ''
+                        --   ,  @c_WriteType   = 'ERROR' 
+                        --   ,  @n_err2        = @n_err 
+                        --   ,  @c_errmsg2     = @c_errmsg 
+                        --   ,  @b_Success     = @b_Success   OUTPUT 
+                        --   ,  @n_err         = @n_err       OUTPUT 
+                        --   ,  @c_errmsg      = @c_errmsg    OUTPUT                                       
+                     END CATCH
+                     
+                     IF @b_Success = 0
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
+            
+                     IF @n_Continue = 3
+                     BEGIN
+                           EXEC [WM].[lsp_WriteError_List] 
                               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                            ,  @c_TableName   = @c_TableName
                            ,  @c_SourceType  = @c_SourceType
@@ -796,13 +956,14 @@ BEGIN
                            ,  @c_errmsg2     = @c_errmsg 
                            ,  @b_Success     = @b_Success   OUTPUT 
                            ,  @n_err         = @n_err       OUTPUT 
-                           ,  @c_errmsg      = @c_errmsg    OUTPUT                                       
-                     END CATCH
+                           ,  @c_errmsg      = @c_errmsg    OUTPUT                                
+                     END
+                     --(Wan01) - END
                   END
                   ELSE
                   BEGIN
                      SET @c_ErrMsg = CASE WHEN @c_Orderkey = '' THEN 'LP - Load #: ' +  @c_Loadkey ELSE 'O - Order #: '  + @c_Orderkey END
-                                    + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                                    + ' had submitted to QCommander & Pending allocation/In Progress. (lsp_WaveAllocation)'   
                                     + '(' + @c_ErrMsg + ')' 
     
                      EXEC [WM].[lsp_WriteError_List] 
@@ -898,17 +1059,26 @@ BEGIN
                   END
                END 
                    
-               SET @n_Cnt = 0 
+               SET @n_Cnt = 0                   
+               --(Wan01) - START
+               SET @c_DataStream = 'LOADAlc' 
+               --SELECT @n_Cnt = 1 
+               --FROM IDSAllocationPool WITH (NOLOCK)
+               --WHERE Sourcekey = @c_Loadkey
+               --AND SourceType = 'LP'
+               --AND Status IN ('0', '1')
+            
                SELECT @n_Cnt = 1 
-               FROM IDSAllocationPool WITH (NOLOCK)
-               WHERE Sourcekey = @c_Loadkey
-               AND SourceType = 'LP'
-               AND Status IN ('0', '1')
-
+               FROM dbo.TCPSocket_QueueTask AS tsqt (NOLOCK)
+               WHERE tsqt.TransmitLogKey = @c_Loadkey
+               AND tsqt.DataStream = @c_DataStream
+               AND tsqt.[Port] = @c_Port
+               AND tsqt.[Status] IN ('0', '1')
+ 
                IF @n_Cnt = 1 
                BEGIN
                   SET @c_ErrMsg = 'LP - Loadkey #: ' + @c_Loadkey
-                                 + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                                 + ' had submitted to QCommander & Pending allocation/In Progress. (lsp_WaveAllocation)'   
                                  + '(' + @c_ErrMsg + ')' 
 
                   EXEC [WM].[lsp_WriteError_List] 
@@ -934,22 +1104,41 @@ BEGIN
                               + ',@c_tblprefix=''XX'''
                               + ',@c_extendparms='''''
                BEGIN TRY
-                  INSERT INTO IDSAllocationPool
-                     (
-                        Sourcekey
-                     ,  SourceType
-                     ,  Wavekey
-                     ,  AllocateCmd
-                     ,  WinComputerName
-                     )
-                  VALUES
-                     (
-                        @c_Loadkey
-                     ,  'LP'
-                     ,  @c_WaveKey
-                     ,  @c_ExecCmd
-                     ,  ''
-                     )
+                  --INSERT INTO IDSAllocationPool
+                  --   (
+                  --      Sourcekey
+                  --   ,  SourceType
+                  --   ,  Wavekey
+                  --   ,  AllocateCmd
+                  --   ,  WinComputerName
+                  --   )
+                  --VALUES
+                  --   (
+                  --      @c_Loadkey
+                  --   ,  'LP'
+                  --   ,  @c_WaveKey
+                  --   ,  @c_ExecCmd
+                  --   ,  ''
+                  --   )
+                  
+                  EXEC isp_QCmd_SubmitTaskToQCommander     
+                           @cTaskType         = @c_TaskType -- D=By Datastream, T=Transmitlog, O=Others           
+                        ,  @cStorerKey        = @c_StorerKey                                                
+                        ,  @cDataStream       = @c_DataStream                                                     
+                        ,  @cCmdType          = @c_CmdType                                                    
+                        ,  @cCommand          = @c_ExecCmd                                                  
+                        ,  @cTransmitlogKey   = @c_Loadkey                                            
+                        ,  @nThreadPerAcct    = @n_ThreadPerAcct                                                    
+                        ,  @nThreadPerStream  = @n_ThreadPerStream                                                          
+                        ,  @nMilisecondDelay  = @n_MilisecondDelay                                                          
+                        ,  @nSeq              = 1                           
+                        ,  @cIP               = @c_IP                                             
+                        ,  @cPORT             = @c_PORT                                                    
+                        ,  @cIniFilePath      = @c_IniFilePath           
+                        ,  @cAPPDBName        = @c_APP_DB_Name                                                   
+                        ,  @bSuccess          = @b_Success   OUTPUT      
+                        ,  @nErr              = @n_Err       OUTPUT      
+                        ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
                END TRY
 
                BEGIN CATCH
@@ -957,11 +1146,34 @@ BEGIN
                   SET @n_Err = 555762
                   SET @c_ErrMsg = ERROR_MESSAGE()
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Load #: ' + @c_Loadkey
-                                 + ' to IDSAllocationPool Fail - Load Consolidate. (lsp_WaveAllocation)'
+                                 + ' to QCommander Fail - Load Consolidate. (lsp_WaveAllocation)'
                                  + '(' + @c_ErrMsg + ')'  
                                  + '|' + @c_Loadkey                                
                                 
-                  EXEC [WM].[lsp_WriteError_List] 
+                  --EXEC [WM].[lsp_WriteError_List] 
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_WaveKey
+                  --   ,  @c_Refkey2     = @c_Loadkey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR' 
+                  --   ,  @n_err2        = @n_err 
+                  --   ,  @c_errmsg2     = @c_errmsg 
+                  --   ,  @b_Success     = @b_Success   OUTPUT 
+                  --   ,  @n_err         = @n_err       OUTPUT 
+                  --   ,  @c_errmsg      = @c_errmsg    OUTPUT                                             
+                  --GOTO EXIT_SP  
+               END CATCH
+               
+               IF @b_Success = 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
+            
+               IF @n_Continue = 3
+               BEGIN
+                     EXEC [WM].[lsp_WriteError_List] 
                         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                      ,  @c_TableName   = @c_TableName
                      ,  @c_SourceType  = @c_SourceType
@@ -973,9 +1185,9 @@ BEGIN
                      ,  @c_errmsg2     = @c_errmsg 
                      ,  @b_Success     = @b_Success   OUTPUT 
                      ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT                                             
-                  GOTO EXIT_SP  
-               END CATCH
+                     ,  @c_errmsg      = @c_errmsg    OUTPUT                                
+               END
+               --(Wan01) - END
 
                GOTO EXIT_SP 
             END
@@ -1023,8 +1235,8 @@ BEGIN
                BEGIN
                   IF @c_AllocateValidationRules <> ''
                   BEGIN
-                     SET @c_ValidateOrderKey = ''
-                     SET @c_ValidateLoadkey  = @c_Orderkey  
+                     SET @c_ValidateOrderKey = @c_Orderkey        --2021-06-15 Fixed
+                     SET @c_ValidateLoadkey  = ''                 --2021-06-15 Fixed 
                      SET @c_ValidateWaveKey  = ''
 
                      SET @c_SQLVLDParms= N'@c_ValidateOrderKey    NVARCHAR(10)'
@@ -1069,11 +1281,21 @@ BEGIN
                   END 
 
                   SET @n_Cnt = 0 
+
+                  --(Wan01) - START
+                  SET @c_DataStream = 'ORDAlcDC' 
+                  --SELECT @n_Cnt = 1 
+                  --FROM IDSAllocationPool WITH (NOLOCK)
+                  --WHERE Sourcekey = @c_Orderkey
+                  --AND SourceType = 'DC'
+                  --AND Status IN ('0', '1')
+            
                   SELECT @n_Cnt = 1 
-                  FROM IDSAllocationPool WITH (NOLOCK)
-                  WHERE Sourcekey = @c_Orderkey
-                  AND SourceType = 'DC'
-                  AND Status IN ('0', '1')
+                  FROM dbo.TCPSocket_QueueTask AS tsqt (NOLOCK)
+                  WHERE tsqt.TransmitLogKey = @c_Orderkey
+                  AND tsqt.DataStream = @c_DataStream
+                  AND tsqt.[Port] = @c_Port
+                  AND tsqt.[Status] IN ('0', '1')
 
                   IF @n_Cnt = 0 
                   BEGIN
@@ -1084,51 +1306,91 @@ BEGIN
                                     + ',@c_tblprefix=''XX'''
                                     + ',@c_extendparms='''+ @c_Source +''''
                      BEGIN TRY
-                        INSERT INTO IDSAllocationPool
-                           (
-                              Sourcekey
-                           ,  SourceType
-                           ,  Wavekey
-                           ,  AllocateCmd
-                           ,  WinComputerName
-                           )
-                        VALUES
-                           (
-                              @c_Orderkey
-                           ,  'DC'
-                           ,  @c_WaveKey
-                           ,  @c_ExecCmd
-                           ,  ''
-                           )
+                        --INSERT INTO IDSAllocationPool
+                        --   (
+                        --      Sourcekey
+                        --   ,  SourceType
+                        --   ,  Wavekey
+                        --   ,  AllocateCmd
+                        --   ,  WinComputerName
+                        --   )
+                        --VALUES
+                        --   (
+                        --      @c_Orderkey
+                        --   ,  'DC'
+                        --   ,  @c_WaveKey
+                        --   ,  @c_ExecCmd
+                        --   ,  ''
+                        --   )
+                        EXEC isp_QCmd_SubmitTaskToQCommander     
+                           @cTaskType         = @c_TaskType -- D=By Datastream, T=Transmitlog, O=Others           
+                        ,  @cStorerKey        = @c_StorerKey                                                
+                        ,  @cDataStream       = @c_DataStream                                                     
+                        ,  @cCmdType          = @c_CmdType                                                    
+                        ,  @cCommand          = @c_ExecCmd                                                  
+                        ,  @cTransmitlogKey   = @c_Orderkey                                            
+                        ,  @nThreadPerAcct    = @n_ThreadPerAcct                                                    
+                        ,  @nThreadPerStream  = @n_ThreadPerStream                                                          
+                        ,  @nMilisecondDelay  = @n_MilisecondDelay                                                          
+                        ,  @nSeq              = 1                           
+                        ,  @cIP               = @c_IP                                             
+                        ,  @cPORT             = @c_PORT                                                    
+                        ,  @cIniFilePath      = @c_IniFilePath           
+                        ,  @cAPPDBName        = @c_APP_DB_Name                                                   
+                        ,  @bSuccess          = @b_Success   OUTPUT      
+                        ,  @nErr              = @n_Err       OUTPUT      
+                        ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
                      END TRY
 
                      BEGIN CATCH
                         SET @n_Err = 555768
                         SET @c_ErrMsg = ERROR_MESSAGE()
                         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Order #: ' + @c_Orderkey 
-                                      + ' to IDSAllocationPool Fail - Order. (lsp_WaveAllocation)'
+                                      + ' to QCommander Fail - Order. (lsp_WaveAllocation)'
                                       + '(' + @c_ErrMsg + ')'  
                                       + '|' + @c_Orderkey                                    
-                     EXEC [WM].[lsp_WriteError_List] 
-                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                        ,  @c_TableName   = @c_TableName
-                        ,  @c_SourceType  = @c_SourceType
-                        ,  @c_Refkey1     = @c_WaveKey
-                        ,  @c_Refkey2     = @c_Loadkey
-                        ,  @c_Refkey3     = ''
-                        ,  @c_WriteType   = 'ERROR' 
-                        ,  @n_err2        = @n_err 
-                        ,  @c_errmsg2     = @c_errmsg 
-                        ,  @b_Success     = @b_Success   OUTPUT 
-                        ,  @n_err         = @n_err       OUTPUT 
-                        ,  @c_errmsg      = @c_errmsg    OUTPUT                                     
-
+                        --EXEC [WM].[lsp_WriteError_List] 
+                        --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        --   ,  @c_TableName   = @c_TableName
+                        --   ,  @c_SourceType  = @c_SourceType
+                        --   ,  @c_Refkey1     = @c_WaveKey
+                        --   ,  @c_Refkey2     = @c_Loadkey
+                        --   ,  @c_Refkey3     = ''
+                        --   ,  @c_WriteType   = 'ERROR' 
+                        --   ,  @n_err2        = @n_err 
+                        --   ,  @c_errmsg2     = @c_errmsg 
+                        --   ,  @b_Success     = @b_Success   OUTPUT 
+                        --   ,  @n_err         = @n_err       OUTPUT 
+                        --   ,  @c_errmsg      = @c_errmsg    OUTPUT                                     
                      END CATCH
+                     
+                     IF @b_Success = 0
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
+            
+                     IF @n_Continue = 3
+                     BEGIN
+                         EXEC [WM].[lsp_WriteError_List] 
+                              @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                           ,  @c_TableName   = @c_TableName
+                           ,  @c_SourceType  = @c_SourceType
+                           ,  @c_Refkey1     = @c_WaveKey
+                           ,  @c_Refkey2     = @c_Loadkey
+                           ,  @c_Refkey3     = ''
+                           ,  @c_WriteType   = 'ERROR' 
+                           ,  @n_err2        = @n_err 
+                           ,  @c_errmsg2     = @c_errmsg 
+                           ,  @b_Success     = @b_Success   OUTPUT 
+                           ,  @n_err         = @n_err       OUTPUT 
+                           ,  @c_errmsg      = @c_errmsg    OUTPUT                                
+                     END
+                     --(Wan01) - END
                   END
                   ELSE
                   BEGIN
                      SET @c_ErrMsg = 'DC - Order #: ' + @c_Orderkey
-                                    + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                                    + ' had submitted to QCommander & Pending allocation/In Progress. (lsp_WaveAllocation)'   
                                     + '(' + @c_ErrMsg + ')' 
 
                      EXEC [WM].[lsp_WriteError_List] 
@@ -1159,16 +1421,25 @@ BEGIN
          IF @c_AllocateType = 'UCC'
          BEGIN
             SET @n_Cnt = 0 
+            --(Wan01) - START
+            SET @c_DataStream = 'WaveAlcUCC' 
+            --SELECT @n_Cnt = 1 
+            --FROM IDSAllocationPool WITH (NOLOCK)
+            --WHERE Sourcekey = @c_WaveKey
+            --AND SourceType = 'UCC'
+            --AND Status IN ('0', '1')
+            
             SELECT @n_Cnt = 1 
-            FROM IDSAllocationPool WITH (NOLOCK)
-            WHERE Sourcekey = @c_WaveKey
-            AND SourceType = 'UCC'
-            AND Status IN ('0', '1')
-
+            FROM dbo.TCPSocket_QueueTask AS tsqt (NOLOCK)
+            WHERE tsqt.TransmitLogKey = @c_WaveKey
+            AND tsqt.DataStream = @c_DataStream
+            AND tsqt.[Port] = @c_Port
+            AND tsqt.[Status] IN ('0', '1')
+     
             IF @n_Cnt = 1 
             BEGIN
                SET @c_ErrMsg = 'UCC - Wave #: ' + @c_WaveKey
-                              + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                              + ' had submitted to QCommander & Pending allocation/In Progress. (lsp_WaveAllocation)'   
                               + '(' + @c_ErrMsg + ')' 
 
                EXEC [WM].[lsp_WriteError_List] 
@@ -1189,22 +1460,41 @@ BEGIN
 
             SET @c_ExecCmd = '[dbo].[ispWaveReplenUCCAlloc] @c_WaveKey=''' + @c_WaveKey + ''',@b_Success=1,@n_Err=0,@c_ErrMsg='''''
             BEGIN TRY
-               INSERT INTO IDSAllocationPool
-                  (
-                     Sourcekey
-                  ,  SourceType
-                  ,  Wavekey
-                  ,  AllocateCmd
-                  ,  WinComputerName
-                  )
-               VALUES
-                  (
-                     @c_WaveKey
-                  ,  'UCC'
-                  ,  @c_WaveKey
-                  ,  @c_ExecCmd
-                  ,  ''
-                  )
+               --INSERT INTO IDSAllocationPool
+               --   (
+               --      Sourcekey
+               --   ,  SourceType
+               --   ,  Wavekey
+               --   ,  AllocateCmd
+               --   ,  WinComputerName
+               --   )
+               --VALUES
+               --   (
+               --      @c_WaveKey
+               --   ,  'UCC'
+               --   ,  @c_WaveKey
+               --   ,  @c_ExecCmd
+               --   ,  ''
+               --   )
+               
+               EXEC isp_QCmd_SubmitTaskToQCommander     
+                     @cTaskType         = @c_TaskType -- D=By Datastream, T=Transmitlog, O=Others           
+                  ,  @cStorerKey        = @c_StorerKey                                                
+                  ,  @cDataStream       = @c_DataStream                                                     
+                  ,  @cCmdType          = @c_CmdType                                                    
+                  ,  @cCommand          = @c_ExecCmd                                                  
+                  ,  @cTransmitlogKey   = @c_Wavekey                                            
+                  ,  @nThreadPerAcct    = @n_ThreadPerAcct                                                    
+                  ,  @nThreadPerStream  = @n_ThreadPerStream                                                          
+                  ,  @nMilisecondDelay  = @n_MilisecondDelay                                                          
+                  ,  @nSeq              = 1                           
+                  ,  @cIP               = @c_IP                                             
+                  ,  @cPORT             = @c_PORT                                                    
+                  ,  @cIniFilePath      = @c_IniFilePath           
+                  ,  @cAPPDBName        = @c_APP_DB_Name                                                   
+                  ,  @bSuccess          = @b_Success   OUTPUT      
+                  ,  @nErr              = @n_Err       OUTPUT      
+                  ,  @cErrMsg           = @c_ErrMsg    OUTPUT    
             END TRY
 
             BEGIN CATCH
@@ -1212,11 +1502,34 @@ BEGIN
                SET @n_Err = 555764
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Wave #: ' + @c_WaveKey
-                              + ' to IDSAllocationPool Fail - UCC. (lsp_WaveAllocation)'   
+                              + ' to QCommander Fail - UCC. (lsp_WaveAllocation)'   
                               + '(' + @c_ErrMsg + ')'
                               + '|' + @c_WaveKey
                                                             
-               EXEC [WM].[lsp_WriteError_List] 
+               --EXEC [WM].[lsp_WriteError_List] 
+               --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               --   ,  @c_TableName   = @c_TableName
+               --   ,  @c_SourceType  = @c_SourceType
+               --   ,  @c_Refkey1     = @c_WaveKey
+               --   ,  @c_Refkey2     = @c_Loadkey
+               --   ,  @c_Refkey3     = ''
+               --   ,  @c_WriteType   = 'ERROR' 
+               --   ,  @n_err2        = @n_err 
+               --   ,  @c_errmsg2     = @c_errmsg 
+               --   ,  @b_Success     = @b_Success   OUTPUT 
+               --   ,  @n_err         = @n_err       OUTPUT 
+               --   ,  @c_errmsg      = @c_errmsg    OUTPUT    
+               --GOTO EXIT_SP                                    
+            END CATCH
+                 
+            IF @b_Success = 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+            
+            IF @n_Continue = 3
+            BEGIN
+                EXEC [WM].[lsp_WriteError_List] 
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                   ,  @c_TableName   = @c_TableName
                   ,  @c_SourceType  = @c_SourceType
@@ -1228,10 +1541,9 @@ BEGIN
                   ,  @c_errmsg2     = @c_errmsg 
                   ,  @b_Success     = @b_Success   OUTPUT 
                   ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT    
-               GOTO EXIT_SP                                    
-            END CATCH
-                 
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT                                
+            END
+            --(Wan01) - END     
             GOTO EXIT_SP 
          END
 
@@ -1239,16 +1551,26 @@ BEGIN
          IF @c_AllocateType = 'DYNAMICPICK'
          BEGIN
             SET @n_Cnt = 0 
+            
+            --(Wan01) - START
+            SET @c_DataStream       = 'WaveAlcDPP' 
+            --SELECT @n_Cnt = 1 
+            --FROM IDSAllocationPool WITH (NOLOCK)
+            --WHERE Sourcekey = @c_WaveKey
+            --AND SourceType = 'DYNAMICPICK'
+            --AND Status IN ('0', '1')
+            
             SELECT @n_Cnt = 1 
-            FROM IDSAllocationPool WITH (NOLOCK)
-            WHERE Sourcekey = @c_WaveKey
-            AND SourceType = 'DYNAMICPICK'
-            AND Status IN ('0', '1')
+            FROM dbo.TCPSocket_QueueTask AS tsqt (NOLOCK)
+            WHERE tsqt.TransmitLogKey = @c_WaveKey
+            AND tsqt.DataStream = @c_DataStream
+            AND tsqt.[Port] = @c_Port
+            AND tsqt.[Status] IN ('0', '1')
 
             IF @n_Cnt = 1 
             BEGIN
                SET @c_ErrMsg = 'DYNAMICPICK - Wave #: ' + @c_WaveKey
-                              + ' had submitted to IDSAllocationPool & Pending allocation/In Progress. (lsp_WaveAllocation)'   
+                              + ' had submitted to QCommander & Pending allocation/In Progress. (lsp_WaveAllocation)'   
                               + '(' + @c_ErrMsg + ')'
 
                EXEC [WM].[lsp_WriteError_List] 
@@ -1278,22 +1600,41 @@ BEGIN
                            + ',@n_Err=0'
                            + ',@c_ErrMsg='''''
             BEGIN TRY
-               INSERT INTO IDSAllocationPool
-                  (
-                     Sourcekey
-                  ,  SourceType
-                  ,  Wavekey
-                  ,  AllocateCmd
-                  ,  WinComputerName
-                  )
-               VALUES
-                  (
-                     @c_WaveKey
-                  ,  'DYNAMICPICK'
-                  ,  @c_WaveKey
-                  ,  @c_ExecCmd
-                  ,  ''
-                  )
+               --INSERT INTO IDSAllocationPool
+               --   (
+               --      Sourcekey
+               --   ,  SourceType
+               --   ,  Wavekey
+               --   ,  AllocateCmd
+               --   ,  WinComputerName
+               --   )
+               --VALUES
+               --   (
+               --      @c_WaveKey
+               --   ,  'DYNAMICPICK'
+               --   ,  @c_WaveKey
+               --   ,  @c_ExecCmd
+               --   ,  ''
+               --   )
+               
+               EXEC isp_QCmd_SubmitTaskToQCommander     
+                     @cTaskType         = @c_TaskType -- D=By Datastream, T=Transmitlog, O=Others           
+                  ,  @cStorerKey        = @c_StorerKey                                                
+                  ,  @cDataStream       = @c_DataStream                                                     
+                  ,  @cCmdType          = @c_CmdType                                                    
+                  ,  @cCommand          = @c_ExecCmd                                                  
+                  ,  @cTransmitlogKey   = @c_Wavekey                                            
+                  ,  @nThreadPerAcct    = @n_ThreadPerAcct                                                    
+                  ,  @nThreadPerStream  = @n_ThreadPerStream                                                          
+                  ,  @nMilisecondDelay  = @n_MilisecondDelay                                                          
+                  ,  @nSeq              = 1                           
+                  ,  @cIP               = @c_IP                                             
+                  ,  @cPORT             = @c_PORT                                                    
+                  ,  @cIniFilePath      = @c_IniFilePath           
+                  ,  @cAPPDBName        = @c_APP_DB_Name                                                   
+                  ,  @bSuccess          = @b_Success   OUTPUT      
+                  ,  @nErr              = @n_Err       OUTPUT      
+                  ,  @cErrMsg           = @c_ErrMsg    OUTPUT    
             END TRY
 
             BEGIN CATCH
@@ -1301,11 +1642,20 @@ BEGIN
                SET @n_Err = 555765
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Submit Wave #: ' + @c_WaveKey
-                              + ' to IDSAllocationPool Fail - DYNAMICPICK . (lsp_WaveAllocation)'   
+                              + ' to QCommander  Fail - DYNAMICPICK . (lsp_WaveAllocation)'   
                               + '(' + @c_ErrMsg + ')'
                               + '|' + @c_WaveKey                            
-
-               EXEC [WM].[lsp_WriteError_List] 
+                                    
+            END CATCH
+            
+            IF @b_Success = 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+            
+            IF @n_Continue = 3
+            BEGIN
+                EXEC [WM].[lsp_WriteError_List] 
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                   ,  @c_TableName   = @c_TableName
                   ,  @c_SourceType  = @c_SourceType
@@ -1318,9 +1668,8 @@ BEGIN
                   ,  @b_Success     = @b_Success   OUTPUT 
                   ,  @n_err         = @n_err       OUTPUT 
                   ,  @c_errmsg      = @c_errmsg    OUTPUT                                
-               GOTO EXIT_SP                                    
-            END CATCH
-
+            END
+            --(Wan01) - END
             GOTO EXIT_SP 
          END
    END TRY

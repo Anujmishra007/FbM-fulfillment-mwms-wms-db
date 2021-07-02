@@ -260,6 +260,8 @@ GO
 /* 22-Sep-2020  NJOW07    4.5  WMS-15238 ValidateSOStatus_SP & ispVSOST01*/
 /*                             check exclude doctype = 'E'               */
 /* 16-Dec-2020  TLTING12  4.6  WMS-15510 tracking DSTORSSOSTATUS         */ 
+/* 05-May-2021  Wan07     4.7  LFWM-2723 - RGMigrate Allocation schedule */
+/*                             job to QCommander. Calculate Wave Status  */
 /*************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrOrderHeaderUpdate]
@@ -584,13 +586,13 @@ END
 
 IF UPDATE(TrafficCop)
 BEGIN
-	 --NJOW03
+    --NJOW03
    IF EXISTS (SELECT 1 FROM INSERTED i   
               JOIN storerconfig s WITH (NOLOCK) ON  i.storerkey = s.storerkey    
               JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
               WHERE  s.configkey = 'OrdersTrigger_SP' AND i.TrafficCop IS NULL) 
    BEGIN
-   	 SELECT @c_TrafficCopAllowTriggerSP = 'Y'
+       SELECT @c_TrafficCopAllowTriggerSP = 'Y'
    END
    
    --NJOW04
@@ -599,7 +601,7 @@ BEGIN
               WHERE  s.configkey = 'SetSOStatusWhileStatusChange' AND i.TrafficCop IS NULL
               AND s.svalue = '1') 
    BEGIN
-   	  SELECT @c_TrafficCopAllowSOStatusUpd = 'Y'   	  
+        SELECT @c_TrafficCopAllowSOStatusUpd = 'Y'      
    END
 
    --(Wan06) - START
@@ -607,7 +609,7 @@ BEGIN
    BEGIN
       IF EXISTS (SELECT 1 FROM INSERTED i WHERE  i.TrafficCop IS NULL) 
       BEGIN
-   	   SET @c_TrafficCopAllowEPACKStatusUpd = 'Y' 
+         SET @c_TrafficCopAllowEPACKStatusUpd = 'Y' 
       END
    END
    --(Wan06) - END
@@ -1029,10 +1031,10 @@ BEGIN
             -- Fuji Interface
             SELECT @b_success = 0
 
-      	    EXECUTE dbo.nspGetRight  '',
+             EXECUTE dbo.nspGetRight  '',
                      @c_StorerKey,   -- Storer
                      '',                   -- Sku
-      		   				'FUJIMYITF',         -- ConfigKey
+                           'FUJIMYITF',         -- ConfigKey
                      @b_success            OUTPUT,
                      @c_authority_fujiitf  OUTPUT,
                      @n_err                OUTPUT,
@@ -1068,7 +1070,7 @@ BEGIN
             END
             
             EXECUTE dbo.nspGetRight  
-										@c_Facility,  --NJOW06
+                              @c_Facility,  --NJOW06
                      @c_StorerKey,        -- Storer
                      '',                  -- Sku
                      'DSCPICK',           -- ConfigKey
@@ -1206,7 +1208,7 @@ BEGIN
                      'LOREALITF',         -- ConfigKey
                      @b_success             OUTPUT,
                      @c_authority_lorealitf OUTPUT,
-            					@n_err                 OUTPUT,
+                           @n_err                 OUTPUT,
                      @c_errmsg              OUTPUT
             
             IF @b_success <> 1
@@ -3229,10 +3231,10 @@ END
 -- Trigger Event for Loadplan Insert Trigger
 IF @n_continue = 1 or @n_continue=2
 BEGIN
-	DECLARE @c_LP_Min_Status NVARCHAR(10),
-	        @c_LP_Max_Status NVARCHAR(10), 
-	        @c_LP_Cur_Status NVARCHAR(10) , 
-	        @c_LP_New_Status NVARCHAR(10)
+   DECLARE @c_LP_Min_Status NVARCHAR(10),
+           @c_LP_Max_Status NVARCHAR(10), 
+           @c_LP_Cur_Status NVARCHAR(10) , 
+           @c_LP_New_Status NVARCHAR(10)
 
    DECLARE @cDoNotCalcLPAllocInfo VARCHAR(10) 
 
@@ -3254,24 +3256,24 @@ BEGIN
       FETCH NEXT FROM CUR_LOAD_UPDATE INTO @c_Loadkey, @c_LP_Cur_Status, @c_StorerKey
       WHILE @@FETCH_STATUS = 0 
       BEGIN
-      	SET @cDoNotCalcLPAllocInfo = '0'
-      	  
+         SET @cDoNotCalcLPAllocInfo = '0'
+           
          SELECT @cDoNotCalcLPAllocInfo = ISNULL(sValue, '0')   
          FROM  STORERCONFIG WITH (NOLOCK)   
          WHERE StorerKey = @c_StorerKey   
          AND   ConfigKey = 'DoNotCalcLPAllocInfo'   
          AND   sVAlue = '1'  
-      	
-      	SELECT @c_LP_Min_Status = '0', 
-      	       @c_LP_Max_Status = '0', 
-      	       @c_LP_New_Status = '0'
-      	             	
-      	SELECT @c_LP_Min_Status = MIN(STATUS), 
-      	       @c_LP_Max_Status = MAX(STATUS) 
-      	FROM   LoadPlanDetail AS lpd WITH (NOLOCK)
-      	WHERE  lpd.LoadKey = @c_Loadkey 
-      	AND    lpd.[Status] NOT IN ('CANC')
-      	
+         
+         SELECT @c_LP_Min_Status = '0', 
+                @c_LP_Max_Status = '0', 
+                @c_LP_New_Status = '0'
+                        
+         SELECT @c_LP_Min_Status = MIN(STATUS), 
+                @c_LP_Max_Status = MAX(STATUS) 
+         FROM   LoadPlanDetail AS lpd WITH (NOLOCK)
+         WHERE  lpd.LoadKey = @c_Loadkey 
+         AND    lpd.[Status] NOT IN ('CANC')
+         
          SET @c_LP_New_Status = CASE
                                    WHEN @c_LP_Max_Status = '0' THEN '0'
                                    WHEN @c_LP_Min_Status = '0' and @c_LP_Max_Status IN ('1','2')
@@ -3282,12 +3284,12 @@ BEGIN
                                 END     
          SET @c_Col5 = ''
          IF @cDoNotCalcLPAllocInfo <> '1' OR  @c_LP_New_Status <> @c_LP_Cur_Status 
-         BEGIN         	
-			   --SET @c_Col5 = 'Upd LP' 
-			   IF EXISTS(SELECT 1 FROM LoadPlan WITH (NOLOCK) 
-			             WHERE Loadkey = @c_Loadkey
-			             AND   LoadPlan.Status BETWEEN '0' AND '5' )
-			   BEGIN
+         BEGIN          
+            --SET @c_Col5 = 'Upd LP' 
+            IF EXISTS(SELECT 1 FROM LoadPlan WITH (NOLOCK) 
+                      WHERE Loadkey = @c_Loadkey
+                      AND   LoadPlan.Status BETWEEN '0' AND '5' )
+            BEGIN
                UPDATE LoadPlan  
                   SET EditDate = GetDate(), EditWho = SUSER_SNAME()
                WHERE Loadkey = @c_Loadkey 
@@ -3300,8 +3302,8 @@ BEGIN
                   SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0))
                                    + ': Update Failed On LoadPlan. (ntrOrderHeaderUpdate) ( SQLSvr MESSAGE='
                                    + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-               END         				   	
-			   END        	
+               END                           
+            END         
             
             --SET @c_TraceName = 'ntrOrderHeaderUpdate-LP'
             --SET @d_step1 = GETDATE()  -- (tlting01)
@@ -3331,8 +3333,8 @@ BEGIN
             --SET @d_step5 = NULL            
          END -- IF @cDoNotCalcLPAllocInfo <> '1' OR  @c_LP_New_Status <> @c_LP_Cur_Status 
          
-                   	
-      	FETCH NEXT FROM CUR_LOAD_UPDATE INTO @c_Loadkey, @c_LP_Cur_Status, @c_StorerKey
+                     
+         FETCH NEXT FROM CUR_LOAD_UPDATE INTO @c_Loadkey, @c_LP_Cur_Status, @c_StorerKey
       END  
       CLOSE CUR_LOAD_UPDATE
       DEALLOCATE CUR_LOAD_UPDATE      
@@ -3367,6 +3369,45 @@ BEGIN
       END
    END
 END
+
+--(Wan07) - START
+IF @n_continue = 1 or @n_continue=2
+BEGIN
+   DECLARE @c_Wavekey         NVARCHAR(10) = ''
+         , @c_Wv_Cur_Status   NVARCHAR(10) = ''
+         , @CUR_WAVE_UPDATE   CURSOR
+         
+   SET @CUR_WAVE_UPDATE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+   SELECT DISTINCT w.Wavekey, w.[Status], INSERTED.StorerKey 
+   FROM  INSERTED  
+   JOIN  dbo.WAVEDETAIL AS wd WITH (NOLOCK) ON (wd.OrderKey = INSERTED.OrderKey) 
+   JOIN  dbo.WAVE       AS w  WITH (NOLOCK) ON (wd.Wavekey  = w.Wavekey)      
+   WHERE w.[Status] BETWEEN '0' AND '5'
+
+   OPEN @CUR_WAVE_UPDATE
+      
+   FETCH NEXT FROM @CUR_WAVE_UPDATE INTO @c_Wavekey, @c_Wv_Cur_Status, @c_StorerKey
+   WHILE @@FETCH_STATUS = 0 AND @n_continue = 1
+   BEGIN
+      EXEC [dbo].[isp_GetWaveStatus]  
+         @c_WaveKey    = @c_WaveKey     
+      ,  @b_UpdateWave = 1                         --1 => yes, 0 => No  
+      ,  @c_Status     = @c_Wv_Cur_Status OUTPUT  
+      ,  @b_Success    = @b_Success       OUTPUT  
+      ,  @n_Err        = @n_Err           OUTPUT  
+      ,  @c_ErrMsg     = @c_ErrMsg        OUTPUT  
+
+      IF @b_Success = 0 
+      BEGIN 
+         SET @n_continue = 3
+      END 
+         
+      FETCH NEXT FROM @CUR_WAVE_UPDATE INTO @c_Wavekey, @c_Wv_Cur_Status, @c_StorerKey
+   END  
+   CLOSE @CUR_WAVE_UPDATE
+   DEALLOCATE @CUR_WAVE_UPDATE      
+END -- IF @n_continue = 1 or @n_continue=2
+--(Wan07) - END
 
 --NJOW02 --NJOW03 move from Top
 IF @n_continue=1 or @n_continue=2
@@ -3411,16 +3452,18 @@ BEGIN
    END
 END
 
+
+
 /********************************************************/
 /* Interface Trigger Points Calling Process - (Start)   */
 /********************************************************/
 IF @n_continue = 1 OR @n_continue = 2
 BEGIN
-	DECLARE @t_ColumnUpdated TABLE (COLUMN_NAME NVARCHAR(50))
-	
-	SET @c_ColumnsUpdated = ''
-	
-	      
+   DECLARE @t_ColumnUpdated TABLE (COLUMN_NAME NVARCHAR(50))
+   
+   SET @c_ColumnsUpdated = ''
+   
+         
    DECLARE Cur_Order_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    -- Extract values for required variables
     SELECT DISTINCT INS.ORDERKEY
@@ -3473,9 +3516,9 @@ BEGIN
       --(MC09) - S
       IF ISNULL(RTRIM(@c_ColumnsUpdated),'') = ''
       BEGIN
-      	INSERT INTO @t_ColumnUpdated
-      	SELECT COLUMN_NAME FROM dbo.fnc_GetUpdatedColumns('ORDERS', @b_ColumnsUpdated)
-      	
+         INSERT INTO @t_ColumnUpdated
+         SELECT COLUMN_NAME FROM dbo.fnc_GetUpdatedColumns('ORDERS', @b_ColumnsUpdated)
+         
          DECLARE Cur_Order_ColUpdated CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT COLUMN_NAME FROM @t_ColumnUpdated
          OPEN Cur_Order_ColUpdated
@@ -3508,7 +3551,7 @@ BEGIN
                SET @c_ColumnsUpdated = @c_ColumnsUpdated + ',' + 'STATUS'
             END
          END
-         --(MC09) - E      	
+         --(MC09) - E         
       END
       */
       --(MC11) - E
