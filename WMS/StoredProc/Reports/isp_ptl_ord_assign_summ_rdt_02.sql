@@ -23,7 +23,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
-/* 31-May-2021  Mingle    1.1 Add new mappings(ML01)                    */
+/* 05-Jul-2021  Mingle    1.1 WMS-17115 - Add new mappings(ML01)        */
 /************************************************************************/
 CREATE PROC isp_ptl_ord_assign_summ_rdt_02
            @c_waveKey   NVARCHAR(20)
@@ -51,7 +51,8 @@ BEGIN
       @c_SQLSelect       NVARCHAR(4000),   
       @c_ExecStatements   NVARCHAR(4000),    
       @c_ExecArguments    NVARCHAR(4000),
-      @c_chkpickzone      NVARCHAR(5)
+      @c_chkpickzone      NVARCHAR(5),
+      @c_UDF03           NVARCHAR(500)    --ML01
 
 
    IF ISNULL(@c_waveKey,'') = ''
@@ -89,7 +90,14 @@ BEGIN
       ,  courier        NVARCHAR(50)   NULL  DEFAULT('')   
       ,  courier2       NVARCHAR(50)   NULL  DEFAULT('') 
       ,  salesman       NVARCHAR(30)   NULL  DEFAULT('')    --ML01
+      ,  storerkey      NVARCHAR(10)   NULL  DEFAULT('')    --ML01
+      ,  shipperkey     NVARCHAR(10)   NULL  DEFAULT('')    --ML01
      )
+
+   CREATE TABLE #TMP_UDF03    --ML01
+      ( Shipperkey      NVARCHAR(50)   NULL  DEFAULT(''),
+        Storerkey       NVARCHAR(50)   NULL  DEFAULT('')
+      )
   
    CREATE TABLE #TMP_PTORDBYSGRP
       (  RowID          INT IDENTITY (1,1) NOT NULL 
@@ -99,6 +107,20 @@ BEGIN
       ,  SKUGRP         NVARCHAR(50)   NULL  DEFAULT('')
       )
 
+   --START(ML01)
+   INSERT INTO #TMP_UDF03(shipperkey,storerkey)    
+   SELECT DISTINCT oh.shipperkey,oh.storerkey
+   FROM WAVEDETAIL WD WITH (NOLOCK)
+   JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = WD.Orderkey
+   WHERE WD.WaveKey = @c_wavekey
+
+   --SELECT @c_UDF03 = @c_UDF03 + CAST(STUFF((SELECT DISTINCT ',' + RTRIM(UDF03) FROM CODELKUP(NOLOCK) WHERE CODELKUP.listname ='SHIPMETHOD' AND CODELKUP.storerkey = #TMP_UDF03.Storerkey AND CODELKUP.code = #TMP_UDF03.ShipperKey
+   --                  ORDER BY 1 FOR XML PATH('')),1,1,'' ) AS NVARCHAR(255)) 
+   SELECT @c_UDF03 = CASE WHEN ISNULL(@c_UDF03,'') = '' THEN LTRIM(RTRIM(ISNULL(CODELKUP.UDF03,''))) ELSE ISNULL(@c_UDF03,'') + ',' + LTRIM(RTRIM(ISNULL(CODELKUP.UDF03,''))) END
+   FROM #TMP_UDF03
+   JOIN CODELKUP WITH (NOLOCK) ON CODELKUP.listname ='SHIPMETHOD' AND CODELKUP.storerkey = #TMP_UDF03.Storerkey AND CODELKUP.code = #TMP_UDF03.ShipperKey
+   --END(ML01)
+   
 
 
    INSERT INTO #TMP_PTORDBYSGRP(orderkey,wavekey,loadkey,SKUGRP)
@@ -113,10 +135,10 @@ BEGIN
       LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname ='skugroup' AND C.storerkey = OH.Storerkey AND C.code = s.skugroup
       WHERE WV.Wavekey=@c_wavekey
 
-      INSERT INTO #TMP_PTORDSUMMRDT(Orderkey,Wavekey,Loadkey,Pqty,Pickzone,OHDELDATE,ExtOrdkey,courier,courier2,salesman)    --ML01     
+      INSERT INTO #TMP_PTORDSUMMRDT(Orderkey,Wavekey,Loadkey,Pqty,Pickzone,OHDELDATE,ExtOrdkey,courier,salesman,storerkey,shipperkey)    --ML01     
       SELECT oh.orderkey,WV.wavekey as Wavekey,oh.loadkey,PD.qty,
              case when c.short='Y' THEN L.pickzone else '' END as pickzone,
-             CONVERT(NVARCHAR(10),OH.deliverydate,101),oh.externorderkey,ISNULL(C1.code2,''),ISNULL(C2.Description,''),OH.Salesman    --ML01                
+             CONVERT(NVARCHAR(10),OH.deliverydate,101),oh.externorderkey,ISNULL(C1.code2,''),OH.Salesman,OH.Storerkey,OH.Shipperkey    --ML01                
       FROM WAVE WV WITH (NOLOCK)
       JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.wavekey = WV.wavekey
       JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = WD.Orderkey
@@ -140,14 +162,18 @@ BEGIN
              OHDELDATE as OHDELDATE,
              ExtOrdkey as ExtOrdkey,
              Courier AS Courier,
-             Courier2 AS Courier2,
+             --Courier2 AS Courier2,
+             @c_UDF03,    --ML01
+             --CAST(STUFF((SELECT DISTINCT ',' + RTRIM(UDF03) FROM CODELKUP(NOLOCK) WHERE CODELKUP.listname ='SHIPMETHOD' AND CODELKUP.storerkey = #TMP_UDF03.Storerkey AND CODELKUP.code = #TMP_UDF03.ShipperKey
+             --ORDER BY 1 FOR XML PATH('')),1,1,'' ) AS NVARCHAR(255)) AS Courier2,
+             shipperkey AS shipperkey,    --ML01
              salesman AS salesman              
              ,CAST(STUFF((SELECT ',' + RTRIM(a.skugrp) FROM #TMP_PTORDBYSGRP a 
                           where a.orderkey = #TMP_PTORDSUMMRDT.orderkey and a.wavekey=#TMP_PTORDSUMMRDT.wavekey 
                ORDER BY a.wavekey, a.orderkey,a.skugrp FOR XML PATH('')),1,1,'' ) AS NVARCHAR(250)) AS SKUGRP
       FROM #TMP_PTORDSUMMRDT
       WHERE Wavekey = @c_wavekey
-      GROUP BY Orderkey,Wavekey,Loadkey,Pickzone,OHDELDATE,ExtOrdkey,Courier,courier2,salesman    --ML01      
+      GROUP BY Orderkey,Wavekey,Loadkey,Pickzone,OHDELDATE,ExtOrdkey,Courier,courier2,salesman,storerkey,shipperkey    --ML01      
       ORDER BY wavekey,orderkey
 
      DROP TABLE #TMP_PTORDSUMMRDT
