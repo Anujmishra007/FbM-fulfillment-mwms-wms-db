@@ -29,7 +29,9 @@ GO
 /* Date         Author    Ver Purposes                                  */ 
 /* 2020-08-06   WLChooi   1.1 WMS-14613 - Change to M_Company and add   */
 /*                            column (WL01)                             */   
-/* 2021-01-21   WLChooi   1.2 WMS-16158 - Cater for Type = '51' (WL02)  */ 
+/* 2021-01-21   WLChooi   1.2 WMS-16158 - Cater for Type = '51' (WL02)  */
+/* 2021-06-03   WLChooi   1.3 WMS-17148 - Cater for calling from Main DW*/
+/*                            (WL03)                                    */
 /************************************************************************/    
 CREATE PROC isp_PackingList_detail_06  
             @c_PickSlipNo     NVARCHAR(10)   
@@ -52,7 +54,21 @@ BEGIN
    SET @n_Continue = 1    
    SET @b_Success  = 1    
    SET @n_Err      = 0    
-   SET @c_Errmsg   = ''     
+   SET @c_Errmsg   = ''    
+   
+   --WL03 S
+   IF @c_ohtype = 'Main'
+   BEGIN
+      SELECT DISTINCT PH.Pickslipno, CASE WHEN ISNULL(CL.Short,'') = '' THEN OH.[Type] ELSE CL.Short END
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
+      LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'NKCORDPL' AND CL.Storerkey = OH.StorerKey
+                                    AND CL.Code = OH.[Type]
+      WHERE PH.Pickslipno = @c_PickSlipNo
+
+      GOTO END_SP
+   END
+   --WL03 E 
    
    CREATE TABLE #TMP_PACKLISTDET06  
       ( Orderkey               NVARCHAR(10)   NOT NULL
@@ -116,7 +132,7 @@ BEGIN
       --                                        AND (CL3.Storerkey = OH.StorerKey)
       --                                        AND (CL3.Code = CL1.Code)
       WHERE   PH.PickSlipNo = @c_PickSlipNo  
-      AND OH.[Type] = @c_ohtype  
+      --AND OH.[Type] = @c_ohtype   --WL03  
    END
    ELSE
    BEGIN
@@ -146,9 +162,9 @@ BEGIN
              OH.C_Address2,    
              PH.PickSlipno,    
              OH.C_state,  
-             CASE WHEN @c_ohtype = '41' THEN LTRIM(RTRIM(ISNULL(SKU.Style,''))) + '-' + LTRIM(RTRIM(ISNULL(SKU.Color,''))) + '-' + LTRIM(RTRIM(ISNULL(SKU.Size,''))) ELSE OD.SKU END,   --WL01    
+             CASE WHEN @c_ohtype IN ('31','41') THEN LTRIM(RTRIM(ISNULL(SKU.Style,''))) + '-' + LTRIM(RTRIM(ISNULL(SKU.Color,''))) + '-' + LTRIM(RTRIM(ISNULL(SKU.Size,''))) ELSE OD.SKU END,   --WL01   --WL03   
              SKU.Descr,    
-             CASE WHEN @c_ohtype = '41' THEN OD.OriginalQty ELSE OD.OpenQty END,   --WL01
+             CASE WHEN @c_ohtype IN ('31','41') THEN OD.OriginalQty ELSE OD.OpenQty END,   --WL01   --WL03
              SUBSTRING(OH.ExternOrderKey,1,CHARINDEX('/',OH.ExternOrderkey) - 1),  --WL01  
              OH.C_Zip   --WL01
       FROM PACKHEADER        PH  WITH (NOLOCK)    
@@ -157,7 +173,7 @@ BEGIN
       JOIN ORDERDETAIL       OD  WITH (NOLOCK) ON (OD.Orderkey = OH.ORderkey )  
       JOIN SKU               SKU WITH (NOLOCK) ON (OD.Storerkey= SKU.Storerkey) AND (OD.Sku = SKU.Sku)    
       WHERE   PH.PickSlipNo = @c_PickSlipNo  
-      AND OH.type = @c_ohtype
+      --AND OH.type = @c_ohtype   --WL03 
    END   --WL02  
    
 QUIT_SP: 
@@ -231,7 +247,7 @@ QUIT_SP:
    IF OBJECT_ID('tempdb..#TMP_PACKLISTDET06') IS NOT NULL
        DROP TABLE #TMP_PACKLISTDET06
    --WL02 E
-      
+END_SP:  
 END -- procedure    
 
 GO
