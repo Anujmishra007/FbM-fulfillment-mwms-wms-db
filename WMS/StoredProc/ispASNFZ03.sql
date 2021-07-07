@@ -27,6 +27,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 17-June-2021 WLChooi 1.1   WMS-17312 - Split 1 Line with multiple PCS to*/
+/*                            1 line with 1 PCS (WL01)                     */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispASNFZ03]  
 (     @c_Receiptkey  NVARCHAR(10)   
@@ -51,12 +53,26 @@ BEGIN
            @n_QtyReceived INT,
            @c_UOM NVARCHAR(10),
            @c_Lot NVARCHAR(10),
-           @c_ExternReceiptkey NVARCHAR(30)        
+           @c_ExternReceiptkey NVARCHAR(30),
+           @n_Count INT,   --WL01
+           @c_Option1 NVARCHAR(10)   --WL01
                       
-   SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT            
+   SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT 
    
-   DECLARE ASN_CUR CURSOR FAST_FORWARD READ_ONLY FOR
-      SELECT RD.Storerkey, RD.ReceiptLineNumber, RD.Sku, SUM(RD.QtyReceived) AS QtyReceived, RD.UOM, ITRN.Lot, RD.ExternReceiptkey
+   --WL01 S    
+   SELECT @c_Storerkey = Storerkey
+   FROM RECEIPT (NOLOCK)
+   WHERE Receiptkey = @c_Receiptkey
+
+   SELECT @c_Option1 = ISNULL(SC.Option1,'')      
+   FROM StorerConfig SC (NOLOCK)
+   WHERE SC.Storerkey = @c_Storerkey
+   AND SC.Configkey = 'PostFinalizeReceiptSP'
+   AND SC.SValue = 'ispASNFZ03'
+   
+   IF ISNULL(@c_Option1,'') = 'SplitQty'
+   BEGIN
+      SELECT @n_Count = SUM(RD.QtyReceived)
       FROM RECEIPT R (NOLOCK)
       JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey 
       JOIN ITRN (NOLOCK) ON ITRN.Storerkey = R.Storerkey AND ITRN.TranType = 'DP' AND ITRN.SourceType = 'ntrReceiptDetailUpdate'  
@@ -66,24 +82,63 @@ BEGIN
       AND RD.Finalizeflag = 'Y'
       AND R.Doctype = 'R'
       AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
-      GROUP BY RD.Storerkey, RD.ReceiptLineNumber, RD.Sku, RD.UOM, ITRN.Lot, RD.ExternReceiptkey
-      ORDER BY RD.ReceiptLineNumber
-
+      
+      IF ISNULL(@n_Count, 0) = 0
+      BEGIN
+         SET @n_Count = 99999
+      END
+      
+      DECLARE ASN_CUR CURSOR FAST_FORWARD READ_ONLY FOR
+         WITH t1 AS ( SELECT RD.Storerkey, RD.ReceiptLineNumber, RD.Sku, SUM(RD.QtyReceived) AS QtyReceived, RD.UOM, ITRN.Lot, RD.ExternReceiptkey
+                      FROM RECEIPT R (NOLOCK)
+                      JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey 
+                      JOIN ITRN (NOLOCK) ON ITRN.Storerkey = R.Storerkey AND ITRN.TranType = 'DP' AND ITRN.SourceType = 'ntrReceiptDetailUpdate'  
+                                         AND ITRN.Sourcekey = RD.Receiptkey + RD.ReceiptLineNumber
+                      WHERE RD.Lottable03 = 'RET'
+                      AND R.Receiptkey = @c_Receiptkey
+                      AND RD.Finalizeflag = 'Y'
+                      AND R.Doctype = 'R'
+                      AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
+                      GROUP BY RD.Storerkey, RD.ReceiptLineNumber, RD.Sku, RD.UOM, ITRN.Lot, RD.ExternReceiptkey ),
+              t2 AS ( SELECT TOP (@n_Count) ROW_NUMBER() OVER (ORDER BY ID) AS Val FROM sysobjects (NOLOCK)  )
+         SELECT t1.Storerkey, t1.ReceiptLineNumber, t1.Sku, '1' AS QtyReceived, t1.UOM, t1.Lot, t1.ExternReceiptkey 
+         FROM t1, t2
+         WHERE t1.QtyReceived >= t2.Val 
+         ORDER BY t1.ReceiptLineNumber
+   END
+   ELSE
+   BEGIN
+      DECLARE ASN_CUR CURSOR FAST_FORWARD READ_ONLY FOR
+         SELECT RD.Storerkey, RD.ReceiptLineNumber, RD.Sku, SUM(RD.QtyReceived) AS QtyReceived, RD.UOM, ITRN.Lot, RD.ExternReceiptkey
+         FROM RECEIPT R (NOLOCK)
+         JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey 
+         JOIN ITRN (NOLOCK) ON ITRN.Storerkey = R.Storerkey AND ITRN.TranType = 'DP' AND ITRN.SourceType = 'ntrReceiptDetailUpdate'  
+                            AND ITRN.Sourcekey = RD.Receiptkey + RD.ReceiptLineNumber
+         WHERE RD.Lottable03 = 'RET'
+         AND R.Receiptkey = @c_Receiptkey
+         AND RD.Finalizeflag = 'Y'
+         AND R.Doctype = 'R'
+         AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
+         GROUP BY RD.Storerkey, RD.ReceiptLineNumber, RD.Sku, RD.UOM, ITRN.Lot, RD.ExternReceiptkey
+         ORDER BY RD.ReceiptLineNumber
+   END
+   --WL01 E
+ 
    OPEN ASN_CUR
 
-	 FETCH NEXT FROM ASN_CUR INTO @c_Storerkey, @c_ReceiptLineNo, @c_Sku, @n_QtyReceived, @c_UOM, @c_Lot, @c_ExternReceiptkey
+   FETCH NEXT FROM ASN_CUR INTO @c_Storerkey, @c_ReceiptLineNo, @c_Sku, @n_QtyReceived, @c_UOM, @c_Lot, @c_ExternReceiptkey
 
-	 WHILE @@FETCH_STATUS <> -1
-	 BEGIN
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
       SELECT @b_success = 1  
 
       EXECUTE dbo.nspg_getkey_DTSITF
-        'InterfaceLogID'     
-       , 10  
-       , @c_InterfaceLogID OUTPUT  
-       , @b_success OUTPUT  
-       , @n_err     OUTPUT  
-       , @c_errmsg  OUTPUT  
+          'InterfaceLogID'     
+         , 10  
+         , @c_InterfaceLogID OUTPUT  
+         , @b_success OUTPUT  
+         , @n_err     OUTPUT  
+         , @c_errmsg  OUTPUT  
       
       IF NOT @b_success = 1  
       BEGIN  
@@ -97,13 +152,13 @@ BEGIN
 
       INSERT INTO INTERFACELOG (Interfacekey, Sourcekey, Storerkey, ExternSourcekey, Tablename, Sku, Qty, UOM,  
                                 UserId, TranCode, TranStatus, TranDate, Userdefine01, Userdefine02, Status)
-                        VALUES (@c_InterfaceLogID, @c_Receiptkey, @c_Storerkey, @c_ReceiptLineNo, 'HMRTN', @c_Sku, @n_QtyReceived, @c_UOM, 
+      VALUES (@c_InterfaceLogID, @c_Receiptkey, @c_Storerkey, @c_ReceiptLineNo, 'HMRTN', @c_Sku, @n_QtyReceived, @c_UOM, 
                                 SUSER_SNAME(), @c_Lot, '', GetDate(), @c_ExternReceiptkey, CAST(@n_QtyReceived AS NVARCHAR), '0')
 	 	  
       FETCH NEXT FROM ASN_CUR INTO @c_Storerkey, @c_ReceiptLineNo, @c_Sku, @n_QtyReceived, @c_UOM, @c_Lot, @c_ExternReceiptkey
-	 END
+   END
    CLOSE ASN_CUR      
-	 DEALLOCATE ASN_CUR
+   DEALLOCATE ASN_CUR
   
    QUIT_SP:
    IF @n_continue = 3  -- Error Occured - Process And Return
