@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2C_rdt              */  
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -25,6 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 2021-06-15   WLChooi   1.1   WMS-17291 - Modify Logic and Add new    */
+/*                              column (WL01)                           */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
@@ -87,6 +89,7 @@ BEGIN
        , M_Address3              NVARCHAR(45)  NULL
        , M_Address4              NVARCHAR(45)  NULL
        , M_City                  NVARCHAR(500) NULL
+       , ODNotes2                NVARCHAR(500) NULL   --WL01
    )
    	 
    INSERT INTO #TMP_SUM (Orderkey, UnitPricexQtyPicked, QtyPicked, Tax)
@@ -119,7 +122,7 @@ BEGIN
         , ISNULL(ST.Country,'') AS STCountry
         , ISNULL(OH.C_Country,'') AS C_Country
         , ISNULL(OH.UserDefine01,'') AS OHUserDefine01
-        , ISNULL(OH.C_Contact1,'') AS C_Contact1
+        , ISNULL(OH.C_Company,'') AS C_Contact1   --WL01
         , ISNULL(OH.C_Address1,'') AS C_Address1
         , ISNULL(OH.C_Address2,'') AS C_Address2
         , ISNULL(OH.C_Address3,'') AS C_Address3
@@ -142,11 +145,19 @@ BEGIN
         , '$' + CASE WHEN ISNUMERIC(ISNULL(OH.Userdefine03,'')) = 1 THEN CAST(FORMAT(CAST(OH.Userdefine03 AS FLOAT),'##,###,##0.00') AS NVARCHAR(20)) ELSE TRIM(ISNULL(OH.Userdefine03,'')) END
         , TRIM(OD.Userdefine02) AS TaxTitle
         , t.Tax AS SumTax
-        , '$' + CAST(FORMAT(t.Tax + t.UnitPricexQtyPicked +
-          CASE WHEN ISNUMERIC(OH.Userdefine03) = 1 
-               THEN CAST(OH.Userdefine03 AS FLOAT) 
-               ELSE 0 END,'##,###,##0.00') AS NVARCHAR(20)) AS Total
-        , ISNULL(OH.M_Contact1,'') AS M_Contact1
+        --WL01 S
+        , CASE WHEN TRIM(OD.Userdefine02) LIKE '%incl%' 
+               THEN '$' + CAST(FORMAT(t.UnitPricexQtyPicked +
+                    CASE WHEN ISNUMERIC(OH.Userdefine03) = 1 
+                         THEN CAST(OH.Userdefine03 AS FLOAT) 
+                         ELSE 0 END,'##,###,##0.00') AS NVARCHAR(20))
+               ELSE '$' + CAST(FORMAT(t.Tax + t.UnitPricexQtyPicked +
+                    CASE WHEN ISNUMERIC(OH.Userdefine03) = 1 
+                         THEN CAST(OH.Userdefine03 AS FLOAT) 
+                         ELSE 0 END,'##,###,##0.00') AS NVARCHAR(20))
+          END AS Total
+        --WL01 E
+        , ISNULL(OH.M_Company,'')  AS M_Contact1   --WL01
         , ISNULL(OH.M_Address1,'') AS M_Address1
         , ISNULL(OH.M_Address2,'') AS M_Address2
         , ISNULL(OH.M_Address3,'') AS M_Address3
@@ -155,6 +166,7 @@ BEGIN
                THEN '(none)' 
                ELSE TRIM(ISNULL(OH.M_City,'')) + ' ' + TRIM(ISNULL(OH.M_State,'')) + ' ' + 
                     TRIM(ISNULL(OH.M_Country,'')) + ' ' + TRIM(ISNULL(OH.M_Zip,'')) END AS M_City
+        , CASE WHEN LEN(ISNULL(OH.Notes2,'')) > 1 THEN 'Notes: ' + TRIM(OH.Notes2) ELSE '' END   --WL01
    FROM ORDERS OH (NOLOCK)
    JOIN STORER ST (NOLOCK) ON OH.Storerkey = ST.StorerKey
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
