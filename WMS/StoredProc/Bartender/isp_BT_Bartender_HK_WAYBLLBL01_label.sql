@@ -17,7 +17,8 @@ GO
 /* Date           Rev  Author     Purposes                                    */  
 /* 2019-05-15     1.0  CSCHONG    Created (WMS-8915)                          */   
 /* 2020-05-28     1.1  CSCHONG    WMS-13496 revised field logic (CS01)        */
-/* 2020-10-05     1.2  CheeMun    INC1315645 - Replace " with '               */          
+/* 2020-10-05     1.2  CheeMun    INC1315645 - Replace " with '               */     
+/* 2021-07-01     1.3  CSCHONG    WMS-17394 add new field col30 (CS02)        */     
 /******************************************************************************/              
                 
 CREATE PROC [dbo].[isp_BT_Bartender_HK_WAYBLLBL01_label]                     
@@ -166,13 +167,13 @@ BEGIN
                    + ' '''',case when Orders.CurrencyCode=''TWD'' then ''NTD'' else Orders.currencycode end,'
                    + ' Orders.invoiceamount,convert(nvarchar(10),DATEADD(DAY,1,getdate()),121),'
                    + ' ISNULL(orders.userdefine02,''''),'    --25                                                                  
-                   +' '''','''',orders.Externorderkey,orders.orderkey,'''','''','''','''','''','''', '  --35  
+                   +' '''','''',orders.Externorderkey,orders.orderkey,OI.EcomOrderID,'''','''','''','''','''', '  --35  --(CS02)
                    +' '''','''','''','''','''','''','''','''','''','''' ,'''','''','''','''','''','   --50
                    +' '''','''','''','''','''','''','''','''','''','''' '                              --60'
                    + ' FROM ORDERS orders WITH (NOLOCK) '
                    + ' JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = orders.storerkey ' 
                    + ' JOIN ORDERINFO OI WITH (NOLOCK) ON OI.orderkey = orders.orderkey '             --CS01
-                   +' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME=''SF_PREF'' ' 
+                   + ' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME=''SF_PREF'' ' 
                    +'                                     AND C1.Storerkey=orders.StorerKey '  
                    + ' WHERE orders.StorerKey =  @c_Sparm1 '                                            
                    + ' AND orders.orderkey = @c_Sparm2 '                               
@@ -325,24 +326,24 @@ EXIT_SP:
    SET @d_Trace_EndTime = GETDATE()
    SET @c_UserName = SUSER_SNAME()
    
-   EXEC isp_InsertTraceInfo 
-      @c_TraceCode = 'BARTENDER',
-      @c_TraceName = 'isp_BT_Bartender_HK_WAYBLLBL01_label',
-      @c_starttime = @d_Trace_StartTime,
-      @c_endtime = @d_Trace_EndTime,
-      @c_step1 = @c_UserName,
-      @c_step2 = '',
-      @c_step3 = '',
-      @c_step4 = '',
-      @c_step5 = '',
-      @c_col1 = @c_Sparm1, 
-      @c_col2 = @c_Sparm2,
-      @c_col3 = @c_Sparm3,
-      @c_col4 = @c_Sparm4,
-      @c_col5 = @c_Sparm5,
-      @b_Success = 1,
-      @n_Err = 0,
-      @c_ErrMsg = ''            
+   --EXEC isp_InsertTraceInfo     --(CS02)
+   --   @c_TraceCode = 'BARTENDER',
+   --   @c_TraceName = 'isp_BT_Bartender_HK_WAYBLLBL01_label',
+   --   @c_starttime = @d_Trace_StartTime,
+   --   @c_endtime = @d_Trace_EndTime,
+   --   @c_step1 = @c_UserName,
+   --   @c_step2 = '',
+   --   @c_step3 = '',
+   --   @c_step4 = '',
+   --   @c_step5 = '',
+   --   @c_col1 = @c_Sparm1, 
+   --   @c_col2 = @c_Sparm2,
+   --   @c_col3 = @c_Sparm3,
+   --   @c_col4 = @c_Sparm4,
+   --   @c_col5 = @c_Sparm5,
+   --   @b_Success = 1,
+   --   @n_Err = 0,
+   --   @c_ErrMsg = ''            
  
 select * from #result WITH (NOLOCK)
                                 
