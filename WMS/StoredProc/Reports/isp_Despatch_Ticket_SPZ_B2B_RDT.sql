@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2B_rdt              */  
 /*                                                                      */  
-/* GitLab Version: 1.2                                                  */  
+/* GitLab Version: 1.0                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -27,7 +27,6 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /* 2021-01-18   WLChooi   1.1   INC1403544 - Return Blank Result if     */
 /*                              ISOCntryCode = MY (WL01)                */
-/* 2021-06-15   WLChooi   1.2   WMS-17291 - Modify Logic (WL02)         */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
@@ -205,7 +204,7 @@ BEGIN
         , '' AS SailingOn
         , TRIM(ISNULL(ST.Country,'')) + ' to ' + TRIM(ISNULL(OH.C_Country,'')) AS Shipment
         , '' AS Via
-        , ISNULL(OH.IncoTerm,'') AS Terms   --ISNULL(SSOD.Terms,'') AS Terms   --WL02
+        , ISNULL(SSOD.Terms,'') AS Terms
         , TRIM(OD.Sku)
         , TRIM(S.DESCR)
         , TRIM(OD.ExternPOKey)
@@ -235,7 +234,7 @@ BEGIN
    FROM ORDERS OH (NOLOCK)
    JOIN STORER ST (NOLOCK) ON OH.Storerkey = ST.StorerKey
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
-   --LEFT JOIN StorerSODefault SSOD (NOLOCK) ON SSOD.StorerKey = OH.ConsigneeKey   --WL02
+   LEFT JOIN StorerSODefault SSOD (NOLOCK) ON SSOD.StorerKey = OH.ConsigneeKey
    JOIN SKU S (NOLOCK) ON OD.Sku = S.Sku AND OD.StorerKey = S.StorerKey
    JOIN PICKDETAIL PD (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
                               AND OD.SKU = PD.SKU
