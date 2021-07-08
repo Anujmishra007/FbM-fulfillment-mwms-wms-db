@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2021-06-01 1.0  CSCHONG    Created(WMS-17136)                              */                  
+/* 2021-06-01 1.0  CSCHONG    Created(WMS-17136)                              */    
+/* 2021-06-17 2.0  CSCHONG    WMS-17286 revised logic (CS01)                  */                 
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_BT_Bartender_HK_RTNHGTAG]                      
@@ -55,7 +56,9 @@ BEGIN
            @d_Trace_Step1      DATETIME,   
            @c_Trace_Step1      NVARCHAR(20),  
            @c_UserName         NVARCHAR(20),
-           @c_ExecArguments    NVARCHAR(4000)     
+           @c_ExecArguments    NVARCHAR(4000),
+           @c_condition1       NVARCHAR(500),
+           @c_orderby          NVARCHAR(500)     
   
    SET @d_Trace_StartTime = GETDATE()  
    SET @c_Trace_ModuleName = ''  
@@ -139,8 +142,31 @@ BEGIN
       [Col60] [NVARCHAR] (80) NULL             
      )            
               
-      
-  SET @c_SQLJOIN = +' SELECT TOP 1 s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
+  --CS01 START 
+
+  SET @c_orderby = N' ORDER BY S.sku'
+
+  IF ISNULL(@c_Sparm04,'') <> '' AND ISNULL(@c_Sparm05,'') = ''
+  BEGIN
+     SET @c_condition1 = N' AND S.sku = @c_Sparm02 OR s.sku = @c_Sparm04 '
+  END
+  ELSE IF ISNULL(@c_Sparm04,'') = '' AND ISNULL(@c_Sparm05,'') <> ''
+  BEGIN
+     SET @c_condition1 = N' AND S.sku = @c_Sparm02 OR s.sku = @c_Sparm05 '
+  END
+  ELSE IF ISNULL(@c_Sparm04,'') <> '' AND ISNULL(@c_Sparm05,'') <> ''
+  BEGIN
+     SET @c_condition1 = N' AND S.sku = @c_Sparm02 OR s.sku = @c_Sparm04 OR s.sku = @c_Sparm05 '
+  END
+  ELSE IF ISNULL(@c_Sparm04,'') = '' AND ISNULL(@c_Sparm05,'') = ''
+  BEGIN
+     SET @c_condition1 = N' AND S.sku = @c_Sparm02  '
+  END
+ 
+
+ IF @n_copy = 1
+ BEGIN    
+  SET @c_SQLJOIN = +' SELECT s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
              + ' CHARINDEX(''-'',s.DESCR,CHARINDEX(''-'',s.DESCR)+1)-CHARINDEX(''-'',s.DESCR)-1),s.color,'
              --+ ' SUBSTRING(s.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, CHARINDEX(''-'',S.DESCR, '
              --+ ' CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1),' --4   
@@ -159,8 +185,33 @@ BEGIN
              + ' '''','''','''','''','''','''','''','''','''','''' '   --60  
              + ' FROM SKU S WITH (NOLOCK) '
              + ' WHERE S.storerkey = @c_Sparm01 '
-             + ' AND S.sku = @c_Sparm02 '        
-          
+          --   + ' AND S.sku = @c_Sparm02 OR s.sku = @c_Sparm04 OR s.sku = @c_Sparm05'   
+          --   + ' ORDER BY S.sku'     
+ END 
+ ELSE
+ BEGIN
+ SET @c_SQLJOIN = +' SELECT TOP 1 s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
+             + ' CHARINDEX(''-'',s.DESCR,CHARINDEX(''-'',s.DESCR)+1)-CHARINDEX(''-'',s.DESCR)-1),s.color,'
+             --+ ' SUBSTRING(s.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, CHARINDEX(''-'',S.DESCR, '
+             --+ ' CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1),' --4   
+             + ' CASE WHEN CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) <> 0 '
+             + ' THEN SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
+             + ' CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1) '
+             + ' ELSE SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
+             + ' LEN(S.DESCR)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) END,' 
+             + ' s.size,s.sku,'''','''','''','''', '      --10  
+             + ' '''','''','''','''','''','     --15       
+             + CHAR(13) +      
+             + ' '''','''','''','''','''','         --20      
+             + ' '''','''','''','''','''','''','''','''','''','''','  --30  
+             + ' '''','''','''','''','''','''','''','''','''','''','   --40       
+             + ' '''','''','''','''','''','''','''','''','''','''', '  --50       
+             + ' '''','''','''','''','''','''','''','''','''','''' '   --60  
+             + ' FROM SKU S WITH (NOLOCK) '
+             + ' WHERE S.storerkey = @c_Sparm01 '
+         --    + ' AND S.sku = @c_Sparm02 '      
+
+ END  --CS01 END       
       IF @b_debug=1        
       BEGIN        
         PRINT @c_SQLJOIN          
@@ -173,16 +224,20 @@ BEGIN
              +',Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54'+ CHAR(13) +           
              + ',Col55,Col56,Col57,Col58,Col59,Col60) '      
 
-SET @c_SQL = @c_SQL + @c_SQLJOIN 
+SET @c_SQL = @c_SQL + @c_SQLJOIN + CHAR(13) + @c_condition1 + CHAR(13) + @c_orderby
 
    
    SET @c_ExecArguments = N'  @c_Sparm01         NVARCHAR(80)'  
                          + ' ,@c_Sparm02         NVARCHAR(80)'  
+                         + ' ,@c_Sparm04         NVARCHAR(80)'    --CS01
+                         + ' ,@c_Sparm05         NVARCHAR(80)'    --CS01
                                
    EXEC sp_ExecuteSql     @c_SQL     
                         , @c_ExecArguments    
                         , @c_Sparm01
-                        , @c_Sparm02         
+                        , @c_Sparm02    
+                        , @c_Sparm04             --CS01 
+                        , @c_Sparm05             --CS01
                 
         
       IF @b_debug=1        

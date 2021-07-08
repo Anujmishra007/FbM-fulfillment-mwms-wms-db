@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2021-06-01 1.0  CSCHONG    Created(WMS-17136)                              */                            
+/* 2021-06-01 1.0  CSCHONG    Created(WMS-17136)                              */ 
+/* 2021-06-17 2.0  CSCHONG    WMS-17286 revised logic (CS01)                  */                           
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_RTNHGTAG_GetParm]                      
@@ -61,7 +62,8 @@ BEGIN
            @c_ExecArguments    NVARCHAR(4000),
            @c_storerkey        NVARCHAR(20),
            @n_Pqty             INT,   
-           @n_rowno            INT   
+           @n_rowno            INT,
+           @n_noofcopy         INT                --CS01   
   
    SET @d_Trace_StartTime = GETDATE()  
    SET @c_Trace_ModuleName = ''  
@@ -78,23 +80,61 @@ BEGIN
     SET @c_SQLinsert = ''
     SET @c_SQLSelect = ''
 
+    --CS01 START
+    SET @n_noofcopy = 1
+
+    SET @n_noofcopy = CAST(@parm03 AS INT)
+    
+  IF @n_noofcopy = 1
+  BEGIN
     SET @c_SQLJOIN = 'SELECT TOP 1 PARM1=S.storerkey, ' +
-                     ' PARM2=S.SKU,PARM3= @parm03 ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+
+                     ' PARM2=S.SKU,PARM3= @parm03 ,PARM4= @parm04,PARM5=@parm05,PARM6='''',PARM7='''', '+   --CS01
                      'PARM8='''',PARM9='''',PARM10='''',Key1=''storerkey'',Key2=''sku'',Key3='''',Key4='''','+
                      ' Key5= '''' '  +  
                      ' FROM SKU S WITH (NOLOCK) ' +
                      ' where s.storerkey = @parm01 ' +
                      ' AND  S.SKU = @parm02    '
      
-       
+  END  
+  ELSE
+  BEGIN
+      SET @c_SQLJOIN = 'SELECT TOP 1 PARM1=S.storerkey, ' +
+                     ' PARM2=S.SKU,PARM3= @parm03 ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+   --CS01
+                     ' PARM8='''',PARM9='''',PARM10='''',Key1=''storerkey'',Key2=''sku'',Key3='''',Key4='''','+
+                     ' Key5= '''' '  +  
+                     ' FROM SKU S WITH (NOLOCK) ' +
+                     ' where s.storerkey = @parm01 ' +
+                     ' AND  S.SKU = @parm02    '  +
+                     ' UNION ' +
+                     ' SELECT TOP 1 PARM1=S.storerkey, ' +
+                     ' PARM2=S.SKU,PARM3= @parm03 ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+   --CS01
+                     ' PARM8='''',PARM9='''',PARM10='''',Key1=''storerkey'',Key2=''sku'',Key3='''',Key4='''','+
+                     ' Key5= '''' '  +  
+                     ' FROM SKU S WITH (NOLOCK) ' +
+                     ' where s.storerkey = @parm01 ' +
+                     ' AND  S.SKU = @parm04    '  +
+                     ' UNION ' + 
+                     ' SELECT TOP 1 PARM1=S.storerkey, ' +
+                     ' PARM2=S.SKU,PARM3= @parm03 ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+   --CS01
+                     ' PARM8='''',PARM9='''',PARM10='''',Key1=''storerkey'',Key2=''sku'',Key3='''',Key4='''','+
+                     ' Key5= '''' '  +  
+                     ' FROM SKU S WITH (NOLOCK) ' +
+                     ' where s.storerkey = @parm01 ' +
+                     ' AND  S.SKU = @parm05    '  +
+                     ' ORDER BY S.SKU  ' 
+                     
+  END    
+  --CS01 END
        SET @c_SQL = @c_SQLJOIN 
        
     
 
    SET @c_ExecArguments = N'   @parm01           NVARCHAR(80),' +
                            '   @parm02           NVARCHAR(80),' +
-                           '   @parm03           NVARCHAR(80),'  +
-                           '   @parm04           NVARCHAR(80)'     
+                           '   @parm03           NVARCHAR(80),' +
+                           '   @parm04           NVARCHAR(80),' +
+                           '   @parm05           NVARCHAR(80)' 
+   
 
                          
                          
@@ -104,6 +144,7 @@ BEGIN
                         , @parm02
                         , @parm03
                         , @parm04
+                        , @parm05 
 
             
    EXIT_SP:    
