@@ -11,7 +11,7 @@ GO
 /* Copyright: IDS                                                           */    
 /* Written by:                                                              */    
 /*                                                                          */    
-/* Purpose: WMS-15992 SG - MHAP – Picking List CR                           */    
+/* Purpose: WMS-15992 SG - MHAP - Picking List CR                           */    
 /*                                                                          */    
 /*                                                                          */    
 /* Usage:                                                                   */    
@@ -28,6 +28,7 @@ GO
 /*                                                                          */    
 /* Updates:                                                                 */    
 /* Date        Author      Ver   Purposes                                   */    
+/* 2021-07-07  WLChooi     1.1   WMS-17430 - Add Storerkey (WL01)           */
 /****************************************************************************/    
     
 CREATE PROC dbo.nsp_GetPickSlipOrders03h (@c_loadkey NVARCHAR(10))    
@@ -183,7 +184,8 @@ BEGIN TRAN
       ,   SortByLoc         INT        NULL             
       ,   ShowPickdetailID  NVARCHAR(10) 
       ,   mbolkey           NVARCHAR(20) NULL
-      ,   Containerkey      NVARCHAR(20) NULL        
+      ,   Containerkey      NVARCHAR(20) NULL 
+      ,   Storerkey         NVARCHAR(15) NULL   --WL01       
       )    
   
    SELECT Storerkey    
@@ -244,6 +246,7 @@ BEGIN TRAN
    ,  ManufacturerSKU     
    ,  SortByLoc         
    ,  ShowPickdetailID,mbolkey ,Containerkey 
+   ,  Storerkey   --WL01
    )    
    SELECT (SELECT PICKHEADERKEY FROM PICKHEADER (NOLOCK)    
            WHERE ExternOrderKey = @c_LoadKey    
@@ -322,6 +325,7 @@ BEGIN TRAN
       ,  ISNULL(CLR.Short,'N') AS ShowPickdetailID   
       ,  ISNULL(MB.mbolkey,'')
       ,  ISNULL(CONT.ContainerKey,'') 
+      ,  ORDERS.StorerKey   --WL01
    FROM LOADPLANDETAIL (NOLOCK)    
    JOIN ORDERS (NOLOCK) ON (ORDERS.Orderkey = LoadPlanDetail.Orderkey)     
    JOIN ORDERDETAIL (NOLOCK) ON (ORDERDETAIL.Orderkey = ORDERS.Orderkey)     
@@ -401,7 +405,8 @@ BEGIN TRAN
          ,  ISNULL(SortByLoc,0)                      
          ,  ISNULL(CLR.Short,'N')      
          ,  ISNULL(MB.mbolkey,'')
-         ,  ISNULL(CONT.ContainerKey,'')               
+         ,  ISNULL(CONT.ContainerKey,'') 
+         ,  ORDERS.StorerKey   --WL01              
   
    BEGIN TRAN    
    -- Uses PickType as a Printed Flag       
@@ -556,6 +561,7 @@ SUCCESS:
       ,  ShowPickdetailID   
       ,  mbolkey
       ,  Containerkey
+      ,  Storerkey   --WL01
    FROM #TEMP_PICK       
    ORDER BY Company    
          ,  Orderkey    
