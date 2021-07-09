@@ -47,6 +47,7 @@ GO
 /* 11-03-2020   MCTang    1.5   Add scanin2log (MC03)                   */
 /* 11-May-2020  MCTang    1.6   Add scanin3log (MC04)                   */
 /* 26-Mar-2021  NJOW01    1.7   WMS-16663 add transmitlog2 interface    */
+/* 09-Jul-2021  NJOW02    1.8   Fix null value comparison issue         */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickingInfoAdd]
@@ -945,7 +946,7 @@ BEGIN
                WHERE ORDERDETAIL.OrderKey = @c_xdOrderKey
                AND ORDERDETAIL.OrderLinenumber = @c_OrderLineNumber
 
-               IF @c_PrevOrderKey <> @c_xdOrderKey
+               IF ISNULL(@c_PrevOrderKey,'') <> ISNULL(@c_xdOrderKey,'')  --NJOW02
                BEGIN
                   SELECT @c_PrevOrderKey = @c_xdOrderKey
 
@@ -1006,7 +1007,7 @@ BEGIN
 
                IF @n_Continue = 1 OR @n_Continue = 2
                BEGIN
-                  IF (@c_PrevLoadKey <> @c_LoadKey) OR (@c_PrevLoadOrderKey <> @c_xdOrderKey)
+                  IF (ISNULL(@c_PrevLoadKey,'') <> ISNULL(@c_LoadKey,'')) OR (ISNULL(@c_PrevLoadOrderKey,'') <> ISNULL(@c_xdOrderKey,'')) --NJOW02
                   BEGIN
                      SELECT @c_PrevLoadKey = @c_LoadKey
                      SELECT @c_PrevLoadOrderKey = @c_xdOrderKey
