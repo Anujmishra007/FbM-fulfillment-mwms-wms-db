@@ -30,6 +30,7 @@ GO
 /* 13-OCT-2020 Wan      1.0   Created                                   */  
 /* 11-MAY-2021 Wan01    1.1   WMS-17001 - [CN] NIKE_O2_Ecompacking_None */
 /*                            RFID SKU Skip Validation_CR               */
+/* 02-JUL-2021 ML01     1.2   WMS-17342 - [CN] NIKE CN ECOM Packing - CR*/
 /************************************************************************/        
 CREATE PROC [dbo].[isp_EPreScanRFID01]        
          @c_TaskBatchNo NVARCHAR(10)         
@@ -53,7 +54,21 @@ BEGIN
           
    SET @b_Success  = 0        
    SET @n_err      = 0        
-   SET @c_errmsg   = ''        
+   SET @c_errmsg   = ''   
+   
+   --(ML01) - START
+      IF NOT EXISTS (SELECT 1
+                 FROM dbo.PackTask AS pt WITH (NOLOCK)
+                 JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.orderkey = pt.orderkey
+                 WHERE pt.TaskBatchNo = @c_TaskBatchNo
+                 AND o.B_Company <> '3940'
+                 )
+                 
+      BEGIN   
+         GOTO QUIT_SP       
+      END     
+   --(ML01) - END
+          
    
    --(Wan01) - START
    IF @c_Sku = ''
@@ -85,7 +100,7 @@ BEGIN
    BEGIN          
      SET @b_Success = 1        
    END           
-        
+       
    QUIT_SP:        
          
 END -- procedure 
