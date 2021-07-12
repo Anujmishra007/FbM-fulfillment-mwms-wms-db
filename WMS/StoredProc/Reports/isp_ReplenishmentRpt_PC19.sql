@@ -26,7 +26,8 @@ GO
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
 /* 05-MAR-2018 Wan01    1.1   WM - Add Functype                            */
-/* 04-AUG-2020 WLChooi  1.2   WMS-14531 - Add Flag if Qty < 0 (WL01)       */
+/* 04-AUG-2020 WLChooi  1.2   WMS-14531 - Add Flag if Qty < 0 (WL01)       */                
+/* 01-Jun-2021 NJOW01   1.3   WMS-16990 Support multiple sku with same EAN */
 /***************************************************************************/
 CREATE PROC isp_ReplenishmentRpt_PC19
                @c_zone01      NVARCHAR(10)
@@ -116,7 +117,8 @@ BEGIN
              ,@b_DoneCheckOverAllocatedLots  INT
              ,@n_SKULOCavailableqty          INT
              ,@c_hostwhcode                  NVARCHAR(10)   -- sos 2199
-             ,@c_overallocation              NVARCHAR(1)  
+             ,@c_overallocation              NVARCHAR(1)
+             ,@c_Sku                         NVARCHAR(20)  
               
       SELECT @c_CurrentSKU = SPACE(20)
             ,@c_CurrentStorer = SPACE(15)
@@ -132,6 +134,9 @@ BEGIN
             ,@n_numberofrecs = 0
             ,@n_limitrecs = 5
             
+      --NJOW01
+      CREATE TABLE #TMP_SKU (Storerkey NVARCHAR(15), Sku NVARCHAR(20), Lottable04 DATETIME NULL, OverallocatedSKU NVARCHAR(5))
+            
       /* Make a temp version of SKUxLOC */
       SELECT ReplenishmentPriority, ReplenishmentSeverity ,StorerKey,
       SKU, LOC, ReplenishmentCasecnt, 'N' AS Overallocation
@@ -141,6 +146,49 @@ BEGIN
 
       -- SHONG01
       -- Use Left Outer Join for LOTxLOCxID
+
+      --NJOW01
+      INSERT #TempSKUxLOC  
+      SELECT MIN(ReplenishmentPriority),  
+      ReplenishmentSeverity = CASE WHEN ISNULL(SUM(LOTxLOCxID.QtyExpected),0) > 0   
+                                     AND MIN(SKUxLOC.QtyLocationMinimum) < SUM(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated)) THEN    
+                                            ISNULL(SUM(LOTxLOCxID.QtyExpected),0)  
+                                   ELSE MAX(SKUxLOC.QtyLocationLimit) - SUM( LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated ))  
+                              END,  
+      SKUxLOC.StorerKey,  
+      MIN(SKUxLOC.SKU),  
+      SKUxLOC.LOC,  
+      MAX(ReplenishmentCasecnt),  
+      OverAllocation = CASE WHEN ISNULL(SUM(LOTxLOCxID.QtyExpected),0) > 0   
+                              AND MIN(SKUxLOC.QtyLocationMinimum) < SUM(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated)) THEN    
+                                 'Y'  
+                            ELSE 'N' END  
+      FROM SKUxLOC (NOLOCK) 
+      JOIN LOC (NOLOCK) ON SKUxLOC.LOC = LOC.LOC
+      JOIN SKU (NOLOCK) ON SKU.StorerKey = SKUxLOC.StorerKey  
+                               AND  SKU.SKU = SKUxLOC.SKU
+      LEFT OUTER JOIN LOTxLOCxID (NOLOCK) ON SKUxLOC.Storerkey = LOTxLOCxID.Storerkey  
+                               AND  SKUxLOC.Sku = LOTxLOCxID.Sku  
+                                AND  SKUxLOC.Loc = LOTxLOCxID.Loc              
+      WHERE  (SKUxLOC.LOCationtype = 'PICK' or SKUxLOC.LOCationtype = 'CASE')   
+      AND (SKUxLOC.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL') 
+      AND  LOC.FACILITY = @c_Zone01  
+      AND  (LOC.PutawayZone in (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)  
+            OR @c_zone02 = 'ALL')  
+      GROUP BY --SKUxLOC.ReplenishmentPriority,  
+               SKUxLOC.StorerKey,  
+               --SKUxLOC.SKU,  
+               SKUxLOC.LOC  
+               --SKUxLOC.ReplenishmentCasecnt,  
+               --SKUxLOC.Qty,  
+               --SKUxLOC.QtyPicked,  
+               --SKUxLOC.QtyAllocated,  
+               --SKUxLOC.QtyLocationMinimum,  
+               --SKUxLOC.QtyLocationLimit  
+      HAVING SUM(LOTxLOCxID.QtyExpected) > 0 OR   
+            (SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated) <= MIN(SKUxLOC.QtyLocationMinimum) )  
+      
+      /*
       INSERT #TempSKUxLOC  
       SELECT ReplenishmentPriority,  
       ReplenishmentSeverity = CASE WHEN ISNULL(SUM(LOTxLOCxID.QtyExpected),0) > 0   
@@ -180,6 +228,7 @@ BEGIN
                SKUxLOC.QtyLocationLimit  
       HAVING SUM(LOTxLOCxID.QtyExpected) > 0 OR   
             (SKUxLOC.Qty - SKUxLOC.QtyPicked - SKUxLOC.QtyAllocated <= SKUxLOC.QtyLocationMinimum )  
+      */      
 
 -- Remarked by June 18.Nov.04 : SOS29580
 --    SELECT @c_CurrentStorer = 'UTL'
@@ -227,19 +276,81 @@ BEGIN
                              END,
          @c_fromlot2 = SPACE(10),
          @b_DoneCheckOverAllocatedLots = 0
+         
+         --NJOW01
+         TRUNCATE TABLE #TMP_SKU
+         
+         INSERT INTO #TMP_SKU (Storerkey, Sku, Lottable04, OverallocatedSKU)
+         SELECT SL.Storerkey, SL.Sku, INV.Lottable04, 'N'
+         FROM SKUXLOC SL(NOLOCK) 
+         OUTER APPLY (SELECT MIN(LA.Lottable04) AS Lottable04,
+                             SUM(LLI.QtyExpected) AS QtyExpected 
+                      FROM LOTXLOCXID LLI(NOLOCK)
+                      JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc
+                      JOIN ID (NOLOCK) ON LLI.ID = ID.Id
+                      JOIN LOT (NOLOCK) ON LLI.Lot = LOT.Lot
+                      JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.Lot = LA.Lot
+                      WHERE LOC.HostWHCode = @c_HostWHCode
+                      AND LOC.Facility = @c_Zone01
+                      AND LLI.Storerkey = SL.Storerkey
+                      AND LLI.Sku = SL.Sku
+                      AND LLI.Loc <> @c_CurrentLoc
+                      AND LOC.LocationFlag = 'NONE'
+                      AND LOC.Status = 'OK'
+                      AND ID.Status = 'OK'
+                      AND LOT.Status = 'OK'
+                      AND LLI.Qty - LLI.QtyPicked - LLI.QtyAllocated > 0) INV                      
+         WHERE SL.Storerkey = @c_CurrentStorer
+         AND SL.Loc = @c_CurrentLoc
+         AND SL.LocationType IN('PICK','CASE')
 
          SELECT LOTxLOCxID.LOT, 'OVERALLOC' AS Overallocation
          INTO #TMP_OVERALLOC
          FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK), LOT (NOLOCK)
          WHERE LOTxLOCxID.StorerKey = @c_CurrentStorer
-         AND LOTxLOCxID.SKU = @c_CurrentSKU
+         --AND LOTxLOCxID.SKU = @c_CurrentSKU  --NJOW01 Removed
          AND LOTxLOCxID.LOC = LOC.LOC
          AND LOTxLOCxID.QtyExpected > 0 
          AND LOTxLOCxID.LOC = @c_CurrentLoc
-            AND LOTxLOCxID.LOT = LOT.Lot       
-            AND LOT.Status     = 'OK'          
+         AND LOTxLOCxID.LOT = LOT.Lot       
+         AND LOT.Status     = 'OK'          
          GROUP BY LOTxLOCxID.LOT   
          
+         --NJOW01
+         UPDATE #TMP_SKU
+         SET #TMP_SKU.OverallocatedSKU = 'Y'
+         WHERE #TMP_SKU.Sku IN (SELECT LOT.Sku FROM #TMP_OVERALLOC JOIN LOT (NOLOCK) ON #TMP_OVERALLOC.Lot = LOT.Lot) 
+
+         --NJOW01
+         DECLARE LOT_CUR CURSOR FAST_FORWARD READ_ONLY FOR 
+         SELECT LOTxLOCxID.LOT, LOTxLOCxID.Sku 
+         FROM LOTxLOCxID (NOLOCK)
+         JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC
+         JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.LOT = LOTATTRIBUTE.LOT
+         JOIN LOT (NOLOCK) ON LOTxLOCxID.LOT = LOT.Lot
+         JOIN ID (NOLOCK) ON LOTxLOCxID.ID  = ID.ID
+         JOIN #TMP_SKU TSKU (NOLOCK) ON LOTxLOCxID.Storerkey = TSKU.Storerkey AND LOTxLOCxID.Sku = TSKU.Sku
+         LEFT JOIN #TMP_OVERALLOC ON LOTxLOCxID.Lot = #TMP_OVERALLOC.Lot
+         WHERE LOTxLOCxID.StorerKey = @c_CurrentStorer
+         --AND LOTxLOCxID.SKU = @c_CurrentSKU
+         AND LOC.LocationFlag <> 'DAMAGE'
+         AND LOC.LocationFlag <> 'HOLD'
+         AND LOC.Status <> 'HOLD'
+         AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated > 0
+         AND LOTxLOCxID.QtyExpected = 0 -- make sure we aren't going to try to pull from a LOCation that needs stuff to satisfy existing demand
+         AND LOTxLOCxID.LOC <> @c_CurrentLoc
+         AND LOC.Facility = @c_zone01
+         AND LOC.hostwhcode = @c_hostwhcode -- sos 2199
+         -- 2006 Oct 02
+         -- Comment by SHONG, Shouldn't filter Zone for From Loc.
+         -- AND (LOC.PutawayZone in (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
+         --        OR @c_zone02 = 'ALL')
+         AND LOT.Status     = 'OK'          -- Added By YTWan on 07-Oct-2004
+         AND ID.Status      <> 'HOLD'       -- Added By YTWan on 07-Oct-2004
+         GROUP BY LOTxLOCxID.LOT, ISNULL(#TMP_OVERALLOC.Overallocation,''), LOTxLOCxID.Sku, TSKU.OverallocatedSku    
+       ORDER BY CASE WHEN ISNULL(#TMP_OVERALLOC.Overallocation,'')='OVERALLOC' THEN 1 ELSE 2 END, CASE WHEN TSKU.OverallocatedSku = 'Y' THEN 1 ELSE 2 END, 
+                MIN(TSKU.Lottable04), LOTxLOCxID.Sku, MIN(LOTATTRIBUTE.LOTTABLE04), MIN(LOTATTRIBUTE.LOTTABLE05)         
+         /*
          DECLARE LOT_CUR CURSOR FAST_FORWARD READ_ONLY FOR 
          SELECT LOTxLOCxID.LOT
          FROM LOTxLOCxID (NOLOCK)
@@ -267,10 +378,11 @@ BEGIN
          GROUP BY LOTxLOCxID.LOT, ISNULL(#TMP_OVERALLOC.Overallocation,'')   
          ORDER BY CASE WHEN ISNULL(#TMP_OVERALLOC.Overallocation,'')='OVERALLOC' THEN 1 ELSE 2 END,
                             MIN(LOTTABLE04), MIN(LOTTABLE05)
+         */                   
 
          OPEN LOT_CUR
 
-         FETCH NEXT FROM LOT_CUR INTO @c_FromLot 
+         FETCH NEXT FROM LOT_CUR INTO @c_FromLot, @c_Sku --NJOW01
          WHILE @@Fetch_Status <> -1 AND @n_remainingqty > 0 
          BEGIN
             SET ROWCOUNT 0
@@ -278,16 +390,16 @@ BEGIN
 
             DECLARE LOC_CUR CURSOR FAST_FORWARD READ_ONLY FOR 
                SELECT LOTxLOCxID.LOC
-               FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK)
-               WHERE LOT = @c_fromlot
-               AND LOTxLOCxID.LOC = LOC.LOC
-               AND StorerKey = @c_CurrentStorer
-               AND SKU = @c_CurrentSKU
+               FROM LOTxLOCxID (NOLOCK)
+               JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC 
+               WHERE LOTxLOCxID.LOT = @c_fromlot
+               AND LOTxLOCxID.StorerKey = @c_CurrentStorer
+               AND LOTxLOCxID.SKU = @c_SKU    --NJOW01 
                AND LOTxLOCxID.LOC = LOC.LOC
                AND LOC.LocationFlag <> 'DAMAGE'
                AND LOC.LocationFlag <> 'HOLD'
                AND LOC.Status <> 'HOLD'
-               AND LOTxLOCxID.qty - QtyPicked - QtyAllocated > 0
+               AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated > 0
                AND LOTxLOCxID.QtyExpected = 0 -- make sure we aren't going to try to pull from a LOCation that needs stuff to satisfy existing demAND
                AND LOTxLOCxID.LOC <> @c_CurrentLoc
                AND LOC.Facility = @c_zone01
@@ -309,18 +421,18 @@ BEGIN
                BEGIN
                   SET ROWCOUNT 1
                   SELECT @c_fromid = ID,
-                         @n_OnHandQty = LOTxLOCxID.QTY - QtyPicked - QtyAllocated
-                  FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK)
-                  WHERE LOT = @c_fromlot
-                  AND LOTxLOCxID.LOC = LOC.LOC 
+                         @n_OnHandQty = LOTxLOCxID.QTY - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated
+                  FROM LOTxLOCxID (NOLOCK)
+                  JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC
+                  WHERE LOTxLOCxID.LOT = @c_fromlot
                   AND LOTxLOCxID.LOC = @c_FromLOC
-                  AND id < @c_fromid
-                  AND StorerKey = @c_CurrentStorer
-                  AND SKU = @c_CurrentSKU
+                  AND LOTxLOCxID.id < @c_fromid
+                  AND LOTxLOCxID.StorerKey = @c_CurrentStorer
+                  AND LOTxLOCxID.SKU = @c_SKU --NJOW01 
                   AND LOC.LocationFlag <> 'DAMAGE'
                   AND LOC.LocationFlag <> 'HOLD'
                   AND LOC.Status <> 'HOLD'
-                  AND LOTxLOCxID.qty - QtyPicked - QtyAllocated > 0
+                  AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated > 0
                   AND LOTxLOCxID.QtyExpected = 0 -- make sure we aren't going to try to pull from a LOCation that needs stuff to satisfy existing demAND
                   AND LOTxLOCxID.LOC <> @c_CurrentLoc
                   AND LOC.Facility = @c_zone01
@@ -362,7 +474,7 @@ BEGIN
                   /* Verify that the from LOCation is not overalLOCated in SKUxLOC */
                   IF EXISTS(SELECT 1 FROM SKUxLOC (NOLOCK)
                             WHERE StorerKey = @c_CurrentStorer
-                            AND SKU = @c_CurrentSKU
+                            AND SKU = @c_SKU --NJOW01
                             AND LOC = @c_FromLOC
                             AND QtyExpected > 0
                   )
@@ -378,7 +490,7 @@ BEGIN
                   /* PIECE PICK LOCation for this product.    */
                   IF EXISTS(SELECT 1 FROM SKUxLOC (NOLOCK)
                   WHERE StorerKey = @c_CurrentStorer
-                  AND SKU = @c_CurrentSKU
+                  AND SKU = @c_SKU --NJOW01
                   AND LOC = @c_FromLOC
                   AND LOCATIONTYPE = 'PICK'
                   )
@@ -393,7 +505,7 @@ BEGIN
                   /* CASE PICK LOCation for this product.     */
                   IF EXISTS(SELECT 1 FROM SKUxLOC (NOLOCK)
                   WHERE StorerKey = @c_CurrentStorer
-                  AND SKU = @c_CurrentSKU
+                  AND SKU = @c_SKU --NJOW01
                   AND LOC = @c_FromLOC
                   AND LOCATIONTYPE = 'CASE'
                   )
@@ -420,7 +532,7 @@ BEGIN
                   FROM   SKU (NOLOCK) 
                   JOIN   PACK (NOLOCK) ON PACK.PackKey = SKU.PackKey 
                   WHERE  SKU.StorerKey = @c_CurrentStorer
-                  AND    SKU.SKU = @c_CurrentSKU
+                  AND    SKU.SKU = @c_SKU --NJOW01
                         
                   IF @cLocationHandling <> '2' -- Case Only 
                   BEGIN 
@@ -431,7 +543,7 @@ BEGIN
                      SELECT @n_FullPallet = QTY - QtyAllocated - QtyPicked
                      FROM LOTxLOCxID (NOLOCK)
                      WHERE StorerKey = @c_CurrentStorer
-                     AND SKU = @c_CurrentSKU
+                     AND SKU = @c_SKU --NJOW01
                      AND LOC = @c_FromLOC
                      AND LOT = @c_fromlot
                      AND ID  = @c_fromid
@@ -545,7 +657,7 @@ BEGIN
                      FROM   SKU (NOLOCK), PACK (NOLOCK)
                      WHERE  SKU.PackKey = PACK.Packkey
                      AND    SKU.StorerKey = @c_CurrentStorer
-                     AND    SKU.SKU = @c_CurrentSKU
+                     AND    SKU.SKU = @c_SKU --NJOW01
 
                      IF @n_continue = 1 or @n_continue = 2
                      BEGIN
@@ -568,7 +680,7 @@ BEGIN
                            Refno)   --WL01
                            VALUES (
                            @c_CurrentStorer,
-                           @c_CurrentSKU,
+                           @c_SKU,  --NJOW01
                            @c_FromLOC,
                            @c_CurrentLoc,
                            @c_fromlot,
@@ -585,14 +697,14 @@ BEGIN
 
                      IF @b_debug = 1
                      BEGIN
-                        SELECT 'INSERTED : ' as Title, @c_CurrentSKU ' SKU', @c_fromlot 'LOT',  @c_CurrentLoc 'LOC', @c_fromid 'ID', 
-                               @n_FromQty 'Qty'
+                        SELECT 'INSERTED : ' as Title, @c_SKU ' SKU', @c_fromlot 'LOT',  @c_CurrentLoc 'LOC', @c_fromid 'ID', 
+                               @n_FromQty 'Qty', @c_CurrentSKU ' CurrentSKU'
                      END 
                               
                   END -- if from qty > 0
                   IF @b_debug = 1
                   BEGIN
-                     select @c_CurrentSKU ' SKU', @c_CurrentLoc 'LOC', @c_CurrentPriority 'priority', @n_currentfullcase 'full case', @n_CurrentSeverity 'severity'
+                     select @c_SKU ' SKU', @c_CurrentLoc 'LOC', @c_CurrentPriority 'priority', @n_currentfullcase 'full case', @n_CurrentSeverity 'severity', @c_CurrentSKU ' CurrentSKU'
                      -- select @n_FromQty 'qty', @c_FromLOC 'fromLOC', @c_fromlot 'from lot', @n_possiblecases 'possible cases'
                      select @n_RemainingQty '@n_RemainingQty', @c_CurrentLoc + ' SKU = ' + @c_CurrentSKU, @c_fromlot 'from lot', @c_fromid
                   END
@@ -612,7 +724,7 @@ BEGIN
             DEALLOCATE LOC_CUR 
 
             FIND_NEXT_LOT:
-            FETCH NEXT FROM LOT_CUR INTO @c_FromLot
+            FETCH NEXT FROM LOT_CUR INTO @c_FromLot, @c_Sku --NJOW01
          END -- LOT 
          CLOSE LOT_CUR 
          DEALLOCATE LOT_CUR 
