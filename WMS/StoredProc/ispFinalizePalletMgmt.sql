@@ -24,13 +24,15 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date         Author  Ver   Purposes                                  */
+/* 22-APR-2021  NJOW01  1.0   WMS-16767 TH check to storer restiction   */  
 /************************************************************************/
 CREATE PROC dbo.ispFinalizePalletMgmt 
-            @c_PMkey    NVARCHAR(10) 
-         ,  @b_Success  INT = 0  OUTPUT 
-         ,  @n_err      INT = 0  OUTPUT 
-         ,  @c_errmsg   NVARCHAR(215) = '' OUTPUT
+            @c_PMkey            NVARCHAR(10) 
+         ,  @b_Success          INT = 0  OUTPUT 
+         ,  @n_err              INT = 0  OUTPUT 
+         ,  @c_errmsg           NVARCHAR(215) = '' OUTPUT
+         ,  @c_BackEndFinalize  NVARCHAR (10) = ''
 AS
 BEGIN
    SET NOCOUNT ON
@@ -49,11 +51,22 @@ BEGIN
          , @c_ToStorerkey        NVARCHAR(15)
          , @c_Storerkey          NVARCHAR(15) 
          , @c_TranType           NVARCHAR(10)
+   
+   --NJOW01
+   DECLARE @c_Country            NVARCHAR(30)  
+         , @c_username           NVARCHAR(128) 
+         , @c_StorerRestrict     NVARCHAR(250) 
+         , @c_FacilityRestrict   NVARCHAR(250) 
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
+   
+   --NJOW01
+   SELECT @c_Country = NSQLValue 
+   FROM NSQLCONFIG (NOLOCK) 
+   WHERE ConfigKey = 'COUNTRY'   
      
    IF EXISTS ( SELECT 1
                FROM PALLETMGMT WITH (NOLOCK)
@@ -158,6 +171,117 @@ BEGIN
       SET @c_errmsg= 'Empty From/To Storer found for transfer transaction type. (ispFinalizePalletMgmt)' 
       GOTO QUIT_SP
    END
+   
+   --NJOW01
+   IF @c_Country = 'TH'
+   BEGIN   	   
+   	  IF EXISTS (SELECT 1 
+                 FROM PALLETMGMT       PMH WITH (NOLOCK)
+                 JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
+                 WHERE PMH.PMKey = @c_PMkey 
+                 AND PMD.Status < '9'
+                 AND PMD.Type IN('DP','WD')
+                 AND PMD.FromStorerkey <> PMD.ToStorerkey)
+      BEGIN
+         SET @n_continue = 3    
+         SET @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+         SET @c_errmsg= 'From Storer and To Storer must be same for Deposit(WD) or Withdrawal(DP) type. (ispFinalizePalletMgmt)' 
+         GOTO QUIT_SP         
+      END           
+   	  
+   	  IF ISNULL(@c_BackEndFinalize,'') <> 'Y'
+   	  BEGIN 
+   	     IF EXISTS (SELECT 1 
+                    FROM PALLETMGMT       PMH WITH (NOLOCK)
+                    JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
+                    WHERE PMH.PMKey = @c_PMkey 
+                    GROUP BY PMD.DocketNo
+                    HAVING COUNT(1) > 1             
+                    UNION ALL
+                    SELECT 1
+                    FROM PALLETMGMT       PMH WITH (NOLOCK)
+                    JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
+                    WHERE PMH.PMKey = @c_PMkey
+                    AND EXISTS(SELECT 1 
+                               FROM PALLETMGMTDETAIL PMD2 (NOLOCK) 
+                               WHERE PMD2.PMKey <> PMH.PMKey 
+                               AND PMD2.Docketno = PMD.Docketno)                           
+                    )
+         BEGIN
+            SET @n_continue = 3    
+            SET @n_err = 81100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg= 'Found Duplicate DocketNo. (ispFinalizePalletMgmt)' 
+            GOTO QUIT_SP         
+         END              	  	
+   	  	
+   	     IF EXISTS (SELECT 1 
+                    FROM PALLETMGMT       PMH WITH (NOLOCK)
+                    JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
+                    WHERE PMH.PMKey = @c_PMkey 
+                    AND PMD.Status < '9'
+                    AND PMD.Type = 'TRF'
+                    AND (ISNULL(PMD.Userdefine03,'') = '' 
+                         OR ISNULL(PMD.Userdefine04,'') = ''))
+         BEGIN
+            SET @n_continue = 3    
+            SET @n_err = 81110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg= 'Userdefine03 or Userdefine04 Cannot be empty. (ispFinalizePalletMgmt)' 
+            GOTO QUIT_SP         
+         END           
+
+         SET ANSI_NULLS ON
+         SET ANSI_WARNINGS ON
+               
+         SET @c_username = SUSER_SNAME()
+               
+         EXEC isp_GetUserRestriction
+            @c_username = @c_username  
+           ,@c_StorerRestrict = @c_StorerRestrict OUTPUT  
+           ,@c_FacilityRestrict = @c_FacilityRestrict OUTPUT  
+           ,@b_Success = @b_Success OUTPUT    
+           ,@n_Err = @n_Err OUTPUT    
+           ,@c_ErrMsg = @c_ErrMsg OUTPUT        
+                           
+         SET ANSI_NULLS OFF
+         SET ANSI_WARNINGS OFF
+         
+         SET @c_ToStorerkey = ''
+         SELECT TOP 1 @c_ToStorerkey = PMD.ToStorerkey
+         FROM PALLETMGMT       PMH WITH (NOLOCK)
+         JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
+         WHERE PMH.PMKey = @c_PMkey 
+         AND PMD.Status < '9'
+         AND PMD.Type IN('TRF')
+         --AND PMD.Type IN('TRF','DP','WD')
+         AND PMD.ToStorerkey NOT IN (SELECT RTRIM(LTRIM(fds.Colvalue)) FROM dbo.fnc_DelimSplit(',',@c_StorerRestrict) AS fds)        	      
+         
+         IF ISNULL(@c_ToStorerkey,'') <> ''
+         BEGIN      
+            SET @n_continue = 3    
+            SET @n_err = 81120   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg= 'Current user ' + RTRIM(@c_username) + ' is not allowed to access To storer: ' + RTRIM(@c_ToStorerkey) + ' (ispFinalizePalletMgmt)' 
+            GOTO QUIT_SP
+         END      
+
+         SET @c_FromStorerkey = ''
+         SELECT TOP 1 @c_FromStorerkey = PMD.FromStorerkey
+         FROM PALLETMGMT       PMH WITH (NOLOCK)
+         JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
+         WHERE PMH.PMKey = @c_PMkey 
+         AND PMD.Status < '9'
+         AND PMD.Type IN('TRF')
+         --AND PMD.Type IN('TRF','DP','WD')
+         AND PMD.FromStorerkey IN (SELECT RTRIM(LTRIM(fds.Colvalue)) FROM dbo.fnc_DelimSplit(',',@c_StorerRestrict) AS fds)        	      
+         
+         IF ISNULL(@c_FromStorerkey,'') <> ''
+         BEGIN      
+            SET @n_continue = 3    
+            SET @n_err = 81130   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg= 'Current user ' + RTRIM(@c_username) + ' is belong to from storer not allowed to Finalize: ' + RTRIM(@c_FromStorerkey) + ' (ispFinalizePalletMgmt)' 
+            GOTO QUIT_SP
+         END      
+      END  
+   END
 
    CREATE TABLE #TMP_PM
       (  Facility       NVARCHAR(5)    NULL
@@ -199,7 +323,7 @@ BEGIN
              ) 
    BEGIN
       SET @n_continue = 3    
-      SET @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+      SET @n_err = 81140   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
       SET @c_errmsg= 'Pallet Management total withdrawal qty > Pallet inventory Qty found. (ispFinalizePalletMgmt)' 
       GOTO QUIT_SP
    END
@@ -242,7 +366,7 @@ BEGIN
             IF @b_Success <> 1
             BEGIN
                SET @n_Continue = 3
-               SET @n_err = 81100
+               SET @n_err = 81150
                GOTO QUIT_SP
             END
          END
@@ -292,7 +416,7 @@ BEGIN
          IF @n_err <> 0     
          BEGIN  
             SET @n_continue = 3    
-            SET @n_err = 81120   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @n_err = 81160   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE PALLETMGMTDETAIL Failed. (ispFinalizePalletMgmt)' 
                          + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             GOTO QUIT_SP
@@ -336,7 +460,7 @@ BEGIN
          IF @n_err <> 0     
          BEGIN  
             SET @n_continue = 3    
-            SET @n_err = 81130   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @n_err = 81170   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE PALLETMGMT Failed. (ispFinalizePalletMgmt)' 
                          + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             GOTO QUIT_SP
