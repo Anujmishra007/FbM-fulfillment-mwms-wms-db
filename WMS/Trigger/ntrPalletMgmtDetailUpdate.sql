@@ -26,7 +26,9 @@ GO
 /* Version: 7.0                                                            */
 /*                                                                         */
 /* Modifications:                                                          */
-/* Date         Author  Ver   Purposes                                     */
+/* Date         Author  Ver   Purposes                                     */                
+/* 01-Jun-2021  NJOW01  1.0   WMS-16767 TH user of to-storer is not allowed*/
+/*                            to amend                                     */
 /***************************************************************************/
 CREATE TRIGGER ntrPalletMgmtDetailUpdate ON PALLETMGMTDETAIL
 FOR UPDATE
@@ -42,25 +44,29 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_Continue        INT                     
-         , @n_StartTCnt       INT            -- Holds the current transaction count    
-         , @b_Success         INT            -- Populated by calls to stored procedures - was the proc successful?    
-         , @n_err             INT            -- Error number returned by stored procedure or this trigger    
-         , @c_errmsg          NVARCHAR(255)  -- Error message returned by stored procedure or this trigger  
-  
-         , @c_PMTranKey       NVARCHAR(10)
-         , @c_SourceKey       NVARCHAR(20)
-         
-         , @c_Facility        NVARCHAR(10)
-         , @c_PMKey           NVARCHAR(10)
-         , @c_PMLineNumber    NVARCHAR(5)
-         , @c_FromStorerkey   NVARCHAR(15) 
-         , @c_ToStorerkey     NVARCHAR(15)
-         , @c_Storerkey       NVARCHAR(15) 
-         , @c_AccountNo       NVARCHAR(30)
-         , @c_Type            NVARCHAR(10)
-         , @c_PalletType      NVARCHAR(30)
-         , @n_Qty             INT
+   DECLARE @n_Continue         INT                     
+         , @n_StartTCnt        INT            -- Holds the current transaction count    
+         , @b_Success          INT            -- Populated by calls to stored procedures - was the proc successful?    
+         , @n_err              INT            -- Error number returned by stored procedure or this trigger    
+         , @c_errmsg           NVARCHAR(255)  -- Error message returned by stored procedure or this trigger  
+                               
+         , @c_PMTranKey        NVARCHAR(10)
+         , @c_SourceKey        NVARCHAR(20)
+                               
+         , @c_Facility         NVARCHAR(10)
+         , @c_PMKey            NVARCHAR(10)
+         , @c_PMLineNumber     NVARCHAR(5)
+         , @c_FromStorerkey    NVARCHAR(15) 
+         , @c_ToStorerkey      NVARCHAR(15)
+         , @c_Storerkey        NVARCHAR(15) 
+         , @c_AccountNo        NVARCHAR(30)
+         , @c_Type             NVARCHAR(10)
+         , @c_PalletType       NVARCHAR(30)
+         , @n_Qty              INT
+         , @c_Country          NVARCHAR(30)
+         , @c_username         NVARCHAR(128) 
+         , @c_StorerRestrict   NVARCHAR(250)     
+         , @c_FacilityRestrict NVARCHAR(250)     
 
    SET @n_Continue  = 1
    SET @n_StartTCnt = @@TRANCOUNT   
@@ -99,7 +105,7 @@ BEGIN
       SET @n_Continue = 4
       GOTO QUIT
    END
-
+   
    IF EXISTS ( SELECT 1
                FROM  INSERTED
                JOIN  DELETED ON (INSERTED.PMKey = DELETED.PMKey)
@@ -128,7 +134,7 @@ BEGIN
    BEGIN
       SET @n_continue = 3    
       SET @n_err = 63230   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-      SET @c_errmsg= 'Invalid Deposit Transaction type for outbound source type. (ntrPalletMgmtUpdate)' 
+      SET @c_errmsg= 'Invalid Deposit Transaction type for outbound source type. (ntrPalletMgmtDetailUpdate)' 
       GOTO QUIT 
    END
 
@@ -151,8 +157,8 @@ BEGIN
               )
    BEGIN
       SET @n_continue = 3    
-      SET @n_err = 63160   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-      SET @c_errmsg= 'Invalid From Storer for outbound source transaction #. (ntrPalletMgmtDetailAdd)' 
+      SET @n_err = 63240   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+      SET @c_errmsg= 'Invalid From Storer for outbound source transaction #. (ntrPalletMgmtDetailUpdate)' 
       GOTO QUIT 
    END
 
@@ -175,10 +181,57 @@ BEGIN
               )
    BEGIN
       SET @n_continue = 3    
-      SET @n_err = 63170   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-      SET @c_errmsg= 'Invalid To Storer for outbound source transaction #. (ntrPalletMgmtDetailAdd)' 
+      SET @n_err = 63250   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+      SET @c_errmsg= 'Invalid To Storer for outbound source transaction #. (ntrPalletMgmtDetailUpdate)' 
       GOTO QUIT 
    END
+   
+   --NJOW01 S
+   SELECT @c_Country = NSQLValue 
+   FROM NSQLCONFIG (NOLOCK) 
+   WHERE ConfigKey = 'COUNTRY'
+   
+   IF @c_Country  ='TH'
+   BEGIN
+      IF UPDATE(DocketNo) OR UPDATE(FromStorerkey) OR UPDATE(ToStorerkey) OR UPDATE(PMAccountNo) OR UPDATE(Type) 
+         OR UPDATE(PalletType) OR UPDATE(Qty) OR UPDATE(Notes) OR UPDATE(Userdefine01) OR UPDATE(Userdefine02)
+         OR UPDATE(Userdefine03) OR UPDATE(Userdefine04) OR UPDATE(Userdefine05) OR UPDATE(Userdefine06) OR UPDATE(Userdefine07)
+         OR UPDATE(Userdefine08) OR UPDATE(Userdefine09) OR UPDATE(Userdefine10)
+      BEGIN
+         SET ANSI_NULLS ON
+         SET ANSI_WARNINGS ON
+               
+         SET @c_username = SUSER_SNAME()
+         
+         EXEC isp_GetUserRestriction
+            @c_username = @c_username  
+           ,@c_StorerRestrict = @c_StorerRestrict OUTPUT  
+           ,@c_FacilityRestrict = @c_FacilityRestrict OUTPUT  
+           ,@b_Success = @b_Success OUTPUT    
+           ,@n_Err = @n_Err OUTPUT    
+           ,@c_ErrMsg = @c_ErrMsg OUTPUT        
+                           
+         SET ANSI_NULLS OFF
+         SET ANSI_WARNINGS OFF                    
+         
+         SET @c_ToStorerkey = ''
+         SELECT TOP 1 @c_ToStorerkey = I.ToStorerkey
+         FROM INSERTED I 
+         WHERE I.Type = 'TRF' 
+         AND I.ToStorerkey IN (SELECT RTRIM(LTRIM(fds.Colvalue)) FROM dbo.fnc_DelimSplit(',',@c_StorerRestrict) AS fds)        	      
+         
+         IF ISNULL(@c_ToStorerkey,'') <> ''
+         BEGIN      
+            SET @n_continue = 3
+            SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+            SET @n_err = 63260  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Current user of To Storer is Not allowed to Edit. (ntrPalletMgmtDetailUpdate)'
+                      + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '         
+            GOTO QUIT          
+         END
+      END   
+   END
+   --NJOW01 E
 
    DECLARE CUR_PMDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT PALLETMGMT.Facility
@@ -228,7 +281,7 @@ BEGIN
          IF NOT @b_success = 1
          BEGIN
             SET @n_continue = 3
-            SET @n_err = 63240
+            SET @n_err = 63270
             SET @c_errmsg = 'ntrPalletMgmtDetailUpdate: ' +RTRIM(@c_errmsg)
             GOTO QUIT
          END
@@ -275,7 +328,7 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             SET @c_errmsg = CONVERT(CHAR(250),@n_err)
-            SET @n_err = 63250  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63280  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On to Table PMTRN. (ntrPalletMgmtDetailUpdate)'
                       + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             GOTO QUIT
@@ -297,8 +350,8 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             SET @c_errmsg = CONVERT(CHAR(250),@n_err)
-            SET @n_err = 63260
-            SET @c_errmsg = 'nspItrnAddWithdrawal: ' +RTRIM(@c_errmsg)
+            SET @n_err = 63290
+            SET @c_errmsg = 'ntrPalletMgmtDetailUpdate: ' +RTRIM(@c_errmsg)
             GOTO QUIT
          END
 
@@ -342,7 +395,7 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             SET @c_errmsg = CONVERT(CHAR(250),@n_err)
-            SET @n_err = 63270  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63300  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On to Table PMTRN. (ntrPalletMgmtDetailUpdate)'
                       + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
 
