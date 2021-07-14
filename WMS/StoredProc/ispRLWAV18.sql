@@ -30,6 +30,7 @@ GO
 /* 09/10/2018  NJOW03   1.2   Conso remove update pendingmovein & qtyreplen*/ 
 /* 2020-02-18  Wan01    1.3   WMS-12056 - [CN]Levis Exceed Release Wave(CR)*/
 /* 01-04-2020  Wan02    1.4   Sync Exceed & SCE                          */
+/* 02-06-2010  NJOW04   1.5   WMS-17192 addition qty to replen           */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV18]      
@@ -308,7 +309,7 @@ BEGIN
           , Qty = CASE WHEN SUM(PD.Qty) <= (-1 * (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn)) 
                        THEN SUM(PD.Qty)                                                                -- If OverAllocated Qty > Wave Qty, Get Wave Qty to Replen
                        ELSE (-1 * (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn))
-                       END
+                       END 
           ,  PD.UOM
           ,  SKU.Packkey, PACK.PACKUOM3
           ,  LOC.LogicalLocation
@@ -442,6 +443,9 @@ BEGIN
                      SET @n_QtyInPickLoc = @n_UCCQty 
                   END
                   SET @n_Qty = @n_Qty - @n_UCCQty
+                  
+                  IF @n_Qty = 0  --NJOW04 take addition carton if demand qty = replen qty
+                     SET @n_Qty = 1                  
                END
                ELSE IF @c_UOM IN ('2', '6')
                BEGIN
@@ -788,6 +792,8 @@ BEGIN
             ,@c_SourceType              = @c_SourceType
             ,@c_Message03               = 'PICKLOC'
             ,@c_PickMethod              = 'PP'
+            ,@c_ReplenWithExtra         = 'Y'   --N=No extra Y=Make sure the pick loc have balance after replenish qty - Demand(allocated) qty. Usually apply to @c_OverAllocateOnly to ensure the loc have balance after pickded. --NJOW04
+            ,@c_ReplenIncludeLocNoTrans = 'Y'   --N=Not include pick loc without any pickdetail of the wave/load  Y=Include pick location without pickdetail of the wave/load. Usually apply for wave/load to trigger replen by sku of the wave/load  --NJOW04
             ,@b_Success                 = @b_Success OUTPUT
             ,@n_Err                     = @n_Err     OUTPUT 
             ,@c_ErrMsg                  = @c_ErrMsg  OUTPUT       
