@@ -376,35 +376,35 @@ BEGIN
             ORDER BY c.Short OFFSET 0 ROWS
         ) AS TEMP2;
 
-        UPDATE t WITH (ROWLOCK)
-        SET transmitflag = '9'
-        FROM dbo.TRANSMITLOG3 AS t
-            JOIN dbo.ORDERS AS o WITH (NOLOCK)
-                ON t.key1 = o.OrderKey
-            JOIN dbo.LoadPlan AS l WITH (NOLOCK)
-                ON l.LoadKey = o.LoadKey --KH07
-            JOIN dbo.PackHeader AS p WITH (NOLOCK)
-                ON p.OrderKey = o.OrderKey --KH05
-            JOIN dbo.PackDetail AS pd WITH (NOLOCK)
-                ON pd.PickSlipNo = p.PickSlipNo
-            JOIN dbo.STORER AS c WITH (NOLOCK)
-                ON o.ConsigneeKey = c.StorerKey
-        WHERE t.key3 = @c_ParamVal1
-              AND t.tablename = @c_ParamVal3
-              AND t.transmitflag = '1'
-              --AND   c.Email1      <> ''
-              AND o.Status IN (   CASE
-                                      WHEN @c_ParamVal1 <> 'NIKESG' THEN
-                                          '5'
-                                  END, '9'
-                              ) --KH05
-              AND l.Status IN (   CASE
-                                      WHEN @c_ParamVal1 <> 'NIKESG' THEN
-                                          '5'
-                                  END, '9'
-                              ) --KH07
-              AND o.ConsigneeKey = @c_ConsigneeKey
-              AND o.DeliveryDate = @c_DeliveryDate;
+        --UPDATE t WITH (ROWLOCK)
+        --SET transmitflag = '9'
+        --FROM dbo.TRANSMITLOG3 AS t
+        --    JOIN dbo.ORDERS AS o WITH (NOLOCK)
+        --        ON t.key1 = o.OrderKey
+        --    JOIN dbo.LoadPlan AS l WITH (NOLOCK)
+        --        ON l.LoadKey = o.LoadKey --KH07
+        --    JOIN dbo.PackHeader AS p WITH (NOLOCK)
+        --        ON p.OrderKey = o.OrderKey --KH05
+        --    JOIN dbo.PackDetail AS pd WITH (NOLOCK)
+        --        ON pd.PickSlipNo = p.PickSlipNo
+        --    JOIN dbo.STORER AS c WITH (NOLOCK)
+        --        ON o.ConsigneeKey = c.StorerKey
+        --WHERE t.key3 = @c_ParamVal1
+        --      AND t.tablename = @c_ParamVal3
+        --      AND t.transmitflag = '1'
+        --      --AND   c.Email1      <> ''
+        --      AND o.Status IN (   CASE
+        --                              WHEN @c_ParamVal1 <> 'NIKESG' THEN
+        --                                  '5'
+        --                          END, '9'
+        --                      ) --KH05
+        --      AND l.Status IN (   CASE
+        --                              WHEN @c_ParamVal1 <> 'NIKESG' THEN
+        --                                  '5'
+        --                          END, '9'
+        --                      ) --KH07
+        --      AND o.ConsigneeKey = @c_ConsigneeKey
+        --      AND o.DeliveryDate = @c_DeliveryDate;
 
     END TRY
     BEGIN CATCH

@@ -77,6 +77,10 @@ BEGIN
      XMLVal        XML NOT NULL
    )
 
+   /********************************************/  
+   /* Variables Declaration (END)              */  
+   /********************************************/ 
+
    SET @b_Success = 1
    SET @n_ErrNo = 0
    SET @c_ErrMsg = ''
@@ -117,7 +121,7 @@ BEGIN
    JOIN dbo.packheader     AS h  WITH (NOLOCK) ON h.orderkey  = o.orderkey  
    JOIN dbo.packdetail     AS pd WITH (NOLOCK) ON pd.pickslipno= h.pickslipno  
    WHERE o.storerkey = @c_StorerKey   
-   AND t.transmitflag = '9'   
+   AND t.transmitflag = '1'   
    AND c.Email1       <> ''   
    AND o.Status IN ( CASE WHEN @c_StorerKey  <> 'NIKESG' THEN '5' END, '9' )
    AND l.Status IN ( CASE WHEN @c_StorerKey  <> 'NIKESG' THEN '5' END, '9' )
@@ -226,10 +230,37 @@ BEGIN
                         + N'<font face="Calibri">Dear recipients, please do not reply the email.</font><br>'
                         + N'<br>'  
                         + N'<font face="Calibri"><strong>Any request, please communicate with Nike team. Thanks.</strong></font><br>'
-  
-   /********************************************/  
-   /* Variables Declaration (END)              */  
-   /********************************************/  
+   
+   UPDATE t WITH (ROWLOCK)
+   SET transmitflag = '9'
+   FROM dbo.TRANSMITLOG3 AS t
+   JOIN dbo.ORDERS AS o WITH (NOLOCK)
+   ON t.key1 = o.OrderKey
+   JOIN dbo.LoadPlan AS l WITH (NOLOCK)
+   ON l.LoadKey = o.LoadKey --KH07
+   JOIN dbo.PackHeader AS p WITH (NOLOCK)
+   ON p.OrderKey = o.OrderKey --KH05
+   JOIN dbo.PackDetail AS pd WITH (NOLOCK)
+   ON pd.PickSlipNo = p.PickSlipNo
+   JOIN dbo.STORER AS c WITH (NOLOCK)
+   ON o.ConsigneeKey = c.StorerKey
+   WHERE t.key3 = @c_StorerKey
+   AND t.tablename = @c_Code2
+   AND t.transmitflag = '1'
+   --AND   c.Email1      <> ''
+   AND o.Status IN (   CASE
+                           WHEN @c_StorerKey <> 'NIKESG' THEN
+                              '5'
+                        END, '9'
+                  ) --KH05
+   AND l.Status IN (   CASE
+                           WHEN @c_StorerKey <> 'NIKESG' THEN
+                              '5'
+                        END, '9'
+                  ) --KH07
+   AND o.ConsigneeKey = @c_ConsigneeKey
+   AND o.DeliveryDate = @c_DeliveryDate;
+ 
   
   --SET @c_EmailToList = 'guanhaochan@lflogistics.com;limtzekeong@lflogistics.com'
 
