@@ -34,6 +34,7 @@ GO
 /* 11-MAR-2021  Wan02   1.5   WMS-16026 - PB-Standardize TrackingNo        */  
 /* 15-Mar-2021  WLChooi 1.6   WMS-16338 - Add Orderdetail.Channel and new  */
 /*                                        logic for ANFQHW (WL01)          */
+/* 15-Jul-2021  WLChooi 1.7   Fix Update Palletdetail with Storerkey (WL02)*/
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ChildOrder_CreateMBOL]
 (     @c_MBOLKey  NVARCHAR(10)
@@ -912,7 +913,7 @@ BEGIN
         , EditDate = GETDATE() 
         , EditWho  = SUSER_NAME()     
         , TrafficCop = NULL 
-      WHERE CaseID = @c_CaseID
+      WHERE CaseID = @c_CaseID AND StorerKey = @c_Storerkey   --WL02
       
       IF @@ERROR <> 0
       BEGIN

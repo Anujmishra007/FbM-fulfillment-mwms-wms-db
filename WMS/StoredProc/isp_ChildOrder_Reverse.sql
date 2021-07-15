@@ -33,6 +33,7 @@ GO
 /*                            Up RDTScanToTruck Table (Wan02)              */
 /* 28-Jan-2019  TLTING_ext 1.2  enlarge externorderkey field length        */    
 /* 15-Mar-2021  WLChooi 1.3   WMS-16338 - Add new logic for ANFQHW (WL01)  */
+/* 15-Jul-2021  WLChooi 1.4   Fix Update Palletdetail with Storerkey (WL02)*/
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_ChildOrder_Reverse]  
 (     @c_MBOLKey           NVARCHAR(10)  
@@ -626,7 +627,7 @@ BEGIN
            , EditDate = GETDATE() 
            , EditWho  = SUSER_NAME()     
            , TrafficCop = NULL 
-         WHERE CaseID = @c_CaseID
+         WHERE CaseID = @c_CaseID AND Storerkey = @c_Storerkey   --WL02
          
          IF @@ERROR <> 0  
          BEGIN  
