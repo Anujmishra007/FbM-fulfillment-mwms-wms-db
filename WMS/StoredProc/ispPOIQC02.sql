@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 15-Jul-2021  WLChooi   1.1 Fix nspg_getkeys do not return result set */
+/*                            (WL01)                                    */
 /************************************************************************/
 CREATE PROC [dbo].[ispPOIQC02]
             @c_qc_key         NVARCHAR(10)
@@ -58,7 +60,7 @@ BEGIN
          @b_Success   = @b_Success  OUTPUT,
          @n_err       = @n_Err,
          @c_errmsg    = @c_ErrMsg,
-         @b_resultset = 1,
+         @b_resultset = 0,   --WL01
          @n_batch     = 1 	 
       
       IF @n_err <> 0
@@ -107,7 +109,7 @@ BEGIN
               , IQD.StorerKey, IQD.SKU, IQC.Reason
          FROM InventoryQCDetail IQD (NOLOCK)
          JOIN InventoryQC IQC (NOLOCK) ON IQC.QC_Key = IQD.QC_Key
-         WHERE IQD.QC_Key = @c_qc_key
+         WHERE IQD.QC_Key = @c_qc_key AND IQC.Reason = 'A2A'   --WL01
          ORDER BY IQD.QC_Key, CAST(IQD.QCLineNo AS INT)
 
          SELECT @n_err = @@ERROR
