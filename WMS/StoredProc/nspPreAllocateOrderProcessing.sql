@@ -152,7 +152,7 @@ DECLARE @c_OtherParms NVARCHAR(200),  -- For CDC
 SET @c_DefaultStrategykey = ''               --(Wan01)
 
 SELECT @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0, @n_err=0, @c_errmsg="", @n_err2=0
-SELECT @b_debug = 1
+SELECT @b_debug = 0
 
 SELECT @c_prev_storer = SPACE(10)
 
