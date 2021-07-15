@@ -19,7 +19,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -28,6 +28,11 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2020-11-17  Wan      1.0   Created                                   */ 
+/* 2021-06-25  Wan01    1.1   1)LFWM-2864 - UAT - TW  Missing ExternLineNo*/
+/*                            and ExternReceiptkey when Populate PO Detail*/
+/*                            in ASNReceipt module                      */
+/*                            2)Fixed populate to ASN & Detail by PO2ASNMAP*/
+--                            3)Fixed missing lottabel09
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]                                                                                                                   
       @c_ReceiptKey           NVARCHAR(10)         
@@ -76,6 +81,9 @@ BEGIN
          ,  @c_SQL                     NVARCHAR(4000) = ''
          ,  @c_SQL1                    NVARCHAR(4000) = ''
          ,  @c_SQLParms                NVARCHAR(4000) = ''
+         
+         ,  @c_SQL_INS_FIELDS          NVARCHAR(4000) = ''        --(Wan01)
+         ,  @c_SQL_UPD_FIELDS          NVARCHAR(4000) = ''        --(Wan01)  
 
          ,  @c_SQLSchema               NVARCHAR(4000) = ''
          ,  @c_TableColumns            NVARCHAR(4000) = ''
@@ -698,6 +706,134 @@ BEGIN
                , UserDefine10       = @c_UserDefine10 
          WHERE RowRef = @n_RowRef_RH
     
+         --(Wan01) - START   
+         SET @c_SQL_UPD_FIELDS =
+              N' ExternReceiptKey = T.ExternReceiptKey' 
+             +', ReceiptGroup = T.ReceiptGroup' 
+             +', ReceiptDate = T.ReceiptDate' 
+             +', POKey = T.POKey' 
+             +', CarrierKey = T.CarrierKey' 
+             +', CarrierName = T.CarrierName' 
+             +', CarrierAddress1 = T.CarrierAddress1' 
+             +', CarrierAddress2 = T.CarrierAddress2' 
+             +', CarrierCity = T.CarrierCity' 
+             +', CarrierState = T.CarrierState' 
+             +', CarrierZip = T.CarrierZip' 
+             +', CarrierReference = T.CarrierReference' 
+             +', WarehouseReference = T.WarehouseReference'
+             +', OriginCountry = T.OriginCountry'
+             +', DestinationCountry = T.DestinationCountry'
+             +', VehicleNumber = T.VehicleNumber'
+             +', VehicleDate = T.VehicleDate'
+             +', PlaceOfLoading = T.PlaceOfLoading'
+             +', PlaceOfDischarge = T.PlaceOfDischarge'
+             +', PlaceofDelivery = T.PlaceofDelivery'
+             +', IncoTerms = T.IncoTerms'
+             +', TermsNote = T.TermsNote'
+             +', ContainerKey= T.ContainerKey'
+             +', Signatory = T.Signatory'
+             +', PlaceofIssue = T.PlaceofIssue'
+             +', Status = T.[Status]'
+             +', Notes = T.Notes'
+             +', EffectiveDate = T.EffectiveDate'
+             +', ContainerType = T.ContainerType'
+             +', ContainerQty = T.ContainerQty'
+             +', BilledContainerQty = T.BilledContainerQty'
+             +', RECType = T.RECType'
+             +', ASNStatus = T.ASNStatus'
+             +', ASNReason = T.ASNReason'
+             +', MBOLKey = T.MBOLKey'
+             +', Appointment_No = T.Appointment_No'
+             +', LoadKey = T.LoadKey'
+             +', xDockFlag = T.xDockFlag'
+             +', UserDefine01 = T.UserDefine01'
+             +', PROCESSTYPE = T.PROCESSTYPE'
+             +', UserDefine02 = T.UserDefine02'
+             +', UserDefine03 = T.UserDefine03'
+             +', UserDefine04 = T.UserDefine04'
+             +', UserDefine05 = T.UserDefine05'
+             +', UserDefine06 = T.UserDefine06'
+             +', UserDefine07 = T.UserDefine07'
+             +', UserDefine08 = T.UserDefine08'
+             +', UserDefine09 = T.UserDefine09'
+             +', UserDefine10 = T.UserDefine10'
+             +', DOCTYPE = T.DOCTYPE'
+             +', RoutingTool = T.RoutingTool'
+             +', CTNTYPE1 = T.CTNTYPE1'
+             +', CTNTYPE2 = T.CTNTYPE2'
+             +', CTNTYPE3 = T.CTNTYPE3'
+             +', CTNTYPE4 = T.CTNTYPE4'
+             +', CTNTYPE5 = T.CTNTYPE5'
+             +', CTNTYPE6 = T.CTNTYPE6'
+             +', CTNTYPE7 = T.CTNTYPE7'
+             +', CTNTYPE8 = T.CTNTYPE8'
+             +', CTNTYPE9 = T.CTNTYPE9'
+             +', CTNTYPE10 = T.CTNTYPE10'
+             +', PACKTYPE1 = T.PACKTYPE1'
+             +', PACKTYPE2 = T.PACKTYPE2'
+             +', PACKTYPE3 = T.PACKTYPE3'
+             +', PACKTYPE4 = T.PACKTYPE4'
+             +', PACKTYPE5 = T.PACKTYPE5'
+             +', PACKTYPE6 = T.PACKTYPE6'
+             +', PACKTYPE7 = T.PACKTYPE7'
+             +', PACKTYPE8 = T.PACKTYPE8'
+             +', PACKTYPE9 = T.PACKTYPE9'
+             +', PACKTYPE10 = T.PACKTYPE10'
+             +', CTNCNT1 = T.CTNCNT1'
+             +', CTNCNT2 = T.CTNCNT2' 
+             +', CTNCNT3 = T.CTNCNT3'
+             +', CTNCNT4 = T.CTNCNT4'
+             +', CTNCNT5 = T.CTNCNT5'
+             +', CTNCNT6 = T.CTNCNT6'
+             +', CTNCNT7 = T.CTNCNT7'
+             +', CTNCNT8 = T.CTNCNT8'
+             +', CTNCNT9 = T.CTNCNT9'
+             +', CTNCNT10 = T.CTNCNT10'
+             +', CTNQTY1 = T.CTNQTY1'
+             +', CTNQTY2 = T.CTNQTY2'
+             +', CTNQTY3 = T.CTNQTY3'
+             +', CTNQTY4 = T.CTNQTY4'
+             +', CTNQTY5 = T.CTNQTY5'
+             +', CTNQTY6 = T.CTNQTY6'
+             +', CTNQTY7 = T.CTNQTY7'
+             +', CTNQTY8 = T.CTNQTY8'
+             +', CTNQTY9 = T.CTNQTY9'
+             +', CTNQTY10= T.CTNQTY10'
+             +', NoOfMasterCtn = T.NoOfMasterCtn'
+             +', NoOfTTLUnit = T.NoOfTTLUnit'
+             +', NoOfPallet = T.NoOfPallet'
+             +', Weight = T.[Weight]'
+             +', WeightUnit = T.WeightUnit'
+             +', Cube = T.[Cube]'
+             +', CubeUnit = T.CubeUnit'
+             +', GIS_ControlNo = T.GIS_ControlNo'
+             +', Cust_ISA_ControlNo = T.Cust_ISA_ControlNo'
+             +', Cust_GIS_ControlNo = T.Cust_GIS_ControlNo'
+             +', GIS_ProcessTime = T.GIS_ProcessTime'
+             +', Cust_EDIAckTime = T.Cust_EDIAckTime'
+             +', FinalizeDate = T.FinalizeDate'
+             +', SellerName = T.SellerName'
+             +', SellerCompany = T.SellerCompany'
+             +', SellerAddress1 = T.SellerAddress1'
+             +', SellerAddress2 = T.SellerAddress2'
+             +', SellerAddress3 = T.SellerAddress3'
+             +', SellerAddress4 = T.SellerAddress4'
+             +', SellerCity = T.SellerCity'
+             +', SellerState = T.SellerState'
+             +', SellerZip = T.SellerZip'
+             +', SellerCountry = T.SellerCountry'
+             +', SellerContact1 = T.SellerContact1'
+             +', SellerContact2 = T.SellerContact2'
+             +', SellerPhone1 = T.SellerPhone1'
+             +', SellerPhone2 = T.SellerPhone2'
+             +', SellerEmail1 = T.SellerEmail1'
+             +', SellerEmail2 = T.SellerEmail2'
+             +', SellerFax1 = T.SellerFax1'
+             +', SellerFax2 = T.SellerFax2'
+             +', HoldChannel = T.HoldChannel'
+             +', TrackingNo = T.TrackingNo' 
+         --(Wan01) - END  
+         
          -- Call Custom Header Mapping - START
          SET @c_ListName = 'PO2ASNMAP'
          SET @CUR_COLMAP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -707,7 +843,14 @@ BEGIN
          WHERE CL.ListName = @c_ListName
          AND   CL.Short = 'H'
          AND   CL.Storerkey = @c_Storerkey
-         AND   (CL.UDF03 Like '%' + @c_DocType + '%' OR CL.UDF03 = '')
+         UNION                                                                                     --(Wan01)
+         SELECT Code  = CL.Code
+               ,Code2 = CL.Code2 
+         FROM CODELKUP CL WITH (NOLOCK)
+         WHERE CL.ListName = @c_ListName
+         AND   CL.Short = 'H'
+         AND   CL.Storerkey = @c_Storerkey
+         AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss)  --(Wan01)
          ORDER BY CL.Code
 
          OPEN @CUR_COLMAP
@@ -756,6 +899,8 @@ BEGIN
                GOTO EXIT_SP                                            
             END CATCH
 
+            SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))         --(Wan01)
+            
             IF @c_ReturnSQL <> ''
             BEGIN
                SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
@@ -790,12 +935,18 @@ BEGIN
                END
             END
 
+            --(Wan01) - START
+            IF CHARINDEX(', ' + @c_UpdateCol, ',' + @c_SQL_UPD_FIELDS, 1) = 0
+            BEGIN
+               SET @c_SQL_UPD_FIELDS = @c_SQL_UPD_FIELDS + N', ' + @c_UpdateCol + N' = T.' + @c_UpdateCol    --use T alias insert from #tReceipt T
+            END
+            --(Wan01) - END 
             FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2 
          END
          CLOSE @CUR_COLMAP
          DEALLOCATE @CUR_COLMAP      
          -- Call Custom Header Mapping - END  
-
+         
          SET @n_RowRef_PD = 0
          WHILE 1 = 1
          BEGIN
@@ -934,6 +1085,7 @@ BEGIN
                                            WHEN @n_Cnt = 6  THEN 'Lottable06'
                                            WHEN @n_Cnt = 7  THEN 'Lottable07'
                                            WHEN @n_Cnt = 8  THEN 'Lottable08'
+                                           WHEN @n_Cnt = 9  THEN 'Lottable09'    --(Wan01)   Fixed missing lottabel09
                                            WHEN @n_Cnt = 10 THEN 'Lottable10'
                                            WHEN @n_Cnt = 11 THEN 'Lottable11'
                                            WHEN @n_Cnt = 12 THEN 'Lottable12'
@@ -948,6 +1100,7 @@ BEGIN
                                            WHEN @n_Cnt = 6  THEN @c_Lottable06
                                            WHEN @n_Cnt = 7  THEN @c_Lottable07
                                            WHEN @n_Cnt = 8  THEN @c_Lottable08
+                                           WHEN @n_Cnt = 9  THEN @c_Lottable09   --(Wan01)   Fixed missing lottabel09   
                                            WHEN @n_Cnt = 10 THEN @c_Lottable10
                                            WHEN @n_Cnt = 11 THEN @c_Lottable11
                                            WHEN @n_Cnt = 12 THEN @c_Lottable12
@@ -969,6 +1122,7 @@ BEGIN
                                            WHEN @n_Cnt = 6  THEN @c_Lottable06Label
                                            WHEN @n_Cnt = 7  THEN @c_Lottable07Label
                                            WHEN @n_Cnt = 8  THEN @c_Lottable08Label
+                                           WHEN @n_Cnt = 9  THEN @c_Lottable09Label --(Wan01)   Fixed Missing lottable09
                                            WHEN @n_Cnt = 10 THEN @c_Lottable10Label
                                            WHEN @n_Cnt = 11 THEN @c_Lottable11Label
                                            WHEN @n_Cnt = 12 THEN @c_Lottable12Label
@@ -1222,6 +1376,53 @@ BEGIN
 
             SET @n_RowRef_RD = @@IDENTITY
 
+            --(Wan01) - START
+            SET @c_SQL_INS_FIELDS = 
+                 N', Storerkey'  
+                + ', Sku'
+                + ', AltSku'
+                + ', Packkey'  
+                + ', UOM'
+                + ', QtyExpected'
+                + ', FreeGoodQtyExpected'
+                + ', ToLoc'
+                + ', ToID'
+                + ', PutawayLoc'  
+                + ', ExternReceiptKey'
+                + ', POKey'
+                + ', POLineNumber'
+                + ', ExternPOKey'
+                + ', ExternLineNo'
+                + ', Vesselkey'
+                + ', Voyagekey'
+                + ', Lottable01'
+                + ', Lottable02'
+                + ', Lottable03'
+                + ', Lottable04'
+                + ', Lottable05'
+                + ', Lottable06'
+                + ', Lottable07'
+                + ', Lottable08'
+                + ', Lottable09'
+                + ', Lottable10'
+                + ', Lottable11'
+                + ', Lottable12'
+                + ', Lottable13'
+                + ', Lottable14'
+                + ', Lottable15'
+                + ', UserDefine01' 
+                + ', UserDefine02'   
+                + ', UserDefine03'
+                + ', UserDefine04'   
+                + ', UserDefine05' 
+                + ', UserDefine06'   
+                + ', UserDefine07'
+                + ', UserDefine08'  
+                + ', UserDefine09'
+                + ', UserDefine10' 
+                + ', SubReasonCode' 
+                + ', Channel'
+            --(Wan01) - END  
             -- Call Custom Detail Mapping - START
             SET @c_ListName = 'PO2ASNMAP'
 
@@ -1232,8 +1433,16 @@ BEGIN
             WHERE CL.ListName = @c_ListName
             AND   CL.Short = 'D'
             AND   CL.Storerkey = @c_Storerkey
-            AND   (CL.UDF03 Like '%' + @c_DocType + '%' OR CL.UDF03 = '')
-            ORDER BY CL.Code
+            AND   CL.UDF03 = ''
+            UNION                                                                                     --(Wan01)
+            SELECT Code  = CL.Code
+                  ,Code2 = CL.Code2 
+            FROM CODELKUP CL WITH (NOLOCK)
+            WHERE CL.ListName = @c_ListName
+            AND   CL.Short = 'D'
+            AND   CL.Storerkey = @c_Storerkey
+            AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss)  --(Wan01) 
+            ORDER BY CL.Code                          
 
             OPEN @CUR_COLMAP
       
@@ -1244,6 +1453,7 @@ BEGIN
                SET @c_ReturnSQL = ''
                SET @c_UpdateCol = ''
                BEGIN TRY
+            
                   EXEC [WM].[lsp_Populate_GetDocFieldsMap] 
                      @c_SourceTable       =  'PODETAIL'     
                   ,  @c_Sourcekey         =  @c_POkey       
@@ -1279,6 +1489,8 @@ BEGIN
 
                   GOTO EXIT_SP                                            
                END CATCH 
+               
+               SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))      -- Wan01
 
                IF @c_ReturnSQL <> ''
                BEGIN
@@ -1313,7 +1525,14 @@ BEGIN
                               , @n_RowRef_RD
                   END
                END
-
+               
+               --(Wan01) - START
+               IF CHARINDEX(', ' + @c_UpdateCol, @c_SQL_INS_FIELDS, 1) = 0
+               BEGIN
+                  SET @c_SQL_INS_FIELDS = @c_SQL_INS_FIELDS + N', '   + @c_UpdateCol       
+               END 
+               --(Wan01) - END 
+               
                FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2 
             END
             CLOSE @CUR_COLMAP
@@ -1329,134 +1548,20 @@ BEGIN
       IF EXISTS ( SELECT 1 FROM #tRECEIPT H JOIN #tRECEIPTDETAIL D ON H.ReceiptKey = D.Receiptkey )
       BEGIN
          BEGIN TRY
-            UPDATE RECEIPT 
-            SET  ExternReceiptKey   = T.ExternReceiptKey  
-               , ReceiptGroup       = T.ReceiptGroup      
-               , ReceiptDate        = T.ReceiptDate       
-               , POKey              = T.POKey             
-               , CarrierKey         = T.CarrierKey        
-               , CarrierName        = T.CarrierName       
-               , CarrierAddress1    = T.CarrierAddress1   
-               , CarrierAddress2    = T.CarrierAddress2   
-               , CarrierCity        = T.CarrierCity       
-               , CarrierState       = T.CarrierState      
-               , CarrierZip         = T.CarrierZip        
-               , CarrierReference   = T.CarrierReference  
-               , WarehouseReference = T.WarehouseReference
-               , OriginCountry      = T.OriginCountry     
-               , DestinationCountry = T.DestinationCountry
-               , VehicleNumber      = T.VehicleNumber     
-               , VehicleDate        = T.VehicleDate       
-               , PlaceOfLoading     = T.PlaceOfLoading    
-               , PlaceOfDischarge   = T.PlaceOfDischarge  
-               , PlaceofDelivery    = T.PlaceofDelivery   
-               , IncoTerms          = T.IncoTerms         
-               , TermsNote          = T.TermsNote         
-               , ContainerKey       = T.ContainerKey      
-               , Signatory          = T.Signatory
-               , PlaceofIssue       = T.PlaceofIssue
-               , [Status]           = T.[Status]
-               , Notes              = T.Notes
-               , EffectiveDate      = T.EffectiveDate
-               , ContainerType      = T.ContainerType
-               , ContainerQty       = T.ContainerQty
-               , BilledContainerQty = T.BilledContainerQty
-               , RECType            = T.RECType
-               , ASNStatus          = T.ASNStatus
-               , ASNReason          = T.ASNReason
-               , MBOLKey            = T.MBOLKey
-               , Appointment_No     = T.Appointment_No
-               , LoadKey            = T.LoadKey
-               , xDockFlag          = T.xDockFlag
-               , UserDefine01       = T.UserDefine01
-               , PROCESSTYPE        = T.PROCESSTYPE
-               , UserDefine02       = T.UserDefine02
-               , UserDefine03       = T.UserDefine03
-               , UserDefine04       = T.UserDefine04
-               , UserDefine05       = T.UserDefine05
-               , UserDefine06       = T.UserDefine06
-               , UserDefine07       = T.UserDefine07
-               , UserDefine08       = T.UserDefine08
-               , UserDefine09       = T.UserDefine09
-               , UserDefine10       = T.UserDefine10
-               , DOCTYPE            = T.DOCTYPE
-               , RoutingTool        = T.RoutingTool
-               , CTNTYPE1           = T.CTNTYPE1
-               , CTNTYPE2           = T.CTNTYPE2
-               , CTNTYPE3           = T.CTNTYPE3
-               , CTNTYPE4           = T.CTNTYPE4
-               , CTNTYPE5           = T.CTNTYPE5
-               , CTNTYPE6           = T.CTNTYPE6
-               , CTNTYPE7           = T.CTNTYPE7
-               , CTNTYPE8           = T.CTNTYPE8
-               , CTNTYPE9           = T.CTNTYPE9
-               , CTNTYPE10          = T.CTNTYPE10
-               , PACKTYPE1          = T.PACKTYPE1
-               , PACKTYPE2          = T.PACKTYPE2
-               , PACKTYPE3          = T.PACKTYPE3
-               , PACKTYPE4          = T.PACKTYPE4
-               , PACKTYPE5          = T.PACKTYPE5
-               , PACKTYPE6          = T.PACKTYPE6
-               , PACKTYPE7          = T.PACKTYPE7
-               , PACKTYPE8          = T.PACKTYPE8
-               , PACKTYPE9          = T.PACKTYPE9
-               , PACKTYPE10         = T.PACKTYPE10
-               , CTNCNT1            = T.CTNCNT1
-               , CTNCNT2            = T.CTNCNT2 
-               , CTNCNT3            = T.CTNCNT3
-               , CTNCNT4            = T.CTNCNT4
-               , CTNCNT5            = T.CTNCNT5
-               , CTNCNT6            = T.CTNCNT6
-               , CTNCNT7            = T.CTNCNT7
-               , CTNCNT8            = T.CTNCNT8
-               , CTNCNT9            = T.CTNCNT9
-               , CTNCNT10           = T.CTNCNT10
-               , CTNQTY1            = T.CTNQTY1
-               , CTNQTY2            = T.CTNQTY2
-               , CTNQTY3            = T.CTNQTY3
-               , CTNQTY4            = T.CTNQTY4
-               , CTNQTY5            = T.CTNQTY5
-               , CTNQTY6            = T.CTNQTY6
-               , CTNQTY7            = T.CTNQTY7
-               , CTNQTY8            = T.CTNQTY8
-               , CTNQTY9            = T.CTNQTY9
-               , CTNQTY10           = T.CTNQTY10
-               , NoOfMasterCtn      = T.NoOfMasterCtn
-               , NoOfTTLUnit        = T.NoOfTTLUnit
-               , NoOfPallet         = T.NoOfPallet
-               , [Weight]           = T.[Weight]
-               , WeightUnit         = T.WeightUnit
-               , [Cube]             = T.[Cube]
-               , CubeUnit           = T.CubeUnit
-               , GIS_ControlNo      = T.GIS_ControlNo
-               , Cust_ISA_ControlNo = T.Cust_ISA_ControlNo
-               , Cust_GIS_ControlNo = T.Cust_GIS_ControlNo
-               , GIS_ProcessTime    = T.GIS_ProcessTime
-               , Cust_EDIAckTime    = T.Cust_EDIAckTime
-               , FinalizeDate       = T.FinalizeDate
-               , SellerName         = T.SellerName
-               , SellerCompany      = T.SellerCompany
-               , SellerAddress1     = T.SellerAddress1
-               , SellerAddress2     = T.SellerAddress2
-               , SellerAddress3     = T.SellerAddress3
-               , SellerAddress4     = T.SellerAddress4
-               , SellerCity         = T.SellerCity
-               , SellerState        = T.SellerState
-               , SellerZip          = T.SellerZip
-               , SellerCountry      = T.SellerCountry
-               , SellerContact1     = T.SellerContact1
-               , SellerContact2     = T.SellerContact2
-               , SellerPhone1       = T.SellerPhone1
-               , SellerPhone2       = T.SellerPhone2
-               , SellerEmail1       = T.SellerEmail1
-               , SellerEmail2       = T.SellerEmail2
-               , SellerFax1         = T.SellerFax1
-               , SellerFax2         = T.SellerFax2
-               , HoldChannel        = T.HoldChannel
-               , TrackingNo         = T.TrackingNo 
-            FROM #tRECEIPT T
-            JOIN RECEIPT RH ON (T.ReceiptKey = RH.ReceiptKey)               
-            WHERE T.RowRef = @n_RowRef_RH
+            --(Wan01) - START
+            SET @c_SQL_UPD_FIELDS 
+            = N' UPDATE RECEIPT WITH (ROWLOCK) SET' 
+            + @c_SQL_UPD_FIELDS
+            + ' FROM #tRECEIPT T'
+            + ' JOIN RECEIPT RH ON (T.ReceiptKey = RH.ReceiptKey)'               
+            + ' WHERE T.RowRef = @n_RowRef_RH'
+              
+            SET @c_SQLParms = N'@n_RowRef_RH INT'
+            
+            EXEC sp_ExecuteSQL @c_SQL_UPD_FIELDS
+                              ,@c_SQLParms
+                              ,@n_RowRef_RH
+            --(Wan01) - END
 
             SET @n_RowCnt_RH = @@ROWCOUNT
          END TRY
@@ -1496,102 +1601,25 @@ BEGIN
          ORDER BY RD.ReceiptLineNumber DESC
 
          BEGIN TRY
-            INSERT INTO RECEIPTDETAIL
-                  (  ReceiptKey
-                  ,  ReceiptLineNumber
-                  ,  Storerkey  
-                  ,  Sku
-                  ,  AltSku
-                  ,  Packkey  
-                  ,  UOM
-                  ,  QtyExpected
-                  ,  FreeGoodQtyExpected
-                  ,  ToLoc
-                  ,  ToID
-                  ,  PutawayLoc  
-                  ,  ExternReceiptKey
-                  ,  POKey
-                  ,  POLineNumber
-                  ,  ExternPOKey
-                  ,  ExternLineNo
-                  ,  Vesselkey
-                  ,  Voyagekey
-                  ,  Lottable01
-                  ,  Lottable02
-                  ,  Lottable03
-                  ,  Lottable04
-                  ,  Lottable05
-                  ,  Lottable06
-                  ,  Lottable07
-                  ,  Lottable08
-                  ,  Lottable09
-                  ,  Lottable10
-                  ,  Lottable11
-                  ,  Lottable12
-                  ,  Lottable13
-                  ,  Lottable14
-                  ,  Lottable15
-                  ,  UserDefine01 
-                  ,  UserDefine02   
-                  ,  UserDefine03
-                  ,  UserDefine04   
-                  ,  UserDefine05 
-                  ,  UserDefine06   
-                  ,  UserDefine07
-                  ,  UserDefine08  
-                  ,  UserDefine09
-                  ,  UserDefine10 
-                  ,  SubReasonCode 
-                  ,  Channel
-                  )
-            SELECT   T.ReceiptKey
-                  ,  ReceiptLineNumber  =  RIGHT( '00000' + CONVERT(NVARCHAR(5), (ROW_NUMBER() OVER (ORDER BY T.RowRef)) + @n_ReceiptLineNumber), 5 )
-                  ,  T.Storerkey  
-                  ,  T.Sku
-                  ,  T.AltSku
-                  ,  T.Packkey  
-                  ,  T.UOM
-                  ,  T.QtyExpected
-                  ,  T.FreeGoodQtyExpected
-                  ,  T.ToLoc
-                  ,  T.ToID
-                  ,  T.PutawayLoc  
-                  ,  T.ExternReceiptKey
-                  ,  T.POKey
-                  ,  T.POLineNumber
-                  ,  T.ExternPOKey
-                  ,  T.ExternLineNo
-                  ,  T.Vesselkey
-                  ,  T.Voyagekey
-                  ,  T.Lottable01
-                  ,  T.Lottable02
-                  ,  T.Lottable03
-                  ,  T.Lottable04
-                  ,  T.Lottable05
-                  ,  T.Lottable06
-                  ,  T.Lottable07
-                  ,  T.Lottable08
-                  ,  T.Lottable09
-                  ,  T.Lottable10
-                  ,  T.Lottable11
-                  ,  T.Lottable12
-                  ,  T.Lottable13
-                  ,  T.Lottable14
-                  ,  T.Lottable15
-                  ,  T.UserDefine01 
-                  ,  T.UserDefine02   
-                  ,  T.UserDefine03
-                  ,  T.UserDefine04   
-                  ,  T.UserDefine05 
-                  ,  T.UserDefine06   
-                  ,  T.UserDefine07
-                  ,  T.UserDefine08  
-                  ,  T.UserDefine09
-                  ,  T.UserDefine10 
-                  ,  T.SubReasonCode 
-                  ,  T.Channel
-            FROM #tRECEIPTDETAIL T
-            ORDER BY T.RowRef
+            --(Wan01) - START
+            SET @c_SQL_INS_FIELDS 
+            = N'INSERT INTO RECEIPTDETAIL ( Receiptkey, ReceiptLineNumber'
+                                        
+            + @c_SQL_INS_FIELDS
+            + ')'
+            +' SELECT Receiptkey'
+            +',RIGHT( ''00000'' + CONVERT(NVARCHAR(5), (ROW_NUMBER() OVER (ORDER BY RowRef)) + @n_ReceiptLineNumber), 5 )'
+            + @c_SQL_INS_FIELDS
+            +' FROM #tRECEIPTDETAIL'
+            +' ORDER BY RowRef'
+            
+            SET @c_SQLParms = N'@n_ReceiptLineNumber INT'
+            
+            EXEC sp_ExecuteSQL @c_SQL_INS_FIELDS
+                              ,@c_SQLParms
+                              ,@n_ReceiptLineNumber
+                              
+            --(Wan01) - END
 
             SET @n_RowCnt_RD = @@ROWCOUNT
          END TRY
