@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By: n_cst_inventoryqc.Event ue_finalizeall                    */
 /*                                                                      */
-/* PVCS Version: 1.1                                                   */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 6.0                                                         */
 /*                                                                      */
@@ -28,12 +28,15 @@ GO
 /* 12-JAN-2015  YTWan     1.1 SOS#328603 - CN_PUMA_add verification for */
 /*                            IQC (START)                               */
 /* 09-NOV-2018  NJOW01    1.2 WMS-6868 Post finalize calling custom sp  */
+/* 05-JUL-2021  WLChooi   1.3 WMS-17352 - Add @c_QC_LineNo as optional  */
+/*                            input parameter for RDT (WL01)            */
 /************************************************************************/
 CREATE PROC ispFinalizeIQC 
             @c_qc_key         NVARCHAR(10) 
          ,  @b_Success        INT = 0  OUTPUT 
          ,  @n_err            INT = 0  OUTPUT 
          ,  @c_errmsg         NVARCHAR(215) = '' OUTPUT
+         ,  @c_QC_LineNo      NVARCHAR(5) = ''   --WL01
 AS
 BEGIN
    DECLARE  
@@ -64,6 +67,7 @@ BEGIN
                                              AND (INVENTORYQCDETAIL.FromID  = LOTxLOCxID.ID) 
                WHERE INVENTORYQCDETAIL.QC_Key = @c_qc_key 
                AND  (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked) < INVENTORYQCDETAIL.toQty
+               AND  INVENTORYQCDETAIL.QCLineNo = CASE WHEN ISNULL(@c_QC_LineNo, '') = '' THEN INVENTORYQCDETAIL.QCLineNo ELSE @c_QC_LineNo END   --WL01
               ) 
    BEGIN
       SET @n_continue = 3    
@@ -139,6 +143,7 @@ BEGIN
       WHERE  QC_Key = @c_qc_key 
       AND    Status <> '9'
       AND    FinalizeFlag <> 'Y'
+      AND    QCLineNo = CASE WHEN ISNULL(@c_QC_LineNo, '') = '' THEN QCLineNo ELSE @c_QC_LineNo END   --WL01
 
       OPEN CUR_IQCDET
 
