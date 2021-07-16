@@ -46,7 +46,10 @@ GO
 /* 03-Jul-2020  CheeMun 2.4   INC1192122 - Initialize ChannelID = 0     */    
 /* 22-Oct-2020  Shong   2.5   LWP-193 Performance Tuning                */
 /* 01-Dec-2020  Shong   2.6   Handle Pending Cancel Orders (SWT04)      */
-/* 12-May-2021  Shong   2.7   Performance Tuning SWT-2021-05-12         */
+/* 01-Dec-2020  NJOW01  2.7   WMS-15746 get channel hold qty by config  */  
+/* 12-May-2021  Shong   2.8   Performance Tuning SWT-2021-05-12         */
+/* 22-Jun-2021  NJOW02  2.9   WMS-17326 Add pre-allocation sp and support*/
+/*                            lot01 as hostwhcode when assign order line*/
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -104,7 +107,7 @@ BEGIN
          ,  @c_SOStatus                     NVARCHAR(10) = '' -- (SWT04)
          ,  @c_Status                       NVARCHAR(10) = '' -- (SWT04)
          ,  @n_ChannelHoldQty               INT     --NJOW01
-
+         ,  @c_PreAllocationSP              NVARCHAR(200)  --NJOW02
   
    DECLARE   
          @c_Lottable06 NVARCHAR(30),              @c_Lottable07 NVARCHAR(30),  
@@ -232,6 +235,70 @@ BEGIN
          Select @n_continue = 3, @c_ErrMsg = 'nspLoadProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')  
       End  
    END     
+   
+   --NJOW02 S
+   IF @n_Continue = 1 OR @n_Continue = 2  
+   BEGIN          
+      SET @c_PreAllocationSP = ''  
+      
+      EXEC nspGetRight    
+           @c_Facility  = @c_facility,   
+           @c_StorerKey = @c_StorerKey,    
+           @c_sku       = NULL,    
+           @c_ConfigKey = 'PreAllocationSP',     
+           @b_Success   = @b_Success          OUTPUT,    
+           @c_authority = @c_PreAllocationSP  OUTPUT,     
+           @n_err       = @n_err              OUTPUT,     
+           @c_errmsg    = @c_errmsg           OUTPUT  
+           
+      IF ISNULL(@c_PreAllocationSP,'') <> ''                
+         AND (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')                   
+             OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PreAllocationSP))        
+      BEGIN
+         DECLARE cur_PreAllocationSP_Orders CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT aabd.OrderKey, aabd.RowRef  
+         FROM  AutoAllocBatchDetail AS aabd WITH (NOLOCK)    
+         JOIN ORDERS O (NOLOCK) ON aabd.Orderkey = O.Orderkey
+         WHERE aabd.AllocBatchNo = @n_AllocBatchNo  
+         AND   EXISTS(SELECT 1 FROM ORDERDETAIL AS OD WITH(NOLOCK)   
+                      WHERE OD.OrderKey = aabd.OrderKey     
+                      AND   OD.StorerKey = @c_StorerKey  
+                      AND   OD.Sku = @c_SKU)  
+         --AND O.Status = '0'            
+         
+         OPEN cur_PreAllocationSP_Orders  
+         
+         FETCH NEXT FROM cur_PreAllocationSP_Orders INTO @c_OrderKey, @n_AABD_RowRef   
+         
+         WHILE @@FETCH_STATUS <> -1  
+         BEGIN                
+            SET @b_Success = 0     
+            
+            EXECUTE dbo.ispPreAllocationWrapper   
+                    @c_OrderKey = @c_OrderKey  
+                  , @c_LoadKey  = ''    
+                  , @c_Wavekey  = ''
+                  , @c_PreAllocationSP = @c_PreAllocationSP    
+                  , @b_Success = @b_Success  OUTPUT    
+                  , @n_Err     = @n_Err      OUTPUT     
+                  , @c_ErrMsg  = @c_errmsg   OUTPUT    
+                  , @b_debug   = 0   
+            
+            IF @n_Err <> 0    
+            BEGIN    
+               SELECT @b_Success = 0, @n_Err = '60544', @c_errmsg = 'Execute ' + @c_PreAllocationSP + ' Failed'  
+               EXECUTE nsp_logerror @n_Err, @c_errmsg, @c_PreAllocationSP  
+               RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
+               RETURN  
+            END               
+                                      
+            FETCH NEXT FROM cur_PreAllocationSP_Orders INTO @c_OrderKey, @n_AABD_RowRef    
+         END  
+         CLOSE cur_PreAllocationSP_Orders  
+         DEALLOCATE cur_PreAllocationSP_Orders           
+      END                
+   END  
+   --NJOW02 E   
                
    SET @c_SkipPreAllocationFlag= '0'  
    
@@ -861,7 +928,7 @@ BEGIN
                   O.Lottable01, O.Lottable02, O.Lottable03, O.Lottable04, O.Lottable05,  
                   O.Lottable06, O.Lottable07, O.Lottable08, O.Lottable09, O.Lottable10,         
                   O.Lottable11, O.Lottable12, O.Lottable13, O.Lottable14, O.Lottable15,          
-      SUM(#OPORDERLINES.LooseQty),   
+                  SUM(#OPORDERLINES.LooseQty),   
                   ISNULL(O.Channel,''),  
                   #OPORDERLINES.HostWHCode    
               FROM #OPORDERLINES  
@@ -1143,7 +1210,7 @@ BEGIN
   
                SELECT @n_PalletQty = Pallet, @c_CartonizePallet = CartonizeUOM4,  
                       @n_CaseQty = CaseCnt, @c_CartonizeCase = CartonizeUOM1,  
-                 @n_InnerPackQty = InnerPack, @c_CartonizeInner = CartonizeUOM2,  
+                      @n_InnerPackQty = InnerPack, @c_CartonizeInner = CartonizeUOM2,  
                       @n_OtherUnit1 = CONVERT(INT,OtherUnit1), @c_CartonizeOther1 = CartonizeUOM8,  
                       @n_OtherUnit2 = CONVERT(INT,OtherUnit2), @c_CartonizeOther2 = CartonizeUOM9,  
                       @c_CartonizeEA = CartonizeUOM3  
@@ -1179,7 +1246,7 @@ BEGIN
                END  
   
                IF @n_cPackQty > @n_aQtyLeftToFulfill --SHONG  
-                  AND @c_aUOM <> '1' --NJOW02 support full pallet by loc/id  
+                  AND @c_aUOM <> '1' -- support full pallet by loc/id  
                   GOTO GET_NEXT_STRATEGY  
                END  
                ELSE  
@@ -1292,7 +1359,7 @@ BEGIN
                   ELSE  
                   BEGIN  
   
-IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101'  
+                     IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101'  
                         SELECT @c_Lottable04 = ''  
                      ELSE  
                         SELECT @c_Lottable04 = CONVERT(VARCHAR(20), @d_Lottable04, 112)  
@@ -1352,7 +1419,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                                     WHEN '@c_Lottable03' THEN ',@c_Lottable03 = N''' + RTRIM(@c_Lottable03) + ''''   
                                     WHEN '@d_Lottable04' THEN ',@d_Lottable04 = N''' + @c_Lottable04 + ''''    
                                     WHEN '@c_Lottable04' THEN ',@c_Lottable04 = N''' + @c_Lottable04 + ''''    
-                 WHEN '@d_Lottable05' THEN ',@d_Lottable05 = N''' + @c_Lottable05 + ''''    
+                                    WHEN '@d_Lottable05' THEN ',@d_Lottable05 = N''' + @c_Lottable05 + ''''    
                                     WHEN '@c_Lottable05' THEN ',@c_Lottable05 = N''' + @c_Lottable05 + ''''    
                                     WHEN '@c_Lottable06' THEN ',@c_Lottable06 = N''' + RTRIM(@c_Lottable06) + ''''   
                                     WHEN '@c_Lottable07' THEN ',@c_Lottable07 = N''' + RTRIM(@c_Lottable07) + ''''   
@@ -1381,7 +1448,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                             SELECT @c_SQLExecute = RTRIM(@c_SQLExecute) + ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''                             
                               
                         IF @b_debug = 1 OR @b_debug = 2  
-               BEGIN  
+                        BEGIN  
                            PRINT ''  
                            PRINT ''  
                            PRINT '-- Execute Allocate Strategy ' + RTRIM(@c_sAllocatePickCode) + ' UOM:' + RTRIM(@c_aUOM)  
@@ -1571,13 +1638,13 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
   
                            IF @c_ChannelInventoryMgmt = '1'         
                            BEGIN  
-							  --INC1192122(START)
-							  IF ((@c_aStorerKey <> @c_sPrevStorerKey) OR (@c_aSKU <> @c_sPrevSKU) 
-							  	OR (@c_aFacility <> @c_PrevFACILITY) OR (@c_Channel <> @c_PrevChannel)
-							  	OR (@c_aLOT <> @c_sPrevLOT))
-							  BEGIN
-							  	SET @n_Channel_ID = 0 
-							  END
+							                --INC1192122(START)
+							                IF ((@c_aStorerKey <> @c_sPrevStorerKey) OR (@c_aSKU <> @c_sPrevSKU) 
+							                	OR (@c_aFacility <> @c_PrevFACILITY) OR (@c_Channel <> @c_PrevChannel)
+							                	OR (@c_aLOT <> @c_sPrevLOT))
+							                BEGIN
+							                	SET @n_Channel_ID = 0 
+							                END
                               --INC1192122(END)
                               
                               IF ISNULL(RTRIM(@c_Channel), '') <> ''  AND  
@@ -1607,12 +1674,12 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                                  END CATCH                                            
                               END  
                               
-							  --INC1192122(START)
-							  SET @c_sPrevStorerKey     =  @c_aStorerKey  
-							  SET @c_sPrevSKU  		    =  @c_aSKU  
-							  SET @c_PrevFACILITY       =  @c_aFacility  
-							  SET @c_PrevChannel        =  @c_Channel  
-							  SET @c_sPrevLOT           =  @c_aLOT  		   
+							                --INC1192122(START)
+							                SET @c_sPrevStorerKey     =  @c_aStorerKey  
+							                SET @c_sPrevSKU  		    =  @c_aSKU  
+							                SET @c_PrevFACILITY       =  @c_aFacility  
+							                SET @c_PrevChannel        =  @c_Channel  
+							                SET @c_sPrevLOT           =  @c_aLOT  		   
                               --INC1192122(END)
                               
                               IF @n_Channel_ID > 0   
@@ -1645,7 +1712,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                                  WHERE ci.Channel_ID = @n_Channel_ID  
                                  AND p.[Status] <> '9'   
                                  AND p.Storerkey = @c_aStorerKey  
-                      AND p.Sku = @c_aSKU  
+                                 AND p.Sku = @c_aSKU  
                                  AND p.LOT = @c_aLOT  
                                  AND p.Channel_ID = @n_Channel_ID   
                                  (Wan03) - END */  
@@ -1669,8 +1736,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                            --(Wan01) - END  
                                                
                         END  
-  
-                        --NJOW10  
+                            
                         IF ISNULL(@c_AllocateGetCasecntFrLottable,'')   
                            IN ('01','02','03','06','07','08','09','10','11','12') AND @c_aUOM = '2'  
                            AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1' --if skip preallocation need to get casecnt from each retun lot  
@@ -1706,7 +1772,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
   
                         END  
   
-                       IF @c_OtherValue = 'FULLPALLET' AND @c_aUOM = '1' --NJOW02 Start  
+                       IF @c_OtherValue = 'FULLPALLET' AND @c_aUOM = '1' -- Start  
                         BEGIN                             
                            SELECT @n_UOMQty = 1  
                               
@@ -1723,7 +1789,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                            BEGIN  
                               PRINT 'FULLPALLET WITH UOM 1'                                 
                         END  
-                           --NJOW02 End  
+                           --End  
                         END  
                         ELSE  
                         BEGIN  
@@ -2249,7 +2315,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
          FROM  ORDERS WITH (NOLOCK)   
          WHERE OrderKey = @c_OrderKey    
            
-         IF @c_PostAllocationSP <> '' AND (@c_OrderStatus = '2' OR (@c_OrderStatus = '1' AND @c_Option1 = 'AllowPartialAllocate'))  -- (SWT01)      
+         IF @c_PostAllocationSP <> '' AND (@c_OrderStatus = '2' OR (@c_OrderStatus = '1' AND @c_Option1 = 'AllowPartialAllocate') OR @c_Option1 = 'AllowAllStatus')  -- (SWT01)      --NJOW02
          BEGIN  
             IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')              
                OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP)   
@@ -2265,7 +2331,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                      , @c_ErrMsg  = @c_errmsg   OUTPUT    
                      , @b_debug   = 0   
            
-          IF @n_Err <> 0    
+               IF @n_Err <> 0    
                BEGIN    
                   SELECT @b_Success = 0, @n_Err = '60544', @c_errmsg = 'Execute ' + @c_PostAllocationSP + ' Failed'  
                   EXECUTE nsp_logerror @n_Err, @c_errmsg, @c_PostAllocationSP  
@@ -2287,8 +2353,7 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
          FETCH NEXT FROM cur_PostAllocationSP_Orders INTO @c_OrderKey, @n_AABD_RowRef    
       END  
       CLOSE cur_PostAllocationSP_Orders  
-      DEALLOCATE cur_PostAllocationSP_Orders        
-                   
+      DEALLOCATE cur_PostAllocationSP_Orders                           
    END  
   
    IF (@n_Continue = 1 OR @n_Continue = 2)  
@@ -2509,7 +2574,22 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                       o.Qty > 0 AND  
                       o.StrategyKey = @c_aStrategyKey AND  
                       o.UOMQty = @n_OriginUOMQty  AND
-                      EXISTS(SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK) -- SHONG   1.7  
+                      OD.Lottable01 = @c_Lottable01 AND --NJOW02
+                      OD.Lottable02 = @c_Lottable02 AND
+                      OD.Lottable03 = @c_Lottable03 AND
+                      OD.Lottable04 = @d_Lottable04 AND
+                      OD.Lottable05 = @d_Lottable05 AND
+                      OD.Lottable06 = @c_Lottable06 AND      
+                      OD.Lottable07 = @c_Lottable07 AND      
+                      OD.Lottable08 = @c_Lottable08 AND      
+                      OD.Lottable09 = @c_Lottable09 AND      
+                      OD.Lottable10 = @c_Lottable10 AND      
+                      OD.Lottable11 = @c_Lottable11 AND      
+                      OD.Lottable12 = @c_Lottable12 AND      
+                      OD.Lottable13 = @d_Lottable13 AND      
+                      OD.Lottable14 = @d_Lottable14 AND      
+                      OD.Lottable15 = @d_Lottable15                                     
+                      /*EXISTS(SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK) -- SHONG   1.7  
                              WHERE LOT = @c_aLOT  
                              AND   LA.StorerKey = OD.StorerKey  
                              AND   LA.SKU = OD.Sku  
@@ -2550,10 +2630,10 @@ IF @d_Lottable04 IS NULL OR CONVERT(VARCHAR(20), @d_Lottable04, 112) = '19000101
                              AND   1 = CASE WHEN OD.Lottable15 = CAST('19000101' AS DATETIME) OR  OD.Lottable15 IS NULL  
                                                  THEN 1  
                                             WHEN OD.Lottable15 = LA.Lottable15  
-                             THEN 1  
+                                                 THEN 1  
                                             ELSE 0  
-              END  
-                            )  
+                                       END  
+                            )*/  
                ORDER BY ORDERS.Priority, --NJOW03  
                         CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
                         CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
