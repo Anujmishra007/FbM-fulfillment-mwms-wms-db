@@ -28,7 +28,8 @@ GO
 /* 17/04/2019  NJOW01   1.0  WMS-4344 allow allocate qtyreplen          */
 /* 15/07/2019  NJOW02   1.1  Fix shelflife flag                         */
 /* 18/07/2019  NJOW03   1.2  Change dyanmic sql by param                */
-/* 11-May-2020 Wan01    1.3   Dynamic SQL review, impact SQL cache log  */  
+/* 11-May-2020 Wan01    1.3  Dynamic SQL review, impact SQL cache log   */  
+/* 23-Jun-2021 NJOW04   1.4  WMS-17326 allow skip lottable filtering    */
 /************************************************************************/
 
 CREATE PROC nspALCFG01
@@ -66,18 +67,19 @@ BEGIN
    Storerkey: <Storer> (if setup short(AllocateStrategykey), storerkey is optional either key in storerkey or AllocateStrategykey)
    code2: for UOM(optional)
    
-   Code              Description                                                     Notes UDF01  UDF02  UDF03  UDF04  UDF05  
-   ----------------------------------------------------------------------------------------------------------------------------
-   ALLOCATEHOLD      Allow allocate from Hold Inventory(default N)                          Y/N                                
-   FROMPBULKLOC      Allocate from bulk only (default N)                                    Y/N                                
-   FROMPICKLOC       Allocate from pick only (default N)                                    Y/N                                
-   FULLPALLETBYLOC   Allocate as full pallet if no remain qty at the loc (default N)        Y/N 
-   CONDITION         Additional allocation retrieve condition                          SQL                                     
-   SORTING           Custom sorting (default FIFO)                                     SQL                                     
-   LOCTYPESEQ        Custom allocate by locationtype and sequence                           Locationtype by sequence (UDF01-05)
-   SHELFLIFE         Allocation Check shelflife (default N)                                 E/M/N
-   LISTNAME          Refer the allocation setting from user created listname                <Listname>
-   ALLOCATEQTYREPLEN Allow allocate qty reserved for replenish at bulk loc                  Y/N
+   Code                 Description                                                     Notes UDF01  UDF02  UDF03  UDF04  UDF05  
+   -------------------------------------------------------------------------------------------------------------------------------
+   ALLOCATEHOLD         Allow allocate from Hold Inventory(default N)                          Y/N                                
+   FROMPBULKLOC         Allocate from bulk only (default N)                                    Y/N                                
+   FROMPICKLOC          Allocate from pick only (default N)                                    Y/N                                
+   FULLPALLETBYLOC      Allocate as full pallet if no remain qty at the loc (default N)        Y/N 
+   CONDITION            Additional allocation retrieve condition                          SQL                                     
+   SORTING              Custom sorting (default FIFO)                                     SQL                                     
+   LOCTYPESEQ           Custom allocate by locationtype and sequence                           Locationtype by sequence (UDF01-05)
+   SHELFLIFE            Allocation Check shelflife (default N)                                 E/M/N
+   LISTNAME             Refer the allocation setting from user created listname                <Listname>
+   ALLOCATEQTYREPLEN    Allow allocate qty reserved for replenish at bulk loc                  Y/N
+   SKIPLOTTABLEFILTER   Allow skip filtering for certain lottable 01-15                        01-15
                  
    Notes:
    1.  Code2 - Optional UOM. If defined, the setup only apply to the same UOM in the strategy otherwise apply to all UOM
@@ -102,6 +104,7 @@ BEGIN
    9.  FULLPALLETBYLOC is only work for Pallet(UOM 1).   
    10. For SHELFLIFE. Set E to enable check shelflife by expiry date in lottable04, M to check by manufacturing date, N is no checking.
    11. For LISTNAME. Only need to provide storerkey and UDF01. This option only can apply to listname 'nspALCFG01'
+   12. For SKIPLOTTABLEFILTER, include the lottable need to skip filtering in the list delimited by comman from 01 to 15. e.g. 02,04,08
       
    Shelflife logic and sequence
    ----------------------------
@@ -157,7 +160,8 @@ BEGIN
            @n_NoOfLot          INT,
            @c_ListName         NVARCHAR(10),
            @c_AllocateGetCasecntFrLottable NVARCHAR(30),
-           @n_LotQtyAvailable  INT
+           @n_LotQtyAvailable  INT,
+           @c_SkipLottableFilter NVARCHAR(60) --NJOW04           
                                                
     SET @c_LocTypeList = ''
     SET @c_LocTypeSort = ''
@@ -170,6 +174,7 @@ BEGIN
    SET @n_ConsigneeSkuMinShelfLife = 0
    SET @n_ConsigneeSkuGroupMinShelfLife = 0      
    SET @c_ContinueChkShelfLife = 'N'   
+   SET @c_SkipLottableFilter = '' --NJOW04   
    
    EXEC isp_Init_Allocate_Candidates         --(Wan01)  
    
@@ -356,6 +361,12 @@ BEGIN
    AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
    
+   SELECT TOP 1 @c_SkipLottableFilter = ISNULL(UDF01,'')  --NJOW04
+   FROM @TMP_CODELKUP
+   WHERE Code = 'SKIPLOTTABLEFILTER' --Skip lottable filtering.
+   AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+      
    IF ISNULL(@c_ShelfLifeFlag,'') IN('E','M')  --NJOW02
       SET @c_ContinueChkShelfLife = 'Y'
 
@@ -364,77 +375,77 @@ BEGIN
       SET @c_SortingFlag = 'Y'
    END
       
-   IF ISNULL(@c_Lottable01,'') <> '' 
+   IF ISNULL(@c_Lottable01,'') <> '' AND CHARINDEX('01',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE01 = RTRIM(@c_Lottable01) "         --(Wan01)
    END
    
-   IF ISNULL(@c_Lottable02,'') <> '' 
+   IF ISNULL(@c_Lottable02,'') <> '' AND CHARINDEX('02',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE02 = RTRIM(@c_Lottable02) "         --(Wan01)
    END
    
-   IF ISNULL(@c_Lottable03,'') <> '' 
+   IF ISNULL(@c_Lottable03,'') <> '' AND CHARINDEX('03',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE03 = RTRIM(@c_Lottable03) "         --(Wan01)
    END
    
-   IF CONVERT(char(10), @d_Lottable04, 103) <> "01/01/1900" AND @d_Lottable04 IS NOT NULL 
+   IF CONVERT(char(10), @d_Lottable04, 103) <> "01/01/1900" AND @d_Lottable04 IS NOT NULL AND CHARINDEX('04',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) " --(Wan01)
    END
    
-   IF CONVERT(char(10), @d_Lottable05, 103) <> "01/01/1900" AND @d_Lottable05 IS NOT NULL 
+   IF CONVERT(char(10), @d_Lottable05, 103) <> "01/01/1900" AND @d_Lottable05 IS NOT NULL AND CHARINDEX('05',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) " --(Wan01)
    END
    
-   IF ISNULL(@c_Lottable06,'') <> '' 
+   IF ISNULL(@c_Lottable06,'') <> '' AND CHARINDEX('06',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')+ ' AND Lottable06 = RTRIM(@c_Lottable06) '             --(Wan01)
    END   
 
-   IF ISNULL(@c_Lottable07,'') <> '' 
+   IF ISNULL(@c_Lottable07,'') <> '' AND CHARINDEX('07',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable07 = RTRIM(@c_Lottable07) '            --(Wan01)
    END   
 
-   IF ISNULL(@c_Lottable08,'') <> '' 
+   IF ISNULL(@c_Lottable08,'') <> '' AND CHARINDEX('08',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable08 = RTRIM(@c_Lottable08) '            --(Wan01)
    END   
 
-   IF ISNULL(@c_Lottable09,'') <> '' 
+   IF ISNULL(@c_Lottable09,'') <> '' AND CHARINDEX('09',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable09 = RTRIM(@c_Lottable09) '            --(Wan01)
    END   
 
-   IF ISNULL(@c_Lottable10,'') <> '' 
+   IF ISNULL(@c_Lottable10,'') <> '' AND CHARINDEX('10',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable10 = RTRIM(@c_Lottable10) '            --(Wan01)
    END   
 
-   IF ISNULL(@c_Lottable11,'') <> '' 
+   IF ISNULL(@c_Lottable11,'') <> '' AND CHARINDEX('11',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable11 = RTRIM(@c_Lottable11) '            --(Wan01)
    END   
 
-   IF ISNULL(@c_Lottable12,'') <> '' 
+   IF ISNULL(@c_Lottable12,'') <> '' AND CHARINDEX('12',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable12 = RTRIM(@c_Lottable12) '            --(Wan01)
    END  
 
-   IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' AND @d_Lottable13 IS NOT NULL 
+   IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' AND @d_Lottable13 IS NOT NULL AND CHARINDEX('13',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' --(Wan01)
    END
 
-   IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900' AND @d_Lottable14 IS NOT NULL
+   IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900' AND @d_Lottable14 IS NOT NULL AND CHARINDEX('14',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' --(Wan01)
    END
 
-   IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900' AND @d_Lottable15 IS NOT NULL
+   IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900' AND @d_Lottable15 IS NOT NULL AND CHARINDEX('15',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' --(Wan01)
    END
