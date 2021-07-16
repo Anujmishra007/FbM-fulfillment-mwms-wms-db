@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */ 
 /* 21-Oct-2020  SHONG   1.1   Performance Tuning                        */
+/* 09-Jul-2021  NJOW01  1.2   WMS-17326 Remove lottable01 if hostwhcode */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPOA14]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -47,7 +48,8 @@ BEGIN
             @n_StartTCnt             INT, -- Holds the current transaction count  
             @c_Pickdetailkey         NVARCHAR(10),  
             @c_Orderkey2             NVARCHAR(10),  
-            @c_Putawayzone           NVARCHAR(4000)  
+            @c_Putawayzone           NVARCHAR(4000),  
+            @c_OrderLinenumber       NVARCHAR(5)
                                                                             
    SELECT @n_StartTCnt=@@TRANCOUNT , @n_Continue=1, @b_Success=1, @n_Err=0, @c_ErrMsg=''    
      
@@ -91,6 +93,7 @@ BEGIN
                                  AND CL.Code = LOC.Putawayzone  
          WHERE (O.Orderkey = @c_Orderkey)  
          AND O.DocType = 'E'  
+         AND O.Status = '2'  --NJOW02  Auto allocation tuning
          GROUP BY O.Orderkey, LOC.Putawayzone  
          ORDER BY O.Orderkey  
       END
@@ -131,8 +134,10 @@ BEGIN
          SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadkey, Wave and Orderkey are Blank (ispPOA14)'  
          GOTO EXIT_SP      
       END    
+      
+      IF (SELECT COUNT(1) FROM #TMP_ORD) = 0  --NJOW01 Auto allocation tuning
+        GOTO UPDATE_LOTTABLE
 
-  
       INSERT INTO #TMP_ORD_Final  
       SELECT DISTINCT t2.Orderkey,   
              STUFF((SELECT RTRIM(t1.Putawayzone) FROM #TMP_ORD t1  
@@ -178,6 +183,92 @@ BEGIN
       CLOSE cur_ORD  
       DEALLOCATE cur_ORD        
    END  
+   
+   --NJOW02
+   UPDATE_LOTTABLE:
+   IF @n_continue IN(1,2)
+   BEGIN
+      IF ISNULL(RTRIM(@c_OrderKey), '') <> ''
+      BEGIN
+      	  IF NOT EXISTS(SELECT 1 
+      	                FROM ORDERS O (NOLOCK)
+      	                JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+      	                WHERE O.Orderkey = @c_Orderkey
+      	                AND O.b_company = '3940' 
+      	                AND OD.Lottable01 = '001'
+      	               )    
+      	  BEGIN
+      	  	 GOTO EXIT_SP  --auto allocation tuning
+      	  END                         
+      	     	  
+         DECLARE CUR_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT O.OrderKey
+            FROM ORDERS O (NOLOCK)
+            WHERE O.OrderKey = @c_OrderKey 
+            AND O.b_company = '3940'        
+      END
+      ELSE IF ISNULL(RTRIM(@c_LoadKey), '') <> ''
+      BEGIN
+         DECLARE CUR_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT O.OrderKey
+            FROM LOADPLANDETAIL LPD (NOLOCK)
+            JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+            WHERE LPD.LoadKey = @c_LoadKey     
+            AND O.b_company = '3940'        
+      END
+      ELSE
+      BEGIN
+         DECLARE CUR_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT O.OrderKey
+            FROM WAVEDETAIL WD (NOLOCK)
+            JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+            WHERE WD.WaveKey = @c_WaveKey
+            AND O.b_company = '3940'                 
+      END          
+             
+      OPEN CUR_ORDERKEY    
+      
+      FETCH NEXT FROM CUR_ORDERKEY INTO @c_OrderKey
+        
+      WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2) --loop order
+      BEGIN          	
+      	  DECLARE CUR_ORDERDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      	     SELECT OD.OrderLineNumber
+      	     FROM ORDERDETAIL OD (NOLOCK)
+      	     WHERE OD.Orderkey = @c_Orderkey
+      	     AND OD.Lottable01 = '001'
+      	     ORDER BY OD.OrderLineNumber
+      
+         OPEN CUR_ORDERDET    
+         
+         FETCH NEXT FROM CUR_ORDERDET INTO @c_OrderLinenumber
+           
+         WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) --loop order detail
+         BEGIN       
+         	 UPDATE ORDERDETAIL WITH (ROWLOCK)
+         	 SET Lottable01 = '',
+         	     TrafficCop = NULL
+         	 WHERE Orderkey = @c_Orderkey
+         	 AND OrderLineNumber = @c_OrderLineNumber
+         	      	
+            IF @@ERROR <> 0
+            BEGIN
+               SELECT @n_Continue = 3    
+               SELECT @n_Err = 35020    
+               SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Error update ORDERDETAIL table. (ispPOA20)'
+            END
+      
+            FETCH NEXT FROM CUR_ORDERDET INTO @c_OrderLinenumber
+      	  END   
+      	  CLOSE CUR_ORDERDET
+      	  DEALLOCATE CUR_ORDERDET
+      	        
+         FETCH NEXT FROM CUR_ORDERKEY INTO @c_OrderKey    
+      END -- WHILE @@FETCH_STATUS <> -1    
+      
+      CLOSE CUR_ORDERKEY        
+      DEALLOCATE CUR_ORDERKEY                        
+   END
            
 EXIT_SP:  
    IF @n_Continue=3  -- Error Occured - Process And Return      
