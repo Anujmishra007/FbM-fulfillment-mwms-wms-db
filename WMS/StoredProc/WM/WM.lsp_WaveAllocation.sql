@@ -30,6 +30,7 @@ GO
 /* 2021-05-05  Wan01    1.2   LFWM-2723 - RGMigrate Allocation schedule */
 /*                            job to QCommander                         */
 /* 2021-05-21  Wan02    1.3   LFWM-2803 - UATCN Allocate error          */
+/* 2021-07-01  Wan03    1.4   LFWM-2808 - CN Allocate Enhancement       */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -58,6 +59,7 @@ BEGIN
          ,  @c_Storerkey                  NVARCHAR(15) = ''
          ,  @c_Orderkey                   NVARCHAR(10) = ''
          ,  @c_ReflineNo                  NVARCHAR(10) = ''
+         ,  @c_StrategykeyParm            NVARCHAR(10) = '' --(Wan03)
 
          ,  @c_FinalizeFlag               NVARCHAR(10) = ''
          ,  @c_SuperOrderFlag             NVARCHAR(10) = ''
@@ -593,6 +595,13 @@ BEGIN
       END
       --(Wan01) - END
       
+      --(Wan03) - START
+      SET @c_StrategykeyParm = ''      
+      SELECT @c_StrategykeyParm = ISNULL(w.Strategykey,'')
+      FROM dbo.WAVE AS w WITH (NOLOCK)
+      WHERE w.WaveKey = @c_Wavekey
+      --(Wan03) - END
+      
       WAVE_ALLOCATION:
          IF @c_AllocateType = 'WAVE' 
          BEGIN
@@ -637,6 +646,7 @@ BEGIN
                END
 
                SET @c_ExecCmd = '[dbo].[ispWaveProcessing] @c_WaveKey=''' + @c_WaveKey + ''',@b_Success=1,@n_Err=0,@c_ErrMsg='''''
+                              + ',@c_strategykeyparm=''' + @c_StrategykeyParm + ''''                                                --(Wan03)
                BEGIN TRY
                   --INSERT INTO IDSAllocationPool
                   --   (
@@ -874,6 +884,7 @@ BEGIN
                                     + ',@c_doroute=''N'''
                                     + ',@c_tblprefix=''XX'''
                                     + ',@c_extendparms=''WP'''
+                                    + ',@c_strategykeyparm=''' + @c_StrategykeyParm + ''''               --(Wan03)
                      BEGIN TRY
                         --INSERT INTO IDSAllocationPool
                         --   (
@@ -1103,6 +1114,7 @@ BEGIN
                               + ',@c_doroute=''N'''
                               + ',@c_tblprefix=''XX'''
                               + ',@c_extendparms='''''
+                              + ',@c_strategykeyparm=''' + @c_StrategykeyParm + ''''               --(Wan03)
                BEGIN TRY
                   --INSERT INTO IDSAllocationPool
                   --   (
@@ -1236,7 +1248,7 @@ BEGIN
                   IF @c_AllocateValidationRules <> ''
                   BEGIN
                      SET @c_ValidateOrderKey = @c_Orderkey        --2021-06-15 Fixed
-                     SET @c_ValidateLoadkey  = ''                 --2021-06-15 Fixed 
+                     SET @c_ValidateLoadkey  = ''                 --2021-06-15 Fixed
                      SET @c_ValidateWaveKey  = ''
 
                      SET @c_SQLVLDParms= N'@c_ValidateOrderKey    NVARCHAR(10)'
@@ -1305,6 +1317,7 @@ BEGIN
                                     + ',@c_doroute=''N'''
                                     + ',@c_tblprefix=''XX'''
                                     + ',@c_extendparms='''+ @c_Source +''''
+                                    + ',@c_strategykeyparm=''' + @c_StrategykeyParm + ''''               --(Wan03)
                      BEGIN TRY
                         --INSERT INTO IDSAllocationPool
                         --   (
