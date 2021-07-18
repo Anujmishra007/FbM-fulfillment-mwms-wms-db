@@ -26,6 +26,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-04-28   Michael  v1.1 Add Configurable Fields for IDSMED         */
+/* 2021-06-24   Michael  v1.2 Add Showfield Update_PD_PickslipNo         */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_03] (
@@ -55,6 +56,7 @@ BEGIN
    [SHOWFIELD]
       Consigneekey, DCC, LineRemark1, LineRemark2, LineRemark3
       HideLottable01, HideAltSku
+      Update_PD_PickslipNo
 
    [SQLJOIN]
 */
@@ -65,6 +67,7 @@ BEGIN
          , @c_Type             NVARCHAR(2)   = RIGHT(@c_Wavekey_type,2)
          , @c_Pickheaderkey    NVARCHAR(10)
          , @c_Orderkey         NVARCHAR(10)
+         , @c_Update_PD_PSNo   NVARCHAR(10)
          , @c_errmsg           NVARCHAR(255)
          , @b_success          INT
          , @n_err              INT
@@ -162,25 +165,32 @@ BEGIN
 
    -- Generate PickHeader
    DECLARE PICK_CUR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-    SELECT DISTINCT OH.Orderkey
+    SELECT OH.Orderkey, MAX(CASE WHEN RptCfg.ShowFields LIKE '%,Update_PD_PickslipNo,%' THEN 'Y' ELSE 'N' END)
       FROM dbo.WAVEDETAIL WD (NOLOCK)
       JOIN dbo.ORDERS     OH (NOLOCK) ON WD.Orderkey = OH.Orderkey
       JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
       LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
       LEFT JOIN dbo.PICKHEADER PH2(NOLOCK) ON OH.Loadkey  = PH2.ExternOrderkey AND ISNULL(PH2.Orderkey,'')='' AND ISNULL(PH2.Zone,'')<>'8' AND ISNULL(OH.Loadkey,'')<>''
+      LEFT JOIN (
+         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+      ) RptCfg
+      ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1
     WHERE WD.wavekey = @c_Wavekey
       AND OH.Userdefine08 = 'Y' -- only for wave plan OH.
       AND PD.Status < '5'
       AND (PD.Pickmethod = '8' OR PD.Pickmethod = '')
       AND PH.PickHeaderKey IS NULL
       AND PH2.PickHeaderKey IS NULL
+    GROUP BY OH.Orderkey
     ORDER BY 1
 
    OPEN PICK_CUR
 
    WHILE 1=1
    BEGIN
-      FETCH NEXT FROM PICK_CUR INTO @c_Orderkey
+      FETCH NEXT FROM PICK_CUR INTO @c_Orderkey, @c_Update_PD_PSNo
 
       IF @@FETCH_STATUS<>0
          BREAK
@@ -212,6 +222,17 @@ BEGIN
       BEGIN
          WHILE @@TRANCOUNT > 0
             COMMIT TRAN
+      END
+
+      IF ISNULL(@c_Update_PD_PSNo,'')='Y'
+      BEGIN
+         UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
+            SET PickslipNo = @c_Pickheaderkey
+              , TrafficCop = NULL
+          WHERE Orderkey = @c_Orderkey
+            AND Status < '9'
+            AND ShipFlag <> 'Y'
+            AND ISNULL(PickslipNo,'') <> @c_Pickheaderkey
       END
    END
 
@@ -286,7 +307,7 @@ BEGIN
    SELECT DISTINCT PD.Storerkey
      FROM dbo.WAVEDETAIL   WD   (NOLOCK)
      JOIN dbo.ORDERS       OH   (NOLOCK) ON WD.Orderkey = OH.Orderkey
-     JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
+ JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
      JOIN dbo.PICKDETAIL   PD   (NOLOCK) ON WD.Orderkey = PD.Orderkey
     WHERE WD.wavekey = @c_Wavekey
       AND OH.Userdefine08 = 'Y'
@@ -584,7 +605,7 @@ BEGIN
         +       ', BUSR10           = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BUSR10Exp      ,'')<>'' THEN @c_BUSR10Exp       ELSE 'SKU.BUSR10'      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', Lottable01       = ISNULL(RTRIM(' + CASE WHEN @c_ShowFields LIKE '%,HideLottable01,%'   THEN 'NULL'
-                                                            ELSE CASE WHEN ISNULL(@c_Lottable01Exp,'')<>'' THEN @c_Lottable01Exp  ELSE 'LA.Lottable01' END
+                            ELSE CASE WHEN ISNULL(@c_Lottable01Exp,'')<>'' THEN @c_Lottable01Exp  ELSE 'LA.Lottable01' END
                                                        END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', Lottable02       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lottable02Exp  ,'')<>'' THEN @c_Lottable02Exp   ELSE 'LA.Lottable02'   END + '),'''')'
