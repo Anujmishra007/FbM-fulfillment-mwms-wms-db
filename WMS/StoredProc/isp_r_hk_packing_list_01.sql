@@ -54,12 +54,13 @@ GO
 /* 13/04/2021   ML       1.21 Add new field LineAmount                   */
 /* 17/04/2021   ML       1.22 Fix duplicate record in #TEMP_PACKDETAIL2  */
 /* 19/04/2021   ML       1.23 Insert errolog when Pick/Pack Unmatch      */
+/* 28/04/2021   ML       1.24 Allow multi values of Param @as_loadkey    */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_packing_list_01] (
        @as_storerkey       NVARCHAR(15)
      , @as_wavekey         NVARCHAR(10)
-     , @as_loadkey         NVARCHAR(10)
+     , @as_loadkey         NVARCHAR(4000)
      , @as_pickslipno      NVARCHAR(4000)
      , @as_externorderkey  NVARCHAR(4000)
      , @as_orderkey        NVARCHAR(4000)
@@ -221,6 +222,8 @@ BEGIN
       END
    END
 
+   IF OBJECT_ID('tempdb..#TEMP_LOADKEY') IS NOT NULL
+      DROP TABLE #TEMP_LOADKEY
    IF OBJECT_ID('tempdb..#TEMP_PICKSLIPNO') IS NOT NULL
       DROP TABLE #TEMP_PICKSLIPNO
    IF OBJECT_ID('tempdb..#TEMP_ORDERKEY') IS NOT NULL
@@ -305,6 +308,7 @@ BEGIN
          , @c_UOMExp             NVARCHAR(4000)
          , @c_UnitpriceExp       NVARCHAR(4000)
          , @c_ExtOrdKey_SumExp   NVARCHAR(4000)
+         , @n_LoadkeyCnt         INT
          , @n_PickslipNoCnt      INT
          , @n_ExternOrderkeyCnt  INT
          , @n_OrderkeyCnt        INT
@@ -417,6 +421,16 @@ BEGIN
       , Section          NVARCHAR(1)
    )
 
+   -- Loadkey List
+   SELECT SeqNo    = MIN(SeqNo)
+        , ColValue = LTRIM(RTRIM(ColValue))
+     INTO #TEMP_LOADKEY
+     FROM dbo.fnc_DelimSplit(',',REPLACE(@as_loadkey,CHAR(13)+CHAR(10),','))
+    WHERE ColValue<>''
+    GROUP BY LTRIM(RTRIM(ColValue))
+
+   SET @n_LoadkeyCnt = @@ROWCOUNT
+
    -- PickslipNo List
    SELECT SeqNo    = MIN(SeqNo)
         , ColValue = LTRIM(RTRIM(ColValue))
@@ -459,7 +473,6 @@ BEGIN
    )
    SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
                         + ',@as_wavekey NVARCHAR(10)'
-                        + ',@as_loadkey NVARCHAR(10)'
                         + ',@as_mbolkey NVARCHAR(10)'
 
    -- Discrete Orders
@@ -476,16 +489,16 @@ BEGIN
                          +   ' JOIN dbo.PACKDETAIL    PD (NOLOCK) ON PH.PickslipNo = PD.Pickslipno'
                          +  ' WHERE OH.Status >= ''3'' AND OH.Status <= ''9'''
                          +    ' AND PD.Qty > 0'
-   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR ISNULL(@as_mbolkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
+   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_mbolkey,'')<>'' OR @n_LoadkeyCnt>0 OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN
       IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
          SET @c_ExecStatements += ' AND OH.Storerkey = @as_storerkey'
       IF ISNULL(@as_wavekey,'')<>''
          SET @c_ExecStatements += ' AND OH.Userdefine09 = @as_wavekey'
-      IF ISNULL(@as_loadkey,'')<>''
-         SET @c_ExecStatements += ' AND OH.LoadKey = @as_loadkey'
       IF ISNULL(@as_mbolkey,'')<>''
          SET @c_ExecStatements += ' AND OH.MBOLKey = @as_mbolkey'
+      IF @n_LoadkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.LoadKey IN (SELECT ColValue FROM #TEMP_LOADKEY)'
       IF @n_PickslipNoCnt>0
          SET @c_ExecStatements += ' AND PH.PickSlipNo IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
       IF @n_ExternOrderkeyCnt>0
@@ -503,7 +516,6 @@ BEGIN
                     , @c_ExecArguments
                     , @as_storerkey
                     , @as_wavekey
-                    , @as_loadkey
                     , @as_mbolkey
 
    -- Consol Orders
@@ -523,16 +535,16 @@ BEGIN
                          +    ' AND OH.Loadkey<>'''''
                          +    ' AND PD.Qty > 0'
                          +    ' AND FOK.Orderkey IS NULL'
-   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR ISNULL(@as_mbolkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
+   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_mbolkey,'')<>'' OR @n_LoadkeyCnt>0 OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN
       IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
          SET @c_ExecStatements += ' AND OH.Storerkey = @as_storerkey'
       IF ISNULL(@as_wavekey,'')<>''
          SET @c_ExecStatements += ' AND OH.Userdefine09 = @as_wavekey'
-      IF ISNULL(@as_loadkey,'')<>''
-         SET @c_ExecStatements += ' AND OH.LoadKey = @as_loadkey'
       IF ISNULL(@as_mbolkey,'')<>''
          SET @c_ExecStatements += ' AND OH.MBOLKey = @as_mbolkey'
+      IF @n_LoadkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.LoadKey IN (SELECT ColValue FROM #TEMP_LOADKEY)'
       IF @n_PickslipNoCnt>0
          SET @c_ExecStatements += ' AND PH.PickSlipNo IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
       IF @n_ExternOrderkeyCnt>0
@@ -550,7 +562,6 @@ BEGIN
                     , @c_ExecArguments
                     , @as_storerkey
                     , @as_wavekey
-                    , @as_loadkey
                     , @as_mbolkey
 
 
@@ -2123,6 +2134,7 @@ BEGIN
                                      from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='N_Width2') ) AS NVARCHAR(50))
         , LineAmount         = SUM(PAKDT.Qty) * MAX( ISNULL( PAKDT.UnitPrice, 0 ) )
+        , SeqLP              = MAX( ISNULL( SelLP.SeqNo, 0 ) )
 
    FROM #TEMP_PAKDT PAKDT
    JOIN dbo.ORDERS OH (NOLOCK) ON PAKDT.FirstOrderKey=OH.OrderKey
@@ -2172,6 +2184,7 @@ BEGIN
    ) RptCfg3
    ON RptCfg3.Storerkey=PAKDT.Storerkey AND RptCfg3.SeqNo=1
 
+   LEFT JOIN #TEMP_LOADKEY        SelLP  ON OH.Loadkey           = SelLP.ColValue
    LEFT JOIN #TEMP_PICKSLIPNO     SelPS  ON PAKDT.PickSlipNo_Key = SelPS.ColValue
    LEFT JOIN #TEMP_EXTERNORDERKEY SelEOK ON PAKDT.ExternOrderKey = SelEOK.ColValue
    LEFT JOIN #TEMP_ORDERKEY       SelOK  ON PAKDT.Orderkey       = SelOK.ColValue
@@ -2189,7 +2202,7 @@ BEGIN
           , PAKDT.SKU
           , PAKDT.LineSplit
 
-   ORDER BY SortOrderkey, SeqPS, SeqEOK, SeqOK, DocKey, CtnGrouping, Section, CartonNo, LabelNo, Line_No
+   ORDER BY SortOrderkey, SeqPS, SeqLP, SeqEOK, SeqOK, DocKey, CtnGrouping, Section, CartonNo, LabelNo, Line_No
 END
 GO
 GRANT EXECUTE ON isp_r_hk_packing_list_01 TO NSQL, JReportRole
