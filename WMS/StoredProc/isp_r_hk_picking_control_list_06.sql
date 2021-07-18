@@ -38,6 +38,8 @@ GO
 /*                            Add MapValue: T_DeliveryDate*,T_OrderType* */
 /*                            T_Route*, T_Notes2*, T_ShipTo*, T_DropID*  */
 /* 2021-03-17   ML       1.5  Exclude blank PickZone                     */
+/* 2021-04-29   ML       1.6  Add ShowField ShowPutawayZone              */
+/* 2021-04-30   ML       1.7  Add new field Indicator                    */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_06] (
@@ -53,14 +55,14 @@ BEGIN
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
       ReserveLoc_Cond, CustomerGroupCode, DeliveryDate, OrderType, Userdefine05, Route, ShipToAddress, ToteCBM, Notes, Notes2
-      DropID, Div, Brand
+      DropID, Div, Brand, Indicator
 
    [MAPVALUE]
       T_DeliveryDate_1, T_DeliveryDate_2, T_OrderType_1, T_OrderType_2, T_Userdefine05_1, T_Userdefine05_2, T_Route_1 , T_Route_2
       T_Notes_1, T_Notes_2, T_Notes2_1, T_Notes2_2, T_ShipTo_1, T_ShipTo_2
 
    [SHOWFIELD]
-      DefaultRDTPick, AllowUserChangePickMethod, C_Country, DropID, Code39
+      DefaultRDTPick, AllowUserChangePickMethod, C_Country, DropID, Code39, ShowPutawayZone
 
    [SQLJOIN]
 */
@@ -108,6 +110,7 @@ BEGIN
          , @c_RouteExp           NVARCHAR(MAX)
          , @c_ToteCBMExp         NVARCHAR(MAX)
          , @c_Notes2Exp          NVARCHAR(MAX)
+         , @c_IndicatorExp       NVARCHAR(MAX)
 
 
    SELECT @c_DataWindow = 'r_hk_picking_control_list_06'
@@ -187,6 +190,7 @@ BEGIN
       , Brand             NVARCHAR(500)
       , Userdefine05      NVARCHAR(500)
       , DropID            NVARCHAR(500)
+      , Indicator         NVARCHAR(500)
    )
 
 
@@ -625,6 +629,7 @@ BEGIN
            , @c_RouteExp           = ''
            , @c_ToteCBMExp         = ''
            , @c_Notes2Exp          = ''
+           , @c_IndicatorExp       = ''
 
       SELECT TOP 1
              @c_JoinClause = Notes
@@ -681,6 +686,10 @@ BEGIN
            , @c_Notes2Exp       = ISNULL(RTRIM((select top 1 b.ColValue
                                   from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                   where a.SeqNo=b.SeqNo and a.ColValue='Notes2')), '' )
+           , @c_IndicatorExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Indicator')), '' )
+
         FROM dbo.CODELKUP (NOLOCK)
        WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
          AND Storerkey = @c_Storerkey
@@ -693,7 +702,7 @@ BEGIN
         +   ', Notes2, C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_City, C_Country, Route'
         +   ', AllocQty, CBM, Sku, ToLoc, Loc, Lot, ID, PickdetailKey, ToteCBM, IsConsol, HasReplen'
         +   ', PrintedFlag, LocationCategory, PD_DropID, PD_PickslipNo, Picker'
-        +   ', ShowFields, CustomerGroupCode, Notes, Div, Brand, Userdefine05, DropID, ShipToAddress)'
+        +   ', ShowFields, CustomerGroupCode, Notes, Div, Brand, Userdefine05, DropID, ShipToAddress, Indicator)'
 
       SET @c_ExecStatements = @c_ExecStatements
         + ' SELECT PickslipNo        = RTRIM( PH.PickslipNo )'
@@ -708,7 +717,7 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         +       ', Type              = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_OrderTypeExp    ,'')<>'' THEN @c_OrderTypeExp     ELSE 'OH.Type'   END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Notes2            = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_Notes2Exp       ,'')<>'' THEN @c_Notes2Exp        ELSE 'OH.Notes2' END + ',''''))'
+        +       ', Notes2            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Notes2Exp       ,'')<>'' THEN @c_Notes2Exp        ELSE 'OH.Notes2' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', C_Company         = ISNULL(RTRIM( OH.C_Company), '''')'
         +       ', C_Address1        = ISNULL(RTRIM( OH.C_Address1), '''')'
@@ -745,17 +754,19 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         +       ', CustomerGroupCode = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_CustGrpCodeExp  ,'')<>'' THEN @c_CustGrpCodeExp   ELSE 'ST.CustomerGroupCode' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Notes             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_NotesExp        ,'')<>'' THEN @c_NotesExp         ELSE 'OH.Notes'  END + ',''''))'
+        +       ', Notes             = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_NotesExp        ,'')<>'' THEN @c_NotesExp         ELSE 'OH.Notes'  END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Div               = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DivExp          ,'')<>'' THEN @c_DivExp           ELSE ''''''      END + ',''''))'
+        +       ', Div               = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DivExp          ,'')<>'' THEN @c_DivExp           ELSE ''''''      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Brand             = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_BrandExp        ,'')<>'' THEN @c_BrandExp         ELSE ''''''      END + ',''''))'
+        +       ', Brand             = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BrandExp        ,'')<>'' THEN @c_BrandExp         ELSE ''''''      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', Userdefine05      = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_Userdefine05Exp ,'')<>'' THEN @c_Userdefine05Exp  ELSE ''''''      END + ',''''))'
+        +       ', Userdefine05      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Userdefine05Exp ,'')<>'' THEN @c_Userdefine05Exp  ELSE ''''''      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', DropID            = RTRIM(ISNULL(' + CASE WHEN ISNULL(@c_DropIDExp       ,'')<>'' THEN @c_DropIDExp        ELSE 'IIF(PH.IsConsol=''Y'','''',''ID''+OH.Orderkey+''001'')' END + ',''''))'
+        +       ', DropID            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DropIDExp       ,'')<>'' THEN @c_DropIDExp        ELSE 'IIF(PH.IsConsol=''Y'','''',''ID''+OH.Orderkey+''001'')' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', ShipToAddress    =  RTRIM('        + CASE WHEN ISNULL(@c_ShipToAddressExp,'')<>'' THEN @c_ShipToAddressExp ELSE 'NULL'      END + ')'
+        +       ', ShipToAddress     = RTRIM('        + CASE WHEN ISNULL(@c_ShipToAddressExp,'')<>'' THEN @c_ShipToAddressExp ELSE 'NULL'      END + ')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Indicator         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_IndicatorExp    ,'')<>'' THEN @c_IndicatorExp     ELSE 'NULL'      END + '),'''')'
 
       SET @c_ExecStatements = @c_ExecStatements
         +   ' FROM #TEMP_PICKHEADER  PH'
@@ -827,30 +838,36 @@ BEGIN
         , PrintedFlag       = MAX( X.PrintedFlag )
         , PickZones         = CAST( CASE MAX( X.IsConsol )
                               WHEN 'N' THEN
-                                 STUFF((SELECT ', ', RTRIM(ISNULL(Y.PickZone,'')), RTRIM(Y.Replen)
+                                 STUFF((SELECT ', ', ISNULL(RTRIM(Y.PickZone),''), RTRIM(Y.Replen)
                                  FROM (
-                                    SELECT PickZone=IIF(c.ToLoc<>'',e.PickZone,d.PickZone), Replen=IIF(ISNULL(MAX(c.ToLoc),'')<>'', IIF(ISNULL(MIN(c.ToLoc),'')=ISNULL(MAX(c.ToLoc),''), N'■',N'▼'),'')
+                                    SELECT PickZone = CASE WHEN X.ShowFields LIKE '%,showputawayzone,%' THEN IIF(c.ToLoc<>'',e.PutawayZone,d.PutawayZone)
+                                                                                                        ELSE IIF(c.ToLoc<>'',e.PickZone,d.PickZone) END
+                                         , Replen   = IIF(ISNULL(MAX(c.ToLoc),'')<>'', IIF(ISNULL(MIN(c.ToLoc),'')=ISNULL(MAX(c.ToLoc),''), N'■',N'▼'),'')
                                     FROM PICKHEADER      a(NOLOCK)
                                     LEFT JOIN PICKDETAIL c(NOLOCK) ON a.Orderkey=c.Orderkey
                                     LEFT JOIN LOC        d(NOLOCK) ON c.Loc=d.Loc
                                     LEFT JOIN LOC        e(NOLOCK) ON c.ToLoc=e.Loc AND c.ToLoc<>''
                                     WHERE c.PickslipNo = X.PD_PickslipNo AND c.Qty>0
-                                 GROUP BY IIF(c.ToLoc<>'',e.PickZone,d.PickZone)
+                                    GROUP BY CASE WHEN X.ShowFields LIKE '%,showputawayzone,%' THEN IIF(c.ToLoc<>'',e.PutawayZone,d.PutawayZone)
+                                                                                               ELSE IIF(c.ToLoc<>'',e.PickZone,d.PickZone) END
                                  ) Y
                                  WHERE Y.PickZone<>''
                                  ORDER BY IIF(Y.Replen=N'■',3,IIF(Y.Replen=N'▼',2,1)), 2
                                  FOR XML PATH('')), 1, 2, '')
                               WHEN 'Y' THEN
-                                 STUFF((SELECT ', ', RTRIM(ISNULL(Y.PickZone,'')), RTRIM(Y.Replen)
+                                 STUFF((SELECT ', ', ISNULL(RTRIM(Y.PickZone),''), RTRIM(Y.Replen)
                                  FROM (
-                                    SELECT PickZone=IIF(c.ToLoc<>'',e.PickZone,d.PickZone), Replen=IIF(ISNULL(MAX(c.ToLoc),'')<>'', IIF(ISNULL(MIN(c.ToLoc),'')=ISNULL(MAX(c.ToLoc),''), N'■',N'▼'),'')
+                                    SELECT PickZone = CASE WHEN X.ShowFields LIKE '%,showputawayzone,%' THEN IIF(c.ToLoc<>'',e.PutawayZone,d.PutawayZone)
+                                                                                                        ELSE IIF(c.ToLoc<>'',e.PickZone,d.PickZone) END
+                                         , Replen   = IIF(ISNULL(MAX(c.ToLoc),'')<>'', IIF(ISNULL(MIN(c.ToLoc),'')=ISNULL(MAX(c.ToLoc),''), N'■',N'▼'),'')
                                     FROM PICKHEADER      a(NOLOCK)
                                     LEFT JOIN ORDERS     b(NOLOCK) ON a.ExternOrderkey=b.Loadkey AND ISNULL(a.Orderkey,'')=''
                                     LEFT JOIN PICKDETAIL c(NOLOCK) ON b.Orderkey=c.Orderkey
                                     LEFT JOIN LOC        d(NOLOCK) ON c.Loc=d.Loc
                                     LEFT JOIN LOC        e(NOLOCK) ON c.ToLoc=e.Loc AND c.ToLoc<>''
                                     WHERE c.PickslipNo = X.PD_PickslipNo AND c.Qty>0
-                                 GROUP BY IIF(c.ToLoc<>'',e.PickZone,d.PickZone)
+                                    GROUP BY CASE WHEN X.ShowFields LIKE '%,showputawayzone,%' THEN IIF(c.ToLoc<>'',e.PutawayZone,d.PutawayZone)
+                                                                                               ELSE IIF(c.ToLoc<>'',e.PickZone,d.PickZone) END
                                  ) Y
                                  WHERE Y.PickZone<>''
                                  ORDER BY IIF(Y.Replen=N'■',3,IIF(Y.Replen=N'▼',2,1)), 2
@@ -915,6 +932,7 @@ BEGIN
         , Lbl_DropID_2      = CAST( RTRIM( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_DropID_2') ) AS NVARCHAR(500))
+        , Indicator         = MAX( X.Indicator )
 
    FROM #TEMP_PIKDT X
 
@@ -928,6 +946,7 @@ BEGIN
    GROUP BY X.PickslipNo
           , X.PD_PickslipNo
           , X.Picker
+          , X.ShowFields
 
    ORDER BY CustomerGroupCode, PickslipNo, PickSlip_SeqNo
 END
