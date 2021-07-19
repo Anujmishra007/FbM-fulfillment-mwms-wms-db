@@ -26,6 +26,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */ 
+/* 2021-07-19   WLChooi 1.1   Bug Fix - Insert CartonShipmentDetail     */
+/*                            record (WL01)                             */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPOA18]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -221,19 +223,20 @@ BEGIN
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67020   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                            
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete CartonShipmentDetail Failed. (ispPOA18)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '             
                END
+            END   --WL01
 
-               INSERT INTO CartonShipmentDetail (Storerkey, Orderkey, Loadkey, TrackingNumber)
-               SELECT @c_GetStorerkey, @c_GetOrderkey, @c_GetLoadkey, @c_TrackNo
+            INSERT INTO CartonShipmentDetail (Storerkey, Orderkey, Loadkey, TrackingNumber)
+            SELECT @c_GetStorerkey, @c_GetOrderkey, @c_GetLoadkey, @c_TrackNo
 
-               SELECT @n_err = @@ERROR
-               
-               IF @n_err <> 0                                                                                                                                                               
-               BEGIN                                                                                                                                                                                  
-                  SELECT @n_Continue = 3                                                                                                                                                              
-                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67025   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                            
-                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert CartonShipmentDetail Failed. (ispPOA18)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '             
-               END
+            SELECT @n_err = @@ERROR
+            
+            IF @n_err <> 0                                                                                                                                                               
+            BEGIN                                                                                                                                                                                  
+               SELECT @n_Continue = 3                                                                                                                                                              
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67025   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                            
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert CartonShipmentDetail Failed. (ispPOA18)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '             
             END
+            --END   --WL01
          END
          ELSE IF @c_GetShipperkey = 'DHL' AND ISNULL(@c_GetTrackingNo,'') <> ''
          BEGIN
