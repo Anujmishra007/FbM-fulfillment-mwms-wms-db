@@ -28,6 +28,7 @@ GO
 /* 05-MAR-2018 Wan01    1.1   WM - Add Functype                            */
 /* 04-AUG-2020 WLChooi  1.2   WMS-14531 - Add Flag if Qty < 0 (WL01)       */                
 /* 01-Jun-2021 NJOW01   1.3   WMS-16990 Support multiple sku with same EAN */
+/* 19-Jul-2021 NJOW02   1.4   Fix add ISNULL to SUM qty from lotxlocxid    */
 /***************************************************************************/
 CREATE PROC isp_ReplenishmentRpt_PC19
                @c_zone01      NVARCHAR(10)
@@ -151,16 +152,16 @@ BEGIN
       INSERT #TempSKUxLOC  
       SELECT MIN(ReplenishmentPriority),  
       ReplenishmentSeverity = CASE WHEN ISNULL(SUM(LOTxLOCxID.QtyExpected),0) > 0   
-                                     AND MIN(SKUxLOC.QtyLocationMinimum) < SUM(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated)) THEN    
+                                     AND MIN(SKUxLOC.QtyLocationMinimum) < SUM(ISNULL(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated),0)) THEN    
                                             ISNULL(SUM(LOTxLOCxID.QtyExpected),0)  
-                                   ELSE MAX(SKUxLOC.QtyLocationLimit) - SUM( LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated ))  
+                                   ELSE MAX(SKUxLOC.QtyLocationLimit) - SUM( ISNULL(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated),0 ))  
                               END,  
       SKUxLOC.StorerKey,  
       MIN(SKUxLOC.SKU),  
       SKUxLOC.LOC,  
       MAX(ReplenishmentCasecnt),  
       OverAllocation = CASE WHEN ISNULL(SUM(LOTxLOCxID.QtyExpected),0) > 0   
-                              AND MIN(SKUxLOC.QtyLocationMinimum) < SUM(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated)) THEN    
+                              AND MIN(SKUxLOC.QtyLocationMinimum) < SUM(ISNULL(LOTxLOCxID.Qty - (LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyAllocated),0)) THEN    
                                  'Y'  
                             ELSE 'N' END  
       FROM SKUxLOC (NOLOCK) 
@@ -186,7 +187,7 @@ BEGIN
                --SKUxLOC.QtyLocationMinimum,  
                --SKUxLOC.QtyLocationLimit  
       HAVING SUM(LOTxLOCxID.QtyExpected) > 0 OR   
-            (SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated) <= MIN(SKUxLOC.QtyLocationMinimum) )  
+            (SUM(ISNULL(LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated,0)) <= MIN(SKUxLOC.QtyLocationMinimum) )  
       
       /*
       INSERT #TempSKUxLOC  
