@@ -25,6 +25,8 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 2021-04-28   Michael  v1.1 Add Configurable Fields for IDSMED         */
+/* 2021-06-24   Michael  v1.2 Add Showfield Update_PD_PickslipNo         */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_03] (
@@ -40,13 +42,23 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      DCC, LineRemark1, LineRemark2, LineRemark3
+      StorerCompany, ExternOrderKey, ExternPOKey, BuyerPO, InvoiceNo, DeliveryDate, ConsigneeKey, Company, Address1, Address2
+      Address3, PostCode, Route, RouteDesc, TrfRoom, LabelPrice, PendingFlag, Notes1, Notes2, SkuDesc
+      ZoneDesc, AltSku, SUSR2, BUSR8, BUSR10, Lottable01, Lottable02, Lottable03, Lottable04, CaseCnt
+      InnerPack, PackUOM1, PackUOM2, PackUOM3, StdCube, StdGrossWgt, DCC, LineRemark1, LineRemark2, LineRemark3
 
    [MAPVALUE]
+      T_Customer, T_InvoiceNo, T_ExternOrderkey, T_ExternPOKey, T_Notes1, T_Notes2, T_SUSR2, T_DeliveryDate, T_PendingFlag
+      T_Route, T_TrfRoom, T_BuyerPO, T_CBM, T_Weight
+      T_Loc, T_Sku, T_SkuDescr, T_AltSku, T_DCC, T_BUSR8, T_Lottable01, T_Lottable02, T_Lottable03, T_Lottable04, T_ID
+      T_CaseCnt, T_InnerPack, T_PackUOM1, T_PackUOM2, T_PackUOM3
 
    [SHOWFIELD]
       Consigneekey, DCC, LineRemark1, LineRemark2, LineRemark3
       HideLottable01, HideAltSku
+      Update_PD_PickslipNo
+
+   [SQLJOIN]
 */
    DECLARE @c_DataWindow       NVARCHAR(40)  = 'r_hk_print_wave_pickslip_03'
          , @n_continue         INT           = 1
@@ -55,6 +67,7 @@ BEGIN
          , @c_Type             NVARCHAR(2)   = RIGHT(@c_Wavekey_type,2)
          , @c_Pickheaderkey    NVARCHAR(10)
          , @c_Orderkey         NVARCHAR(10)
+         , @c_Update_PD_PSNo   NVARCHAR(10)
          , @c_errmsg           NVARCHAR(255)
          , @b_success          INT
          , @n_err              INT
@@ -63,6 +76,43 @@ BEGIN
          , @c_ExecStatements   NVARCHAR(MAX)
          , @c_ExecArguments    NVARCHAR(MAX)
          , @c_ShowFields       NVARCHAR(MAX)
+         , @c_JoinClause       NVARCHAR(MAX)
+         , @c_StrCompanyExp    NVARCHAR(MAX)
+         , @c_ExtOrderKeyExp   NVARCHAR(MAX)
+         , @c_ExternPOKeyExp   NVARCHAR(MAX)
+         , @c_BuyerPOExp       NVARCHAR(MAX)
+         , @c_InvoiceNoExp     NVARCHAR(MAX)
+         , @c_DeliveryDateExp  NVARCHAR(MAX)
+         , @c_ConsigneeKeyExp  NVARCHAR(MAX)
+         , @c_CompanyExp       NVARCHAR(MAX)
+         , @c_Addr1Exp         NVARCHAR(MAX)
+         , @c_Addr2Exp         NVARCHAR(MAX)
+         , @c_Addr3Exp         NVARCHAR(MAX)
+         , @c_PostCodeExp      NVARCHAR(MAX)
+         , @c_RouteExp         NVARCHAR(MAX)
+         , @c_RouteDescExp     NVARCHAR(MAX)
+         , @c_TrfRoomExp       NVARCHAR(MAX)
+         , @c_LabelPriceExp    NVARCHAR(MAX)
+         , @c_PendingFlagExp   NVARCHAR(MAX)
+         , @c_Notes1Exp        NVARCHAR(MAX)
+         , @c_Notes2Exp        NVARCHAR(MAX)
+         , @c_SkuDescExp       NVARCHAR(MAX)
+         , @c_ZoneDescExp      NVARCHAR(MAX)
+         , @c_AltSkuExp        NVARCHAR(MAX)
+         , @c_SUSR2Exp         NVARCHAR(MAX)
+         , @c_BUSR8Exp         NVARCHAR(MAX)
+         , @c_BUSR10Exp        NVARCHAR(MAX)
+         , @c_Lottable01Exp    NVARCHAR(MAX)
+         , @c_Lottable02Exp    NVARCHAR(MAX)
+         , @c_Lottable03Exp    NVARCHAR(MAX)
+         , @c_Lottable04Exp    NVARCHAR(MAX)
+         , @c_CaseCntExp       NVARCHAR(MAX)
+         , @c_InnerPackExp     NVARCHAR(MAX)
+         , @c_PackUOM1Exp      NVARCHAR(MAX)
+         , @c_PackUOM2Exp      NVARCHAR(MAX)
+         , @c_PackUOM3Exp      NVARCHAR(MAX)
+         , @c_StdCubeExp       NVARCHAR(MAX)
+         , @c_StdGrossWgtExp   NVARCHAR(MAX)
          , @c_DCCExp           NVARCHAR(MAX)
          , @c_LineRemark1Exp   NVARCHAR(MAX)
          , @c_LineRemark2Exp   NVARCHAR(MAX)
@@ -115,25 +165,32 @@ BEGIN
 
    -- Generate PickHeader
    DECLARE PICK_CUR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-    SELECT DISTINCT OH.Orderkey
+    SELECT OH.Orderkey, MAX(CASE WHEN RptCfg.ShowFields LIKE '%,Update_PD_PickslipNo,%' THEN 'Y' ELSE 'N' END)
       FROM dbo.WAVEDETAIL WD (NOLOCK)
       JOIN dbo.ORDERS     OH (NOLOCK) ON WD.Orderkey = OH.Orderkey
       JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
       LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
       LEFT JOIN dbo.PICKHEADER PH2(NOLOCK) ON OH.Loadkey  = PH2.ExternOrderkey AND ISNULL(PH2.Orderkey,'')='' AND ISNULL(PH2.Zone,'')<>'8' AND ISNULL(OH.Loadkey,'')<>''
+      LEFT JOIN (
+         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+      ) RptCfg
+      ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1
     WHERE WD.wavekey = @c_Wavekey
       AND OH.Userdefine08 = 'Y' -- only for wave plan OH.
       AND PD.Status < '5'
       AND (PD.Pickmethod = '8' OR PD.Pickmethod = '')
       AND PH.PickHeaderKey IS NULL
       AND PH2.PickHeaderKey IS NULL
+    GROUP BY OH.Orderkey
     ORDER BY 1
 
    OPEN PICK_CUR
 
    WHILE 1=1
    BEGIN
-      FETCH NEXT FROM PICK_CUR INTO @c_Orderkey
+      FETCH NEXT FROM PICK_CUR INTO @c_Orderkey, @c_Update_PD_PSNo
 
       IF @@FETCH_STATUS<>0
          BREAK
@@ -166,6 +223,17 @@ BEGIN
          WHILE @@TRANCOUNT > 0
             COMMIT TRAN
       END
+
+      IF ISNULL(@c_Update_PD_PSNo,'')='Y'
+      BEGIN
+         UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
+            SET PickslipNo = @c_Pickheaderkey
+              , TrafficCop = NULL
+          WHERE Orderkey = @c_Orderkey
+            AND Status < '9'
+            AND ShipFlag <> 'Y'
+            AND ISNULL(PickslipNo,'') <> @c_Pickheaderkey
+      END
    END
 
    CLOSE PICK_CUR
@@ -176,26 +244,26 @@ BEGIN
    CREATE TABLE #TEMP_PIKDT (
         Wavekey          NVARCHAR(10)
       , Storerkey        NVARCHAR(15)
-      , StorerCompany    NVARCHAR(45)
+      , StorerCompany    NVARCHAR(50)
       , PickSlipNo       NVARCHAR(18)
       , OrderKey         NVARCHAR(10)
-      , ExternOrderKey   NVARCHAR(63)
-      , ExternPOKey      NVARCHAR(20)
-      , BuyerPO          NVARCHAR(20)
-      , InvoiceNo        NVARCHAR(20)
+      , ExternOrderKey   NVARCHAR(50)
+      , ExternPOKey      NVARCHAR(50)
+      , BuyerPO          NVARCHAR(50)
+      , InvoiceNo        NVARCHAR(50)
       , DeliveryDate     DATETIME
-      , ConsigneeKey     NVARCHAR(15)
-      , Company          NVARCHAR(45)
-      , Addr1            NVARCHAR(45)
-      , Addr2            NVARCHAR(45)
-      , Addr3            NVARCHAR(45)
-      , PostCode         NVARCHAR(18)
-      , Route            NVARCHAR(10)
+      , ConsigneeKey     NVARCHAR(50)
+      , Company          NVARCHAR(50)
+      , Addr1            NVARCHAR(50)
+      , Addr2            NVARCHAR(50)
+      , Addr3            NVARCHAR(50)
+      , PostCode         NVARCHAR(50)
+      , Route            NVARCHAR(50)
       , Route_Desc       NVARCHAR(60)
-      , TrfRoom          NVARCHAR(10)
+      , TrfRoom          NVARCHAR(50)
       , PrintedFlag      NVARCHAR(1)
-      , LabelPrice       NVARCHAR(5)
-      , PendingFlag      NVARCHAR(30)
+      , LabelPrice       NVARCHAR(50)
+      , PendingFlag      NVARCHAR(50)
       , Notes1           NVARCHAR(500)
       , Notes2           NVARCHAR(500)
       , SKU              NVARCHAR(20)
@@ -205,26 +273,26 @@ BEGIN
       , LogicalLocation  NVARCHAR(18)
       , LOC              NVARCHAR(10)
       , ID               NVARCHAR(18)
-      , AltSKU           NVARCHAR(20)
-      , SUSR2            NVARCHAR(20)
-      , BUSR8            NVARCHAR(30)
-      , BUSR10           NVARCHAR(30)
-      , Lottable01       NVARCHAR(18)
-      , Lottable02       NVARCHAR(18)
-      , Lottable03       NVARCHAR(18)
+      , AltSKU           NVARCHAR(50)
+      , SUSR2            NVARCHAR(50)
+      , BUSR8            NVARCHAR(50)
+      , BUSR10           NVARCHAR(50)
+      , Lottable01       NVARCHAR(50)
+      , Lottable02       NVARCHAR(50)
+      , Lottable03       NVARCHAR(50)
       , Lottable04       DATETIME
       , Qty              INT
       , CaseCnt          INT
       , InnerPack        INT
-      , PackUOM1         NVARCHAR(10)
-      , PackUOM2         NVARCHAR(10)
-      , PackUOM3         NVARCHAR(10)
+      , PackUOM1         NVARCHAR(50)
+      , PackUOM2         NVARCHAR(50)
+      , PackUOM3         NVARCHAR(50)
       , Cartons          INT
       , Inners           INT
       , Pieces           INT
       , StdCube          FLOAT
       , StdGrossWgt      FLOAT
-      , DCC              NVARCHAR(30)
+      , DCC              NVARCHAR(50)
       , LineRemark1      NVARCHAR(500)
       , LineRemark2      NVARCHAR(500)
       , LineRemark3      NVARCHAR(500)
@@ -239,7 +307,7 @@ BEGIN
    SELECT DISTINCT PD.Storerkey
      FROM dbo.WAVEDETAIL   WD   (NOLOCK)
      JOIN dbo.ORDERS       OH   (NOLOCK) ON WD.Orderkey = OH.Orderkey
-     JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
+ JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
      JOIN dbo.PICKDETAIL   PD   (NOLOCK) ON WD.Orderkey = PD.Orderkey
     WHERE WD.wavekey = @c_Wavekey
       AND OH.Userdefine08 = 'Y'
@@ -257,12 +325,49 @@ BEGIN
       IF @@FETCH_STATUS<>0
          BREAK
 
-      SELECT @c_ShowFields     = ''
-           , @c_Storer_Logo    = ''
-           , @c_DCCExp         = ''
-           , @c_LineRemark1Exp = ''
-           , @c_LineRemark2Exp = ''
-           , @c_LineRemark3Exp = ''
+      SELECT @c_ShowFields      = ''
+           , @c_JoinClause      = ''
+           , @c_Storer_Logo     = ''
+           , @c_StrCompanyExp   = ''
+           , @c_ExtOrderKeyExp  = ''
+           , @c_ExternPOKeyExp  = ''
+           , @c_BuyerPOExp      = ''
+           , @c_InvoiceNoExp    = ''
+           , @c_DeliveryDateExp = ''
+           , @c_ConsigneeKeyExp = ''
+           , @c_CompanyExp      = ''
+           , @c_Addr1Exp        = ''
+           , @c_Addr2Exp        = ''
+           , @c_Addr3Exp        = ''
+           , @c_PostCodeExp     = ''
+           , @c_RouteExp        = ''
+           , @c_RouteDescExp    = ''
+           , @c_TrfRoomExp      = ''
+           , @c_LabelPriceExp   = ''
+           , @c_PendingFlagExp  = ''
+           , @c_Notes1Exp       = ''
+           , @c_Notes2Exp       = ''
+           , @c_SkuDescExp      = ''
+           , @c_ZoneDescExp     = ''
+           , @c_AltSkuExp       = ''
+           , @c_SUSR2Exp        = ''
+           , @c_BUSR8Exp        = ''
+           , @c_BUSR10Exp       = ''
+           , @c_Lottable01Exp   = ''
+           , @c_Lottable02Exp   = ''
+           , @c_Lottable03Exp   = ''
+           , @c_Lottable04Exp   = ''
+           , @c_CaseCntExp      = ''
+           , @c_InnerPackExp    = ''
+           , @c_PackUOM1Exp     = ''
+           , @c_PackUOM2Exp     = ''
+           , @c_PackUOM3Exp     = ''
+           , @c_StdCubeExp      = ''
+           , @c_StdGrossWgtExp  = ''
+           , @c_DCCExp          = ''
+           , @c_LineRemark1Exp  = ''
+           , @c_LineRemark2Exp  = ''
+           , @c_LineRemark3Exp  = ''
 
       SELECT TOP 1
              @c_ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
@@ -272,7 +377,14 @@ BEGIN
        ORDER BY Code2
 
       SELECT TOP 1
-             @c_Storer_Logo = RTRIM( ISNULL( RL.Notes, '') )
+             @c_JoinClause = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_Storer_Logo = ISNULL(RTRIM(RL.Notes), '')
         FROM dbo.CODELKUP RL(NOLOCK)
        WHERE Listname='RPTLOGO' AND Code='LOGO' AND Long=@c_DataWindow
          AND Storerkey = @c_Storerkey
@@ -280,7 +392,115 @@ BEGIN
 
 
       SELECT TOP 1
-             @c_DCCExp         = ISNULL(RTRIM((select top 1 b.ColValue
+             @c_StrCompanyExp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='StorerCompany')), '' )
+           , @c_ExtOrderKeyExp = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='ExternOrderKey')), '' )
+           , @c_ExternPOKeyExp = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='ExternPOKey')), '' )
+           , @c_BuyerPOExp     = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='BuyerPO')), '' )
+           , @c_InvoiceNoExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='InvoiceNo')), '' )
+           , @c_DeliveryDateExp= ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='DeliveryDate')), '' )
+           , @c_ConsigneeKeyExp= ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='ConsigneeKey')), '' )
+           , @c_CompanyExp     = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Company')), '' )
+           , @c_Addr1Exp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Address1')), '' )
+           , @c_Addr2Exp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Address2')), '' )
+           , @c_Addr3Exp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Address3')), '' )
+           , @c_PostCodeExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='PostCode')), '' )
+           , @c_RouteExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Route')), '' )
+           , @c_RouteDescExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='RouteDesc')), '' )
+           , @c_TrfRoomExp     = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='TrfRoom')), '' )
+           , @c_LabelPriceExp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='LabelPrice')), '' )
+           , @c_PendingFlagExp = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='PendingFlag')), '' )
+           , @c_Notes1Exp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Notes1')), '' )
+           , @c_Notes2Exp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Notes2')), '' )
+           , @c_SkuDescExp     = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='SkuDesc')), '' )
+           , @c_ZoneDescExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='ZoneDesc')), '' )
+           , @c_AltSkuExp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='AltSku')), '' )
+           , @c_SUSR2Exp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='SUSR2')), '' )
+           , @c_BUSR8Exp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='BUSR8')), '' )
+           , @c_BUSR10Exp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='BUSR10')), '' )
+           , @c_Lottable01Exp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Lottable01')), '' )
+           , @c_Lottable02Exp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Lottable02')), '' )
+           , @c_Lottable03Exp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Lottable03')), '' )
+           , @c_Lottable04Exp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='Lottable04')), '' )
+           , @c_CaseCntExp     = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='CaseCnt')), '' )
+           , @c_InnerPackExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='InnerPack')), '' )
+           , @c_PackUOM1Exp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='PackUOM1')), '' )
+           , @c_PackUOM2Exp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='PackUOM2')), '' )
+           , @c_PackUOM3Exp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='PackUOM3')), '' )
+           , @c_StdCubeExp     = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='StdCube')), '' )
+           , @c_StdGrossWgtExp = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='StdGrossWgt')), '' )
+           , @c_DCCExp         = ISNULL(RTRIM((select top 1 b.ColValue
                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                  where a.SeqNo=b.SeqNo and a.ColValue='DCC')), '' )
            , @c_LineRemark1Exp = ISNULL(RTRIM((select top 1 b.ColValue
@@ -308,66 +528,119 @@ BEGIN
         +   ', LineRemark3, DWName, ShowFields, Storer_Logo)'
 
       SET @c_ExecStatements = @c_ExecStatements
-        + ' SELECT Wavekey          = RTRIM( ISNULL( WD.Wavekey, '''') )'
-        +       ', Storerkey        = RTRIM( ISNULL( PD.Storerkey, '''') )'
-        +       ', StorerCompany    = RTRIM( ISNULL( ST.Company, '''') )'
-        +       ', PickSlipNo       = RTRIM( ISNULL( PH.PickheaderKey, '''') )'
-        +       ', OrderKey         = RTRIM( ISNULL( PD.Orderkey, '''') )'
-        +       ', ExternOrderKey   = RTRIM( ISNULL( OH.ExternOrderKey, '''') ) + '' (''+RTRIM( ISNULL(OH.Type, '''') )+'')'''
-        +       ', ExternPOKey      = RTRIM( ISNULL( OH.ExternPoKey, '''') )'
-        +       ', BuyerPO          = RTRIM( ISNULL( OH.BuyerPO, '''') )'
-        +       ', InvoiceNo        = RTRIM( ISNULL( OH.InvoiceNo, '''') )'
-        +       ', DeliveryDate     = OH.DeliveryDate'
-        +       ', ConsigneeKey     = RTRIM( ISNULL( ' + CASE WHEN @c_ShowFields LIKE '%,Consigneekey,%'   THEN 'OH.Consigneekey' ELSE 'OH.BillToKey'  END + ', '''') )'
-        +       ', Company          = RTRIM( ISNULL( OH.C_Company, '''') )'
-        +       ', Addr1            = RTRIM( ISNULL( OH.C_Address1, '''') )'
-        +       ', Addr2            = RTRIM( ISNULL( OH.C_Address2, '''') )'
-        +       ', Addr3            = RTRIM( ISNULL( OH.C_Address3, '''') )'
-        +       ', PostCode         = RTRIM( ISNULL( OH.C_Zip, '''') )'
-        +       ', Route            = RTRIM( ISNULL( OH.Route, '''') )'
-        +       ', Route_Desc       = RTRIM( ISNULL( RT.Descr, '''') )'
-        +       ', TrfRoom          = RTRIM( ISNULL( OH.Door, '''') )'
+        + ' SELECT Wavekey          = ISNULL(RTRIM(WD.Wavekey),'''')'
+        +       ', Storerkey        = ISNULL(RTRIM(PD.Storerkey),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', StorerCompany    = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_StrCompanyExp  ,'')<>'' THEN @c_StrCompanyExp   ELSE 'ST.Company'      END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', PickSlipNo       = ISNULL(RTRIM(PH.PickheaderKey),'''')'
+        +       ', OrderKey         = ISNULL(RTRIM(PD.Orderkey),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', ExternOrderKey   = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExtOrderKeyExp ,'')<>'' THEN @c_ExtOrderKeyExp
+                                                            ELSE 'ISNULL(RTRIM(OH.ExternOrderKey),'''')+ '' (''+ISNULL(TRIM(OH.Type),'''')+'')'''
+                                                       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', ExternPOKey      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExternPOKeyExp ,'')<>'' THEN @c_ExternPOKeyExp  ELSE 'OH.ExternPoKey'  END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', BuyerPO          = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BuyerPOExp     ,'')<>'' THEN @c_BuyerPOExp      ELSE 'OH.BuyerPO'      END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', InvoiceNo        = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_InvoiceNoExp   ,'')<>'' THEN @c_InvoiceNoExp    ELSE 'OH.InvoiceNo'    END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', DeliveryDate     = '              + CASE WHEN ISNULL(@c_DeliveryDateExp,'')<>'' THEN @c_DeliveryDateExp ELSE 'OH.DeliveryDate' END
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', ConsigneeKey     = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ConsigneeKeyExp ,'')<>'' THEN @c_ConsigneeKeyExp
+                                                            ELSE CASE WHEN @c_ShowFields LIKE '%,Consigneekey,%' THEN 'OH.Consigneekey' ELSE 'OH.BillToKey'  END
+                                                       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Company          = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_CompanyExp     ,'')<>'' THEN @c_CompanyExp      ELSE 'OH.C_Company'    END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Addr1            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Addr1Exp       ,'')<>'' THEN @c_Addr1Exp        ELSE 'OH.C_Address1'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Addr2            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Addr2Exp       ,'')<>'' THEN @c_Addr2Exp        ELSE 'OH.C_Address2'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Addr3            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Addr3Exp       ,'')<>'' THEN @c_Addr3Exp        ELSE 'OH.C_Address3'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', PostCode         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PostCodeExp    ,'')<>'' THEN @c_PostCodeExp     ELSE 'OH.C_Zip'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Route            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RouteExp       ,'')<>'' THEN @c_RouteExp        ELSE 'OH.Route'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Route_Desc       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RouteDescExp   ,'')<>'' THEN @c_RouteDescExp    ELSE 'RT.Descr'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', TrfRoom          = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_TrfRoomExp     ,'')<>'' THEN @c_TrfRoomExp      ELSE 'OH.Door'         END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
         +       ', PrintedFlag      = CASE WHEN PH.PickType = ''1'' THEN ''Y'' ELSE ''N'' END'
-        +       ', LabelPrice       = RTRIM( ISNULL( OH.LabelPrice, ''N'') )'
-        +       ', PendingFlag      = RTRIM( ISNULL( OH.RDD, '''') )'
-        +       ', Notes1           = RTRIM( ISNULL( OH.Notes, '''') )'
-        +       ', Notes2           = RTRIM( ISNULL( OH.Notes2, '''') )'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', SKU              = RTRIM( ISNULL( PD.Sku,'''') )'
-        +       ', SkuDesc          = RTRIM( ISNULL( SKU.Descr,'''') )'
-        +       ', Putawayzone      = RTRIM( ISNULL( CASE WHEN PD.ToLoc<>'''' THEN TOLOC.Putawayzone ELSE LOC.Putawayzone END, '''') )'
-        +       ', ZoneDesc         = RTRIM( ISNULL( CASE WHEN PD.ToLoc<>'''' THEN TOPA.Descr ELSE PA.Descr END, '''') )'
-        +       ', LogicalLocation  = RTRIM( ISNULL( LOC.LogicalLocation, '''') )'
-        +       ', LOC              = RTRIM( ISNULL( CASE WHEN PD.ToLoc<>'''' THEN PD.ToLoc ELSE PD.Loc END,'''') )'
-        +       ', ID               = RTRIM( ISNULL( PD.ID, '''') )'
-        +       ', AltSKU           = RTRIM( ISNULL( ' + CASE WHEN @c_ShowFields LIKE '%,HideAltSku,%'     THEN 'NULL'            ELSE 'SKU.AltSKU'    END + ', '''') )'
-        +       ', SUSR2            = RTRIM( ISNULL( ' + CASE WHEN @c_ShowFields LIKE '%,Consigneekey,%'   THEN 'SHPTO.SUSR2'     ELSE 'BILTO.SUSR2'   END + ', '''') )'
-        +       ', BUSR8            = RTRIM( ISNULL( SKU.BUSR8, '''') )'
-        +       ', BUSR10           = RTRIM( ISNULL( SKU.BUSR10, '''') )'
-        +       ', Lottable01       = RTRIM( ISNULL( ' + CASE WHEN @c_ShowFields LIKE '%,HideLottable01,%' THEN 'NULL'            ELSE 'LA.Lottable01' END + ', '''') )'
-        +       ', Lottable02       = RTRIM( ISNULL( LA.Lottable02,'''') )'
-        +       ', Lottable03       = RTRIM( ISNULL( LA.Lottable03, '''') )'
-        +       ', Lottable04       = LA.Lottable04'
+        +       ', LabelPrice       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LabelPriceExp  ,'')<>'' THEN @c_LabelPriceExp   ELSE 'ISNULL(OH.LabelPrice,''N'')' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', PendingFlag      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PendingFlagExp ,'')<>'' THEN @c_PendingFlagExp  ELSE 'OH.RDD'          END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Notes1           = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Notes1Exp      ,'')<>'' THEN @c_Notes1Exp       ELSE 'OH.Notes'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Notes2           = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Notes2Exp      ,'')<>'' THEN @c_Notes2Exp       ELSE 'OH.Notes2'       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', SKU              = ISNULL(RTRIM(PD.Sku),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', SkuDesc          = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SkuDescExp     ,'')<>'' THEN @c_SkuDescExp      ELSE 'SKU.Descr'       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Putawayzone      = ISNULL(RTRIM(CASE WHEN PD.ToLoc<>'''' THEN TOLOC.Putawayzone ELSE LOC.Putawayzone END),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', ZoneDesc         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ZoneDescExp    ,'')<>'' THEN @c_ZoneDescExp
+                                                            ELSE 'CASE WHEN PD.ToLoc<>'''' THEN TOPA.Descr ELSE PA.Descr END'
+                                                       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', LogicalLocation  = ISNULL(RTRIM(LOC.LogicalLocation),'''')'
+        +       ', LOC              = ISNULL(RTRIM(CASE WHEN PD.ToLoc<>'''' THEN PD.ToLoc ELSE PD.Loc END),'''')'
+        +       ', ID               = ISNULL(RTRIM(PD.ID),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', AltSKU           = ISNULL(RTRIM(' + CASE WHEN @c_ShowFields LIKE '%,HideAltSku,%'       THEN 'NULL'
+                                                            ELSE CASE WHEN ISNULL(@c_AltSkuExp,'')<>''     THEN @c_AltSkuExp      ELSE 'SKU.AltSKU'    END
+                                                       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', SUSR2            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SUSR2Exp,'')<>''  THEN @c_SUSR2Exp
+                                                            ELSE CASE WHEN @c_ShowFields LIKE '%,Consigneekey,%' THEN 'SHPTO.SUSR2' ELSE 'BILTO.SUSR2' END
+                                                       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', BUSR8            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BUSR8Exp       ,'')<>'' THEN @c_BUSR8Exp        ELSE 'SKU.BUSR8'       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', BUSR10           = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BUSR10Exp      ,'')<>'' THEN @c_BUSR10Exp       ELSE 'SKU.BUSR10'      END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Lottable01       = ISNULL(RTRIM(' + CASE WHEN @c_ShowFields LIKE '%,HideLottable01,%'   THEN 'NULL'
+                            ELSE CASE WHEN ISNULL(@c_Lottable01Exp,'')<>'' THEN @c_Lottable01Exp  ELSE 'LA.Lottable01' END
+                                                       END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Lottable02       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lottable02Exp  ,'')<>'' THEN @c_Lottable02Exp   ELSE 'LA.Lottable02'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Lottable03       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lottable03Exp  ,'')<>'' THEN @c_Lottable03Exp   ELSE 'LA.Lottable03'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', Lottable04       = '              + CASE WHEN ISNULL(@c_Lottable04Exp  ,'')<>'' THEN @c_Lottable04Exp   ELSE 'LA.Lottable04'   END
+      SET @c_ExecStatements = @c_ExecStatements
         +       ', Qty              = PD.Qty'
-        +       ', CaseCnt          = PACK.CaseCnt'
-        +       ', InnerPack        = PACK.InnerPack'
-        +       ', PackUOM1         = RTRIM( ISNULL( PACK.PackUOM1, '''') )'
-        +       ', PackUOM2         = RTRIM( ISNULL( PACK.PackUOM2, '''') )'
-        +       ', PackUOM3         = RTRIM( ISNULL( PACK.PackUOM3, '''') )'
-        +       ', StdCube          = ISNULL( SKU.StdCube,0.0)'
-        +       ', StdGrossWgt      = ISNULL( SKU.StdGrossWgt,0.0)'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', DCC              = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DCCExp        ,'')<>'' THEN @c_DCCExp         ELSE 'NULL' END + '),'''')'
+        +       ', CaseCnt          = '              + CASE WHEN ISNULL(@c_CaseCntExp     ,'')<>'' THEN @c_CaseCntExp      ELSE 'PACK.CaseCnt'    END
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', LineRemark1      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRemark1Exp,'')<>'' THEN @c_LineRemark1Exp ELSE 'NULL' END + '),'''')'
+        +       ', InnerPack        = '              + CASE WHEN ISNULL(@c_InnerPackExp   ,'')<>'' THEN @c_InnerPackExp    ELSE 'PACK.InnerPack'  END
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', LineRemark2      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRemark2Exp,'')<>'' THEN @c_LineRemark2Exp ELSE 'NULL' END + '),'''')'
+        +       ', PackUOM1         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PackUOM1Exp    ,'')<>'' THEN @c_PackUOM1Exp     ELSE 'PACK.PackUOM1'   END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', LineRemark3      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRemark3Exp,'')<>'' THEN @c_LineRemark3Exp ELSE 'NULL' END + '),'''')'
+        +       ', PackUOM2         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PackUOM2Exp    ,'')<>'' THEN @c_PackUOM2Exp     ELSE 'PACK.PackUOM2'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', PackUOM3         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PackUOM3Exp    ,'')<>'' THEN @c_PackUOM3Exp     ELSE 'PACK.PackUOM3'   END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', StdCube          = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_StdCubeExp     ,'')<>'' THEN @c_StdCubeExp      ELSE 'SKU.StdCube'     END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', StdGrossWgt      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_StdGrossWgtExp ,'')<>'' THEN @c_StdGrossWgtExp  ELSE 'SKU.StdGrossWgt' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', DCC              = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DCCExp         ,'')<>'' THEN @c_DCCExp          ELSE 'NULL'            END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', LineRemark1      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRemark1Exp ,'')<>'' THEN @c_LineRemark1Exp  ELSE 'NULL'            END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', LineRemark2      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRemark2Exp ,'')<>'' THEN @c_LineRemark2Exp  ELSE 'NULL'            END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', LineRemark3      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRemark3Exp ,'')<>'' THEN @c_LineRemark3Exp  ELSE 'NULL'            END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', DWName           = @c_DataWindow'
-        +       ', ShowFields       = RTRIM( ISNULL( @c_ShowFields, '''') )'
-        +       ', Storer_Logo      = RTRIM( ISNULL( @c_Storer_Logo, '''') )'
+        +       ', ShowFields       = ISNULL(RTRIM(@c_ShowFields),'''')'
+        +       ', Storer_Logo      = ISNULL(RTRIM(@c_Storer_Logo),'''')'
 
       SET @c_ExecStatements = @c_ExecStatements
         +   ' FROM dbo.WAVEDETAIL   WD   (NOLOCK)'
@@ -385,6 +658,8 @@ BEGIN
         +   ' LEFT JOIN dbo.PUTAWAYZONE  TOPA (NOLOCK) ON TOLOC.PutawayZone = TOPA.PutawayZone'
         +   ' LEFT JOIN dbo.STORER       SHPTO(NOLOCK) ON OH.Consigneekey = SHPTO.Storerkey'
         +   ' LEFT JOIN dbo.STORER       BILTO(NOLOCK) ON OH.BillToKey = BILTO.Storerkey'
+      SET @c_ExecStatements = @c_ExecStatements
+        + CASE WHEN ISNULL(@c_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_JoinClause)),'') END
 
       SET @c_ExecStatements = @c_ExecStatements
         +   ' WHERE WD.wavekey = @c_Wavekey'
@@ -412,80 +687,179 @@ BEGIN
 
 
 
-   SELECT Wavekey         = UPPER( X.Wavekey )
-        , Storerkey       = UPPER( X.Storerkey )
-        , StorerCompany   = MAX( X.StorerCompany )
-        , PickSlipNo      = UPPER( X.PickSlipNo )
-        , OrderKey        = UPPER( X.OrderKey )
-        , ExternOrderKey  = MAX( X.ExternOrderKey )
-        , ExternPOKey     = MAX( X.ExternPOKey )
-        , BuyerPO         = MAX( X.BuyerPO )
-        , InvoiceNo       = MAX( X.InvoiceNo )
-        , DeliveryDate    = MAX( X.DeliveryDate )
-        , ConsigneeKey    = UPPER( MAX( X.ConsigneeKey ) )
-        , Company         = MAX( X.Company )
-        , Addr1           = MAX( X.Addr1 )
-        , Addr2           = MAX( X.Addr2 )
-        , Addr3           = MAX( X.Addr3 )
-        , PostCode        = MAX( X.PostCode )
-        , Route           = MAX( X.Route )
-        , Route_Desc      = MAX( X.Route_Desc )
-        , TrfRoom         = MAX( X.TrfRoom )
-        , PrintedFlag     = MAX( X.PrintedFlag )
-        , LabelPrice      = MAX( X.LabelPrice )
-        , PendingFlag     = MAX( X.PendingFlag )
-        , Notes1          = MAX( X.Notes1 )
-        , Notes2          = MAX( X.Notes2 )
-        , SKU             = UPPER( X.SKU )
-        , SkuDesc         = MAX( X.SkuDesc )
-        , Putawayzone     = UPPER( MAX( X.Putawayzone ) )
-        , ZoneDesc        = MAX( X.ZoneDesc )
-        , LogicalLocation = UPPER( MAX( X.LogicalLocation ) )
-        , LOC             = UPPER( X.LOC )
-        , ID              = UPPER( X.ID )
-        , AltSKU          = MAX( X.AltSKU )
-        , SUSR2           = MAX( X.SUSR2 )
-        , BUSR8           = MAX( X.BUSR8 )
-        , BUSR10          = UPPER( MAX( X.BUSR10 ) )
-        , Lottable01      = UPPER( X.Lottable01 )
-        , Lottable02      = UPPER( X.Lottable02 )
-        , Lottable03      = UPPER( X.Lottable03 )
-        , Lottable04      = X.Lottable04
-        , Qty             = SUM( X.Qty )
-        , CaseCnt         = MAX( X.CaseCnt )
-        , InnerPack       = MAX( X.InnerPack )
-        , PackUOM1        = MAX( X.PackUOM1 )
-        , PackUOM2        = MAX( X.PackUOM2 )
-        , PackUOM3        = MAX( X.PackUOM3 )
-        , Cartons         = CASE WHEN ISNULL(MAX(X.CaseCnt  ),0)=0 THEN 0 ELSE FLOOR(SUM(X.Qty) / MAX(X.CaseCnt)) END
-        , Inners          = CASE WHEN ISNULL(MAX(X.InnerPack),0)=0 THEN 0 ELSE FLOOR( IIF(ISNULL(MAX(X.CaseCnt),0)=0, SUM(X.Qty), SUM(X.Qty) % MAX(X.CaseCnt)) / MAX(X.InnerPack)) END
-        , Pieces          = CASE WHEN ISNULL(MAX(X.InnerPack),0)=0 THEN IIF(ISNULL(MAX(X.CaseCnt),0)=0, SUM(X.Qty), SUM(X.Qty) % MAX(X.CaseCnt))
-                                                                   ELSE IIF(ISNULL(MAX(X.CaseCnt),0)=0, SUM(X.Qty), SUM(X.Qty) % MAX(X.CaseCnt)) % MAX(X.InnerPack) END
-        , StdCube         = MAX( X.StdCube )
-        , StdGrossWgt     = MAX( X.StdGrossWgt )
-        , DCC             = X.DCC
-        , LineRemark1     = X.LineRemark1
-        , LineRemark2     = X.LineRemark2
-        , LineRemark3     = X.LineRemark3
-        , DWName          = MAX( X.DWName )
-        , ShowFields      = MAX( X.ShowFields )
-        , Storer_Logo     = MAX( X.Storer_Logo )
-   FROM #TEMP_PIKDT X
-   GROUP BY X.Wavekey
-          , X.Storerkey
-          , X.PickSlipNo
-          , X.OrderKey
-          , X.SKU
-          , X.LOC
-          , X.ID
-          , X.Lottable01
-          , X.Lottable02
-          , X.Lottable03
-          , X.Lottable04
-          , X.DCC
-          , X.LineRemark1
-          , X.LineRemark2
-          , X.LineRemark3
+   SELECT Wavekey            = UPPER( PIKDT.Wavekey )
+        , Storerkey          = UPPER( PIKDT.Storerkey )
+        , StorerCompany      = MAX( PIKDT.StorerCompany )
+        , PickSlipNo         = UPPER( PIKDT.PickSlipNo )
+        , OrderKey           = UPPER( PIKDT.OrderKey )
+        , ExternOrderKey     = MAX( PIKDT.ExternOrderKey )
+        , ExternPOKey        = MAX( PIKDT.ExternPOKey )
+        , BuyerPO            = MAX( PIKDT.BuyerPO )
+        , InvoiceNo          = MAX( PIKDT.InvoiceNo )
+        , DeliveryDate       = MAX( PIKDT.DeliveryDate )
+        , ConsigneeKey       = UPPER( MAX( PIKDT.ConsigneeKey ) )
+        , Company            = MAX( PIKDT.Company )
+        , Addr1              = MAX( PIKDT.Addr1 )
+        , Addr2              = MAX( PIKDT.Addr2 )
+        , Addr3              = MAX( PIKDT.Addr3 )
+        , PostCode           = MAX( PIKDT.PostCode )
+        , Route              = MAX( PIKDT.Route )
+        , Route_Desc         = MAX( PIKDT.Route_Desc )
+        , TrfRoom            = MAX( PIKDT.TrfRoom )
+        , PrintedFlag        = MAX( PIKDT.PrintedFlag )
+        , LabelPrice         = MAX( PIKDT.LabelPrice )
+        , PendingFlag        = MAX( PIKDT.PendingFlag )
+        , Notes1             = MAX( PIKDT.Notes1 )
+        , Notes2             = MAX( PIKDT.Notes2 )
+        , SKU                = UPPER( PIKDT.SKU )
+        , SkuDesc            = MAX( PIKDT.SkuDesc )
+        , Putawayzone        = UPPER( MAX( PIKDT.Putawayzone ) )
+        , ZoneDesc           = MAX( PIKDT.ZoneDesc )
+        , LogicalLocation    = UPPER( MAX( PIKDT.LogicalLocation ) )
+        , LOC                = UPPER( PIKDT.LOC )
+        , ID                 = UPPER( PIKDT.ID )
+        , AltSKU             = MAX( PIKDT.AltSKU )
+        , SUSR2              = MAX( PIKDT.SUSR2 )
+        , BUSR8              = MAX( PIKDT.BUSR8 )
+        , BUSR10             = UPPER( MAX( PIKDT.BUSR10 ) )
+        , Lottable01         = UPPER( PIKDT.Lottable01 )
+        , Lottable02         = UPPER( PIKDT.Lottable02 )
+        , Lottable03         = UPPER( PIKDT.Lottable03 )
+        , Lottable04         = PIKDT.Lottable04
+        , Qty                = SUM( PIKDT.Qty )
+        , CaseCnt            = MAX( PIKDT.CaseCnt )
+        , InnerPack          = MAX( PIKDT.InnerPack )
+        , PackUOM1           = MAX( PIKDT.PackUOM1 )
+        , PackUOM2           = MAX( PIKDT.PackUOM2 )
+        , PackUOM3           = MAX( PIKDT.PackUOM3 )
+        , Cartons            = CASE WHEN ISNULL(MAX(PIKDT.CaseCnt  ),0)=0 THEN 0 ELSE FLOOR(SUM(PIKDT.Qty) / MAX(PIKDT.CaseCnt)) END
+        , Inners             = CASE WHEN ISNULL(MAX(PIKDT.InnerPack),0)=0 THEN 0 ELSE FLOOR( IIF(ISNULL(MAX(PIKDT.CaseCnt),0)=0, SUM(PIKDT.Qty), SUM(PIKDT.Qty) % MAX(PIKDT.CaseCnt)) / MAX(PIKDT.InnerPack)) END
+        , Pieces             = CASE WHEN ISNULL(MAX(PIKDT.InnerPack),0)=0 THEN IIF(ISNULL(MAX(PIKDT.CaseCnt),0)=0, SUM(PIKDT.Qty), SUM(PIKDT.Qty) % MAX(PIKDT.CaseCnt))
+                                                                      ELSE IIF(ISNULL(MAX(PIKDT.CaseCnt),0)=0, SUM(PIKDT.Qty), SUM(PIKDT.Qty) % MAX(PIKDT.CaseCnt)) % MAX(PIKDT.InnerPack) END
+        , StdCube            = MAX( PIKDT.StdCube )
+        , StdGrossWgt        = MAX( PIKDT.StdGrossWgt )
+        , DCC                = PIKDT.DCC
+        , LineRemark1        = PIKDT.LineRemark1
+        , LineRemark2        = PIKDT.LineRemark2
+        , LineRemark3        = PIKDT.LineRemark3
+        , DWName             = MAX( PIKDT.DWName )
+        , ShowFields         = MAX( PIKDT.ShowFields )
+        , Storer_Logo        = MAX( PIKDT.Storer_Logo )
+        , Lbl_Customer       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Customer') ) AS NVARCHAR(50))
+        , Lbl_InvoiceNo      = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_InvoiceNo') ) AS NVARCHAR(50))
+        , Lbl_ExternOrderkey = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_ExternOrderkey') ) AS NVARCHAR(50))
+        , Lbl_ExternPOKey    = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_ExternPOKey') ) AS NVARCHAR(50))
+        , Lbl_Notes1         = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Notes1') ) AS NVARCHAR(50))
+        , Lbl_Notes2         = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Notes2') ) AS NVARCHAR(50))
+        , Lbl_SUSR2          = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_SUSR2') ) AS NVARCHAR(50))
+        , Lbl_DeliveryDate   = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_DeliveryDate') ) AS NVARCHAR(50))
+        , Lbl_PendingFlag    = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_PendingFlag') ) AS NVARCHAR(50))
+        , Lbl_Route          = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Route') ) AS NVARCHAR(50))
+        , Lbl_TrfRoom        = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_TrfRoom') ) AS NVARCHAR(50))
+        , Lbl_BuyerPO        = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_BuyerPO') ) AS NVARCHAR(50))
+        , Lbl_CBM            = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_CBM') ) AS NVARCHAR(50))
+        , Lbl_Weight         = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Weight') ) AS NVARCHAR(50))
+        , Lbl_Loc            = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Loc') ) AS NVARCHAR(50))
+        , Lbl_Sku            = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Sku') ) AS NVARCHAR(50))
+        , Lbl_SkuDescr       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_SkuDescr') ) AS NVARCHAR(50))
+        , Lbl_AltSku         = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_AltSku') ) AS NVARCHAR(50))
+        , Lbl_DCC            = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_DCC') ) AS NVARCHAR(50))
+        , Lbl_BUSR8          = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_BUSR8') ) AS NVARCHAR(50))
+        , Lbl_Lottable01     = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Lottable01') ) AS NVARCHAR(50))
+        , Lbl_Lottable02     = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Lottable02') ) AS NVARCHAR(50))
+        , Lbl_Lottable03     = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Lottable03') ) AS NVARCHAR(50))
+        , Lbl_Lottable04     = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Lottable04') ) AS NVARCHAR(50))
+        , Lbl_ID             = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_ID') ) AS NVARCHAR(50))
+        , Lbl_CaseCnt        = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_CaseCnt') ) AS NVARCHAR(50))
+        , Lbl_InnerPack      = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_InnerPack') ) AS NVARCHAR(50))
+        , Lbl_PackUOM1       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_PackUOM1') ) AS NVARCHAR(50))
+        , Lbl_PackUOM2       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_PackUOM2') ) AS NVARCHAR(50))
+        , Lbl_PackUOM3       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_PackUOM3') ) AS NVARCHAR(50))
+
+   FROM #TEMP_PIKDT PIKDT
+
+   LEFT JOIN (
+      SELECT Storerkey, Notes = RTRIM(Notes), Notes2 = RTRIM(Notes2), Delim = LTRIM(RTRIM(UDF01))
+           , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+        FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='MAPVALUE' AND Long=@c_DataWindow AND Short='Y'
+   ) RptCfg3
+   ON RptCfg3.Storerkey=PIKDT.Storerkey AND RptCfg3.SeqNo=1
+
+   GROUP BY PIKDT.Wavekey
+          , PIKDT.Storerkey
+          , PIKDT.PickSlipNo
+          , PIKDT.OrderKey
+          , PIKDT.SKU
+          , PIKDT.LOC
+          , PIKDT.ID
+          , PIKDT.Lottable01
+          , PIKDT.Lottable02
+          , PIKDT.Lottable03
+          , PIKDT.Lottable04
+          , PIKDT.DCC
+          , PIKDT.LineRemark1
+          , PIKDT.LineRemark2
+          , PIKDT.LineRemark3
     ORDER BY Orderkey, ZoneDesc, LogicalLocation, Loc
 
 QUIT:
