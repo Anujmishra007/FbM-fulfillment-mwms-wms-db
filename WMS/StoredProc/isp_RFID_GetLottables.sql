@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /* 02-DEC-2020 Wan      1.0   Created                                   */
 /* 2021-03-19  Wan01    1.1   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
 /*                           _Overall_CR                                */
+/* 06-JUL-2021 WLChooi  1.2   WMS-17404 - Add Output Parameters (WL01)  */
 /************************************************************************/
 CREATE PROC isp_RFID_GetLottables
       @c_ReceiptKey              NVARCHAR(10)   
@@ -81,6 +82,8 @@ CREATE PROC isp_RFID_GetLottables
    ,  @c_Lottable13attrib        NVARCHAR(1)  = '0'   OUTPUT   --(wan01)
    ,  @c_Lottable14attrib        NVARCHAR(1)  = '0'   OUTPUT   --(wan01)
    ,  @c_Lottable15attrib        NVARCHAR(1)  = '0'   OUTPUT   --(wan01)
+   ,  @c_OtherFieldName          NVARCHAR(2000) = '0' OUTPUT   --WL01
+   ,  @c_OtherFieldValue         NVARCHAR(2000) = '0' OUTPUT   --WL01
    ,  @b_Success                 INT = 1              OUTPUT  
    ,  @n_Err                     INT = 1              OUTPUT  
    ,  @c_ErrMsg                  NVARCHAR(215) = ''   OUTPUT  
@@ -344,6 +347,9 @@ BEGIN
               + ',@c_Lottable13attrib     = @c_Lottable13attrib      OUTPUT'    
               + ',@c_Lottable14attrib     = @c_Lottable14attrib      OUTPUT'    
               + ',@c_Lottable15attrib     = @c_Lottable15attrib      OUTPUT'    
+              + ',@c_OtherFieldName       = @c_OtherFieldName        OUTPUT'   --WL01
+              + ',@c_OtherFieldValue      = @c_OtherFieldValue       OUTPUT'   --WL01
+              + ',@c_Receiptkey           = @c_Receiptkey                  '   --WL01
 
    SET @c_SQLParms= N'@c_StorerKey               NVARCHAR(15)'   
                   + ',@c_SKU                     NVARCHAR(20)'
@@ -393,6 +399,9 @@ BEGIN
                   + ',@c_Lottable13attrib        NVARCHAR(1)   OUTPUT'
                   + ',@c_Lottable14attrib        NVARCHAR(1)   OUTPUT'
                   + ',@c_Lottable15attrib        NVARCHAR(1)   OUTPUT'
+                  + ',@c_OtherFieldName          NVARCHAR(2000) OUTPUT'   --WL01
+                  + ',@c_OtherFieldValue         NVARCHAR(2000) OUTPUT'   --WL01
+                  + ',@c_Receiptkey              NVARCHAR(2000) OUTPUT'   --WL01
 
    EXEC sp_ExecuteSQL  @c_SQL
                      , @c_SQLParms
@@ -444,6 +453,9 @@ BEGIN
                      , @c_Lottable13attrib        OUTPUT
                      , @c_Lottable14attrib        OUTPUT
                      , @c_Lottable15attrib        OUTPUT
+                     , @c_OtherFieldName          OUTPUT   --WL01
+                     , @c_OtherFieldValue         OUTPUT   --WL01
+                     , @c_Receiptkey              OUTPUT   --WL01
 
    -------------------------------------------------
    --(Wan01) - END : GET Sku Lottables Attribute  

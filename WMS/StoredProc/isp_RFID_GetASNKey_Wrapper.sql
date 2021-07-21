@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,6 +30,8 @@ GO
 /*                           _Overall_CR                                */
 /* 2021-05-20  WLChooi  1.2   WMS-16736 - [CN]NIKE_GWP_RFID_Receiving_CR*/
 /*                            (WL01)                                    */
+/* 2021-07-06  WLChooi  1.3   WMS-17404 - [CN]NIKE PHC Outlets RFID     */
+/*                            Receiving CR (WL02)                       */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey_Wrapper
            @c_Facility           NVARCHAR(5)  
@@ -39,6 +41,7 @@ CREATE PROC isp_RFID_GetASNKey_Wrapper
          , @n_TotalQtyExpected   INT = 0           OUTPUT
          , @n_TotalQtyReceived   INT = 0           OUTPUT
          , @n_SessionID          BIGINT = 0        OUTPUT   --(Wan01)
+         , @c_Remark             NVARCHAR(50) = '' OUTPUT   --WL02   
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -120,6 +123,7 @@ BEGIN
                  +', @c_RefNo      = @c_RefNo'     
                  +', @c_ReceiptKey = @c_ReceiptKey OUTPUT'
                  +', @n_SessionID  = @n_SessionID  OUTPUT'     --(Wan01)
+                 +', @c_Remark     = @c_Remark     OUTPUT'     --WL02
                  +', @b_Success    = @b_Success OUTPUT'
                  +', @n_Err        = @n_Err     OUTPUT'
                  +', @c_ErrMsg     = @c_ErrMsg  OUTPUT'
@@ -129,6 +133,7 @@ BEGIN
                      +', @c_RefNo       NVARCHAR(50)'
                      +', @c_ReceiptKey  NVARCHAR(10) OUTPUT'
                      +', @n_SessionID   BIGINT       OUTPUT'   --(Wan01)
+                     +', @c_Remark       NVARCHAR(50) OUTPUT'   --WL02
                      +', @b_Success     INT          OUTPUT'
                      +', @n_Err         INT          OUTPUT'
                      +', @c_ErrMsg      NVARCHAR(255)OUTPUT'
@@ -140,6 +145,7 @@ BEGIN
                         , @c_RefNo       
                         , @c_ReceiptKey   OUTPUT
                         , @n_SessionID    OUTPUT               --(Wan01)
+                        , @c_Remark       OUTPUT               --WL02
                         , @b_Success      OUTPUT
                         , @n_Err          OUTPUT
                         , @c_ErrMsg       OUTPUT

@@ -1,4 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_GetASNKey01]') 
+﻿IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_GetASNKey01]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_RFID_GetASNKey01]
 GO
@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -34,13 +34,16 @@ GO
 /*                            when fial on checklist                    */
 /* 2021-05-20  WLChooi  1.5   WMS-16736 - [CN]NIKE_GWP_RFID_Receiving_CR*/
 /*                            (WL01)                                    */
+/* 2021-07-06  WLChooi  1.6   WMS-17404 - [CN]NIKE PHC Outlets RFID     */
+/*                            Receiving CR (WL02)                       */
 /************************************************************************/
 CREATE PROC isp_RFID_GetASNKey01
            @c_Facility           NVARCHAR(5)  
          , @c_Storerkey          NVARCHAR(15)
          , @c_RefNo              NVARCHAR(50)
          , @c_ReceiptKey         NVARCHAR(10) = '' OUTPUT
-         , @n_SessionID          BIGINT = 0        OUTPUT   --(Wan03)        
+         , @n_SessionID          BIGINT = 0        OUTPUT   --(Wan03)  
+         , @c_Remark             NVARCHAR(50) = '' OUTPUT   --WL02      
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -510,6 +513,17 @@ BEGIN
          GOTO QUIT_SP  
       END  
    END
+
+   --WL02 S
+   IF EXISTS (SELECT 1 
+              FROM RECEIPT R (NOLOCK)
+              JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'NIKESoldTo' AND CL.Notes = R.UserDefine03 AND CL.Long = 'OUTLET'
+                                       AND CL.Storerkey = R.StorerKey
+              WHERE R.ReceiptKey = @c_ReceiptKey )
+   BEGIN
+      SET @c_Remark = N'奥特莱斯订单'
+   END
+   --WL02 E
    
 QUIT_SP:
    --WL01 S

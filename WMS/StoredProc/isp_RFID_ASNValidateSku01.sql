@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 01-DEC-2020 Wan      1.0   Created                                   */
 /* 20-JAN-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
+/* 06-JUL-2021 WLChooi  1.2   WMS-17404 - Skip RFID Validation for      */
+/*                            Outlet ASN (WL01)                         */
 /************************************************************************/
 CREATE PROC isp_RFID_ASNValidateSku01
            @c_Receiptkey   NVARCHAR(10) = ''  
@@ -99,6 +101,17 @@ BEGIN
       SET @c_errmsg = @c_errmsg + '. Accept SET Sku?'
       SET @b_Success = 2
    END 
+
+   --WL01 S
+   IF EXISTS (SELECT 1 
+              FROM RECEIPT R (NOLOCK)
+              JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'NIKESoldTo' AND CL.Notes = R.UserDefine03 AND CL.Long = 'OUTLET'
+                                       AND CL.Storerkey = R.StorerKey
+              WHERE R.ReceiptKey = @c_ReceiptKey )
+   BEGIN
+      SET @b_ReadRFIDTag = 0
+   END
+   --WL01 E
 
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return

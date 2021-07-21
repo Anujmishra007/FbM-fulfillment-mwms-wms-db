@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-03-19  Wan      1.0   Created                                   */
+/* 2021-07-06  WLChooi  1.1   WMS-17404 - Prompt ErrorMsg if TrackingNo */
+/*                            not valid (WL01)                          */
 /************************************************************************/
 CREATE PROC isp_RFID_ASNVLDTrackingNo01
            @c_Receiptkey         NVARCHAR(10) = '' 
@@ -78,7 +80,10 @@ BEGIN
 
    IF NOT EXISTS (SELECT 1 FROM rdt.V_Rdtdatacapture WITH (NOLOCK) WHERE V_String1 = @c_TrackingNo)
    BEGIN
+      SET @n_Continue = 3      --WL01
+      SET @n_Err      = 87015  --WL01
       SET @c_ErrMsg = 'Tracking # Not Found in V_Rdtdatacapture. (isp_RFID_ASNVLDTrackingNo01) '
+      GOTO QUIT_SP   --WL01
    END
    
 QUIT_SP:
