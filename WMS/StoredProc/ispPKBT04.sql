@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 01-MAR-2021 CSCHONG  1.1   WMS-16414 revised print logic (CS01)      */
+/* 12-JUL-2021 CSCHOPNG 1.2   WMS-17456 revised print logic (CS02)      */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPKBT04]
    @c_printerid  NVARCHAR(50) = '',  
@@ -235,7 +236,7 @@ BEGIN
        FROM #DirPDFTree
        WHERE SubDirectory like 'packlist_' + @c_ExtOrderkey + '%'     --CS01
 
-          IF ISNULL(@c_CLFileName,'') = '' OR ISNULL(@c_PackLFileName,'') = ''
+          IF ISNULL(@c_CLFileName,'') = '' --OR ISNULL(@c_PackLFileName,'') = ''         --(CS02)
           BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60003   
@@ -243,9 +244,15 @@ BEGIN
             GOTO QUIT_SP
          END
 
-         INSERT INTO #TEMPPRINTJOB(PrnFilename)
-         VALUES(@c_PackLFileName)
+         --CS02 START
 
+          IF ISNULL(@c_PackLFileName,'') <> ''
+          BEGIN
+              INSERT INTO #TEMPPRINTJOB(PrnFilename)
+              VALUES(@c_PackLFileName)
+          END
+
+         --CS02 END
          INSERT INTO #TEMPPRINTJOB(PrnFilename)
          VALUES(@c_CLFileName)
 
