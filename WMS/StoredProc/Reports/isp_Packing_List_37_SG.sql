@@ -48,12 +48,15 @@ GO
 /* 23-Jun-2020  CSCHONG   2.5   WMS-13800/14980 add new field (CS09)    */                                              
 /* 08-Dec-2020  CSCHONG   2.6   WMS-14980 revised mapping (CS09a)       */        
 /* 01-FEB-2021  CSCHONG   2.7   Performance tunning - replace view table*/    
-/*                              with Temp table (CS10)                  */                                  
+/*                              with Temp table (CS10)                  */    
+/* 18-FEB-2021  CSCHONG   2.8   WMS-16135 revised report grouping (CS11)*/       
+/* 16-JUL-2021  CSCHONG   2.9   WMS-16135 fix sorting issue (CS11a)     */                       
 /************************************************************************/      
       
 CREATE PROC [dbo].[isp_Packing_List_37_SG] (      
-   @c_MBOLKey NVARCHAR(21)       
-  ,@c_type NVARCHAR(10) --= 'H1'   --(CS35)      
+   @c_MBOLKey  NVARCHAR(21)       
+  ,@c_type     NVARCHAR(10)   = 'H1'   
+  ,@c_ShipType NVARCHAR(10)   = ''  -- CS11     
 )       
 AS       
 BEGIN      
@@ -162,8 +165,11 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@n_fpltwgt             FLOAT                           --CS09a    
        ,@n_fpltcbm             FLOAT                           --CS09      
     -- ,@C_getCLKUPUDF01   NVARCHAR(15)    
-       ,@n_epltwgt                FLOAT   =0                   --CS09a    
-       ,@n_epltcbm                FLOAT   =0                   --CS09a                                
+       ,@n_epltwgt             FLOAT   =0                      --CS09a    
+       ,@n_epltcbm             FLOAT   =0                      --CS09a  
+       ,@c_getstorerkey        NVARCHAR(20)                    --CS11
+       ,@c_OrderKey_Inv        NVARCHAR(50)                    --CS11
+                               
             
                      
            
@@ -236,7 +242,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             Fpltwgt          FLOAT,                                         --CS09      
             Fpltcbm          FLOAT                                          --CS09    
            ,epltwgt          FLOAT                                          --CS09a    
-           ,epltcbm          FLOAT                                          --CS09a    
+           ,epltcbm          FLOAT                                          --CS09a  
+           ,InvoiceNo        NVARCHAR(50)                                   --CS10  
          )      
                
                
@@ -295,12 +302,21 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         ExtOrdKey           NVARCHAR(500) NULL,    
         C_Company           NVARCHAR(45) NULL )    
     
-    
+        --CS11 START
+        SET @c_getstorerkey = ''
+
+        SELECT TOP 1 @c_getstorerkey = ORDERS.Storerkey
+        FROM MBOL WITH (NOLOCK)
+        JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)
+        JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)  
+        WHERE MBOL.MbolKey = @c_MBOLKey
+        --CS11 END
+
        INSERT INTO #TMP_PLTDET2(PLTKEY,MBOLKEY,PLTDETUDF02,ExtOrdKey,C_Company)    
        Select PD.Palletkey, O.MBOLKey, PD.UserDefine02, O.ExternOrderkey, O.C_Company       
        From dbo.PALLETDETAIL PD (nolock)            
-       LEFT JOIN dbo.ORDERS O (NOLOCK) ON O.OrderKey = PD.UserDefine02 and O.StorerKey = 'LOGITECH'          
-       where PD.Storerkey = 'LOGITECH' --and PalletKey = 'AP074275'           
+       LEFT JOIN dbo.ORDERS O (NOLOCK) ON O.OrderKey = PD.UserDefine02 and O.StorerKey = @c_getstorerkey         
+       where PD.Storerkey = @c_getstorerkey --and PalletKey = 'AP074275'           
        AND O.MBOLKey = @c_MBOLKey     
        Group By PD.Palletkey, O.MBOLKey, PD.UserDefine02, O.ExternOrderkey, O.C_Company      
     
@@ -320,8 +336,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         , P.GrossWgt, LLI.LOC, PD.GrpExtOrdKey, PD.C_Company          
         From #TMP_PLTDET3 PD (nolock)              
         JOIN dbo.PALLET P (nolock) ON P.PalletKey = PD.PLTKEY              
-        JOIN (select DISTINCT LOC, ID FROM dbo.LOTxLOCxID (nolock) where StorerKey = 'LOGITECH') AS LLI ON LLI.Id = PD.PLTKEY            
-        where P.StorerKey = 'LOGITECH' and pd.rn = 1-- and mbolkey = '0000606408'        
+        JOIN (select DISTINCT LOC, ID FROM dbo.LOTxLOCxID (nolock) where StorerKey = @c_getstorerkey) AS LLI ON LLI.Id = PD.PLTKEY            
+        where P.StorerKey = @c_getstorerkey and pd.rn = 1-- and mbolkey = '0000606408'        
         AND   PD.MBOLKEY = @c_MBOLKey    
         group by PD.PLTKEY, PD.MBOLKey, P.PalletType, PD.PLTDETUDF02, P.Length, P.Width, P.Height, P.GrossWgt, LLI.LOC, PD.GrpExtOrdKey, PD.C_Company       
       
@@ -498,6 +514,14 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                       ELSE '' END AS CON_Address4      
                 ,ORDERS.OrderGroup AS OrdGrp      
                 /*CS04 end*/                                                      --CS02      
+                /*CS10 START*/
+                ,OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN ORDERS.Orderkey 
+                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'O' THEN  MBOL.Mbolkey 
+                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'D' THEN  'D' + MBOL.Mbolkey  
+                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'E' THEN  'E' + MBOL.Mbolkey
+                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'N' THEN  'N' + MBOL.Mbolkey 
+                                     ELSE '' END  
+                /*CS10 END*/
               FROM MBOL WITH (NOLOCK)      
               INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)      
               INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)      
@@ -532,9 +556,9 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                  @c_ShipTO_City, @c_ShipTO_Phone1,      
                                  @c_ShipTO_Contact1, @c_ShipTO_Country,      
                                  @c_From_Country, @c_StorerKey,       
-                                 @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,    --CS03a      
+                                 @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,       --CS03a      
                                  @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                  --CS04      
-                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp                         --CS04      
+                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,@c_Orderkey_inv         --CS04        --CS10
               
         WHILE @@FETCH_STATUS = 0      
         BEGIN      
@@ -883,6 +907,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                ,Fpltcbm               --CS09    
                ,Epltwgt               --CS09a    
                ,Epltcbm               --CS09a    
+               ,InvoiceNo             --CS11
               )      
               VALUES      
               (      
@@ -941,9 +966,10 @@ DECLARE @c_OrderKey            NVARCHAR(10)
               ,@n_EPWGT_Value,@n_EPCBM_Value            --CS04      
               ,@C_CLKUPUDF01,@c_orderkey,''             --CS05      
               ,@c_dest,@c_PLTNo                         --CS06    
-              ,@n_pltwgt,@n_pltcbm                      --CS09    
-              ,@n_fpltwgt,@n_fpltcbm                    --CS09    
-              ,@n_epltwgt, @n_epltcbm                   --CS09a    
+              ,ISNULL(@n_pltwgt,0),ISNULL(@n_pltcbm,0)  --CS09    
+              ,ISNULL(@n_fpltwgt,0),ISNULL(@n_fpltcbm,0)          --CS09    
+              ,ISNULL(@n_epltwgt,0), ISNULL(@n_epltcbm,0),
+              CASE WHEN  @c_ShipType = 'L' THEN 'A' + @c_OrderKey_Inv ELSE @c_OrderKey_Inv END  --CS09a     --CS11
               )      
                        
            SET @c_PreOrderKey = @c_OrderKey      
@@ -972,7 +998,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                        @c_From_Country, @c_StorerKey,       
                                        @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,    --CS03a      
                                        @c_Con_Company, @c_Con_Address1, @c_Con_Address2,               --CS04      
-                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp                       --CS04      
+                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,@c_Orderkey_inv      --CS04  --CS10    
         END      
               
         CLOSE CS_ORDERS_INFO      
@@ -1166,6 +1192,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
   --CS09a END    
     
   select * from #temp_Packlist37    
+  ORDER BY MBOLKey,InvoiceNo
         
   GOTO QUIT      
       
@@ -1200,11 +1227,12 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address2     ,       
     CON_Address3     ,      
     CON_Address4     ,       
-    ORDGRP          
+    ORDGRP           ,
+    InvoiceNo                    --CS11
   FROM #TEMP_PackList37      
   WHERE MBOLKey = @c_MBOLKey      
   AND ORDGRP = 'S01'      
-  ORDER BY mbolkey,ExternOrdKey,ORDGRP      
+  ORDER BY mbolkey,InvoiceNo,ExternOrdKey,ORDGRP   --CS11a   
         
    GOTO QUIT      
       
