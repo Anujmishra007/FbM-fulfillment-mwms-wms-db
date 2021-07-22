@@ -38,6 +38,7 @@ GO
 /*                            consignee only                            */
 /* 17-Oct-2019  NJOW07  1.6   WMS-10923 Support sort by qty by config   */
 /* 06-May-2020  NJOW08  1.7   WMS-6226 skip UOM 1 allocation by condition*/
+/* 01-Dec-2020  NJOW09  1.8   WMS-15743 MHAP Get shelflife from codelkup */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPFIFO]        
    @c_Orderkey    NVARCHAR(10),  
@@ -207,22 +208,28 @@ BEGIN
    END
    ELSE
    BEGIN 
-      SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
+      --SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
+      SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lot, LOC.LogicalLocation, LOC.LOC '  --NJOW08 
       SET @c_SORTNOTUOM1 = ' ORDER BY LA.Lottable05, 4, LOC.LogicalLocation, LOC.LOC '
    END 
    --NJOW07 E
       
-   SELECT TOP 1 @n_RestrictDays = CASE WHEN (CON.Susr1 = 'DCNM1' OR CON.Susr2 = 'DCNM1' OR CON.Susr3 = 'DCNM1' OR CON.Susr4 = 'DCNM1' OR CON.Susr5 = 'DCNM1') AND
-                                            (SKU.Skugroup IN ('AG','AR','CE','CH','CS','CM','GP')) THEN 82
-                                       WHEN (CON.Susr1 = 'DCNM2' OR CON.Susr2 = 'DCNM2' OR CON.Susr3 = 'DCNM2' OR CON.Susr4 = 'DCNM2' OR CON.Susr5 = 'DCNM2') AND              
-                                            (SKU.Skugroup = 'CB') THEN 82
+   SELECT TOP 1 @n_RestrictDays = CASE WHEN (CON.Susr1 = 'DCNM1' OR CON.Susr2 = 'DCNM1' OR CON.Susr3 = 'DCNM1' OR CON.Susr4 = 'DCNM1' OR CON.Susr5 = 'DCNM1') --AND
+                                            THEN --(SKU.Skugroup IN ('AG','AR','CE','CH','CS','CM','GP')) THEN 
+                                                CASE WHEN ISNUMERIC(RDAY.Short) = 1 THEN CAST(RDAY.Short AS INT) ELSE 0 END --NJOW09
+                                       WHEN (CON.Susr1 = 'DCNM2' OR CON.Susr2 = 'DCNM2' OR CON.Susr3 = 'DCNM2' OR CON.Susr4 = 'DCNM2' OR CON.Susr5 = 'DCNM2') --AND              
+                                            THEN --(SKU.Skugroup = 'CB') THEN 
+                                                CASE WHEN ISNUMERIC(RDAY.Short) = 1 THEN CAST(RDAY.Short AS INT) ELSE 0 END --NJOW09
                                        WHEN (CON.Susr1 = 'DCNM3' OR CON.Susr2 = 'DCNM3' OR CON.Susr3 = 'DCNM3' OR CON.Susr4 = 'DCNM3' OR CON.Susr5 = 'DCNM3') AND              
-                                            (SKU.ItemClass = '001') THEN 82
+                                            (SKU.ItemClass = '001') THEN 
+                                                CASE WHEN ISNUMERIC(RDAY.Short) = 1 THEN CAST(RDAY.Short AS INT) ELSE 0 END --NJOW09                                           
                                   ELSE 0 END                                                                                                                                
    FROM ORDERS O (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
    JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
    JOIN STORER CON (NOLOCK) ON O.Consigneekey = CON.Storerkey
+   OUTER APPLY (SELECT TOP 1 CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'MHAPRESDAY' AND CL.Code = O.Consigneekey --AND SKU.SkuGroup = CL.Long
+                AND SKU.Skugroup IN(SELECT ColValue FROM dbo.fnc_DelimSplit(',',CL.Long))) RDAY --NJOW09
    WHERE O.Orderkey = @c_Orderkey
    AND OD.Sku = @c_Sku 
    AND (CON.Susr1 LIKE 'DCNM%' OR CON.Susr2 LIKE 'DCNM%' OR CON.Susr3 LIKE 'DCNM%' OR CON.Susr4 LIKE 'DCNM%' OR CON.Susr5 LIKE 'DCNM%')
