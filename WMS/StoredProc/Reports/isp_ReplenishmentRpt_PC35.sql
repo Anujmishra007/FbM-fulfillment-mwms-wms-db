@@ -25,6 +25,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 15-Jul-2021  NJOW01  1.0   WMS-17515 change sorting.                    */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC35]
                @c_zone01           NVARCHAR(10)
@@ -478,6 +479,7 @@ BEGIN
               (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_shelfLife, @d_today))) 
          ORDER BY 
                   ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01'),
+                  ISNULL(LOTATTRIBUTE.LOTTABLE05, '1900-01-01'),  --NJOW01
                   LOC.LogicalLocation,
                   LOC.Loc 
               -- , LOTxLOCxID.Loc desc
