@@ -29,6 +29,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author    Ver.  Purposes                                */
+/* 09-Jun-2021  NJOW01    1.0   WMS-14759 Join to wave table            */
 /************************************************************************/    
 CREATE  PROC [dbo].[isp_ConsolidatePickdetail]        
     @c_Loadkey                      NVARCHAR(10) = ''
@@ -674,6 +675,7 @@ BEGIN
                       JOIN SKU (NOLOCK) ON PICKDETAIL.Storerkey = SKU.Storerkey AND PICKDETAIL.Sku = SKU.Sku
                       JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey ' +                     
                       CASE WHEN ISNULL(@c_Wavekey,'') <> '' THEN ' JOIN WAVEDETAIL (NOLOCK) ON ORDERS.Orderkey = WAVEDETAIL.Orderkey ' ELSE ' ' END +                      
+                      CASE WHEN ISNULL(@c_Wavekey,'') <> '' THEN ' JOIN WAVE (NOLOCK) ON WAVEDETAIL.Wavekey = WAVE.Wavekey ' ELSE ' ' END +  --NJOW01                      
                     CASE WHEN @c_CaseCntByUCC = 'Y' THEN 
                        ' LEFT JOIN #UCC UCC ON PICKDETAIL.Storerkey = UCC.Storerkey AND PICKDETAIL.Sku = UCC.SKU AND PICKDETAIL.Lot = UCC.Lot AND PICKDETAIL.Loc = UCC.Loc AND PICKDETAIL.Id = UCC.Id '
                     ELSE '' END +
@@ -714,6 +716,7 @@ BEGIN
                            JOIN SKU (NOLOCK) ON PICKDETAIL.Storerkey = SKU.Storerkey AND PICKDETAIL.Sku = SKU.Sku                      
                            JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey ' +
                            CASE WHEN ISNULL(@c_Wavekey,'') <> '' THEN ' JOIN WAVEDETAIL (NOLOCK) ON ORDERS.Orderkey = WAVEDETAIL.Orderkey ' ELSE ' ' END +                                                 
+                           CASE WHEN ISNULL(@c_Wavekey,'') <> '' THEN ' JOIN WAVE (NOLOCK) ON WAVEDETAIL.Wavekey = WAVE.Wavekey ' ELSE ' ' END +  --NJOW01                      
                          ' WHERE PICKDETAIL.Storerkey = @c_Storerkey
                            AND PICKDETAIL.Sku = @c_Sku
                            AND PICKDETAIL.Lot = @c_Lot
