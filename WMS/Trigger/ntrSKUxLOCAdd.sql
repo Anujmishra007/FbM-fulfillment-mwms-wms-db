@@ -28,6 +28,7 @@ GO
 /* 06-May-2008  SHONG     Not allow to update if Over-Allocated qty     */
 /*                        found in LOTxLOCxID (SHONG_20080506)          */
 /* 23-Aug-2016  TLTING    add NOLOCK hint                               */
+/* 30-Mar-2021  NJOW01    WMS-16618 call custom stored proc             */ 
 /************************************************************************/
 CREATE TRIGGER [dbo].[ntrSKUxLOCAdd]
 ON  [dbo].[SKUxLOC]
@@ -73,6 +74,49 @@ BEGIN
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Assign Pick/Case Location Not Allow. Please Set Location to Lose Id (ntrSKUxLOCUpdate)' 
       END
    END
+
+   --NJOW01 S
+   IF @n_continue=1 or @n_continue = 2
+   BEGIN
+      IF EXISTS (SELECT 1 FROM INSERTED i
+                 JOIN storerconfig s WITH (NOLOCK) ON  i.StorerKey = s.StorerKey
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'SKUXLOCTrigger_SP')
+      BEGIN
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+          SELECT *
+          INTO #INSERTED
+          FROM INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+          SELECT *
+          INTO #DELETED
+          FROM DELETED
+
+         EXECUTE dbo.isp_SkuXLocTrigger_Wrapper
+                   'INSERT'  --@c_Action
+                 , @b_Success  OUTPUT
+                 , @n_Err      OUTPUT
+                 , @c_ErrMsg   OUTPUT
+
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3
+                  ,@c_errmsg = 'ntrSKUxLOCAdd ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END
+
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END
+   --NJOW01 E
 
 -- begin ---------------------------------------------------------------------
    DECLARE @c_StorerKey                NVARCHAR(15),
@@ -310,6 +354,8 @@ BEGIN
          WHERE  StorerKey = @c_StorerKey
          AND    SKU = @c_SKU
          AND    LOC = @c_LOC
+         
+         --NJOW01
 
 
       END -- while storerkey

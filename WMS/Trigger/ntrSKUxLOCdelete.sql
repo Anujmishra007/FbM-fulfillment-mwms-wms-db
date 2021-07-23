@@ -2,11 +2,30 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrSKUxLOC
               and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
 drop trigger [dbo].[ntrSKUxLOCdelete]
 GO
-
-/* 13-Sep-2011  KHLim02     GetRight for Delete log                */
-/* 18-Jan-2012  KHLim03     check ArchiveCop                       */
-/* 27-Jul-2017  TLTING      SET Option                             */
-/* 27-Oct-2017  TLTING      Move up dellog                         */
+/************************************************************************/
+/* Trigger:  ntrSKUxLOCDelete                                           */
+/* Creation Date: 22-Mar-2006                                           */
+/* Copyright: IDS                                                       */
+/* Written by:                                                          */
+/*                                                                      */
+/* Purpose:  Trigger point upon any delete on SKUxLOC                   */
+/*                                                                      */
+/* Called By: When records delete                                       */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author  Ver. Purposes                                   */
+/* 13-Sep-2011  KHLim02 1.0  GetRight for Delete log                    */
+/* 18-Jan-2012  KHLim03 1.1  check ArchiveCop                           */
+/* 27-Jul-2017  TLTING  1.2  SET Option                                 */
+/* 27-Oct-2017  TLTING  1.3  Move up dellog                             */
+/* 30-Mar-2021  NJOW01  1.4  WMS-16618 call custom stored proc          */ 
+/************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrSKUxLOCdelete]
 ON [dbo].[SKUxLOC]
@@ -77,6 +96,49 @@ BEGIN
       SELECT @n_err = 63210
       SELECT @c_errmsg = 'NSQL-63210 : Delete Not Allowed on Active Records (ntrSKUxLOCdelete)'
    end
+   
+   --NJOW01 S
+   IF @n_continue=1 or @n_continue=2          
+   BEGIN
+      IF EXISTS (SELECT 1 FROM DELETED d  
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'SKUXLOCTrigger_SP')  
+      BEGIN        	  
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+      	 SELECT * 
+      	 INTO #INSERTED
+      	 FROM INSERTED
+            
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+   
+      	 SELECT * 
+      	 INTO #DELETED
+      	 FROM DELETED
+   
+         EXECUTE dbo.isp_SkuXLocTrigger_Wrapper
+                   'DELETE'  --@c_Action
+                 , @b_Success  OUTPUT  
+                 , @n_Err      OUTPUT   
+                 , @c_ErrMsg   OUTPUT  
+   
+         IF @b_success <> 1  
+         BEGIN  
+            SELECT @n_continue = 3  
+                  ,@c_errmsg = 'ntrSKUXLOCDelete ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END  
+         
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+   
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END      
+   --NJOW01 E
 
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN
