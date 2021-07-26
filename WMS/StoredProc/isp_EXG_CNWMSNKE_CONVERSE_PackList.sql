@@ -12,7 +12,7 @@ GO
 
 /*************************************************************************/  
 /* Stored Procedure: isp_EXG_CNWMSNKE_CONVERSE_PackList                  */  
-/* Creation Date: 08 Jul 2020                                            */  
+/* Creation Date: 08-Jul-2020                                            */  
 /* Copyright: LFL                                                        */  
 /* Written by: GHChan                                                    */  
 /*                                                                       */  
@@ -24,7 +24,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date          Author   Ver  Purposes                                  */  
-/* 08-Jul-2020   GHChan   1.0  Initial Development                       */  
+/* 08-Jul-2020   GHChan   1.0  Initial Development                       */
+/* 26-Jul-2021   GHChan   2.0  Ticket WMS-16796                          */
 /*************************************************************************/  
   
 CREATE PROCEDURE [dbo].[isp_EXG_CNWMSNKE_CONVERSE_PackList]  
@@ -171,7 +172,8 @@ BEGIN
                   '"', [发货数量(ShippedQty)], '"', @c_Delimiter,   
                   '"', [外箱条码(UCC)], '"', @c_Delimiter,   
                   '"', [Consigneekey], '"', @c_Delimiter,   
-                  '"', [条码], '"') AS LineText1  
+                  '"', [条码], '"', @c_Delimiter,     
+                  '"', [总单号(Load)], '"') AS LineText1    
          FROM (  
             SELECT  
                N'发货单号(Shipment Number)' AS [发货单号(Shipment Number)]  
@@ -194,7 +196,8 @@ BEGIN
             ,  N'发货数量(ShippedQty)' AS [发货数量(ShippedQty)]  
             ,  N'外箱条码(UCC)' AS [外箱条码(UCC)]  
             ,  N'Consigneekey' AS [Consigneekey]  
-            ,  N'条码' AS [条码]) AS TEMP1  
+            ,  N'条码' AS [条码]  
+            ,  N'总单号(Load)' AS [总单号(Load)]) AS TEMP1    
   
       INSERT INTO [dbo].[EXG_FileDet](  
               file_key  
@@ -229,7 +232,8 @@ BEGIN
                   '"', [发货数量(ShippedQty)]  , '"', @c_Delimiter,   
                   '"', [外箱条码(UCC)]  , '"', @c_Delimiter,   
                   '"', [Consigneekey]  , '"', @c_Delimiter,   
-                  '"', [条码]   , '"') AS LineText1  
+                  '"', [条码]   , '"', @c_Delimiter,     
+                  '"', [总单号(Load)]   , '"') AS LineText1    
          FROM (   
          Select   t1.Mbolkey as [发货单号(Shipment Number)]  
                ,  t1.ExternOrderkey as [PT号(PickShip Number)]  
@@ -252,19 +256,6 @@ BEGIN
                      then ''   
                      else t4.Color   
                   end as [颜色(Color)]    
-               --case when left(ltrim(rtrim(t4.size)),1)='0'   
-               --then cast(cast(cast(t4.Size as int) as float)/10 as varchar(5))   
-               --else t4.Size   
-               --end as [尺码(Size)], t1.stop as [产品大类(SKUClass)],   
-              -- ,  case   
-              --       when t4.size = '00'   
-              --          then t4.size   
-              -- when left(ltrim(rtrim(t4.size)),1)='0' and t4.size <> '00'   
-              --          then cast(cast(cast(t4.Size as int) as float)/10 as varchar(5))    
-              -- when (t4.measurement ='' or t4.measurement = 'U')   
-              --          then t4.Size   
-              --    else t4.measurement   
-              --end as [尺码(Size)]  
                ,  case   
                      when t4.BUSR8='10' AND ISNULL(t4.measurement,'') <> '' then t4.measurement  
                    when t4.BUSR8='10' AND ISNULL(t4.measurement,'') = ''  then t4.size   
@@ -290,15 +281,13 @@ BEGIN
                         else ltrim(rtrim(t4.AltSKU))+left(ltrim(rtrim(t4.BUSR3)),2)+ (case right(ltrim(rtrim(t4.BUSR3)),1) when 'S' then '01' when 'R' then '02' when 'F' then '03' when 'H' then '04' end)    
                   end as [产品条码(Product barcode)]  
                ,  case   
-                  --when t4.ProductModel='G' and len(t3.UPC)<=17 then right(ltrim(rtrim(t3.UPC)),4)    
-                  --when t4.ProductModel='G' and len(t3.UPC)=20 then ltrim(rtrim(t5.Userdefined03))   
                      when isnull(t8.Userdefine06,'')<>'' and left(ltrim(rtrim(t8.Userdefine06)),1) not in('S','R','F','H')  
                         then left(ltrim(rtrim(t8.Userdefine06)),2)+ (case right(ltrim(rtrim(t8.Userdefine06)),1) when 'S' then '01' when 'R' then '02' when 'F' then '03' when 'H' then '04' end)    
                      when isnull(t8.Userdefine06,'')<>'' and left(ltrim(rtrim(t8.Userdefine06)),2) in('SP','SU','FA','HO')   
                         then right(ltrim(rtrim(t8.Userdefine06)),2)+ (case left(ltrim(rtrim(t8.Userdefine06)),2) when 'SP' then '01' when 'SU' then '02' when 'FA' then '03' when 'HO' then '04' end)    
                         else left(ltrim(rtrim(t4.BUSR3)),2)+ (case right(ltrim(rtrim(t4.BUSR3)),1) when 'S' then '01' when 'R' then '02' when 'F' then '03' when 'H' then '04' end)   
                   end as [季节(Season Code)]  
-               ,  SUM ( t3.Qty ) as [发货数量(ShippedQty)]  
+               ,  SUM ( t2.Qty ) as [发货数量(ShippedQty)]  
                ,  t3.LabelNo as [外箱条码(UCC)]  
                ,  case   
                      when len(t1.consigneekey)=7   
@@ -306,9 +295,10 @@ BEGIN
                         else t1.Consigneekey   
                      end as Consigneekey  
                ,  '*'+ t3.LabelNo +'*'  AS [条码] -- add by ella 1/19  
+               , t1.LoadKey AS [总单号(Load)]
       From dbo.Orders as t1(nolock)   
-      inner join dbo.PackHeader as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'   
-      inner join dbo.PackDetail as t3(nolock) on t2.Pickslipno=t3.Pickslipno   
+      inner join dbo.Pickdetail as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'     
+      inner join dbo.PackDetail as t3(nolock) on t2.Dropid=substring(t3.Labelno,3,18) and t2.Storerkey = t3.Storerkey and   t2.SKU=t3.SKU     
          inner join (select Distinct storerkey,Orderkey,SKU, userdefine06,Userdefine09   
                   from dbo.Orderdetail(nolock)   
                      where Storerkey=@c_ParamVal1) as t8 on t2.Orderkey=t8.Orderkey and t3.SKU=t8.SKU    
@@ -364,9 +354,8 @@ BEGIN
                         then t4.MANUFACTURERSKU   
                         else ltrim(rtrim(t4.AltSKU))+left(ltrim(rtrim(t4.BUSR3)),2)+ (case right(ltrim(rtrim(t4.BUSR3)),1) when 'S' then '01' when 'R' then '02' when 'F' then '03' when 'H' then '04' end)    
                   end  
-               ,  case --when t4.ProductModel='G' and len(t3.UPC)<=17 then right(ltrim(rtrim(t3.UPC)),4)    
-                  --when t4.ProductModel='G' and len(t3.UPC)=20 then ltrim(rtrim(t5.Userdefined03))   
-                     when isnull(t8.Userdefine06,'')<>'' and left(ltrim(rtrim(t8.Userdefine06)),1) not in('S','R','F','H')  
+               ,  case   
+                     WHEN isnull(t8.Userdefine06,'')<>'' and left(ltrim(rtrim(t8.Userdefine06)),1) not in('S','R','F','H')    
                         then left(ltrim(rtrim(t8.Userdefine06)),2)+ (case right(ltrim(rtrim(t8.Userdefine06)),1) when 'S' then '01' when 'R' then '02' when 'F' then '03' when 'H' then '04' end)    
                      when isnull(t8.Userdefine06,'')<>'' and left(ltrim(rtrim(t8.Userdefine06)),2) in('SP','SU','FA','HO')   
                         then right(ltrim(rtrim(t8.Userdefine06)),2)+ (case left(ltrim(rtrim(t8.Userdefine06)),2) when 'SP' then '01' when 'SU' then '02' when 'FA' then '03' when 'HO' then '04' end)    
@@ -381,6 +370,7 @@ BEGIN
                ,  Convert(char(10),DateAdd(Day,cast(t6.Short as int),t1.Editdate),121)  
                ,  t1.stop  
                ,  t8.userdefine09   
+               ,  t1.loadkey     
          Order by t1.ExternOrderkey  
                ,  t3.CartonNo  
                ,  t4.Style  
@@ -653,7 +643,4 @@ BEGIN
    /***********************************************/        
    /* Std - Error Handling (End)                  */        
    /***********************************************/  
-END --End Procedure  
-  
-  
-  
+END --End Procedure
