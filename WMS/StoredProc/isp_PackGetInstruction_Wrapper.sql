@@ -23,12 +23,14 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 01-JUL-2021  NJOW01   1.0  WMS-17290 - Increase c_PackInstruction to */
+/*                            500                                       */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_PackGetInstruction_Wrapper] 
    @c_PickslipNo NVARCHAR(10),
    @c_Storerkey  NVARCHAR(15),  
    @c_Sku        NVARCHAR(50),
-   @c_packinstruction NVARCHAR(20) OUTPUT,
+   @c_packinstruction NVARCHAR(500) OUTPUT, --NJOW01
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
    @c_ErrMsg     NVARCHAR(250) OUTPUT
@@ -75,7 +77,7 @@ BEGIN
                 ' @c_ErrMsg OUTPUT '
      
    EXEC sp_executesql @c_SQL, 
-        N'@c_Pickslipno NVARCHAR(10),@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(50), @c_packinstruction NVARCHAR(20) OUTPUT, @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
+        N'@c_Pickslipno NVARCHAR(10),@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(50), @c_packinstruction NVARCHAR(500) OUTPUT, @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
         @c_PickSlipNo,
         @c_StorerKey,
         @c_Sku,
