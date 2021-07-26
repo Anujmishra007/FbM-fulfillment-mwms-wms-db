@@ -23,13 +23,15 @@ GO
 /* 15-SEP-2016 1.0  NJOW01     WMS-368 Change externorderkey extract    */
 /*                             condition from SOR to SO                 */
 /* 12-JAN-2017 1.1  Wan01      WMS-929 - Prestige SG - Scan Pack        */
+/* 01-JUL-2021 1.2  NJOW02     WMS-17290 - Increase c_PackInstruction to*/
+/*                             500                                      */
 /************************************************************************/
 
 CREATE PROCEDURE ispPKINS01
    @c_Pickslipno       NVARCHAR(10),
    @c_Storerkey        NVARCHAR(15),
    @c_Sku              NVARCHAR(50),
-   @c_PackInstruction  NVARCHAR(20) OUTPUT,
+   @c_PackInstruction  NVARCHAR(500) OUTPUT,  --NJOW02
    @b_Success          INT      OUTPUT,
    @n_ErrNo            INT      OUTPUT, 
    @c_ErrMsg           NVARCHAR(250) OUTPUT
