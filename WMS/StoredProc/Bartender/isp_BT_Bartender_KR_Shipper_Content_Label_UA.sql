@@ -16,6 +16,7 @@ GO
 /* 2019-04-24 1.1  WinSern    INC0667544 -Sum pickdetail instead of packdetail*/
 /* 2019-06-25 1.2  LZG        INC0751609 -Cater for split Order line (ZG01)   */
 /* 2021-03-19 1.3  mingle01   Add ORD.Notes to col45                          */
+/* 2021-07-14 1.4  LZG        Extracted nested query to temp table (ZG02)     */
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_BT_Bartender_KR_Shipper_Content_Label_UA]
@@ -233,6 +234,13 @@ DECLARE
       [Col60] [NVARCHAR] (80) NULL
       )
 
+   IF OBJECT_ID('TempDB..#OrderDetail') IS NOT NULL   -- ZG02
+      DROP TABLE #OrderDetail
+   CREATE TABLE [#OrderDetail] (
+      [OrderKey]    [NVARCHAR] (10) NULL,
+      [StorerKey]   [NVARCHAR] (15) NULL,
+      [Sku]         [NVARCHAR] (20) NULL)
+      
    CREATE TABLE [#CartonContent] (
       [ID]          [INT] IDENTITY(1,1) NOT NULL,
       [OrderKey]    [NVARCHAR] (10) NULL,
@@ -337,6 +345,14 @@ DECLARE
             AND PD.CartonNo <= CONVERT(INT,@c_Sparm3)
          END
 
+         -- ZG02
+         INSERT INTO #OrderDetail (OrderKey, StorerKey, Sku)
+         SELECT DISTINCT OD1.OrderKey, OD1.StorerKey, OD1.Sku 
+         FROM OrderDetail OD1 WITH (NOLOCK)
+         JOIN PackHeader PH1 WITH (NOLOCK) ON (OD1.StorerKey = PH1.StorerKey AND OD1.OrderKey = PH1.OrderKey)
+         JOIN PackDetail PD1 WITH (NOLOCK) ON (PH1.PickSlipNo = PD1.PickSlipNo)
+         WHERE PH1.OrderKey = @c_GetOrderKey
+
          DELETE #CartonContent
          INSERT INTO #CartonContent (OrderKey,ORDSku,SDESCR,TTLPICKQTY)
 
@@ -348,11 +364,12 @@ DECLARE
          FROM PackHeader PH WITH (NOLOCK)
          JOIN PackDetail PD WITH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
          JOIN Orders OH WITH (NOLOCK) ON (PH.OrderKey = OH.OrderKey)
-         JOIN (SELECT DISTINCT OD1.OrderKey, OD1.StorerKey, OD1.Sku FROM OrderDetail OD1 WITH (NOLOCK)
-         JOIN PackHeader PH1 WITH (NOLOCK) ON (OD1.StorerKey = PH1.StorerKey AND OD1.OrderKey = PH1.OrderKey)
-         JOIN PackDetail PD1 WITH (NOLOCK) ON (PH1.PickSlipNo = PD1.PickSlipNo)
-         WHERE PH1.OrderKey = @c_GetOrderKey)
-         AS OD ON (OH.OrderKey = OD.OrderKey AND PD.StorerKey = OD.StorerKey AND PD.SKU = OD.SKU)
+         --JOIN (SELECT DISTINCT OD1.OrderKey, OD1.StorerKey, OD1.Sku FROM OrderDetail OD1 WITH (NOLOCK)
+         --JOIN PackHeader PH1 WITH (NOLOCK) ON (OD1.StorerKey = PH1.StorerKey AND OD1.OrderKey = PH1.OrderKey)-- ZG02
+         --JOIN PackDetail PD1 WITH (NOLOCK) ON (PH1.PickSlipNo = PD1.PickSlipNo)
+         --WHERE PH1.OrderKey = @c_GetOrderKey)
+         --AS OD ON (OH.OrderKey = OD.OrderKey AND PD.StorerKey = OD.StorerKey AND PD.SKU = OD.SKU)
+         JOIN #OrderDetail OD ON OH.OrderKey = OD.OrderKey AND PD.StorerKey = OD.StorerKey AND PD.SKU = OD.SKU    -- ZG02
          JOIN SKU S WITH (NOLOCK)  ON  S.SKU = OD.SKU AND S.StorerKey = OD.Storerkey
          WHERE OH.OrderKey = @c_GetOrderKey
          AND PD.CartonNo >= CONVERT(INT,@c_Sparm2)
