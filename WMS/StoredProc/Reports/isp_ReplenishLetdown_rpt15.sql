@@ -29,7 +29,7 @@ GO
 /*                                                                      */  
 /* Called By: r_dw_replenishletdown_rpt15                               */  
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -37,6 +37,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author     Purposes                                     */  
+/* 2021-07-27   WLChooi    Fix - Modify Filter (WL01)                   */
 /************************************************************************/  
   
 CREATE PROC isp_ReplenishLetdown_rpt15 (
@@ -528,7 +529,7 @@ BEGIN
    FROM #RESULT2   
    INNER JOIN SKU WITH (NOLOCK) ON (#RESULT2.Storerkey = SKU.Storerkey) AND (#RESULT2.Sku = SKU.Sku)  
    LEFT JOIN Pack WITH (NOLOCK) ON (#RESULT2.Packkey = pack.packkey)  
-   WHERE  CaseBalRtnToRackInEA <= QtyInEA AND CaseBalRtnToRackInEA > 0
+   WHERE  CaseBalRtnToRackInEA <= QtyInEA AND CaseBalRtnToRackInEA >= 0   --WL01
    GROUP BY #RESULT2.Storerkey  
           , #RESULT2.Sku  
           , #RESULT2.Lottable02  
