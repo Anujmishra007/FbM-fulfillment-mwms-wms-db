@@ -29,7 +29,7 @@ GO
 /*                                                                      */  
 /* Called By: r_dw_replenishletdown_rpt15                               */  
 /*                                                                      */  
-/* GitLab Version: 1.1                                                  */  
+/* GitLab Version: 1.2                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -38,6 +38,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author     Purposes                                     */  
 /* 2021-07-27   WLChooi    Fix - Modify Filter (WL01)                   */
+/* 2021-07-28   WLChooi    Fix - Modify Logic advised by LIT (WL02)     */
 /************************************************************************/  
   
 CREATE PROC isp_ReplenishLetdown_rpt15 (
@@ -88,9 +89,10 @@ BEGIN
         , ISNULL(RTRIM(PD.Sku),'')        AS Sku  
         , ISNULL(RTRIM(PD.Loc),'')        AS Loc  
         , ISNULL(RTRIM(PD.ID),'')         AS ID  
-        , ISNULL(SUM(PD.Qty),0)           AS PickQty  
+        , ISNULL(SUM(CASE WHEN PD.UOM = 6 AND WV.WAVETYPE = '1' THEN 0 ELSE PD.Qty END),0) AS PickQty   --WL02
         , ISNULL(RTRIM(PD.Lot),'')        AS Lot  
         , ISNULL(RTRIM(LA.Lottable02),'') AS Lottable02  
+        , ISNULL(SUM(CASE WHEN PD.UOM = 6 AND WV.WAVETYPE = '1' THEN PD.Qty ELSE 0 END),0) AS RplQty   --WL02
    INTO #temppick  
    FROM WAVEDETAIL WD WITH (NOLOCK) 
    JOIN PICKDETAIL PD WITH (NOLOCK)       ON (PD.Orderkey  = WD.Orderkey)  
@@ -99,6 +101,7 @@ BEGIN
                                           AND(SL.Loc       = PD.Loc)  
    JOIN ORDERS     OH WITH (NOLOCK)       ON (OH.OrderKey  = WD.OrderKey)
    JOIN LOTATTRIBUTE LA WITH (NOLOCK)     ON (LA.LOT       = PD.LOT)  
+   JOIN WAVE WV WITH (NOLOCK)             ON (WD.WAVEKEY   = WV.WAVEKEY)   --WL02
    WHERE WD.WaveKey  = @c_Wavekey  
    AND   OH.Facility = @c_Facility   
    AND   SL.LocationType <> 'CASE'  
@@ -529,7 +532,7 @@ BEGIN
    FROM #RESULT2   
    INNER JOIN SKU WITH (NOLOCK) ON (#RESULT2.Storerkey = SKU.Storerkey) AND (#RESULT2.Sku = SKU.Sku)  
    LEFT JOIN Pack WITH (NOLOCK) ON (#RESULT2.Packkey = pack.packkey)  
-   WHERE  CaseBalRtnToRackInEA <= QtyInEA AND CaseBalRtnToRackInEA >= 0   --WL01
+   --WHERE  CaseBalRtnToRackInEA <= QtyInEA AND CaseBalRtnToRackInEA >= 0   --WL01   --WL02
    GROUP BY #RESULT2.Storerkey  
           , #RESULT2.Sku  
           , #RESULT2.Lottable02  
