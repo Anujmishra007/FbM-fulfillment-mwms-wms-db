@@ -2,7 +2,6 @@ IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_B
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_BT_Bartender_HK_RTNHGTAG]
 GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,10 +16,11 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2021-06-01 1.0  CSCHONG    Created(WMS-17136)                              */    
-/* 2021-06-17 2.0  CSCHONG    WMS-17286 revised logic (CS01)                  */                 
+/* 2021-06-17 2.0  CSCHONG    WMS-17286 revised logic (CS01)                  */         
+/* 2021-07-13 2.1  CSCHONG    WMS-17286 revised col02 and col04 (CS02)        */        
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_BT_Bartender_HK_RTNHGTAG]                      
+CREATE  PROC [dbo].[isp_BT_Bartender_HK_RTNHGTAG]                      
 (  @c_Sparm01            NVARCHAR(250),              
    @c_Sparm02            NVARCHAR(250),              
    @c_Sparm03            NVARCHAR(250),              
@@ -166,15 +166,20 @@ BEGIN
 
  IF @n_copy = 1
  BEGIN    
-  SET @c_SQLJOIN = +' SELECT s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
-             + ' CHARINDEX(''-'',s.DESCR,CHARINDEX(''-'',s.DESCR)+1)-CHARINDEX(''-'',s.DESCR)-1),s.color,'
+  --CS02 START  
+  --SET @c_SQLJOIN = +' SELECT s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
+  --           + ' CHARINDEX(''-'',s.DESCR,CHARINDEX(''-'',s.DESCR)+1)-CHARINDEX(''-'',s.DESCR)-1),s.color,'
+  --           --+ ' SUBSTRING(s.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, CHARINDEX(''-'',S.DESCR, '
+  --           --+ ' CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1),' --4   
+  --           + ' CASE WHEN CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) <> 0 '
+  --           + ' THEN SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
+  --           + ' CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1) '
+  --           + ' ELSE SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
+  --           + ' LEN(S.DESCR)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) END,' 
+  SET @c_SQLJOIN = +' SELECT s.style,CONCAT(ISNULL(SIF.ExtendedField01,''''), ISNULL(SIF.ExtendedField02,'''')),s.color,'
              --+ ' SUBSTRING(s.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, CHARINDEX(''-'',S.DESCR, '
              --+ ' CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1),' --4   
-             + ' CASE WHEN CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) <> 0 '
-             + ' THEN SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
-             + ' CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1) '
-             + ' ELSE SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
-             + ' LEN(S.DESCR)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) END,' 
+             + ' CONCAT(ISNULL(SIF.ExtendedField03,''''), ISNULL(SIF.ExtendedField04,'''')),'   --CS02 END 
              + ' s.size,s.sku,'''','''','''','''', '      --10  
              + ' '''','''','''','''','''','     --15       
              + CHAR(13) +      
@@ -184,21 +189,27 @@ BEGIN
              + ' '''','''','''','''','''','''','''','''','''','''', '  --50       
              + ' '''','''','''','''','''','''','''','''','''','''' '   --60  
              + ' FROM SKU S WITH (NOLOCK) '
+             + ' JOIN SKUINFO SIF WITH (NOLOCK) ON SIF.Storerkey = S.Storerkey AND SIF.sku = S.sku '    --CS02
              + ' WHERE S.storerkey = @c_Sparm01 '
           --   + ' AND S.sku = @c_Sparm02 OR s.sku = @c_Sparm04 OR s.sku = @c_Sparm05'   
           --   + ' ORDER BY S.sku'     
  END 
  ELSE
  BEGIN
- SET @c_SQLJOIN = +' SELECT TOP 1 s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
-             + ' CHARINDEX(''-'',s.DESCR,CHARINDEX(''-'',s.DESCR)+1)-CHARINDEX(''-'',s.DESCR)-1),s.color,'
+--CS02 START
+ --SET @c_SQLJOIN = +' SELECT TOP 1 s.style,SUBSTRING(s.DESCR, CHARINDEX(''-'',s.DESCR)+1, '
+ --            + ' CHARINDEX(''-'',s.DESCR,CHARINDEX(''-'',s.DESCR)+1)-CHARINDEX(''-'',s.DESCR)-1),s.color,'
+ --            --+ ' SUBSTRING(s.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, CHARINDEX(''-'',S.DESCR, '
+ --            --+ ' CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1),' --4   
+ --            + ' CASE WHEN CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) <> 0 '
+ --            + ' THEN SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
+ --            + ' CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1) '
+ --            + ' ELSE SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
+ --            + ' LEN(S.DESCR)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) END,' 
+  SET @c_SQLJOIN = +' SELECT TOP 1 s.style,CONCAT(ISNULL(SIF.ExtendedField01,''''), ISNULL(SIF.ExtendedField02,'''')),s.color,'
              --+ ' SUBSTRING(s.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, CHARINDEX(''-'',S.DESCR, '
              --+ ' CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1),' --4   
-             + ' CASE WHEN CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) <> 0 '
-             + ' THEN SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
-             + ' CHARINDEX(''-'',S.DESCR,CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)-1) '
-             + ' ELSE SUBSTRING(S.DESCR, CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1, '
-             + ' LEN(S.DESCR)-CHARINDEX(''-'', S.DESCR, CHARINDEX(''-'',S.DESCR)+1)+1) END,' 
+             + ' CONCAT(ISNULL(SIF.ExtendedField03,''''), ISNULL(SIF.ExtendedField04,'''')),'   --CS02 END 
              + ' s.size,s.sku,'''','''','''','''', '      --10  
              + ' '''','''','''','''','''','     --15       
              + CHAR(13) +      
@@ -208,6 +219,7 @@ BEGIN
              + ' '''','''','''','''','''','''','''','''','''','''', '  --50       
              + ' '''','''','''','''','''','''','''','''','''','''' '   --60  
              + ' FROM SKU S WITH (NOLOCK) '
+             + ' JOIN SKUINFO SIF WITH (NOLOCK) ON SIF.Storerkey = S.Storerkey AND SIF.sku = S.sku '    --CS02
              + ' WHERE S.storerkey = @c_Sparm01 '
          --    + ' AND S.sku = @c_Sparm02 '      
 
