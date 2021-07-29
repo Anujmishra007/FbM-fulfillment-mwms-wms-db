@@ -39,6 +39,7 @@ GO
 /* Date         Author     Purposes                                     */  
 /* 2021-07-27   WLChooi    Fix - Modify Filter (WL01)                   */
 /* 2021-07-28   WLChooi    Fix - Modify Logic advised by LIT (WL02)     */
+/* 2021-07-29   WLChooi    Fix - Modify Logic advised by LIT (WL03)     */
 /************************************************************************/  
   
 CREATE PROC isp_ReplenishLetdown_rpt15 (
@@ -283,9 +284,9 @@ BEGIN
                ELSE CAST(ISNULL(SUM((ISNULL(TSL.Qty,0)+ ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0) - ISNULL(TRP.ReplQty,0)),0)/ ISNULL(TSL.CaseCnt,0) AS INT)                     
           END                             AS CaseBalRtnToRack  
          ,CASE ISNULL(TSL.CaseCnt,0) WHEN 0  
-               THEN ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0) - ISNULL(TRP.ReplQty,0)),0)  
-               ELSE ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0))- ISNULL(TP.PickQty,0) - ISNULL(TRP.ReplQty,0)),0) % CAST(ISNULL(TSL.CaseCnt,0) AS INT)   
-          END                             AS CaseBalRtnToRackInEA  
+               THEN ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0)),0)  
+               ELSE ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0)),0) % CAST(ISNULL(TSL.CaseCnt,0) AS INT)   --WL03
+          END                             AS CaseBalRtnToRackInEA   
          ,'            '                  AS MoveToLoc  
          ,@c_Facility                     AS facility  
          ,@c_Wavekey                      AS WavekeyStart  
