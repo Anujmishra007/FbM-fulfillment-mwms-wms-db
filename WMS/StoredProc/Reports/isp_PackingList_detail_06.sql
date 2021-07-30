@@ -9,6 +9,17 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
   
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PackingList_detail_06]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[isp_PackingList_detail_06]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+  
 /************************************************************************/    
 /* Trigger: isp_PackingList_detail_06                                   */    
 /* Creation Date: 26-MAR-2020                                           */    
@@ -32,6 +43,8 @@ GO
 /* 2021-01-21   WLChooi   1.2 WMS-16158 - Cater for Type = '51' (WL02)  */
 /* 2021-06-03   WLChooi   1.3 WMS-17148 - Cater for calling from Main DW*/
 /*                            (WL03)                                    */
+/* 2021-07-29   Mingle    1.4 WMS-17506 - Add notes and modify logic    */
+/*                            (ML01)                                    */
 /************************************************************************/    
 CREATE PROC isp_PackingList_detail_06  
             @c_PickSlipNo     NVARCHAR(10)   
@@ -89,12 +102,34 @@ BEGIN
       , NKStoreAddr            NVARCHAR(500)  NULL   --WL02
       , RTNQR                  NVARCHAR(255)  NULL   --WL02
       , NKEQR                  NVARCHAR(255)  NULL   --WL02
+      , Notes                  NVARCHAR(500)  NULL   --ML01
    )  
       
    --WL02 S
    IF @c_ohtype = '51'
    BEGIN
-      INSERT INTO #TMP_PACKLISTDET06    
+      INSERT INTO #TMP_PACKLISTDET06 
+      --ML01 S
+      (  Orderkey      
+       , ExternOrderkey
+       , c_city        
+       , C_Contact1    
+       , C_Address1    
+       , c_phone1      
+       , C_Address2    
+       , PickSlipno    
+       , c_State       
+       , SKU           
+       , Descr         
+       , OpenQty       
+       , ExtOrdKey     
+       , C_Zip
+       , NKStoreID
+       , NKStoreAddr
+       , RTNQR
+       , NKEQR
+      )   
+      --ML01 E	  
       SELECT OH.Orderkey,    
              OH.M_Company,  
              OH.C_city,    
@@ -151,10 +186,11 @@ BEGIN
        , OpenQty       
        , ExtOrdKey     
        , C_Zip
+       , Notes  --ML01
       )   
       --WL02 E	
       SELECT OH.Orderkey,    
-             OH.M_Company,   --OH.ExternOrderkey,   --WL01    
+             ISNULL(OH.M_Company,''),   --OH.ExternOrderkey,   --WL01    
              OH.C_city,    
              OH.C_Contact1,    
              OH.C_Address1,    
@@ -165,13 +201,16 @@ BEGIN
              CASE WHEN @c_ohtype IN ('31','41') THEN LTRIM(RTRIM(ISNULL(SKU.Style,''))) + '-' + LTRIM(RTRIM(ISNULL(SKU.Color,''))) + '-' + LTRIM(RTRIM(ISNULL(SKU.Size,''))) ELSE OD.SKU END,   --WL01   --WL03   
              SKU.Descr,    
              CASE WHEN @c_ohtype IN ('31','41') THEN OD.OriginalQty ELSE OD.OpenQty END,   --WL01   --WL03
-             SUBSTRING(OH.ExternOrderKey,1,CHARINDEX('/',OH.ExternOrderkey) - 1),  --WL01  
-             OH.C_Zip   --WL01
+             '',--SUBSTRING(OH.ExternOrderKey,1,CHARINDEX('/',OH.ExternOrderkey) - 1),  --WL01 --ML01  
+             OH.C_Zip,   --WL01
+             CL4.Notes   --ML01
       FROM PACKHEADER        PH  WITH (NOLOCK)    
       -- JOIN PACKDETAIL        PD  WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)    
       JOIN ORDERS            OH  WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)    
       JOIN ORDERDETAIL       OD  WITH (NOLOCK) ON (OD.Orderkey = OH.ORderkey )  
-      JOIN SKU               SKU WITH (NOLOCK) ON (OD.Storerkey= SKU.Storerkey) AND (OD.Sku = SKU.Sku)    
+      JOIN SKU               SKU WITH (NOLOCK) ON (OD.Storerkey= SKU.Storerkey) AND (OD.Sku = SKU.Sku) 
+      LEFT JOIN CODELKUP     CL4 WITH (NOLOCK) ON (CL4.LISTNAME = 'NKCORDPL') AND (CL4.Code = '21')
+                                              AND (CL4.Storerkey = OH.StorerKey)  --ML01 
       WHERE   PH.PickSlipNo = @c_PickSlipNo  
       --AND OH.type = @c_ohtype   --WL03 
    END   --WL02  
@@ -239,7 +278,8 @@ QUIT_SP:
            , Descr         
            , OpenQty       
            , ExtOrdKey     
-           , C_Zip              
+           , C_Zip
+           , Notes --ML01              
       FROM #TMP_PACKLISTDET06
       ORDER BY Pickslipno,sku  
    END
@@ -253,4 +293,6 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_PackingList_detail_06] TO nsql
 GO
+
+
 
