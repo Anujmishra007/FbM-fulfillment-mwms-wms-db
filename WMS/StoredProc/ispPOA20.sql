@@ -26,6 +26,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */ 
+/* 30-Jul-2021  NJOW01  1.0   Fix key to auto running number            */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPOA20]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -51,7 +52,8 @@ BEGIN
             @c_option3       NVARCHAR(50),
             @c_option4       NVARCHAR(50),
             @c_option5       NVARCHAR(4000),
-            @c_authority     NVARCHAR(30)            
+            @c_authority     NVARCHAR(30),
+            @c_Key2          NVARCHAR(10)            
                                                                                         
    SELECT @n_StartTCnt = @@TRANCOUNT , @n_Continue = 1, @b_Success = 1, @n_Err = 0, @c_ErrMsg = ''    
    
@@ -93,7 +95,7 @@ BEGIN
        @n_err       = @n_err       OUTPUT,             
        @c_errmsg    = @c_errmsg    OUTPUT,             
        @c_Option1   = @c_option1   OUTPUT,  --table name        
-       @c_Option2   = @c_option2   OUTPUT,  --key2             
+       @c_Option2   = @c_option2   OUTPUT,             
        @c_Option3   = @c_option3   OUTPUT,               
        @c_Option4   = @c_option4   OUTPUT,               
        @c_Option5   = @c_option5   OUTPUT   
@@ -129,8 +131,8 @@ BEGIN
       END	
       ELSE IF ISNULL(RTRIM(@c_Wavekey), '') <> ''                
       BEGIN
-         SELECT @c_Storerkey = O.StorerKey,
-                @c_Facility  = O.Facility
+         DECLARE CUR_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT O.OrderKey
          FROM WAVEDETAIL WD (NOLOCK)
          JOIN ORDERS O (NOLOCK) ON WD.OrderKey = O.OrderKey
          WHERE WD.Wavekey = @c_Wavekey        	
@@ -143,11 +145,22 @@ BEGIN
             
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
       BEGIN       
+      	SET @c_Key2 = ''
+      	
+      	EXEC dbo.nspg_GetKey                
+        @KeyName = 'ispPOA20'    
+       ,@fieldlength = 10    
+       ,@keystring = @c_Key2 OUTPUT    
+       ,@b_Success = @b_success OUTPUT    
+       ,@n_err = @n_err OUTPUT    
+       ,@c_errmsg = @c_errmsg OUTPUT
+       ,@b_resultset = 0    
+       ,@n_batch     = 1                  
 
         EXEC ispGenTransmitLog2                                             
          @c_TableName     = @c_Option1,                                        
          @c_Key1          = @c_Orderkey,                                        
-         @c_Key2          = @c_Option2,               
+         @c_Key2          = @c_Key2,               
          @c_Key3          = @c_Storerkey,                                        
          @c_TransmitBatch = 'N',                                        
          @b_Success       = @b_Success OUTPUT,                                   
