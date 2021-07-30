@@ -50,6 +50,7 @@ GO
 /* 18-MAY-2021  CSCHONG   2.8   WMS-16133 revised print logic (CS11)      */  
 /* 16-JUL-2021  CSCHONG   2.9   WMS-16133 revised sorting for report page */  
 /*                              break issue (CS12)                         */  
+/* 23-JUL-2021  CSCHONG   3.0   WMS-16133 Fix L shiptype sorting (CS12a)  */
 /**************************************************************************/  
   
 CREATE PROC [dbo].[isp_Delivery_Note23_SG] (  
@@ -411,7 +412,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
       LEFT JOIN STORER SD WITH (NOLOCK) ON (SD.Storerkey = SOD.Door)  
       /*CS07 End*/         
       WHERE MBOL.Mbolkey = @c_mbolkey  
-      ORDER BY  ORDERS.C_Company,ISNULL(ORDERS.C_Address1,''),ISNULL(ORDERS.C_Address2,''),   --(CS09) --(CS12)  
+      ORDER BY  ORDERS.[route] ,ORDERS.C_Company,ISNULL(ORDERS.C_Address1,''),ISNULL(ORDERS.C_Address2,''),   --(CS09) --(CS12)  
                 ISNULL(ORDERS.C_Address3,''),ORDERS.Orderkey  
   
         OPEN CS_ORDERS_INFO  
@@ -1044,7 +1045,9 @@ DECLARE @c_OrderKey            NVARCHAR(10)
       FROM #TEMP_DelNote23SG  
       --ORDER BY mbolkey,ExternOrdKey, Rowid, sku, CTNCOUNT DESC   
       --ORDER BY Rowid --CS12  
-      ORDER BY OrderKey_Inv, ShipTO_Company,ShipTO_Address1,ShipTO_Address2,ShipTO_Address3  
+      ORDER BY CASE WHEN @c_ShipType = 'L' THEN Rowid END                                            --CS12a
+              , OrderKey_Inv , CASE WHEN @c_ShipType = '' THEN Rowid END                             --CS12a
+              ,ShipTO_Company,ShipTO_Address1,ShipTO_Address2,ShipTO_Address3  
               --,CASE WHEN @c_ShipMode = 'L' THEN OrderKey_Inv END  
                  
   

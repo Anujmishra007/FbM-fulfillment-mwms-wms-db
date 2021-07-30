@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,7 @@ GO
 /* 2021-03-19  Wan01    1.1   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
 /*                           _Overall_CR                                */
 /* 06-JUL-2021 WLChooi  1.2   WMS-17404 - Add Output Parameters (WL01)  */
+/* 27-JUL-2021 WLChooi  1.3   WMS-17404 - Do not reset b_success (WL02) */
 /************************************************************************/
 CREATE PROC isp_RFID_GetLottables
       @c_ReceiptKey              NVARCHAR(10)   
@@ -297,7 +298,7 @@ BEGIN
       GOTO QUIT_SP
    END
 
-   SET @b_Success = 1
+   --SET @b_Success = 1   --WL02
    SET @c_SQL = N'EXEC ' + @c_RFIDASNGetLAAttrib_SP
               + ' @c_StorerKey            = @c_StorerKey'             
               + ',@c_SKU                  = @c_SKU' 

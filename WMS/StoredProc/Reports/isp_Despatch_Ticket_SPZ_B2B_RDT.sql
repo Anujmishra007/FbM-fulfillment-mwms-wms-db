@@ -17,7 +17,7 @@ GO
 /*                                                                      */  
 /* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2B_rdt              */  
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.2                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -27,6 +27,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /* 2021-01-18   WLChooi   1.1   INC1403544 - Return Blank Result if     */
 /*                              ISOCntryCode = MY (WL01)                */
+/* 2021-06-15   WLChooi   1.2   WMS-17291 - Modify Logic (WL02)         */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
@@ -204,7 +205,7 @@ BEGIN
         , '' AS SailingOn
         , TRIM(ISNULL(ST.Country,'')) + ' to ' + TRIM(ISNULL(OH.C_Country,'')) AS Shipment
         , '' AS Via
-        , ISNULL(SSOD.Terms,'') AS Terms
+        , CASE WHEN LEN(ISNULL(OH.IncoTerm,'')) > 1 THEN ISNULL(OH.IncoTerm,'') ELSE ISNULL(SSOD.Terms,'') END AS Terms   --ISNULL(SSOD.Terms,'') AS Terms   --WL02
         , TRIM(OD.Sku)
         , TRIM(S.DESCR)
         , TRIM(OD.ExternPOKey)

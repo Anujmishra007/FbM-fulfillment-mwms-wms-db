@@ -297,7 +297,7 @@ BEGIN
                ,  '*'+ t3.LabelNo +'*'  AS [条码] -- add by ella 1/19  
                , t1.LoadKey AS [总单号(Load)]
       From dbo.Orders as t1(nolock)   
-      inner join dbo.Pickdetail as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status='9'     
+      inner join dbo.Pickdetail as t2(nolock) on t1.Orderkey=t2.Orderkey and t2.status IN('9','5')     
       inner join dbo.PackDetail as t3(nolock) on t2.Dropid=substring(t3.Labelno,3,18) and t2.Storerkey = t3.Storerkey and   t2.SKU=t3.SKU     
          inner join (select Distinct storerkey,Orderkey,SKU, userdefine06,Userdefine09   
                   from dbo.Orderdetail(nolock)   

@@ -1,3 +1,12 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_Packing_List_87_RDT]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+   DROP PROCEDURE [dbo].[isp_Packing_List_87_RDT]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /************************************************************************/
 /* Stored Procedure: isp_Packing_List_87_RDT                            */
@@ -9,7 +18,7 @@
 /*                                                                      */
 /* Called By: report dw = r_dw_packing_list_87_RDT                      */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -19,8 +28,9 @@
 /* Date         Author           Ver.  Purposes                         */
 /* 2021-03-21   SeongYaikChua    1.0   Bug Fix for Multiple Order Line  */
 /*                                     of same SKU                      */
+/* 2021-07-29   WLChooi          1.1   WMS-17508 - Add new column (WL01)*/
 /************************************************************************/
-ALTER PROC [dbo].[isp_Packing_List_87_RDT] (
+CREATE PROC [dbo].[isp_Packing_List_87_RDT] (
    @c_Pickslipno NVARCHAR(10)
 )
 AS
@@ -110,6 +120,8 @@ BEGIN
         , SUM(S.StdCube * PD.qty) AS TotalCube
         , 'ZCJ_Logo.png' AS Logo
         , OH.OrderKey AS Orderkey
+        , ISNULL(CL1.Notes,'') AS CL1Notes   --WL01
+        , ISNULL(CL2.Notes,'') AS QRCode     --WL01
    FROM PACKHEADER PH (NOLOCK)
    JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.Pickslipno
    JOIN ORDERS OH (NOLOCK) On PH.Orderkey = OH.OrderKey
@@ -117,6 +129,11 @@ BEGIN
    JOIN SKU S (NOLOCK) ON S.SKU = OD.SKU AND S.StorerKey = OH.StorerKey
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'ZCJPACK'
                                  AND CL.Storerkey = OH.StorerKey AND CL.Code = 'B4'
+   LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.Listname = 'ZCJPKLIST'                         --WL01
+                                  AND CL1.Storerkey = OH.StorerKey AND CL1.Code = 'A1'   --WL01
+   LEFT JOIN CODELKUP CL2 (NOLOCK) ON CL2.Listname = 'RPTLOGO'                           --WL01
+                                  AND CL2.Long = 'r_dw_packing_list_87_RDT'              --WL01
+                                  AND CL2.Storerkey = OH.StorerKey AND CL2.Code = 'ZCJQR'   --WL01
    WHERE OH.Orderkey = @c_Orderkey
    GROUP BY ISNULL(OH.C_Contact1,'')
           , ISNULL(OH.C_Address1,'')
@@ -134,6 +151,10 @@ BEGIN
           , OD.Sku
           , S.Descr
           , OH.OrderKey
-
+          , ISNULL(CL1.Notes,'')   --WL01
+          , ISNULL(CL2.Notes,'')   --WL01
 
 END
+GO
+GRANT EXECUTE ON [dbo].[isp_Packing_List_87_RDT] TO nSQL 
+GO
