@@ -209,7 +209,6 @@ BEGIN
    DEALLOCATE CUR_VAS_DEMAND
 
 END -- Procedure
-END
 GO
 GRANT EXECUTE ON [dbo].[isp_VAS_Update_Status] TO NSQL
 GO
