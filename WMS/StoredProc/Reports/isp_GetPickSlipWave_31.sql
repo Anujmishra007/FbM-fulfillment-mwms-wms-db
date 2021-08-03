@@ -19,7 +19,7 @@ GO
 /*                                                                      */
 /* Called By: r_dw_print_wave_pickslip_31                               */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   ver. Purposes                                   */
+/* 2021-08-03  WLChooi  1.1  Fix - Use MAX(ORDERS.ROUTE) (WL01)         */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave_31 (
       @c_wavekey       NVARCHAR(10)
@@ -86,7 +87,7 @@ BEGIN
    END
    ELSE IF @c_Type = 'D3'
    BEGIN
-      SELECT ORDERS.[Route], 
+      SELECT MAX(ORDERS.[Route]),   --WL01 
              Wave.AddDate, 
              WAVE.WaveKey, 
              PICKDETAIL.LOC, 
@@ -126,7 +127,7 @@ BEGIN
       AND 1 = CASE WHEN ISNULL(C1.short,'') <> '' AND ISNULL(C.code,'') <> '' 
                         AND C.code=LOC.LocationCategory AND LOC.LocLevel>CONVERT(INT,C.UDF02) THEN 1
       			    WHEN ISNULL(C1.short,'N') = 'N'THEN 1 ELSE 0 END
-      GROUP BY ORDERS.[Route], 
+      GROUP BY --ORDERS.[Route],   --WL01 
                Wave.AddDate, 
                WAVE.WaveKey, 
                PICKDETAIL.LOC, 
