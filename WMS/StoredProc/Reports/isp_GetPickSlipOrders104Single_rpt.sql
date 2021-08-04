@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver   Purposes                                */
+/* 21/07/2021   Mingle    1.1   WMS-17541 Add codelkup.long(ML01)       */
 /************************************************************************/
 
 CREATE PROC isp_GetPickSlipOrders104Single_rpt 
@@ -84,12 +85,14 @@ BEGIN
          , SUM(PD.Qty) AS TotalUnit
          , #Temp_Zone.Descr AS AllZones
          , Loc.PickZone AS PickZone
+         , ISNULL(CL.long,'') AS Title --ML01
    FROM ORDERS OH (NOLOCK)
    JOIN PICKDETAIL PD (NOLOCK) ON PD.ORDERKEY = OH.ORDERKEY
    JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.ORDERKEY = OH.ORDERKEY
    --JOIN PICKHEADER PH (NOLOCK) ON PH.ORDERKEY = OH.ORDERKEY
    JOIN LOC (NOLOCK) ON LOC.LOC = PD.LOC
    LEFT JOIN #Temp_Zone ON #Temp_Zone.BatchKey = PD.Pickslipno
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'IKEATITLE' AND CL.Storerkey = oh.StorerKey AND CL.Code = oh.ShipperKey --ML01
    WHERE LPD.Loadkey = @c_loadkey
      AND OH.ECOM_Single_Flag = 'S'
      AND PD.Pickslipno = CASE WHEN @c_batchkey = '' THEN PD.Pickslipno ELSE @c_batchkey END
@@ -97,6 +100,7 @@ BEGIN
           , PD.Pickslipno 
           , #Temp_Zone.Descr 
           , Loc.PickZone
+          , ISNULL(CL.long,'') --ML01
 
 
 QUIT_SP:
