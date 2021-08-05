@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -30,6 +30,7 @@ GO
 /*                            changed                                   */
 /* 2021-02-24  Wan01    1.2   Fixed to call lsp_SetUser SP & Quip SP    */
 /*                            if @c_UserName <> SUSER_SNAME()           */
+/* 2021-08--5  Wan02    1.3   Fixed Linkage issue                       */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -156,7 +157,7 @@ AS
       --(Wan01)           
       IF @n_Err <> 0       
       BEGIN                
-      	GOTO EXIT_SP
+         GOTO EXIT_SP
       END
       
       EXECUTE AS LOGIN = @c_UserName      
@@ -449,7 +450,7 @@ AS
    SET @c_SQLWhere = N'FROM WAVEDETAIL WITH (NOLOCK) '
       + CHAR(13) + 'JOIN ORDERS WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey'  
       + CHAR(13) + 'JOIN ORDERDETAIL WITH (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey'  
-      + CHAR(13) + 'JOIN SKU WITH (NOLOCK) ON ORDERDETAIL.Storerkey = SKU.Storerkey AND SKU.Sku = SKU.Sku'                   
+      + CHAR(13) + 'JOIN SKU WITH (NOLOCK) ON ORDERDETAIL.Storerkey = SKU.Storerkey AND ORDERDETAIL.Sku = SKU.Sku'   --(Wan02)                  
       + CHAR(13) + 'WHERE WAVEDETAIL.Wavekey = @c_Wavekey'                          
       + CHAR(13) + 'AND ORDERS.StorerKey = @c_StorerKey'                                                                                            
       + CHAR(13) + 'AND ORDERS.Facility = @c_Facility'                                                                                               
