@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-01-25  Wan      1.0   Created                                   */
+/* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuMLC7
      @c_WaveKey                     NVARCHAR(10)
@@ -210,7 +211,12 @@ BEGIN
      AND OH.[Status] < '9'
      AND OH.UserDefine10 IN ('170146','170149')  --Mexico Order
      AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0  
-   
+ 
+   IF NOT EXISTS (SELECT 1 FROM #TMPOD)         --(Wan01) 
+   BEGIN 
+      GOTO QUIT_SP
+   END    
+        
    ;WITH OD (  Storerkey, Sku, SkuLAQty
              , Lottable01, Lottable02, Lottable03, Lottable04, Lottable05
              , Lottable06, Lottable07, Lottable08, Lottable09, Lottable10
@@ -335,7 +341,7 @@ BEGIN
          , t.Orderkey
          , t.OrderLineNumber
 
-   IF @b_Debug = 2
+   IF @b_Debug = 1
    BEGIN
       SELECT iNV = 'INV',* FROM #TMPALLOC t
    END
@@ -361,6 +367,7 @@ BEGIN
       WHERE u.Qty <= lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen
       AND   u.Qty > 0
       AND   u.[Status] = '1'
+      AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0    --(Wan01)
       GROUP BY u.UCC_RowRef 
             ,  u.UCCNo
             ,  u.Qty
@@ -371,13 +378,13 @@ BEGIN
             ,  lli.QtyAllocated 
             ,  lli.QtyPicked 
             ,  lli.QtyReplen
-      --HAVING ISNULL(SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked ),0) > 0
       ORDER BY MIN(t.RowRef)
 
       IF @n_UCC_RowRef = 0 OR @@ROWCOUNT = 0 
       BEGIN
          BREAK
       END
+      
       IF @b_Debug = 2
       BEGIN
          SELECT  
@@ -419,10 +426,10 @@ BEGIN
       ORDER BY AccumulatedQty
          
       IF NOT EXISTS ( SELECT 1 FROM @tORD t
-                        WHERE UCCQty > 0
+                      WHERE UCCQty > 0
                      )
       BEGIN 
-         BREAK
+         CONTINUE          --(Wan01) 2021-07-19. Continue allocate from Next record
       END
          
       SET @n_batch = 0

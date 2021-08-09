@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-01-25  Wan      1.0   Created                                   */
+/* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuLQ7
      @c_WaveKey                     NVARCHAR(10)
@@ -206,6 +207,11 @@ BEGIN
      AND OH.SOStatus <> 'CANC'   
      AND OH.[Status] < '9'
      AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0  
+ 
+   IF NOT EXISTS (SELECT 1 FROM #TMPOD)         --(Wan01) 
+   BEGIN 
+      GOTO QUIT_SP
+   END  
    
    ;WITH OD (  Orderkey,   Storerkey, Sku, SkuLAQty
              , Lottable01, Lottable02, Lottable03, Lottable04, Lottable05
@@ -282,6 +288,17 @@ BEGIN
          , t.Orderkey
          , t.OrderLineNumber
 
+   IF @b_Debug = 1
+   BEGIN
+         SELECT t.Lot
+         ,t.Loc
+         ,t.ID
+         ,qtyavailable = lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen
+         ,*
+         FROM #TMPALLOC t
+         JOIN LOTxLOCxID AS lli WITH (NOLOCK) ON lli.Lot = t.Lot AND lli.loc = t.loc AND lli.id = t.id
+   END
+   
    SET @CUR_INV = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT t.Lot
          ,t.Loc
@@ -307,13 +324,14 @@ BEGIN
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-      IF @b_Debug = 2
+      IF @b_Debug = 1
       BEGIN
           SELECT @n_QtyAvailable '@n_QtyAvailable', 
                   od.OrderKey
                ,  od.OrderLineNumber
                ,  od.OpenQty - od.QtyAllocated - od.QtyPicked
                ,  AccumulatedQty = SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) OVER (ORDER BY od.OrderKey, od.OrderLineNumber)
+               ,  t.lot, t.loc, t.id
             FROM #TMPALLOC t
             JOIN ORDERDETAIL AS od WITH (NOLOCK) ON (t.Orderkey = od.Orderkey AND t.OrderLineNumber = od.OrderLineNumber)
             WHERE t.lot = @c_Lot
@@ -350,10 +368,10 @@ BEGIN
       END
       
       IF NOT EXISTS ( SELECT 1 FROM @tORD t
-                        WHERE QtyAvailable > 0
+                      WHERE QtyAvailable > 0
                      )
       BEGIN 
-         BREAK
+         GOTO NEXT_LLI           --(Wan01) 2021--07-19. Continue allocate from Next record
       END
    
       SET @n_batch = 0
@@ -400,7 +418,8 @@ BEGIN
       IF @b_Debug = 2   
       BEGIN     
          SELECT pickcode = 'ispLuLuLQ7' 
-            ,  Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) AS NVARCHAR) - 1 , 10)
+            --,  Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) AS NVARCHAR) - 1 , 10)
+            ,  Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) -1 AS NVARCHAR), 10)
             ,  CaseID = ''
             ,  PickHeaderKey = ''
             ,  od.OrderKey
@@ -456,7 +475,7 @@ BEGIN
          ,  Trafficcop
          )
       SELECT 
-            Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) AS NVARCHAR) - 1 , 10)
+            Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) -1 AS NVARCHAR), 10)
          ,  CaseID = ''
          ,  PickHeaderKey = ''
          ,  od.OrderKey
