@@ -137,8 +137,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@n_epltwgt             FLOAT                               
        ,@n_epltcbm             FLOAT                                  
        ,@c_getstorerkey        NVARCHAR(20)                        
-       ,@c_LocalOrd            NVARCHAR(5)  
-       ,@c_userdefine05        NVARCHAR(20)                        
+       ,@c_LocalOrd            NVARCHAR(5)                         
     
  CREATE TABLE #TEMP_DelNote54SG    
          (  Rowid            INT IDENTITY(1,1),    
@@ -185,7 +184,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             PGrossWgt        FLOAT,    
             PCubeUom1        FLOAT,    
             PalletKey        NVARCHAR(30) NULL,    
-            --ODUDEF05         NVARCHAR(30) NULL,    
+            ODUDEF05         NVARCHAR(30) NULL,    
             CTNCOUNT         INT ,    
             PieceQty         INT,    
             TTLWGT           FLOAT,    
@@ -206,8 +205,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             Fpltcbm          FLOAT                                                   
            -- OHROUTE          NVARCHAR(20)                                       
            ,epltwgt          FLOAT NULL                                                    
-           ,epltcbm          FLOAT NULL    
-           ,userdefine05     NVARCHAR(20)   NULL                                       
+           ,epltcbm          FLOAT NULL                                          
          )    
     
     
@@ -367,8 +365,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'D' THEN  'D' + MBOL.Mbolkey      
                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'E' THEN  'E' + MBOL.Mbolkey    
                                     WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'N' THEN  'N' + MBOL.Mbolkey END     
-                 ,ORDERS.[route]  
-                 ,ORDERDETAIL.Userdefine05                                                                    
+                 ,ORDERS.[route]                                                                     
       FROM MBOL WITH (NOLOCK)    
       INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)    
       INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)    
@@ -399,9 +396,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                  @c_ShipTO_Contact1, @c_ShipTO_Country,    
                                  @c_From_Country, @c_StorerKey,    
   @c_ShipMode, @c_SONo, @c_PalletKey,@c_facility,@c_OrdGrp,           
-                                 @c_OrderKey_Inv,@c_ohroute,  
-                                 @c_userdefine05                                          
-    
+                                 @c_OrderKey_Inv,@c_ohroute                                           
+   
         WHILE @@FETCH_STATUS = 0    
         BEGIN    
            -- Full Carton    
@@ -558,7 +554,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     
               SELECT TOP 1    
                       @c_UnitPrice = CONVERT(decimal(10,2),o.UnitPrice)    
-                    -- ,@c_ODUDEF05  = ISNULL(o.Userdefine05,'')    
+                    ,@c_ODUDEF05  = ISNULL(o.Userdefine05,'')    
               FROM ORDERDETAIL AS o WITH(NOLOCK)    
               WHERE o.OrderKey = @c_OrderKey    
               AND   o.Sku = @c_sku    
@@ -697,7 +693,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                PGrossWgt,    
                PCubeUom1,    
                PalletKey,    
-             --   ODUDEF05,    
+               ODUDEF05,    
                CTNCOUNT,  --41    
       PieceQty,    
                TTLWGT,    
@@ -717,8 +713,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                ,Fpltwgt              
                ,Fpltcbm                
                ,epltwgt              
-               ,epltcbm   
-               ,userdefine05               
+               ,epltcbm                 
               )    
               VALUES    
               (    
@@ -764,7 +759,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                @c_PCubeUom1,    
                --@c_PalletKey,    
                @c_GetPalletKey,                  
-              --  @c_ODUDEF05,    
+                @c_ODUDEF05,    
                @n_NoOfCarton,  --41    
                @n_PieceQty,    
                @n_TTLWGT,    
@@ -778,8 +773,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                ,@c_OrderKey_Inv                    
                ,ISNULL(@n_pltwgt,0),ISNULL(@n_pltcbm,0)                 
                ,ISNULL(@n_fpltwgt,0),ISNULL(@n_fpltcbm,0)               
-               ,ISNULL(@n_epltwgt,0),ISNULL(@n_epltcbm,0)   
-               ,@c_userdefine05              
+               ,ISNULL(@n_epltwgt,0),ISNULL(@n_epltcbm,0)                 
               )    
     
                SET @c_PreOrderKey = @c_OrderKey    
@@ -808,8 +802,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                  @c_ShipTO_Contact1, @c_ShipTO_Country,    
                                  @c_From_Country, @c_StorerKey,    
                                  @c_ShipMode, @c_SONo, @c_PalletKey,@c_facility,@c_OrdGrp        
-                                ,@c_OrderKey_Inv,@c_ohroute   
-                                ,@c_userdefine05                                       
+                                ,@c_OrderKey_Inv,@c_ohroute                                        
     
         END    
     
@@ -973,7 +966,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
       , PGrossWgt    
       , PCubeUom1    
       , PalletKey    
-      --, ODUDEF05    
+      , ODUDEF05    
       , CTNCOUNT    
       , PieceQty    
       , ROUND(TTLWGT, 2) AS TTLWGT    
@@ -992,8 +985,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
       , CLKUDF02 = ISNULL(@c_CLKUDF02,'')     
      ,pltwgt as pltwgt,pltcbm as pltcbm                          
       ,fpltwgt as fpltwgt,fpltcbm as fpltcbm                    
-      , epltwgt as epltwgt , epltcbm as epltcbm  
-      ,userdefine05               
+      , epltwgt as epltwgt , epltcbm as epltcbm                
       FROM #TEMP_DelNote54SG    
       --ORDER BY mbolkey,ExternOrdKey, Rowid, sku, CTNCOUNT DESC     
       --ORDER BY Rowid     
