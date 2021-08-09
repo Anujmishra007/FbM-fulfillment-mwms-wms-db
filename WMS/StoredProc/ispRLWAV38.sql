@@ -17,7 +17,7 @@ GO
 /*        : Copy and develop from ispRLWAV04                             */      
 /* Called By: wave                                                       */      
 /*                                                                       */      
-/* PVCS Version: 1.0                                                     */      
+/* PVCS Version: 1.1                                                     */      
 /*                                                                       */      
 /* Version: 7.0                                                          */      
 /*                                                                       */      
@@ -26,6 +26,7 @@ GO
 /* Updates:                                                              */      
 /* Date        Author   Ver   Purposes                                   */  
 /* 2020-12-31  Wan      1.0   Created                                    */
+/* 2021-07-19  Wan01    1.1   Fixed.RPF UPdate Taskdetailkey to wrong sku*/
 /*************************************************************************/       
 CREATE PROCEDURE [dbo].[ispRLWAV38]          
                  @c_wavekey      NVARCHAR(10)      
@@ -1574,6 +1575,7 @@ BEGIN
             AND (PD.Taskdetailkey = '' OR  PD.Taskdetailkey IS NULL)  
             AND PD.Storerkey = @c_Storerkey  
             --AND PD.Lot = @c_Lot         --@c_Lot is empty in Taskdetail.lot
+            AND PD.Sku = @c_Sku           --Wan01
             AND PD.Loc = @c_FromLoc    
             AND PD.ID  = @c_ID  
             AND PD.DropID = @c_UCCNo  
