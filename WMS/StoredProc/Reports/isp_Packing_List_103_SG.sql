@@ -145,7 +145,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@n_epltcbm             FLOAT   =0                       
        ,@c_getstorerkey        NVARCHAR(20)                    
        ,@c_OrderKey_Inv        NVARCHAR(50)                    
-       ,@c_userdefine05        NVARCHAR(20)
+       ,@c_ordudf05        NVARCHAR(20)
                                
             
                      
@@ -221,7 +221,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
            ,epltwgt          FLOAT                                            
            ,epltcbm          FLOAT                                        
            ,InvoiceNo        NVARCHAR(50)                                 
-           ,userdefine05     NVARCHAR(20) NULL 
+           ,ordudf05     NVARCHAR(20) NULL 
          )      
                
                
@@ -484,12 +484,10 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                      WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'E' THEN  'E' + MBOL.Mbolkey
                                      WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'N' THEN  'N' + MBOL.Mbolkey 
                                      ELSE '' END  
-                ,ORDERDETAIL.Userdefine05
               FROM MBOL WITH (NOLOCK)      
               INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)      
               INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)      
-              INNER JOIN STORER S WITH (NOLOCK) ON (S.Storerkey = ORDERS.Storerkey)
-              INNER JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERDETAIL.OrderKey = MBOLDETAIL.OrderKey)           
+              INNER JOIN STORER S WITH (NOLOCK) ON (S.Storerkey = ORDERS.Storerkey)           
               LEFT JOIN STORER STW WITH (NOLOCK) ON (STW.Storerkey = 'LOGITWDDP')          
               LEFT JOIN STORER SHK WITH (NOLOCK) ON (SHK.Storerkey = 'LOGIHKDDP')              
               LEFT JOIN STORER MWRHK WITH (NOLOCK) ON (MWRHK.Storerkey = 'LOGISMWRHK')          
@@ -517,8 +515,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                  @c_From_Country, @c_StorerKey,       
                                  @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,          
                                  @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                       
-                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,@c_Orderkey_inv,        
-                                 @c_userdefine05
+                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,@c_Orderkey_inv        
               
         WHILE @@FETCH_STATUS = 0      
         BEGIN      
@@ -675,7 +672,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                           THEN CASE WHEN LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))) > 20    
                                                     THEN SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),1,20) + ' ' + SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),21,LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))))    
                                                     ELSE ISNULL(SKUINFO.EXTENDEDFIELD05,'') END     
-                                          ELSE '' END    
+                                          ELSE '' END
+                     ,@c_ordudf05 = ISNULL(O.USERDEFINE05,'')    
               FROM ORDERDETAIL AS O WITH(NOLOCK)      
               INNER JOIN ORDERS AS OH WITH (NOLOCK) ON (O.OrderKey = OH.OrderKey)     
               INNER JOIN SKU WITH (NOLOCK) ON (O.StorerKey = SKU.StorerKey AND O.Sku = SKU.Sku)    
@@ -855,7 +853,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                ,Epltwgt                   
                ,Epltcbm                  
                ,InvoiceNo            
-               ,userdefine05
+               ,ordudf05
               )      
               VALUES      
               (      
@@ -918,7 +916,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
               ,ISNULL(@n_fpltwgt,0),ISNULL(@n_fpltcbm,0)             
               ,ISNULL(@n_epltwgt,0), ISNULL(@n_epltcbm,0)
               ,CASE WHEN  @c_ShipType = 'L' THEN 'A' + @c_OrderKey_Inv ELSE @c_OrderKey_Inv END  
-              ,@c_userdefine05
+              ,@c_ordudf05
               )      
                        
            SET @c_PreOrderKey = @c_OrderKey      
@@ -947,8 +945,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                        @c_From_Country, @c_StorerKey,       
                                        @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,        
                                        @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                    
-                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,@c_Orderkey_inv,      
-                                       @c_userdefine05    
+                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,@c_Orderkey_inv   
         END      
               
         CLOSE CS_ORDERS_INFO      
@@ -1175,8 +1172,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address3     ,      
     CON_Address4     ,       
     ORDGRP           ,
-    InvoiceNo        ,                   
-    userdefine05
+    InvoiceNo                         
   FROM #TEMP_PackList103      
   WHERE MBOLKey = @c_MBOLKey      
   AND ORDGRP = 'S01'      
@@ -1212,8 +1208,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address2     ,       
     CON_Address3     ,      
     CON_Address4     ,       
-    ORDGRP           ,
-    userdefine05     
+    ORDGRP              
   FROM #TEMP_PackList103      
   WHERE MBOLKey = @c_MBOLKey      
   AND ORDGRP <> 'S01'      

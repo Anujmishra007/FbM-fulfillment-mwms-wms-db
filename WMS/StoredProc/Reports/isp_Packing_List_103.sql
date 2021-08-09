@@ -22,33 +22,11 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
-/* 11-May-2017  CSCHONG   1.0   WMS-1747 -Revise Field mapping (CS01)   */  
-/* 08-JUN-2017  CSCHONG   1.1   WMS-1747 - Revise Address field (CS02)  */  
-/* 30-JUN-2017  CSCHONG   1.2   WMS-2311 - revise field logic (CS03)    */  
-/* 14-JUL-2017  JYHBIN    1.3   Resolve Bug                              */  
-/* 27-JUL-2017  CSCHONG   1.3   fix duplicated issue, CN1 process (CS03a)*/  
-/* 24-JUL-2017  CSCHONG   1.4   WMS-2432 - Revise report layout(CS04)   */  
-/* 16-Aug-2017  CSCHONG   1.5   Fix total pallet issue (CS04a)          */  
-/* 21-Aug-2017  CSCHONG   1.6   fix totalqty issue (CS04b)              */  
-/* 29-Aug-2017  MengTah   1.7   IN00451304 Group by PD.QTY (MT01)       */  
-/* 07-DEC-2017  CSCHONG   1.8   WMS-3441 add new logic (CS05)           */
-/* 18-OCT-2018  WLCHOOI   1.9   WMS-6668 - Revise logic of displaying   */
-/*                              model number and add new Facility (WL01)*/ 
-/* 19-FEB-2019  CHEEMUN   2.0   INC0582740 - Clear @c_ODUDEF05 value    */ 
-/* 17-JUN-2019  CSCHONG   2.1   WMS-8806 revised field logic (CS06)     */  
-/* 05-AUG-2019  CSCHONG   2.2   WMS-9970 revised field logic (CS07)     */      
-/* 30-JAN-2020  CSCHONG   2.3   WMS-11894 revised field logic (CS08)    */    
-/* 23-APR-2020  WLChooi   2.4   WMS-13021 - ShowModelNumber by ReportCFG*/
-/*                              (WL02)                                  */ 
-/* 23-JUL-2020  WLChooi   2.5   WMS-14384 - Add new condition to show   */
-/*                              remark for CN only (WL03)					*/
-/* 19-MAY-2021	 ADRIAN    2.6   WMS-17007 - Add new facility (AC01) 		*/  
-/* 09-Jul-2021  MINGLE    2.7   WMS-17356 - add new mappings(ML01)      */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_Packing_List_103] (  
    @c_MBOLKey NVARCHAR(21)   
-  ,@c_type NVARCHAR(10) --= 'H1'   --(CS35)  
+  ,@c_type NVARCHAR(10) --= 'H1'   
 )   
 AS   
 BEGIN  
@@ -109,7 +87,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@n_PGrossWgt           FLOAT  
        ,@c_PCubeUom1           FLOAT  
        ,@c_PalletKey           NVARCHAR(30)  
-       ,@c_ODUDEF05            NVARCHAR(50)   --WL02  
+       ,@c_ODUDEF05            NVARCHAR(50)     
        ,@c_CTNCOUNT            INT  
        ,@n_PieceQty            INT  
        ,@n_TTLWGT              FLOAT  
@@ -122,45 +100,45 @@ DECLARE @c_OrderKey            NVARCHAR(10)
        ,@n_NoOfCarton          INT   
        ,@n_NoFullCarton        INT  
        ,@n_CaseCnt             INT   
-       ,@c_shiptitle           NVARCHAR(30)                    --CS02  
-       ,@c_GetPalletKey        NVARCHAR(30)                    --CS03  
-       ,@n_TTLPLT              INT                             --CS03     
-       ,@c_PreOrderKey         NVARCHAR(10)                    --CS03     
-       ,@c_ChkPalletKey        NVARCHAR(30)                    --CS03   
-       ,@c_facility            NVARCHAR(5)                     --CS03a            
-       ,@c_Con_Company         NVARCHAR(45)                    --CS04  
-       ,@c_Con_Address1        NVARCHAR(45)                    --CS04   
-       ,@c_Con_Address2        NVARCHAR(45)                    --CS04   
-       ,@c_Con_Address3        NVARCHAR(45)                    --CS04   
-       ,@c_Con_Address4        NVARCHAR(45)                    --CS04   
-       ,@c_OrdGrp              NVARCHAR(20)                    --CS04    
-       ,@n_EPWGT_Value         DECIMAL(6,2)                    --CS04  
-       ,@n_EPCBM_Value         DECIMAL(6,2)                    --CS04    
-       ,@c_UDF01               NVARCHAR(5)                     --CS04     
-       ,@n_lineNo              INT                             --CS04a      
-       ,@C_CLKUPUDF01          NVARCHAR(15)                    --CS05  
-       ,@C_Lottable11          NVARCHAR(30)                    --CS05  
-       ,@c_madein              NVARCHAR(250)                   --CS05  
-       ,@c_delimiter           NVARCHAR(1)                     --CS05   
-       ,@c_GetOrderKey         NVARCHAR(10)                    --CS05   
-       ,@c_getsku              NVARCHAR(20)                    --CS05  
-       ,@n_CntRec              INT                             --CS05     
-       ,@c_lott11              NVARCHAR(50)                    --CS05  
-       ,@c_company             NVARCHAR(45)                    --CS05  
-       ,@c_UPDATECCOM          NVARCHAR(1)                     --CS05 
-       ,@c_dest                NVARCHAR(100)                   --CS06
-       ,@c_PLTNo               NVARCHAR(80)                    --CS06               
+       ,@c_shiptitle           NVARCHAR(30)                      
+       ,@c_GetPalletKey        NVARCHAR(30)                      
+       ,@n_TTLPLT              INT                                  
+       ,@c_PreOrderKey         NVARCHAR(10)                         
+       ,@c_ChkPalletKey        NVARCHAR(30)                       
+       ,@c_facility            NVARCHAR(5)                                 
+       ,@c_Con_Company         NVARCHAR(45)                      
+       ,@c_Con_Address1        NVARCHAR(45)                       
+       ,@c_Con_Address2        NVARCHAR(45)                       
+       ,@c_Con_Address3        NVARCHAR(45)                       
+       ,@c_Con_Address4        NVARCHAR(45)                       
+       ,@c_OrdGrp              NVARCHAR(20)                        
+       ,@n_EPWGT_Value         DECIMAL(6,2)                      
+       ,@n_EPCBM_Value         DECIMAL(6,2)                        
+       ,@c_UDF01               NVARCHAR(5)                          
+       ,@n_lineNo              INT                                   
+       ,@C_CLKUPUDF01          NVARCHAR(15)                      
+       ,@C_Lottable11          NVARCHAR(30)                      
+       ,@c_madein              NVARCHAR(250)                     
+       ,@c_delimiter           NVARCHAR(1)                        
+       ,@c_GetOrderKey         NVARCHAR(10)                       
+       ,@c_getsku              NVARCHAR(20)                      
+       ,@n_CntRec              INT                                  
+       ,@c_lott11              NVARCHAR(50)                      
+       ,@c_company             NVARCHAR(45)                      
+       ,@c_UPDATECCOM          NVARCHAR(1)                      
+       ,@c_dest                NVARCHAR(100)                   
+       ,@c_PLTNo               NVARCHAR(80)                                   
     -- ,@C_getCLKUPUDF01   NVARCHAR(15)                    
-       ,@c_NSQLCountry         NVARCHAR(10)                    --WL03
-       ,@c_ShowRemark          NVARCHAR(10)                    --WL03
-       ,@c_userdefine05        NVARCHAR(20)                    --ML01
-       ,@c_ordertype           NVARCHAR(20)                    --ML01
+       ,@c_NSQLCountry         NVARCHAR(10)                    
+       ,@c_ShowRemark          NVARCHAR(10)                    
+       ,@c_ordudf05            NVARCHAR(30)                    
+       ,@c_ordertype           NVARCHAR(20)
+        
           
-   --WL03 START
    SELECT @c_NSQLCountry = NSQLValue
    FROM NSQLCONFIG (NOLOCK)
    WHERE ConfigKey = 'Country'
-   --WL03 END   
+    END   
      
    CREATE TABLE #TEMP_PackList103  
          (  Rowid            INT IDENTITY(1,1),  
@@ -204,31 +182,32 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             PGrossWgt        FLOAT,  
             PCubeUom1        FLOAT,  
             PalletKey        NVARCHAR(30) NULL,   
-            ODUDEF05         NVARCHAR(50) NULL,   --WL02
+            ODUDEF05         NVARCHAR(50) NULL,   
             CTNCOUNT         INT ,  
             PieceQty         INT,  
             TTLWGT           FLOAT,  
             CBM              FLOAT,  
             PCubeUom3        FLOAT,  
             PNetWgt          FLOAT,  
-            ShipTitle        NVARCHAR(30) NULL ,                           --CS02  
-            TTLPLT           INT ,                                          --CS03  
-            CON_Company      NVARCHAR(45) NULL,                             --CS04  
-            CON_Address1     NVARCHAR(45) NULL,                             --CS04   
-            CON_Address2     NVARCHAR(45) NULL,                             --CS04  
-            CON_Address3     NVARCHAR(45) NULL,                             --CS04  
-            CON_Address4     NVARCHAR(45) NULL,                             --CS04  
-            ORDGRP           NVARCHAR(20) NULL,                             --CS04  
+            ShipTitle        NVARCHAR(30) NULL ,                             
+            TTLPLT           INT ,                                            
+            CON_Company      NVARCHAR(45) NULL,                               
+            CON_Address1     NVARCHAR(45) NULL,                                
+            CON_Address2     NVARCHAR(45) NULL,                               
+            CON_Address3     NVARCHAR(45) NULL,                               
+            CON_Address4     NVARCHAR(45) NULL,                               
+            ORDGRP           NVARCHAR(20) NULL,                               
             EPWGT            FLOAT,         
             EPCBM            FLOAT,  
-            CLKUPUDF01       NVARCHAR(5)   NULL,                            --CS05  
-            Orderkey         NVARCHAR(20)  NULL,                            --CS05      
-            lott11           NVARCHAR(250) NULL,                            --CS05   
-            Dest             NVARCHAR(250) NULL,                            --CS05                                                                                                          
-            PltNo            NVARCHAR(250) NULL,                            --CS05   
-            ShowRemark       NVARCHAR(1)   NULL,                            --WL03
-            Userdefine05     NVARCHAR(20)  NULL,                            --ML01
-            Ordertype        NVARCHAR(20)  NULL                             --ML01
+            CLKUPUDF01       NVARCHAR(5)   NULL,                              
+            Orderkey         NVARCHAR(20)  NULL,                                  
+            lott11           NVARCHAR(250) NULL,                               
+            Dest             NVARCHAR(250) NULL,                                                                                                                                      
+            PltNo            NVARCHAR(250) NULL,                               
+            ShowRemark       NVARCHAR(1)   NULL,                            
+            ordudf05         NVARCHAR(30)  NULL,                            
+            Ordertype        NVARCHAR(20)  NULL
+                                         
          )  
            
            
@@ -240,10 +219,9 @@ DECLARE @c_OrderKey            NVARCHAR(10)
          TotalQty   INT,  
          CartonNo   INT,  
          Palletkey  NVARCHAR(20) NULL,  
-         CLKUPUDF01 NVARCHAR(15) NULL --WL01  
+         CLKUPUDF01 NVARCHAR(15) NULL   
         )  
-          
-        --CS05 Start  
+           
          CREATE TABLE #TEMP_madein103 (  
          MBOLKey        NVARCHAR(20) NULL,  
          OrderKey       NVARCHAR(20) NULL,  
@@ -252,21 +230,20 @@ DECLARE @c_OrderKey            NVARCHAR(10)
          C_Company      NVARCHAR(45) NULL  
         )  
           
-        --CS05 End  
           
         SET @c_multisku = 'N'  
-        SET @c_PreOrderKey = ''              --CS03  
-        SET @n_EPWGT_Value = 0.00            --CS04  
+        SET @c_PreOrderKey = ''                
+        SET @n_EPWGT_Value = 0.00              
         SET @n_EPCBM_value = 0.00  
-        SET @n_lineNo = 1                    --CS04a  
+        SET @n_lineNo = 1                      
         SET @C_CLKUPUDF01 =''  
         SET @c_madein = ''  
-        SET @c_delimiter =','                 --CS05  
-        SET @c_lott11 = ''                    --CS05  
-        SET @c_company = ''                   --CS05  
-        SET @c_UPDATECCOM = 'N'               --CS05
-        SET @c_dest       = ''                --CS06
-        SET @c_PLTNo      = ''                --CS06   
+        SET @c_delimiter =','                   
+        SET @c_lott11 = ''                      
+        SET @c_company = ''                     
+        SET @c_UPDATECCOM = 'N'               
+        SET @c_dest       = ''                
+        SET @c_PLTNo      = ''                   
 
       SELECT TOP 1  @c_dest = C.UDF01
                    ,@c_PLTNo = C.UDF02
@@ -296,13 +273,12 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                 ORDERS.Userdefine05,  
                 ORDERS.ExternOrderKey,  
                 --S.B_Company AS IDS_Company,  
-            /*CS07 START*/
-                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.company,'') ELSE ISNULL(S.B_Company,'') END, --CS02  
-                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address1,'') ELSE ISNULL(S.B_Address1,'') END AS IDS_Address1,  --CS02  
-                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address2,'') ELSE ISNULL(S.B_Address2,'') END AS IDS_Address2,  --CS02  
-                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address3,'') ELSE ISNULL(S.B_Address3,'') END AS IDS_Address3,  --CS02,  
-                --CASE WHEN  ORDERS.facility='YPCN1' THEN '' ELSE ISNULL(S.B_Address4,'') END AS IDS_Address4,  --CS02,  
-                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Phone1,'')  ELSE ISNULL(S.B_Phone1,'')  END AS IDS_Phone1,  --CS02 
+                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.company,'') ELSE ISNULL(S.B_Company,'') END,   
+                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address1,'') ELSE ISNULL(S.B_Address1,'') END AS IDS_Address1,    
+                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address2,'') ELSE ISNULL(S.B_Address2,'') END AS IDS_Address2,    
+                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Address3,'') ELSE ISNULL(S.B_Address3,'') END AS IDS_Address3,  ,  
+                --CASE WHEN  ORDERS.facility='YPCN1' THEN '' ELSE ISNULL(S.B_Address4,'') END AS IDS_Address4,  ,  
+                --CASE WHEN  ORDERS.facility='YPCN1' THEN ISNULL(S.Phone1,'')  ELSE ISNULL(S.B_Phone1,'')  END AS IDS_Phone1,   
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Company,'')
                 ELSE ISNULL(S.B_Company,'') END AS IDS_Company,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Address1,'')
@@ -315,7 +291,6 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                 ELSE ISNULL(S.B_Address4,'') END AS IDS_Address4,
                 CASE WHEN (ISNULL(SOD.Door,''))<> '' THEN ISNULL(SD.B_Phone1,'')
                 ELSE ISNULL(S.B_Phone1,'') END AS IDS_Phone1, 
-            /*CS07 END*/ 
                 (ISNULL(S.b_city,'') + SPACE(2) + ISNULL(S.B_state,'') + SPACE(2) +  ISNULL(s.B_zip,'') +  
                  ISNULL(S.B_country,'') ) AS IDS_City,  
                 ORDERS.B_Company AS BILLTO_Company,  
@@ -324,49 +299,46 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                 ISNULL(ORDERS.B_Address3,'') AS BILLTO_Address3,  
                 ISNULL(ORDERS.B_Address4,'') AS BILLTO_Address4,  
                 LTRIM(ISNULL(ORDERS.B_City,'') + SPACE(2) + ISNULL(ORDERS.B_State,'') + SPACE(2) +  
-                ISNULL(ORDERS.B_Zip,'') + SPACE(2) +  ISNULL(ORDERS.B_Country,'')) AS BILLTO_City,  
-                /*CS02 start*/  
+                ISNULL(ORDERS.B_Zip,'') + SPACE(2) +  ISNULL(ORDERS.B_Country,'')) AS BILLTO_City,    
                 CASE WHEN ORDERS.Ordergroup <> 'S01' THEN  
-                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN  --CS08
+                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN  
                 CASE WHEN ORDERS.c_country = 'HK'  THEN ISNULL(SHK.company,'')  
                 WHEN ORDERS.c_country = 'TW'  THEN ISNULL(STW.company,'')  
                 ELSE ISNULL(ORDERS.C_Company,'') END  
                 ELSE ISNULL(ORDERS.C_Company,'') END   
-                ELSE   
-                /*CS04 Start*/  
+                ELSE     
                 CASE WHEN ORDERS.type='WR' THEN ORDERS.c_company ELSE '' END  
-                END AS ShipTO_Company,  
-                /*CS04 End*/  
-                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN   --CS04  
-                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN  --CS08
+                END AS ShipTO_Company,    
+                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN     
+                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN  
                 CASE WHEN ORDERS.c_country = 'HK'  THEN ISNULL(SHK.Address1,'')  
                 WHEN ORDERS.c_country = 'TW'  THEN ISNULL(STW.Address1,'')  
                 ELSE ISNULL(ORDERS.C_Address1,'') END  
                 ELSE ISNULL(ORDERS.C_Address1,'') END   
                 ELSE  
-                ISNULL(ORDERS.C_Address1,'') END AS ShipTO_Address1,      --CS04  
-                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN   --CS04  
-                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN   --CS08 
+                ISNULL(ORDERS.C_Address1,'') END AS ShipTO_Address1,        
+                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN     
+                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN    
                 CASE WHEN ORDERS.c_country = 'HK'  THEN ISNULL(SHK.Address2,'')  
                 WHEN ORDERS.c_country = 'TW'  THEN ISNULL(STW.Address2,'')  
                 ELSE ISNULL(ORDERS.C_Address2,'') END  
                 ELSE ISNULL(ORDERS.C_Address2,'') END   
                 ELSE  
-                ISNULL(ORDERS.C_Address2,'') END  AS ShipTO_Address2,    --CS04  
-                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN   --CS04  
-                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM')  AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN  --CS08
+                ISNULL(ORDERS.C_Address2,'') END  AS ShipTO_Address2,      
+                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN     
+                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM')  AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN  
                 CASE WHEN ORDERS.c_country = 'HK'  THEN ISNULL(SHK.Address3,'')  
                       WHEN ORDERS.c_country = 'TW'  THEN ISNULL(STW.Address3,'')  
                 ELSE ISNULL(ORDERS.C_Address3,'') END  
                 ELSE ISNULL(ORDERS.C_Address3,'') END   
                 ELSE  
-                ISNULL(ORDERS.C_Address3,'') END AS ShipTO_Address3,        --CS04  
-                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN   --CS04  
-                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM')AND ORDERS.c_country IN ('HK','TW')     --CS08
+                ISNULL(ORDERS.C_Address3,'') END AS ShipTO_Address3,          
+                CASE WHEN ORDERS.Ordergroup <> 'S01' THEN     
+                CASE WHEN ORDERS.facility IN ('WGQAP','BULIM')AND ORDERS.c_country IN ('HK','TW')     
                      AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%') THEN ''   
                  ELSE ISNULL(ORDERS.C_Address4,'') END   
                  ELSE  
-                 ISNULL(ORDERS.C_Address4,'') END AS ShipTO_Address4,       --CS04  
+                 ISNULL(ORDERS.C_Address4,'') END AS ShipTO_Address4,         
                  /*CS02 End*/  
                  LTRIM(ISNULL(ORDERS.C_City,'') + SPACE(2) + ISNULL(ORDERS.C_State,'') + SPACE(2) +  
                  ISNULL(ORDERS.C_Zip,'') + SPACE(2) +  ISNULL(ORDERS.C_Country,'')) AS ShipTO_City,  
@@ -375,18 +347,17 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                  ORDERS.StorerKey,  
                  ORDERS.Userdefine03 AS ShipMode,  
                  ORDERS.Userdefine01 AS SONo  
-                 ,''--ISNULL(PTD.Palletkey,'N/A') AS palletkey                             --CS03  
-                 ,CASE WHEN ORDERS.Ordergroup <> 'S01' THEN   --CS04  
-                        --CASE WHEN ORDERS.facility='WGQAP' AND ORDERS.c_country IN ('HK','TW')       --CS08 START
+                 ,''--ISNULL(PTD.Palletkey,'N/A') AS palletkey                               
+                 ,CASE WHEN ORDERS.Ordergroup <> 'S01' THEN     
+                        --CASE WHEN ORDERS.facility='WGQAP' AND ORDERS.c_country IN ('HK','TW')       
                         --AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%' )
                   CASE WHEN ORDERS.facility IN ('WGQAP','BULIM') AND ORDERS.c_country IN ('HK','TW')   
-                           AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%')      --CS08 END 
+                           AND (ORDERS.userdefine05 LIKE 'DDP%' OR ORDERS.userdefine05 LIKE 'FOB%')      
                   THEN 'Consignee:'   
                         ELSE 'Ship To:' END   
                   ELSE  
-                  'Ship To/Notify To:' END AS ShipTitle ,                      --CS02      --CS04  
-                  ORDERS.facility,                                         --CS03a   
-                  /*CS04 Start*/    
+                  'Ship To/Notify To:' END AS ShipTitle ,                              
+                  ORDERS.facility,                                               
                    CASE WHEN ORDERS.Ordergroup = 'S01' THEN   
                       CASE WHEN ORDERS.c_country = 'HK'  THEN ISNULL(MWRHK.company,'')  
                       WHEN ORDERS.c_country = 'TW'  THEN ISNULL(MWRTW.company,'')  
@@ -422,33 +393,23 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                            WHEN ORDERS.c_country = 'NZ'  THEN ISNULL(MWRNZ.Address4,'')  
                            ELSE '' END  
                       ELSE '' END AS CON_Address4  
-                ,ORDERS.OrderGroup AS OrdGrp  
-                /*CS04 end*/                                                      --CS02  
-                --WL03 START
+                ,ORDERS.OrderGroup AS OrdGrp                                                         
                 , ShowRemark = CASE WHEN ORDERS.C_Country IN ('TW') AND ORDERS.Facility IN ('WGQAP','BULIM')
                                      AND ORDERS.ConsigneeKey IN ('4925968') AND @c_NSQLCountry = 'CN'
-                                    THEN 'Y' ELSE 'N' END
-                --WL03 END
-                , ORDERDETAIL.Userdefine05                    --ML01
+                                    THEN 'Y' ELSE 'N' END                  
                 , ORDERS.type AS Ordertype
               FROM MBOL WITH (NOLOCK)  
               INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)  
               INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)  
-              INNER JOIN STORER S WITH (NOLOCK) ON (S.Storerkey = ORDERS.Storerkey)  
-              /*CS02 Start*/  
-              INNER JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERDETAIL.OrderKey = MBOLDETAIL.OrderKey)                    --ML01 
+              INNER JOIN STORER S WITH (NOLOCK) ON (S.Storerkey = ORDERS.Storerkey)   
               LEFT JOIN STORER STW WITH (NOLOCK) ON (STW.Storerkey = 'LOGITWDDP')      
-              LEFT JOIN STORER SHK WITH (NOLOCK) ON (SHK.Storerkey = 'LOGIHKDDP')     
-              /*CS04 Start*/  
+              LEFT JOIN STORER SHK WITH (NOLOCK) ON (SHK.Storerkey = 'LOGIHKDDP')      
               LEFT JOIN STORER MWRHK WITH (NOLOCK) ON (MWRHK.Storerkey = 'LOGISMWRHK')      
               LEFT JOIN STORER MWRTW WITH (NOLOCK) ON (MWRTW.Storerkey = 'LOGISMWRTW')   
               LEFT JOIN STORER MWRAU WITH (NOLOCK) ON (MWRAU.Storerkey = 'LOGISMWRAU')      
               LEFT JOIN STORER MWRNZ WITH (NOLOCK) ON (MWRNZ.Storerkey = 'LOGISMWRNZ')   
-              /*CS04 End*/
-              /*CS07 Start*/
               LEFT JOIN storersodefault SOD WITH (NOLOCK) ON SOD.StorerKey = ORDERS.ConsigneeKey
-              LEFT JOIN STORER SD WITH (NOLOCK) ON (SD.Storerkey = SOD.Door)
-              /*CS07 End*/       
+              LEFT JOIN STORER SD WITH (NOLOCK) ON (SD.Storerkey = SOD.Door)      
               WHERE MBOL.Mbolkey = @c_mbolkey  
           
        OPEN CS_ORDERS_INFO  
@@ -466,33 +427,30 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                  @c_ShipTO_City, @c_ShipTO_Phone1,  
                                  @c_ShipTO_Contact1, @c_ShipTO_Country,  
                                  @c_From_Country, @c_StorerKey,   
-                                 @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,    --CS03a  
-                                 @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                  --CS04  
-                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,                        --CS04  
-                                 @c_ShowRemark,   --WL03
-                                 @c_userdefine05,                   --ML01
-                                 @c_ordertype                       --ML01
+                                 @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,      
+                                 @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                    
+                                 @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,                          
+                                 @c_ShowRemark,
+                                 @c_ordertype                       
           
         WHILE @@FETCH_STATUS = 0  
         BEGIN  
            -- Full Carton  
            SET @n_PrevCtnQty = 0  
-          
-        /*CS03a Start*/     
-         IF @c_facility IN ('BULIM','WGQAP','WGQBL','WGQUS') --(WL01) New Facility --AC(01)
+              
+         IF @c_facility IN ('BULIM','WGQAP','WGQBL','WGQUS')  
          BEGIN  
            INSERT INTO #TEMP_CTNTYPE103 (CartonType, SKU, QTY, TotalCtn, TotalQty, CartonNo,Palletkey,CLKUPUDF01)              
             SELECT 'SINGLE' , PD.SKU, SUM(PD.Qty)/COUNT(DISTINCT PD.CartonNo) , COUNT(DISTINCT PD.CartonNo) , SUM(PD.Qty) ,0   
-              ,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END  --CS03  
-             -- ,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END --CS03  
-             ,ISNULL(C.UDF01,'')                                                    --CS05  
+              ,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END    
+             -- ,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END   
+             ,ISNULL(C.UDF01,'')                                                      
             FROM PACKHEADER PH WITH (NOLOCK)   
-            JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo   
-            /*CS03 Start*/  
-            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey    --CS03a  
-            JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.caseid = PD.LabelNo AND PLTD.Sku=pd.sku --AND PLTD.StorerKey=ORD.StorerKey   --CS04b  
+            JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo     
+            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey      
+            JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.caseid = PD.LabelNo AND PLTD.Sku=pd.sku --AND PLTD.StorerKey=ORD.StorerKey     
             JOIN Containerdetail CD WITH (NOLOCK) ON CD.PalletKey=PLTD.PalletKey  
-            JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey     --CS03a  
+            JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey       
             LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CONTAINERT' AND C.UDF01='P' AND C.code=CON.ContainerType  
             WHERE PH.orderkey = @c_OrderKey   
             AND PLTD.STORERKEY = @c_StorerKey  
@@ -502,21 +460,20 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                         GROUP BY pd2.CartonNo  
                         HAVING COUNT(DISTINCT PD2.SKU) = 1   
                         )    
-            GROUP BY PD.SKU,PD.qty,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END   --MT01  
+            GROUP BY PD.SKU,PD.qty,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END     
                      ,ISNULL(C.UDF01,'')    
             UNION ALL  
             --INSERT INTO #TEMP_CTNTYPE103 (CartonType, SKU, QTY, TotalCtn, TotalQty, CartonNo,Palletkey)   
             SELECT 'MULTI' , PD.SKU, SUM(PD.Qty)/COUNT(DISTINCT PD.CartonNo) , 0, SUM(PD.Qty) ,PD.CartonNo   
-            ,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END  --CS03  
-            --,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END                           --CS03  
+            ,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END    
+            --,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END                             
             ,ISNULL(C.UDF01,'')  
             FROM PACKHEADER PH WITH (NOLOCK)   
             JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
-             /*CS03 Start*/  
-            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey           --CS03a  
-            JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.caseid = PD.LabelNo AND PLTD.Sku=pd.sku--AND PLTD.StorerKey=ORD.StorerKey    --CS04b  
+            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey             
+            JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.caseid = PD.LabelNo AND PLTD.Sku=pd.sku--AND PLTD.StorerKey=ORD.StorerKey      
             JOIN Containerdetail CD WITH (NOLOCK) ON CD.PalletKey=PLTD.PalletKey   
-            JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey          --CS03a  
+            JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey            
             LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CONTAINERT' AND C.UDF01='P' AND C.code=CON.ContainerType  
             WHERE PH.orderkey = @c_OrderKey   
             AND PLTD.STORERKEY = @c_StorerKey  
@@ -526,20 +483,19 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                      GROUP BY pd2.CartonNo  
                      HAVING COUNT(DISTINCT PD2.SKU) = 1   
                      )    
-           GROUP BY PD.CartonNo, PD.SKU,PD.Qty ,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A'  END   --MT01  
+           GROUP BY PD.CartonNo, PD.SKU,PD.Qty ,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A'  END     
                      ,ISNULL(C.UDF01,'')       
          END  
          ELSE IF @c_facility = 'YPCN1'  
          BEGIN  
           INSERT INTO #TEMP_CTNTYPE103 (CartonType, SKU, QTY, TotalCtn, TotalQty, CartonNo,Palletkey,CLKUPUDF01)              
             SELECT 'SINGLE' , PD.SKU, SUM(PD.Qty)/COUNT(DISTINCT PD.CartonNo) , COUNT(DISTINCT PD.CartonNo) , SUM(PD.Qty) ,0   
-              ,'N/A'--CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END  --CS03  
-             -- ,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END --CS03  
+              ,'N/A'--CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END    
+             -- ,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END   
              ,''  
             FROM PACKHEADER PH WITH (NOLOCK)   
-            JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo   
-            /*CS03 Start*/  
-            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey    --CS03a  
+            JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
+            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey      
             WHERE PH.orderkey = @c_OrderKey   
             --AND PLTD.STORERKEY = @c_StorerKey  
             AND EXISTS(SELECT 1 FROM PackDetail AS pd2 WITH(NOLOCK)   
@@ -548,17 +504,16 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                         GROUP BY pd2.CartonNo  
                         HAVING COUNT(DISTINCT PD2.SKU) = 1   
                         )    
-            GROUP BY PD.SKU,PD.Qty --,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END  --MT01  
+            GROUP BY PD.SKU,PD.Qty --,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END    
             UNION ALL  
             --INSERT INTO #TEMP_CTNTYPE103 (CartonType, SKU, QTY, TotalCtn, TotalQty, CartonNo,Palletkey)   
             SELECT 'MULTI' , PD.SKU, SUM(PD.Qty)/COUNT(DISTINCT PD.CartonNo) , 0, SUM(PD.Qty) ,PD.CartonNo   
-            ,'N/A'--CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END  --CS03  
-            --,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END                           --CS03  
+            ,'N/A'--CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A' END    
+            --,CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey) ELSE 0 END                             
             ,''  
             FROM PACKHEADER PH WITH (NOLOCK)   
-            JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
-             /*CS03 Start*/  
-            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey           --CS03a  
+            JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo     
+            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey             
             WHERE PH.orderkey = @c_OrderKey   
             --AND PLTD.STORERKEY = @c_StorerKey  
             AND NOT EXISTS(SELECT 1 FROM PackDetail AS pd2 WITH(NOLOCK)   
@@ -567,9 +522,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                      GROUP BY pd2.CartonNo  
                      HAVING COUNT(DISTINCT PD2.SKU) = 1   
                      )    
-            GROUP BY PD.CartonNo, PD.SKU,PD.Qty --,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A'  END   --MT01  
-         END      
-           /*CS03a end*/     
+            GROUP BY PD.CartonNo, PD.SKU,PD.Qty --,CASE WHEN C.UDF01='P' THEN ISNULL(REPLACE(LTRIM(REPLACE(CD.ContainerLineNumber, '0', ' ')), ' ', '0'),'') ELSE 'N/A'  END     
+         END          
              
            --SELECT * FROM #TEMP_CTNTYPE103  
              
@@ -580,7 +534,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
            ORDER BY CartonType desc,CartonNo  
               
            OPEN CS_SinglePack  
-           FETCH NEXT FROM CS_SinglePack INTO @c_CartonType, @c_SKU, @n_CtnQty, @n_CtnCount, @n_PQty,@c_GetPalletKey--,@n_TTLPLT   --CS03  
+           FETCH NEXT FROM CS_SinglePack INTO @c_CartonType, @c_SKU, @n_CtnQty, @n_CtnCount, @n_PQty,@c_GetPalletKey--,@n_TTLPLT     
                                               ,@C_CLKUPUDF01  
            WHILE @@FETCH_STATUS=0  
            BEGIN  
@@ -629,30 +583,27 @@ DECLARE @c_OrderKey            NVARCHAR(10)
            
               SELECT TOP 1  
                       @c_UnitPrice = CONVERT(decimal(10,2),o.UnitPrice)  
-                     ,@c_ODUDEF05  = CASE WHEN OH.C_COUNTRY IN ('IN','KR') THEN ISNULL(SKUINFO.EXTENDEDFIELD05,'')  --WL01
-                                          --WL02 START
+                     ,@c_ODUDEF05  = CASE WHEN OH.C_COUNTRY IN ('IN','KR') THEN ISNULL(SKUINFO.EXTENDEDFIELD05,'')  
                                           WHEN ISNULL(CL.Short,'N') = 'Y'
                                           THEN CASE WHEN LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))) > 20
                                                     THEN SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),1,20) + ' ' + SUBSTRING(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,''))),21,LEN(LTRIM(RTRIM(ISNULL(SKUINFO.EXTENDEDFIELD05,'')))))
                                                     ELSE ISNULL(SKUINFO.EXTENDEDFIELD05,'') END
-                                          --WL02 END
-                                          ELSE '' END--WL01
+                                          ELSE '' END
+                     ,@c_ordudf05 = ISNULL(o.Userdefine05,'')
               FROM ORDERDETAIL AS O WITH(NOLOCK)  
-              INNER JOIN ORDERS AS OH WITH (NOLOCK) ON (O.OrderKey = OH.OrderKey)  --WL01
-              INNER JOIN SKU WITH (NOLOCK) ON (O.StorerKey = SKU.StorerKey AND O.Sku = SKU.Sku)--WL01
-              INNER JOIN SKUINFO WITH (NOLOCK) ON (SKUINFO.StorerKey = SKU.StorerKey AND O.Sku = SKUINFO.Sku AND SKU.SKU = SKUINFO.SKU)--WL01
+              INNER JOIN ORDERS AS OH WITH (NOLOCK) ON (O.OrderKey = OH.OrderKey)  
+              INNER JOIN SKU WITH (NOLOCK) ON (O.StorerKey = SKU.StorerKey AND O.Sku = SKU.Sku)
+              INNER JOIN SKUINFO WITH (NOLOCK) ON (SKUINFO.StorerKey = SKU.StorerKey AND O.Sku = SKUINFO.Sku AND SKU.SKU = SKUINFO.SKU)
               LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.Listname = 'REPORTCFG' AND CL.Code = 'ShowModelNumber' AND CL.Storerkey = OH.Storerkey
-                                                      AND CL.code2 = OH.Facility) --WL02
+                                                      AND CL.code2 = OH.Facility) 
               WHERE o.OrderKey = @c_OrderKey   
               AND   o.Sku = @c_sku   
-                
-             /*Cs03 Start*/   
+                 
              SET @n_TTLPLT = 0  
              SET @c_UDF01 = ''  
              IF @c_PreOrderKey <> @c_OrderKey  
              BEGIN  
                 
-              /*CS04a start*/  
               IF @n_lineNo = 1  
               BEGIN  
                 SELECT @n_TTLPLT= CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey)  ELSE 0 END  
@@ -661,16 +612,15 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                 JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CONTAINERT' AND C.UDF01='P' AND C.code=CON.ContainerType  
                 GROUP BY C.UDF01  
               END  
-  
-              /*CS04a End*/  
-               -- SELECT @n_TTLPLT= CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey)  ELSE 0 END  --CS04a  
+   
+               -- SELECT @n_TTLPLT= CASE WHEN C.UDF01='P' THEN COUNT(DISTINCT CD.palletkey)  ELSE 0 END    
                 SELECT @c_UDF01 = C.UDF01  
                 FROM PACKHEADER PH WITH (NOLOCK)   
                 JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
-                JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey           --CS03a  
+                JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey             
                 JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.caseid = PD.LabelNo --AND PLTD.StorerKey=ORD.StorerKey  
                 JOIN Containerdetail CD WITH (NOLOCK) ON CD.PalletKey=PLTD.PalletKey   
-                JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey          --CS03a  
+                JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey            
                 JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CONTAINERT' AND C.UDF01='P' AND C.code=CON.ContainerType  
                 WHERE PH.orderkey = @c_OrderKey   
                 AND PLTD.STORERKEY = @c_StorerKey  
@@ -690,7 +640,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         SET @n_EPWGT_Value = 0.00  
         SET @n_EPCBM_Value = 0.00  
           
-       IF @c_facility in ('WGQAP','YPCN1','WGQBL','WGQUS') --(WL01) New Facility --AC(01)
+       IF @c_facility in ('WGQAP','YPCN1','WGQBL','WGQUS') 
        BEGIN  
           
         SELECT @n_EPWGT_Value = CASE WHEN ISNUMERIC(c.udf02) = 1   
@@ -706,10 +656,10 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                   THEN ISNULL(CAST(CON.Carrieragent AS DECIMAL(6,2)),0.00) ELSE 0.00 END  
         FROM PACKHEADER PH WITH (NOLOCK)   
         JOIN PackDetail AS PD WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
-        JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey           --CS03a  
+        JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=ph.OrderKey             
         JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.caseid = PD.LabelNo --AND PLTD.StorerKey=ORD.StorerKey  
         JOIN Containerdetail CD WITH (NOLOCK) ON CD.PalletKey=PLTD.PalletKey   
-        JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey          --CS03a  
+        JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey            
         JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CONTAINERT' AND C.UDF01='P' AND C.code=CON.ContainerType  
         WHERE PH.orderkey = @c_OrderKey   
         AND PLTD.STORERKEY = @c_StorerKey  
@@ -777,24 +727,24 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                CBM,  
                PCubeUom3,  
                PNetWgt  
-               ,ShipTitle             --CS02  
-               ,TTLPLT                --CS03  
-               ,CON_Company           --CS04  
-               ,CON_Address1          --CS04  
-               ,CON_Address2          --CS04  
-               ,CON_Address3          --CS04  
-               ,CON_Address4          --CS04  
-               ,ORDGRP                --CS04  
-               ,EPWGT                 --CS04  
-               ,EPCBM                 --CS04  
-               ,CLKUPUDF01            --CS05  
-               ,Orderkey              --CS05  
-               ,Lott11                --CS05
-               ,Dest                  --CS06
-               ,PltNo                 --CS06 
-               ,ShowRemark            --WL03 
-               ,Userdefine05          --ML01 
-               ,ordertype             --ML01
+               ,ShipTitle               
+               ,TTLPLT                  
+               ,CON_Company             
+               ,CON_Address1            
+               ,CON_Address2            
+               ,CON_Address3            
+               ,CON_Address4            
+               ,ORDGRP                  
+               ,EPWGT                   
+               ,EPCBM                   
+               ,CLKUPUDF01              
+               ,Orderkey                
+               ,Lott11                
+               ,Dest                  
+               ,PltNo                  
+               ,ShowRemark             
+               ,ordudf05          
+               ,ordertype             
               )  
               VALUES  
               (  
@@ -837,7 +787,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                @n_PQty,  
                @n_PGrossWgt,  
                @c_PCubeUom1,  
-               @c_GetPalletKey,                         --CS03  
+               @c_GetPalletKey,                           
                @c_ODUDEF05,  
                @n_NoOfCarton,  
                @n_PieceQty,  
@@ -845,26 +795,26 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                @n_CBM,  
                @n_PCubeUom3,  
                @c_PNetWgt  
-              ,@c_shiptitle                             --CS02  
-              ,@n_TTLPLT                                --CS03  
-              ,@c_CON_Company, @c_CON_Address1          --CS04  
-              ,@c_CON_Address2,@c_CON_Address3          --CS04  
-              ,@c_CON_Address4,@c_OrdGrp                --CS04  
-              ,@n_EPWGT_Value,@n_EPCBM_Value            --CS04  
-              ,@C_CLKUPUDF01,@c_orderkey,''             --CS05  
-              ,@c_dest,@c_PLTNo                         --CS06
-              ,@c_ShowRemark                            --WL03
-              ,@c_userdefine05                          --ML01
-              ,@c_ordertype                             --ML01
+              ,@c_shiptitle                               
+              ,@n_TTLPLT                                  
+              ,@c_CON_Company, @c_CON_Address1            
+              ,@c_CON_Address2,@c_CON_Address3            
+              ,@c_CON_Address4,@c_OrdGrp                  
+              ,@n_EPWGT_Value,@n_EPCBM_Value              
+              ,@C_CLKUPUDF01,@c_orderkey,''               
+              ,@c_dest,@c_PLTNo                         
+              ,@c_ShowRemark                            
+              ,@c_ordudf05                          
+              ,@c_ordertype                             
               )  
                    
            SET @c_PreOrderKey = @c_OrderKey  
-           SET @n_lineNo = @n_lineNo + 1                --CS04a  
+           SET @n_lineNo = @n_lineNo + 1                  
              
            DELETE FROM #TEMP_CTNTYPE103  
                     
-           FETCH NEXT FROM CS_SinglePack INTO @c_CartonType, @c_SKU, @n_CtnQty, @n_CtnCount, @n_PQty,@c_GetPalletKey--,@n_TTLPLT  --CS03  
-                                              ,@C_CLKUPUDF01       --CS05  
+           FETCH NEXT FROM CS_SinglePack INTO @c_CartonType, @c_SKU, @n_CtnQty, @n_CtnCount, @n_PQty,@c_GetPalletKey--,@n_TTLPLT    
+                                              ,@C_CLKUPUDF01         
            END  
            CLOSE CS_SinglePack  
            DEALLOCATE CS_SinglePack  
@@ -882,18 +832,15 @@ DECLARE @c_OrderKey            NVARCHAR(10)
                                        @c_ShipTO_City, @c_ShipTO_Phone1,  
                                        @c_ShipTO_Contact1, @c_ShipTO_Country,  
                                        @c_From_Country, @c_StorerKey,   
-                                       @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,    --CS03a  
-                                       @c_Con_Company, @c_Con_Address1, @c_Con_Address2,               --CS04  
-                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,                     --CS04  
-                                       @c_ShowRemark,   --WL03
-                                       @c_userdefine05,                                                --ML01
-                                       @c_ordertype                                                    --ML01
-        END  
+                                       @c_ShipMode, @c_SONo, @c_PalletKey,@c_shiptitle,@c_facility,      
+                                       @c_Con_Company, @c_Con_Address1, @c_Con_Address2,                 
+                                       @c_Con_Address3, @c_Con_Address4,@c_OrdGrp,                       
+                                       @c_ShowRemark,                                                
+                                       @c_ordertype                                                    
           
         CLOSE CS_ORDERS_INFO  
         DEALLOCATE CS_ORDERS_INFO  
           
-         --CS05 Start  
          DECLARE TH_ORDERS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT DISTINCT mbolkey,orderkey,sku  
          FROM #TEMP_PackList103  
@@ -917,10 +864,10 @@ DECLARE @c_OrderKey            NVARCHAR(10)
            )  
            SELECT DISTINCT  ORD.mbolkey, ORD.orderkey ,PD.sku,c.Description,ord.C_Company  
             FROM PICKDETAIL PD (NOLOCK)   
-            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=pd.OrderKey    --CS03a  
-            JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.userdefine02  = PD.orderkey AND PLTD.Sku=pd.sku AND PLTD.StorerKey=ORD.StorerKey   --CS04b  
+            JOIN ORDERS ORD WITH (NOLOCK) ON ORD.OrderKey=pd.OrderKey      
+            JOIN PALLETDETAIL PLTD WITH (NOLOCK) ON PLTD.userdefine02  = PD.orderkey AND PLTD.Sku=pd.sku AND PLTD.StorerKey=ORD.StorerKey     
             JOIN Containerdetail CD WITH (NOLOCK) ON CD.PalletKey=PLTD.PalletKey  
-            JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey     --CS03a  
+            JOIN Container CON WITH (NOLOCK) ON CON.ContainerKey = CD.ContainerKey AND CON.MBOLKey=ord.MBOLKey       
             JOIN LOTATTRIBUTE LOTT WITH (NOLOCK) ON (LOTT.SKU=PD.SKU AND LOTT.Storerkey=PD.Storerkey AND LOTT.lot=PD.Lot)  
             LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'CTYCAT' AND C.code=LOTT.lottable11   
             WHERE ORD.mbolkey=@c_Getmbolkey AND ORD.orderkey = @c_GetOrderKey AND PD.sku = @c_getsku  
@@ -937,7 +884,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
       
     IF EXISTS (SELECT 1 FROM #TEMP_madein103  WHERE MBOLKey = @c_MBOLKey)  
     BEGIN  
-      SET @c_UPDATECCOM = 'Y'               --CS05  
+      SET @c_UPDATECCOM = 'Y'                 
     END  
       
     SELECT @n_CntRec = COUNT(DISTINCT lot11),@c_lott11 = MIN(lot11)  
@@ -991,13 +938,13 @@ DECLARE @c_OrderKey            NVARCHAR(10)
       
     UPDATE #TEMP_PackList103  
     SET lott11 = @c_madein  
-        ,ShipTO_Company = CASE WHEN  @c_UPDATECCOM = 'Y'  THEN @c_company ELSE ShipTO_Company END   --CS05  
+        ,ShipTO_Company = CASE WHEN  @c_UPDATECCOM = 'Y'  THEN @c_company ELSE ShipTO_Company END     
     WHERE MBOLKey = @c_MBOLKey   
       
       
     DELETE FROM #TEMP_madein103  
       
-    --CS05 End  
+     End  
       
    IF @c_type = 'H1' GOTO TYPE_H1     
    IF @c_type = 'S01' GOTO TYPE_S01  
@@ -1055,21 +1002,20 @@ DECLARE @c_OrderKey            NVARCHAR(10)
   , ROUND(CBM, 2) AS CBM                 
   , PCubeUom3          
   , PNetWgt    
-  , shiptitle                            --CS02     
-  , TTLPLT                               --CS03   
-  , CON_Company, CON_Address1            --CS04  
-  , CON_Address2,CON_Address3            --CS04  
-  , CON_Address4,ORDGRP                  --CS04  
-  , EPWGT,EPCBM                          --CS04  
-  , CLKUPUDF01                           --CS05  
+  , shiptitle                                 
+  , TTLPLT                                  
+  , CON_Company, CON_Address1              
+  , CON_Address2,CON_Address3              
+  , CON_Address4,ORDGRP                    
+  , EPWGT,EPCBM                            
+  , CLKUPUDF01                             
   --,orderkey  
-  , lott11                               --CS05  
-  , Dest                                 --CS06
-  , PltNo                                --CS06
-  , ShowRemark                           --WL03
-  , @c_NSQLCountry                       --WL03
-  , Userdefine05                         --ML01
-  , Ordertype                            --ML01          
+  , lott11                                 
+  , Dest                                 
+  , PltNo                                
+  , ShowRemark                           
+  , ordudf05                                               
+  , Ordertype                                      
   FROM #TEMP_PackList103  
   ORDER BY mbolkey,ExternOrdKey, Rowid, sku, CTNCOUNT DESC   
     
@@ -1107,9 +1053,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address3     ,  
     CON_Address4     ,   
     ORDGRP           ,
-    ShowRemark       ,                   --WL03
-    @c_NSQLCountry   ,                    --WL03
-    Userdefine05                         --ML01
+    ShowRemark       ,                   
+    @c_NSQLCountry                        
   FROM #TEMP_PackList103  
   WHERE MBOLKey = @c_MBOLKey  
   AND ORDGRP = 'S01'  
@@ -1146,9 +1091,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     CON_Address3     ,  
     CON_Address4     ,   
     ORDGRP           ,
-    ShowRemark       ,                   --WL03
-    @c_NSQLCountry   ,                   --WL03
-    Userdefine05                         --ML01
+    ShowRemark       ,                   
+    @c_NSQLCountry                                               
   FROM #TEMP_PackList103  
   WHERE MBOLKey = @c_MBOLKey  
   AND ORDGRP <> 'S01'  
@@ -1156,8 +1100,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
     
    GOTO QUIT  
   
-QUIT:  
-END  
+QUIT:   
 GO
 
 SET QUOTED_IDENTIFIER OFF 
