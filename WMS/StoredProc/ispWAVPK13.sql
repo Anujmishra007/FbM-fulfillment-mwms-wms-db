@@ -18,7 +18,7 @@ GO
 /*                                                                      */  
 /* Called By: Wave                                                      */  
 /*                                                                      */  
-/* GitLab Version: 1.1                                                  */  
+/* GitLab Version: 1.3                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -29,6 +29,7 @@ GO
 /* 2021-03-01   WLChooi  1.1  WMS-15713 - AssignPackLabelToOrdCfg (WL01)*/
 /* 2021-03-04   WLChooi  1.2  WMS-16501 - Split Carton by Max LabelLine */
 /*                                        using Storerconfig (WL02)     */
+/* 2021-07-27   WLChooi  1.3  WMS-17575 - Limit Max Qty Per CTN (WL03)  */
 /************************************************************************/  
   
 CREATE PROC [dbo].[ispWAVPK13]  
@@ -59,7 +60,23 @@ BEGIN
            @c_GetPickslipno                NVARCHAR(10) = '',   --WL01
            @n_MaxLinePerCarton             INT,       --WL02
            @n_TTLCTN                       INT = 1    --WL02
-           
+   
+   --WL03 S
+   DECLARE @n_CurrentQtyPerCtn             INT = 0
+         , @n_PrevCartonNo                 INT = 0
+         , @n_FirstCarton                  INT = 1
+
+   CREATE TABLE #TMP_PS (
+      SKU       NVARCHAR(20),
+      Qty       INT,
+      MAXQty    INT )
+   
+   CREATE TABLE #TMP_AssignCTN (
+      SKU       NVARCHAR(20),
+      Qty       INT,
+      CartonNo  INT )
+   --WL03 E
+      
    DECLARE @n_Continue   INT,  
            @n_StartTCnt  INT,  
            @n_debug      INT  
@@ -248,39 +265,146 @@ BEGIN
          IF @b_Success <> 1  
             SET @n_continue = 3  
 
+         --WL03 S
+         INSERT INTO #TMP_PS (SKU, Qty, MAXQty)
+         SELECT P.SKU, SUM(P.Qty), @n_MaxLinePerCarton  
+         FROM PICKDETAIL P (NOLOCK)  
+         JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.OrderKey = LPD.OrderKey
+         WHERE LPD.LoadKey = @c_Loadkey
+         AND P.Qty > 0  
+         GROUP BY P.SKU;
+
+         SET @n_CartonNo = 1
+         SET @n_CurrentQtyPerCtn = 0
+         SET @n_FirstCarton = 1
+         
+         DECLARE CUR_Carton CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         WITH CTE AS (
+               SELECT SKU, Qty, MAXQty,
+                      (CASE WHEN Qty > MAXQty THEN MAXQty ELSE Qty END) AS NewSplitQty
+               FROM #TMP_PS
+               UNION ALL
+               SELECT SKU, Qty, MAXQty,
+                      (CASE WHEN Qty - MAXQty > MAXQty THEN MAXQty ELSE Qty - MAXQty END) AS NewSplitQty
+               FROM #TMP_PS
+               WHERE Qty - MAXQty > 0
+             )
+         SELECT SKU, NewSplitQty
+         FROM CTE
+         ORDER BY SKU, Qty
+         
+         OPEN CUR_Carton
+         
+         FETCH NEXT FROM CUR_Carton INTO @c_SKU, @n_Qty
+         
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            IF @n_Qty = @n_MaxLinePerCarton AND @n_FirstCarton = 1
+            BEGIN
+               SET @n_CurrentQtyPerCtn = 0
+            
+               INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+               SELECT @c_SKU, @n_Qty, @n_CartonNo
+            
+               SET @n_CartonNo = @n_CartonNo + 1
+               
+            END
+            ELSE IF @n_Qty = @n_MaxLinePerCarton
+            BEGIN
+               SET @n_CurrentQtyPerCtn = 0
+               SET @n_CartonNo = @n_CartonNo + 1
+            
+               INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+               SELECT @c_SKU, @n_Qty, @n_CartonNo
+            
+               SET @n_CartonNo = @n_CartonNo + 1
+            END
+            ELSE
+            BEGIN
+               IF @n_CurrentQtyPerCtn + @n_Qty > @n_MaxLinePerCarton
+               BEGIN
+                  SET @n_CurrentQtyPerCtn = @n_Qty
+                  SET @n_CartonNo = @n_CartonNo + 1
+                  
+                  INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                  SELECT @c_SKU, @n_Qty, @n_CartonNo
+               END
+               ELSE
+               BEGIN
+                  INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                  SELECT @c_SKU, @n_Qty, @n_CartonNo
+            
+                  SET @n_CurrentQtyPerCtn = @n_CurrentQtyPerCtn + @n_Qty
+               END
+            END
+
+            SET @n_FirstCarton = 0
+            
+            FETCH NEXT FROM CUR_Carton INTO @c_SKU, @n_Qty
+         END
+         CLOSE CUR_Carton
+         DEALLOCATE CUR_Carton
+
+         SET @n_PrevCartonNo = 0
+
          DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-            SELECT P.SKU, SUM(P.Qty)  
-            FROM PICKDETAIL P (NOLOCK)  
-            WHERE P.OrderKey = @c_OrderKey  
-            AND P.Qty > 0  
-            GROUP BY P.SKU  
+            --SELECT P.SKU, SUM(P.Qty)  
+            --FROM PICKDETAIL P (NOLOCK)  
+            --WHERE P.OrderKey = @c_OrderKey  
+            --AND P.Qty > 0  
+            --GROUP BY P.SKU  
+            SELECT TAC.SKU, TAC.Qty, TAC.CartonNo 
+            FROM #TMP_AssignCTN TAC
+         --WL03 E
   
          OPEN CUR_PICKDETAIL  
   
-         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty  
+         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CartonNo   --WL03 
   
          WHILE @@FETCH_STATUS<> -1  
          BEGIN  
+            --WL03 S
          	--WL02 S
-            IF @n_LabelLineNo = @n_MaxLinePerCarton AND @n_MaxLinePerCarton > 0
-            BEGIN
-               SET @c_LabelNo = ''  
-               SET @n_CartonNo = @n_CartonNo + 1 
-               SET @n_LabelLineNo = 0  
+            --IF @n_LabelLineNo = @n_MaxLinePerCarton AND @n_MaxLinePerCarton > 0
+            --BEGIN
+            --   SET @c_LabelNo = ''  
+            --   SET @n_CartonNo = @n_CartonNo + 1 
+            --   SET @n_LabelLineNo = 0  
                
+            --   EXEC isp_GenUCCLabelNo_Std  
+            --      @cPickslipNo  = @c_Pickslipno,  
+            --      @nCartonNo    = @n_CartonNo,  
+            --      @cLabelNo     = @c_LabelNo OUTPUT,  
+            --      @b_success    = @b_Success OUTPUT,  
+            --      @n_err        = @n_err OUTPUT,  
+            --      @c_errmsg     = @c_errmsg OUTPUT  
+               
+            --   IF @b_Success <> 1  
+            --      SET @n_continue = 3  
+            --END
+            --WL02 E
+
+            IF @n_PrevCartonNo = 0
+               SET @n_PrevCartonNo = @n_CartonNo
+
+            IF @n_PrevCartonNo <> @n_CartonNo
+            BEGIN
+               SET @c_LabelNo = ''
+               SET @n_LabelLineNo = 0  
+
                EXEC isp_GenUCCLabelNo_Std  
                   @cPickslipNo  = @c_Pickslipno,  
                   @nCartonNo    = @n_CartonNo,  
-                  @cLabelNo     = @c_LabelNo OUTPUT,  
-                  @b_success    = @b_Success OUTPUT,  
+                  @cLabelNo     = @c_LabelNo OUTPUT,
+                  @b_success    = @b_Success OUTPUT,
                   @n_err        = @n_err OUTPUT,  
                   @c_errmsg     = @c_errmsg OUTPUT  
                
                IF @b_Success <> 1  
                   SET @n_continue = 3  
             END
-            --WL02 E
-            
+            --WL03 E
+
             SET @n_LabelLineNo = @n_LabelLineNo + 1  
             SET @c_LabelLineNo = RIGHT('00000' + RTRIM(CAST(@n_LabelLineNo AS NVARCHAR)),5)  
             
@@ -288,7 +412,7 @@ BEGIN
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
             VALUES  
                (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,  
-                @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())  
+                @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
   
             SET @n_err = @@ERROR  
   
@@ -297,9 +421,11 @@ BEGIN
                SELECT @n_continue = 3  
                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68060  
                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-            END  
-            
-            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty  
+            END 
+
+            SET @n_PrevCartonNo = @n_CartonNo   --WL03
+
+            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CartonNo   --WL03   
          END  
          CLOSE CUR_PICKDETAIL  
          DEALLOCATE CUR_PICKDETAIL  
@@ -439,41 +565,146 @@ NEXT_LOOP:
             @c_errmsg     = @c_errmsg OUTPUT  
 
          IF @b_Success <> 1  
-            SET @n_continue = 3  
+            SET @n_continue = 3
+            
+         --WL03 S
+         INSERT INTO #TMP_PS (SKU, Qty, MAXQty)
+         SELECT P.SKU, SUM(P.Qty), @n_MaxLinePerCarton  
+         FROM PICKDETAIL P (NOLOCK)  
+         JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.OrderKey = LPD.OrderKey
+         WHERE LPD.LoadKey = @c_Loadkey
+         AND P.Qty > 0  
+         GROUP BY P.SKU;
+
+         SET @n_CartonNo = 1
+         SET @n_CurrentQtyPerCtn = 0
+         SET @n_FirstCarton = 1
+         
+         DECLARE CUR_Carton CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         WITH CTE AS (
+               SELECT SKU, Qty, MAXQty,
+                      (CASE WHEN Qty > MAXQty THEN MAXQty ELSE Qty END) AS NewSplitQty
+               FROM #TMP_PS
+               UNION ALL
+               SELECT SKU, Qty, MAXQty,
+                      (CASE WHEN Qty - MAXQty > MAXQty THEN MAXQty ELSE Qty - MAXQty END) AS NewSplitQty
+               FROM #TMP_PS
+               WHERE Qty - MAXQty > 0
+             )
+         SELECT SKU, NewSplitQty
+         FROM CTE
+         ORDER BY SKU, Qty
+         
+         OPEN CUR_Carton
+         
+         FETCH NEXT FROM CUR_Carton INTO @c_SKU, @n_Qty
+         
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            IF @n_Qty = @n_MaxLinePerCarton AND @n_FirstCarton = 1
+            BEGIN
+               SET @n_CurrentQtyPerCtn = 0
+            
+               INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+               SELECT @c_SKU, @n_Qty, @n_CartonNo
+            
+               SET @n_CartonNo = @n_CartonNo + 1
+               
+            END
+            ELSE IF @n_Qty = @n_MaxLinePerCarton
+            BEGIN
+               SET @n_CurrentQtyPerCtn = 0
+               SET @n_CartonNo = @n_CartonNo + 1
+            
+               INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+               SELECT @c_SKU, @n_Qty, @n_CartonNo
+            
+               SET @n_CartonNo = @n_CartonNo + 1
+            END
+            ELSE
+            BEGIN
+               IF @n_CurrentQtyPerCtn + @n_Qty > @n_MaxLinePerCarton
+               BEGIN
+                  SET @n_CurrentQtyPerCtn = @n_Qty
+                  SET @n_CartonNo = @n_CartonNo + 1
+                  
+                  INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                  SELECT @c_SKU, @n_Qty, @n_CartonNo
+               END
+               ELSE
+               BEGIN
+                  INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                  SELECT @c_SKU, @n_Qty, @n_CartonNo
+            
+                  SET @n_CurrentQtyPerCtn = @n_CurrentQtyPerCtn + @n_Qty
+               END
+            END
+
+            SET @n_FirstCarton = 0
+            
+            FETCH NEXT FROM CUR_Carton INTO @c_SKU, @n_Qty
+         END
+         CLOSE CUR_Carton
+         DEALLOCATE CUR_Carton
+         
+         SET @n_PrevCartonNo = 0
 
          DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-            SELECT P.SKU, SUM(P.Qty)  
-            FROM PICKDETAIL P (NOLOCK)  
-            JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.OrderKey = LPD.OrderKey
-            WHERE LPD.LoadKey = @c_Loadkey
-            AND P.Qty > 0  
-            GROUP BY P.SKU  
-  
+            --SELECT P.SKU, SUM(P.Qty)  
+            --FROM PICKDETAIL P (NOLOCK)  
+            --JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.OrderKey = LPD.OrderKey
+            --WHERE LPD.LoadKey = @c_Loadkey
+            --AND P.Qty > 0  
+            --GROUP BY P.SKU  
+            SELECT TAC.SKU, TAC.Qty, TAC.CartonNo 
+            FROM #TMP_AssignCTN TAC
+         --WL03 E
          OPEN CUR_PICKDETAIL  
   
-         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty  
+         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CartonNo   --WL03  
   
          WHILE @@FETCH_STATUS<> -1  
          BEGIN  
+            --WL03 S
          	--WL02 S
-            IF @n_LabelLineNo = @n_MaxLinePerCarton AND @n_MaxLinePerCarton > 0
-            BEGIN
-               SET @c_LabelNo = ''  
-               SET @n_CartonNo = @n_CartonNo + 1 
-               SET @n_LabelLineNo = 0  
+            --IF @n_LabelLineNo = @n_MaxLinePerCarton AND @n_MaxLinePerCarton > 0
+            --BEGIN
+            --   SET @c_LabelNo = ''  
+            --   SET @n_CartonNo = @n_CartonNo + 1 
+            --   SET @n_LabelLineNo = 0  
                
+            --   EXEC isp_GenUCCLabelNo_Std  
+            --      @cPickslipNo  = @c_Pickslipno,  
+            --      @nCartonNo    = @n_CartonNo,  
+            --      @cLabelNo     = @c_LabelNo OUTPUT,  
+            --      @b_success    = @b_Success OUTPUT,  
+            --      @n_err        = @n_err OUTPUT,  
+            --      @c_errmsg     = @c_errmsg OUTPUT  
+               
+            --   IF @b_Success <> 1  
+            --      SET @n_continue = 3  
+            --END
+            --WL02 E
+            IF @n_PrevCartonNo = 0
+               SET @n_PrevCartonNo = @n_CartonNo
+
+            IF @n_PrevCartonNo <> @n_CartonNo
+            BEGIN
+               SET @c_LabelNo = ''
+               SET @n_LabelLineNo = 0  
+
                EXEC isp_GenUCCLabelNo_Std  
                   @cPickslipNo  = @c_Pickslipno,  
                   @nCartonNo    = @n_CartonNo,  
-                  @cLabelNo     = @c_LabelNo OUTPUT,  
-                  @b_success    = @b_Success OUTPUT,  
+                  @cLabelNo     = @c_LabelNo OUTPUT,
+                  @b_success    = @b_Success OUTPUT,
                   @n_err        = @n_err OUTPUT,  
                   @c_errmsg     = @c_errmsg OUTPUT  
                
                IF @b_Success <> 1  
                   SET @n_continue = 3  
             END
-            --WL02 E
+            --WL03 E
             
             SET @n_LabelLineNo = @n_LabelLineNo + 1  
             SET @c_LabelLineNo = RIGHT('00000' + RTRIM(CAST(@n_LabelLineNo AS NVARCHAR)),5)  
@@ -482,7 +713,7 @@ NEXT_LOOP:
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
             VALUES  
                (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,  
-                @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())  
+                @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
   
             SET @n_err = @@ERROR  
   
@@ -492,8 +723,10 @@ NEXT_LOOP:
                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 68085  
                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (ispWAVPK13)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
             END  
-            
-            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty  
+
+            SET @n_PrevCartonNo = @n_CartonNo   --WL03
+
+            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CartonNo   --WL03   
          END  
          CLOSE CUR_PICKDETAIL  
          DEALLOCATE CUR_PICKDETAIL  
@@ -654,6 +887,20 @@ QUIT_SP:
       DEALLOCATE CUR_LOOP   
    END
    --WL01 E
+
+   --WL03 S
+   IF OBJECT_ID('tempdb..#TMP_PS') IS NOT NULL
+      DROP TABLE #TMP_PS
+
+   IF OBJECT_ID('tempdb..#TMP_AssignCTN') IS NOT NULL
+      DROP TABLE #TMP_AssignCTN
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_Carton') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_Carton
+      DEALLOCATE CUR_Carton   
+   END
+   --WL03 E
    
    IF @n_Continue=3  -- Error Occured - Process AND Return
    BEGIN
