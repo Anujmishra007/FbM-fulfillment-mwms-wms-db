@@ -30,6 +30,7 @@ GO
 /* 2021-03-04   WLChooi  1.2  WMS-16501 - Split Carton by Max LabelLine */
 /*                                        using Storerconfig (WL02)     */
 /* 2021-07-27   WLChooi  1.3  WMS-17575 - Limit Max Qty Per CTN (WL03)  */
+/* 2021-08-11   WLChooi  1.4  Bug Fix for WMS-17575 (WL04)              */
 /************************************************************************/  
   
 CREATE PROC [dbo].[ispWAVPK13]  
@@ -269,8 +270,9 @@ BEGIN
          INSERT INTO #TMP_PS (SKU, Qty, MAXQty)
          SELECT P.SKU, SUM(P.Qty), @n_MaxLinePerCarton  
          FROM PICKDETAIL P (NOLOCK)  
-         JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.OrderKey = LPD.OrderKey
-         WHERE LPD.LoadKey = @c_Loadkey
+         --JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.OrderKey = LPD.OrderKey   --WL04  
+         --WHERE LPD.LoadKey = @c_Loadkey   --WL04  
+         WHERE P.OrderKey = @c_OrderKey   --WL04  
          AND P.Qty > 0  
          GROUP BY P.SKU;
 
@@ -497,6 +499,8 @@ BEGIN
             --WL01 E
          END
 NEXT_LOOP:
+         TRUNCATE TABLE #TMP_PS   --WL04
+         TRUNCATE TABLE #TMP_AssignCTN   --WL04
          FETCH NEXT FROM CUR_DISCPACK INTO @c_Loadkey, @c_Orderkey, @c_Storerkey 
       END  
       --CLOSE CUR_DISCPACK  
@@ -796,6 +800,8 @@ NEXT_LOOP:
             --WL01 E
          END
 NEXT_ConsoLOOP:
+         TRUNCATE TABLE #TMP_PS   --WL04
+         TRUNCATE TABLE #TMP_AssignCTN   --WL04
          FETCH NEXT FROM CUR_DISCPACKConso INTO @c_Loadkey, @c_Storerkey 
       END  
       --CLOSE CUR_DISCPACKConso  
