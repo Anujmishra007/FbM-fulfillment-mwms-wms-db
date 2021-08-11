@@ -22,7 +22,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */ 
+/* 9/8/21       ian      INC1583102 Support id with >10 , <19 character */    
 /************************************************************************/
 
 CREATE PROC ispCANOR02   
@@ -54,7 +55,7 @@ BEGIN
          , @n_SumLotLocIDQty     INT
          , @c_Lot                NVARCHAR(10)
          , @c_Loc                NVARCHAR(10)
-         , @c_ID                 NVARCHAR(10)
+         , @c_ID                 NVARCHAR(18) --ian        INC1583102
          , @c_FromLoc            NVARCHAR(10)
          , @c_ToLoc              NVARCHAR(10)
          , @c_Packkey            NVARCHAR(10)
