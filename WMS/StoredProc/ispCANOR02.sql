@@ -23,7 +23,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */ 
-/* 9/8/21       ian        INC1583102 , Support id with >10 , <19 character */    
+/* 9/8/21       ian      INC1583102 Support id with >10 , <19 character */    
 /************************************************************************/
 
 CREATE PROC ispCANOR02   
