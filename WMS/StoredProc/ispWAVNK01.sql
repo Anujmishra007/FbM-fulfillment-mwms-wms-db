@@ -36,6 +36,7 @@ GO
 /* 24-FEB-2018 Barnett  1.4   WMS-3682 if sku.stdcube >                 */
 /*                            cartonization.cube, stop process(BL03)    */
 /* 04-JUL-2018 Wan01    1.5   WMS-5447:CN-NIKESDC_WMS_PreCartonization_CR*/
+/* 23-JUL-2021 NJOW01   1.6   WMS-17457 update orderdetail for grouping */
 /************************************************************************/
 CREATE PROC [dbo].[ispWAVNK01](
     @c_WaveKey       NVARCHAR(20)
@@ -82,7 +83,7 @@ BEGIN
             @FillTolerance    INT,
             @CurrWeight       FLOAT,
             @CurrCube         FLOAT,
-      @CurrCount        INT
+            @CurrCount        INT
 
    DECLARE  @SKULength        FLOAT,
             @SKUCUBE          FLOAT,
@@ -120,6 +121,10 @@ BEGIN
             , @c_DocKey             NVARCHAR(10)         --(Wan01)
             , @c_SKUSUSR3           NVARCHAR(20)         --(Wan01)
             , @n_TotalCube          FLOAT                --(Wan01)
+            , @c_GetOrderkey        NVARCHAR(10)         --NJOW01
+            , @c_OrderLineNumber    NVARCHAR(5)          --NJOW01
+            , @c_OrderDetRefNote1   NVARCHAR(1000)       --NJOW01
+            , @n_Discount           FLOAT                --NJOW01
 
    --Dynamic SQL use Variable
    DECLARE @c_ListName NVARCHAR(10)
@@ -134,7 +139,7 @@ BEGIN
          ,@c_SQLGroup NVARCHAR(2000)
          ,@c_SQLDYN01 NVARCHAR(2000)
          ,@c_SQLDYN02 NVARCHAR(2000)
-         ,@c_SQLDYN03 NVARCHAR(2000) --NJOW01
+         ,@c_SQLDYN03 NVARCHAR(2000) 
          ,@c_Field01 NVARCHAR(60)
          ,@c_Field02 NVARCHAR(60)
          ,@c_Field03 NVARCHAR(60)
@@ -146,11 +151,11 @@ BEGIN
          ,@c_Field09 NVARCHAR(60)
          ,@c_Field10 NVARCHAR(60)
          ,@n_cnt int
-         ,@n_NoOfGroupField      INT --NJOW03
-         ,@c_FoundLoadkey NVARCHAR(10) --NJOW01
-                       
+         ,@n_NoOfGroupField      INT 
+         ,@c_FoundLoadkey NVARCHAR(10)                     
    
    SELECT @b_success = 1 --Preset to success
+   SET @n_continue = 1
    SET @n_Debug = 0
    SET @n_StartTCnt=@@TRANCOUNT
 
@@ -625,7 +630,7 @@ BEGIN
       AND   Loadkey  = @c_Loadkey
 
       --(Wan01) - END  
-NEXT_CartonType:
+      NEXT_CartonType:
 
       --Set Complete the this line of record
       UPDATE #PickDetail
@@ -762,7 +767,61 @@ NEXT_CartonType:
                   FROM codelkup (NOLOCK) 
                   WHERE ListName = @c_Notes1 AND code2='PRECARTON')
       BEGIN
+      	 --update orderdetail S --NJOW01
+      	 IF EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) WHERE Listname = 'NKVASDISCT' AND Code = @c_Notes1)
+      	 BEGIN      	 
+            SELECT @c_SQLDYN01 = N'DECLARE CUR_OrdDetList CURSOR FAST_FORWARD READ_ONLY FOR '
+                        + N' SELECT PD.PackOrderKey, PD.OrderLineNumber, ISNULL(OREF.Note1,''''), '    
+                        + N'        CASE WHEN ISNULL(OD.ExtendedPrice,0)=0 THEN 0 ELSE ISNULL(OD.UnitPrice,0) / OD.ExtendedPrice END '
+                        + N' FROM #PickDetail PD '
+                        + N' JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = PD.PackOrderKey AND OD.OrderLineNumber = PD.OrderLineNumber ' 
+                        + N' OUTER APPLY (SELECT TOP 1 ODR.Note1 FROM ORDERDETAILREF ODR (NOLOCK) WHERE ODR.Orderkey = OD.Orderkey AND ODR.OrderLineNumber = OD.OrderLineNumber AND ISNULL(ODR.Note1,'''') = N''安全扣'') AS OREF '
+                        + N' WHERE PD.UOM in(6,7) and Sts = ''0'' AND PD.OrderKey = @c_Orderkey '    
+                        + N' AND PD.Loadkey = @c_Loadkey '                              
+                        + N' AND PD.Consignee = @c_ConsigneeKey '                        
+                        + N' GROUP BY PD.PackOrderKey, PD.OrderLineNumber, OREF.Note1, OD.ExtendedPrice, OD.UnitPrice ' +  
+                        + N' ORDER BY PD.PackOrderKey, PD.OrderLineNumber '    
+                        
+            EXEC sp_executesql @c_SQLDYN01,
+                  N'@c_Loadkey NVARCHAR(10), @c_Orderkey NVARCHAR(10), @c_Consigneekey NVARCHAR(15)', 
+                  @c_Loadkey,
+                  @c_Orderkey,
+                  @c_Consigneekey
 
+            OPEN CUR_OrdDetList       
+                       
+            FETCH NEXT FROM CUR_OrdDetList INTO @c_GetOrderkey, @c_OrderLineNumber, @c_OrderDetRefNote1, @n_Discount
+            
+            WHILE (@@FETCH_STATUS <> -1) AND @n_continue in(1,2)   
+            BEGIN
+            	 IF @c_OrderDetRefNote1 = N'安全扣' OR @n_Discount >= 0
+            	 BEGIN
+            	 	  UPDATE ORDERDETAIL WITH (ROWLOCK)
+            	 	  SET UserDefine09 = CASE WHEN @c_OrderDetRefNote1 = N'安全扣' THEN 'SAFETYBK' ELSE 'NOSAFETYBK' END,
+            	 	      UserDefine10 = CASE WHEN @n_Discount = 0 THEN '0'
+            	 	                          WHEN @n_Discount > 0 AND @n_Discount <= 0.5 THEN '5'
+            	 	                          WHEN @n_Discount > 0.5 THEN '10'
+            	 	                          ELSE '0' END,
+            	 	      TrafficCop = NULL
+            	 	   WHERE Orderkey = @c_GetOrderkey
+            	 	   AND OrderLineNumber = @c_OrderLineNumber
+            	 	   
+                   SELECT @n_err = @@ERROR
+                   IF @n_err <> 0
+                   BEGIN
+                      SELECT @n_continue = 3
+                      SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 60011   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+                      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Table Failed. (ispWAVNK01)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+                   END            	 	                                      	 	
+            	 END
+            	 
+               FETCH NEXT FROM CUR_OrdDetList INTO @c_GetOrderkey, @c_OrderLineNumber, @c_OrderDetRefNote1, @n_Discount            	 
+            END
+            CLOSE CUR_OrdDetList
+            DEALLOCATE CUR_OrdDetList                  	                                                        
+         END               
+      	 --update orderdetail E
+      	
          --Prepare dynamic sql
          DECLARE CUR_CODELKUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
      
@@ -1124,7 +1183,7 @@ NEXT_CartonType:
             WHILE @CntCount <= @PickDetailQty
             BEGIN
 
-   --Check Any Open Carton for this Order SKU 
+               --Check Any Open Carton for this Order SKU 
                IF EXISTS (SELECT 1 FROM #OpenCarton WHERE Sts = 0 and PickSlipNo = @c_PickSlipno and CartonType = @c_CartonType AND UOM = '7')--(Wan01)
                BEGIN
                   --SELECT 'Got Open carton, Get The Current Carton Info'
@@ -1140,7 +1199,7 @@ NEXT_CartonType:
                ELSE
                BEGIN
                    --SELECT 'No Open carton, Open one'
-         Open_New_Carton:
+                  Open_New_Carton:
                   SET @cLabelNo = ''
                   SET @CartonNo = ''
 
