@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 05-Aug-2021 NJOW01   1.0   WMS-17104 add config to skip get tracking */
+/*                            no from userdefine04                      */
 /************************************************************************/
 CREATE PROC isp_Ecom_GetOrderInfo
            @c_Orderkey   NVARCHAR(10)
@@ -44,7 +46,7 @@ BEGIN
       COMMIT TRAN
    END
 
-   SELECT ORDERS.Orderkey
+   SELECT TOP 1 ORDERS.Orderkey
       ,ORDERS.ExternOrderkey
       ,ORDERS.LoadKey
       ,ORDERS.ConsigneeKey
@@ -56,9 +58,13 @@ BEGIN
       ,ORDERS.UserDefine05
       ,ORDERS.Status
       ,ORDERS.SOStatus
-      ,TrackingNo = CASE WHEN ISNULL(RTRIM(TrackingNo),'') <> '' THEN TrackingNo ELSE ISNULL(RTRIM(UserDefine04),'') END
+      ,TrackingNo = CASE WHEN SC.Configkey IS NOT NULL THEN ISNULL(RTRIM(ORDERS.TrackingNo),'') ELSE  --NJOW01
+                         CASE WHEN ISNULL(RTRIM(ORDERS.TrackingNo),'') <> '' THEN ORDERS.TrackingNo ELSE ISNULL(RTRIM(ORDERS.UserDefine04),'') END
+                    END     
+      --,TrackingNo = CASE WHEN ISNULL(RTRIM(TrackingNo),'') <> '' THEN TrackingNo ELSE ISNULL(RTRIM(UserDefine04),'') END
    FROM ORDERS WITH (NOLOCK)
-   WHERE Orderkey = @c_Orderkey
+   LEFT JOIN STORERCONFIG SC (NOLOCK) ON ORDERS.Storerkey = SC.Storerkey AND SC.Configkey = 'EPACKGetTrackNoSkipUDF04' AND SC.Svalue = '1'  --NJOW01
+   WHERE ORDERS.Orderkey = @c_Orderkey
 
 QUIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt
