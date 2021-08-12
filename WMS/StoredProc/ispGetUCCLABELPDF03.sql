@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-10-23  WLChooi  1.1   WMS-13124 - Fix only print PDF (WL01)     */
+/* 2021-06-10  WLChooi  1.2   WMS-17206 - Exclude some Ordergroup (WL02)*/
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispGetUCCLABELPDF03]
@@ -96,7 +97,8 @@ BEGIN
          , @c_ArchivePath     NVARCHAR(200) = ''
          , @c_TrackingNo      NVARCHAR(30)  = ''
          , @c_Type            NVARCHAR(20)  = ''
-         , @c_Option3         NVARCHAR(50) = ''
+         , @c_Option3         NVARCHAR(50)  = ''
+         , @c_OrderGroup      NVARCHAR(20)  = ''   --WL02
           
    --CREATE TABLE #DirPDFTree (
    --   ID INT IDENTITY(1,1),
@@ -119,9 +121,18 @@ BEGIN
         , @c_ExtOrderkey = ORDERS.ExternOrderKey
         , @c_Shipperkey  = LTRIM(RTRIM(ISNULL(ORDERS.ShipperKey,'')))
         , @c_TrackingNo  = LTRIM(RTRIM(ISNULL(ORDERS.TrackingNo,'')))
+        , @c_OrderGroup  = ORDERS.OrderGroup   --WL02
    FROM PACKHEADER (NOLOCK)
    JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
    WHERE PACKHEADER.PickSlipNo = @c_Param01 
+
+   --WL02 S
+   IF LTRIM(RTRIM(ISNULL(@c_OrderGroup,''))) = 'aCommerce'
+   BEGIN
+      SET @n_PrintAction = 0
+      GOTO QUIT_SP
+   END
+   --WL02 E
 
    SELECT @c_Option3 = ISNULL(SC.Option3,'')
    FROM STORERCONFIG SC (NOLOCK)
