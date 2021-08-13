@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 24-Jul-2021 CSCHONG  1.0   WMS-15908 revised field logic (CS01)      */
+/* 26-Jul-2021 CSCHONG  1.1   WMS-15908 fix page break sorting issue(CS02)*/
 /************************************************************************/
 CREATE PROC isp_Delivery_Receipt10
             @c_OrderKey     NVARCHAR(10)  
@@ -59,7 +61,7 @@ BEGIN
    SET @n_Continue = 1  
      
    SET @c_Rptsku = ''            
-   SET @n_Maxline = 17        
+   SET @n_Maxline = 25--17     --CS02        
     
   
    CREATE TABLE #DR10  
@@ -83,7 +85,7 @@ BEGIN
       ,  Storerkey         NVARCHAR(15)  
       ,  Sku               NVARCHAR(20)   
       ,  SKUDescr          NVARCHAR(60)     
-      ,  QTY               INT        
+      ,  QTY               NVARCHAR(10)        
       ,  Pageno            INT
       ,  PrefixQty         NVARCHAR(50)
       ,  ShowField         NVARCHAR(5)
@@ -139,7 +141,11 @@ BEGIN
   , ORDERs.Storerkey  
   , ORDERDETAIL.Sku AS sku   
   , SKUDescr = ISNULL(RTRIM(SKU.Descr),'')  
-  , SUM(Orderdetail.QtyAllocated + Orderdetail.QtyPicked + Orderdetail.ShippedQty)
+  --, SUM(Orderdetail.QtyAllocated + Orderdetail.QtyPicked + Orderdetail.ShippedQty)    --CS01
+  , Qty = CASE WHEN ORDERDETAIL.Userdefine02 = ('K') THEN
+                        CASE WHEN SUM(Orderdetail.QtyAllocated + Orderdetail.QtyPicked + Orderdetail.ShippedQty) > 0 THEN '' 
+                                 ELSE CAST(SUM(Orderdetail.QtyAllocated + Orderdetail.QtyPicked + Orderdetail.ShippedQty) AS NVARCHAR(10)) END 
+          ELSE CAST(SUM(Orderdetail.QtyAllocated + Orderdetail.QtyPicked + Orderdetail.ShippedQty) AS NVARCHAR(10)) END
   , pageno = 1--(Row_Number() OVER (PARTITION BY ORDERS.Orderkey ORDER BY ORDERS.Orderkey, ORDERDETAIL.orderlinenumber,PICKDETAIL.Sku Asc)-1)/@n_maxLine + 1   
   , PrefixQty = CASE WHEN ORDERDETAIL.Userdefine02 NOT IN ('N', 'PN') THEN
                         CASE WHEN SUM(Orderdetail.QtyAllocated + Orderdetail.QtyPicked + Orderdetail.ShippedQty) = 0 THEN '(OOS-To Follow)' ELSE '' END ELSE '' END
@@ -197,10 +203,11 @@ BEGIN
       ,  #DR10.Sku                 
       ,  #DR10.SKUDescr              
       ,  (#DR10.QTY) as QTY           
-      ,   (Row_Number() OVER (PARTITION BY #DR10.Orderkey ORDER BY #DR10.Orderkey,#DR10.Sku Asc)-1)/@n_maxLine + 1 as Pageno  
+      ,   (Row_Number() OVER (PARTITION BY #DR10.Orderkey ORDER BY #DR10.Orderkey,#DR10.ExtLineno,#DR10.Sku Asc)-1)/@n_maxLine + 1 as Pageno  --CS02
       ,  #DR10.PrefixQty 
       ,  #DR10.ShowField 
       FROM #DR10  #DR10   
+      WHERE #DR10.ShowField='Y'
       group by  #DR10.ODNotes   
       ,  #DR10.DRDate  
       ,  #DR10.shipperkey             
@@ -227,7 +234,8 @@ BEGIN
        ,  #DR10.ExtLineno
       ORDER BY #DR10.Orderkey  
             ,  #DR10.Storerkey       
-            --,  CASE WHEN #DR10.Sku <> '' THEN 1 ELSE 0 END desc        
+            --,  CASE WHEN #DR10.Sku <> '' THEN 1 ELSE 0 END desc   
+            , #DR10.ShowField desc     
             ,  #DR10.ExtLineno
 QUIT:  
   
