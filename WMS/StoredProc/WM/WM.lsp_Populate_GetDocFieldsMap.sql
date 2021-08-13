@@ -27,6 +27,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-06-18  Wan01    1.1   LFWM-2811 - UATPhilippines  Populate of PO*/
 /*                            in ASN (RECTYPE)                          */
+/* 2021-07-20  Wan02    1.6   LFWM-2854 - UAT - TW  Receipt - Populate  */
+/*                            from PO ( 1 PO 1 ASN ) in SCE does not    */
+/*                            support codelkup 'PO2ASNMAP               */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Populate_GetDocFieldsMap] 
       @c_SourceTable          NVARCHAR(30) 
@@ -116,7 +119,7 @@ BEGIN
       GOTO EXIT_SP  
    END  
    
-   IF @c_FromCol = ''                                       --(Wan01)
+   IF @c_FromCol = '' AND @c_FromTable <> ''                --(Wan01)(Wan02)
    BEGIN    
       GOTO EXIT_SP    
    END   
@@ -158,7 +161,7 @@ BEGIN
          GOTO EXIT_SP  
       END  
   
-      SET @c_ReturnSQL = N' SELECT FromValue = ' + @c_FromCol  
+      SET @c_ReturnSQL = N' SELECT TOP 1 FromValue = ' + @c_FromCol                    --(Wan02) - Return 1 record
                        +  ' FROM ' + @c_SourceTable + ' WITH (NOLOCK)'  
   
       GOTO EXIT_SP  
@@ -171,7 +174,7 @@ BEGIN
   
    IF @c_Rule = 'SQL'  
    BEGIN  
-      SET @c_ReturnSQL = REPLACE (@c_CustomSQL, 'SELECT', 'SELECT FromValue = ')   
+      SET @c_ReturnSQL = REPLACE (@c_CustomSQL, 'SELECT', 'SELECT TOP 1 FromValue = ') --(Wan02) - Return 1 record  
   
       GOTO EXIT_SP  
    END  
