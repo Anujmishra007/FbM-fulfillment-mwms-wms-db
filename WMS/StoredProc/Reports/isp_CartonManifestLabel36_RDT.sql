@@ -1,7 +1,6 @@
 if exists (select * from  dbo.sysobjects where id = object_id(N'[dbo].[isp_CartonManifestLabel36_RDT]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
    drop procedure [dbo].[isp_CartonManifestLabel36_RDT]
 GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -26,6 +25,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 15-Jun-2021  CSCHONG       WMS-16910 revised field logic (CS01)      */
+/* 24-Jul-2021  CSCHONG       WMS-16910 revised field logic (CS02)      */
+/* 28-JUL-2021  CSCHONG       WMS-17587 fix dupliacte qty issue (CS03)  */
 /************************************************************************/
 CREATE PROC [dbo].[isp_CartonManifestLabel36_RDT] (
       @c_Orderkey      NVARCHAR(10) 
@@ -117,6 +118,10 @@ BEGIN
    FROM  PACKDETAIL  WITH (NOLOCK) 
    JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
    JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
+   CROSS APPLY(SELECT DISTINCT OD.storerkey,OD.SKU,PD.CartonNo,pd.qty AS PQTY FROM  ORDERDETAIL OD WITH (NOLOCK) 
+               JOIN Packdetail PD WITH (NOLOCK) ON PD.StorerKey=OD.StorerKey AND PD.SKU = OD.Sku
+               JOIN dbo.PackHeader PH WITH (NOLOCK) ON PH.OrderKey = OD.OrderKey AND PH.PickSlipNo=PD.PickSlipNo where ORDERS.Orderkey = OD.OrderKey 
+               AND OD.StorerKey = orders.Storerkey AND OD.userdefine02 <> 'K' AND OD.sku = PACKDETAIL.sku AND PD.Cartonno = PACKDETAIL.Cartonno) AS OD --CS03
    JOIN  SKU         WITH (NOLOCK)  ON (PACKDETAIL.Storerkey = SKU.Storerkey)
                                    AND (PACKDETAIL.Sku = SKU.Sku)
    JOIN  PACK        WITH (NOLOCK)  ON (SKU.Packkey = PACK.Packkey)
@@ -136,6 +141,7 @@ BEGIN
   -- AND   PACKDETAIL.DropID   = CASE WHEN @c_dropid = '' THEN PACKDETAIL.DropID ELSE @c_dropid END 
   -- AND   PACKHEADER.Status = '9'
    AND ISNULL(ORDERS.shipperkey,'') <> '' AND ISNULL(ORDERS.trackingno,'') <> ''
+   --AND OD.userdefine02 <> 'K'             --CS03
    GROUP BY ORDERS.Orderkey
          ,  ISNULL(RTRIM(ORDERS.ConsigneeKey),'')
          ,  ISNULL(RTRIM(ORDERS.C_Company),'')
