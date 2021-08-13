@@ -2,6 +2,7 @@ IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_B
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_BT_Bartender_HK_RTNHGTAG]
 GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,10 +18,11 @@ GO
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2021-06-01 1.0  CSCHONG    Created(WMS-17136)                              */    
 /* 2021-06-17 2.0  CSCHONG    WMS-17286 revised logic (CS01)                  */         
-/* 2021-07-13 2.1  CSCHONG    WMS-17286 revised col02 and col04 (CS02)        */        
+/* 2021-07-13 2.1  CSCHONG    WMS-17286 revised col02 and col04 (CS02)        */     
+/* 2021-08-04 2.2  CSCHONG    WMS-17534 support duplicate sku (CS03)          */   
 /******************************************************************************/                
                   
-CREATE  PROC [dbo].[isp_BT_Bartender_HK_RTNHGTAG]                      
+CREATE PROC [dbo].[isp_BT_Bartender_HK_RTNHGTAG]                      
 (  @c_Sparm01            NVARCHAR(250),              
    @c_Sparm02            NVARCHAR(250),              
    @c_Sparm03            NVARCHAR(250),              
@@ -261,7 +263,7 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN + CHAR(13) + @c_condition1 + CHAR(13) + @c_orde
         SELECT * FROM #Result (nolock)        
       END   
       
- WHILE @n_copy > 1
+   WHILE @n_copy > 1
    BEGIN
       INSERT INTO #Result
       (
@@ -391,7 +393,139 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN + CHAR(13) + @c_condition1 + CHAR(13) + @c_orde
       ORDER BY r.ID
       
       SET @n_copy = @n_copy - 1
-   END           
+   END 
+  --CS03 START
+   IF @n_copy = 1 AND @c_Sparm02 = @c_Sparm04
+   BEGIN   
+
+     INSERT INTO #Result
+     (
+         Col01,
+         Col02,
+         Col03,
+         Col04,
+         Col05,
+         Col06,
+         Col07,
+         Col08,
+         Col09,
+         Col10,
+         Col11,
+         Col12,
+         Col13,
+         Col14,
+         Col15,
+         Col16,
+         Col17,
+         Col18,
+         Col19,
+         Col20,
+         Col21,
+         Col22,
+         Col23,
+         Col24,
+         Col25,
+         Col26,
+         Col27,
+         Col28,
+         Col29,
+         Col30,
+         Col31,
+         Col32,
+         Col33,
+         Col34,
+         Col35,
+         Col36,
+         Col37,
+         Col38,
+         Col39,
+         Col40,
+         Col41,
+         Col42,
+         Col43,
+         Col44,
+         Col45,
+         Col46,
+         Col47,
+         Col48,
+         Col49,
+         Col50,
+         Col51,
+         Col52,
+         Col53,
+         Col54,
+         Col55,
+         Col56,
+         Col57,
+         Col58,
+         Col59,
+         Col60
+     )
+     SELECT TOP 1 Col01,
+         Col02,
+         Col03,
+         Col04,
+         Col05,
+         Col06,
+         Col07,
+         Col08,
+         Col09,
+         Col10,
+         Col11,
+         Col12,
+         Col13,
+         Col14,
+         Col15,
+         Col16,
+         Col17,
+         Col18,
+         Col19,
+         Col20,
+         Col21,
+         Col22,
+         Col23,
+         Col24,
+         Col25,
+         Col26,
+         Col27,
+         Col28,
+         Col29,
+         Col30,
+         Col31,
+         Col32,
+         Col33,
+         Col34,
+         Col35,
+         Col36,
+         Col37,
+         Col38,
+         Col39,
+         Col40,
+         Col41,
+         Col42,
+         Col43,
+         Col44,
+         Col45,
+         Col46,
+         Col47,
+         Col48,
+         Col49,
+         Col50,
+         Col51,
+         Col52,
+         Col53,
+         Col54,
+         Col55,
+         Col56,
+         Col57,
+         Col58,
+         Col59,
+         Col60
+      FROM #Result AS r
+      WHERE col06=@c_Sparm02  
+
+   END
+  --CS03 END    
      
       SELECT * FROM #Result (nolock)   
             
