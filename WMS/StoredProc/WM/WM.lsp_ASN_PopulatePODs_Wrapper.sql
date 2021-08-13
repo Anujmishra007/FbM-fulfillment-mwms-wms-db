@@ -19,7 +19,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -36,6 +36,8 @@ GO
 /* 2021-07-20  Wan02    1.2   LFWM-2854 - UAT - TW  Receipt - Populate  */
 /*                            from PO ( 1 PO 1 ASN ) in SCE does not    */
 /*                            support codelkup 'PO2ASNMAP               */
+/* 2020-08-11  Wan03    1.3   LFWM-2962 - Populate Order details -Populate*/
+/*                            SO Detail fail.                           */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]                                                                                                                   
       @c_ReceiptKey           NVARCHAR(10)         
@@ -92,6 +94,7 @@ BEGIN
          ,  @c_TableColumns            NVARCHAR(4000) = ''
          ,  @c_TableColumns_SELECT     NVARCHAR(4000) = ''
          ,  @c_Table                   NVARCHAR(60) = ''
+         ,  @c_TempTableName           NVARCHAR(50) = ''          --(Wan03)
 
          ,  @c_TableName               NVARCHAR(50)   = 'RECEIPTDETAIL'
          ,  @c_SourceType              NVARCHAR(50)   = 'lsp_ASN_PopulatePODs_Wrapper'
@@ -370,6 +373,14 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> - 1
       BEGIN
+         --(Wan03) - START
+         SET @c_TempTableName = '#t' + @c_Table
+         EXEC isp_BuildTmpTableColFrTable                                                                                                                    
+            @c_TempTableName    =  @c_TempTableName
+         ,  @c_OrginalTableName =  @c_Table             
+         ,  @c_TableColumnNames =  @c_TableColumns_Select   OUTPUT
+         ,  @c_ColumnNames      =  @c_TableColumns          OUTPUT 
+         /*
          SET @c_SQLSchema = ''
          SET @c_SQLSchema  = RTRIM(ISNULL(CONVERT(NVARCHAR(4000), 
                               ( SELECT 
@@ -425,7 +436,8 @@ BEGIN
          BEGIN
             SET @c_TableColumns = SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) 
          END
-
+         */
+         --(Wan03) - END
          IF @c_Table = 'PODETAIL' AND @c_TableColumns <> ''
          BEGIN
             SET @c_SQL = N'INSERT INTO #tPODETAIL  (' + @c_TableColumns + ')'
