@@ -19,7 +19,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -32,7 +32,10 @@ GO
 /*                            and ExternReceiptkey when Populate PO Detail*/
 /*                            in ASNReceipt module                      */
 /*                            2)Fixed populate to ASN & Detail by PO2ASNMAP*/
---                            3)Fixed missing lottabel09
+/*                            3)Fixed missing lottabel09                */
+/* 2021-07-20  Wan02    1.2   LFWM-2854 - UAT - TW  Receipt - Populate  */
+/*                            from PO ( 1 PO 1 ASN ) in SCE does not    */
+/*                            support codelkup 'PO2ASNMAP               */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]                                                                                                                   
       @c_ReceiptKey           NVARCHAR(10)         
@@ -903,35 +906,39 @@ BEGIN
             
             IF @c_ReturnSQL <> ''
             BEGIN
-               SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+               --(Wan02) - START
+               --SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+               SET @c_SQL = @c_ReturnSQL
                SET @c_SQL = REPLACE(@c_SQL, ' PO ', ' #tPO PO ')
                SET @c_SQL = REPLACE(@c_SQL, ' PODETAIL ', ' #tPODETAIL PODETAIL ')
-
-               IF CHARINDEX(' FROM ',@c_ReturnSQL) > 0
-               BEGIN
-                  IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
-                  BEGIN
-                     SET @c_SQL = @c_SQL + ' WHERE'
-                  END
-                  ELSE
-                  BEGIN
-                     SET @c_SQL = @c_SQL + ' AND'
-                  END
-                  SET @c_SQL = @c_SQL + ' PO.RowRef = @n_RowRef_PH'
-               END
+               
+               --IF CHARINDEX(' FROM ',@c_ReturnSQL) > 0
+               --BEGIN
+               --   IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
+               --   BEGIN
+               --      SET @c_SQL = @c_SQL + ' WHERE'
+               --   END
+               --   ELSE
+               --   BEGIN
+               --      SET @c_SQL = @c_SQL + ' AND'
+               --   END
+               --   SET @c_SQL = @c_SQL + ' PO.RowRef = @n_RowRef_PH'
+               --END
                IF @c_SQL <> ''
                BEGIN
                   SET @c_SQL = 'UPDATE #tRECEIPT'
                              + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
                              + ' WHERE RowRef = @n_RowRef_RH' 
 
-                  SET @c_SQLParms = '@n_RowRef_PH INT' 
-                                  +',@n_RowRef_RH INT' 
-
+                  SET @c_SQLParms = '@n_RowRef_PH  INT' 
+                                  +',@n_RowRef_RH  INT' 
+                                  +',@c_PoKey      NVARCHAR(18)'        --(Wan02)                                
+  
                   EXEC sp_ExecuteSQL @c_SQL
                            , @c_SQLParms
                            , @n_RowRef_PH
                            , @n_RowRef_RH
+                           , @c_PoKey                                  --(Wan02)  
                END
             END
 
@@ -1494,35 +1501,42 @@ BEGIN
 
                IF @c_ReturnSQL <> ''
                BEGIN
-                  SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+                  --(Wan02) - START
+                  --SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+                  SET @c_SQL = @c_ReturnSQL
                   SET @c_SQL = REPLACE(@c_SQL, ' PO ', ' #tPO PO ')
                   SET @c_SQL = REPLACE(@c_SQL, ' PODETAIL ', ' #tPODETAIL PODETAIL ')
 
-                  IF CHARINDEX(' FROM ', @c_ReturnSQL) > 0
-                  BEGIN
-                     IF CHARINDEX('WHERE', @c_ReturnSQL) = 0
-                     BEGIN
-                        SET @c_SQL = @c_SQL + ' WHERE'
-                     END
-                     ELSE
-                     BEGIN
-                        SET @c_SQL = @c_SQL + ' AND'
-                     END
-                     SET @c_SQL = @c_SQL + ' PODETAIL.RowRef = @n_RowRef_PD'
-                  END
+                  --IF CHARINDEX(' FROM ', @c_ReturnSQL) > 0
+                  --BEGIN
+                  --   IF CHARINDEX('WHERE', @c_ReturnSQL) = 0
+                  --   BEGIN
+                  --      SET @c_SQL = @c_SQL + ' WHERE'
+                  --   END
+                  --   ELSE
+                  --   BEGIN
+                  --      SET @c_SQL = @c_SQL + ' AND'
+                  --   END
+                  --   SET @c_SQL = @c_SQL + ' PODETAIL.RowRef = @n_RowRef_PD'
+                  --END
+                  --(Wan02) - END
                   IF @c_SQL <> ''
                   BEGIN
                      SET @c_SQL = 'UPDATE #tRECEIPTDETAIL'
                                 + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
                                 + ' WHERE RowRef = @n_RowRef_RD' 
 
-                     SET @c_SQLParms = '@n_RowRef_PD INT' 
-                                     +',@n_RowRef_RD INT' 
+                     SET @c_SQLParms = '@n_RowRef_PD     INT' 
+                                     +',@n_RowRef_RD     INT'
+                                     +',@c_PoKey         NVARCHAR(18)'        --(Wan02) 
+                                     +',@c_POLineNumber  NVARCHAR(5)'         --(Wan02)                                       
 
                      EXEC sp_ExecuteSQL @c_SQL
                               , @c_SQLParms
                               , @n_RowRef_PD
                               , @n_RowRef_RD
+                              , @c_PoKey                                     --(Wan02)
+                              , @c_POLineNumber                              --(Wan02)                              
                   END
                END
                
@@ -1693,6 +1707,22 @@ BEGIN
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
+
+      --Log Error to WMS_Error_List
+      EXEC [WM].[lsp_WriteError_List]        --(Wan02) 
+            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+         ,  @c_TableName   = @c_TableName
+         ,  @c_SourceType  = @c_SourceType
+         ,  @c_Refkey1     = @c_Receiptkey
+         ,  @c_Refkey2     = @c_POKey
+         ,  @c_Refkey3     = ''
+         ,  @c_WriteType   = 'ERROR' 
+         ,  @n_err2        = @n_err 
+         ,  @c_errmsg2     = @c_errmsg 
+         ,  @b_Success     = @b_Success    
+         ,  @n_err         = @n_err        
+         ,  @c_errmsg      = @c_errmsg    
+
       GOTO EXIT_SP
    END CATCH   
 EXIT_SP:

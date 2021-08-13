@@ -32,6 +32,9 @@ GO
 /* 2021-06-08  Wan03    1.5   LFWM-2831-UAT - TW Missing ExternReceiptKey*/
 /*                            in detail lines when Populate PO to Receipt*/
 /*                            1 PO - 1 ASN                              */
+/* 2021-06-25  Wan04    1.6   LFWM-2854 - UAT - TW  Receipt - Populate  */
+/*                            from PO ( 1 PO 1 ASN ) in SCE does not    */
+/*                            support codelkup 'PO2ASNMAP               */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -161,6 +164,9 @@ BEGIN
          ,  @c_ReturnSQL               NVARCHAR(MAX)  = ''
          ,  @c_SQL                     NVARCHAR(4000) = ''
          ,  @c_SQLParms                NVARCHAR(4000) = ''
+         
+         ,  @c_SQL_INS_FIELDS          NVARCHAR(4000) = ''        --(Wan04)
+         ,  @c_SQL_UPD_FIELDS          NVARCHAR(4000) = ''        --(Wan04)  
 
          ,  @c_SQLSchema_Prior         NVARCHAR(4000) = ''
          ,  @c_SQLSchema               NVARCHAR(4000) = ''
@@ -190,7 +196,7 @@ BEGIN
          ,  @c_DefaultRcptLOC          NVARCHAR(30)   = ''
          ,  @c_QCLocation              NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
-
+     
          ,  @CUR_SCHEMA                CURSOR
          ,  @CUR_INVALIDPO             CURSOR
          ,  @CUR_COLMAP                CURSOR
@@ -383,6 +389,7 @@ BEGIN
          SELECT PD.POKey FROM #tPOs PO
          JOIN PODETAIL PD WITH (NOLOCK) ON PO.PORefKey = PD.POKey
          WHERE (PD.Facility <> '' AND PD.Facility <> @c_Facility)
+         GROUP BY PD.POKey       --(Wan04)
          ORDER BY PD.POKey
 
          OPEN @CUR_INVALIDPO
@@ -636,6 +643,83 @@ BEGIN
      
          SET @n_RowRef_RH = @@IDENTITY
 
+         --(Wan04) - START
+         SET @c_SQL_INS_FIELDS = 
+                N', Storerkey'
+               + ', Facility'
+               + ', ExternReceiptkey'
+               + ', RecType'
+               + ', DocType'
+               + ', WarehouseReference'
+               + ', Carrierkey'
+               + ', CarrierAddress1' 
+               + ', CarrierAddress2' 
+               + ', SellerName'
+               + ', SellerCompany'   
+               + ', SellerAddress1' 
+               + ', SellerAddress2'   
+               + ', SellerAddress3'
+               + ', SellerAddress4'   
+               + ', SellerContact1' 
+               + ', SellerContact2'  
+               + ', SellerPhone1'
+               + ', SellerPhone2'  
+               + ', SellerEmail1'
+               + ', SellerEmail2'   
+               + ', SellerFax1'
+               + ', SellerFax2' 
+               + ', SellerCountry'
+               + ', SellerCity'
+               + ', SellerState'   
+               + ', SellerZip'
+               + ', UserDefine01' 
+               + ', UserDefine02'   
+               + ', UserDefine03'
+               + ', UserDefine04'   
+               + ', UserDefine05' 
+               + ', UserDefine06'   
+               + ', UserDefine07'
+               + ', UserDefine08'  
+               + ', UserDefine09'
+               + ', UserDefine10'
+          
+         SET @c_SQL_UPD_FIELDS =  
+                N' ExternReceiptkey   = T.ExternReceiptkey'
+               +', RecType            = T.RecType'
+               +', WarehouseReference = T.WarehouseReference'
+               +', Carrierkey         = T.Carrierkey' 
+               +', CarrierAddress1    = T.CarrierAddress1' 
+               +', CarrierAddress2    = T.CarrierAddress2' 
+               +', SellerName         = T.SellerName'
+               +', SellerCompany      = T.SellerCompany' 
+               +', SellerAddress1     = T.SellerAddress1'
+               +', SellerAddress2     = T.SellerAddress2'  
+               +', SellerAddress3     = T.SellerAddress3'
+               +', SellerAddress4     = T.SellerAddress4'  
+               +', SellerContact1     = T.SellerContact1'
+               +', SellerContact2     = T.SellerContact2' 
+               +', SellerPhone1       = T.SellerPhone1'
+               +', SellerPhone2       = T.SellerPhone2'
+               +', SellerEmail1       = T.SellerEmail1'
+               +', SellerEmail2       = T.SellerEmail2'
+               +', SellerFax1         = T.SellerFax1'
+               +', SellerFax2         = T.SellerFax2'
+               +', SellerCountry      = T.SellerCountry'
+               +', SellerCity         = T.SellerCity'
+               +', SellerState        = T.SellerState'   
+               +', SellerZip          = T.SellerZip' 
+               +', UserDefine01       = T.UserDefine01' 
+               +', UserDefine02       = T.UserDefine02'   
+               +', UserDefine03       = T.UserDefine03'
+               +', UserDefine04       = T.UserDefine04'   
+               +', UserDefine05       = T.UserDefine05' 
+               +', UserDefine06       = T.UserDefine06'   
+               +', UserDefine07       = T.UserDefine07'
+               +', UserDefine08       = T.UserDefine08'  
+               +', UserDefine09       = T.UserDefine09'
+               +', UserDefine10       = T.UserDefine10' 
+         --(Wan04) - END
+         --   
          -- Call Custom Header Mapping - START
          SET @c_ListName = 'PO2ASNMAP'
          SET @CUR_COLMAP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -645,7 +729,14 @@ BEGIN
          WHERE CL.ListName = @c_ListName
          AND   CL.Short = 'H'
          AND   CL.Storerkey = @c_Storerkey
-         AND   (CL.UDF03 Like '%' + @c_DocType + '%' OR CL.UDF03 = '')
+         UNION                                                                                     --(Wan04)
+         SELECT Code  = CL.Code
+               ,Code2 = CL.Code2 
+         FROM CODELKUP CL WITH (NOLOCK)
+         WHERE CL.ListName = @c_ListName
+         AND   CL.Short = 'H'
+         AND   CL.Storerkey = @c_Storerkey
+         AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss)  --(Wan04) 
          ORDER BY CL.Code
 
          OPEN @CUR_COLMAP
@@ -695,39 +786,57 @@ BEGIN
                GOTO EXIT_SP                                            
             END CATCH
 
+            SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))         --(Wan04)
+            
             IF @c_ReturnSQL <> ''
             BEGIN
-               SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+               --(Wan04) - START - 2021-07-20
+               --SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' TOP 1 FromValue')
+               SET @c_SQL = @c_ReturnSQL
                SET @c_SQL = REPLACE(@c_SQL, ' PO ', ' #tPO PO ')
                SET @c_SQL = REPLACE(@c_SQL, ' PODETAIL ', ' #tPODETAIL PODETAIL ')
-
-               IF CHARINDEX(' FROM ',@c_ReturnSQL) > 0
-               BEGIN
-                  IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
-                  BEGIN
-                     SET @c_SQL = @c_SQL + ' WHERE'
-                  END
-                  ELSE
-                  BEGIN
-                     SET @c_SQL = @c_SQL + ' AND'
-                  END
-                  SET @c_SQL = @c_SQL + ' PO.RowRef = @n_RowRef_PH'
-               END
+                       
+               --IF CHARINDEX(' FROM ',@c_ReturnSQL) > 0
+               --BEGIN
+               --   IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
+               --   BEGIN
+               --      SET @c_SQL = @c_SQL + ' WHERE'
+               --   END
+               --   ELSE
+               --   BEGIN
+               --      SET @c_SQL = @c_SQL + ' AND'
+               --   END
+               --   SET @c_SQL = @c_SQL + ' PO.RowRef = @n_RowRef_PH'
+               --END
+               --(Wan04) - END - 2021-07-20
                IF @c_SQL <> ''
                BEGIN
                   SET @c_SQL = 'UPDATE #tRECEIPT'
                              + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
                              + ' WHERE RowRef = @n_RowRef_RH' 
 
-                  SET @c_SQLParms = '@n_RowRef_PH INT' 
-                                  +',@n_RowRef_RH INT' 
+                  SET @c_SQLParms = '@n_RowRef_PH  INT' 
+                                  +',@n_RowRef_RH  INT' 
+                                  +',@c_PoKey      NVARCHAR(18)'        --(Wan04)
 
                   EXEC sp_ExecuteSQL @c_SQL
                            , @c_SQLParms
                            , @n_RowRef_PH
                            , @n_RowRef_RH
+                           , @c_PoKey                                  --(Wan04)                              
                END
             END
+            
+            --(Wan04) - START
+            IF CHARINDEX(', ' + @c_UpdateCol, @c_SQL_INS_FIELDS, 1) = 0
+            BEGIN
+               SET @c_SQL_INS_FIELDS = @c_SQL_INS_FIELDS + N', '   + @c_UpdateCol       
+            END 
+            IF CHARINDEX(', ' + @c_UpdateCol, ',' + @c_SQL_UPD_FIELDS, 1) = 0
+            BEGIN
+               SET @c_SQL_UPD_FIELDS = @c_SQL_UPD_FIELDS + N', ' + @c_UpdateCol + N' = T.' + @c_UpdateCol    --use T alias insert from #tReceipt T
+            END
+            --(Wan04) - END 
 
             FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2 
          END
@@ -780,87 +889,24 @@ BEGIN
          IF NOT EXISTS (SELECT 1 FROM RECEIPT RH WITH (NOLOCK) WHERE RH.Receiptkey = @c_NewReceiptKey)  
          BEGIN
             BEGIN TRY
-               INSERT INTO RECEIPT 
-               (  ReceiptKey
-               ,  Storerkey
-               ,  Facility
-               ,  ExternReceiptkey
-               ,  RecType
-               ,  DocType
-               ,  WarehouseReference
-               ,  Carrierkey 
-               ,  CarrierAddress1 
-               ,  CarrierAddress2 
-               ,  SellerName 
-               ,  SellerCompany   
-               ,  SellerAddress1 
-               ,  SellerAddress2   
-               ,  SellerAddress3
-               ,  SellerAddress4   
-               ,  SellerContact1 
-               ,  SellerContact2  
-               ,  SellerPhone1
-               ,  SellerPhone2  
-               ,  SellerEmail1
-               ,  SellerEmail2   
-               ,  SellerFax1
-               ,  SellerFax2 
-               ,  SellerCountry
-               ,  SellerCity
-               ,  SellerState   
-               ,  SellerZip 
-               ,  UserDefine01 
-               ,  UserDefine02   
-               ,  UserDefine03
-               ,  UserDefine04   
-               ,  UserDefine05 
-               ,  UserDefine06   
-               ,  UserDefine07
-               ,  UserDefine08  
-               ,  UserDefine09
-               ,  UserDefine10  
-                )
-               SELECT
-                  @c_NewReceiptkey
-               ,  T.Storerkey
-               ,  T.Facility
-               ,  T.ExternReceiptkey
-               ,  T.RecType
-               ,  T.DocType
-               ,  T.WarehouseReference
-               ,  T.Carrierkey 
-               ,  T.CarrierAddress1 
-               ,  T.CarrierAddress2 
-               ,  T.SellerName 
-               ,  T.SellerCompany   
-               ,  T.SellerAddress1 
-               ,  T.SellerAddress2   
-               ,  T.SellerAddress3
-               ,  T.SellerAddress4   
-               ,  T.SellerContact1 
-               ,  T.SellerContact2  
-               ,  T.SellerPhone1
-               ,  T.SellerPhone2  
-               ,  T.SellerEmail1
-               ,  T.SellerEmail2   
-               ,  T.SellerFax1
-               ,  T.SellerFax2 
-               ,  T.SellerCountry
-               ,  T.SellerCity
-               ,  T.SellerState   
-               ,  T.SellerZip 
-               ,  T.UserDefine01 
-               ,  T.UserDefine02   
-               ,  T.UserDefine03
-               ,  T.UserDefine04   
-               ,  T.UserDefine05 
-               ,  T.UserDefine06   
-               ,  T.UserDefine07
-               ,  T.UserDefine08  
-               ,  T.UserDefine09
-               ,  T.UserDefine10 
-               FROM #tRECEIPT T
-               WHERE T.RowRef = @n_RowRef_RH
+               --(Wan04) - START
+               SET @c_SQL_INS_FIELDS 
+               = N'INSERT INTO RECEIPT ( Receiptkey' 
+               + @c_SQL_INS_FIELDS
+               + ')'
+               +' SELECT @c_NewReceiptkey'
+               + @c_SQL_INS_FIELDS
+               +' FROM #tRECEIPT'
+               +' WHERE RowRef = @n_RowRef_RH'
+               
+               SET @c_SQLParms = N'@c_NewReceiptkey   NVARCHAR(10)'
+                               + ',@n_RowRef_RH       INT'
+               
+               EXEC sp_ExecuteSQL @c_SQL_INS_FIELDS
+                                 ,@c_SQLParms
+                                 ,@c_NewReceiptkey
+                                 ,@n_RowRef_RH
+               --(Wan04) - END
             END TRY
             BEGIN CATCH
                --2020-09-15 - START
@@ -909,44 +955,20 @@ BEGIN
          ELSE
          BEGIN
             BEGIN TRY
-               UPDATE RECEIPT 
-               SET  ExternReceiptkey   = T.ExternReceiptkey
-                  , RecType            = T.RecType
-                  , WarehouseReference = T.WarehouseReference
-                  , Carrierkey         = T.Carrierkey 
-                  , CarrierAddress1    = T.CarrierAddress1 
-                  , CarrierAddress2    = T.CarrierAddress2 
-                  , SellerName         = T.SellerName 
-                  , SellerCompany      = T.SellerCompany   
-                  , SellerAddress1     = T.SellerAddress1 
-                  , SellerAddress2     = T.SellerAddress2   
-                  , SellerAddress3     = T.SellerAddress3
-                  , SellerAddress4     = T.SellerAddress4   
-                  , SellerContact1     = T.SellerContact1 
-                  , SellerContact2     = T.SellerContact2  
-                  , SellerPhone1       = T.SellerPhone1
-                  , SellerPhone2       = T.SellerPhone2  
-                  , SellerEmail1       = T.SellerEmail1
-                  , SellerEmail2       = T.SellerEmail2   
-                  , SellerFax1         = T.SellerFax1
-                  , SellerFax2         = T.SellerFax2 
-                  , SellerCountry      = T.SellerCountry
-                  , SellerCity         = T.SellerCity
-                  , SellerState        = T.SellerState   
-                  , SellerZip          = T.SellerZip 
-                  , UserDefine01       = T.UserDefine01 
-                  , UserDefine02       = T.UserDefine02   
-                  , UserDefine03       = T.UserDefine03
-                  , UserDefine04       = T.UserDefine04   
-                  , UserDefine05       = T.UserDefine05 
-                  , UserDefine06       = T.UserDefine06   
-                  , UserDefine07       = T.UserDefine07
-                  , UserDefine08       = T.UserDefine08  
-                  , UserDefine09       = T.UserDefine09
-                  , UserDefine10       = T.UserDefine10  
-               FROM #tRECEIPT T
-               JOIN RECEIPT RH ON (T.ReceiptKey = RH.ReceiptKey)               
-               WHERE T.RowRef = @n_RowRef_RH
+               --(Wan04) - START
+               SET @c_SQL_UPD_FIELDS 
+               = N' UPDATE RECEIPT WITH (ROWLOCK) SET' 
+               + @c_SQL_UPD_FIELDS
+               + ' FROM #tRECEIPT T'
+               + ' JOIN RECEIPT RH ON (T.ReceiptKey = RH.ReceiptKey)'               
+               + ' WHERE T.RowRef = @n_RowRef_RH'
+              
+               SET @c_SQLParms = N'@n_RowRef_RH INT'
+               
+               EXEC sp_ExecuteSQL @c_SQL_UPD_FIELDS
+                                 ,@c_SQLParms
+                                 ,@n_RowRef_RH
+               --(Wan04) - END
             END TRY
             BEGIN CATCH
                --2020-09-15 - START
@@ -1462,6 +1484,55 @@ BEGIN
 
             SET @n_RowRef_RD = @@IDENTITY
 
+            --(Wan04) - START
+            SET @c_SQL_INS_FIELDS = 
+                 N', ReceiptLineNumber'
+                + ', Storerkey'  
+                + ', Sku'
+                + ', AltSku'
+                + ', Packkey'  
+                + ', UOM'
+                + ', QtyExpected'
+                + ', FreeGoodQtyExpected'
+                + ', ToLoc'
+                + ', ToID'
+                + ', PutawayLoc'  
+                + ', ExternReceiptKey'
+                + ', POKey'
+                + ', POLineNumber'
+                + ', ExternPOKey'
+                + ', ExternLineNo'
+                + ', Vesselkey'
+                + ', Voyagekey'
+                + ', Lottable01'
+                + ', Lottable02'
+                + ', Lottable03'
+                + ', Lottable04'
+                + ', Lottable05'
+                + ', Lottable06'
+                + ', Lottable07'
+                + ', Lottable08'
+                + ', Lottable09'
+                + ', Lottable10'
+                + ', Lottable11'
+                + ', Lottable12'
+                + ', Lottable13'
+                + ', Lottable14'
+                + ', Lottable15'
+                + ', UserDefine01' 
+                + ', UserDefine02'   
+                + ', UserDefine03'
+                + ', UserDefine04'   
+                + ', UserDefine05' 
+                + ', UserDefine06'   
+                + ', UserDefine07'
+                + ', UserDefine08'  
+                + ', UserDefine09'
+                + ', UserDefine10' 
+                + ', SubReasonCode' 
+                + ', Channel'
+            --(Wan04) - END  
+            
             -- Call Custom Detail Mapping - START
             SET @c_ListName = 'PO2ASNMAP'
 
@@ -1472,7 +1543,14 @@ BEGIN
             WHERE CL.ListName = @c_ListName
             AND   CL.Short = 'D'
             AND   CL.Storerkey = @c_Storerkey
-            AND   (CL.UDF03 Like '%' + @c_DocType + '%' OR CL.UDF03 = '')
+            UNION                                                                                     --(Wan04)
+            SELECT Code  = CL.Code
+                  ,Code2 = CL.Code2 
+            FROM CODELKUP CL WITH (NOLOCK)
+            WHERE CL.ListName = @c_ListName
+            AND   CL.Short = 'D'
+            AND   CL.Storerkey = @c_Storerkey
+            AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss)  --(Wan04) 
             ORDER BY CL.Code
 
             OPEN @CUR_COLMAP
@@ -1520,40 +1598,55 @@ BEGIN
                   GOTO EXIT_SP                                            
                END CATCH 
 
+               SET @c_UpdateCol  = RTRIM(LTRIM(@c_UpdateCol))  --(Wan04)
+               
                IF @c_ReturnSQL <> ''
                BEGIN
-                  SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+                  -- (Wan04) - START 2021-07-20
+                  --SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
+                  SET @c_SQL = @c_ReturnSQL
                   SET @c_SQL = REPLACE(@c_SQL, ' PO ', ' #tPO PO ')
                   SET @c_SQL = REPLACE(@c_SQL, ' PODETAIL ', ' #tPODETAIL PODETAIL ')
-
-                  IF CHARINDEX(' FROM ', @c_ReturnSQL) > 0
-                  BEGIN
-                     IF CHARINDEX('WHERE', @c_ReturnSQL) = 0
-                     BEGIN
-                        SET @c_SQL = @c_SQL + ' WHERE'
-                     END
-                     ELSE
-                     BEGIN
-                        SET @c_SQL = @c_SQL + ' AND'
-                     END
-                     SET @c_SQL = @c_SQL + ' PODETAIL.RowRef = @n_RowRef_PD'
-                  END
+                  --
+                  --IF CHARINDEX(' FROM ', @c_ReturnSQL) > 0
+                  --BEGIN
+                  --   IF CHARINDEX('WHERE', @c_ReturnSQL) = 0
+                  --   BEGIN
+                  --      SET @c_SQL = @c_SQL + ' WHERE'
+                  --   END
+                  --   ELSE
+                  --   BEGIN
+                  --      SET @c_SQL = @c_SQL + ' AND'
+                  --   END
+                  --   SET @c_SQL = @c_SQL + ' PODETAIL.RowRef = @n_RowRef_PD'
+                  --END
+                  -- (Wan04) - END 2021-07-20
+                  
                   IF @c_SQL <> ''
                   BEGIN
                      SET @c_SQL = 'UPDATE #tRECEIPTDETAIL'
                                 + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
                                 + ' WHERE RowRef = @n_RowRef_RD' 
 
-                     SET @c_SQLParms = '@n_RowRef_PD INT' 
-                                     +',@n_RowRef_RD INT' 
+                     SET @c_SQLParms = '@n_RowRef_PD     INT' 
+                                     +',@n_RowRef_RD     INT'
+                                     +',@c_PoKey         NVARCHAR(18)'        --(Wan04) 
+                                     +',@c_POLineNumber  NVARCHAR(5)'         --(Wan04) 
 
                      EXEC sp_ExecuteSQL @c_SQL
                               , @c_SQLParms
                               , @n_RowRef_PD
                               , @n_RowRef_RD
+                              , @c_PoKey                                     --(Wan04)
+                              , @c_POLineNumber                              --(Wan04)
                   END
                END
-
+               --(Wan04) - START
+               IF CHARINDEX(', ' + @c_UpdateCol, @c_SQL_INS_FIELDS, 1) = 0
+               BEGIN
+                  SET @c_SQL_INS_FIELDS = @c_SQL_INS_FIELDS + N', '   + @c_UpdateCol       
+               END 
+               --(Wan04) - END 
                FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2 
             END
             CLOSE @CUR_COLMAP
@@ -1561,102 +1654,24 @@ BEGIN
 
          -- Call Custom Detail Mapping - END
             BEGIN TRY
-               INSERT INTO RECEIPTDETAIL
-                     (  ReceiptKey
-                     ,  ReceiptLineNumber
-                     ,  Storerkey  
-                     ,  Sku
-                     ,  AltSku
-                     ,  Packkey  
-                     ,  UOM
-                     ,  QtyExpected
-                     ,  FreeGoodQtyExpected
-                     ,  ToLoc
-                     ,  ToID
-                     ,  PutawayLoc  
-                     ,  ExternReceiptKey
-                     ,  POKey
-                     ,  POLineNumber
-                     ,  ExternPOKey
-                     ,  ExternLineNo
-                     ,  Vesselkey
-                     ,  Voyagekey
-                     ,  Lottable01
-                     ,  Lottable02
-                     ,  Lottable03
-                     ,  Lottable04
-                     ,  Lottable05
-                     ,  Lottable06
-                     ,  Lottable07
-                     ,  Lottable08
-                     ,  Lottable09
-                     ,  Lottable10
-                     ,  Lottable11
-                     ,  Lottable12
-                     ,  Lottable13
-                     ,  Lottable14
-                     ,  Lottable15
-                     ,  UserDefine01 
-                     ,  UserDefine02   
-                     ,  UserDefine03
-                     ,  UserDefine04   
-                     ,  UserDefine05 
-                     ,  UserDefine06   
-                     ,  UserDefine07
-                     ,  UserDefine08  
-                     ,  UserDefine09
-                     ,  UserDefine10 
-                     ,  SubReasonCode 
-                     ,  Channel
-                     )
-               SELECT   T.ReceiptKey
-                     ,  T.ReceiptLineNumber
-                     ,  T.Storerkey  
-                     ,  T.Sku
-                     ,  T.AltSku
-                     ,  T.Packkey  
-                     ,  T.UOM
-                     ,  T.QtyExpected
-                     ,  T.FreeGoodQtyExpected
-                     ,  T.ToLoc
-                     ,  T.ToID
-                     ,  T.PutawayLoc  
-                     ,  T.ExternReceiptKey
-                     ,  T.POKey
-                     ,  T.POLineNumber
-                     ,  T.ExternPOKey
-                     ,  T.ExternLineNo
-                     ,  T.Vesselkey
-                     ,  T.Voyagekey
-                     ,  T.Lottable01
-                     ,  T.Lottable02
-                     ,  T.Lottable03
-                     ,  T.Lottable04
-                     ,  T.Lottable05
-                     ,  T.Lottable06
-                     ,  T.Lottable07
-                     ,  T.Lottable08
-                     ,  T.Lottable09
-                     ,  T.Lottable10
-                     ,  T.Lottable11
-                     ,  T.Lottable12
-                     ,  T.Lottable13
-                     ,  T.Lottable14
-                     ,  T.Lottable15
-                     ,  T.UserDefine01 
-                     ,  T.UserDefine02   
-                     ,  T.UserDefine03
-                     ,  T.UserDefine04   
-                     ,  T.UserDefine05 
-                     ,  T.UserDefine06   
-                     ,  T.UserDefine07
-                     ,  T.UserDefine08  
-                     ,  T.UserDefine09
-                     ,  T.UserDefine10 
-                     ,  T.SubReasonCode 
-                     ,  T.Channel
-               FROM #tRECEIPTDETAIL T
-               WHERE RowRef = @n_RowRef_RD
+               --(Wan04) - START
+               SET @c_SQL_INS_FIELDS 
+               = N'INSERT INTO RECEIPTDETAIL ( Receiptkey' 
+               + @c_SQL_INS_FIELDS
+               + ')'
+               +' SELECT Receiptkey'
+               + @c_SQL_INS_FIELDS
+               +' FROM #tRECEIPTDETAIL'
+               +' WHERE RowRef = @n_RowRef_RD'
+               
+               SET @c_SQLParms = N'@n_RowRef_RD INT'
+               
+               EXEC sp_ExecuteSQL @c_SQL_INS_FIELDS
+                                 ,@c_SQLParms
+                                 ,@n_RowRef_RD
+                                 
+               --(Wan04) - END
+              
             END TRY
             BEGIN CATCH
                --2020-09-15 - START            
@@ -1718,7 +1733,22 @@ BEGIN
   
    BEGIN CATCH 
       SET @n_Continue = 3                 --(Wan02) 
-      SET @c_ErrMsg   = ERROR_MESSAGE()   --(Wan02)     
+      SET @c_ErrMsg   = ERROR_MESSAGE()   --(Wan02) 
+                                          --
+      --      --Log Error to WMS_Error_List
+      EXEC [WM].[lsp_WriteError_List]     --(Wan04)
+            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+         ,  @c_TableName   = @c_TableName
+         ,  @c_SourceType  = @c_SourceType
+         ,  @c_Refkey1     = @c_Receiptkey
+         ,  @c_Refkey2     = @c_POKey
+         ,  @c_Refkey3     = ''
+         ,  @c_WriteType   = 'ERROR' 
+         ,  @n_err2        = @n_err 
+         ,  @c_errmsg2     = @c_errmsg 
+         ,  @b_Success     = @b_Success    
+         ,  @n_err         = @n_err        
+         ,  @c_errmsg      = @c_errmsg     
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
    
