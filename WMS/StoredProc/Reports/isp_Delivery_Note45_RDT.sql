@@ -28,6 +28,7 @@ GO
 /* 20-OCT-2020  CSCHONG  1.1   INC1330177 - Fix over lenght issue (CS01) */    
 /* 30-OCT-2020  CSCHONG  1.2   WMS-15624 Revised report filter logic (CS01)*/
 /* 23-Nov-2020  WLChooi  1.3   WMS-15745 - Modify Logic of A1 (WL01)     */
+/* 19-Jul-2021  CSCHONG  1.4   WMS-17529 - reveised field logic (CS02)   */
 /*************************************************************************/    
     
 CREATE PROC [dbo].[isp_Delivery_Note45_RDT]     
@@ -272,15 +273,22 @@ BEGIN
             ',A14=ISNULL(MAX(CASE WHEN CL.Code =''A14'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +    
             ',A15=ISNULL(RTRIM(OH.BuyerPO),'''') ' +    
             ',A16=ISNULL(RTRIM(CONVERT(NVARCHAR(10),OH.OrderDate,112)),'''') ' +     
-            ',A17=ISNULL(RTRIM(MAX(OH.Notes2)),'''') ' +    
+            --',A17=ISNULL(RTRIM(MAX(OH.Notes2)),'''') ' +                                          --CS02
+            ',A17='''' ' +                                                                          --CS02
             --',A18_1=(ISNULL(RTRIM(OH.C_Company),'''') + ISNULL(RTRIM(ST.B_Contact2),'''') ) ' +   --WL01
-            ',A18_1 = CASE WHEN ISNULL(CL1.short,''0'') = ''1''  THEN OH.C_Company ' +   --WL01       
-            '              ELSE ISNULL(RTRIM(OH.C_Contact2),'''') + '' '' + ISNULL(RTRIM(OH.C_Contact1),'''') END' +   --WL01
-            ',A18_2=ISNULL(RTRIM(OH.C_Zip),'''') ' +     
-            ',A18_3=ISNULL(RTRIM(OH.C_State),'''') ' +    
-            ',A18_4=ISNULL(RTRIM(OH.C_City),'''') ' +    
-            ',A18_5=ISNULL(RTRIM(C_Address1),'''') ' +                                                                       
-            ',A18_6=ISNULL(RTRIM(C_Address2),'''') + ISNULL(RTRIM(C_Address3),'''') + ISNULL(RTRIM(C_Address4),'''') ' +    
+            --',A18_1 = CASE WHEN ISNULL(CL1.short,''0'') = ''1''  THEN OH.C_Company ' +   --WL01   --CS02 START    
+            --'              ELSE ISNULL(RTRIM(OH.C_Contact2),'''') + '' '' + ISNULL(RTRIM(OH.C_Contact1),'''') END' +   --WL01
+            --',A18_2=ISNULL(RTRIM(OH.C_Zip),'''') ' +     
+            --',A18_3=ISNULL(RTRIM(OH.C_State),'''') ' +    
+            --',A18_4=ISNULL(RTRIM(OH.C_City),'''') ' +    
+            --',A18_5=ISNULL(RTRIM(C_Address1),'''') ' +                                                                       
+            --',A18_6=ISNULL(RTRIM(C_Address2),'''') + ISNULL(RTRIM(C_Address3),'''') + ISNULL(RTRIM(C_Address4),'''') ' +   
+             ',A18_1 = '''' ' +   --WL01
+            ',A18_2='''' ' +     
+            ',A18_3='''' ' +    
+            ',A18_4='''' ' +    
+            ',A18_5='''' ' +                                                                       
+            ',A18_6='''' ' +   --CS02 END  
             ',B1=ISNULL(MAX(CASE WHEN CL.Code =''B1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +    
             ',B2=ISNULL(MAX(CASE WHEN CL.Code =''B2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +     
             ',B9=ISNULL(MAX(CASE WHEN CL.Code =''B9'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +    
@@ -300,8 +308,10 @@ BEGIN
             ',OrdGrp=1 ' +     
             ',A25=ISNULL(MAX(CASE WHEN CL.Code = ''A25'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +     
             ',A26=ISNULL(MAX(CASE WHEN CL.Code = ''A26'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +     
-            ',A27=ISNULL(MAX(CASE WHEN CL.Code = ''A27'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +      
-            ',A28=ISNULL(MAX(CASE WHEN CL.Code = ''A28'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +     
+            --',A27=ISNULL(MAX(CASE WHEN CL.Code = ''A27'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +   --CS02 START   
+            --',A28=ISNULL(MAX(CASE WHEN CL.Code = ''A28'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +     
+            ',A27='''' ' +      
+            ',A28='''' ' +                                                                                        --CS02 END
             ',C1=ISNULL(MAX(CASE WHEN CL.Code = ''C1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +     
             ',C2=ISNULL(MAX(CASE WHEN CL.Code = ''C2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +      
             ',C3=ISNULL(MAX(CASE WHEN CL.Code = ''C3'' THEN RTRIM(CL.Description) ELSE '''' END),'''') '      
