@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date         Author   Ver  Purposes                                   */    
+/* Date         Author   Ver  Purposes                                   */ 
+/* 2021-08-17   WLChooi  1.1  Bug Fix (WL01)                             */   
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV42]        
@@ -432,36 +433,39 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Loc not found in Loc table. (ispRLWAV42)'         
       END 
 
-      EXEC isp_CreateTaskByPick
-          @c_TaskType              = @c_TaskType
-         ,@c_Wavekey               = @c_Wavekey  
-         ,@c_ToLoc                 = @c_ToLoc 
-         ,@c_ToLoc_Strategy        = @c_ToLoc_Strategy
-         ,@c_ToLoc_StrategyParam   = @c_ToLoc_StrategyParam
-         ,@c_PickMethod            = @c_PickMethod   -- ?=Auto determine FP/PP by inv qty available  ?TASKQTY=(Qty available - taskqty)  ?ROUNDUP=Qty available - (qty - systemqty)
-         ,@c_Priority              = @c_Priority      
-         ,@c_Message03             = @c_Message03   
-         ,@c_SourceType            = @c_SourceType      
-         ,@c_SourceKey             = @c_Wavekey         
-         ,@c_CallSource            = 'WAVE'  -- WAVE / LOADPLAN 
-         ,@c_PickCondition_SQL     = @c_PickCondition_SQL   -- Additional condition to filter pickdetail. e.g. AND PICKDETAIL.UOM='2' AND LOC.LocationType = 'OTHER'
-         ,@c_LinkTaskToPick        = 'WIP'   -- N=No update taskdetailkey to pickdetail Y=Update taskdetailkey to pickdetail  WIP=Update taskdetailkey to pickdetail_wip
-         ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL  -- Additional sql condition to retrieve the pickdetail like AND PICKDETAIL.UOM = @c_UOM or Order BY
-         ,@c_ReserveQtyReplen      = 'N'  -- TASKQTY=Reserve all task qty for replenish at Lotxlocxid ROUNDUP=Reserve round up to full carton/pallet qty only (qty - systemqty)
-         ,@c_ReservePendingMoveIn  = 'Y'  -- N=No update @n_qty to @n_PendingMoveIn Y=Update @n_qty to @n_PendingMoveIn ,@c_WIP_RefNo = @c_SourceType   -- referencekey for filtering pickdetail_wip table. optional and only apply for WIP
-         ,@c_WIP_RefNo             = @c_SourceType -- referencekey for filtering pickdetail_wip table. optional and only apply for WIP
-         ,@c_RoundUpQty            = 'N'  -- FC=Round up qty to full carton by packkey/ucc FP=Round up qty to full pallet by packkey/ucc  FL=Round up to full location qty
-         ,@c_SplitTaskByCase       = 'Y'  -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.
-         ,@c_CasecntbyLocUCC       = 'Y'  -- N=Get casecnt by packkey Y=Get casecnt by UCC Qty of the lot,loc & ID. All UCC must have same qty.
-         ,@c_ZeroSystemQty         = 'N'  -- N=@n_SystemQty will copy from @n_Qty if @n_SystemQty=0 Y=@n_SystemQty force to zero.
-         ,@b_Success               = @b_Success OUTPUT
-         ,@n_Err                   = @n_Err     OUTPUT        
-         ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
-        
-      IF @b_Success <> 1
+      IF (@n_continue = 1 OR @n_continue = 2)   --WL01
       BEGIN
-         SET @n_continue = 3
-      END    
+         EXEC isp_CreateTaskByPick
+             @c_TaskType              = @c_TaskType
+            ,@c_Wavekey               = @c_Wavekey  
+            ,@c_ToLoc                 = @c_ToLoc 
+            ,@c_ToLoc_Strategy        = @c_ToLoc_Strategy
+            ,@c_ToLoc_StrategyParam   = @c_ToLoc_StrategyParam
+            ,@c_PickMethod            = @c_PickMethod   -- ?=Auto determine FP/PP by inv qty available  ?TASKQTY=(Qty available - taskqty)  ?ROUNDUP=Qty available - (qty - systemqty)
+            ,@c_Priority              = @c_Priority      
+            ,@c_Message03             = @c_Message03   
+            ,@c_SourceType            = @c_SourceType      
+            ,@c_SourceKey             = @c_Wavekey         
+            ,@c_CallSource            = 'WAVE'  -- WAVE / LOADPLAN 
+            ,@c_PickCondition_SQL     = @c_PickCondition_SQL   -- Additional condition to filter pickdetail. e.g. AND PICKDETAIL.UOM='2' AND LOC.LocationType = 'OTHER'
+            ,@c_LinkTaskToPick        = 'WIP'   -- N=No update taskdetailkey to pickdetail Y=Update taskdetailkey to pickdetail  WIP=Update taskdetailkey to pickdetail_wip
+            ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL  -- Additional sql condition to retrieve the pickdetail like AND PICKDETAIL.UOM = @c_UOM or Order BY
+            ,@c_ReserveQtyReplen      = 'N'  -- TASKQTY=Reserve all task qty for replenish at Lotxlocxid ROUNDUP=Reserve round up to full carton/pallet qty only (qty - systemqty)
+            ,@c_ReservePendingMoveIn  = 'Y'  -- N=No update @n_qty to @n_PendingMoveIn Y=Update @n_qty to @n_PendingMoveIn ,@c_WIP_RefNo = @c_SourceType   -- referencekey for filtering pickdetail_wip table. optional and only apply for WIP
+            ,@c_WIP_RefNo             = @c_SourceType -- referencekey for filtering pickdetail_wip table. optional and only apply for WIP
+            ,@c_RoundUpQty            = 'N'  -- FC=Round up qty to full carton by packkey/ucc FP=Round up qty to full pallet by packkey/ucc  FL=Round up to full location qty
+            ,@c_SplitTaskByCase       = 'Y'  -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.
+            ,@c_CasecntbyLocUCC       = 'Y'  -- N=Get casecnt by packkey Y=Get casecnt by UCC Qty of the lot,loc & ID. All UCC must have same qty.
+            ,@c_ZeroSystemQty         = 'N'  -- N=@n_SystemQty will copy from @n_Qty if @n_SystemQty=0 Y=@n_SystemQty force to zero.
+            ,@b_Success               = @b_Success OUTPUT
+            ,@n_Err                   = @n_Err     OUTPUT        
+            ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
+           
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_continue = 3
+         END 
+      END   --WL01   
       
       IF OBJECT_ID('tempdb..#TMP_PICK') IS NOT NULL
          DROP TABLE #TMP_PICK                            
