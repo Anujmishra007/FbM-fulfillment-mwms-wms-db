@@ -22,12 +22,14 @@ GO
 /* 16-Jan-2018 1.2  James      WMS3192-Add Code2 filter in codelkup     */
 /*                             selection (james01)                      */
 /* 23-Oct-2019 1.3  KHChan     Extend Field Length (KH01)               */
+/* 20-Jul-2021 1.4  KHChan     LFI-2883 Extend Field Length (KH02)      */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_PrintZplLabel](
     @cStorerKey        NVARCHAR( 15)  
    ,@cLabelNo          NVARCHAR(20)
-   ,@cTrackingNo       NVARCHAR(20)
+   --,@cTrackingNo       NVARCHAR(20) --(KH02) 
+   ,@cTrackingNo       NVARCHAR(40) --(KH02) 
    --,@cPrinter          NVARCHAR(10) --(KH01)
    ,@cPrinter          NVARCHAR(50) --(KH01)
    ,@nErrNo            INT            OUTPUT  
