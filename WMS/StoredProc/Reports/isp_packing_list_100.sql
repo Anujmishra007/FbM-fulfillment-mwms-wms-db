@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-08-20  WLChooi  1.1   Fix @n_MaxLineno = 10 (WL01)              */
 /************************************************************************/
 CREATE PROC isp_packing_list_100
            @c_PickSlipNo      NVARCHAR(10)
@@ -45,7 +46,7 @@ BEGIN
 
    SET @n_StartTCnt = @@TRANCOUNT
 
-   SET @n_MaxLineno = 12
+   SET @n_MaxLineno = 10   --WL01
 
   CREATE TABLE #TMP_PICKLIST100 (
     ExternOrderkey        NVARCHAR(50),
