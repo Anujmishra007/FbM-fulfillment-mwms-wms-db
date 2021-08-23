@@ -39,6 +39,7 @@ GO
 /* 08-OCT-2018  NJOW01   1.1  WMS-6391 map pack.casecnt instead of      */
 /*                            sku.packqtyindicator                      */
 /* 28-Jan-2019  TLTING_ext 1.2 enlarge externorderkey field length      */
+/* 15-Aug-2021  MINGLE   1.3  WMS-17665 add new field(ML01)             */
 /************************************************************************/
 
 CREATE PROC dbo.nsp_GetPickSlipOrders71 (@c_loadkey NVARCHAR(10))
@@ -103,7 +104,9 @@ BEGIN
       @c_Lottable02       NVARCHAR(18),
       @c_DeliveryNote     NVARCHAR(10),
       @d_DeliveryDate     datetime,
-		@n_PackQtyIndicator INT                   --CS01     
+		@n_PackQtyIndicator INT,                   --CS01
+      @c_Type             NVARCHAR(20), --ML01
+      @c_showtype         NVARCHAR(10) --ML01
    
    DECLARE @c_PrevOrderKey     NVARCHAR(10),
       @n_Pallets          int,
@@ -173,7 +176,9 @@ BEGIN
       Consigneekey2    NVARCHAR(15),
       WrapSkuDesc      INT,  
       PDET_ID          NVARCHAR(18),
-		PACKQTYIDCATOR   INT                   --CS01 
+		PACKQTYIDCATOR   INT,                   --CS01 
+      Type             NVARCHAR(20), --ML01
+      showtype         NVARCHAR(10) --ML01
        )      
        
    SELECT @n_continue = 1 
@@ -267,7 +272,8 @@ BEGIN
                -- SOS59298
                @c_Facility     = '',
                @c_DeliveryNote = '',
-               @c_Consigneekey2 = '' 
+               @c_Consigneekey2 = '',
+               @c_Type = ''  --ML01
          END
          ELSE
          BEGIN
@@ -284,7 +290,8 @@ BEGIN
                  @c_Facility     = ORDERS.Facility,    -- SOS59298
                  @c_DeliveryNote = ORDERS.DeliveryNote,-- SOS59298
                  @d_DeliveryDate = ORDERS.DeliveryDate, 
-                 @c_ConsigneeKey2 = ORDERS.Consigneekey 
+                 @c_ConsigneeKey2 = ORDERS.Consigneekey,
+                 @c_Type = ORDERS.Type --ML01
           FROM   ORDERS (NOLOCK)  
           WHERE  ORDERS.OrderKey = @c_OrderKey
          END -- IF @c_OrderKey = ''
@@ -334,6 +341,7 @@ BEGIN
          IF @c_Lottable02    IS NULL SELECT @c_Lottable02 = ''         
          IF @c_DeliveryNote  IS NULL SELECT @c_DeliveryNote = ''
          IF @c_Consigneekey2 IS NULL SELECT @c_Consigneekey2 = ''
+         IF @c_Type          IS NULL SELECT @c_Type = '' --ML01
 
          IF @c_superorderflag = 'Y' 
           SELECT @c_orderkey = ''
@@ -397,6 +405,15 @@ BEGIN
          AND   Storerkey = @c_Storerkey
          AND   Long = 'r_dw_print_pickorder06'
          AND   ISNULL(Short,'') <> 'N'
+
+         --START --ML01
+         SELECT @c_showtype = ISNULL(CL.SHORT,'')
+         FROM CODELKUP CL WITH (NOLOCK) 
+         WHERE ListName = 'PSPORTCFG'
+         AND   Code = 'ORDERTYPE'
+         AND   Storerkey = @c_Storerkey
+         AND   Long = 'r_dw_print_pickorder71'
+         --END  --ML01
          
 
          INSERT INTO #Temp_Pick
@@ -411,7 +428,8 @@ BEGIN
             Lottable04,          LabelPrice,       ExternOrderKey,
             Facility,            Lottable02,       DeliveryNote ,    DeliveryDate,    -- SOS59298  , ONG01
             SKU2,								 Consigneekey2
-          , WrapSkuDesc    ,PDET_ID   ,  PACKQTYIDCATOR                        --CS01                                                       
+          , WrapSkuDesc    ,PDET_ID   ,  PACKQTYIDCATOR,                        --CS01  
+            Type,          showtype   --ML01                                                  
             )
          VALUES 
             (@c_pickheaderkey,   @c_LoadKey,       @c_OrderKey,     @c_ConsigneeKey,
@@ -429,7 +447,7 @@ BEGIN
              @c_Facility,        @c_Lottable02,    @c_DeliveryNote, @d_DeliveryDate, -- SOS59298          
              @c_Sku2,						 @c_Consigneekey2
             ,@n_WrapSkuDesc , @c_PDETID     ,--@n_PackQtyIndicator                      --CS01                                                      
-            @n_Casecnt  --NJOW01
+            @n_Casecnt,          @c_Type,          @c_showtype  --NJOW01   --ML01
              )
              
          SELECT @c_PrevOrderKey = @c_OrderKey
@@ -598,6 +616,8 @@ BEGIN
          ,  WrapSkuDesc
          ,  PDET_ID       
 			,  PACKQTYIDCATOR 
+         ,  Type --ML01
+         ,  showtype --ML01
      FROM #TEMP_PICK  
      DROP Table #TEMP_PICK  
 
