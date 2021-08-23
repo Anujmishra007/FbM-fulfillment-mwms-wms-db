@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
-/* 2021-06-15 1.0  CHONGCS    Created (WMS-17250)                             */           
+/* 2021-06-15 1.0  CHONGCS    Created (WMS-17250)                             */     
+/* 2021-08-18 1.0  MINGLE     Modify logic from SKU to ALTSKU (WMS-17752)     */      
 /******************************************************************************/                 
                     
 CREATE PROC [dbo].[isp_BT_Bartender_VN_PRICESOLBL_1]                        
@@ -151,7 +152,7 @@ BEGIN
                     +' FROM ORDERDETAIL OD WITH (NOLOCK)'   + CHAR(13)     
                     + 'JOIN SKU S WITH (NOLOCK) ON S.Storerkey = OD.Storerkey AND S.sku = OD.SKU ' 
                     +' WHERE OD.Orderkey = @c_Sparm01 '   + CHAR(13)  
-                    +' AND S.SKU = @c_Sparm02 ' + CHAR(13)  
+                    +' AND S.ALTSKU = @c_Sparm02 ' + CHAR(13)  --ML01
                     +' AND S.Storerkey = @c_Sparm03'
                    
    IF @b_debug=1          
