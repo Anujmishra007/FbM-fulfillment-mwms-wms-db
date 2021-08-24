@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 1.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 2015-02-12   CSCHONG 1.1   New Lottable06 to 15  (CS11)              */
+/* 2021-02-08   WLChooi 1.2   WMS-16327 - Use Codelkup to control       */
+/*                            sorting (WL01)                            */
 /************************************************************************/
 CREATE  PROC [dbo].[ispALANF05]
    @c_LoadKey    NVARCHAR(10),   
@@ -62,10 +64,30 @@ BEGIN
            @c_SQLParm     NVARCHAR(MAX)    
           
    DECLARE @c_LocationCategory NVARCHAR(10),
-           @c_LoadType         NVARCHAR(10)
+           @c_LoadType         NVARCHAR(10),
+           @c_SortingSQL       NVARCHAR(4000)  --WL01
 
    SET @b_debug = 0
    SET @c_LocationCategory = 'ANFOTHERS'
+   SET @c_SortingSQL = 'ORDER BY LOC.LogicalLocation, LOC.LOC '   --WL01
+   
+   --WL01 START
+   IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)  
+              WHERE CL.Storerkey = @c_Storerkey  
+              AND CL.Code = 'SORTBY'  
+              AND CL.Listname = 'PKCODECFG'  
+              AND CL.Long = 'ispALANF05'
+              AND ISNULL(CL.Short,'') <> 'N')
+   BEGIN
+      SELECT @c_SortingSQL = LTRIM(RTRIM(ISNULL(CL.Notes,'')))
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.Storerkey = @c_Storerkey
+      AND CL.Code = 'SORTBY'
+      AND CL.Listname = 'PKCODECFG'
+      AND CL.Long = 'ispALANF05'
+      AND ISNULL(CL.Short,'') <> 'N'
+   END
+   --WL01 END
 
    -- GET LoadType FROM LoadPlan
    SELECT TOP 1 
@@ -110,8 +132,9 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' + CHAR(13) END +         
       CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END +  
           'GROUP BY LOTxLOCxID.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOTxLOCxID.QTY, LOTxLOCxID.QTYALLOCATED,  
-                   LOTxLOCxID.QTYPICKED, LOTxLOCxID.QtyReplen, LOC.LocationHandling, LOC.LogicalLocation, LOC.LOC  
-          ORDER BY LOC.LogicalLocation, LOC.LOC'
+                   LOTxLOCxID.QTYPICKED, LOTxLOCxID.QtyReplen, LOC.LocationHandling, LOC.LogicalLocation, LOC.LOC ' +   --WL01  
+          --ORDER BY LOC.LogicalLocation, LOC.LOC'   --WL01
+          @c_SortingSQL                              --WL01
          
       SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, ' +        
                          '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +  
