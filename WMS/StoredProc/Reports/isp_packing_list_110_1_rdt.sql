@@ -41,6 +41,9 @@ BEGIN
          , @n_ShowTerms     NVARCHAR(10)   
          , @n_ShowStamp     NVARCHAR(10)   
          , @c_Storerkey     NVARCHAR(15)   
+         , @c_long          NVARCHAR(30) 
+         , @c_udf01          NVARCHAR(30) 
+         , @c_udf02          NVARCHAR(30) 
    
    SET @c_Orderkey = @c_Pickslipno
    
@@ -63,6 +66,14 @@ BEGIN
    AND CL.Storerkey = @c_Storerkey
    AND CL.Short = 'Y'
    AND CL.code2 = 'B2C'
+
+   SELECT @c_long  = ISNULL(CL1.Long,''),
+          @c_udf01  = ISNULL(CL1.UDF01,''),
+          @c_udf02  = ISNULL(CL1.UDF02,'')
+   FROM CODELKUP CL1(NOLOCK)
+   WHERE CL1.LISTNAME = 'REPORTCFG'
+   AND CL1.Storerkey = 'spz'
+   AND CL1.code = 'RPTTitle'
    
    CREATE TABLE #TMP_SUM (
 	      Orderkey              NVARCHAR(10) NULL
@@ -119,6 +130,9 @@ BEGIN
        , ODUOM                   NVARCHAR(20)  NULL
        , SumShpQty               INT NULL
        , PKDQty                  INT NULL
+       ,  long                   NVARCHAR(30)  NULL 
+       ,  udf01                  NVARCHAR(30)  NULL 
+       ,  udf02                  NVARCHAR(30)  NULL 
    )
    	 
    INSERT INTO #TMP_SUM (Orderkey, UnitPricexQtyPicked, QtyPicked, Tax,ShpQty,PKDQty)
@@ -212,6 +226,9 @@ BEGIN
         , OD.UOM
         , t.ShpQty AS SumShpQty
         , t.PKDqty AS SumPKDQty
+        , @c_long AS long
+        , @c_udf01 AS udf01
+        , @c_udf02 AS udf02
    FROM ORDERS OH (NOLOCK)
    JOIN STORER ST (NOLOCK) ON OH.Storerkey = ST.StorerKey
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey

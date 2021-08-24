@@ -41,6 +41,9 @@ BEGIN
   
    DECLARE @n_Continue  INT = 1
          , @n_TTLCTN    INT = 0
+         , @c_long          NVARCHAR(30) 
+         , @c_udf01          NVARCHAR(30) 
+         , @c_udf02          NVARCHAR(30)
   
    CREATE TABLE #Temp_DOrderByPS(  
          DCompany        NVARCHAR(45)   
@@ -74,7 +77,10 @@ BEGIN
       ,  TTLCTN          INT  
       ,  PickSlipNo      NVARCHAR(10)
       ,  PickHeaderkey   NVARCHAR(10)
-      ,  DPhone1         NVARCHAR(20)  
+      ,  DPhone1         NVARCHAR(20) 
+      ,  long          NVARCHAR(30) 
+      ,  udf01          NVARCHAR(30) 
+      ,  udf02          NVARCHAR(30) 
       )  
   
    IF(@n_Continue = 1 OR @n_Continue = 2)  
@@ -82,6 +88,14 @@ BEGIN
       SELECT @n_TTLCTN = COUNT(DISTINCT pd.cartonNo) 
       FROM PackDetail PD with (nolock) 
       WHERE pd.PickSlipNo = @c_PickSlipNo
+
+      SELECT @c_long  = ISNULL(CL1.Long,''),
+          @c_udf01  = ISNULL(CL1.UDF01,''),
+          @c_udf02  = ISNULL(CL1.UDF02,'')
+   FROM CODELKUP CL1(NOLOCK)
+   WHERE CL1.LISTNAME = 'REPORTCFG'
+   AND CL1.Storerkey = 'spz'
+   AND CL1.code = 'RPTTitle'
         
       INSERT INTO #Temp_DOrderByPS 
          (  DCompany
@@ -116,6 +130,9 @@ BEGIN
          ,  PickSlipNo
          ,  PickHeaderkey
          ,  DPhone1
+         ,  long
+         ,  udf01
+         ,  udf02
          )
       SELECT DISTINCT 
             DCompany  = ISNULL(OH.c_company,'')
@@ -143,13 +160,16 @@ BEGIN
          ,  FZip      = ISNULL(F.zip,'')
          ,  FCountry  = ISNULL(F.Country,'')
          ,  FPhone1   = ISNULL(F.Phone1,'')
-         ,  FCompany  = N'??????????????????'
+         ,  FCompany  = N'香港商台灣利豐物流有限公司台灣分公司'
          ,  P.PackUOM3
          ,  PQTY      = sum(PD.Qty)
          ,  TTLCTN    = @n_TTLCTN
          ,  PH.PickSlipNo
          ,  PK.Pickheaderkey
          ,  DPhone1  = ISNULL(OH.c_Phone1,'') 
+         ,  long = @c_long 
+         ,  udf01 = @c_udf01
+         ,  udf02 = @c_udf02
       FROM ORDERS OH (NOLOCK) 
       JOIN PACKHEADER PH (NOLOCK) ON PH.ORDERKEY = OH.ORDERKEY 
       --JOIN MBOLDETAIL MD (NOLOCK) ON MD.ORDERKEY = OH.ORDERKEY  
@@ -231,6 +251,9 @@ BEGIN
       ,  PickSlipNo 
       ,  PickHeaderkey
       ,  DPhone1
+      ,  long
+      ,  udf01
+      ,  udf02
    FROM #Temp_DOrderByPS  
    ORDER BY Orderkey
            ,sku  
@@ -244,4 +267,5 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_packing_list_110_2_rdt] TO nSQL 
 GO
+
 
