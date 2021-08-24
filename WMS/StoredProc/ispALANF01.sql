@@ -28,8 +28,6 @@ GO
 /* 2015-02-12  CSCHONG  1.2   New Lottable06 to 15  (CS11)              */
 /* 2015-10-30  Leong    1.3   SOS# 355313 - Change to UNION ALL.        */
 /* 14-Feb-2020 Wan01    1.4   Dynamic SQL review, impact SQL cache log  */ 
-/* 08-Feb-2021 WLChooi  1.5   WMS-16327 - Use Codelkup to control       */
-/*                            sorting (WL01)                            */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispALANF01]
@@ -86,31 +84,11 @@ BEGIN
       @c_Result            NVARCHAR(MAX),
       @c_TempStr           NVARCHAR(MAX),
       @c_LoadType          NVARCHAR(20),
-      @c_PrintResult       NVARCHAR(4000),
-      @c_SortingSQL        NVARCHAR(4000)  --WL01
+      @c_PrintResult       NVARCHAR(4000)
 
    SET @b_debug = 0
    SET @c_LocationType = 'OTHER'
    SET @c_LocationCategory = 'SELECTIVE'
-   SET @c_SortingSQL = 'ORDER BY LOC.LogicalLocation, LOC.LOC '   --WL01
-   
-   --WL01 START
-   IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)  
-              WHERE CL.Storerkey = @c_Storerkey  
-              AND CL.Code = 'SORTBY'  
-              AND CL.Listname = 'PKCODECFG'  
-              AND CL.Long = 'ispALANF01'
-              AND ISNULL(CL.Short,'') <> 'N')
-   BEGIN
-      SELECT @c_SortingSQL = LTRIM(RTRIM(ISNULL(CL.Notes,'')))
-      FROM CODELKUP CL (NOLOCK)
-      WHERE CL.Storerkey = @c_Storerkey
-      AND CL.Code = 'SORTBY'
-      AND CL.Listname = 'PKCODECFG'
-      AND CL.Long = 'ispALANF01'
-      AND ISNULL(CL.Short,'') <> 'N'
-   END
-   --WL01 END
 
    EXEC isp_Init_Allocate_Candidates         --(Wan01)  
 
@@ -222,9 +200,8 @@ BEGIN
          CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END +
          'AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= UCC.Qty
       GROUP BY UCC.Qty, Loc.LocationHandling, Loc.LogicalLocation, LOC.LOC, LOTxLOCxID.LOT, LOTxLOCxID.ID, LOTxLOCxID.QTYALLOCATED
-      HAVING COUNT(1) > 0' +                     --WL01
-      --ORDER BY Loc.LogicalLocation, LOC.LOC'   --WL01
-      @c_SortingSQL                              --WL01
+      HAVING COUNT(1) > 0
+      ORDER BY Loc.LogicalLocation, LOC.LOC'
 
       SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), ' +
                          '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +

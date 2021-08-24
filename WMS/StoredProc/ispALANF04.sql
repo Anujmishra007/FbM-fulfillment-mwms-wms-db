@@ -29,8 +29,6 @@ GO
 /* Date         Author        Purposes                                  */
 /* 2015-02-12   CSCHONG 1.1   New Lottable06 to 15  (CS11)              */
 /* 2019-08-02   SHONG   1.2   WMS-9275 Include MEZZANINE as Loc Category*/
-/* 2021-02-08   WLChooi 1.3   WMS-16327 - Use Codelkup to control       */
-/*                            sorting (WL01)                            */
 /************************************************************************/
 CREATE  PROC [dbo].[ispALANF04]
    @c_LoadKey    NVARCHAR(10),   
@@ -71,32 +69,12 @@ BEGIN
            @n_QtyAvailable     INT,  
            @c_LOT              NVARCHAR(10),
            @c_LOC              NVARCHAR(10),
-           @c_ID               NVARCHAR(18),
-           @c_SortingSQL       NVARCHAR(4000)  --WL01 
+           @c_ID               NVARCHAR(18) 
 
    SET @b_debug = 0
    SET @n_QtyAvailable = 0          
    SET @c_LocationType = 'OTHER'
    SET @c_LocationCategory = '(''SELECTIVE'',''MEZZANINE'') '
-   SET @c_SortingSQL = 'ORDER BY LOC.LogicalLocation, LOC.LOC '   --WL01
-   
-   --WL01 START
-   IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)  
-              WHERE CL.Storerkey = @c_Storerkey  
-              AND CL.Code = 'SORTBY'  
-              AND CL.Listname = 'PKCODECFG'  
-              AND CL.Long = 'ispALANF04'
-              AND ISNULL(CL.Short,'') <> 'N')
-   BEGIN
-      SELECT @c_SortingSQL = LTRIM(RTRIM(ISNULL(CL.Notes,'')))
-      FROM CODELKUP CL (NOLOCK)
-      WHERE CL.Storerkey = @c_Storerkey
-      AND CL.Code = 'SORTBY'
-      AND CL.Listname = 'PKCODECFG'
-      AND CL.Long = 'ispALANF04'
-      AND ISNULL(CL.Short,'') <> 'N'
-   END
-   --WL01 END
 
    -- Get All Available Location In Bulk Area for the SKU
    SET @c_SQL = N'      
@@ -135,9 +113,8 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LA.Lottable10 = @c_Lottable10 ' + CHAR(13) END +      
       CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' + CHAR(13) END +         
       CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END + 
-      'GROUP BY LOTxLOCxID.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.LogicalLocation, LOC.LOC, UCC.Qty  ' +  --WL01   
-       --ORDER BY LOC.LogicalLocation, LOC.LOC'   --WL01
-       @c_SortingSQL                              --WL01
+      'GROUP BY LOTxLOCxID.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.LogicalLocation, LOC.LOC, UCC.Qty    
+       ORDER BY LOC.LogicalLocation, LOC.LOC'
       
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, ' +        
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +   
