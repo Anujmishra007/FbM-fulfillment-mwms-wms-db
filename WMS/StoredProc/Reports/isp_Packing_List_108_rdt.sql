@@ -106,7 +106,7 @@ BEGIN
    	Pickslipno   NVARCHAR(10)
    )
  
-   IF EXISTS (SELECT 1 FROM PICKDETAIL (NOLOCK) WHERE Pickslipno = @c_Storerkey AND @c_Storerkey <> '')   --Pickslipno
+   IF EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE Pickslipno = @c_Storerkey AND @c_Storerkey <> '')   --Pickslipno
    BEGIN
       INSERT INTO #TMP_Orders (Pickslipno)
       SELECT @c_Storerkey
@@ -164,9 +164,10 @@ BEGIN
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = OH.Orderkey 
                             AND PD.orderlinenumber = ORDDET.orderlinenumber
+   JOIN PACKHEADER PH WITH (NOLOCK) ON PH.OrderKey = OH.OrderKey
    JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU AND S.Storerkey=PD.Storerkey
    JOIN STORER STO WITH (NOLOCK) ON OH.shipperkey = STO.Storerkey  
-   JOIN #TMP_Orders TOS ON TOS.Pickslipno = PD.Pickslipno 
+   JOIN #TMP_Orders TOS ON TOS.Pickslipno = PH.Pickslipno 
    LEFT JOIN FACILITY F WITH (NOLOCK) ON f.Facility=oh.Facility  
   -- WHERE PD.Orderkey = @c_getOrdKey
   -- AND PD.Caseid = CASE WHEN ISNULL(@c_labelno,'') <> '' THEN  @c_labelno ELSE PD.Caseid END
