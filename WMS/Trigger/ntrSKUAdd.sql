@@ -35,7 +35,7 @@ GO
 /* 03-Nov-2010  YokeBeen  1.2   FBR#193606 - Added new trigger point       */
 /*                              for WITRON interface with                  */
 /*                              Configkey = "WTNSKULOG". - (YokeBeen02)    */
-/* 22-Dec-2010	 YokeBeen  1.2   SOS#198768 - Blocked interface on process  */
+/* 22-Dec-2010	 YokeBeen  1.2   SOS#198768 - Blocked interface on process */
 /*                              of re-allocation with Configkey = 'GDSITF' */
 /*                              - (YokeBeen03)                             */
 /* 28-Mar-2016  Shong     1.3   SOS#366725 Default OTM SKU Group (Shong02) */
@@ -46,6 +46,7 @@ GO
 /*                              DefaultSkuLottableCode (WL01)              */
 /* 11-Nov-2020  WLChooi   1.7   WMS-15671 - SKUTrigger_SP - call custom SP */
 /*                              when INSERT record (WL02)                  */
+/* 18-Aug-2021  NJOW01    1.8  WMS-17763 Update active based on skustatus  */
 /***************************************************************************/
 CREATE TRIGGER ntrSKUAdd ON SKU 
 FOR INSERT
@@ -130,6 +131,34 @@ BEGIN
    BEGIN
 	   SELECT @n_continue = 4
    END
+   
+   --NJOW01
+   IF @n_continue = 1 or @n_continue = 2
+   BEGIN
+      UPDATE SKU WITH (ROWLOCK)
+      SET SKU.Active = CASE WHEN CL.Short = 'ACTIVE_ON' THEN '1' WHEN CL.Short = 'ACTIVE_OFF' THEN '0' ELSE SKU.Active END,
+          SKU.TrafficCop = NULL
+      FROM INSERTED I (NOLOCK)
+      JOIN SKU ON I.Storerkey = SKU.Storerkey AND I.Sku = SKU.Sku
+      CROSS APPLY (SELECT TOP 1 C.Short 
+                   FROM CODELKUP C (NOLOCK) 
+                   WHERE C.Code = I.SkuStatus AND C.ListName = 'SKUSTATUS' 
+                   AND (C.Storerkey = I.Storerkey OR C.Storerkey = '')
+                   ORDER BY C.Storerkey DESC) CL                
+      JOIN V_STORERCONFIG2 SC ON I.Storerkey = SC.Storerkey AND SC.Configkey = 'SKUAutoUpdActiveByStatus' AND SC.Svalue = '1'
+      WHERE CL.Short IN ('ACTIVE_ON','ACTIVE_OFF')
+      
+      SET @n_err = @@ERROR
+      
+      IF @n_err <> 0
+      BEGIN   	 	  	 
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=63800
+         SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_err,0))
+                           + ': Update Active Failed (ntrSkuAdd) ( SQLSvr MESSAGE='
+                           + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+      END                     
+   END   
 
    --WL02 START
    IF @n_continue=1 or @n_continue = 2

@@ -56,6 +56,7 @@ GO
 /* 11-Nov-2020  WLChooi  1.6  WMS-15671 - SKUTrigger_SP - call custom SP   */
 /*                            when UPDATE record (WL01)                    */
 /* 15-Mar-2021  KHChan   1.7  LFI-1646 - Trigger for Webservice (KH01)     */
+/* 18-Aug-2021  NJOW01   1.7  WMS-17763 Update active based on skustatus   */
 /***************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrSKUUpdate] ON [dbo].[SKU]
@@ -147,7 +148,6 @@ BEGIN
          END
       END
    END
-
    
    IF UPDATE(ArchiveCop)
    BEGIN
@@ -189,6 +189,36 @@ BEGIN
       --WL01 END
    
       SELECT @n_continue = 4
+   END
+   
+   --NJOW01
+   IF (@n_continue = 1 or @n_continue = 2) AND UPDATE(Skustatus)
+   BEGIN
+      UPDATE SKU WITH (ROWLOCK)
+      SET SKU.Active = CASE WHEN CL.Short = 'ACTIVE_ON' THEN '1' WHEN CL.Short = 'ACTIVE_OFF' THEN '0' ELSE SKU.Active END,
+          SKU.TrafficCop = NULL
+      FROM INSERTED I (NOLOCK)
+      JOIN DELETED D (NOLOCK) ON I.Storerkey = D.Storerkey AND I.Sku = D.Sku
+      JOIN SKU ON I.Storerkey = SKU.Storerkey AND I.Sku = SKU.Sku
+      CROSS APPLY (SELECT TOP 1 C.Short 
+                   FROM CODELKUP C (NOLOCK) 
+                   WHERE C.Code = I.SkuStatus AND C.ListName = 'SKUSTATUS' 
+                   AND (C.Storerkey = I.Storerkey OR C.Storerkey = '')
+                   ORDER BY C.Storerkey DESC) CL                
+      JOIN V_STORERCONFIG2 SC ON I.Storerkey = SC.Storerkey AND SC.Configkey = 'SKUAutoUpdActiveByStatus' AND SC.Svalue = '1'
+      WHERE I.SkuStatus <> D.SkuStatus
+      AND CL.Short IN ('ACTIVE_ON','ACTIVE_OFF')
+      
+      SET @n_err = @@ERROR
+      
+      IF @n_err <> 0
+      BEGIN   	 	  	 
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err=63800
+         SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_err,0))
+                           + ': Update Active Failed (ntrSkuUpdate) ( SQLSvr MESSAGE='
+                           + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+      END                     
    END
 
    --(Kc01) - Start
