@@ -33,6 +33,8 @@ GO
 /* 2021-05-21  Wan01    1.2   LFWM-2799 -UATCN SKU Image not loading    */
 /* 2020-11-24  Wan02    1.3   LFWM-2824 - UATMulti SKU Image Upload and */
 /*                            Display (Backend)                         */   
+/* 2021-08-23  Wan03    1.4   LFWM-2989 - CN UATSKU IMAGE GET URL CR for*/
+/*                            CN Alicloud migration                     */
 /************************************************************************/
 CREATE PROC WM.lsp_PRSG_SKU_URL
      @c_Storerkey  NVARCHAR(15)
@@ -71,16 +73,26 @@ BEGIN
          , @c_FolderSeqNo     NVARCHAR(3) = ''           
    SET @c_SKUImageURL = ''
    SET @c_SkuImageServer = ''
-   
-   SELECT @c_SkuImageServer = Option1        --NETAPP Volume Shared Path. Should be same nsqlconfig 'SkuImageServer' nsqldescrip
-         ,@c_Urltemplate    = Option5        --URL Template  
+                                             --Wan03. Use NSQLCOnfig as Option1 not able to store all, in this case set option1 as blank
+   SELECT @c_SkuImageServer = Option1        --NETAPP Volume Shared Path. Should be same nsqlconfig 'SkuImageServer' nsqldescrip-- Wan03 
+        , @c_Urltemplate    = Option5        --URL Template  
    FROM StorerConfig (NOLOCK)
    WHERE ConfigKey='GetSKUURL'
    AND Storerkey = 'ALL'
    AND SValue > ''
-   AND Option1 <> ''
+   --AND Option1 <> ''                       --Wan03. Use NSQLCOnfig as Option1 not able to store all
    AND Option5 <> ''
-
+   
+   --(Wan03) - START
+   IF @c_SkuImageServer = ''
+   BEGIN
+      SELECT @c_SkuImageServer = n.NSQLDescrip  --NETAPP Volume Shared Path
+      FROM dbo.NSQLCONFIG AS n (NOLOCK)
+      WHERE n.ConfigKey='SkuImageServer'
+      AND n.NSQLValue='1'
+   END
+   --(Wan03) - END
+   
    IF OBJECT_ID('tempdb..#DirTree') IS NULL
    BEGIN      
       CREATE TABLE #DirTree (
