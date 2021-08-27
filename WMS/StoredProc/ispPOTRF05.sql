@@ -19,7 +19,7 @@ GO
 /* Called By:                                                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -27,7 +27,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
-/* 15-Mar-2021  Wan     1.1   Created.                                     */
+/* 15-Mar-2021  Wan     1.0   Created.                                     */
+/* 27-AUG-2021  Wan01   1.1   Fixed lot for Kittype= 'T', To be empty      */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPOTRF05]  
 (     @c_Transferkey  NVARCHAR(10)   
@@ -447,7 +448,7 @@ BEGIN
             ,  @c_ComponentSku
             ,  @c_Packkey
             ,  @c_UOM
-            ,  @c_ToLot
+            ,  ''                         --(Wan01)
             ,  @c_ToLoc
             ,  @c_ToID
             ,  @n_KitQty
