@@ -155,6 +155,7 @@ GO
 /*                                  ASN by config                              */
 /* 25-Nov-2020  WLChooi      1.16   WMS-15742 - Disable status update to 9 when*/
 /*                                  openqty <= 0 (WL02)                        */
+/* 27-Aug-2021  TLTING05     2.1    Extend ExternReceiptKey field length       */
 /*******************************************************************************/
 
 CREATE TRIGGER ntrReceiptHeaderUpdate
@@ -190,7 +191,7 @@ BEGIN
          , @c_orderkey           NVARCHAR(10)   -- Added for IDSTH by Ricky 27.Feb.03
          , @c_receiptkey         NVARCHAR(10)
          , @c_currentreceipt     NVARCHAR(10)
-         , @c_externreceiptkey   NVARCHAR(20)
+         , @c_externreceiptkey   NVARCHAR(50)   --TLTING05
 
    DECLARE  @c_transmitlogkey    NVARCHAR(10)
           , @c_sourcekey         NVARCHAR(20)

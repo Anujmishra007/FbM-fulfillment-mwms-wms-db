@@ -168,6 +168,7 @@ GO
 /* 09-Jun-2020  NJOW11    5.0   WMS-13612 add new column support for        */
 /*                              CopyRecDetValueToLottable.                  */
 /* 13-Jul-2020  NJOW12    5.1   WMS-14228 storerconfig add facility         */
+/* 27-Aug-2021  TLTING06  5.3   Extend ExternReceiptKey field length        */
 /****************************************************************************/ 
  
 CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -208,7 +209,7 @@ DECLARE  @c_CatchWeightFlag    NVARCHAR(1),
          @c_PopulateSubInv     NVARCHAR(1), 
          @c_UCCTrackingFlag    NVARCHAR(1), 
          @c_AddUCCFromUDF01    NVARCHAR(10), 
-         @c_ExternReceiptKey   NVARCHAR(20), 
+         @c_ExternReceiptKey   NVARCHAR(50),       --TLTING06
          @c_DisallowInValidSKU NVARCHAR(1),         --(CS01) 
          @c_SkuStatus          NVARCHAR(10),        --(CS01) 
          @c_skustatusFlag      NVARCHAR(60)         --(CS01)  
