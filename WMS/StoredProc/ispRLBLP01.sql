@@ -16,7 +16,7 @@ GO
 /*                                                                       */  
 /* Called By:                                                            */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.2                                                     */  
 /*                                                                       */  
 /* Version: 5.4                                                          */  
 /*                                                                       */  
@@ -27,6 +27,7 @@ GO
 /* 01/04/2019   NJOW01   1.0  Change WIP using temp table and fix        */
 /* 15/05/2019   NJOW02   1.1  WMS-9070 Replenish addition carton if the  */
 /*                            location no more available qty after pick  */
+/* 25/08/2021   WLChooi  1.2   WMS-17812 - Set Priority to 4 for UA(WL01)*/ 
 /*************************************************************************/  
   
 CREATE PROC ispRLBLP01  
@@ -348,7 +349,8 @@ BEGIN
  	  	    SET @c_ToLoc = @c_PackStation
  	  	    SET @c_Message01 = ''
  	  	    SET @c_Message03 = 'PACKSTATION' 
- 	  	    SET @c_Priority = '8'
+ 	  	    --SET @c_Priority = '8'   --WL01
+          SET @c_Priority = CASE WHEN @c_Storerkey = 'UA' THEN '4' ELSE '8' END     --WL01
  	  	    SET @c_PickMethod = 'PP'
    	  	  SET @n_TotCtn = FLOOR(@n_Qty / @n_CaseCnt)       	  	 
    	  	  
@@ -457,9 +459,10 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
       BEGIN       	            	  
-      	  SET @c_Message01 = ''
+          SET @c_Message01 = ''
  	  	    SET @c_Message03 = 'PICKLOC' 
- 	  	    SET @c_Priority = '8'
+ 	  	    --SET @c_Priority = '8'   --WL01
+          SET @c_Priority = CASE WHEN @c_Storerkey = 'UA' THEN '4' ELSE '8' END     --WL01
  	  	    SET @c_PickMethod = 'PP'
 
        	  SELECT TOP 1 @c_Message01 = ISNULL(Short,'')
