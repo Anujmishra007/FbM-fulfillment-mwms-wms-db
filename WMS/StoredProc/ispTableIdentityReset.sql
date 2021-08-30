@@ -31,7 +31,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */    
-/* 14-May-2015  TLTING        Revise to cater bigInt                    */
+/* 14-May-2015  TLTING        Revise to cater bigInt                    */ 
+/* 17-Aug-2021  TLTING01      Bug fix                                   */
 /************************************************************************/    
 
 SET ANSI_NULLS OFF
