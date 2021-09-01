@@ -115,7 +115,7 @@ BEGIN
    BEGIN
    	INSERT INTO #TMP_Orders (Pickslipno)
       SELECT TOP 1 Pickslipno
-      FROM PICKDETAIL (NOLOCK)
+      FROM PACKHEADER (NOLOCK)
       WHERE Orderkey = @c_Orderkey
    END
 
