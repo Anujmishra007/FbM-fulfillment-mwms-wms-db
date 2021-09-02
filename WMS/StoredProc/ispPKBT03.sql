@@ -19,7 +19,7 @@ GO
 /* Called By:                                                           */
 /*          :                                                           */
 /*        :                                                             */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -35,6 +35,7 @@ GO
 /*                            printer (WL03)                            */ 
 /*11-Sep-2020  WLChooi  1.4   WMS-15133 - JITX Print ShipLabel and      */
 /*                            remove PDF printing (WL04)                */
+/*28-Jul-2021  WLChooi  1.5   WMS-17538 - B2B Print SF ShipLabel (WL05) */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPKBT03]
    @c_printerid  NVARCHAR(50) = '',  
@@ -196,6 +197,13 @@ BEGIN
          END
          ELSE
          BEGIN
+            --WL05 S
+            --Override @c_PrinterID
+            SELECT @c_PrinterID = u.DefaultPrinter_Paper
+            FROM RDT.RDTUSER u (NOLOCK) 
+            WHERE u.UserName = @c_UserId
+            --WL05 E
+
             EXEC isp_BT_GenBartenderCommand       
                      @cPrinterID = @c_PrinterID
                   ,  @c_LabelType = @c_LabelType
@@ -219,7 +227,42 @@ BEGIN
             IF @n_Err <> 0 
             BEGIN
                SET @n_continue = 3
+            END
+            
+            --WL05 S
+            IF @n_continue IN (1,2) AND @c_Shipperkey = 'SF' AND @c_LabelType <> 'SHIPLBLSKE'
+            BEGIN
+               --Override @c_PrinterID
+               SELECT @c_PrinterID = u.DefaultPrinter
+               FROM RDT.RDTUSER u (NOLOCK) 
+               WHERE u.UserName = @c_UserId
+
+               EXEC isp_BT_GenBartenderCommand       
+                        @cPrinterID = @c_PrinterID
+                     ,  @c_LabelType = 'SHIPLBLSKE'
+                     ,  @c_userid = @c_UserId
+                     ,  @c_Parm01 = @c_Parm01 --pickslipno
+                     ,  @c_Parm02 = @c_Parm02 --carton from
+                     ,  @c_Parm03 = @c_Parm03 --carton to
+                     ,  @c_Parm04 = @c_Parm04 --template code
+                     ,  @c_Parm05 = @c_Parm05
+                     ,  @c_Parm06 = @c_Parm06
+                     ,  @c_Parm07 = @c_Parm07
+                     ,  @c_Parm08 = @c_Parm08
+                     ,  @c_Parm09 = @c_Parm09
+                     ,  @c_Parm10 = @c_Parm10
+                     ,  @c_Storerkey = @c_Storerkey
+                     ,  @c_NoCopy = @c_NoOfCopy
+                     ,  @c_Returnresult = 'N' 
+                     ,  @n_err = @n_Err OUTPUT
+                     ,  @c_errmsg = @c_ErrMsg OUTPUT     
+                                     
+               IF @n_Err <> 0 
+               BEGIN
+                  SET @n_continue = 3
+               END
             END   
+            --WL05 E
          END 
 
          GOTO QUIT_SP   
@@ -250,7 +293,42 @@ BEGIN
          IF @n_Err <> 0 
          BEGIN
             SET @n_continue = 3
-         END       
+         END 
+         
+         --WL05 S
+         IF @n_continue IN (1,2) AND @c_LabelType <> 'SHIPLBLSKE'
+         BEGIN
+            --Override @c_PrinterID
+            SELECT @c_PrinterID = u.DefaultPrinter
+            FROM RDT.RDTUSER u (NOLOCK) 
+            WHERE u.UserName = @c_UserId
+
+            EXEC isp_BT_GenBartenderCommand       
+                     @cPrinterID = @c_PrinterID
+                  ,  @c_LabelType = 'SHIPLBLSKE'
+                  ,  @c_userid = @c_UserId
+                  ,  @c_Parm01 = @c_Parm01 --pickslipno
+                  ,  @c_Parm02 = @c_Parm02 --carton from
+                  ,  @c_Parm03 = @c_Parm03 --carton to
+                  ,  @c_Parm04 = @c_Parm04 --template code
+                  ,  @c_Parm05 = @c_Parm05
+                  ,  @c_Parm06 = @c_Parm06
+                  ,  @c_Parm07 = @c_Parm07
+                  ,  @c_Parm08 = @c_Parm08
+                  ,  @c_Parm09 = @c_Parm09
+                  ,  @c_Parm10 = @c_Parm10
+                  ,  @c_Storerkey = @c_Storerkey
+                  ,  @c_NoCopy = @c_NoOfCopy
+                  ,  @c_Returnresult = 'N' 
+                  ,  @n_err = @n_Err OUTPUT
+                  ,  @c_errmsg = @c_ErrMsg OUTPUT     
+                                  
+            IF @n_Err <> 0 
+            BEGIN
+               SET @n_continue = 3
+            END
+         END   
+         --WL05 E      
       
          GOTO QUIT_SP  
       END --WL01 
