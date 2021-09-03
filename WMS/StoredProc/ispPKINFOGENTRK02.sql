@@ -25,8 +25,7 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */    
-/* Date         Author   Ver  Purposes                                  */ 
-/* 2021-09-03   WLChooi  1.1  WMS-17693 - Exclude ECOM Orders (WL01)    */   
+/* Date         Author   Ver  Purposes                                  */    
 /************************************************************************/  
 CREATE PROC [dbo].[ispPKINFOGENTRK02]
        @c_Pickslipno                NVARCHAR(10)  
@@ -107,34 +106,29 @@ BEGIN
 
       IF ISNULL(@c_OrderKey,'') = ''
          GOTO QUIT_SP
-      
+
       --B2B only get trackingno for SF
       IF @c_Type = 'N' AND @c_Shipperkey <> 'SF'
          GOTO QUIT_SP
-      
-      --WL01 S
-      IF @c_Type = 'E'
-         GOTO QUIT_SP
 
       --B2C - No need to generate TrackingNo for Cartonno 1, directly get from ORDERS.UserDefine04 / ORDERS.TrackingNo
-      --IF @c_Type = 'E' AND @n_CartonNo = 1
-      --BEGIN
-      --   IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE Orderkey = @c_Orderkey AND UserDefine04 <> '')
-      --   BEGIN
-      --      SELECT @c_TrackingNo = OH.UserDefine04
-      --      FROM ORDERS OH (NOLOCK)
-      --      WHERE OH.OrderKey = @c_Orderkey
-      --   END
-      --   ELSE
-      --   BEGIN
-      --      SELECT @c_TrackingNo = OH.TrackingNo
-      --      FROM ORDERS OH (NOLOCK)
-      --      WHERE OH.OrderKey = @c_Orderkey
-      --   END
+      IF @c_Type = 'E' AND @n_CartonNo = 1
+      BEGIN
+         IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE Orderkey = @c_Orderkey AND UserDefine04 <> '')
+         BEGIN
+            SELECT @c_TrackingNo = OH.UserDefine04
+            FROM ORDERS OH (NOLOCK)
+            WHERE OH.OrderKey = @c_Orderkey
+         END
+         ELSE
+         BEGIN
+            SELECT @c_TrackingNo = OH.TrackingNo
+            FROM ORDERS OH (NOLOCK)
+            WHERE OH.OrderKey = @c_Orderkey
+         END
 
-      --   GOTO SKIP_CT
-      --END
-      --WL01 E
+         GOTO SKIP_CT
+      END
 
       IF @b_Debug = 1
          SELECT @c_Storerkey, @c_Type, @c_Shipperkey, @c_OrderKey
