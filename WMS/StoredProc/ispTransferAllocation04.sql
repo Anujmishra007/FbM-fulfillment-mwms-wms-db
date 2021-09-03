@@ -12,10 +12,10 @@ GO
 /* Written by: Wan                                                         */  
 /*                                                                         */  
 /* Purpose: WMS-16397 - [CN]ANF_Exceed_Transfer_CR                         */  
-/*                                                                         */
+/*        : Transfer Channel Only. LotxLocxID No change- Transfer allocate */
 /* Called By: Job Scheduler / ue_transferallocation                        */  
 /*                                                                         */  
-/* PVCS Version: 1.0                                                       */  
+/* PVCS Version: 1.1                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -24,6 +24,8 @@ GO
 /* Updates:                                                                */  
 /* Date        Author   Ver   Purposes                                     */  
 /* 2021-03-12  Wan      1.0   Created.                                     */
+/* 2021-08-27  Wan01    1.1   Fixed. Transfer Channel Only. LotxLocxID No  */
+/*                            changed.                                     */
 /***************************************************************************/  
   
 CREATE PROC [dbo].[ispTransferAllocation04](  
@@ -417,7 +419,7 @@ BEGIN
                                     ,  @c_ToChannel 
   
       WHILE @@FETCH_STATUS <> -1  
-      BEGIN  
+      BEGIN
          SET @n_QtyRemaining = @n_FromQty  
          SET @c_Status_TFD = '9'  
   
@@ -555,35 +557,52 @@ BEGIN
             SET @dt_Lottable13 = NULL  
             SET @dt_Lottable14 = NULL  
             SET @dt_Lottable15 = NULL  
-  
-            -- CR v6.0
+            
+            --(Wan01) 2021-09-02 Only Transfer Channel, No Transfer Inventory, Inventory Unchanged
+            --(Wan01) Allocate UCC, task , movement no longer valid for CN, that was HK ANF logic
+            --(Wan01) Remove unnecessary logic
             SELECT TOP 1  
-                   @c_FromLot = LLI.Lot  
-                  ,@c_FromLoc = LLI.Loc  
-                  ,@c_FromID  = LLI.ID  
-                  ,@n_QtyAvail   = CASE WHEN UCC.UCCNo IS NOT NULL THEN UCC.Qty ELSE (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) END  
-                  ,@c_UCCNo      = ISNULL(UCC.UCCNo,'')
-                  ,@n_UCCQty     = ISNULL(UCC.Qty,0)
-                  ,@c_Status_UCC = UCC.[Status]
-                  ,@n_UCC_RowRef = UCC.UCC_RowRef
-                  ,@c_Lottable01 = ISNULL(RTRIM(LA.Lottable01),'')  
-                  ,@c_Lottable02 = ISNULL(RTRIM(LA.Lottable02),'') 
-                  ,@c_Lottable03 = ISNULL(RTRIM(LA.Lottable03),'')  
-                  ,@dt_Lottable04= LA.Lottable04  
-                  ,@dt_Lottable05= LA.Lottable05  
-                  ,@c_Lottable06 = ISNULL(RTRIM(LA.Lottable06),'')  
-                  ,@c_Lottable07 = ISNULL(RTRIM(LA.Lottable07),'')  
-                  ,@c_Lottable08 = ISNULL(RTRIM(LA.Lottable08),'')  
-                  ,@c_Lottable09 = ISNULL(RTRIM(LA.Lottable09),'')  
-                  ,@c_Lottable10 = ISNULL(RTRIM(LA.Lottable10),'')  
-                  ,@c_Lottable11 = ISNULL(RTRIM(LA.Lottable11),'')  
-                  ,@c_Lottable12 = ISNULL(RTRIM(LA.Lottable12),'')  
-                  ,@dt_Lottable13= LA.Lottable13  
-                  ,@dt_Lottable14= LA.Lottable14  
-                  ,@dt_Lottable15= LA.Lottable15  
-                  ,@c_LogicalLoc = ISNULL(RTRIM(LOC.LogicalLocation),'') 
-                  ,@c_LocationCategory = LOC.LocationCategory
-                  ,@c_LocationType = LOC.LocationType
+                @c_FromLot = LLI.Lot  
+               ,@c_FromLoc = LLI.Loc  
+               ,@c_FromID  = LLI.ID  
+               --(Wan01) - START
+               --,@n_QtyAvail   = CASE WHEN UCC.UCCNo IS NOT NULL 
+               --                        THEN UCC.Qty 
+               --                        WHEN CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold >= LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked  --Wan01, GetAvailable Channel
+               --                        THEN LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
+               --                        ELSE CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold
+               --                        END  
+               --,@c_UCCNo      = ISNULL(UCC.UCCNo,'')
+               --,@n_UCCQty     = ISNULL(UCC.Qty,0)
+               --,@c_Status_UCC = UCC.[Status]
+               --,@n_UCC_RowRef = UCC.UCC_RowRef
+               ,@n_QtyAvail= CASE WHEN CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold >= LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked  --Wan01, GetAvailable Channel
+                                  THEN LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
+                                  ELSE CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold
+                                  END  
+               ,@c_UCCNo      = ''
+               ,@n_UCCQty     = 0
+               ,@c_Status_UCC = ''
+               ,@n_UCC_RowRef = 0
+               --(Wan01)-END
+               ,@c_Lottable01 = ISNULL(RTRIM(LA.Lottable01),'')  
+               ,@c_Lottable02 = ISNULL(RTRIM(LA.Lottable02),'') 
+               ,@c_Lottable03 = ISNULL(RTRIM(LA.Lottable03),'')  
+               ,@dt_Lottable04= LA.Lottable04  
+               ,@dt_Lottable05= LA.Lottable05  
+               ,@c_Lottable06 = ISNULL(RTRIM(LA.Lottable06),'')  
+               ,@c_Lottable07 = ISNULL(RTRIM(LA.Lottable07),'')  
+               ,@c_Lottable08 = ISNULL(RTRIM(LA.Lottable08),'')  
+               ,@c_Lottable09 = ISNULL(RTRIM(LA.Lottable09),'')  
+               ,@c_Lottable10 = ISNULL(RTRIM(LA.Lottable10),'')  
+               ,@c_Lottable11 = ISNULL(RTRIM(LA.Lottable11),'')  
+               ,@c_Lottable12 = ISNULL(RTRIM(LA.Lottable12),'')  
+               ,@dt_Lottable13= LA.Lottable13  
+               ,@dt_Lottable14= LA.Lottable14  
+               ,@dt_Lottable15= LA.Lottable15  
+               ,@c_LogicalLoc = ISNULL(RTRIM(LOC.LogicalLocation),'') 
+               ,@c_LocationCategory = LOC.LocationCategory
+               ,@c_LocationType = LOC.LocationType
             FROM @tLA LA 
             JOIN LOT          LOT WITH (NOLOCK) ON (LA.Lot = LOT.Lot)
             JOIN LOTxLOCxID   LLI WITH (NOLOCK) ON (LOT.Lot = LLI.Lot)  
@@ -595,17 +614,16 @@ BEGIN
                                                 AND(CINV.Channel= @c_FromChannel)
                                                 AND(CINV.C_Attribute01 = LA.Lottable03)
                                                 AND CINV.C_Attribute01 <> ''
-            LEFT JOIN UCC     UCC WITH (NOLOCK) ON (LLI.Lot = UCC.Lot)  
-                                                AND(LLI.Loc = UCC.Loc)  
-                                                AND(LLI.ID  = UCC.ID)  
-                                                AND(UCC.[Status]= '1')         
-                                                AND UCC.Qty > 0                   
-                                                AND CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold >= UCC.Qty -- Do not allocate from partial allocated UCC
+            --LEFT JOIN UCC     UCC WITH (NOLOCK) ON (LLI.Lot = UCC.Lot)         --(Wan01)
+            --                     AND(LLI.Loc = UCC.Loc)                        --(Wan01)
+            --                     AND(LLI.ID  = UCC.ID)                         --(Wan01)
+            --                     AND(UCC.[Status]= '1')                        --(Wan01)
+            --                     AND UCC.Qty > 0                               --(Wan01)
             WHERE LOC.Facility  = @c_FromFacility  
             AND   LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked - LOT.QtyPreAllocated > 0  
             AND   LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0  
-            --AND   LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked <= CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold                                          -- 2021-05-27 Fixed
             AND   CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold > 0
+            --AND   CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold >= ISNULL(UCC.Qty,0)   -- if Channel Qty invqty, CHannel & inv qty are tally --Wan01      
             AND   LOT.[Status] = 'OK'  
             AND   LOC.[Status] = 'OK'  
             AND   LOC.LocationFlag NOT IN ( 'HOLD', 'DAMAGE' )  
@@ -613,28 +631,34 @@ BEGIN
             AND   LA.MatchLottable01 + LA.MatchLottable02 + LA.MatchLottable03 + LA.MatchLottable04 + LA.MatchLottable05 +
                   LA.MatchLottable06 + LA.MatchLottable07 + LA.MatchLottable08 + LA.MatchLottable09 + LA.MatchLottable10 +
                   LA.MatchLottable11 + LA.MatchLottable12 + LA.MatchLottable13 + LA.MatchLottable14 + LA.MatchLottable15 = 15 
-            AND   NOT EXISTS (SELECT 1 FROM dbo.TRANSFERDETAIL AS t WITH (NOLOCK) WHERE t.TransferKey = @c_TransferKey AND t.UserDefine01 = ucc.UCCNo)   -- 2021-05-27 Fixed  
-            AND   NOT EXISTS (SELECT 1 FROM dbo.TRANSFERDETAIL AS t2 WITH (NOLOCK)     -- 2021-07-08 CR 8.0
-                           WHERE t2.TransferKey = @c_TransferKey 
-                           AND   t2.fromlot = LLI.lot
-                           AND   t2.FromLoc = LLI.loc
-                           AND   t2.FromId  = lli.Id
-                           AND   t2.[Status] = '9'
-                           AND   t2.UserDefine01 = '' 
-                           AND   t2.UserDefine01 = t2.UserDefine02
-                           GROUP BY t2.fromlot 
-                                 , t2.FromLoc
-                                 , t2.FromId 
-                           HAVING SUM(t2.FromQty) <= LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
-                                       )                                               -- 2021-07-08 CR 8.0  
+            --(Wan01) - START      
+            --AND   NOT EXISTS (SELECT 1 FROM dbo.UCC AS u WITH (NOLOCK) WHERE u.UCC_RowRef = UCC.UCC_RowRef AND u.Qty > @n_QtyRemaining)  --(Wan01) not to alloc partial ucc
+            --AND   NOT EXISTS (SELECT 1 FROM dbo.TRANSFERDETAIL AS t WITH (NOLOCK) WHERE t.TransferKey = @c_TransferKey AND t.UserDefine01 = ucc.UCCNo)      -- 2021-05-27 Fixed  
+            --AND   NOT EXISTS (SELECT 1 FROM dbo.TRANSFERDETAIL AS t2 WITH (NOLOCK)     -- 2021-07-08 CR 8.0
+            --               WHERE t2.TransferKey = @c_TransferKey 
+            --               AND   t2.fromlot = LLI.lot
+            --               AND   t2.FromLoc = LLI.loc
+            --               AND   t2.FromId  = lli.Id
+            --               AND   t2.[Status] = '9'
+            --               AND   t2.UserDefine01 = '' 
+            --               AND   t2.UserDefine01 = t2.UserDefine02
+            --               GROUP BY t2.fromlot 
+            --                     , t2.FromLoc
+            --                     , t2.FromId 
+            --               HAVING SUM(t2.FromQty) <= LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
+            --                           )                                               -- 2021-07-08 CR 8.0  
+            --(Wan01) - END
             ORDER BY CASE WHEN @c_FromFacility =  @c_ToFacility AND LOC.LocationType = 'DYNPPICK' THEN 10  
                           WHEN @c_FromFacility =  @c_ToFacility AND LOC.LocationType <>'DYNPPICK' THEN 20 
-                          WHEN @c_FromFacility <> @c_ToFacility AND LOC.LocationType = 'DYNPPICK' THEN 10  
-                          WHEN @c_FromFacility <> @c_ToFacility AND LOC.LocationType <>'DYNPPICK' THEN 20  
+                          WHEN @c_FromFacility <> @c_ToFacility AND LOC.LocationType = 'DYNPPICK' THEN 20         --(Wan01) Fixed order by BULK
+                          WHEN @c_FromFacility <> @c_ToFacility AND LOC.LocationType <>'DYNPPICK' THEN 10         --(Wan01) Fixed order by BULK
                           END  
-                  ,  CASE WHEN LOC.LocationType = 'DYNPPICK' THEN LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
-                          ELSE UCC.Qty END  
- 
+                  ,  LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
+            --(Wan01) - START      
+            --      ,  CASE WHEN LOC.LocationType = 'DYNPPICK' THEN LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked
+            --              ELSE UCC.Qty END 
+            --(Wan01) - END 
+
             IF @c_FromLot = ''  
             BEGIN  
                GOTO NEXT_TRFDET  
@@ -654,10 +678,10 @@ BEGIN
                GOTO NEXT_LLI
             END 
 
-            IF @b_RPFTask = 1 AND @c_LocationCategory <> 'SELECTIVE'
-            BEGIN
-               SET @b_RPFTask = 0
-            END  
+            --IF @b_RPFTask = 1 AND @c_LocationCategory <> 'SELECTIVE'
+            --BEGIN
+            --   SET @b_RPFTask = 0
+            --END  
             
             SET @c_Status_TFD = '0'  
 
@@ -1172,6 +1196,7 @@ BEGIN
             --------------------------------------------------
             -- Finalize Transfer Line is Status = '9' - START
             --------------------------------------------------
+ 
             IF @c_Status_TFD = '9' 
             BEGIN
                EXEC dbo.ispFinalizeTransfer 
