@@ -18,7 +18,7 @@ GO
 /* Called By: event                                                     */
 /*          : w_gtm_kiosk.ue_perform_job                                */
 /*                                                                      */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,6 +32,8 @@ GO
 /* 26-FEB-2016  WAN04   1.3   Get status '5' job if B pallet had been   */
 /*                            released & move out but C released  fail  */
 /* 04-JAN-2018  Wan05   1.4   WMS-7286-PRHK - GTM Picking For COPACK Sku*/
+/* 05-APR-2021  Wan06   1.5   WMS-16593-SG-ASRS-GTM Picking Enhancement */
+/*                            CPI                                       */
 /************************************************************************/
 CREATE PROC isp_GetGTMKioskJobs
             @c_GTMWorkStation NVARCHAR(10) 
@@ -383,7 +385,7 @@ BEGIN
                               AND PICKDETAIL.Status < '5' 
                               AND ISNULL(SKU.SUSR4,'') <> 'SSCC'
                               GROUP BY PICKDETAIL.ID
-                              HAVING COUNT(DISTINCT PICKDETAIL.Orderkey) <= 1
+                             -- HAVING COUNT(DISTINCT PICKDETAIL.Orderkey) <= 1                             --(Wan06)
                             )
                   BEGIN
                      SET @n_PickToQty = 0

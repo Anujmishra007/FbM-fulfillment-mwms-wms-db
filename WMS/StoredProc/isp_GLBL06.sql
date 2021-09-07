@@ -27,7 +27,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author  Ver.  Purposes                                  */
+/* 02-JUL-2021  NJOW01  1.0   WMS-17424 get order info thru packheader  */
+/*                            pickheader failed                         */
 /************************************************************************/
 
 CREATE PROC isp_GLBL06 ( 
@@ -69,6 +71,18 @@ BEGIN
    JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
    WHERE PH.Pickheaderkey = @c_PickslipNo
    ORDER BY OD.OrderLineNumber
+   
+   --NJOW01
+   IF ISNULL(@c_Storerkey,'') = ''
+   BEGIN
+      SELECT TOP 1 @c_Lottable02 = ISNULL(OD.Lottable02,'')
+                  ,@c_Storerkey = ISNULL(O.Storerkey,'')
+      FROM PACKHEADER PH (NOLOCK)                                           
+      JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+      WHERE PH.PickSlipNo = @c_PickslipNo
+      ORDER BY OD.OrderLineNumber
+   END
 
    SELECT @c_PackNo_Long = Long,
           @c_Prefix = Short

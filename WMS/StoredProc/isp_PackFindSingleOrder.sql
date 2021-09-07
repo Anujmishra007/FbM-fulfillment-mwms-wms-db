@@ -31,6 +31,7 @@ GO
 /* 09-JAN-2018 1.1  Wan01    Increase @c_Dropid to NVARCHAR(20)            */ 
 /* 27-Nov-2020 1.2  NJOW01   WMS-15762 filter out orders.status 9 AND Sort */
 /*                           by order.status < 5.                          */
+/* 08-Jun-2021 1.3  NJOW02   WMS-17104 exclude sostatus by codelkup        */ 
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_packfindsingleorder]    
 (     @c_DropId      NVARCHAR(20)     
@@ -74,6 +75,11 @@ BEGIN
    AND PD.SKU = @c_Sku
    AND PKD.Pickslipno IS NULL
    AND O.Status <> '9'  --NJOW02
+   AND O.SOStatus NOT IN (SELECT Code
+                          FROM CODELKUP (NOLOCK) 
+                          WHERE Listname = 'NONEPACKSO'
+                          --AND Code NOT IN ('CANC', 'HOLD')
+                          AND (Storerkey = O.Storerkey OR ISNULL(Storerkey,'')='')) --NJOW03
    GROUP BY PD.Orderkey, O.Priority, O.Status  --NJOW01
    HAVING SUM(PD.QTY) = 1
    ORDER BY CASE WHEN O.Status < '5' THEN 1 ELSE 2 END, O.Priority, PD.Orderkey  --NJOW02   

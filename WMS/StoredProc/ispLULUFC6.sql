@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-01-25  Wan      1.0   Created                                   */
 /* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
+/* 2021-08-12  Wan02    1.2   Performance Tune                          */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuFC6
      @c_WaveKey                     NVARCHAR(10)
@@ -67,6 +68,7 @@ BEGIN
          , @n_QtyAvailable       INT = 0
          , @n_RemainingQty       INT = 0
          , @n_UCCQty             INT = 0
+         , @n_QtyLeftToFulfilled INT = 0              --(Wan02)  
          , @c_PickDetailKey      NVARCHAR(10) = ''
          , @c_PickMethod         NVARCHAR(10) = 'C'
 
@@ -154,6 +156,7 @@ BEGIN
    ,  OrderLineNumber   NVARCHAR(5)    NOT NULL DEFAULT('')
    ,  SkuLAQty          INT            NOT NULL DEFAULT(0)
    ,  Storerkey         NVARCHAR(15)   NOT NULL DEFAULT('')
+   ,  Sku               NVARCHAR(20)   NOT NULL DEFAULT('')       --(Wan02)  
    ,  UCCNo             NVARCHAR(20)   NOT NULL DEFAULT('')
    )
    
@@ -212,7 +215,11 @@ BEGIN
      AND OH.SOStatus <> 'CANC'   
      AND OH.[Status] < '9'
      AND OH.UserDefine10 NOT IN ('170146','170149') 
-     AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0  
+     AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0 
+   ORDER BY 
+            OD.Storerkey   --(Wan02)
+         ,  OD.Sku         --(Wan02)
+         ,  OH.Orderkey    --(Wan02) 
    
    IF NOT EXISTS (SELECT 1 FROM #TMPOD)         --(Wan01) 
    BEGIN 
@@ -280,9 +287,9 @@ BEGIN
       ORDER BY t.UCCNo
    END   
 
-   INSERT INTO #TMPALLOC (lot, loc, id, qtyavailable, Orderkey, OrderLineNumber, SKULAQty, Storerkey, UCCNo)
+   INSERT INTO #TMPALLOC (lot, loc, id, qtyavailable, Orderkey, OrderLineNumber, SKULAQty, Storerkey, Sku, UCCNo)       --(Wan02)
    SELECT lli.Lot, lli.Loc, lli.Id, qtyavailable = (lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen)
-         ,t.Orderkey, t.OrderLineNumber, t.SkuLAQty, ucc.Storerkey, ucc.UCCNo
+         ,t.Orderkey, t.OrderLineNumber, t.SkuLAQty, ucc.Storerkey, ucc.Sku, ucc.UCCNo                                  --(Wan02)
    FROM #TMPOD t
    JOIN #TMPUCC AS ucc WITH (NOLOCK) ON  t.Storerkey = ucc.Storerkey
                                      AND t.Sku       = ucc.sku
@@ -319,6 +326,7 @@ BEGIN
          ,  t.OrderLineNumber
          ,  t.SkuLAQty 
          ,  ucc.Storerkey
+         ,  ucc.Sku                                                                                                  --(Wan02)
          ,  ucc.UCCNo
    ORDER BY MIN(la.lottable05)
          , t.Orderkey
@@ -328,297 +336,277 @@ BEGIN
    BEGIN
       SELECT * FROM #TMPAlloc AS t
       ORDER BY t.RowRef
-   END         
-   SET @n_RowRef = 0    --(Wan01) 
-   WHILE 1=1
-   BEGIN
-      /*
-      ;WITH t2 ( UCC_RowRef, UCCNo, Qty, [Match], Lot, Loc, ID, RowRef ) AS
-      (  SELECT u.UCC_RowRef
-               ,u.UCCNo
-               ,u.Qty 
-               ,[Match] = CASE WHEN ISNULL(SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked ),0) - u.qty >= 0 THEN 1 ELSE 0 END
-               ,lli.Lot
-               ,lli.Loc
-               ,lli.ID
-               ,RowRef = ROW_NUMBER() OVER (ORDER BY MIN(t.RowRef))
+   END 
+   
+   --(Wan02) - START        
+   SET @c_Sku = ''                     
+   WHILE 1=1    
+   BEGIN 
+      SET @n_QtyLeftToFulfilled = 0  
+      SELECT TOP 1   
+              @c_Storerkey = t.Storerkey  
+            , @c_Sku = t.Sku  
+            , @n_QtyLeftToFulfilled = SUM(t.Qty)   
+      FROM #TMPOD t  
+      WHERE t.Sku > @c_Sku
+      AND EXISTS (   SELECT 1 FROM #TMPALLOC AS t2 
+                     WHERE t2.Storerkey = t.Storerkey
+                     AND t2.Sku = t.Sku
+                  )   
+      GROUP BY t.Storerkey  
+              ,t.Sku   
+      ORDER BY t.Storerkey  
+              ,t.Sku    
+               
+      IF @@ROWCOUNT = 0   
+      BEGIN  
+         BREAK  
+      END  
+        
+      SET @n_RowRef = 0    --(Wan01)   
+      
+      --(Wan02) - START
+      WHILE @n_QtyLeftToFulfilled > 0 AND @n_Continue = 1  
+      BEGIN  
+         SET @n_UCC_RowRef = 0 
+         SELECT TOP 1 
+               @n_UCC_RowRef = u.UCC_RowRef
+            ,  @c_UCCNo = u.UCCNo
+            ,  @n_UCCQty= u.Qty        
+            --,  @c_Orderkey = tu.Orderkey            --(Wan02)
+            ,  @c_Lot   = lli.Lot
+            ,  @c_Loc   = lli.Loc
+            ,  @c_ID    = lli.ID
+            ,  @n_RowRef = t.RowRef
          FROM #TMPALLOC t
          JOIN LOTxLOCxID AS lli WITH (NOLOCK) ON lli.Lot = t.Lot AND lli.loc = t.loc AND lli.id = t.id
          JOIN #TMPUCC tu ON t.Storerkey = tu.Storerkey AND t.UCCNo = tu.UCCNo 
-                         AND lli.Lot = tu.Lot AND lli.loc = tu.loc AND lli.id = tu.id
+                         AND lli.Lot =  tu.Lot AND lli.loc = tu.loc AND lli.id = tu.id
          JOIN UCC AS u WITH (NOLOCK) ON u.UCC_RowRef = tu.UCC_RowRef
-         LEFT JOIN ORDERDETAIL AS od WITH (NOLOCK) ON (t.Orderkey = od.Orderkey AND t.OrderLineNumber = od.OrderLineNumber)
-         WHERE u.Qty <= lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen        --(Wan01)
-         AND u.Qty > 0    
+         WHERE t.Storerkey = @c_Storerkey             --(Wan02) 
+         AND t.Sku = @c_Sku                           --(Wan02)             
+         AND t.RowRef > @n_RowRef
+         AND u.Qty <= lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen       
+         AND u.Qty > 0
+         AND u.Qty <= @n_QtyLeftToFulfilled           --(Wan02)    
          AND u.[Status] = '1'
-         GROUP BY u.UCC_RowRef
-               ,  u.UCCNo
-               ,  u.Qty
-               ,  lli.Lot
-               ,  lli.Loc
-               ,  lli.ID
-               ,  lli.Qty 
-               ,  lli.QtyAllocated 
-               ,  lli.QtyPicked 
-               ,  lli.QtyReplen
-      )
-                 
-      SELECT TOP 1 
-            @n_UCC_RowRef = t2.UCC_RowRef
-         ,  @c_UCCNo = t2.UCCNo
-         ,  @n_UCCQty= t2.Qty       
-         ,  @c_Lot   = t2.Lot
-         ,  @c_Loc   = t2.Loc
-         ,  @c_ID    = t2.ID
-      FROM t2
-      GROUP BY UCC_RowRef
-            ,  t2.uccno
-            ,  t2.Qty 
-            ,  t2.Lot
-            ,  t2.Loc
-            ,  t2.ID  
-            ,  t2.RowRef 
-      HAVING MIN(t2.[Match]) = 1  
-      ORDER BY t2.RowRef
-      */
+         --AND EXISTS (SELECT 1                       --(Wan02) - START
+         --            FROM #TMPALLOC AS t2 
+         --            JOIN ORDERDETAIL AS od WITH (NOLOCK) ON od.OrderKey = t2.OrderKey
+         --                                                AND od.OrderLineNumber = t2.OrderLineNumber
+         --            WHERE od.Storerkey= u.Storerkey
+         --            AND   od.Sku = u.Sku
+         --            AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0
+         --            GROUP BY od.Storerkey
+         --                     ,od.Sku
+         --            HAVING SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) - u.Qty >= 0
+         --            )                              --(Wan02) - END
+         ORDER BY t.RowRef 
+         --(Wan01) - END   
 
-      SELECT TOP 1 
-            @n_UCC_RowRef = u.UCC_RowRef
-         ,  @c_UCCNo = u.UCCNo
-         ,  @n_UCCQty= u.Qty        
-         ,  @c_Orderkey = tu.Orderkey
-         ,  @c_Lot   = lli.Lot
-         ,  @c_Loc   = lli.Loc
-         ,  @c_ID    = lli.ID
-         ,  @n_RowRef = t.RowRef
-      FROM #TMPALLOC t
-      JOIN LOTxLOCxID AS lli WITH (NOLOCK) ON lli.Lot = t.Lot AND lli.loc = t.loc AND lli.id = t.id
-      JOIN #TMPUCC tu ON t.Storerkey = tu.Storerkey AND t.UCCNo = tu.UCCNo 
-                      AND lli.Lot =  tu.Lot AND lli.loc = tu.loc AND lli.id = tu.id
-      JOIN UCC AS u WITH (NOLOCK) ON u.UCC_RowRef = tu.UCC_RowRef
-      WHERE t.RowRef > @n_RowRef
-      AND   u.Qty <= lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen       
-      AND u.Qty > 0    
-      AND u.[Status] = '1'
-      AND EXISTS (SELECT 1
-                  FROM #TMPALLOC AS t2 
-                  JOIN ORDERDETAIL AS od WITH (NOLOCK) ON od.OrderKey = t2.OrderKey
-                                                      AND od.OrderLineNumber = t2.OrderLineNumber
-                  WHERE od.Storerkey= u.Storerkey
-                  AND   od.Sku = u.Sku
-                  AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0
-                  GROUP BY od.Storerkey
-                           ,od.Sku
-                  HAVING SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) - u.Qty >= 0
-                  )      
-      ORDER BY t.RowRef 
-      --(Wan01) - END   
-
-      IF @n_UCC_RowRef = 0 OR @@ROWCOUNT = 0 
-      BEGIN
-         BREAK
-      END
-      
-      IF @b_Debug = 2
-      BEGIN
-         SELECT @n_UCCQty '@n_UCCQty'
+         IF @n_UCC_RowRef = 0 OR @@ROWCOUNT = 0 
+         BEGIN
+            BREAK
+         END
+         
+         IF @b_Debug = 2
+         BEGIN
+            SELECT @n_RowRef, '@n_RowRef', @c_UCCNO '@c_UCCNO', @n_UCCQty '@n_UCCQty' , GETDATE() 'now'   
+                
+            SELECT GETDATE()'now'     
+                  ,  od.OrderKey
+                  ,  od.OrderLineNumber
+                  ,  od.OpenQty - od.QtyAllocated - od.QtyPicked
+                  ,  AccumulatedQty = SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) OVER (ORDER BY od.OrderKey, od.OrderLineNumber)
+               FROM #TMPALLOC t
+               JOIN ORDERDETAIL AS od WITH (NOLOCK) ON (t.Orderkey = od.Orderkey AND t.OrderLineNumber = od.OrderLineNumber)
+               WHERE t.lot = @c_Lot
+               AND   t.loc = @c_Loc
+               AND   t.id  = @c_id  
+               AND   t.UCCNo = @c_UCCNo                 
+               --AND   od.OpenQty - od.QtyAllocated - od.QtyPicked >= @n_UCCQty
+               AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0
+         END   
             
-         SELECT  
-                  od.OrderKey
-               ,  od.OrderLineNumber
-               ,  od.OpenQty - od.QtyAllocated - od.QtyPicked
-               ,  AccumulatedQty = SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) OVER (ORDER BY od.OrderKey, od.OrderLineNumber)
-            FROM #TMPALLOC t
-            JOIN ORDERDETAIL AS od WITH (NOLOCK) ON (t.Orderkey = od.Orderkey AND t.OrderLineNumber = od.OrderLineNumber)
-            WHERE t.lot = @c_Lot
-            AND   t.loc = @c_Loc
-            AND   t.id  = @c_id  
-            AND   t.UCCNo = @c_UCCNo                 
-            --AND   od.OpenQty - od.QtyAllocated - od.QtyPicked >= @n_UCCQty
-            AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0
-      END   
-         
-      DELETE FROM @tORD                        
-      ;WITH OD ( OrderKey, OrderLineNumber, Qty, AccumulatedQty )
-      AS (  SELECT  
-                  od.OrderKey
-               ,  od.OrderLineNumber
-               ,  od.OpenQty - od.QtyAllocated - od.QtyPicked
-               ,  AccumulatedQty = SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) OVER (ORDER BY od.OrderKey, od.OrderLineNumber)
-            FROM #TMPALLOC t
-            JOIN ORDERDETAIL AS od WITH (NOLOCK) ON (t.Orderkey = od.Orderkey AND t.OrderLineNumber = od.OrderLineNumber)
-            WHERE t.lot = @c_Lot
-            AND   t.loc = @c_Loc
-            AND   t.id  = @c_id  
-            AND   t.UCCNo  = @c_UCCNo                 
-            --AND   od.OpenQty - od.QtyAllocated - od.QtyPicked >= @n_UCCQty
-            AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0
-      )
-         
-      --INSERT INTO @tORD (Orderkey, OrderLineNumber, Qty, AccumulatedQty)
-      --SELECT od.OrderKey, od.OrderLineNumber, od.Qty, od.AccumulatedQty
-      --FROM OD
-      --WHERE AccumulatedQty <= @n_UCCQty
-      --ORDER BY AccumulatedQty
-         
-      INSERT INTO @tORD (Orderkey, OrderLineNumber, Qty, AccumulatedQty, UCCQty)
-      SELECT od.OrderKey, od.OrderLineNumber, od.Qty, od.AccumulatedQty
-            , QtyAvailable = Lag( @n_UCCQty - AccumulatedQty, 1, CASE WHEN Qty <= @n_UCCQty THEN Qty ELSE @n_UCCQty END ) 
-                              OVER (ORDER BY AccumulatedQty) -- Default Qty to first Row, put Remaining UCCQty (@n_UCCQty - AccumulatedQty on row) to next row 
-      FROM OD
-      ORDER BY AccumulatedQty
-
-      IF @b_Debug = 2
-      BEGIN
-         SELECT @n_UCCQty '@n_UCCQty', * FROM @tORD
-      END   
-                  
-      IF NOT EXISTS ( SELECT 1 FROM @tORD t
-                      WHERE t.UCCQty > 0
-                     )
-      BEGIN 
-         CONTINUE             --(Wan01) 2021-07-19. Continue allocate from Next record
-      END
-
-      SELECT TOP 1 @n_RemainingQty = t.AccumulatedQty
-      FROM @tORD t
-      ORDER BY AccumulatedQty DESC
-         
-      IF @n_RemainingQty = 0 
-      BEGIN 
-         CONTINUE             --(Wan01) 2021-07-19. Continue allocate from Next record
-      END
-         
-      -- IF UCC Qty > Total to allocate Qty in the Wave (Cannot use up 1 UCC for wave's order lines allocation)      
-      IF @n_UCCQty > @n_RemainingQty 
-      BEGIN
-         CONTINUE             --(Wan01) 2021-07-19. Continue allocate from Next record
-      END 
-         
-      SET @n_batch = 0
-      SELECT @n_batch = COUNT(1)
-      FROM @tORD t
-      WHERE t.UCCQty > 0
-      AND t.AccumulatedQty > 0
-         
-      EXECUTE nspg_Getkey  
-           @KeyName       = 'PickDetailKey'  
-         , @fieldlength   = 10  
-         , @keystring     = @c_PickDetailKey OUTPUT  
-         , @b_Success     = @b_Success       OUTPUT  
-         , @n_err         = @n_Err           OUTPUT  
-         , @c_errmsg      = @c_ErrMsg        OUTPUT 
-         , @b_resultset   = 0 
-         , @n_batch       = @n_batch 
-                  
-      IF @b_Success <> 1  
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 88010
-         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) 
-                        + ': Get PickDetailKey Failed. (ispLuLuFC6)'
-         GOTO QUIT_SP
-      END
-         
-      IF @b_Debug = 1
-      BEGIN
-         PRINT 'PickCode: ispLuLuFC6: ' + CONVERT(NVARCHAR(23),GETDATE(),121)
-            + ',Storerkey: ' + @c_Storerkey
-            + ',Sku: ' + @c_Sku
-            + ',Lot: ' + @c_Lot
-            + ',Loc: ' + @c_Loc
-            + ',ID: '  + @c_ID
-            + ',UCCNo: '  + @c_UCCNo
-            + ',Wavekey: ' + @c_Wavekey
-            + ',PickMethod: ' + @c_PickMethod
-            + ',UOM: ' + @c_UOM   
-            + ',UCCQty: ' + CAST(@n_UCCQty AS NVARCHAR)
-            + ',First Pickdetailkey: ' + @c_PickDetailKey
-            + ',Gen Pickdetailkey Batch: ' + CAST(@n_batch AS NVARCHAR)     
-      END
-         
-      -- INSERT PICKDETAIL BY BATCH
-      INSERT INTO PICKDETAIL 
-         (  PickDetailKey
-         ,  CaseID
-         ,  PickHeaderKey
-         ,  OrderKey
-         ,  OrderLineNumber
-         ,  Storerkey
-         ,  Sku
-         ,  Lot
-         ,  Loc
-         ,  ID
-         ,  DropID
-         ,  PackKey
-         ,  UOM 
-         ,  Qty
-         ,  UOMQty
-         ,  CartonGroup
-         ,  DoReplenish
-         ,  PickMethod
-         ,  WaveKey
-         ,  Replenishzone
-         ,  doCartonize
-         ,  Trafficcop
+         DELETE FROM @tORD                        
+         ;WITH OD ( OrderKey, OrderLineNumber, Qty, AccumulatedQty )
+         AS (  SELECT  
+                     od.OrderKey
+                  ,  od.OrderLineNumber
+                  ,  od.OpenQty - od.QtyAllocated - od.QtyPicked
+                  ,  AccumulatedQty = SUM(od.OpenQty - od.QtyAllocated - od.QtyPicked) OVER (ORDER BY od.OrderKey, od.OrderLineNumber)
+               FROM #TMPALLOC t
+               JOIN ORDERDETAIL AS od WITH (NOLOCK) ON (t.Orderkey = od.Orderkey AND t.OrderLineNumber = od.OrderLineNumber)
+               WHERE t.lot = @c_Lot
+               AND   t.loc = @c_Loc
+               AND   t.id  = @c_id  
+               AND   t.UCCNo  = @c_UCCNo                 
+               --AND   od.OpenQty - od.QtyAllocated - od.QtyPicked >= @n_UCCQty
+               AND   od.OpenQty - od.QtyAllocated - od.QtyPicked > 0
          )
-      SELECT 
-            Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) -1 AS NVARCHAR), 10)
-         ,  CaseID = ''
-         ,  PickHeaderKey = ''
-         ,  od.OrderKey
-         ,  od.OrderLineNumber
-         ,  od.Storerkey
-         ,  od.Sku
-         ,  @c_Lot
-         ,  @c_Loc
-         ,  @c_ID
-         ,  @c_UCCNo
-         ,  s.PackKey
-         ,  @c_UOM
-         ,  Qty = CASE WHEN @n_UCCQty >= t.AccumulatedQty THEN t.Qty ELSE t.Qty - (t.AccumulatedQty - @n_UCCQty) END --2021-05-25
-         ,  @n_UCCQty
-         ,  CartonGroup  = ''
-         ,  DoReplenish  = 'N'
-         ,  PickMethod   = @c_PickMethod
-         ,  Wavekey = @c_WaveKey
-         ,  Replenishzone= ''
-         ,  doCartonize  = NULL
-         ,  Trafficcop   = 'U'
-      FROM @tORD t
-      JOIN ORDERDETAIL AS od WITH (NOLOCK) ON t.Orderkey = od.OrderKey AND t.OrderLineNumber = od.OrderLineNumber
-      JOIN SKU AS s WITH (NOLOCK) ON s.StorerKey = od.StorerKey AND s.Sku = od.Sku
-      WHERE t.UCCQty > 0
-      AND t.AccumulatedQty > 0
             
-      SET @n_Err = @@ERROR
-         
-      IF @n_Err <> 0 
-      BEGIN 
-         SET @n_Continue = 3
-         SET @n_Err = 88020
-         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Insert Into Pickdetail table Fail. (ispLuLuFC6)'
-         GOTO QUIT_SP
+         INSERT INTO @tORD (Orderkey, OrderLineNumber, Qty, AccumulatedQty, UCCQty)
+         SELECT od.OrderKey, od.OrderLineNumber, od.Qty, od.AccumulatedQty
+               , QtyAvailable = Lag( @n_UCCQty - AccumulatedQty, 1, CASE WHEN Qty <= @n_UCCQty THEN Qty ELSE @n_UCCQty END ) 
+                                 OVER (ORDER BY AccumulatedQty) -- Default Qty to first Row, put Remaining UCCQty (@n_UCCQty - AccumulatedQty on row) to next row 
+         FROM OD
+         ORDER BY AccumulatedQty
+
+         IF @b_Debug = 2
+         BEGIN
+            SELECT GETDATE()'now', @n_UCCQty '@n_UCCQty', * FROM @tORD
+         END   
+                     
+         IF NOT EXISTS ( SELECT 1 FROM @tORD t
+                         WHERE t.UCCQty > 0
+                        )
+         BEGIN 
+            CONTINUE             --(Wan01) 2021-07-19. Continue allocate from Next record
+         END
+
+         SELECT TOP 1 @n_RemainingQty = t.AccumulatedQty
+         FROM @tORD t
+         ORDER BY AccumulatedQty DESC
+            
+         IF @n_RemainingQty = 0 
+         BEGIN 
+            CONTINUE             --(Wan01) 2021-07-19. Continue allocate from Next record
+         END
+            
+         -- IF UCC Qty > Total to allocate Qty in the Wave (Cannot use up 1 UCC for wave's order lines allocation)      
+         IF @n_UCCQty > @n_RemainingQty 
+         BEGIN
+            CONTINUE             --(Wan01) 2021-07-19. Continue allocate from Next record
+         END 
+            
+         SET @n_batch = 0
+         SELECT @n_batch = COUNT(1)
+         FROM @tORD t
+         WHERE t.UCCQty > 0
+         AND t.AccumulatedQty > 0
+            
+         EXECUTE nspg_Getkey  
+              @KeyName       = 'PickDetailKey'  
+            , @fieldlength   = 10  
+            , @keystring     = @c_PickDetailKey OUTPUT  
+            , @b_Success     = @b_Success       OUTPUT  
+            , @n_err         = @n_Err           OUTPUT  
+            , @c_errmsg      = @c_ErrMsg        OUTPUT 
+            , @b_resultset   = 0 
+            , @n_batch       = @n_batch 
+                     
+         IF @b_Success <> 1  
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 88010
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) 
+                           + ': Get PickDetailKey Failed. (ispLuLuFC6)'
+            GOTO QUIT_SP
+         END
+            
+         IF @b_Debug = 1
+         BEGIN
+            PRINT 'PickCode: ispLuLuFC6: ' + CONVERT(NVARCHAR(23),GETDATE(),121)
+               + ',Storerkey: ' + @c_Storerkey
+               + ',Sku: ' + @c_Sku
+               + ',Lot: ' + @c_Lot
+               + ',Loc: ' + @c_Loc
+               + ',ID: '  + @c_ID
+               + ',UCCNo: '  + @c_UCCNo
+               + ',Wavekey: ' + @c_Wavekey
+               + ',PickMethod: ' + @c_PickMethod
+               + ',UOM: ' + @c_UOM   
+               + ',UCCQty: ' + CAST(@n_UCCQty AS NVARCHAR)
+               + ',First Pickdetailkey: ' + @c_PickDetailKey
+               + ',Gen Pickdetailkey Batch: ' + CAST(@n_batch AS NVARCHAR)     
+         END
+            
+         -- INSERT PICKDETAIL BY BATCH
+         INSERT INTO PICKDETAIL 
+            (  PickDetailKey
+            ,  CaseID
+            ,  PickHeaderKey
+            ,  OrderKey
+            ,  OrderLineNumber
+            ,  Storerkey
+            ,  Sku
+            ,  Lot
+            ,  Loc
+            ,  ID
+            ,  DropID
+            ,  PackKey
+            ,  UOM 
+            ,  Qty
+            ,  UOMQty
+            ,  CartonGroup
+            ,  DoReplenish
+            ,  PickMethod
+            ,  WaveKey
+            ,  Replenishzone
+            ,  doCartonize
+            ,  Trafficcop
+            )
+         SELECT 
+               Pickdetailkey = RIGHT( '0000000000' +  CAST( CAST(@c_PickDetailKey AS INT) + ROW_NUMBER() OVER (ORDER BY od.OrderKey, od.OrderLineNumber) -1 AS NVARCHAR), 10)
+            ,  CaseID = ''
+            ,  PickHeaderKey = ''
+            ,  od.OrderKey
+            ,  od.OrderLineNumber
+            ,  od.Storerkey
+            ,  od.Sku
+            ,  @c_Lot
+            ,  @c_Loc
+            ,  @c_ID
+            ,  @c_UCCNo
+            ,  s.PackKey
+            ,  @c_UOM
+            ,  Qty = CASE WHEN @n_UCCQty >= t.AccumulatedQty THEN t.Qty ELSE t.Qty - (t.AccumulatedQty - @n_UCCQty) END --2021-05-25
+            ,  @n_UCCQty
+            ,  CartonGroup  = ''
+            ,  DoReplenish  = 'N'
+            ,  PickMethod   = @c_PickMethod
+            ,  Wavekey = @c_WaveKey
+            ,  Replenishzone= ''
+            ,  doCartonize  = NULL
+            ,  Trafficcop   = 'U'
+         FROM @tORD t
+         JOIN ORDERDETAIL AS od WITH (NOLOCK) ON t.Orderkey = od.OrderKey AND t.OrderLineNumber = od.OrderLineNumber
+         JOIN SKU AS s WITH (NOLOCK) ON s.StorerKey = od.StorerKey AND s.Sku = od.Sku
+         WHERE t.UCCQty > 0
+         AND t.AccumulatedQty > 0
+               
+         SET @n_Err = @@ERROR
+            
+         IF @n_Err <> 0 
+         BEGIN 
+            SET @n_Continue = 3
+            SET @n_Err = 88020
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Insert Into Pickdetail table Fail. (ispLuLuFC6)'
+            GOTO QUIT_SP
+         END
+            
+         UPDATE UCC
+         SET [Status] = '3'
+            , EditDate= GETDATE()
+            , EditWho = SUSER_SNAME()
+            , TrafficCop = NULL
+         FROM UCC 
+         WHERE UCC_RowRef = @n_UCC_RowRef
+            
+         SET @n_Err = @@ERROR
+            
+         IF @n_Err <> 0 
+         BEGIN 
+            SET @n_Continue = 3
+            SET @n_Err = 88030
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Update UCC table Fail.  (ispLuLuFC6)'
+            GOTO QUIT_SP
+         END
+         SET @n_QtyLeftToFulfilled = @n_QtyLeftToFulfilled - @n_UCCQty        --(Wan02)
       END
-         
-      UPDATE UCC
-      SET [Status] = '3'
-         , EditDate= GETDATE()
-         , EditWho = SUSER_SNAME()
-         , TrafficCop = NULL
-      FROM UCC 
-      WHERE UCC_RowRef = @n_UCC_RowRef
-         
-      SET @n_Err = @@ERROR
-         
-      IF @n_Err <> 0 
-      BEGIN 
-         SET @n_Continue = 3
-         SET @n_Err = 88030
-         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Update UCC table Fail.  (ispLuLuFC6)'
-         GOTO QUIT_SP
-      END
+      --(Wan02) - END
    END
+   --(Wan02) - END
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

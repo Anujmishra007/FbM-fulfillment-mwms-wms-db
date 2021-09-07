@@ -81,6 +81,7 @@ GO
 /* 2017-06-01 1.25 TLTING02 WMS-2047 WMS2GVT Inbound events             */  
 /* 2019-08-01 1.25 Wan01    WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for   */
 /*                          Channel                                     */
+/* 2021-08-27 2.1  TLTING03 Extend ExternReceiptKey field length        */
 /************************************************************************/
 
 CREATE TRIGGER ntrReceiptHeaderAdd
@@ -611,7 +612,7 @@ BEGIN
    DECLARE @c_NWReceiptKey NVARCHAR(10),
            @c_DocType    NVARCHAR(1),
            @c_ASNStatus  NVARCHAR(1),
-           @c_ExternReceiptKey NVARCHAR(20)
+           @c_ExternReceiptKey NVARCHAR(50)   -- TLTING03
                
    SELECT @b_success = 0
    

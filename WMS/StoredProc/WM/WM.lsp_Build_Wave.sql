@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -34,6 +34,8 @@ GO
 /* 2021-04-08  Wan02    1.3   Exclude ORders.Userdefine08='Y'=> discrete */
 /*                            order checking. it is standard initially  */
 /*                            Refer to LFWM-2619 Shong comment          */
+/* 2021-08-03  Wan03    1.4   LFWM-2948 - UATJPWaveMissing Order Parm   */
+/*                            after setup the Group condition           */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -428,7 +430,7 @@ AS
                SET @c_SortBy = @c_SortBy + CHAR(13) + ', ' +  RTRIM(@c_FieldName) + ' ' + RTRIM(@c_SortSeq)                                                                     
          END        
                                                                                                                                                             
-         IF @c_ParmBuildType = 'GROUP'                                                                                                                                  
+         IF @c_ParmBuildType = 'GROUP' AND @c_BuildWaveType NOT IN ( 'ANALYSIS' )         --Wan03                                                                                                                               
          BEGIN 
             SET @n_BuildGroupCnt = @n_BuildGroupCnt + 1                      --Fixed counter increase for 'GROUP' only   
             IF ISNULL(RTRIM(@c_TableName), '') NOT IN('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')                                                                                                         
@@ -626,7 +628,7 @@ AS
          --(Wan02 - START
          IF @c_Operator = 'IN SQL'
          BEGIN
-         	SET @c_Operator = 'IN'
+            SET @c_Operator = 'IN'
          END
          --(Wan02 - END
                                                                                                                                                    
@@ -829,7 +831,7 @@ AS
          --       END  
          + RTRIM(@c_SQLCond)
 
-      SET @c_SQLWhere = @c_SQLWhere + @c_SQLBuildByGroupWhere
+      --SET @c_SQLWhere = @c_SQLWhere + @c_SQLBuildByGroupWhere         --(Wan03) Do not add @c_SQLBuildByGroupWhere to @c_SQLWhere
 
       SET @c_SQLGroupBy = CHAR(13) + N'GROUP BY'
                         + CHAR(13) +  'ORDERS.OrderKey'
@@ -852,7 +854,7 @@ AS
          SET @c_SQLGroupBy= @c_SQLGroupBy+ ', ' + @c_GroupBySortField
       END
 
-      SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLGroupBy+ @c_SQLHaving
+      SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere +  @c_SQLGroupBy + @c_SQLHaving           --(Wan03)
 
       SET @c_SQLBuildWave = @c_SQL     --2020-07-10  -- To Debug
 
@@ -881,9 +883,21 @@ AS
                                  + CHAR(13) + ' ORDER BY ORDERS.Storerkey ' + @c_SQLFieldGroupBy    
                                                                                                                                                                                            
          EXEC SP_EXECUTESQL @c_SQLBuildByGroup 
-               , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5)'  
+               , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5) 
+                  ,@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60),@c_Field04 NVARCHAR(60), @c_Field05 NVARCHAR(60)
+                  ,@c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60),@c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60)' --(Wan03)
                , @c_StorerKey                                                                                          
-               , @c_Facility                                                                                           
+               , @c_Facility 
+               , @c_Field01            --(Wan03)
+               , @c_Field02            --(Wan03)
+               , @c_Field03            --(Wan03)
+               , @c_Field04            --(Wan03)
+               , @c_Field05            --(Wan03)
+               , @c_Field06            --(Wan03)
+               , @c_Field07            --(Wan03)
+               , @c_Field08            --(Wan03)
+               , @c_Field09            --(Wan03)
+               , @c_Field10            --(Wan03)                                                                             
                                                                                                                                                                                                                      
          OPEN CUR_WAVEGRP                                                                                                                                         
          FETCH NEXT FROM CUR_WAVEGRP INTO @c_Storerkey

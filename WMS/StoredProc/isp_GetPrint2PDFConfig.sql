@@ -31,6 +31,8 @@ GO
 /*                                PDF Enhancement - New Function (WL01)    */
 /* 06-04-2021     1.2    WLChooi  WMS-16755 - Add Function to Print From   */
 /*                                Order Screen (WL02)                      */
+/* 10-06-2021     1.3    WLChooi  WMS-17206 - Indicate Auto Print from     */
+/*                                Packing Module (Normal & ECOM) (WL03)    */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_GetPrint2PDFConfig]    
 (     
@@ -53,7 +55,7 @@ CREATE PROC [dbo].[isp_GetPrint2PDFConfig]
       @b_Success       INT           OUTPUT,  
       @n_Err           INT           OUTPUT, 
       @c_ErrMsg        NVARCHAR(255) OUTPUT,    
-      @c_FromModule    NVARCHAR(100) = ''         --Call from which module from Exceed   --WL01
+      @c_FromModule    NVARCHAR(100) = ''         --Call from which module from Exceed   --WL01   --For Packing only, @c_FromModule = PACKING - Manual Print, @c_FromModule = PACKING_AUTO - Auto Print upon Pack confirm/New Carton/Close Query
 )    
 AS    
 BEGIN    
@@ -160,6 +162,14 @@ BEGIN
            @c_OldWayToPrint     NVARCHAR(1) = '0'
            
    --WL01 E
+
+   --WL03 S
+   IF @n_Err = 1
+   BEGIN
+      SET @b_Debug = 1
+      SET @n_Err   = 0
+   END
+   --WL03 E
    
    SET @b_Success= 1   
    SET @n_Err    = 0    
@@ -221,7 +231,7 @@ BEGIN
    IF ISNULL(@c_SearchMethod,'') = ''
       SET @c_SearchMethod = '1'
       
-   IF @c_FromModule = 'PACKING'
+   IF @c_FromModule IN ('PACKING', 'PACKING_AUTO')   --WL03
    BEGIN
       SELECT @c_GetOrderkey = Orderkey
       FROM PACKHEADER (NOLOCK)
@@ -278,7 +288,7 @@ BEGIN
    
    IF(@n_continue = 1 OR @n_continue = 2)
    BEGIN  
-      IF @c_FromModule = 'PACKING' AND @b_CheckConso = 1
+      IF @c_FromModule IN ('PACKING', 'PACKING_AUTO') AND @b_CheckConso = 1   --WL03
       BEGIN
          SET @c_SQL = N' SELECT @n_RecFound = COUNT(1)'
          SET @c_SQLFrom = ' FROM PACKHEADER (NOLOCK) '
@@ -289,7 +299,7 @@ BEGIN
                          +' LEFT JOIN ORDERINFO (NOLOCK) ON ORDERINFO.Orderkey = ORDERS.Orderkey '
                          +' WHERE PACKHEADER.PickSlipNo = @c_Param01 AND PACKDETAIL.CartonNo BETWEEN @c_Param02 AND @c_Param03'
       END
-      ELSE IF @c_FromModule = 'PACKING' AND @b_CheckConso = 0
+      ELSE IF @c_FromModule IN ('PACKING', 'PACKING_AUTO') AND @b_CheckConso = 0   --WL03
       BEGIN
          SET @c_SQL = N' SELECT @n_RecFound = COUNT(1)'
          SET @c_SQLFrom = ' FROM PACKHEADER (NOLOCK) '

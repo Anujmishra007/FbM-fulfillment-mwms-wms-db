@@ -29,6 +29,8 @@ GO
 /* 10-NOV-2020 CSCHONG  1.2   WMS-15197 fix sn length, taxqty issue (CS02)*/
 /* 21-DEC-2020 LZG      1.3   INC1382606 - Misc fixes (ZG01)            */
 /* 26-MAR-2021 LZG      1.4   INC1461268 - Used PickDetail.Qty (ZG02)   */
+/* 24-JUN-2021 LZG      1.5   JSM-5938 - Sum split PickDetail lines     */
+/*                                       Qty (ZG03)                     */
 /************************************************************************/
 CREATE PROC isp_delivery_note48
             @c_OrderKey     NVARCHAR(10)  
@@ -191,14 +193,14 @@ BEGIN
   , PICKDETAIL.Storerkey  
   , PICKDETAIL.Sku AS sku   
   , SKUDescr = ISNULL(RTRIM(SKU.Descr),'')  
-  , UOMQty = CASE WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM1 THEN (PICKDETAIL.Qty)/NULLIF(PACK.CASECNT,0)     -- ZG02
+  , UOMQty = SUM(CASE WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM1 THEN (PICKDETAIL.Qty)/NULLIF(PACK.CASECNT,0)     -- ZG02
            WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'')= PACK.PACKUOM2 THEN (PICKDETAIL.Qty)/NULLIF(PACK.INNERPACK,0)           -- ZG02
            WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM3 THEN (PICKDETAIL.Qty)/NULLIF(PACK.Qty,0)                -- ZG02
-           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM4 THEN (PICKDETAIL.Qty)/NULLIF(PACK.Pallet,0) ELSE 0 END  -- ZG02 
+           WHEN  ISNULL(RTRIM(ORDERDETAIL.UOM),'') = PACK.PACKUOM4 THEN (PICKDETAIL.Qty)/NULLIF(PACK.Pallet,0) ELSE 0 END)  -- ZG02 
  -- , UOMQty = (ORDERDETAIL.OriginalQty)
-  , TAXQTY  = (PICKDETAIL.Qty)   
+  , TAXQTY  = SUM(PICKDETAIL.Qty)   
   , OHUDF03 = CASE WHEN ISNUMERIC(ISNULL(RTRIM(ORDERDETAIL.userdefine03),'')) = 1 THEN CAST(ISNULL(RTRIM(ORDERDETAIL.userdefine03),'0') AS decimal(10,2)) ELSE 1 END 
-  , (PICKDETAIL.Qty)
+  , SUM(PICKDETAIL.Qty)    
   , EcomOrderId = ISNULL(OIF.EcomOrderId,'')  
   , ST_Address1 = ISNULL(RTRIM(ST.Address1),'') 
   , ST_Address2 = ISNULL(RTRIM(ST.Address2),'')
@@ -414,10 +416,10 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  DN48.Storerkey           
       ,  DN48.Sku                 
       ,  DN48.SKUDescr            
-      ,  DN48.UOMQTY            
-      ,  (DN48.UOMQTY *DN48.OHUDF03) AS TAXQTY             
+      ,  SUM(DN48.UOMQTY)                          -- ZG03
+      ,  SUM(DN48.UOMQTY *DN48.OHUDF03) AS TAXQTY  -- ZG03
       ,  DN48.OHUDF03   
-      ,  (DN48.PQTY) as PQTY       
+      ,  SUM(DN48.PQTY) as PQTY                    -- ZG03
       ,  DN48.EcomOrderId   
       ,  DN48.ST_Address1        
       ,  DN48.ST_Address2         
@@ -459,10 +461,10 @@ AND PH.ManifestPrinted  = CASE WHEN @c_Reprint = 'Y' THEN 'Y' ELSE '0' END
       ,  DN48.Storerkey           
       ,  DN48.Sku                 
       ,  DN48.SKUDescr            
-      ,  DN48.UOMQTY            
+      --,  DN48.UOMQTY                 -- ZG03
      -- ,  (DN48.UOMQTY *DN48.OHUDF03)              
       ,  DN48.OHUDF03   
-      ,  PQTY       
+      --,  PQTY                        -- ZG03
       ,  DN48.EcomOrderId   
       ,  DN48.ST_Address1        
       ,  DN48.ST_Address2         

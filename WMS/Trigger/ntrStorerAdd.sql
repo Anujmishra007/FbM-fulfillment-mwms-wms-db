@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 26-Jun-2018  NJOW01   1.0  WMS-5221 validate CustomerGroupCode and   */
 /*                            CustomerGroupName                         */
+/* 27-Apr-2020  CSCHONG  1.1  WMS-12867 (CS01)                          */
 /************************************************************************/  
 CREATE TRIGGER ntrStorerAdd ON STORER 
  FOR INSERT
@@ -65,7 +66,50 @@ BEGIN
       SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),ISNULL(@n_err,0))  
                       +': Storer Type 1 must have valid CustomerGroupCode. (ntrStorerAdd)' + ' ( '   
                       +' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '  
-   END  	
+   END 
+
+   --CS01 START
+   IF EXISTS (SELECT 1 
+              FROM INSERTED
+              LEFT JOIN CODELKUP (NOLOCK) ON INSERTED.MarketSegment = CODELKUP.Code AND CODELKUP.Listname = 'MKTSGMT'
+              WHERE INSERTED.Type = '1'
+              AND CODELKUP.Code IS NULL)
+   BEGIN  
+      SELECT @n_continue = 3  
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85802   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+      SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),ISNULL(@n_err,0))  
+                      +': Storer Type 1 must have valid MarketSegment. (ntrStorerAdd)' + ' ( '   
+                      +' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '  
+   END 	
+
+   IF EXISTS (SELECT 1 
+              FROM INSERTED
+              LEFT JOIN CODELKUP (NOLOCK) ON INSERTED.Status = CODELKUP.Code AND CODELKUP.Listname = 'STORERSTAT'
+              WHERE INSERTED.Type = '1'
+              AND CODELKUP.Code IS NULL)
+   BEGIN  
+      SELECT @n_continue = 3  
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85803   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+      SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),ISNULL(@n_err,0))  
+                      +': Storer Type 1 must have valid STATUS. (ntrStorerAdd)' + ' ( '   
+                      +' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '  
+   END 
+
+  IF EXISTS (SELECT 1 
+              FROM INSERTED
+              LEFT JOIN CODELKUP (NOLOCK) ON INSERTED.CustomerGroupName = CODELKUP.Description AND CODELKUP.Listname = 'STCUSTCODE'
+              WHERE INSERTED.Type = '1'
+              AND CODELKUP.Code IS NULL)
+   BEGIN  
+      SELECT @n_continue = 3  
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85804   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+      SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),ISNULL(@n_err,0))  
+                      +': Storer Type 1 must have valid CustomerGroupName. (ntrStorerAdd)' + ' ( '   
+                      +' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '  
+   END 
+   
+   --CS01 END
+
 END 
 
 --IF @n_continue=1 OR @n_continue=2 --NJOW01

@@ -18,7 +18,8 @@ GO
 /* 2018-10-23 1.0  WLCHOOI    Created (WMS-6706)                              */    
 /* 2019-02-18 1.1  WLCHOOI    WMS-8019 - Change logic to get Sku, descr,      */  
 /*                                       Qty (WL01)                           */ 
-/* 2020-08-26 1.2  CSCHONG   WMS-14859 - Add new field col47 to Col55 (CS01)  */              
+/* 2020-08-26 1.2  CSCHONG    WMS-14859 - Add new field col47 to Col55 (CS01) */           
+/* 2021-08-06 1.3  WLChooi    WMS-17690 - Add new field Col56 (WL02)          */     
 /******************************************************************************/                    
                       
 CREATE PROC [dbo].[isp_BT_SHIPLBL_KR_LOTTE]                          
@@ -195,7 +196,7 @@ SET @c_SQLJOIN = +' SELECT DISTINCT OH.ORDERKEY,OH.EXTERNORDERKEY,OH.BUYERPO,OH.
      --(WL01 END)
      +' ,Substring(PAD.labelno,1,4) + ''-'' + Substring(PAD.labelno,5,4)  +''-'' +  Substring(PAD.labelno,9,4)  ' + CHAR(13) --41  
      +' ,PAD.LABELNO,PAD.UPC,PAD.REFNO2,OH.NOTES,OH.NOTES2 ' + CHAR(13) --46  
-     +' ,'''','''','''','''','''','''','''','''','''','''','''','''',PH.PICKSLIPNO,''KR'' ' + CHAR(13)--60  
+     +' ,'''','''','''','''','''','''','''','''','''',ISNULL(OH.M_Contact1,''''),'''','''',PH.PICKSLIPNO,''KR'' ' + CHAR(13) --60   --WL02  
      +' FROM PACKHEADER PH WITH (NOLOCK) '  + CHAR(13)
      +' JOIN PACKDETAIL PAD WITH (NOLOCK) ON (PAD.Pickslipno = PH.Pickslipno) '  + CHAR(13)
      +' JOIN ORDERS OH WITH (NOLOCK) ON (OH.OrderKey=PH.OrderKey)   '  + CHAR(13)
@@ -207,7 +208,7 @@ SET @c_SQLJOIN = +' SELECT DISTINCT OH.ORDERKEY,OH.EXTERNORDERKEY,OH.BUYERPO,OH.
      +' ,OH.C_STATE,OH.C_CITY,OH.C_Address1,OH.C_Address2,OH.C_Address3,OH.C_Address4,OH.C_ZIP '  + CHAR(13)
      +' ,OH.DISCHARGEPLACE,OH.M_ADDRESS1,OH.M_ADDRESS2,OH.M_ZIP,OH.M_PHONE1,OH.M_PHONE2,OH.M_COUNTRY '  + CHAR(13)
      +' ,OH.M_ADDRESS3,OH.M_STATE,OH.M_ADDRESS4,PAD.LABELLINE '  + CHAR(13)
-     +' ,PAD.SKU,SKU.DESCR,PAD.QTY,PAD.CARTONNO,PAD.LABELNO,PAD.UPC,PAD.REFNO2,OH.NOTES,OH.NOTES2,PH.PICKSLIPNO '  + CHAR(13)
+     +' ,PAD.SKU,SKU.DESCR,PAD.QTY,PAD.CARTONNO,PAD.LABELNO,PAD.UPC,PAD.REFNO2,OH.NOTES,OH.NOTES2,PH.PICKSLIPNO,ISNULL(OH.M_Contact1,'''') '  + CHAR(13)   --WL02
   
                            
    IF @b_debug=1            

@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Output Parameters:                                                   */
 /*                                                                      */
-/* PVCS Version: 1.8                                                    */
+/* PVCS Version: 1.9                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -40,6 +40,8 @@ GO
 /*                           WM-DEFAULT QCOMMANDER                      */   
 /*                           WM-Fixed                                   */
 /* 25-JUN-2020  Wan07   1.8  WMS-13491 - SG - PMI - Packing [CR]        */
+/* 03-SEP-2021  WLChooi 1.9  WMS-17890 - Allow configure to use LABEL or*/
+/*                           Paper Printer from Codelkup (WL01)         */ 
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_PrintToRDTSpooler] ( 
@@ -113,6 +115,8 @@ BEGIN
 
    ,  @n_Retry             INT = 1           --(Wan07) 
 
+   ,  @c_RdtPrintType      NVARCHAR(30) = '' --(WL01)
+
    SET @n_starttcnt = @@TRANCOUNT
    SET @n_continue = 1
    SET @b_success = 0
@@ -136,6 +140,26 @@ BEGIN
       FROM RDT.RDTUser (NOLOCK)
       WHERE UserName = @c_UserName
    END
+
+   --WL01 S
+   SELECT @c_RdtPrintType = ISNULL(CL.Short,'')
+   FROM CODELKUP CL (NOLOCK)
+   WHERE CL.LISTNAME = 'RDTPRNTYPE'
+   AND CL.Code = @c_ReportType
+   AND CL.Long = @c_Datawindow
+   AND CL.Storerkey = @c_Storerkey
+   AND (CL.code2 = @c_Facility OR CL.code2 = '')
+   ORDER BY CASE WHEN CL.code2 = '' THEN 2 ELSE 1 END
+
+   IF @c_RdtPrintType = 'LABEL'
+   BEGIN
+      SET @c_IsPaperPrinter = 'N'
+   END
+   ELSE IF @c_RdtPrintType = 'PAPER'
+   BEGIN
+      SET @c_IsPaperPrinter = 'Y'
+   END
+   --WL01 E
 
    --(Wan06) - START
    SET @c_TargetDB = DB_NAME()

@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                   */  
 /* 2020-12-31  Wan      1.0   Created                                    */
 /* 2021-07-19  Wan01    1.1   Fixed.RPF UPdate Taskdetailkey to wrong sku*/
+/* 2021-08-09  Wan02    1.1   Fixed.Generate RPF for empty string or NULL*/
+/*                            pickdetail.taskdetailkey                   */
 /*************************************************************************/       
 CREATE PROCEDURE [dbo].[ispRLWAV38]          
                  @c_wavekey      NVARCHAR(10)      
@@ -182,7 +184,7 @@ BEGIN
       END               
    END
     
-   -----Wave Validation-----    
+   -----Wave Validation----- 
    IF EXISTS ( SELECT 1         
                FROM WAVEDETAIL WD WITH (NOLOCK)        
                JOIN ORDERS O WITH (NOLOCK) ON WD.Orderkey = O.Orderkey        
@@ -917,7 +919,8 @@ BEGIN
       AND PD.[Status] = '0'
       AND PD.UOM = '7' 
       AND PD.DropID = ''
-      AND (PD.ToLoc = ''  OR PD.ToLoc IS  NULL)   
+      AND (PD.ToLoc = ''  OR PD.ToLoc IS  NULL) 
+      AND (PD.TaskDetailKey = '' OR PD.TaskDetailKey IS NULL)                    --(Wan02) - Fixed  
       GROUP BY PD.Storerkey     
             , PD.Sku      
             , PD.Loc     
@@ -941,6 +944,7 @@ BEGIN
       WHERE TP.WAVEPAZone = 0
       AND PD.[Status] = '0'        
       AND PD.DropId <> '' 
+      AND (PD.TaskDetailKey = '' OR PD.TaskDetailKey IS NULL)                    --(Wan02) - Fixed
       GROUP BY PD.Storerkey     
             ,  CASE WHEN TP.UCCMultiSku = 1 THEN '' ELSE PD.Sku END   
             ,  CASE WHEN TP.UCCMultiSku = 1 THEN '' ELSE PD.Lot END     

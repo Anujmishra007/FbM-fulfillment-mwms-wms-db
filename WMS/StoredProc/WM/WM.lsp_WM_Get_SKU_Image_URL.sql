@@ -19,7 +19,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -37,6 +37,8 @@ GO
 /*                            Do Not Use UserName to login as SubProgram*/
 /*                            need to Access to File Server Image Folder*/
 /*                            as UserName may not have folder access right*/
+/* 2021-08-23  Wan03    1.3   LFWM-2989 - CN UATSKU IMAGE GET URL CR for*/
+/*                            CN Alicloud migration                     */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Get_SKU_Image_URL]
      @c_Storerkey          NVARCHAR(15)
@@ -93,7 +95,7 @@ BEGIN
       WHERE ConfigKey='GetSKUURL'
       AND Storerkey = 'ALL'
       AND SValue > ''
-      AND Option1 <> ''
+      --AND Option1 <> ''        --(Wan03)
       AND Option5 <> ''
       --AND OPTION5 IS NOT NULL
       
@@ -166,7 +168,8 @@ BEGIN
       BEGIN
          SELECT @c_Storerkey AS [StorerKey], 
                   @c_SKU       AS [SKU],
-                  'https://intranetapi.lfuat.net/GenericAPI/GetFile?src=IcOC6d%2BAoBNa16e0gLVR7PS6th0bgaLCsPIZ9M4UmX2CNC%2Fz69UrlCEmIguGHETX%2Bo1U7b8omrkl%2Bw9qT75BasN0VsuVylaxFaAgqXjo%2FlpuCd15Vao%2B6xpSHzVX1LVQzEk2HRWABiY%3D' AS [URL]                   
+                  'https://intranetapi.lfuat.net/GenericAPI/GetFile?src=%2BGLq4DAwiIfSKV%2FVqwkCb35eKoWeQCCw' AS [URL]        --(Wan03)
+                 -- 'https://intranetapi.lfuat.net/GenericAPI/GetFile?src=IcOC6d%2BAoBNa16e0gLVR7PS6th0bgaLCsPIZ9M4UmX2CNC%2Fz69UrlCEmIguGHETX%2Bo1U7b8omrkl%2Bw9qT75BasN0VsuVylaxFaAgqXjo%2FlpuCd15Vao%2B6xpSHzVX1LVQzEk2HRWABiY%3D' AS [URL]                   
       END   
    END TRY
    

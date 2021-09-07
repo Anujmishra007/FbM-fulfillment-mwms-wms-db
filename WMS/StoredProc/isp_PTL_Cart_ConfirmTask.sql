@@ -27,6 +27,7 @@ GO
 /* 2014-05-15  1.3  ChewKP      Offset shall follow DropID.PickslipNo   */
 /*                              and LoadKey (ChewKP02)                  */
 /* 2014-06-04  1.4  ChewKP      Delete Route Before Create (ChewKP03)   */
+/* 2021-08-23  1.5  Chermaine   WMS-17814 Add ChannelID (cc01)          */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_PTL_Cart_ConfirmTask] (
@@ -303,14 +304,16 @@ BEGIN
                   DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, PickDetailKey, TaskDetailKey, 
                   QTY,
                   TrafficCop,
-                  OptimizeCop)
+                  OptimizeCop,
+                  Channel_ID)  --(cc01)
                SELECT
                   CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, UOMQTY, QTYMoved,
                   '0', DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
                   DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, @cNewPickDetailKey, TaskDetailKey, 
                   @nQTY_PD - @nPickQty, -- QTY
                   NULL, --TrafficCop,
-                  '1'  --OptimizeCop
+                  '1' ,--OptimizeCop
+                  Channel_ID  --(cc01)
                FROM dbo.PickDetail WITH (NOLOCK)
                WHERE PickDetailKey = @cPickDetailKey
 

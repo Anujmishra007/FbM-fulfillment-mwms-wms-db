@@ -15,7 +15,7 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.4                                                     */  
+/* PVCS Version: 1.5                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -32,6 +32,7 @@ GO
 /*                            ucc for manual replenshment as backup plan */
 /* 23-Oct-2019 NJOW04   1.3   Fix split pickdetail issue                 */
 /* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                          */ 
+/* 25-08-2021  WLChooi  1.5   WMS-17812 - Set Priority to 4 (WL01)       */ 
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV16]      
@@ -128,7 +129,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
             ,@n_QtyInPickLoc INT
                         
     SET @c_SourceType = 'ispRLWAV16'    
-    SET @c_Priority = '8'
+    --SET @c_Priority = '8'   --WL01
+    SET @c_Priority = '4'     --WL01
     SET @c_TaskType = 'RPF'
     SET @c_PickMethod = 'PP'
 
@@ -1092,7 +1094,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
            PRINT 'Create replenishment task'
        END
 
-       SET @c_Priority = '8'
+       --SET @c_Priority = '8'   --WL01
+       SET @c_Priority = '4'     --WL01
        SET @c_Message03 = 'PICKLOC'
        SET @c_Message01 = ''
        

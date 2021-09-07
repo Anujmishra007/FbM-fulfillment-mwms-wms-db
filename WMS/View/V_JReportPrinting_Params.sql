@@ -12,7 +12,7 @@ GO
 /*        : This view is to show Module, ReportType and its corresponding  */
 /*        : parameters                                                     */
 /*                                                                         */
-/* Called By: isp_GetJReportCompleteURL                                    */
+/* Called By: isp_GetJReportURL                                            */
 /*          :                                                              */
 /* GitLab Version: 1.0                                                     */
 /*                                                                         */
@@ -22,6 +22,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
+/* 2021-08-11  WLChooi  1.1   Cater for Module = PACKING_AUTO (WL01)       */
 /***************************************************************************/
 
 CREATE VIEW V_JReportPrinting_Params AS
@@ -182,6 +183,165 @@ SELECT Module      = 'PACKING'
       ,Param09     = ''              ,Param09Type = ''
       ,Param10     = ''              ,Param10Type = ''
 --Packing Module - END
+
+--Packing_Auto Module - WL01 - START
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'CarrierLbl' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'CtnMnfLbl' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'CTNMARKLBL' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'PACKLIST' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'PACKLIST02' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'PackSKULBL' 
+      ,Param01     = 'PARAM_WMS_c_SKU' ,Param01Type = 'NVARCHAR(20)'   
+      ,Param02     = 'PARAM_WMS_n_Qty' ,Param02Type = 'INT'
+      ,Param03     = ''              ,Param03Type = ''
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'SSCCLABEL' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'PACKDISPCY' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'DespatchTk' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'ConsoDptTk' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'UCCLABEL' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+UNION ALL   
+SELECT Module      = 'PACKING_AUTO'
+      ,ReportType  = 'UCCLBCONSO' 
+      ,Param01     = 'PARAM_WMS_c_Pickslipno' ,Param01Type = 'NVARCHAR(10)'
+      ,Param02     = 'PARAM_WMS_n_CartonFrom' ,Param02Type = 'INT'
+      ,Param03     = 'PARAM_WMS_n_CartonTo'   ,Param03Type = 'INT'
+      ,Param04     = ''              ,Param04Type = ''
+      ,Param05     = ''              ,Param05Type = ''
+      ,Param06     = ''              ,Param06Type = ''
+      ,Param07     = ''              ,Param07Type = ''
+      ,Param08     = ''              ,Param08Type = ''
+      ,Param09     = ''              ,Param09Type = ''
+      ,Param10     = ''              ,Param10Type = ''
+--Packing_Auto Module - WL01 - END
 
 --Receipt Module - START
 UNION ALL   

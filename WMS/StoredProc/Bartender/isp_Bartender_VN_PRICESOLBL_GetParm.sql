@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
-/* 2021-06-15 1.0  CHONGCS    Created (WMS-17250)                             */               
+/* 2021-06-15 1.0  CHONGCS    Created (WMS-17250)                             */    
+/* 2021-08-21 1.1  mingle     Change parm2 from sku to altsku (WMS-17752)     */            
 /******************************************************************************/                  
                     
 CREATE PROC [dbo].[isp_Bartender_VN_PRICESOLBL_GetParm]                        
@@ -84,12 +85,12 @@ BEGIN
    SET @c_ExecArguments = ''  
 
 
-   SET @c_SQLJOIN = ' SELECT DISTINCT TOP 1 PARM1=OD.Orderkey,PARM2=S.SKU,PARM3=S.Storerkey,PARM4='''',PARM5='''',' + CHAR(13) +  
-                       ' PARM6= '''',PARM7='''',PARM8='''',PARM9='''',PARM10='''',Key1=''orderkey'',Key2=''SKU'',Key3='''',Key4='''',Key5='''' ' + CHAR(13) +  
+   SET @c_SQLJOIN = ' SELECT DISTINCT TOP 1 PARM1=OD.Orderkey,PARM2=S.ALTSKU,PARM3=S.Storerkey,PARM4='''',PARM5='''',' + CHAR(13) +  
+                       ' PARM6= '''',PARM7='''',PARM8='''',PARM9='''',PARM10='''',Key1=''orderkey'',Key2=''ALTSKU'',Key3='''',Key4='''',Key5='''' ' + CHAR(13) +  
                        ' FROM ORDERDETAIL OD WITH (NOLOCK) ' + CHAR(13) +  
                        ' JOIN SKU S WITH (NOLOCK) ON S.Storerkey = OD.Storerkey and S.sku = OD.sku ' + CHAR(13) +  
                        ' WHERE OD.orderkey = @Parm01 '+ CHAR(13) +  
-                       ' AND S.SKU = @Parm02 '
+                       ' AND S.ALTSKU = @Parm02 '
 
    
    SET @c_ExecArguments = N' @parm01          NVARCHAR(80),'  

@@ -10,7 +10,8 @@ GO
 /*                                                                           */               
 /* Date         Rev    Author    Purposes                                    */         
 /* 21-JAN-2021  1.0    CSCHONG   WMS-16082                                   */ 
-/* 05-MAR-2021  1.2    CSCHONG   Fix col11 mapping issue (CS02)              */         
+/* 05-MAR-2021  1.2    CSCHONG   Fix col11 mapping issue (CS02)              */    
+/* 11-AUG-2021  1.3    MINGLE    Add new mappings (ML01)                     */       
 /*****************************************************************************/              
               
 CREATE PROC [dbo].[isp_BT_Bartender_UCCLBL_LEGO]                
@@ -235,7 +236,7 @@ END
      + ' '''','''','''','''','''','''','''','''',PD.CartonNo,PD.labelNo,'  --30          
      + ' CASE WHEN ISNULL(STC.susr3,'''') = '''' OR ISNULL(STC.storerkey,'''') = '''' THEN ''INVALIDVAS'' '  
      + ' ELSE ISNULL(STC.susr3,'''') END,'  --31  
-     + ' ISNULL(O.B_VAT,''''),PD.CartonNo,'''','''','''','''','''','''','''','   --40           
+     + ' ISNULL(O.B_VAT,''''),PD.CartonNo,O.Orderdate,FORMAT (O.deliverydate, ''dd/MM/yyyy'') as date,O.Effectivedate,O.Type,'''','''','''','   --40    --ML01       
      + ' '''','''','''','''','''','''','''','''','''','''', '  --50           
      + ' '''','''','''','''','''','''','''','''',PH.Pickslipno,''O'' ' --60             
      + CHAR(13) +             
@@ -255,7 +256,7 @@ END
      + ' CASE WHEN ISNULL(STC.susr2,'''') = '''' OR ISNULL(STC.storerkey,'''') = '''' THEN ISNULL(O.Route,'''') + ''-'' + ''NA'' '   
      + ' ELSE  ISNULL(O.Route,'''') + ''-'' + ISNULL(STC.susr2,'''') END,'    +CHAR(13) 
      + ' PD.CartonNo,PD.labelNo, CASE WHEN ISNULL(STC.susr3,'''') = '''' OR ISNULL(STC.storerkey,'''') = '''' THEN ''INVALIDVAS'' '    +CHAR(13) 
-     + ' ELSE ISNULL(STC.susr3,'''') END, ISNULL(O.B_VAT,''''),PD.CartonNo,PH.Pickslipno    '        
+     + ' ELSE ISNULL(STC.susr3,'''') END, ISNULL(O.B_VAT,''''),PD.CartonNo,O.Orderdate,O.Deliverydate,O.Effectivedate,O.Type,PH.Pickslipno    '  --ML01      
             
             
 IF @b_debug=1           
@@ -544,3 +545,4 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_UCCLBL_LEGO] TO nsql 
 GO
+

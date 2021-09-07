@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.4                                                   */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -32,6 +32,8 @@ GO
 /*                            is incorrect and addwho was changed to    */
 /*                            WMConnect                                 */
 /* 15-Jan-2021 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2020-08-11  Wan04    1.4   LFWM-2962 - Populate Order details -Populate*/
+/*                            SO Detail fail.                           */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulateSODs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -72,10 +74,11 @@ BEGIN
          ,  @c_SQL1                    NVARCHAR(4000) = ''
          ,  @c_SQLParms                NVARCHAR(4000) = ''
 
-         ,  @c_SQLSchema               NVARCHAR(4000) = ''
+         ,  @c_SQLSchema               NVARCHAR(MAX) = ''
          ,  @c_TableColumns_Select     NVARCHAR(4000) = ''
          ,  @c_TableColumns            NVARCHAR(4000) = ''
          ,  @c_Table                   NVARCHAR(60) = ''
+         ,  @c_TempTableName           NVARCHAR(50) = ''          --(Wan04)
 
          ,  @c_TableName               NVARCHAR(50)   = 'RECEIPTDETAIL'
          ,  @c_SourceType              NVARCHAR(50)   = 'lsp_ASN_PopulateSODs_Wrapper'
@@ -284,6 +287,14 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> - 1
       BEGIN
+         --(Wan04) - START
+         SET @c_TempTableName = '#t' + @c_Table
+         EXEC isp_BuildTmpTableColFrTable                                                                                                                    
+            @c_TempTableName    =  @c_TempTableName
+         ,  @c_OrginalTableName =  @c_Table             
+         ,  @c_TableColumnNames =  @c_TableColumns_Select   OUTPUT
+         ,  @c_ColumnNames      =  @c_TableColumns          OUTPUT 
+         /*
          SET @c_SQLSchema = ''
          SET @c_SQLSchema  = RTRIM(ISNULL(CONVERT(NVARCHAR(4000), 
                               ( SELECT 
@@ -294,7 +305,7 @@ BEGIN
                                      WHEN col.data_type = 'numeric'  THEN '(15,5)' 
                                      ELSE '' 
                                      END
-                              + CASE WHEN col.data_type = 'timstamp' THEN '' ELSE ' NULL,' END 
+                              + CASE WHEN col.data_type = 'timestamp' THEN '' ELSE ' NULL,' END 
                               FROM INFORMATION_SCHEMA.COLUMNS Col WITH (NOLOCK)
                               WHERE Table_Name = @c_Table
                               ORDER BY Col.ORDINAL_POSITION
@@ -340,6 +351,8 @@ BEGIN
          BEGIN
             SET @c_TableColumns = SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) 
          END
+         */
+         --(Wan04) - END         
 
          IF @c_Table = 'ORDERS' AND @c_TableColumns <> ''
          BEGIN
@@ -351,7 +364,7 @@ BEGIN
                         +               ' JOIN ' + RTRIM(@c_DBName) + 'dbo.ORDERDETAIL OD WITH (NOLOCK)'
                         +                               ' ON T.OrderRefKey = OD.Orderkey'
                         +                               ' AND T.OrderRefLineNo = OD.OrderLineNumber'
-                        +               ' WHERE T.OrderRefKey = ORDERS.OrderKey '
+                        +               ' WHERE T.OrderRefKey = ORDERS.OrderKey ' 
                         +               ' AND OD.ShippedQty > 0)'
             EXEC ( @c_SQL + @c_SQL1 )
          END
@@ -379,7 +392,6 @@ BEGIN
                         +                               ' AND RD.OrderLineNumber = PICKDETAIL.OrderLineNumber'
 
             EXEC sp_ExecuteSQL @c_SQL
- 
          END
 
          IF @c_Table = 'LOTATTRIBUTE' AND @c_TableColumns <> ''
@@ -548,7 +560,7 @@ BEGIN
                      ,  @c_IsArch   = @c_IsArch
                      ,  @b_Success  = @b_Success      OUTPUT
                      ,  @n_Err      = @n_Err          OUTPUT
-		               ,  @c_ErrMsg   = @c_ErrMsg       OUTPUT
+                     ,  @c_ErrMsg   = @c_ErrMsg       OUTPUT
                      ,  @c_Option5  = @c_OverdueMsg   OUTPUT
                END TRY
 

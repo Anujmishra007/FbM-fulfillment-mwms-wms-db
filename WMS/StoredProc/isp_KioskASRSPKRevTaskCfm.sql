@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: cb_confirmpick                                            */
 /*          : u_kiosk_asrspk_rev_c.cb_confirmpick.click event           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 03-JAN-2019  Wan01   1.1   WMS-7286 - PRHK-GTM Picking For COPACK Sku*/
+/* 05-APR-2021  Wan02   1.2   WMS-16593-SG-ASRS-GTM Picking Enhancement */
+/*                            CPI                                       */
 /************************************************************************/
 CREATE PROC [dbo].[isp_KioskASRSPKRevTaskCfm] 
             @c_JobKey         NVARCHAR(10)
@@ -50,9 +52,10 @@ BEGIN
    DECLARE @n_StartTCnt          INT
          , @n_Continue           INT 
 
-         , @n_ShortPickQty       INT
-         , @n_QtyToMove          INT
-         , @n_QtyAllocated       INT
+         , @n_ShortPickQty       INT         = 0      --(Wan03) Set Initial As 0         
+         , @n_QtyToMove          INT         = 0      --(Wan03) Set Initial As 0
+         , @n_QtyAllocated       INT         = 0      --(Wan03) Set Initial As 0
+         , @n_MoveIDCnt          INT         = 0      --(Wan03) Set Initial As 0
 
          , @c_Orderkey           NVARCHAR(10)
          , @c_PickDetailKey      NVARCHAR(10)
@@ -65,11 +68,18 @@ BEGIN
          , @c_UOM                NVARCHAR(10)
          , @dt_today             DATETIME
 
-         , @c_MoveRefKey         NVARCHAR(10)
+         , @c_MoveRefKey         NVARCHAR(10) = ''    --(Wan03) Set Initial As ''
 
    --(Wan01) - START
          , @c_COPACKSku          NVARCHAR(20) = '' 
          , @n_PickToQty_Orig     INT          = ''
+   --(Wan01) - END
+
+         , @n_Qty                INT         = 0      -- (Wan02)
+         , @c_TaskDetailkey_Upd  NVARCHAR(10)= ''     -- (Wan02)
+         , @CUR_UPDPLT           CURSOR               -- (Wan02)
+         
+   --(Wan01) - START      
    DECLARE @tLot TABLE
       (  Lot               NVARCHAR(10)   NOT NULL PRIMARY KEY
       )
@@ -97,6 +107,25 @@ BEGIN
    BEGIN TRAN
  
    CONFIRM_PICK:                                                        --(Wan01)
+   --(Wan02) Move Up - Start
+   SELECT TOP 1                                                      --(Wan01)   
+          @c_Storerkey = LOTxLOCxID.Storerkey
+         ,@c_Sku       = LOTxLOCxID.Sku
+         ,@c_Lot       = LOTxLOCxID.Lot                              --(Wan01)
+         ,@c_Loc       = LOTxLOCxID.Loc
+         ,@c_PackKey   = SKU.Packkey
+         ,@c_UOM       = PACK.PackUOM3
+   FROM @tLot t                                                      --(Wan01)
+   JOIN LOTxLOCxID WITH (NOLOCK) ON (t.lot =  LOTxLOCxID.Lot)        --(Wan01)
+   JOIN SKU WITH (NOLOCK)  ON (LOTxLOCxID.Storerkey = SKU.Storerkey)
+                           AND(LOTxLOCxID.Sku = SKU.Sku)
+   JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
+   --WHERE LOTxLOCxID.Lot = @c_Lot                                   --(Wan01)
+   WHERE   LOTxLOCxID.ID  = @c_ID                                    --(Wan01)
+   AND   LOTxLOCxID.Qty > 0
+   ORDER BY T.Lot                                                    --(Wan01)
+   --(Wan02) Move Up - END
+   
    IF @n_PickToQty > 0 
    BEGIN
       SET @n_QtyToMove = @n_PickToQty
@@ -107,70 +136,165 @@ BEGIN
          SET @n_ShortPickQty = @n_PickToQty - @n_QtyToPut
       END 
 
-      SELECT TOP 1                                                      --(Wan01)   
-             @c_Storerkey = LOTxLOCxID.Storerkey
-            ,@c_Sku       = LOTxLOCxID.Sku
-            ,@c_Lot       = LOTxLOCxID.Lot                              --(Wan01)
-            ,@c_Loc       = LOTxLOCxID.Loc
-            ,@c_PackKey   = SKU.Packkey
-            ,@c_UOM       = PACK.PackUOM3
-      FROM @tLot t                                                      --(Wan01)
-      JOIN LOTxLOCxID WITH (NOLOCK) ON (t.lot =  LOTxLOCxID.Lot)        --(Wan01)
-      JOIN SKU WITH (NOLOCK)  ON (LOTxLOCxID.Storerkey = SKU.Storerkey)
-                              AND(LOTxLOCxID.Sku = SKU.Sku)
-      JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
-      --WHERE LOTxLOCxID.Lot = @c_Lot                                   --(Wan01)
-      WHERE   LOTxLOCxID.ID  = @c_ID                                    --(Wan01)
-      AND   LOTxLOCxID.Qty > 0
-      ORDER BY T.Lot                                                    --(Wan01)
+      --(Wan03) - START
+      -- Move to Pick To Pallet
+      SET @n_MoveIDCnt = 0
+      SELECT @n_MoveIDCnt = COUNT(1) 
+      FROM PICKDETAIL AS p WITH (NOLOCK)  
+      WHERE p.ID = @c_ID 
+      AND   p.Lot= @c_Lot                            --Reverse Pack only 1 ID 1 Pallet ID
+      AND   p.Loc= @c_Loc  
+      AND   p.[Status] < '9'                         --2021-05-31 Fixed
+      AND   p.Orderkey NOT IN (@c_Orderkey)          --2021-05-31 Fixed
+  
+      SET @CUR_UPDPLT = CURSOR FAST_FORWARD READ_ONLY FOR  
+      SELECT pd.Storerkey  
+            ,pd.Sku  
+            ,pd.Lot  
+            ,pd.Loc  
+            ,p.Packkey  
+            ,p.PackUOM3  
+      FROM dbo.PICKDETAIL AS pd WITH (NOLOCK)  
+      JOIN dbo.SKU AS s2 WITH (NOLOCK) ON pd.Storerkey = s2.StorerKey AND pd.Sku = s2.Sku  
+      JOIN dbo.PACK AS p WITH (NOLOCK) ON s2.PACKKey = p.PackKey  
+      WHERE pd.ID = @c_ID 
+      AND   pd.Lot= @c_Lot                            --Reverse Pack only 1 ID 1 Pallet ID
+      AND   pd.Loc= @c_Loc   
+      AND   pd.[Status] <'9'                          --2021-05-31 Fixed
+      GROUP BY pd.Storerkey  
+            ,  pd.Sku  
+            ,  pd.Lot  
+            ,  pd.Loc  
+            ,  pd.ID  
+            ,  p.Packkey  
+            ,  p.PackUOM3     
+      ORDER BY pd.Lot  
+            ,  pd.Loc  
+            ,  pd.ID  
+        
+      OPEN @CUR_UPDPLT  
+     
+      FETCH NEXT FROM @CUR_UPDPLT INTO @c_Storerkey  
+                                    ,  @c_Sku  
+                                    ,  @c_Lot  
+                                    ,  @c_Loc  
+                                    ,  @c_Packkey  
+                                    ,  @c_UOM 
 
-      SET @b_Success = 1
-      EXEC dbo.nspItrnAddMove
-            @n_ItrnSysId      = NULL
-         ,  @c_StorerKey      = @c_Storerkey
-         ,  @c_Sku            = @c_Sku
-         ,  @c_Lot            = @c_Lot
-         ,  @c_FromLoc        = @c_Loc
-         ,  @c_FromID         = @c_ID
-         ,  @c_ToLoc          = @c_Loc
-         ,  @c_ToID           = @c_PickToID
-         ,  @c_Status         = 'OK'
-         ,  @c_lottable01     = '' 
-         ,  @c_lottable02     = '' 
-         ,  @c_lottable03     = '' 
-         ,  @d_lottable04     = '' 
-         ,  @d_lottable05     = '' 
-         ,  @n_casecnt        = 0.00 
-         ,  @n_innerpack      = 0.00 
-         ,  @n_qty            = @n_QtyToMove
-         ,  @n_pallet         = 0.00 
-         ,  @f_cube           = 0.00
-         ,  @f_grosswgt       = 0.00  
-         ,  @f_netwgt         = 0.00  
-         ,  @f_otherunit1     = 0.00  
-         ,  @f_otherunit2     = 0.00  
-         ,  @c_SourceKey      = ''
-         ,  @c_SourceType     = 'isp_KioskASRSPKRevTaskCfm'
-         ,  @c_PackKey        = @c_Packkey
-         ,  @c_UOM            = @c_UOM
-         ,  @b_UOMCalc        = 0
-         ,  @d_EffectiveDate  = @dt_today
-         ,  @c_itrnkey        = ''
-         ,  @b_Success        = @b_Success      OUTPUT
-         ,  @n_err            = @n_err          OUTPUT
-         ,  @c_errmsg         = @c_errmsg       OUTPUT  
- 
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1  
+      BEGIN  
+         SET @c_MoveRefKey = ''  
+         
+         IF @n_MoveIDCnt > 0
+         BEGIN
+            SET @b_success = 1      
+            EXECUTE   nspg_getkey      
+                     'MoveRefKey'      
+                     , 10      
+                     , @c_MoveRefKey       OUTPUT      
+                     , @b_success          OUTPUT      
+                     , @n_err              OUTPUT      
+                     , @c_errmsg           OUTPUT   
+  
+            IF NOT @b_success = 1      
+            BEGIN      
+               SET @n_continue = 3      
+               SET @n_err = 61060  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Get MoveRefKey Failed. (isp_KioskASRSPKRevTaskCfm)'   
+               GOTO QUIT_SP    
+            END   
+  
+            ; WITH PD ( PickDetailKey ) AS  
+            ( SELECT p.PickDetailKey  
+              FROM PICKDETAIL AS p WITH (NOLOCK)  
+              WHERE p.Lot= @c_Lot  
+              AND   p.Loc= @c_Loc  
+              AND   p.ID = @c_ID 
+              AND   p.[Status] < '9'                         --2021-05-31 Fixed
+              AND   p.Orderkey NOT IN (@c_Orderkey)          --2021-05-31 Fixed
+            )  
+        
+            UPDATE p  
+               SET MoveRefKey = @c_MoveRefKey  
+                  ,EditWho    = SUSER_NAME()  
+                  ,EditDate   = GETDATE()  
+                  ,Trafficcop = NULL  
+            FROM PD  
+            JOIN PICKDETAIL AS p ON pd.PickDetailKey = p.PickDetailKey  
 
-      IF NOT @b_Success = 1
-      BEGIN
-         SET @n_Continue = 3 
-         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)     
-         SET @n_Err = 61005   
-         SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Error Executing Move To ToID - nspItrnAddMove (isp_KioskASRSPKRevTaskCfm)'
-                      + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-         GOTO QUIT_SP   
-      END
+            SET @n_err = @@ERROR   
+  
+            IF @n_err <> 0      
+            BEGIN    
+               SET @n_continue = 3      
+               SET @n_err = 61070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Failed on Table PICKDETIAL. (isp_KioskASRSPKRevTaskCfm)'   
+               GOTO QUIT_SP  
+            END   
+         END  
+   
+         SET @b_Success = 1
+         EXEC dbo.nspItrnAddMove
+               @n_ItrnSysId      = NULL
+            ,  @c_StorerKey      = @c_Storerkey
+            ,  @c_Sku            = @c_Sku
+            ,  @c_Lot            = @c_Lot
+            ,  @c_FromLoc        = @c_Loc
+            ,  @c_FromID         = @c_ID
+            ,  @c_ToLoc          = @c_Loc
+            ,  @c_ToID           = @c_PickToID
+            ,  @c_Status         = 'OK'
+            ,  @c_lottable01     = '' 
+            ,  @c_lottable02     = '' 
+            ,  @c_lottable03     = '' 
+            ,  @d_lottable04     = '' 
+            ,  @d_lottable05     = '' 
+            ,  @n_casecnt        = 0.00 
+            ,  @n_innerpack      = 0.00 
+            ,  @n_qty            = @n_QtyToMove
+            ,  @n_pallet         = 0.00 
+            ,  @f_cube           = 0.00
+            ,  @f_grosswgt       = 0.00  
+            ,  @f_netwgt         = 0.00  
+            ,  @f_otherunit1     = 0.00  
+            ,  @f_otherunit2     = 0.00  
+            ,  @c_SourceKey      = ''
+            ,  @c_SourceType     = 'isp_KioskASRSPKRevTaskCfm'
+            ,  @c_PackKey        = @c_Packkey
+            ,  @c_UOM            = @c_UOM
+            ,  @b_UOMCalc        = 0
+            ,  @d_EffectiveDate  = @dt_today
+            ,  @c_itrnkey        = ''
+            ,  @b_Success        = @b_Success      OUTPUT
+            ,  @n_err            = @n_err          OUTPUT
+            ,  @c_errmsg         = @c_errmsg       OUTPUT  
+            ,  @c_MoveRefKey     = @c_MoveRefKey  
 
+         IF NOT @b_Success = 1
+         BEGIN
+            SET @n_Continue = 3 
+            SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)     
+            SET @n_Err = 61005   
+            SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Error Executing Move To ToID - nspItrnAddMove (isp_KioskASRSPKRevTaskCfm)'
+                         + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            GOTO QUIT_SP   
+         END
+         
+         IF @n_MoveIDCnt = 0
+         BEGIN 
+            BREAK
+         END 
+      
+         FETCH NEXT FROM @CUR_UPDPLT INTO @c_Storerkey  
+                                       ,  @c_Sku  
+                                       ,  @c_Lot  
+                                       ,  @c_Loc  
+                                       ,  @c_Packkey  
+                                       ,  @c_UOM 
+      END  
+      CLOSE @CUR_UPDPLT  
+      DEALLOCATE @CUR_UPDPLT 
+      --(Wan03) - END 
    END
 
    DECLARE CUR_PD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -371,6 +495,7 @@ BEGIN
          END
 
          SET @c_PickDetailKey = @c_NewPickDetailKey
+         
       END
 
       UPDATE PICKDETAIL WITH (ROWLOCK)
@@ -500,6 +625,227 @@ BEGIN
          GOTO QUIT_SP
       END 
    END
+
+   --(Wan01) - START Change GTMLOOP/ GTMTask / TaskDetail FromID to PickToID 
+   -- 1) GTMLOOP.PalletID = @c_ID 
+   -- 2) GTMTask.PalletID = @c_ID 
+   -- 3) Taskdetail.FromID = @c_ID 
+   
+   --2021-05-31 - Move Up
+   --SET @CUR_UPDPLT = CURSOR FAST_FORWARD READ_ONLY FOR
+   --SELECT pd.Storerkey
+   --      ,pd.Sku
+   --      ,pd.Lot
+   --      ,pd.Loc
+   --      ,p.Packkey
+   --      ,p.PackUOM3
+   --      ,qty = SUM(pd.Qty)
+   --FROM dbo.PICKDETAIL AS pd WITH (NOLOCK)
+   --JOIN dbo.SKU AS s2 WITH (NOLOCK) ON pd.Storerkey = s2.StorerKey AND pd.Sku = s2.Sku
+   --JOIN dbo.PACK AS p WITH (NOLOCK) ON s2.PACKKey = p.PackKey
+   --WHERE pd.ID = @c_ID
+   --AND   pd.[Status] <'4'                          --2021-05-31 Fixed
+   --GROUP BY pd.Storerkey
+   --      ,  pd.Sku
+   --      ,  pd.Lot
+   --      ,  pd.Loc
+   --      ,  pd.ID
+   --      ,  p.Packkey
+   --      ,  p.PackUOM3   
+   --ORDER BY pd.Lot
+   --      ,  pd.Loc
+   --      ,  pd.ID
+      
+   --OPEN @CUR_UPDPLT
+   
+   --FETCH NEXT FROM @CUR_UPDPLT INTO @c_Storerkey
+   --                              ,  @c_Sku
+   --                              ,  @c_Lot
+   --                              ,  @c_Loc
+   --                              ,  @c_Packkey
+   --                              ,  @c_UOM
+   --                              ,  @n_Qty
+                                                                   
+   --WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+   --BEGIN
+      
+   -- SET @c_MoveRefKey = ''
+   --   SET @b_success = 1    
+   --   EXECUTE   nspg_getkey    
+   --            'MoveRefKey'    
+   --            , 10    
+   --            , @c_MoveRefKey       OUTPUT    
+   --            , @b_success          OUTPUT    
+   --            , @n_err              OUTPUT    
+   --            , @c_errmsg           OUTPUT 
+
+   --   IF NOT @b_success = 1    
+   --   BEGIN    
+   --      SET @n_continue = 3    
+   --      SET @n_err = 61060  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+   --      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Get MoveRefKey Failed. (isp_KioskASRSPKRevTaskCfm)' 
+   --      GOTO QUIT_SP  
+   --   END 
+
+   --   ; WITH PD ( PickDetailKey ) AS
+   --   ( SELECT p.PickDetailKey
+   --     FROM PICKDETAIL AS p WITH (NOLOCK)
+   --     WHERE p.Lot= @c_Lot
+   --     AND   p.Loc= @c_Loc
+   --     AND   p.ID = @c_ID
+   --     AND   p.[Status] <'4'                         --2021-05-31 Fixed
+   --   )
+      
+   --   UPDATE p
+   --      SET MoveRefKey = @c_MoveRefKey
+   --         ,EditWho    = SUSER_NAME()
+   --         ,EditDate   = GETDATE()
+   --         ,Trafficcop = NULL
+   --   FROM PD
+   --   JOIN PICKDETAIL AS p ON pd.PickDetailKey = p.PickDetailKey
+
+   --   SET @n_err = @@ERROR 
+
+   --   IF @n_err <> 0    
+   --   BEGIN  
+   --      SET @n_continue = 3    
+   --      SET @n_err = 61070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+   --      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Failed on Table PICKDETIAL. (isp_KioskASRSPKRevTaskCfm)' 
+   --      GOTO QUIT_SP
+   --   END 
+
+   --   SET @b_Success = 1
+   --   EXEC dbo.nspItrnAddMove
+   --         @n_ItrnSysId      = NULL
+   --      ,  @c_StorerKey      = @c_Storerkey
+   --      ,  @c_Sku            = @c_Sku
+   --      ,  @c_Lot            = @c_Lot
+   --      ,  @c_FromLoc        = @c_Loc
+   --      ,  @c_FromID         = @c_ID
+   --      ,  @c_ToLoc          = @c_Loc
+   --      ,  @c_ToID           = @c_PickToID
+   --      ,  @c_Status         = 'OK'
+   --      ,  @c_lottable01     = '' 
+   --      ,  @c_lottable02     = '' 
+   --      ,  @c_lottable03     = '' 
+   --      ,  @d_lottable04     = '' 
+   --      ,  @d_lottable05     = '' 
+   --      ,  @n_casecnt        = 0.00 
+   --      ,  @n_innerpack      = 0.00 
+   --      ,  @n_qty            = @n_Qty
+   --      ,  @n_pallet         = 0.00 
+   --      ,  @f_cube           = 0.00
+   --      ,  @f_grosswgt       = 0.00  
+   --      ,  @f_netwgt         = 0.00  
+   --      ,  @f_otherunit1     = 0.00  
+   --      ,  @f_otherunit2     = 0.00  
+   --      ,  @c_SourceKey      = ''
+   --      ,  @c_SourceType     = 'isp_KioskASRSPKRevTaskCfm'
+   --      ,  @c_PackKey        = @c_Packkey
+   --      ,  @c_UOM            = @c_UOM
+   --      ,  @b_UOMCalc        = 0
+   --      ,  @d_EffectiveDate  = @dt_today
+   --      ,  @c_itrnkey        = ''
+   --      ,  @b_Success        = @b_Success      OUTPUT
+   --      ,  @n_err            = @n_err          OUTPUT
+   --      ,  @c_errmsg         = @c_errmsg       OUTPUT  
+   --      ,  @c_MoveRefKey     = @c_MoveRefKey  
+
+   --   IF NOT @b_Success = 1
+   --   BEGIN
+   --      SET @n_Continue = 3 
+   --      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)     
+   --      SET @n_Err = 61080   
+   --      SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Error Executing Move To ToID - nspItrnAddMove (isp_KioskASRSPKRevTaskCfm)'
+   --                     + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+   --      GOTO QUIT_SP   
+   --   END
+      
+   --   FETCH NEXT FROM @CUR_UPDPLT INTO @c_Storerkey
+   --                                 ,  @c_Sku
+   --                                 ,  @c_Lot
+   --                                 ,  @c_Loc
+   --                                 ,  @c_Packkey
+   --                                 ,  @c_UOM
+   --                                 ,  @n_Qty
+   --END
+   --CLOSE @CUR_UPDPLT
+   --DEALLOCATE @CUR_UPDPLT
+      
+   SET @CUR_UPDPLT = CURSOR FAST_FORWARD READ_ONLY FOR
+   SELECT td.TaskDetailKey
+   FROM dbo.TASKDETAIL AS td (NOLOCK)
+   WHERE td.TaskType LIKE 'ASRS%'
+   AND td.FromID = @c_ID
+   AND td.[Status] < '9'
+      
+   OPEN @CUR_UPDPLT
+   
+   FETCH NEXT FROM @CUR_UPDPLT INTO  @c_TaskdetailKey_upd
+                                                                   
+   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+   BEGIN
+      UPDATE dbo.TASKDETAIL
+      SET FromID = @c_PickToID
+         ,EditDate = GETDATE()
+         ,EditWho  = SUSER_SNAME()
+         ,TrafficCop = NULL
+      WHERE TaskDetailKey = @c_TaskdetailKey_upd
+            
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 61090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Failed on Table TASKDETAIL. (isp_KioskASRSPKRevTaskCfm)'  
+      END
+            
+      IF @n_Continue = 1 AND
+         EXISTS ( SELECT 1
+                  FROM dbo.GTMTask AS gt (NOLOCK)
+                  WHERE gt.TaskDetailKey = @c_TaskdetailKey_upd
+                  AND gt.PalletID = @c_ID
+                  AND gt.[Status] < '9'
+      )
+      BEGIN
+         UPDATE dbo.GTMTask
+         SET PalletId = @c_PickToID
+            ,EditDate = GETDATE()
+            ,EditWho  = SUSER_SNAME()
+         WHERE TaskDetailKey = @c_TaskdetailKey_upd
+               
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 61100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Failed on Table GTMTask. (isp_KioskASRSPKRevTaskCfm)'  
+         END
+      END
+
+      IF @n_Continue = 1 AND
+         EXISTS ( SELECT 1
+                  FROM dbo.GTMLoop AS gt (NOLOCK)
+                  WHERE gt.PalletID = @c_ID
+                  AND gt.[Status] < '9'
+      )
+      BEGIN
+         UPDATE dbo.GTMLoop
+         SET PalletId = @c_PickToID
+            ,EditDate = GETDATE()
+            ,EditWho  = SUSER_SNAME()
+         WHERE PalletID = @c_ID
+               
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 61110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Failed on Table GTMLoop. (isp_KioskASRSPKRevTaskCfm)'  
+         END
+      END            
+      FETCH NEXT FROM @CUR_UPDPLT INTO  @c_TaskdetailKey_upd
+   END
+   CLOSE @CUR_UPDPLT
+   DEALLOCATE @CUR_UPDPLT
+   --(Wan01) Change GTMTask / TaskDetail FromID to PickToID if GTMTask.PalletID = @c_ID and Taskdetail.FromID = @c_ID
 
 QUIT_SP:
 IF @n_Continue=3  -- Error Occured - Process And Return
