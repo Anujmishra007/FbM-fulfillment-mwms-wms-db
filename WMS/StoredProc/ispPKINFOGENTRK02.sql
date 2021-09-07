@@ -26,7 +26,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */    
 /* Date         Author   Ver  Purposes                                  */ 
-/* 2021-09-03   WLChooi  1.1  WMS-17693 - Exclude ECOM Orders (WL01)    */   
+/* 2021-09-03   WLChooi  1.1  WMS-17693 - Exclude ECOM Orders (WL01)    */
+/* 2021-09-06   WLChooi  1.2  Bug Fix For Conso Packing (WL02)          */   
 /************************************************************************/  
 CREATE PROC [dbo].[ispPKINFOGENTRK02]
        @c_Pickslipno                NVARCHAR(10)  
@@ -46,7 +47,7 @@ BEGIN
            @c_Type          NVARCHAR(10),  
            @c_Storerkey     NVARCHAR(15),  
            @c_TrackingNo    NVARCHAR(40),  
-           @c_Orderkey      NVARCHAR(10),  
+           @c_Orderkey      NVARCHAR(4000),   --WL02
            @n_RowRef        BIGINT,
            @c_Loadkey       NVARCHAR(10),
            @c_Shipperkey    NVARCHAR(15),
@@ -90,7 +91,7 @@ BEGIN
       --Conso
       IF ISNULL(@c_OrderKey,'') = ''
       BEGIN
-         SELECT TOP 1 @c_OrderKey   = CT.Orderkey
+         SELECT TOP 1 @c_OrderKey   = ''   --CT.Orderkey   --WL02
                     , @c_Type       = OH.DocType 
                     , @c_Storerkey  = OH.Storerkey
                     , @c_Shipperkey = OH.ShipperKey
@@ -98,11 +99,20 @@ BEGIN
          FROM PACKHEADER PH (NOLOCK)
          JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.LoadKey = PH.LoadKey
          JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = LPD.OrderKey
-         CROSS APPLY (SELECT TOP 1 CTNTR.CarrierRef1 AS Orderkey 
-                      FROM CARTONTRACK CTNTR (NOLOCK)
-                      WHERE CTNTR.KeyName = 'WSSOTMSCR2' AND CTNTR.CarrierRef1 = OH.OrderKey
-                      AND (CTNTR.TrackingNo IS NOT NULL AND CTNTR.TrackingNo <> '') ) AS CT
+         --CROSS APPLY (SELECT TOP 1 CTNTR.CarrierRef1 AS Orderkey 
+         --             FROM CARTONTRACK CTNTR (NOLOCK)
+         --             WHERE CTNTR.KeyName = 'WSSOTMSCR2' AND CTNTR.CarrierRef1 = OH.OrderKey
+         --             AND (CTNTR.TrackingNo IS NOT NULL AND CTNTR.TrackingNo <> '') ) AS CT   --WL02
          WHERE PH.PickSlipNo = @c_Pickslipno
+
+         --WL02 S
+         SELECT @c_OrderKey = STUFF((SELECT ',' + RTRIM(OH.OrderKey) 
+                                     FROM PACKHEADER PH (NOLOCK)
+                                     JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.LoadKey = PH.LoadKey
+                                     JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = LPD.OrderKey
+                                     WHERE PH.PickSlipNo = @c_Pickslipno
+                                     ORDER BY 1 FOR XML PATH('')),1,1,'' )
+         --WL02 E
       END 
 
       --WL01 S
@@ -162,7 +172,7 @@ BEGIN
       AND CL.Storerkey = @c_Storerkey  
       AND CL.code = @c_Type  
       AND CL.code2 = @c_Shipperkey
-      AND CT.CarrierRef1 = @c_OrderKey
+      AND CT.CarrierRef1 in (SELECT ColValue from dbo.fnc_delimsplit (',',@c_OrderKey))   --@c_OrderKey   --WL02
       AND CT.CarrierRef2 = ''  
       AND (CT.LabelNo IS NULL OR CT.LabelNo = '')
       ORDER BY CT.RowRef                        
