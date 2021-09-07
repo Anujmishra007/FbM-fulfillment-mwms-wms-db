@@ -30,6 +30,7 @@ GO
 /* 21-11-2014 1.3  ChewKP   Relight when <> 0 (ChewKP01)                */
 /* 11-02-2015 1.4  ChewKP   Bug Fixes (ChewKP02)                        */
 /* 24-03-2015 1.5  Shong    Performance Tuning                          */
+/* 23-04-2021 1.6  Chermain WMS-16846 Add Channel_ID (cc01)             */
 /************************************************************************/    
 CREATE PROC [dbo].[isp_PTL_PTS_Confirm02] (    
      @nPTLKey              INT    
@@ -554,7 +555,7 @@ BEGIN
                          ,ShipFlag                ,PickSlipNo      ,PickDetailKey      
                          ,QTY                     ,TrafficCop      ,OptimizeCop      
                          ,TaskDetailkey      
-                        )      
+                         ,Channel_ID )      --(cc01)
                      SELECT  CaseID               ,PickHeaderKey   ,OrderKey      
                             ,OrderLineNumber      ,Lot             ,StorerKey      
                             ,SKU                  ,AltSku          ,UOM      
@@ -566,7 +567,8 @@ BEGIN
                             ,WaveKey              ,EffectiveDate   ,ArchiveCop      
                             ,ShipFlag             ,PickSlipNo      ,@cNewPickDetailKey      
                             ,@nPDQty - @nActualQty,NULL            ,'1'  --OptimizeCop,      
-                            ,TaskDetailKey      
+                            ,TaskDetailKey 
+                            ,Channel_ID --(cc01)     
                      FROM   dbo.PickDetail WITH (NOLOCK)      
                      WHERE  PickDetailKey = @cPickDetailKey      
                 

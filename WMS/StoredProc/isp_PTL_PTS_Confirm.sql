@@ -44,7 +44,8 @@ GO
 /* 21-07-2016 2.4  ChewKP   SOS#373755-ANF WholeSale Project (ChewKP08) */  
 /* 24-02-2017 2.5  TLTING   Performance tune - Editwho, Editdate        */                            
 /* 30-07-2018 2.6  James    WMS-5814 Add eventlog (james01)             */ 
-/* 26-02-2019 2.7  ChewKP   WMS-8056 - LF Light Link Migration          */                              
+/* 26-02-2019 2.7  ChewKP   WMS-8056 - LF Light Link Migration          */     
+/* 23-04-2021 2.8  Chermain WMS-16846 Add Channel_ID (cc01)             */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_PTL_PTS_Confirm] (
@@ -765,7 +766,7 @@ BEGIN
                             ,ShipFlag                ,PickSlipNo      ,PickDetailKey  
                             ,QTY                     ,TrafficCop      ,OptimizeCop  
                             ,TaskDetailkey  
-                           )  
+                            ,Channel_ID )      --(cc01)    
                         SELECT CaseID               ,PickHeaderKey   ,OrderKey  
                                ,OrderLineNumber      ,Lot             ,StorerKey  
                                ,SKU                  ,AltSku          ,UOM  
@@ -778,6 +779,7 @@ BEGIN
                                 ,ShipFlag            ,PickSlipNo      ,@cNewPickDetailKey  
                                ,@nPDQty - @nQTY      ,NULL            ,'1'  --OptimizeCop,  
                                ,TaskDetailKey  
+                               ,Channel_ID --(cc01)  
                         FROM   dbo.PickDetail WITH (NOLOCK)  
                         WHERE  PickDetailKey = @cPickDetailKey  
              
