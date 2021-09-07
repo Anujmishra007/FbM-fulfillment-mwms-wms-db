@@ -17,6 +17,7 @@ GO
 /* 2019-06-25 1.2  LZG        INC0751609 -Cater for split Order line (ZG01)   */
 /* 2021-03-19 1.3  mingle01   Add ORD.Notes to col45                          */
 /* 2021-07-14 1.4  LZG        Extracted nested query to temp table (ZG02)     */
+/* 2021-08-28 1.5  MINGLE     WMS-17774 Add and chg sku descr to sku div(ML02)*/
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_BT_Bartender_KR_Shipper_Content_Label_UA]
@@ -92,43 +93,55 @@ BEGIN
       @c_SkuStyle        NCHAR(5),
       @n_cntOrdUDef04    INT,
       @c_getOrdUdef04    NVARCHAR(80),
-      @c_notes           NVARCHAR(20)          --mingle01
+      @c_notes           NVARCHAR(20),   --ML01
+      @c_SkuDivision     NVARCHAR(15)    --ML02
 
  DECLARE
       @c_colORDDETSKU1     NVARCHAR(60),
       @c_ColSDESCR1        NVARCHAR(60),
+      @c_ColSDIV1          NVARCHAR(60),    --ML02
       @c_ColPDQty1         NVARCHAR(5),
       @c_colORDDETSKU2     NVARCHAR(60),
       @c_ColSDESCR2        NVARCHAR(60),
+      @c_ColSDIV2          NVARCHAR(60),    --ML02
       @c_ColPDQty2         NVARCHAR(5),
       @c_colORDDETSKU3     NVARCHAR(60),
       @c_ColSDESCR3        NVARCHAR(60),
+      @c_ColSDIV3          NVARCHAR(60),    --ML02
       @c_ColPDQty3         NVARCHAR(5),
       @c_colORDDETSKU4     NVARCHAR(60),
       @c_ColSDESCR4        NVARCHAR(60),
+      @c_ColSDIV4          NVARCHAR(60),    --ML02
       @c_ColPDQty4         NVARCHAR(5),
       @c_colORDDETSKU5     NVARCHAR(60),
       @c_ColSDESCR5        NVARCHAR(60),
+      @c_ColSDIV5          NVARCHAR(60),    --ML02
       @c_ColPDQty5         NVARCHAR(5),
       @c_colORDDETSKU6     NVARCHAR(60),
       @c_ColSDESCR6        NVARCHAR(60),
+      @c_ColSDIV6          NVARCHAR(60),    --ML02
       @c_ColPDQty6         NVARCHAR(5),
       @c_colORDDETSKU7     NVARCHAR(60),
       @c_ColSDESCR7        NVARCHAR(60),
+      @c_ColSDIV7          NVARCHAR(60),    --ML02
       @c_ColPDQty7         NVARCHAR(5),
       @c_colORDDETSKU8     NVARCHAR(60),
       @c_ColSDESCR8        NVARCHAR(60),
+      @c_ColSDIV8          NVARCHAR(60),    --ML02
       @c_ColPDQty8         NVARCHAR(5)
 
 DECLARE
       @c_colORDDETSKU9      NVARCHAR(60),
       @c_ColSDESCR9         NVARCHAR(60),
+      @c_ColSDIV9          NVARCHAR(60),    --ML02
       @c_ColPDQty9          NVARCHAR(5),
       @c_colORDDETSKU10     NVARCHAR(60),
       @c_ColSDESCR10        NVARCHAR(60),
+      @c_ColSDIV10          NVARCHAR(60),    --ML02
       @c_ColPDQty10         NVARCHAR(5),
       @c_colORDDETSKU11     NVARCHAR(60),
       @c_ColSDESCR11        NVARCHAR(60),
+      @c_ColSDIV11          NVARCHAR(60),    --ML02
       @c_ColPDQty11         NVARCHAR(5),
       @c_colORDDETSKU12     NVARCHAR(60),
       @c_ColSDESCR12        NVARCHAR(60),
@@ -148,6 +161,7 @@ DECLARE
 
       @c_ColContentsku      NVARCHAR(20),
       @c_ColContentDescr    NVARCHAR(60),
+      @c_Colcontentsdiv     NVARCHAR(60),     --ML02
       @c_ColContentqty      NVARCHAR(5),
       @c_CartonType         NVARCHAR(10),
       @c_GETCartonType      NVARCHAR(10),
@@ -233,6 +247,14 @@ DECLARE
       [Col59] [NVARCHAR] (80) NULL,
       [Col60] [NVARCHAR] (80) NULL
       )
+   
+   --START(ML02)
+   --SELECT @c_SkuDivision = CASE WHEN S.SUSR3 IN ('01','1002') THEN 'APP' 
+   --                             WHEN S.SUSR3 IN ('02','1003') THEN 'FTW' 
+   --                             WHEN S.SUSR3 IN ('04','1001') THEN 'ACC' END
+   --FROM SKU S(NOLOCK)
+   --JOIN PACKDETAIL PD(NOLOCK) ON PD.SKU = S.SKU
+   --END(ML02)
 
    IF OBJECT_ID('TempDB..#OrderDetail') IS NOT NULL   -- ZG02
       DROP TABLE #OrderDetail
@@ -246,6 +268,7 @@ DECLARE
       [OrderKey]    [NVARCHAR] (10) NULL,
       [ORDSku]      [NCHAR] (20)    NULL,
       [SDESCR]      [NVARCHAR](60)  NULL,
+      [SDIV]        [NVARCHAR](60)  NULL,
       [TTLPICKQTY]  [INT]           NULL,
       [Retrieve]    [NVARCHAR] (1) DEFAULT 'N')
 
@@ -257,11 +280,13 @@ DECLARE
    DECLARE CUR_StartRecLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT ORD.ExternOrderKey AS ORD_ExternOrdKey,ORD.ExternPOKey AS ORD_EXTPOKey,
           ORD.BuyerPO AS ORD_BuyerPO,ORD.OrderKey AS ORD_ORDKey,ORD.Type AS ORD_Type,
-          PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo),ORD.Notes          --mingle01                     
+          PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo),ORD.Notes  --ML01 
+          --@c_SkuDivision --ML02                   
    FROM ORDERS ORD WITH (NOLOCK)
    INNER JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = ORD.OrderKey
    JOIN PACKHEADER PH WITH (NOLOCK) ON PH.OrderKey = ORD.OrderKey
    JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.PickSlipNo = PH.PickSlipNo
+   JOIN SKU S WITH (NOLOCK) ON S.SKU = PDET.SKU 
    LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.PickSlipNo = PDET.PickSlipNo
    AND PIF.CartonNo = PDET.CartonNo
    WHERE PDET.PickSlipNo = @c_Sparm1
@@ -269,10 +294,10 @@ DECLARE
    AND PDET.CartonNo <= CONVERT(INT,@c_Sparm3)
    GROUP BY ORD.ExternOrderKey ,ORD.ExternPOKey,
             ORD.BuyerPO ,ORD.OrderKey ,ORD.Type,
-            PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo),ORD.Notes          --mingle01
+            PIF.CartonType,PDET.LabelNo,CONVERT(NVARCHAR(10),PDET.CartonNo),ORD.Notes --ML01
 
    OPEN CUR_StartRecLoop
-   FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo,@c_Notes          --mingle01
+   FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo,@c_Notes --ML01  --ML02
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @b_debug = 1
@@ -288,7 +313,7 @@ DECLARE
                            ,Col55,Col56,Col57,Col58,Col59,Col60)
       VALUES(@c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,
             '1',@c_LabelNo,'','','','','','','','','','','','',
-            '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,@c_Notes,'','','',''                   --mingle01
+            '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,@c_Notes,'','','','' --ML01 --ML02
             ,'','','','','','','','','','O')
 
       IF @b_debug = 1
@@ -354,12 +379,15 @@ DECLARE
          WHERE PH1.OrderKey = @c_GetOrderKey
 
          DELETE #CartonContent
-         INSERT INTO #CartonContent (OrderKey,ORDSku,SDESCR,TTLPICKQTY)
+         INSERT INTO #CartonContent (OrderKey,ORDSku,SDESCR,SDIV,TTLPICKQTY)    --ML02
 
          -- ZG01 (Start)
          SELECT OD.OrderKey
                ,OD.SKU
                ,S.Descr
+               ,CASE WHEN S.SUSR3 IN ('01','1002') THEN 'APP' 
+                                WHEN S.SUSR3 IN ('02','1003') THEN 'FTW' 
+                                WHEN S.SUSR3 IN ('04','1001') THEN 'ACC' END
                ,SUM(PD.Qty)
          FROM PackHeader PH WITH (NOLOCK)
          JOIN PackDetail PD WITH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
@@ -377,6 +405,9 @@ DECLARE
          GROUP BY OD.OrderKey
                  ,OD.sku
                  ,S.Descr
+                 ,CASE WHEN S.SUSR3 IN ('01','1002') THEN 'APP' 
+                                WHEN S.SUSR3 IN ('02','1003') THEN 'FTW' 
+                                WHEN S.SUSR3 IN ('04','1001') THEN 'ACC' END
          -- ZG01 (End)
 
          IF @b_debug = '1'
@@ -388,36 +419,47 @@ DECLARE
 
          SET @c_colORDDETSKU1      =''
          SET @c_ColSDESCR1         =''
+         SET @c_ColSDIV1           =''    --ML02
          SET @c_ColPDQty1          =''
          SET @c_colORDDETSKU2      =''
          SET @c_ColSDESCR2         =''
+         SET @c_ColSDIV2           =''    --ML02
          SET @c_ColPDQty2          =''
          SET @c_colORDDETSKU3      =''
          SET @c_ColSDESCR3         =''
+         SET @c_ColSDIV3           =''    --ML02
          SET @c_ColPDQty3          =''
          SET @c_colORDDETSKU4      =''
          SET @c_ColSDESCR4         =''
+         SET @c_ColSDIV4           =''    --ML02
          SET @c_ColPDQty4          =''
          SET @c_colORDDETSKU5      =''
          SET @c_ColSDESCR5         =''
+         SET @c_ColSDIV5           =''    --ML02
          SET @c_ColPDQty5          =''
          SET @c_colORDDETSKU6      =''
          SET @c_ColSDESCR6         =''
+         SET @c_ColSDIV6           =''    --ML02
          SET @c_ColPDQty6          =''
          SET @c_colORDDETSKU7      =''
          SET @c_ColSDESCR7         =''
+         SET @c_ColSDIV7           =''    --ML02
          SET @c_ColPDQty7          =''
          SET @c_colORDDETSKU8      =''
          SET @c_ColSDESCR8         =''
+         SET @c_ColSDIV8           =''    --ML02
          SET @c_ColPDQty8          =''
          SET @c_colORDDETSKU9      =''
          SET @c_ColSDESCR9         =''
+         SET @c_ColSDIV9           =''    --ML02
          SET @c_ColPDQty9          =''
          SET @c_colORDDETSKU10     =''
          SET @c_ColSDESCR10        =''
+         SET @c_ColSDIV10          =''    --ML02
          SET @c_ColPDQty10         =''
          SET @c_colORDDETSKU11     =''
          SET @c_ColSDESCR11        =''
+         SET @c_ColSDIV11          =''    --ML02
          SET @c_ColPDQty11         =''
          SET @c_colORDDETSKU12     =''
          SET @c_ColSDESCR12        =''
@@ -479,7 +521,7 @@ DECLARE
                                     ,Col55,Col56,Col57,Col58,Col59,Col60)
                VALUES(@c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,
                      '1',@c_LabelNo,'','','','','','','','','','','','',
-                     '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,@c_Notes,'','','',''          --mingle01
+                     '','','','','','','','','','','','','','','','','','','','','','','','',@c_CartonNo,@c_Notes,'','','',''  --ML01  --ML02
                      ,'','','','','','','','','','O')
 
                IF @b_debug = '1'
@@ -488,38 +530,49 @@ DECLARE
                END
 
                SET @c_colORDDETSKU1      =''
-               SET @c_ColSDESCR1         =''
-               SET @c_ColPDQty1          =''
-               SET @c_colORDDETSKU2      =''
-               SET @c_ColSDESCR2         =''
-               SET @c_ColPDQty2          =''
-               SET @c_colORDDETSKU3      =''
-               SET @c_ColSDESCR3         =''
-               SET @c_ColPDQty3          =''
-               SET @c_colORDDETSKU4      =''
-               SET @c_ColSDESCR4         =''
-               SET @c_ColPDQty4          =''
-               SET @c_colORDDETSKU5      =''
-               SET @c_ColSDESCR5         =''
-               SET @c_ColPDQty5          =''
-               SET @c_colORDDETSKU6      =''
-               SET @c_ColSDESCR6         =''
-               SET @c_ColPDQty6          =''
-               SET @c_colORDDETSKU7      =''
-               SET @c_ColSDESCR7         =''
-               SET @c_ColPDQty7          =''
-               SET @c_colORDDETSKU8      =''
-               SET @c_ColSDESCR8         =''
-               SET @c_ColPDQty8          =''
-               SET @c_colORDDETSKU9      =''
-               SET @c_ColSDESCR9         =''
-               SET @c_ColPDQty9          =''
-               SET @c_colORDDETSKU10     =''
-               SET @c_ColSDESCR10        =''
-               SET @c_ColPDQty10         =''
-               SET @c_colORDDETSKU11     =''
-               SET @c_ColSDESCR11        =''
-               SET @c_ColPDQty11         =''
+         SET @c_ColSDESCR1         =''
+         SET @c_ColSDIV1           =''
+         SET @c_ColPDQty1          =''
+         SET @c_colORDDETSKU2      =''
+         SET @c_ColSDESCR2         =''
+         SET @c_ColSDIV2           =''
+         SET @c_ColPDQty2          =''
+         SET @c_colORDDETSKU3      =''
+         SET @c_ColSDESCR3         =''
+         SET @c_ColSDIV3           =''
+         SET @c_ColPDQty3          =''
+         SET @c_colORDDETSKU4      =''
+         SET @c_ColSDESCR4         =''
+         SET @c_ColSDIV4           =''
+         SET @c_ColPDQty4          =''
+         SET @c_colORDDETSKU5      =''
+         SET @c_ColSDESCR5         =''
+         SET @c_ColSDIV5           =''
+         SET @c_ColPDQty5          =''
+         SET @c_colORDDETSKU6      =''
+         SET @c_ColSDESCR6         =''
+         SET @c_ColSDIV6           =''
+         SET @c_ColPDQty6          =''
+         SET @c_colORDDETSKU7      =''
+         SET @c_ColSDESCR7         =''
+         SET @c_ColSDIV7           =''
+         SET @c_ColPDQty7          =''
+         SET @c_colORDDETSKU8      =''
+         SET @c_ColSDESCR8         =''
+         SET @c_ColSDIV8           =''
+         SET @c_ColPDQty8          =''
+         SET @c_colORDDETSKU9      =''
+         SET @c_ColSDESCR9         =''
+         SET @c_ColSDIV9           =''
+         SET @c_ColPDQty9          =''
+         SET @c_colORDDETSKU10     =''
+         SET @c_ColSDESCR10        =''
+         SET @c_ColSDIV10          =''
+         SET @c_ColPDQty10         =''
+         SET @c_colORDDETSKU11     =''
+         SET @c_ColSDESCR11        =''
+         SET @c_ColSDIV11          =''
+         SET @c_ColPDQty11         =''
             END
 
             SET @n_TTLLine = 0
@@ -531,7 +584,8 @@ DECLARE
             END
 
             SELECT @c_ColContentsku   = ORDSku,
-                   @c_Colcontentdescr = SDESCR,
+                   @c_Colcontentdescr = SDESCR, 
+                   @c_Colcontentsdiv  = SDIV,      --ML02
                    @c_ColContentqty   = CONVERT(NCHAR(5),TTLPICKQTY)
             FROM  #CartonContent c WITH (NOLOCK)
             WHERE c.ID = @n_intFlag
@@ -546,7 +600,8 @@ DECLARE
             IF (@n_intFlag % @n_MaxLine) = 1
             BEGIN
                SET @c_colORDDETSKU1  = @c_ColContentsku
-               SET @c_ColSDESCR1     = @c_Colcontentdescr
+               --SET @c_ColSDESCR1     = @c_Colcontentdescr
+               SET @c_ColSDIV1       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty1      = @c_ColContentqty
             END
 
@@ -554,7 +609,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 2
             BEGIN
                SET @c_colORDDETSKU2  = @c_ColContentsku
-               SET @c_ColSDESCR2     = @c_Colcontentdescr
+               --SET @c_ColSDESCR2     = @c_Colcontentdescr
+               SET @c_ColSDIV2       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty2      = @c_ColContentqty
             END
 
@@ -562,7 +618,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 3
             BEGIN
                SET @c_colORDDETSKU3  = @c_ColContentsku
-               SET @c_ColSDESCR3     = @c_Colcontentdescr
+               --SET @c_ColSDESCR3     = @c_Colcontentdescr
+               SET @c_ColSDIV3       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty3      = @c_ColContentqty
             END
 
@@ -570,7 +627,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 4
             BEGIN
                SET @c_colORDDETSKU4  = @c_ColContentsku
-               SET @c_ColSDESCR4     = @c_Colcontentdescr
+               --SET @c_ColSDESCR4     = @c_Colcontentdescr
+               SET @c_ColSDIV4       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty4      = @c_ColContentqty
             END
 
@@ -578,7 +636,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 5
             BEGIN
                SET @c_colORDDETSKU5  = @c_ColContentsku
-               SET @c_ColSDESCR5     = @c_Colcontentdescr
+               --SET @c_ColSDESCR5     = @c_Colcontentdescr
+               SET @c_ColSDIV5       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty5      = @c_ColContentqty
             END
 
@@ -586,7 +645,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 6
             BEGIN
                SET @c_colORDDETSKU6  = @c_ColContentsku
-               SET @c_ColSDESCR6     = @c_Colcontentdescr
+               --SET @c_ColSDESCR6     = @c_Colcontentdescr
+               SET @c_ColSDIV6       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty6      = @c_ColContentqty
             END
 
@@ -594,7 +654,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 7
             BEGIN
                SET @c_colORDDETSKU7  = @c_ColContentsku
-               SET @c_ColSDESCR7     = @c_Colcontentdescr
+               --SET @c_ColSDESCR7     = @c_Colcontentdescr
+               SET @c_ColSDIV7       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty7      = @c_ColContentqty
             END
 
@@ -602,7 +663,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 8
             BEGIN
                SET @c_colORDDETSKU8  = @c_ColContentsku
-               SET @c_ColSDESCR8     = @c_Colcontentdescr
+               --SET @c_ColSDESCR8     = @c_Colcontentdescr
+               SET @c_ColSDIV8       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty8      = @c_ColContentqty
             END
 
@@ -610,7 +672,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 9
             BEGIN
                SET @c_colORDDETSKU9  = @c_ColContentsku
-               SET @c_ColSDESCR9     = @c_Colcontentdescr
+               --SET @c_ColSDESCR9     = @c_Colcontentdescr
+               SET @c_ColSDIV9       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty9      = @c_ColContentqty
             END
 
@@ -618,7 +681,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 10
             BEGIN
                SET @c_colORDDETSKU10  = @c_ColContentsku
-               SET @c_ColSDESCR10     = @c_Colcontentdescr
+               --SET @c_ColSDESCR10     = @c_Colcontentdescr
+               SET @c_ColSDIV10       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty10      = @c_ColContentqty
             END
 
@@ -626,7 +690,8 @@ DECLARE
             ELSE IF (@n_intFlag % @n_MaxLine) = 0
             BEGIN
                SET @c_colORDDETSKU11  = @c_ColContentsku
-               SET @c_ColSDESCR11     = @c_Colcontentdescr
+               --SET @c_ColSDESCR11     = @c_Colcontentdescr
+               SET @c_ColSDIV11       = @c_Colcontentsdiv    --ML02
                SET @c_ColPDQty11     = @c_ColContentqty
             END
 
@@ -641,38 +706,39 @@ DECLARE
                 Col10 = @c_col10,
                 Col11 = @c_Col11,
                 Col12 = @c_colORDDETSKU1,
-                Col13 = @c_ColSDESCR1,
+                Col13 = @c_ColSDIV1,    --ML02
                 Col14 = @c_ColPDQty1,
                 Col15 = @c_colORDDETSKU2,
-                Col16 = @c_ColSDESCR2,
+                Col16 = @c_ColSDIV2,    --ML02
                 Col17 = @c_ColPDQty2,
                 Col18 = @c_colORDDETSKU3,
-                Col19 = @c_ColSDESCR3,
+                Col19 = @c_ColSDIV3,    --ML02
                 Col20 = @c_ColPDQty3,
                 Col21 = @c_colORDDETSKU4,
-                Col22 = @c_ColSDESCR4,
+                Col22 = @c_ColSDIV4,    --ML02
                 Col23 = @c_ColPDQty4,
                 Col24 = @c_colORDDETSKU5,
-                Col25 = @c_ColSDESCR5,
+                Col25 = @c_ColSDIV5,    --ML02
                 Col26 = @c_ColPDQty5,
                 Col27 = @c_colORDDETSKU6,
-                Col28 = @c_ColSDESCR6,
+                Col28 = @c_ColSDIV6,    --ML02
                 Col29 = @c_ColPDQty6,
                 Col30 = @c_colORDDETSKU7,
-                Col31 = @c_ColSDESCR7,
+                Col31 = @c_ColSDIV7,    --ML02
                 Col32 = @c_ColPDQty7,
                 Col33 = @c_colORDDETSKU8,
-                Col34 = @c_ColSDESCR8,
+                Col34 = @c_ColSDIV8,    --ML02
                 Col35 = @c_ColPDQty8,
                 Col36 = @c_colORDDETSKU9,
-                Col37 = @c_ColSDESCR9,
+                Col37 = @c_ColSDIV9,    --ML02
                 Col38 = @c_ColPDQty9,
                 Col39 = @c_colORDDETSKU10,
-                Col40 = @c_ColSDESCR10,
+                Col40 = @c_ColSDIV10,    --ML02
                 Col41 = @c_ColPDQty10,
                 Col42 = @c_colORDDETSKU11,
-                Col43 = @c_ColSDESCR11,
-                Col44 = @c_ColPDQty11
+                Col43 = @c_ColSDIV11,    --ML02
+                Col44 = @c_ColPDQty11,
+                Col46 = @c_Colcontentsdiv
             WHERE ID = @n_CurrentPage
 
             UPDATE #CartonContent
@@ -697,7 +763,7 @@ DECLARE
       CLOSE CUR_RowNoLoop
       DEALLOCATE CUR_RowNoLoop
 
-      FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo,@c_Notes          --mingle01
+      FETCH NEXT FROM CUR_StartRecLoop INTO @c_ExternORDKey,@c_ExternPOKey,@c_BuyerPO,@c_OrderKey,@c_OrdType,@c_CartonType,@c_LabelNo,@c_CartonNo,@c_Notes --ML01 --ML02
    END -- While
    CLOSE CUR_StartRecLoop
    DEALLOCATE CUR_StartRecLoop
@@ -732,3 +798,12 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_KR_Shipper_Content_Label_UA] TO NSQL
 GO
+
+
+
+
+
+
+
+
+
