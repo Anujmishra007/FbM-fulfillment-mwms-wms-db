@@ -13,10 +13,11 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 30-01-2013  1.0   Ung      SOS256104. Created                        */
-/* 15-07-2015  1.1   Ung      SOS346283 Fix to allow AreaKey blank      */
+/* Date        Rev  Author     Purposes                                 */
+/* 30-01-2013  1.0   Ung       SOS256104. Created                       */
+/* 15-07-2015  1.1   Ung       SOS346283 Fix to allow AreaKey blank     */
 /* 15-11-2019  1.2   Chermaine WMS-11126 Add userkey override (cc01)    */
+/* 08-09-2021  1.3   Ung       Performance tuning                       */
 /************************************************************************/
 CREATE PROC [dbo].[nspTTMPF01]
     @c_UserID    NVARCHAR(18)
@@ -52,20 +53,6 @@ BEGIN
       ,@c_errmsg = ''
       ,@c_TaskDetailkey = ''
       ,@c_LastLOCAisle = ''
-
-   -- Reset in-progress task, to be refetch, if connection broken
-   UPDATE TaskDetail SET
-      Status = '0'
-   WHERE UserKey = @c_UserID
-      AND Status = '3'
-   IF @@ERROR <> 0
-   BEGIN
-      SET @n_continue = 3
-      SET @n_err = 81201
-      SET @c_errmsg = 'NSQL' + CONVERT( NVARCHAR(5), @n_err) + ': ' + 
-                      'Update to TaskDetail table failed. (nspTTMPF01)' + 
-                      '(SQLSvr MESSAGE = ' + RTRIM( @c_errmsg) + ' )'
-   END
 
    -- Close cursor
    IF CURSOR_STATUS( 'global', 'Cursor_PAFTaskCandidates') IN (0, 1) -- 0=empty, 1=record
