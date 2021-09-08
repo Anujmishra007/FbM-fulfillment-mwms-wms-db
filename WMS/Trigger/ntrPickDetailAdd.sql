@@ -49,6 +49,9 @@ GO
 /* 06-Feb-2018  SHONG04       Added Channel Management Logic            */
 /* 28-Sep-2018  TLTING  1.1   remove #tmp , remmove update row lock     */
 /* 23-JUL-2019  Wan01   3.8   ChannelInventoryMgmt use fnc_SelectGetRight*/
+/* 03-Aug-2021  Wan02   3.0   consistence with Pickdetail Update -Check */
+/*                            no over allocate when AllowOverAllocations*/  
+/*                            turn off                                  */  
 /************************************************************************/
 CREATE  TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]
@@ -832,6 +835,18 @@ BEGIN
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": An Attempt Was Made To OverAllocate A Location That Is Not a Case Pick OR Piece Pick Location. (ntrPickDetailAdd)"
       END
    END
+   ELSE IF @c_AllowOverAllocations = "0"        --(Wan02) - START
+   BEGIN
+      IF EXISTS(SELECT 1 FROM LOTxLOCxID (NOLOCK)
+                JOIN INSERTED ON  INSERTED.Lot = LOTxLOCxID.Lot  
+                              AND INSERTED.Loc= LOTxLOCxID.Loc  
+                              AND INSERTED.Id = LOTxLOCxID.Id  
+                WHERE (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QTYPICKED) > LOTxLOCxID.QTY)  
+      BEGIN  
+         SELECT @n_Continue = 3 , @n_err = 63127  
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": An Attempt Was Made by OverAllocate is Turn OFF. (ntrPickDetailAdd)"  
+      END                                       --(Wan02) - END
+   END 
 END
 
 -- MC01-S
