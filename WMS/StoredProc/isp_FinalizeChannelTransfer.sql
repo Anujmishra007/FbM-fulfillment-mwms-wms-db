@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 23-JUL-2019  Wan01   1.1   ChannelInventoryMgmt use nspGetRight2     */
+/* 16-Aug-2021  NJOW01  1.2   WMS-17740 Allow finalize zero qty for itf */
 /************************************************************************/
 CREATE PROC dbo.isp_FinalizeChannelTransfer
       @c_ChannelTransferKey         NVARCHAR(10)
@@ -89,6 +90,14 @@ BEGIN
 
          , @c_SQL                NVARCHAR(4000)
          , @c_SQLParms           NVARCHAR(4000)
+         
+   --NJOW01      
+   DECLARE @c_Option1                     NVARCHAR(50)  
+         , @c_Option2                     NVARCHAR(50) 
+         , @c_Option3                     NVARCHAR(50) 
+         , @c_Option4                     NVARCHAR(50) 
+         , @c_Option5                     NVARCHAR(4000) 
+         , @c_ChannelTransferAllowFNZ0Qty NVARCHAR(30) 
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -115,16 +124,22 @@ BEGIN
 
    SET @c_ChannelFromInvMgmt = '0'
    SET @b_success = 0
+       
    Execute nspGetRight2       --(Wan01) 
-      @c_FromFacility
-   ,  @c_FromStorerKey        -- Storer
-   ,  ''                      -- Sku
-   ,  'ChannelInventoryMgmt'  -- ConfigKey
-   ,  @b_success              OUTPUT
-   ,  @c_ChannelFromInvMgmt   OUTPUT
-   ,  @n_err                  OUTPUT
-   ,  @c_ErrMsg               OUTPUT
-
+      @c_Facility  = @c_FromFacility
+   ,  @c_StorerKey = @c_FromStorerKey        -- Storer
+   ,  @c_sku       =''                      -- Sku
+   ,  @c_ConfigKey = 'ChannelInventoryMgmt'  -- ConfigKey
+   ,  @b_Success   = @b_success             OUTPUT
+   ,  @c_authority = @c_ChannelFromInvMgmt  OUTPUT
+   ,  @n_err       = @n_err                 OUTPUT
+   ,  @c_errmsg    = @c_ErrMsg              OUTPUT
+   ,  @c_Option1   = @c_Option1             OUTPUT --NJOW01
+   ,  @c_Option2   = @c_Option2             OUTPUT 
+   ,  @c_Option3   = @c_Option3             OUTPUT 
+   ,  @c_Option4   = @c_Option4             OUTPUT 
+   ,  @c_Option5   = @c_Option5             OUTPUT 
+        
    IF @b_success <> 1
    BEGIN
       SET @n_continue = 3
@@ -133,19 +148,22 @@ BEGIN
                     + '. (isp_FinalizeChannelTransfer) ' + ISNULL(RTRIM(@c_ErrMsg),'')
       GOTO QUIT_SP
    END
+   
+   SELECT @c_ChannelTransferAllowFNZ0Qty = dbo.fnc_GetParamValueFromString('@c_ChannelTransferAllowFNZ0Qty', @c_Option5, 'N') --NJOW01
 
    SET @c_ChannelToInvMgmt = '0'
    SET @b_success = 0
+   
    Execute nspGetRight2       --(Wan01) 
-      @c_ToFacility
-   ,  @c_ToStorerKey          -- Storer
-   ,  ''                      -- Sku
-   ,  'ChannelInventoryMgmt'  -- ConfigKey
-   ,  @b_success              OUTPUT
-   ,  @c_ChannelToInvMgmt     OUTPUT
-   ,  @n_err                  OUTPUT
-   ,  @c_ErrMsg               OUTPUT
-
+      @c_Facility  = @c_ToFacility
+   ,  @c_StorerKey = @c_ToStorerKey        -- Storer
+   ,  @c_sku       =''                      -- Sku
+   ,  @c_ConfigKey = 'ChannelInventoryMgmt'  -- ConfigKey
+   ,  @b_Success   = @b_success             OUTPUT
+   ,  @c_authority = @c_ChannelToInvMgmt    OUTPUT
+   ,  @n_err       = @n_err                 OUTPUT
+   ,  @c_errmsg    = @c_ErrMsg              OUTPUT
+   
    IF @b_success <> 1
    BEGIN
       SET @n_continue = 3
@@ -229,7 +247,7 @@ BEGIN
                       + '. (isp_FinalizeChannelTransfer)' 
       GOTO QUIT_SP
    END
-
+   
    SET @c_SQL = N'SELECT '
               + '  @n_EmptyFromChannel = ISNULL(SUM(CASE WHEN CINV.Channel_ID IS NULL THEN 1 ELSE 0 END),0)'
               + ', @n_QtyAvailToTransfer = ISNULL(ISNULL(CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold,0)- SUM(CTD.FromQty),0)'
@@ -250,6 +268,8 @@ BEGIN
                      ELSE ' AND CTD.ChannelTransferLineNumber = @c_ChannelTransferLineNumber'
                      END
               + ' AND CTD.Status < ''9'''
+              + CASE WHEN @c_ChannelTransferAllowFNZ0Qty = 'Y' THEN
+                 ' AND (CTD.FromQty > 0 OR CTD.ToQty > 0) ' ELSE ' ' END --NJOW01  
               + ' GROUP BY  CTD.FromStorerkey'
               +         ' , CTD.FromSku'
               +         ' , CTD.FromC_Attribute01'
@@ -259,7 +279,7 @@ BEGIN
               +         ' , CTD.FromC_Attribute05'
               +         ' , ISNULL(CINV.Channel_ID,0)'
               +         ' , ISNULL(CINV.Qty - CINV.QtyAllocated - CINV.QtyOnHold,0)'
-
+   
    SET @n_EmptyFromChannel = 0
    SET @n_QtyAvailToTransfer = 0
    SET @c_SQLParms= N'@n_EmptyFromChannel    INT   OUTPUT'
@@ -267,8 +287,8 @@ BEGIN
                   + ',@c_ChannelTransferKey        NVARCHAR(10)'
                   + ',@c_ChannelTransferLineNumber NVARCHAR(10)'
                   + ',@c_FromFacility              NVARCHAR(5)'
-
-
+   
+   
    SET @n_Count = 0
    EXEC sp_ExecuteSQL  @c_SQL
                      , @c_SQLParms
@@ -277,7 +297,7 @@ BEGIN
                      , @c_ChannelTransferKey
                      , @c_ChannelTransferLineNumber
                      , @c_FromFacility
-  
+   
    IF @n_EmptyFromChannel > 0
    BEGIN
       SET @n_Continue = 3
@@ -286,7 +306,7 @@ BEGIN
                       + '. (isp_FinalizeChannelTransfer)' 
       GOTO QUIT_SP
    END
-
+   
    IF @n_QtyAvailToTransfer < 0
    BEGIN
       SET @n_Continue = 3
@@ -524,6 +544,18 @@ BEGIN
                               , @n_ToQty
    WHILE @@FETCH_STATUS <> -1
    BEGIN
+   	  IF @c_ChannelTransferAllowFNZ0Qty = 'Y' AND (@n_FromQty = 0 OR @n_ToQty = 0)  --NJOW01
+   	  BEGIN
+         UPDATE CHANNELTRANSFERDETAIL WITH (ROWLOCK)
+         SET Status = '9'
+            ,EditDate = GETDATE()
+            ,EditWho  = SUSER_NAME()
+         WHERE ChannelTransferKey = @c_ChannelTransferKey
+         AND   ChannelTransferLineNumber = @c_ChannelTransferLineNumber
+            	  	
+   	     GOTO NEXT_TRFREC
+   	  END
+   	
       SET @n_FromChannel_ID = 0 
       SELECT @n_FromChannel_ID = ci.Channel_ID 
 			,@n_QtyAvailable = CI.Qty - CI.QtyAllocated - CI.QtyOnHold
@@ -607,6 +639,8 @@ BEGIN
             GOTO QUIT_SP
          END
       END 
+      
+      NEXT_TRFREC:
 
       FETCH NEXT FROM CUR_TRF INTO @c_ChannelTransferLineNumber
                                  , @c_FromStorerkey
