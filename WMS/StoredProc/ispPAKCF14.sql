@@ -18,7 +18,7 @@ GO
 /* Called By: PostPackConfirmSP                                            */  
 /*                                                                         */  
 /*                                                                         */  
-/* PVCS Version: 1.0                                                       */  
+/* PVCS Version: 1.1                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                                */  
 /* Date        Author   Ver   Purposes                                     */ 
 /* 2020-11-12  Wan      1.0   Creation                                     */ 
+/* 2021-08-17  WLChooi  1.1   WMS-17206 - Trigger Interface (WL01)         */ 
 /***************************************************************************/    
 CREATE PROC [dbo].[ispPAKCF14]    
 (     @c_PickSlipNo  NVARCHAR(10)     
@@ -48,6 +49,8 @@ BEGIN
    
    DECLARE @c_Orderkey        NVARCHAR(10) = ''
          , @c_Key2            NVARCHAR(11) = ''
+         , @c_OrderGroup      NVARCHAR(50) = ''   --WL01
+         , @n_MaxCarton       INT = 0   --WL01
               
    SET @b_Success= 1   
    SET @n_Err    = 0    
@@ -77,7 +80,36 @@ BEGIN
                         ': Insert into TRANSMITLOG2 Failed. (ispPAKCF14) ( SQLSvr MESSAGE = ' +     
                         ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '    
       GOTO QUIT_SP  
-   END     
+   END 
+   
+   --WL01 S
+   SELECT @c_OrderGroup = OH.OrderGroup
+   FROM PACKHEADER PH WITH (NOLOCK)
+   JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = PH.Orderkey
+   WHERE PH.PickSlipNo = @c_PickSlipNo
+
+   IF @c_OrderGroup = 'aCommerce' AND @c_Storerkey = 'ADIDAS'
+   BEGIN
+      SELECT @n_MaxCarton = MAX(CartonNo)
+      FROM PACKDETAIL WITH (NOLOCK)
+      WHERE Pickslipno = @c_PickSlipNo
+
+      EXEC ispGenTransmitLog2 'WSPACFMLOGAC', @c_PickSlipNo, 1, @c_StorerKey, ''    
+            , @b_success OUTPUT    
+            , @n_err OUTPUT    
+            , @c_errmsg OUTPUT    
+                            
+      IF @b_success <> 1    
+      BEGIN    
+         SET @n_continue = 3    
+         SET @n_err = 68015    
+         SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +     
+                           ': Insert into TRANSMITLOG2 Failed. (ispPAKCF14) ( SQLSvr MESSAGE = ' +     
+                           ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '    
+         GOTO QUIT_SP  
+      END 
+   END
+   --WL01 E    
                                                                                                                                 
    QUIT_SP:  
   
