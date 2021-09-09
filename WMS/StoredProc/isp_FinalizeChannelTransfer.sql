@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 23-JUL-2019  Wan01   1.1   ChannelInventoryMgmt use nspGetRight2     */
 /* 16-Aug-2021  NJOW01  1.2   WMS-17740 Allow finalize zero qty for itf */
+/* 19-May-2021  WLChooi 1.3   WMS-17048 Add Channel Transfer Extended   */
+/*                            Validation (WL01)                         */
 /************************************************************************/
 CREATE PROC dbo.isp_FinalizeChannelTransfer
       @c_ChannelTransferKey         NVARCHAR(10)
@@ -121,6 +123,65 @@ BEGIN
          , @c_ReasonCode     = ISNULL(RTRIM(ReasonCode),'')
    FROM CHANNELTRANSFER WITH (NOLOCK)
    WHERE ChannelTransferKey = @c_ChannelTransferKey
+
+   --WL01 S
+   IF @n_Continue = 1 OR @n_Continue = 2
+   BEGIN
+      DECLARE @c_ChannelTRFValidationRules  NVARCHAR(100)
+
+      SELECT @c_ChannelTRFValidationRules = SC.sValue
+      FROM STORERCONFIG SC (NOLOCK)
+      JOIN CODELKUP CL (NOLOCK) ON SC.sValue = CL.Listname
+      WHERE SC.StorerKey = @c_FromStorerkey
+      AND SC.Configkey = 'ChannelTRFExtendedValidation'
+
+      IF ISNULL(@c_ChannelTRFValidationRules,'') <> ''
+      BEGIN
+         EXEC isp_ChannelTRF_ExtendedValidation 
+               @c_ChannelTransferKey = @c_ChannelTransferKey,
+               @c_ChannelTRFValidationRules = @c_ChannelTRFValidationRules,
+               @b_Success  = @b_Success   OUTPUT, 
+               @c_ErrorMsg = @c_ErrMsg    OUTPUT,
+               @c_ChannelTransferLineNumber = @c_ChannelTransferLineNumber
+
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 62000
+            GOTO QUIT_SP
+         END
+      END
+      ELSE
+      BEGIN
+         SELECT @c_ChannelTRFValidationRules = SC.sValue
+         FROM STORERCONFIG SC (NOLOCK)
+         WHERE SC.StorerKey = @c_FromStorerkey
+         AND SC.Configkey = 'ChannelTRFExtendedValidation'
+
+         IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_ChannelTRFValidationRules) AND type = 'P')
+         BEGIN
+            SET @c_SQL = 'EXEC ' + @c_ChannelTRFValidationRules + ' @c_ChannelTransferKey, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
+                       + ',@c_ChannelTransferLineNumber'
+
+            EXEC sp_EXECUTEsql @c_SQL,
+                  N'@c_ChannelTransferKey NVARCHAR(10), @b_Success Int OUTPUT, @n_Err Int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT
+                   ,@c_ChannelTransferLineNumber NVARCHAR(5)' ,
+                  @c_ChannelTransferKey,
+                  @b_Success OUTPUT,
+                  @n_Err OUTPUT,
+                  @c_ErrMsg OUTPUT,
+                  @c_ChannelTransferLineNumber
+
+            IF @b_Success <> 1
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 62005
+               GOTO QUIT_SP
+            END
+         END
+      END
+   END
+   --WL01 E
 
    SET @c_ChannelFromInvMgmt = '0'
    SET @b_success = 0
