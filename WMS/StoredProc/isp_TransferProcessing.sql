@@ -29,6 +29,7 @@ GO
 /* 01-Jun-2016  NJOW01  1.0   Fix - double update tranfer.openqty       */
 /* 21-Aug-2017  Wan     1.1   WMS-HK CPI - Lululemon - Transfer Allocation*/
 /* 23-Apr-2018  NJOW02  1.2   WMS-9567 None conso allocation            */
+/* 08-Aug-2021  NJOW03  1.3   WMS-17314 add #ALLOCATE_CANDIDATES        */
 /************************************************************************/
 CREATE PROC  isp_TransferProcessing  
                @c_TransferKey   NVARCHAR(10)
@@ -117,6 +118,21 @@ BEGIN
          , @n_SplitQty INT
          , @n_AllocatedLineCnt INT
          , @n_OpenLineCnt INT
+
+   --NJOW03
+   IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #ALLOCATE_CANDIDATES;
+   END
+
+   CREATE TABLE #ALLOCATE_CANDIDATES
+   (  RowID          INT            NOT NULL IDENTITY(1,1) 
+   ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')
+   ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+   ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
+   )
 
    IF @n_err = 1
       SET @b_debug = 1
