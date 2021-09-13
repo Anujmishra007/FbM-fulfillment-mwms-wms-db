@@ -23,9 +23,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 16-AUG-2021  CSCHONG  1.1  WMS-17671 revised logic (CS01)            */
 /************************************************************************/
 
-CREATE PROC ispREC04   
+CREATE  PROC ispREC04   
    @c_Action        NVARCHAR(10),
    @c_Storerkey     NVARCHAR(15),  
    @b_Success       INT      OUTPUT,
@@ -88,6 +89,10 @@ BEGIN
          WHERE I.Storerkey = @c_Storerkey     
          AND I.ASNStatus = '9' 
          AND S.SUSR4 = 'SSCC'
+         --CS01 START
+         AND (S.LOTTABLE10LABEL = '' OR S.LOTTABLE10LABEL IS NULL)
+         AND CASE WHEN ISNUMERIC(s.busr7) = 1 THEN CAST(S.busr7 AS NUMERIC(10,2)) ELSE 0.00 END >= 0.7
+         --CS01 END 
          GROUP BY   I.Receiptkey, RD.SKU,RD.lottable02 
          ORDER BY I.Receiptkey, RD.SKU,RD.lottable02
 
