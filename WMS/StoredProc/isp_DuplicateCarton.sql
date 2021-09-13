@@ -27,6 +27,8 @@ GO
 /* Date        Author Ver.  Purposes                                    */
 /* 13-MAY-2016 Wan01  1.1   Specify SP parameters                       */  
 /* 11-MAR-2021 Wan02  1.2   WMS-16026 - PB-Standardize TrackingNo       */
+/* 19-Jul-2021 NJOW01 1.3   WMS-17491 copy lottablevalue column and     */
+/*                          validation                                  */
 /************************************************************************/
 
 CREATE PROC isp_DuplicateCarton
@@ -37,7 +39,7 @@ CREATE PROC isp_DuplicateCarton
          @n_NewCartonNoTo    INT OUTPUT,
          @b_Success          INT       OUTPUT,
          @n_err              INT       OUTPUT,
-         @c_errmsg           NVARCHAR(255) OUTPUT
+         @c_errmsg           NVARCHAR(2000) OUTPUT  --NJOW01
 AS
 BEGIN
    SET NOCOUNT ON   
@@ -49,15 +51,25 @@ BEGIN
            @n_continue INT,
            @n_cnt INT,
            @n_NewCartonNo INT,
-           @c_NewLabelNo NVARCHAR(20)
+           @c_NewLabelNo NVARCHAR(20),           
+           @c_isConsoPack NVARCHAR(5),
+           @c_PackByLottable NVARCHAR(30),
+           @c_SPCode NVARCHAR(30),
+           @c_Storerkey NVARCHAR(15),
+           @c_Sku NVARCHAR(20), 
+           @c_LottableValue NVARCHAR(60), 
+           @n_PackingQty INT,
+           @c_Facility NVARCHAR(5),
+           @c_SQL NVARCHAR(4000),
+           @c_ErrMsg2 NVARCHAR(250)  --NJOW01
    
-   SELECT @n_starttcnt=@@TRANCOUNT, @n_continue=1, @b_success=0, @n_err=0, @c_errmsg='', @n_cnt = 0, @n_NewCartonNo = 0
+   SELECT @n_starttcnt=@@TRANCOUNT, @n_continue=1, @b_success=0, @n_err=0, @c_errmsg='', @n_cnt = 0, @n_NewCartonNo = 0, @c_ErrMsg2 = '' 
    
    IF EXISTS (SELECT 1
               FROM PACKHEADER (NOLOCK)
               WHERE Pickslipno = @c_Pickslipno
               AND ISNULL(PACKHEADER.Orderkey,'') <> '')  
-   BEGIN
+   BEGIN   	 
         IF EXISTS ( SELECT 1 FROM
                       (SELECT PKD.Storerkey, PKD.Sku, SUM(PD.Qty) AS PickedQty,
                               ISNULL((SELECT SUM(PACKDETAIL.Qty)   
@@ -78,6 +90,7 @@ BEGIN
          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=61900   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Pack qty to duplicate exceeded pickded qty. (isp_DuplicateCarton)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(ISNULL(@c_errmsg,'')) + ' ) '
       END
+      SET @c_isConsoPack = 'N'
    END
    ELSE
    BEGIN
@@ -102,17 +115,94 @@ BEGIN
          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=61910   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Pack qty to duplicate exceeded pickded qty. (isp_DuplicateCarton)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(ISNULL(@c_errmsg,'')) + ' ) '
       END
+      SET @c_isConsoPack = 'Y'
    END
    
+   --NJOW01
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
+   	  IF @c_isConsoPack = 'N'
+   	  BEGIN
+         SELECT @c_Storerkey = O.Storerkey,
+                @c_Facility = O.Facility             
+         FROM PACKHEADER PH (NOLOCK)
+         JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+         WHERE PH.Pickslipno = @c_Pickslipno
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @c_Storerkey = O.Storerkey,
+                      @c_Facility = O.Facility             
+         FROM PACKHEADER PH (NOLOCK)
+         JOIN LOADPLANDETAIL LPD (NOLOCK) ON PH.LoadKey = LPD.LoadKey         
+         JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+         WHERE PH.Pickslipno = @c_Pickslipno
+      END            
+      
+      SELECT @c_PackByLottable = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PackByLottable') 
+      SELECT @c_SPCode = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PackByLottableValidate_SP') 
+         
+      IF @c_PackByLottable = '1' AND EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')
+      BEGIN      	
+         DECLARE CUR_CARTON CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT Sku, LottableValue, SUM(Qty) * @n_ToNumberOfCarton
+            FROM PACKDETAIL (NOLOCK)
+            WHERE Pickslipno = @c_Pickslipno
+            AND CartonNo = @n_FromCartonNo
+            AND LottableValue <> ''
+            AND LottableValue IS NOT NULL
+            GROUP BY Sku, LottableValue
+
+         OPEN CUR_CARTON
+         
+         FETCH NEXT FROM CUR_CARTON INTO @c_Sku, @c_LottableValue, @n_PackingQty
+         
+         WHILE @@FETCH_STATUS <> -1 --AND @n_continue IN(1,2)     
+         BEGIN         	  
+            SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Pickslipno=@c_Pickslipno, @c_Storerkey=@c_Storerkey, @c_Sku=@c_Sku, @c_LottableValue=@c_LottableValue, 
+                          @n_Cartonno=@n_Cartonno, @n_PackingQty=@n_PackingQty, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_ErrMsg=@c_ErrMsg OUTPUT '
+                          
+            SET @c_ErrMsg2 = ''            
+            SET @b_Success = 1  
+              
+            EXEC sp_executesql @c_SQL, 
+                 N'@c_Pickslipno NVARCHAR(10), @c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_LottableValue NVARCHAR(60), @n_CartonNo INT, @n_PackingQty INT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT', 
+                 @c_Pickslipno,
+                 @c_Storerkey,
+                 @c_Sku,
+                 @c_LottableValue, 
+                 0, --@n_Cartonno
+                 @n_PackingQty,
+                 @b_Success OUTPUT,                      
+                 @n_Err OUTPUT, 
+                 @c_ErrMsg2 OUTPUT
+                 
+            IF @b_Success <> 1            
+            BEGIN                         
+            	  IF RTRIM(ISNULL(@c_errmsg,'')) = ''            	     
+                	 SET @c_errmsg = RTRIM(ISNULL(@c_errmsg2,'')) 
+                ELSE	 
+            	     SET @c_errmsg = RTRIM(ISNULL(@c_errmsg,'')) + ' ' + CHAR(13) + RTRIM(ISNULL(@c_errmsg2,'')) 
+            	     
+                SELECT @n_continue = 3                    
+            END                           
+                          	  
+            FETCH NEXT FROM CUR_CARTON INTO @c_Sku, @c_LottableValue, @n_PackingQty
+         END
+         CLOSE CUR_CARTON
+         DEALLOCATE CUR_CARTON      	                          
+      END      
+   END
+      
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN   	
         SELECT @n_NewCartonNo = ISNULL(MAX(Cartonno),0) + 1
         FROM PACKDETAIL (NOLOCK)
         WHERE Pickslipno = @c_Pickslipno
         
         SELECT @n_NewCartonNoFrom = @n_NewCartonNo
         
-        SELECT Storerkey, LabelLine, Sku, Qty, Refno, RefNo2, DropID, UPC, ExpQty
+        SELECT Storerkey, LabelLine, Sku, Qty, Refno, RefNo2, DropID, UPC, ExpQty, LottableValue  
         INTO #TMP_PACKDETAIL
         FROM PACKDETAIL (NOLOCK)
         WHERE Pickslipno = @c_Pickslipno
@@ -134,7 +224,7 @@ BEGIN
             GOTO EXIT_SP 
            END        
          
-          INSERT INTO PACKDETAIL (Pickslipno, Cartonno, Labelno, LabelLine, Storerkey, Sku, Qty, Refno, RefNo2, DropID, UPC, ExpQty)
+          INSERT INTO PACKDETAIL (Pickslipno, Cartonno, Labelno, LabelLine, Storerkey, Sku, Qty, Refno, RefNo2, DropID, UPC, ExpQty, LottableValue)
           SELECT Pickslipno, 
                  @n_NewCartonNo, 
                  @c_NewLabelNo, 
@@ -146,7 +236,8 @@ BEGIN
                  RefNo2, 
                  DropID, 
                  UPC, 
-                 ExpQty
+                 ExpQty,
+                 LottableValue  --NJOW01
            FROM PACKDETAIL (NOLOCK)
            WHERE Pickslipno = @c_Pickslipno
            AND CartonNo = @n_FromCartonNo
