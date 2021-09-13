@@ -26,6 +26,7 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 01-Sep-2021  NJOWO2  1.1   WMS-17852 add shipperkey for filtering    */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPVH3B]        
    @c_DocumentNo NVARCHAR(10),  
@@ -73,15 +74,16 @@ BEGIN
            @n_StorerMinShelfLife INT,
            @n_LotQtyAvailable    INT,
            @c_Country            NVARCHAR(30),
-           @c_cond               NVARCHAR(250),
+           @c_cond               NVARCHAR(4000),
            @c_BillToKey          NVARCHAR(15),
            @c_SortBy             NVARCHAR(2000),
            @c_UDF02              NVARCHAR(30),
            @n_LocQtyAvailable    INT,  
            @n_OrderQty           INT,
            @n_TotalOrderQty      INT,
-           @c_cond2              NVARCHAR(250)
-
+           @c_cond2              NVARCHAR(4000),
+           @c_Shipperkey         NVARCHAR(15)  --NJOW02
+           
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
    SET @n_QtyToTake = 0
@@ -103,7 +105,8 @@ BEGIN
       
       IF ISNULL(@c_key2,'')<>''  --call by order
       BEGIN      	
-      	 SELECT @c_BillToKey = BillToKey      	        
+      	 SELECT @c_BillToKey = BillToKey,
+      	        @c_Shipperkey = Shipperkey  --NJOW02      	              	       	        
       	 FROM ORDERS(NOLOCK)
       	 WHERE Orderkey = @c_Orderkey      	
       END
@@ -223,8 +226,10 @@ BEGIN
       SET @c_UDF02 = ''   
       SET @c_BillTokey = ''
       SET @c_Country = ''
+      SET @c_Shipperkey = '' --NJOW02
 
-    	SELECT @c_BillToKey = BillToKey      	        
+    	SELECT @c_BillToKey = BillToKey,
+    	       @c_Shipperkey = Shipperkey  --NJOW02      	            	      	        
       FROM ORDERS(NOLOCK)
       WHERE Orderkey = @c_Orderkey      	
 
@@ -320,11 +325,11 @@ BEGIN
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
                       '@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), ' +
-                      '@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME ' 
+                      '@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME, @c_Shipperkey NVARCHAR(15) ' 
 
    EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @n_QtyLeftToFulfill, @n_UOMBase, @c_Lottable01, @c_Lottable02, @c_Lottable03,
                       @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12,
-                      @d_Lottable13, @d_Lottable14, @d_Lottable15
+                      @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_Shipperkey --NJOW02
                       
    WHILE @n_QtyLeftToFulfill > 0
    BEGIN
