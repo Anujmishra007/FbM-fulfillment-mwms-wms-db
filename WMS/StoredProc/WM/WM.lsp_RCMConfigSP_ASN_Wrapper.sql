@@ -23,9 +23,11 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */  
-/* 2021-02-09   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/* Date        Author  Ver    Purposes                                   */  
+/* 2021-02-09  Mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/  
+/* 2021-07-05  Wan01    1.2   LFWM-2875 - UAT RG-Create RCM allocation   */
+/*                            feature in Adjustment Screen- SCE          */
 /*************************************************************************/ 
 CREATE PROCEDURE [WM].[lsp_RCMConfigSP_ASN_Wrapper]  
    @c_Storerkey      NVARCHAR(15)
@@ -34,7 +36,7 @@ CREATE PROCEDURE [WM].[lsp_RCMConfigSP_ASN_Wrapper]
 ,  @n_Err            INT          = 0   OUTPUT
 ,  @c_Errmsg         NVARCHAR(255)= ''  OUTPUT
 ,  @c_UserName       NVARCHAR(128)= ''
-,  @c_Code           NVARCHAR(10) = ''
+,  @c_Code           NVARCHAR(30) = ''          --(Wan01) Extended to 30
 AS  
 BEGIN  
    SET NOCOUNT ON
