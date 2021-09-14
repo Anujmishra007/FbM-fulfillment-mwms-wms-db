@@ -33,6 +33,8 @@ GO
 /*                                Order Screen (WL02)                      */
 /* 10-06-2021     1.3    WLChooi  WMS-17206 - Indicate Auto Print from     */
 /*                                Packing Module (Normal & ECOM) (WL03)    */
+/* 09-09-2021     1.4    WLChooi  WMS-17943 - Allow continue other printing*/
+/*                                method if print PDF failed (WL04)        */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_GetPrint2PDFConfig]    
 (     
@@ -163,6 +165,8 @@ BEGIN
            
    --WL01 E
 
+   DECLARE @c_ContinuePrintIfFail NVARCHAR(10) = 'N'   --WL04
+
    --WL03 S
    IF @n_Err = 1
    BEGIN
@@ -227,9 +231,14 @@ BEGIN
    SELECT @c_GetPrintAction = dbo.fnc_GetParamValueFromString('@c_GetPrintAction'  , @c_Option5, @c_GetPrintAction)  
    SELECT @c_PrinterType    = dbo.fnc_GetParamValueFromString('@c_PrinterType'     , @c_Option5, @c_PrinterType)  
    SELECT @c_SearchMethod   = dbo.fnc_GetParamValueFromString('@c_SearchMethod'    , @c_Option5, @c_SearchMethod)  
-   
+
    IF ISNULL(@c_SearchMethod,'') = ''
       SET @c_SearchMethod = '1'
+
+   --WL04
+   SELECT @c_ContinuePrintIfFail = dbo.fnc_GetParamValueFromString('@c_ContinuePrintIfFail'
+                                                                  , @c_Option5
+                                                                  , @c_ContinuePrintIfFail)
       
    IF @c_FromModule IN ('PACKING', 'PACKING_AUTO')   --WL03
    BEGIN
@@ -920,9 +929,21 @@ QUIT_SP:
          , @n_Err       = @n_Err    
          , @c_ErrMsg    = @c_ErrMsg 
 
+
    IF @n_continue = 3  -- Error Occured - Process And Return  
    BEGIN  
       SET @b_success = 0  
+
+      --WL04 S
+      IF @n_PrintAction = 0 AND @c_ContinuePrintIfFail = 'Y'
+      BEGIN
+         SET @n_PrintAction = 2
+      END
+      ELSE
+      BEGIN
+         SET @n_PrintAction = 0
+      END
+      --WL04 E
   
       IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCount  
       BEGIN  
