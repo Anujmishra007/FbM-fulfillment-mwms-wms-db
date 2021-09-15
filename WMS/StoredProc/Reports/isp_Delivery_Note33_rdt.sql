@@ -1,7 +1,6 @@
-﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Delivery_Note33_rdt]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_Delivery_Note33_rdt]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Delivery_Note33_rdt]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_Delivery_Note33_rdt]
 GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -28,6 +27,7 @@ GO
 /*10/05/2019    WLCHOOI 1.0   WMS-9035 - Add ExternOrderkey and change   */
 /*                                       mapping (WL01)                  */
 /* 03/02/2021   CSCHONG 1.1  WMS-16223 revised field logic (CS01)        */
+/* 05/08/2021   Mingle  1.2   WMS-17593 - Add new mappings(ML01)         */
 /*************************************************************************/
 
 CREATE PROC isp_Delivery_Note33_rdt 
@@ -98,6 +98,9 @@ BEGIN
             ,  CNotes          NVARCHAR(120) NULL
             ,  BuyerPO         NVARCHAR(20) NULL
             ,  ExternOrderKey  NVARCHAR(50) NULL   --WL01
+            ,  CNotes2         NVARCHAR(120) NULL  --ML01
+            ,  CNotes3         NVARCHAR(120) NULL  --ML01
+            ,  showfield       NVARCHAR(10) NULL   --ML01
          )
 
       IF ISNULL(RTRIM(@c_Orderkey),'') = ''
@@ -164,6 +167,9 @@ BEGIN
             ,  CNotes   
             ,  BuyerPO  
             ,  ExternOrderKey    --WL01
+            ,  CNotes2           --ML01
+            ,  CNotes3           --ML01
+            ,  showfield         --ML01
          )
       SELECT DISTINCT 
              TMP.SeqNo
@@ -190,6 +196,9 @@ BEGIN
          -- ,ExternOrderKey = ISNULL(OH.ExternOrderKey,'')     --WL01   --CS01
             ,ExternOrderkey = Case when ISNULL(OH.Userdefine02,'') = '' THEN ISNULL(OH.ExternOrderKey,'')     --CS01
                                Else  ISNULL(OH.Userdefine02,'') END
+            ,CNotes2         = ISNULL(MAX(CASE WHEN CL2.Code ='2' THEN RTRIM(CL2.notes) ELSE '' END),'')      --ML01
+            ,CNotes3         = ISNULL(MAX(CASE WHEN CL3.Code ='3' THEN RTRIM(CL3.notes) ELSE '' END),'')      --ML01
+            ,showfield       = ISNULL(CL4.SHORT,'')
       FROM #TMP_ORD33 TMP
       JOIN ORDERS      OH WITH (NOLOCK) ON (TMP.Orderkey = OH.Orderkey)
       JOIN STORER      ST WITH (NOLOCK) ON (OH.Storerkey = ST.Storerkey)
@@ -197,6 +206,9 @@ BEGIN
                                         and OD.sku = TMP.sku
       JOIN SKU S WITH (NOLOCK) ON OD.storerkey = S.storerkey AND OD.sku = S.sku
       LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.listname = 'ssinv' And CL.storerkey = OH.Storerkey and CL.code='1'
+      LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON CL2.listname = 'ssinv' And CL2.storerkey = OH.Storerkey and CL2.code='2' --ML01
+      LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON CL3.listname = 'ssinv' And CL3.storerkey = OH.Storerkey and CL3.code='3' --ML01
+      LEFT JOIN CODELKUP CL4 WITH (NOLOCK) ON CL4.listname = 'reportcfg' And CL4.storerkey = OH.Storerkey and CL4.long='r_dw_delivery_note33_rdt' --ML01
       GROUP BY   TMP.SeqNo
                  ,OH.orderkey
                  ,OH.Storerkey
@@ -221,6 +233,7 @@ BEGIN
                  --,ISNULL(OH.ExternOrderKey,'')   --WL01    --CS01
                    ,Case when ISNULL(OH.Userdefine02,'') = '' THEN ISNULL(OH.ExternOrderKey,'') 
                                Else  ISNULL(OH.Userdefine02,'') END              --CS01
+                   ,ISNULL(CL4.SHORT,'') --ML01
       ORDER BY TMP.SeqNo
 
       
@@ -247,6 +260,9 @@ BEGIN
             ,  CNotes     
             ,  BuyerPO
             ,  ExternOrderKey   --WL01
+            ,  CNotes2          --ML01
+            ,  CNotes3          --ML01
+            ,  showfield        --ML01
       FROM #TMP_HDR33
       ORDER BY SeqNo                    
 
@@ -256,8 +272,8 @@ BEGIN
 
 
 QUIT_SP:  
-END       
+END 
 
-       
+GO   
 GRANT EXECUTE ON isp_Delivery_Note33_rdt TO NSQL
-GO     
+GO   
