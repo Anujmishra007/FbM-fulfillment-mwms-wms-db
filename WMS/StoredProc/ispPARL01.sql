@@ -2,19 +2,19 @@ if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispPARL01]
 drop procedure [dbo].[ispPARL01]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/  
-/* Stored Procedure: ispPARL01                                          */  
-/* Creation Date: 18-Sep-2011                                           */  
-/* Copyright: IDS                                                       */  
-/* Written by: YTWan                                                    */  
-/*                                                                      */  
-/* Purpose: SOS#255755 - Release PA Tasks                               */  
-/*                                                                      */ 
+/************************************************************************/
+/* Stored Procedure: ispPARL01                                          */
+/* Creation Date: 18-Sep-2011                                           */
+/* Copyright: IDS                                                       */
+/* Written by: YTWan                                                    */
+/*                                                                      */
+/* Purpose: SOS#255755 - Release PA Tasks                               */
+/*                                                                      */
 /* Input Parameters:  @c_ReceiptKey                                     */
 /*                                                                      */
 /* Output Parameters:  @b_Success                                       */
@@ -25,31 +25,32 @@ GO
 /* Usage:                                                               */
 /*                                                                      */
 /* Local Variables:                                                     */
-/*                                                                      */ 
-/* Called By: isp_ASNReleasePATask_Wrapper                              */  
-/*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/*                                                                      */
+/* Called By: isp_ASNReleasePATask_Wrapper                              */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author   Ver  Purposes                                  */
 /* 30-Aug-2013  Shong    1.1  Default Priority to 5 instead of 9        */
-/************************************************************************/  
+/* 14-Sep-2021  SYChua   1.2  JSM-20558: Fix Performance issue (SY01)   */
+/************************************************************************/
 
-CREATE PROC ispPARL01 
+CREATE PROC ispPARL01
    @c_ReceiptKey  NVARCHAR(10),
-   @b_Success     INT OUTPUT, 
-   @n_err         INT OUTPUT, 
-   @c_errmsg      NVARCHAR(250) OUTPUT 
+   @b_Success     INT OUTPUT,
+   @n_err         INT OUTPUT,
+   @c_errmsg      NVARCHAR(250) OUTPUT
 AS
 BEGIN
    SET NOCOUNT ON       -- SQL 2005 Standard
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF   
-   SET CONCAT_NULL_YIELDS_NULL OFF    
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_continue        INT
          , @n_StartTCnt       INT
@@ -61,7 +62,7 @@ BEGIN
          , @c_ToID            NVARCHAR(18)
          , @c_ToLoc           NVARCHAR(10)
          , @c_ToLogicalLoc    NVARCHAR(18)
-   
+
    SET @n_StartTCnt     =  @@TRANCOUNT
    SET @n_continue      = 1
    SET @n_NoOfTasks     = 0
@@ -74,14 +75,14 @@ BEGIN
    SET @c_ToLogicalLoc  = ''
 
    WHILE @@TRANCOUNT > 0
-   BEGIN 
+   BEGIN
       COMMIT TRAN
    END
 
-   DECLARE CursorASNDetail CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+   DECLARE CursorASNDetail CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT RTRIM(RD.Storerkey)
          ,MIN(RTRIM(RD.ReceiptKey) + RTRIM(RD.ReceiptLineNumber))
-         ,CASE WHEN COUNT(DISTINCT CASE WHEN UCC.UCCNo IS NULL THEN RD.SKU ELSE UCC.SKU END) <= 1 AND 
+         ,CASE WHEN COUNT(DISTINCT CASE WHEN UCC.UCCNo IS NULL THEN RD.SKU ELSE UCC.SKU END) <= 1 AND
                     COUNT(DISTINCT CASE WHEN UCC.UCCNo IS NULL THEN 0 ELSE UCC.QTY END)  <= 1 THEN 'FP' ELSE 'PP' END
          ,CASE WHEN UCC.UCCNo IS NULL THEN RTRIM(RD.ToID) ELSE RTRIM(UCC.ID) END
          ,CASE WHEN UCC.UCCNo IS NULL THEN RTRIM(RD.ToLoc) ELSE RTRIM(UCC.Loc) END
@@ -102,7 +103,8 @@ BEGIN
    AND   RD.QtyReceived > 0
    AND   ((UCC.UCCNo IS NOT NULL AND RTRIM(UCC.ID) <> '' AND UCC.ID IS NOT NULL) OR
           (UCC.UCCNo IS NULL AND RTRIM(RD.ToID) <> '' AND RD.ToID IS NOT NULL))
-   AND   NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH (NOLOCK) WHERE SourceKey like RTRIM(RD.ReceiptKey) + '%'
+   AND   NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH (NOLOCK) WHERE --SourceKey like RTRIM(RD.ReceiptKey) + '%'  --(SY01)
+                     LEFT(RTRIM(SourceKey), 10) = RTRIM(RD.ReceiptKey)   --(SY01)
                      AND FromID = CASE WHEN UCC.UCCNo IS NULL THEN RTRIM(RD.ToID) ELSE RTRIM(UCC.ID) END
                      AND TaskType = 'PAF')
    GROUP BY RTRIM(RD.Storerkey)
@@ -110,34 +112,34 @@ BEGIN
          ,  CASE WHEN UCC.UCCNo IS NULL THEN RTRIM(RD.ToLoc) ELSE RTRIM(UCC.Loc) END
          ,  ISNULL(RTRIM(LOC.LogicalLocation),'')
 
-   OPEN CursorASNDetail   
+   OPEN CursorASNDetail
 
    FETCH NEXT FROM CursorASNDetail INTO @c_Storerkey, @c_SourceKey, @c_PickMethod, @c_ToID, @c_ToLoc, @c_ToLogicalLoc
 
-   WHILE @@FETCH_STATUS <> -1               
+   WHILE @@FETCH_STATUS <> -1
    BEGIN
       EXECUTE nspg_GetKey
              'TaskDetailKey'
-            ,10 
-            ,@c_TaskDetailKey OUTPUT 
-            ,@b_success       OUTPUT 
-            ,@n_err           OUTPUT 
+            ,10
+            ,@c_TaskDetailKey OUTPUT
+            ,@b_success       OUTPUT
+            ,@n_err           OUTPUT
             ,@c_errmsg        OUTPUT
 
       IF NOT @b_success = 1
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 30101
-         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Error Getting New TaskDetailKey. (ispPARL01)' 
+         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Error Getting New TaskDetailKey. (ispPARL01)'
          GOTO QUIT_SP
-      END   
+      END
 
-      INSERT INTO TASKDETAIL 
+      INSERT INTO TASKDETAIL
              (    TaskDetailKey
                ,  Storerkey
                ,  TaskType
                ,  Fromloc
-               ,  LogicalFromLoc 
+               ,  LogicalFromLoc
                ,  FromID
                ,  PickMethod
                ,  Status
@@ -145,7 +147,7 @@ BEGIN
                ,  SourcePriority
                ,  SourceType
                ,  SourceKey
-             )  
+             )
       VALUES (    @c_TaskdetailKey
                ,  @c_Storerkey
                ,  'PAF'
@@ -164,8 +166,8 @@ BEGIN
       FETCH NEXT FROM CursorASNDetail INTO @c_Storerkey, @c_SourceKey, @c_PickMethod, @c_ToID, @c_ToLoc, @c_ToLogicalLoc
    END
    QUIT_SP:
-   CLOSE CursorASNDetail            
-   DEALLOCATE CursorASNDetail  
+   CLOSE CursorASNDetail
+   DEALLOCATE CursorASNDetail
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
@@ -192,7 +194,7 @@ BEGIN
    END
    ELSE
    BEGIN
-      IF @n_NoOfTasks > 0 
+      IF @n_NoOfTasks > 0
       BEGIN
          SET @c_errmsg = 'Total ' +CONVERT(NVARCHAR(5), @n_NoOfTasks)+ ' Putaway From tasks released sucessfully.'
       END
@@ -209,7 +211,3 @@ BEGIN
       RETURN
    END
 END
-GO
-
-GRANT EXECUTE ON ispPARL01 TO NSQL
-GO

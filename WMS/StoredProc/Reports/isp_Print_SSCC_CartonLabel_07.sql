@@ -29,6 +29,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 19-May-2016  CSCHONG   1.0   Change mapping (CS01)                   */
 /* 02-Aug-2016  CSCHONG   1.1   total Cnt by palletid (CS02)            */
+/* 06-Aug-2021  MINGLE    1.2   WMS-17603 enlarge c_company length and  */
+/*                              change no of line = 5(ML01)             */
 /************************************************************************/
 
 CREATE PROC isp_Print_SSCC_CartonLabel_07 ( 
@@ -72,7 +74,8 @@ BEGIN
       @n_MaxGrp                  INT
       
       
-      SET @n_NoOfLine = 6               --CS01
+      --SET @n_NoOfLine = 5               --CS01
+      SET @n_NoOfLine = 5               --ML01
       SET @n_TTLCnt = 0
       SET @n_MaxGrp = 1
 
@@ -95,7 +98,7 @@ BEGIN
    
    DECLARE @Temp_SSCCTBLH TABLE (
          ShipTo_StorerKey        NVARCHAR( 15) NULL,
-         ShipTo_Company          NVARCHAR( 45) NULL,
+         ShipTo_Company          NVARCHAR( 100) NULL, --ML01
          ShipTo_Addr1            NVARCHAR( 45) NULL,
          ShipTo_Addr2            NVARCHAR( 45) NULL,
          ShipTo_Addr3            NVARCHAR( 45) NULL,
