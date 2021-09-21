@@ -50,6 +50,7 @@ GO
 /*                            Archive Pick script                       */ 
 /* 22-Jul-2015  TLTING        Add table LoadPlanRetDetail               */
 /* 25-Oct-2016  JayLim   1.3  Add table LoadPlan_SUP_Detail             */
+/* 20-Sep-2021  TLTING   1.4  Perfromance tune - LoadPlan_SUP_Detail    */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_ArchiveLoad]
@@ -83,8 +84,8 @@ begin -- main
 		@c_temp            NVARCHAR(254), 
       @cLoadKey          NVARCHAR(10),
       @cLoadLine         NVARCHAR(5),
-      @c_SKU             NVARCHAR(20) --(Jay01)
-	
+      @c_SKU             NVARCHAR(20), --(Jay01)
+      @n_LP_SUP_RowRefNo INT	
 
 	select @n_starttcnt=@@trancount , @n_continue=1, @b_success=0,@n_err=0,@c_errmsg='',
 		@b_debug = 0, @local_n_err = 0, @local_c_errmsg = ' '
@@ -492,14 +493,13 @@ begin -- main
            if @n_continue = 1 or @n_continue = 2 --(Jay01)
             begin
                declare c_arc_LoadPlan_SUP_Detail cursor local fast_forward read_only for 
-                select SKU 
+                select RowRefNo 
                 from   LoadPlan_SUP_Detail (nolock)
-                where  LoadKey = @cLoadKey 
-                order by SKU
+                where  LoadKey = @cLoadKey  
                
                open c_arc_LoadPlan_SUP_Detail
       
-               FETCH NEXT FROM c_arc_LoadPlan_SUP_Detail into @c_SKU 
+               FETCH NEXT FROM c_arc_LoadPlan_SUP_Detail into @n_LP_SUP_RowRefNo 
          
                while @@fetch_status <> -1 and (@n_continue = 1 or @n_continue = 2)
                begin
@@ -507,7 +507,7 @@ begin -- main
    
                   update LoadPlan_SUP_Detail with (rowlock) 
                   set archivecop = '9'
-                  where loadkey = @cLoadKey and SKU= @c_SKU
+                  WHERE RowRefNo = @n_LP_SUP_RowRefNo
                   select @local_n_err = @@error, @n_cnt = @@rowcount
                   select @n_archive_loadplan_sup_detail_records = @n_archive_loadplan_sup_detail_records + 1
                   if @local_n_err <> 0
@@ -525,7 +525,7 @@ begin -- main
                      commit tran 
                   end  
       
-                  FETCH NEXT FROM c_arc_LoadPlan_SUP_Detail into @c_SKU 
+                  FETCH NEXT FROM c_arc_LoadPlan_SUP_Detail into @n_LP_SUP_RowRefNo 
                end
                close c_arc_LoadPlan_SUP_Detail 
                deallocate c_arc_LoadPlan_SUP_Detail
