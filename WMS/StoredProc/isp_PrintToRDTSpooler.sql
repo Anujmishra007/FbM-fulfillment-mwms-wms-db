@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Output Parameters:                                                   */
 /*                                                                      */
-/* PVCS Version: 1.9                                                    */
+/* PVCS Version: 2.0                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -42,46 +42,48 @@ GO
 /* 25-JUN-2020  Wan07   1.8  WMS-13491 - SG - PMI - Packing [CR]        */
 /* 03-SEP-2021  WLChooi 1.9  WMS-17890 - Allow configure to use LABEL or*/
 /*                           Paper Printer from Codelkup (WL01)         */ 
+/* 07-SEP-2021  Wan08   2.0  LFWM-2993 - UAT - PH  Job is not triggered */  
+/*                           although report is successfully printed    */  
 /************************************************************************/ 
 
-CREATE PROC [dbo].[isp_PrintToRDTSpooler] ( 
-   @c_ReportType     NVARCHAR(10), 
-   @c_Storerkey      NVARCHAR(15),
-   @b_success        INT OUTPUT,
-   @n_err            INT OUTPUT,
-   @c_errmsg         NVARCHAR(255) OUTPUT,
-   @n_Noofparam      INT = 0,
-   @c_Param01        NVARCHAR(20)='',
-   @c_Param02        NVARCHAR(20)='',
-   @c_Param03        NVARCHAR(20)='',
-   @c_Param04        NVARCHAR(20)='',
-   @c_Param05        NVARCHAR(20)='',
-   @c_Param06        NVARCHAR(20)='',
-   @c_Param07        NVARCHAR(20)='',
-   @c_Param08        NVARCHAR(20)='',
-   @c_Param09        NVARCHAR(20)='',
-   @c_Param10        NVARCHAR(20)='',
-   @n_Noofcopy       INT = 1, --optional
-   @c_UserName       NVARCHAR(128)='', --optional
-   @c_Facility       NVARCHAR(5)='',  --optional
-   @c_PrinterID      NVARCHAR(10)='', --optional
-   @c_Datawindow     NVARCHAR(40)='', --optional
-   @c_IsPaperPrinter NVARCHAR(5)='N', --optional
-   @c_JobType        NVARCHAR(10)='DATAWINDOW', --optional (DATAWINDOW / COMMAND / DIRECTPRN / QCOMMANDER / BARTENDER / TCPSPOOLER)
-   @c_PrintData      NVARCHAR(MAX)='' --optional apply for DIRECTPRN -- up to 8000
-  ,@n_Function_ID    INT      = 0      --Optional
-  ,@b_PrintFromWM    BIT      = 0      --(Wan06)
-  ,@c_Param11        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param12        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param13        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param14        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param15        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param16        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param17        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param18        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param19        NVARCHAR(20)=''   --(Wan06)
-  ,@c_Param20        NVARCHAR(20)=''   --(Wan06)
-  ,@c_ReportLineNo   NVARCHAR(5)=''    --(Wan06)
+CREATE PROC [dbo].[isp_PrintToRDTSpooler] (   
+   @c_ReportType     NVARCHAR(10),   
+   @c_Storerkey      NVARCHAR(15),  
+   @b_success        INT OUTPUT,  
+   @n_err            INT OUTPUT,  
+   @c_errmsg         NVARCHAR(255) OUTPUT,  
+   @n_Noofparam      INT = 0,  
+   @c_Param01        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param02        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param03        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param04        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param05        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param06        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param07        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param08        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param09        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @c_Param10        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
+   @n_Noofcopy       INT = 1, --optional  
+   @c_UserName       NVARCHAR(128)='', --optional  
+   @c_Facility       NVARCHAR(5)='',  --optional  
+   @c_PrinterID      NVARCHAR(10)='', --optional  
+   @c_Datawindow     NVARCHAR(40)='', --optional  
+   @c_IsPaperPrinter NVARCHAR(5)='N', --optional  
+   @c_JobType        NVARCHAR(10)='DATAWINDOW', --optional (DATAWINDOW / COMMAND / DIRECTPRN / QCOMMANDER / BARTENDER / TCPSPOOLER)  
+   @c_PrintData      NVARCHAR(MAX)='' --optional apply for DIRECTPRN -- up to 8000  
+  ,@n_Function_ID    INT      = 0      --Optional  
+  ,@b_PrintFromWM    BIT      = 0      --(Wan06)  
+  ,@c_Param11        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param12        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param13        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param14        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param15        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param16        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param17        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param18        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param19        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_Param20        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
+  ,@c_ReportLineNo   NVARCHAR(5)=''    --(Wan06)  
    )   
 AS
 BEGIN

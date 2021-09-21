@@ -30,6 +30,8 @@ GO
 /* 10-Aug-2017  Shong   1.1   Remove HardCode IP and Port               */ 
 /* 06-Sep-2017  TLTING  1.2   Performance tune                          */ 
 /* 06-May-2020  Shong   1.4   Addding Priority to Q-Cmd Task (SWT01)    */
+/* 18-Aug-2021  NJOW01  1.5   WMS-14231 add config to change carrier    */
+/*                            field mapping                             */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_QCmd_SubmitAssignTrackingNo] (
    @d_StartDate  DATETIME,  
@@ -81,8 +83,6 @@ BEGIN
    
    IF @c_IP = ''
       RETURN               
-
-
                  
    DECLARE C_Shipper CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT distinct  clk.Short
@@ -95,15 +95,14 @@ BEGIN
    FETCH FROM C_Shipper INTO @cCarrierName 
    
    WHILE @@FETCH_STATUS = 0
-   BEGIN
-   
-                           
+   BEGIN                           
          DECLARE C_Carrier CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT MAX(O.StorerKey), clk.Long 
-         FROM  CODELKUP   clk WITH (NOLOCK)  
+         FROM  CODELKUP   clk WITH (NOLOCK)           
+         OUTER APPLY(SELECT Authority, Option1 from dbo.fnc_getright2(clk.notes, clk.storerkey,'','AsgnTnoGetCarrierFrom')) CFG  --NJOW01
                 JOIN  ORDERS O WITH (NOLOCK)
                      ON  clk.Storerkey = O.StorerKey
-                     AND clk.Short = O.Shipperkey
+                     AND clk.Short = CASE WHEN CFG.Authority=  '1' AND CFG.Option1 = 'M_FAX2' THEN O.M_Fax2 ELSE O.Shipperkey END  --NJOW01
                      AND clk.Notes = O.Facility
                      AND clk.UDF01 = CASE 
                                           WHEN ISNULL(clk.UDF01, '') <> '' THEN ISNULL(O.UserDefine02, '')

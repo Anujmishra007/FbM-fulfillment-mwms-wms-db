@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2021-02-15  mingle01 1.1   Add Big Outer Begin try/Catch             */ 
+/* 2021-09-02  Wan01    1.2   LFWM-3014 - UAT CN Wave Control  Wave     */
+/*                            Generate Task                             */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveAnalysis]                                                                                                                     
       @c_Wavekey        NVARCHAR(10)                                                                                                                     
@@ -75,13 +77,14 @@ BEGIN
       WHERE WH.Wavekey = @c_Wavekey
 
       SELECT @n_NoOfTasks         = COUNT(1)
-            ,@n_NoOfTaskInProg    = SUM(DISTINCT CASE WHEN TD.Status < '9' THEN 1 ELSE NULL END)
-            ,@n_NoOfTaskCompleted = SUM(DISTINCT CASE WHEN TD.Status = '9' THEN 1 ELSE NULL END)
-      FROM WAVE WH WITH (NOLOCK)
-      JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)
-      JOIN PICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey= PD.Orderkey)
-      JOIN TASKDETAIL TD WITH (NOLOCK) ON (PD.TaskDetailKey = TD.TaskDetailKey)
-      WHERE WH.Wavekey = @c_Wavekey
+            ,@n_NoOfTaskInProg    = SUM(CASE WHEN TD.Status BETWEEN '1' AND '8' THEN 1 ELSE 0 END)       --(Wan01)
+            ,@n_NoOfTaskCompleted = SUM(CASE WHEN TD.Status = '9' THEN 1 ELSE 0 END)                     --(Wan01)
+      --FROM WAVE WH WITH (NOLOCK)                                               --(Wan01)
+      --JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)            --(Wan01)
+      --JOIN PICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey= PD.Orderkey)           --(Wan01)
+      --JOIN TASKDETAIL TD WITH (NOLOCK) ON (PD.TaskdeailKey = TD.TaskdeailKey)  --(Wan01)
+      FROM TASKDETAIL TD WITH (NOLOCK)                                           --(Wan01)   
+      WHERE TD.Wavekey = @c_Wavekey                                              --(Wan01)  
    END TRY
    
    BEGIN CATCH

@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.5                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -36,6 +36,8 @@ GO
 /*                            Refer to LFWM-2619 Shong comment          */
 /* 2021-08-03  Wan03    1.4   LFWM-2948 - UATJPWaveMissing Order Parm   */
 /*                            after setup the Group condition           */
+/* 2021-09-06  Wan04    1.5   LFWM-2953 - UAT - ID  Include missing     */
+/*                            'NOT LIKE' operator in Order Parameter    */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -650,7 +652,7 @@ AS
                      CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +                                                                        
                      RTRIM(LTRIM(@c_Value)) +                                                                                                                      
                      CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END    
-                  WHEN @c_Operator = 'LIKE' THEN    
+                  WHEN @c_Operator IN ( 'LIKE', 'NOT LIKE' ) THEN             --(Wan04) 
                      ' N' +                                                                                                                                     
                      CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN '''' ELSE '' END +                                                                      
                      RTRIM(LTRIM(@c_Value)) +                                        

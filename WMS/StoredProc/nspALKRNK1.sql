@@ -30,6 +30,7 @@ GO
 /* 01-Mar-2019  NJOW01  1.0   WMS-8091 allow configure codelkup to skip */
 /*                            filtering for lottable                    */
 /* 11-Sep-2019  CSCHONG 1.1   WMS-10442 add new sorting rule (CS01)     */
+/* 23-Jul-2021	NJOW02  1.2   WMS-17558 filter Lottable by order type   */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALKRNK1]        
    @c_Orderey    NVARCHAR(10),  
@@ -79,12 +80,44 @@ BEGIN
            @n_PickAvailableQty INT,
            @C_ExclLottableChk  NVARCHAR(1000)
 
+   --NJOW02
+   DECLARE @c_key1             NVARCHAR(10),          
+           @c_key2             NVARCHAR(5),           
+           @c_key3             NCHAR(1),              
+           @c_Type             NVARCHAR(10),
+           @c_FilterLottable02 NVARCHAR(5) = 'N'   
+   
    SET @b_debug = 0
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
    SET @n_QtyToTake = 0
    SET @c_PutawayLoc = ''
    SET @n_PickAvailableQty = 0
+
+   --NJOW02
+   IF LEN(@c_OtherParms) > 0  
+   BEGIN   	    
+      SET @c_key1 = LEFT(@c_OtherParms, 10) --Orderkey, Loadkey(conso), Wavekey(conso)
+      SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber      	    
+      SET @c_key3 = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave     	   
+      
+      IF ISNULL(@c_key1,'')<>'' AND ISNULL(@c_key2,'')<>'' 
+      BEGIN
+      	SELECT @c_Type = Type
+      	FROM ORDERS (NOLOCK)
+      	WHERE Orderkey = @c_Key1
+      END
+      ELSE	
+         SET @c_Type = SUBSTRING(@c_OtherParms, 17, 10) --order type             	 
+      
+      IF EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) 
+                WHERE ListName = 'NKCNSOTYPE' 
+                AND Storerkey = @c_Storerkey
+                AND Code = @c_Type)
+      BEGIN
+         SET @c_FilterLottable02 = 'Y'
+      END            
+   END         
    
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
@@ -173,7 +206,8 @@ BEGIN
       AND LOC.Facility = @c_Facility
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) > 0
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
-      AND LOTxLOCxID.SKU = @c_SKU ' + 
+      AND LOTxLOCxID.SKU = @c_SKU ' +                 
+      CASE WHEN @c_FilterLottable02 = 'Y' THEN ' AND LA.Lottable02 NOT IN(''01000'',''02000'') ' ELSE ' ' END +  --NJOW02
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' OR CHARINDEX('01',@C_ExclLottableChk) > 0 THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' OR CHARINDEX('02',@C_ExclLottableChk) > 0 THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' OR CHARINDEX('03',@C_ExclLottableChk) > 0 THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
