@@ -2,7 +2,6 @@ IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspAL_SG
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
 DROP PROCEDURE [dbo].[nspAL_SG07]
 GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,7 +25,10 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */   
+/* Date         Author  Ver.  Purposes                                  */  
+/* 21-JUL-2021  FUN01   1.1   Align with nspOrderProcessing setting to  */  
+/* fix 'Could not complete cursor operation' error                      */ 
+/* 21-JUL-2021  CSCHONG 1.1   WMS-17436 revised logic (CS01)            */ 
 /************************************************************************/    
 CREATE  PROC [dbo].[nspAL_SG07]        
    @c_Orderkey    NVARCHAR(10),  
@@ -57,7 +59,8 @@ AS
 BEGIN    
    SET NOCOUNT ON 
    SET QUOTED_IDENTIFIER OFF 
-   SET ANSI_NULLS OFF    
+   SET ANSI_NULLS OFF  
+   SET CONCAT_NULL_YIELDS_NULL OFF   --FUN01  
 
    DECLARE @b_debug       INT,      
            @c_SQL         NVARCHAR(MAX),    
@@ -97,7 +100,7 @@ BEGIN
 
    IF LEFT(@c_Lottable07,4) = '2016' AND EXISTS(SELECT 1 FROM SKU(NOLOCK) WHERE Storerkey = @c_Storerkey AND Sku = @c_Sku AND ItemClass = '001')
    BEGIN    
-   	  IF @c_UOM = '1'  
+        IF @c_UOM = '1'  
          GOTO EXIT_SP
       ELSE
          SET @c_UOM2NOCONSCHK = 'Y'      
@@ -107,8 +110,8 @@ BEGIN
    BEGIN
       SET @c_OrderKey = LEFT(@c_OtherParms,10) 
       SET @c_key1 = LEFT(@c_OtherParms, 10) --Orderkey, Loadkey(conso), Wavekey(conso)
-      SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber      	    
-      SET @c_key3 = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave     	    
+      SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber             
+      SET @c_key3 = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave          
       
       IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='' 
       BEGIN
@@ -119,7 +122,7 @@ BEGIN
          WHERE O.Loadkey = @c_key1
          AND OD.Sku = @c_SKU
          ORDER BY O.Orderkey, OD.OrderLineNumber
-      END        	     
+      END              
          
       IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='W' 
       BEGIN
@@ -151,14 +154,14 @@ BEGIN
                         FROM ORDERS (NOLOCK)
                         WHERE Orderkey = @c_Orderkey
                         AND C_Company LIKE @c_UDF01)
-         BEGIN         	
+         BEGIN          
             GOTO EXIT_SP      
          END             
       END
       --ELSE
       --BEGIN
       --   GOTO EXIT_SP           
-      --END           	     
+      --END                  
    END   
 
    IF @c_UOM IN('1','6')
@@ -169,7 +172,7 @@ BEGIN
                         FROM ORDERS (NOLOCK)
                         WHERE Orderkey = @c_Orderkey
                         AND C_Company LIKE @c_UDF01)
-         BEGIN         	
+         BEGIN          
             GOTO EXIT_SP      
          END             
       END
@@ -186,12 +189,14 @@ BEGIN
    
    IF @c_SortByQty = 'SORTBYQTY'
    BEGIN
-      SET @c_SORTUOM1 = ' ORDER BY CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
+      --SET @c_SORTUOM1 = ' ORDER BY CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC ' --CS01
+      SET @c_SORTUOM1 = ' ORDER BY CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC  '
       SET @c_SORTNOTUOM1 = ' ORDER BY 4, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '
    END
    ELSE
    BEGIN 
-      SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
+      --SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lot, LOC.LogicalLocation, LOC.LOC '   --CS01
+      SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lot, LOC.LogicalLocation, LOC.LOC '          --CS01
       SET @c_SORTNOTUOM1 = ' ORDER BY LA.Lottable05, 4, LOC.LogicalLocation, LOC.LOC '
    END 
      
@@ -227,7 +232,7 @@ BEGIN
               AND SKU.OVAS = 'MHOSTATUS'
               )
    BEGIN
-   	  SET @c_Lottable03 = 'O'
+        SET @c_Lottable03 = 'O'
    END             
    
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
@@ -316,30 +321,30 @@ BEGIN
    BEGIN    
       IF @c_LOT <> @c_PrevLOT 
       BEGIN
-      	 SELECT @n_LotQtyAvailable = SUM(Qty - QtyAllocated - QtyPicked)
-      	        - (SELECT ISNULL(SUM(TD.FromQty),0) 
-      	           FROM TRANSFER T (NOLOCK)
-      	           JOIN TRANSFERDETAIL TD (NOLOCK) ON T.Transferkey = TD.Transferkey
-      	           AND TD.Status <> '9' 
-      	           AND TD.FromLot = LOT.Lot)      	         
-      	 FROM LOT (NOLOCK)
-      	 WHERE LOT = @c_LOT
-       	 GROUP BY Lot
+          SELECT @n_LotQtyAvailable = SUM(Qty - QtyAllocated - QtyPicked)
+                 - (SELECT ISNULL(SUM(TD.FromQty),0) 
+                    FROM TRANSFER T (NOLOCK)
+                    JOIN TRANSFERDETAIL TD (NOLOCK) ON T.Transferkey = TD.Transferkey
+                    AND TD.Status <> '9' 
+                    AND TD.FromLot = LOT.Lot)                  
+          FROM LOT (NOLOCK)
+          WHERE LOT = @c_LOT
+          GROUP BY Lot
       END
       
       IF @n_LotQtyAvailable < @n_QtyAvailable 
       BEGIN
-      	 IF @c_UOM = '1' 
-      	    SET @n_QtyAvailable = 0
-      	 ELSE
+          IF @c_UOM = '1' 
+             SET @n_QtyAvailable = 0
+          ELSE
             SET @n_QtyAvailable = @n_LotQtyAvailable
       END
-               	                  
+                                    
       IF @c_UOM = '1' --Pallet
       BEGIN
-     	   
-     	   SELECT @n_LocQty = 0, @n_NoOfLot = 0
-          	  
+         
+         SELECT @n_LocQty = 0, @n_NoOfLot = 0
+              
          SELECT @n_LocQty = SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen),
                 @n_NoOfLot = COUNT(DISTINCT LLI.Lot)
          FROM LOTXLOCXID LLI (NOLOCK)
@@ -348,38 +353,38 @@ BEGIN
          AND LLI.Storerkey = @c_Storerkey
          AND LLI.Sku = @c_Sku 
          AND LLI.Qty > 0  --NJOW07
-                	        	
+                           
          IF @n_QtyLeftToFulfill >= @n_QtyAvailable 
             AND @n_NoOfLot = 1 -- if multi lot per sku/loc/id then proceed to next strategy allocation by carton
-         BEGIN                	    
+         BEGIN                       
             SET @n_QtyToTake = @n_QtyAvailable  
          END
          ELSE
          BEGIN
-         	  SET @n_QtyToTake = 0
+              SET @n_QtyToTake = 0
             --GOTO EXIT_SP
          END
       END
 
       IF @c_UOM <> '1' --Case/Piece 
       BEGIN
-      	 IF @n_QtyLeftToFulfill >= @n_QtyAvailable
-      	 BEGIN
-      	 		 SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
-      	 END
-      	 ELSE
-      	 BEGIN
-      	 	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
-      	 END      	 
+          IF @n_QtyLeftToFulfill >= @n_QtyAvailable
+          BEGIN
+                SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
+          END
+          ELSE
+          BEGIN
+              SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
+          END         
       END
       
       IF @n_QtyToTake > 0
       BEGIN
-      	 IF @n_QtyToTake = @n_QtyAvailable AND @c_UOM = '1'
-          	 SET @c_OtherValue = 'FULLPALLET' 
+          IF @n_QtyToTake = @n_QtyAvailable AND @c_UOM = '1'
+             SET @c_OtherValue = 'FULLPALLET' 
          ELSE
-           	 SET @c_OtherValue = '1'       	 
-      	
+             SET @c_OtherValue = '1'          
+         
          IF ISNULL(@c_SQL,'') = ''
          BEGIN
             SET @c_SQL = N'   
