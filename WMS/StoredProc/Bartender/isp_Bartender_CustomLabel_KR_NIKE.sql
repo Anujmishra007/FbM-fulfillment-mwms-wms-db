@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2016-05-09 1.0  CSCHONG    Created (WMS-3450)                              */            
+/* 2016-05-09 1.0  CSCHONG    Created (WMS-3450)                              */    
+/* 2021-08-11 1.1  MINGLE     Add new columns(WMS-17578)                      */        
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CustomLabel_KR_NIKE]                      
@@ -59,7 +60,7 @@ BEGIN
            @c_mode             NVARCHAR(1),
            @c_sku              NVARCHAR(20), 
            @c_condition        NVARCHAR(150) ,
-           @c_GroupBy          NVARCHAR(150),
+           @c_GroupBy          NVARCHAR(200),
            @c_ExecStatements   NVARCHAR(4000),    
            @c_ExecArguments    NVARCHAR(4000) 
   
@@ -186,7 +187,8 @@ BEGIN
 			 SET @c_condition  = ' AND U.Uccno = @c_Sparm01  '
        END
       
- 		 	 SET @c_GroupBy = ' GROUP BY U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),C.UDF01,RECDET.SKU,S.Altsku,S.Descr,S.putawayzone'
+ 		 	 SET @c_GroupBy = ' GROUP BY U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),C.UDF01,RECDET.SKU,S.Altsku,S.Descr,S.putawayzone,U.editdate,'+ CHAR(13) 
+                          +' S.ReceiptInspectionLoc,S.ReceiptHoldCode' --ML01
  		 	 
    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT SKU   
@@ -202,7 +204,7 @@ BEGIN
     SET @c_SQLJOIN = +' SELECT DISTINCT U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),'+ CHAR(13)--SUM(RECDET.qtyreceived),RECDET.SKU,'+ CHAR(13)+ --5
              + ' SUM(U.qty),RECDET.SKU,'                      --5   
              + ' S.Altsku,S.Descr,C.UDF01,''0'','''', '      --10   
-             + ' s.putawayzone,'''','''','''','''','     --15       
+             + ' s.putawayzone,U.editdate,S.ReceiptInspectionLoc,S.ReceiptHoldCode,'''','     --15   --ML01    
              + CHAR(13) +      
              + ' '''','''','''','''','''','         --20      
               + ' '''','''','''','''','''','''','''','''','''','''','  --30  
@@ -261,7 +263,9 @@ BEGIN
      SELECT * FROM #Result (nolock)        
    END        
       
-   SELECT * FROM #Result (nolock)        
+   SELECT * FROM #Result (nolock) 
+   PRINT @c_SQLJoin
+   PRINT @c_GroupBy       
             
    EXIT_SP:    
   
@@ -295,8 +299,7 @@ BEGIN
 GO
 GRANT EXECUTE ON [dbo].[isp_Bartender_CustomLabel_KR_NIKE] TO nsql
 GO
+ 
 
-  
-   
-  
-  
+
+ 
