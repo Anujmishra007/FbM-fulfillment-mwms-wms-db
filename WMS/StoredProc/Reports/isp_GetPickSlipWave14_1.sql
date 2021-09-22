@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By: R_dw_print_wave_pickslip_14_1                             */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -33,17 +33,19 @@ GO
 /* 14-Jun-2018 CSCHONG  1.4   WMS-5247 - revise sorting (CS02)          */
 /* 21-Nov-2018 WLCHOOI  1.5   WMS-6779 - Add new fields (WL01)          */
 /* 21-Nov-2019 TTLTING01 1.5   WMS-6779 - Add new fields (WL01)         */      
-/* 03-Dec-2019 Wan03    1.5   Performance enhancement                   */      
+/* 03-Dec-2019 Wan03    1.5   Performance enhancement                   */  
+/* 15-06-2020  Wan04    1.6   Sync Exceed & SCE                         */ 
+/* 26-07-2021  CSCHONG  1.7   WMS-17182 revised field logic (CS03)      */   
 /************************************************************************/
-CREATE PROC isp_GetPickSlipWave14_1
+CREATE  PROC isp_GetPickSlipWave14_1
             @c_Wavekey        NVARCHAR(10)
          ,  @c_PickSlipNo     NVARCHAR(10)
          ,  @c_Zone           NVARCHAR(10)
          ,  @c_PrintedFlag    NCHAR(1)
          ,  @n_NoOfSku        INT
          ,  @n_NoOfPickLines  INT
-       ,  @c_ordselectkey NVARCHAR(20)
-       ,  @c_colorcode    NVARCHAR(20)
+         ,  @c_ordselectkey NVARCHAR(20)
+         ,  @c_colorcode    NVARCHAR(20)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -109,7 +111,8 @@ BEGIN
    JOIN WAVEDETAIL  WD WITH (NOLOCK) ON WD.WaveKey  = WH.WaveKey     
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON WD.Orderkey = OD.Orderkey    
    WHERE WH.AddDate BETWEEN @d_Adddate AND DATEADD(d, 1, @d_Adddate)      
-   AND WH.status='1'      
+   AND   WH.TMReleaseFlag = 'Y'  --Wan04
+   --AND WH.status='1'           --Wan04
    AND OD.Storerkey = @c_Storerkey    
    GROUP BY WH.Wavekey, WH.EditDate, OD.Orderkey    
    ORDER BY WH.Wavekey, OD.Orderkey    
@@ -209,23 +212,24 @@ BEGIN
          ,PD.Storerkey
          ,PD.Loc
          ,PD.ID
-         ,Style   = SUBSTRING(SKU.Sku,3,6) 
-         ,Color   = SUBSTRING(SKU.Sku,9,3)
-         ,Size    = LTRIM(SUBSTRING(SKU.Sku,12,5))
-         ,SkuDescr= ISNULL(MIN(SKU.Descr),0)
+         ,Style   = SUBSTRING(S1.Sku,3,6)                               --CS03
+         ,Color   = SUBSTRING(S1.Sku,9,3)                               --CS03
+         ,Size    = LTRIM(SUBSTRING(S1.Sku,12,5))                       --CS03
+         ,SkuDescr= ISNULL(MIN(S1.Descr),0)                             --CS03
          ,AltSku  = ISNULL(RTRIM(SKU.AltSku), '')
-         ,SKU.SkuGroup
+         ,S1.SkuGroup                                                   --CS03
          ,Qty    = ISNULL(SUM(PD.Qty),0)
          ,NoOfSku= @n_NoOfSku --COUNT(DISTINCT PD.Sku)
          ,NoOfPickLines= @n_NoOfPickLines --COUNT(DISTINCT PD.Loc + PD.ID)
          ,TTLSeq  = @n_TTLSeq                                          --(CS01)
-       ,logicalloc = loc.logicallocation                             --(CS02)
-       ,OrdSelectkey = @c_ordselectkey      --WL01
-       ,Colorcode = @c_colorcode         --WL01
+         ,logicalloc = loc.logicallocation                             --(CS02)
+         ,OrdSelectkey = @c_ordselectkey      --WL01
+         ,Colorcode = @c_colorcode         --WL01
    FROM PICKDETAIL PD   WITH (NOLOCK) 
    JOIN LOC        LOC  WITH (NOLOCK) ON (PD.Loc = LOC.Loc)    --(Wan01)
    JOIN SKU        SKU  WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
                                       AND(PD.Sku = SKU.Sku)
+   JOIN SKU S1 (NOLOCK) ON S1.ALTSKU=SKU.ALTSKU AND S1.StorerKey='NIKEKRB' AND SKU.StorerKey='NIKEKR'      --CS03
    JOIN REFKEYLOOKUP RL WITH (NOLOCK) ON (PD.PickDetailKey = RL.PickDetailkey)
    JOIN (SELECT OD.Orderkey, Openqty = SUM(OD.OpenQty) FROM ORDERS OH WITH (NOLOCK)
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey) 
@@ -241,11 +245,11 @@ BEGIN
          ,  PD.Storerkey
          ,  PD.Loc
          ,  PD.ID
-         ,  SUBSTRING(SKU.Sku,3,6)
-         ,  SUBSTRING(SKU.Sku,9,3)
-         ,  LTRIM(SUBSTRING(SKU.Sku,12,5))
+         ,  SUBSTRING(S1.Sku,3,6)                              --CS03 
+         ,  SUBSTRING(S1.Sku,9,3)                              --CS03
+         ,  LTRIM(SUBSTRING(S1.Sku,12,5))                      --CS03
          ,  ISNULL(RTRIM(SKU.AltSku), '')
-         ,  SKU.SkuGroup
+         ,  S1.SkuGroup                                        --CS03
          ,loc.logicallocation                                  --(CS02)
    ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), '') 
          ,  LOC.PutawayZone                                    --(Wan01)  
