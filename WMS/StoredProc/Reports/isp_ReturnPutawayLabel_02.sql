@@ -1,7 +1,6 @@
 IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_ReturnPutawayLabel_02' AND type = 'P')
    DROP PROC isp_ReturnPutawayLabel_02
 GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -19,7 +18,7 @@ GO
 /*                                                                      */
 /* Parameters:                                                          */
 /*                                                                      */
-/* PVCS Version: 1.0	                                                  */
+/* PVCS Version: 1.0                                                   */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -27,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 22-JUL-2021  CSCHONG   1.1   WMS-17183 revised sku field logic (CS01)*/
 /************************************************************************/
 
 CREATE  PROCEDURE isp_ReturnPutawayLabel_02
@@ -70,97 +70,99 @@ BEGIN
    
    IF @c_DocType <> 'R' OR @c_Status <> '9'
    BEGIN
-   	  SELECT @n_Continue = 4
+        SELECT @n_Continue = 4
       GOTO ENDPROC
    END
      
    BEGIN TRAN
-   	
+      
    --CREATE TABLE #TMP_PABOOKING (PABookingKey INT NULL)
  
    DECLARE cur_RECEIPT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT R.Receiptkey, RD.Storerkey, RD.Sku, RD.ReceiptLineNumber, SUM(RD.QtyReceived) AS QtyReceived, ITRN.Lot, RD.ToLoc, RD.ToID,
+      SELECT R.Receiptkey, RD.Storerkey, S1.sku,--RD.Sku,                                           --CS01
+             RD.ReceiptLineNumber, SUM(RD.QtyReceived) AS QtyReceived, ITRN.Lot, RD.ToLoc, RD.ToID,
              SKU.Putawayzone, SKU.Putawayloc
       FROM RECEIPT R (NOLOCK)
       JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey 
       JOIN ITRN (NOLOCK) ON ITRN.Storerkey = R.Storerkey AND ITRN.TranType = 'DP' AND ITRN.SourceType = 'ntrReceiptDetailUpdate'  
                          AND ITRN.Sourcekey = RD.Receiptkey + RD.ReceiptLineNumber
       JOIN SKU (NOLOCK) ON RD.Storerkey = SKU.Storerkey AND RD.Sku = SKU.Sku 
+      JOIN SKU S1 (NOLOCK) ON S1.ALTSKU=SKU.ALTSKU AND S1.StorerKey='NIKEKRB' AND SKU.StorerKey='NIKEKR'      --CS01
       WHERE R.Receiptkey BETWEEN @c_ReceiptkeyFrom AND @c_ReceiptkeyTo
       AND RD.Finalizeflag = 'Y'
       AND R.Doctype = 'R'
       --AND ISNULL(RD.PutawayLoc,'') = ''            
-      GROUP BY R.Receiptkey, RD.Storerkey, RD.Sku, RD.ReceiptLineNumber, ITRN.Lot, RD.ToLoc, RD.ToID, SKU.Putawayzone, SKU.Putawayloc
+      GROUP BY R.Receiptkey, RD.Storerkey, S1.Sku, RD.ReceiptLineNumber, ITRN.Lot, RD.ToLoc, RD.ToID, SKU.Putawayzone, SKU.Putawayloc  --CS01
       ORDER BY R.Receiptkey, RD.ReceiptLineNumber
             
    OPEN cur_RECEIPT  
    FETCH NEXT FROM cur_RECEIPT INTO @c_Receiptkey, @c_Storerkey, @c_Sku, @c_ReceiptLineNumber, @n_Qty, @c_Lot, @c_FromLoc, @c_FromID, @c_LocPutawayzone, @c_SkuPutawayloc
 
    WHILE @@FETCH_STATUS = 0  
-   BEGIN           	  
-   	  SET @c_PutawayLoc = ''
-   	     	  
-   	  SELECT TOP 1 @c_Putawayloc = L.Loc
-   	  FROM LOTXLOCXID LLI(NOLOCK)
-   	  JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
-   	  WHERE LLI.Storerkey = @c_Storerkey
-   	  AND LLI.Sku = @c_Sku
-   	  AND LLI.Qty > 0
-   	  AND L.Putawayzone = @c_LocPutawayZone
-   	  AND L.LocationFlag <> 'HOLD'
-   	  ORDER BY LLI.Qty DESC, LLI.Lot DESC, L.LogicalLocation, L.Loc   	  
-   	  
-   	  IF @c_LocPutawayZone = 'PAL01' 
-   	  BEGIN
-   	  	 IF ISNULL(@c_Putawayloc,'') = ''
-   	  	    SET @c_Putawayloc = @c_SkuPutawayloc 
-   	  END
-   	  ELSE IF LEFT(@c_LocPutawayZone,3) = 'MEZ' 
-   	  BEGIN
-   	  	 IF ISNULL(@c_Putawayloc,'') = ''
-   	  	 BEGIN
-   	        SELECT TOP 1 @c_Putawayloc = L.Loc
-   	        FROM LOTXLOCXID LLI(NOLOCK)
-   	        JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
-   	        WHERE LLI.Storerkey = @c_Storerkey
-   	        AND LLI.Sku = @c_Sku
-   	        AND LLI.Qty > 0
-   	        AND L.Putawayzone Like 'MEZ%'  
-   	        AND L.LocationFlag <> 'HOLD'
-   	        ORDER BY LLI.Lot DESC, L.LogicalLocation, L.Loc
-   	  	 END    	  	 
-   	  END
-   	  ELSE IF LEFT(@c_LocPutawayZone,3) = 'CAR'
-   	  BEGIN
-   	  	 IF ISNULL(@c_Putawayloc,'') = ''
-   	  	 BEGIN
-   	        SELECT TOP 1 @c_Putawayloc = L.Loc
-   	        FROM LOTXLOCXID LLI(NOLOCK)
-   	        JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
-   	        WHERE LLI.Storerkey = @c_Storerkey
-   	        AND LLI.Sku = @c_Sku
-   	        AND LLI.Qty > 0
-   	        AND L.Putawayzone Like 'CAR%' 
-   	        AND L.LocationFlag <> 'HOLD'
-   	        ORDER BY LLI.Lot DESC, L.LogicalLocation, L.Loc
-   	  	 END    	  	 
-   	  END
-   	  
-   	  /*
-   	  EXEC nspRDTPASTD @c_userid='', 
-   	                   @c_storerkey=@c_Storerkey, 
-   	                   @c_lot=@c_Lot ,
-   	                   @c_sku=@c_Sku ,
-   	                   @c_id=@c_FromID, 
-   	                   @c_fromloc=@c_FromLoc , 
-   	                   @n_qty=@n_Qty, 
-   	                   @n_PutawayCapacity = 0,   	  
-   	                   @c_final_toloc = @c_PutawayLoc OUTPUT
-   	 */                  
-   	 
-   	 /*                     	  
-   	  IF ISNULL(@c_PutawayLoc,'') <> ''
-   	  BEGIN
+   BEGIN               
+        SET @c_PutawayLoc = ''
+              
+        SELECT TOP 1 @c_Putawayloc = L.Loc
+        FROM LOTXLOCXID LLI(NOLOCK)
+        JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
+        WHERE LLI.Storerkey = @c_Storerkey
+        AND LLI.Sku = @c_Sku
+        AND LLI.Qty > 0
+        AND L.Putawayzone = @c_LocPutawayZone
+        AND L.LocationFlag <> 'HOLD'
+        ORDER BY LLI.Qty DESC, LLI.Lot DESC, L.LogicalLocation, L.Loc        
+        
+        IF @c_LocPutawayZone = 'PAL01' 
+        BEGIN
+          IF ISNULL(@c_Putawayloc,'') = ''
+             SET @c_Putawayloc = @c_SkuPutawayloc 
+        END
+        ELSE IF LEFT(@c_LocPutawayZone,3) = 'MEZ' 
+        BEGIN
+          IF ISNULL(@c_Putawayloc,'') = ''
+          BEGIN
+              SELECT TOP 1 @c_Putawayloc = L.Loc
+              FROM LOTXLOCXID LLI(NOLOCK)
+              JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
+              WHERE LLI.Storerkey = @c_Storerkey
+              AND LLI.Sku = @c_Sku
+              AND LLI.Qty > 0
+              AND L.Putawayzone Like 'MEZ%'  
+              AND L.LocationFlag <> 'HOLD'
+              ORDER BY LLI.Lot DESC, L.LogicalLocation, L.Loc
+          END         
+        END
+        ELSE IF LEFT(@c_LocPutawayZone,3) = 'CAR'
+        BEGIN
+          IF ISNULL(@c_Putawayloc,'') = ''
+          BEGIN
+              SELECT TOP 1 @c_Putawayloc = L.Loc
+              FROM LOTXLOCXID LLI(NOLOCK)
+              JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
+              WHERE LLI.Storerkey = @c_Storerkey
+              AND LLI.Sku = @c_Sku
+              AND LLI.Qty > 0
+              AND L.Putawayzone Like 'CAR%' 
+              AND L.LocationFlag <> 'HOLD'
+              ORDER BY LLI.Lot DESC, L.LogicalLocation, L.Loc
+          END         
+        END
+        
+        /*
+        EXEC nspRDTPASTD @c_userid='', 
+                         @c_storerkey=@c_Storerkey, 
+                         @c_lot=@c_Lot ,
+                         @c_sku=@c_Sku ,
+                         @c_id=@c_FromID, 
+                         @c_fromloc=@c_FromLoc , 
+                         @n_qty=@n_Qty, 
+                         @n_PutawayCapacity = 0,        
+                         @c_final_toloc = @c_PutawayLoc OUTPUT
+       */                  
+       
+       /*                          
+        IF ISNULL(@c_PutawayLoc,'') <> ''
+        BEGIN
          SET @n_PABookingKey = 0  
          EXEC rdt.rdt_Putaway_PendingMoveIn  
              @cUserName     = 'WMS'  
@@ -182,7 +184,7 @@ BEGIN
             VALUES (@n_PABookingKey)
          END                           
       END     
-      */       	
+      */          
       
       IF ISNULL(@c_PutawayLoc,'') = ''
          SET @c_PutawayLoc = 'NONE'
@@ -193,7 +195,7 @@ BEGIN
       WHERE Receiptkey = @c_Receiptkey
       AND ReceiptLineNumber = @c_ReceiptLineNumber
                                
-      FETCH NEXT FROM cur_RECEIPT INTO @c_Receiptkey, @c_Storerkey, @c_Sku, @c_ReceiptLineNumber, @n_Qty, @c_Lot, @c_FromLoc, @c_FromID, @c_LocPutawayzone, @c_SkuPutawayloc
+   FETCH NEXT FROM cur_RECEIPT INTO @c_Receiptkey, @c_Storerkey, @c_Sku, @c_ReceiptLineNumber, @n_Qty, @c_Lot, @c_FromLoc, @c_FromID, @c_LocPutawayzone, @c_SkuPutawayloc
    END
    CLOSE cur_RECEIPT  
    DEALLOCATE cur_RECEIPT                                   
@@ -207,7 +209,7 @@ BEGIN
    FETCH NEXT FROM cur_Book INTO @n_PABookingKey
 
    WHILE @@FETCH_STATUS = 0  
-   BEGIN           	  
+   BEGIN               
        IF @n_PABookingKey <> 0  
        BEGIN  
           EXEC rdt.rdt_Putaway_PendingMoveIn 
@@ -245,32 +247,32 @@ ENDPROC:
    END
  
    IF @n_continue=3  -- Error Occured - Process And Return
-	 BEGIN
-	    SELECT @b_success = 0
-	    IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt
-	    BEGIN
-	       ROLLBACK TRAN
-	    END
-	 ELSE
-	    BEGIN
-	       WHILE @@TRANCOUNT > @n_starttcnt
- 	      BEGIN
-	          COMMIT TRAN
-	       END
-	    END
-  	  execute nsp_logerror @n_err, @c_errmsg, 'isp_ReturnPutawayLabel_02'
-	    --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-	    RETURN
-	 END
-	 ELSE
-	    BEGIN
-	       SELECT @b_success = 1
-	       WHILE @@TRANCOUNT > @n_starttcnt
-	       BEGIN
-	          COMMIT TRAN
-	       END
-	       RETURN
-	    END	   
+    BEGIN
+       SELECT @b_success = 0
+       IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt
+       BEGIN
+          ROLLBACK TRAN
+       END
+    ELSE
+       BEGIN
+          WHILE @@TRANCOUNT > @n_starttcnt
+         BEGIN
+             COMMIT TRAN
+          END
+       END
+     execute nsp_logerror @n_err, @c_errmsg, 'isp_ReturnPutawayLabel_02'
+       --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+       RETURN
+    END
+    ELSE
+       BEGIN
+          SELECT @b_success = 1
+          WHILE @@TRANCOUNT > @n_starttcnt
+          BEGIN
+             COMMIT TRAN
+          END
+          RETURN
+       END     
 END -- End PROC
 GO 
 
