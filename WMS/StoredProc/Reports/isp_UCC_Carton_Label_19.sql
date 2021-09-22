@@ -32,7 +32,8 @@ GO
 /* 12-Oct-2018  JunYan  1.3   WMS-6411 - Add Priority field, change     */  
 /*                            DeliveryDate format and Add UserDefine03  */  
 /*                            to DD-MMM-YYYY (CJY01)                    */    
-/* 28-Jan-2019  TLTING_ext 1.4  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.4  enlarge externorderkey field length     */
+/* 20-Sep-2021  Mingle_ 1.5   WMS-18006 Add new mapping(ML01)           */
 /************************************************************************/    
     
 CREATE PROC dbo.isp_UCC_Carton_Label_19 (    
@@ -95,7 +96,8 @@ BEGIN
             UserDefine03   NVARCHAR(11) NULL,          -- (CJY01)    
             UserDefine10   NVARCHAR(11) NULL,          -- (CJY01)    
             Qty            int NULL,         --GOH01     
-			DocType        NVARCHAR(1) NULL            -- (CJY01)            
+			   DocType        NVARCHAR(1) NULL,           -- (CJY01)  
+            PONum          NVARCHAR(100) NULL          --(ML01)
      )    
        
    -- Insert Label Result To Temp Table    
@@ -130,9 +132,9 @@ BEGIN
    --DeliveryDate = CONVERT(NVARCHAR(10),ORDERS.DeliveryDate,112),                 --(Wan02)  -- (CJY01)  
    DeliveryDate = CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.Userdefine10, '') = '' 
                        THEN REPLACE( CONVERT(NVARCHAR(11), ORDERS.DeliveryDate, 106), ' ', '-')  ELSE '' END,   -- (CJY01)    
-   UserDefine03 = CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> ''   
+   UserDefine03 = CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> '' AND ISDATE(ORDERS.UserDefine03) = '1'  
                        THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine03 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)   
-   UserDefine10 = CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' 
+   UserDefine10 = CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' AND ISDATE(ORDERS.UserDefine10) = '1'
                        THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine10 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)    
    --SUM(PACKD.Qty)          --GOH01                                             --(Wan02)    
    Qty = (SELECT SUM(PD.Qty)                                                     --(Wan02)    
@@ -140,7 +142,11 @@ BEGIN
               JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)--(Wan02)    
               WHERE PH.Loadkey = ORDERS.Loadkey                                  --(Wan02)             
               AND   PD.DropID = PACKD.DropID),                                    --(Wan02)   
-   ORDERS.DocType      -- (CJY01)  
+   ORDERS.DocType,      -- (CJY01)  
+   PONum = CASE WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.POKEY + '/' + ORDERS.M_COMPANY
+           WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') = '' THEN ORDERS.POKEY
+           WHEN ISNULL(ORDERS.POKEY,'') = '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.M_COMPANY
+           ELSE '' END 
    FROM PACKDETAIL PACKD WITH (NOLOCK)     
    JOIN PACKHEADER PACKH WITH (NOLOCK) ON (PACKH.PICKSLIPNO = PACKD.PICKSLIPNO)      
 --   JOIN ORDERS ORDERS WITH (NOLOCK) ON (ORDERS.ORDERKEY = PACKH.ORDERKEY)      --(Wan01)    
@@ -174,12 +180,16 @@ BEGIN
    --CONVERT(NVARCHAR(10),ORDERS.DeliveryDate,112)            --(Wan02)  -- (CJY01)   
 	CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.Userdefine10, '') = '' 
          THEN REPLACE( CONVERT(NVARCHAR(11), ORDERS.DeliveryDate, 106), ' ', '-')  ELSE '' END,   -- (CJY01)    
-    CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> ''   
+    CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> '' AND ISDATE(ORDERS.UserDefine03) = '1'   
           THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine03 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)   
-    CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' 
+    CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' AND ISDATE(ORDERS.UserDefine10) = '1'
          THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine10 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)  
-  ORDERS.DocType      -- (CJY01)  
---GOH01 End    
+  ORDERS.DocType,      -- (CJY01)  
+--GOH01 End 
+   CASE WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.POKEY + '/' + ORDERS.M_COMPANY
+        WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') = '' THEN ORDERS.POKEY
+        WHEN ISNULL(ORDERS.POKEY,'') = '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.M_COMPANY
+        ELSE '' END   
   
    IF NOT EXISTS(SELECT 1 FROM @t_Result)    
    BEGIN     
@@ -214,9 +224,9 @@ BEGIN
  --DeliveryDate = CONVERT(NVARCHAR(10),ORDERS.DeliveryDate,112),                 --(Wan02)  -- (CJY01)  
    DeliveryDate = CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.Userdefine10, '') = '' 
                        THEN REPLACE( CONVERT(NVARCHAR(11), ORDERS.DeliveryDate, 106), ' ', '-')  ELSE '' END,   -- (CJY01)    
-   UserDefine03 = CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> ''   
+   UserDefine03 = CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> '' AND ISDATE(ORDERS.UserDefine03) = '1'   
                        THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine03 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)   
-   UserDefine10 = CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' 
+   UserDefine10 = CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' AND ISDATE(ORDERS.UserDefine10) = '1' 
                        THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine10 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)   
    --Sum(PACKD.Qty)          --GOH01    
    Qty = (SELECT SUM(PD.Qty)                                                     --(Wan02)    
@@ -224,7 +234,11 @@ BEGIN
               JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)--(Wan02)    
               WHERE PH.Loadkey = ORDERS.Loadkey                                  --(Wan02)             
               AND   PD.DropID = PACKD.DropID),                                   --(Wan02) 
-   ORDERS.DocType      -- (CJY01)   
+   ORDERS.DocType,      -- (CJY01) 
+   PONum = CASE WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.POKEY + '/' + ORDERS.M_COMPANY
+           WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') = '' THEN ORDERS.POKEY
+           WHEN ISNULL(ORDERS.POKEY,'') = '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.M_COMPANY
+           ELSE '' END   
    FROM PACKHEADER PACKH WITH (NOLOCK)    
    JOIN PACKDETAIL PACKD WITH (NOLOCK) ON (PACKD.PICKSLIPNO = PACKH.PICKSLIPNO)      
 --   JOIN ORDERS ORDERS WITH (NOLOCK) ON (ORDERS.ORDERKEY = PACKH.ORDERKEY)      --(Wan01)    
@@ -259,12 +273,16 @@ BEGIN
    --CONVERT(NVARCHAR(10),ORDERS.DeliveryDate,112)            --(Wan02)  -- (CJY01)   
 	CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.Userdefine10, '') = '' 
          THEN REPLACE( CONVERT(NVARCHAR(11), ORDERS.DeliveryDate, 106), ' ', '-')  ELSE '' END,   -- (CJY01)    
-    CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> ''   
+    CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> '' AND ISDATE(ORDERS.UserDefine03) = '1'   
           THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine03 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)   
-    CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' 
+    CASE WHEN ORDERS.DocType = 'N' AND ISNULL(ORDERS.UserDefine10, '') <> '' AND ISDATE(ORDERS.UserDefine10) = '1' 
          THEN REPLACE( CONVERT(NVARCHAR(11), CAST(ORDERS.UserDefine10 AS DATETIME) , 106), ' ', '-') ELSE '' END,   -- (CJY01)  
-  ORDERS.DocType      -- (CJY01)   
---GOH01 End    
+  ORDERS.DocType,      -- (CJY01)   
+--GOH01 End 
+   CASE WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.POKEY + '/' + ORDERS.M_COMPANY
+        WHEN ISNULL(ORDERS.POKEY,'') <> '' AND ISNULL(ORDERS.M_COMPANY,'') = '' THEN ORDERS.POKEY
+        WHEN ISNULL(ORDERS.POKEY,'') = '' AND ISNULL(ORDERS.M_COMPANY,'') <> '' THEN ORDERS.M_COMPANY
+        ELSE '' END   
    END    
        
    SELECT DISTINCT * FROM @t_Result                            
