@@ -7,13 +7,11 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+/* 14-Jul-2011  KHLim02    1.0   GetRight for Delete log                */
+/* 19-Dec-2011  KHLim03    1.1   Additional PK: Storerkey               */
+/* 13-Apr-2015  KHLim04    1.2   Additional PK: code2                   */
 
-/* 14-Jul-2011  KHLim02    1.0   GetRight for Delete log                      */
-/* 19-Dec-2011  KHLim03    1.1   Additional PK: Storerkey                     */
-/* 13-Apr-2015  KHLim04    1.2   Additional PK: code2                         */
-/* 24-Sept-2021 kocy       1.3   WMS-17868 Add additional columns for trace   */
-
-CREATE OR ALTER TRIGGER [dbo].[ntrCODELKUPDelete]
+CREATE TRIGGER [dbo].[ntrCODELKUPDelete]
 ON [dbo].[CODELKUP]
 FOR DELETE
 AS
@@ -60,9 +58,8 @@ BEGIN
       ELSE 
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
-         INSERT INTO dbo.CODELKUP_DELLOG ( LISTNAME, Code, Storerkey, code2, [Description], Short, Long,  Notes, Notes2, UDF01, UDF02, UDF03, UDF04, UDF05 )  -- KHLim03 --kocy
-         SELECT LISTNAME, Code, Storerkey, code2, [Description], Short, Long,  Notes, Notes2, UDF01, UDF02, UDF03, UDF04, UDF05 -- KHLim04   -- kocy
-         FROM DELETED                  
+         INSERT INTO dbo.CODELKUP_DELLOG ( LISTNAME, Code, Storerkey, code2 )  -- KHLim03
+         SELECT LISTNAME, Code, Storerkey, code2 FROM DELETED                  -- KHLim04
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
@@ -101,6 +98,3 @@ BEGIN
       RETURN
    END
 END
-GO
-
-
