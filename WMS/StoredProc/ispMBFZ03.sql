@@ -31,6 +31,8 @@ GO
 /* 10-Mar-2021  NJOW01  1.0   Include zone max rate calculation            */  
 /* 24-Mar-2021	NJOW02  1.1   WMS-16644 include export order calculation   */
 /* 15-Apr-2021  NJOW03  1.2   WMS-16834 Change VAT formula                 */
+/* 02-Sep-2021  NJOW04  1.3   WMS-17846 Add Macau handling for HK MO       */
+/* 28-Sep-2021  NJOW    1.4   DEVOPS script combine                        */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispMBFZ03]  
 (     @c_MBOLKey     NVARCHAR(10)   
@@ -107,7 +109,8 @@ BEGIN
            @n_TotCarton INT,
            @n_DistirbutePltVol DECIMAL(15,6),
            @n_CaseCnt INT,
-           @n_ExportOrdCnt INT
+           @n_ExportOrdCnt INT,
+           @n_HK_MOExportOrdCnt INT
                                                                      
    SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT
    
@@ -124,6 +127,7 @@ BEGIN
    --Validation
    IF @n_continue IN(1,2)
    BEGIN
+   	  --1
    	  IF EXISTS (SELECT 1 
    	             FROM EXTERNORDERS (NOLOCK)
    	             WHERE ExternOrderkey = @c_Mbolkey
@@ -250,6 +254,7 @@ BEGIN
    BEGIN
    	  CREATE TABLE #TMP_PICK (Sku NVARCHAR(20), OrderLineNumber NVARCHAR(5), Qty INT)
    	  
+   	  --2
    	  SET @n_SurchargeRate = 0.00	           	
    	  SELECT TOP 1 @n_SurchargeRate = CASE WHEN ISNUMERIC(CL.Long) = 1 THEN CAST(CL.Long AS DECIMAL(15,4)) ELSE 0 END
    	  FROM CODELKUP CL (NOLOCK)
@@ -258,6 +263,7 @@ BEGIN
    	  AND CL.Code = 'FMS_EDI'
    	  AND CL.Code2 = 'FUEL_SUR'
    	  
+   	  --3
    	  SET @n_VATRate = 0.00
    	  SELECT TOP 1 @n_VATRate = CASE WHEN ISNUMERIC(CL.Long) = 1 THEN CAST(CL.Long AS DECIMAL(15,4)) ELSE 0 END
    	  FROM CODELKUP CL (NOLOCK)
@@ -281,14 +287,15 @@ BEGIN
    	  AND CL.Code = 'FMS_PalletGRWGT'
    END	  
    	  
-   --Process for consignee with scan to container --NJOW01
+   --4,5,6 Process for consignee with scan to container --NJOW01
    IF @n_continue IN(1,2)
    BEGIN   	      	     	
    	  --loop consignee
    	  DECLARE CURSOR_CONSIGNEE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone,
                 CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END,  --NJOW01
-                SUM(CASE WHEN ISNULL(O.C_Country,'') <> ISNULL(S.Country,'') THEN 1 ELSE 0 END) --NJOW02
+                SUM(CASE WHEN ISNULL(O.C_Country,'') <> ISNULL(S.Country,'') THEN 1 ELSE 0 END), --NJOW02
+                SUM(CASE WHEN ISNULL(O.C_Country,'') ='MO' AND ISNULL(S.Country,'') = 'HK' THEN 1 ELSE 0 END) --NJOW03                
    	     FROM MBOLDETAIL MD (NOLOCK)
    	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
    	     JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey  --NJOW02
@@ -306,12 +313,15 @@ BEGIN
    	  
       OPEN CURSOR_CONSIGNEE
       
-      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt      
+      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt, @n_HK_MOExportOrdCnt       
       
       WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
       BEGIN
-      	 --NJOW02
-      	 IF @n_ExportOrdCnt > 0
+      	 IF @n_HK_MOExportOrdCnt > 0  --NJOW03
+      	 BEGIN
+      	 	  SET @c_Zone = 'MOEXPORT'
+      	 END
+      	 ELSE IF @n_ExportOrdCnt > 0   --NJOW02
       	 BEGIN
       	 	  SET @c_Zone = 'NA'
       	 	  SET @n_ZoneMaxRate = 1
@@ -455,7 +465,8 @@ BEGIN
    	           AND CL.UDF03 = @c_Zone 
    	           
    	           --NJOW02
-   	           IF @n_ExportOrdCnt > 0
+   	           IF @n_ExportOrdCnt > 0 
+   	              AND @n_HK_MOExportOrdCnt = 0  --NJOW03
    	           BEGIN
    	              SET @n_FreightRate = 1
    	              SET @c_FreightType = 'FIXED'
@@ -467,6 +478,7 @@ BEGIN
                   SET @n_FreightAmt = ROUND(@n_TotContainerVolRounded * @n_FreightRate,2) --NJOW01                  
                   
                IF @n_FreightAmt > @n_ZoneMaxRate  --NJOW01
+                  AND @n_HK_MOExportOrdCnt = 0 --NJOW03
                   SET @n_FreightAmt = @n_ZoneMaxRate
                                     
                SET @c_RateString = FORMAT(@n_FreightRate,'0.######') + '|' + RTRIM(@c_FreightType) + '|' + FORMAT(@n_SurchargeRate,'0.######') + '|' + FORMAT(@n_VATRate,'0.######')  
@@ -715,20 +727,21 @@ BEGIN
          CLOSE CURSOR_CONSCONTAINER
          DEALLOCATE CURSOR_CONSCONTAINER      	
       	
-         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt      
+         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt, @n_HK_MoExportOrdCnt      
       END
       CLOSE CURSOR_CONSIGNEE
       DEALLOCATE CURSOR_CONSIGNEE   	               
    END
 
-   --Process for consignee without scan to container --NJOW01
+   --7 Process for consignee without scan to container --NJOW01 
    IF @n_continue IN(1,2)
    BEGIN   	      	     	
    	  --loop consignee
    	  DECLARE CURSOR_CONSIGNEE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT O.Consigneekey, ISNULL(Z.Long,'') AS Zone,
                 CASE WHEN ISNUMERIC(Z.Short) = 1 THEN CAST(Z.Short AS DECIMAL(15,2)) ELSE 0 END,  --NJOW01         
-                SUM(CASE WHEN ISNULL(O.C_Country,'') <> ISNULL(S.Country,'') THEN 1 ELSE 0 END) --NJOW02
+                SUM(CASE WHEN ISNULL(O.C_Country,'') <> ISNULL(S.Country,'') THEN 1 ELSE 0 END), --NJOW02
+                SUM(CASE WHEN ISNULL(O.C_Country,'') ='MO' AND ISNULL(S.Country,'') = 'HK' THEN 1 ELSE 0 END) --NJOW03                                
    	     FROM MBOLDETAIL MD (NOLOCK)
    	     JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey --NJOW02
    	     JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey
@@ -754,7 +767,7 @@ BEGIN
    	  
       OPEN CURSOR_CONSIGNEE
       
-      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt  
+      FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt, @n_HK_MOExportOrdCnt  
       
       WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
       BEGIN      	       	       	      	 
@@ -767,6 +780,17 @@ BEGIN
          SET @n_TotLooseCartonVol = 0.00
          SET @n_TotConsigneeCarton = 0
          SET @n_TotConsigneeVol = 0.00
+         
+         --NJOW03
+      	 IF @n_HK_MOExportOrdCnt > 0  
+      	 BEGIN
+      	 	  SET @c_Zone = 'MOEXPORT'
+      	 END
+      	 ELSE IF @n_ExportOrdCnt > 0   
+      	 BEGIN
+      	 	  SET @c_Zone = 'NA'
+      	 	  SET @n_ZoneMaxRate = 1
+      	 END         
       	 
       	 --------------create freight by consignee----------------  
       	 IF @n_continue IN(1,2)
@@ -860,7 +884,8 @@ BEGIN
    	        AND CL.UDF03 = @C_Zone
    	        
    	        --NJOW02
-   	        IF @n_ExportOrdCnt > 0 
+   	        IF @n_ExportOrdCnt > 0  
+   	           AND @n_HK_MOExportOrdCnt = 0 --NJOW03
    	        BEGIN
    	           SET @n_FreightRate = 1
    	           SET @c_FreightType = 'FIXED'
@@ -872,6 +897,7 @@ BEGIN
                SET @n_FreightAmt = ROUND(@n_TotConsigneeVolRounded * @n_FreightRate,2) --NJOW01                  
                               
             IF @n_FreightAmt > @n_ZoneMaxRate  --NJOW01
+               AND @n_HK_MOExportOrdCnt = 0 --NJOW03            
                SET @n_FreightAmt = @n_ZoneMaxRate
                
             SET @c_RateString = FORMAT(@n_FreightRate,'0.######') + '|' + RTRIM(@c_FreightType) + '|' + FORMAT(@n_SurchargeRate,'0.######') + '|' + FORMAT(@n_VATRate,'0.######')  
@@ -1080,7 +1106,7 @@ BEGIN
             DEALLOCATE CURSOR_CONSORDER             
          END 
       	       	           	
-         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt      
+         FETCH NEXT FROM CURSOR_CONSIGNEE INTO @c_Consigneekey, @c_Zone, @n_ZoneMaxRate, @n_ExportOrdCnt, @n_HK_MOExportOrdCnt        
       END
       CLOSE CURSOR_CONSIGNEE
       DEALLOCATE CURSOR_CONSIGNEE   	               
@@ -1183,6 +1209,5 @@ IF @c_CallSource = 'LOOSECARTON_NONSTC'
    
 END
 GO
-
 GRANT EXECUTE ON [dbo].[ispMBFZ03] TO nSQL 
 GO
