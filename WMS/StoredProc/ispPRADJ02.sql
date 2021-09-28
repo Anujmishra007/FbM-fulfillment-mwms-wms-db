@@ -25,6 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
+/* 28-09-21		GHUI	  1.0 Fixed Bug (JSM-21666)                     */
+/*                                                                      */
 /************************************************************************/  
 CREATE PROC ispPRADJ02   
             @c_AdjustmentKey  NVARCHAR(10)  
@@ -182,6 +184,7 @@ BEGIN
             SET @c_errmsg= 'NSQL'+CONVERT(char(5),@n_err)+': UPDATE Adjustmentdetail Fail. (ispPRADJ02)'  
             GOTO QUIT_SP  
          END  
+    END  --(JSM-21666)
   
          NEXT_LINE:  
          FETCH NEXT FROM CUR_ADLINE INTO @c_AdjLineNumber  
@@ -213,7 +216,7 @@ BEGIN
    CLOSE CUR_AD  
    DEALLOCATE CUR_AD  
   
-  END    
+      
 QUIT_SP:  
   
    IF CURSOR_STATUS( 'LOCAL', 'CUR_AD') in (0 , 1)    
@@ -222,7 +225,7 @@ QUIT_SP:
       DEALLOCATE CUR_AD  
    END  
   
-  
+   PRINT CURSOR_STATUS( 'LOCAL', 'CUR_ADLINE')  --(JSM-21666)
    IF CURSOR_STATUS( 'LOCAL', 'CUR_ADLINE') in (0 , 1)    
    BEGIN  
       CLOSE CUR_ADLINE  
