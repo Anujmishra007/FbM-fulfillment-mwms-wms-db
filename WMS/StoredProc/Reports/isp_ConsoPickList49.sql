@@ -34,6 +34,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
+/* 02-SEP-2021  CSCHONG  1.1  WMS-17844 revised pickslip logic (CS01)   */
 /************************************************************************/
 
 CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10)) 
@@ -106,6 +107,8 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
     
       SET @c_StorerKey = ''
       SET @c_GrpByLocZone = 'N'
+
+
 
        SELECT TOP 1 @c_StorerKey = ORD.storerkey
        FROM ORDERS ORD WITH (NOLOCK)
@@ -189,7 +192,7 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
            CASE WHEN LOC.Locationtype = 'OTHER' THEN
                 'PALLET PICKING LIST'
                 ELSE 'EACH PICKING LIST'
-           END,
+           END ,
            LotAttribute.Lottable01,                
            LotAttribute.Lottable02,                
            IsNUll(LotAttribute.Lottable04, '19000101'),        
@@ -208,7 +211,8 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
            ELSE
                '19000101'
            END,
-           CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN LOC.PickZone ELSE '' END AS Putawayzone,
+           --CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN LOC.PickZone ELSE '' END AS Putawayzone,   --CS01
+           CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN LOC.LocationType ELSE '' END AS Putawayzone, --CS01 
            Loadplan.Route AS LRoute,                                                 
            Loadplan.Externloadkey AS LEXTLoadKey,                                     
            Loadplan.Priority AS LPriority,                                           
@@ -244,10 +248,10 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
            PickDetail.sku,
            Sku.Altsku,
            Sku.Descr,                  
-           CASE WHEN Loc.Locationtype = 'OTHER' THEN
+            CASE WHEN Loc.Locationtype = 'OTHER' THEN
                 'PALLET PICKING LIST'
                 ELSE 'EACH PICKING LIST'
-           END,
+           END ,
            LotAttribute.Lottable01,                
            LotAttribute.Lottable02,                
            IsNUll(LotAttribute.Lottable04, '19000101'),        
@@ -257,11 +261,13 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
            STORER.Minshelflife,
            PACK.Pallet,
            PACK.CaseCnt,
-           CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN LOC.PickZone ELSE '' END,
+           --CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN LOC.PickZone ELSE '' END,   --CS01
+           CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN LOC.LocationType ELSE '' END, --CS01
            Loadplan.Route ,                                              
            Loadplan.Externloadkey ,                                        
            Loadplan.Priority ,                                            
-           Loadplan.LPuserdefDate01                                          
+           Loadplan.LPuserdefDate01      
+                                
 
      BEGIN TRAN  
      -- Uses PickType as a Printed Flag  
@@ -323,10 +329,10 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
          SELECT @n_Linecount = @n_Linecount + 1  
          
          IF @c_PrevLoadKey <> @c_LoadKey OR   
-            @c_PrevOrderKey <> @c_OrderKey OR
-            @c_PrevLocTypeDesc <> @c_LocTypeDesc OR
-            (@c_PrevPutawayzone <> @c_Putawayzone AND @c_NOSPLITBYLINECNTZONE <> 'Y') OR  
-            (@n_Linecount > 15 AND @c_NOSPLITBYLINECNTZONE <> 'Y')
+            @c_PrevOrderKey <> @c_OrderKey --OR                         
+           -- @c_PrevLocTypeDesc <> @c_LocTypeDesc --OR                    --CS01
+           --(@c_PrevPutawayzone <> @c_Putawayzone AND @c_NOSPLITBYLINECNTZONE <> 'Y') OR  --CS01
+            --(@n_Linecount > 15 AND @c_NOSPLITBYLINECNTZONE <> 'Y')
          BEGIN       
 --          BEGIN TRAN
             SET @c_PickSlipNo = ''
@@ -388,7 +394,7 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
                                     'JOIN   LOTATTRIBUTE WITH (NOLOCK) ON (PICKDETAIL.Lot = LOTATTRIBUTE.Lot) ' +   
                                     'WHERE  OrderDetail.OrderKey =  @c_OrderKey ' +
                                     ' AND    OrderDetail.LoadKey  = @c_LoadKey   ' +
-                                    ' AND LOC.PickZone =  RTRIM(@c_Putawayzone) ' +   
+                                    ' AND LOC.PickZone =  CASE WHEN ISNULL(@c_GrpByLocZone,''N'') = ''Y'' THEN RTRIM(@c_Putawayzone) ELSE LOC.PickZone END ' +   
                                     ' AND Pickdetail.Sku =  RTRIM(@c_Sku) ' +   
                                     ' AND Pickdetail.Loc =  RTRIM(@c_Loc) ' +   
                                     ' AND Pickdetail.Id = RTRIM(@c_ID)  ' +   
@@ -407,7 +413,8 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
                                      +' , @c_Lottable01        NVARCHAR(18)'
                                      +' , @c_Lottable02        NVARCHAR(18)'
                                      +' , @dt_Lottable04       DATETIME' 
-                                     +' , @c_Putawayzone        NVARCHAR(20)' 
+                                     +' , @c_Putawayzone       NVARCHAR(20)' 
+                                     +' , @c_GrpByLocZone      NVARCHAR(1)'
               
               
                EXEC sp_ExecuteSql     @c_ExecStatement     
@@ -421,6 +428,7 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
                                     , @c_Lottable02
                                     , @dt_Lottable04
                                     , @c_Putawayzone
+                                    , @c_GrpByLocZone
 
 
             OPEN C_PickDetailKey  
@@ -455,7 +463,7 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
          WHERE OrderKey = @c_OrderKey  
          AND   LoadKey = @c_LoadKey         
          AND   LocationTypeDesc = @c_LocTypeDesc
-         AND   Putawayzone = @c_Putawayzone  
+         AND   Putawayzone = CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN @c_Putawayzone  ELSE Putawayzone END
          AND   Sku = @c_Sku  
          AND   Loc = @c_Loc  
          AND   ID = @c_ID  
@@ -509,7 +517,17 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
      END
 
  SUCCESS:
-     SELECT * FROM #TEMP_PICK ORDER BY Pickslipno  
+     SELECT PickSlipNo,          LoadKey,         OrderKey,      ConsigneeKey,
+             Company,             Addr1,           Addr2,         Addr3,
+             Addr4,               City,            Loc,           ID,
+             SKU,                 AltSKU,          SkuDesc,       Qty, PrintedFlag,
+             CASE WHEN ISNULL(@c_GrpByLocZone,'N') = 'Y' THEN Locationtypedesc ELSE 'PICKING LIST' END AS Locationtypedesc , 
+             Lottable01,   Lottable02, Lottable04,
+             ExternOrderkey,      LogicalLoc,         Shelflife,  Minshelflife,
+             pallet,             casecnt,             pickafterdate,    putawayzone,
+             LRoute,LEXTLoadKey,LPriority,LPuserdefDate01
+
+     FROM #TEMP_PICK ORDER BY Pickslipno  
       DROP Table #TEMP_PICK  
   END --@n_continue = 1 or 2
 
