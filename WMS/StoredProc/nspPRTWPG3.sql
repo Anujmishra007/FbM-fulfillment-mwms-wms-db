@@ -8,7 +8,7 @@ GO
 /***************************************************************************/
 /* Stored Procedure: nspPRTWPG3                                            */
 /* Copyright: IDS                                                          */
-/* PVCS Version: 1.1                                                       */
+/* PVCS Version: 1.7                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -19,10 +19,12 @@ GO
 /* 08-Nov-2015  SHONG01    1.3   Minus Qty Avaialble with Overallocated Qty*/
 /* 06-Jan-2017  NJOW02     1.4   Fix facility filtering and qtyexclude     */
 /* 19-Jan-2017  NJOW03     1.5   Fix qtyavailable formula cater scenario of*/
-/*                               with or without qtyreplen                 */ 
+/*                               with or without qtyreplen                 */
+/* 22-Sep-2021  WLChooi    1.6   DEVOPS Combine Script                     */
+/* 22-Sep-2021  WLChooi    1.7   WMS-18018 - Filter LocationCategory based */
+/*                               on Codelkup (WL01)                        */
 /***************************************************************************/
-
-CREATE PROC [dbo].[nspPRTWPG3]
+CREATE PROC [dbo].[nspPRTWPG3] (
    @c_StorerKey        NVARCHAR(15),
    @c_SKU              NVARCHAR(20),
    @c_LOT              NVARCHAR(10),
@@ -36,13 +38,33 @@ CREATE PROC [dbo].[nspPRTWPG3]
    @n_UOMBase          INT,
    @n_QtyLeftToFulfill INT,
    @c_OtherParms       NVARCHAR(20) = ''
+)
 AS
 BEGIN
     SET NOCOUNT ON
+    SET QUOTED_IDENTIFIER OFF     
+    SET ANSI_NULLS OFF   
+    SET CONCAT_NULL_YIELDS_NULL OFF    
 
     DECLARE @n_ConsigneeMinShelfLife  INT
            ,@c_Condition              NVARCHAR(MAX)
            ,@c_UOMBase                NVARCHAR(10)
+
+    --WL01  
+    DECLARE @c_LocationCategory       NVARCHAR(255) = ''
+          , @c_LeftJoinCondition      NVARCHAR(4000) = ''
+
+    SET @c_UOMBase = RTRIM(CAST(@n_uombase AS NVARCHAR(10)))
+    SET @c_Condition = '' -- SOS# 332576
+
+    --WL01 S
+    SELECT @c_LocationCategory = ISNULL(CL.Code2,'')
+    FROM CODELKUP CL (NOLOCK)
+    WHERE CL.LISTNAME = 'PKCODECFG'
+    AND CL.Code = 'FILTERLOCCATEGRY'
+    AND CL.Short = 'Y'
+    AND CL.Storerkey = @c_StorerKey
+    --WL01 E
 
     SET @c_UOMBase = RTRIM(CAST(@n_uombase AS NVARCHAR(10)))
     SET @c_Condition = '' -- SOS# 332576
@@ -102,6 +124,14 @@ BEGIN
                        " AND RIGHT(RTRIM(Lotattribute.Lottable02),1) <> 'Z' "
             END
         END
+
+        --WL01 S
+        IF ISNULL(@c_LocationCategory,'') <> ''
+        BEGIN
+           SELECT @c_LeftJoinCondition = RTRIM(@c_LeftJoinCondition) +
+                                         ' AND LOC.LocationCategory NOT IN (SELECT DISTINCT ColValue FROM dbo.fnc_delimsplit ('','', N''' + @c_LocationCategory + ''') ) '
+        END
+        --WL01 E
 
         IF LEN(ISNULL(RTRIM(@c_LOT) ,'')) > 1
         BEGIN
@@ -215,6 +245,7 @@ BEGIN
 		                              " WHERE LOTxLOCxID.StorerKey = N'" + @c_StorerKey + "' "+  
                                   " AND LOTxLOCxID.SKU = N'" + @c_SKU + "' " + 
                                   " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED <> 0 " +
+                                  @c_LeftJoinCondition +   --WL01
                                   " GROUP BY LOTxLOCxID.LOT) AS LOT2 ON LOT2.LOT = LOT.LOT  " + 
                  " WHERE LOT.StorerKey = N'" + @c_StorerKey + "' "+ 
                  " AND LOT.SKU = N'" + @c_SKU + "' "+ 
@@ -236,7 +267,6 @@ BEGIN
                  --           " END / " + @c_UOMBase + " ) * " + @c_UOMBase + " > 0 " +                   
                  @c_Condition
               )
-      
     END
 END
 GO

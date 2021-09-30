@@ -30,6 +30,8 @@ GO
 /* 30-Jun-2020  WLChooi   1.2 LEFT JOIN UCC table and bug fix (WL02)    */
 /* 02-Jul-2020  WLChooi   1.3 Bug fix (WL03)                            */
 /* 13-Jul-2020  WLChooi   1.4 Bug fix when UCCNo is blank (WL04)        */
+/* 10-Feb-2021  WLChooi   1.5 DevOps Combine Script                     */
+/* 10-Feb-2021  WLChooi   1.6 WMS-16201 - Show Lottable02 (WL05)        */
 /************************************************************************/ 
 
 CREATE PROC [dbo].[isp_ReceiptPreTallySheet06]  
@@ -47,25 +49,69 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF    
    
    DECLARE @n_continue INT = 1, @n_err INT = 0, @c_errmsg NVARCHAR(255) = '', @b_Success INT = 1
-           , @n_StartTCnt INT = @@TRANCOUNT, @c_GetReceiptKey NVARCHAR(10), @c_GetUserDefine03 NVARCHAR(30)
-           , @n_PalletPosCnt        INT = 0
-           , @c_Receiptkey          NVARCHAR(10)
-           , @c_SKU                 NVARCHAR(30)
-           , @c_ItemClass           NVARCHAR(20)
-           , @n_Qty                 INT = 0
-           , @c_PalletPos           NVARCHAR(20)
-           , @n_PrevPalletPosCnt    INT = 0
-           , @c_PrevItemClass       NVARCHAR(20)
-           , @n_CountUCC            INT = 0   --WL02
+         , @n_StartTCnt INT = @@TRANCOUNT, @c_GetReceiptKey NVARCHAR(10), @c_GetUserDefine03 NVARCHAR(30)
+         , @n_PalletPosCnt        INT = 0
+         , @c_Receiptkey          NVARCHAR(10)
+         , @c_SKU                 NVARCHAR(30)
+         , @c_ItemClass           NVARCHAR(20)
+         , @n_Qty                 INT = 0
+         , @c_PalletPos           NVARCHAR(20)
+         , @n_PrevPalletPosCnt    INT = 0
+         , @c_PrevItemClass       NVARCHAR(20)
+         , @n_CountUCC            INT = 0   --WL02
+         
+   --WL05 S
+   DECLARE @c_AllLottable02 NVARCHAR(4000) = ''
+         
+   CREATE TABLE #TMP_LOTTABLE (
+      ReceiptKey   NVARCHAR(10) NULL
+    , Lottable02   NVARCHAR(30) NULL
+   )
+   
+   DECLARE CUR_LOTTABLE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT R.Receiptkey
+   FROM RECEIPT R (NOLOCK)
+   WHERE ( R.ReceiptKey >= @c_ReceiptStart ) AND  
+         ( R.ReceiptKey <= @c_ReceiptEnd   ) AND  
+         ( R.Storerkey  >= @c_StorerStart  ) AND 
+         ( R.Storerkey  <= @c_StorerEnd    ) 
+         
+   OPEN CUR_LOTTABLE
+   
+   FETCH NEXT FROM CUR_LOTTABLE INTO @c_GetReceiptKey
+   
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      SELECT @c_AllLottable02 = CAST(STUFF((SELECT DISTINCT TOP 3 ',' + RTRIM(RD.Lottable02)
+                                FROM RECEIPTDETAIL RD (NOLOCK)
+                                WHERE RD.ReceiptKey = @c_GetReceiptKey AND (RD.Lottable02 <> '' AND RD.Lottable02 IS NOT NULL)
+                                ORDER BY ',' + RTRIM(RD.Lottable02) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(4000))
+      INSERT INTO #TMP_LOTTABLE
+      (
+      	ReceiptKey,
+      	Lottable02
+      )
+      VALUES
+      (
+      	@c_GetReceiptKey,
+      	@c_AllLottable02
+      )
+      FETCH NEXT FROM CUR_LOTTABLE INTO @c_GetReceiptKey
+   END
+   CLOSE CUR_LOTTABLE
+   DEALLOCATE CUR_LOTTABLE
+
+  -- SELECT * FROM #TMP_LOTTABLE
+   --WL05 E
 
    CREATE TABLE #ITEMCLASS(
-   RECEIPTKEY         NVARCHAR(10),
-   SKU                NVARCHAR(30),
-   Qty                INT,
-   ItemClass          NVARCHAR(10),
-   UCCNo              NVARCHAR(20),
-   PalletPosition     NVARCHAR(10),
-   CountPallet        INT  )
+      RECEIPTKEY         NVARCHAR(10),
+      SKU                NVARCHAR(30),
+      Qty                INT,
+      ItemClass          NVARCHAR(10),
+      UCCNo              NVARCHAR(20),
+      PalletPosition     NVARCHAR(10),
+      CountPallet        INT  )
 
    INSERT INTO #ITEMCLASS
    SELECT RECEIPT.RECEIPTKEY,
@@ -188,7 +234,8 @@ BEGIN
           Pack.Innerpack,
           RECEIPT.ExternReceiptkey,  
           ISNULL(CL1.Short,'') AS Lottable01,
-          ISNULL(CL2.Short,'') AS Lottable02,  
+          --ISNULL(CL2.Short,'') AS Lottable02,   --WL05
+          CAST((SELECT ColValue FROM dbo.fnc_delimsplit (',', MAX(tt.Lottable02)) WHERE SeqNo = 1) AS NVARCHAR(36)) AS Lottable02,   --WL05  
           ISNULL(CL3.Short,'') AS Lottable12,  
           RECEIPTDETAIL.Lottable04,
           t.ItemClass,
@@ -196,7 +243,12 @@ BEGIN
           --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,   --WL03   --@n_CountUCC AS UCCNoCnt,   --WL02   --COUNT(DISTINCT t.UCCNo) AS UCCNoCnt,   --WL04
           ISNULL(t1.CountUCCNo,0) AS UCCNoCnt,   --WL04
           t.CountPallet,
-          (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc
+          (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc,
+          CAST((SELECT ColValue FROM dbo.fnc_delimsplit (',', MAX(tt.Lottable02)) WHERE SeqNo = 2) AS NVARCHAR(36)) AS Lottable02_2,   --WL05
+          CAST((SELECT ColValue FROM dbo.fnc_delimsplit (',', MAX(tt.Lottable02)) WHERE SeqNo = 3) AS NVARCHAR(36)) AS Lottable02_3,   --WL05
+          (SELECT TOP 1 RD.Lottable02 FROM RECEIPTDETAIL RD (NOLOCK)                      --WL05
+           WHERE RD.ReceiptKey = RECEIPT.ReceiptKey AND RD.SKU = t.Sku                    --WL05
+           AND (RD.Lottable02 <> '' AND RD.Lottable02 IS NOT NULL)) AS Lottable02PerSKU   --WL05
     FROM RECEIPT (NOLOCK)
     JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
     JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku
@@ -214,6 +266,11 @@ BEGIN
                                                                                         AND t1.ItemClass = t.ItemClass AND t1.PalletPosition = t.PalletPosition 
                                                                                         AND t1.CountPallet = t.CountPallet
     --WL04 END
+    --WL05 S
+    OUTER APPLY (SELECT TOP 1 ISNULL(t.Lottable02,'') AS Lottable02 
+                 FROM #TMP_LOTTABLE t 
+                 WHERE t.ReceiptKey = RECEIPT.ReceiptKey) AS tt
+    --WL05 E
     GROUP BY RECEIPT.ReceiptKey,   
              --RECEIPTDETAIL.ExternPOKey,   --WL01
              t.Sku,  
@@ -236,7 +293,7 @@ BEGIN
              Pack.Innerpack,
              RECEIPT.ExternReceiptkey,  
              ISNULL(CL1.Short,''),
-             ISNULL(CL2.Short,''), 
+             --ISNULL(CL2.Short,''),   --WL05
              ISNULL(CL3.Short,''),  
              RECEIPTDETAIL.Lottable04,
              t.ItemClass,
@@ -250,6 +307,11 @@ BEGIN
       CLOSE cur_Loop
       DEALLOCATE cur_Loop   
    END
+   
+   --WL05 S
+   IF OBJECT_ID('tempdb..#TMP_LOTTABLE') IS NOT NULL
+      DROP TABLE #TMP_LOTTABLE
+   --WL05 E
    
    IF @n_Continue=3  -- Error Occured - Process And Return  
    BEGIN  

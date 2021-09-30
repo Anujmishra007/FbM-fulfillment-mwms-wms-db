@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickDetailAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickDetailAdd]')
+              and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntrPickDetailAdd]
 GO
 
@@ -39,7 +39,7 @@ GO
 /* 22-May-2012  KHLim01       Update LOT & LOTxLOCxID.EditDate          */
 /* 05-Jun-2013  James         SOS276541 - Prevent allocation from       */
 /*                            WS01 - Temporarily (james01)              */
-/* 03-Jun-2014  Leong         SOS# 312878 - Enhance to unique @n_err.   */          
+/* 03-Jun-2014  Leong         SOS# 312878 - Enhance to unique @n_err.   */
 /* 29-Jun-2015  NJOW02        342109-Update SKUXLOC cater for DYNPPICK  */
 /* 15-Sep-2015  NJOW03        352837 - update pickslip# to pickdetail   */
 /* 20-Sep-2016  TLTING        Change SET ROWCOUNT 1 to TOP 1            */
@@ -50,8 +50,10 @@ GO
 /* 28-Sep-2018  TLTING  1.1   remove #tmp , remmove update row lock     */
 /* 23-JUL-2019  Wan01   3.8   ChannelInventoryMgmt use fnc_SelectGetRight*/
 /* 03-Aug-2021  Wan02   3.0   consistence with Pickdetail Update -Check */
-/*                            no over allocate when AllowOverAllocations*/  
-/*                            turn off                                  */  
+/*                            no over allocate when AllowOverAllocations*/
+/*                            turn off                                  */
+/* 28-Sep-2021  SYChua        Fix: Added CLOSE and DEALLOCATE statement */
+/*                            for cursor: CUR_CHANNEL_MGMT  (SY01)      */
 /************************************************************************/
 CREATE  TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]
@@ -75,15 +77,15 @@ DECLARE
    , @n_PickDetailSysId INT
    , @c_facility        NVARCHAR(5)
    , @c_Storerkey       NVARCHAR(15)
-   , @c_UpdPickslipToPickDet NVARCHAR(10)  --NJOW03          
+   , @c_UpdPickslipToPickDet NVARCHAR(10)  --NJOW03
    , @c_Pickheaderkey   NVARCHAR(10) --NJOW03
    , @c_PrevOrderKey    NVARCHAR(10) --NJOW03
    , @c_OrderLineNumber NVARCHAR(5)
-   , @n_InsertedRows    INT = 0 
+   , @n_InsertedRows    INT = 0
 
 
 SELECT @n_InsertedRows = COUNT(*)
-FROM   INSERTED 
+FROM   INSERTED
 
 SELECT @n_Continue = 1, @n_starttcnt = @@TRANCOUNT
 DECLARE @c_AllowOverAllocations NVARCHAR(1) -- Flag to see if overallocations are allowed.
@@ -109,10 +111,10 @@ END
 IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop is not NULL ) > 0
 BEGIN
    -- SHONG03 Bug Fixing
-   UPDATE PICKDETAIL  
+   UPDATE PICKDETAIL
       SET OptimizeCop = NULL, TrafficCop = NULL
    FROM PICKDETAIL
-   JOIN INSERTED ON PICKDETAIL.PickDetailKey = INSERTED.PickDetailKey   
+   JOIN INSERTED ON PICKDETAIL.PickDetailKey = INSERTED.PickDetailKey
 
    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    IF @n_err <> 0
@@ -234,7 +236,7 @@ BEGIN
          BEGIN
             SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
          END
-         
+
          SET @c_PrevStorerKey = @c_StorerKey
          SET @c_PrevFacility  = @c_Facility
 
@@ -245,7 +247,7 @@ BEGIN
             SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
          END
-         
+
          --NJOW03
          SELECT @c_UpdPickslipToPickDet = ''
          SELECT @b_success = 0
@@ -263,7 +265,7 @@ BEGIN
          END
       END -- @c_PrevStorerKey <> @c_StorerKey OR @c_PrevFacility <> @c_Facility
 
-      SET @n_SL_Qty=0
+     SET @n_SL_Qty=0
       SET @n_SL_QtyAllocated = 0
       SET @n_SL_QtyPicked = 0
 
@@ -294,39 +296,39 @@ BEGIN
             SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Over Allocation NOT Allow for Non Pick Location (ntrPickDetailAdd)'
          END
       END
-      
+
       --NJOW03
-      IF @n_Continue IN (1,2) AND @c_UpdPickslipToPickDet = '1'      
+      IF @n_Continue IN (1,2) AND @c_UpdPickslipToPickDet = '1'
       BEGIN
-          IF @c_PrevOrderKey <> @c_OrderKey 
-          BEGIN               
+          IF @c_PrevOrderKey <> @c_OrderKey
+          BEGIN
              SET @c_Pickheaderkey = ''
-             
+
              SELECT TOP 1 @c_Pickheaderkey = Pickheaderkey
-             FROM PICKHEADER (NOLOCK) 
+             FROM PICKHEADER (NOLOCK)
              WHERE OrderKey = @c_OrderKey
-             
+
              IF ISNULL(@c_Pickheaderkey ,'') = ''
              BEGIN
                  SELECT TOP 1 @c_Pickheaderkey  = PH.Pickheaderkey
                  FROM PICKHEADER PH (NOLOCK)
-                 JOIN ORDERS O (NOLOCK) ON PH.ExternOrderKey = O.Loadkey 
+                 JOIN ORDERS O (NOLOCK) ON PH.ExternOrderKey = O.Loadkey
                  WHERE ISNULL(PH.OrderKey,'') = ''
                  AND ISNULL(O.Loadkey,'') <> ''
                  AND O.OrderKey = @c_OrderKey
              END
-             
+
              IF ISNULL(@c_Pickheaderkey,'') <> ''
              BEGIN
-                UPDATE PICKDETAIL  
+                UPDATE PICKDETAIL
                 SET PICKDETAIL.Pickslipno = @c_Pickheaderkey,
-                    PICKDETAIL.TrafficCop = NULL            
+                    PICKDETAIL.TrafficCop = NULL
                 FROM PICKDETAIL
                 JOIN INSERTED I ON PICKDETAIL.PickDetailKey = I.PickDetailKey
-                WHERE I.OrderKey = @c_OrderKey        
+                WHERE I.OrderKey = @c_OrderKey
              END
           END
-      END                
+      END
       SET @c_PrevOrderKey = @c_OrderKey
 
       FETCH NEXT FROM Cursor_SKUxLOC_Check INTO
@@ -363,10 +365,10 @@ BEGIN
            @c_sLot                      NVARCHAR(10),
            @c_sPreAllocatePickDetailKey NVARCHAR(10)
 
-   DECLARE @n_sPreAllocatePickDetailQty INT, 
-           @n_sPickDetailQty            INT, 
+   DECLARE @n_sPreAllocatePickDetailQty INT,
+           @n_sPickDetailQty            INT,
            @n_sQtyToReduce              INT
-           
+
    SELECT @c_sPickDetailKey = SPACE(20)
 
    WHILE (1=1)
@@ -395,8 +397,8 @@ BEGIN
             SELECT 'Data From PreAllocatePickDetail'
          END
 
-         SELECT TOP 1 
-             @c_sPreAllocatePickDetailKey = PreAllocatePickDetailKey, 
+         SELECT TOP 1
+             @c_sPreAllocatePickDetailKey = PreAllocatePickDetailKey,
              @n_sPreAllocatePickDetailQty = qty
          FROM PreAllocatePickDetail (NOLOCK)
          WHERE PreAllocatePickDetailKey > @c_sPreAllocatePickDetailKey
@@ -433,7 +435,7 @@ BEGIN
             SELECT 'qty to reduce', @c_sPreAllocatePickDetailKey, @n_sQtyToReduce
          END
 
-         UPDATE PreAllocatePickDetail  
+         UPDATE PreAllocatePickDetail
          SET QTY = QTY - @n_sQtyToReduce,
              Editdate = GETDATE(),
              Editwho = SUSER_SNAME()
@@ -455,101 +457,102 @@ BEGIN
    END
 END
 
--- SHONG04 Channel Management 
+-- SHONG04 Channel Management
 IF @n_Continue = 1 OR @n_Continue = 2
 BEGIN
    SELECT TOP 1 @c_StorerKey = StorerKey
    FROM INSERTED
-   
+
    IF EXISTS(SELECT 1 FROM StorerConfig WITH (NOLOCK)
              WHERE StorerKey = @c_StorerKey AND ConfigKey = 'ChannelInventoryMgmt' AND sValue = '1')
    BEGIN
-      DECLARE @n_Channel_ID     BIGINT, 
-              @c_Channel        NVARCHAR(20), 
-              @c_cStorerKey     NVARCHAR(15), 
+      DECLARE @n_Channel_ID     BIGINT,
+              @c_Channel        NVARCHAR(20),
+              @c_cStorerKey     NVARCHAR(15),
               @c_cFacility      NVARCHAR(10),
               @c_cLOT           NVARCHAR(10),
               @c_cSKU           NVARCHAR(20),
               @n_cQty           INT,
-              @c_cPickDetailKey NVARCHAR(10) 
-      
+              @c_cPickDetailKey NVARCHAR(10)
+
       DECLARE CUR_CHANNEL_MGMT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT INSERTED.PickDetailKey,
-             INSERTED.Storerkey, 
-             INSERTED.Sku, 
-             LOC.Facility, 
-             ISNULL(OD.Channel,''), 
-             INSERTED.Lot, 
-             ISNULL(INSERTED.Channel_ID,0), 
+             INSERTED.Storerkey,
+             INSERTED.Sku,
+             LOC.Facility,
+             ISNULL(OD.Channel,''),
+             INSERTED.Lot,
+             ISNULL(INSERTED.Channel_ID,0),
              INSERTED.Qty
-      FROM INSERTED WITH (NOLOCK) 
-      JOIN LOC LOC WITH (NOLOCK) ON LOC.Loc = INSERTED.Loc 
-      CROSS APPLY fnc_SelectGetRight (LOC.Facility, INSERTED.Storerkey, '', 'ChannelInventoryMgmt') SC--(Wan01) 
+      FROM INSERTED WITH (NOLOCK)
+      JOIN LOC LOC WITH (NOLOCK) ON LOC.Loc = INSERTED.Loc
+      CROSS APPLY fnc_SelectGetRight (LOC.Facility, INSERTED.Storerkey, '', 'ChannelInventoryMgmt') SC--(Wan01)
       --JOIN StorerConfig AS sc WITH(NOLOCK) ON INSERTED.Storerkey = SC.StorerKey                     --(Wan01)
       --          AND SC.ConfigKey = 'ChannelInventoryMgmt' AND SC.sValue = '1'                       --(Wan01)
       JOIN ORDERDETAIL AS OD WITH(NOLOCK)
-             ON  OD.OrderKey = INSERTED.OrderKey AND OD.OrderLineNumber = INSERTED.OrderLineNumber 
-      WHERE SC.Authority = '1'                                                                        --(Wan01) 
-      
-      OPEN CUR_CHANNEL_MGMT 
-      
+             ON  OD.OrderKey = INSERTED.OrderKey AND OD.OrderLineNumber = INSERTED.OrderLineNumber
+      WHERE SC.Authority = '1'                                                                        --(Wan01)
+
+      OPEN CUR_CHANNEL_MGMT
+
       FETCH NEXT FROM CUR_CHANNEL_MGMT INTO @c_cPickDetailKey, @c_cStorerKey, @c_cSKU, @c_cFacility, @c_Channel, @c_cLOT, @n_Channel_ID, @n_cQty
-      
-      WHILE @@FETCH_STATUS = 0 
+
+      WHILE @@FETCH_STATUS = 0
       BEGIN
          IF ISNULL(RTRIM(@c_Channel),'') = ''
          BEGIN
             SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63125   
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63125
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
-                  + ': Order Detail Channel Cannot be BLANK. (ntrPickDetailAdd)' 
-                  + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) ' 
-            BREAK                
+                  + ': Order Detail Channel Cannot be BLANK. (ntrPickDetailAdd)'
+                  + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            BREAK
          END
-         IF @n_Channel_ID = 0 
+         IF @n_Channel_ID = 0
          BEGIN
-            EXEC isp_ChannelGetID 
+            EXEC isp_ChannelGetID
                 @c_StorerKey   = @c_cStorerKey
                ,@c_Sku         = @c_cSKU
                ,@c_Facility    = @c_cFacility
                ,@c_Channel     = @c_Channel
                ,@c_LOT         = @c_cLOT
                ,@n_Channel_ID  = @n_Channel_ID OUTPUT
-            
+
          END
-         IF ISNULL(@n_Channel_ID,0) > 0 
+         IF ISNULL(@n_Channel_ID,0) > 0
          BEGIN
             IF EXISTS(SELECT 1 FROM ChannelInv AS ci WITH(NOLOCK)
-                      WHERE ci.Channel_ID = @n_Channel_ID 
+                      WHERE ci.Channel_ID = @n_Channel_ID
                       AND ci.Qty < ci.QtyAllocated + @n_cQty)
             BEGIN
                SELECT @n_Continue = 3
-               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63126   
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63126
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
-                     + ': Update Channel Inventory Failed, Channel Qty less than Qty Allocated. (ntrPickDetailAdd)' 
-                     + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '              
+                     + ': Update Channel Inventory Failed, Channel Qty less than Qty Allocated. (ntrPickDetailAdd)'
+                     + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             END
             ELSE
             BEGIN
-               UPDATE ChannelInv  
-                  SET QtyAllocated = QtyAllocated + @n_cQty, 
+               UPDATE ChannelInv
+                  SET QtyAllocated = QtyAllocated + @n_cQty,
                       EditDate = GETDATE(),
                       EditWho = SUSER_SNAME()
-               WHERE Channel_ID = @n_Channel_ID 
-            
-               UPDATE PICKDETAIL 
-                  SET Channel_ID = @n_Channel_ID, 
+               WHERE Channel_ID = @n_Channel_ID
+
+               UPDATE PICKDETAIL
+                  SET Channel_ID = @n_Channel_ID,
                       EditDate = GETDATE(),
                       EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @c_cPickDetailKey               
+               WHERE PickDetailKey = @c_cPickDetailKey
             END
          END
-         
+
          FETCH NEXT FROM CUR_CHANNEL_MGMT INTO @c_cPickDetailKey, @c_cStorerKey, @c_cSKU, @c_cFacility, @c_Channel, @c_cLOT, @n_Channel_ID, @n_cQty
-      END -- While 
-         
-   END   
-END 
+      END -- While
+      CLOSE CUR_CHANNEL_MGMT            --SY01
+      DEALLOCATE CUR_CHANNEL_MGMT       --SY01
+   END
+END
 
 IF @n_Continue = 1 OR @n_Continue = 2
 BEGIN
@@ -560,39 +563,39 @@ BEGIN
 
    IF @n_InsertedRows = 1
    BEGIN
-      UPDATE LOT 
+      UPDATE LOT
       SET  QtyAllocated = (LOT.QtyAllocated + INSERTED.Qty),
-           EditDate = GETDATE(),    
-           EditWho = SUSER_SNAME(), 
-           TrafficCop = NULL        
-      FROM LOT 
+           EditDate = GETDATE(),
+           EditWho = SUSER_SNAME(),
+           TrafficCop = NULL
+      FROM LOT
       JOIN INSERTED ON INSERTED.LOT = LOT.LOT
-      
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    END
-   ELSE 
+   ELSE
    BEGIN
       DECLARE  @tLOT TABLE   (
          LOT          NVARCHAR(10) NOT NULL,
-         QtyAllocated INT 
+         QtyAllocated INT
          PRIMARY KEY CLUSTERED (LOT)
        )
 
       INSERT INTO @tLOT  ( LOT, QtyAllocated )
       SELECT LOT,
-             SUM (Qty) AS QtyAllocated 
+             SUM (Qty) AS QtyAllocated
       FROM INSERTED
       GROUP BY LOT
-   
-      UPDATE LOT  
+
+      UPDATE LOT
       SET  QtyAllocated = (LOT.QtyAllocated + tL.QtyAllocated),
            EditDate = GETDATE(),   --tlting
-           EditWho = SUSER_SNAME(), 
-           TrafficCop = NULL        
+           EditWho = SUSER_SNAME(),
+           TrafficCop = NULL
       FROM LOT
       JOIN @tLOT tL ON tL.LOT = LOT.LOT
-      
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT    
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    END
    IF @n_err <> 0
    BEGIN
@@ -602,7 +605,7 @@ BEGIN
    END
 END
 
-IF (@n_Continue = 1 OR @n_Continue = 2)  
+IF (@n_Continue = 1 OR @n_Continue = 2)
 BEGIN
    IF @b_debug = 1
    BEGIN
@@ -611,17 +614,17 @@ BEGIN
 
    IF @n_InsertedRows = 1
    BEGIN
-      UPDATE LOTxLOCxID  
+      UPDATE LOTxLOCxID
       SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + INSERTED.Qty),
-           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND                
-                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0   
+           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND
+                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0
                                WHEN (( LOTxLOCxID.QtyAllocated + INSERTED.Qty) +
                                        LOTxLOCxID.QtyPicked ) > LOTxLOCxID.Qty
                                THEN (( LOTxLOCxID.QtyAllocated +  INSERTED.Qty) +
-                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty ) 
+                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
                                ELSE 0
                           END,
-            EditDate = GETDATE(),  
+            EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
       FROM LOTxLOCxID
       JOIN INSERTED ON INSERTED.LOT = LOTxLOCxID.LOT AND
@@ -632,7 +635,7 @@ BEGIN
                      AND SL.LOC = LOTxLOCxID.LOC
       JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
 
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT             
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    END
    ELSE
    BEGIN
@@ -641,7 +644,7 @@ BEGIN
          LOT          NVARCHAR(10) NOT NULL,
          LOC          NVARCHAR(10) NOT NULL,
          ID           NVARCHAR(18) NOT NULL,
-         QtyAllocated int DEFAULT (0) 
+         QtyAllocated int DEFAULT (0)
          PRIMARY KEY CLUSTERED (LOT, LOC, ID)
          )
 
@@ -650,19 +653,19 @@ BEGIN
              SUM (Qty) AS QtyAllocated
       FROM INSERTED
       GROUP BY LOT, LOC, ID
-   
-      UPDATE LOTxLOCxID 
+
+      UPDATE LOTxLOCxID
       SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated),
-           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND                
-                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0   
+           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND
+                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0
                                WHEN (( LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated) +
                                        LOTxLOCxID.QtyPicked ) > LOTxLOCxID.Qty
                                THEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
-                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty ) 
+                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
                                ELSE 0
                           END,
-            EditDate = GETDATE(),  
-            EditWho = SUSER_SNAME()
+            EditDate = GETDATE(),
+  EditWho = SUSER_SNAME()
       FROM LOTxLOCxID
       JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
                                 tLLI.LOC = LOTxLOCxID.LOC AND
@@ -672,7 +675,7 @@ BEGIN
                      AND SL.LOC = LOTxLOCxID.LOC
       JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
 
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT    
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    END
 
    IF @n_err <> 0
@@ -683,7 +686,7 @@ BEGIN
    END
 END
 
-IF (@n_Continue = 1 OR @n_Continue = 2)  
+IF (@n_Continue = 1 OR @n_Continue = 2)
 BEGIN
    IF @b_debug = 1
    BEGIN
@@ -692,55 +695,55 @@ BEGIN
 
    IF @n_InsertedRows = 1
    BEGIN
-      UPDATE SKUxLOC 
+      UPDATE SKUxLOC
       SET  QtyAllocated = (SKUxLOC.QtyAllocated + INSERTED.Qty),
            QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
                                     INSERTED.Qty > (SKUxLOC.Qty )
                                THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
                                       INSERTED.Qty ) - (SKUxLOC.Qty)
                                ELSE 0
-                          END, 
-            EditDate = GETDATE(),    
+                          END,
+            EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
       FROM SKUxLOC
-      JOIN INSERTED ON INSERTED.StorerKey = SKUxLOC.StorerKey 
-                   AND INSERTED.SKU = SKUxLOC.SKU 
+      JOIN INSERTED ON INSERTED.StorerKey = SKUxLOC.StorerKey
+                   AND INSERTED.SKU = SKUxLOC.SKU
                    AND INSERTED.LOC = SKUxLOC.LOC
 
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT          
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    END
-   ELSE 
+   ELSE
    BEGIN
       DECLARE  @tSKUxLOC Table   (
          StorerKey    NVARCHAR(15) NOT NULL,
          SKU          NVARCHAR(20) NOT NULL,
          LOC          NVARCHAR(10) NOT NULL,
-         QtyAllocated int DEFAULT (0) 
-         PRIMARY KEY CLUSTERED (StorerKey, SKU, LOC) 
+         QtyAllocated int DEFAULT (0)
+         PRIMARY KEY CLUSTERED (StorerKey, SKU, LOC)
          )
 
       INSERT INTO @tSKUxLOC ( StorerKey, SKU, LOC, QtyAllocated )
       SELECT StorerKey, SKU, LOC,
-             SUM (Qty) AS QtyAllocated 
+             SUM (Qty) AS QtyAllocated
       FROM INSERTED
       GROUP BY StorerKey, SKU, LOC
-   
-      UPDATE SKUxLOC  
+
+      UPDATE SKUxLOC
       SET  QtyAllocated = (SKUxLOC.QtyAllocated + tSL.QtyAllocated),
            QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
                                     tSL.QtyAllocated > (SKUxLOC.Qty )
                                THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
                                       tSL.QtyAllocated ) - (SKUxLOC.Qty)
                                ELSE 0
-                          END, 
-            EditDate = GETDATE(),    
+                          END,
+            EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
       FROM SKUxLOC
-      JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey 
-                        AND tSL.SKU = SKUxLOC.SKU 
+      JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey
+                        AND tSL.SKU = SKUxLOC.SKU
                         AND tSL.LOC = SKUxLOC.LOC
 
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT    
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
    END
    IF @n_err <> 0
    BEGIN
@@ -756,27 +759,27 @@ BEGIN
    BEGIN
       SELECT 'Update Data In ORDERDETAIL'
    END
-   
+
    -- TLTING01
    DECLARE Cursor_item CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT  INSERTED.OrderKey, INSERTED.OrderLineNumber, SUM(INSERTED.Qty) Qty
-   FROM INSERTED 
-   GROUP BY INSERTED.OrderKey, INSERTED.OrderLineNumber 
+   FROM INSERTED
+   GROUP BY INSERTED.OrderKey, INSERTED.OrderLineNumber
 
    OPEN Cursor_item
 
    FETCH NEXT FROM Cursor_item INTO @c_OrderKey, @c_OrderLineNumber, @n_Qty
 
    WHILE @@FETCH_STATUS <> -1
-   BEGIN    
+   BEGIN
       -- SHONG02
-      UPDATE OrderDetail  
+      UPDATE OrderDetail
       SET OrderDetail.QtyAllocated = OrderDetail.QtyAllocated + @n_Qty,
           OrderDetail.Editdate = GETDATE(),
           OrderDetail.Editwho = SUSER_SNAME()
       WHERE OrderDetail.OrderKey = @c_OrderKey
       AND OrderDetail.OrderLineNumber = @c_OrderLineNumber
-   
+
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
       BEGIN
@@ -788,7 +791,7 @@ BEGIN
       FETCH NEXT FROM Cursor_item INTO @c_OrderKey, @c_OrderLineNumber, @n_Qty
    END -- WHILE
    CLOSE Cursor_item
-   DEALLOCATE Cursor_item   
+   DEALLOCATE Cursor_item
 END
 
 -- UnComment By SHONG
@@ -799,7 +802,7 @@ BEGIN
    -- this option only valid when manual allocation
    IF EXISTS (SELECT 1 FROM INSERTED WHERE PickMethod = '' OR CaseID <> '' OR TrafficCop <> 'U' )
    BEGIN
-      UPDATE ORDERS  
+      UPDATE ORDERS
       SET EditDate = GETDATE()
       FROM ORDERS, INSERTED
       WHERE ORDERS.OrderKey = INSERTED.OrderKey
@@ -829,7 +832,7 @@ BEGIN
                 AND SKUxLOC.LOCATIONTYPE <> "PICK"
                 AND SKUxLOC.LOCATIONTYPE <> "CASE"
                 AND LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK') --NJOW02
-                AND (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QTYPICKED) > LOTxLOCxID.QTY)                
+                AND (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QTYPICKED) > LOTxLOCxID.QTY)
       BEGIN
          SELECT @n_Continue = 3 , @n_err = 63124
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": An Attempt Was Made To OverAllocate A Location That Is Not a Case Pick OR Piece Pick Location. (ntrPickDetailAdd)"
@@ -838,22 +841,22 @@ BEGIN
    ELSE IF @c_AllowOverAllocations = "0"        --(Wan02) - START
    BEGIN
       IF EXISTS(SELECT 1 FROM LOTxLOCxID (NOLOCK)
-                JOIN INSERTED ON  INSERTED.Lot = LOTxLOCxID.Lot  
-                              AND INSERTED.Loc= LOTxLOCxID.Loc  
-                              AND INSERTED.Id = LOTxLOCxID.Id  
-                WHERE (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QTYPICKED) > LOTxLOCxID.QTY)  
-      BEGIN  
-         SELECT @n_Continue = 3 , @n_err = 63127  
-         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": An Attempt Was Made by OverAllocate is Turn OFF. (ntrPickDetailAdd)"  
+                JOIN INSERTED ON  INSERTED.Lot = LOTxLOCxID.Lot
+                              AND INSERTED.Loc= LOTxLOCxID.Loc
+                              AND INSERTED.Id = LOTxLOCxID.Id
+                WHERE (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QTYPICKED) > LOTxLOCxID.QTY)
+      BEGIN
+         SELECT @n_Continue = 3 , @n_err = 63127
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": An Attempt Was Made by OverAllocate is Turn OFF. (ntrPickDetailAdd)"
       END                                       --(Wan02) - END
-   END 
+   END
 END
 
 -- MC01-S
 IF EXISTS(SELECT 1 FROM StorerConfig WITH (NOLOCK)
           WHERE StorerKey = @c_StorerKey AND ConfigKey = 'WAVEUPDLOG' AND sValue = '1')
 BEGIN
-   INSERT INTO PickDetail_Log (OrderKey ,OrderLineNumber ,WaveKey ,StorerKey
+  INSERT INTO PickDetail_Log (OrderKey ,OrderLineNumber ,WaveKey ,StorerKey
                               ,B_SKU, B_LOT, B_LOC, B_ID, B_QTY
                               ,A_SKU, A_LOT, A_LOC, A_ID, A_QTY
                               ,Status, PickDetailKey)

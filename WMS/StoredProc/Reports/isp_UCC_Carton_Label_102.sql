@@ -26,6 +26,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 23-SEP-2021 CSCHONG  1.1   Fix TTLCTN nto show (CS01)                */
 /************************************************************************/
 CREATE PROC isp_UCC_Carton_Label_102
             @c_StorerKey      NVARCHAR(15) 
@@ -81,8 +82,9 @@ BEGIN
 
    SELECT @n_ttlctn = MAX(cartonno)
    FROM PACKDETAIL WITH (NOLOCK)
-   WHERE Pickslipno = @c_PickSlipNo
+   WHERE Pickslipno = @c_getpickslipno    --CS01
    AND   Storerkey = @c_StorerKey 
+
 
    CREATE TABLE #TMP_LCartonLBL102 (
           rowid           int NOT NULL identity(1,1) PRIMARY KEY,

@@ -17,7 +17,7 @@ GO
 /*                                                                      */    
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.1                                                    */    
+/* PVCS Version: 1.3                                                    */    
 /*                                                                      */    
 /* Version: 5.4                                                         */    
 /*                                                                      */    
@@ -27,8 +27,11 @@ GO
 /* Date         Author  Ver.  Purposes                                  */    
 /* 10-Feb-2014  Shong   1.0   P&G VIP Handling                          */  
 /* 19-Sep-2016  NJOW01  1.1   WMS-248 case from pick and bulk           */
+/* 22-Sep-2021  WLChooi 1.2   DEVOPS Combine Script                     */
+/* 22-Sep-2021  WLChooi 1.3   WMS-18018 - Filter LocationCategory based */
+/*                            on Codelkup (WL01)                        */
 /************************************************************************/  
-CREATE  PROC [dbo].[nspPRTWPG4]        
+CREATE PROC [dbo].[nspPRTWPG4] (      
    @c_StorerKey NVARCHAR(15) ,        
    @c_SKU NVARCHAR(20) ,        
    @c_LOT NVARCHAR(10) ,        
@@ -41,16 +44,31 @@ CREATE  PROC [dbo].[nspPRTWPG4]
    @c_Facility NVARCHAR(10)  ,  -- added By Ricky for IDSV5        
    @n_UOMBase int ,        
    @n_QtyLeftToFulfill int,        
-   @c_OtherParms NVARCHAR(20) = ''         
+   @c_OtherParms NVARCHAR(20) = '' 
+)        
 AS        
 BEGIN        
-   SET NOCOUNT ON        
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF     
+   SET ANSI_NULLS OFF   
+   SET CONCAT_NULL_YIELDS_NULL OFF         
               
    DECLARE @n_ConsigneeMinShelfLife int,        
            @c_Condition NVARCHAR(MAX),         
            @c_UOMBase   NVARCHAR(10)        
            
    SET @c_UOMBase = RTRIM(CAST ( @n_uombase AS NVARCHAR(10)))        
+
+   --WL01 S
+   DECLARE @c_LocationCategory       NVARCHAR(255) = ''
+   
+   SELECT @c_LocationCategory = ISNULL(CL.Code2,'')
+   FROM CODELKUP CL (NOLOCK)
+   WHERE CL.LISTNAME = 'PKCODECFG'
+   AND CL.Code = 'FILTERLOCCATEGRY'
+   AND CL.Short = 'Y'
+   AND CL.Storerkey = @c_StorerKey
+   --WL01 E 
         
    IF ISNULL(LTRIM(RTRIM(@c_LOT)) ,'') <> '' AND LEFT(@c_LOT ,1) <> '*'        
    BEGIN        
@@ -111,7 +129,15 @@ BEGIN
                SELECT @c_Condition = RTRIM(@c_Condition) + " AND RIGHT(RTRIM(Lotattribute.Lottable02),1) <> 'Z' "         
             END        
          END        
-      END        
+      END 
+      
+      --WL01 S
+      IF ISNULL(@c_LocationCategory,'') <> ''
+      BEGIN
+         SELECT @c_Condition = RTRIM(@c_Condition) +
+                               ' AND LOC.LocationCategory NOT IN (SELECT DISTINCT ColValue FROM dbo.fnc_delimsplit ('','', N''' + @c_LocationCategory + ''') ) '
+      END
+      --WL01 E       
               
       IF LEN(ISNULL(RTRIM(@c_LOT),'')) > 1 AND LEFT(@c_LOT,1) = '*'        
       BEGIN                  
