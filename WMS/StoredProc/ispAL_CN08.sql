@@ -19,14 +19,15 @@ GO
 /*                                                                       */            
 /* Called By:                                                            */            
 /*                                                                       */            
-/* GitLab Version: 1.0                                                   */            
+/* GitLab Version: 1.1                                                   */            
 /*                                                                       */            
 /* Version: 7.0                                                          */            
 /*                                                                       */            
 /* Data Modifications:                                                   */            
 /*                                                                       */            
 /* Updates:                                                              */            
-/* Date         Author  Ver.  Purposes                                   */    
+/* Date         Author  Ver.  Purposes                                   */  
+/* 2021-09-30   WLChooi 1.1   Bug Fix - Extend SKU to NVARCHAR(20) (WL01)*/   
 /*************************************************************************/            
 CREATE PROC ispAL_CN08
    @c_DocNo      NVARCHAR(10),  
@@ -168,13 +169,13 @@ BEGIN
                    RTRIM(ISNULL(@c_OrderBy,''))
 
    EXEC sp_executesql @c_SQL 
-      , N'@c_Storerkey     NVARCHAR(15), @c_Sku NVARCHAR(15), @c_Facility NVARCHAR(5), 
+      , N'@c_Storerkey     NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5), 
           @c_Lottable01    NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18),
           @d_Lottable04    DATETIME,     @d_Lottable05 DATETIME,     @c_Lottable06 NVARCHAR(30), 
           @c_Lottable07    NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), 
           @c_Lottable10    NVARCHAR(30), @c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30),
           @d_Lottable13    DATETIME,     @d_Lottable14 DATETIME,     @d_Lottable15 DATETIME,
-          @c_UserDefine01  NVARCHAR(50)'  
+          @c_UserDefine01  NVARCHAR(50)'   --WL01  
       , @c_StorerKey
       , @c_Sku
       , @c_Facility
