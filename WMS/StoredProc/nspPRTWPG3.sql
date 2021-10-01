@@ -8,7 +8,7 @@ GO
 /***************************************************************************/
 /* Stored Procedure: nspPRTWPG3                                            */
 /* Copyright: IDS                                                          */
-/* PVCS Version: 1.7                                                       */
+/* PVCS Version: 1.8                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -23,6 +23,7 @@ GO
 /* 22-Sep-2021  WLChooi    1.6   DEVOPS Combine Script                     */
 /* 22-Sep-2021  WLChooi    1.7   WMS-18018 - Filter LocationCategory based */
 /*                               on Codelkup (WL01)                        */
+/* 01-Oct-2021  WLChooi    1.8   Bug Fix for WMS-18018 (WL02)              */
 /***************************************************************************/
 CREATE PROC [dbo].[nspPRTWPG3] (
    @c_StorerKey        NVARCHAR(15),
@@ -53,6 +54,7 @@ BEGIN
     --WL01  
     DECLARE @c_LocationCategory       NVARCHAR(255) = ''
           , @c_LeftJoinCondition      NVARCHAR(4000) = ''
+          , @c_JoinTable              NVARCHAR(4000) = ''   --WL02
 
     SET @c_UOMBase = RTRIM(CAST(@n_uombase AS NVARCHAR(10)))
     SET @c_Condition = '' -- SOS# 332576
@@ -197,6 +199,43 @@ BEGIN
         SELECT @c_Condition = ISNULL(RTRIM(@c_Condition) ,'') +
                            " ORDER BY LOTATTRIBUTE.Lottable04, LOT.Lot, QTYAVAILABLE "
 
+        --WL02 S
+        SET @c_JoinTable = ''
+
+        IF ISNULL(@c_LocationCategory,'') <> '' AND ISNULL(@c_LeftJoinCondition,'') <> ''
+        BEGIN
+           SELECT @c_JoinTable = " JOIN ( " + 
+                                 " SELECT LOTxLOCxID.LOT, " + 
+                                         " SUM(LOTxLOCxID.QTY- LOTxLOCxID.QTYALLOCATED- LOTxLOCxID.QTYPICKED) AS QtyAvailable, " +  
+                                         " SUM(CASE WHEN (ID.Status = 'HOLD' AND LOC.Status = 'HOLD') OR " + 
+				                                   "             (LOC.LocationFlag IN ('HOLD','DAMAGE')) " + 
+				                                          " THEN LOTxLOCxID.QTY- LOTxLOCxID.QTYALLOCATED- LOTxLOCxID.QTYPICKED " + 
+				                                          " ELSE 0 END) AS HoldQty, " +  
+  			                                 " SUM(CASE WHEN SKUxLOC.LocationType IN ('CASE','PICK') " +   
+  			                                          " THEN LOTxLOCxID.QTY- LOTxLOCxID.QTYALLOCATED- LOTxLOCxID.QTYPICKED " +    
+				                                          " ELSE 0 END) AS QtyInPickLoc, " +  
+		                                     " SUM(CASE WHEN LOC.HostWhCode <> N'" + @c_Lottable01 + "' AND '" + @c_Lottable01 + "' <> '' "  +   
+		                                              " THEN LOTxLOCxID.QTY- LOTxLOCxID.QTYALLOCATED- LOTxLOCxID.QTYPICKED " +  
+				                                          " ELSE 0 END) AS QtyExclude, " + 
+		                                     " SUM( LOTxLOCxID.QtyReplen ) AS QtyReplen, " +        
+		                                     " SUM(CASE WHEN LOC.Facility <> N'" + @c_Facility + "' " +   
+		                                              " THEN LOTxLOCxID.QTY- LOTxLOCxID.QTYALLOCATED- LOTxLOCxID.QTYPICKED " +  
+				                                          " ELSE 0 END) AS QtyOtherFacility " + 
+                                 " FROM LOTxLOCxID (NOLOCK) " +  
+                                 " JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc " + 
+                                 " JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID " + 
+                                 " JOIN SKUxLOC(NOLOCK) " + 
+                                 " ON  SKUxLOC.StorerKey = LOTxLOCxID.StorerKey " + 
+                                 " AND SKUxLOC.SKU = LOTxLOCxID.SKU " + 
+                                 " AND SKUxLOC.LOC = LOTxLOCxID.LOC " +       
+                                 " WHERE LOTxLOCxID.StorerKey = N'" + @c_StorerKey + "' "+  
+                                 " AND LOTxLOCxID.SKU = N'" + @c_SKU + "' " + 
+                                 " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED <> 0 " +
+                                 @c_LeftJoinCondition +
+                                 " GROUP BY LOTxLOCxID.LOT) AS LOT3 ON LOT3.LOT = LOT.LOT  "
+        END
+        --WL02 E
+
         EXEC (   " DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR " + 
                  " SELECT LOT.StorerKey, LOT.SKU, LOT.LOT, " +                   
                  " QTYAVAILABLE = " + 
@@ -246,7 +285,7 @@ BEGIN
                                   " AND LOTxLOCxID.SKU = N'" + @c_SKU + "' " + 
                                   " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED <> 0 " +
                                   @c_LeftJoinCondition +   --WL01
-                                  " GROUP BY LOTxLOCxID.LOT) AS LOT2 ON LOT2.LOT = LOT.LOT  " + 
+                                  " GROUP BY LOTxLOCxID.LOT) AS LOT2 ON LOT2.LOT = LOT.LOT  " + @c_JoinTable +   --WL02
                  " WHERE LOT.StorerKey = N'" + @c_StorerKey + "' "+ 
                  " AND LOT.SKU = N'" + @c_SKU + "' "+ 
                  " AND LOT.STATUS = 'OK' " +  
