@@ -18,7 +18,7 @@ GO
 /*                                                                         */
 /* Called By: SQL Job                                                      */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.2                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -26,6 +26,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 2021-10-01   WLChooi 1.1   DevOps Combine Script                        */
+/* 2021-10-01   WLChooi 1.2   Add Errormsg if Receiptdetail is empty (WL01)*/
 /***************************************************************************/  
 CREATE PROCEDURE isp_NIKEKR_PopulatePOTOASN (
       @c_Storerkey     NVARCHAR(15)   = 'NIKEKR'
@@ -306,6 +308,22 @@ BEGIN
          END -- WHILE @@FETCH_STATUS <> -1
          CLOSE PICK_CUR
          DEALLOCATE PICK_CUR
+         
+         --WL01 S
+         IF NOT EXISTS (SELECT 1 FROM RECEIPTDETAIL (NOLOCK)
+                        WHERE ReceiptKey = @c_NewReceiptKey)  
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63535
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Receiptdetail for #' + @c_NewReceiptKey + ' is empty. Please validate the data. (isp_NIKEKR_PopulatePOTOASN)' + ' ( '
+                            + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+         
+            INSERT INTO #TMP_RESULT (POKey, Reason)
+            SELECT @c_POKey, 'Empty Receiptdetail #' + @c_NewReceiptKey
+            
+            GOTO QUIT_SP
+         END
+         --WL01 E
       END
       
       --Finalize
