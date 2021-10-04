@@ -29,6 +29,7 @@ GO
 /* 05-Jan-2021  Wan01    1.2  Execute login if current user<>@c_username*/
 /*                            Return Error Msg for Big Outer Catch      */
 /*                            Do Not Raise error for WM Script          */
+/* 04-Oct-2021  CheeMun  1.3  JSM-23942 - Extend @c_Sku Length          */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional
@@ -37,7 +38,7 @@ CREATE PROCEDURE [WM].[lsp_Unallocation_Wrapper]
    ,@c_OrderLineNumber NVARCHAR(5) = '' --optional
    ,@c_Loadkey NVARCHAR(10) = ''        --optional
    ,@c_Wavekey NVARCHAR(10) = ''        --optional
-   ,@c_Sku     NVARCHAR(15) = ''        --optional
+   ,@c_Sku     NVARCHAR(20) = ''        --optional      --JSM-23942
    ,@b_Success INT = 1 OUTPUT 
    ,@n_Err INT = 0 OUTPUT
    ,@c_ErrMsg NVARCHAR(250) = '' OUTPUT
