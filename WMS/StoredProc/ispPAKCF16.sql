@@ -19,7 +19,7 @@ GO
 /*                                                                         */
 /* Called By: PostPackConfirmSP                                            */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.2                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -27,6 +27,9 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 2021-10-01   WLChooi 1.1   DevOps Combine Script                        */
+/* 2021-10-01   WLChooi 1.2   WMS-18086 - Trigger Interface for Type RETURN*/
+/*                            (WL01)                                       */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPAKCF16]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -51,6 +54,8 @@ BEGIN
          , @n_Cube            DECIMAL(20, 5)
          , @c_ECOM_S_Flag     NVARCHAR(1)
          , @n_MaxCarton       INT
+         , @c_OrderType       NVARCHAR(20)   --WL01
+         , @c_DocType         NVARCHAR(20)   --WL01
    
    IF @c_ErrMsg = '1'
    BEGIN
@@ -69,6 +74,8 @@ BEGIN
 
    SELECT @c_ECOM_S_Flag = MAX(OH.ECOM_SINGLE_Flag)
         , @n_MaxCarton   = MAX(PD.CartonNo)
+        , @c_OrderType   = MAX(OH.[Type])    --WL01
+        , @c_DocType     = MAX(OH.DocType)   --WL01
    FROM ORDERS OH (NOLOCK)
    JOIN PACKHEADER PH (NOLOCK) ON OH.OrderKey = PH.Orderkey
    JOIN PACKDETAIL PD (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
@@ -129,7 +136,8 @@ BEGIN
    DEALLOCATE cur_PACKINFO  
    
    --Trigger EDI when Packinfo updated
-   IF @c_ECOM_S_Flag = 'S'
+   --OR Trigger EDI for Orders.Type = 'RETURN' since not able to trigger EDI during ue_printcartonlabel_interface due to Orders.Type not matched (WL01)
+   IF @c_ECOM_S_Flag = 'S' OR @c_OrderType = 'RETURN'   --WL01
    BEGIN
       EXEC [dbo].[isp_PrintCartonLabel_Interface]    
              @c_Pickslipno   = @c_PickSlipNo       
