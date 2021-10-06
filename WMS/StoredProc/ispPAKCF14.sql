@@ -18,7 +18,7 @@ GO
 /* Called By: PostPackConfirmSP                                            */  
 /*                                                                         */  
 /*                                                                         */  
-/* PVCS Version: 1.1                                                       */  
+/* PVCS Version: 1.3                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -27,7 +27,10 @@ GO
 /* Updates:                                                                */  
 /* Date        Author   Ver   Purposes                                     */ 
 /* 2020-11-12  Wan      1.0   Creation                                     */ 
-/* 2021-08-17  WLChooi  1.1   WMS-17206 - Trigger Interface (WL01)         */ 
+/* 2021-08-17  WLChooi  1.1   WMS-17206 - Trigger Interface (WL01)         */
+/* 2021-08-17  WLChooi  1.2   DevOps Combine Script                        */  
+/* 2021-10-06  WLChooi  1.3   Fix - Immediate trigger label extract web    */
+/*                            service (WL02)                               */
 /***************************************************************************/    
 CREATE PROC [dbo].[ispPAKCF14]    
 (     @c_PickSlipNo  NVARCHAR(10)     
@@ -51,6 +54,7 @@ BEGIN
          , @c_Key2            NVARCHAR(11) = ''
          , @c_OrderGroup      NVARCHAR(50) = ''   --WL01
          , @n_MaxCarton       INT = 0   --WL01
+         , @c_trmlogkey       NVARCHAR(10) = ''   --WL02
               
    SET @b_Success= 1   
    SET @n_Err    = 0    
@@ -90,24 +94,78 @@ BEGIN
 
    IF @c_OrderGroup = 'aCommerce' AND @c_Storerkey = 'ADIDAS'
    BEGIN
-      SELECT @n_MaxCarton = MAX(CartonNo)
-      FROM PACKDETAIL WITH (NOLOCK)
-      WHERE Pickslipno = @c_PickSlipNo
+      --WL02 S
+      --SELECT @n_MaxCarton = MAX(CartonNo)
+      --FROM PACKDETAIL WITH (NOLOCK)
+      --WHERE Pickslipno = @c_PickSlipNo
 
-      EXEC ispGenTransmitLog2 'WSPACFMLOGAC', @c_PickSlipNo, 1, @c_StorerKey, ''    
-            , @b_success OUTPUT    
-            , @n_err OUTPUT    
-            , @c_errmsg OUTPUT    
+      --EXEC ispGenTransmitLog2 'WSPACFMLOGAC', @c_PickSlipNo, 1, @c_StorerKey, ''    
+      --      , @b_success OUTPUT    
+      --      , @n_err OUTPUT    
+      --      , @c_errmsg OUTPUT    
                             
-      IF @b_success <> 1    
-      BEGIN    
+      --IF @b_success <> 1    
+      --BEGIN    
+      --   SET @n_continue = 3    
+      --   SET @n_err = 68015    
+      --   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +     
+      --                     ': Insert into TRANSMITLOG2 Failed. (ispPAKCF14) ( SQLSvr MESSAGE = ' +     
+      --                     ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '    
+      --   GOTO QUIT_SP  
+      --END
+      
+      SELECT @b_success = 1
+      EXECUTE nspg_getkey
+         'TransmitlogKey2'
+         , 10
+         , @c_trmlogkey OUTPUT
+         , @b_success   OUTPUT
+         , @n_err       OUTPUT
+         , @c_errmsg    OUTPUT
+           
+      IF @b_success <> 1
+      BEGIN
          SET @n_continue = 3    
          SET @n_err = 68015    
          SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +     
                            ': Insert into TRANSMITLOG2 Failed. (ispPAKCF14) ( SQLSvr MESSAGE = ' +     
                            ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '    
-         GOTO QUIT_SP  
+         GOTO QUIT_SP
+      END
+      ELSE
+      BEGIN
+         INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
+         VALUES (@c_trmlogkey, 'WSPACFMLOGAC', @c_Pickslipno, '1', @c_Storerkey, '0', '')
+
+         --For immediate trigger label extract web service 
+         IF EXISTS(SELECT 1 FROM QCmd_TransmitlogConfig AS qtc WITH(NOLOCK)
+                   WHERE qtc.PhysicalTableName='TRANSMITLOG2' 
+                   AND qtc.TableName = 'WSPACFMLOGAC' 
+                   AND qtc.StorerKey = @c_Storerkey
+                   AND qtc.QCmdClass = 'FRONTEND')
+         BEGIN
+            SET @n_err = 0 
+            EXEC  [dbo].[isp_QCmd_WSTransmitLogInsertAlert] 
+                 @c_QCmdClass            = 'FRONTEND'      
+               , @c_FrmTransmitlogKey    = @c_trmlogkey 
+               , @c_ToTransmitlogKey     = @c_trmlogkey                
+               , @b_Debug                = 0            
+               , @b_Success              = @b_success OUTPUT                
+               , @n_Err                  = @n_err     OUTPUT
+               , @c_ErrMsg               = @c_errmsg  OUTPUT
+                      
+            IF @n_err <> 0
+            BEGIN
+               SET @n_continue = 3    
+               SET @n_err = 68020   
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +     
+                                 ': EXEC isp_QCmd_WSTransmitLogInsertAlert Failed. (ispPAKCF14) ( SQLSvr MESSAGE = ' +     
+                                 ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '    
+               GOTO QUIT_SP  
+            END                    
+         END
       END 
+      --WL02 E        
    END
    --WL01 E    
                                                                                                                                 
