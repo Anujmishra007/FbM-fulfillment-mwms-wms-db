@@ -1,6 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPrint2PDF_Generic]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetMBOLPackingListPDF01]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetPrint2PDF_Generic]
+   DROP PROCEDURE [dbo].[isp_GetMBOLPackingListPDF01]
 GO
 
 SET QUOTED_IDENTIFIER OFF 
@@ -9,17 +9,16 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Stored Procedure: isp_GetPrint2PDF_Generic                           */
-/* Creation Date: 07-Jan-2020                                           */
+/* Stored Procedure: isp_GetMBOLPackingListPDF01                        */
+/* Creation Date: 05-Oct-2021                                           */
 /* Copyright: LF Logistics                                              */
 /* Written by: WLChooi                                                  */
 /*                                                                      */
-/* Purpose: WMS-13933 - [MY]-Skechers Selluseller ECOM Print ShipLabel  */
-/*          and Invoice-[CR]                                            */
+/* Purpose: WMS-18094 - TH-RC2-Exceed-Print Invoice on MBOL module      */
 /*                                                                      */
 /* Called By: isp_GetPrint2PDFConfig                                    */
 /*                                                                      */
-/* GitLab Version: 1.2                                                  */
+/* GitLab Version: 1.0                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,11 +26,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 04-Oct-2021 WLChooi  1.1   DevOps Combine Script                     */
-/* 04-Oct-2021 WLChooi  1.2   WMS-18094 - Not Allow Reprint (WL01)      */
+/* 05-Oct-2021 WLChooi  1.0   DevOps Combine Script                     */
 /************************************************************************/
 
-CREATE PROCEDURE [dbo].[isp_GetPrint2PDF_Generic]
+CREATE PROCEDURE [dbo].[isp_GetMBOLPackingListPDF01]
        @c_Storerkey       NVARCHAR(15),
        @c_Facility        NVARCHAR(5), 
        @c_Configkey       NVARCHAR(30),
@@ -80,13 +78,12 @@ BEGIN
          , @c_Shipperkey      NVARCHAR(50) = ''
          , @c_GetPdfName      NVARCHAR(MAX) 
          , @b_Debug           INT = 0
-         , @c_authority       NVARCHAR(30)     --WL01
-         , @c_Option1         NVARCHAR(50)     --WL01
-         , @c_Option2         NVARCHAR(50)     --WL01
-         , @c_Option3         NVARCHAR(50)     --WL01
-         , @c_Option4         NVARCHAR(50)     --WL01
-         , @c_Reprint         NVARCHAR(10)     --WL01
-   	    
+         , @c_InvoiceNo       NVARCHAR(500) = ''
+         , @n_StartIdx        INT = 0
+         , @n_EndIdx          INT = 0
+         , @n_DiffIdx         INT = 0
+         , @c_MBOLKey         NVARCHAR(10) = ''
+
    SET @n_err = 0
    SET @b_success = 1
    SET @c_errmsg = ''
@@ -94,32 +91,6 @@ BEGIN
    SET @n_starttcnt = @@TRANCOUNT
    SET @c_SpoolerGroup = '' 
    SET @c_userid = SUSER_SNAME()
-   SET @c_Reprint = 'Y'   --WL01
-
-   --WL01 S
-   IF (@n_continue = 1 OR @n_continue = 2)
-   BEGIN
-      EXECUTE nspGetRight                 
-         @c_Facility  = @c_facility,        
-         @c_StorerKey = @c_StorerKey,       
-         @c_sku       = '',
-         @c_ConfigKey = @c_Configkey,
-         @b_Success   = @b_success   OUTPUT,
-         @c_authority = @c_authority OUTPUT,
-         @n_err       = @n_err       OUTPUT,
-         @c_errmsg    = @c_errmsg    OUTPUT,
-         @c_Option1   = @c_Option1   OUTPUT,  
-         @c_Option2   = @c_Option2   OUTPUT,  
-         @c_Option3   = @c_Option3   OUTPUT,  
-         @c_Option4   = @c_Option4   OUTPUT,  
-         @c_Option5   = @c_Option5   OUTPUT   
-
-      SELECT @c_Reprint = dbo.fnc_GetParamValueFromString('@c_Reprint', @c_Option5, @c_Reprint)
-
-      IF ISNULL(@c_Reprint,'') = ''
-         SET @c_Reprint = 'Y'
-   END
-   --WL01 E
 
    IF (@n_continue = 1 OR @n_continue = 2)
    BEGIN
@@ -156,7 +127,7 @@ BEGIN
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60050  
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err) 
-               + ': PDF Image Server Not Yet Setup/Enable In Storerconfig for Configkey :' + @c_Configkey + ' (isp_GetPrint2PDF_Generic) '
+               + ': PDF Image Server Not Yet Setup/Enable In Storerconfig for Configkey :' + @c_Configkey + ' (isp_GetMBOLPackingListPDF01) '
                + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          SET @n_PrintAction = 0
          GOTO QUIT_SP
@@ -184,38 +155,8 @@ BEGIN
 
       SET @c_PdfName = @c_PdfFile
 
-      --SELECT @c_SearchMethod, @c_PdfFile
-      --Method 1 - Get the PDF with complete file name, eg. INVOICE_LZD_20210106001_20200301.PDF
-      IF (@n_continue = 1 OR @n_continue = 2) AND @c_SearchMethod = '1'
-      BEGIN
-         --Normal Folder
-         SET @n_IsExists = 0
-         SET @c_PDFFilePath = @c_PdfFolder + @c_PdfName
-         SET @c_PdfFile = @c_PDFFilePath
-         EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT
-         
-         IF @n_IsExists = 0 AND @c_Reprint <> 'N'   --WL01
-         BEGIN
-            SET @c_PDFFilePath = @c_ArchiveFolder + @c_PdfName
-            SET @c_PdfFile = @c_PDFFilePath
-            SET @c_ArchivePath = '' 
-            SET @c_ActionType = '2'
-            EXEC dbo.xp_fileexist @c_PDFFilePath, @n_IsExists OUTPUT 
-         END
-         
-         IF @n_IsExists = 0 
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60060   
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': PDF - ' + @c_PdfFile + ' Not Found.'
-                            +'(isp_GetPrint2PDF_Generic)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-            SET @n_PrintAction = 0
-            GOTO QUIT_SP  
-         END
-      END
-      
       --Method 2 - Search the folder with partial PDF name, eg. LIKE INVOICE_LZD_20210106001_%.PDF 
-      IF (@n_continue = 1 OR @n_continue = 2) AND @c_SearchMethod = '2'
+      IF (@n_continue = 1 OR @n_continue = 2)
       BEGIN
       	SET @c_PdfName = REPLACE(@c_PdfName,'.PDF','')
       	
@@ -229,12 +170,12 @@ BEGIN
          --Normal Folder
          INSERT INTO #DirPDFTree (SubDirectory, Depth, FileFlag)
          EXEC xp_dirtree_admin @c_PdfFolder, 2, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file 
-         
+
          SET @c_GetPdfName = ''
          
          SELECT TOP 1 @c_GetPdfName = SubDirectory
          FROM #DirPDFTree
-         WHERE SubDirectory like @c_PdfName + '%'
+         WHERE SubDirectory like '%' + @c_PdfName + '%'
          AND Depth = 1
 
          IF ISNULL(@c_GetPdfName,'') <> '' 
@@ -242,25 +183,20 @@ BEGIN
             SET @c_PDFFilePath = @c_PdfFolder + @c_GetPdfName
             SET @c_PdfFile = @c_PDFFilePath
          END
-
-         --Archive Folder
-         IF ISNULL(@c_GetPdfName,'') = '' AND @c_Reprint <> 'N'   --WL01
+         ELSE
          BEGIN
-            INSERT INTO #DirPDFTree (SubDirectory, Depth, FileFlag)
-            EXEC xp_dirtree_admin @c_ArchiveFolder, 2, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file 
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60065  
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': PDF - ' + @c_PdfName + ' Not Found.'
+                            +'(isp_GetMBOLPackingListPDF01)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+            SET @n_PrintAction = 0
+            GOTO QUIT_SP  
+         END
+      END
 
-            SELECT TOP 1 @c_GetPdfName = SubDirectory
-            FROM #DirPDFTree
-            WHERE SubDirectory like @c_PdfName + '%'
-            AND Depth = 1
-
-            IF ISNULL(@c_GetPdfName,'') <> '' 
-            BEGIN
-               SET @c_PDFFilePath = @c_ArchiveFolder + @c_GetPdfName
-               SET @c_PdfFile = @c_PDFFilePath
-               SET @c_ActionType = '2'
-            END
-         END --Archive Folder
+      IF @c_GetPdfName LIKE '%SIN%'
+      BEGIN
+         SET @c_InvoiceNo = REPLACE(@c_GetPdfName,'.pdf','')
       END
    END
    
@@ -291,6 +227,27 @@ BEGIN
    BEGIN
    	SET @n_PrintAction = 1
    END
+
+   IF @n_PrintAction = 1 AND @c_InvoiceNo LIKE '%SIN%'
+   BEGIN
+      SELECT @n_StartIdx = PATINDEX('%SIN%', @c_InvoiceNo)
+      SELECT @n_EndIdx  = CHARINDEX(' ', @c_InvoiceNo, PATINDEX('%SIN%', @c_InvoiceNo))
+      SELECT @n_DiffIdx = @n_EndIdx - @n_StartIdx
+
+      SELECT @c_InvoiceNo = SUBSTRING(@c_InvoiceNo, @n_StartIdx, @n_DiffIdx)
+
+      UPDATE ORDERS WITH (ROWLOCK)
+      SET InvoiceNo = CAST(@c_InvoiceNo AS NVARCHAR(20))
+        , TrafficCop = NULL
+        , EditDate = GETDATE()
+        , EditWho = SUSER_SNAME()
+      WHERE OrderKey = @c_Param01
+
+      UPDATE MBOLDETAIL WITH (ROWLOCK)
+      SET UserDefine01 = @c_userid
+        , UserDefine06 = GETDATE()
+      WHERE OrderKey = @c_Param01
+   END
   
 QUIT_SP:
    IF OBJECT_ID('tempdb..#DirPDFTree') IS NOT NULL
@@ -310,7 +267,7 @@ QUIT_SP:
             COMMIT TRAN
          END          
       END
-      EXECUTE nsp_logerror @n_err, @c_errmsg, "isp_GetPrint2PDF_Generic"
+      EXECUTE nsp_logerror @n_err, @c_errmsg, "isp_GetMBOLPackingListPDF01"
       --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
@@ -330,5 +287,5 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-GRANT EXECUTE ON [dbo].[isp_GetPrint2PDF_Generic] TO NSQL
+GRANT EXECUTE ON [dbo].[isp_GetMBOLPackingListPDF01] TO NSQL
 GO

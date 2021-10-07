@@ -19,7 +19,7 @@ GO
 /* Called By:                                                              */  
 /*                                                                         */  
 /*                                                                         */  
-/* PVCS Version: 1.0                                                       */  
+/* PVCS Version: 1.6                                                       */  
 /*                                                                         */  
 /* Version: 7.0                                                            */  
 /*                                                                         */  
@@ -35,6 +35,9 @@ GO
 /*                                Packing Module (Normal & ECOM) (WL03)    */
 /* 09-09-2021     1.4    WLChooi  WMS-17943 - Allow continue other printing*/
 /*                                method if print PDF failed (WL04)        */
+/* 04-10-2021     1.5    WLChooi  DevOps Combine Script                    */
+/* 04-10-2021     1.6    WLChooi  WMS-18094 - Add Function to Print From   */
+/*                                MBOL Screen (WL05)                       */
 /***************************************************************************/    
 CREATE PROC [dbo].[isp_GetPrint2PDFConfig]    
 (     
@@ -348,6 +351,29 @@ BEGIN
                           +' WHERE ORDERS.Orderkey = @c_Param01 '
       END
       --WL02 E
+      --WL05 S
+      ELSE IF @c_FromModule = 'MBOL'
+      BEGIN
+         IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE OrderKey = @c_Param01 AND StorerKey = @c_Storerkey)
+         BEGIN
+            SET @c_SQL = N' SELECT @n_RecFound = COUNT(1)'
+            SET @c_SQLFrom =  ' FROM MBOL (NOLOCK) '
+                             +' JOIN MBOLDETAIL (NOLOCK) ON MBOLDETAIL.MBOLKey = MBOL.MBOLKey'
+                             +' JOIN ORDERS (NOLOCK) ON MBOLDETAIL.Orderkey = ORDERS.Orderkey '
+                             +' LEFT JOIN ORDERINFO (NOLOCK) ON ORDERINFO.Orderkey = ORDERS.Orderkey '
+                             +' WHERE MBOLDETAIL.Orderkey = @c_Param01 '
+         END
+         ELSE
+         BEGIN
+            SET @c_SQL = N' SELECT @n_RecFound = COUNT(1)'
+            SET @c_SQLFrom =  ' FROM MBOL (NOLOCK) '
+                             +' JOIN MBOLDETAIL (NOLOCK) ON MBOLDETAIL.MBOLKey = MBOL.MBOLKey'
+                             +' JOIN ORDERS (NOLOCK) ON MBOLDETAIL.Orderkey = ORDERS.Orderkey '
+                             +' LEFT JOIN ORDERINFO (NOLOCK) ON ORDERINFO.Orderkey = ORDERS.Orderkey '
+                             +' WHERE MBOL.MBOLKey = @c_Param01 '
+         END
+      END
+      --WL05 E
 
       SET @c_SQL = @c_SQL + @c_SQLFrom
           
