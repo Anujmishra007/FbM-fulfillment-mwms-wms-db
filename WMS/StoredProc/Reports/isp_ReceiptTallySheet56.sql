@@ -26,8 +26,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
+/* 19-AUG-2021  CSCHONG 1.1   WMS-17719 add new field (CS01)            */
+/* 11-OCT-2021  CSCHONG 1.2   Devops Scripts combine                    */
 /************************************************************************/
-CREATE PROC [dbo].[isp_ReceiptTallySheet56] (
+CREATE  PROC [dbo].[isp_ReceiptTallySheet56] (
 	   @c_receiptkeystart NVARCHAR(10),
 	   @c_receiptkeyend   NVARCHAR(10),
 	   @c_storerkeystart  NVARCHAR(15),
@@ -40,7 +42,7 @@ BEGIN
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF
 								  
-   SELECT (Storer.company + RECEIPT.StorerKey) as storerkey,   
+   SELECT (RTRIM(Storer.company) + RECEIPT.StorerKey) as storerkey,   
          RECEIPT.ContainerKey,   
          RECEIPT.Facility ,    
          RECEIPT.ReceiptDate,
@@ -48,7 +50,7 @@ BEGIN
          'PO' as PO,
          RECEIPT.POKey,   
          RECEIPTDETAIL.Lottable01,
-         RECEIPTDETAIL.Sku,   
+         RTRIM(RECEIPTDETAIL.Sku) AS sku,   
          RECEIPTDETAIL.Lottable08,
          SKU.Descr,
          RECEIPTDETAIL.Lottable02,
@@ -57,7 +59,8 @@ BEGIN
          CASE WHEN PACK.Casecnt = 0 THEN 1 ELSE CEILING(SUM(RECEIPTDETAIL.QtyExpected)/PACK.Casecnt) END AS QTYPERCASE,
          SUM(RECEIPTDETAIL.QtyExpected) AS QtyExpected,
          SKU.STDGROSSWGT as STDGROSSWGT,
-         SKU.STDCUBE as STDCUBE
+         SKU.STDCUBE as STDCUBE,
+         RECEIPT.CarrierReference AS CarrierReference          --CS01
    FROM RECEIPT WITH (NOLOCK) 
    JOIN RECEIPTDETAIL WITH (NOLOCK) ON ( RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey ) 
    JOIN SKU WITH (NOLOCK) ON ( SKU.StorerKey = RECEIPTDETAIL.StorerKey 
@@ -68,14 +71,14 @@ BEGIN
      AND ( RECEIPT.ReceiptKey <= @c_receiptkeyend ) 
      AND ( RECEIPT.Storerkey >= @c_storerkeystart ) 
      AND ( RECEIPT.Storerkey <= @c_storerkeyend ) 
-   GROUP BY  (Storer.company + RECEIPT.StorerKey),   
+   GROUP BY  (RTRIM(Storer.company) + RECEIPT.StorerKey),   
              RECEIPT.ContainerKey,   
              RECEIPT.Facility ,    
              RECEIPT.ReceiptDate,   
              RECEIPT.ReceiptKey, 
              RECEIPT.POKey,   
              RECEIPTDETAIL.Lottable01,
-             RECEIPTDETAIL.Sku,   
+             RTRIM(RECEIPTDETAIL.Sku),   
              RECEIPTDETAIL.Lottable08,
              SKU.Descr,
              RECEIPTDETAIL.Lottable02,
@@ -83,8 +86,8 @@ BEGIN
              PACK.Casecnt, 
              RECEIPTDETAIL.QtyExpected,
              SKU.STDGROSSWGT,
-             SKU.STDCUBE
-   ORDER BY RECEIPT.ReceiptKey, RECEIPTDETAIL.Sku
+             SKU.STDCUBE,receipt.CarrierReference
+   ORDER BY RECEIPT.ReceiptKey, RTRIM(RECEIPTDETAIL.Sku)
    
 END        
 GO

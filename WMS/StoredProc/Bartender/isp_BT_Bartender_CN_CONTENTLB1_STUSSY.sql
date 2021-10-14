@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                       
 /*                                                                            */                       
 /* Date        Rev  Author     Purposes                                       */      
-/* 09-Aug-2021 1.0  WLChooi    Created - DEVOPS Combine Script (WMS-17654)    */     
+/* 09-Aug-2021 1.0  WLChooi    Created - DEVOPS Combine Script (WMS-17654)    */  
+/* 12-Oct-2021 1.1  WLChooi    WMS-18122 - Add Col31 (WL01)                   */   
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_Bartender_CN_CONTENTLB1_STUSSY]                            
@@ -93,6 +94,7 @@ BEGIN
          , @n_SumQty            INT = 0  
          , @n_Cube              FLOAT = 0.00
          , @n_Weight            FLOAT = 0.00
+         , @c_Col31             NVARCHAR(80)   --WL01
 
    SET @d_Trace_StartTime = GETDATE()        
    SET @c_Trace_ModuleName = ''        
@@ -183,6 +185,7 @@ BEGIN
               , @c_Col02     = ISNULL(ORDERS.ExternOrderKey,'')
               , @c_Col03     = ISNULL(ORDERS.BuyerPO,'')
               , @c_Col24     = CONVERT(NVARCHAR(10), ORDERS.AddDate, 120)
+              , @c_Col31     = ORDERS.C_Contact1   --WL01
    FROM PACKHEADER (NOLOCK)  
    JOIN ORDERS (NOLOCK) ON ORDERS.ORDERKEY = PACKHEADER.ORDERKEY 
    WHERE PACKHEADER.Pickslipno = @c_Sparm01 
@@ -200,6 +203,7 @@ BEGIN
                  , @c_Col02     = ISNULL(ORDERS.ExternOrderKey,'')
                  , @c_Col03     = ISNULL(ORDERS.BuyerPO,'')
                  , @c_Col24     = CONVERT(NVARCHAR(10), ORDERS.AddDate, 120)
+                 , @c_Col31     = ORDERS.C_Contact1   --WL01
       FROM PACKHEADER (NOLOCK)  
       JOIN LOADPLANDETAIL (NOLOCK) ON PACKHEADER.LOADKEY = LOADPLANDETAIL.LOADKEY  
       JOIN ORDERS (NOLOCK) ON ORDERS.ORDERKEY = LOADPLANDETAIL.ORDERKEY  
@@ -244,7 +248,7 @@ BEGIN
                     + ' '''', '''', '''', @c_Col24, CONVERT(NVARCHAR(10), PH.EditDate, 120), ' + CHAR(13)   --25
                     + ' CASE WHEN @c_LastCtn = ''Y'' THEN CAST(PD.CartonNo AS NVARCHAR) + ''/'' + @c_MaxCtn ELSE CAST(PD.CartonNo AS NVARCHAR) END, ' + CHAR(13)   --26
                     + ' '''', '''', '''', PD.LabelNo, ' + CHAR(13)  --30     
-                    + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --40        
+                    + ' @c_Col31, '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --40   --WL01        
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --50                           
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', PD.CartonNo, @c_Sparm01 ' + CHAR(13)  --60                
                     + ' FROM PACKDETAIL PD (NOLOCK) ' + CHAR(13)
@@ -277,6 +281,7 @@ BEGIN
                          + ', @c_Col24            NVARCHAR(80) '  
                          + ', @c_LastCtn          NVARCHAR(80) '
                          + ', @c_MaxCtn           NVARCHAR(80) '
+                         + ', @c_Col31            NVARCHAR(80) '   --WL01
                                 
    EXEC sp_ExecuteSql     @c_SQL           
                         , @c_ExecArguments          
@@ -291,6 +296,7 @@ BEGIN
                         , @c_Col24
                         , @c_LastCtn
                         , @c_MaxCtn
+                        , @c_Col31   --WL01
               
    IF @b_debug = 1              
    BEGIN                
@@ -377,7 +383,7 @@ BEGIN
             SELECT TOP 1 Col01,Col02,Col03,'','','','','','','',         
                         '','','','','', '','','','','',  
                         '','','',Col24,Col25,Col26,'','','',Col30,                  
-                        '','','','','', '','','','','',
+                        Col31,'','','','', '','','','','',   --WL01
                         '','','','','', '','','','','',                   
                         '','','','','', '','','',Col59,Col60   
             FROM #Result WHERE Col60 <> ''  

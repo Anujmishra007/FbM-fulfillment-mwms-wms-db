@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 07-OCT-2021  CSCHONG       Devops scripts combine                   */
 /************************************************************************/
 
 CREATE PROC dbo.isp_GetPickSlipWave32 (
@@ -165,7 +166,8 @@ CREATE TABLE #temp_pick (
    ID                NVARCHAR(18) NULL,
    CountSku          NVARCHAR(10) NULL,
    InterModalVehicle NVARCHAR(30) NULL,                                                                    
-   ServiceMode       NVARCHAR(30) NULL)                                                                    
+   ServiceMode       NVARCHAR(30) NULL)      
+                                                                 
 SELECT @n_continue = 1
 SELECT @n_RowNo = 0
 SELECT @c_firstorderkey = 'N'
@@ -489,13 +491,13 @@ BEGIN
 
 
       IF EXISTS(SELECT 1 FROM STORERCONFIG WITH (NOLOCK)
-                        WHERE Storerkey = @c_StorerKey AND 
-                              Configkey = 'ULVITF' AND 
-                              SVALUE = '1')
+                WHERE Storerkey = @c_StorerKey AND 
+                      Configkey = 'ULVITF' AND 
+                      SVALUE = '1')
          AND EXISTS(SELECT 1 FROM STORERCONFIG WITH (NOLOCK)
-                        WHERE Storerkey = @c_StorerKey AND 
-                              Configkey = 'ULVITF_PCF_WHEN_GEN_PICKSLIP' AND 
-                              SVALUE = '1')    -- New Config Key
+                    WHERE Storerkey = @c_StorerKey AND 
+                    Configkey = 'ULVITF_PCF_WHEN_GEN_PICKSLIP' AND 
+                    SVALUE = '1')    -- New Config Key
       BEGIN
          IF NOT EXISTS (SELECT 1 FROM  STORERCONFIG WITH (NOLOCK)
                                 WHERE  StorerKey = @c_StorerKey AND 
@@ -503,18 +505,18 @@ BEGIN
                                        SValue = '1' )
          BEGIN
             SELECT @c_pickheaderkey = PickHeaderKey 
-              FROM PickHeader WITH (NOLOCK)
-             WHERE WaveKey = @c_WaveKey
-               AND Zone = '8'
-               AND OrderKey = @c_OrderKey
+            FROM PickHeader WITH (NOLOCK)
+            WHERE WaveKey = @c_WaveKey
+            AND Zone = '8'
+            AND OrderKey = @c_OrderKey
 
             SELECT @c_OrderLineNumber = ''
             WHILE ( @n_continue = 1 or @n_continue = 2 )
             BEGIN
                SELECT @c_OrderLineNumber = MIN (Orderlinenumber)
-                 FROM ORDERDETAIL WITH (NOLOCK)
-                WHERE Orderkey = @c_OrderKey
-                  AND ORDERLINENUMBER > @c_OrderLineNumber
+               FROM ORDERDETAIL WITH (NOLOCK)
+               WHERE Orderkey = @c_OrderKey
+               AND ORDERLINENUMBER > @c_OrderLineNumber
 
                IF ISNULL(@c_OrderLineNumber,'') = ''
                   BREAK
