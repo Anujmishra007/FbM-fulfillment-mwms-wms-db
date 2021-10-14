@@ -31,6 +31,9 @@ GO
 /* 2021-02-19  Wan01    1.1   Execute Login @c_Username if <> SUSER_SNAME()*/
 /* 2021-03-31  Wan02    1.2   LFWM-2666 - PROD PH MNC LOTTABLE04 defaulting*/
 /*                            to 01011900                                */
+/* 2021-08-11  Wan03    1.3   LFWM-2935 - UAT - TW  Adjustment Lottable  */
+/*                            Input Validation                           */
+/* 2021-10-14  Wan03    1.0   DevOps Script Combine                      */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lspLottableRule_Wrapper]  
         @c_SPName                NVARCHAR(250)
@@ -349,10 +352,17 @@ BEGIN
          GOTO EXIT_SP
       END CATCH  
 
-      IF @b_Success  = 2 
+      IF @b_Success = 2 
       BEGIN
          SET @c_WarningMsg = @c_WarningMsg + ', ' +  @c_Errmsg
       END
+      ELSE        --(Wan03) - START
+      BEGIN
+         IF @c_Errmsg <> ''
+         BEGIN
+            SET @n_Continue = 3
+         END
+      END         --(Wan03) - END
       
       --(Wan02) - START
       IF @c_Lottable01 = '' OR @c_Lottable01 IS NULL SET @c_Lottable01 = ISNULL(RTRIM(@c_Lottable01Value),'')   
