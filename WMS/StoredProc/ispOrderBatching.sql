@@ -88,6 +88,8 @@ GO
 /*                            loc into two batch by config. Sort by loc */
 /* 19-Aug-2020  NJOW10  3.2   WMS-14811 determine single/multi order    */
 /*                            by ECOM_SINGLE_Flag                       */
+/* 05-Oct-2021  NJOW    3.3   DEVOPS combine scritp                     */
+/* 05-Oct-2021	NJOW11  3.4   WMS-18023 split batch by qty limit        */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispOrderBatching]  
@@ -101,7 +103,7 @@ CREATE PROC [dbo].[ispOrderBatching]
    , @c_CallSource  NVARCHAR(10) = '' -- NJOW04 'RPT'- call from report no regenerate. 'RPTREGEN' - call from report with regenerate
    , @c_WaveKey     NVARCHAR(10) = ''     --(Wan01) 
    , @c_UOM         NVARCHAR(500)= ''     --(Wan01) 
-   , @c_updatepick  NCHAR(1)     = 'N'    --(Wan03)
+   , @c_updatepick  NCHAR(5)     = 'N'    --(Wan03)
    , @c_rptprocess  NVARCHAR(10) = ''     --(CS01)
 
 AS  
@@ -147,7 +149,14 @@ BEGIN
    ,  @c_OrdBatchM9LocNotSplitBth  NVARCHAR(30) --NJOW09
    ,  @n_NextLocOrdCnt             INT          --NJOW09
    ,  @c_OrdBatchBySingleFlag      NVARCHAR(10) --NJOW10
-
+   
+   --NJOW11
+   DECLARE 
+      @n_CurrBatchQty              INT
+   ,  @n_CurrOrdQty                INT
+   ,  @n_MaxBatchQty               INT
+   ,  @c_OrdBatchQtyLimit          NVARCHAR(30)
+   
   SET @c_ZoneList = @c_PickZones         --(Wan01)
   SET @c_replenishrequire = ''               --(CS01)
          
@@ -432,6 +441,15 @@ BEGIN
       , @n_err       = @n_err             OUTPUT    
       , @c_errmsg    = @c_errmsg          OUTPUT  
       , @c_Option1   = @c_ExcludeLocType  OUTPUT
+   
+   --NJOW11   
+   SET @c_OrdBatchQtyLimit = ''
+   IF LEFT(@c_updatepick,2) IN ('NQ','YQ') AND ISNUMERIC(SUBSTRING(@c_updatepick,3,3)) = 1
+   BEGIN
+   	  SET @c_OrdBatchQtyLimit = '1'
+   	  SET @n_MaxBatchQty = SUBSTRING(@c_updatepick,3,3)
+   	  SET @c_updatepick = LEFT(@c_updatepick,1)
+   END
 
    SET @c_SQL= N'SELECT DISTINCT'     
              + ' PD.PickDetailKey'
@@ -833,44 +851,45 @@ BEGIN
          SET @c_BatchCode = 'B' + @c_BatchCode
       END
       
+      SET @n_CurrBatchQty = 0  --NJOW11
       WHILE (@n_Count > 0)
       BEGIN
-          IF @c_Mode = '9' --NJOW04  single order
-          BEGIN
-          	IF @c_OrdBatchM9LocNotSplitBth = '1'
-          	BEGIN
-               --NJOW09              
-               SET @c_CurrLoc = ''
-               SELECT TOP 1 
-                      @c_OrderKey = O.OrderKey,
-                      @c_CurrLoc = MIN(O.Loc)
-               FROM #OrderTable O
-               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
-               GROUP BY O.Orderkey
-               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey                        		
+         IF @c_Mode = '9' --NJOW04  single order
+         BEGIN
+         	IF @c_OrdBatchM9LocNotSplitBth = '1'
+         	BEGIN
+              --NJOW09              
+              SET @c_CurrLoc = ''
+              SELECT TOP 1 
+                     @c_OrderKey = O.OrderKey,
+                     @c_CurrLoc = MIN(O.Loc)
+              FROM #OrderTable O
+              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+              GROUP BY O.Orderkey
+              ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey                        		
 
-               /*SET @c_CurrLocType = ''
-               SELECT TOP 1 
-                      @c_OrderKey = O.OrderKey,
-                      @c_CurrLoc = MIN(O.Loc),
-                      @c_CurrLocType = MIN(ISNULL(SL.LocationType,''))
-               FROM #OrderTable O
-               JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
-               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
-               LEFT JOIN SKUXLOC SL (NOLOCK) ON L.Loc = SL.Loc AND PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')
-               GROUP BY O.Orderkey
-               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/                        		
-          	END
-          	ELSE
-          	BEGIN
-               SELECT TOP 1 
-                      @c_OrderKey = O.OrderKey
-               FROM #OrderTable O
-               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
-               GROUP BY O.Orderkey
-               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey --NJOW09
-            END            
-          END
+              /*SET @c_CurrLocType = ''
+              SELECT TOP 1 
+                     @c_OrderKey = O.OrderKey,
+                     @c_CurrLoc = MIN(O.Loc),
+                     @c_CurrLocType = MIN(ISNULL(SL.LocationType,''))
+              FROM #OrderTable O
+              JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+              LEFT JOIN SKUXLOC SL (NOLOCK) ON L.Loc = SL.Loc AND PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')
+              GROUP BY O.Orderkey
+              ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/                        		
+         	END
+         	ELSE
+         	BEGIN
+              SELECT TOP 1 
+                     @c_OrderKey = O.OrderKey
+              FROM #OrderTable O
+              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+              GROUP BY O.Orderkey
+              ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey --NJOW09
+           END            
+         END
          ELSE IF @n_Counter = 1
          BEGIN
             -- Clear Diff field for each new batch (Chee01)
@@ -933,6 +952,58 @@ BEGIN
             GROUP BY OrderKey 
             ORDER BY AVG(CAST(Diff AS FLOAT))
          END
+         
+         --NJOW11
+         IF @c_OrdBatchQtyLimit = '1'
+         BEGIN
+         	  SET @n_CurrOrdQty = 0
+            SELECT @n_CurrOrdQty = SUM(PD.Qty)
+            FROM PICKDETAIL PD (NOLOCK) 
+            JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
+            WHERE PD.Orderkey = @c_Orderkey
+            AND SKU.BUSR7 = '20' 
+                        
+            IF @n_CurrOrdQty + @n_CurrBatchQty > @n_MaxBatchQty  
+            BEGIN
+            	  IF @n_CurrOrdQty > @n_MaxBatchQty AND @n_CurrBatchQty = 0
+            	  BEGIN   
+            	  	--The order qty more than batch limit, just place one order into one batch and close it                               	  	
+                  UPDATE #BatchResultTable                                                
+                  SET Status = '9'                                                        
+                                                                                          
+                  INSERT INTO #BatchResultTable (BatchNo, OrderKey, Loc, Score)           
+                  SELECT                                                                  
+                     CAST(@n_BatchNo AS NVARCHAR),                                        
+                     OrderKey,                                                                                                                                                      
+                     Loc,                                                                 
+                     Score                                                                
+                  FROM #OrderTable O                                                      
+                  WHERE OrderKey = @c_OrderKey                                            
+                                                                                          
+                  DELETE FROM #OrderTable                                                 
+                  WHERE OrderKey = @c_OrderKey                                            
+                                                                                          
+                  DELETE FROM #OrderAvgScore                                              
+                  WHERE Orderkey = @c_Orderkey
+                                    
+                  SELECT @n_Count = COUNT(1) 
+                  FROM #OrderTable                                               
+                  
+                  SET @n_CurrBatchQty = 0
+            	    GOTO CloseBatch                           	              	  	 
+            	  END
+            	  ELSE
+            	  BEGIN
+            	     --close current batch and process this order again in next batch
+            	     SET @n_CurrBatchQty = 0
+            	     GOTO CloseBatch
+            	  END
+            END
+            ELSE
+            BEGIN
+            	 SET @n_CurrBatchQty = @n_CurrBatchQty + @n_CurrOrdQty
+            END
+         END
 
          UPDATE #BatchResultTable 
          SET Status = '9'
@@ -940,7 +1011,7 @@ BEGIN
          INSERT INTO #BatchResultTable (BatchNo, OrderKey, Loc, Score) 
          SELECT
             CAST(@n_BatchNo AS NVARCHAR),
-            OrderKey, 
+            OrderKey,             
             Loc,
             Score
          FROM #OrderTable O
@@ -977,10 +1048,14 @@ BEGIN
          SELECT @n_Count = COUNT(1) 
          FROM #OrderTable
          
-         IF @n_Counter > @n_OrderCount 
-            OR (@c_Mode = '9' AND  @c_OrdBatchM9LocNotSplitBth = '1' AND (@n_Counter - 1) + @n_NextLocOrdCnt > @n_OrderCount AND @c_Currloc <> @c_NextLoc) --NJOW09 if next loc ord cnt can't fit curr batch create new batch
+         IF (@n_Counter > @n_OrderCount 
+            OR (@c_Mode = '9' AND  @c_OrdBatchM9LocNotSplitBth = '1' AND (@n_Counter - 1) + @n_NextLocOrdCnt > @n_OrderCount AND @c_Currloc <> @c_NextLoc)) --NJOW09 if next loc ord cnt can't fit curr batch create new batch
+            AND @n_OrderCount > 0  --NJOW11
             --AND NOT (@c_Mode = '9' AND @c_CurrLoc = @c_NextLoc AND @c_CurrLocType NOT IN('PICK','CASE') AND @c_OrdBatchM9LocNotSplitBth = '1')  --NJOW09
          BEGIN
+         	  --NJOW11
+         	  CloseBatch: 
+         	  
          	  print 'close group'
             IF @b_debug = 1
             BEGIN
@@ -1286,10 +1361,6 @@ Quit:
       RETURN  
    END  
 END -- Procedure
-
 GO
-
-
-
 GRANT EXECUTE ON [dbo].[ispOrderBatching] TO nSQL 
 GO
