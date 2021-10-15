@@ -29,6 +29,7 @@ GO
 /* 16-Aug-2021  NJOW01  1.2   WMS-17740 Allow finalize zero qty for itf */
 /* 19-May-2021  WLChooi 1.3   WMS-17048 Add Channel Transfer Extended   */
 /*                            Validation (WL01)                         */
+/* 11-Oct-2021  LZG     1.4   JSM-24637 - Revised error message (ZG01)  */
 /************************************************************************/
 CREATE PROC dbo.isp_FinalizeChannelTransfer
       @c_ChannelTransferKey         NVARCHAR(10)
@@ -372,7 +373,9 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 62090
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': FromQty < Channel Available Qty Found.'
+      --SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': FromQty < Channel Available Qty Found.'  -- ZG01
+      --                + '. (isp_FinalizeChannelTransfer)' 
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': FromQty > Channel Available Qty Found.'    -- ZG01
                       + '. (isp_FinalizeChannelTransfer)' 
       GOTO QUIT_SP
    END
