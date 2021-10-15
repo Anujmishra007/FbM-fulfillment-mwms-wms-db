@@ -30,6 +30,8 @@ GO
 /* Date        Author      Ver   Purposes                                  */
 /* 12-MAY-2021 CSCHONG     1.1   WMS-16820 Fix dulicated line (CS01)       */
 /* 10-JUN-2021 MINGLE      1.2   WMS-17270 Add buyerpo and codelkup(ML01)  */
+/* 08-SEP-2021 MINGLE      1.3   WMS-17906 Add new mappings(ML02)          */
+/* 15-Oct-2021 Mingle      1.3   DevOps Combine Script                     */
 /***************************************************************************/
 
 CREATE PROC dbo.isp_GetPickSlipOrders03i
@@ -165,15 +167,19 @@ BEGIN TRAN
          ,  SysQty         INT     
          ,  ORDGRP         NVARCHAR(20)   NULL
          ,  LOTT12         NVARCHAR(30)   NULL
+         ,  LOTLot12       NVARCHAR(30)   NULL
          ,  BatchNo        NVARCHAR(60)   NULL
+         ,  BatchNo2       NVARCHAR(60)   NULL
          ,  SerialNo       NVARCHAR(60)   NULL 
+         ,  SerialNo2      NVARCHAR(60)   NULL
          ,  PackUOM1       NVARCHAR(20)   NULL
          ,  PackUOM2       NVARCHAR(20)   NULL
          ,  PackUOM3       NVARCHAR(20)   NULL 
          ,  PInnerPack     FLOAT   
          ,  PUOM3Qty       INT
          ,  buyerpo        NVARCHAR(20)   NULL     --M01
-         ,  SHOWBUYERPO    NVARCHAR(5)    NULL     --M01                              
+         ,  SHOWBUYERPO    NVARCHAR(5)    NULL     --M01
+         ,  SHOWFIELD      NVARCHAR(5)    NULL     --M01                              
          )                                                             
 
    -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 8 - By Order
@@ -235,10 +241,11 @@ BEGIN TRAN
          ,  Ovas                   
          ,  Putawayzone 
          ,  SysQty
-         ,  ORDGRP,LOTT12,BatchNo,SerialNo
+         ,  ORDGRP,LOTT12,LOTLot12,BatchNo,BatchNo2,SerialNo,SerialNo2
          ,  PackUOM1,PackUOM2,PackUOM3,PInnerPack,PUOM3Qty
          ,  buyerpo     --M01 
-         ,  SHOWBUYERPO --M01  
+         ,  SHOWBUYERPO --M01 
+         ,  SHOWFIELD 
          ) 
    SELECT ( SELECT PickHeaderkey
             FROM PICKHEADER (NOLOCK)
@@ -300,11 +307,15 @@ BEGIN TRAN
          ,ISNULL(LOTxLOCxID.Qty,0)                 AS SysQty
          ,ISNULL(ORDERS.Ordergroup,'')             AS ORDGRP
          ,ISNULL(RTRIM(OD.Lottable12),'')   AS Lottable12
-         ,(ISNULL(RTRIM(OD.Lottable08),'') +ISNULL(RTRIM(OD.Lottable09),'') ) AS BatchNo  
+         ,ISNULL(RTRIM(LOTATTRIBUTE.Lottable12),'')   AS LOTLot12   --ML02
+         ,(ISNULL(RTRIM(OD.Lottable08),'') +ISNULL(RTRIM(OD.Lottable09),'') ) AS BatchNo 
+         ,(ISNULL(RTRIM(LOTATTRIBUTE.Lottable08),'') +ISNULL(RTRIM(LOTATTRIBUTE.Lottable09),'') ) AS BatchNo2   --ML02 
          ,(ISNULL(RTRIM(OD.Lottable10),'') +ISNULL(RTRIM(OD.Lottable11),'') ) AS SerialNo
+         ,(ISNULL(RTRIM(LOTATTRIBUTE.Lottable10),'') +ISNULL(RTRIM(LOTATTRIBUTE.Lottable11),'') ) AS SerialNo2   --ML02
          ,PACK.PackUOM1 ,PACK.PackUOM2,PACK.PackUOM3,ISNULL(Pack.InnerPack,0),ISNULL(Pack.Qty,0)
          ,ISNULL(ORDERS.buyerpo,'') AS buyerpo     --M01
          ,ISNULL(CL.SHORT,'') AS SHOWBUYERPO
+         ,ISNULL(CL1.SHORT,'') AS SHOWFIELD
          FROM LOADPLANDETAIL WITH (NOLOCK)
          JOIN ORDERS        WITH (NOLOCK) ON ( ORDERS.Orderkey = LoadPlanDetail.Orderkey )
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = ORDERS.orderkey
@@ -320,6 +331,8 @@ BEGIN TRAN
          JOIN LOTxLOCxID    WITH (NOLOCK) ON ( PICKDETAIL.LOC = LOTxLOCxID.LOC AND PICKDETAIL.LOT = LOTxLOCxID.LOT AND PICKDETAIL.ID = LOTxLOCxID.ID )
          LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'REPORTCFG' AND CL.CODE = 'SHOWBUYERPO'      --M01
                                              AND CL.LONG = 'r_dw_print_pickorder03i' AND CL.STORERKEY = ORDERS.STORERKEY )
+         LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.LISTNAME = 'REPORTCFG' AND CL1.CODE = 'SHOWFIELD'      --M01
+                                              AND CL1.LONG = 'r_dw_print_pickorder03i' AND CL1.STORERKEY = ORDERS.STORERKEY )
          WHERE PICKDETAIL.Status >= '0'
          AND LOADPLANDETAIL.LoadKey = @c_LoadKey
          GROUP BY PICKDETAIL.OrderKey 
@@ -360,11 +373,15 @@ BEGIN TRAN
          ,ISNULL(RTRIM(SKU.ovas),'')         
          ,ISNULL(RTRIM(LOC.Putawayzone),'')
          ,ISNULL(LOTxLOCxID.Qty,0)
-         ,ISNULL(ORDERS.Ordergroup,'') ,ISNULL(RTRIM(OD.Lottable12),'') ,ISNULL(RTRIM(OD.Lottable08),'')
-         ,ISNULL(RTRIM(OD.Lottable09),''),ISNULL(RTRIM(OD.Lottable10),''),ISNULL(RTRIM(OD.Lottable11),'')   
+         ,ISNULL(ORDERS.Ordergroup,'') 
+         ,ISNULL(RTRIM(OD.Lottable12),'') ,ISNULL(RTRIM(OD.Lottable08),'')
+         ,ISNULL(RTRIM(OD.Lottable09),''),ISNULL(RTRIM(OD.Lottable10),''),ISNULL(RTRIM(OD.Lottable11),'')
+         ,ISNULL(RTRIM(LOTATTRIBUTE.Lottable12),'') ,ISNULL(RTRIM(LOTATTRIBUTE.Lottable08),'')   --ML02
+         ,ISNULL(RTRIM(LOTATTRIBUTE.Lottable09),''),ISNULL(RTRIM(LOTATTRIBUTE.Lottable10),''),ISNULL(RTRIM(LOTATTRIBUTE.Lottable11),'')   --ML02   
          ,PACK.PackUOM1 ,PACK.PackUOM2,PACK.PackUOM3,ISNULL(Pack.InnerPack,0),ISNULL(Pack.Qty,0) 
          ,ISNULL(ORDERS.buyerpo,'')     --M01
          ,ISNULL(CL.SHORT,'')           --M01
+         ,ISNULL(CL1.SHORT,'') 
 
    BEGIN TRAN
    -- Uses PickType as a Printed Flag
@@ -533,10 +550,11 @@ BEGIN TRAN
                           ELSE 0 END  
          , Qty  
          , SysQty
-         , ORDGRP,LOTT12,BatchNo,SerialNo
+         , ORDGRP,LOTT12,lotlOT12,BatchNo,BatchNo2,SerialNo,SerialNo2
          , PackUOM1 ,PackUOM2,PackUOM3,ISNULL(PInnerPack,0),ISNULL(PUOM3Qty,0)
          , buyerpo     --M01
          , SHOWBUYERPO --ML01
+         , SHOWFIELD
    FROM #TEMP_PICK
 
    DROP TABLE #TEMP_PICK
