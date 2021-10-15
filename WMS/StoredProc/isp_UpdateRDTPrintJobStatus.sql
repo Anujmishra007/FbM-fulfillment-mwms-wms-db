@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,6 +31,9 @@ GO
 /* 2019-06-16  James    1.2   Comment commit tran before start          */
 /*                            transaction (james01)                     */
 /* 2020-11-23  Wan02    1.3   Fixed.Insert NULL to RDT.RDTPRINTJOB_LOG  */
+/* 2021-07-28  Wan03    1.4   LFWM-2800 - RG UAT PB Report Print Preview*/
+/*                            SP & sharedrive for PDF Storage           */
+/* 2021-09-24  Wan03    1.4   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC [dbo].[isp_UpdateRDTPrintJobStatus]
       @n_JobID          BIGINT
@@ -110,7 +113,8 @@ BEGIN
          ,  [Parm19]        
          ,  [Parm20]        
          ,  [Function_ID] 
-         ,  [ReportLineNo]            
+         ,  [ReportLineNo]
+         ,  [PDFPreview]                                 --(Wan03)         
          )
 
       SELECT   [JobId]         
@@ -157,6 +161,7 @@ BEGIN
             ,  [Parm20]  
             ,  [Function_ID] 
             ,  [ReportLineNo] 
+            ,  [PDFPreview]                                 --(Wan04)   
       FROM RDT.RDTPRINTJOB WITH (NOLOCK)
       WHERE JobID = @n_JobId   
       
@@ -172,7 +177,7 @@ BEGIN
          GOTO QUIT_SP
       END  
       
-      DELETE RDT.RDTPRINTJOB  
+      DELETE RDT.RDTPRINTJOB   
       WHERE JobID = @n_JobId   
       
       SET @n_Err = @@ERROR

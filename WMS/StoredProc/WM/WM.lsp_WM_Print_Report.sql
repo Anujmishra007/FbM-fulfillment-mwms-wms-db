@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -30,9 +30,12 @@ GO
 /*                            Phase 2  Backend Setup  SPs Setup         */
 /* 2021-02-15  Wan01    1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 2021-06-17  Wan02    1.2   LFWM-2841 - SCE JReport Phase 1 & Phase 2 */
-/*                            SCE JReport Rebrand to Logi Report in UAT &*/
-/*                            PROD                                      */
+/* 2021-06-17  Wan02    1.2   LFWM-2841 - SCE JReport Phase 1 & Phase 2 */  
+/*                            SCE JReport Rebrand to Logi Report in UAT &*/  
+/*                            PROD                                      */ 
+/* 2021-06-03  Wan03    1.3   LFWM-2800 - RG UAT PB Report Print Preview*/
+/*                            SP & sharedrive for PDF Storage           */
+/* 2021-09-24  Wan03    1.3   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -68,6 +71,8 @@ CREATE PROC [WM].[lsp_WM_Print_Report]
          , @n_Err                INT            OUTPUT
          , @c_ErrMsg             NVARCHAR(255)  OUTPUT
          , @c_PrintSource        NVARCHAR(10)   = 'WMReport' --Wan01  1: Report, 2: JReport 
+         , @b_SCEPreView         INT            = 0          --(Wan03) -- 1:If call from Preview Button and not JREport
+         , @c_JobIDs             NVARCHAR(50)   = '' OUTPUT  --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
 AS
 BEGIN
    SET NOCOUNT ON
@@ -168,6 +173,8 @@ BEGIN
          , @c_PreprintSP            NVARCHAR(50)      = ''  
          , @c_PrintData             NVARCHAR(4000)    = ''
          , @c_JobType               NVARCHAR(30)      = ''  
+         
+         , @n_JobID                 INT               = 0   --(Wan03)
 
          , @c_PrinterGroup          NVARCHAR(10)      = ''
          , @c_Printer               NVARCHAR(30)      = ''
@@ -203,6 +210,8 @@ BEGIN
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
+   SET @c_JobIDs   = ''    --(Wan03)
+
    SET @n_Err = 0 
    --(Wan01) - START 
    IF SUSER_SNAME() <> @c_UserName 
@@ -223,7 +232,7 @@ BEGIN
 
    --(Wan01) - START
    BEGIN TRY
-   	
+      
 
       IF @n_NoOfCopy = 0  SET @n_NoOfCopy = '1'
    
@@ -868,6 +877,7 @@ BEGIN
                SET @c_ReportTemplate = ''
             END
 
+            SET @n_JobID = 0                       --(Wan03)
             BEGIN TRY
                EXEC  isp_PrintToRDTSpooler                      
                      @c_ReportType     = @c_ReportID         
@@ -907,6 +917,8 @@ BEGIN
                   ,  @c_Param19        = @c_Parm19             
                   ,  @c_Param20        = @c_Parm20   
                   ,  @c_ReportLineNo   = @c_ReportLineNo
+                  ,  @b_SCEPreView     = @b_SCEPreView           --(Wan03)
+                  ,  @n_JobID          = @n_JobID       OUTPUT   --(Wan03)
             END TRY
             BEGIN CATCH
                SET @n_err = 552655
@@ -921,7 +933,11 @@ BEGIN
                SET @c_errmsg = @c_errmsg
                GOTO EXIT_SP 
             END
-   
+            
+            IF @c_JobIDs <> '' SET @c_JobIDs = @c_JobIDs + '|'          --(Wan03)
+            
+            SET @c_JobIDs = @c_JobIDs + CONVERT(NVARCHAR(10),@n_JobID)  --(Wan03)
+            
             GOTO NEXT_REC
          END
 
@@ -945,12 +961,12 @@ BEGIN
       DEALLOCATE @CUR_GROUP
 
       --(Wan01) - START
-
       IF EXISTS (SELECT 1 FROM @RPTURL)
       BEGIN
          SELECT RowNo, ReportID, DetailRowID, Report_URL FROM @RPTURL
       END
       --(Wan01) - END
+      
    END TRY
    BEGIN CATCH
       SET @n_Continue = 3

@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -28,6 +28,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-02-25  Wan01    1.1   Add Big Outer Try/Catch                   */ 
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-06-03  Wan02    1.2   LFWM-2800 - RG UAT PB Report Print Preview*/
+/*                            SP & sharedrive for PDF Storage           */
+/* 2021-09-24  Wan02    1.2   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Print_ViewReport]
            @c_ModuleID           NVARCHAR(30)  = 'ViewReport'
@@ -59,6 +62,8 @@ CREATE PROC [WM].[lsp_WM_Print_ViewReport]
          , @b_Success            INT            OUTPUT
          , @n_Err                INT            OUTPUT
          , @c_ErrMsg             NVARCHAR(255)  OUTPUT
+         , @b_SCEPreView         INT            = 0          --(Wan02)-- 1:If call from Preview Button
+         , @c_JobIDs             NVARCHAR(50)   = ''  OUTPUT --(Wan02)-- Standard with module report where by return multiple jobs ID. View Report only return 1 Jobid
 AS
 BEGIN
    SET NOCOUNT ON
@@ -76,12 +81,16 @@ BEGIN
          , @c_Facility              NVARCHAR(5)       = ''
          , @c_ReportTemplate        NVARCHAR(4000)    = ''
          , @c_SCEPrintType          NVARCHAR(30)      = ''
+         
+         , @n_JobID                 INT               = 0   --(Wan02)
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @b_Success  = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
+   
+   SET @c_JobIDs   = ''    --(Wan02)
 
    SET @n_Err = 0 
    --(Wan01) - START
@@ -165,7 +174,12 @@ BEGIN
             ,  @c_Param17        = @c_ParmValue17            
             ,  @c_Param18        = @c_ParmValue18             
             ,  @c_Param19        = @c_ParmValue19             
-            ,  @c_Param20        = @c_ParmValue20   
+            ,  @c_Param20        = @c_ParmValue20          --(Wan02)
+            ,  @c_ReportLineNo   = ''
+            ,  @b_SCEPreView     = @b_SCEPreView           --(Wan02)
+            ,  @n_JobID          = @n_JobID       OUTPUT   --(Wan02) 
+            
+            SET @c_JobIDs = CONVERT(NVARCHAR, @n_JobID)
       END TRY
       BEGIN CATCH
          SET @n_err = 554352

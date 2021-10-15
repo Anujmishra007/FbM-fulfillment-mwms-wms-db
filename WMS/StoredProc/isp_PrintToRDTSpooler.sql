@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Output Parameters:                                                   */
 /*                                                                      */
-/* PVCS Version: 2.0                                                    */
+/* PVCS Version: 1.9                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -41,49 +41,54 @@ GO
 /*                           WM-Fixed                                   */
 /* 25-JUN-2020  Wan07   1.8  WMS-13491 - SG - PMI - Packing [CR]        */
 /* 03-SEP-2021  WLChooi 1.9  WMS-17890 - Allow configure to use LABEL or*/
-/*                           Paper Printer from Codelkup (WL01)         */ 
-/* 07-SEP-2021  Wan08   2.0  LFWM-2993 - UAT - PH  Job is not triggered */  
-/*                           although report is successfully printed    */  
+/*                           Paper Printer from Codelkup (WL01)         */
+/* 07-SEP-2021  Wan08   2.0  LFWM-2993 - UAT - PH  Job is not triggered */
+/*                           although report is successfully printed    */
+/* 03-JUN-2021  Wan09   2.1  LFWM-2800 - RG UAT PB Report Print Preview */
+/*                           SP & sharedrive for PDF Storage            */
+/* 24-SEP-2021  Wan09   2.1  DevOps Combine Script                      */
 /************************************************************************/ 
 
-CREATE PROC [dbo].[isp_PrintToRDTSpooler] (   
-   @c_ReportType     NVARCHAR(10),   
-   @c_Storerkey      NVARCHAR(15),  
-   @b_success        INT OUTPUT,  
-   @n_err            INT OUTPUT,  
-   @c_errmsg         NVARCHAR(255) OUTPUT,  
-   @n_Noofparam      INT = 0,  
-   @c_Param01        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param02        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param03        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param04        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param05        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param06        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param07        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param08        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param09        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @c_Param10        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value  
-   @n_Noofcopy       INT = 1, --optional  
-   @c_UserName       NVARCHAR(128)='', --optional  
-   @c_Facility       NVARCHAR(5)='',  --optional  
-   @c_PrinterID      NVARCHAR(10)='', --optional  
-   @c_Datawindow     NVARCHAR(40)='', --optional  
-   @c_IsPaperPrinter NVARCHAR(5)='N', --optional  
-   @c_JobType        NVARCHAR(10)='DATAWINDOW', --optional (DATAWINDOW / COMMAND / DIRECTPRN / QCOMMANDER / BARTENDER / TCPSPOOLER)  
-   @c_PrintData      NVARCHAR(MAX)='' --optional apply for DIRECTPRN -- up to 8000  
-  ,@n_Function_ID    INT      = 0      --Optional  
-  ,@b_PrintFromWM    BIT      = 0      --(Wan06)  
-  ,@c_Param11        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param12        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param13        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param14        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param15        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param16        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param17        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param18        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param19        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_Param20        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate value  
-  ,@c_ReportLineNo   NVARCHAR(5)=''    --(Wan06)  
+CREATE PROC [dbo].[isp_PrintToRDTSpooler] ( 
+   @c_ReportType     NVARCHAR(10), 
+   @c_Storerkey      NVARCHAR(15),
+   @b_success        INT OUTPUT,
+   @n_err            INT OUTPUT,
+   @c_errmsg         NVARCHAR(255) OUTPUT,
+   @n_Noofparam      INT = 0,
+   @c_Param01        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param02        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param03        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param04        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param05        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param06        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param07        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param08        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param09        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @c_Param10        NVARCHAR(30)='',        --(Wan08) - Fixed Truncate Value
+   @n_Noofcopy       INT = 1, --optional
+   @c_UserName       NVARCHAR(128)='', --optional
+   @c_Facility       NVARCHAR(5)='',  --optional
+   @c_PrinterID      NVARCHAR(10)='', --optional
+   @c_Datawindow     NVARCHAR(40)='', --optional
+   @c_IsPaperPrinter NVARCHAR(5)='N', --optional
+   @c_JobType        NVARCHAR(10)='DATAWINDOW', --optional (DATAWINDOW / COMMAND / DIRECTPRN / QCOMMANDER / BARTENDER / TCPSPOOLER)
+   @c_PrintData      NVARCHAR(MAX)='' --optional apply for DIRECTPRN -- up to 8000
+  ,@n_Function_ID    INT      = 0      --Optional
+  ,@b_PrintFromWM    BIT      = 0      --(Wan06) 
+  ,@c_Param11        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param12        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param13        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param14        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param15        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param16        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param17        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param18        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param19        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_Param20        NVARCHAR(30)=''   --(Wan06)(Wan08) - Fixed Truncate Value 
+  ,@c_ReportLineNo   NVARCHAR(5)=''    --(Wan06) 
+  ,@b_SCEPreView     INT        = 0          --(Wan09)
+  ,@n_JobID          INT        = 0 OUTPUT   --(Wan09)
    )   
 AS
 BEGIN
@@ -99,7 +104,7 @@ BEGIN
       @c_TargetDB     NVARCHAR(20),
       @n_Mobile       INT,
       @c_PrintJobName NVARCHAR(50)
-   ,  @n_JobID        INT                    --(Wan01)
+   --,  @n_JobID        INT                    --(Wan01) --(Wan09)
    ,  @n_QueueID      INT                    --(Wan01)
    ,  @c_ProcessType  NVARCHAR(15)           --(Wan01)
    ,  @c_SpoolerGroup NVARCHAR(20)           --(Wan01)
@@ -116,8 +121,12 @@ BEGIN
    ,  @c_JobID             NVARCHAR(10)      --(Wan05) = ''
 
    ,  @n_Retry             INT = 1           --(Wan07) 
-
+   
    ,  @c_RdtPrintType      NVARCHAR(30) = '' --(WL01)
+   
+   ,  @c_PDFPreview        CHAR(1)      = 'N'--(Wan09)
+   ,  @c_CountryPDFFolder  NVARCHAR(30) = '' --(Wan09)
+   ,  @c_PDFPreviewServer  NVARCHAR(30) = '' --(Wan09)
 
    SET @n_starttcnt = @@TRANCOUNT
    SET @n_continue = 1
@@ -135,6 +144,8 @@ BEGIN
    
    IF ISNULL(@c_UserName,'') = ''
       SET @c_UserName = SUSER_SNAME()
+      
+   IF @b_SCEPreView = 1 SET @c_PrinterID = ''                           --(Wan09)
 
    IF ISNULL(@c_Facility,'') = ''
    BEGIN
@@ -219,6 +230,56 @@ BEGIN
    
    IF ISNULL(@c_PrinterID,'') = ''
    BEGIN
+      IF @b_SCEPreView = 1    --(Wan09) - START
+      BEGIN
+         SET @c_PDFPreview = 'Y'
+         
+         SELECT 
+               @c_PDFPreviewServer  = SValue  
+            ,  @c_CountryPDFFolder  = ISNULL(Option1,'')          
+         FROM StorerConfig (NOLOCK)  
+         WHERE ConfigKey='PDFPreviewServer'  
+         AND Storerkey = 'ALL'  
+         
+         IF @c_PDFPreviewServer = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 63505
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': PDFPreviewServer Not Setup.'
+            GOTO EXIT_SP
+         END
+         
+         IF @c_CountryPDFFolder = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 63506
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Country PDF Folder for Preview not Setup.'
+            GOTO EXIT_SP
+         END
+         
+         SET @c_SpoolerGroup = ''
+         SELECT @c_SpoolerGroup = rs.SpoolerGroup
+         FROM RDT.rdtSpooler AS rs  WITH (NOLOCK) 
+         WHERE rs.IPAddress = @c_PDFPreviewServer
+         
+         IF @c_SpoolerGroup = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 63507
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': SpoolerGroup not Setup.'
+            GOTO EXIT_SP
+         END
+         
+         SELECT TOP 1 @c_PrinterID = rp.PrinterID   
+         FROM rdt.RDTPrinter AS rp WITH (NOLOCK)
+         LEFT JOIN rdt.RDTPrintJob AS rpj WITH (NOLOCK) ON rp.PrinterID = rpj.Printer
+         WHERE rp.SpoolerGroup = @c_SpoolerGroup
+         GROUP BY rp.PrinterID
+         ORDER BY COUNT(rpj.Printer) 
+               ,  rp.PrinterID  
+      END
+      ELSE
+      BEGIN
         IF @c_IsPaperPrinter = 'Y'
         BEGIN
            SELECT TOP 1 @c_PrinterID = U.DefaultPrinter_Paper
@@ -235,6 +296,7 @@ BEGIN
            JOIN RDT.RDTPrinter P (NOLOCK) ON U.DefaultPrinter = P.PrinterID
            WHERE U.UserName = @c_UserName
         END
+     END                     --(Wan09) - END
    END
         
    IF ISNULL(@c_PrinterID,'') = ''
@@ -304,19 +366,22 @@ BEGIN
       END  
    END
 
-  
    --(Wan04) - START
    INSERT INTO RDT.RDTPrintJob(JobName, ReportID, JobStatus, Datawindow, NoOfParms
                               , Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10
                               , Parm11, Parm12, Parm13, Parm14, Parm15, Parm16, Parm17, Parm18, Parm19, Parm20                      --(Wan06)
                               , ReportLineNo                                                                                        --(Wan06)
-                              , Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, Storerkey, Function_ID)
+                              , Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, Storerkey, Function_ID
+                              , PDFPreview                                                                                          --(Wan09)
+                              )
    VALUES(@c_PrintJobName, @c_ReportType, '0', @c_DataWindow, @n_Noofparam
          ,@c_Param01, @c_Param02, @c_Param03, @c_Param04, @c_Param05, @c_Param06, @c_Param07, @c_Param08, @c_Param09, @c_Param10
          ,@c_Param11, @c_Param12, @c_Param13, @c_Param14, @c_Param15, @c_Param16, @c_Param17, @c_Param18, @c_Param19, @c_Param20    --(Wan06)
          ,@c_ReportLineNo                                                                                                           --(Wan06)
          ,@c_PrinterId, @n_Noofcopy, @n_Mobile, @c_TargetDB
-        , @c_PrintData, @c_JobType, @c_Storerkey, @n_Function_ID)
+         ,@c_PrintData, @c_JobType, @c_Storerkey, @n_Function_ID
+         ,@c_PDFPreview                                                                                                             --(Wan09)         
+         )
    --(Wan04) - END
 
    SET @n_JobID = SCOPE_IDENTITY()        --(Wan01)
@@ -456,7 +521,7 @@ BEGIN
       BEGIN
          GOTO EXIT_SP
       END
-
+      
       QCMD_END:                  --(Wan03)
    END
    --(Wan01) - END
