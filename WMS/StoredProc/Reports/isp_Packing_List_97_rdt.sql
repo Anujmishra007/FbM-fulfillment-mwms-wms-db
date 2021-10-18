@@ -25,7 +25,8 @@ GO
 /*                                                                      */        
 /* Updates:                                                             */        
 /* Date         Author    Ver Purposes                                  */ 
-/* 18-Jun-2021  Mingle    1.1 WMS-17272 modify logic(ML01)              */      
+/* 18-Jun-2021  Mingle    1.1 WMS-17272 modify logic(ML01)              */
+/* 15-Oct-2021  WinSern   1.2 INC1643048 add sku.storerkey join(ws01)   */
 /************************************************************************/        
 --EXEC isp_Packing_List_97_rdt 'P000136620'
 CREATE PROC [dbo].[isp_Packing_List_97_rdt]     
@@ -52,10 +53,11 @@ BEGIN
 		   --(SELECT CASE WHEN oh.UserDefine03 LIKE '%mara%' then CAST(CAST(sum(od.Unitprice)AS INT)AS NVARCHAR(10))  ELSE ' ' END  FROM dbo.ORDERDETAIL (NOLOCK) od JOIN dbo.ORDERS (NOLOCK) oh ON oh.OrderKey = od.OrderKey AND oh.StorerKey = od.StorerKey WHERE od.OrderKey=orderdetail.OrderKey AND od.StorerKey=orderdetail.StorerKey GROUP BY oh.UserDefine03) as totalmara   
              
     FROM Packdetail (NOLOCK)    
-         JOIN SKU (NOLOCK) ON packdetail.SKU = SKU.SKU    
+         --JOIN SKU (NOLOCK) ON packdetail.SKU = SKU.SKU         --(ws01)    
          JOIN Packheader (NOLOCK) ON Packdetail.Pickslipno = Packheader.Pickslipno     
          JOIN Orders (NOLOCK) ON Packheader.orderkey = Orders.Orderkey     
-         JOIN Orderdetail (NOLOCK) ON Orders.orderkey = Orderdetail.orderkey   
+         JOIN Orderdetail (NOLOCK) ON Orders.orderkey = Orderdetail.orderkey
+         JOIN SKU (NOLOCK) ON packdetail.SKU = SKU.SKU  and SKU.storerkey=Orders.storerkey       --(ws01)
          JOIN Pickdetail (NOLOCK) ON Pickdetail.Orderkey = Orderdetail.Orderkey   
                                  and Pickdetail.OrderlineNumber = Orderdetail.OrderlineNumber   
                                  and Pickdetail.SKu = Orderdetail.SKU  
