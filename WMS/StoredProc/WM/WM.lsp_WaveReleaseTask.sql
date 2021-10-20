@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,6 +27,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
+/* 2021-09-28  Wan01    1.2   DevOps Combine Script.                     */
+/* 2021-08-12  wan01    1.2   Fixed. 1) to rollback for xact_status      */
+/*                            2) Start Transaction For Batch Commit      */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveReleaseTask]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -57,7 +60,9 @@ BEGIN
 
    SET @b_Success = 1
    SET @n_Err     = 0
-               
+   
+   BEGIN TRAN        --(Wan01)
+                               
    SET @n_Err = 0 
    --(mingle01) - START   
    IF SUSER_SNAME() <> @c_UserName
@@ -207,7 +212,17 @@ BEGIN
             SET @n_Err = 555804
             SET @c_ErrMsg = ERROR_MESSAGE()
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ReleaseWave_Wrapper. (lsp_WaveReleaseTask)'   
-                          + '(' + @c_ErrMsg + ')'          
+                          + '(' + @c_ErrMsg + ')'
+                            
+            IF (XACT_STATE()) = -1        --(Wan01) - START 
+            BEGIN
+               ROLLBACK TRAN
+
+               WHILE @@TRANCOUNT < @n_StartTCnt
+               BEGIN
+                  BEGIN TRAN
+               END
+            END                           --(Wan01) - END                                 
          END CATCH
             
          IF @b_Success = 0 OR @n_Err <> 0
@@ -303,10 +318,16 @@ BEGIN
    END CATCH
    --(mingle01) - END 
 EXIT_SP:
+   IF (XACT_STATE()) = -1                                      --(Wan01)  
+   BEGIN
+      SET @n_Continue = 3
+      ROLLBACK TRAN
+   END 
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt       --(Wan01)
       BEGIN
          ROLLBACK TRAN
       END

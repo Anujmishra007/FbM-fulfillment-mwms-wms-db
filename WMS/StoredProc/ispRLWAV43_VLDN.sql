@@ -1,0 +1,318 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_VLDN]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [dbo].[ispRLWAV43_VLDN]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/************************************************************************/
+/* Stored Proc: ispRLWAV43_VLDN                                         */
+/* Creation Date: 2021-07-09                                            */
+/* Copyright: LF Logistics                                              */
+/* Written by: Wan                                                      */
+/*                                                                      */
+/* Purpose: WMS-17299 - RG - Adidas Release Wave                        */
+/*        :                                                             */
+/* Called By:                                                           */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 7.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/* 2021-07-09  Wan      1.0   Created.                                  */
+/* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/************************************************************************/
+
+CREATE PROC [dbo].[ispRLWAV43_VLDN]
+   @c_Wavekey     NVARCHAR(10)    
+,  @b_Success     INT            = 1   OUTPUT
+,  @n_Err         INT            = 0   OUTPUT
+,  @c_ErrMsg      NVARCHAR(255)  = ''  OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE  
+           @n_StartTCnt             INT   = @@TRANCOUNT
+         , @n_Continue              INT   = 1
+         
+   DECLARE @c_Facility              NVARCHAR(5)  = ''
+         , @c_Storerkey             NVARCHAR(15) = ''
+         , @c_SortStationGroups     NVARCHAR(110)= ''
+         , @c_Status_ORD            NVARCHAR(10)  = ''
+         , @c_SortStationGroup_NF   NVARCHAR(100) = ''
+
+         , @n_SortStationLoc        INT   = 0
+         , @n_NoOfLargeLoc          INT   = 0
+         , @n_CubicCapacity_Max     FLOAT = 0.00
+
+         , @n_MultiOrder            INT   = 0
+         , @n_NoOfLargeVolumeOrd    FLOAT = 0.00
+         
+         , @n_Found                 INT   = 0
+
+         , @c_Sku                   NVARCHAR(20) = ''
+        
+   DECLARE @t_SortLocCubic          TABLE
+         ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
+         , Loc                      NVARCHAR(10)   NOT NULL DEFAULT('')    
+         , SortStation              NVARCHAR(10)   NOT NULL DEFAULT('') 
+         , SortStationGroup         NVARCHAR(10)   NOT NULL DEFAULT('') 
+         , CubicCapacity            FLOAT          NOT NULL DEFAULT(0.00)
+         , SortStationGroup_NF      NVARCHAR(10)   NOT NULL DEFAULT('') 
+         )
+   
+   DECLARE @t_SkuPickZone           TABLE 
+         ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
+         , PickZone                 NVARCHAR(10)   NULL     DEFAULT('')    
+         , DocType                  NVARCHAR(10)   NOT NULL DEFAULT('') 
+         )
+      
+   SET @b_Success  = 1   
+   SET @n_Err     = 0   
+   SET @c_ErrMsg  = ''  
+
+   SELECT TOP 1 
+      @c_SortStationGroups = ISNULL(RTRIM(w.UserDefine01),'') + ',' + ISNULL(RTRIM(w.UserDefine02),'') + ',' --CR v2.5
+                           + ISNULL(RTRIM(w.UserDefine03),'') + ',' + ISNULL(RTRIM(w.UserDefine04),'') + ','
+                           + ISNULL(RTRIM(w.UserDefine05),'')
+   ,  @c_Status_ORD  = o.[Status] 
+   ,  @c_Storerkey   = o.Storerkey
+   ,  @c_Facility    = o.Facility
+   FROM dbo.WAVE AS w WITH (NOLOCK)
+   JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
+   JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
+   WHERE w.WaveKey = @c_Wavekey
+   ORDER BY o.Status ASC
+
+   IF @c_Status_ORD = '0'
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 61010
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Open Order found. (ispRLWAV43_VLDN)'
+      GOTO QUIT_SP
+   END
+   
+   IF EXISTS (
+               SELECT 1 
+               FROM dbo.WAVE AS w WITH (NOLOCK)
+               JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
+               JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
+               JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME = 'ADICOURIER'
+                                                    AND c.Storerkey = o.StorerKey
+               WHERE w.WaveKey = @c_Wavekey
+               AND o.[Status] < '2'
+               AND c.Short = 'Y'
+               AND c.UDF01 = o.DocType
+               AND c.UDF02 = o.[Type]
+               AND c.UDF03 = o.Salesman
+               AND c.UDF04 = o.DeliveryNote
+            )
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 61020
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Partial Allocated Order Found. (ispRLWAV43_VLDN)'
+      GOTO QUIT_SP
+   END
+   
+   IF EXISTS ( SELECT 1 FROM dbo.WAVE AS w WITH (NOLOCK)
+               JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
+               JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
+               WHERE w.WaveKey = @c_Wavekey
+               AND DocType = 'E'
+               AND o.ECOM_SINGLE_Flag = 'M'
+   )
+   BEGIN
+      IF @c_SortStationGroups = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 61030
+         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Sort Station Group ID is required. (ispRLWAV43_VLDN)'
+         GOTO QUIT_SP
+      END
+
+      SELECT @c_SortStationGroup_NF = RTRIM(ISNULL(CONVERT(VARCHAR(250),  
+                                               ( 
+                                                SELECT DISTINCT ss.[value] + ','
+                                                FROM STRING_SPLIT(@c_SortStationGroups, ',') AS ss
+                                                WHERE ss.[value] <> ''
+                                                AND NOT EXISTS (
+                                                                  SELECT l.Loc, l.PickZone, l.CubicCapacity, dp.DeviceID
+                                                                  FROM dbo.DeviceProfile AS dp WITH (NOLOCK) 
+                                                                  JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = dp.Loc
+                                                                  WHERE dp.StorerKey = @c_Storerkey
+                                                                  AND  l.LocationCategory = 'PTL'
+                                                                  AND  l.LocationType= 'OTHER'        
+                                                                  AND  l.LocationFlag = 'HOLD'  
+                                                                  AND l.PickZone = LTRIM(RTRIM(ss.[value]))
+                                                                  )
+                                                FOR XML PATH(''), TYPE  
+                                                )  
+                                              )
+                                         ,'')  
+                                       )  
+  
+      IF @c_SortStationGroup_NF <> ''
+      BEGIN
+         SET @c_SortStationGroup_NF = SUBSTRING(@c_SortStationGroup_NF, 1, LEN(@c_SortStationGroup_NF) - 1 )
+
+         SET @n_Continue = 3
+         SET @n_Err = 61040
+         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid Sort Station Group ID found: ' + @c_SortStationGroup_NF + '. (ispRLWAV43_VLDN)'
+         GOTO QUIT_SP
+      END
+   END
+   
+   IF EXISTS ( SELECT 1 FROM TASKDETAIL TD (NOLOCK)   
+               WHERE TD.Wavekey = @c_Wavekey  
+               AND TD.Sourcetype LIKE 'ispRLWAV43%'  
+               AND TD.Tasktype IN ('RPF', 'CPK', 'ASTCPK')  
+               AND TD.Status <> 'X')   
+   BEGIN  
+      SET @n_Continue = 3  
+      SET @n_Err = 61050  
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has been released - RPF/CPK/ASTCPK. (ispRLWAV43_VLDN)'  
+      GOTO QUIT_SP  
+   END  
+
+   IF EXISTS ( SELECT 1   
+               FROM WAVEDETAIL WD(NOLOCK)  
+               JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+               WHERE O.Status > '2'  
+               AND WD.Wavekey = @c_Wavekey  
+             )  
+   BEGIN  
+      SET @n_Continue = 3  
+      SET @n_Err = 61060  
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Some orders of this Wave are started picking. (ispRLWAV43_VLDN)'  
+      GOTO QUIT_SP  
+   END
+   
+   SET @n_Found = 0
+   SET @c_Sku = ''
+   SELECT TOP 1 @c_Sku = RTRIM(p.Sku)  
+               ,@n_Found =  CASE WHEN s.[Length] = 0.00 THEN 1
+                                 WHEN s.Width = 0.00 THEN 1
+                                 WHEN s.Height = 0.00 THEN 1
+                                 WHEN s.STDCUBE = 0.00 THEN 1
+                                 WHEN s.STDGROSSWGT = 0.00 THEN 1                                 
+                                 ELSE 0 
+                                 END 
+   FROM dbo.WAVEDETAIL AS w (NOLOCK)  
+   JOIN dbo.PICKDETAIL AS p (NOLOCK) ON p.Orderkey = w.Orderkey  
+   JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = p.Storerkey AND s.Sku = p.Sku
+   WHERE w.Wavekey = @c_Wavekey   
+   ORDER BY 2 DESC
+ 
+   IF @n_Found = 1
+   BEGIN  
+      SET @n_Continue = 3  
+      SET @n_Err = 61070  
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found Sku Length, Width, Height, StdCube, StdGrossWgt not setup. Sku:' + @c_Sku
+                   +'. (ispRLWAV43_VLDN)'  
+      GOTO QUIT_SP  
+   END   
+   
+   SET @n_Found = 0
+   SET @c_Sku = ''
+   SELECT TOP 1 @c_Sku = RTRIM(p.Sku) 
+               ,@n_Found =  CASE WHEN C.ListName IS NULL THEN 1
+                                 WHEN c.UDF01 = '' THEN 1
+                                 WHEN c2.CartonizationKey IS NULL THEN 1
+                                 ELSE 0 
+                                 END
+   FROM dbo.WAVEDETAIL AS w (NOLOCK)  
+   JOIN dbo.PICKDETAIL AS p (NOLOCK) ON p.Orderkey = w.Orderkey  
+   JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = p.Storerkey AND s.Sku = p.Sku
+   LEFT JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME = 'SKUGROUP' 
+                                             AND C.Code = s.SkuGroup
+                                             AND c.Storerkey = p.Storerkey
+   LEFT JOIN dbo.CARTONIZATION AS c2 WITH (NOLOCK) ON c.UDF01 = c2.CartonizationGroup
+   WHERE w.Wavekey = @c_Wavekey 
+   ORDER BY 2 DESC
+   
+   IF @n_Found = 1
+   BEGIN  
+      SET @n_Continue = 3  
+      SET @n_Err = 61080 
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': SkuGroup/CartonGroup Not Found in Codelkup - SkuGroup/Cartonization. Sku: ' + @c_Sku
+                   + '. (ispRLWAV43_VLDN)'  
+      GOTO QUIT_SP  
+   END    
+
+   INSERT INTO @t_SkuPickZone (PickZone, DocType)
+   SELECT PickZone = l.PickZone, o.DocType 
+   FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)  
+   JOIN dbo.ORDERS AS o WITH (NOLOCK) ON w.OrderKey = o.OrderKey
+   JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.Orderkey = o.Orderkey 
+   LEFT JOIN SKUxLOC AS sl WITH (NOLOCK) ON sl.Storerkey = p.Storerkey AND sl.Sku = p.Sku AND sl.LocationType = 'PICK' 
+   LEFT JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = sl.Loc AND l.LocationType = 'DYNPPICK' AND l.Facility = @c_Facility
+   WHERE w.Wavekey = @c_Wavekey
+   GROUP BY l.PickZone
+         ,  o.DocType
+   
+   IF EXISTS (SELECT 1 FROM @t_SkuPickZone AS tspz WHERE tspz.PickZone IS NULL)    
+   BEGIN    
+      SET @n_Continue = 3    
+      SET @n_Err = 61090    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. Sku''s home location not found. (ispRLWAV43_VLDN)'    
+      GOTO QUIT_SP    
+   END    
+  
+   IF EXISTS ( SELECT 1    
+               FROM @t_SkuPickZone AS tspz   
+               LEFT JOIN CODELKUP CL   WITH (NOLOCK) ON (CL.ListName = 'ADPICKZONE')    
+                                                     AND(CL.Code  = tspz.PickZone)    
+                                                     AND(CL.Code2 = tspz.DocType)     
+                                                     AND(CL.Storerkey = @c_Storerkey)    
+               LEFT JOIN LOC      PS   WITH (NOLOCK) ON (PS.Loc = CL.Short)     
+               WHERE (CL.Code IS NULL OR PS.Loc IS NULL)    
+             )                   
+   BEGIN    
+      SET @n_Continue = 3    
+      SET @n_Err = 61100    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. Pack Station not setup in codelkup OR Loc table. (ispRLWAV43_VLDN)'    
+      GOTO QUIT_SP    
+   END  
+   
+   
+QUIT_SP:
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SET @b_Success = 0
+      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'ispRLWAV43_VLDN'
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+   END
+   ELSE
+   BEGIN
+      SET @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+END   
+GO
+GRANT EXECUTE ON [dbo].[ispRLWAV43_VLDN] TO nSQL 
+GO

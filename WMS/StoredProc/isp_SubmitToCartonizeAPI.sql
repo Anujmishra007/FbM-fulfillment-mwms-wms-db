@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,10 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */ 
+/* 01-DEC-2020 Wan01    1.1   Validation Check for Carton & SKu LxWxH   */  
+/* 2021-04-27  Wan02    1.2   Standardize #OptimizeItemToPack Temp Table*/
+/*                            Use at isp_SubmitToCartonizeAPI           */
+/* 2021-09-27  Wan02    1.2   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC isp_SubmitToCartonizeAPI
            @c_CartonGroup        NVARCHAR(10) 
@@ -57,7 +61,29 @@ DECLARE
      , @c_vbErrMsg            NVARCHAR(MAX) = '' 
      , @c_vbHttpStatusCode    NVARCHAR(20)  = '' 
      , @c_vbHttpStatusDesc    NVARCHAR(1000)= '' 
-         
+     , @c_Sku                 NVARCHAR(20)  = ''         --Wan01    
+     , @n_Length              DECIMAL(10,6) = 0.000000   --Wan01    
+     , @n_Width               DECIMAL(10,6) = 0.000000   --Wan01    
+     , @n_Height              DECIMAL(10,6) = 0.000000   --Wan01   
+       
+   --(Wan01) - START    
+   SELECT @n_Length = CONVERT(DECIMAL(10,6), ctn.CartonLength)    
+         ,@n_Width  = CONVERT(DECIMAL(10,6), ctn.CartonWidth )    
+         ,@n_Height = CONVERT(DECIMAL(10,6), ctn.CartonHeight)    
+   FROM CARTONIZATION AS ctn WITH(NOLOCK)      
+   WHERE ctn.CartonizationGroup= @c_CartonGroup      
+   AND ctn.CartonType =  @c_CartonType    
+       
+   IF @n_Length = 0.000000 OR @n_Width = 0.000000 OR @n_Height = 0.000000    
+   BEGIN    
+      SET @n_Continue = 3      
+      SET @n_Err      = 89001      
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ':'      
+                      + 'Zero Length/width/height found for Carton Type: ' + @c_CartonType + '. (isp_SubmitToCartonizeAPI)'      
+      GOTO QUIT_SP        
+   END 
+   --(Wan01) - END
+   
    SET @c_ContainerString = (
    SELECT 0 AS ID,
           CONVERT(DECIMAL(10,6), ctn.CartonLength) AS [Length], 
@@ -107,18 +133,56 @@ DECLARE
    --   GROUP BY p.Sku, SKU.Length, SKU.Width, SKU.Height
    --END
   
-   SET @c_PackItemString = ( 
-      SELECT 
-      tip.ID, 
-      tip.SKU  AS [Name], 
-      tip.Dim1, 
-      tip.Dim2, 
-      tip.Dim3, 
-      tip.Quantity
-      FROM #t_ItemPack AS tip WITH(NOLOCK)    
-      FOR JSON PATH, ROOT('ItemsToPack') 
-      )
- 
+   --(Wan02) - START
+   IF OBJECT_ID('tempdb..#OptimizeItemToPack','U') IS NOT NULL
+   BEGIN
+      SELECT TOP 1 @c_Sku = oitp.SKU            --(Wan01)       
+      FROM #OptimizeItemToPack AS oitp WITH(NOLOCK)     
+      WHERE (oitp.Dim1 = 0.000000 OR oitp.Dim2 = 0.000000 OR oitp.Dim3 = 0.000000) 
+      
+      SET @c_PackItemString = ( 
+         SELECT 
+            oitp.ID, 
+            oitp.SKU  AS [Name], 
+            oitp.Dim1, 
+            oitp.Dim2, 
+            oitp.Dim3, 
+            oitp.Quantity
+         FROM #OptimizeItemToPack AS oitp WITH(NOLOCK)    
+         FOR JSON PATH, ROOT('ItemsToPack') 
+         )
+   END
+   ELSE
+   BEGIN
+      SELECT TOP 1 @c_Sku = tip.SKU             --(Wan01)    
+      FROM #t_ItemPack AS tip WITH(NOLOCK)     
+      WHERE (tip.Dim1 = 0.000000 OR tip.Dim2 = 0.000000 OR tip.Dim3 = 0.000000) 
+   
+      SET @c_PackItemString = ( 
+         SELECT 
+            tip.ID, 
+            tip.SKU  AS [Name], 
+            tip.Dim1, 
+            tip.Dim2, 
+            tip.Dim3, 
+            tip.Quantity
+            FROM #t_ItemPack AS tip WITH(NOLOCK)    
+            FOR JSON PATH, ROOT('ItemsToPack') 
+         )
+   END
+   --(Wan02) - END
+   
+   --(Wan01) - START   
+   IF @c_Sku <> ''    
+   BEGIN    
+      SET @n_Continue = 3      
+      SET @n_Err      = 89002      
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ':'      
+                      + 'Zero Length/width/height found for Sku: ' + @c_Sku + '. (isp_SubmitToCartonizeAPI)'      
+      GOTO QUIT_SP        
+   END    
+   --(Wan01) - END 
+   
    IF @b_Debug = 1
       PRINT '@c_PackItemString >> ' + @c_PackItemString
 
