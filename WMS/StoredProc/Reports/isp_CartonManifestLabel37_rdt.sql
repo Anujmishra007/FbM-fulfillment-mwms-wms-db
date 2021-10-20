@@ -1,0 +1,97 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_CartonManifestLabel37_rdt]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+   DROP PROCEDURE [dbo].[isp_CartonManifestLabel37_rdt]
+GO
+ 
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
+GO   
+
+/************************************************************************/    
+/* Stored Procedure: isp_CartonManifestLabel37_rdt                      */    
+/* Creation Date: 14-Jun-2021                                           */    
+/* Copyright: LFL                                                       */    
+/* Written by: WLChooi                                                  */    
+/*                                                                      */    
+/* Purpose: WMS-17265 - Adidas UCC Shipping & Carton Label              */    
+/*                                                                      */    
+/* Called By: r_dw_carton_manifest_label_37_rdt                         */    
+/*                                                                      */    
+/* GitLab Version: 1.0                                                  */    
+/*                                                                      */    
+/* Version: 5.4                                                         */    
+/*                                                                      */    
+/* Data Modifications:                                                  */    
+/*                                                                      */    
+/* Updates:                                                             */    
+/* Date         Author  Ver   Purposes                                  */ 
+/* 2021-06-14  WLChooi  1.0   Created - DevOps Combine Script           */     
+/************************************************************************/    
+CREATE PROC dbo.isp_CartonManifestLabel37_rdt (    
+       @c_Pickslipno   NVARCHAR(10),     
+       @c_FromCartonNo NVARCHAR(10),    
+       @c_ToCartonNo   NVARCHAR(10),
+       @c_FromLabelNo  NVARCHAR(20),
+       @c_ToLabelNo    NVARCHAR(20),
+       @c_DropID       NVARCHAR(20)
+)    
+AS    
+BEGIN    
+   SET NOCOUNT ON 
+   SET ANSI_NULLS OFF 
+   SET QUOTED_IDENTIFIER OFF 
+   SET CONCAT_NULL_YIELDS_NULL OFF  
+   
+   DECLARE @n_continue    INT,    
+           @c_errmsg      NVARCHAR(255),    
+           @b_success     INT,    
+           @n_err         INT,     
+           @b_debug       INT    
+       
+   SET @b_debug = 0    
+    
+   SELECT Loadkey        = PACKHEADER.Loadkey
+         ,ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
+         ,CtnCnt1        = (SELECT COUNT(DISTINCT PD.LabelNo)                                    
+                            FROM PACKHEADER PH WITH (NOLOCK)                                    
+                            JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo) 
+                            WHERE PH.PickSlipNo = @c_Pickslipno)                                 
+         ,CartonNo       = ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
+         ,DropID         = ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
+         ,Style          = ISNULL(RTRIM(SKU.Style),'') 
+         ,SkuDesc        = ''--ISNULL(RTRIM(SKU.Descr),'')    
+         ,SizeQty        = SUM(PACKDETAIL.Qty) 
+         ,ShowLargeFont  = ISNULL(CL.SHORT,'N')
+         ,ShowSONo       = ISNULL(CL1.SHORT,'N')
+   FROM PACKHEADER WITH (NOLOCK)  
+   JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
+   JOIN SKU WITH (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey)     
+                         AND (PACKDETAIL.Sku = SKU.Sku)
+   JOIN ORDERS WITH (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'REPORTCFG' AND CL.CODE = 'ShowLargeFont' )
+                                      AND (CL.LONG = 'r_dw_carton_manifest_label_37_rdt' AND CL.STORERKEY = ORDERS.Storerkey)
+   LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.LISTNAME = 'REPORTCFG' AND CL1.CODE = 'ShowSONo' )
+                                       AND (CL1.LONG = 'r_dw_carton_manifest_label_37_rdt' AND CL1.STORERKEY = ORDERS.Storerkey)
+   WHERE PACKHEADER.PickSlipNo = @c_Pickslipno 
+   --AND PACKD.CartonNo BETWEEN CAST(@c_FromCartonNo AS INT) AND CAST(@c_ToCartonNo AS INT) 
+   AND PACKDETAIL.LabelNo BETWEEN @c_FromLabelNo AND @c_ToLabelNo
+   GROUP BY PACKHEADER.Loadkey
+         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
+         ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
+         ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
+         ,  ISNULL(RTRIM(SKU.Style),'')
+         --,  ISNULL(RTRIM(SKU.Descr),'') 
+         ,  ISNULL(CL.SHORT,'N')  
+         ,  ISNULL(CL1.SHORT,'N')
+   ORDER BY PACKHEADER.Loadkey
+         ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
+         ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
+         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
+         ,  ISNULL(RTRIM(SKU.Style),'')  
+
+END 
+GO
+GRANT EXECUTE ON isp_CartonManifestLabel37_rdt TO NSQL
+GO
+
