@@ -18,7 +18,7 @@ GO
 /*                                                                         */
 /* Called By: r_dw_putaway_suggest_loc_ikea_rpt                            */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -26,6 +26,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 13-Oct-2021  WLChooi 1.1   DevOps Combine Script                        */
+/* 13-Oct-2021  WLChooi 1.1   WMS-17838 Add SKUInfo.ExtendedField05 (WL01) */
 /***************************************************************************/  
 CREATE PROC [dbo].[isp_putaway_suggest_loc_ikea_rpt]  
 (     @c_Storerkey   NVARCHAR(15)  = 'IKEA'  
@@ -47,6 +49,7 @@ BEGIN
          , @c_LocationType    NVARCHAR(10) = 'PICK'
          , @c_SuggestedLoc    NVARCHAR(20) = ''
          , @c_SKU             NVARCHAR(20) = ''
+         , @c_ExtendedField05 NVARCHAR(255) = ''   --WL01
 
    SET @b_Debug     = '0' 
    SET @n_Continue  = 1  
@@ -62,9 +65,10 @@ BEGIN
    CREATE NONCLUSTERED INDEX IDX_TMP_LLI ON #TMP_LLI (LOC)
 
    CREATE TABLE #TMP_RESULT (
-      FromLoc        NVARCHAR(20)
-    , SKU            NVARCHAR(20)
-    , SuggestedLoc   NVARCHAR(20) 
+      FromLoc         NVARCHAR(20)
+    , SKU             NVARCHAR(20)
+    , SuggestedLoc    NVARCHAR(20) 
+    , ExtendedField05 NVARCHAR(255)   --WL01
    )
 
    CREATE TABLE #TMP_FromLoc (
@@ -118,8 +122,14 @@ BEGIN
             ORDER BY TL.Qty DESC
          END
 
-         INSERT INTO #TMP_RESULT(FromLoc, SKU, SuggestedLoc)
-         SELECT @c_Loc, @c_SKU, @c_SuggestedLoc
+         --WL01 S
+         SELECT @c_ExtendedField05 = ISNULL(SI.ExtendedField05,'')
+         FROM SkuInfo SI (NOLOCK)
+         WHERE SI.SKU = @c_SKU AND SI.Storerkey = @c_Storerkey
+
+         INSERT INTO #TMP_RESULT(FromLoc, SKU, SuggestedLoc, ExtendedField05)
+         SELECT @c_Loc, @c_SKU, @c_SuggestedLoc, ISNULL(@c_ExtendedField05,'')
+         --WL01 E
 
          FETCH NEXT FROM CUR_SKU INTO @c_SKU, @n_CountLoc
       END
@@ -130,10 +140,13 @@ BEGIN
    IF (@n_continue = 1 OR @n_continue = 2) 
    BEGIN  
       SELECT TR.FromLoc, TR.SKU, TR.SuggestedLoc, TFL.FromLocQty AS Qty
+           , TR.ExtendedField05   --WL01
       FROM #TMP_RESULT TR
       JOIN #TMP_FromLoc TFL ON TFL.SKU = TR.SKU
       GROUP BY TR.FromLoc, TR.SKU, TR.SuggestedLoc, TFL.FromLocQty
-      ORDER BY TR.SKU
+             , TR.ExtendedField05   --WL01
+      --ORDER BY TR.SKU   --WL01
+      ORDER BY TR.SuggestedLoc, TR.SKU   --WL01
    END
 
 QUIT_SP:
