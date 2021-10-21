@@ -27,6 +27,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 14-OCT-2021  CSCHONG 1.0   Devops Scripts Combine                       */
+/* 14-OCT-2021  CSCHONG 1.1   WMS-17880 revised report logic (CS01)        */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPRREC20]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -66,7 +68,7 @@ BEGIN
          FROM RECEIPTDETAIL (NOLOCK)
          WHERE Receiptkey = @c_Receiptkey
          AND (ReceiptLineNumber = @c_ReceiptLineNumber OR ISNULL(@c_ReceiptLineNumber,'') = '')
-         AND SUBSTRING(toid,4,2) <> 'AP'
+         --AND SUBSTRING(toid,4,2) <> 'AP'                          --CS01
          ORDER BY ReceiptLineNumber
       
       OPEN CUR_RECDET  
@@ -84,7 +86,7 @@ BEGIN
 
          IF EXISTS (SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
              WHERE C.listname = 'HMALOC' AND C.Storerkey = @c_Storerkey
-             AND C.short = @c_GetToid ) AND @c_GetToid <> 'AP'
+             AND C.short = @c_GetToid ) --AND @c_GetToid <> 'AP'   --CS01
          BEGIN
              SELECT  @c_CLKCode = C.code
              FROM dbo.CODELKUP C WITH (NOLOCK)
