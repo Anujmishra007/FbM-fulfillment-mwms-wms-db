@@ -18,7 +18,7 @@ GO
 /*                                                                         */
 /* Called By: PostPackConfirmSP                                            */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 12-Oct-2021  WLChooi 1.0   DevOps Combine Script                        */
+/* 20-Oct-2021  WLChooi 1.1   WMS-18128 - Insert PackSerialNo Table (WL01) */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPAKCF17]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -56,6 +57,8 @@ BEGIN
          , @c_LabelLine       NVARCHAR(10)
          , @c_Orderkey1sttime NVARCHAR(10)
          , @c_DropID          NVARCHAR(20)
+         , @c_LabelNo         NVARCHAR(20)   --WL01
+         , @c_SerialNo        NVARCHAR(50)   --WL01
    
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -391,7 +394,7 @@ BEGIN
                   SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Update SERIALNO Table Failed. (ispPAKCF17)'
                END                                                 
               
-                  FETCH NEXT FROM cur_SERIALNO_C INTO @c_SerialNoKey
+               FETCH NEXT FROM cur_SERIALNO_C INTO @c_SerialNoKey
             END
             CLOSE cur_SERIALNO_C
             DEALLOCATE cur_SERIALNO_C                              
@@ -402,6 +405,53 @@ BEGIN
          DEALLOCATE cur_CartonNo
       END
    END
+
+   --WL01 S
+   IF @n_continue IN(1,2)
+   BEGIN
+      DECLARE CUR_PSN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PD.PickSlipNo, PD.CartonNo, PD.LabelNo, PD.LabelLine, PD.StorerKey, PD.SKU, 1 AS Qty, SN.SerialNo
+      FROM PACKDETAIL PD (NOLOCK)
+      JOIN SerialNo SN (NOLOCK) ON SN.PickSlipNo = PD.PickSlipNo AND SN.CartonNo = PD.CartonNo AND SN.LabelLine = PD.LabelLine
+                               AND SN.SKU = PD.SKU AND SN.StorerKey = PD.StorerKey
+      WHERE PD.PickSlipNo = @c_PickSlipNo
+      ORDER BY PD.CartonNo, PD.LabelLine, PD.SKU
+
+      OPEN CUR_PSN  
+             
+      FETCH NEXT FROM CUR_PSN INTO @c_Pickslipno, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_Storerkey, @c_Sku, @n_Qty, @c_SerialNo
+             
+      WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+      BEGIN
+         IF NOT EXISTS (SELECT 1 
+                        FROM PackSerialNo PSN (NOLOCK) 
+                        WHERE PSN.PickSlipNo = @c_Pickslipno
+                          AND PSN.CartonNo   = @n_CartonNo
+                          AND PSN.LabelNo    = @c_LabelNo
+                          AND PSN.LabelLine  = @c_LabelLine
+                          AND PSN.StorerKey  = @c_Storerkey
+                          AND PSN.SKU        = @c_Sku
+                          AND PSN.SerialNo   = @c_SerialNo)
+         BEGIN
+            INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY, ArchiveCop)
+            SELECT @c_Pickslipno, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_Storerkey, @c_Sku, @c_SerialNo, @n_Qty, '9'
+
+            SET @n_Err = @@ERROR
+                                
+            IF @n_Err <> 0
+            BEGIN
+               SELECT @n_Continue = 3 
+               SELECT @n_Err = 38045
+               SELECT @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Insert PACKSERIALNO Table Failed. (ispPAKCF17)'
+            END  
+         END
+
+         FETCH NEXT FROM CUR_PSN INTO @c_Pickslipno, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_Storerkey, @c_Sku, @n_Qty, @c_SerialNo
+      END
+      CLOSE CUR_PSN
+      DEALLOCATE CUR_PSN
+   END
+   --WL01 E
 
 QUIT_SP:
    IF CURSOR_STATUS('LOCAL', 'cur_ORDLINE_N') IN (0 , 1)
@@ -439,6 +489,17 @@ QUIT_SP:
       CLOSE cur_CartonNo
       DEALLOCATE cur_CartonNo   
    END
+
+   --WL01 S
+   IF OBJECT_ID('tempdb..#TMP_DROPID') IS NOT NULL
+      DROP TABLE #TMP_DROPID
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_PSN') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_PSN
+      DEALLOCATE CUR_PSN   
+   END
+   --WL01 E
    
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
