@@ -17,7 +17,7 @@ GO
 /*        : FUll Case - UCCNo PickCode                                  */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-08  Wan      1.0   Created.                                  */
 /* 2021-10-06  Wan      1.0   DevOps Combine Script                     */
+/* 2021-10-22  Wan01    1.1   Exclude Normal Replen UCC for UOM 2 & 6   */
+/*                            where UCC.Status = '1'                    */
 /************************************************************************/
 CREATE PROC dbo.[ispALADSFC]
       @c_Wavekey           NVARCHAR(10)  
@@ -151,10 +153,10 @@ BEGIN
               +                                 ' AND u.loc= lli.LOC'
               +                                 ' AND u.ID = lli.ID'
               +  CASE WHEN @c_UOM = '7' THEN ' AND u.[Status] IN ( ''1'',''3'')' ELSE ' AND u.[Status] = ''1''' END
-              + ' JOIN dbo.LOTATTRIBUTE AS l2 WITH (NOLOCK) ON l2.Lot = lli.Lot'       
+              + ' JOIN dbo.LOTATTRIBUTE AS l2 WITH (NOLOCK) ON l2.Lot = lli.Lot'    
+              + ' LEFT OUTER JOIN TASKDETAIL AS td WITH (NOLOCK) ON td.storerkey = u.storerkey AND td.caseid = u.uccno'    --Wan01. Need LEFT JOIN Taskdetail for UOM '2', '6', ,'7'     
               +  CASE WHEN @c_UOM = '7' THEN 
-                ' LEFT OUTER JOIN #ALLOCATE_DROPID AS ad ON u.UCCNo = ad.DropID
-                  LEFT OUTER JOIN TASKDETAIL AS td WITH (NOLOCK) ON td.storerkey = u.storerkey AND td.caseid = u.uccno' 
+                ' LEFT OUTER JOIN #ALLOCATE_DROPID AS ad ON u.UCCNo = ad.DropID'
                                         ELSE '' 
                                         END       
               + ' WHERE lli.StorerKey = @c_StorerKey'
@@ -167,6 +169,7 @@ BEGIN
               + ' AND u.Qty > 0'
               + CASE WHEN @c_UOM = '7' THEN ' AND u.Qty - ISNULL(ad.QtyAllocated,0) > 0' ELSE ' AND u.Qty <= @n_QtyLeftToFulfill' END
               + ' AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0'
+              + CASE WHEN @c_UOM IN ('2','6') THEN ' AND td.Taskdetailkey IS NULL' ELSE '' END                             --Wan01. Need to exclude Replen UCC that UCC.Status = '1'
               + CASE WHEN @c_Lottable01 = '' THEN '' ELSE N' AND l2.Lottable01 = @c_Lottable01' END
               + CASE WHEN @c_Lottable02 = '' THEN '' ELSE N' AND l2.Lottable02 = @c_Lottable02' END  
               + CASE WHEN @c_Lottable03 = '' THEN '' ELSE N' AND l2.Lottable03 = @c_Lottable03' END
