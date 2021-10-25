@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-15  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/* 2021-10-21  Wan01    1.1   PHWMS Issue fixed                         */
+/* 2021-10-22  Wan02    1.1   IDWMS UAT Issue fixed                     */
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -65,7 +67,8 @@ BEGIN
          , @c_PackZone           NVARCHAR(10) = ''   
          , @c_Style              NVARCHAR(10) = ''
          , @c_Color              NVARCHAR(10) = ''   
-         , @c_Size               NVARCHAR(10) = ''                           
+         , @c_Size               NVARCHAR(10) = ''
+         , @n_SplitToAccessQty   INT          = 0        --Wan02                           
 
          , @n_CartonSeqNo        INT         = 0
          , @c_CartonGroup_B2B    NVARCHAR(10)= ''
@@ -188,7 +191,8 @@ BEGIN
       ,  CartonSeqNo       INT          DEFAULT(0)
       ,  CartonCube        FLOAT        DEFAULT(0.00)
       ,  Status_CZ         INT          DEFAULT(0)  
-      ,  PackAccessQty     NVARCHAR(10) DEFAULT('')                
+      ,  PackAccessQty     NVARCHAR(10) DEFAULT('') 
+      ,  SplitToAccessQty  INT          DEFAULT(0)                 
       )
    END
 
@@ -682,34 +686,42 @@ BEGIN
       -- 1) For UCC to PackStation, UOM = '2' - START
       ---------------------------------------------------------
       ;WITH UCC_B2B AS --(SeqNo, DropID, Cube_TTL, Wgt_TTL ) AS
-      (  
-         SELECT TOP 1 WITH TIES
-                 pw.DropID
-               , SeqNo = ROW_NUMBER() OVER ( PARTITION BY ocg.[Cube], ocg.MaxWeight, ocg.CartonType
-                                             ORDER BY l.PickZone, pw.SkuGroup, l.LogicalLocation, pw.DropID
-                                          )               
-               , ocg.CartonType
-               , ocg.[Cube]
-         FROM @t_ORDERS AS tor        
-         JOIN #PICKDETAIL_WIP AS pw ON pw.Orderkey = tor.Orderkey
-         JOIN dbo.LOC AS l WITH (NOLOCK) ON pw.Loc = l.Loc
-         JOIN #OptimizeCZGroup AS ocg ON ocg.CartonizationGroup = pw.CartonGroup 
-         WHERE tor.DocType = 'N'   
-         AND pw.PackStation= 1
-         AND pw.UOM IN ('2')       -- Full UCC For Same Orderkey
-         AND pw.Orderkey = @c_Orderkey
-         AND pw.CartonType = ''
-         GROUP BY l.PickZone
-               ,  pw.SkuGroup
-               ,  l.LogicalLocation
-               ,  pw.DropID
-               ,  ocg.CartonType
-               ,  ocg.[Cube]
-               ,  ocg.MaxWeight 
-        HAVING SUM(pw.PickItemCube) <= ocg.[Cube] AND SUM(pw.PickItemWgt) <= ocg.MaxWeight 
-        ORDER BY ROW_NUMBER() OVER (PARTITION BY pw.DropID ORDER BY ocg.[Cube], ocg.MaxWeight, ocg.CartonType) 
+      (  SELECT d.DropID                                             --(Wan01) 2021-10-21
+               ,SeqNo = ROW_NUMBER() OVER ( ORDER BY d.PickZone, d.SkuGroup, d.LogicalLocation, d.DropID ) 
+               , d.cartontype
+               , d.[Cube]                              
+         FROM (
+            SELECT TOP 1 WITH TIES
+                    pw.DropID
+                  , SeqNo = ROW_NUMBER() OVER ( PARTITION BY ocg.[Cube], ocg.MaxWeight, ocg.CartonType
+                                                ORDER BY l.PickZone, pw.SkuGroup, l.LogicalLocation, pw.DropID
+                                                )               
+           
+                  , ocg.cartontype
+                  , ocg.[Cube]
+                  , l.PickZone
+                  , pw.SkuGroup
+                  , l.LogicalLocation
+            FROM @t_ORDERS AS tor        
+            JOIN #PICKDETAIL_WIP AS pw ON pw.Orderkey = tor.Orderkey
+            JOIN dbo.LOC AS l WITH (NOLOCK) ON pw.Loc = l.Loc
+            JOIN #OptimizeCZGroup AS ocg ON ocg.CartonizationGroup = pw.CartonGroup 
+            WHERE tor.DocType = 'N'   
+            AND pw.PackStation= 1
+            AND pw.UOM IN ('2')       -- Full UCC For Same Orderkey
+            AND pw.Orderkey = @c_Orderkey
+            AND pw.CartonType = ''
+            GROUP BY l.PickZone
+                  ,  pw.SkuGroup
+                  ,  l.LogicalLocation
+                  ,  pw.DropID
+                  ,  ocg.CartonType
+                  ,  ocg.[Cube]
+                  ,  ocg.MaxWeight 
+           HAVING SUM(pw.PickItemCube) <= ocg.[Cube] AND SUM(pw.PickItemWgt) <= ocg.MaxWeight 
+           ORDER BY ROW_NUMBER() OVER (PARTITION BY pw.DropID ORDER BY ocg.[Cube], ocg.MaxWeight, ocg.CartonType) 
+         ) d
       ) 
-      
       UPDATE pw
          SET pw.LabelNo    = u.DropID
             ,pw.CartonType = u.CartonType
@@ -732,6 +744,7 @@ BEGIN
       ORDER BY pw.CartonSeqNo DESC
 
       SET @n_PackAccessQty = NULL
+      SET @n_SplitToAccessQty = 0                                                --Wan02 
       WHILE 1 = 1
       BEGIN
          SELECT TOP 1
@@ -746,6 +759,7 @@ BEGIN
          AND pw.PackStation = 0
          AND pw.UOM IN ('6', '7')
          AND pw.CartonType = ''
+         AND pw.SplitToAccessQty IN (0, @n_SplitToAccessQty)                     --Wan02 
          AND EXISTS (SELECT 1 FROM #PICKDETAIL_WIP AS pw2
                      WHERE pw2.Orderkey = @c_Orderkey    
                      AND pw2.PackStation = 0
@@ -755,6 +769,7 @@ BEGIN
                      AND pw2.SkuGroup = pw.SkuGroup
                      AND pw2.Style = pw.Style
                      AND pw2.Sku = pw.Sku
+                     AND pw2.SplitToAccessQty IN (0, @n_SplitToAccessQty)        --Wan02                     
                      GROUP BY pw2.Sku   
                      HAVING SUM(CASE WHEN FLOOR(pw2.Qty/pw2.PackQtyIndicator) = 0 THEN 1    
                                      ELSE FLOOR(pw2.Qty/pw2.PackQtyIndicator)               
@@ -780,6 +795,7 @@ BEGIN
             END
             
             SET @n_PackAccessQty = 0
+            SET @n_SplitToAccessQty = 1                                          --Wan02
             CONTINUE
          END
          
@@ -818,6 +834,7 @@ BEGIN
                AND pw.PickZone  = @c_PickZone
                AND pw.SkuGroup  = @c_SkuGroup
                AND pw.Style     = @c_Style
+               AND pw.SplitToAccessQty IN (0, @n_SplitToAccessQty)                     --Wan02
                AND EXISTS (SELECT 1 FROM #PICKDETAIL_WIP AS pw2
                            WHERE pw2.Orderkey = @c_Orderkey    
                            AND pw2.PackStation = 0
@@ -827,6 +844,7 @@ BEGIN
                            AND pw2.SkuGroup = pw.SkuGroup
                            AND pw2.Style = pw.Style
                            AND pw2.Sku = pw.Sku
+                           AND pw2.SplitToAccessQty IN (0, @n_SplitToAccessQty)        --Wan02 
                            GROUP BY pw2.Sku   
                            HAVING SUM(CASE WHEN FLOOR(pw2.Qty/pw2.PackQtyIndicator) = 0 THEN 1    
                                            ELSE FLOOR(pw2.Qty/pw2.PackQtyIndicator)               
@@ -851,7 +869,7 @@ BEGIN
             AND (a.AccumulateCube > @n_MaxCube_B2B OR a.AccumulateWgt > @n_MaxWeight_B2B)
             UNION 
             SELECT TOP 1 a.Storerkey, a.SKU, a.[Length], a.Width, a.Height                         -- At least Use 1 record to pack  
-                        , Quantity = CASE WHEN a.RemainQtyWgt <= 0 AND a.RemainQtyCube <= 0
+                        , Quantity = CASE WHEN a.RemainQtyWgt <= 0 OR a.RemainQtyCube <= 0         --Wan02
                                           THEN 1
                                           WHEN a.RemainQtyWgt > 0 AND a.RemainQtyWgt <= a.RemainQtyCube
                                           THEN a.RemainQtyWgt
@@ -893,7 +911,7 @@ BEGIN
                BEGIN  
                   SET @n_Continue = 3  
                   SET @n_err = 64010    
-                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_SubmitToCartonizeAPI. (isp_CartonOptimizeCheck)'     
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_SubmitToCartonizeAPI. (ispRLWAV43_PACK)'     
                               + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
                   GOTO QUIT_SP    
                END  
@@ -944,9 +962,20 @@ BEGIN
                      BREAK
                   END
                
-                  IF @b_MinQty1ToPack = 1 -- pack at least 1 qty to Large Carton even if 0 qty to fit to Large box
+                  --Wan02 
+                  --IF @b_MinQty1ToPack = 1 -- pack at least 1 qty to Large Carton even if 0 qty to fit to Large box
+                  --BEGIN
+                  --   BREAK
+                  --END
+                                
+                  IF @c_IsCompletePack = ''-- Sku's LxWxH > Carton's LxWxH, prompt error 
+                  OR @b_MinQty1ToPack = 1  -- Prompt Error if Qty 1 cannot fit in
                   BEGIN
-                     BREAK
+                     SET @n_Continue = 3
+                     SET @n_Err = 64015
+                     SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Sku: ' + RTRIM(@c_Sku_ToPack)+ ' cannot fit into Carton. (ispRLWAV43_PACK)'     
+                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
+                     GOTO QUIT_SP   
                   END
                   
                   --Access Qty = 2
@@ -1133,19 +1162,21 @@ BEGIN
                WHERE pw.Qty > oitp.Quantity
             END   
             
-            IF @c_CartonType_B2B <> ''
-            BEGIN         
+            --Wan02 - Update if c_CartonType_B2B = '' 
+            --IF @c_CartonType_B2B <> ''
+            --BEGIN         
                UPDATE pw
-                  SET pw.CartonType = @c_CartonType_B2B
-                     , pw.CartonSeqNo = @n_CartonSeqNo
-                     , pw.CartonCube = @n_MaxCube_B2B
+                  SET pw.CartonType  = CASE WHEN @c_CartonType_B2B <> '' THEN @c_CartonType_B2B ELSE pw.CartonType END
+                     , pw.CartonSeqNo = CASE WHEN @c_CartonType_B2B <> '' THEN @n_CartonSeqNo ELSE pw.CartonSeqNo END
+                     , pw.CartonCube  = CASE WHEN @c_CartonType_B2B <> '' THEN @n_MaxCube_B2B ELSE pw.CartonCube END
                      , pw.Qty = oitp.Quantity
                      , pw.PickItemCube = oitp.Quantity * pw.StdCube
                      , pw.PickItemWgt  = oitp.Quantity * pw.StdGrossWgt
                      , pw.Status_CZ = CASE WHEN pw.Qty > oitp.Quantity AND pw.Status_CZ = 0 THEN 1 ELSE pw.Status_CZ END--If Split record, remain status_CZ = 2
+                     , pw.SplitToAccessQty = CASE WHEN @c_CartonType_B2B = '' THEN 1 ELSE 0 END                 
                FROM #OptimizeItemToPack AS oitp
                JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = oitp.RowRef
-            END
+            --END
          END
       END
       ---------------------------------------------------------
