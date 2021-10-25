@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-09  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/* 2021-10-22  Wan01    1.1   Add LxWxH = StdCube validation            */
+/*                      1.1   CR 2.6                                    */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV43_VLDN]
@@ -50,6 +52,7 @@ BEGIN
          , @c_SortStationGroups     NVARCHAR(110)= ''
          , @c_Status_ORD            NVARCHAR(10)  = ''
          , @c_SortStationGroup_NF   NVARCHAR(100) = ''
+         , @c_OrderCheckFlag        NVARCHAR(20)  = ''
 
          , @n_SortStationLoc        INT   = 0
          , @n_NoOfLargeLoc          INT   = 0
@@ -61,7 +64,7 @@ BEGIN
          , @n_Found                 INT   = 0
 
          , @c_Sku                   NVARCHAR(20) = ''
-        
+         
    DECLARE @t_SortLocCubic          TABLE
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
          , Loc                      NVARCHAR(10)   NOT NULL DEFAULT('')    
@@ -77,6 +80,13 @@ BEGIN
          , DocType                  NVARCHAR(10)   NOT NULL DEFAULT('') 
          )
       
+   --Wan01
+   DECLARE @t_Orders                TABLE 
+         ( Orderkey                 NVARCHAR(10)   NOT NULL DEFAULT('')    PRIMARY KEY
+         , [Status]                 NVARCHAR(10)   NULL     DEFAULT('')  
+         , ADCourier                INT            NOT NULL DEFAULT(0)
+         )  
+            
    SET @b_Success  = 1   
    SET @n_Err     = 0   
    SET @c_ErrMsg  = ''  
@@ -85,6 +95,7 @@ BEGIN
       @c_SortStationGroups = ISNULL(RTRIM(w.UserDefine01),'') + ',' + ISNULL(RTRIM(w.UserDefine02),'') + ',' --CR v2.5
                            + ISNULL(RTRIM(w.UserDefine03),'') + ',' + ISNULL(RTRIM(w.UserDefine04),'') + ','
                            + ISNULL(RTRIM(w.UserDefine05),'')
+   ,  @c_OrderCheckFlag = ISNULL(RTRIM(w.UserDefine08),'')                  
    ,  @c_Status_ORD  = o.[Status] 
    ,  @c_Storerkey   = o.Storerkey
    ,  @c_Facility    = o.Facility
@@ -102,27 +113,57 @@ BEGIN
       GOTO QUIT_SP
    END
    
-   IF EXISTS (
-               SELECT 1 
-               FROM dbo.WAVE AS w WITH (NOLOCK)
-               JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
-               JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
-               JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME = 'ADICOURIER'
-                                                    AND c.Storerkey = o.StorerKey
-               WHERE w.WaveKey = @c_Wavekey
-               AND o.[Status] < '2'
-               AND c.Short = 'Y'
-               AND c.UDF01 = o.DocType
-               AND c.UDF02 = o.[Type]
-               AND c.UDF03 = o.Salesman
-               AND c.UDF04 = o.DeliveryNote
+   --Wan01 - START
+   INSERT INTO @t_ORDERS ( Orderkey, Status, ADCourier )
+   SELECT o.Orderkey, o.[Status], ADCourier = CASE WHEN c.LISTNAME IS NULL THEN 0 ELSE 1 END
+   FROM dbo.WAVE AS w WITH (NOLOCK)
+   JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
+   JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
+   LEFT OUTER JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME = 'ADICOURIER'
+                                                   AND c.Storerkey = o.StorerKey
+                                                   AND c.Short = 'Y'
+                                                   AND c.UDF01 = o.DocType
+                                                   AND c.UDF02 = o.[Type]
+                                                   AND c.UDF03 = o.Salesman
+                                                   AND (c.UDF04 = '' OR c.UDF04 = o.DeliveryNote)
+   WHERE w.WaveKey = @c_Wavekey
+   GROUP BY o.Orderkey
+         ,  o.[Status]
+         ,  CASE WHEN c.LISTNAME IS NULL THEN 0 ELSE 1 END
+            
+   IF EXISTS ( SELECT 1 FROM @t_Orders AS tor WHERE tor.ADCourier = 1 AND tor.[Status] < '2'
+               --SELECT 1 
+               --FROM dbo.WAVE AS w WITH (NOLOCK)
+               --JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
+               --JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
+               --JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME = 'ADICOURIER'
+               --                                     AND c.Storerkey = o.StorerKey
+               --WHERE w.WaveKey = @c_Wavekey
+               --AND o.[Status] < '2'
+               --AND c.Short = 'Y'
+               --AND c.UDF01 = o.DocType
+               --AND c.UDF02 = o.[Type]
+               --AND c.UDF03 = o.Salesman
+               --AND c.UDF04 = o.DeliveryNote
             )
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 61020
-      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Partial Allocated Order Found. (ispRLWAV43_VLDN)'
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Partial Allocated AD Courier Order Found. (ispRLWAV43_VLDN)'
       GOTO QUIT_SP
    END
+   
+   IF @c_OrderCheckFlag <> 'BYPASS'
+   BEGIN
+      IF EXISTS ( SELECT 1 FROM @t_Orders AS tor WHERE tor.ADCourier = 0 AND tor.[Status] < '2')
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 61021
+         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Partial Allocated Non AD Courier Order Found. (ispRLWAV43_VLDN)'
+         GOTO QUIT_SP
+      END
+   END
+   --Wan01 - END
    
    IF EXISTS ( SELECT 1 FROM dbo.WAVE AS w WITH (NOLOCK)
                JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
@@ -204,7 +245,8 @@ BEGIN
                                  WHEN s.Width = 0.00 THEN 1
                                  WHEN s.Height = 0.00 THEN 1
                                  WHEN s.STDCUBE = 0.00 THEN 1
-                                 WHEN s.STDGROSSWGT = 0.00 THEN 1                                 
+                                 WHEN s.STDGROSSWGT = 0.00 THEN 1  
+                                 WHEN ROUND(s.[Length] * s.Width * s.Height,5) <> ROUND(s.STDCUBE,5) THEN 1       --(Wan01)                                       
                                  ELSE 0 
                                  END 
    FROM dbo.WAVEDETAIL AS w (NOLOCK)  
@@ -217,7 +259,7 @@ BEGIN
    BEGIN  
       SET @n_Continue = 3  
       SET @n_Err = 61070  
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found Sku Length, Width, Height, StdCube, StdGrossWgt not setup. Sku:' + @c_Sku
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found Sku Length, Width, Height, StdCube, StdGrossWgt not setup OR LxWxH <> StdCube. Sku:' + @c_Sku
                    +'. (ispRLWAV43_VLDN)'  
       GOTO QUIT_SP  
    END   
