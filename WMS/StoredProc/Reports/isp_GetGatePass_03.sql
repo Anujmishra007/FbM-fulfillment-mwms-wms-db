@@ -26,7 +26,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC from MBOL                                            */
 /*                                                                      */
-/* GitLab Version: 1.3                                                  */
+/* GitLab Version: 1.5                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -40,6 +40,8 @@ GO
 /*                              (WL02)                                  */
 /* 2021-04-13   WLChooi   1.3   WMS-16790 Modify logic of TTLCTN (WL03) */
 /* 2021-10-13   LZG       1.4   JSM-25777-Removed ShipperKey JOIN (ZG01)*/
+/* 2021-10-25   WLChooi   1.5   DevOps Combine Script                   */
+/* 2021-10-25   WLChooi   1.5   WMS-18243 Modify logic for B2B (WL04)   */
 /************************************************************************/
 
 CREATE PROC isp_GetGatePass_03 (@c_mbolkey NVARCHAR(10))
@@ -217,8 +219,9 @@ BEGIN
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideExternLoadkey
              , SUM(PICKDETAIL.qty) AS totalEaches
              --, COUNT(DISTINCT PICKDETAIL.DropID) AS TTLCTN   --WL03
-             , MAX(TN.TTLCTN)   --WL03
-             , CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02
+             , CASE WHEN ORDERS.Doctype = 'E' THEN MAX(TN.TTLCTN) ELSE MAX(TNB2B.TTLCTN) END   --WL03   --WL04
+             --, CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02   --WL04
+             , CASE WHEN ORDERS.Doctype = 'E' THEN ORDERS.ShipperKey ELSE ORDERS.ConsigneeKey END   --WL04
              , @c_Containerkey AS Containerkey   --WL01
       FROM PICKDETAIL (NOLOCK)
       INNER JOIN ORDERDETAIL (NOLOCK) ON (PICKDETAIL.orderkey  = ORDERDETAIL.Orderkey
@@ -241,12 +244,18 @@ BEGIN
       JOIN lotattribute LOTT WITH (NOLOCK) ON LOTT.lot=PICKDETAIL.Lot AND LOTT.sku = PICKDETAIL.sku AND LOTT.Storerkey = PICKDETAIL.Storerkey
       JOIN #TMP_ALLMBOL t ON t.MBOLKey = MBOL.MBOLKey AND MBOL.[Status] = '9'  --WL01
       --WHERE ORDERDETAIL.mbolkey = @c_mbolkey AND MBOL.status = '9'   --WL01
-      CROSS APPLY (SELECT COUNT(DISTINCT OH.TrackingNo) AS TTLCTN
+      OUTER APPLY (SELECT COUNT(DISTINCT OH.TrackingNo) AS TTLCTN   --WL04
                    FROM ORDERS OH (NOLOCK)
                    WHERE OH.MBOLKey = MBOL.MBOLKey
-                   AND OH.Salesman = ORDERS.Salesman
-                   --AND OH.Shipperkey = ORDERS.Shipperkey  -- ZG01
+                   --AND OH.Salesman = ORDERS.Salesman   --WL04
+                   AND OH.Shipperkey = ORDERS.Shipperkey  -- ZG01   --WL04
                    ) AS TN   --WL03
+      OUTER APPLY (SELECT COUNT(DISTINCT PD.DropID) AS TTLCTN
+                   FROM PICKDETAIL PD (NOLOCK)
+                   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey
+                   WHERE OH.MBOLKey = MBOL.MbolKey
+                   AND OH.ConsigneeKey = ORDERS.ConsigneeKey
+                   ) AS TNB2B   --WL04
       GROUP BY MBOL.Mbolkey
              --, MBOL.facility
              , FACILITY.descr
@@ -266,7 +275,9 @@ BEGIN
              --, LEFT(ISNULL(MBOL.Remarks,''),250)            --WL01
              --, SUBSTRING(ISNULL(MBOL.Remarks,''),251,250)   --WL01
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END
-             , CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02
+             --, CASE WHEN ISNULL(ORDERS.Salesman,'') = '' THEN 'STO' ELSE ORDERS.Salesman END   --WL02   --WL04
+             , CASE WHEN ORDERS.Doctype = 'E' THEN ORDERS.ShipperKey ELSE ORDERS.ConsigneeKey END   --WL04
+             , ORDERS.Doctype   --WL04
    END
 
    IF @n_continue = 3
