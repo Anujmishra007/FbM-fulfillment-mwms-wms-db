@@ -38,6 +38,9 @@ GO
 /*                            support codelkup 'PO2ASNMAP               */
 /* 2020-08-11  Wan03    1.3   LFWM-2962 - Populate Order details -Populate*/
 /*                            SO Detail fail.                           */
+/* 2021-20-26  NJOW01   1.7   DEVOPS combine script                     */
+/* 2021-20-26  NJOW01   1.7   WMS-17224 fix pokeylist delimiter pass to */
+/*                            sub-stored proc.                          */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]                                                                                                                   
       @c_ReceiptKey           NVARCHAR(10)         
@@ -226,6 +229,8 @@ BEGIN
          ,  @c_DefaultLOC              NVARCHAR(30)   = ''
          ,  @c_DefaultRcptLOC          NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
+         ,  @c_POKeyListParam          NVARCHAR(4000) = ''  --NJOW01  
+         ,  @c_POLineNumberListParam   NVARCHAR(4000) = ''  --NJOW01
 
          ,  @CUR_SCHEMA                CURSOR
 
@@ -591,12 +596,16 @@ BEGIN
             ,  @n_err         = @n_err       
             ,  @c_errmsg      = @c_errmsg    
          END
+         
+         --NJOW01
+         SET @c_POKeyListParam = REPLACE(@c_POKeyList,'|',',')         
+         SET @c_POLineNumberListParam = REPLACE(@c_POLineNumberList,'|',',')        
 
          BEGIN TRY
             EXEC [dbo].[isp_PrePopulatePO_Wrapper]  
                   @c_Receiptkey  = @c_Receiptkey
-               , @c_POKeys       = @c_POKeyList     
-               , @c_POLineNumbers= @c_POLineNumberList                
+               , @c_POKeys       = @c_POKeyListParam         --NJOW01
+               , @c_POLineNumbers= @c_POLineNumberListParam  --NJOW01              
                , @b_Success      = @b_Success      OUTPUT
                , @n_Err          = @n_Err          OUTPUT 
                , @c_ErrMsg       = @c_ErrMsg       OUTPUT 

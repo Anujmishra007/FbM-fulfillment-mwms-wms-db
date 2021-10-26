@@ -35,6 +35,9 @@ GO
 /* 2021-06-25  Wan04    1.6   LFWM-2854 - UAT - TW  Receipt - Populate  */
 /*                            from PO ( 1 PO 1 ASN ) in SCE does not    */
 /*                            support codelkup 'PO2ASNMAP               */
+/* 2021-20-26  NJOW01   1.7   DEVOPS combine script                     */
+/* 2021-20-26  NJOW01   1.7   WMS-17224 fix pokeylist delimiter pass to */
+/*                            sub-stored proc.                          */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -196,6 +199,7 @@ BEGIN
          ,  @c_DefaultRcptLOC          NVARCHAR(30)   = ''
          ,  @c_QCLocation              NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
+         ,  @c_POKeyListParam          NVARCHAR(4000) = '' --NJOW01
      
          ,  @CUR_SCHEMA                CURSOR
          ,  @CUR_INVALIDPO             CURSOR
@@ -441,19 +445,30 @@ BEGIN
          GOTO EXIT_SP  
       END
 
-      SET @c_POKeyList = ''
+      /*SET @c_POKeyList = ''
       SET @c_POKeyList = RTRIM(ISNULL(CONVERT(VARCHAR(4000),            --2020-09-21
                                           (  SELECT RTRIM(T.PORefKey) + '/ ' 
                                              FROM #tPOs T 
                                              ORDER BY T.RowRef
                                              FOR XML PATH(''), TYPE
                                           )
+                                       ),''))*/
+
+      --NJOW01
+      SET @c_POKeyListParam = ''
+      SET @c_POKeyListParam = RTRIM(ISNULL(CONVERT(VARCHAR(4000),            --2020-09-21
+                                          (  SELECT RTRIM(T.PORefKey) + ',' 
+                                             FROM #tPOs T 
+                                             ORDER BY T.RowRef
+                                             FOR XML PATH(''), TYPE
+                                          )
                                        ),''))
+      SET @c_POKeyListParam = LEFT(@c_POKeyListParam , LEN(@c_POKeyListParam ) - 1)                                  
 
       BEGIN TRY
          EXEC [dbo].[isp_PrePopulatePO_Wrapper]  
               @c_Receiptkey   = @c_Receiptkey
-            , @c_POKeys       = @c_POKeyList     
+            , @c_POKeys       = @c_POKeyListParam  --NJOW01   
             , @c_POLineNumbers= ''                
             , @b_Success      = @b_Success      OUTPUT
             , @n_Err          = @n_Err          OUTPUT 
@@ -1813,6 +1828,5 @@ EXIT_SP:
    REVERT
 END
 GO
-
 GRANT EXECUTE ON [WM].[lsp_ASN_PopulatePOs_Wrapper] TO nSQL 
 GO  
