@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2021-10-26  Mingle   1.1   WMS-18235 - Modify logic(ML01)            */
+/* 2021-10-26  Mingle   1.1   DevOps Combine Script                     */
 /************************************************************************/
 create PROC isp_packing_list_81_main
          @c_PickSlipNo     NVARCHAR(10)
@@ -267,7 +269,7 @@ BEGIN
   JOIN SKU S WITH (NOLOCK) ON S.storerkey = OD.Storerkey AND S.sku = OD.sku
   --LEFT OUTER JOIN #TempPackList81 T81 ON OD.OrderKey = T81.ORderkey AND OD.sku = T81.sku 
    WHERE OD.orderkey = @c_orderkey
-   AND ( od.qtypicked - od.originalqty ) <> 0
+   AND ( od.qtyallocated+od.qtypicked - od.originalqty ) <> 0  --ML01
    --AND T81.misspqty = 'Y'
    Order by OD.Orderkey,OD.sku
    GOTO QUIT;
