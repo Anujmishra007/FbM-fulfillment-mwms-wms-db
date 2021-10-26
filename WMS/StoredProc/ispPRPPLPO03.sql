@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 06-OCT-2021  NJOW      1.0 DEVOPS combine script                     */
+/* 20-OCT-2021  NJOW01    1.1 Fix stamp Userdefined06 to Userdefined09  */
 /************************************************************************/
 CREATE PROC [dbo].[ispPRPPLPO03]
            @c_Receiptkey      NVARCHAR(10)
@@ -84,6 +85,13 @@ BEGIN
    
    IF @n_continue IN(1,2)
    BEGIN
+   	  --NJOW01
+   	  IF CHARINDEX('|',@c_POKeys) > 0
+   	     SELECT @c_POKeys = REPLACE(@c_POKeys,'|',',')    
+
+   	  IF CHARINDEX('|',@c_POLineNumbers) > 0
+   	     SELECT @c_POLineNumbers = REPLACE(@c_POLineNumbers,'|',',')       	  
+   	  
       CREATE TABLE #PREPPL_PO
          (  SeqNo          INT
          ,  POKey          NVARCHAR(10)   NOT NULL DEFAULT ('')
@@ -92,7 +100,7 @@ BEGIN
       
       INSERT INTO #PREPPL_PO
          (  SeqNo
-         ,  POKey
+         ,  POKey 
          )     
       SELECT SeqNo
          ,   ColValue
@@ -223,9 +231,9 @@ BEGIN
       	       JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
       	       JOIN UCC (NOLOCK) ON UCC.Externkey = POD.ExternPokey AND UCC.UccNo = POD.Userdefine01 AND UCC.Storerkey = PO.Storerkey AND UCC.Sku = POD.Sku AND UCC.Userdefined08 <> 'HV' 
       	       WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO)
-      	       AND SKU.SUSR2 <> '1'
+      	       AND ISNULL(SKU.SUSR2,'') <> '1'
       	       GROUP BY SKU.Style
-      	       ORDER BY SUM(POD.QtyExpected), SKU.Style 
+      	       ORDER BY SUM(POD.QtyOrdered), SKU.Style 
 
             OPEN CUR_ARTICLE  
       
@@ -240,7 +248,7 @@ BEGIN
       	          JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
       	          JOIN UCC (NOLOCK) ON UCC.Externkey = POD.ExternPokey AND UCC.UccNo = POD.Userdefine01 AND UCC.Storerkey = PO.Storerkey AND UCC.Userdefined08 <> 'HV' 
       	          WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO)
-      	          AND SKU.SUSR2 <> '1'
+      	          AND ISNULL(SKU.SUSR2,'') <> '1'
       	          AND SKU.Style = @c_Style
                           
                OPEN CUR_UCC_QC
@@ -250,7 +258,7 @@ BEGIN
                WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2) 
                BEGIN
       	          UPDATE UCC WITH (ROWLOCK)
-      	          SET Userdefined06 = '1', 
+      	          SET Userdefined09 = '1',   --NJOW01
       	              TrafficCop = NULL
       	          WHERE UCCNo = @c_UCCNo
       	          AND Storerkey = @c_Storerkey
