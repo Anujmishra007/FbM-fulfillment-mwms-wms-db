@@ -27,6 +27,8 @@ GO
 /* Date         Author    Ver Purposes                                  */ 
 /* 2021-01-28   WLChooi   1.1 Do not join Packdetail to get Qty, use    */
 /*                            SUM(PICKDETAIL.Qty) instead (WL01)        */
+/* 2021-10-26   Mingle    1.2 Modify logic(ML01)                        */
+/* 2021-10-26   Mingle    1.2 DevOps Combine Script                     */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_Packing_List_93_rdt]
             @c_Pickslipno    NVARCHAR(15),      --Could be Storerkey/Pickslipno/Orderkey
@@ -79,7 +81,8 @@ BEGIN
    END
    
    SELECT ISNULL(OH.Externorderkey,'') AS Externorderkey
-        , ISNULL(OH.M_Company,'') AS M_Company
+        --, ISNULL(OH.M_Company,'') AS M_Company
+        , CASE WHEN OH.StorerKey = '18405' THEN ISNULL(OH.TrackingNo,'') ELSE ISNULL(OH.M_Company,'') END AS M_Company  --ML01
         , LTRIM(RTRIM(ISNULL(OH.C_Contact1,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Contact2,''''))) AS C_Contact
         , LTRIM(RTRIM(ISNULL(OH.C_Address2,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address3,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address4,''''))) AS C_Addresses
         , OH.C_Phone1
@@ -105,7 +108,8 @@ BEGIN
    AND OH.DocType = 'E'
    --WL01 S
    GROUP BY ISNULL(OH.Externorderkey,'')
-          , ISNULL(OH.M_Company,'')
+          --, ISNULL(OH.M_Company,'')
+          ,CASE WHEN OH.StorerKey = '18405' THEN ISNULL(OH.TrackingNo,'') ELSE ISNULL(OH.M_Company,'') END  --ML01
           , LTRIM(RTRIM(ISNULL(OH.C_Contact1,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Contact2,'''')))
           , LTRIM(RTRIM(ISNULL(OH.C_Address2,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address3,''''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address4,'''')))
           , OH.C_Phone1
