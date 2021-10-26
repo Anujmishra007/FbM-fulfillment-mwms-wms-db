@@ -1,6 +1,7 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspAL_UA01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[nspAL_UA01]
 GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -30,6 +31,9 @@ GO
 /* 27-Feb-2017  TLTING  1.1  Variable Nvarchar                          */
 /* 10-Jul-2018  NJOW02  1.2  WMS-5692 Change lot sorting by locationgroup*/
 /*                           for full case. CN only.                    */
+/* 10-Sep-2021  NJOW03  1.3  WMS-17912 new logic for HK UA. filter      */
+/*                           location type OTHER for UOM 2              */
+/* 16-Oct-2021  NJOW03  1.3  DEVOPS combine script                      */
 /************************************************************************/
 
 CREATE PROC nspAL_UA01 
@@ -102,6 +106,27 @@ BEGIN
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) > 0 
       ORDER BY LOC.LocationGroup, LOC.LocLevel, QTYAVAILABLE, LOC.LogicalLocation, LOC.LOC   	
    END
+   ELSE IF @c_UOM  = '2' AND @c_countryflag = 'HK'  --NJOW03
+   BEGIN
+      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
+      FOR SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID,
+      QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen), '1'
+      FROM LOTxLOCxID (NOLOCK)
+      JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC
+      JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku
+                               AND LOTxLOCxID.Loc = SKUxLOC.Loc
+      JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID 
+      WHERE LOTxLOCxID.Lot = @c_lot
+      AND LOC.Facility = @c_Facility
+      AND LOC.Locationflag <>'HOLD'
+      AND LOC.Locationflag <> 'DAMAGE'
+      AND LOC.Status <> 'HOLD'
+      AND ID.Status = 'OK'
+      --AND SKUXLOC.Locationtype NOT IN ('PICK','CASE') 
+      AND LOC.Locationtype = 'OTHER'       
+      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) > 0 
+      ORDER BY 3, LOC.LogicalLocation, LOC.LOC   	   	
+   END
    ELSE
    BEGIN --UOM 7 or 2(non CN)
       DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
@@ -126,12 +151,5 @@ BEGIN
    
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-
-SET ANSI_NULLS OFF
-GO
-
 GRANT EXECUTE ON nspAL_UA01 TO nSQL
 GO
