@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,7 @@ GO
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
 /* 2021-10-21  Wan01    1.1   PHWMS Issue fixed                         */
 /* 2021-10-22  Wan02    1.1   IDWMS UAT Issue fixed                     */
+/* 2021-10-27  Wan03    1.2   Fixed Cannot Find Cartontype for UCC (FC) */
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -48,6 +49,7 @@ BEGIN
          , @n_Continue           INT         = 1
 
          , @n_RowRef             INT         = 0
+         , @n_RowRef_FC          INT         = 0      --(Wan03)
          , @n_Status             INT         = 0      --0:Original, 1:Split, 2:New
    
          , @c_Release_Opt5       NVARCHAR(4000) = ''  
@@ -68,6 +70,8 @@ BEGIN
          , @c_Style              NVARCHAR(10) = ''
          , @c_Color              NVARCHAR(10) = ''   
          , @c_Size               NVARCHAR(10) = ''
+         , @n_RecCnt             NVARCHAR(20) = ''       --(Wan03)
+         
          , @n_SplitToAccessQty   INT          = 0        --Wan02                           
 
          , @n_CartonSeqNo        INT         = 0
@@ -86,8 +90,7 @@ BEGIN
          , @n_MaxWeight_B2C      FLOAT       = 0.00
          
          , @n_RemainingCube      FLOAT       = 0.00
-         
-       
+                
          , @c_IsCompletePack     NVARCHAR(5) = ''
          , @c_Sku_Optimize       NVARCHAR(20)= ''
          , @c_Sku_ToPack         NVARCHAR(20)= ''
@@ -147,7 +150,20 @@ BEGIN
          ,  Storerkey            NVARCHAR(15) NOT NULL   DEFAULT('')  
          ,  UDF01                NVARCHAR(60) NOT NULL   DEFAULT('')     
          ,  UDF02                NVARCHAR(60) NOT NULL   DEFAULT('')                   
-         )                
+         )  
+
+   --(Wan03)      
+   DECLARE @t_OptimizeCZGroup_FC TABLE
+         (  RowRef               INT            IDENTITY(1,1) PRIMARY KEY
+         ,  CartonizationGroup   NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  CartonType           NVARCHAR(10)   NOT NULL DEFAULT ('')
+         ,  [Cube]               FLOAT          NOT NULL DEFAULT (0.00)
+         ,  MaxWeight            FLOAT          NOT NULL DEFAULT (0.00)
+         ,  CartonLength         FLOAT          NOT NULL DEFAULT (0.00)
+         ,  CartonWidth          FLOAT          NOT NULL DEFAULT (0.00)
+         ,  CartonHeight         FLOAT          NOT NULL DEFAULT (0.00)
+         )
+         
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
@@ -685,6 +701,37 @@ BEGIN
       ---------------------------------------------------------
       -- 1) For UCC to PackStation, UOM = '2' - START
       ---------------------------------------------------------
+      --(Wan03) - START
+      INSERT INTO @t_OptimizeCZGroup_FC
+          (
+              CartonizationGroup
+          ,   CartonType
+          ,   [Cube]
+          ,   MaxWeight
+          ,   CartonLength
+          ,   CartonWidth
+          ,   CartonHeight
+          )
+      SELECT CartonizationGroup
+          ,   oc.CartonType
+          ,   oc.[Cube]
+          ,   oc.MaxWeight
+          ,   oc.CartonLength
+          ,   oc.CartonWidth
+          ,   oc.CartonHeight
+      FROM #OptimizeCZGroup AS oc
+      ORDER BY oc.RowRef
+      
+      SELECT TOP 1 @n_RowRef_FC = tocgf.RowRef
+      FROM @t_OptimizeCZGroup_FC AS tocgf
+      ORDER BY tocgf.RowRef DESC
+      
+      UPDATE @t_OptimizeCZGroup_FC
+         SET [Cube]    = 9999.99
+           , MaxWeight = 99.99
+      WHERE RowRef = @n_RowRef_FC
+      --(Wan03) - END
+      
       ;WITH UCC_B2B AS --(SeqNo, DropID, Cube_TTL, Wgt_TTL ) AS
       (  SELECT d.DropID                                             --(Wan01) 2021-10-21
                ,SeqNo = ROW_NUMBER() OVER ( ORDER BY d.PickZone, d.SkuGroup, d.LogicalLocation, d.DropID ) 
@@ -705,7 +752,7 @@ BEGIN
             FROM @t_ORDERS AS tor        
             JOIN #PICKDETAIL_WIP AS pw ON pw.Orderkey = tor.Orderkey
             JOIN dbo.LOC AS l WITH (NOLOCK) ON pw.Loc = l.Loc
-            JOIN #OptimizeCZGroup AS ocg ON ocg.CartonizationGroup = pw.CartonGroup 
+            JOIN @t_OptimizeCZGroup_FC AS ocg ON ocg.CartonizationGroup = pw.CartonGroup        --(Wan03)
             WHERE tor.DocType = 'N'   
             AND pw.PackStation= 1
             AND pw.UOM IN ('2')       -- Full UCC For Same Orderkey
@@ -726,9 +773,10 @@ BEGIN
          SET pw.LabelNo    = u.DropID
             ,pw.CartonType = u.CartonType
             ,pw.CartonSeqNo= u.SeqNo
-            ,pw.CartonCube = u.[Cube]
+            ,pw.CartonCube = ocg.[Cube]                                    --(Wan03)
       FROM #PICKDETAIL_WIP AS pw
       JOIN UCC_B2B AS u ON pw.DropID = u.DropID
+      JOIN #OptimizeCZGroup AS ocg ON u.CartonType = ocg.CartonType        --(Wan03)
 
       ---------------------------------------------------------
       -- 1) For UCC to PackStation, UOM = '2' - END
@@ -1186,14 +1234,28 @@ BEGIN
       
       IF @n_debug = 1
       BEGIN
-         SELECT @c_DocType '@c_DocType', * FROM #PICKDETAIL_WIP AS pw WHERE pw.Orderkey = @c_Orderkey
+         SELECT @c_DocType '@c_DocType',pw.UOM, pw.dropid, pw.CartonType, pw.CartonSeqNo,pw.cartoncube, pw.PickItemCube, pw.PickItemWgt, *
+         FROM #PICKDETAIL_WIP AS pw WHERE pw.Orderkey = @c_Orderkey
+         ORDER BY pw.CartonSeqNo, pw.UOM, pw.CartonType
       END
-       
-      IF EXISTS (SELECT 1 FROM #PICKDETAIL_WIP AS pw WHERE pw.Orderkey = @c_Orderkey AND pw.CartonType = '')
+      
+      --(Wan03) 
+      SET @n_RecCnt = 0
+      SET @c_Sku = ''
+      SELECT TOP 1 
+               @n_RecCnt = 1
+             , @c_Sku = RTRIM(pw.Sku)
+      FROM #PICKDETAIL_WIP AS pw 
+      WHERE pw.Orderkey = @c_Orderkey AND pw.CartonType = ''
+      ORDER BY pw.RowRef
+            
+      --IF EXISTS (SELECT 1 FROM #PICKDETAIL_WIP AS pw WHERE pw.Orderkey = @c_Orderkey AND pw.CartonType = '')
+      IF @n_RecCnt = 1
       BEGIN
          SET @n_continue = 3  
          SET @n_Err = 64020
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Shipment Order without carton type found. (ispRLWAV43_PACK)' 
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Shipment Order without carton type found, Orderkey: ' + @c_Orderkey + ', Sku: ' + @c_Sku
+                      + '. (ispRLWAV43_PACK)' 
          GOTO QUIT_SP      
       END
       
