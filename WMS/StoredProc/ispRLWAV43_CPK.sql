@@ -3,6 +3,10 @@ AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
 DROP PROCEDURE [dbo].[ispRLWAV43_CPK]
 GO
 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Stored Proc: ispRLWAV43_CPK                                          */  
 /* Creation Date: 2021-07-21                                            */  
@@ -23,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2021-07-21  Wan      1.0   Created.                                  */  
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */  
+/* 2021-09-28  Wan01    1.1   Check Build CPK Case Qty against Pick Qty */  
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV43_CPK]  
    @c_Wavekey     NVARCHAR(10)      
@@ -47,7 +52,8 @@ BEGIN
          --, @c_CaseID             NVARCHAR(20)= ''  
          , @c_TaskDetailKey      NVARCHAR(10)= ''   
          , @c_TaskStatus         NVARCHAR(10)= '0'  
-           
+         
+         , @c_CaseID             NVARCHAR(20) = '' --(Wan01)
      
    DECLARE @t_ORDERS             TABLE  
          (  Wavekey              NVARCHAR(10) NOT NULL   DEFAULT('')   
@@ -64,39 +70,44 @@ BEGIN
    SET @n_err      = 0  
    SET @c_errmsg   = ''  
     
-   IF OBJECT_ID('tempdb..#CPK_WIP','U') IS NULL  
+   IF OBJECT_ID('tempdb..#CPK_WIP','U') IS NOT NULL  
    BEGIN  
-      CREATE TABLE #CPK_WIP    
-      (  RowID             INT          IDENTITY(1,1)     PRIMARY KEY  
-      ,  Orderkey          NVARCHAR(10) DEFAULT('')  
-      ,  Pickdetailkey     NVARCHAR(10) DEFAULT('')     
-      ,  Storerkey         NVARCHAR(15) DEFAULT('')  
-      ,  Sku               NVARCHAR(20) DEFAULT('')  
-      ,  UOM               NVARCHAR(10) DEFAULT('')  
-      ,  UOMQty            INT          DEFAULT(0)  
-      ,  Qty               INT          DEFAULT(0)  
-      ,  Lot               NVARCHAR(10) DEFAULT('')  
-      ,  Loc               NVARCHAR(10) DEFAULT('')            
-      ,  CaseID            NVARCHAR(20) DEFAULT('')  
-      ,  DropID            NVARCHAR(20) DEFAULT('')        
-      ,  PickLoc           NVARCHAR(10) DEFAULT('')         --RPF toLoc (DP/DPP/PackStation/SortStationGroup) or Pickdetail.Loc  
-      ,  PickLogicalloc    NVARCHAR(10) DEFAULT('')  
-      ,  PickZone          NVARCHAR(10) DEFAULT('')  
-      ,  PickAreakey       NVARCHAR(10) DEFAULT('')  
-      ,  PackZone          NVARCHAR(10) DEFAULT('')         --Ecom PackZone, Single = PackStation, Multi = SortStation Group   
-      --,  PackStation       INT          DEFAULT(0)  
-      ,  SkuGroup          NVARCHAR(30) DEFAULT('')           
-      ,  Style             NVARCHAR(10) DEFAULT('')          
-      ,  Color             NVARCHAR(10) DEFAULT('')        
-      ,  Size              NVARCHAR(10) DEFAULT('')   
-      ,  PickMethod        NVARCHAR(10) DEFAULT('')   
-      ,  Score             NVARCHAR(10) DEFAULT('')   
-      )  
+      DROP TABLE #CPK_WIP 
    END  
+   
+   CREATE TABLE #CPK_WIP    
+   (  RowID             INT          IDENTITY(1,1)     PRIMARY KEY  
+   ,  Orderkey          NVARCHAR(10) DEFAULT('')  
+   ,  Pickdetailkey     NVARCHAR(10) DEFAULT('')     
+   ,  Storerkey         NVARCHAR(15) DEFAULT('')  
+   ,  Sku               NVARCHAR(20) DEFAULT('')  
+   ,  UOM               NVARCHAR(10) DEFAULT('')  
+   ,  UOMQty            INT          DEFAULT(0)  
+   ,  Qty               INT          DEFAULT(0)  
+   ,  Lot               NVARCHAR(10) DEFAULT('')  
+   ,  Loc               NVARCHAR(10) DEFAULT('')            
+   ,  CaseID            NVARCHAR(20) DEFAULT('')  
+   ,  DropID            NVARCHAR(20) DEFAULT('')        
+   ,  PickLoc           NVARCHAR(10) DEFAULT('')         --RPF toLoc (DP/DPP/PackStation/SortStationGroup) or Pickdetail.Loc  
+   ,  PickLogicalloc    NVARCHAR(10) DEFAULT('')  
+   ,  PickZone          NVARCHAR(10) DEFAULT('')  
+   ,  PickAreakey       NVARCHAR(10) DEFAULT('')  
+   ,  PackZone          NVARCHAR(10) DEFAULT('')         --Ecom PackZone, Single = PackStation, Multi = SortStation Group   
+   --,  PackStation       INT          DEFAULT(0)  
+   ,  SkuGroup          NVARCHAR(30) DEFAULT('')           
+   ,  Style             NVARCHAR(10) DEFAULT('')          
+   ,  Color             NVARCHAR(10) DEFAULT('')        
+   ,  Size              NVARCHAR(10) DEFAULT('')   
+   ,  PickMethod        NVARCHAR(10) DEFAULT('')   
+   ,  Score             NVARCHAR(10) DEFAULT('')   
+   )  
      
-   IF OBJECT_ID('tempdb..#CPK','U') IS NULL    
-   BEGIN    
-      CREATE TABLE #CPK      
+   IF OBJECT_ID('tempdb..#CPK','U') IS NOT NULL    
+   BEGIN  
+      DROP TABLE #CPK
+   END
+   
+   CREATE TABLE #CPK      
       (  RowID             INT          IDENTITY(1,1)     PRIMARY KEY    
       ,  TaskDetailKey     NVARCHAR(10) DEFAULT('')     
       ,  Wavekey           NVARCHAR(10) DEFAULT('')     
@@ -118,8 +129,7 @@ BEGIN
       ,  RowRef            INT           DEFAULT(0)    
   
       )    
-   END   
-  
+   
    INSERT INTO @t_ORDERS  
         ( Wavekey, Loadkey, Orderkey, Facility, Storerkey, DocType, Ecom_Single_Flag )  
    SELECT WD.Wavekey, OH.Loadkey, OH.Orderkey, OH.Facility, OH.Storerkey, OH.DocType, OH.ECOM_SINGLE_Flag  
@@ -298,6 +308,38 @@ BEGIN
    ORDER BY cw.PickMethod  
          ,  cw.PickZone   
          ,  cw.PickLogicalloc   
+         
+         
+   --(Wan01) - START 
+   SET @c_CaseID = ''
+   ;WITH td AS
+   (  SELECT cw.CaseID, Qty = SUM(cw.Qty)
+      FROM #CPK_WIP AS cw 
+      GROUP BY cw.CaseID
+   )
+   , pd AS
+    ( SELECT p.CaseID, Qty = SUM(p.Qty)
+      FROM WAVEDETAIL AS w WITH (NOLOCK) 
+      JOIN PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = w.OrderKey
+      WHERE w.WaveKey = @c_Wavekey
+      AND p.[Status] < '5'
+      GROUP BY p.CaseID
+   )
+  
+   SELECT TOP 1 @c_CaseID = RTRIM(pd.CaseID)
+   FROM td 
+   JOIN pd ON pd.CaseID = td.CaseID
+   WHERE td.Qty <> pd.Qty
+  
+   IF @c_CaseID <> ''
+   BEGIN  
+      SET @n_continue = 3      
+      SET @n_Err = 66015    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Taskdetail Case Qty <> PickDetail Case Qty. CaseID: ' + @c_CaseID 
+                   + '. Please make sure No Home Loc Changing during release Wave. (ispRLWAV43_CPK)'     
+      GOTO QUIT_SP   
+   END 
+   --(Wan01) - END
   
    SET @n_Batch = 0  
    SELECT TOP 1 @n_Batch = c.RowID  
