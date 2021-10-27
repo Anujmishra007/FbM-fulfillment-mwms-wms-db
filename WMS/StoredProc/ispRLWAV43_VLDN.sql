@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,8 @@ GO
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
 /* 2021-10-22  Wan01    1.1   Add LxWxH = StdCube validation            */
 /*                      1.1   CR 2.6                                    */
+/* 2021-10-26  Wan02    1.2   Convert to REAL to compare                */
+/* 2021-10-26           1.2   Home Loc/Pick Face Checking               */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV43_VLDN]
@@ -64,6 +66,9 @@ BEGIN
          , @n_Found                 INT   = 0
 
          , @c_Sku                   NVARCHAR(20) = ''
+         , @c_DiffHomeLoc_AL        NVARCHAR(10) = ''       --(Wan02)
+         , @n_NoOfDPP_AL            INT          = 0        --(Wan02)
+         , @n_NoOfHomeLoc           INT          = 0        --(Wan02)
          
    DECLARE @t_SortLocCubic          TABLE
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
@@ -86,6 +91,17 @@ BEGIN
          , [Status]                 NVARCHAR(10)   NULL     DEFAULT('')  
          , ADCourier                INT            NOT NULL DEFAULT(0)
          )  
+    
+   --Wan02    
+   DECLARE @t_HomeLoc_AL            TABLE 
+         ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
+         , Storerkey                NVARCHAR(15)   NOT NULL DEFAULT('')   
+         , Sku                      NVARCHAR(20)   NOT NULL DEFAULT('')  
+         , Loc                      NVARCHAR(10)   NOT NULL DEFAULT('')  
+         , NoOFDPP                  INT            NOT NULL DEFAULT(0)
+         )  
+    
+   
             
    SET @b_Success  = 1   
    SET @n_Err     = 0   
@@ -246,7 +262,9 @@ BEGIN
                                  WHEN s.Height = 0.00 THEN 1
                                  WHEN s.STDCUBE = 0.00 THEN 1
                                  WHEN s.STDGROSSWGT = 0.00 THEN 1  
-                                 WHEN ROUND(s.[Length] * s.Width * s.Height,5) <> ROUND(s.STDCUBE,5) THEN 1       --(Wan01)                                       
+                                 WHEN ROUND(CONVERT(REAL,s.[Length] * s.Width * s.Height),5) <> ROUND(CONVERT(REAL,s.STDCUBE),5) THEN 1       --(Wan01) 
+                                 --WHEN ROUND( s.[Length] * s.Width * s.Height,5) >= ROUND(s.STDCUBE,5) AND ROUND( s.[Length] * s.Width * s.Height,5) - ROUND(s.STDCUBE,5) > 0.00001 THEN 1       --(Wan02)                                       
+                                 --WHEN ROUND( s.[Length] * s.Width * s.Height,5) <  ROUND(s.STDCUBE,5) AND ROUND(s.STDCUBE,5) - ROUND(s.[Length] * s.Width * s.Height,5) > 0.00001  THEN 1       --(Wan02)                                    
                                  ELSE 0 
                                  END 
    FROM dbo.WAVEDETAIL AS w (NOLOCK)  
@@ -326,7 +344,64 @@ BEGIN
       GOTO QUIT_SP    
    END  
    
+   --(Wan02) - START
+   INSERT INTO @t_HomeLoc_AL 
+       (
+           Storerkey,
+           Sku,
+           Loc,
+           NoOFDPP
+       )
+   SELECT p.Storerkey
+         ,p.Sku
+         ,loc     = MIN(CASE WHEN l.LocationType = 'DYNPPICK' THEN p.Loc ELSE '' END)
+         ,NoOFDPP = COUNT(DISTINCT CASE WHEN l.LocationType = 'DYNPPICK' THEN p.Loc ELSE NULL END)
+   FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)
+   JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = w.OrderKey
+   JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = p.Loc
+   WHERE w.WaveKey = @c_Wavekey
+   AND p.[Status] < '5'
+   GROUP BY p.Storerkey, p.Sku, p.Loc
    
+   SET @c_Sku = ''
+   SET @n_NoOfHomeLoc = 0
+   SET @c_DiffHomeLoc_AL = ''
+   SELECT TOP 1 
+               @c_Sku = RTRIM(sul.Sku)
+            ,  @n_NoOfHomeLoc   = COUNT(DISTINCT sul.Loc)
+            ,  @n_NoOfDPP_AL    = thla.NoOFDPP
+            ,  @c_DiffHomeLoc_AL = MAX(CASE WHEN thla.Loc <> '' AND thla.Loc <> sul.loc THEN thla.Loc ELSE '' END)
+   FROM @t_HomeLoc_AL AS thla 
+   JOIN dbo.SKUxLOC AS sul WITH (NOLOCK) ON sul.Storerkey = thla.StorerKey
+                                          AND sul.Sku = thla.Sku
+   WHERE sul.LocationType = 'PICK'
+   GROUP BY sul.Storerkey, sul.Sku, thla.NoOFDPP
+   ORDER BY 2 DESC, thla.NoOFDPP DESC
+
+   IF @c_Sku <> '' AND @n_NoOfHomeLoc > 1
+   BEGIN 
+      SET @n_Continue = 3    
+      SET @n_Err = 61110    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. More than 1 Home Loc Found. Sku:.' + RTRIM(@c_Sku) + '. (ispRLWAV43_VLDN)'   
+      GOTO QUIT_SP               
+   END
+
+   IF @c_Sku <> '' AND @n_NoOfDPP_AL > 1
+   BEGIN 
+      SET @n_Continue = 3    
+      SET @n_Err = 61120    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. Sku:.' + RTRIM(@c_Sku) + ' allocated to > 1 DPP Loc found. (ispRLWAV43_VLDN)'      
+      GOTO QUIT_SP               
+   END
+   
+   IF @c_Sku <> '' AND @n_NoOfHomeLoc = 1 AND @c_DiffHomeLoc_AL <> ''
+   BEGIN 
+      SET @n_Continue = 3    
+      SET @n_Err = 61130    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. Different Allocated & Sku Home Loc found. Sku:' + RTRIM(@c_Sku) + '. (ispRLWAV43_VLDN)'   
+      GOTO QUIT_SP               
+   END   
+   --(Wan02) - END
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
