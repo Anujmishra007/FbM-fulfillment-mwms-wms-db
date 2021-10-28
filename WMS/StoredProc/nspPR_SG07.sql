@@ -16,42 +16,45 @@ GO
 /*                                                                      */
 /* Called By: nspOrderProcessing                                        */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */ 
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author  Rev  Purposes								                    */
+/* Date        Author  Rev  Purposes								            */
 /* 03/01/2019  NJOW01  1.0  WMS-7293 PRSG only sort by lottable08 and   */
 /*                          try allocate COPACK in same pallet          */
+/* 23/09/2021  WLChooi 1.1  DevOps Script Combine                       */
+/* 23/09/2021  WLChooi 1.2  WMS-18029 - Add FilterEmptyLotXX Codelkup   */
+/*                          (WL01)                                      */
 /************************************************************************/
-
-CREATE PROC nspPR_SG07
-@c_storerkey NVARCHAR(15) ,
-@c_sku NVARCHAR(20) ,
-@c_lot NVARCHAR(10) ,
-@c_lottable01 NVARCHAR(18) ,
-@c_lottable02 NVARCHAR(18) ,
-@c_lottable03 NVARCHAR(18) ,
-@d_lottable04 datetime ,
-@d_lottable05 datetime ,
-@c_lottable06 NVARCHAR(30) ,  
-@c_lottable07 NVARCHAR(30) ,  
-@c_lottable08 NVARCHAR(30) ,  
-@c_lottable09 NVARCHAR(30) ,  
-@c_lottable10 NVARCHAR(30) ,  
-@c_lottable11 NVARCHAR(30) ,  
-@c_lottable12 NVARCHAR(30) ,  
-@d_lottable13 DATETIME ,      
-@d_lottable14 DATETIME ,      
-@d_lottable15 DATETIME ,      
-@c_uom NVARCHAR(10) ,
-@c_facility NVARCHAR(5),   
-@n_uombase int ,
-@n_qtylefttofulfill INT,
-@c_OtherParms NVARCHAR(200)=''
+CREATE PROC nspPR_SG07 (
+   @c_storerkey NVARCHAR(15) ,
+   @c_sku NVARCHAR(20) ,
+   @c_lot NVARCHAR(10) ,
+   @c_lottable01 NVARCHAR(18) ,
+   @c_lottable02 NVARCHAR(18) ,
+   @c_lottable03 NVARCHAR(18) ,
+   @d_lottable04 datetime ,
+   @d_lottable05 datetime ,
+   @c_lottable06 NVARCHAR(30) ,  
+   @c_lottable07 NVARCHAR(30) ,  
+   @c_lottable08 NVARCHAR(30) ,  
+   @c_lottable09 NVARCHAR(30) ,  
+   @c_lottable10 NVARCHAR(30) ,  
+   @c_lottable11 NVARCHAR(30) ,  
+   @c_lottable12 NVARCHAR(30) ,  
+   @d_lottable13 DATETIME ,      
+   @d_lottable14 DATETIME ,      
+   @d_lottable15 DATETIME ,      
+   @c_uom NVARCHAR(10) ,
+   @c_facility NVARCHAR(5),   
+   @n_uombase int ,
+   @n_qtylefttofulfill INT,
+   @c_OtherParms NVARCHAR(200)=''
+)
 AS
 BEGIN   
    DECLARE @c_Condition NVARCHAR(4000),      
@@ -214,18 +217,58 @@ BEGIN
    BEGIN
       SELECT @c_Condition = " AND LOTATTRIBUTE.LOTTABLE01 = N'" + RTRIM(ISNULL(@c_Lottable01,'')) + "' "
    END   
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT01'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = ' AND LOTATTRIBUTE.LOTTABLE01 = '''' '
+      END
+   END
+   --WL01 E
+
    IF ISNULL(@c_Lottable02,'') <> '' 
    BEGIN
       SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + " AND LOTATTRIBUTE.LOTTABLE02 = N'" + RTRIM(ISNULL(@c_Lottable02,'')) + "' "
-   END   
+   END  
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT02'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE02 = '''' '
+      END
+   END
+   --WL01 E 
    
    IF ISNULL(@c_Lottable03,'') <> '' 
    BEGIN
       SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + " AND LOTATTRIBUTE.LOTTABLE03 = N'" + RTRIM(ISNULL(@c_Lottable03,'')) + "' "
    END
-   ELSE 
+   ELSE   --WL01 S
+   BEGIN 
       SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + " AND LOTATTRIBUTE.LOTTABLE03 = N'OK' "
-   
+
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT03'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE03 = '''' '
+      END
+   END
+   --WL01 E
+
    IF CONVERT(char(10), @d_Lottable04, 103) <> "01/01/1900" AND @d_Lottable04 IS NOT NULL
    BEGIN
       SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + " AND LOTATTRIBUTE.LOTTABLE04 = N'" + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) + "' "
@@ -237,31 +280,129 @@ BEGIN
    IF ISNULL(@c_Lottable06,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable06 = N''' + RTRIM(ISNULL(@c_Lottable06,'')) + '''' 
-   END   
+   END
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT06'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE06 = '''' '
+      END
+   END
+   --WL01 E 
+      
    IF ISNULL(@c_Lottable07,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable07 = N''' + RTRIM(ISNULL(@c_Lottable07,'')) + '''' 
-   END   
+   END 
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT07'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE07 = '''' '
+      END
+   END
+   --WL01 E 
+     
    IF ISNULL(@c_Lottable08,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable08 = N''' + RTRIM(ISNULL(@c_Lottable08,'')) + '''' 
-   END   
+   END  
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT08'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE08 = '''' '
+      END
+   END
+   --WL01 E 
+    
    IF ISNULL(@c_Lottable09,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable09 = N''' + RTRIM(ISNULL(@c_Lottable09,'')) + '''' 
    END   
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT09'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE09 = '''' '
+      END
+   END
+   --WL01 E 
+
    IF ISNULL(@c_Lottable10,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable10 = N''' + RTRIM(ISNULL(@c_Lottable10,'')) + '''' 
    END   
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT10'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE10 = '''' '
+      END
+   END
+   --WL01 E 
+
    IF ISNULL(@c_Lottable11,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable11 = N''' + RTRIM(ISNULL(@c_Lottable11,'')) + '''' 
-   END   
+   END  
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT11'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE11 = '''' '
+      END
+   END
+   --WL01 E 
+    
    IF ISNULL(@c_Lottable12,'') <> '' 
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable12 = N''' + RTRIM(ISNULL(@c_Lottable12,'')) + '''' 
    END  
+   ELSE   --WL01 S
+   BEGIN 
+      IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+                 WHERE CL.Storerkey = @c_Storerkey
+                 AND CL.Code = 'FILTEREMPTYLOT12'
+                 AND CL.Listname = 'PKCODECFG'
+                 AND CL.Code2 = 'nspPR_SG07'
+                 AND ISNULL(CL.Short,'') <> 'N') 
+      BEGIN              
+         SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.LOTTABLE12 = '''' '
+      END
+   END
+   --WL01 E 
+
    IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' AND @d_Lottable13 IS NOT NULL
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable13 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) + ''''
