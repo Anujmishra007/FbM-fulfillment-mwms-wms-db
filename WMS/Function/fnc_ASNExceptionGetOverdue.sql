@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author    Ver Purposes                                   */
 /* 2021-05-12  Wan      1.0   Created                                   */
+/* 2021-10-21  Wan01    1.1   WMS-18121 - [CN]Nike_Phoeix_B2C_Exceed_   */
+/*                            Exception_Tracking-CR                     */
 /************************************************************************/
 CREATE FUNCTION dbo.fnc_ASNExceptionGetOverdue 
 (
@@ -33,16 +35,20 @@ CREATE FUNCTION dbo.fnc_ASNExceptionGetOverdue
 ,  @c_documentno  NVARCHAR(10)
 )
 RETURNS @t_Overdue TABLE  
-(  RowRef         BIGINT
-,  Documentno     NVARCHAR(10)
-,  [Status]       NVARCHAR(20) 
+(  RowRef            BIGINT
+,  Documentno        NVARCHAR(10)
+,  [Status]          NVARCHAR(20)
+,  Message_Pass      NVARCHAR(20)
 )       
 AS
 BEGIN   
    DECLARE  
            @c_Receiptkey      NVARCHAR(10)   = ''
          , @c_Overdue         NVARCHAR(20)   = ''
-         , @dt_Userdefine06   DATETIME       
+         , @dt_Userdefine06   DATETIME    
+         
+         , @c_UserDefine02    NVARCHAR(30)   = '' 
+         , @c_Message_Pass    NVARCHAR(20)   = ''
 
    SELECT TOP 1 @c_ReceiptKey = di.Key1 
    FROM DocStatusTrack AS dst WITH (NOLOCK)  
@@ -55,17 +61,23 @@ BEGIN
    ORDER BY di.AddDate DESC
    
    SELECT @dt_Userdefine06 = r.UserDefine06
+         ,@c_UserDefine02 = ISNULL(r.UserDefine02,'')
    FROM RECEIPT AS r WITH (NOLOCK)
    WHERE r.ReceiptKey = @c_ReceiptKey
 
    IF DATEDIFF(DAY, @dt_Userdefine06, GETDATE()) > 0 
    BEGIN
-      SET @c_Overdue = N'º”º±£°'
+      SET @c_Overdue = N'Âä†ÊÄ•ÔºÅ'
+   END
+   
+   IF @c_UserDefine02 = 'Y'         --(Wan02)
+   BEGIN
+      SET @c_Message_Pass = N'ÁªøÈÄö'    
    END
 
    EXIT_FUNCTION: 
-   INSERT INTO @t_Overdue ( RowRef, DocumentNo, [Status] ) 
-   VALUES ( @n_RowRef, @c_DocumentNo, @c_Overdue )
+   INSERT INTO @t_Overdue ( RowRef, DocumentNo, [Status], Message_Pass ) 
+   VALUES ( @n_RowRef, @c_DocumentNo, @c_Overdue, @c_Message_Pass )
 
    RETURN
 END -- procedure

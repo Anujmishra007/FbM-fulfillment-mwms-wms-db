@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-05-10  Wan      1.0   Created                                   */
 /* 2020-05-31  Wan01    1.1   CR1.5 - Use Script to Block first         */
+/* 2021-10-20  Wan02    1.2   WMS-18121-[CN]Nike_Phoeix_B2C_Exceed_     */
+/*                            Exception_Tracking-CR                     */
 /************************************************************************/
 CREATE PROC isp_ASNException_Validate_ColValue
      @n_RowRef             BIGINT
@@ -40,7 +42,7 @@ CREATE PROC isp_ASNException_Validate_ColValue
    , @c_ColName02_RDF      NVARCHAR(50) = ''    OUTPUT
    , @c_ColVal02_RDF       NVARCHAR(50) = ''    OUTPUT   
    , @c_ColName03_RDF      NVARCHAR(50) = ''    OUTPUT
-   , @c_ColVal03_RDF       NVARCHAR(50) = ''    OUTPUT      
+   , @c_ColVal03_RDF       NVARCHAR(50) = ''    OUTPUT  
    , @b_Success            INT          = 1     OUTPUT
    , @n_Err                INT          = 0     OUTPUT
    , @c_ErrMsg             NVARCHAR(255)= ''    OUTPUT
@@ -57,6 +59,10 @@ BEGIN
          
          , @n_Cnt             INT = 0           --(Wan01) - CR1.5
          , @c_TrackingNo      NVARCHAR(40) = '' --(Wan01) - CR1.5
+         
+         , @c_UserDefine05    NVARCHAR(30) = '' --(Wan02)
+         , @c_PlatForm        NVARCHAR(30) = '' --(Wan02)
+         
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
@@ -68,7 +74,6 @@ BEGIN
    BEGIN
       GOTO QUIT_SP
    END
-   
       
    IF @c_ColName = 'facility' AND @c_ColValue = ''
    BEGIN
@@ -86,18 +91,18 @@ BEGIN
       GOTO QUIT_SP
    END
    
-   IF @c_ColName = 'Userdefine01' AND @c_ColValue <> ''
+   IF @c_ColName = 'Userdefine01' --AND @c_ColValue <> ''                                    --(Wan02)
    BEGIN
-   	--Wan01 - START
+      --Wan01 - START
       SET @n_Cnt = 0
       SELECT @c_TrackingNo = ISNULL(dst.Userdefine01,'')
             ,@n_Cnt = 1
       FROM dbo.DocStatusTrack AS dst WITH (NOLOCK)
       WHERE DocumentNo = @c_DocumentNo
       
-      IF @c_TrackingNo <> '' AND @c_TrackingNo <> @c_ColValue
+      IF @c_TrackingNo <> '' AND @c_TrackingNo <> @c_ColValue 
       BEGIN
-      	SET @n_Continue = 3 
+         SET @n_Continue = 3 
          SET @n_Err = 88125
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Not Allow to change Tracking #'
                        + '. (isp_ASNException_Validate_ColValue)'
@@ -114,8 +119,13 @@ BEGIN
                      AND rdc.V_String1= @c_ColValue
       )
       BEGIN
-         SET @c_ErrMsg = 'Invalid Tracking #'
-         SET @c_ColVal01_RDF  = 'N'
+         --(Wan02) - START
+         SET @n_Continue = 3 
+         SET @n_Err = 88126
+         SET @c_ErrMsg = 'Invalid Tracking #' + '. (isp_ASNException_Validate_ColValue)'
+         SET @c_ColName01_RDF = ''              --SET @c_ColName01_RDF = 'Userdefine04'
+         SET @c_ColVal01_RDF  = ''              --SET @c_ColVal01_RDF  = 'N'
+         --(Wan02) - END
       END
       
       SET @c_ColName02_RDF = 'Userdefine05'
@@ -126,10 +136,29 @@ BEGIN
       WHERE di.TableName = 'RECEIPT'
       AND di.Key3 = @c_ColValue
       ORDER BY di.AddDate DESC
+      
+      --(Wan02) - START
+      IF @c_ColVal02_RDF <> ''
+      BEGIN
+         SET @c_UserDefine05 = @c_ColVal02_RDF
+         GOTO DEFAULT_USERDEFINE08
+         RETURN_DEFAULT_USERDEFINE08:
+      END
+      --(Wan02) - END
    END
    
-   IF @c_ColName = 'Userdefine03' AND @c_ColValue <> ''
+   IF @c_ColName = 'Userdefine03' 
    BEGIN
+      --(Wan02) - START
+      IF @c_ColValue = ''
+      BEGIN
+         SET @n_Continue = 3 
+         SET @n_Err = 88129
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Quantity is Required. (isp_ASNException_Validate_ColValue)'
+         GOTO QUIT_SP      
+      END  
+      --(Wan02) - END
+      --    
       IF ISNUMERIC(@c_ColValue) = 0
       BEGIN
          SET @n_Continue = 3 
@@ -146,7 +175,49 @@ BEGIN
          GOTO QUIT_SP
       END
    END
+
+   --(Wan02) - START   
+   IF @c_ColName = 'userdefine02' AND @c_ColValue = ''
+   BEGIN
+      SET @n_Continue = 3 
+      SET @n_Err = 88160
+      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + N': Exp.reason“Ï≥£‘≠“Ú is Required. (isp_ASNException_Validate_ColValue)'
+      GOTO QUIT_SP
+   END
    
+   IF @c_ColName = 'userdefine05' AND @c_ColValue <> ''
+   BEGIN
+      SET @c_UserDefine05 = @c_ColValue
+      DEFAULT_USERDEFINE08:
+      
+      SELECT TOP 1 @c_PlatForm = c.UDF04 
+      FROM dbo.CODELKUP AS c WITH (NOLOCK) WHERE c.ListName = 'NKEXC' AND LEFT(@c_UserDefine05,c.UDF02) = c.UDF01
+      ORDER BY c.Code
+      
+      IF @c_PlatForm <> ''
+      BEGIN
+         IF @c_ColName = 'userdefine05'
+         BEGIN
+            SET @c_ColName01_RDF = 'userdefine08' 
+            SET @c_ColVal01_RDF  = @c_PlatForm  
+         END
+         ELSE
+         BEGIN
+            SET @c_ColName03_RDF = 'userdefine08'
+            SET @c_ColVal03_RDF  = @c_PlatForm  
+            GOTO RETURN_DEFAULT_USERDEFINE08             
+         END
+      END
+   END
+   
+   IF @c_ColName = 'userdefine08' AND  @c_ColValue = ''
+   BEGIN
+      SET @n_Continue = 3 
+      SET @n_Err = 88170
+      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Platform is Required. (isp_ASNException_Validate_ColValue)'
+      GOTO QUIT_SP
+   END
+   --(Wan01) - END
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
