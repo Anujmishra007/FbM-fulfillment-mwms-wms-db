@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
 /* 30-Dec-2020  CSCHONG   1.1 WMS-15970 revised field mapping (CS01)    */
+/* 19-Oct-2021  MINGLE    1.2 WMS-18135 modify logic (ML01)             */
+/* 19-Oct-2021  Mingle    1.2 DevOps Combine Script                     */
 /************************************************************************/  
   
 CREATE PROC isp_packinglist_detail_07
@@ -211,9 +213,9 @@ BEGIN
       JOIN SKU S WITH (NOLOCK) ON S.StorerKey = PD.StorerKey AND S.sku = PD.sku
       LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.LISTNAME = 'Sephora2C' AND C.code = OH.UserDefine03
                                            AND C.storerkey = OH.StorerKey
-      LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME = 'Sephora2C2' AND C1.storerkey = OH.StorerKey  
-      LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME = 'Sephora2C3' AND C2.storerkey = OH.StorerKey  
-      LEFT JOIN CODELKUP C3 WITH (NOLOCK) ON C3.LISTNAME = 'Sephora2C4' AND C3.storerkey = OH.StorerKey   
+      LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME = 'Sephora2C2' AND C1.storerkey = OH.StorerKey AND C1.code = OH.UserDefine03 --ML01 
+      LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME = 'Sephora2C3' AND C2.storerkey = OH.StorerKey AND C2.code = OH.UserDefine03 --ML01  
+      LEFT JOIN CODELKUP C3 WITH (NOLOCK) ON C3.LISTNAME = 'Sephora2C4' AND C3.storerkey = OH.StorerKey AND C3.code = OH.UserDefine03 --ML01   
       JOIN #TMP_DECRYPTEDDATA t WITH (NOLOCK) ON (t.Orderkey = OH.Orderkey)    
       WHERE PH.Storerkey = @c_Storerkey
       AND PH.PickSlipNo = @c_Pickslipno
@@ -254,9 +256,9 @@ BEGIN
       JOIN SKU S WITH (NOLOCK) ON S.StorerKey = PD.StorerKey AND S.sku = PD.sku
       LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.LISTNAME = 'Sephora2C' AND C.code = OH.UserDefine03
                                            AND C.storerkey = OH.StorerKey
-      LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME = 'Sephora2C2' AND C1.storerkey = OH.StorerKey  
-      LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME = 'Sephora2C3' AND C2.storerkey = OH.StorerKey  
-      LEFT JOIN CODELKUP C3 WITH (NOLOCK) ON C3.LISTNAME = 'Sephora2C4' AND C3.storerkey = OH.StorerKey  
+      LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME = 'Sephora2C2' AND C1.storerkey = OH.StorerKey AND C1.code = OH.UserDefine03 --ML01  
+      LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME = 'Sephora2C3' AND C2.storerkey = OH.StorerKey AND C2.code = OH.UserDefine03 --ML01  
+      LEFT JOIN CODELKUP C3 WITH (NOLOCK) ON C3.LISTNAME = 'Sephora2C4' AND C3.storerkey = OH.StorerKey AND C3.code = OH.UserDefine03 --ML01 
       JOIN #TMP_DECRYPTEDDATA t WITH (NOLOCK) ON (t.Orderkey = OH.Orderkey)  
       WHERE PH.Storerkey = @c_Storerkey
       AND PH.PickSlipNo = @c_Pickslipno
@@ -265,7 +267,7 @@ BEGIN
               , PD.LabelNo
               , S.DESCR 
               , CASE WHEN ISNULL(C.short,'') = '1' THEN 'Y' ELSE 'N' END
-   END
+   END  
    
    SET @c_ExternOrderKey = ''
    SET @c_showqrcode     = ''
