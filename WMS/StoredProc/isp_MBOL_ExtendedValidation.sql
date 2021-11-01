@@ -38,6 +38,7 @@ GO
 /* 19-Jul-2017  JayLim    1.8   Performance tune-reduce cache log (jay01)*/
 /* 23-Apr-2019  WLCHOOI   1.9   WMS-8712 - LEFT JOIN Load-related       */
 /*                                         table (WL01)                 */
+/* 01-Nov-2021  SHONG     2.0  Fixing Bugs (SWT01)                      */
 /************************************************************************/
 CREATE PROC [dbo].[isp_MBOL_ExtendedValidation] 
    @cMBOLKey               NVARCHAR(10), 
@@ -179,7 +180,7 @@ OPEN CUR_MBOL_CONDITION
 FETCH NEXT FROM CUR_MBOL_CONDITION INTO @cTableName, @cDescription, @cColumnName, @cCondition, @cType, @cWhereCondition  
 
 WHILE @@FETCH_STATUS <> -1
-BEGIN
+BEGIN   
    SET @cSQL = N'SELECT @cRecFound = COUNT(1), @cMBOLLineNumber = MIN(MBOLDETAIL.MBOLLineNumber) '
                +' FROM MBOL (NOLOCK) '
                +' JOIN MBOLDETAIL WITH (NOLOCK) ON MBOL.MBOLKey = MBOLDETAIL.MBOLKey '
@@ -189,9 +190,9 @@ BEGIN
                +' WHERE MBOL.MBOLKey= @cMBOLKey '
                +' AND ORDERS.StorerKey = @cStorerKey ' --(jay01)
 
-
    IF @cType = 'CONDITION'
-   	  IF ISNULL(@cCondition,'') <> ''
+   BEGIN
+   	IF ISNULL(@cCondition,'') <> ''
    	  BEGIN
       	 SET @cCondition = REPLACE(LEFT(@cCondition,5),'AND ','AND (') + SUBSTRING(@cCondition,6,LEN(@cCondition)-5)
       	 SET @cCondition = REPLACE(LEFT(@cCondition,4),'OR ','OR (') + SUBSTRING(@cCondition,5,LEN(@cCondition)-4)
@@ -207,7 +208,8 @@ BEGIN
            SET @cSQL = @cSQL + master.dbo.fnc_GetCharASCII(13) + CASE WHEN LEFT(LTRIM(@cWhereCondition),3) NOT IN ('AND','OR ') AND ISNULL(@cWhereCondition,'') <> '' THEN ' AND (' ELSE ' ' END + RTRIM(@cWhereCondition) + ')'
          END
       END
-      --SET @cSQL = @cSQL + master.dbo.fnc_GetCharASCII(13) + ' ' + @cCondition 
+      --SET @cSQL = @cSQL + master.dbo.fnc_GetCharASCII(13) + ' ' + @cCondition       
+   END
    ELSE
    BEGIN --CONTAINS
    	  IF ISNULL(@cCondition,'') <> ''
@@ -234,6 +236,7 @@ BEGIN
                    +'@cMBOLKey NVARCHAR(10), '
                    +'@cStorerKey NVARCHAR(15) '
 
+   SET @cRecFound = 0 -- (SWT01)
    EXEC sp_executesql @cSQL, @cSQLArg, @cRecFound OUTPUT, @cMBOLLineNumber OUTPUT, @cMBOLKey, @cStorerKey --(jay01)
   
    IF @cRecFound = 0 AND @cType <> 'CONDITION'
