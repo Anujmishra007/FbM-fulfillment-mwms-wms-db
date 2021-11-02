@@ -58,6 +58,7 @@ GO
 /* 23-Oct-2017  Shong     1.8    Performance Tuning (SWT02)                    */
 /* 07-FEB-2018  Wan02     1.9    Bug Fixed                                     */
 /* 15-JAN-2019  NJOW01    2.0    Fix - check discrete by orderkey              */
+/* 02-Nov-2021  TLTING01  2.1    Deadlock tuning                               */
 /*******************************************************************************/  
 CREATE TRIGGER [dbo].[ntrPickingInfoUpdate]  
 ON  [dbo].[PickingInfo]  
@@ -348,6 +349,7 @@ BEGIN
                         UPDATE PICKDETAIL WITH (ROWLOCK)
                            SET Status = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()
                         WHERE PickDetailKey = @c_PickDetailKey
+                        AND   Status < '4'     --tlting01
                      END                  		
                   END
                   -- SWT02 (End) 
@@ -400,6 +402,7 @@ BEGIN
                                EditDate = GetDate(),
                                EditWho  = sUser_sName()
                         WHERE  OrderKey = @c_NextOrderKey
+                        AND   [Status] < '5'       --tlting01
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 	                      IF @n_err <> 0  
 	                      BEGIN  
@@ -436,6 +439,7 @@ BEGIN
 	                        SET [Status] = '5', EditDate = GETDATE(), EditWho=sUser_sName(), TrafficCop = NULL     
 	                     WHERE OrderKey = @c_NextOrderKey   
 	                     AND   OrderLineNumber = @c_OrderLineNumber
+	                     AND   [Status] < '5'          --tlting01
 	         
 	                     IF @@ERROR <> 0    
 	                     BEGIN    
@@ -520,6 +524,7 @@ BEGIN
                                  TrafficCop = null
                         WHERE Loadkey  = @c_LoadKey
                           AND LoadLineNumber = @c_LoadLineNumber
+                          AND STATUS < '5'         --tlting01
 
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
                         IF @n_err <> 0
@@ -757,6 +762,7 @@ BEGIN
                      UPDATE PICKDETAIL WITH (ROWLOCK)
                         SET STATUS = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()
                      WHERE  PickDetailKey = @c_PickDetailKey
+                     AND    Status < '4'     --tlting01
                      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
                      IF @n_err <> 0
                      BEGIN
@@ -804,6 +810,7 @@ BEGIN
                            SET Status = '5', EditDate = GetDate(),
                                EditWho  = sUser_sName(), Trafficcop = NULL
                         WHERE Orderkey = @c_NextOrderKey
+                        AND   Status < '5'    --tlting01
 
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
                         IF @n_err <> 0
