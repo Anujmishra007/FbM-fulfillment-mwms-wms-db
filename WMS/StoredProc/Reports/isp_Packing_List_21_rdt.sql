@@ -29,6 +29,7 @@ GO
 /* 05-Aug-2016  CSCHONG   1.0   Add logic to support RDT and ECOM EXCEED(CS01)*/  
 /* 10-Nov-2016  SHONG     1.1   Performance Tuning  (SWT01)                   */
 /* 11-Nov-2017  CSCHONG   1.2   Remove case (CS02)                            */
+/* 27-Oct-2021  MINGLE    1.3   Modify logic (ML01)                           */
 /******************************************************************************/     
 CREATE PROC [dbo].[isp_Packing_List_21_rdt]             
        (@c_Orderkey NVARCHAR(10),
@@ -124,10 +125,10 @@ BEGIN
    --                     , SCompany 
    --                     , RecGrp)  
                                   
-   SELECT c_Contact1     = ISNULL(OH.c_Contact1,''),
-          C_Addresses    = (OH.C_address2 + OH.C_address3 + OH.C_address4),
+   SELECT c_Contact1     = CASE WHEN OH.ECOM_Platform IN ( 'PDD','TM') THEN '' ELSE ISNULL(OH.c_Contact1,'') END,
+          C_Addresses    = CASE WHEN OH.ECOM_Platform IN ( 'PDD','TM') THEN '' ELSE (OH.C_address2 + OH.C_address3 + OH.C_address4) END,
           c_Phone1       = ISNULL(OH.C_Phone1,''),
-          c_phone2       = ISNULL(OH.C_Phone2,''),
+          c_phone2       = CASE WHEN OH.ECOM_Platform IN ( 'PDD','TM') THEN '' ELSE ISNULL(OH.C_Phone2,'') END,
           M_Company      = ISNULL(OH.M_Company,''),
           Externorderkey =  OH.Externorderkey,
           PickLOC        =  PD.LOC,
@@ -137,7 +138,8 @@ BEGIN
           Pqty           =  PD.qty,
           OrderKey       =  OH.OrderKey,
           Loadkey        =  OH.Loadkey,
-          Salesman       =  OH.Salesman,
+          --Salesman       =  OH.Salesman,
+          Salesman       =  CASE WHEN OH.Salesman = 'PDD' THEN '' ELSE OH.Salesman END,   --ML01
           Shipperkey     =  OH.shipperkey,
           SCompany       =  STO.company,
           RecGrp         =  (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine 
@@ -174,10 +176,10 @@ BEGIN
     --                    , SCompany 
     --                    , RecGrp)  
                                   
-    SELECT c_Contact1     = ISNULL(OH.c_Contact1,''),
-          C_Addresses    = (OH.C_address2 + OH.C_address3 + OH.C_address4),
+    SELECT c_Contact1     = CASE WHEN OH.ECOM_Platform IN ( 'PDD','TM') THEN '' ELSE ISNULL(OH.c_Contact1,'') END,
+          C_Addresses    = CASE WHEN OH.ECOM_Platform IN ( 'PDD','TM') THEN '' ELSE (OH.C_address2 + OH.C_address3 + OH.C_address4) END,
           c_Phone1       = ISNULL(OH.C_Phone1,''),
-          c_phone2       = ISNULL(OH.C_Phone2,''),
+          c_phone2       = CASE WHEN OH.ECOM_Platform IN ( 'PDD','TM') THEN '' ELSE ISNULL(OH.C_Phone2,'') END,
           M_Company      = ISNULL(OH.M_Company,''),
           Externorderkey =  OH.Externorderkey,
           PickLOC        =  PD.LOC,
@@ -187,7 +189,8 @@ BEGIN
           Pqty           =  PD.qty,
           OrderKey       =  OH.OrderKey,
           Loadkey        =  OH.Loadkey,
-          Salesman       =  OH.Salesman,
+          --Salesman       =  OH.Salesman,
+          Salesman       =  CASE WHEN OH.Salesman = 'PDD' THEN '' ELSE OH.Salesman END,   --ML01
           Shipperkey     =  OH.shipperkey,
           SCompany       =  STO.company,
           RecGrp         =  (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine 
@@ -231,3 +234,4 @@ END
 GO
 GRANT EXECUTE ON  isp_Packing_List_21_rdt TO NSQL
 GO  
+
