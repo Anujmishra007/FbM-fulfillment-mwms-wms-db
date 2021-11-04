@@ -22,7 +22,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author Ver.   Purposes                                  */
+/* 02-NOV-2021  NJOW01 1.0    WMS-18279 Fix SUM qty expected & received */
+/* 02-NOV-2021  NJOW01 1.0    DEVOPS combine script                     */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_ReceiptTallySheet69] (
@@ -121,7 +123,7 @@ BEGIN
    FROM RECEIPT R (NOLOCK)
    JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
    JOIN SKU S (NOLOCK) ON S.StorerKey = R.StorerKey AND S.SKU = RD.SKU
-   JOIN #TEMP_RECEIPT t ON t.Receiptkey = R.Receiptkey AND t.SKU = RD.SKU
+   JOIN #TEMP_RECEIPT t ON t.Receiptkey = R.Receiptkey AND t.SKU = RD.SKU AND T.ReceiptLineNumber = RD.ReceiptLineNumber
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = ''DSTALLYSHT'' AND CL.Storerkey = R.Storerkey AND S.SKUGROUP = CL.Short
    GROUP BY R.Receiptkey
           , R.ExternReceiptkey
@@ -156,7 +158,6 @@ BEGIN
         , A21
    FROM #TEMP_RECEIPT_RESULT 
    ORDER BY Receiptkey, UserDefine01
-
 END
 GO
 GRANT EXECUTE ON isp_ReceiptTallySheet69 TO NSQL
