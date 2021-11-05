@@ -35,6 +35,7 @@ GO
 /*                            as default value for parmLabel = 'userid' */
 /* 2021-09-06  Wan02    1.3   LFWM-3001 - UAT - TW  Cannot Print Delivery*/
 /*                            Note from View Report                     */
+/* 2021-10-13  CheeMun  1.4   LFWM-3126 - View Report Parameters Seq    */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Get_ViewReportParms] 
            @c_ModuleID           NVARCHAR(30) = 'ViewReport'
@@ -119,7 +120,7 @@ BEGIN
       SET @c_endtofyear_dt   = CONVERT(NVARCHAR(19), @dt_endtofyear, 120)   
 
       SELECT  Rpt_id
-            , Parm_No = CONVERT(NVARCHAR(5), ROW_NUMBER() OVER (ORDER BY parm_no))           --(Wan03)
+            , Parm_No = CAST(CONVERT(NVARCHAR(5), ROW_NUMBER() OVER (ORDER BY parm_no))AS INT)           --(Wan03)  --LFWM-3126
             , parm_label
             , Parm_default_string   = CASE WHEN parm_datatype = 'date' AND Parm_default = 'now'             THEN @c_now_d
                                            WHEN parm_datatype = 'date' AND Parm_default = 'today'           THEN @c_today_d
