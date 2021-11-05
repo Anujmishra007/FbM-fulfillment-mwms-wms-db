@@ -42,6 +42,7 @@ GO
 /* 2021-10-13   LZG       1.4   JSM-25777-Removed ShipperKey JOIN (ZG01)*/
 /* 2021-10-25   WLChooi   1.5   DevOps Combine Script                   */
 /* 2021-10-25   WLChooi   1.5   WMS-18243 Modify logic for B2B (WL04)   */
+/* 2021-11-05   WLChooi   1.6   Remove LOADPLAN table linkage (WL05)    */
 /************************************************************************/
 
 CREATE PROC isp_GetGatePass_03 (@c_mbolkey NVARCHAR(10))
@@ -240,7 +241,7 @@ BEGIN
       LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (ORDERS.Storerkey = CLR.Storerkey AND CLR.Code = 'HIDEEXTERNLOADKEY'
                                              AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_gatepass_03' AND ISNULL(CLR.Short,'') <> 'N')
       INNER JOIN FACILITY (NOLOCK) ON (MBOL.facility = FACILITY.facility)
-      JOIN LOADPLAN WITH (NOLOCK) ON LOADPLAN.loadkey = ORDERDETAIL.loadkey
+      --JOIN LOADPLAN WITH (NOLOCK) ON LOADPLAN.loadkey = ORDERDETAIL.loadkey   --WL05
       JOIN lotattribute LOTT WITH (NOLOCK) ON LOTT.lot=PICKDETAIL.Lot AND LOTT.sku = PICKDETAIL.sku AND LOTT.Storerkey = PICKDETAIL.Storerkey
       JOIN #TMP_ALLMBOL t ON t.MBOLKey = MBOL.MBOLKey AND MBOL.[Status] = '9'  --WL01
       --WHERE ORDERDETAIL.mbolkey = @c_mbolkey AND MBOL.status = '9'   --WL01
