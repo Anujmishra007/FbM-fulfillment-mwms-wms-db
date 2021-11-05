@@ -26,7 +26,8 @@ GO
 /* Data Modifications:                                                        */              
 /*                                                                            */              
 /* Updates:                                                                   */              
-/* Date         Author    Ver.  Purposes                                      */ 
+/* Date         Author    Ver.  Purposes                                      */
+/*28-OCT-2021   Mingle    1.1   WMS-17949 - Enlarge externordkey length(ML01) */ 
 /******************************************************************************/     
   
 CREATE PROC [dbo].[isp_GetDispatchLabel_13]             
@@ -76,7 +77,7 @@ BEGIN
    BEGIN
       SELECT MBOLDETAIL.MbolKey,   
              MBOLDETAIL.OrderKey,
-             ORDERS_EXTERNORDERKEY = LEFT(LTRIM(RTRIM(ORDERS.EXTERNORDERKEY)),15),   
+             ORDERS_EXTERNORDERKEY = LEFT(LTRIM(RTRIM(ORDERS.EXTERNORDERKEY)),25), --ML01  
              ORDERS.ConsigneeKey,   
              CASE WHEN @c_CarrierKey = '' THEN '' ELSE ORDERS.Shipperkey END,
              MBOL.vessel,   
