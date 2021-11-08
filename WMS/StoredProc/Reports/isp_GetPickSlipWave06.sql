@@ -6,30 +6,31 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-/************************************************************************/
-/* Stored Procedure: isp_GetPickSlipWave06                              */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by: Rick Liew                                                */
-/*                                                                      */
-/* Purpose:                                                             */
-/*                                                                      */
-/* Called By: PB- r_dw_print_wave_pickslip06                            */
-/*                                                                      */
-/* PVCS Version: 1.2                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 19-Feb-2009  Rick Liew     Change the report layout for SOS#129583   */
-/* 15-DEC-2011  YTWan         SOS#232489- Add transport mode. (Wan01)   */
-/*                                      - Report Seq: InterModalVehicle,*/
-/*                                        Consigneekey, Orderkey,       */
-/*                                        Facility                      */
-/************************************************************************/
+/**************************************************************************/
+/* Stored Procedure: isp_GetPickSlipWave06                                */
+/* Creation Date:                                                         */
+/* Copyright: IDS                                                         */
+/* Written by: Rick Liew                                                  */
+/*                                                                        */
+/* Purpose:                                                               */
+/*                                                                        */
+/* Called By: PB- r_dw_print_wave_pickslip06                              */
+/*                                                                        */
+/* PVCS Version: 1.2                                                      */
+/*                                                                        */
+/* Version: 5.4                                                           */
+/*                                                                        */
+/* Data Modifications:                                                    */
+/*                                                                        */
+/* Updates:                                                               */
+/* Date         Author     Ver. Purposes                                  */
+/* 19-Feb-2009  Rick Liew  1.0  Change the report layout for SOS#129583   */
+/* 15-DEC-2011  YTWan      1.1  SOS#232489- Add transport mode. (Wan01)   */
+/*                                        - Report Seq: InterModalVehicle,*/
+/*                                          Consigneekey, Orderkey,       */
+/*                                          Facility                      */
+/* 27-Oct-2021  WLChooi    1.2  WMS-18258 - Customize Sorting (WL01)      */
+/**************************************************************************/
 
 CREATE PROC dbo.isp_GetPickSlipWave06 (
 @c_wavekey          NVARCHAR(10))
@@ -104,7 +105,8 @@ DECLARE
 @c_Susr2            NVARCHAR(20),       
 @n_StartTCnt        int,
 @c_Id               NVARCHAR(18), 
-@c_CountSku         NVARCHAR(10)
+@c_CountSku         NVARCHAR(10),
+@c_SortByLogicalLoc NVARCHAR(10) = 'N'   --WL01
 SET @n_StartTCnt=@@TRANCOUNT
 
 DECLARE @c_PrevOrderKey       NVARCHAR(10),
@@ -351,8 +353,20 @@ BEGIN --While
    FROM  STORER WITH (NOLOCK)
    WHERE STORERKEY = @c_storerkey
 
+   --WL01 S
+   SET @c_SortByLogicalLoc = 'N'
+
+   SELECT @c_SortByLogicalLoc = ISNULL(CL.Short,'')
+   FROM CODELKUP CL WITH (NOLOCK) 
+   WHERE CL.ListName = 'REPORTCFG'
+   AND   CL.Code = 'SortByLogicalLoc'
+   AND   CL.Storerkey = @c_StorerKey
+   AND   CL.Long = 'r_dw_print_wave_pickslip_06'
+   --WL01 E
+
    SELECT @c_putawayzone = LOC.Putawayzone,
-          @c_zonedesc = PUTAWAYZONE.Descr
+          @c_zonedesc = PUTAWAYZONE.Descr,
+          @c_logicalloc = CASE WHEN @c_SortByLogicalLoc = 'Y' THEN LOC.LogicalLocation ELSE '' END   --WL01
    FROM   LOC WITH (nolock), PUTAWAYZONE WITH (nolock)
    WHERE  PUTAWAYZONE.PUTAWAYZONE = LOC.PUTAWAYZONE 
    AND    LOC.LOC = @c_loc
@@ -395,7 +409,7 @@ BEGIN --While
    InnerPack,           Busr8,            Lottable03,
    AltSKU,              SUSR2,
    /*LogicalLocation,*/ID
-  , InterModalVehicle, ServiceMode)                                                                --(Wan01) 
+  , InterModalVehicle, ServiceMode, LogicalLocation)                                                --(Wan01)   --WL01 
    VALUES
    (@c_pickheaderkey,   @c_wavekey,       @c_OrderKey,      @c_ConsigneeKey,
    @c_Company,          @c_Addr1,         @c_Addr2,         0,
@@ -410,7 +424,7 @@ BEGIN --While
    @n_innerpack,        @c_busr8,         @c_Lottable03,
    @c_AltSKU,           @c_Susr2,
    @c_Id
-  ,@c_InterModalVehicle, @c_ServiceMode)                                                           --(Wan01) )
+  ,@c_InterModalVehicle, @c_ServiceMode, @c_logicalloc)                                             --(Wan01) )   --WL01
 
    SELECT @c_CountSku = Count(distinct(Sku)) FROM #Temp_Pick WITH (NOLOCK)
    WHERE PickSlipNo = @c_pickheaderkey
@@ -608,10 +622,12 @@ SUCCESS:
    --(Wan01) - START
           , InterModalVehicle
           , ServiceMode
+          , LogicalLocation   --WL01
    --Order By OrderKey 
    Order By InterModalVehicle
           , ConsigneeKey 
           , OrderKey
+          , LogicalLocation   --WL01
           , Loc
           , ID
           , Sku 
