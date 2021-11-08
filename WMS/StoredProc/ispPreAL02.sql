@@ -17,7 +17,7 @@ GO
 /*        :                                                              */
 /* Called By:                                                            */
 /*          :                                                            */
-/* PVCS Version: 1.1                                                     */
+/* PVCS Version: 1.5                                                     */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -29,6 +29,8 @@ GO
 /*                            consignee                                  */
 /* 05-OCT-2020 NJOW01   1.2   WMS-15367 allocation based on consignee PMS*/
 /* 04-APR-2021 NJOW02   1.3   WMS-16523 change sorting                   */
+/* 04-OCT-2021 WLChooi  1.4   DevOps Combine Script                      */
+/* 04-OCT-2021 WLChooi  1.5   WMS-18082 - Change sorting (WL01)          */
 /*************************************************************************/
 CREATE PROC dbo.ispPreAL02                      
            @c_OrderKey NVARCHAR(10) 
@@ -141,7 +143,7 @@ BEGIN
    SET @n_Continue  = 1
    SET @b_Success = 1
    SET @c_ErrMsg  = ''
-   SET @b_debug = 1
+   SET @b_debug = 0   --WL01 Set @b_debug = 0
    
    DECLARE CUR_OD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT OH.Facility
@@ -347,21 +349,25 @@ BEGIN
                + CASE WHEN @c_Consigneekey = 'PMS' THEN  --NJOW01 
                --+ ' ORDER BY LOTATTRIBUTE.Lottable06 DESC, ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot ' ELSE 
                  ' ORDER BY LOTATTRIBUTE.Lottable06 DESC, ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable05,  ' --NJOW02
+               +         '  LOTATTRIBUTE.Lottable02, '  --WL01
                +         '  CASE WHEN PACK.Casecnt > 0 THEN CASE WHEN SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) % CAST(PACK.Casecnt AS INT) = 0 THEN 1 ELSE 2 END ELSE 3 END,' --NJOW02
                +         '  MIN(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), ' + --NJOW02
-               +         '  LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot '  --NJOW02
+               --+         '  LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot '  --NJOW02  --WL01
+               +         '  LOTxLOCxID.Lot '   --WL01
                        -- ' MIN(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked), LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot '  --NJOW02
                       WHEN @c_Consigneekey = 'PMS1' THEN  --NJOW02
                  ' ORDER BY LOTATTRIBUTE.Lottable06 DESC'
                +        ',  ISNULL(SKU.BUSR5,'''')'  
                +        ',  LOTATTRIBUTE.Lottable15'
                +        ',  LOTATTRIBUTE.Lottable05'  --NJOW02
+               +        ',  LOTATTRIBUTE.Lottable02'  --WL01
                +        ',  MIN(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked) ' --NJOW02           
                  ELSE                
                  ' ORDER BY LOTATTRIBUTE.Lottable06 DESC'
                +        ',  ISNULL(SKU.BUSR5,'''')'  
                +        ',  LOTATTRIBUTE.Lottable15'
                +        ',  LOTATTRIBUTE.Lottable05'  --NJOW02
+               +        ',  LOTATTRIBUTE.Lottable02'  --WL01
                +        ',  CASE WHEN PACK.CaseCnt > 0 THEN '
                +        '      CASE WHEN SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked) % CAST(PACK.CaseCnt AS INT) > 0 THEN 1 ELSE 2 END ELSE 3 END ' --NJOW02           
                +        ',  MIN(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked) ' --NJOW02           
@@ -380,25 +386,25 @@ BEGIN
                +        ',  LOTxLOCxID.Sku'
 
               --print @c_SQL
-              
-              select @c_Facility    
-                  ,@c_StorerKey   
-                  ,@c_AltSku      
-                  ,@c_Lottable01  
-                  ,@c_Lottable02  
-                  ,@c_Lottable03  
-                  ,@dt_Lottable04 
-                  ,@dt_Lottable05 
-                  ,@c_Lottable06  
-                  ,@c_Lottable07  
-                  ,@c_Lottable08  
-                  ,@c_Lottable09  
-                  ,@c_Lottable10  
-                  ,@c_Lottable11  
-                  ,@c_Lottable12  
-                  ,@dt_Lottable13 
-                  ,@dt_Lottable14 
-                  ,@dt_Lottable15 
+              --WL01 Remark
+              --select @c_Facility    
+              --    ,@c_StorerKey   
+              --    ,@c_AltSku      
+              --    ,@c_Lottable01  
+              --    ,@c_Lottable02  
+              --    ,@c_Lottable03  
+              --    ,@dt_Lottable04 
+              --    ,@dt_Lottable05 
+              --    ,@c_Lottable06  
+              --    ,@c_Lottable07  
+              --    ,@c_Lottable08  
+              --    ,@c_Lottable09  
+              --    ,@c_Lottable10  
+              --    ,@c_Lottable11  
+              --    ,@c_Lottable12  
+              --    ,@dt_Lottable13 
+              --    ,@dt_Lottable14 
+              --    ,@dt_Lottable15 
                   
       --EXEC (@c_SQL)
       SEt @c_SQLParms = N'@c_Facility     NVARCHAR(5)'  
