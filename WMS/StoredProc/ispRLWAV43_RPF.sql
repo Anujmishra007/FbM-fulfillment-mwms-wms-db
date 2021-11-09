@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 2021-07-19  WLChooi  1.0   Created - DevOps Combine Script           */
+/* 2021-11-08  Wan01    1.1   CR 2.8 Skip Gen Normal Repl Task          */
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -124,6 +125,9 @@ BEGIN
          , @c_ECSingleFlag       NVARCHAR(10) = ''
          , @n_CountOrderkey      INT
          , @c_ExistingTDKey      NVARCHAR(10) = ''
+         
+         , @c_Release_Opt5       NVARCHAR(4000) = ''           --Wan01
+         , @c_SkipNormalReplTask NVARCHAR(1) = 'N'             --Wan01
      
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -142,6 +146,11 @@ BEGIN
    FROM WAVEDETAIL WD WITH (NOLOCK)  
    JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey  
    WHERE WD.Wavekey= @c_Wavekey  
+   
+   --(Wan01) - START
+   SELECT @c_Release_Opt5 = ISNULL(fgr.Option5,'')
+   FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+   --(Wan01) - END
   
    DECLARE @t_UPDPICK TABLE  
    (  RowRef            INT   IDENTITY(1,1) PRIMARY KEY  
@@ -1101,6 +1110,15 @@ NEXT_LOOP:
    CLOSE CUR_PD  
    DEALLOCATE CUR_PD  
    
+   --(Wan01) -- START
+   SET @c_SkipNormalReplTask = 'N'
+   SELECT @c_SkipNormalReplTask = dbo.fnc_GetParamValueFromString('@c_SkipNormalReplTask', @c_Release_Opt5, @c_SkipNormalReplTask) 
+   
+   IF @c_SkipNormalReplTask = 'Y'
+   BEGIN
+      GOTO UPDATE_ADPHLDPLoc
+   END
+   --(Wan01) -- END
    -------------------------------------------------------------------------------------  
    -- Enable Gen General replenishment task - START
    -------------------------------------------------------------------------------------  
@@ -1316,10 +1334,10 @@ NEXT_LOOP:
             FROM LOC (NOLOCK)  
             JOIN PICKZONE (NOLOCK) ON LOC.Pickzone = PICKZONE.Pickzone  
             WHERE LOC.Loc = @c_Toloc 
-			   
+            
             IF @c_TransitLoc IS NULL  
                SET @c_TransitLoc = ''
-			
+         
             SET @c_FinalLoc = @c_LogicalToLoc  
             SET @c_FinalID = @c_ID                                               
          END         
@@ -1438,9 +1456,11 @@ NEXT_LOOP:
    -- Enable Gen General replenishment task - END
    ------------------------------------------------------------------------------------   
 
+         
    ------------------------------------------------------------------------------------  
    -- Insert/Update Last DP LOC into Codelkup 
    ------------------------------------------------------------------------------------  
+   UPDATE_ADPHLDPLoc:                  --(Wan01)
    DECLARE @CUR_DP CURSOR           
    SET @CUR_DP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                
    SELECT LDP.PickZone          
