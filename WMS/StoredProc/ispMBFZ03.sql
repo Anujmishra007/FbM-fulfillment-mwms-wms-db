@@ -32,7 +32,8 @@ GO
 /* 24-Mar-2021	NJOW02  1.1   WMS-16644 include export order calculation   */
 /* 15-Apr-2021  NJOW03  1.2   WMS-16834 Change VAT formula                 */
 /* 02-Sep-2021  NJOW04  1.3   WMS-17846 Add Macau handling for HK MO       */
-/* 28-Sep-2021  NJOW    1.4   DEVOPS script combine                        */
+/* 28-Sep-2021  NJOW    1.4   DEVOPS script combine                        */                  
+/* 30-Sep-2021  NJOW05  1.5   WMS-18059 add distributed pallet weight      */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispMBFZ03]  
 (     @c_MBOLKey     NVARCHAR(10)   
@@ -107,7 +108,8 @@ BEGIN
            @n_PackQty INT,
            @n_QtyTake INT,
            @n_TotCarton INT,
-           @n_DistirbutePltVol DECIMAL(15,6),
+           @n_DistributePltVol DECIMAL(15,6),
+           @n_DistributePltWgt DECIMAL(15,6),  --NJOW05
            @n_CaseCnt INT,
            @n_ExportOrdCnt INT,
            @n_HK_MOExportOrdCnt INT
@@ -615,7 +617,10 @@ BEGIN
                   AND O.Orderkey = @c_Orderkey   	                
                   
                   --calculate distribute pallet volume
-                  SET @n_DistirbutePltVol = ROUND(@n_TotPalletVol / @n_TotCarton, 6)                          
+                  SET @n_DistributePltVol = ROUND(@n_TotPalletVol / @n_TotCarton, 6)                          
+                  
+                  --calculate distribute pallet weight
+                  SET @n_DistributePltWgt = ROUND(@n_TotPalletGrossWgt / @n_TotCarton, 6) --NJOW05                         
                                                          
                   --calculate total full carton & volume * grosswgt & netwgt       
                   --loop consignee->container->order->label                
@@ -1005,7 +1010,10 @@ BEGIN
                AND O.Orderkey = @c_Orderkey   	                
                
                --calculate distribute pallet volume
-               SET @n_DistirbutePltVol = ROUND(@n_TotPalletVol / @n_TotCarton, 6)                          
+               SET @n_DistributePltVol = ROUND(@n_TotPalletVol / @n_TotCarton, 6)                          
+
+               --calculate distribute pallet weight
+               SET @n_DistributePltWgt = ROUND(@n_TotPalletGrossWgt / @n_TotCarton, 6) --NJOW05                         
             	                               
                --calculate total full carton & volume * grosswgt & netwgt       
                --loop consignee->container->order->label                
@@ -1180,10 +1188,10 @@ INSERT_EXTERNORDERSDETAIL:
    	  	 AND OrderLineNumber = @c_OrderLineNumber   	  	    	 
    	  	 
    	  	 INSERT INTO EXTERNORDERSDETAIL (ExternOrderkey, ExternLineNo, Orderkey, OrderLineNumber, Storerkey, Sku, QRCode, TIDNo, 
-   	  	                                 Userdefine01, Userdefine02, Userdefine03, Userdefine04, Userdefine05, Userdefine06)
+   	  	                                 Userdefine01, Userdefine02, Userdefine03, Userdefine04, Userdefine05, Userdefine06, Userdefine07)
    	  	                         VALUES (CAST(@n_ShipmentNo AS NVARCHAR), '', @c_Orderkey, @c_OrderLineNumber, @c_Storerkey, @c_Sku, @c_Mbolkey, 'SC', 
    	  	                                 @c_LabelNo, @c_LottableValue, CAST(@n_QtyTake AS NVARCHAR), FORMAT(@n_CartonVol,'0.######'), FORMAT(@n_CartonGrossWgt,'0.######'),
-   	  	                                 FORMAT(@n_DistirbutePltVol,'0.######'))         
+   	  	                                 FORMAT(@n_DistributePltVol,'0.######'), FORMAT(@n_DistributePltWgt,'0.######')) --NJOW05        
    	  	 
    	     FETCH NEXT FROM CURSOR_ORDLINE INTO @c_OrderLineNumber, @n_Qty
    	  END
