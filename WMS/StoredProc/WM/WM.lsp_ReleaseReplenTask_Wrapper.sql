@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-06-24  Wan      1.0   Created.                                  */
+/* 2021-09-27  CheeMun  1.1   JSM-20741 - Revised script to ROLLBACK    */
+/*                            if XACT_STATE() = -1                      */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_ReleaseReplenTask_Wrapper]                                                                                                                     
       @c_Storerkey            NVARCHAR(15) = ''  
@@ -79,7 +81,7 @@ BEGIN
    END
 
    BEGIN TRY
-
+      BEGIN TRAN        --JSM-20741
       EXEC [dbo].[ispReleaseReplenTask_Wrapper]
             @c_Facility =  @c_Facility  
          ,  @c_zone02   =  @c_zone02     
@@ -115,11 +117,18 @@ BEGIN
    END CATCH
    
 EXIT_SP:
-
+   --JSM-20741 (START)
+   SELECT @c_ErrMsg '@c_ErrMsg'  
+   IF XACT_STATE() = -1                                              --(Wan01)   
+   BEGIN  
+    ROLLBACK TRAN  
+   END                                
+   --JSM-20741 (END)
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF  @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt       --JSM-20741
       BEGIN
          ROLLBACK TRAN
       END
