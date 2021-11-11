@@ -18,7 +18,7 @@ GO
 /*        :                                                             */    
 /* Called By: r_dw_print_wave_pickslip_34                               */    
 /*          :                                                           */    
-/* GitLab Version: 1.0                                                  */    
+/* GitLab Version: 1.1                                                  */    
 /*                                                                      */    
 /* Version: 7.0                                                         */    
 /*                                                                      */    
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author    Ver Purposes                                  */     
 /* 2021-09-23   WLChooi   1.0 DevOps Combine Script                     */
+/* 2021-10-27   WLChooi   1.1 Add AutoScanIn Function (WL01)            */
 /************************************************************************/  
 CREATE PROC dbo.isp_GetPickSlipWave_34 (
    @c_wavekey          NVARCHAR(10)
@@ -108,7 +109,8 @@ BEGIN
    @c_Buyerpo          NVARCHAR(20),
    @c_Style            NVARCHAR(50),
    @c_Color            NVARCHAR(50),
-   @c_Size             NVARCHAR(50)
+   @c_Size             NVARCHAR(50),
+   @c_AutoScanIn       NVARCHAR(10)   --WL01
    
    SET @n_StartTCnt = @@TRANCOUNT
    
@@ -303,7 +305,7 @@ BEGIN
             EXECUTE nspg_GetKey
             'PICKSLIP',
             9,
-               @c_pickheaderkey  OUTPUT,
+            @c_pickheaderkey  OUTPUT,
             @b_success        OUTPUT,
             @n_err            OUTPUT,
             @c_errmsg         OUTPUT
@@ -479,7 +481,7 @@ BEGIN
       Style,               Color,            Size
       )
       VALUES
-      (@c_pickheaderkey,   @c_wavekey,        @c_OrderKey,      @c_ConsigneeKey,
+      (@c_pickheaderkey,    @c_wavekey,       @c_OrderKey,      @c_ConsigneeKey,
        @c_Company,          @c_Addr1,         @c_Addr2,         0,
        @c_Addr3,            @c_PostCode,      @c_Route,         @c_Route_Desc,
        @c_TrfRoom,          @c_Notes1,        @n_RowNo,         @c_Notes2,
@@ -671,13 +673,82 @@ SUCCESS:
    CLOSE c_ord
    DEALLOCATE c_ord
 
+   --WL01 S
+   DECLARE CUR_PSNO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
+   SELECT PickSlipNo        
+         ,OrderKey        
+         ,Storerkey        
+   FROM #temp_pick        
+   ORDER BY PickSlipNo        
+        
+   OPEN CUR_PSNO        
+        
+   FETCH NEXT FROM CUR_PSNO INTO @c_pickheaderkey        
+                                ,@c_Orderkey        
+                                ,@c_Storerkey        
+   WHILE @@FETCH_STATUS <> -1        
+   BEGIN        
+      SET @c_AutoScanIn = '0'        
+      EXEC nspGetRight        
+            @c_Facility   = @c_Facility        
+         ,  @c_StorerKey  = @c_StorerKey        
+         ,  @c_sku        = ''        
+         ,  @c_ConfigKey  = 'AutoScanIn'   
+         ,  @b_Success    = @b_Success    OUTPUT        
+         ,  @c_authority  = @c_AutoScanIn OUTPUT        
+         ,  @n_err        = @n_err        OUTPUT        
+         ,  @c_errmsg     = @c_errmsg     OUTPUT        
+        
+      IF @b_Success = 0        
+      BEGIN        
+         SET @n_Continue = 3        
+         GOTO QUIT        
+      END        
+        
+      BEGIN TRAN        
+      IF @c_AutoScanIn = '1'        
+      BEGIN        
+         IF NOT EXISTS (SELECT 1        
+                        FROM PICKINGINFO WITH (NOLOCK)        
+                        WHERE PickSlipNo = @c_pickheaderkey        
+                        )        
+         BEGIN        
+            INSERT INTO PICKINGINFO  (PickSlipNo, ScanInDate, PickerID, ScanOutDate)        
+            VALUES (@c_pickheaderkey, GETDATE(), SUSER_NAME(), NULL)        
+        
+            SET @n_err = @@ERROR        
+            IF @n_err <> 0        
+            BEGIN        
+               SET @n_Continue = 3        
+               GOTO QUIT        
+            END        
+         END        
+      END        
+        
+      WHILE @@TRANCOUNT > 0        
+      BEGIN        
+         COMMIT TRAN        
+      END        
+      FETCH NEXT FROM CUR_PSNO INTO @c_pickheaderkey        
+                                   ,@c_Orderkey        
+                                   ,@c_Storerkey        
+   END        
+   CLOSE CUR_PSNO        
+   DEALLOCATE CUR_PSNO    
+   --WL01 E
+
    SELECT * FROM #temp_pick 
    ORDER BY Putawayzone, Orderkey, SKU,
             Style, Color, Size,
             LogicalLocation, LOC, Lottable02, Lottable04, Lottable03
 
 QUIT:
-   TRUNCATE Table #temp_pick
+   --WL01 S
+   IF OBJECT_ID('tempdb..#temp_pick') IS NOT NULL
+      DROP TABLE #temp_pick
+
+   --TRUNCATE Table #temp_pick
+   --WL01 E
 
    WHILE @@TRANCOUNT < @n_StartTCnt
       BEGIN TRAN 
