@@ -18,7 +18,7 @@ GO
 /*                                                                      */    
 /* Called By: r_dw_carton_manifest_label_37_rdt                         */    
 /*                                                                      */    
-/* GitLab Version: 1.0                                                  */    
+/* GitLab Version: 1.1                                                  */    
 /*                                                                      */    
 /* Version: 5.4                                                         */    
 /*                                                                      */    
@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver   Purposes                                  */ 
 /* 2021-06-14  WLChooi  1.0   Created - DevOps Combine Script           */     
+/* 2021-11-11  WLChooi  1.1   WMS-17265 - Add CartonType and Userkey    */
+/*                            (WL01)                                    */
 /************************************************************************/    
 CREATE PROC dbo.isp_CartonManifestLabel37_rdt (    
        @c_Pickslipno   NVARCHAR(10),     
@@ -64,6 +66,8 @@ BEGIN
          ,SizeQty        = SUM(PACKDETAIL.Qty) 
          ,ShowLargeFont  = ISNULL(CL.SHORT,'N')
          ,ShowSONo       = ISNULL(CL1.SHORT,'N')
+         ,CartonType     = ISNULL(PIF.CartonType,'')   --WL02
+         ,UserkeyOverride= TD.UserkeyOverride   --WL02
    FROM PACKHEADER WITH (NOLOCK)  
    JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
    JOIN SKU WITH (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey)     
@@ -73,6 +77,14 @@ BEGIN
                                       AND (CL.LONG = 'r_dw_carton_manifest_label_37_rdt' AND CL.STORERKEY = ORDERS.Storerkey)
    LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.LISTNAME = 'REPORTCFG' AND CL1.CODE = 'ShowSONo' )
                                        AND (CL1.LONG = 'r_dw_carton_manifest_label_37_rdt' AND CL1.STORERKEY = ORDERS.Storerkey)
+   LEFT JOIN PACKINFO PIF (NOLOCK) ON PIF.PickSlipNo = PACKDETAIL.PickSlipNo   --WL01
+                                  AND PIF.CartonNo = PACKDETAIL.CartonNo       --WL01
+   OUTER APPLY (SELECT TOP 1 ISNULL(TASKDETAIL.UserkeyOverride,'')             --WL01
+                AS UserkeyOverride                                             --WL01
+                FROM TASKDETAIL (NOLOCK)                                       --WL01
+                WHERE TASKDETAIL.Storerkey = PACKHEADER.StorerKey              --WL01
+                AND TASKDETAIL.Caseid = PACKDETAIL.LabelNo                     --WL01
+                AND TASKDETAIL.TaskType = 'CPK') AS TD                         --WL01
    WHERE PACKHEADER.PickSlipNo = @c_Pickslipno 
    --AND PACKD.CartonNo BETWEEN CAST(@c_FromCartonNo AS INT) AND CAST(@c_ToCartonNo AS INT) 
    AND PACKDETAIL.LabelNo BETWEEN @c_FromLabelNo AND @c_ToLabelNo
@@ -82,8 +94,10 @@ BEGIN
          ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
          ,  ISNULL(RTRIM(SKU.Style),'')
          --,  ISNULL(RTRIM(SKU.Descr),'') 
-         ,  ISNULL(CL.SHORT,'N')  
+         ,  ISNULL(CL.SHORT,'N')
          ,  ISNULL(CL1.SHORT,'N')
+         ,  ISNULL(PIF.CartonType,'')   --WL02
+         ,  TD.UserkeyOverride          --WL02
    ORDER BY PACKHEADER.Loadkey
          ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
          ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
