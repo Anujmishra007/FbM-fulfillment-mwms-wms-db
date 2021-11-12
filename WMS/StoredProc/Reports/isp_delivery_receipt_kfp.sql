@@ -2,9 +2,10 @@ IF EXISTS (SELECT name FROM sysobjects WHERE name = 'isp_Delivery_Receipt_KFP' A
    DROP PROC isp_Delivery_Receipt_KFP
 GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/  
@@ -36,6 +37,7 @@ GO
 /* 28-Feb-2012  NJOW03   1.4  Fix joining Sku table include storerkey   */
 /* 08-MAY-2018  WAN01    1.5  WMS-4916 - [PH] JTI - Delivery Receipt    */
 /* 21-MAY-2018  WAN02    1.6  Fixed to Return 3 correct decimal value   */
+/* 28-Jan-2019 TLTING_ext 1.7  enlarge externorderkey field length     */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_Delivery_Receipt_KFP] (@cMBOLkey NVARCHAR(10) )  
@@ -46,7 +48,7 @@ BEGIN
    SET ANSI_NULLS OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
   
- DECLARE @cExternOrderKey  NVARCHAR(30)  
+ DECLARE @cExternOrderKey  NVARCHAR(50)    --tlting_ext
       ,  @cStorerkey       NVARCHAR(15)  
       ,  @cUserdefine10    NVARCHAR(10)  
       ,  @cDRCounterKey    NVARCHAR(10)  
@@ -71,7 +73,7 @@ BEGIN
  
   -- tlting01 - change Memory table to temp table
  CREATE TABLE #TempFlag (      
-         ExternOrderkey    [NVARchar]  (30)  NULL,      
+         ExternOrderkey    [NVARchar]  (50)  NULL,        --tlting_ext
          PrintFlag         [char]      (1)   NULL,
          Storerkey         [NVARCHAR]  (15)  NULL,             --(Wan01)           
          ConverttoKG       [INT]             NULL DEFAULT (0)  --(Wan01)
@@ -81,36 +83,36 @@ BEGIN
   Create Clustered index [PK_tempFlag] on #TempFlag (ExternOrderkey)  -- tlting01
 
   DECLARE @TempData TABLE (  
-         MBOLKey           [char] (10) NULL,  
-         UserDefine10      [char] (10) NULL,  
-         ExternOrderKey    [char] (30) NULL,  
-         PrintFlag         [char] (1)  NULL,  
-         Consigneekey      [char] (15) NULL,  
-         C_Company         [char] (45) NULL,  
-         C_Address1        [char] (45) NULL,  
-         C_Address2        [char] (45) NULL,  
-         C_Address3        [char] (45) NULL,  
-         C_Address4        [char] (45) NULL,  
-         C_City            [char] (45) NULL,  
-         C_Country         [char] (30) NULL,  
-         BuyerPO           [char] (20) NULL,  
+         MBOLKey            [nvarchar]  (10) NULL,  
+         UserDefine10       [nvarchar]  (10) NULL,  
+         ExternOrderKey     [nvarchar]  (50) NULL,    --tlting_ext
+         PrintFlag          [nvarchar]  (1)  NULL,  
+         Consigneekey       [nvarchar]  (15) NULL,  
+         C_Company          [nvarchar]  (45) NULL,  
+         C_Address1         [nvarchar]  (45) NULL,  
+         C_Address2         [nvarchar]  (45) NULL,  
+         C_Address3         [nvarchar]  (45) NULL,  
+         C_Address4         [nvarchar]  (45) NULL,  
+         C_City             [nvarchar]  (45) NULL,  
+         C_Country          [nvarchar]  (30) NULL,  
+         BuyerPO            [nvarchar]  (20) NULL,  
          OrderDate         [datetime]  NULL,  
          DeliveryDate      [datetime]  NULL,  
          DepartureDate     [datetime]  NULL,  
-         CarrierAgent      [char] (30) NULL,  
-         VesselQualifier   [char] (10) NULL,  
-         DriverName        [char] (30) NULL,  
-         Vessel            [char] (30) NULL,  
-         OtherReference    [char] (30) NULL,  
-         SKU               [char] (20) NULL,  
-         SkuDescr          [char] (60) NULL,  
-         Company           [char] (45) NULL,  
-         Lot02             [char] (18) NULL,  
+         CarrierAgent       [nvarchar]  (30) NULL,  
+         VesselQualifier    [nvarchar]  (10) NULL,  
+         DriverName         [nvarchar]  (30) NULL,  
+         Vessel             [nvarchar]  (30) NULL,  
+         OtherReference     [nvarchar]  (30) NULL,  
+         SKU                [nvarchar]  (20) NULL,  
+         SkuDescr           [nvarchar]  (60) NULL,  
+         Company            [nvarchar]  (45) NULL,  
+         Lot02              [nvarchar]  (18) NULL,  
          ShippedQty        [decimal] (12,2)  NULL,  
          DRDate            [datetime]  NULL,
-         Lot01             [char] (18) NULL,
+         Lot01              [nvarchar]  (18) NULL,
          Lot04             [datetime] NULL,
-         Remark            [varchar] (250)   NULL,
+         Remark             [nvarchar]  (250)   NULL,
          QtyEA             [int] NULL,
          QtyInner          [decimal] (12,2)  NULL,
          QtyCtn            [decimal] (12,2)  NULL,
@@ -168,13 +170,13 @@ BEGIN
             BEGIN  
                SELECT @n_continue = 3  
                SELECT @n_err = 63500  -- should assign new error code  
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Setup for CodeLkUp.ListName = DR_NCOUNT. (isp_Delivery_Receipt_KFP)"  
+               SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": No Setup for CodeLkUp.ListName = DR_NCOUNT. (isp_Delivery_Receipt_KFP)"  
             END  
   
             IF @b_debug = 1  
                PRINT 'Check this: SELECT Code FROM CodeLkUp (NOLOCK) WHERE ListName = ''DR_NCOUNT'' AND SHORT =N''' + dbo.fnc_RTrim(@cStorerkey) + ''''  
             
-            IF @n_continue = 1 or @n_continue = 2  
+            IF @n_continue = 1 OR @n_continue = 2  
             BEGIN  
                SELECT @b_success = 0  
                
@@ -191,7 +193,7 @@ BEGIN
                BEGIN  
                   SELECT @n_continue = 3  
                   SELECT @n_err = 63500  -- should assign new error code  
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Fail to Generate Userdeine10 . (isp_Delivery_Receipt_KFP)"  
+                  SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Fail to Generate Userdeine10 . (isp_Delivery_Receipt_KFP)"  
                END  
                ELSE  
                BEGIN  
@@ -208,7 +210,7 @@ BEGIN
                   BEGIN  
                      SELECT @n_continue = 3  
                      SELECT @n_err = 63501  -- should assign new error code  
-                     SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": UPDATE ORDERS Failed. (isp_Delivery_Receipt_KFP)"  
+                     SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": UPDATE ORDERS Failed. (isp_Delivery_Receipt_KFP)"  
                   END  
                END  
             END  -- @n_continue = 1 or @n_continue = 2  
@@ -278,20 +280,20 @@ BEGIN
          -- SUM(Pickdetail.Qty) / PACK.CaseCnt As ShippedQty,  
          CONVERT(DECIMAL(12,2),SUM(Pickdetail.Qty) / (CASE WHEN ORDERDETAIL.UOM = PACK.PackUOM1 THEN PACK.CaseCnt   
                                WHEN ORDERDETAIL.UOM = PACK.PackUOM2 THEN PACK.InnerPack  
-                               ELSE 1 END)) As ShippedQty,  
+                               ELSE 1 END)) AS ShippedQty,  
          MBOL.EditDate,         
          LOTATTRIBUTE.Lottable01 AS Lot01,  
          LOTATTRIBUTE.Lottable04 AS Lot04,
          CL.Long AS Remark,
          CONVERT(DECIMAL(12,2),CASE WHEN ORDERDETAIL.UOM = PACK.PackUOM1 THEN 0   
                                     WHEN ORDERDETAIL.UOM = PACK.PackUOM2 THEN 0  
-                                    ELSE SUM(Pickdetail.Qty) END) As QtyEA,  
+                                    ELSE SUM(Pickdetail.Qty) END) AS QtyEA,  
          CONVERT(DECIMAL(12,2),CASE WHEN ORDERDETAIL.UOM = PACK.PackUOM1 THEN 0   
                                     WHEN ORDERDETAIL.UOM = PACK.PackUOM2 THEN SUM(Pickdetail.Qty) / PACK.InnerPack  
-                                    ELSE 0 END) As QtyInner,  
+                                    ELSE 0 END) AS QtyInner,  
          CONVERT(DECIMAL(12,2),CASE WHEN ORDERDETAIL.UOM = PACK.PackUOM1 THEN SUM(Pickdetail.Qty) / PACK.CaseCnt   
                                     WHEN ORDERDETAIL.UOM = PACK.PackUOM2 THEN 0  
-                                    ELSE 0 END) As QtyCtn,  
+                                    ELSE 0 END) AS QtyCtn,  
          /*SUM(Pickdetail.Qty) AS QtyEA,
          CONVERT(DECIMAL(12,2), CASE WHEN PACK.Innerpack > 0 THEN SUM(Pickdetail.Qty) / PACK.Innerpack   
                                        ELSE 0 END) As QtyInner,  
@@ -374,12 +376,11 @@ BEGIN
       END  
       RETURN  
    END  
-END /* main procedure */  
+END /* main procedure */
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
+
+
 GRANT  EXECUTE  ON [dbo].[isp_Delivery_Receipt_KFP]  TO [nsql]
 GO
+
 
