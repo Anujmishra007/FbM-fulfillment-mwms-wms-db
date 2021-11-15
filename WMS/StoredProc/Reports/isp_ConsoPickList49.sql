@@ -35,6 +35,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 02-SEP-2021  CSCHONG  1.1  WMS-17844 revised pickslip logic (CS01)   */
+/* 23-OCT-2021  MINGLE   1.2  WMS-18183 add new mappings (ML01)         */
+/* 23-OCT-2021  Mingle   1.2  DevOps Combine Script                     */
 /************************************************************************/
 
 CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10)) 
@@ -157,8 +159,11 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
          LRoute           NVARCHAR(10) NULL,                 
          LEXTLoadKey      NVARCHAR(20) NULL,                 
          LPriority        NVARCHAR(10) NULL,                 
-         LPuserdefDate01  DATETIME NULL)                  
-       
+         LPuserdefDate01  DATETIME NULL,
+         packuom3         NVARCHAR(10) NULL, --ML01
+         deliverydate     DATETIME NULL,     --ML01
+         notes            NVARCHAR(200) NULL)--ML01                 
+      
        INSERT INTO #TEMP_PICK
             (PickSlipNo,          LoadKey,         OrderKey,      ConsigneeKey,
              Company,             Addr1,           Addr2,         Addr3,
@@ -167,7 +172,8 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
              PrintedFlag,         Locationtypedesc, Lottable01,   Lottable02, Lottable04,
              ExternOrderkey,      LogicalLoc,         Shelflife,  Minshelflife,
              pallet,             casecnt,             pickafterdate,    putawayzone,
-             LRoute,LEXTLoadKey,LPriority,LPuserdefDate01)        
+             LRoute,LEXTLoadKey,  LPriority,       LPuserdefDate01,  packuom3,
+             deliverydate,        notes) --ML01        
 
         SELECT RefKeyLookup.PickSlipNo,  
            TLP.Loadkey AS Loadkey, --@c_LoadKey as LoadKey,                 
@@ -216,7 +222,10 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
            Loadplan.Route AS LRoute,                                                 
            Loadplan.Externloadkey AS LEXTLoadKey,                                     
            Loadplan.Priority AS LPriority,                                           
-           Loadplan.LPuserdefDate01  AS LPuserdefDate01                                
+           Loadplan.LPuserdefDate01  AS LPuserdefDate01,
+           PACK.PACKUOM3,       --ML01
+           ORDERS.Deliverydate, --ML01
+           ORDERS.Notes         --ML01                     
          FROM #TEMP_LOADKEYS TLP
          JOIN LOADPLANDETAIL WITH (NOLOCK) ON LoadPlanDetail.LoadKey = TLP.Loadkey 
          JOIN ORDERS WITH (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey
@@ -266,7 +275,10 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
            Loadplan.Route ,                                              
            Loadplan.Externloadkey ,                                        
            Loadplan.Priority ,                                            
-           Loadplan.LPuserdefDate01      
+           Loadplan.LPuserdefDate01,
+           PACK.PACKUOM3,        --ML01
+           ORDERS.Deliverydate,  --ML01
+           ORDERS.Notes          --ML01 
                                 
 
      BEGIN TRAN  
@@ -525,7 +537,8 @@ CREATE PROC isp_ConsoPickList49 (@c_wavekey NVARCHAR(10))
              Lottable01,   Lottable02, Lottable04,
              ExternOrderkey,      LogicalLoc,         Shelflife,  Minshelflife,
              pallet,             casecnt,             pickafterdate,    putawayzone,
-             LRoute,LEXTLoadKey,LPriority,LPuserdefDate01
+             LRoute,             LEXTLoadKey,      LPriority,     LPuserdefDate01,
+             packuom3,           deliverydate,     notes --ML01
 
      FROM #TEMP_PICK ORDER BY Pickslipno  
       DROP Table #TEMP_PICK  
