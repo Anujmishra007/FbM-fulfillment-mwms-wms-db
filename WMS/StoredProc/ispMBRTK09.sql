@@ -36,6 +36,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver  Purposes                                   */
+/* 01-11-2021  CheeMun  1.1  JSM-29814 - Revise MBOLDetail Weight&Cube  */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispMBRTK09]
@@ -1161,11 +1162,11 @@ BEGIN
       	 	  WHERE Orderkey = @c_MBOLOrderkey
       	 	  */
 
-            SELECT @n_TotalGrossWgt = SUM(PKSUM.Cube),
-                   @n_TotalCube = SUM(PKSUM.Weight)
+            SELECT @n_TotalGrossWgt = SUM(PKSUM.Weight),      --JSM-29814
+                   @n_TotalCube = SUM(PKSUM.Cube)             --JSM-29814
             FROM (SELECT PACKDETAIL.CartonNo,
                    CASE WHEN ISNULL(CZ.[Cube],0) = 0 THEN SUM(PACKDETAIL.Qty * Sku.StdCube) ELSE ISNULL(CZ.[Cube],0) END AS Cube,  
-                   SUM(PACKDETAIL.Qty * Sku.StdGrossWgt) + ISNULL(CZ.CartonWeight,0) AS Weight  
+                   SUM(PACKDETAIL.Qty * SKU.STDNetWgt) + ISNULL(CZ.CartonWeight,0) AS Weight  ----JSM-29814
                    FROM PACKHEADER (NOLOCK) 
                    JOIN PACKDETAIL (NOLOCK) ON (PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno)  
                    JOIN STORER (NOLOCK) ON (PACKHEADER.StorerKey = STORER.StorerKey)  

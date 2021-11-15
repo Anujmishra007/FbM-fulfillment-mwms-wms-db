@@ -18,7 +18,7 @@ GO
 /*                                                                      */    
 /* Called By: r_dw_ucc_carton_label_104_rdt                             */      
 /*                                                                      */    
-/* GitLab Version: 1.0                                                  */    
+/* GitLab Version: 1.2                                                  */    
 /*                                                                      */    
 /* Version: 5.4                                                         */    
 /*                                                                      */    
@@ -27,6 +27,10 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver   Purposes                                  */ 
 /* 2021-06-14  WLChooi  1.0   Created - DevOps Combine Script           */   
+/* 2021-11-03  WLChooi  1.1   WMS-17265 - Show/Hide Route and Change Qty*/
+/*                            logic (WL01)                              */
+/* 2021-11-11  WLChooi  1.2   WMS-17265 - Add CartonType and Userkey    */
+/*                            (WL02)                                    */
 /************************************************************************/    
 CREATE PROC dbo.isp_UCC_Carton_Label_104_rdt (    
        @c_Pickslipno   NVARCHAR(10),     
@@ -125,14 +129,16 @@ BEGIN
             ExternOrderkey NVARCHAR(50),
             FCIndicator    NVARCHAR(10),
             POTitle        NVARCHAR(50),
-            DNTitle        NVARCHAR(50)   
+            DNTitle        NVARCHAR(50),
+            CartonType     NVARCHAR(50),   --WL02
+            Userkey        NVARCHAR(18)    --WL02   
    )    
        
    -- Insert Label Result To Temp Table    
    INSERT INTO @t_Result     
    SELECT DISTINCT PACKD.LabelNo,   
    ORDERS.Loadkey,               
-   ORDERS.[Route],     
+   CASE WHEN ISNULL(CL3.Short,'N') = 'Y' THEN ORDERS.[Route] ELSE '' END AS [Route],   --WL01     
    ORDERS.C_Company,     
    ORDERS.C_Address1,     
    ORDERS.C_Address2,     
@@ -163,14 +169,17 @@ BEGIN
    Qty = (SELECT SUM(PD.Qty)                                                     
           FROM PACKHEADER PH WITH (NOLOCK)                                   
           JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-          WHERE PH.Loadkey = ORDERS.Loadkey                                     
+          --WHERE PH.Loadkey = ORDERS.Loadkey      --WL01
+          WHERE PD.PickSlipNo = PACKD.PickSlipNo   --WL01                                     
           AND   PD.LabelNo = PACKD.LabelNo),                                   
    ORDERS.DocType,
    CASE WHEN ISNULL(CL1.Short,'N') = 'Y' THEN ORDERS.UserDefine04 ELSE '' END AS UserDefine04,
    CASE WHEN ISNULL(CL2.Short,'N') = 'Y' THEN ORDERS.ExternOrderkey ELSE '' END AS ExternOrderkey,
    ISNULL(TDI.Indicator,'') AS FCIndicator,
    CASE WHEN ISNULL(CL1.Short,'N') = 'Y' THEN 'PO No   :' ELSE '' END AS POTitle,
-   CASE WHEN ISNULL(CL2.Short,'N') = 'Y' THEN 'DN No   :' ELSE '' END AS DNTitle
+   CASE WHEN ISNULL(CL2.Short,'N') = 'Y' THEN 'DN No   :' ELSE '' END AS DNTitle,
+   ISNULL(PIF.CartonType,'') AS CartonType,   --WL02
+   TD.UserkeyOverride   --WL02
    FROM PACKDETAIL PACKD WITH (NOLOCK)     
    JOIN PACKHEADER PACKH WITH (NOLOCK) ON (PACKH.PICKSLIPNO = PACKD.PICKSLIPNO)  
    --JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON (LPD.LoadKey = PACKH.LoadKey)
@@ -182,13 +191,24 @@ BEGIN
    LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON CL2.LISTNAME = 'REPORTCFG' AND CL2.Code = 'ShowDNNo' 
                                        AND CL2.Storerkey = ORDERS.StorerKey
                                        AND CL2.Long = 'r_dw_ucc_carton_label_104_rdt' 
+   LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON CL3.LISTNAME = 'REPORTCFG' AND CL3.Code = 'ShowRoute'   --WL01
+                                       AND CL3.Storerkey = ORDERS.StorerKey                        --WL01
+                                       AND CL3.Long = 'r_dw_ucc_carton_label_104_rdt'              --WL01
    LEFT JOIN @t_DropID TDI ON TDI.LabelNo = PACKD.LabelNo  
+   LEFT JOIN PACKINFO PIF (NOLOCK) ON PIF.PickSlipNo = PACKD.PickSlipNo   --WL02
+                                  AND PIF.CartonNo = PACKD.CartonNo       --WL02
+   OUTER APPLY (SELECT TOP 1 ISNULL(TASKDETAIL.UserkeyOverride,'')        --WL02
+                AS UserkeyOverride                                        --WL02
+                FROM TASKDETAIL (NOLOCK)                                  --WL02
+                WHERE TASKDETAIL.Storerkey = PACKH.StorerKey              --WL02
+                AND TASKDETAIL.Caseid = PACKD.LabelNo                     --WL02
+                AND TASKDETAIL.TaskType = 'CPK') AS TD                    --WL02
    WHERE PACKD.PickSlipNo = @c_Pickslipno 
    --AND PACKD.CartonNo BETWEEN CAST(@c_FromCartonNo AS INT) AND CAST(@c_ToCartonNo AS INT) 
    AND PACKD.LabelNo BETWEEN @c_FromLabelNo AND @c_ToLabelNo
    GROUP BY PACKD.LabelNo,      
    ORDERS.Loadkey, 
-   ORDERS.[Route],     
+   CASE WHEN ISNULL(CL3.Short,'N') = 'Y' THEN ORDERS.[Route] ELSE '' END,   --WL01    
    ORDERS.C_Company,     
    ORDERS.C_Address1,     
    ORDERS.C_Address2,     
@@ -218,7 +238,10 @@ BEGIN
    CASE WHEN ISNULL(CL2.Short,'N') = 'Y' THEN ORDERS.ExternOrderkey ELSE '' END,
    ISNULL(TDI.Indicator,''),
    CASE WHEN ISNULL(CL1.Short,'N') = 'Y' THEN 'PO No   :' ELSE '' END,
-   CASE WHEN ISNULL(CL2.Short,'N') = 'Y' THEN 'DN No   :' ELSE '' END
+   CASE WHEN ISNULL(CL2.Short,'N') = 'Y' THEN 'DN No   :' ELSE '' END,
+   PACKD.PickSlipNo,   --WL01
+   ISNULL(PIF.CartonType,''),   --WL02
+   TD.UserkeyOverride   --WL02
        
    SELECT DISTINCT * FROM @t_Result                      
     

@@ -4,7 +4,8 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO
+GO 
+
 /************************************************************************/
 /* Store Procedure:  isp_delivery_receipt                               */
 /* Creation Date:  18-Apr-2006                                          */
@@ -37,13 +38,15 @@ GO
 /* 2013-07-08  NJOW01  1.1   282838-user define company name            */
 /* 2014-06-27  NJOW02  1.2   314240-Sort by sku,lottable02              */
 /* 2015-06-01  Leong   1.3   SOS# 343524 - Join with StorerKey.         */
+/* 28-Jan-2019 TLTING_ext 1.4  enlarge externorderkey field length     */
 /************************************************************************/
 
-CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
+CREATE PROC [dbo].[isp_delivery_receipt] (@cMBOLkey NVARCHAR(10) )
  AS
  BEGIN
-   SET NOCOUNT ON
-   SET QUOTED_IDENTIFIER OFF
+   SET NOCOUNT ON 
+   SET ANSI_NULLS OFF 
+   SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE   @cOrderKey     NVARCHAR(10)
             ,@cStorerkey    NVARCHAR(15)
@@ -76,7 +79,7 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
    CREATE TABLE [#Temptb] (
       Orderkey          [NVARCHAR] (10) NULL,
       UserDefine10      [NVARCHAR] (10) NULL,
-      ExternOrderKey    [NVARCHAR] (30) NULL,
+      ExternOrderKey    [NVARCHAR] (50) NULL,   --tlting_ext
       PrintFlag         [NVARCHAR] (1)    NULL,
       Consigneekey      [NVARCHAR] (15) NULL,
       C_Company         [NVARCHAR] (45) NULL,
@@ -109,11 +112,11 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
       IF @n_count <= 0
       begin
          SELECT @n_continue = 4
-         if @b_debug = 1
+         IF @b_debug = 1
             PRINT 'No Data Found'
-      end
-      else
-         if @b_debug = 1
+      END
+      ELSE
+         IF @b_debug = 1
             PRINT 'Start Processing...  MBOLKey=' + @cMBOLkey
 
       -- Assign DR Number to all order under this MBOLKey! Exclude those already got
@@ -153,7 +156,7 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
                   SELECT @n_continue = 3
                   SELECT @n_err = 63500      -- should assign new error code
                   SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": No Setup for CodeLkUp.ListName = DR_NCOUNT. (isp_delivery_receipt)"
-               end
+               END
 
                IF @b_debug = 1
                begin
@@ -181,7 +184,7 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
                   END
                END
 
-               IF @n_continue = 1 or @n_continue = 2
+               IF @n_continue = 1 OR @n_continue = 2
                BEGIN
                   UPDATE ORDERS SET UserDefine10 = @cUserDefine10
                   WHERE ORDERKEY = @cOrderkey
@@ -284,7 +287,7 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
       END
 
       -- SORT ORDER
-      If @n_continue = 1 or @n_continue = 2
+      IF @n_continue = 1 OR @n_continue = 2
       BEGIN
          SELECT * , IDENTITY(INT, 1, 1) AS SeqNum
          INTO #Temptb1
@@ -297,10 +300,10 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
             SELECT @n_continue = 3
             SELECT @n_err = 63500      -- should assign new error code
             SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": No Data Found. (isp_delivery_receipt)"
-         End
+         END
 
          -- Show the OrderQty only on the first line per sku in same order (same DR number)
-         If @n_continue = 1 or @n_continue = 2
+         IF @n_continue = 1 OR @n_continue = 2
          BEGIN
 
             SELECT @cUserdefine10 = '', @PrevUserdefine10 = '', @cSKU= '', @PrevSKU = '', @cSeqNum = 0
@@ -313,9 +316,9 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
             OPEN CurSKU
             FETCH NEXT FROM CurSKU INTO @cUserdefine10, @cSKU, @cSeqNum
 
-            WHILE @@FETCH_STATUS <> -1 and (@n_continue = 1 OR @n_continue = 2) -- CurOrder Loop
+            WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 OR @n_continue = 2) -- CurOrder Loop
             BEGIN
-               If @PrevUserdefine10 <> @cUserdefine10
+               IF @PrevUserdefine10 <> @cUserdefine10
                BEGIN
                   SELECT @PrevUserdefine10 = @cUserdefine10
                   SELECT @PrevSKU = @cSKU
@@ -337,13 +340,13 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
    END -- If @n_continue = 1 or @n_continue = 2 FOR Retrieve SELECT LIST
 
 
-   If @n_continue = 1 or @n_continue = 2
+   IF @n_continue = 1 OR @n_continue = 2
       SELECT * FROM #Temptb1
       ORDER BY SeqNum
 
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN
-      execute nsp_logerror @n_err, @c_errmsg, "isp_delivery_receipt"
+      EXECUTE nsp_logerror @n_err, @c_errmsg, "isp_delivery_receipt"
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
@@ -364,9 +367,8 @@ CREATE PROC isp_delivery_receipt (@cMBOLkey NVARCHAR(10) )
 
 END /* main procedure */
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
+
+
+
 GRANT EXECUTE ON isp_delivery_receipt TO NSQL
 GO
