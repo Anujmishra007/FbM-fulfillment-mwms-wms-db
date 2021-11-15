@@ -14,7 +14,9 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */                            
+/* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */     
+/* 2021-05-25 1.1  WLChooi    WMS-17129 - Use UPC.UPC to print label (WL01)   */  
+/* 2021-05-25 1.1  WLChooi    DevOps Combine Script                           */                       
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_SKULABEL07_GetParm]                      
@@ -85,11 +87,12 @@ BEGIN
     , SKU               NVARCHAR(20) NULL
     , ExtendedField01   NVARCHAR(50) NULL
     , Qty               INT NULL
+    , UPC               NVARCHAR(30) NULL   --WL01
    )
 
    --@c_ExtendedField01 = 'A' If SKUINFO.ExtendedField01 = 'A'
    --@c_ExtendedField01 = 'B' If SKUINFO.ExtendedField01 <> 'A'
-   IF EXISTS (SELECT 1 FROM RECEIPTDETAIL (NOLOCK) WHERE ToId = @parm02 AND Storerkey = @parm01)
+   IF EXISTS (SELECT 1 FROM RECEIPTDETAIL (NOLOCK) WHERE ToId = @parm02 AND Storerkey = @parm01 AND @parm02 <> '')   --WL01
    BEGIN
       INSERT INTO #TMP_SKU(Storerkey, SKU, ExtendedField01, Qty)
       SELECT DISTINCT RD.Storerkey, RD.SKU, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END
@@ -102,6 +105,17 @@ BEGIN
       GROUP BY RD.Storerkey, RD.SKU, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END
       HAVING SUM(RD.BeforeReceivedQty) > 0
    END
+   --WL01 S
+   IF EXISTS (SELECT 1 FROM UPC (NOLOCK) WHERE UPC = @parm03 AND Storerkey = @parm01)
+   BEGIN
+      INSERT INTO #TMP_SKU(Storerkey, SKU, ExtendedField01, Qty, UPC)
+      SELECT @parm01, SKU.SKU, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END, 1, @parm03
+      FROM UPC (NOLOCK)
+      JOIN SKU (NOLOCK) ON SKU.StorerKey = UPC.StorerKey AND SKU.SKU = UPC.SKU
+      LEFT JOIN SKUINFO (NOLOCK) ON SKU.Sku = SKUINFO.Sku AND SKU.StorerKey = SKUINFO.Storerkey
+      WHERE UPC.StorerKey = @parm01 AND UPC.UPC = @parm03
+   END
+   --WL01 E
    ELSE
    BEGIN
       INSERT INTO #TMP_SKU(Storerkey, SKU, ExtendedField01, Qty)
@@ -133,7 +147,7 @@ BEGIN
                      ' Key01,Key02,Key03,Key04,Key05)'   
 
    SET @c_SQLJOIN = 'SELECT DISTINCT PARM1 = S.Storerkey, ' +
-                    ' PARM2 = RTRIM(S.SKU), PARM3 = t.Qty, PARM4 = '''', PARM5 = '''', PARM6 = '''', PARM7 = '''', '+
+                    ' PARM2 = RTRIM(S.SKU), PARM3 = t.Qty, PARM4 = ISNULL(t.UPC,''''), PARM5 = '''', PARM6 = '''', PARM7 = '''', '+   --WL01
                     ' PARM8 = '''', PARM9 = '''', PARM10 = '''', Key1 = ''Storerkey'', Key2 = ''SKU'', Key3 = t.ExtendedField01, '+
                     ' Key4 = '''', Key5 = '''' '  +   
                     ' FROM SKU S WITH (NOLOCK) ' +

@@ -16,7 +16,9 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */        
-/* 2021-04-08 1.1  WLChooi    WMS-16426 - Add Col16 & Col17 (WL01)            */       
+/* 2021-04-08 1.1  WLChooi    WMS-16426 - Add Col16 & Col17 (WL01)            */ 
+/* 2021-05-25 1.2  WLChooi    WMS-17129 - Get UPC.UPC from param (WL02)       */      
+/* 2021-05-25 1.2  WLChooi    DevOps Combine Script                           */        
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CN_SKULABEL07_Lagardere]                      
@@ -126,7 +128,8 @@ BEGIN
             
    SET @c_SQLJOIN = + ' SELECT TOP 1 ISNULL(S.BUSR6,''''), RTRIM(S.SKU), ISNULL(SI.ExtendedField02,''''), ISNULL(SI.ExtendedField03,''''),'   + CHAR(13) +   --4    
                     + ' LEFT(ISNULL(SI.ExtendedField21,''''),80), ISNULL(SI.ExtendedField04,''''), ISNULL(SI.ExtendedField05,''''), ISNULL(SI.ExtendedField06,''''), '   + CHAR(13) +   --8
-                    + ' ISNULL(SI.ExtendedField07,''''), ISNULL(ST.Company,''''), ISNULL(ST.Address2,''''), ISNULL(ST.Zip,''''), ISNULL(ST.Phone1,''''), S.Price, ISNULL(U.UPC,''''), '   + CHAR(13)   --15          
+                    + ' ISNULL(SI.ExtendedField07,''''), ISNULL(ST.Company,''''), ISNULL(ST.Address2,''''), ISNULL(ST.Zip,''''), ISNULL(ST.Phone1,''''), S.Price, '   --WL02
+                    + ' CASE WHEN ISNULL(@c_Sparm04,'''') = '''' THEN ISNULL(U.UPC,'''') ELSE @c_Sparm04 END, '   + CHAR(13)   --15   --WL02          
                     + ' ISNULL(SI.ExtendedField08,''''), ISNULL(SI.ExtendedField09,''''),'''','''','''','   + CHAR(13)     --20   --WL01
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --30  
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --40       
@@ -152,14 +155,20 @@ BEGIN
              +',Col55,Col56,Col57,Col58,Col59,Col60) '      
 
    SET @c_ExecArguments = N' @c_Sparm01      NVARCHAR(80),'   
-                          +' @c_Sparm02      NVARCHAR(80) '
+                          +' @c_Sparm02      NVARCHAR(80),'
+                          +' @c_Sparm03      NVARCHAR(80),'   --WL02
+                          +' @c_Sparm04      NVARCHAR(80),'   --WL02
+                          +' @c_Sparm05      NVARCHAR(80) '   --WL02
   
    SET @c_SQL = @c_SQL + @c_SQLJOIN 
 
    EXEC sp_ExecuteSql @c_SQL   
                     , @c_ExecArguments  
                     , @c_Sparm01    
-                    , @c_Sparm02       
+                    , @c_Sparm02      
+                    , @c_Sparm03   --WL02
+                    , @c_Sparm04   --WL02
+                    , @c_Sparm05   --WL02 
                 
         
    IF @b_debug = 1        
