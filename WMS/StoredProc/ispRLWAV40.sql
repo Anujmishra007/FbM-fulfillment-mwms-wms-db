@@ -1,5 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV40]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [dbo].[ispRLWAV40]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ispRLWAV40]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+   DROP PROCEDURE [dbo].[ispRLWAV40]
 GO
 
 SET QUOTED_IDENTIFIER OFF 
@@ -17,14 +18,16 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* GitLab Version: 1.0                                                   */    
+/* GitLab Version: 1.1                                                   */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date         Author   Ver  Purposes                                   */    
+/* Date         Author   Ver  Purposes                                   */  
+/* 2021-08-16   WLChooi  1.1  DevOps Combine Script                      */  
+/* 2021-08-16   WLChooi  1.1  WMS-17699 - Update New Logic (WL01)        */  
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV40]        
@@ -48,72 +51,73 @@ CREATE PROCEDURE [dbo].[ispRLWAV40]
    SELECT @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0,@n_err=0,@c_errmsg='',@n_cnt=0  
    SELECT @n_debug = @b_debug 
  
-DECLARE @c_DispatchPiecePickMethod NVARCHAR(10)
-      , @c_Userdefine03            NVARCHAR(20)
-      , @c_ShipTo                  NVARCHAR(45)
-      , @c_OmniaOrderNo            NVARCHAR(20)
-      , @c_DeviceId                NVARCHAR(20)
-      , @c_IPAddress               NVARCHAR(40)
-      , @c_PortNo                  NVARCHAR(5)
-      , @c_DevicePosition          NVARCHAR(10)
-      , @c_PTSLOC                  NVARCHAR(10)
-      , @c_PTSStatus               NVARCHAR(10)
-      , @c_InLoc                   NVARCHAR(10)
-      , @c_DropId                  NVARCHAR(20)
-      , @c_Storerkey               NVARCHAR(15)
-      , @c_Sku                     NVARCHAR(20)
-      , @c_Lot                     NVARCHAR(10)
-      , @c_FromLoc                 NVARCHAR(10)
-      , @c_ID                      NVARCHAR(18)
-      , @n_Qty                     INT
-      , @c_PickMethod              NVARCHAR(10)
-      , @c_Toloc                   NVARCHAR(10)
-      , @c_Taskdetailkey           NVARCHAR(10)
-      , @n_UCCQty                  INT
-      , @c_Style                   NVARCHAR(20)
-      , @c_Facility                NVARCHAR(5)
-      , @c_NextDynPickLoc          NVARCHAR(10)
-      , @c_UOM                     NVARCHAR(10)
-      , @c_DestinationType         NVARCHAR(30)
-      , @c_SameStyleLoc            NVARCHAR(10)
-      , @c_SameStyleLogicalLoc     NVARCHAR(30)
-      , @c_SourceType              NVARCHAR(30)
-      , @c_Pickdetailkey           NVARCHAR(18)
-      , @c_NewPickdetailKey        NVARCHAR(18)
-      , @n_Pickqty                 INT
-      , @n_ReplenQty               INT
-      , @n_SplitQty                INT
-      , @c_Message03               NVARCHAR(20)
-      , @c_TaskType                NVARCHAR(10)
-      , @c_Orderkey                NVARCHAR(10)
-      , @c_Pickslipno              NVARCHAR(10)
-      , @c_Loadkey                 NVARCHAR(10)
-      , @c_InductionLoc            NVARCHAR(20)
-      , @c_PTLWavekey              NVARCHAR(10)
-      , @c_PTLLoadkey              NVARCHAR(10)
-      , @c_LoadlineNumber          NVARCHAR(5)
-      , @c_Loctype                 NVARCHAR(10)
-      , @c_curPickdetailkey        NVARCHAR(10)
-      , @c_Lottable01              NVARCHAR(18)
-      , @n_UCCToFit                INT
-      , @n_UCCCnt                  INT
-      , @dt_Lottable05             DATETIME
-      , @c_UserDefine02            NVARCHAR(18)
-      , @c_GetUserDefine02         NVARCHAR(18)
-      , @c_Sourcekey               NVARCHAR(10)
-      , @c_trmlogkey               NVARCHAR(10)
-      , @c_DocType                 NVARCHAR(10)
-      , @n_TLogGenerated           INT = 0
-      , @c_Userdefine04            NVARCHAR(10)
-      , @c_PrevSourcekey           NVARCHAR(10) = N''
-      , @c_DPCount                 NVARCHAR(10) = N''
-      , @c_FirstDP                 NVARCHAR(20) = N''
-      , @c_PrevDP                  NVARCHAR(20) = N''
-      , @c_SourcekeyCNT            INT          = 0
-      , @c_TableName               NVARCHAR(20) = N''
-      , @c_UserDefine08            NVARCHAR(50) = N''
-      , @c_GetSKU                  NVARCHAR(20) = N''
- 
+   DECLARE @c_DispatchPiecePickMethod NVARCHAR(10)
+         , @c_Userdefine03            NVARCHAR(20)
+         , @c_ShipTo                  NVARCHAR(45)
+         , @c_OmniaOrderNo            NVARCHAR(20)
+         , @c_DeviceId                NVARCHAR(20)
+         , @c_IPAddress               NVARCHAR(40)
+         , @c_PortNo                  NVARCHAR(5)
+         , @c_DevicePosition          NVARCHAR(10)
+         , @c_PTSLOC                  NVARCHAR(10)
+         , @c_PTSStatus               NVARCHAR(10)
+         , @c_InLoc                   NVARCHAR(10)
+         , @c_DropId                  NVARCHAR(20)
+         , @c_Storerkey               NVARCHAR(15)
+         , @c_Sku                     NVARCHAR(20)
+         , @c_Lot                     NVARCHAR(10)
+         , @c_FromLoc                 NVARCHAR(10)
+         , @c_ID                      NVARCHAR(18)
+         , @n_Qty                     INT
+         , @c_PickMethod              NVARCHAR(10)
+         , @c_Toloc                   NVARCHAR(10)
+         , @c_Taskdetailkey           NVARCHAR(10)
+         , @n_UCCQty                  INT
+         , @c_Style                   NVARCHAR(20)
+         , @c_Facility                NVARCHAR(5)
+         , @c_NextDynPickLoc          NVARCHAR(10)
+         , @c_UOM                     NVARCHAR(10)
+         , @c_DestinationType         NVARCHAR(30)
+         , @c_SameStyleLoc            NVARCHAR(10)
+         , @c_SameStyleLogicalLoc     NVARCHAR(30)
+         , @c_SourceType              NVARCHAR(30)
+         , @c_Pickdetailkey           NVARCHAR(18)
+         , @c_NewPickdetailKey        NVARCHAR(18)
+         , @n_Pickqty                 INT
+         , @n_ReplenQty               INT
+         , @n_SplitQty                INT
+         , @c_Message03               NVARCHAR(20)
+         , @c_TaskType                NVARCHAR(10)
+         , @c_Orderkey                NVARCHAR(10)
+         , @c_Pickslipno              NVARCHAR(10)
+         , @c_Loadkey                 NVARCHAR(10)
+         , @c_InductionLoc            NVARCHAR(20)
+         , @c_PTLWavekey              NVARCHAR(10)
+         , @c_PTLLoadkey              NVARCHAR(10)
+         , @c_LoadlineNumber          NVARCHAR(5)
+         , @c_Loctype                 NVARCHAR(10)
+         , @c_curPickdetailkey        NVARCHAR(10)
+         , @c_Lottable01              NVARCHAR(18)
+         , @n_UCCToFit                INT
+         , @n_UCCCnt                  INT
+         , @dt_Lottable05             DATETIME
+         , @c_UserDefine02            NVARCHAR(18)
+         , @c_GetUserDefine02         NVARCHAR(18)
+         , @c_Sourcekey               NVARCHAR(10)
+         , @c_trmlogkey               NVARCHAR(10)
+         , @c_DocType                 NVARCHAR(10)
+         , @n_TLogGenerated           INT = 0
+         , @c_Userdefine04            NVARCHAR(10)
+         , @c_PrevSourcekey           NVARCHAR(10) = N''
+         , @c_DPCount                 NVARCHAR(10) = N''
+         , @c_FirstDP                 NVARCHAR(20) = N''
+         , @c_PrevDP                  NVARCHAR(20) = N''
+         , @c_SourcekeyCNT            INT          = 0
+         , @c_TableName               NVARCHAR(20) = N''
+         , @c_UserDefine08            NVARCHAR(50) = N''
+         , @c_GetSKU                  NVARCHAR(20) = N''
+         , @c_ODUDF02                 NVARCHAR(18) = N''   --WL01
+         
    DECLARE @cur_PICKSKU CURSOR,   
            @c_SortMode NVARCHAR(10)  
              
@@ -644,15 +648,17 @@ DECLARE @c_DispatchPiecePickMethod NVARCHAR(10)
 
       DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT OH.LoadKey,
-                      OH.StorerKey
+                      OH.StorerKey,
+                      CASE WHEN @c_DispatchPiecePickMethod IN ('ANFB2BPTS','ANFB2B2DC') THEN OD.UserDefine02 ELSE '' END   --WL01
       FROM WAVEDETAIL WD (NOLOCK)  
       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+      JOIN ORDERDETAIL OD (NOLOCK) ON OH.OrderKey = OD.OrderKey   --WL01
       WHERE WD.Wavekey = @c_Wavekey AND OH.DocType = 'N'
-      ORDER BY OH.LoadKey
+      ORDER BY 1, 3   --WL01
 
       OPEN CUR_LOOP
 
-      FETCH NEXT FROM CUR_LOOP INTO @c_Loadkey, @c_Storerkey
+      FETCH NEXT FROM CUR_LOOP INTO @c_Loadkey, @c_Storerkey, @c_ODUDF02   --WL01
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -677,7 +683,7 @@ DECLARE @c_DispatchPiecePickMethod NVARCHAR(10)
             SET @c_TableName = 'WSB2BOrderLOG'
             
             INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
-            VALUES (@c_trmlogkey, @c_TableName, @c_Loadkey, '', @c_StorerKey, '0', '')
+            VALUES (@c_trmlogkey, @c_TableName, @c_Loadkey, @c_ODUDF02, @c_StorerKey, '0', '')   --WL01
             
             SET @n_err = @@ERROR
             
@@ -690,7 +696,7 @@ DECLARE @c_DispatchPiecePickMethod NVARCHAR(10)
             END
          END
 
-         FETCH NEXT FROM CUR_LOOP INTO @c_Loadkey, @c_Storerkey
+         FETCH NEXT FROM CUR_LOOP INTO @c_Loadkey, @c_Storerkey, @c_ODUDF02   --WL01
       END
       CLOSE CUR_LOOP
       DEALLOCATE CUR_LOOP
