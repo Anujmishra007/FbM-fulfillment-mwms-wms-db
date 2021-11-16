@@ -1,6 +1,7 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR_PH12]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[nspPR_PH12]
 GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -24,7 +25,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author     Purposes                                     */  
+/* Date         Author  Ver. Purposes                                   */  
+/* 16-Nov-2021  NJOW    1.0  DEVOPS combine script                      */
 /************************************************************************/  
   
 CREATE PROC [dbo].[nspPR_PH12]  
@@ -326,12 +328,6 @@ BEGIN
     END  
 END  
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO
-
 GRANT EXECUTE on nspPR_PH12 to nSQL
 GO
 

@@ -1,6 +1,7 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspAL_PH07]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[nspAL_PH07]
 GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -27,6 +28,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author  Ver. Purposes                                   */  
+/* 16-Nov-2021  NJOW    1.0  DEVOPS combine script                      */
 /************************************************************************/  
 CREATE PROC nspAL_PH07   
 @c_lot char(10) ,  
@@ -187,12 +189,6 @@ BEGIN
       ORDER BY LOC.LogicalLocation, LOC.LOC      
    END  
 END  
-
-SET QUOTED_IDENTIFIER OFF
 GO
-
-SET ANSI_NULLS OFF
-GO
-
 GRANT EXECUTE ON nspAL_PH07 TO nSQL
 GO
