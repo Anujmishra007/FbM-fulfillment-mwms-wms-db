@@ -18,7 +18,7 @@ GO
 /*                                                                      */    
 /* Called By: r_dw_carton_manifest_label_37_rdt                         */    
 /*                                                                      */    
-/* GitLab Version: 1.1                                                  */    
+/* GitLab Version: 1.2                                                  */    
 /*                                                                      */    
 /* Version: 5.4                                                         */    
 /*                                                                      */    
@@ -29,6 +29,7 @@ GO
 /* 2021-06-14  WLChooi  1.0   Created - DevOps Combine Script           */     
 /* 2021-11-11  WLChooi  1.1   WMS-17265 - Add CartonType and Userkey    */
 /*                            (WL01)                                    */
+/* 2021-11-15  WLChooi  1.2   WMS-17265- Add BuyerPO (WL02)             */
 /************************************************************************/    
 CREATE PROC dbo.isp_CartonManifestLabel37_rdt (    
        @c_Pickslipno   NVARCHAR(10),     
@@ -66,8 +67,9 @@ BEGIN
          ,SizeQty        = SUM(PACKDETAIL.Qty) 
          ,ShowLargeFont  = ISNULL(CL.SHORT,'N')
          ,ShowSONo       = ISNULL(CL1.SHORT,'N')
-         ,CartonType     = ISNULL(PIF.CartonType,'')   --WL02
-         ,UserkeyOverride= TD.UserkeyOverride   --WL02
+         ,CartonType     = ISNULL(PIF.CartonType,'')   --WL01
+         ,UserkeyOverride= TD.UserkeyOverride   --WL01
+         ,BuyerPO        = ISNULL(ORDERS.BuyerPO,'')   --WL02
    FROM PACKHEADER WITH (NOLOCK)  
    JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
    JOIN SKU WITH (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey)     
@@ -96,8 +98,9 @@ BEGIN
          --,  ISNULL(RTRIM(SKU.Descr),'') 
          ,  ISNULL(CL.SHORT,'N')
          ,  ISNULL(CL1.SHORT,'N')
-         ,  ISNULL(PIF.CartonType,'')   --WL02
-         ,  TD.UserkeyOverride          --WL02
+         ,  ISNULL(PIF.CartonType,'')   --WL01
+         ,  TD.UserkeyOverride          --WL01
+         ,  ISNULL(ORDERS.BuyerPO,'')   --WL02
    ORDER BY PACKHEADER.Loadkey
          ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
          ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
