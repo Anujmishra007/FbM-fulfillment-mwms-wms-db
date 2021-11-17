@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,6 +31,12 @@ GO
 /*                      1.1   CR 2.6                                    */
 /* 2021-10-26  Wan02    1.2   Convert to REAL to compare                */
 /* 2021-10-26           1.2   Home Loc/Pick Face Checking               */
+/* 2021-11-02  Wan03    1.3   Check LxWxH against Stdcube by 0.00001    */
+/*                            variance                                  */
+/* 2021-11-07  Wan04    1.3   Add Validation: 1 UCC Multiple Sku in BULK*/
+/*                            Location                                  */
+/*                            FC UCC qty allocated for UOM '2' and '6'  */
+/* 2021-11-11  Wan05    1.3   Add Validation: Lose ID For None Bulk Loc */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV43_VLDN]
@@ -70,6 +76,9 @@ BEGIN
          , @n_NoOfDPP_AL            INT          = 0        --(Wan02)
          , @n_NoOfHomeLoc           INT          = 0        --(Wan02)
          
+         , @c_UCCNo                 NVARCHAR(20) = ''       --(Wan02)
+         , @c_Loc                   NVARCHAR(10) = ''       --(Wan05)
+         
    DECLARE @t_SortLocCubic          TABLE
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
          , Loc                      NVARCHAR(10)   NOT NULL DEFAULT('')    
@@ -99,9 +108,16 @@ BEGIN
          , Sku                      NVARCHAR(20)   NOT NULL DEFAULT('')  
          , Loc                      NVARCHAR(10)   NOT NULL DEFAULT('')  
          , NoOFDPP                  INT            NOT NULL DEFAULT(0)
+         , PickZone                 NVARCHAR(10)   NOT NULL DEFAULT('')                --(Wan05)
          )  
     
-   
+   --Wan04    
+   DECLARE @t_DropID_AL             TABLE 
+         ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
+         , Storerkey                NVARCHAR(15)   NOT NULL DEFAULT('')   
+         , DropID                   NVARCHAR(20)   NOT NULL DEFAULT('')  
+         , Qty                      INT            NOT NULL DEFAULT(0)
+         )  
             
    SET @b_Success  = 1   
    SET @n_Err     = 0   
@@ -262,9 +278,10 @@ BEGIN
                                  WHEN s.Height = 0.00 THEN 1
                                  WHEN s.STDCUBE = 0.00 THEN 1
                                  WHEN s.STDGROSSWGT = 0.00 THEN 1  
-                                 WHEN ROUND(CONVERT(REAL,s.[Length] * s.Width * s.Height),5) <> ROUND(CONVERT(REAL,s.STDCUBE),5) THEN 1       --(Wan01) 
-                                 --WHEN ROUND( s.[Length] * s.Width * s.Height,5) >= ROUND(s.STDCUBE,5) AND ROUND( s.[Length] * s.Width * s.Height,5) - ROUND(s.STDCUBE,5) > 0.00001 THEN 1       --(Wan02)                                       
-                                 --WHEN ROUND( s.[Length] * s.Width * s.Height,5) <  ROUND(s.STDCUBE,5) AND ROUND(s.STDCUBE,5) - ROUND(s.[Length] * s.Width * s.Height,5) > 0.00001  THEN 1       --(Wan02)                                    
+                                 WHEN CONVERT(DECIMAL(12,5),s.[Length] * s.Width * s.Height) - CONVERT(DECIMAL(12,5),s.STDCUBE) NOT BETWEEN -0.00001 AND 0.00001 THEN 1                         --(Wan03)                     --(Wan03) 
+                                 --WHEN ROUND(CONVERT(REAL,s.[Length] * s.Width * s.Height),5) <> ROUND(CONVERT(REAL,s.STDCUBE),5) THEN 1       --(Wan01) 
+                                 --WHEN ROUND( s.[Length] * s.Width * s.Height,5) >= ROUND(s.STDCUBE,5) AND ROUND( s.[Length] * s.Width * s.Height,5) - ROUND(s.STDCUBE,5) > 0.00001 THEN 1     --(Wan02)                                       
+                                 --WHEN ROUND( s.[Length] * s.Width * s.Height,5) <  ROUND(s.STDCUBE,5) AND ROUND(s.STDCUBE,5) - ROUND(s.[Length] * s.Width * s.Height,5) > 0.00001  THEN 1     --(Wan02)                                    
                                  ELSE 0 
                                  END 
    FROM dbo.WAVEDETAIL AS w (NOLOCK)  
@@ -350,18 +367,20 @@ BEGIN
            Storerkey,
            Sku,
            Loc,
-           NoOFDPP
+           NoOFDPP,
+           PickZone                                               --(Wan05)
        )
    SELECT p.Storerkey
          ,p.Sku
          ,loc     = MIN(CASE WHEN l.LocationType = 'DYNPPICK' THEN p.Loc ELSE '' END)
          ,NoOFDPP = COUNT(DISTINCT CASE WHEN l.LocationType = 'DYNPPICK' THEN p.Loc ELSE NULL END)
+         ,l.PickZone                                              --(Wan05)
    FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)
    JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = w.OrderKey
    JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = p.Loc
    WHERE w.WaveKey = @c_Wavekey
    AND p.[Status] < '5'
-   GROUP BY p.Storerkey, p.Sku, p.Loc
+   GROUP BY p.Storerkey, p.Sku, p.Loc, l.PickZone              --(Wan05)
    
    SET @c_Sku = ''
    SET @n_NoOfHomeLoc = 0
@@ -402,6 +421,85 @@ BEGIN
       GOTO QUIT_SP               
    END   
    --(Wan02) - END
+   
+   --(Wan04) - START
+   INSERT INTO @t_DropID_AL (Storerkey, DropID, Qty)
+   SELECT p.Storerkey, DropID = p.DropID,  Qty=SUM(Qty)
+   FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)
+   JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = w.OrderKey
+   --JOIN dbo.UCC AS u WITH (NOLOCK) ON u.Storerkey = p.Storerkey AND u.UCCNo = p.DropID
+   WHERE w.Wavekey = @c_Wavekey
+   AND p.DropID <> ''
+   AND p.[Status] < '5'
+   AND p.UOM IN ('2','6')
+   GROUP BY p.Storerkey, p.DropID 
+ 
+   SET @c_UCCNo = ''
+   SELECT TOP 1 @c_UCCNo = RTRIM(u.UCCNo)
+   FROM @t_DropID_AL AS tdia
+   JOIN dbo.UCC AS u WITH (NOLOCK) ON u.Storerkey = tdia.Storerkey AND u.UCCNo = tdia.DropID
+   GROUP BY u.UCCNo 
+   HAVING COUNT(DISTINCT u.Sku) > 1
+
+   IF @c_UCCNo <> ''         
+   BEGIN 
+      SET @n_Continue = 3    
+      SET @n_Err = 61140    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. MutliSku found in UCCNo: ' + @c_UCCNo + '. (ispRLWAV43_VLDN)'   
+      GOTO QUIT_SP               
+   END 
+   
+   SET @c_UCCNo = ''
+   SELECT TOP 1 @c_UCCNo = RTRIM(u.UCCNo)
+   FROM @t_DropID_AL AS tdia
+   JOIN dbo.UCC AS u WITH (NOLOCK) ON u.Storerkey = tdia.Storerkey AND u.UCCNo = tdia.DropID
+   WHERE tdia.Qty <> u.Qty
+
+   IF @c_UCCNo <> ''         
+   BEGIN
+      SET @n_Continue = 3    
+      SET @n_Err = 61150    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. Not fully allocated UCCNo qty for UOM 2 & 6 found. UCCNo: ' + @c_UCCNo + '. (ispRLWAV43_VLDN)'   
+      GOTO QUIT_SP               
+   END  
+   --(Wan04) - END
+   
+   --(Wan05) - START
+   SET @c_Loc = ''
+   SELECT TOP 1 @c_Loc = CASE WHEN l.LoseId NOT IN ('1') THEN RTRIM(l.loc)
+                             WHEN p.ID <> '' THEN RTRIM(l.loc)
+                             ELSE ''
+                             END
+   FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)
+   JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = w.OrderKey
+   JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = p.Loc
+   WHERE w.WaveKey = @c_Wavekey
+   AND p.[Status] < '5'
+   AND p.UOM IN ('7')
+   AND l.LocationType IN ('DPBULK', 'DYNPPICK')
+   ORDER BY 1 DESC
+   
+   IF @c_Loc = ''
+   BEGIN
+      SELECT TOP 1 @c_Loc = RTRIM(l.Loc)  
+      FROM @t_HomeLoc_AL AS thla 
+      JOIN dbo.LOC AS l (NOLOCK) ON l.PickZone = thla.PickZone
+      WHERE l.LoseId <> '1' 
+      AND l.LocationType IN ( 'DYNPICKP')
+      AND l.Facility = @c_Facility
+      GROUP BY RTRIM(l.Loc) 
+      ORDER BY RTRIM(l.Loc) 
+   END
+   
+   IF @c_Loc <> ''         
+   BEGIN
+      SET @n_Continue = 3    
+      SET @n_Err = 61160    
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release rejects. PICKDETAIL''s ID found for None Bulk or DPBULK/DYNPPICK/DYNPICKP loc not lose id found. Loc: ' + @c_Loc + '. (ispRLWAV43_VLDN)' 
+      GOTO QUIT_SP               
+   END
+   
+   --(Wan05) - END
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
