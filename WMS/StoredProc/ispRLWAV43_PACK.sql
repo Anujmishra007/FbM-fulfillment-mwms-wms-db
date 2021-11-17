@@ -30,6 +30,8 @@ GO
 /* 2021-10-21  Wan01    1.1   PHWMS Issue fixed                         */
 /* 2021-10-22  Wan02    1.1   IDWMS UAT Issue fixed                     */
 /* 2021-10-27  Wan03    1.2   Fixed Cannot Find Cartontype for UCC (FC) */
+/* 2021-10-28  Wan04    1.3   Fixed Create @t_OptimizeCZGroup_FC record */
+/*                            Once for B2B FC cartanization             */
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -670,6 +672,37 @@ BEGIN
    ------------------------------------------------
    -- B2B Build Carton Type - START
    ------------------------------------------------ 
+  --(Wan04) - START - Move Out from Order Loop for Wan03
+   INSERT INTO @t_OptimizeCZGroup_FC
+       (
+           CartonizationGroup
+       ,   CartonType
+       ,   [Cube]
+       ,   MaxWeight
+       ,   CartonLength
+       ,   CartonWidth
+       ,   CartonHeight
+       )
+   SELECT CartonizationGroup
+       ,   oc.CartonType
+       ,   oc.[Cube]
+       ,   oc.MaxWeight
+       ,   oc.CartonLength
+       ,   oc.CartonWidth
+       ,   oc.CartonHeight
+   FROM #OptimizeCZGroup AS oc
+   ORDER BY oc.RowRef
+   
+   SELECT TOP 1 @n_RowRef_FC = tocgf.RowRef
+   FROM @t_OptimizeCZGroup_FC AS tocgf
+   ORDER BY tocgf.RowRef DESC
+   
+   UPDATE @t_OptimizeCZGroup_FC
+      SET [Cube]    = 9999.99
+        , MaxWeight = 99.99
+   WHERE RowRef = @n_RowRef_FC
+   --(Wan04) - END - Move Out from Order Loop for Wan03
+   
    SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT   tor.Orderkey
          ,  tor.Loadkey
@@ -701,37 +734,6 @@ BEGIN
       ---------------------------------------------------------
       -- 1) For UCC to PackStation, UOM = '2' - START
       ---------------------------------------------------------
-      --(Wan03) - START
-      INSERT INTO @t_OptimizeCZGroup_FC
-          (
-              CartonizationGroup
-          ,   CartonType
-          ,   [Cube]
-          ,   MaxWeight
-          ,   CartonLength
-          ,   CartonWidth
-          ,   CartonHeight
-          )
-      SELECT CartonizationGroup
-          ,   oc.CartonType
-          ,   oc.[Cube]
-          ,   oc.MaxWeight
-          ,   oc.CartonLength
-          ,   oc.CartonWidth
-          ,   oc.CartonHeight
-      FROM #OptimizeCZGroup AS oc
-      ORDER BY oc.RowRef
-      
-      SELECT TOP 1 @n_RowRef_FC = tocgf.RowRef
-      FROM @t_OptimizeCZGroup_FC AS tocgf
-      ORDER BY tocgf.RowRef DESC
-      
-      UPDATE @t_OptimizeCZGroup_FC
-         SET [Cube]    = 9999.99
-           , MaxWeight = 99.99
-      WHERE RowRef = @n_RowRef_FC
-      --(Wan03) - END
-      
       ;WITH UCC_B2B AS --(SeqNo, DropID, Cube_TTL, Wgt_TTL ) AS
       (  SELECT d.DropID                                             --(Wan01) 2021-10-21
                ,SeqNo = ROW_NUMBER() OVER ( ORDER BY d.PickZone, d.SkuGroup, d.LogicalLocation, d.DropID ) 
