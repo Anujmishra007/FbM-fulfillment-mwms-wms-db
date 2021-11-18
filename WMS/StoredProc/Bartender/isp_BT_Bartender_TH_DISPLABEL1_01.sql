@@ -17,6 +17,8 @@ GO
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
 /* 2021-02-25 1.0  CSCHONG    Created (WMS-16406)                             */   
+/* 2021-11-11 1.1  CSCHONG    Devops Scripts combine                          */     
+/* 2021-11-11 1.1  CSCHONG    WMS-16406 revised noofcopy rule (CS01)          */         
 /******************************************************************************/                  
 CREATE PROC [dbo].[isp_BT_Bartender_TH_DISPLABEL1_01]                        
 (  @c_Sparm01            NVARCHAR(250),                
@@ -44,7 +46,8 @@ BEGIN
       @c_SQLSORT         NVARCHAR(4000),          
       @c_SQLJOIN         NVARCHAR(4000),  
       @n_sequence        INT,   
-      @n_TTLPage         INT       
+      @n_TTLPage         INT,
+      @n_NoofCopy        INT                    --CS01       
             
       
   DECLARE @d_Trace_StartTime   DATETIME,     
@@ -67,6 +70,7 @@ BEGIN
     SET @n_TTLPage = CAST( @c_Sparm02 AS INT)   
     SET @c_condition= ''  
     SET @c_SQLGroup = ''
+    SET @n_NoofCopy = CAST(@c_Sparm02 AS INT)  --CS01
                 
     CREATE TABLE [#Result] (               
       [ID]    [INT] IDENTITY(1,1) NOT NULL,                              
@@ -131,8 +135,11 @@ BEGIN
       [Col59] [NVARCHAR] (80) NULL,                
       [Col60] [NVARCHAR] (80) NULL               
      )              
-                
-             
+        
+   
+  WHILE @n_NoofCopy >= 1   --CS01 START
+  BEGIN
+          
    SET @c_ExecArguments = ''                       
 
   
@@ -174,7 +181,7 @@ BEGIN
       
     SET @c_SQL = @c_SQL + @c_SQLJOIN    
   
- SET @c_ExecArguments = N'@c_Sparm01  NVARCHAR(280)'  
+    SET @c_ExecArguments = N'@c_Sparm01  NVARCHAR(280)'  
                        +',@c_Sparm02  NVARCHAR(280)'  
                        +',@n_sequence INT'   
                                     
@@ -184,8 +191,12 @@ BEGIN
                              , @c_Sparm01  
                              , @c_Sparm02
                              , @n_sequence  
+
+
+    SET @n_NoofCopy = @n_NoofCopy - 1
+    SET @n_sequence = @n_sequence + 1
               
-          
+ END   --CS01 END         
 --EXEC sp_executesql @c_SQL            
           
    IF @b_debug=1          
