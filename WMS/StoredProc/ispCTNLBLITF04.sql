@@ -26,8 +26,9 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 26-OCT-2021 CSCHONG  1.0   Devops Scripts combine                    */
+/* 15-NOV-2021 CSCHONG  1.1   WMS-18355 revised logic (CS01)            */
 /************************************************************************/  
-CREATE PROCEDURE [dbo].[ispCTNLBLITF04]  
+CREATE  PROCEDURE [dbo].[ispCTNLBLITF04]  
       @c_Pickslipno   NVARCHAR(10)       
   ,   @n_CartonNo_Min INT   
   ,   @n_CartonNo_Max INT   
@@ -68,7 +69,8 @@ BEGIN
          , @c_Parm10          NVARCHAR(80)  
          , @c_Returnresult    NVARCHAR(20)   
          , @c_key2            NVARCHAR(30)  
-         , @c_trmlogkey       NVARCHAR(10)      
+         , @c_trmlogkey       NVARCHAR(10)  
+         , @c_ExtOrderkey     NVARCHAR(50)    --CS01    
      
    DECLARE @c_PrintCartonLabelByITF   NVARCHAR(100)  
          , @c_Option1                 NVARCHAR(255)  
@@ -104,19 +106,10 @@ BEGIN
    FROM RDT.RDTUser (NOLOCK)     
    WHERE UserName = @c_userid  
   
-   --SELECT @n_SUMPackQty = SUM(PACKDETAIL.Qty)  
-   --FROM PACKDETAIL (NOLOCK)  
-   --WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno  
-  
-   --SELECT @n_SUMPickQty = SUM(PD.Qty)  
-   --     , @c_Orderkey   = MAX(PH.Orderkey)  
-   --FROM PACKHEADER PH (NOLOCK)  
-   --JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = PH.Orderkey  
-   --WHERE PH.PickSlipNo = @c_Pickslipno  
   
  SELECT  @c_Storerkey = ORDERS.StorerKey  
         , @c_OrderKey = ORDERS.OrderKey   
-       -- , @c_ExtOrderkey = ORDERS.ExternOrderKey  
+        , @c_ExtOrderkey = ORDERS.ExternOrderKey     --CS01
         , @c_Shipperkey = ORDERS.ShipperKey  
          ,@c_ECOM_S_Flag = ORDERS.ECOM_SINGLE_Flag   
    FROM PACKHEADER (NOLOCK)  
@@ -140,19 +133,6 @@ BEGIN
     FROM PACKINFO PIF WITH (NOLOCK)  
     WHERE PIF.PickSlipNo = @c_Pickslipno   
     AND PIF.CartonNo = @n_Cartonno  
-     
-  
-   --IF ISNULL(@n_SUMPackQty, 0) = 0  
-   --   SET @n_SUMPackQty = 0  
-  
-   --IF ISNULL(@n_SUMPickQty, 0) = 0  
-   --   SET @n_SUMPickQty = 0  
-  
-   --SELECT @c_ECOM_S_Flag = OH.ECOM_SINGLE_Flag  
-   --     , @c_Storerkey   = OH.StorerKey  
-   --     , @c_shipperkey = OH.ShipperKey  
-   --FROM ORDERS OH (NOLOCK)  
-   --WHERE OH.OrderKey = @c_Orderkey  
   
    EXEC nspGetRight   
       '',    
@@ -171,39 +151,13 @@ BEGIN
   BEGIN  
      
    --For shipperkey='ninjavan' check if packinfo.trackingno . if packinfo.trackingno is null or blank trigger insert transmitlog2 else print bartender label  
-   --For shipperkey <> 'ninjavan' direct print bartender label  
+   --For shipperkey <> 'ninjavan' and tracking no is blank or null update packinfo and packdetail before print bartender label else direct print bartender label
    --Skip insert Transmitlog2 in isp_PrintCartonLabel_Interface  
-      
+         
      
-     
-  IF  @c_shipperkey ='NinjaVan'   
+  IF  @c_shipperkey ='NinjaVan'  
   BEGIN                        
-         --IF EXISTS (SELECT 1   
-         --           FROM TRANSMITLOG2 T2 (NOLOCK)   
-         --           WHERE T2.tablename = @c_Option1  
-         --           AND T2.key3 = @c_Storerkey  
-         --           AND T2.key1 = SUBSTRING(@c_Pickslipno,2,9)+CONVERT(NVARCHAR(5),@n_Cartonno)) AND @c_trackingno <> ''  
-         --BEGIN  
-         --         SET @c_key2 = ''  
-         --         SELECT @c_key2 =T2.key2  
-         --         FROM TRANSMITLOG2 T2 (NOLOCK)   
-         --         WHERE T2.tablename = @c_Option1  
-         --         AND T2.key3 = @c_Storerkey  
-         --         AND T2.key1 = SUBSTRING(@c_Pickslipno,2,9)+CONVERT(NVARCHAR(5),@n_Cartonno)  
-  
-  
-         --         UPDATE TRANSMITLOG2  
-         --         SET transmitflag = '0'  
-         --            ,key2 = CASE WHEN @c_key2 <> @c_userid THEN @c_userid ELSE key2 END  
-         --         WHERE tablename = @c_Option1  
-         --         AND key3 = @c_Storerkey  
-         --         AND key1 = SUBSTRING(@c_Pickslipno,2,9)+CONVERT(NVARCHAR(5),@n_Cartonno)  
-              
-  
-         --         SET @n_continue = 1        
-         --         SET @c_errmsg = ''    
-         --END     
-         --  
+ 
          IF @c_trackingno <> ''  
          BEGIN  
              EXEC isp_BT_GenBartenderCommand            
@@ -259,8 +213,12 @@ BEGIN
                   END    
          END          
   END  
-  ELSE    
-  BEGIN    
+  ELSE    --shipperkey <> 'ninjavan'
+  BEGIN   
+    --CS01 START
+    IF @c_trackingno <> ''  
+    BEGIN  
+ 
         EXEC isp_BT_GenBartenderCommand            
           @cPrinterID = @c_PrinterID    
          ,@c_LabelType = @c_LabelType    
@@ -290,7 +248,104 @@ BEGIN
       BEGIN  
          SET @n_continue = 1        
          SET @c_errmsg = ''    
-      END        
+      END   
+   END
+   ELSE  
+   BEGIN
+            
+          UPDATE PACKINFO WITH (ROWLOCK)  
+          SET TrackingNo = @c_ExtOrderkey
+         ,TrafficCop = NULL  
+         ,EditWho = SUSER_SNAME()  
+         ,EditDate= GETDATE()  
+         WHERE PickSlipNo = @c_PickSlipNo  
+         AND CartonNo = @n_CartonNo  
+
+         SET @n_err = @@ERROR  
+         IF @n_err <> 0  
+         BEGIN  
+            SET @n_continue = 3  
+            SET @n_err = 60020    
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update PACKINFO Table. (ispCTNLBLITF04)'   
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
+            GOTO QUIT_SP  
+         END  
+
+         UPDATE PackDetail WITH (ROWLOCK)  
+          SET labelno = @c_ExtOrderkey, refno = @c_ExtOrderkey
+         ,EditWho = SUSER_SNAME()  
+         ,EditDate= GETDATE()  
+         WHERE PickSlipNo = @c_PickSlipNo  
+         AND CartonNo = @n_CartonNo  
+
+         SET @n_err = @@ERROR  
+         IF @n_err <> 0  
+         BEGIN  
+            SET @n_continue = 3  
+            SET @n_err = 60020    
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update PACKINFO Table. (ispCTNLBLITF04)'   
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
+            GOTO QUIT_SP  
+         END  
+
+
+       WHILE @@TRANCOUNT > 0  
+       BEGIN  
+         COMMIT TRAN  
+      END  
+  
+                  SELECT @b_success = 1      
+                   EXECUTE nspg_getkey      
+                   'TransmitlogKey2'      
+                   , 10      
+                   , @c_trmlogkey OUTPUT      
+                   , @b_success   OUTPUT      
+                   , @n_err       OUTPUT      
+                   , @c_errmsg    OUTPUT      
+             
+                   IF @b_success <> 1      
+                   BEGIN      
+                     SELECT @n_continue = 3      
+                   END      
+                   ELSE      
+                   BEGIN      
+                     INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)      
+                     VALUES (@c_trmlogkey, 'WSPICKCFMLOG', @c_Orderkey, '5', @c_Storerkey, '0', '')      
+                  END    
+
+
+                   EXEC isp_BT_GenBartenderCommand            
+                         @cPrinterID = @c_PrinterID    
+                        ,@c_LabelType = @c_LabelType    
+                        ,@c_userid = @c_UserId    
+                        ,@c_Parm01 = @c_Pickslipno    
+                        ,@c_Parm02 = @n_Cartonno    
+                        ,@c_Parm03 = @n_Cartonno    
+                        ,@c_Parm04 = @c_Parm04    
+                        ,@c_Parm05 = @c_Parm05    
+                        ,@c_Parm06 = @c_Parm06    
+                        ,@c_Parm07 = @c_Parm07    
+                        ,@c_Parm08 = @c_Parm08    
+                        ,@c_Parm09 = @c_Parm09    
+                        ,@c_Parm10 = @c_Parm10    
+                        ,@c_Storerkey = @c_Storerkey    
+                        ,@c_NoCopy = '1'   
+                        ,@c_Returnresult = 'N'     
+                        ,@n_err = @n_Err OUTPUT    
+                        ,@c_errmsg = @c_ErrMsg OUTPUT        
+    
+                     IF @n_err <> 0    
+                     BEGIN    
+                         SELECT @n_continue = 3      
+                         GOTO QUIT_SP    
+                     END    
+                     ELSE  
+                     BEGIN  
+                        SET @n_continue = 1        
+                        SET @c_errmsg = ''    
+                     END 
+         END 
+    --CS01 END 
    END    
   
     SET @b_success = 2   
