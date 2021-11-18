@@ -17,9 +17,11 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
-/* 2021-03-26 1.0  WLChooi    Created (WMS-16672)                             */                    
+/* 2021-03-26 1.0  WLChooi    Created (WMS-16672)                             */  
+/* 2021-11-10 1.1  CSCHONG    Devops scripts combine                          */ 
+/* 2021-11-10 1.2  CSCHONG    WMS-18254 new printing parameter (CS01)         */                  
 /******************************************************************************/                        
-CREATE PROC [dbo].[isp_Bartender_SHIPUCCLB3_GetParm]                        
+CREATE  PROC [dbo].[isp_Bartender_SHIPUCCLB3_GetParm]                        
 (  @parm01            NVARCHAR(250),                
    @parm02            NVARCHAR(250),                
    @parm03            NVARCHAR(250),                
@@ -111,6 +113,20 @@ BEGIN
                         ' WHERE PH.Pickslipno = @Parm01 ' +  
                         ' AND PD.CartonNo = @Parm02 '
     END  
+     ELSE  IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE orderkey = @parm01) AND ISNUMERIC(@parm02) = 1 AND ISNUMERIC(@parm03) = 1    /*CS01 START*/
+    --(orderkey + ttlctn + noofcopy)
+    BEGIN
+       SET @c_SQLJOIN = ' SELECT DISTINCT PARM1= OH.Orderkey,PARM2=@Parm02,PARM3=@Parm03 ,PARM4= '''',PARM5='''',PARM6='''',PARM7='''', '+  
+                        ' PARM8='''',PARM9='''',PARM10='''',Key1=''orderkey'',Key2=''ttlctn'',Key3='''',' +  
+                        ' Key4='''','+  
+                        ' Key5= '''' '  +    
+                        ' FROM ORDERS OH WITH (NOLOCK) ' +  
+                --        ' JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo'+    
+                        ' WHERE OH.orderkey = @Parm01 '  
+               --         ' AND PD.CartonNo >= CONVERT(INT,@Parm02) ' +
+               --        ' AND PD.CartonNo <= CONVERT(INT,@Parm03) '
+    END
+   /*CS01 END*/
     ELSE
     --(Pickslipno + CartonFrom + CartonTo)
     BEGIN
@@ -124,6 +140,8 @@ BEGIN
                         ' AND PD.CartonNo >= CONVERT(INT,@Parm02) ' +
                         ' AND PD.CartonNo <= CONVERT(INT,@Parm03) '
     END
+    
+   
 
         
    SET @c_SQL = @c_SQLJOIN   
