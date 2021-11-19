@@ -36,13 +36,15 @@ GO
 /* 2021-06-03  Wan03    1.3   LFWM-2800 - RG UAT PB Report Print Preview*/
 /*                            SP & sharedrive for PDF Storage           */
 /* 2021-09-24  Wan03    1.3   DevOps Combine Script                     */
+/* 2021-11-05  Wan04    1.4   LFWM-3029 - UAT CN - Wave report Carters  */
+/*                            PRINT issue                               */
 /************************************************************************/
 CREATE PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
          , @c_ReportID           NVARCHAR(10)
          , @c_Storerkey          NVARCHAR(15)
          , @c_Facility           NVARCHAR(5)
-         , @c_UserName           NVARCHAR(30) 
+         , @c_UserName           NVARCHAR(128)              --(Wan04) 
          , @c_ComputerName       NVARCHAR(30) 
          , @c_PrinterID          NVARCHAR(30)
          , @n_NoOfCopy           INT            = 1
@@ -569,15 +571,59 @@ BEGIN
             GOTO PRINT_START
          END
  
+         --(Wan04) - Start Move UP 
+         SET @c_Printer = @c_PrinterID
+         IF @c_PrinterID <> '' AND @c_PrintType NOT IN ( 'JReport', 'LogiReport')   
+         BEGIN
+            -- Check if printer is a group
+            SET @c_PrinterGroup = @c_Printer
+            IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @c_PrinterGroup)
+            BEGIN
+               SET @c_Printer = ''
+               SET @n_FunctionID = 999
+
+               -- Check if report print to a specific printer in group
+               SELECT @c_Printer = PrinterID
+               FROM rdt.rdtReportToPrinter WITH (NOLOCK)
+               WHERE  Function_ID = @n_FunctionID
+                  AND StorerKey   = @c_StorerKey
+                  AND ReportType  = @c_ReportID
+                  AND ReportLineNo= @c_ReportLineNo
+                  AND PrinterGroup= @c_PrinterGroup
+ 
+               IF @c_Printer = ''
+               BEGIN
+                  -- Get default printer in the group
+                  SELECT @c_Printer = PrinterID
+                  FROM rdt.rdtPrinterGroup WITH (NOLOCK)
+                  WHERE PrinterGroup = @c_PrinterGroup
+                  AND DefaultPrinter = 1
+
+                  -- Check no default printer
+                  IF @c_Printer = ''
+                  BEGIN
+                     SET @n_Continue=3 
+                     SET @n_Err    = 552651
+                     SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(6), @n_Err) 
+                                    + ': Default Printer Not Setup for PrintGroup:' + RTRIM(@c_PrinterGroup)
+                                    + ' |' + RTRIM(@c_PrinterGroup)
+                     GOTO EXIT_SP 
+                  END
+               END
+            END
+         END
+         --(Wan04) - END Move UP 
+
          IF @c_PreprintSP <> ''
          BEGIN
             SET @b_ContinuePrint = 0
 
-            IF EXISTS (SELECT 1 FROM sys.objects o WHERE NAME = @c_PreprintSP AND TYPE = 'P')
+            IF EXISTS (SELECT 1 FROM sysobjects o WHERE id = OBJECT_ID(@c_PreprintSP)  AND TYPE = 'P')               --(Wan04) 
             BEGIN
 
                SET @c_SQL  = 'EXECUTE ' + @c_PreprintSP 
                            + ' @n_WMReportRowID = @n_RowID'
+                           + ',@c_UserName      = @c_UserName '                  --(Wan04) 
                            + ',@c_Parm1         = @c_Parm1           OUTPUT '              
                            + ',@c_Parm2         = @c_Parm2           OUTPUT '              
                            + ',@c_Parm3         = @c_Parm3           OUTPUT '              
@@ -605,9 +651,13 @@ BEGIN
                            + ',@c_PrintData     = @c_PrintData       OUTPUT '  
                            + ',@b_Success       = @b_Success         OUTPUT '
                            + ',@n_Err           = @n_Err             OUTPUT '
-                           + ',@c_ErrMsg        = @c_ErrMsg          OUTPUT '          
+                           + ',@c_ErrMsg        = @c_ErrMsg          OUTPUT ' 
+                           + ',@c_PrintSource   = @c_PrintSource '               --(Wan04)     
+                           + ',@b_SCEPreView    = @b_SCEPreView  '               --(Wan04) 
+                           + ',@n_JobID         = @n_JobID           OUTPUT '    --(Wan04) 
 
                  SET @c_SQLParms= N'@n_RowID       BIGINT '
+                              + ',@c_UserName      NVARCHAR(128) '               --(Wan04)               
                               + ',@c_Parm1         NVARCHAR(60)   OUTPUT '           
                               + ',@c_Parm2         NVARCHAR(60)   OUTPUT '           
                               + ',@c_Parm3         NVARCHAR(60)   OUTPUT '           
@@ -635,11 +685,15 @@ BEGIN
                               + ',@c_PrintData     NVARCHAR(4000) OUTPUT '  
                               + ',@b_Success       INT            OUTPUT '
                               + ',@n_Err           INT            OUTPUT '
-                              + ',@c_ErrMsg        NVARCHAR(255)  OUTPUT '           
+                              + ',@c_ErrMsg        NVARCHAR(255)  OUTPUT ' 
+                              + ',@c_PrintSource   NVARCHAR(10) '             --(Wan04)     
+                              + ',@b_SCEPreView    INT '                      --(Wan04)  
+                              + ',@n_JobID         INT            OUTPUT '    --(Wan04)                                         
  
                EXEC sp_ExecuteSQL @c_SQL
                                  ,@c_SQLParms
                                  ,@n_RowID 
+                                 ,@c_UserName                  --(Wan04) 
                                  ,@c_Parm1         OUTPUT           
                                  ,@c_Parm2         OUTPUT            
                                  ,@c_Parm3         OUTPUT          
@@ -668,8 +722,11 @@ BEGIN
                                  ,@b_Success       OUTPUT 
                                  ,@n_Err           OUTPUT  
                                  ,@c_ErrMsg        OUTPUT  
-
+                                 ,@c_PrintSource               --(Wan04)      
+                                 ,@b_SCEPreView                --(Wan04)
+                                 ,@n_JobID        OUTPUT       --(Wan04)
                IF @b_Success <> 1
+               
                BEGIN
                   SET @n_Continue=3 
                   SET @n_Err    = 552652
@@ -687,7 +744,14 @@ BEGIN
             END
  
             IF @b_ContinuePrint = 0 
-            BEGIN 
+            BEGIN
+               --(Wan04) - START 
+               IF @n_JobID > 0 
+               BEGIN 
+                  SET @c_JobIDs = @c_JobIDs + CONVERT(NVARCHAR(10),@n_JobID) 
+               END
+               --(Wan04) - END
+               
                GOTO NEXT_REC
             END        
          END
@@ -738,49 +802,6 @@ BEGIN
 
             GOTO NEXT_REC
          END
-         -- Move Down
-   
-         SET @c_Printer = @c_PrinterID
-         IF @c_PrinterID <> ''
-         BEGIN
-            -- Check if printer is a group
-            SET @c_PrinterGroup = @c_Printer
-            IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @c_PrinterGroup)
-            BEGIN
-               SET @c_Printer = ''
-               SET @n_FunctionID = 999
-
-               -- Check if report print to a specific printer in group
-               SELECT @c_Printer = PrinterID
-               FROM rdt.rdtReportToPrinter WITH (NOLOCK)
-               WHERE  Function_ID = @n_FunctionID
-                  AND StorerKey   = @c_StorerKey
-                  AND ReportType  = @c_ReportID
-                  AND ReportLineNo= @c_ReportLineNo
-                  AND PrinterGroup= @c_PrinterGroup
- 
-               IF @c_Printer = ''
-               BEGIN
-                  -- Get default printer in the group
-                  SELECT @c_Printer = PrinterID
-                  FROM rdt.rdtPrinterGroup WITH (NOLOCK)
-                  WHERE PrinterGroup = @c_PrinterGroup
-                  AND DefaultPrinter = 1
-
-                  -- Check no default printer
-                  IF @c_Printer = ''
-                  BEGIN
-                     SET @n_Continue=3 
-                     SET @n_Err    = 552651
-                     SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(6), @n_Err) 
-                                    + ': Default Printer Not Setup for PrintGroup:' + RTRIM(@c_PrinterGroup)
-                                    + ' |' + RTRIM(@c_PrinterGroup)
-                     GOTO EXIT_SP 
-                  END
-               END
-            END
-         END
-         -- Move Down
          --(Wan01) - END  
 
          IF @c_PrintMethod = 'BARTENDER' OR @c_PrintType = 'BARTENDER'
