@@ -45,7 +45,9 @@ GO
 /* 2020-02-17   kocy05        1.5   Comment out Delete WaveDetail record first                     */
 /* 2020-04-14   NJOW01        1.6   WMS-12785 Lululemon move stock logic                           */
 /* 2020-07-29   NJOW02        1.7   Fix temploc bug follow isp0000P_WSIML_GENERIC_WMS_CancOrd_Import*/
-/* 2020-09-14   NJOW03        1.8   WMS-14932 Move to TempLoc Logic Update                         */
+/* 2020-09-14   NJOW03        1.8   WMS-14932 Move to TempLoc Logic Update                         */ 
+/* 2021-11-08   NJOW04        1.9   WMS-18345 PVH config to move pre-sales order to different loc  */      
+/* 2021-11-08   NJOW04        1.9   DEVOPS combine script                                          */
 /***************************************************************************************************/        
         
 CREATE PROC [dbo].[isp_BackendCancelOrders] (        
@@ -113,7 +115,7 @@ BEGIN
          , @c_To_ID                    NVARCHAR(18)
          
    --NJOW01      
-   DECLARE @n_WSOrdCancMoveToLoc_Opt1  NVARCHAR(50)
+   DECLARE @c_WSOrdCancMoveToLoc_Opt1  NVARCHAR(50)
          , @c_LPUserDefine01           NVARCHAR(20)  
          , @c_ToLoc                    NVARCHAR(10)
         
@@ -154,8 +156,10 @@ BEGIN
          , @c_PD_PickDetailKey         NVARCHAR(18)   --NJOW02
          , @c_Temp_PickDetailKey       NVARCHAR(18)   --NJOW02
          , @c_WSOrdCancMoveToLoc_Opt2  NVARCHAR(50)   --NJOW03
-        
-        
+         , @c_WSOrdCancMoveToLoc_Opt3  NVARCHAR(50)   --NJOW04
+         , @c_ECOM_PRESALE_FLAG        NVARCHAR(2)    --NJOW04
+         , @c_Move2Loc_UDF01           NVARCHAR(60)   --NJOW04
+                
    SET @n_StartTCnt = @@TRANCOUNT        
    SET @b_Success = 0        
    SET @n_RowCNT = 0        
@@ -258,7 +262,7 @@ BEGIN
          , @c_Doctype    = ISNULL(RTRIM(O.Doctype),'')        
          , @c_LPUserDefine01    = ISNULL(RTRIM(LP.UserDefine01),'') --NJOW01
         -- , @c_Priority   = ISNULL(RTRIM(Priority),'')        
-        -- , @c_ECOM_PRESALE_FLAG = ISNULL(RTRIM(ECOM_PRESALE_FLAG),'')        
+         , @c_ECOM_PRESALE_FLAG = ISNULL(RTRIM(ECOM_PRESALE_FLAG),'') --NJOW04       
    FROM ORDERS o WITH (NOLOCK)        
    LEFT JOIN LOADPLAN LP WITH (NOLOCK) ON O.Loadkey = LP.Loadkey --NJOW01
    WHERE O.OrderKey = @c_OrderKey        
@@ -282,7 +286,8 @@ BEGIN
    AND ConfigKey = 'ByPassDeletePreAllocate'        
            
    SELECT @n_WSOrdCancMoveToLoc_Exist = (1)         
-         ,@n_WSOrdCancMoveToLoc_Opt1 = Option1  -- NJOW01
+         ,@c_WSOrdCancMoveToLoc_Opt1 = Option1  -- NJOW01
+         ,@c_WSOrdCancMoveToLoc_Opt3 = Option3  -- NJOW04
    FROM  StorerConfig WITH (NOLOCK)        
    WHERE StorerKey = @c_Storerkey        
    AND ConfigKey = 'WSOrdCancMoveToLoc'      
@@ -335,7 +340,7 @@ BEGIN
    --kocy03 (e)
 
    --NJOW01
-   IF @n_WSOrdCancMoveToLoc_Opt1 = 'TOLOCBYLOADUDF1' 
+   IF @c_WSOrdCancMoveToLoc_Opt1 = 'TOLOCBYLOADUDF1' 
    BEGIN
    	 IF ISNULL(@c_LPUserDefine01,'') = 'Y'
    	 BEGIN 
@@ -570,7 +575,7 @@ BEGIN
       AND Facility = @c_Facility        
 
       --NJOW01
-      IF @n_WSOrdCancMoveToLoc_Opt1 = 'TOLOCBYLOADUDF1' 
+      IF @c_WSOrdCancMoveToLoc_Opt1 = 'TOLOCBYLOADUDF1' 
       BEGIN
       	 SET @c_SC_SValue1 = ISNULL(@c_ToLoc,'')      	        	  
       END       
@@ -773,7 +778,7 @@ BEGIN
             /*********************************************/           
             
             --NJOW01
-            IF @n_WSOrdCancMoveToLoc_Opt1 = 'TOLOCBYLOADUDF1' 
+            IF @c_WSOrdCancMoveToLoc_Opt1 = 'TOLOCBYLOADUDF1' 
             BEGIN
       	       SET @c_To_Loc = ISNULL(@c_SC_SValue1,'')      	        	  
             END                   
@@ -817,17 +822,27 @@ BEGIN
                /*********************************************/        
                SET @c_Move2Loc_Long = ''        
                SET @c_Move2Loc_Short = ''       --YT01        
+               SET @c_Move2Loc_UDF01 = ''  --NJOW04
                SELECT @c_Move2Loc_Long = ISNULL(RTRIM(Long), '')        
                      , @c_Move2Loc_Short = ISNULL(RTRIM(Short), '')         
+                     , @c_Move2Loc_UDF01 = ISNULL(RTRIM(UDF01), '') --NJOW04         
                FROM CODELKUP WITH (NOLOCK)        
                WHERE ListName = 'WSMove2Loc'        
                   AND Code = @c_Facility        
                   AND Code2 = @c_SL_LocationType        
                   AND StorerKey = @c_Storerkey            
         
-        
-               IF @c_Move2Loc_Long <> ''        
-                  SET @c_To_Loc = @c_Move2Loc_Long        
+               --NJOW04
+               IF @c_WSOrdCancMoveToLoc_Opt3 = '1' AND @c_ECOM_PRESALE_FLAG <> ''
+               BEGIN
+                  IF @c_Move2Loc_UDF01 <> ''                  	
+               	     SET @c_To_Loc = @c_Move2Loc_UDF01
+               END
+               ELSE
+               BEGIN                              
+                  IF @c_Move2Loc_Long <> ''        
+                     SET @c_To_Loc = @c_Move2Loc_Long
+               END        
         
                --YT01-S        
                IF @c_Move2Loc_Short <> ''        
@@ -1174,7 +1189,7 @@ BEGIN
                ,'' --@c_itrnkey        
                ,@b_Success OUTPUT        
                ,@n_Err OUTPUT        
-       ,@c_ErrMsg OUTPUT        
+               ,@c_ErrMsg OUTPUT        
         
                IF @b_Success = 0        
                BEGIn        
