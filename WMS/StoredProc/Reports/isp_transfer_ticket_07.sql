@@ -291,14 +291,14 @@ BEGIN
    JOIN TRANSFERDETAIL       WITH (NOLOCK) ON ( TRANSFER.TransferKey = TRANSFERDETAIL.TransferKey )      
    JOIN CODELKUP             WITH (NOLOCK) ON ( CODELKUP.Listname = 'TRANTYPE' )      
                                          AND( TRANSFER.Type = CODELKUP.Code )      
-                                         --AND( CODELKUP.StorerKey = @c_ClkStorerKey)  --SOS329051           
-   JOIN CODELKUP CODELKUP_b  WITH (NOLOCK) ON ( CODELKUP_b.Listname = 'TRNReason' )      
-                                         AND( TRANSFER.ReasonCode = CODELKUP_b.Code )      
+                                         AND( CODELKUP.StorerKey = @c_ClkStorerKey)  --SOS329051           
+   --JOIN CODELKUP CODELKUP_b  WITH (NOLOCK) ON ( CODELKUP_b.Listname = 'TRNReason' )      
+   --                                      AND( TRANSFER.ReasonCode = CODELKUP_b.Code )      
                                          --AND( CODELKUP_b.StorerKey = @b_ClkStorerKey) --SOS329051      
-   --CROSS APPLY (SELECT TOP 1 C.[Description] FROM CODELKUP AS C WHERE C.STORERKEY = @b_ClkStorerKey       
-   --             AND C.Listname = 'TRNREASON'      
-   --             AND TRANSFER.ReasonCode = C.Code      
-   --             ORDER BY CASE WHEN TRANSFER.Type = LEFT(C.Code2, 3) THEN 1 ELSE 2 END) AS CODELKUP_b            
+   CROSS APPLY (SELECT TOP 1 C.[Description] FROM CODELKUP AS C WHERE C.STORERKEY = @b_ClkStorerKey       
+                AND C.Listname = 'TRNREASON'      
+                AND TRANSFER.ReasonCode = C.Code      
+                ORDER BY CASE WHEN TRANSFER.Type = LEFT(C.Code2, 3) THEN 1 ELSE 2 END) AS CODELKUP_b            
    JOIN STORER STORER_a      WITH (NOLOCK) ON ( TRANSFER.FromStorerKey = STORER_a.StorerKey )      
    JOIN STORER STORER_b      WITH (NOLOCK) ON ( TRANSFER.ToStorerKey = STORER_b.StorerKey )      
    JOIN PACK PACK_a          WITH (NOLOCK) ON ( TRANSFERDETAIL.FromPackkey = Pack_a.Packkey )      
@@ -630,3 +630,7 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_Transfer_Ticket_07] TO NSQL
 GO
+
+
+
+
