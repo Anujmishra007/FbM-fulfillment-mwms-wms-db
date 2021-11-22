@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 27-Oct-2021 Chai01   1.2   LFWM-3070 - UAT|JP|Wave|AddParameterDescriptionOnWaveReleaseScreen*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -80,6 +81,7 @@ BEGIN
          , @c_SQLHaving       NVARCHAR(1000) = ''
 
          , @CUR_PARMKEY       CURSOR
+         , @c_BuildParmDesc   NVARCHAR(60)   = '' -- (Chai01)
 
    DECLARE @t_WaveOrderAnalysis TABLE
          (  BuildParmKey      NVARCHAR(10)   NOT NULL DEFAULT('')
@@ -89,6 +91,7 @@ BEGIN
          ,  Allocated         INT            NOT NULL DEFAULT(0) 
          ,  Picked            INT            NOT NULL DEFAULT(0) 
          ,  RemainOrders      INT            NOT NULL DEFAULT(0)
+         ,  BuildParmDesc     NVARCHAR(60)   NOT NULL DEFAULT('') -- (Chai01)
          )
 
    SET @n_Err = 0  
@@ -151,6 +154,7 @@ BEGIN
           ,  @n_MaxOpenQty03 = CASE WHEN BP.Restriction03 = '2_MaxQtyPerBuild' THEN BP.RestrictionValue03  ELSE 0 END
           ,  @n_MaxOpenQty04 = CASE WHEN BP.Restriction04 = '2_MaxQtyPerBuild' THEN BP.RestrictionValue04  ELSE 0 END
           ,  @n_MaxOpenQty05 = CASE WHEN BP.Restriction05 = '2_MaxQtyPerBuild' THEN BP.RestrictionValue05  ELSE 0 END
+          ,  @c_BuildParmDesc = BP.Description  -- (Chai01)
       FROM BUILDPARM BP WITH (NOLOCK)                                                                                                                                 
       WHERE BP.BuildParmKey = @c_BuildParmKey 
 
@@ -279,6 +283,7 @@ BEGIN
          ,  Allocated    
          ,  Picked 
          ,  RemainOrders
+         ,  BuildParmDesc  -- (Chai01)
          )      
       VALUES 
          (  @c_BuildParmKey
@@ -288,6 +293,7 @@ BEGIN
          ,  @n_NoOfAllocated
          ,  @n_NoOfPicked
          ,  @n_RemainOrders
+         ,  @c_BuildParmDesc -- (Chai01)
          )
 
       --SET @n_TotalOrders = @n_TotalOrders + @n_BuildOrders 
@@ -331,6 +337,7 @@ BEGIN
          ,  SummAllocated  = @n_NoOfAllocated
          ,  SummAllocPctg  = @n_AllocPctg
          ,  SummTotalOrders= @n_TotalOrders
+         ,  BuildParmDesc -- (Chai01)
    FROM @t_WaveOrderAnalysis
    
    END TRY  
