@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */ 
+/* 09-SEP-2021  NJOW01  1.0   WMS-17858 Add post kit allocation         */
+/* 22-NOV-2021  NJOW01  1.0   DEVOPS combine script                     */
 /************************************************************************/
 CREATE PROC  isp_Kit_Allocation  
       @c_KitKey              NVARCHAR(10)
@@ -109,12 +111,22 @@ BEGIN
          , @n_QtyAvailable             INT
          , @n_QtyToTake                INT
          , @c_kitAllocateNoConso       NVARCHAR(10) 
-         , @c_ExpectedQtyFlag          NVARCHAR(5)
+         , @c_ExpectedQtyFlag          NVARCHAR(5)            
          , @c_CaseUOM                  NVARCHAR(10)
          , @c_PalletUOM                NVARCHAR(10)
          , @c_EachUOM                  NVARCHAR(10)
          , @c_UOM                      NVARCHAR(10)
-
+   
+   --NJOW01      
+   DECLARE @c_AllocateStrategykey_SC   NVARCHAR(10)                                
+         , @c_UpdateUsedQty            NVARCHAR(5)
+         , @c_LineAllocated            INT
+         , @c_option1                  NVARCHAR(50)
+         , @c_option2                  NVARCHAR(50)
+         , @c_option3                  NVARCHAR(50)
+         , @c_option4                  NVARCHAR(50)
+         , @c_option5                  NVARCHAR(4000)
+           
    DECLARE @c_NewKitLineNumber NVARCHAR(5)
          , @c_KitLineNumber NVARCHAR(5)
          , @n_BalQty INT
@@ -126,19 +138,60 @@ BEGIN
    ELSE
       SET @b_debug = 0
 
-   SELECT @n_StartTCnt = @@TRANCOUNT, @n_continue = 1, @b_success = 1, @n_err = 0, @c_errmsg = ''
+   SELECT @n_StartTCnt = @@TRANCOUNT, @n_continue = 1, @b_success = 1, @n_err = 0, @c_errmsg = '', @c_LineAllocated = 0
    SET @c_ExpectedQtyFlag = 'Y'  --default Y get from ExpectedQty field
+   SET @c_UpdateUsedQty = 'N'  --default N Update qty field  --NJOW01
+   
+   IF @@TRANCOUNT = 0 --NJOW01
+      BEGIN TRAN
+   
+   --NJOW01
+   IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #ALLOCATE_CANDIDATES;
+   END
+
+   CREATE TABLE #ALLOCATE_CANDIDATES
+   (  RowID          INT            NOT NULL IDENTITY(1,1) 
+   ,  Lot            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')
+   ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+   ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
+   )   
    
    SELECT @c_aStorerkey = Storerkey,
           @c_aFacility = Facility
    FROM KIT (NOLOCK)
    WHERE KitKey = @c_Kitkey
+  
+   --NJOW01 S   
+   EXECUTE nspGetRight                                
+      @c_Facility   = @c_afacility,                     
+      @c_StorerKey  = @c_aStorerKey,                    
+      @c_sku        = '',                          
+      @c_ConfigKey  = 'KitAllocateStrategykey', -- Configkey         
+      @b_Success    = @b_success   OUTPUT,             
+      @c_authority  = @c_AllocateStrategykey_SC OUTPUT,             
+      @n_err        = @n_err       OUTPUT,             
+      @c_errmsg     = @c_errmsg    OUTPUT,             
+      @c_Option1    = @c_option1   OUTPUT,               
+      @c_Option2    = @c_option2   OUTPUT,               
+      @c_Option3    = @c_option3   OUTPUT,               
+      @c_Option4    = @c_option4   OUTPUT,               
+      @c_Option5    = @c_option5   OUTPUT                
+
+   SELECT @c_ExpectedQtyFlag = dbo.fnc_GetParamValueFromString('@c_ExpectedQtyFlag', @c_Option5, @c_ExpectedQtyFlag)
+   SELECT @c_UpdateUsedQty = dbo.fnc_GetParamValueFromString('@c_UpdateUsedQty', @c_Option5, @c_UpdateUsedQty)
+   
+   --NJOW01 E
    
    IF ISNULL(@c_AllocateStrategykey,'') = ''
    BEGIN
-      SELECT @c_AllocateStrategykey = dbo.fnc_GetRight(@c_aFacility, @c_aStorerkey, '', 'KitAllocateStrategykey') 
+     	SET @c_AllocateStrategykey = @c_AllocateStrategykey_SC  --NJOW01
+      --SELECT @c_AllocateStrategykey = dbo.fnc_GetRight(@c_aFacility, @c_aStorerkey, '', 'KitAllocateStrategykey') 
       
-      IF ISNULL(@c_AllocateStrategykey,'') = '0'
+      IF ISNULL(@c_AllocateStrategykey,'') IN('0','1')
          SET @c_AllocateStrategykey = ''
    END         
    
@@ -810,7 +863,53 @@ BEGIN
    END
    CLOSE KITLINES_CUR
    DEALLOCATE KITLINES_CUR
-
+   
+   --NJOW01
+   --Update used qty 
+   IF @n_continue IN(1,2) AND @c_UpdateUsedQty = 'Y' AND @c_ExpectedQtyFlag = 'Y' AND @c_LineAllocated > 0
+   BEGIN
+      UPDATE KITDETAIL WITH (ROWLOCK)
+      SET Qty = ExpectedQty,
+          TrafficCop = NULL 
+      WHERE Kitkey = @c_KitKey 
+      AND (
+            (Type = 'F'
+             AND Lot <> ''
+             AND Lot IS NOT NULL
+             AND ExpectedQty > 0
+             AND Qty = 0)
+         OR (Type = 'T'
+             AND ExpectedQty > 0
+             AND Qty = 0)
+           )
+                                                  
+      SELECT @n_err = @@ERROR                
+      
+      IF @n_err <> 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 63530   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kitdetail Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
+		  END   	            
+   END
+         
+   --NJOW01      
+   IF @n_continue IN(1,2) AND @c_LineAllocated > 0
+   BEGIN
+      EXEC isp_PostKitAllocation_Wrapper 
+            @c_KitKey        = @c_KitKey 
+          , @b_Success       = @b_Success OUTPUT 
+          , @n_Err           = @n_Err     OUTPUT 
+          , @c_ErrMsg        = @c_ErrMsg  OUTPUT 
+      
+      IF @b_Success <> 1
+      BEGIN
+         SET @n_continue = 3
+         SET @c_errmsg = 'isp_Kit_Allocation : ' + RTRIM(@c_errmsg) 
+         GOTO EXIT_SP
+      END
+   END
+   
    EXIT_SP:
    
    IF @n_continue IN(1,2)
@@ -832,7 +931,7 @@ BEGIN
       	  IF @n_err <> 0
       	  BEGIN
              SET @n_continue = 3
-             SET @n_err = 63530   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SET @n_err = 63540   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
              SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kit Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	  END   	      
    	   END             
@@ -949,7 +1048,7 @@ BEGIN
       	 IF @n_err <> 0
       	 BEGIN
             SET @n_continue = 3
-            SET @n_err = 63540   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63550   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kitdetail Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	 END
 		   	 
@@ -1012,7 +1111,9 @@ BEGIN
          	Lottable12,
          	Lottable13,
          	Lottable14,
-         	Lottable15
+         	Lottable15,
+         	Channel,
+         	Channel_ID
          )
          SELECT
          	KITDETAIL.KITKey,
@@ -1045,7 +1146,9 @@ BEGIN
          	KITDETAIL.Lottable12,
          	KITDETAIL.Lottable13,
          	KITDETAIL.Lottable14,
-         	KITDETAIL.Lottable15
+         	KITDETAIL.Lottable15,
+         	KITDETAIL.Channel,
+         	KITDETAIL.Channel_ID
          FROM KITDETAIL (NOLOCK) 
          WHERE KITDETAIL.kitkey = @c_aKitkey
          AND KITDETAIL.KitLineNumber = @c_KitLineNumber
@@ -1055,7 +1158,7 @@ BEGIN
       	 IF @n_err <> 0
       	 BEGIN
             SET @n_continue = 3
-            SET @n_err = 63550   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63560   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Insert Kitdetail Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	 END      	 
 		   	 
@@ -1089,7 +1192,7 @@ BEGIN
       	 IF @n_err <> 0
       	 BEGIN
             SET @n_continue = 3
-            SET @n_err = 63560   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63570   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kitdetail Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	 END
           
@@ -1123,9 +1226,11 @@ BEGIN
       IF @n_err <> 0
       BEGIN
          SET @n_continue = 3
-         SET @n_err = 63570   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @n_err = 63580   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
          SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update KITDETAIL Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		  END      	 
+		  
+		  SET @c_LineAllocated = @c_LineAllocated + 1 --NJOW01
       
       FETCH NEXT FROM CUR_KITDET_UPDATE INTO @c_kitLineNumber, @n_Qty            
    END
@@ -1143,12 +1248,6 @@ BEGIN
    GOTO RETURNFROMUPDATEINV 
 END
 GO    
-      
-SET QUOTED_IDENTIFIER OFF 
-GO    
-SET ANSI_NULLS OFF 
-GO    
-      
 GRANT EXECUTE ON isp_Kit_Allocation to nSQL
 GO    
       
