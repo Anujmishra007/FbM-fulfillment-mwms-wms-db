@@ -36,6 +36,7 @@ GO
 /* 24-JAN-2014   YTWan         SOS#300785 - [GIGA] Change request on    */
 /*                             RCM Report - Count Sheet (Wan01)         */
 /* 22-MAY-2014   CSCHONG       Added Lottables 06-15 (CS01)             */
+/* 12-MAY-2021   Mingle        Added showlot08 and showlot12(ML01)      */
 /************************************************************************/
 
 CREATE PROC ispGetStockTakeSheet (
@@ -114,6 +115,8 @@ cckey NVARCHAR(10) null
 , Lottable13 datetime null				--(CS01)
 , Lottable14 datetime null				--(CS01)
 , Lottable15 datetime null				--(CS01)
+, showlot08 NVARCHAR(30) NULL		--(ML01)
+, showlot12 NVARCHAR(30) NULL		--(ML01)
 )
 
  -- prepare result table
@@ -153,6 +156,8 @@ INSERT INTO #RESULT
 , Lottable13		--(CS01)
 , Lottable14		--(CS01)
 , Lottable15		--(CS01)
+, showlot08		--(ML01)
+, showlot12		--(ML01)
 )
  SELECT CCDETAIL.CCKey,  -- SOS63326
   CCDETAIL.ccsheetno,
@@ -253,8 +258,10 @@ INSERT INTO #RESULT
            WHEN '1' THEN CCDETAIL.lottable15
            WHEN '2' THEN CCDETAIL.lottable15_Cnt2
            WHEN '3' THEN CCDETAIL.lottable15_Cnt3
-      END as Lottable15
+      END as Lottable15,
 		/*CS01 END*/
+      showlot08 = CASE WHEN CCDETAIL.StorerKey = 'IDSMED' THEN Lottable08 ELSE Lottable02 END,		--(ML01)
+      showlot12 = CASE WHEN CCDETAIL.StorerKey = 'IDSMED' THEN Lottable12 ELSE SKU.SkuGroup END		--(ML01)
  FROM CCDETAIL (NOLOCK)
  LEFT OUTER JOIN  LOC (NOLOCK) ON (LOC.loc = CCDETAIL.loc)
  LEFT OUTER JOIN  SKU (NOLOCK) ON (CCDETAIL.StorerKey = SKU.StorerKey AND CCDETAIL.SKU = SKU.SKU)
@@ -437,7 +444,9 @@ SELECT
 #RESULT.Lottable12,		--(CS01)
 #RESULT.Lottable13,		--(CS01)
 #RESULT.Lottable14,		--(CS01)
-#RESULT.Lottable15		--(CS01)
+#RESULT.Lottable15,		--(CS01)
+#RESULT.showlot08,		--(ML01)
+#RESULT.showlot12		--(ML01)
 FROM #RESULT
 JOIN  #RESULT1 ON (#RESULT.cckey = #RESULT1.CCKEy1) --ang01 End
    WHERE (StorerKey BETWEEN @c_StorerKey_Start AND @c_StorerKey_End OR ISNULL(Storerkey,'')='') --NJOW02
