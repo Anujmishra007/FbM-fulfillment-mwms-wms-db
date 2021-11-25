@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 26-OCT-2021 CSCHONG  1.0   Devops Scripts combine                    */
 /* 15-NOV-2021 CSCHONG  1.1   WMS-18355 revised logic (CS01)            */
+/* 22-Nov-2021 CSCHONG  1.2   WMs-18355 remove update pickdetail (CS02) */
 /************************************************************************/  
 CREATE  PROCEDURE [dbo].[ispCTNLBLITF04]  
       @c_Pickslipno   NVARCHAR(10)       
@@ -272,7 +273,8 @@ BEGIN
          END  
 
          UPDATE PackDetail WITH (ROWLOCK)  
-          SET labelno = @c_ExtOrderkey, refno = @c_ExtOrderkey
+          --SET labelno = @c_ExtOrderkey, refno = @c_ExtOrderkey    --CS02
+          SET  refno = @c_ExtOrderkey
          ,EditWho = SUSER_SNAME()  
          ,EditDate= GETDATE()  
          WHERE PickSlipNo = @c_PickSlipNo  
