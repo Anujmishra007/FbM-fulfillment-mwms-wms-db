@@ -20,7 +20,7 @@ GO
 /*                                                                      */  
 /* Called By: ReleaseWave_SP                                            */  
 /*          :                                                           */  
-/* PVCS Version: 2.0                                                    */  
+/* PVCS Version: 2.1                                                    */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -49,9 +49,12 @@ GO
 /* 2020-09-23  Wan02    1.8   Sku Bundle CR                             */          
 /* 2020-09-19  NJOW01   1.9   WMS-15204 change taskdetail mapping       */  
 /* 2020-11-27  Wan03    2.0   Add SkuStdGrossWgt TO #PICKDETAIL_WIP     */   
-/* 2021-03-08  Bee Tin        INC1444738-commented @c_TransitLoc =       */
+/* 2021-03-08  Bee Tin        INC1444738-commented @c_TransitLoc =      */
 /*                            'NK'+LTRIM(ISNULL(LocAisle,''))           */
 /*                            added c_TransitLoc = PICKZONE.InLoc       */
+/* 2021-09-24  Wan04    2.1   DevOps Combine Script                     */
+/* 2021-05-12  Wan04    2.1   WMS-16805-NIKE-PH Cartonization Enhancement*/
+/* 2021-10-28  Wan05    2.1   WMS-16805 CR 2.0 - Add Validation         */
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV20]  
         @c_wavekey      NVARCHAR(10)    
@@ -133,18 +136,23 @@ BEGIN
          , @n_CaseCnt            FLOAT = 0.00                     --(Wan09)   
          , @c_Wavekey_PD         NVARCHAR(10) = ''                --(Wan09)   
          
-        -- , @c_DPPPKZone_Last     NVARCHAR(10) = ''                --(Wan09)    
+        -- , @c_DPPPKZone_Last     NVARCHAR(10) = ''              --(Wan09)    
          , @c_logicalloc         NVARCHAR(10) = ''                --(Wan09)  
          , @c_logicallocStart    NVARCHAR(10) = ''                --(Wan09)  
            
-        -- , @c_LastDPLoc          NVARCHAR(10) = ''                --(Wan09)  
-        -- , @c_LastDPLogicalLoc   NVARCHAR(10) = ''                --(Wan09)   
-         , @n_LocQty             INT          = 0                    --(Wan09)   
-         , @b_UpdMultiWave       BIT          = 0                    --(Wan11)   
+        -- , @c_LastDPLoc          NVARCHAR(10) = ''              --(Wan09)  
+        -- , @c_LastDPLogicalLoc   NVARCHAR(10) = ''              --(Wan09)   
+         , @n_LocQty             INT          = 0                 --(Wan09)   
+         , @b_UpdMultiWave       BIT          = 0                 --(Wan11)   
          , @b_DirectGenPickSlip  INT          = 0      -- INC0924060               
          , @c_TransitLoc         NVARCHAR(10)  --NJOW01  
          , @c_FinalLoc           NVARCHAR(10)  --NJOW01  
-         , @c_FinalID            NVARCHAR(18)  --NJOW01  
+         , @c_FinalID            NVARCHAR(18)  --NJOW01 
+                                               --
+         , @n_Found              INT          = 0                 --(Wan04)
+         , @c_Release_Opt5       NVARCHAR(500)= ''                --(Wan04)
+         , @c_LooseBundleCheck   NVARCHAR(10) = ''                --(Wan04)
+         , @c_Loc                NVARCHAR(10) = ''                --(Wan04)
      
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -525,19 +533,68 @@ BEGIN
    --(Wan09) - END       
     
    --(Wan15) - START  
-   IF EXISTS ( SELECT 1 FROM #TMP_PICK TP   
-               JOIN SKU WITH (NOLOCK) ON  TP.Storerkey = SKU.Storerkey  
-                                    AND TP.Sku = SKU.Sku  
-               WHERE (SKU.StdCube = 0.00 OR SKU.StdGrossWgt = 0.00)  
-             )  
+   --IF EXISTS ( SELECT 1 FROM #TMP_PICK TP                                -- (Wan04) - START
+   --            JOIN SKU WITH (NOLOCK) ON  TP.Storerkey = SKU.Storerkey  
+   --                                   AND TP.Sku = SKU.Sku  
+   --            WHERE (SKU.StdCube = 0.00 OR SKU.StdGrossWgt = 0.00)  
+   --          )  
+    SELECT TOP 1 @c_Sku = TP.Sku  
+               , @n_Found =  CASE WHEN s.[Length] = 0.00 THEN 1
+                                  WHEN s.Width = 0.00 THEN 1
+                                  WHEN s.Height = 0.00 THEN 1
+                                  WHEN s.STDCUBE = 0.00 THEN 1
+                                  WHEN s.STDGROSSWGT = 0.00 THEN 1                                 
+                                  ELSE 0 
+                                  END
+   FROM #TMP_PICK TP   
+   JOIN SKU AS s WITH (NOLOCK) ON  TP.Storerkey = s.Storerkey  
+                              AND TP.Sku = s.Sku                 
+     
+   IF @n_Found = 1                                                         -- (Wan04) - END
    BEGIN  
       SET @n_Continue = 3  
       SET @n_Err = 81215  
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Sku not setup either StdCube or StdGrossWgt in sku master found.  (ispRLWAV20)'  
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found Sku Length, Width, Height, StdCube, StdGrossWgt not setup. Sku: ' + @c_Sku    --(Wan04)
+                   +'. (ispRLWAV20)'                                                                                                         --(Wan04)
+      --SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Sku not setup either StdCube or StdGrossWgt in sku master found.  (ispRLWAV20)'  --(Wan04)
       GOTO QUIT_SP  
-   END     
-   --(Wan15) - END      
-  
+   END
+   
+   SET @c_Sku = ''                                                         --(Wan04)
+   --(Wan15) - END  
+   
+   --(Wan04)-START
+   SELECT @c_Release_Opt5 = fgr.Option5 FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP' ) AS fgr  
+   
+   SET @c_LooseBundleCheck = 'N'              
+   SELECT @c_LooseBundleCheck = dbo.fnc_GetParamValueFromString('@c_LooseBundleCheck', @c_Release_Opt5, @c_LooseBundleCheck)   
+   IF @c_LooseBundleCheck = 'Y'
+   BEGIN
+      SET @n_Found = 0
+      SET @c_Loc = ''
+      SET @c_Orderkey = ''
+      SELECT TOP 1 @n_Found = 1, @c_Sku = p.Sku, @c_Loc = MIN(l.loc), @c_Orderkey = p.OrderKey
+      FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)
+      JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = w.OrderKey
+      JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = p.Loc
+      JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = p.Storerkey AND s.Sku = p.Sku
+      WHERE w.WaveKey = @c_wavekey
+      AND s.PackQtyIndicator > 1
+      GROUP BY p.Orderkey, p.Storerkey, p.Sku, l.LoseUCC, s.PackQtyIndicator
+      HAVING (SUM(p.Qty) % s.PackQtyIndicator) > 0
+
+      IF @n_Found = 1
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err = 81217  
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Loose Bundle Found. Sku: ' + @c_Sku + ', Loc: ' + @c_Loc + ', Orderkey: ' + @c_Orderkey
+                      +'. (ispRLWAV20)'                                                                                                  
+         GOTO QUIT_SP  
+      END
+      SET @c_Orderkey = ''
+   END   
+   --(Wan04)-END
+   
    --(Wan16) - START --2020-07-10  
    IF EXISTS ( SELECT 1  
                FROM #TMP_PICK TP  
@@ -1929,11 +1986,11 @@ BEGIN
                FROM LOC (NOLOCK)  
                JOIN PICKZONE (NOLOCK) ON LOC.Pickzone = PICKZONE.Pickzone  
                WHERE LOC.Loc = @c_Toloc 
-			   
-			      
+            
+               
                IF @c_TransitLoc IS NULL  
                   SET @c_TransitLoc = ''
-			
+         
               
             SET @c_FinalLoc = @c_LogicalToLoc  
             SET @c_FinalID = @c_ID                                               
@@ -2141,7 +2198,9 @@ BEGIN
       ,  CaseID            NVARCHAR(20) DEFAULT('')  
       ,  CartonSeqNo       INT          DEFAULT(0)  
       ,  CartonCube        FLOAT        DEFAULT(0.00)  
-      ,  [Status]          INT          DEFAULT(0)  
+      ,  [Status]          INT          DEFAULT(0) 
+      ,  ItemClass         NVARCHAR(10) DEFAULT('')      --(Wan04)
+      ,  Size              NVARCHAR(10) DEFAULT('')      --(Wan04) 
       )  
   
    EXEC ispRLWAV20_PACK  

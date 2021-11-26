@@ -38,6 +38,10 @@ GO
 /* 2020-09-04  Wan03    1.2   FBR Version 4.2 - Optimization            */
 /* 2020-11-18  Wan03    1.2   Get per piece LWH for bundle item         */
 /* 2020-11-27  Wan04    1.3   Fixed                                     */
+/* 2021-04-27  Wan05    1.4   WMS-16805-NIKE-PH Cartonization Enhancement*/
+/*             Wan06          Standardize #OptimizeItemToPack Temp Table*/
+/*                            use at isp_SubmitToCartonizeAPI           */
+/* 2021-09-27  Wan06    1.4   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC ispRLWAV20_PACK
            @c_Wavekey            NVARCHAR(10)
@@ -60,7 +64,10 @@ BEGIN
          , @b_SplitPickdetail    INT         = 0
 
          , @n_RowRef             INT         = 0
+         , @n_RowRef_Sku         INT         = 0
+         , @n_RowRef_PD          INT         = 0
          , @n_Status             INT         = 0      --0:Original, 1:Split, 2:New
+         , @b_InsSkuToPack       INT         = 0      --CR1.8
 
          , @c_Busr7_Prev         NVARCHAR(30)= ''
          , @c_LocLevel_Prev      NVARCHAR(10)= ''
@@ -90,11 +97,17 @@ BEGIN
          , @n_QtyNeedWgt         FLOAT       = 0.00
          , @n_PackedCube         FLOAT       = 0.00
          , @n_PackedWgt          FLOAT       = 0.00
-
+         , @n_ItemClass_Cube     FLOAT       = 0.00      --CR1.8
+         , @n_ItemClass_Wgt      FLOAT       = 0.00      --CR1.8
+         
          , @n_QtyCubeExceed      INT         = 0         --2020-08-22
          , @n_QtyWgtExceed       INT         = 0         --2020-08-22
          , @n_QtyToReduce        INT         = 0         --2020-08-22
          , @n_QtyToPack          INT         = 0
+         , @n_Qty_Recalc         INT         = 0         --2021-07-13 
+         , @n_Qty_PD             INT         = 0         --2021-07-13    
+         , @n_QtyToPack_REM      INT         = 0         --2021-07-13
+         , @n_QtyToPack_TTL      INT         = 0         --2021-07-13
 
          , @c_PickDetailKey      NVARCHAR(10)= ''
          , @c_Storerkey          NVARCHAR(15)= ''
@@ -125,6 +138,11 @@ BEGIN
          , @c_Facility           NVARCHAR(5) = '' --(Wan03) 2020-09-04
          , @c_NewCartonType      NVARCHAR(10)= '' --(Wan03) 2020-09-04
          , @c_CartonOptimizeChk  NVARCHAR(30)= '' --(Wan03) 2020-09-04
+         
+         , @n_AccessQty          INT         = 0  --(Wan05)
+         , @n_PickedQty          INT         = 0  --(Wan05)
+         , @c_ItemClass          NVARCHAR(10)= '' --(Wan05) 
+         , @c_Size               NVARCHAR(10)= '' --(Wan05)    
          
          , @CUR_ORD              CURSOR
          , @CUR_PD               CURSOR
@@ -173,6 +191,8 @@ BEGIN
       ,  CartonSeqNo       INT          DEFAULT(0)
       ,  CartonCube        FLOAT        DEFAULT(0.00)
       ,  [Status]          INT          DEFAULT(0)
+      ,  ItemClass         NVARCHAR(10) DEFAULT('')      --(Wan05)
+      ,  Size              NVARCHAR(10) DEFAULT('')      --(Wan05)
       )
    END
 
@@ -190,20 +210,37 @@ BEGIN
          )
    END
    --(Wan03) 2020-09-04 - START
-   IF OBJECT_ID('tempdb..#t_ItemPack','U') IS NULL
+   --IF OBJECT_ID('tempdb..#t_ItemPack','U') IS NULL
+   --BEGIN
+   --   CREATE TABLE #t_ItemPack 
+   --      (
+   --         ID          INT         IDENTITY(0,1)
+   --      ,  Storerkey   NVARCHAR(15)
+   --      ,  SKU         NVARCHAR(20)   
+   --      ,  Dim1        DECIMAL(10,6)  
+   --      ,  Dim2        DECIMAL(10,6)  
+   --      ,  Dim3        DECIMAL(10,6)  
+   --      ,  Quantity    INT 
+   --      )
+   --END
+   --(Wan03) 2020-09-04 - END
+      
+   IF OBJECT_ID('tempdb..#OptimizeItemToPack','U') IS NULL     --(Wan06)
    BEGIN
-      CREATE TABLE #t_ItemPack 
+      CREATE TABLE #OptimizeItemToPack 
          (
-            ID          INT         IDENTITY(0,1)
-         ,  Storerkey   NVARCHAR(15)
-         ,  SKU         NVARCHAR(20)   
-         ,  Dim1        DECIMAL(10,6)  
-         ,  Dim2        DECIMAL(10,6)  
-         ,  Dim3        DECIMAL(10,6)  
-         ,  Quantity    INT 
+            ID          INT                     IDENTITY(1,1)
+         ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT('') 
+         ,  SKU         NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Dim1        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
+         ,  Dim2        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
+         ,  Dim3        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
+         ,  Quantity    INT            NOT NULL DEFAULT(0)
+         ,  RowRef      INT            NOT NULL DEFAULT(0)
+         ,  OriginalQty INT            NOT NULL DEFAULT(0)
          )
    END
-   --(Wan03) 2020-09-04 - END
+
    BEGIN TRAN
 
    --(Wan03) 2020-09-04 
@@ -287,8 +324,8 @@ BEGIN
          , [Length]= ISNULL(SKU.[Length],0.00)  
          , Width   = ISNULL(SKU.Width,0.00)    
          , Height  = ISNULL(SKU.Height,0.00) 
-         , PackQtyIndicator = ISNULL(SKU.PackQtyIndicator,0)   --(Wan02)  
-         , PD.DropID  
+         , PackQtyIndicator = ISNULL(SKU.PackQtyIndicator,1)   --(Wan02)  
+         , PD.DropID
    FROM WAVEDETAIL WD WITH (NOLOCK)  
    JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey  
    JOIN ORDERS     OH WITH (NOLOCK) ON PD.Orderkey = OH.Orderkey  
@@ -299,6 +336,7 @@ BEGIN
                                          AND TD.Sourcetype IN ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC', 'ispRLWAV20-REPLEN' )   
    WHERE WD.Wavekey = @c_Wavekey
    AND   PD.UOM = '2'  
+   AND   PD.Qty > 0                 -- (Wan05)
    GROUP BY WD.Wavekey  
          , OH.Loadkey  
          , PD.Orderkey  
@@ -317,7 +355,7 @@ BEGIN
          , ISNULL(SKU.[Length],0.00)  
          , ISNULL(SKU.Width,0.00)     
          , ISNULL(SKU.Height,0.00)
-         , ISNULL(SKU.PackQtyIndicator,0)   --(Wan02)   
+         , ISNULL(SKU.PackQtyIndicator,1)   --(Wan02)   
          , PD.DropID  
    ORDER BY PD.Orderkey
          ,  MIN(PD.PickDetailKey)  
@@ -351,6 +389,8 @@ BEGIN
       ,  [Height] --2020-08-07
       ,  PackQtyIndicator  --(Wan02)
       ,  DropID 
+      ,  ItemClass                  --(Wan05)
+      ,  Size                       --(Wan05)
       )
    SELECT  WD.Wavekey
          , OH.Loadkey
@@ -370,17 +410,28 @@ BEGIN
                         * (SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube)) --2020-08-27
          , PickStdWgt  = PD.Qty / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)   --(Wan02) -- 2020-10-19
                        * SKU.StdGrossWgt
-         , StdCube = (SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube))                      --2020-08-27  
+         --(Wan05) - START CR1.8
+         --, StdCube = (SKU.StdCube + (CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END / 100.00 * SKU.StdCube))                      --2020-08-27  
                      /  (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)                   --2020-08-27 
-         , StdWgt  = SKU.StdGrossWgt /  (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)   --2020-08-27 
+         --, StdWgt  = SKU.StdGrossWgt /  (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)   --2020-08-27 
+         , StdCube = SKU.StdCube  
+         , StdWgt  = SKU.StdGrossWgt                  
+         --(Wan05) - END CR1.8
          , SkuStdCube = SKU.StdCube  
          , SkuStdGrossWgt = SKU.StdGrossWgt                 --2020-11-27
          , CubeTolerance = CASE WHEN ISNUMERIC(SKU.BUSR5) = 1 THEN SKU.BUSR5 ELSE 0 END  --2020-08-27
-         , [Length]= ISNULL(SKU.[Length],0.00) / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
-         , Width   = ISNULL(SKU.Width,0.00)    / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
-         , Height  = ISNULL(SKU.Height,0.00)   / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
-         , PackQtyIndicator = ISNULL(SKU.PackQtyIndicator,0)   --(Wan02)
+         --(Wan05) - START CR1.8
+         --, [Length]= ISNULL(SKU.[Length],0.00) / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
+         --, Width   = ISNULL(SKU.Width,0.00)    / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
+         --, Height  = ISNULL(SKU.Height,0.00)   / (1.00 * CASE WHEN ISNULL(SKU.PackQtyIndicator,0) <= 1 THEN 1 ELSE ISNULL(SKU.PackQtyIndicator,0) END)  --(Wan03) 2020-11-18  
+         , [Length]= ISNULL(SKU.[Length],0.00)  
+         , Width   = ISNULL(SKU.Width,0.00)    
+         , Height  = ISNULL(SKU.Height,0.00)
+         --(Wan05) - END CR1.8
+         , PackQtyIndicator = ISNULL(SKU.PackQtyIndicator,1) 
          , PD.DropID
+         , ItemClass = ISNULL(SKU.ItemClass,'')                --(Wan05)
+         , Size      = ISNULL(SKU.Size,'')                     --(Wan05) 
    FROM WAVEDETAIL WD WITH (NOLOCK)
    JOIN PICKDETAIL PD WITH (NOLOCK) ON WD.Orderkey = PD.Orderkey
    JOIN ORDERS     OH WITH (NOLOCK) ON PD.Orderkey = OH.Orderkey
@@ -391,8 +442,9 @@ BEGIN
                                          AND TD.Sourcetype IN ( 'ispRLWAV20-INLINE', 'ispRLWAV20-DTC', 'ispRLWAV20-REPLEN' )  --(Wan01)
    WHERE WD.Wavekey = @c_WaveKey
    AND   PD.UOM IN ('6', '7')             --(Wan01) 2020-10-01
+   AND   PD.Qty > 0                       --(Wan05)   Get Qty > 0 as Floor(qty/PackQtyIndicator) may have 0 and pickqty = 0 tp process loose qty
    ORDER BY PD.Orderkey
-
+        
    UPDATE #PICKDETAIL_WIP
       SET LocLevel = L.LocLevel
          ,Logicallocation = L.LogicalLocation
@@ -426,13 +478,21 @@ BEGIN
    WHERE CZ.CartonizationGroup = @c_CartonGroup
    ORDER BY [Cube]
            ,MaxWeight 
+          
+   --(Wan05) - START  
+   SET @n_AccessQty = 0      
+   SELECT @n_AccessQty = ISNULL(CL.Short,0)
+   FROM CODELKUP CL WITH (NOLOCK) 
+   WHERE CL.ListName = 'NIKPHCZCFG'  
+   AND CL.Code = 'AccessValue' 
+   --(Wan05) - END                            
 
    SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT  PD.Orderkey
          , PD.Loadkey
          , PD.[Route]
          , PD.ExternOrderkey
-   FROM #PICKDETAIL_WIP PD
+   FROM #PICKDETAIL_WIP PD   
    GROUP BY PD.Orderkey
          ,  PD.Loadkey
          ,  PD.[Route]
@@ -447,168 +507,369 @@ BEGIN
                               ,  @c_ExternOrderkey
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-      SET @b_NewCarton = 1
-
-      SET @n_CartonSeqNo = 0
-      SET @c_Busr7_Prev = ''
-      SET @c_LocLevel_Prev = ''
-
       IF @n_debug = 1
       BEGIN
          PRINT '@c_Orderkey: ' + @c_Orderkey
       END
 
-      GET_PICK_REC:
-      SET @CUR_PD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT PD.RowRef
-            ,PD.Storerkey
-            ,PD.Sku
-            ,PD.PickStdCube
-            ,PD.PickStdGrossWgt
-            ,PD.StdCube
-            ,PD.StdGrossWgt
-            ,PD.Qty
-            ,PD.UOM
-            ,PD.Busr7
-            ,PD.LocLevel
-            ,PD.PackQtyIndicator                                  --(Wan02)          
-      FROM #PICKDETAIL_WIP PD
-      WHERE PD.Orderkey = @c_Orderkey
-      AND   PD.UOM IN ('2','6','7')
-      AND   PD.CartonType = ''
-      ORDER BY CASE WHEN PD.UOM = 2 THEN 1 ELSE 9 END
-            ,  PD.Busr7
-            ,  PD.LocLevel
-            ,  PD.LogicalLocation   
-            ,  PD.Sku
+      --------------------------------------------
+      -- UOM = '2' 
+      --------------------------------------------
+      SET @c_DropID = ''
 
-      OPEN @CUR_PD
-   
-      FETCH NEXT FROM @CUR_PD INTO @n_RowRef
-                                 , @c_Storerkey
-                                 , @c_Sku
-                                 , @n_PickStdCube
-                                 , @n_PickStdGrossWgt
-                                 , @n_StdCube
-                                 , @n_StdGrossWgt
-                                 , @n_Qty
-                                 , @c_UOM
-                                 , @c_Busr7
-                                 , @c_LocLevel 
-                                 , @n_PackQtyIndicator   --(Wan02)                                 
-      WHILE @@FETCH_STATUS <> -1
+      WHILE 1=1
       BEGIN
-         IF @n_debug = 1
+         SELECT TOP 1 @c_DropID = PD.DropID
+                  ,  @n_PickStdCube = SUM(PD.PickStdCube)
+                  ,  @n_PickStdGrossWgt = SUM(PD.PickStdGrossWgt)                 
+         FROM #PICKDETAIL_WIP PD
+         WHERE PD.Orderkey = @c_Orderkey
+         AND   PD.UOM = '2'
+         AND   PD.CartonType = ''
+         GROUP BY PD.Busr7
+               ,  PD.LocLevel
+               ,  PD.LogicalLocation
+               ,  PD.DropID            
+         ORDER BY PD.Busr7
+               ,  PD.LocLevel
+               ,  PD.LogicalLocation
+               ,  PD.DropID                                
+        
+         IF @c_DropID = '' OR @@ROWCOUNT = 0 
          BEGIN
-            PRINT '@n_RowRef: ' + CAST(@n_RowRef AS NVARCHAR)
-                  +', @c_UOM:' +  @c_UOM 
-                  +', @c_Busr7:' +  @c_Busr7
-                  +', @c_LocLevel: ' + @c_LocLevel
+            BREAK
          END
+         
+         SET @n_CartonSeqNo = @n_CartonSeqNo + 1
+         
+         SET @c_CartonType = ''
+         SET @n_MaxCube = 0
+         SET @n_MaxWeight = 0
+         
+         SELECT TOP 1 @c_CartonType = CG.CartonType
+                     ,@n_MaxCube    = CG.[Cube]
+                     ,@n_MaxWeight  = CG.MaxWeight
+         FROM #NikeCTNGroup CG
+         WHERE [Cube]  >= @n_PickStdCube
+         AND MaxWeight >= @n_PickStdGrossWgt
+         ORDER BY RowRef 
 
-         SET @n_Status = 0
-
-         IF @c_UOM = '2'
+         IF @c_CartonType = ''
          BEGIN
-            SET @n_QtyToPack = @n_Qty
-            SET @c_CartonType = ''
             SELECT TOP 1 @c_CartonType = CG.CartonType
                         ,@n_MaxCube    = CG.[Cube]
                         ,@n_MaxWeight  = CG.MaxWeight
             FROM #NikeCTNGroup CG
-            WHERE [Cube]  >= @n_PickStdCube
-            AND MaxWeight >= @n_PickStdGrossWgt
-            ORDER BY RowRef 
-
-            IF @c_CartonType = ''
-            BEGIN
-               SELECT TOP 1 @c_CartonType = CG.CartonType
-                           ,@n_MaxCube    = CG.[Cube]
-                           ,@n_MaxWeight  = CG.MaxWeight
-               FROM #NikeCTNGroup CG
-               ORDER BY RowRef DESC
-            END
-
-            SET @n_CartonSeqNo = @n_CartonSeqNo + 1
-
-            SET @c_Busr7_Prev = ''
-            SET @c_LocLevel_Prev = ''
+            ORDER BY RowRef DESC
          END
-         ELSE
+         
+         IF @n_debug = 1
          BEGIN
-            IF @c_Busr7_Prev <> @c_Busr7 OR
-               @c_LocLevel_Prev <> @c_LocLevel
+            PRINT '@c_CartonType: ' + @c_CartonType
+               + ', @c_LocLevel: '+ @c_LocLevel
+               + ', @n_CartonSeqNo: ' + CAST (@n_CartonSeqNo AS NVARCHAR) 
+         END
+                
+         SET @CUR_PD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT PD.RowRef
+         FROM #PICKDETAIL_WIP PD
+         WHERE PD.Orderkey = @c_Orderkey
+         AND   PD.UOM = '2'
+         AND   PD.DropID = @c_DropID
+         AND   PD.CartonType = ''
+         ORDER BY PD.RowRef
+         
+         OPEN @CUR_PD
+   
+         FETCH NEXT FROM @CUR_PD INTO @n_RowRef
+                         
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            IF @n_debug = 1
             BEGIN
-               SET @b_NewCarton = 1
+               PRINT '@n_RowRef: ' + CAST(@n_RowRef AS NVARCHAR)
+                     +', @c_UOM:' +  @c_UOM 
+                     +', @c_Busr7:' +  @c_Busr7
+                     +', @c_LocLevel: ' + @c_LocLevel
             END
+           
+            UPDATE #PICKDETAIL_WIP
+            Set  CartonType = @c_CartonType
+               , CartonSeqNo= @n_CartonSeqNo
+               , CartonCube = @n_MaxCube
+            WHERE RowRef    = @n_RowRef  
+
+            FETCH NEXT FROM @CUR_PD INTO @n_RowRef
+         END
+         CLOSE @CUR_PD
+         DEALLOCATE @CUR_PD
+      END
+      --------------------------------------------
+      -- UOM = '2' 
+      --------------------------------------------
+ 
+      --------------------------------------------
+      -- UOM IN ('6','7') 
+      --------------------------------------------
+      
+      SET @b_NewCarton = 1
+
+      --SET @n_CartonSeqNo = 0
+      SET @c_Busr7_Prev = ''
+      SET @c_LocLevel_Prev = ''
+      
+      SET @n_PickedQty = CASE WHEN @n_AccessQty > 0 THEN @n_AccessQty ELSE 1 END
+
+      WHILE 1=1
+      BEGIN
+         SET @n_RowRef = 0
+         ;WITH PD ( RowRef, Storerkey, Sku, ItemClass, SIZE, Busr7, LocLevel, Sku_Qty) AS
+         (  SELECT RowRef = MIN(PD.RowRef)  
+                  ,  PD.Storerkey  
+                  ,  PD.Sku  
+                  ,  PD.ItemClass  
+                  ,  PD.Size  
+                  ,  PD.Busr7  
+                  ,  PD.LocLevel 
+                  ,  SKU_QTY = SUM(FLOOR(PD.Qty/PD.PackQtyIndicator))       
+            FROM #PICKDETAIL_WIP PD  
+            WHERE PD.Orderkey = @c_Orderkey  
+            AND   PD.UOM IN ('6','7')  
+            AND   PD.CartonType = ''  
+            GROUP BY PD.Storerkey  
+                  ,  PD.Sku  
+                  ,  PD.ItemClass  
+                  ,  PD.Size  
+                  ,  PD.Busr7  
+                  ,  PD.LocLevel 
+         )           
+         SELECT TOP 1   
+                    @n_RowRef = MIN(PD.RowRef)  
+                  , @c_ItemClass = PD.ItemClass  
+                  , @c_Size = PD.Size  
+                  , @c_Busr7 = PD.Busr7  
+                  , @c_LocLevel = PD.LocLevel             
+         FROM  PD  
+         WHERE PD.Sku_Qty > @n_PickedQty                                                           
+         GROUP BY PD.Busr7  
+               ,  PD.LocLevel  
+               ,  PD.ItemClass                                          
+               ,  PD.Size   
+                                                  
+         ORDER BY PD.Busr7  
+               ,  PD.LocLevel  
+               ,  PD.ItemClass                                          
+               ,  PD.Size  
+
+         IF @n_RowRef = 0 OR @@ROWCOUNT = 0 
+         BEGIN
+            IF @n_PickedQty = 0
+            BEGIN
+               BREAK
+            END   
+            
+            SET @n_PickedQty = 0 --2021-05-25 Fixed. Floor (qty/packqtyindicator) may have 0 qty
+            SET @b_NewCarton = 1 --2021-07-13 fixed, New Carton If Change Access Qty
+            CONTINUE
+         END
+         
+         IF @c_Busr7_Prev <> @c_Busr7 OR
+            @c_LocLevel_Prev <> @c_LocLevel
+         BEGIN
+            SET @b_NewCarton = 1
+         END
+         
+         SET @c_Busr7_Prev = @c_Busr7 
+         SET @c_LocLevel_Prev = @c_LocLevel
+         
+         SET @b_SplitPickdetail = 0
+       
+         GET_PICK_REC:
+         SET @CUR_PD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT RowRef_Sku = MIN(PD.RowRef)  
+               ,PD.Storerkey  
+               ,PD.Sku  
+               ,PickStdCube     = SUM(PD.Qty) / (1.00 * PD.PackQtyIndicator)   
+                                * (PD.SKUStdCube + (PD.CubeTolerance / 100.00 * PD.SKUStdCube)) 
+               ,PickStdGrossWgt = SUM(PD.Qty) / (1.00 * PD.PackQtyIndicator)  
+                                * PD.SKUStdGrossWgt   
+               ,PD.StdCube  
+               ,PD.StdGrossWgt  
+               ,Qty = SUM(PD.Qty) 
+               ,PD.UOM  
+               ,PD.PackQtyIndicator                                  --(Wan02)         
+         FROM #PICKDETAIL_WIP PD  
+         WHERE PD.Orderkey = @c_Orderkey  
+         AND   PD.UOM IN ('6','7')  
+         AND   PD.CartonType = ''  
+         AND   PD.ItemClass = @c_ItemClass                           --(Wan05)   
+         AND   PD.Size = @c_Size                                     --(Wan05)   
+         AND   PD.Busr7 = @c_Busr7    
+         AND   PD.LocLevel = @c_LocLevel  
+         GROUP BY PD.Storerkey                                       --(Wan05) - Add Grou By And Having
+               ,  PD.Sku  
+               ,  PD.StdCube  
+               ,  PD.StdGrossWgt  
+               ,  PD.SkuStdCube  
+               ,  PD.SkuStdGrossWgt 
+               ,  PD.CubeTolerance                
+               ,  PD.UOM  
+               ,  PD.PackQtyIndicator                                                                                                                
+         HAVING SUM(FLOOR(PD.Qty/PD.PackQtyIndicator)) > @n_PickedQty  
+         ORDER BY SUM(PD.Qty) DESC                                   --(Wan05)  
+               ,  PD.Sku  
+
+         OPEN @CUR_PD
+   
+         FETCH NEXT FROM @CUR_PD INTO @n_RowRef_Sku  
+                                    , @c_Storerkey
+                                    , @c_Sku
+                                    , @n_PickStdCube
+                                    , @n_PickStdGrossWgt
+                                    , @n_StdCube
+                                    , @n_StdGrossWgt
+                                    , @n_Qty
+                                    , @c_UOM
+                                    , @n_PackQtyIndicator   --(Wan02)   
+                          
+         WHILE @@FETCH_STATUS <> -1 AND @b_SplitPickdetail = 0    --2021-06-10 fixed to process new split record again
+         BEGIN
+            --(Wan05) - START CR1.8
+            IF @n_Qty >= @n_PackQtyIndicator
+            BEGIN
+               SET @n_Qty = FLOOR(@n_Qty/@n_PackQtyIndicator) * @n_PackQtyIndicator       
+            END
+            --(Wan05) - END CR1.8
+            
+            IF @n_debug = 1
+            BEGIN
+               PRINT '@n_RowRef_Sku: ' + CAST(@n_RowRef_Sku AS NVARCHAR)
+                     +', @c_UOM:' +  @c_UOM 
+                     +', @c_Busr7:' +  @c_Busr7
+                     +', @c_LocLevel: ' + @c_LocLevel
+            END
+            SET @n_Status = 0
 
             IF @n_debug = 1
             BEGIN
                PRINT '@c_Sku: ' + @c_Sku
                   + ', @n_StdCube: ' + CAST (@n_StdCube as NVARCHAR)
                   + ', @n_StdGrossWgt: '+ CAST (@n_StdGrossWgt as NVARCHAR)
-                  + ', @n_Qty: ' + CAST (@n_Qty AS NVARCHAR)                    
+                  + ', @n_Qty: ' + CAST (@n_Qty AS NVARCHAR) 
+                  + ', @b_NewCarton: ' + CAST (@b_NewCarton AS NVARCHAR)    
+                  + ', @n_PickedQty: ' + CAST (@n_PickedQty AS NVARCHAR)                       
             END
    
             IF @b_NewCarton = 0
             BEGIN
-               SET @n_QtyNeedCube = FLOOR( @n_AvailableCube / @n_StdCube )
-               SET @n_QtyNeedWgt  = FLOOR( @n_AvailableWgt / @n_StdGrossWgt )
-
-               IF @n_debug = 1
+               IF @c_CartonOptimizeChk = '1'       --(Wan05) - 2021-07-26 Let API to calculate   
                BEGIN
-                  PRINT '@c_Sku: ' + @c_Sku
-                     + ', @n_AvailableCube: ' + CAST (@n_AvailableCube as NVARCHAR)
-                     + ', @n_QtyNeedCube: '+ CAST (@n_QtyNeedCube as NVARCHAR)
-                     + ', @n_AvailableWgt: ' + CAST (@n_AvailableWgt as NVARCHAR)
-                     + ', @n_QtyNeedWgt: '+ CAST (@n_QtyNeedWgt as NVARCHAR)
-                     + ', @c_CartonOptimizeChk: ' + @c_CartonOptimizeChk
+                  SET @n_QtyToPack = @n_Qty
                END
-
-               SET @n_QtyToPack = 0
-               IF @n_QtyNeedCube > 0 AND @n_QtyNeedWgt > 0
+               ELSE
                BEGIN
-                  IF @n_QtyNeedCube > @n_QtyNeedWgt
-                  BEGIN
-                     SET @n_QtyToPack = @n_QtyNeedWgt
+                  --CR1.8 - START
+                  IF EXISTS ( SELECT 1  
+                              FROM #PICKDETAIL_WIP p
+                              WHERE p.CartonType = @c_CartonType
+                              AND p.CartonSeqNo  = @n_CartonSeqNo
+                              AND p.orderkey = @c_Orderkey 
+                              AND p.ItemClass <> @c_ItemClass
+                  )
+                  BEGIN 
+                     SET @n_ItemClass_Cube = 0.00
+                     SET @n_ItemClass_Wgt  = 0.00
+                     SELECT @n_ItemClass_Cube = SUM(p.PickStdCube)
+                           ,@n_ItemClass_Wgt  = SUM(p.PickStdGrossWgt)
+                     FROM #PICKDETAIL_WIP p
+                     WHERE p.orderkey = @c_Orderkey 
+                     AND   p.CartonType   = ''
+                     AND   p.CartonSeqNo  = ''
+                     AND   P.ItemClass = @c_ItemClass
+                     AND   p.Busr7 = @c_Busr7            --2021-10-22
+                     AND   p.LocLevel = @c_LocLevel      --2021-10-22
+                     GROUP BY P.ItemClass
+                  
+                     IF @n_QtyNeedCube <> @n_ItemClass_Cube OR @n_QtyNeedWgt < @n_ItemClass_Wgt -- New Itemclass cannot fully fit into current box
+                     BEGIN 
+                        SET @b_NewCarton = 1  
+                        GOTO NEW_CARTON
+                     END 
                   END
-                  ELSE
+                  --CR1.8 - END
+
+                  SET @n_QtyNeedCube = FLOOR( @n_AvailableCube / @n_StdCube ) * @n_PackQtyIndicator         --(Wan05)
+                  SET @n_QtyNeedWgt  = FLOOR( @n_AvailableWgt / @n_StdGrossWgt ) * @n_PackQtyIndicator      --(Wan05)
+
+                  IF @n_debug = 1
                   BEGIN
-                     SET @n_QtyToPack = @n_QtyNeedCube
+                     PRINT '@c_Sku: ' + @c_Sku
+                        + ', @n_AvailableCube: ' + CAST (@n_AvailableCube as NVARCHAR)
+                        + ', @n_QtyNeedCube: '+ CAST (@n_QtyNeedCube as NVARCHAR)
+                        + ', @n_AvailableWgt: ' + CAST (@n_AvailableWgt as NVARCHAR)
+                        + ', @n_QtyNeedWgt: '+ CAST (@n_QtyNeedWgt as NVARCHAR)
+                        + ', @c_CartonOptimizeChk: ' + @c_CartonOptimizeChk
                   END
 
-                  --2020-10-12
-                  IF @n_QtyToPack > @n_Qty 
+                  SET @n_QtyToPack = 0
+                  IF @n_QtyNeedCube > 0 AND @n_QtyNeedWgt > 0
                   BEGIN
-                     SET @n_QtyToPack = @n_Qty
-                  END
-               END
+                     IF @n_QtyNeedCube > @n_QtyNeedWgt
+                     BEGIN
+                        SET @n_QtyToPack = @n_QtyNeedWgt
+                     END
+                     ELSE
+                     BEGIN
+                        SET @n_QtyToPack = @n_QtyNeedCube
+                     END
 
-               IF @n_QtyToPack = 0
-               BEGIN
-                  SET @b_NewCarton = 1
-               END 
-               --(Wan02) - START
-               ELSE IF @n_PackQtyIndicator > 1 AND @n_Qty > @n_QtyToPack 
-               BEGIN
-                  IF @n_QtyToPack < @n_PackQtyIndicator
-                  BEGIN
-                     SET @b_NewCarton = 1 
+                     --2020-10-12
+                     IF @n_QtyToPack > @n_Qty 
+                     BEGIN
+                        SET @n_QtyToPack = @n_Qty
+                     END
                   END
-                  ELSE
+
+                  IF @n_QtyToPack = 0
                   BEGIN
-                    -- Check Remaining is loose and if bundle + loose able to fit.
-                    SET @n_QtyToPackBundle = FLOOR( @n_QtyToPack / @n_PackQtyIndicator * 1.00) * @n_PackQtyIndicator
-                    IF @n_Qty - @n_QtyToPackBundle > @n_PackQtyIndicator
-                    BEGIN
-                       SET @n_QtyToPack = @n_QtyToPackBundle  -- pack bundle qty
-                    END
+                     SET @b_NewCarton = 1
+                     GOTO NEW_CARTON            --(Wan05)
+                  END 
+               
+                  /* (Wan05) 2021-07-17 - START
+                  --(Wan02) - START
+                  ELSE IF @n_PackQtyIndicator > 1 AND @n_Qty > @n_QtyToPack 
+                  BEGIN
+                     IF @n_QtyToPack < @n_PackQtyIndicator
+                     BEGIN
+                        SET @b_NewCarton = 1
+                        GOTO NEW_CARTON            --(Wan05) 
+                     END
+                     ELSE
+                     BEGIN
+                       -- Check Remaining is loose and if bundle + loose able to fit.
+                       SET @n_QtyToPackBundle = FLOOR( @n_QtyToPack / @n_PackQtyIndicator * 1.00) * @n_PackQtyIndicator
+                       IF @n_Qty - @n_QtyToPackBundle > @n_PackQtyIndicator
+                       BEGIN
+                          SET @n_QtyToPack = @n_QtyToPackBundle  -- pack bundle qtyp.ItemClass <> @c_ItemClass                       END
+                     END
                   END
-               END
-               --(Wan02) - END               
+                  --(Wan02) - END 
+                  --(Wan05) 2021-07-17 - END  */ 
+                  
+                  --(Wan05) - START CR1.3 & 1.4 - 2021-07-01
+                  IF @n_PickedQty > 0 AND @n_Qty > @n_QtyToPack AND                                                                    --2021-08-11
+                   ((@n_Qty - @n_QtyToPack)/@n_PackQtyIndicator <= @n_PickedQty OR (@n_QtyToPack/@n_PackQtyIndicator) <= @n_PickedQty) --2021-08-11  
+                  BEGIN 
+                     SET @b_NewCarton = 1  
+                     GOTO NEW_CARTON                         
+                  END
+                  --(Wan05) - END CR1.3 & 1.4 - 2021-07-01 
+               END --(Wan05) - 2021-07-26   
             END
-       
+     
             NEW_CARTON:
+
             IF @b_NewCarton = 1
             BEGIN
                SET @n_PackedCube = 0.00
@@ -616,18 +877,36 @@ BEGIN
 
                SET @n_TotalPickCube = 0.00
                SET @n_TotalPickWgt  = 0.00
-               SELECT @n_TotalPickCube = ISNULL(SUM(PD.PickStdCube),0.00)
-                     ,@n_TotalPickWgt  = ISNULL(SUM(PD.PickStdGrossWgt),0.00)
-                     ,@n_MaxLength  = ISNULL(MAX(PD.[Length]),0.00)
-                     ,@n_MaxWidth   = ISNULL(MAX(PD.Width),0.00)
-                     ,@n_MaxHeight  = ISNULL(MAX(PD.Height),0.00)
-               FROM #PICKDETAIL_WIP PD
-               WHERE PD.Orderkey = @c_Orderkey
-               AND   PD.Busr7    = @c_Busr7
-               AND   PD.LocLevel = @c_LocLevel
-               AND   PD.UOM IN ('6', '7')
-               AND   PD.CartonType = ''
-
+               
+               IF @n_PickedQty = 0           --2021-06-17 Fixed. Floor (qty/packqtyindicator) may have 0 qty, hence pickedqty = 0 --(Wan05) - START
+               BEGIN                
+                  SELECT @n_TotalPickCube = ISNULL(SUM(PD.PickStdCube),0.00)
+                        ,@n_TotalPickWgt  = ISNULL(SUM(PD.PickStdGrossWgt),0.00)
+                        ,@n_MaxLength  = ISNULL(MAX(PD.[Length]),0.00)
+                        ,@n_MaxWidth   = ISNULL(MAX(PD.Width),0.00)
+                        ,@n_MaxHeight  = ISNULL(MAX(PD.Height),0.00)
+                  FROM #PICKDETAIL_WIP PD
+                  WHERE PD.Orderkey = @c_Orderkey
+                  AND   PD.Busr7    = @c_Busr7
+                  AND   PD.LocLevel = @c_LocLevel
+                  AND   PD.UOM IN ('6', '7')
+                  AND   PD.CartonType = ''
+               END
+               ELSE 
+               BEGIN
+                  SELECT @n_TotalPickCube = ISNULL(SUM(PD.PickStdCube),0.00)
+                        ,@n_TotalPickWgt  = ISNULL(SUM(PD.PickStdGrossWgt),0.00)
+                        ,@n_MaxLength  = ISNULL(MAX(PD.[Length]),0.00)
+                        ,@n_MaxWidth   = ISNULL(MAX(PD.Width),0.00)
+                        ,@n_MaxHeight  = ISNULL(MAX(PD.Height),0.00)
+                  FROM #PICKDETAIL_WIP PD
+                  WHERE PD.Orderkey = @c_Orderkey
+                  AND   PD.Busr7    = @c_Busr7
+                  AND   PD.LocLevel = @c_LocLevel
+                  AND   PD.ItemClass = @c_ItemClass         --(Wan05)
+                  AND   PD.UOM IN ('6', '7')
+                  AND   PD.CartonType = ''
+               END   --(Wan05) - END
                --2020-08-07 - START
                SET @n_MaxDimension = @n_MaxLength
 
@@ -660,8 +939,12 @@ BEGIN
                   SET @n_QtyCubeExceed = 0
                   SET @n_QtyWgtExceed  = 0
  
-                  IF @n_MaxCube   < @n_PickStdCube   SET @n_QtyCubeExceed = CEILING((@n_PickStdCube - @n_MaxCube)/@n_StdCube)
-                  IF @n_MaxWeight < @n_PickStdGrossWgt SET @n_QtyWgtExceed  = CEILING((@n_PickStdGrossWgt - @n_MaxWeight)/@n_StdGrossWgt)
+                  IF @n_MaxCube   < @n_PickStdCube   
+                     SET @n_QtyCubeExceed = CEILING((@n_PickStdCube - @n_MaxCube)/@n_StdCube) * @n_PackQtyIndicator --(Wan05)
+ 
+                  IF @n_MaxWeight < @n_PickStdGrossWgt 
+                     SET @n_QtyWgtExceed  = CEILING((@n_PickStdGrossWgt - @n_MaxWeight)/@n_StdGrossWgt) * @n_PackQtyIndicator --(Wan05)
+ 
                   
                   IF @n_QtyCubeExceed > @n_QtyWgtExceed 
                   BEGIN
@@ -673,12 +956,14 @@ BEGIN
                   END 
                   --2020-08-21 - Fixed
 
+                  /*(Wan05) 2021-07-17 - START
                   --(Wan02) 2020-11-19 - START  
                   IF @n_PackQtyIndicator > 1 
                   BEGIN  
                      SET @n_QtyToReduce = @n_Qty - (FLOOR((@n_Qty - @n_QtyToReduce) / @n_PackQtyIndicator) * @n_PackQtyIndicator)
                   END  
                   --(Wan02) 2020-11-19 - END
+                  --(Wan05) 2021-07-17 - END */
                END
 
                IF @n_debug = 1
@@ -701,7 +986,7 @@ BEGIN
                SET @n_AvailableWgt  = @n_MaxWeight
                SET @n_QtyToPack = @n_Qty
 
-               IF @n_QtyToReduce > 0 --2020-08-22 Fixed
+               IF @n_QtyToReduce > 0 AND @c_CartonOptimizeChk <> '1'--2020-08-22 Fixed (Wan05) Only Reduce Qty if not API to calculate
                BEGIN
                   SET @n_QtyToPack = @n_Qty - @n_QtyToReduce
                   SET @n_QtyToReduce = 0
@@ -709,7 +994,7 @@ BEGIN
 
                SET @n_CartonSeqNo = @n_CartonSeqNo + 1
             END
-
+       
             IF @c_CartonOptimizeChk = '1' -- (Wan03) 2020-09-04 - START
             BEGIN
                IF @n_QtyToPack = 0        --If New Carton and QtyToPack is 0, Pass Item Qty to Optimizer to check if can fit.
@@ -719,9 +1004,9 @@ BEGIN
 
                SET @n_CartonItem = 0
                
-               TRUNCATE TABLE #t_ItemPack;
+               TRUNCATE TABLE #OptimizeItemToPack;    --(Wan06)
 
-               INSERT INTO #t_ItemPack
+               INSERT INTO #OptimizeItemToPack        --(Wan06)
                (  Storerkey, SKU, Dim1, Dim2, Dim3, Quantity  )
                SELECT 
                   p.Storerkey
@@ -729,7 +1014,7 @@ BEGIN
                , CONVERT(DECIMAL(10,6), p.[Length]) 
                , CONVERT(DECIMAL(10,6), p.Width) 
                , CONVERT(DECIMAL(10,6), p.Height)
-               , Quantity = SUM(p.Qty) 
+               , Quantity = SUM(p.Qty) / p.PackQtyIndicator --(Wan06) CR1.8
                FROM #PICKDETAIL_WIP p
                WHERE p.CartonType = @c_CartonType
                AND p.CartonSeqNo  = @n_CartonSeqNo
@@ -739,20 +1024,83 @@ BEGIN
                      ,  p.[Length]
                      ,  p.Width 
                      ,  p.Height
+                     ,  p.PackQtyIndicator --(Wan06) CR1.8
 
-               SET @n_CartonItem = @@ROWCOUNT
+               --CR1.8 - START
+               --SET @n_CartonItem = @@ROWCOUNT
+               SELECT TOP 1 @n_CartonItem = oitp.ID
+               FROM #OptimizeItemToPack AS oitp 
+               ORDER BY oitp.ID DESC
+               
+               SET @b_InsSkuToPack = 1
+               IF @n_CartonItem > 0 
+               BEGIN
+                  IF EXISTS ( SELECT 1  
+                              FROM #PICKDETAIL_WIP p
+                              WHERE p.CartonType = @c_CartonType
+                              AND p.CartonSeqNo  = @n_CartonSeqNo
+                              AND p.orderkey = @c_Orderkey 
+                              AND p.ItemClass <> @c_ItemClass
+                  )
+                  BEGIN
+                     INSERT INTO #OptimizeItemToPack            
+                     (  Storerkey, SKU, Dim1, Dim2, Dim3, Quantity  )
+                     SELECT 
+                       p.Storerkey
+                     , p.Sku 
+                     , CONVERT(DECIMAL(10,6), p.Length) 
+                     , CONVERT(DECIMAL(10,6), p.Width) 
+                     , CONVERT(DECIMAL(10,6), p.Height)
+                     , Quantity = @n_QtyToPack / p.PackQtyIndicator 
+                     FROM #PICKDETAIL_WIP p
+                     WHERE p.orderkey = @c_Orderkey 
+                     AND   p.CartonType   = ''
+                     AND   p.CartonSeqNo  = ''
+                     AND   P.ItemClass = @c_ItemClass
+                     AND   p.Busr7 = @c_Busr7            --2021-10-22
+                     AND   p.LocLevel = @c_LocLevel      --2021-10-22                     
+                     ORDER BY p.RowRef
+                     
+                     EXEC isp_CartonOptimizeCheck
+                       @c_CartonGroup  = @c_CartonGroup
+                     , @c_CartonType   = @c_CartonType   
+                     , @n_MaxCube      = @n_MaxCube         
+                     , @n_MaxWeight    = @n_MaxWeight       
+                     , @n_QtyToPack    = @n_QtyToPack       OUTPUT
+                     , @b_CheckIfFix   = 1      
+                     , @b_Success      = @b_Success         OUTPUT
+                     , @n_Err          = @n_Err             OUTPUT
+                     , @c_ErrMsg       = @c_ErrMsg          OUTPUT  
+                     
+                     IF @n_QtyToPack = 0 -- Not Fixed
+                     BEGIN
+                        SET @b_NewCarton = 1
+                        GOTO NEW_CARTON   
+                     END 
+                     
+                     DELETE FROM #OptimizeItemToPack
+                     WHERE ID > @n_CartonItem
+                     AND Sku <> @c_Sku
+                     
+                     SET @b_InsSkuToPack = 0
+                  END
+               END
 
-               INSERT INTO #t_ItemPack
-               (  Storerkey, SKU, Dim1, Dim2, Dim3, Quantity  )
-               SELECT 
-                 p.Storerkey
-               , p.Sku 
-               , CONVERT(DECIMAL(10,6), p.Length) 
-               , CONVERT(DECIMAL(10,6), p.Width) 
-               , CONVERT(DECIMAL(10,6), p.Height)
-               , Quantity = @n_QtyToPack
-               FROM #PICKDETAIL_WIP p
-               WHERE P.RowRef = @n_RowRef
+               IF @b_InsSkuToPack = 1
+               BEGIN
+                  INSERT INTO #OptimizeItemToPack           --(Wan06)   
+                     (  Storerkey, SKU, Dim1, Dim2, Dim3, Quantity  )
+                  SELECT 
+                     p.Storerkey
+                  , p.Sku 
+                  , CONVERT(DECIMAL(10,6), p.Length) 
+                  , CONVERT(DECIMAL(10,6), p.Width) 
+                  , CONVERT(DECIMAL(10,6), p.Height)
+                  , Quantity = @n_QtyToPack / @n_PackQtyIndicator --(Wan06) CR1.8
+                  FROM #PICKDETAIL_WIP p
+                  WHERE P.RowRef = @n_RowRef_Sku
+               END 
+               --CR1.8 - END
 
                IF @n_debug = 1  
                BEGIN  
@@ -761,7 +1109,7 @@ BEGIN
                   + ', @n_MaxCube: ' + CAST(@n_MaxCube AS NVARCHAR)
                   + ', @n_MaxWeight: ' + CAST(@n_MaxWeight AS NVARCHAR)
 
-                  SELECT * from #t_ItemPack
+                  SELECT * from #OptimizeItemToPack         --(Wan06)
                END  
 
                SET @c_NewCartonType = @c_CartonType
@@ -800,6 +1148,18 @@ BEGIN
                   GOTO NEW_CARTON
                END
                
+               --(Wan05) - START CR1.3 & 1.4 2021-07-01
+               -- Pack to Current Carton, total qty = 12, pack qty = 8, remain qty = 4, pack 8 to current box
+               -- Pack to Current Carton, total qty = 12, pack qty = 1, remain qty = 11, close current box and pack 12 to new box
+               -- Pack to Current Carton, total qty = 12, pack qty = 11,remain qty = 1,  close current box and pack 12 to new box
+               IF @n_CartonItem > 0 AND @n_PickedQty > 0 AND @n_Qty > @n_QtyToPack AND                                                                   --2021-08-11
+                 ((@n_Qty - @n_QtyToPack)/@n_PackQtyIndicator <= @n_PickedQty OR (@n_QtyToPack/@n_PackQtyIndicator) <= @n_PickedQty)                     --2021-08-11
+               BEGIN                                      
+                  SET @b_NewCarton = 1  
+                  GOTO NEW_CARTON  
+               END  
+               --(Wan05) - END CR1.3  & 1.4 2021-07-01
+               
                IF @c_CartonType <> @c_NewCartonType  -- Change to Biger Carton
                BEGIN
                   UPDATE #PICKDETAIL_WIP 
@@ -817,147 +1177,308 @@ BEGIN
                   END  
                END
             END  --(Wan03) - END
+            
+            --CR 1.6 - 2021-08-04 - START - Put Sku.StdCube > Large Carton's Cube
+            IF @n_QtyToPack = 0 --AND @n_StdCube > @n_MaxCube    --If 0 qty can fit, at least put 1 even system calculate pick item cube < Large Carton Cube
+            BEGIN
+               SET @n_QtyToPack = 1 * @n_PackQtyIndicator
+            END
+            --CR 1.6 - 2021-08-04 - END - Put Sku.StdCube > Large Carton's Cube
+
+            SET @n_RowRef_PD = 0
+            SET @n_QtyToPack_REM = @n_QtyToPack
+            SET @n_QtyToPack_TTL = @n_QtyToPack
+            WHILE 1 = 1 AND @n_QtyToPack_REM > 0
+            BEGIN
+               SET @n_Status = 0  
+               SET @b_SplitPickdetail = 0  
+               
+               SELECT TOP 1 @n_RowRef_PD = pw.RowRef
+                     ,@n_Qty_PD = pw.Qty
+               FROM #PICKDETAIL_WIP AS pw
+               WHERE pw.RowRef <> @n_RowRef_PD
+               AND pw.Storerkey = @c_Storerkey
+               AND   pw.Sku = @c_Sku
+               AND   pw.CartonType = ''
+               AND   pw.LocLevel = @c_LocLevel      --2021-10-22               
+               ORDER BY pw.Qty DESC
+                      , pw.RowRef
+               
+               IF @@ROWCOUNT = 0 
+               BEGIN
+                  BREAK
+               END
+   
+               IF @n_Qty_PD > @n_QtyToPack_REM AND @n_QtyToPack_REM > 0   --2020-09-24 Wan01  
+               BEGIN  
+                  SET @n_QtyToPack = @n_QtyToPack_REM
+                  
+                  SET @b_SplitPickdetail = 1  
+                 
+                  INSERT INTO #PICKDETAIL_WIP      --(Wan05) - START  
+                     (    
+                        Wavekey  
+                     ,  Loadkey  
+                     ,  Orderkey  
+                     ,  [Route]  
+                     ,  ExternOrderkey  
+                     ,  Busr7  
+                     ,  PickDetailKey  
+                     ,  Storerkey  
+                     ,  Sku  
+                     ,  UOM  
+                     ,  UOMQty  
+                     ,  Qty  
+                     ,  PickStdCube  
+                     ,  PickStdGrossWgt  
+                     ,  StdCube  
+                     ,  StdGrossWgt  
+                     ,  SkuStdCube        --2020-08-27  
+                     ,  SkuStdGrossWgt    --2020-11-27   
+                     ,  [Length]          --2020-08-07  
+                     ,  Width             --2020-08-07  
+                     ,  Height            --2020-08-07  
+                     ,  CubeTolerance     --2020-08-27  
+                     ,  PackQtyIndicator  --(Wan02)                    
+                     ,  Lot  
+                     ,  ToLoc  
+                     ,  DropID  
+                     ,  LocLevel  
+                     ,  LogicalLocation  
+                     ,  [Status]  
+                     ,  ItemClass         --(Wan05)   
+                     ,  Size              --(Wan05)    
+                     )  
+                  SELECT   
+                        Wavekey = @c_Wavekey  
+                     ,  PD.Loadkey  
+                     ,  @c_Orderkey  
+                     ,  PD.[Route]  
+                     ,  PD.ExternOrderkey  
+                     ,  Busr7 = @c_Busr7  
+                     ,  PD.PickDetailkey  
+                     ,  PD.Storerkey  
+                     ,  PD.Sku  
+                     ,  PD.UOM  
+                     ,  UOMQty = CASE WHEN PD.DropID = '' THEN @n_QtyToPack ELSE PD.UOMQty END                    --(WAn05)
+                     ,  Qty    = @n_Qty_PD - @n_QtyToPack  
+                     ,  PickStdCube    = ((@n_Qty_PD - @n_QtyToPack) / (1.00 * @n_PackQtyIndicator)) * @n_StdCube    --(WAn05)
+                     ,  PickStdGrosWgt = ((@n_Qty_PD - @n_QtyToPack) / (1.00 * @n_PackQtyIndicator)) * @n_StdGrossWgt--(WAn05)
+                     ,  StdCube     = @n_StdCube  
+                     ,  StdGrossWgt = @n_StdGrossWgt  
+                     ,  PD.SkuStdCube        --2020-08-27  
+                     ,  PD.SkuStdGrossWgt    --2020-11-27                       
+                     ,  PD.[Length]          --2020-08-07  
+                     ,  PD.Width             --2020-08-07  
+                     ,  PD.Height            --2020-08-07  
+                     ,  PD.CubeTolerance     --2020-08-27  
+                     ,  @n_PackQtyIndicator  --(Wan02)   Bundle Sku should not be splitted, just keep a record for split sku                 
+                     ,  PD.Lot  
+                     ,  PD.ToLoc  
+                     ,  PD.DropID  
+                     ,  PD.LocLevel  
+                     ,  PD.LogicalLocation  
+                     ,  [Status]  = 2  
+                     ,  PD.ItemClass               --(Wan05)  
+                     ,  PD.Size                    --(Wan05)      
+                  FROM #PICKDETAIL_WIP PD  
+                  WHERE PD.RowRef = @n_RowRef_PD  
   
-            SET @n_Status = 0
-            SET @b_SplitPickdetail = 0
-            IF @n_Qty > @n_QtyToPack AND @n_QtyToPack > 0   --2020-09-24 Wan01
-            BEGIN
-               SET @b_SplitPickdetail = 1
-               INSERT INTO #PICKDETAIL_WIP
-                  (  
-                     Wavekey
-                  ,  Loadkey
-                  ,  Orderkey
-                  ,  [Route]
-                  ,  ExternOrderkey
-                  ,  Busr7
-                  ,  PickDetailKey
-                  ,  Storerkey
-                  ,  Sku
-                  ,  UOM
-                  ,  UOMQty
-                  ,  Qty
-                  ,  PickStdCube
-                  ,  PickStdGrossWgt
-                  ,  StdCube
-                  ,  StdGrossWgt
-                  ,  SkuStdCube        --2020-08-27
-                  ,  SkuStdGrossWgt    --2020-11-27 
-                  ,  [Length]          --2020-08-07
-                  ,  Width             --2020-08-07
-                  ,  Height            --2020-08-07
-                  ,  CubeTolerance     --2020-08-27
-                  ,  PackQtyIndicator  --(Wan02)                  
-                  ,  Lot
-                  ,  ToLoc
-                  ,  DropID
-                  ,  LocLevel
-                  ,  LogicalLocation
-                  ,  [Status]
-                  )
-               SELECT 
-                     Wavekey = @c_Wavekey
-                  ,  PD.Loadkey
-                  ,  @c_Orderkey
-                  ,  PD.[Route]
-                  ,  PD.ExternOrderkey
-                  ,  Busr7 = @c_Busr7
-                  ,  PD.PickDetailkey
-                  ,  PD.Storerkey
-                  ,  PD.Sku
-                  ,  PD.UOM
-                  ,  UOMQty = CASE WHEN PD.DropID = '' THEN @n_Qty - @n_QtyToPack ELSE PD.UOMQty END
-                  ,  Qty = @n_Qty - @n_QtyToPack
-                  ,  PickStdCube = @n_StdCube * ((@n_Qty - @n_QtyToPack) / (1.00 * @n_PackQtyIndicator))
-                  ,  PickStdGrosWgt = @n_StdGrossWgt * ((@n_Qty - @n_QtyToPack) / (1.00 * @n_PackQtyIndicator))
-                  ,  StdCube = @n_StdCube
-                  ,  StdGrossWgt = @n_StdGrossWgt
-                  ,  PD.SkuStdCube        --2020-08-27
-                  ,  PD.SkuStdGrossWgt    --2020-11-27                     
-                  ,  PD.[Length]          --2020-08-07
-                  ,  PD.Width             --2020-08-07
-                  ,  PD.Height            --2020-08-07
-                  ,  PD.CubeTolerance     --2020-08-27
-                  ,  @n_PackQtyIndicator  --(Wan02)   Bundle Sku should not be splitted, just keep a record for split sku               
-                  ,  PD.Lot
-                  ,  PD.ToLoc
-                  ,  PD.DropID
-                  ,  PD.LocLevel
-                  ,  PD.LogicalLocation
-                  ,  [Status] = 2
-               FROM #PICKDETAIL_WIP PD
-               WHERE PD.RowRef = @n_RowRef
+                  SET @n_Status = 1               
+               END  
+               ELSE  
+               BEGIN 
+                  SET @n_QtyToPack_Rem = @n_QtyToPack_Rem - @n_Qty_PD   --2021-10-11 fix @n_QtyToPack - @n_Qty_PD
+                  SET @n_QtyToPack = @n_Qty_PD   
+               END  
+  
+               IF @n_debug = 1  
+               BEGIN  
+                  PRINT 'sku: ' + @c_Sku
+                     + ', @n_RowRef_PD:' + CAST (@n_RowRef_PD as NVARCHAR)  
+                     + ',@n_QtyToPack: ' + CAST (@n_QtyToPack as NVARCHAR)  
+                     + ', @n_PackedCube: '+ CAST (@n_PackedCube as NVARCHAR)  
+                     + ', @n_PackedWgt: '+ CAST (@n_PackedWgt as NVARCHAR)  
+                     + ', @n_MaxCube: ' + CAST (@n_MaxCube as NVARCHAR)  
+                     + ', @n_MaxWeight: '+ CAST (@n_MaxWeight as NVARCHAR)  
 
-               SET @n_Status = 1
+                  PRINT '@c_CartonType: ' + @c_CartonType  
+                     + ', @c_LocLevel: '+ @c_LocLevel  
+                     + ', @n_CartonSeqNo: ' + CAST (@n_CartonSeqNo AS NVARCHAR) 
+               END  
+              
+               UPDATE #PICKDETAIL_WIP  
+               Set  CartonType     = @c_CartonType  
+                  , CartonSeqNo    = @n_CartonSeqNo  
+                  , CartonCube     = @n_MaxCube  
+                  , UOMQty         = CASE WHEN DropID = '' THEN @n_QtyToPack ELSE UOMQty END  
+                  , Qty            = @n_QtyToPack  
+                  , PickStdCube    = (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)) * StdCube             --2020-10-19 --CASE WHEN @n_Status = 1 THEN @n_QtyToPack * StdCube ELSE PickStdCube END  
+                  , PickStdGrossWgt= (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)) * StdGrossWgt         --2020-10-19 --CASE WHEN @n_Status = 1 THEN @n_QtyToPack * StdGrossWgt ELSE PickStdGrossWgt END  
+                  , [Status]       = CASE WHEN [Status] = 0 THEN @n_Status ELSE [Status] END  
+               WHERE RowRef        = @n_RowRef_PD  
+            
+               IF @b_SplitPickdetail = 1 
+               BEGIN 
+                  BREAK
+               END 
+               SET @n_QtyToPack_TTL = @n_QtyToPack_TTL + @n_QtyToPack
             END
-            ELSE
-            BEGIN
-               SET @n_QtyToPack = @n_Qty
-            END
+         
+            --Move Down
+            SET @n_PackedCube= @n_PackedCube + (@n_StdCube * (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)))       --2020-10-19  
+            SET @n_PackedWgt = @n_PackedWgt  + (@n_StdGrossWgt * ( @n_QtyToPack / (1.00 * @n_PackQtyIndicator)))  --2020-10-19  
+  
+            SET @n_AvailableCube = @n_MaxCube - @n_PackedCube  
+            SET @n_AvailableWgt  = @n_MaxWeight - @n_PackedWgt  
+            --(Wan05) - END
 
-            SET @n_PackedCube= @n_PackedCube + (@n_StdCube * (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)))       --2020-10-19
-            SET @n_PackedWgt = @n_PackedWgt  + (@n_StdGrossWgt * ( @n_QtyToPack / (1.00 * @n_PackQtyIndicator)))  --2020-10-19
+            NEXT_PD:
 
-            SET @n_AvailableCube = @n_MaxCube - @n_PackedCube
-            SET @n_AvailableWgt  = @n_MaxWeight - @n_PackedWgt
-
-            IF @n_debug = 1
-            BEGIN
-               PRINT  '@n_QtyToPack: ' + CAST (@n_QtyToPack as NVARCHAR)
-                  + ', @n_PackedCube: '+ CAST (@n_PackedCube as NVARCHAR)
-                  + ', @n_PackedWgt: '+ CAST (@n_PackedWgt as NVARCHAR)
-                  + ', @n_MaxCube: ' + CAST (@n_MaxCube as NVARCHAR)
-                  + ', @n_MaxWeight: '+ CAST (@n_MaxWeight as NVARCHAR)
-            END
+            --IF @b_SplitPickdetail = 1      --(Wan05)        
+            --BEGIN
+            --   SET @b_SplitPickdetail = 0
+            --   GOTO GET_PICK_REC           --(Wan05) 
+            --END                               
+         
+            FETCH NEXT FROM @CUR_PD INTO @n_RowRef_Sku  
+                                       , @c_Storerkey
+                                       , @c_Sku
+                                       , @n_PickStdCube
+                                       , @n_PickStdGrossWgt
+                                       , @n_StdCube
+                                       , @n_StdGrossWgt
+                                       , @n_Qty
+                                       , @c_UOM
+                                       , @n_PackQtyIndicator   --(Wan02) 
+ 
          END
-
-         IF @n_debug = 1
-         BEGIN
-            PRINT '@c_CartonType: ' + @c_CartonType
-               + ', @c_LocLevel: '+ @c_LocLevel
-               + ', @n_CartonSeqNo: ' + CAST (@n_CartonSeqNo AS NVARCHAR) 
-         END
-
-         UPDATE #PICKDETAIL_WIP
-         Set  CartonType = @c_CartonType
-            , CartonSeqNo= @n_CartonSeqNo
-            , CartonCube = @n_MaxCube
-            , UOMQty     = CASE WHEN DropID = '' THEN @n_QtyToPack ELSE UOMQty END
-            , Qty        = @n_QtyToPack
-            , PickStdCube= (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)) * StdCube           --2020-10-19 --CASE WHEN @n_Status = 1 THEN @n_QtyToPack * StdCube ELSE PickStdCube END
-            , PickStdGrossWgt= (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)) * StdGrossWgt   --2020-10-19 --CASE WHEN @n_Status = 1 THEN @n_QtyToPack * StdGrossWgt ELSE PickStdGrossWgt END
-            , [Status]   = CASE WHEN [Status] = 0 THEN @n_Status ELSE [Status] END
-         WHERE RowRef    = @n_RowRef  
-
-         NEXT_PD:
-
-         IF @c_UOM <> '2'  -- Only NewCarton for UOM 6 & 7
-         BEGIN
-            SET @c_Busr7_Prev = @c_Busr7
-            SET @c_LocLevel_Prev = @c_LocLevel
-         END
-
-         IF @b_SplitPickdetail = 1
-         BEGIN
-            SET @b_SplitPickdetail = 0
-            GOTO GET_PICK_REC
-         END
-         FETCH NEXT FROM @CUR_PD INTO @n_RowRef
-                                    , @c_Storerkey
-                                    , @c_Sku
-                                    , @n_PickStdCube
-                                    , @n_PickStdGrossWgt
-                                    , @n_StdCube
-                                    , @n_StdGrossWgt
-                                    , @n_Qty
-                                    , @c_UOM
-                                    , @c_Busr7
-                                    , @c_LocLevel
-                                    , @n_PackQtyIndicator   --(Wan02) 
+         CLOSE @CUR_PD
+         DEALLOCATE @CUR_PD
       END
-      CLOSE @CUR_PD
-      DEALLOCATE @CUR_PD
-
+      -------------------------------------------
+      -- ReCalulate CartonType - START
+      --------------------------------------------
+      SET @n_CartonSeqNo = 0
+      IF @c_CartonOptimizeChk = '1'   
+      BEGIN
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+                   @n_TotalPickCube = ISNULL(SUM(PD.PickStdCube),0.00)  
+                  ,@n_TotalPickWgt  = ISNULL(SUM(PD.PickStdGrossWgt),0.00)
+                  ,@c_CartonType =  PD.CartonType
+                  ,@n_CartonSeqNo= PD.CartonSeqNo
+            FROM #PICKDETAIL_WIP PD  
+            WHERE PD.Orderkey = @c_Orderkey  
+            AND   PD.CartonType <> ''
+            AND   PD.CartonSeqNo > @n_CartonSeqNo  
+            AND   PD.UOM IN ('6', '7') 
+            GROUP BY PD.CartonType
+                     ,PD.CartonSeqNo
+             ORDER BY PD.CartonSeqNo
+        
+            IF @@ROWCOUNT = 0
+            BEGIN
+               BREAK
+            END    
+               
+            SET @c_NewCartonType = ''
+            SELECT TOP 1 @c_NewCartonType = CG.CartonType  
+                     ,@n_MaxCube    = CG.[Cube]  
+                     ,@n_MaxWeight  = CG.MaxWeight  
+            FROM #NikeCTNGroup CG  
+            WHERE [Cube]  >= @n_TotalPickCube  
+            AND MaxWeight >= @n_TotalPickWgt  
+            ORDER BY RowRef
+                  
+            IF @c_NewCartonType = ''  
+            BEGIN
+               SET @c_NewCartonType = @c_CartonType
+            END
+                  
+            IF @c_CartonType <> @c_NewCartonType
+            BEGIN
+               TRUNCATE TABLE #OptimizeItemToPack;             --(Wan06) 
+                     
+               INSERT INTO #OptimizeItemToPack                 --(Wan06)  
+               (  Storerkey, SKU, Dim1, Dim2, Dim3, Quantity  )  
+               SELECT   
+                  p.Storerkey  
+               ,  p.Sku   
+               , CONVERT(DECIMAL(10,6), p.[Length])   
+               , CONVERT(DECIMAL(10,6), p.Width)   
+               , CONVERT(DECIMAL(10,6), p.Height)  
+               , Quantity = SUM(p.Qty) / p.PackQtyIndicator --(Wan06) CR1.8
+               FROM #PICKDETAIL_WIP p  
+               WHERE p.CartonType = @c_CartonType              
+               AND p.CartonSeqNo  = @n_CartonSeqNo             
+               AND p.orderkey = @c_Orderkey              --Wan04  
+               GROUP BY p.Storerkey  
+                     ,  p.Sku  
+                     ,  p.[Length]  
+                     ,  p.Width   
+                     ,  p.Height
+                     , p.PackQtyIndicator                   --(Wan06) CR1.8
+                     
+               SET @n_Qty_Recalc = 0
+               SELECT TOP 1 @n_Qty_Recalc = Quantity
+               FROM #OptimizeItemToPack                        --(Wan06)
+               ORDER BY ID DESC        
+                     
+               IF @n_debug = 1    
+               BEGIN    
+                  PRINT 'Recalculate @c_cartonType: ' +  @c_CartonType   
+                  + ', @n_CartonSeqNo: ' + CAST (@n_CartonSeqNo AS NVARCHAR)  
+                  + ', @c_NewCartonType: ' + @c_NewCartonType
+                  + ', @c_Orderkey: ' + @c_Orderkey 
+                        
+                  PRINT '@n_TotalPickCube: ' + CAST (@n_TotalPickCube AS NVARCHAR) 
+                  + ', @n_TotalPickWgt: ' + CAST (@n_TotalPickWgt AS NVARCHAR)                          
+                  + ', @n_MaxLength: ' + CAST (@n_MaxLength AS NVARCHAR) 
+                  + ', @n_MaxWidth: ' + CAST (@n_MaxWidth AS NVARCHAR)   
+                  + ', @n_MaxHeight: ' + CAST (@n_MaxHeight AS NVARCHAR) 
+               END    
+             
+               EXEC isp_CartonOptimizeCheck  
+                     @c_CartonGroup  = @c_CartonGroup  
+                  , @c_CartonType   = @c_NewCartonType   OUTPUT  
+                  , @n_MaxCube      = @n_MaxCube         OUTPUT  
+                  , @n_MaxWeight    = @n_MaxWeight       OUTPUT  
+                  , @n_QtyToPack    = @n_Qty_Recalc      OUTPUT 
+                  , @b_Success      = @b_Success         OUTPUT  
+                  , @n_Err          = @n_Err             OUTPUT  
+                  , @c_ErrMsg       = @c_ErrMsg          OUTPUT  
+            
+               IF @b_Success = 0  
+               BEGIN  
+                  SET @n_Continue = 3  
+                  SET @n_err = 82009     
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_CartonOptimizeCheck. (ispRLWAV20_PACK)'     
+                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '     
+                  GOTO QUIT_SP    
+               END  
+                     
+               IF @c_CartonType <> @c_NewCartonType AND @n_Qty_Recalc > 0           -- Not to change Cartontype if @n_Qty_Recalc return does not fit to new cartontype.  
+               BEGIN
+                  UPDATE PD  
+                     SET CartonType = @c_NewCartonType  
+                        ,CartonCube = @n_MaxCube   
+                  FROM #PICKDETAIL_WIP PD  
+                  WHERE PD.Orderkey = @c_Orderkey  
+                  AND   PD.CartonType = @c_CartonType  
+                  AND   PD.CartonSeqNo= @n_CartonSeqNo  
+               END
+            END  
+         END
+      END
+      --------------------------------------------
+      -- Re-Calulate CartonType - END
+      -------------------------------------------- 
+      --------------------------------------------
+      -- UOM IN ('6','7') 
+      --------------------------------------------
+      
       ------------------------------------------
       --- Create PACK  - START
       ------------------------------------------
@@ -1155,7 +1676,7 @@ BEGIN
                GOTO QUIT_SP  
             END  
 
-      	   INSERT INTO PICKDETAIL 
+            INSERT INTO PICKDETAIL 
                   (  PickDetailKey
                   ,  CaseID
                   ,  PickHeaderKey
@@ -1287,6 +1808,19 @@ BEGIN
          where orderkey = @c_Orderkey
          ORDER BY orderkey, busr7, loclevel, logicallocation,CartonSeqNo, sku
 
+               SELECT @c_PickSlipNo
+            ,CartonNo = PD.CartonSeqNo --+ @n_CartonNo
+            ,[Weight] = ISNULL(SUM(PD.StdGrossWgt * PD.Qty),0.00)
+            --,[Cube]   = ISNULL(SUM(PD.StdCube * PD.Qty),0.00) 
+            ,[Cube]   = PD.CartonCube                              --2020-09-14
+            ,Qty = ISNULL(SUM(PD.Qty),0)
+            ,PD.CartonType
+      FROM #PICKDETAIL_WIP PD
+      WHERE PD.Orderkey = @c_Orderkey
+      GROUP BY PD.CartonSeqNo
+            ,  PD.CartonType
+            ,  PD.CartonCube                                      --2020-09-14
+            
          SELECT @c_PickSlipNo
                ,CartonNo = PD.CartonSeqNo --+ @n_CartonNo
                ,PD.Caseid
@@ -1300,8 +1834,22 @@ BEGIN
                ,  PD.CaseID
                ,  PD.Storerkey
                ,  PD.Sku
+               
+               
+         SELECT @c_PickSlipNo
+               ,CartonNo = PD.CartonSeqNo --+ @n_CartonNo
+               ,PD.Caseid
+               ,PD.Storerkey
+               ,PD.Sku
+               ,PD.Qty
+               ,ItemClass, SIZE
+               , Cartontype,cartonseqno
+               , status
+         FROM #PICKDETAIL_WIP PD
+         WHERE PD.Orderkey = @c_Orderkey  
+         ORDER BY CartonSeqNo    
       END
-
+                      
       INSERT INTO PACKDETAIL
          (  PickSlipNo
          ,  CartonNo
