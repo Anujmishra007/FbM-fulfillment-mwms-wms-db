@@ -166,13 +166,13 @@ BEGIN
 
       IF @b_Debug = 1
       BEGIN
-        PRINT '@c_NewCartonType£º' +@c_NewCartonType 
-            + ', @n_NewMaxCube£º' +  cast(@n_NewMaxCube as nvarchar)
-            + ', @n_NewMaxWeight£º' +  cast(@n_NewMaxWeight as nvarchar)
-            + ', @n_QtyToPack£º' +  cast(@n_QtyToPack as nvarchar)
+        PRINT '@c_NewCartonType:' +@c_NewCartonType 
+            + ', @n_NewMaxCube:' +  cast(@n_NewMaxCube as nvarchar)
+            + ', @n_NewMaxWeight:' +  cast(@n_NewMaxWeight as nvarchar)
+            + ', @n_QtyToPack:' +  cast(@n_QtyToPack as nvarchar)
       END 
 
-      IF @c_NewCartonType <> ''  -- If get bigger Carton, then check if can fit
+      IF ISNULL(@c_NewCartonType,'') <> ''  -- If get bigger Carton, then check if can fit
       BEGIN        
          SET @c_CartonType= @c_NewCartonType
          SET @n_MaxCube   = @n_NewMaxCube
@@ -188,16 +188,20 @@ BEGIN
    BEGIN
       PRINT 'N_QtyPack (B4 reduce): ' + CAST (@n_QtyToPack + @n_QtyItemToReduce AS NVARCHAR)
           + ',@n_QtyItemToReduce: ' + CAST (@n_QtyItemToReduce AS NVARCHAR)
-          + ',@n_QtyToPack - @n_QtyItemToReduce£º' +  cast(@n_QtyToPack as nvarchar)
+          + ',@n_QtyToPack - @n_QtyItemToReduce:' +  cast(@n_QtyToPack as nvarchar)
    END
 
    IF @n_QtyToPack <= 0 
    BEGIN
-      SET @n_QtyToPack = 0
-      SET @c_CartonType= @c_OrigCartonType
-      SET @n_MaxCube   = @n_OrigMaxCube
-      SET @n_MaxWeight = @n_OrigMaxWeight
-      GOTO QUIT_SP
+      SELECT @n_Count = COUNT(1) FROM #t_ItemPack (NOLOCK)
+     IF(@n_Count > 1)
+     BEGIN
+         SET @n_QtyToPack = 0
+         SET @c_CartonType= @c_OrigCartonType
+         SET @n_MaxCube   = @n_OrigMaxCube
+         SET @n_MaxWeight = @n_OrigMaxWeight
+     END
+     GOTO QUIT_SP
    END
 
    --SET @n_ID = 0
