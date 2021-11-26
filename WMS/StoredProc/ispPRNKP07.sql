@@ -23,6 +23,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author   Ver.  Purposes                                  */
+/* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
+/* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
 /************************************************************************/    
 CREATE  PROC [dbo].[ispPRNKP07]        
     @c_WaveKey                      NVARCHAR(10)
@@ -87,6 +89,7 @@ BEGIN
          , @c_LocationHandling   NVARCHAR(10) = ''
          , @c_Status             NVARCHAR(10) = '0'
          , @c_TaskDetailkey      NVARCHAR(10) = ''
+         , @n_PackQtyIndicator   INT          = 0  --NJOW01         
 
          , @CUR_ORDERLINES       CURSOR
          , @CUR_ORD              CURSOR
@@ -137,6 +140,7 @@ BEGIN
    ,  Lottable10        NVARCHAR(30)
    ,  Lottable11        NVARCHAR(30)
    ,  Lottable12        NVARCHAR(30)
+   ,  PackQtyIndicator  INT  --NJOW01            
    )
 
    -- Store all UCC's LotxLOcxID
@@ -203,6 +207,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01                           
          )
       SELECT  
             O.Facility
@@ -221,6 +226,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01                                                      
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -247,6 +253,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01                                                         
       ORDER BY ISNULL(RTRIM(OD.Lottable01),'') DESC           
 
    END
@@ -269,6 +276,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01                           
          )
       SELECT  
             O.Facility
@@ -287,6 +295,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01                                                      
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -313,6 +322,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01                                                         
       ORDER BY O.Orderkey           
    END
    IF @b_Debug = 1
@@ -325,11 +335,15 @@ BEGIN
    /*********************************/
 
    SET @CUR_ORDERLINES = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-   SELECT   OL.StorerKey,  OL.SKU, OL.Facility, OL.Packkey, OrderQty = SUM(OL.OrderQty)
+   SELECT   OL.StorerKey,  OL.SKU, OL.Facility, OL.Packkey
+         ,  SUM(CASE WHEN OL.PackQtyIndicator > 1 THEN
+                          FLOOR(OL.OrderQty / OL.PackQtyIndicator) * OL.PackQtyIndicator
+                     ELSE OL.OrderQty END)  --NJOW01
          ,  OL.Lottable01, OL.Lottable02, OL.Lottable03, OL.Lottable06 
          ,  OL.Lottable07, OL.Lottable08, OL.Lottable09, OL.Lottable10
          ,  OL.Lottable11, OL.Lottable12
          ,  ISNULL(SKU.Susr1,'0')
+         ,  OL.PackQtyIndicator  --NJOW01                            
    FROM #ORDERLINES OL
    JOIN SKU WITH (NOLOCK) ON OL.Storerkey = SKU.Storerkey
                          AND OL.Sku = SKU.Sku 
@@ -341,6 +355,7 @@ BEGIN
          ,  OL.Lottable07, OL.Lottable08, OL.Lottable09, OL.Lottable10
          ,  OL.Lottable11, OL.Lottable12
          ,  ISNULL(SKU.Susr1,'0')
+         ,  OL.PackQtyIndicator  --NJOW01          
    ORDER BY OL.StorerKey
          ,  OL.SKU
 
@@ -349,7 +364,7 @@ BEGIN
                                     ,  @c_Lottable01, @c_Lottable02, @c_Lottable03, @c_Lottable06
                                     ,  @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                                     ,  @c_Lottable11, @c_Lottable12
-                                    ,  @c_Susr1
+                                    ,  @c_Susr1, @n_PackQtyIndicator --NJOW01      
           
    WHILE (@@FETCH_STATUS <> -1)          
    BEGIN 
@@ -676,6 +691,12 @@ BEGIN
           
          WHILE (@@FETCH_STATUS = 0) AND @n_RemainingQty > 0         
          BEGIN 
+            --NJOW01
+            IF @n_PackQtyIndicator > 1
+            BEGIN
+            	 SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+            END
+
             IF @n_OrderQty >= @n_RemainingQty
             BEGIN
                SET @n_QtyToInsert = @n_RemainingQty
@@ -819,7 +840,7 @@ BEGIN
                                           ,  @c_Lottable01, @c_Lottable02, @c_Lottable03, @c_Lottable06
                                           ,  @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                                           ,  @c_Lottable11, @c_Lottable12
-                                          ,  @c_Susr1
+                                          ,  @c_Susr1, @n_PackQtyIndicator --NJOW01
    END -- END WHILE FOR @CUR_ORDERLINES             
 
 
@@ -862,7 +883,6 @@ QUIT_SP:
       RETURN  
    END  
 END -- Procedure
-
 GO
 GRANT EXECUTE ON [dbo].[ispPRNKP07] TO nSQL 
 GO

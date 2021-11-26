@@ -14,7 +14,8 @@ GO
 /* Written by: Wan                                                      */    
 /*                                                                      */    
 /* Purpose: WMS-10156 NIKE - PH Allocation Strategy Enhancement         */
-/*        : Allocate From DPBULK, Shelving, loseid, loseucc             */    
+/*        : Allocate piece From DPBULK, Shelving, loseid, loseucc by    */    
+/*          order                                                       */
 /* Called By:                                                           */    
 /*                                                                      */    
 /* PVCS Version: 1.0                                                    */    
@@ -23,6 +24,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author   Ver.  Purposes                                  */
+/* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
+/* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPRNKP03]        
     @c_WaveKey                      NVARCHAR(10)
@@ -67,7 +70,6 @@ BEGIN
          , @c_SKU                NVARCHAR(20) = '' 
          , @c_PackKey            NVARCHAR(10) = ''  
          , @c_PickMethod         NVARCHAR(1)  = ''                       
-
          , @c_Lottable01         NVARCHAR(18) = ''    
          , @c_Lottable02         NVARCHAR(18) = ''    
          , @c_Lottable03         NVARCHAR(18) = ''
@@ -83,6 +85,7 @@ BEGIN
          , @c_LocationHandling   NVARCHAR(10) = ''
          , @c_Status             NVARCHAR(10) = '0'
          , @c_TaskDetailkey      NVARCHAR(10) = ''
+         , @n_PackQtyIndicator   INT          = 0  --NJOW01
 
          , @CUR_ORDERLINES       CURSOR
          , @CUR_ORD              CURSOR
@@ -133,6 +136,7 @@ BEGIN
    ,  Lottable10        NVARCHAR(30)
    ,  Lottable11        NVARCHAR(30)
    ,  Lottable12        NVARCHAR(30)
+   ,  PackQtyIndicator  INT  --NJOW01      
    )
 
  
@@ -172,6 +176,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01
          )
       SELECT  
             O.Facility
@@ -190,6 +195,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01                  
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -216,6 +222,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01                  
       ORDER BY ISNULL(RTRIM(OD.Lottable01),'') DESC           
 
    END
@@ -238,6 +245,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01
          )
       SELECT  
             O.Facility
@@ -256,6 +264,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01                  
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -282,6 +291,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01                     
       ORDER BY O.Orderkey           
    END
    IF @b_Debug = 1
@@ -407,6 +417,12 @@ BEGIN
       BEGIN  
          SET @n_RemainingQty = @n_QtyAvail
 
+         --NJOW01
+      	 IF @n_PackQtyIndicator > 1
+      	 BEGIN
+      	 	 SELECT @n_RemainingQty = FLOOR(@n_RemainingQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+      	 END
+
          SET @c_PickMethod = ''  
          SELECT @c_PickMethod = UOM3PickMethod -- piece        
          FROM LOC  WITH (NOLOCK)  
@@ -439,6 +455,12 @@ BEGIN
           
          WHILE (@@FETCH_STATUS = 0) AND @n_RemainingQty > 0         
          BEGIN 
+            --NJOW01
+      	    IF @n_PackQtyIndicator > 1
+      	    BEGIN
+      	    	 SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+      	    END
+         	
             IF @n_OrderQty >= @n_RemainingQty
             BEGIN
                SET @n_QtyToInsert = @n_RemainingQty
@@ -576,7 +598,6 @@ QUIT_SP:
       RETURN  
    END  
 END -- Procedure
-
 GO
 GRANT EXECUTE ON [dbo].[ispPRNKP03] TO nSQL 
 GO

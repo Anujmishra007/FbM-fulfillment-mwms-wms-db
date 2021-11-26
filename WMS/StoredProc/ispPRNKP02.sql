@@ -14,6 +14,7 @@ GO
 /* Written by: Wan                                                      */    
 /*                                                                      */    
 /* Purpose: WMS-10156 NIKE - PH Allocation Strategy Enhancement         */
+/*          Full Case from Case Then Pallet Loc by single order         */
 /*                                                                      */    
 /* Called By:                                                           */    
 /*                                                                      */    
@@ -23,6 +24,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author    Ver.  Purposes                                 */
+/* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
+/* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
 /************************************************************************/    
 CREATE  PROC [dbo].[ispPRNKP02]        
     @c_WaveKey                      NVARCHAR(10)
@@ -78,6 +81,7 @@ BEGIN
          , @c_LocationType          NVARCHAR(10)   = ''  
          , @c_LocationCategory      NVARCHAR(10)   = ''
          , @c_LocationHandling      NVARCHAR(10)   = ''
+         , @n_PackQtyIndicator      INT            = 0  --NJOW01
 
          , @b_Found                 INT            = 0
          , @n_SeqNo                 INT            = 0
@@ -148,6 +152,7 @@ BEGIN
    ,  Lottable10        NVARCHAR(30)
    ,  Lottable11        NVARCHAR(30)
    ,  Lottable12        NVARCHAR(30)
+   ,  PackQtyIndicator  INT  --NJOW01   
    )
 
    IF OBJECT_ID('tempdb..#UCCxLOTxLOCxID','u') IS NOT NULL
@@ -224,6 +229,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01
          )
       SELECT  
             O.Facility
@@ -242,6 +248,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01         
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -268,6 +275,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01           
       ORDER BY ISNULL(RTRIM(OD.Lottable01),'') DESC                                               
    END
    ELSE
@@ -289,6 +297,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01         
          )
       SELECT  
             O.Facility
@@ -307,6 +316,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01         
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -333,6 +343,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01            
       ORDER BY O.Orderkey                                       
    END
 
@@ -475,7 +486,7 @@ BEGIN
       /***  START PRE-ALLOC UCC (Get Combination of pool numbers for orderQty)   ***/
       /*****************************************************************************/
       SET @CUR_ORDERLINE_SKU = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT Orderkey, OrderQty       
+      SELECT Orderkey, OrderQty, PackQtyIndicator --NJOW01            
       FROM #ORDERLINES WITH (NOLOCK) 
       WHERE OrderQty >= @n_LowerBound  
       AND StorerKey = @c_StorerKey  
@@ -495,7 +506,7 @@ BEGIN
       ORDER BY Orderkey         
  
       OPEN @CUR_ORDERLINE_SKU               
-      FETCH NEXT FROM @CUR_ORDERLINE_SKU INTO @c_Orderkey, @n_OrderQty
+      FETCH NEXT FROM @CUR_ORDERLINE_SKU INTO @c_Orderkey, @n_OrderQty, @n_PackQtyIndicator  --NJOW01
       
       --Retrieve all the orderkey of the sku      
       WHILE (@@FETCH_STATUS <> -1) 
@@ -505,6 +516,12 @@ BEGIN
          /*****************************/
          TRUNCATE TABLE #CombinationPool
          TRUNCATE TABLE #SplitList
+
+         --NJOW01
+      	 IF @n_PackQtyIndicator > 1
+      	 BEGIN
+      	 	 SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+      	 END
 
          -- 1 = FOUND
          SET @b_Found = 0
@@ -875,7 +892,7 @@ BEGIN
              PRINT 'RESULT FOR ' + CAST(@n_OrderQty AS NVARCHAR) + ': ' + @c_Result  
          END
        
-         FETCH NEXT FROM @CUR_ORDERLINE_SKU INTO @c_Orderkey, @n_OrderQty
+         FETCH NEXT FROM @CUR_ORDERLINE_SKU INTO @c_Orderkey, @n_OrderQty,  @n_PackQtyIndicator  --NJOW01
       END -- END WHILE FOR @CUR_ORDERLINE_SKU              
       CLOSE @CUR_ORDERLINE_SKU
       DEALLOCATE @CUR_ORDERLINE_SKU

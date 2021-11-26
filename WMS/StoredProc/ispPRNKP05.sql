@@ -14,6 +14,7 @@ GO
 /* Written by: Wan                                                      */    
 /*                                                                      */    
 /* Purpose: WMS-10156 NIKE - PH Allocation Strategy Enhancement         */
+/*          Full Pallet from Pallet loc by Consolidate order            */
 /*                                                                      */    
 /* Called By:                                                           */    
 /*                                                                      */    
@@ -25,6 +26,8 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2019-10-04  Wan01    1.0   Fixed Getting Different ID issue          */
 /* 2019-10-08  Wan02    1.0   Fixed wrong deduct orderqty               */
+/* 2021-10-21  NJOW01   1.1   WMS-18109 Prepack qty restriction check   */
+/* 2021-10-21  NJOW01   1.1   DEVOPS Combine script                     */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPRNKP05]        
     @c_WaveKey                      NVARCHAR(10)
@@ -81,6 +84,7 @@ BEGIN
          , @c_LocationType          NVARCHAR(10)   = ''  
          , @c_LocationCategory      NVARCHAR(10)   = ''
          , @c_LocationHandling      NVARCHAR(10)   = ''
+         , @n_PackQtyIndicator      INT            = 0  --NJOW01
 
          , @n_IDQty                 INT            = 0 
          , @n_SeqNo                 INT            = 0           
@@ -139,6 +143,7 @@ BEGIN
    ,  Lottable10        NVARCHAR(30)
    ,  Lottable11        NVARCHAR(30)
    ,  Lottable12        NVARCHAR(30)
+   ,  PackQtyIndicator  INT  --NJOW01      
    )
 
    IF OBJECT_ID('tempdb..#IDxLOCxLOT','u') IS NOT NULL
@@ -188,6 +193,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01                  
          )
       SELECT  
             O.Facility
@@ -206,6 +212,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01                                    
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -232,6 +239,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01                                       
       ORDER BY ISNULL(RTRIM(OD.Lottable01),'') DESC             
    END
    ELSE
@@ -253,6 +261,7 @@ BEGIN
          ,  Lottable10  
          ,  Lottable11  
          ,  Lottable12
+         ,  PackQtyIndicator --NJOW01                  
          )
       SELECT  
             O.Facility
@@ -271,6 +280,7 @@ BEGIN
          ,  ISNULL(RTRIM(OD.Lottable10),'')
          ,  ISNULL(RTRIM(OD.Lottable11),'')
          ,  ISNULL(RTRIM(OD.Lottable12),'')
+         ,  SKU.PackQtyIndicator  --NJOW01                                    
       FROM ORDERS      O   WITH (NOLOCK)        
       JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey) 
       JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)  
@@ -297,6 +307,7 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
+            ,  SKU.PackQtyIndicator  --NJOW01                                       
       ORDER BY O.Orderkey                                     
    END
 
@@ -314,12 +325,16 @@ BEGIN
       , Lottable01, Lottable02, Lottable03, Lottable06 
       , Lottable07, Lottable08, Lottable09, Lottable10
       , Lottable11, Lottable12
-      , OrderQty = SUM(OrderQty)
+      , OrderQty = SUM(CASE WHEN PackQtyIndicator > 1 THEN
+                            FLOOR(OrderQty / PackQtyIndicator) * PackQtyIndicator
+                       ELSE OrderQty END)  --NJOW01
+      , PackQtyIndicator  --NJOW01                   
    FROM #ORDERLINES
    GROUP BY StorerKey,  SKU, Facility, Packkey                                                                     
          , Lottable01, Lottable02, Lottable03, Lottable06 
          , Lottable07, Lottable08, Lottable09, Lottable10
          , Lottable11, Lottable12
+         , PackQtyIndicator  --NJOW01
    ORDER BY Lottable01 DESC                                                                           
 
    OPEN @CUR_ORDERLINES               
@@ -327,7 +342,7 @@ BEGIN
                                     ,  @c_Lottable01, @c_Lottable02, @c_Lottable03, @c_Lottable06
                                     ,  @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                                     ,  @c_Lottable11, @c_Lottable12
-                                    ,  @n_OrderQty
+                                    ,  @n_OrderQty, @n_PackQtyIndicator --NJOW01
           
    WHILE (@@FETCH_STATUS <> -1)          
    BEGIN 
@@ -565,6 +580,12 @@ BEGIN
                --Retrieve all order lines for the order group and create pickdetail
                WHILE (@@FETCH_STATUS <> -1) AND @n_CTNQty > 0         
                BEGIN 
+                  --NJOW01
+                  IF @n_PackQtyIndicator > 1
+                  BEGIN
+                  	 SELECT @n_OrderLineQty = FLOOR(@n_OrderLineQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+                  END
+               	
                   IF @n_OrderLineQty <= @n_CTNQty 
                   BEGIN
                      SET @n_InsertQty = @n_OrderLineQty
@@ -684,7 +705,7 @@ BEGIN
                                        ,  @c_Lottable01, @c_Lottable02, @c_Lottable03, @c_Lottable06
                                        ,  @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                                        ,  @c_Lottable11, @c_Lottable12
-                                       ,  @n_OrderQty
+                                       ,  @n_OrderQty, @n_PackQtyIndicator --NJOW01
    END -- END WHILE FOR @CUR_ORDERLINES             
    CLOSE @CUR_ORDERLINES          
    DEALLOCATE @CUR_ORDERLINES
