@@ -18,7 +18,7 @@ GO
 /*        :                                                             */    
 /* Called By: ECOM PackHeader - ue_saveend                              */    
 /*          :                                                           */    
-/* PVCS Version: 1.3                                                    */    
+/* PVCS Version: 1.5                                                    */    
 /*                                                                      */    
 /* Version: 7.0                                                         */    
 /*                                                                      */    
@@ -31,6 +31,9 @@ GO
 /*                            Trackingno validation (WL01)              */   
 /* 2020-10-09  Wan02    1.3   WMS-14948 - PH_Benby_Ecom_Packing_Filter  */  
 /* 2021-01-20  Wan03    1.4   WMS-16026 - PB-Standardize TrackingNo     */
+/* 2021-11-16  WLChooi  1.5   WMS-18202-Storerconfig filter by facility */
+/*                            (WL02)                                    */
+/* 2021-11-16  WLChooi  1.5   DevOps Combine Script                     */
 /************************************************************************/    
 CREATE PROC isp_ECOM_PackSaveEnd    
            @c_PickSlipNo         NVARCHAR(10)    
@@ -62,7 +65,8 @@ BEGIN
          , @c_ValidateTrackNo NVARCHAR(10)   = ''    
          , @CUR_PIF           CURSOR   
          
-         , @c_EPackSkipTracknoCheck    NVARCHAR(10)   = ''   --WL01   
+         , @c_EPackSkipTracknoCheck    NVARCHAR(10)   = ''   --WL01  
+         , @c_Facility                 NVARCHAR(5)    = ''   --WL02 
     
     
    SET @n_err      = 0    
@@ -78,12 +82,21 @@ BEGIN
                                  THEN OH.TrackingNo     
                                  ELSE ISNULL(RTRIM(OH.UserDefine04),'')     
                                  END  
-      ,   @c_Storerkey  = OH.Storerkey    
+      ,   @c_Storerkey  = OH.Storerkey
+      ,   @c_Facility   = OH.Facility   --WL02    
    FROM ORDERS OH WITH (NOLOCK)    
    WHERE OH.Orderkey = @c_Orderkey    
        
    SELECT @c_ValidateTrackNo = dbo.fnc_GetRight('', @c_Storerkey, '', 'ValidateTrackNo')    
    SELECT @c_EPackSkipTracknoCheck = dbo.fnc_GetRight('', @c_Storerkey, '', 'EPackSkipTracknoCheck')   --WL01  
+
+   --WL02 S
+   IF ISNULL(@c_ValidateTrackNo,'') IN ('','0')
+      SELECT @c_ValidateTrackNo = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateTrackNo')   
+
+   IF ISNULL(@c_EPackSkipTracknoCheck,'') IN ('','0')
+      SELECT @c_EPackSkipTracknoCheck = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPackSkipTracknoCheck')  
+   --WL02 E
 
    SET @CUR_PIF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
    SELECT DISTINCT PD.CartonNo                  --(Wan01)    
