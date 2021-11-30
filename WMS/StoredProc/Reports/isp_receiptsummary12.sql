@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 2-2-2018     LZG       1.0  Added LocationFlag = 'NONE' (ZG01)       */ 
 /************************************************************************/
 CREATE PROC isp_ReceiptSummary12
             @c_ReceiptKey  NVARCHAR(10)
@@ -197,6 +198,7 @@ BEGIN
          and loc in (select loc
                        from loc
                        where facility=@c_Facility
+                       AND LocationFlag = 'NONE'               -- ZG01
                        and hostwhcode=@c_RLHOSTWHCODE)
          ORDER BY lli.Qty
 
