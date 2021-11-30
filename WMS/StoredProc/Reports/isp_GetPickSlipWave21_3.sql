@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 13-NOV-2021 MINGLE   1.1   WMS-18334-Add new field (ML01)            */
+/* 29-NOV-2021 Mingle   1.1   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave21_3
            @c_WaveKey   NVARCHAR(10)
@@ -57,7 +59,9 @@ BEGIN
       ELSE '' END AS RetailSku,
       convert(nvarchar(10),LOTATTRIBUTE.Lottable04,126)  AS Lottable04,
       CASE WHEN ISNULL(C2.Short,'N') = 'Y' THEN LOC.Putawayzone ELSE '' END AS Putawayzone, --WL01
-      ISNULL(C2.Short,'N') AS ShowPutawayzone  --WL01                                                         
+      ISNULL(C2.Short,'N') AS ShowPutawayzone,  --WL01
+      PACK.InnerPack --ML01
+                                                              
    FROM ORDERS (NOLOCK)  
    JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.OrderKey = ORDERS.OrderKey 
    JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.LOC 
