@@ -40,7 +40,9 @@ GO
 /* 21-AUG-2020  NJOW02   1.5  Fix invalid column error                   */ 
 /* 12-NOV-2020  NJOW03   1.6  INC1339334 - Fix bypassed validation while */ 
 /*                            saving WaveDetail                          */
-/*************************************************************************/     
+/* 11-Jun-2021  NJOW04   1.7  WMS-17231 include inventoryhold validation */
+/* 11-Jun-2021  NJOW04   1.7  DEVOPS Combine script                      */
+/*************************************************************************/  
 CREATE PROCEDURE [dbo].[isp_Wrapup_Validation]    
       @c_Window            NVARCHAR(60) = ''  
    ,  @c_BusObj            NVARCHAR(30) = ''  
@@ -91,7 +93,11 @@ BEGIN
          , @c_SPName          NVARCHAR(50)  
   
          , @c_ValidateBy      NVARCHAR(30)  
-         , @c_CfgValSourceCol NVARCHAR(30)  
+         , @c_CfgValSourceCol NVARCHAR(30) 
+         , @c_Lot             NVARCHAR(10)
+         , @c_Loc             NVARCHAR(10)
+         , @c_ID              NVARCHAR(18)
+         , @c_Sku             NVARCHAR(15) 
   
   
    SET @n_err        = 0  
@@ -280,7 +286,7 @@ BEGIN
                             + ' LEFT JOIN ID  WITH (NOLOCK) ON (KITDETAIL.ID  = ID.Id)'  
                          --(Wan01) - END  
                          --(Wan02) - START  
-              WHEN @c_UpdateTable = 'WORKORDERDETAIL'  
+                         WHEN @c_UpdateTable = 'WORKORDERDETAIL'  
                          THEN ' JOIN STORER WITH (NOLOCK) ON (WORKORDERDETAIL.Storerkey = STORER.Storerkey)'  
                             + ' LEFT JOIN SKU WITH (NOLOCK) ON (WORKORDERDETAIL.Storerkey = SKU.Storerkey)'  
                             +                             ' AND(WORKORDERDETAIL.Sku = SKU.Sku)'  
@@ -294,7 +300,7 @@ BEGIN
                          THEN ' LEFT JOIN ORDERS WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERS.Orderkey)'  
                          WHEN @c_UpdateTable = 'LOADPLAN'  
                          THEN ' LEFT JOIN LOADPLANDETAIL WITH (NOLOCK) ON (LOADPLAN.Loadkey = LOADPLANDETAIL.Loadkey)'  
-     + ' LEFT JOIN ORDERS WITH (NOLOCK) ON (LOADPLANDETAIL.Orderkey = ORDERS.Orderkey)'  
+                            + ' LEFT JOIN ORDERS WITH (NOLOCK) ON (LOADPLANDETAIL.Orderkey = ORDERS.Orderkey)'  
                          WHEN @c_UpdateTable = 'LOADPLANDETAIL'  
                          THEN ' JOIN ORDERS WITH (NOLOCK) ON (LOADPLANDETAIL.Orderkey = ORDERS.Orderkey)'  
                          WHEN @c_UpdateTable = 'MBOL'  
@@ -312,6 +318,12 @@ BEGIN
                          WHEN @c_UpdateTable IN ('PODETAIL', 'RECEIPTDETAIL', 'ORDERDETAIL', 'PICKDETAIL')  
                          THEN ' JOIN SKU WITH (NOLOCK) ON (' + @c_UpdateTable + '.Storerkey = SKU.Storerkey)'  
                             +                        ' AND(' + @c_UpdateTable + '.Sku = SKU.Sku)'  
+                         WHEN @c_UpdateTable = 'INVENTORYHOLD'  --NJOW04  
+                         THEN ' LEFT JOIN LOT WITH (NOLOCK) ON (INVENTORYHOLD.Lot = LOT.Lot)'  
+                            + ' LEFT JOIN LOC WITH (NOLOCK) ON (INVENTORYHOLD.Loc = LOC.Loc)'  
+                            + ' LEFT JOIN ID  WITH (NOLOCK) ON (INVENTORYHOLD.ID = ID.ID)'  
+                            + ' LEFT JOIN SKU WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = SKU.Storerkey AND INVENTORYHOLD.Sku = SKU.Sku)'
+                            + ' LEFT JOIN STORER WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = STORER.Storerkey)'    
                          ELSE ''  
                          END  
   
@@ -360,6 +372,58 @@ BEGIN
       --NJOW03 E                         
       END
       --NJOW02 E        
+      
+      --NJOW04 S
+      IF @c_UpdateTable = 'INVENTORYHOLD' AND @c_ValidateBy = 'Storer'  
+      BEGIN
+      	 SET @c_Storerkey = ''
+      	 SET @c_Sku = ''
+      	 SELECT TOP 1 @c_Storerkey = Storerkey,
+      	              @c_Sku = Sku,
+      	              @c_Lot = Lot,
+      	              @c_Loc = Loc,
+      	              @c_ID = ID
+      	 FROM #VALDN
+      	 
+      	 IF ISNULL(@c_Storerkey,'') = ''
+      	 BEGIN
+      	    IF ISNULL(@c_Lot,'') <> ''
+      	    BEGIN
+      	       SELECT @c_Storerkey = Storerkey,
+      	              @c_Sku = Sku
+      	       FROM LOT (NOLOCK)  
+      	       WHERE Lot = @c_Lot
+      	    END       
+      	    ELSE IF ISNULL(@c_ID,'') <> ''
+      	    BEGIN
+      	    	 SELECT TOP 1 @c_Storerkey = Storerkey
+      	    	 FROM LOTXLOCXID (NOLOCK)
+      	    	 WHERE ID = @c_ID
+      	    	 AND Qty > 0
+      	    	 ORDER BY Editdate DESC      	    	       	    	       	    	 
+      	    END
+      	    ELSE IF ISNULL(@c_Loc,'') <> ''
+      	    BEGIN
+      	    	 SELECT TOP 1 @c_Storerkey = Storerkey
+      	    	 FROM LOTXLOCXID (NOLOCK)
+      	    	 WHERE Loc = @c_Loc
+      	    	 --AND Qty > 0
+      	    	 ORDER BY Editdate DESC
+      	    END      	      
+      	    
+      	    IF ISNULL(@c_Storerkey,'') = ''
+      	    BEGIN 
+      	       GOTO QUIT_SP
+      	    END        
+      	    ELSE
+      	    BEGIN
+      	       UPDATE #VALDN
+      	       SET Storerkey = @c_Storerkey,
+      	           Sku = CASE WHEN ISNULL(@c_Sku,'') <> '' THEN @c_Sku ELSE Sku END      	           
+      	    END
+      	 END
+      END 
+      --NJOW04 E
   
       SET @c_Facility = ''  
       SET @c_Storerkey = ''  
@@ -628,7 +692,7 @@ BEGIN
   
             IF EXISTS ( SELECT 1    
                         FROM [INFORMATION_SCHEMA].[PARAMETERS] WITH (NOLOCK)  
-  WHERE SPECIFIC_NAME = @c_SPName  
+                        WHERE SPECIFIC_NAME = @c_SPName  
                         AND PARAMETER_NAME = '@x_XMLSchema'  
                         AND PARAMETER_NAME = '@c_' + @c_ColumnName  
                       )  
