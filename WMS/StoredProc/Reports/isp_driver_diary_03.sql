@@ -1,6 +1,6 @@
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_driver_diary_03]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_driver_diary_03]
+DROP PROCEDURE [dbo].[isp_driver_diary_03]
 GO
 
 SET ANSI_NULLS OFF
@@ -30,7 +30,7 @@ GO
 /************************************************************************/
 CREATE PROC isp_driver_diary_03
             @c_MBOLKey        NVARCHAR(10),
-            @c_type           NVARCHAR(5) = 'H'  
+            @c_type           NVARCHAR(5) = 'M'  
 AS
 BEGIN
    SET NOCOUNT ON
@@ -220,10 +220,14 @@ INNER JOIN MBOL (nolock) ON ( RECEIPT.MBOLKey = MBOL.MbolKey )
 LEFT OUTER JOIN Codelkup CLR WITH (NOLOCK) ON CLR.Storerkey = RECEIPT.StorerKey  AND CLR.Code = 'SHOWLINE'   AND CLR.Listname = 'REPORTCFG' 
                                                          AND CLR.Long = 'r_dw_driver_diary_01' AND ISNULL(CLR.Short,'') <> 'N'  
  WHERE ( MBOL.MBOLKEY = @c_MBOLKey )  
-
-
-   IF @c_type = 'H'
-   BEGIN
+ 
+  IF @c_type = 'M'
+  BEGIN
+     SELECT @c_MBOLKey AS MBOLKEY
+   
+  END
+  ELSE IF @c_type = 'H'
+  BEGIN
       SELECT * FROM #TMPDRIVERDL03
       ORDER BY Route,Company
    END
@@ -263,8 +267,8 @@ LEFT OUTER JOIN Codelkup CLR WITH (NOLOCK) ON CLR.Storerkey = RECEIPT.StorerKey 
   END
   ELSE IF @c_type = 'S2'
   BEGIN
-      SELECT s.ALTSKU AS Altsku,od.Sku AS sku,LOTT.Lottable01 AS lottable01,SUM(pd.Qty)/CAST(p.casecnt AS INT) AS qtycarton,
-           CASE WHEN  (SUM(pd.Qty)%CAST(p.casecnt AS INT)) <> 0 THEN  (SUM(pd.Qty)%CAST(p.casecnt AS INT)/CAST(p.InnerPack AS INT) )  ELSE 0 END AS qtyinner
+      SELECT s.ALTSKU AS Altsku,od.Sku AS sku,LOTT.Lottable01 AS lottable01,SUM(pd.Qty)/CAST(nullif(p.casecnt,0) AS INT) AS qtycarton,
+           CASE WHEN  (SUM(pd.Qty)%CAST(nullif(p.casecnt,0) AS INT)) <> 0 THEN  (SUM(pd.Qty)%CAST(nullif(p.casecnt,0) AS INT)/CAST(nullif(p.InnerPack,0) AS INT) )  ELSE 0 END AS qtyinner
       FROM MBOL MB WITH (NOLOCK)
       JOIN MBOLDETAIL MBD WITH (NOLOCK) ON MBD.mbolkey = MB.MbolKey
       JOIN ORDERDETAIL OD WITH (NOLOCK) ON Od.OrderKey=MBD.orderkey
