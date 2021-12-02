@@ -25,14 +25,16 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author   Ver. Purposes                                  */
+/* 2021-11-24   WLChooi  1.1  DevOps Combine Script                     */
+/* 2021-11-24   WLChooi  1.1  WMS-18393 - Show ID, Color, Size (WL01)   */
 /************************************************************************/
 
 CREATE  PROC dbo.isp_GetPickSlipOrders57 (@c_loadkey NVARCHAR(10))
@@ -345,10 +347,13 @@ BEGIN
          ,PD.Loc
          ,ISNULL(RTRIM(SKU.Descr),'')
          ,ISNULL(RTRIM(SKU.SkuGroup),'')
-         ,ISNULL(RTRIM(LA.Lottable02),'')
-         ,CASE WHEN LA.Lottable04 = '1900-01-01' THEN NULL ELSE LA.Lottable04 END
+         ,''   --ISNULL(RTRIM(LA.Lottable02),'')   --WL01
+         ,NULL --CASE WHEN LA.Lottable04 = '1900-01-01' THEN NULL ELSE LA.Lottable04 END   --WL01
          ,QtyInCarton = CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(SUM(PD.Qty) / PACK.CaseCnt) ELSE 0 END
          ,QtyInEA     = CASE WHEN PACK.CaseCnt > 0 THEN SUM(PD.Qty) % CONVERT(INT,PACK.CaseCnt) ELSE SUM(PD.Qty) END
+         ,ID          = PD.ID                  --WL01
+         ,Color       = ISNULL(SKU.Color,'')   --WL01
+         ,Size        = ISNULL(SKU.Size,'')    --WL01
    FROM #TMP_PICK    TMP
    JOIN ORDERS       OH  WITH (NOLOCK) ON (TMP.Orderkey = OH.Orderkey)
    JOIN PICKDETAIL   PD  WITH (NOLOCK) ON (TMP.Orderkey = PD.Orderkey)
@@ -371,12 +376,18 @@ BEGIN
          ,  PD.Loc
          ,  ISNULL(RTRIM(SKU.Descr),'')
          ,  ISNULL(RTRIM(SKU.SkuGroup),'')
-         ,  ISNULL(RTRIM(LA.Lottable02),'')
-         ,  CASE WHEN LA.Lottable04 = '1900-01-01' THEN NULL ELSE LA.Lottable04 END
+         --,  ISNULL(RTRIM(LA.Lottable02),'')   --WL01
+         --,  CASE WHEN LA.Lottable04 = '1900-01-01' THEN NULL ELSE LA.Lottable04 END   --WL01
          ,  PACK.CaseCnt 
+         ,  PD.ID                  --WL01
+         ,  ISNULL(SKU.Color,'')   --WL01
+         ,  ISNULL(SKU.Size,'')    --WL01
    ORDER BY TMP.PickSlipNo
          ,  TMP.Loadkey
          ,  TMP.Orderkey
+         ,  PD.Loc   --WL01
+         ,  PD.ID    --WL01
+         ,  PD.Sku   --WL01
 
    DROP Table #TMP_PICK
 
