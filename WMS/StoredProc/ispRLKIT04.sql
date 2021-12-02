@@ -12,11 +12,11 @@ GO
 /* Written by:                                                           */  
 /*                                                                       */  
 /* Purpose: WMS-10085 CN/SG Logitech split kitting                       */
-/*          Storerconifg:	KitReleaseTask_SP  Option1 = ¡®Split to new kit¡¯*/
+/*          Storerconifg:	KitReleaseTask_SP  Option1 = Split to new kit */
 /*                                                                       */  
 /* Called By: Kitting RCM Release pick task (split to new kit)           */  
 /*                                                                       */  
-/* PVCS Version: 1.0                                                     */  
+/* PVCS Version: 1.1                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -25,6 +25,8 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */  
 /* 08-Jul-2020  NJOW01   1.0  WMS-14142 copy lottable07 to to-kit        */
+/* 19-Nov-2021  WLChooi  1.1  DevOps Combine Script                      */
+/* 19-Nov-2021  WLChooi  1.1  WMS-18400 - Filter by KITKey (WL01)        */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLKIT04]      
@@ -103,6 +105,7 @@ CREATE PROCEDURE [dbo].[ispRLKIT04]
        JOIN KIT (NOLOCK) ON CL.Code = KIT.Facility AND CL.Storerkey = KIT.Storerkey
        JOIN LOC (NOLOCK) ON CL.Short = LOC.Loc
        WHERE CL.ListName = 'LOGIKIT' 
+       AND KIT.KITKey = @c_kitkey   --WL01
        
        IF ISNULL(@c_FinalLoc,'') = ''
        BEGIN
@@ -482,4 +485,3 @@ GO
 
 GRANT EXECUTE ON ispRLKIT04 TO NSQL
 GO
-
