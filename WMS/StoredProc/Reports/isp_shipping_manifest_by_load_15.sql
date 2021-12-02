@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date         Author  Ver   Purposes                                   */    
+/* Date         Author  Ver   Purposes                                   */ 
+/* 05-11-2021   Mingle  1.1   WMS-18305 Add new mappings(ML01)           */   
 /*************************************************************************/    
 CREATE PROC [dbo].[isp_shipping_manifest_by_load_15]    
 (      
@@ -154,7 +155,10 @@ BEGIN
           StdCube         FLOAT NULL,    
           ST_Company      NVARCHAR(45) NULL,    
           C_Address1      NVARCHAR(45) NULL,    
-          F_Address1      NVARCHAR(45) NULL    
+          F_Address1      NVARCHAR(45) NULL,
+          Userdefine02    NVARCHAR(20) NULL,    --ML01     
+          Userdefine03    NVARCHAR(20) NULL,    --ML01
+          Showfield       NVARCHAR(5)  NULL
           )           
        
   -- SET @n_NoOfLine = 6    
@@ -205,7 +209,10 @@ BEGIN
           PCS ,    
           STDNETWGT,    
           StdCube,    
-          ST_company,C_Address1,F_Address1    
+          ST_company,C_Address1,F_Address1,
+          Userdefine02,    --ML01
+          Userdefine03,    --ML01   
+          Showfield
       )    
       SELECT orders.orderkey,orders.loadkey,orders.c_company,    
              orderdetail.Sku,    
@@ -221,7 +228,10 @@ BEGIN
              CASE WHEN L.locationtype='PICK' THEN SUM(pickdetail.qty) ELSE 0 END,    
              cast(Sum(pickdetail.qty)*sku.StdGrossWgt as decimal(9,4)),    
              case when sku.[Cube]>0 then Sum(pickdetail.qty) *sku.StdCube else Sum(pickdetail.qty) *sku.StdCube  end,
-             storer.company,ISNULL(C_Address1,'') , ISNULL(F.Address1,'')    
+             storer.company,ISNULL(C_Address1,'') , ISNULL(F.Address1,'') ,
+             orders.UserDefine02,    --ML01
+             orders.UserDefine03,    --ML01   
+             ISNULL(CL.SHORT,'')
       FROM Orders orders  WITH (nolock)    
       LEFT JOIN orderdetail orderdetail  WITH  (nolock) on orderdetail.orderkey = orders.orderkey     
       LEFT JOIN storer storer  WITH (nolock) on orders.storerkey = storer.storerkey     
@@ -230,7 +240,8 @@ BEGIN
       LEFT JOIN PickDetail pickdetail  WITH  (nolock) on pickdetail.OrderKey=orderdetail.OrderKey and pickdetail.OrderLineNumber=orderdetail.OrderLineNumber    
       LEFT JOIN LotAttribute lot  WITH (nolock) on pickdetail.Lot=lot.Lot    
       JOIN LOC L WITH (NOLOCK) ON L.loc = pickdetail.loc    
-      JOIN FACILITY F WITH (NOLOCK) ON F.facility = Orders.facility    
+      JOIN FACILITY F WITH (NOLOCK) ON F.facility = Orders.facility  
+      LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Storerkey = orders.StorerKey AND CL.Long = 'r_shipping_manifest_by_load_15'
       WHERE orders.StorerKey = @c_getstorerkey    
       AND orders.LoadKey = @c_getLoadkey    
       AND orders.Orderkey = @c_getOrderkey    
@@ -243,12 +254,15 @@ BEGIN
               orders.ExternOrderKey,    
               ISNULL(RTRIM(orders.c_Contact1), ''),    
               ISNULL(RTRIM(orders.C_Phone1), '') ,L.locationtype,pack.CaseCnt,orders.consigneekey,    
-              sku.StdGrossWgt,sku.[cube],sku.StdCube  ,storer.company,ISNULL(C_Address1,'') , ISNULL(F.Address1,'')    
+              sku.StdGrossWgt,sku.[cube],sku.StdCube  ,storer.company,ISNULL(C_Address1,'') , ISNULL(F.Address1,''),    
      --      CASE WHEN L.locationtype<>'PICK' THEN SUM(pickdetail.qty) ELSE 0 END,    
      --      CASE WHEN L.locationtype<>'PICK' THEN SUM(pickdetail.qty) ELSE 0 END % CAST(p.casecnt as int) +    
      --CASE WHEN L.locationtype='PICK' THEN SUM(pickdetail.qty) ELSE 0 END,    
          --  cast(Sum(pickdetail.qty)*s.StdGrossWgt as decimal(9,4)),    
-        --   case when s.[Cube]>0 then Sum(pickdetail.qty) *t3.StdCube else Sum(pickdetail.qty) *t3.StdCube  end    
+        --   case when s.[Cube]>0 then Sum(pickdetail.qty) *t3.StdCube else Sum(pickdetail.qty) *t3.StdCube  end
+             orders.UserDefine02,    --ML01
+             orders.UserDefine03,    --ML01 
+             ISNULL(CL.SHORT,'')   
      
    ORDER BY orders.orderkey,orders.loadkey,orders.ExternOrderKey,orderdetail.Sku    
     
@@ -274,7 +288,10 @@ BEGIN
     ts.PCS,    
     ts.SDESCR,    
     FLOOR(ts.CaseCnt) as CaseCnt,ts.c_address1,ts.F_address1, --(stv03)    
-    ROW_Number() OVER(PARTITION BY ts.Orderkey ORDER BY ts.Orderkey )  AS seqno --(stv04)    
+    ROW_Number() OVER(PARTITION BY ts.Orderkey ORDER BY ts.Orderkey )  AS seqno, --(stv04) 
+    ts.userdefine02,    --ML01
+    ts.Userdefine03,    --ML01 
+    ts.Showfield
    FROM #TMP_SMBLOAD15 AS ts    
   --  WHERE ts.loadkey = @c_loadkey    
    ORDER BY ts.loadkey,ts.Orderkey,ts.ExtOrdKey,ts.SKU    
