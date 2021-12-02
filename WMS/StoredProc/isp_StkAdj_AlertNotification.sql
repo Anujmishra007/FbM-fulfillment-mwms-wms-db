@@ -7,7 +7,7 @@ SET ANSI_NULLS OFF
 GO
 
 /***************************************************************************/
-/* Stored Proc : isp_StkAdj_AlertNotification                           	*/
+/* Stored Proc : isp_StkAdj_AlertNotification                              */
 /* Creation Date:  21th May 2009                                           */
 /* Copyright: IDS                                                          */
 /* Written by: Shong                                                       */
@@ -19,7 +19,7 @@ GO
 /*                                                                         */
 /* Local Variables:                                                        */
 /*                                                                         */
-/* Called By: Back-end job                                 	               */
+/* Called By: Back-end job                                                 */
 /*                                                                         */
 /* PVCS Version: 1.0                                                       */
 /*                                                                         */
@@ -29,9 +29,11 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author      Ver   Purposes                                  */
+/* 29-Nov-2021 CSCHONg     1.1   Devops Scripts Combine                    */
+/* 29-Nov-2021 CSCHONG     1.2   WMS-18401 revised field logic (CS01)      */
 /***************************************************************************/
 
-CREATE PROC isp_StkAdj_AlertNotification 
+CREATE  PROC isp_StkAdj_AlertNotification 
   @cRecipientList NVARCHAR(max), 
   @cStartStorer   NVARCHAR(60) = '',
   @cEndStorer     NVARCHAR(60) = 'ZZZZZZZZZZ',
@@ -59,22 +61,25 @@ BEGIN
           N'<table border="1">' +
           N'<tr><th>Storer</th><th>Adjustment No</th>' +
           N'<th>Remarks</th><th>Reasons</th>' +
-          N'<th>Variances</th></tr>' +
+          N'<th>Variances(PC)</th>' +                     --(CS01)
+          N'<th>Variances(CS)</th></tr>' +                --(CS01)
           CAST ( ( SELECT td = A.StorerKey, '', 
                           td = A.AdjustmentKey, '', 
-                          td = A.Remarks, '', 
+                          td = ISNULL(A.Remarks,''), '', 
                           td = ISNULL(CL.Description,'No Reason'), '', 
-                          td = SUM(Qty)   
+                          td = SUM(AD.Qty), '',  
+                          td = SUM(AD.Qty/NULLIF(CAST(p.casecnt AS INT),0))                   --(CS01)
                    FROM Adjustment A WITH (NOLOCK)
                    JOIN AdjustmentDetail AD WITH (NOLOCK) ON A.AdjustmentKey = AD.Adjustmentkey 
                    LEFT OUTER JOIN CODELKUP CL WITH (NOLOCK) ON CL.ListName = 'ADJREASON' AND
                          CL.Code = AD.ReasonCode
                    JOIN  LOC WITH (NOLOCK) ON AD.LOC = LOC.LOC 
+                   JOIN PACK P WITH (NOLOCK) ON P.PackKey = AD.PackKey            --CS01
                    WHERE AD.EditDate Between @cStartDate and @cEndDate 
                      AND AD.StorerKey Between @cStartStorer and @cEndStorer 
                      AND LOC.Facility Between @cStartFacility and @cEndFacility 
                      AND AD.FinalizedFlag = 'Y'
-                   GROUP BY A.StorerKey, A.AdjustmentKey, A.Remarks, ISNULL(CL.Description,'No Reason') 
+                   GROUP BY A.StorerKey, A.AdjustmentKey,ISNULL(A.Remarks,''), ISNULL(CL.Description,'No Reason') 
                    ORDER BY 1, 2
             FOR XML PATH('tr'), TYPE 
           ) AS NVARCHAR(MAX) ) +
