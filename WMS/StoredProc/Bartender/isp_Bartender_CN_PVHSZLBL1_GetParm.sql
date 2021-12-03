@@ -18,6 +18,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2021-09-09 1.0  WLChooi    Created (WMS-17933)                             */
 /* 2021-09-09 1.0  WLChooi    DevOps Combine Script                           */
+/* 2021-12-01 1.1  WLChooi    WMS-17933 - Bug Fix (WL01)                      */
 /******************************************************************************/
                   
 CREATE PROC [dbo].[isp_Bartender_CN_PVHSZLBL1_GetParm]                      
@@ -118,7 +119,21 @@ BEGIN
                                         AND SUBSTRING(ST.Storerkey,5, LEN(ST.Storerkey) - 4) = OH.Consigneekey
       WHERE OH.Storerkey = @Parm01
       AND OH.Orderkey = @c_FirstOrderkey
-      
+      AND ST.ISOCntryCode IS NOT NULL  --WL01
+
+      --WL01 S
+      IF ISNULL(@c_countrycode,'') = '' AND ISNULL(@c_OrdGRP,'') = ''
+      BEGIN
+         SELECT @c_countrycode = ST.isocntrycode,
+                @c_OrdGRP = OH.OrderGroup 
+         FROM ORDERS OH WITH (NOLOCK) 
+         LEFT JOIN Storer ST WITH (NOLOCK) ON ST.ConsigneeFor = OH.Storerkey 
+                                           AND SUBSTRING(ST.Storerkey,5, LEN(ST.Storerkey) - 4) = OH.Consigneekey
+         WHERE OH.Storerkey = @Parm01
+         AND OH.Orderkey = @c_FirstOrderkey
+      END
+      --WL01 E
+
       IF @b_debug = '1'
       BEGIN
          SELECT @c_countrycode '@c_countrycode',@c_OrdGRP '@c_OrdGRP'
@@ -181,7 +196,8 @@ BEGIN
                           ' FROM PACKDETAIL PD WITH (NOLOCK)  ' + CHAR(13) +
                           ' WHERE PD.Storerkey = @Parm01 '+ CHAR(13) +
                           ' AND PD.Labelno = @Parm02 ' + CHAR(13) +
-                          ' GROUP BY PD.Storerkey,PD.Labelno,PD.SKU'
+                          ' GROUP BY PD.Storerkey, PD.Labelno, PD.SKU ' +   --WL01
+                          ' ORDER BY PD.Storerkey, PD.Labelno, PD.SKU '     --WL01
       END
    END
    ELSE
@@ -215,6 +231,20 @@ BEGIN
                                         AND SUBSTRING(ST.Storerkey,5, LEN(ST.Storerkey) - 4) = OH.Consigneekey
       WHERE OH.Storerkey = @Parm01
       AND OH.Orderkey = @c_FirstOrderkey
+      AND ST.ISOCntryCode IS NOT NULL  --WL01
+
+      --WL01 S
+      IF ISNULL(@c_countrycode,'') = '' AND ISNULL(@c_OrdGRP,'') = ''
+      BEGIN
+         SELECT @c_countrycode = ST.isocntrycode,
+                @c_OrdGRP = OH.OrderGroup 
+         FROM ORDERS OH WITH (NOLOCK) 
+         LEFT JOIN Storer ST WITH (NOLOCK) ON ST.ConsigneeFor = OH.Storerkey 
+                                           AND SUBSTRING(ST.Storerkey,5, LEN(ST.Storerkey) - 4) = OH.Consigneekey
+         WHERE OH.Storerkey = @Parm01
+         AND OH.Orderkey = @c_FirstOrderkey
+      END
+      --WL01 E
 
       IF @b_debug = '1'
       BEGIN
