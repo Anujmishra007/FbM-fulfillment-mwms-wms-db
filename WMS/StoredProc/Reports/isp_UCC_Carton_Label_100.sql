@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 2021-11-16   WLChooi   1.1 WMS-18335 Add VirtualDCName & Flag (WL01) */
+/* 2021-11-16   WLChooi   1.1 DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC [dbo].[isp_UCC_Carton_Label_100]
            @c_Storerkey       NVARCHAR(15)
@@ -47,6 +49,11 @@ BEGIN
          , @n_TotalPackedQty        INT
          , @c_Loadkey               NVARCHAR(10)
          , @c_OnlyPrintNewLayout    NVARCHAR(1) = 'N'
+         , @c_ShowFlag              NVARCHAR(1) = 'Y'   --WL01
+         , @c_GetPickslipno         NVARCHAR(10) = ''   --WL01
+         , @n_CartonNo              INT = 0             --WL01
+         , @n_CountPickzone         INT = 0             --WL01
+         , @n_CountCertainPickzone  INT = 0             --WL01
          
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -68,6 +75,104 @@ BEGIN
    FROM LOADPLANDETAIL LPD (NOLOCK)
    JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = LPD.OrderKey
    WHERE LPD.LoadKey = @c_Loadkey
+
+   --WL01 S
+   CREATE TABLE #TMP_DCUSER (
+      Pickslipno    NVARCHAR(10)
+    , CartonNo      INT
+    , VirtualDCName NVARCHAR(50)
+    , Flag          NVARCHAR(50)
+   )
+
+   CREATE TABLE #TMP_Pickzone (
+      Loadkey       NVARCHAR(10)
+    , Pickzone      NVARCHAR(20)
+   )
+
+   INSERT INTO #TMP_Pickzone(Loadkey, Pickzone)
+   SELECT DISTINCT LPD.LoadKey, L.PickZone
+   FROM LOADPLANDETAIL LPD (NOLOCK)
+   JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = LPD.OrderKey
+   JOIN LOC L (NOLOCK) ON L.Loc = PD.Loc
+   WHERE LPD.LoadKey = @c_Loadkey
+
+   SELECT @n_CountPickzone = COUNT(DISTINCT TP.Pickzone)
+   FROM #TMP_Pickzone TP
+   WHERE TP.Loadkey = @c_Loadkey
+
+   SELECT @n_CountCertainPickzone = COUNT(DISTINCT TP.Pickzone)
+   FROM #TMP_Pickzone TP
+   WHERE TP.Loadkey = @c_Loadkey
+   AND TP.Pickzone IN ('BS01','BS08')
+
+   IF EXISTS (SELECT 1
+              FROM #TMP_Pickzone PZ
+              WHERE PZ.LoadKey = @c_Loadkey
+              AND PZ.PickZone = 'BS08'
+              AND @n_CountPickzone = 1)
+   BEGIN
+      SET @c_ShowFlag = 'N'
+   END
+
+   IF EXISTS (SELECT 1
+              FROM #TMP_Pickzone PZ
+              WHERE PZ.LoadKey = @c_Loadkey
+              AND PZ.PickZone = 'BS01'
+              AND @n_CountPickzone = 1 )
+   BEGIN
+      SET @c_ShowFlag = 'N'
+   END
+
+   /*
+   IF EXISTS (SELECT 1
+              FROM #TMP_Pickzone PZ
+              WHERE PZ.LoadKey = @c_Loadkey
+              AND PZ.PickZone IN ('BS08','BS01')
+              AND @n_CountPickzone = 2 )
+   BEGIN
+      SET @c_ShowFlag = 'N'
+   END
+   */
+
+   IF EXISTS (SELECT 1
+              FROM #TMP_Pickzone PZ
+              WHERE PZ.LoadKey = @c_Loadkey
+              AND PZ.PickZone IN ('BS01','BS08')
+              AND @n_CountPickzone = 2 
+              AND @n_CountPickzone = @n_CountCertainPickzone)
+   BEGIN
+      SET @c_ShowFlag = 'N'
+   END
+
+   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT PD.Pickslipno, PD.CartonNo
+   FROM PACKDETAIL PD (NOLOCK)
+   WHERE (PD.PickSlipNo = @c_PickSlipNo)
+   AND (PD.Storerkey = @c_Storerkey)
+   AND (PD.CartonNo BETWEEN @c_StartCartonNo AND @c_EndCartonNo)
+   ORDER BY PD.CartonNo
+
+   OPEN CUR_LOOP
+
+   FETCH NEXT FROM CUR_LOOP INTO @c_GetPickslipno, @n_CartonNo
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      INSERT INTO #TMP_DCUSER (Pickslipno, CartonNo, VirtualDCName, Flag)
+      SELECT @c_GetPickslipno, @n_CartonNo, ISNULL(CL.Short,''), ISNULL(CL.Long,'')
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'DCUSER'
+      AND CL.Code IN (SELECT TOP 1 PD.Addwho
+                      FROM PACKDETAIL PD (NOLOCK)
+                      WHERE PD.PickSlipNo = @c_GetPickslipno
+                      AND PD.CartonNo = @n_CartonNo)
+      AND CL.Storerkey = @c_Storerkey
+
+      FETCH NEXT FROM CUR_LOOP INTO @c_GetPickslipno, @n_CartonNo
+   END
+   CLOSE CUR_LOOP
+   DEALLOCATE CUR_LOOP
+   --WL01 E
    
    IF @c_EndCartonNo = 'NL'
    BEGIN
@@ -117,12 +222,15 @@ BEGIN
            , Loadkey       = SUBSTRING(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),1, LEN(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),'')) - 4)
            , Last4Loadkey  = RIGHT(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),4)
            , NewLayout     = 'N'
+           , VirtualDCName = CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END   --WL01
+           , Flag          = CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.Flag,'')          END   --WL01
       INTO #TMP_CtnLbl100
       FROM PACKHEADER WITH (NOLOCK) 
       JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo) 
       JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON LPD.Loadkey = PACKHEADER.LoadKey
       JOIN ORDERS WITH (NOLOCK) ON LPD.Orderkey = ORDERS.Orderkey
       LEFT JOIN STORER WITH (NOLOCK) ON (STORER.Storerkey =  RTRIM(ORDERS.ConsigneeKey))
+      LEFT JOIN #TMP_DCUSER TD ON TD.Pickslipno = PackDetail.PickSlipNo AND TD.CartonNo = PackDetail.CartonNo   --WL01
       WHERE (PACKHEADER.PickSlipNo= @c_PickSlipNo)
          AND (PACKHEADER.Storerkey = @c_Storerkey)
          AND (PACKDETAIL.CartonNo BETWEEN @c_StartCartonNo AND @c_EndCartonNo)
@@ -143,6 +251,8 @@ BEGIN
              , RIGHT(ISNULL(LTRIM(RTRIM(PACKDETAIL.LabelNo)),''),4)
              , SUBSTRING(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),1, LEN(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),'')) - 4)
              , RIGHT(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),4)
+             , CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END    --WL01
+             , CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.Flag,'') END             --WL01
              
       IF (@c_StartCartonNo <> @c_EndCartonNo) OR @c_OnlyPrintNewLayout = 'Y'
       BEGIN
@@ -181,6 +291,8 @@ BEGIN
               , Loadkey      
               , Last4Loadkey 
               , 'Y'
+              , VirtualDCName   --WL01
+              , Flag            --WL01
          FROM #TMP_CtnLbl100 WITH (NOLOCK) 
       END
       
@@ -255,6 +367,19 @@ BEGIN
    END
 
 QUIT_SP:
+   --WL01 S
+   IF OBJECT_ID('tempdb..#TMP_CtnLbl100') IS NOT NULL
+      DROP TABLE #TMP_CtnLbl100
+
+   IF OBJECT_ID('tempdb..#TMP_DCUSER') IS NOT NULL
+      DROP TABLE #TMP_DCUSER
+   
+   IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_LOOP
+      DEALLOCATE CUR_LOOP   
+   END
+   --WL01 E
 END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_UCC_Carton_Label_100] TO nSQL 
