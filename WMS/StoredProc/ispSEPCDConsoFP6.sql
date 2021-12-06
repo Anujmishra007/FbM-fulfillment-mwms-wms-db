@@ -24,8 +24,9 @@ GO
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
-/* Updates:                                                             */  
-/* Date        Author   Ver   Purposes                                  */  
+/* Updates:                                                             */
+/* Date         Author  Ver   Purposes                                  */
+/* 19-Aug-2021  WLChooi 1.0   DevOps Combine Script                     */
 /************************************************************************/  
 CREATE PROC ispSEPCDConsoFP6
      @c_WaveKey            NVARCHAR(10)
