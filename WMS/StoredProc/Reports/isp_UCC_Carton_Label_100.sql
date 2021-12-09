@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_ucc_carton_label_100                                 */
 /*          :                                                           */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Date         Author    Ver Purposes                                  */
 /* 2021-11-16   WLChooi   1.1 WMS-18335 Add VirtualDCName & Flag (WL01) */
 /* 2021-11-16   WLChooi   1.1 DevOps Combine Script                     */
+/* 2021-12-07   WLChooi   1.2 WMS-18335 - Add ShowDCName Flag (WL02)    */
 /************************************************************************/
 CREATE PROC [dbo].[isp_UCC_Carton_Label_100]
            @c_Storerkey       NVARCHAR(15)
@@ -54,6 +55,7 @@ BEGIN
          , @n_CartonNo              INT = 0             --WL01
          , @n_CountPickzone         INT = 0             --WL01
          , @n_CountCertainPickzone  INT = 0             --WL01
+         , @c_ShowDCName            NVARCHAR(10)        --WL02
          
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -144,6 +146,18 @@ BEGIN
       SET @c_ShowFlag = 'N'
    END
 
+   --WL02 S
+   IF EXISTS (SELECT 1
+              FROM #TMP_Pickzone PZ
+              JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CONSUBDCPZ'
+                                       AND CL.Code = PZ.Pickzone
+                                       AND CL.Storerkey = @c_Storerkey
+                                       AND CL.UDF01 = '1'
+              WHERE PZ.LoadKey = @c_Loadkey) 
+   BEGIN
+      SET @c_ShowDCName = 'Y'
+   END
+   
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT PD.Pickslipno, PD.CartonNo
    FROM PACKDETAIL PD (NOLOCK)
@@ -172,6 +186,7 @@ BEGIN
    END
    CLOSE CUR_LOOP
    DEALLOCATE CUR_LOOP
+   --WL02 E
    --WL01 E
    
    IF @c_EndCartonNo = 'NL'
@@ -222,7 +237,7 @@ BEGIN
            , Loadkey       = SUBSTRING(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),1, LEN(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),'')) - 4)
            , Last4Loadkey  = RIGHT(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),4)
            , NewLayout     = 'N'
-           , VirtualDCName = CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END   --WL01
+           , VirtualDCName = CASE WHEN @c_ShowDCName = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END   --WL01   --WL02
            , Flag          = CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.Flag,'')          END   --WL01
       INTO #TMP_CtnLbl100
       FROM PACKHEADER WITH (NOLOCK) 
@@ -251,7 +266,7 @@ BEGIN
              , RIGHT(ISNULL(LTRIM(RTRIM(PACKDETAIL.LabelNo)),''),4)
              , SUBSTRING(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),1, LEN(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),'')) - 4)
              , RIGHT(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),4)
-             , CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END    --WL01
+             , CASE WHEN @c_ShowDCName = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END   --WL01   --WL02
              , CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.Flag,'') END             --WL01
              
       IF (@c_StartCartonNo <> @c_EndCartonNo) OR @c_OnlyPrintNewLayout = 'Y'
