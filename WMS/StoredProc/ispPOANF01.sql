@@ -7,59 +7,62 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/    
-/* Stored Procedure: ispPOANF01                                         */    
-/* Creation Date: 07-Feb-2014                                           */    
-/* Copyright: LFL                                                       */    
-/* Written by: Chee Jun Yan                                             */    
-/*                                                                      */    
-/* Purpose: Update UCC.Status to 3 and Stamp UCCNo to PickDetail.DropID */ 
+/************************************************************************/
+/* Stored Procedure: ispPOANF01                                         */
+/* Creation Date: 07-Feb-2014                                           */
+/* Copyright: LFL                                                       */
+/* Written by: Chee Jun Yan                                             */
+/*                                                                      */
+/* Purpose: Update UCC.Status to 3 and Stamp UCCNo to PickDetail.DropID */
 /*          to avoid duplicate allocation (All)                         */
-/*                                                                      */    
-/* Called By:                                                           */    
-/*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
-/*                                                                      */    
-/* Version: 1.0                                                         */    
-/*                                                                      */    
-/* Data Modifications:                                                  */    
-/*                                                                      */    
-/* Updates:                                                             */    
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 1.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 2014-05-26   Chee      1.1   Bug Fix when calculating combinations   */
-/*                              for low UCC qty (Chee01)                */ 
-/* 2014-06-30   CSCHONG   1.2   SQL2012 Fixing Bugs (CS01)              */ 
-/************************************************************************/    
-CREATE  PROC [dbo].[ispPOANF01]        
+/*                              for low UCC qty (Chee01)                */
+/* 2014-06-30   CSCHONG   1.2   SQL2012 Fixing Bugs (CS01)              */
+/* 2021-11-30   SYChua    1.3   JSM-26835 - bug fix for missing         */
+/*                              channel_id for split pickdetail (SY01)  */
+/************************************************************************/
+
+CREATE  PROC [dbo].[ispPOANF01]
     @c_LoadKey                      NVARCHAR(10)
   , @c_UOM                          NVARCHAR(10)
   , @c_LocationTypeOverride         NVARCHAR(10)
   , @c_LocationTypeOverRideStripe   NVARCHAR(10)
-  , @b_Success                      INT           OUTPUT  
-  , @n_Err                          INT           OUTPUT  
-  , @c_ErrMsg                       NVARCHAR(250) OUTPUT  
+  , @b_Success                      INT           OUTPUT
+  , @n_Err                          INT           OUTPUT
+  , @c_ErrMsg                       NVARCHAR(250) OUTPUT
   , @b_Debug                        INT = 0
-AS    
-BEGIN    
-   SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
-   SET ANSI_NULLS OFF    
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
 
-   DECLARE  
-      @n_Continue    INT,  
+   DECLARE
+      @n_Continue    INT,
       @n_StartTCnt   INT
 
-   DECLARE 
+   DECLARE
       @c_PickDetailKey    NVARCHAR(18),
       @c_NewPickDetailKey NVARCHAR(18),
       @c_OrderKey         NVARCHAR(10),
       @c_OrderLineNumber  NVARCHAR(5),
-      @c_StorerKey        NVARCHAR(15), 
-      @c_SKU              NVARCHAR(20), 
+      @c_StorerKey        NVARCHAR(15),
+      @c_SKU              NVARCHAR(20),
       @c_Loc              NVARCHAR(10),
       @c_Lot              NVARCHAR(10),
       @c_ID               NVARCHAR(18),
-      @c_UCCNo            NVARCHAR(20), 
+      @c_UCCNo            NVARCHAR(20),
       @n_UCCQty           INT,
       @n_PickedQty        INT,
       @n_Sum              INT,
@@ -69,7 +72,7 @@ BEGIN
    DECLARE
       @n_CntCount         INT,
       @n_Count            INT,
-      @n_Number           INT, 
+      @n_Number           INT,
       @n_Pos              INT,
       @n_Result           INT,
       @c_Result           NVARCHAR(4000),
@@ -82,7 +85,7 @@ BEGIN
    IF OBJECT_ID('tempdb..#NumPool','u') IS NOT NULL
    DROP TABLE #NumPool;
 
-   CREATE TABLE #NumPool (  
+   CREATE TABLE #NumPool (
       ID            INT IDENTITY(1,1),
       UCCQty        INT,
       CntCount      INT DEFAULT 0
@@ -93,22 +96,22 @@ BEGIN
 
    -- Store all possible combination numbers
    CREATE TABLE #CombinationPool (
-      [Sum]    INT, 
+      [Sum]    INT,
       Subset   NVARCHAR(4000)
    )
 
    SELECT @n_StartTCnt = @@TRANCOUNT , @n_Continue=1, @b_Success=1, @n_Err=0, @c_ErrMsg=''
 
 
-   SELECT TOP 1 
+   SELECT TOP 1
       @c_LoadType = O.Type
    FROM LOADPLANDETAIL LPD WITH (NOLOCK)
    JOIN ORDERS O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
    WHERE LPD.LoadKey = @c_LoadKey
 
    IF ISNULL(@c_LoadType, '') = 'selloff'
-      DECLARE CURSOR_PICKDETAILS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-      SELECT  
+      DECLARE CURSOR_PICKDETAILS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT
          PD.StorerKey,
          PD.SKU,
          PD.LOT,
@@ -117,15 +120,15 @@ BEGIN
          PD.UOM,
          SUM(PD.Qty)
       FROM PICKDETAIL PD WITH (NOLOCK)
-      JOIN LOC WITH (NOLOCK) ON (PD.Loc = LOC.LOC)    
+      JOIN LOC WITH (NOLOCK) ON (PD.Loc = LOC.LOC)
       JOIN LoadPlanDetail LPD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
       WHERE LPD.LoadKey = @c_LoadKey
         AND LOC.LocationCategory = 'ANFOTHERS'
         AND ISNULL(PD.DropID, '') = ''
       GROUP BY PD.StorerKey, PD.SKU, PD.LOT, PD.LOC, PD.ID, PD.UOM
    ELSE
-      DECLARE CURSOR_PICKDETAILS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-      SELECT  
+      DECLARE CURSOR_PICKDETAILS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT
          PD.StorerKey,
          PD.SKU,
          PD.LOT,
@@ -134,7 +137,7 @@ BEGIN
          PD.UOM,
          SUM(PD.Qty)
       FROM PICKDETAIL PD WITH (NOLOCK)
-      JOIN LOC WITH (NOLOCK) ON (PD.Loc = LOC.LOC)    
+      JOIN LOC WITH (NOLOCK) ON (PD.Loc = LOC.LOC)
       JOIN LoadPlanDetail LPD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
       WHERE LPD.LoadKey = @c_LoadKey
         AND LOC.LocationType = 'OTHER'
@@ -144,24 +147,24 @@ BEGIN
 
    OPEN CURSOR_PICKDETAILS
    FETCH NEXT FROM CURSOR_PICKDETAILS INTO @c_StorerKey, @c_SKU, @c_Lot, @c_Loc, @c_ID, @c_UOM, @n_Total
-          
-   WHILE (@@FETCH_STATUS <> -1)          
-   BEGIN 
+
+   WHILE (@@FETCH_STATUS <> -1)
+   BEGIN
       IF @b_Debug = 1
         PRINT '-------------------------------------------------' + CHAR(13) +
             'StorerKey: ' + @c_StorerKey + CHAR(13) +
             'SKU: ' + @c_SKU + CHAR(13) +
             'Lot: ' + @c_Lot + CHAR(13) +
             'Loc: ' + @c_Loc + CHAR(13) +
-            'ID: ' + @c_ID + CHAR(13) + 
-            'UOM: ' + @c_UOM + CHAR(13) + 
+            'ID: ' + @c_ID + CHAR(13) +
+            'UOM: ' + @c_UOM + CHAR(13) +
             'Total: ' + CAST(@n_Total AS NVARCHAR) + CHAR(13)
 
       IF @c_UOM = '7'
       BEGIN
          SELECT @c_UCCNo = '', @n_UCCQty = 0
          SELECT TOP 1
-            @c_UCCNo = UCCNo, 
+            @c_UCCNo = UCCNo,
             @n_UCCQty = Qty
          FROM UCC WITH (NOLOCK)
          WHERE StorerKey = @c_StorerKey
@@ -177,20 +180,20 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 13000
-            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                             ': Failed to find UCC. (ispPOANF01)'
             GOTO Quit
          END
 
          IF @b_Debug = 1
-            PRINT '******' + CHAR(13) + 
+            PRINT '******' + CHAR(13) +
                   'Update UCCNo: ' + @c_UCCNo + CHAR(13) +
                   'UCCQty: ' + CAST(@n_UCCQty AS NVARCHAR) + CHAR(13)
-       
+
          UPDATE PD
          SET PD.DropID = @c_UCCNo, PD.UOMQty = @n_UCCQty
          FROM PickDetail PD WITH (NOLOCK)
-         JOIN LoadPlanDetail LPD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey     
+         JOIN LoadPlanDetail LPD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
          WHERE LPD.LoadKey = @c_LoadKey
            AND PD.StorerKey = @c_StorerKey
            AND PD.SKU = @c_SKU
@@ -204,12 +207,12 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 13001
-            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
-                            ': Update PickDetail Failed. (ispPOANF01)'
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
+           ': Update PickDetail Failed. (ispPOANF01)'
             GOTO Quit
          END
 
-         SELECT TOP 1 
+         SELECT TOP 1
             @c_PickDetailKey = PickDetailKey,
             @c_OrderKey = OrderKey,
             @c_OrderLineNumber = OrderLineNumber
@@ -218,13 +221,13 @@ BEGIN
 
          IF @b_Debug = 1
             PRINT '------------------' + CHAR(13) +
-                  'Updating UCC: ' + @c_UCCNo + ' - PickDetailKey: ' + @c_PickDetailKey + 
+                  'Updating UCC: ' + @c_UCCNo + ' - PickDetailKey: ' + @c_PickDetailKey +
                   ', OrderKey: ' + @c_OrderKey + ', OrderLineNumber: ' + @c_OrderLineNumber + CHAR(13) +
                   '------------------' + CHAR(13)
 
-         -- Update UCC.Status to 3 
+         -- Update UCC.Status to 3
          UPDATE UCC WITH (ROWLOCK)
-         SET Status = '3', PickDetailKey = @c_PickDetailKey, 
+         SET Status = '3', PickDetailKey = @c_PickDetailKey,
              OrderKey = @c_OrderKey, OrderLineNumber = @c_OrderLineNumber
          WHERE UCCNo = @c_UCCNo
            AND Status = '1'
@@ -235,7 +238,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 13002
-            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                             ': Update UCC Failed. (ispPOANF01)'
             GOTO Quit
          END
@@ -244,16 +247,16 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 13003
-            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                             ': Update UCC Failed. (ispPOANF01)'
             GOTO Quit
          END
-      
-         IF @b_Debug = 1 
+
+         IF @b_Debug = 1
          BEGIN
             SET @c_PrintResult = ''
             SELECT @c_PrintResult = @c_PrintResult + PickDetailKey + ',' FROM PickDetail WITH (NOLOCK) WHERE DropID = @c_UccNo
-            PRINT 'to ' + CHAR(13) + 
+            PRINT 'to ' + CHAR(13) +
                   'PickDetailKey: ' + SUBSTRING(@c_PrintResult, 0, LEN(@c_PrintResult)) + CHAR(13) +
                   '******' + CHAR(13)
          END
@@ -282,13 +285,13 @@ BEGIN
             IF @b_Debug = 1
             BEGIN
                PRINT 'Remaining Total: ' + CAST(@n_Total AS NVARCHAR)
-               
+
                SET @c_PrintResult = ''
-               SELECT @c_PrintResult = @c_PrintResult + 'UCCQty: ' + CAST(UCCQty AS NVARCHAR) + 
+               SELECT @c_PrintResult = @c_PrintResult + 'UCCQty: ' + CAST(UCCQty AS NVARCHAR) +
                       ', CntCount: ' + CAST(CntCount AS NVARCHAR) + CHAR(13) FROM #NumPool WITH (NOLOCK)
-               PRINT 'Remaining UCC for StorerKey: ' + @c_StorerKey + 
-                     ', SKU: ' + @c_SKU + ', LOT: ' + @c_Lot + ', LOC: ' + @c_Loc + ', ID: ' + @c_Id + CHAR(13) + 
-                     SUBSTRING(@c_PrintResult, 0, LEN(@c_PrintResult)) + CHAR(13) 
+               PRINT 'Remaining UCC for StorerKey: ' + @c_StorerKey +
+                     ', SKU: ' + @c_SKU + ', LOT: ' + @c_Lot + ', LOC: ' + @c_Loc + ', ID: ' + @c_Id + CHAR(13) +
+                     SUBSTRING(@c_PrintResult, 0, LEN(@c_PrintResult)) + CHAR(13)
             END
 
             SET @n_UCCQty = 0
@@ -309,50 +312,50 @@ BEGIN
                /***************************************************/
                /***   Get all possible combination of NumPool   ***/
                /***************************************************/
-               DECLARE CURSOR_COMBINATION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+               DECLARE CURSOR_COMBINATION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                SELECT UCCQty, CntCount
                FROM #NumPool WITH (ROWLOCK)
 
-               OPEN CURSOR_COMBINATION               
+               OPEN CURSOR_COMBINATION
                FETCH NEXT FROM CURSOR_COMBINATION INTO @n_UCCQty, @n_CntCount
 
                WHILE (@@FETCH_STATUS <> -1)
                BEGIN
-                  SET @n_Count = 1
+               SET @n_Count = 1
 
                   WHILE (@n_Count <= @n_CntCount)
                   BEGIN
-                     INSERT INTO #CombinationPool 
-                     VALUES (@n_UCCQty * @n_Count, 
+                     INSERT INTO #CombinationPool
+                     VALUES (@n_UCCQty * @n_Count,
                              CAST(@n_UCCQty AS NVARCHAR) + ' * ' + CAST(@n_Count AS NVARCHAR))
 
-                     DECLARE CURSOR_COMBINATION_INNER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-                     SELECT [Sum], Subset 
+                     DECLARE CURSOR_COMBINATION_INNER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                     SELECT [Sum], Subset
                      FROM #CombinationPool WITH (NOLOCK)
-                     --WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR), Subset) = 0 
+                     --WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR), Subset) = 0
                      WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR) + ' * ', Subset) = 0 -- (Chee01)
 
-                     OPEN CURSOR_COMBINATION_INNER               
+                     OPEN CURSOR_COMBINATION_INNER
                      FETCH NEXT FROM CURSOR_COMBINATION_INNER INTO @n_Sum, @c_Subset
-                     WHILE (@@FETCH_STATUS <> -1)          
+                     WHILE (@@FETCH_STATUS <> -1)
                      BEGIN
 
-                        INSERT INTO #CombinationPool 
-                        VALUES (@n_Sum + @n_UCCQty * @n_Count, 
+                        INSERT INTO #CombinationPool
+                        VALUES (@n_Sum + @n_UCCQty * @n_Count,
                                 @c_Subset + ' + ' + CAST(@n_UCCQty AS NVARCHAR) + ' * ' + CAST(@n_Count AS NVARCHAR))
 
                         FETCH NEXT FROM CURSOR_COMBINATION_INNER INTO @n_Sum, @c_Subset
-                     END -- END WHILE FOR CURSOR_COMBINATION_INNER      
-                     CLOSE CURSOR_COMBINATION_INNER          
-                     DEALLOCATE CURSOR_COMBINATION_INNER 
+                     END -- END WHILE FOR CURSOR_COMBINATION_INNER
+                     CLOSE CURSOR_COMBINATION_INNER
+                     DEALLOCATE CURSOR_COMBINATION_INNER
 
                      SET @n_Count = @n_Count + 1
                   END
 
                   FETCH NEXT FROM CURSOR_COMBINATION INTO @n_UCCQty, @n_CntCount
-               END -- END WHILE FOR CURSOR_COMBINATION      
+               END -- END WHILE FOR CURSOR_COMBINATION
                CLOSE CURSOR_COMBINATION
-               DEALLOCATE CURSOR_COMBINATION  
+               DEALLOCATE CURSOR_COMBINATION
 
                -- GET Combination with least Remainder, least number combination
                SELECT TOP 1 @c_Result = Subset, @n_Result = [Sum]
@@ -363,7 +366,7 @@ BEGIN
             END -- IF ISNULL(@c_Result, '') = ''
 
             IF @b_Debug = 1
-               PRINT 'RESULT FOR ' + CAST(@n_Total AS NVARCHAR) + ': ' + @c_Result + CHAR(13) 
+               PRINT 'RESULT FOR ' + CAST(@n_Total AS NVARCHAR) + ': ' + @c_Result + CHAR(13)
 
             /*************************/
             /***  Process Result   ***/
@@ -373,30 +376,30 @@ BEGIN
                -- Clear #NumPool
                DELETE FROM #NumPool
                SET @c_TempStr = @c_Result
-   
+
                -- Convert Result string into #SplitList table
                WHILE CHARINDEX('+', @c_TempStr) > 0
                BEGIN
-                  SET @n_Pos = CHARINDEX('+', @c_TempStr)  
+                  SET @n_Pos = CHARINDEX('+', @c_TempStr)
                   SET @c_Subset = SUBSTRING(@c_TempStr, 1, @n_Pos-2)
                   SET @c_TempStr = SUBSTRING(@c_TempStr, @n_Pos+2, LEN(@c_TempStr)-@n_Pos)
-   
+
                   SET @n_Pos  = CHARINDEX('*', @c_Subset)
                   SET @n_Number = CAST(SUBSTRING(@c_Subset, 1, @n_Pos-2) AS INT)
                   SET @n_CntCount = CAST(SUBSTRING(@c_Subset, @n_Pos+2, LEN(@c_Subset) - @n_Pos+2) AS INT)
                   WHILE @n_CntCount > 0
                   BEGIN
-                     INSERT INTO #NumPool (UCCQty) VALUES (@n_Number) 
+INSERT INTO #NumPool (UCCQty) VALUES (@n_Number)
                      SET @n_CntCount = @n_CntCount - 1
                   END
                END -- WHILE CHARINDEX('+', @c_Result) > 0
-   
+
                SET @n_Pos  = CHARINDEX('*', @c_TempStr)
                SET @n_Number = CAST(SUBSTRING(@c_TempStr, 1, @n_Pos-2) AS INT)
                SET @n_CntCount = CAST(SUBSTRING(@c_TempStr, @n_Pos+2, LEN(@c_TempStr) - @n_Pos+2) AS INT)
                WHILE @n_CntCount > 0
                BEGIN
-                  INSERT INTO #NumPool (UCCQty) VALUES (@n_Number) 
+                  INSERT INTO #NumPool (UCCQty) VALUES (@n_Number)
                   SET @n_CntCount = @n_CntCount - 1
                END
 
@@ -404,23 +407,23 @@ BEGIN
                BEGIN
                   SET @c_PrintResult = ''
                   SELECT @c_PrintResult = @c_PrintResult + CAST(ID AS NVARCHAR) + ': ' + CAST(UCCQty AS NVARCHAR) + CHAR(13) FROM #NumPool WITH (NOLOCK)
-                  PRINT 'Result UCC: ' + CHAR(13) + 
-                        SUBSTRING(@c_PrintResult, 0, LEN(@c_PrintResult)) + CHAR(13) 
+                  PRINT 'Result UCC: ' + CHAR(13) +
+                        SUBSTRING(@c_PrintResult, 0, LEN(@c_PrintResult)) + CHAR(13)
                END
 
                SET @n_PickedQty = 0
-               -- Loop through UCC result 
-               DECLARE CURSOR_UCC_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-               SELECT  
+               -- Loop through UCC result
+               DECLARE CURSOR_UCC_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT
                   ID, UCCQty
                FROM #NumPool WITH (NOLOCK)
                ORDER BY UCCQty
 
                OPEN CURSOR_UCC_RESULT
                FETCH NEXT FROM CURSOR_UCC_RESULT INTO @n_Pos, @n_UCCQty
-                      
-               WHILE (@@FETCH_STATUS <> -1)          
-               BEGIN 
+
+               WHILE (@@FETCH_STATUS <> -1)
+               BEGIN
                   SELECT @c_UCCNO = '', @n_Qty = @n_UCCQty
                   SELECT TOP 1
                      @c_UCCNo = UCCNo
@@ -431,31 +434,37 @@ BEGIN
                     AND Loc = @c_Loc
                     AND ID = @c_ID
                     AND Status < '3'
-                    AND Qty = @n_UCCQty 
+                    AND Qty = @n_UCCQty
 
                   IF ISNULL(@c_UCCNo, '') = ''
                   BEGIN
                      SET @n_Continue = 3
                      SET @n_Err = 13004
-                     SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
-                                     ': Failed to find UCC. (ispPOANF01)'
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
+                                     ' StorerKey: ' + ISNULL(RTRIM(@c_StorerKey),'') +
+                                     ', Sku: ' + ISNULL(RTRIM(@c_SKU),'') +
+                                     ', Lot: ' + ISNULL(RTRIM(@c_Lot),'') +
+                                     ', Loc: ' + ISNULL(RTRIM(@c_Loc),'') +
+                                     ', Id: ' + ISNULL(RTRIM(@c_ID),'') +
+                                     ', UCCQty: ' + CAST(@n_UCCQty AS NVARCHAR(10)) +
+                                     ' : Failed to find UCC. (ispPOANF01)'
                      GOTO Quit
                   END
 
                   IF @b_Debug = 1
-                     PRINT '******' + CHAR(13) + 
+                     PRINT '******' + CHAR(13) +
                            'Update UCCNo: ' + @c_UCCNo + CHAR(13) +
-                           'UCCQty: ' + CAST(@n_UCCQty AS NVARCHAR) + CHAR(13) 
+                           'UCCQty: ' + CAST(@n_UCCQty AS NVARCHAR) + CHAR(13)
 
                   WHILE @n_Qty > 0
-                  BEGIN 
+                  BEGIN
                      IF @n_PickedQty = 0
                      BEGIN
                         SELECT @c_PickDetailKey = ''
                         SELECT TOP 1
-                           @c_PickDetailKey = PD.PickDetailKey, 
-                           @c_OrderKey = PD.OrderKey, 
-                           @c_OrderLineNumber = PD.OrderLineNumber, 
+                           @c_PickDetailKey = PD.PickDetailKey,
+                           @c_OrderKey = PD.OrderKey,
+                           @c_OrderLineNumber = PD.OrderLineNumber,
                            @n_PickedQty = PD.Qty
                         FROM PICKDETAIL PD WITH (NOLOCK)
                         JOIN LoadPlanDetail LPD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
@@ -465,7 +474,7 @@ BEGIN
                           AND Lot = @c_Lot
                           AND Loc = @c_Loc
                           AND ID = @c_Id
-                          AND UOM = @c_UOM  
+                          AND UOM = @c_UOM
                           AND ISNULL(DropID, '') = ''
                         ORDER BY @n_UCCQty % Qty, Qty
 
@@ -473,31 +482,31 @@ BEGIN
                         BEGIN
                            SET @n_Continue = 3
                            SET @n_Err = 13005
-                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                                            ': Failed to get PickDetailKey. (ispPOANF01)'
                            GOTO Quit
                         END
 
                         IF @b_Debug = 1
-                           PRINT 
+                           PRINT
                               '######' + CHAR(13) +
                               'PickDetailKey: ' + @c_PickDetailKey + CHAR(13) +
                               'PickedQty: ' + CAST(@n_PickedQty AS NVARCHAR) + CHAR(13) +
-                              'Total: ' + CAST(@n_Total AS NVARCHAR) + CHAR(13) + 
-                              '######' + CHAR(13) 
+                              'Total: ' + CAST(@n_Total AS NVARCHAR) + CHAR(13) +
+                              '######' + CHAR(13)
                      END -- IF @n_PickedQty = 0
 
-                     IF @n_PickedQty <= @n_Qty 
-                     BEGIN                               
+                     IF @n_PickedQty <= @n_Qty
+                     BEGIN
                         UPDATE PickDetail WITH (ROWLOCK)
                         SET DropID = @c_UCCNo, UOMQty = @n_UCCQty
-                        WHERE PickDetailKey = @c_PickDetailKey 
+                        WHERE PickDetailKey = @c_PickDetailKey
 
                         IF @@ERROR <> 0
                         BEGIN
                            SET @n_Continue = 3
                            SET @n_Err = 13006
-                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                                            ': Update PickDetail Failed. (ispPOANF01)'
                            GOTO Quit
                         END
@@ -505,91 +514,93 @@ BEGIN
                         SET @n_Qty = @n_Qty - @n_PickedQty
                         SET @n_Total = @n_Total - @n_PickedQty
                         SET @n_PickedQty = 0
-                     END   
+                     END
                      ELSE
                      BEGIN
-                        -- Split PickDetail Lines       
-                        EXECUTE dbo.nspg_GetKey    
-                              'PICKDETAILKEY',    
-                              10,    
-                              @c_NewPickDetailKey OUTPUT,    
-                              @b_Success          OUTPUT,    
-                              @n_Err              OUTPUT,    
-                              @c_ErrMsg           OUTPUT    
-                 
-                        IF @b_Success<>1    
-                        BEGIN    
-                           SET @b_Success = 0  
-                           SET @n_Err = 13007
-                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +  
-                                           ': Unable to retrieve new PickdetailKey. (ispPOANF01)'  
-                           GOTO Quit 
-                        END  
+                        -- Split PickDetail Lines
+                        EXECUTE dbo.nspg_GetKey
+                              'PICKDETAILKEY',
+                              10,
+                              @c_NewPickDetailKey OUTPUT,
+                              @b_Success          OUTPUT,
+                              @n_Err              OUTPUT,
+                              @c_ErrMsg           OUTPUT
 
-                        -- Create a new PickDetail to hold the balance    
-                        INSERT INTO dbo.PICKDETAIL    
-                           (    
-                             CaseID               ,PickHeaderKey     ,OrderKey    
-                            ,OrderLineNumber      ,LOT               ,StorerKey    
-                            ,SKU                  ,AltSKU            ,UOM    
-                            ,UOMQTY               ,QTYMoved          ,STATUS    
-                            ,DropID               ,LOC               ,ID    
-                            ,PackKey              ,UpdateSource      ,CartonGroup    
-                            ,CartonType           ,ToLoc             ,DoReplenish    
-                            ,ReplenishZone        ,DoCartonize       ,PickMethod    
-                            ,WaveKey              ,EffectiveDate     ,ArchiveCop    
-                            ,ShipFlag             ,PickSlipNo        ,PickDetailKey    
-                            ,QTY                  
-                            ,TrafficCop           
-                            ,OptimizeCop 
-                            ,TaskDetailkey    
-                           )    
+                        IF @b_Success<>1
+                        BEGIN
+                           SET @b_Success = 0
+                           SET @n_Err = 13007
+                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
+                                           ': Unable to retrieve new PickdetailKey. (ispPOANF01)'
+                           GOTO Quit
+                        END
+
+                        -- Create a new PickDetail to hold the balance
+                        INSERT INTO dbo.PICKDETAIL
+                           (
+                             CaseID               ,PickHeaderKey     ,OrderKey
+                            ,OrderLineNumber      ,LOT               ,StorerKey
+                            ,SKU                  ,AltSKU            ,UOM
+                            ,UOMQTY               ,QTYMoved          ,STATUS
+                            ,DropID               ,LOC               ,ID
+                            ,PackKey              ,UpdateSource      ,CartonGroup
+                            ,CartonType           ,ToLoc             ,DoReplenish
+                            ,ReplenishZone        ,DoCartonize       ,PickMethod
+                            ,WaveKey              ,EffectiveDate     ,ArchiveCop
+                            ,ShipFlag             ,PickSlipNo        ,PickDetailKey
+                            ,QTY
+                            ,TrafficCop
+                            ,OptimizeCop
+                            ,TaskDetailkey
+                            ,Channel_ID     --SY01
+                           )
                         SELECT
-                             CaseID             ,PickHeaderKey     ,OrderKey    
-                            ,OrderLineNumber      ,Lot               ,StorerKey    
-                            ,SKU                  ,AltSku            ,UOM    
-                            ,UOMQTY               ,QTYMoved          ,STATUS    
-                            ,''                   ,LOC               ,ID    
-                            ,PackKey              ,UpdateSource      ,CartonGroup    
-                            ,CartonType           ,ToLoc             ,DoReplenish    
-                            ,ReplenishZone        ,DoCartonize       ,PickMethod    
-                            ,WaveKey              ,EffectiveDate     ,ArchiveCop    
-                            ,ShipFlag             ,PickSlipNo        ,@c_NewPickDetailKey    
-                            ,@n_PickedQty - @n_Qty 
-                            , NULL                
-                            ,'1' 
-                            ,TaskDetailkey    
-                        FROM   dbo.PickDetail WITH (NOLOCK)    
+                             CaseID             ,PickHeaderKey     ,OrderKey
+                            ,OrderLineNumber      ,Lot               ,StorerKey
+                            ,SKU                  ,AltSku            ,UOM
+                            ,UOMQTY               ,QTYMoved          ,STATUS
+                            ,''                   ,LOC               ,ID
+                            ,PackKey              ,UpdateSource      ,CartonGroup
+                            ,CartonType           ,ToLoc             ,DoReplenish
+                            ,ReplenishZone        ,DoCartonize       ,PickMethod
+                            ,WaveKey              ,EffectiveDate     ,ArchiveCop
+                            ,ShipFlag             ,PickSlipNo        ,@c_NewPickDetailKey
+                            ,@n_PickedQty - @n_Qty
+                            , NULL
+                            ,'1'
+                            ,TaskDetailkey
+                            ,Channel_ID     --SY01
+                        FROM   dbo.PickDetail WITH (NOLOCK)
                         WHERE PickDetailKey = @c_PickDetailKey
 
-                        IF @@ERROR <> 0     
-                        BEGIN    
-                           SET @b_Success = 0  
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @b_Success = 0
                            SET @n_Err = 13008
-                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +  
-                                           ': Insert Pickdetail Failed. (ispPOANF01)'  
-                           GOTO Quit 
-                        END  
+                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
+                                           ': Insert Pickdetail Failed. (ispPOANF01)'
+                           GOTO Quit
+                        END
 
-                        UPDATE PickDetail WITH (ROWLOCK)    
+                        UPDATE PickDetail WITH (ROWLOCK)
                         SET DropID = @c_UCCNo, Qty = @n_Qty, UOMQty = @n_UCCQty, Trafficcop = NULL
                         WHERE PickDetailKey = @c_PickDetailKey
 
-                        IF @@ERROR <> 0     
-                        BEGIN    
-                           SET @b_Success = 0  
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @b_Success = 0
                            SET @n_Err = 13009
-                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +  
-                                           ': Update Pickdetail Failed. (ispPOANF01)'  
-                           GOTO Quit 
-                        END  
+                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
+                                           ': Update Pickdetail Failed. (ispPOANF01)'
+                           GOTO Quit
+                        END
 
                         IF @b_Debug = 1
                            PRINT '   Splited PickDetail: ' + CHAR(13) +
                               '   PickDetailKey: ' + @c_PickDetailKey + ' to ' + @c_NewPickDetailKey + CHAR(13) +
-                              '   PickedQty: ' + CAST(@n_PickedQty AS NVARCHAR) + ' to ' + CAST(@n_PickedQty - @n_Qty AS NVARCHAR) + CHAR(13) 
+                              '   PickedQty: ' + CAST(@n_PickedQty AS NVARCHAR) + ' to ' + CAST(@n_PickedQty - @n_Qty AS NVARCHAR) + CHAR(13)
 
-                        SET @n_PickedQty = @n_PickedQty - @n_Qty 
+                        SET @n_PickedQty = @n_PickedQty - @n_Qty
                         SET @n_Total = @n_Total - @n_Qty
                         SET @n_Qty = 0
                      END
@@ -598,7 +609,7 @@ BEGIN
                      BEGIN
                         SET @c_PrintResult = ''
                         SELECT @c_PrintResult = @c_PrintResult + PickDetailKey + ',' FROM PickDetail WITH (NOLOCK) WHERE DropID = @c_UccNo
-                        PRINT 'to ' + CHAR(13) + 
+                        PRINT 'to ' + CHAR(13) +
                               'PickDetailKey: ' + SUBSTRING(@c_PrintResult, 0, LEN(@c_PrintResult)) + CHAR(13) +
                               '*******' + CHAR(13)
                      END
@@ -606,13 +617,13 @@ BEGIN
 
                   IF @b_Debug = 1
                      PRINT '------------------' + CHAR(13) +
-                           'Updating UCC: ' + @c_UCCNo + ' - PickDetailKey: ' + @c_PickDetailKey + 
-                           ', OrderKey: ' + @c_OrderKey + ', OrderLineNumber: ' + @c_OrderLineNumber + CHAR(13) + 
+                           'Updating UCC: ' + @c_UCCNo + ' - PickDetailKey: ' + @c_PickDetailKey +
+                           ', OrderKey: ' + @c_OrderKey + ', OrderLineNumber: ' + @c_OrderLineNumber + CHAR(13) +
                            '------------------' + CHAR(13)
 
-                  -- Update UCC.Status to 3 
+                  -- Update UCC.Status to 3
                   UPDATE UCC WITH (ROWLOCK)
-                  SET Status = '3', PickDetailKey = @c_PickDetailKey, 
+                  SET Status = '3', PickDetailKey = @c_PickDetailKey,
                       OrderKey = @c_OrderKey, OrderLineNumber = @c_OrderLineNumber
                   WHERE UCCNo = @c_UCCNo
                     AND Status = '1'
@@ -624,7 +635,7 @@ BEGIN
                   BEGIN
                      SET @n_Continue = 3
                      SET @n_Err = 13010
-                     SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                                      ': Update UCC Failed. (ispPOANF01)'
                      GOTO Quit
                   END
@@ -633,9 +644,9 @@ BEGIN
                   BEGIN
                      SET @n_Continue = 3
                      SET @n_Err = 13011
-                     SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+                   SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) +
                                      ': Update UCC Failed. (ispPOANF01)'
-                     GOTO Quit
+              GOTO Quit
                   END
 
                   -- SET NewPickDetailKey to PickDetailKey if splited PickDetail
@@ -646,76 +657,72 @@ BEGIN
                   END
 
                   FETCH NEXT FROM CURSOR_UCC_RESULT INTO @n_Pos, @n_UCCQty
-               END  
+               END
                CLOSE CURSOR_UCC_RESULT
                DEALLOCATE CURSOR_UCC_RESULT
             END -- IF ISNULL(@c_Result, '') <> ''
          END -- IF @n_Total > 0
       END -- IF @c_UOM = '6'
-   
+
       FETCH NEXT FROM CURSOR_PICKDETAILS INTO @c_StorerKey, @c_SKU, @c_Lot, @c_Loc, @c_ID, @c_UOM, @n_Total
-   END  
+   END
    CLOSE CURSOR_PICKDETAILS
    DEALLOCATE CURSOR_PICKDETAILS
 
    IF @b_Debug = 1
-      PRINT '-------------------------------------------------' + CHAR(13) 
+      PRINT '-------------------------------------------------' + CHAR(13)
 
 QUIT:
-   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_PICKDETAILS')) >=0 
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_PICKDETAILS')) >=0
    BEGIN
-      CLOSE CURSOR_PICKDETAILS           
-      DEALLOCATE CURSOR_PICKDETAILS      
+      CLOSE CURSOR_PICKDETAILS
+      DEALLOCATE CURSOR_PICKDETAILS
    END
 
-   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_UCC_RESULT')) >=0 
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_UCC_RESULT')) >=0
    BEGIN
-      CLOSE CURSOR_UCC_RESULT           
-      DEALLOCATE CURSOR_UCC_RESULT      
+      CLOSE CURSOR_UCC_RESULT
+      DEALLOCATE CURSOR_UCC_RESULT
    END
 
-   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_COMBINATION')) >=0 
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_COMBINATION')) >=0
    BEGIN
-      CLOSE CURSOR_COMBINATION           
-      DEALLOCATE CURSOR_COMBINATION      
+      CLOSE CURSOR_COMBINATION
+      DEALLOCATE CURSOR_COMBINATION
    END
 
-   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_COMBINATION_INNER')) >=0 
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_COMBINATION_INNER')) >=0
    BEGIN
-      CLOSE CURSOR_COMBINATION_INNER           
-      DEALLOCATE CURSOR_COMBINATION_INNER      
+      CLOSE CURSOR_COMBINATION_INNER
+      DEALLOCATE CURSOR_COMBINATION_INNER
    END
 
-   IF @n_Continue=3  -- Error Occured - Process And Return  
-   BEGIN  
-      SELECT @b_Success = 0  
-      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt  
-      BEGIN  
-         ROLLBACK TRAN  
-      END  
-      ELSE  
-      BEGIN  
-         WHILE @@TRANCOUNT > @n_StartTCnt  
-         BEGIN  
-            COMMIT TRAN  
-         END  
-      END  
-      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispPOANF01'  
-      --RAISERROR @n_Err @c_ErrMsg  
-		RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012 
-      RETURN  
-   END  
-   ELSE  
-   BEGIN  
-      SELECT @b_Success = 1  
-      WHILE @@TRANCOUNT > @n_StartTCnt  
-      BEGIN  
-         COMMIT TRAN  
-      END  
-      RETURN  
-   END  
-
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SELECT @b_Success = 0
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispPOANF01'
+      --RAISERROR @n_Err @c_ErrMsg
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN
+   END
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
 END -- Procedure
-GO
-GRANT EXECUTE ON [dbo].[ispPOANF01] TO nSQL
-GO
