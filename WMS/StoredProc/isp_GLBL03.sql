@@ -31,9 +31,11 @@ GO
 /* 2014-06-03   ChewKP    1.2   Add in TraceInfo (ChewKP01)             */
 /* 2014-06-05   Chee      1.3   Prevent error when pickslip has child   */
 /*                              order generated (Chee02)                */  
+/* 2021-09-22   CSCHONG   1.4   WMS-17959 revised field logic (CS01)    */
+/* 2021-11-25   CSCHONG   1.5   Devops scripts combine                  */
 /************************************************************************/
 
-CREATE PROC isp_GLBL03 (
+CREATE  PROC isp_GLBL03 (
    @c_PickSlipNo         NVARCHAR(10), 
    @n_CartonNo           INT,  
    @c_LabelNo            NVARCHAR(20)   OUTPUT, -- Pass in DropID , Output LabelNo
@@ -83,7 +85,8 @@ BEGIN
    @cFaclity        NVARCHAR(5),
    @nTry            INT,
    @c_TempLabelNo   NVARCHAR(20), 
-   @bDebug          INT
+   @bDebug          INT,
+   @c_getConsigneeKey  NVARCHAR(30)    --CS01
    
    
    
@@ -240,13 +243,29 @@ BEGIN
            AND Status = '3'
         END
 
-        -- Need to clarify on the Brand is what -- 
-        SELECT TOP 1 @cBrand = OD.UserDefine01
-        FROM dbo.PickDetail PD WITH (NOLOCK) 
-        INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
-        INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON OD.OrderKey = O.OrderKey AND OD.SKU = PD.SKU
-        WHERE PD.PickSlipNo = @c_PickSlipNo
-          AND OD.UserDefine02 = @cConsigneeKey -- (Chee01)
+        --CS01 START
+
+        SET @c_getConsigneeKey = ''
+        IF EXISTS (SELECT 1 FROM CODELKUP C WITH (NOLOCK) WHERE C.LISTNAME = 'ANFBRANDS' AND C.Storerkey=@cStorerKey AND C.code=@cFacility AND c.UDF01 ='1')
+        BEGIN
+             SELECT @cBrand = ST.Secondary
+             FROM STORER ST WITH (NOLOCK)
+             WHERE ST.StorerKey = @cConsigneeKey AND ST.type ='2'
+        END
+        ELSE
+        BEGIN
+            -- Need to clarify on the Brand is what -- 
+              SELECT TOP 1 @cBrand = OD.UserDefine01
+              FROM dbo.PickDetail PD WITH (NOLOCK) 
+              INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
+              INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON OD.OrderKey = O.OrderKey AND OD.SKU = PD.SKU
+              WHERE PD.PickSlipNo = @c_PickSlipNo
+              AND OD.UserDefine02 = @cConsigneeKey -- (Chee01)  
+        END
+  
+        --CS01 END
+
+       
 
         -- (Chee01)
         SET @cConsigneeKey = RIGHT(@cConsigneeKey, 5) 
