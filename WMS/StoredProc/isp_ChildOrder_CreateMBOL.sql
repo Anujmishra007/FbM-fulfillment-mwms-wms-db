@@ -1,6 +1,7 @@
 IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_ChildOrder_CreateMBOL]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
    DROP PROCEDURE dbo.isp_ChildOrder_CreateMBOL
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -35,15 +36,18 @@ GO
 /* 15-Mar-2021  WLChooi 1.6   WMS-16338 - Add Orderdetail.Channel and new  */
 /*                                        logic for ANFQHW (WL01)          */
 /* 15-Jul-2021  WLChooi 1.7   Fix Update Palletdetail with Storerkey (WL02)*/
+/* 20-AUG-2021  Wan02   1.8   WMS-17787 - [CN] ANFQHW_WMS_MBOL_Creation CR */
+/* 28-OCT-2021  Wan02   1.8   DevOps Combine Script.                       */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ChildOrder_CreateMBOL]
-(     @c_MBOLKey  NVARCHAR(10)
-  ,   @c_Orderkey NVARCHAR(10)
-  ,   @c_Store    NVARCHAR(30)
-  ,   @c_CaseID   NVARCHAR(20)
-  ,   @b_Success  INT           OUTPUT
-  ,   @n_Err      INT           OUTPUT
-  ,   @c_ErrMsg   NVARCHAR(255) OUTPUT
+(     @c_MBOLKey     NVARCHAR(10)
+  ,   @c_Orderkey    NVARCHAR(10)
+  ,   @c_Store       NVARCHAR(30)
+  ,   @c_Store_Child NVARCHAR(30) = ''       -- Wan01
+  ,   @c_CaseID      NVARCHAR(20)
+  ,   @b_Success     INT           OUTPUT
+  ,   @n_Err         INT           OUTPUT
+  ,   @c_ErrMsg      NVARCHAR(255) OUTPUT
 )
 AS
 BEGIN
@@ -77,6 +81,7 @@ BEGIN
          , @c_MBOLLineNumber     NVARCHAR(5)
          , @c_Facility           NVARCHAR(5)
          , @c_Storerkey          NVARCHAR(15)
+         , @c_Consigneekey       NVARCHAR(30)         --(Wan02)
          , @c_C_contact1         NVARCHAR(30)
          , @c_C_Contact2         NVARCHAR(30)
          , @c_C_Company          NVARCHAR(45)
@@ -187,12 +192,31 @@ BEGIN
          --,@c_CarrierCode= ISNULL(RTRIM(ShipperKey),'') --NJOW01 remarked
    FROM ORDERS (NOLOCK)
    WHERE Orderkey = @c_Orderkey
-
+      
+   --(Wan02) - START
+   SET @c_Store_Child = ISNULL(@c_Store_Child,'')
+   SET @c_Consigneekey = @c_Store
+   
+   IF @c_Store_Child <> ''
+   BEGIN
+      --IF EXISTS ( SELECT 1 FROM dbo.ORDERDETAIL AS o WITH (NOLOCK) 
+      --            JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.OrderKey = o.OrderKey
+      --                                                   AND p.OrderLineNumber = o.OrderLineNumber
+      --            WHERE o.Storerkey = @c_Storerkey AND p.CaseID = @c_CaseID
+      --            GROUP BY p.CaseID
+      --            HAVING COUNT(DISTINCT ISNULL(o.UserDefine02,'') + ISNULL(o.UserDefine09,'')) = 1
+      --)
+      --BEGIN
+         SET @c_Consigneekey = @c_Store_Child
+      --END
+   END
+   --(Wan02) - END
+     
    --NJOW01
    SELECT @c_CarrierCode = ISNULL(RTRIM(SOD.Terms),'')
    FROM STORER  ST          WITH (NOLOCK)
    LEFT JOIN STORERSODEFAULT SOD WITH (NOLOCK) ON (ST.Storerkey = SOD.Storerkey)
-   WHERE ST.Storerkey = @c_Store
+   WHERE ST.Storerkey = @c_Consigneekey               --(Wan02)
 
    --WL01 S
    EXEC nspGetRight  
@@ -227,9 +251,10 @@ BEGIN
       FROM ORDERS WITH (NOLOCK)
       WHERE MBOLKey = @c_MBOLkey
       AND Storerkey = @c_Storerkey
-      AND Consigneekey = @c_Store
+      AND Consigneekey = @c_Consigneekey           --(Wan02)
       AND Shipperkey   = @c_CarrierCode
       AND Userdefine05 = @c_DocType
+      AND Userdefine03 = @c_Store_Child            --(Wan02)
       AND Type    = 'CHDORD'
       AND Status  < '9'
 
@@ -277,7 +302,7 @@ BEGIN
             ,@c_Route          = CASE WHEN @c_MBOLCreateChildOrdChkPallet = '1' THEN ISNULL(RTRIM(SOD.[Route]),'99') ELSE SOD.[Route] END   --WL01
       FROM STORER  ST          WITH (NOLOCK)
       LEFT JOIN STORERSODEFAULT SOD WITH (NOLOCK) ON (ST.Storerkey = SOD.Storerkey)
-      WHERE ST.Storerkey = @c_Store
+      WHERE ST.Storerkey = @c_Consigneekey            --(Wan02)
 
       INSERT INTO ORDERS
       (
@@ -288,17 +313,17 @@ BEGIN
       C_Phone2,         C_Fax1,           C_Fax2,              C_Vat,
       Type,             OpenQty,          Status,              Route,
       Facility,         RDD,              UserDefine05,        ShipperKey,
-      Loadkey,          MBOLKey
+      Loadkey,          MBOLKey,          UserDefine02,        UserDefine03   --(Wan02)
       )
       SELECT
-      @c_COrderKey,     OH.StorerKey,     @c_Store,            @c_C_contact1,
+      @c_COrderKey,     OH.StorerKey,     @c_Consigneekey,     @c_C_contact1, --(Wan02)
       @c_C_Contact2,    @c_C_Company,     @c_C_Address1,       @c_C_Address2,
       @c_C_Address3,    @c_C_Address4,    @c_C_City,           @c_C_State,
       @c_C_Zip,         @c_C_Country,     @c_C_ISOCntryCode,   @c_C_Phone1,
       @c_C_Phone2,      @c_C_Fax1,        @c_C_Fax2,           @c_C_Vat,
       'CHDORD',         OpenQty=0,        '5',                 @c_Route,
       OH.Facility,      'SplitOrder',     OH.UserDefine05,     @c_CarrierCode, --NJOW01  OH.ShipperKey,
-      OH.LoadKey,        @c_MBOLKey
+      OH.LoadKey,        @c_MBOLKey,      @c_Store,            @c_Store_Child --(Wan02)       
 /*
       (
       OrderKey,        StorerKey,       ExternOrderKey,     OrderDate,
@@ -366,7 +391,6 @@ BEGIN
       OH.ShipperKey
 */
       FROM ORDERS OH WITH (NOLOCK)
-
       WHERE OH.OrderKey = @c_OrderKey
 
       IF @@ERROR <> 0
@@ -388,6 +412,7 @@ BEGIN
                                      AND(OD.OrderLineNumber = PD.OrderLineNumber)
    WHERE OD.Orderkey = @c_Orderkey
    AND   OD.UserDefine02 = @c_Store
+   AND   ISNULL(OD.UserDefine09,'') = @c_Store_Child        --(Wan02)
    AND   PD.CaseID       = @c_CaseID
    ORDER BY OD.OrderLineNumber
 
@@ -449,7 +474,7 @@ BEGIN
          Lottable06,            Lottable07,       Lottable08,            Lottable09,       Lottable10,
          Lottable11,            Lottable12,       Lottable13,            Lottable14,       Lottable15,
          GrossWeight,           Capacity,         '',                    @c_MBOLKey,
-         QtyToProcess,          MinShelfLife,     UserDefine01,          UserDefine02,
+         QtyToProcess,          MinShelfLife,     UserDefine01,          @c_Consigneekey,             --(Wan01)
          UserDefine03,          UserDefine04,     UserDefine05,          UserDefine06,
          UserDefine07,          UserDefine08,     Orderkey,              OrderLineNumber,
          POkey,                 ExternPOKey,      EnteredQTY=0,          ConsoOrderKey,
@@ -768,7 +793,7 @@ BEGIN
           [STATUS])
       SELECT
           @c_CLoadKey,        @c_CLoadLineNumber,
-          @c_COrderKey,       @c_Store,
+          @c_COrderKey,       @c_Consigneekey,              --(Wan02)
           Priority,           OrderDate,
           DeliveryDate,       Type,
           Door,               Stop,
@@ -908,7 +933,7 @@ BEGIN
    --WL01
    IF @c_MBOLCreateChildOrdChkPallet = '1'
    BEGIN
-   	UPDATE PALLETDETAIL WITH (ROWLOCK)
+      UPDATE PALLETDETAIL WITH (ROWLOCK)
       SET UserDefine01 = @c_MBOLKey
         , EditDate = GETDATE() 
         , EditWho  = SUSER_NAME()     
@@ -1242,7 +1267,7 @@ IF @@TRANCOUNT > 0
    ROLLBACK TRAN
 
 --RAISERROR (N'SQL Error: %s ErrorNo: %d.',16, 1) WITH SETERROR    -- SQL2012
-RAISERROR (N'SQL Error: %s',16, 1, @c_errmsg) WITH SETERROR		-- SQL2012, SOS365643
+RAISERROR (N'SQL Error: %s',16, 1, @c_errmsg) WITH SETERROR    -- SQL2012, SOS365643
 QUIT:
 
    IF CURSOR_STATUS('LOCAL' , 'CUR_CASE') in (0 , 1)

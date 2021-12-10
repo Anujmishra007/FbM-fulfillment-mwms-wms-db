@@ -18,7 +18,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* GitLab Version: 1.0                                                   */    
+/* GitLab Version: 1.2                                                   */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
@@ -27,6 +27,8 @@ GO
 /* Updates:                                                              */    
 /* Date         Author   Ver  Purposes                                   */ 
 /* 2021-08-17   WLChooi  1.1  Bug Fix (WL01)                             */   
+/* 2021-09-08   WLChooi  1.2  DevOps Combine Script                      */   
+/* 2021-09-08   WLChooi  1.2  WMS-17879 - Update Pickdetail.Notes (WL02) */
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV42]        
@@ -124,6 +126,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
          , @c_Userdefine03            NVARCHAR(50) = N''
          , @c_PickCondition_SQL       NVARCHAR(4000)
          , @c_LinkTaskToPick_SQL      NVARCHAR(4000)
+         , @c_CLCode                  NVARCHAR(50)   --WL02
+         , @c_CLShort                 NVARCHAR(50)   --WL02
  
    DECLARE @cur_PICKSKU CURSOR,   
            @c_SortMode NVARCHAR(10)  
@@ -274,7 +278,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       EXEC isp_CreatePickdetail_WIP
-         @c_Loadkey               = ''
+          @c_Loadkey               = ''
          ,@c_Wavekey               = @c_Wavekey  
          ,@c_WIP_RefNo             = @c_SourceType 
          ,@c_PickCondition_SQL     = ''
@@ -297,21 +301,24 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
       DECLARE Orders_Pickdet_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
       SELECT Pickdetailkey  
       FROM WAVEDETAIL WITH (NOLOCK)    
-      JOIN PICKDETAIL WITH (NOLOCK)  ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey  
+      JOIN #PickDetail_WIP PICKDETAIL WITH (NOLOCK)  ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey   --WL02  
       WHERE WAVEDETAIL.Wavekey = @c_Wavekey   
   
       OPEN Orders_Pickdet_cur   
       FETCH NEXT FROM Orders_Pickdet_cur INTO @c_curPickdetailkey   
       WHILE @@FETCH_STATUS = 0   
       BEGIN   
-         UPDATE PICKDETAIL WITH (ROWLOCK)   
-         SET PICKDETAIL.TaskdetailKey = '',  
-             PICKDETAIL.Wavekey = @c_Wavekey,   
+         --WL02 S
+         UPDATE #PickDetail_WIP WITH (ROWLOCK)   
+         SET #PickDetail_WIP.TaskdetailKey = '', 
+             #PickDetail_WIP.Notes = '',   
+             #PickDetail_WIP.Wavekey = @c_Wavekey,   
              EditWho    = SUSER_SNAME(),  
              EditDate   = GETDATE(),     
              TrafficCop = NULL  
-         WHERE PICKDETAIL.Pickdetailkey = @c_curPickdetailkey
-           
+         WHERE #PickDetail_WIP.Pickdetailkey = @c_curPickdetailkey
+         --WL02 E
+          
          SELECT @n_err = @@ERROR  
 
          IF @n_err <> 0   
@@ -676,11 +683,47 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
       DEALLOCATE cur_PickLoc
    END*/
 
+   --WL02 S
+   --Assign PTS Loc to Pickdetail.Notes
+   IF (@n_continue = 1 OR @n_continue = 2) AND @c_DocType = 'N'
+   BEGIN
+      DECLARE CUR_PTS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT CL.Code, CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CL.Short ELSE 0 END
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.LISTNAME = 'WSPTSCODE'
+      AND CL.Storerkey = @c_Storerkey
+      ORDER BY CL.Code ASC
+
+      OPEN CUR_PTS
+
+      FETCH NEXT FROM CUR_PTS INTO @c_CLCode, @c_CLShort
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         UPDATE #PickDetail_WIP
+         SET Notes = @c_CLCode
+         WHERE OrderKey IN ( SELECT DISTINCT TOP (CAST(@c_CLShort AS INT)) PD.OrderKey
+                             FROM #PickDetail_WIP PD
+                             WHERE PD.WaveKey = @c_wavekey
+                             AND PD.Notes = ''
+                             ORDER BY PD.OrderKey)
+         AND Storerkey = @c_Storerkey
+
+         IF NOT EXISTS (SELECT 1 FROM #PickDetail_WIP PDW WHERE PDW.Notes = '')
+            BREAK;
+
+         FETCH NEXT FROM CUR_PTS INTO @c_CLCode, @c_CLShort
+      END
+      CLOSE CUR_PTS
+      DEALLOCATE CUR_PTS
+   END
+   --WL02 E
+
    -----Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       EXEC isp_CreatePickdetail_WIP
-            @c_Loadkey               = ''
+          @c_Loadkey               = ''
          ,@c_Wavekey               = @c_wavekey  
          ,@c_WIP_RefNo             = @c_SourceType 
          ,@c_PickCondition_SQL     = ''
@@ -763,6 +806,14 @@ RETURN_SP:
    BEGIN 
       DROP TABLE #TMP_WavePICKLOT
    END
+
+   --WL02 S
+   IF CURSOR_STATUS('LOCAL', 'CUR_PTS') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_PTS
+      DEALLOCATE CUR_PTS   
+   END
+   --WL02 E
 
    IF @n_continue=3  -- Error Occured - Process And Return    
    BEGIN    
