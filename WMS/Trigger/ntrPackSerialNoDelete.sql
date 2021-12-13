@@ -7,13 +7,30 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Trigger: ntrPackSerialNoDelete                                       */
-/* Copyright: LF Logistics                                              */
+/************************************************************************/    
+/* Trigger: ntrPackSerialNoDelete                                       */    
+/* Creation Date: 2017-May-29                                           */    
+/* Copyright: LFL                                                       */    
+/* Written by:                                                          */    
+/*                                                                      */    
+/* Purpose: PackSerialNo Delete trigger                                 */
 /*                                                                      */
-/* Date         Author     Ver.  Purposes                               */
-/* 2017-May-29  Ung        1.1   WMS-1919 Created                       */
-/************************************************************************/
+/* Called By:                                                           */    
+/*                                                                      */    
+/* PVCS Version: 1.0                                                    */    
+/*                                                                      */    
+/* Version: 1.0                                                         */    
+/*                                                                      */    
+/* Data Modifications:                                                  */    
+/*                                                                      */    
+/* Updates:                                                             */    
+/* Date         Author  Ver.  Purposes                                  */   
+/* 2017-May-29  Ung     1.1   WMS-1919 Created                          */
+/* 2021-Dec-08  NJOW01  1.2   WMS-18599 remove orderkey when reverse    */
+/*                            serial number.                            */
+/* 2021-Dec-08  NJOW01  1.2   DEVOPS combine script                     */
+/************************************************************************/    
+
 CREATE TRIGGER [ntrPackSerialNoDelete] ON [PackSerialNo] 
 FOR  DELETE
 AS
@@ -71,6 +88,8 @@ BEGIN
       BEGIN
          UPDATE SerialNo SET
             Status = '1', -- Received
+            Orderkey = '',  --NJOW01
+            OrderLineNumber = '',  --NJOW01
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME()
          WHERE SerialNoKey = @c_SerialNoKey
@@ -133,9 +152,4 @@ BEGIN
       RETURN      
    END
 END
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
 GO
