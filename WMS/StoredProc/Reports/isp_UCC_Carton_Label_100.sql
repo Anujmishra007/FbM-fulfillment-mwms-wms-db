@@ -28,6 +28,8 @@ GO
 /* 2021-11-16   WLChooi   1.1 WMS-18335 Add VirtualDCName & Flag (WL01) */
 /* 2021-11-16   WLChooi   1.1 DevOps Combine Script                     */
 /* 2021-12-07   WLChooi   1.2 WMS-18335 - Add ShowDCName Flag (WL02)    */
+/* 2021-12-13   WLChooi   1.3 Bug Fix - Initialize @c_ShowDCName to 'N' */
+/*                            (WL03)                                    */
 /************************************************************************/
 CREATE PROC [dbo].[isp_UCC_Carton_Label_100]
            @c_Storerkey       NVARCHAR(15)
@@ -55,7 +57,7 @@ BEGIN
          , @n_CartonNo              INT = 0             --WL01
          , @n_CountPickzone         INT = 0             --WL01
          , @n_CountCertainPickzone  INT = 0             --WL01
-         , @c_ShowDCName            NVARCHAR(10)        --WL02
+         , @c_ShowDCName            NVARCHAR(10) = 'N'  --WL02   --WL03
          
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
