@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 09-Aug-2017  CSCHONG   1.0 WMS-2642-Add new field (CS01)             */
+/* 13-NOV-2021  MINGLE    1.0 WMS-18329-Add new field (ML01)            */
 /************************************************************************/
 CREATE PROC isp_POD_08
            @c_MBOLKey   NVARCHAR(10),
@@ -76,6 +77,8 @@ BEGIN
       ,  LineNum        NVARCHAR(10)   NULL  DEFAULT ('')
       ,  OHUDF01        NVARCHAR(20)   NULL  DEFAULT ('')                 --CS01
       ,  OHUDF02        NVARCHAR(20)   NULL  DEFAULT ('')                 --CS01
+      ,  OHUDF07        DATETIME       NULL                               --ML01
+      ,  Shipperkey     NVARCHAR(15)   NULL  DEFAULT ('')                 --ML01
       )
 
             
@@ -105,7 +108,9 @@ BEGIN
       ,  OHNotes
       ,  POD_Barcode   
       ,  LineNum     
-      ,OHUDF01, OHUDF02                        --CS01    
+      ,  OHUDF01, OHUDF02                        --CS01  
+      ,  OHUDF07                    --ML01
+      ,  ShipperKey                 --ML01  
       )
    SELECT MH.MBOLKey
          ,OH.ExternOrderKey
@@ -131,7 +136,9 @@ BEGIN
          ,OH.Notes
          ,POD_Barcode = 'POD-CN' + RTRIM(C.short) + OH.orderkey
          ,LineNum=RIGHT('00000'+ CAST(Row_number() OVER (PARTITION BY oh.orderkey ORDER BY oh.orderkey, pd.sku) AS NVARCHAR(5)),5)
-         ,OH.UserDefine01,OH.UserDefine02                                                                  --CS01
+         ,OH.UserDefine01,OH.UserDefine02                                    --CS01
+         ,OH.UserDefine07               --ML01
+         ,OH.ShipperKey                 --ML01                                                         
    FROM MBOL       MH  WITH (NOLOCK)
    JOIN MBOLDETAIL MD  WITH (NOLOCK) ON (MH.MBOLKey  = MD.MBOLKey)
    JOIN ORDERS     OH  WITH (NOLOCK) ON (MD.Orderkey = OH.Orderkey)
@@ -152,6 +159,8 @@ BEGIN
          ,  OH.Notes
          ,  c.Short
          ,OH.UserDefine01,OH.UserDefine02                         --CS01
+         ,OH.UserDefine07                --ML01
+         ,OH.ShipperKey                  --ML01
    ORDER BY MH.MBOLKey
          ,  OH.Orderkey
 
@@ -181,7 +190,9 @@ BEGIN
       ,  OHNotes
       ,  POD_Barcode 
       ,  LineNum
-		,OHUDF01,OHUDF02                        --CS01
+		,  OHUDF01,OHUDF02                        --CS01
+      ,  OHUDF07                --ML01
+      ,  Shipperkey             --ML01
    FROM #TMP_PODRPT08
 
    WHILE @@TRANCOUNT < @n_StartTCnt
