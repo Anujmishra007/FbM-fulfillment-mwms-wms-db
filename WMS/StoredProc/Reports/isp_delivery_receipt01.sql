@@ -30,6 +30,7 @@ GO
 /* 04-MAR-2014  YTWan         SOS#303595 - PH - Update Loading Sheet RCM*/
 /*                            (Wan01)                                   */
 /* 03-NOV-2015  SPChin        SOS356337 - Add Filter By StorerKey       */
+/* 25-JAN-2017  JayLim        SQL2012 compatibility modification (Jay01)*/  
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Delivery_Receipt01] (@cMBOLkey NVARCHAR(10) )
@@ -248,7 +249,7 @@ BEGIN
       ORDERS.loadkey,
       LOTATTRIBUTE.Lottable04,
       ROUND(SUM(Pickdetail.Qty * SKU.stdgrosswgt),2) AS grosswgt,
-      ROUND(SUM(Pickdetail.Qty * SKU.cube),2) AS liters,
+      ROUND(SUM(Pickdetail.Qty * SKU.[cube]),2) AS liters,  --jaylim
       ROUND(SUM(Pickdetail.Qty * SKU.stdcube),2) AS cbm,
       CONVERT(NVARCHAR(500),MBOL.Remarks) as remarks,
       MBOL.Facility,  --  SOS#149425 ChewKP01
