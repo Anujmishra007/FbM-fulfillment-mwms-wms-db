@@ -1,7 +1,14 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrReceiptDetailDelete]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrReceiptDetailDelete]
+IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrReceiptDetailDelete]') 
+              AND OBJECTPROPERTY(id, N'IsTrigger') = 1) 
+DROP trigger [dbo].[ntrReceiptDetailDelete]
+
+SET ANSI_NULLS ON
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 /************************************************************************/  
 /* Trigger: ntrReceiptDetailDelete                                      */  
 /* Creation Date:                                                       */  
@@ -29,6 +36,7 @@ GO
 /* 26-Oct-2015  YTWan    1.5  SOS#353512 - Project Merlion - GW FRR     */
 /*                            Suggested Putaway Location (Wan01)        */
 /* 03-May-2017  NJOW01   1.6    WMS-1798 Allow config to call custom sp */
+/* 14-Oct-2021  KSChin   1.7  add tracker to DEL_ReceiptDetail table    */
 /************************************************************************/  
 CREATE TRIGGER [dbo].[ntrReceiptDetailDelete]
 ON [dbo].[RECEIPTDETAIL]
@@ -383,13 +391,13 @@ BEGIN
    DEALLOCATE CUR_RCPT
    --(Wan01) - END
     
-    INSERT INTO TableDeleteLog
+    /*INSERT INTO TableDeleteLog
     (
        TableName,   Col1,    Col2,    Col3,   Col4,  Col5, Remarks
     )
     SELECT 'RECEIPTDETAIL', RECEIPTKEY, RECEIPTLINENUMBER, STORERKEY, SKU, CAST(QtyExpected AS NVARCHAR(30)),
            ' PO# ' + ISNULL(POKey,'') + ' PO Line# ' + ISNULL(POLineNumber,'') 
-    FROM   DELETED   
+    FROM   DELETED  */ 
 
    -- Start (KHLim01) 
    IF @n_continue = 1 or @n_continue = 2
@@ -424,6 +432,55 @@ BEGIN
       END
    END
    -- End (KHLim01) 
+   -- Added by KS Chin 
+   IF @n_continue = 1 or @n_continue = 2
+   BEGIN  
+   IF EXISTS(SELECT 1 FROM DEL_RECEIPTDETAIL WITH (NOLOCK) 
+               JOIN DELETED ON DELETED.ReceiptKey = DEL_RECEIPTDETAIL.ReceiptKey AND DELETED.ReceiptLineNumber=DEL_RECEIPTDETAIL.ReceiptLineNumber )
+      BEGIN
+         DELETE  DEL_RECEIPTDETAIL
+         FROM   DEL_RECEIPTDETAIL
+         JOIN   DELETED ON DELETED.ReceiptKey = DEL_RECEIPTDETAIL.ReceiptKey AND DELETED.ReceiptLineNumber=DEL_RECEIPTDETAIL.ReceiptLineNumber
+         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+         IF @n_err <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62401  
+            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete DEL_RECEIPTDETAIL Failed. (ntrOrderHeaderDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+         END
+      END   
+      INSERT INTO DEL_RECEIPTDETAIL(ReceiptKey, ReceiptLineNumber, ExternReceiptKey, ExternLineNo, StorerKey, POKey, 
+            Sku, AltSku, Id, Status, DateReceived, QtyExpected, QtyAdjusted, QtyReceived, UOM,
+            PackKey, VesselKey, VoyageKey, XdockKey, ContainerKey, ToLoc, ToLot, ToId, ConditionCode,
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, CaseCnt, InnerPack,
+            Pallet, Cube, GrossWgt, NetWgt, OtherUnit1, OtherUnit2, UnitPrice, ExtendedPrice,
+            EffectiveDate, AddDate, AddWho, EditDate, EditWho, TrafficCop, ArchiveCop, TariffKey,  
+            FreeGoodQtyExpected, FreeGoodQtyReceived, SubReasonCode, FinalizeFlag, DuplicateFrom,
+            BeforeReceivedQty, PutawayLoc, ExportStatus, SplitPalletFlag, POLineNumber, LoadKey,
+            ExternPoKey, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, 
+            UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, Lottable06,
+	         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13,
+	         Lottable14, Lottable15, Channel, Channel_ID)
+      SELECT ReceiptKey, ReceiptLineNumber, ExternReceiptKey, ExternLineNo, StorerKey, POKey, 
+            Sku, AltSku, Id, Status, DateReceived, QtyExpected, QtyAdjusted, QtyReceived, UOM,
+            PackKey, VesselKey, VoyageKey, XdockKey, ContainerKey, ToLoc, ToLot, ToId, ConditionCode,
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, CaseCnt, InnerPack,
+            Pallet, Cube, GrossWgt, NetWgt, OtherUnit1, OtherUnit2, UnitPrice, ExtendedPrice,
+            EffectiveDate, getdate(), suser_sname(), EditDate, EditWho, TrafficCop, ArchiveCop, TariffKey,  
+            FreeGoodQtyExpected, FreeGoodQtyReceived, SubReasonCode, FinalizeFlag, DuplicateFrom,
+            BeforeReceivedQty, PutawayLoc, ExportStatus, SplitPalletFlag, POLineNumber, LoadKey,
+            ExternPoKey, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, 
+            UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, Lottable06,
+	         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13,
+	         Lottable14, Lottable15, Channel, Channel_ID FROM DELETED 
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62401   
+         SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Insert DEL_RECEIPT Failed. (ntrOrderHeaderDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+      END
+   END    -- Added End by KS Chin
 
     /* #INCLUDE <TRRDD2.SQL> */  
     IF @n_continue=3 -- Error Occured - Process And Return
@@ -453,4 +510,10 @@ BEGIN
         RETURN
     END
 END  
+
+GO
+
+ALTER TABLE [dbo].[RECEIPTDETAIL] ENABLE TRIGGER [ntrReceiptDetailDelete]
+GO
+
 

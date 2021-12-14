@@ -1,11 +1,16 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrReceiptHeaderDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrReceiptHeaderDelete]
+IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrReceiptHeaderDelete]') 
+              AND OBJECTPROPERTY(id, N'IsTrigger') = 1) 
+DROP trigger [dbo].[ntrReceiptHeaderDelete]
+
+SET ANSI_NULLS OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+
+
+
+
 
 /************************************************************************/
 /* Trigger: ntrReceiptHeaderDelete                                      */
@@ -31,6 +36,7 @@ GO
 /* 07-Apr-2017  NJOW01    1.2   Call custom trigger stored proc         */
 /* 01-Aug-20195 Wan01     1.3   WMS-9995 [CN] NIKESDC_Exceed_Hold ASN   */
 /*                              for Channel                             */
+/* 14-Oct-2021  KSChin    1.4   add tracker to DEL_Receipt table        */
 /************************************************************************/
 CREATE TRIGGER [dbo].[ntrReceiptHeaderDelete]
  ON [dbo].[RECEIPT]
@@ -159,6 +165,69 @@ BEGIN
 END
 --(Wan01) - END
 
+--added by KS Chin
+  IF @n_continue = 1 or @n_continue=2  
+   BEGIN
+   IF EXISTS(SELECT 1 FROM DEL_RECEIPT WITH (NOLOCK) 
+               JOIN DELETED ON DELETED.ReceiptKey = DEL_RECEIPT.ReceiptKey )
+      BEGIN
+         DELETE  DEL_RECEIPT
+         FROM   DEL_RECEIPT
+         JOIN   DELETED ON DELETED.ReceiptKey = DEL_RECEIPT.ReceiptKey
+         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+         IF @n_err <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62401   
+            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete DEL_RECEIPT Failed. (ntrREceiptHeaderDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+         END
+      END   
+   INSERT INTO DEL_RECEIPT(ReceiptKey, ExternReceiptKey, ReceiptGroup, StorerKey, ReceiptDate, POKey, 
+            CarrierKey, CarrierName, CarrierAddress1, CarrierAddress2, CarrierCity, CarrierState, 
+            CarrierZip, CarrierReference, WarehouseReference, OriginCountry, DestinationCountry, 
+            VehicleNumber, VehicleDate, PlaceOfLoading, PlaceOfDischarge, PlaceofDelivery, IncoTerms,
+            TermsNote, ContainerKey, Signatory, PlaceofIssue, OpenQty, Status, Notes, 
+            EffectiveDate, AddDate, AddWho, EditDate, EditWho, TrafficCop, ArchiveCop, ContainerType, ContainerQty, 
+            BilledContainerQty, RECType, ASNStatus, ASNReason, Facility, MBOLKey, Appointment_No, 
+            LoadKey, xDockFlag, PROCESSTYPE, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, 
+            UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, DOCTYPE, RoutingTool, 
+            CTNTYPE1, CTNTYPE2, CTNTYPE3, CTNTYPE4, CTNTYPE5, CTNTYPE6, CTNTYPE7, CTNTYPE8, CTNTYPE9, CTNTYPE10, 
+            PACKTYPE1, PACKTYPE2, PACKTYPE3, PACKTYPE4, PACKTYPE5, PACKTYPE6, PACKTYPE7, PACKTYPE8, PACKTYPE9, PACKTYPE10,
+	         CTNCNT1, CTNCNT2, CTNCNT3, CTNCNT4, CTNCNT5, CTNCNT6, CTNCNT7, CTNCNT8, CTNCNT9, CTNCNT10,
+            CTNQTY1, CTNQTY2, CTNQTY3, CTNQTY4, CTNQTY5, CTNQTY6, CTNQTY7, CTNQTY8, CTNQTY9, CTNQTY10,
+            NoOfMasterCtn, NoOfTTLUnit, NoOfPallet, Weight, WeightUnit, Cube, CubeUnit, GIS_ControlNo,
+	         Cust_ISA_ControlNo, Cust_GIS_ControlNo, GIS_ProcessTime, Cust_EDIAckTime, FinalizeDate, SellerName,
+            SellerCompany, SellerAddress1, SellerAddress2 ,SellerAddress3, SellerAddress4, SellerCity,
+            SellerState, SellerZip, SellerCountry, SellerContact1, SellerContact2, SellerPhone1, SellerPhone2,
+            SellerEmail1, SellerEmail2, SellerFax1, SellerFax2, HoldChannel, TrackingNo)
+      SELECT ReceiptKey, ExternReceiptKey, ReceiptGroup, StorerKey, ReceiptDate, POKey, 
+            CarrierKey, CarrierName, CarrierAddress1, CarrierAddress2, CarrierCity, CarrierState, 
+            CarrierZip, CarrierReference, WarehouseReference, OriginCountry, DestinationCountry, 
+            VehicleNumber, VehicleDate, PlaceOfLoading, PlaceOfDischarge, PlaceofDelivery, IncoTerms,
+            TermsNote, ContainerKey, Signatory, PlaceofIssue, OpenQty, Status, Notes, 
+            EffectiveDate, getdate(), suser_sname(), EditDate, EditWho, TrafficCop, ArchiveCop, ContainerType, ContainerQty, 
+            BilledContainerQty, RECType, ASNStatus, ASNReason, Facility, MBOLKey, Appointment_No, 
+            LoadKey, xDockFlag, PROCESSTYPE, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, 
+            UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, DOCTYPE, RoutingTool, 
+            CTNTYPE1, CTNTYPE2, CTNTYPE3, CTNTYPE4, CTNTYPE5, CTNTYPE6, CTNTYPE7, CTNTYPE8, CTNTYPE9, CTNTYPE10, 
+            PACKTYPE1, PACKTYPE2, PACKTYPE3, PACKTYPE4, PACKTYPE5, PACKTYPE6, PACKTYPE7, PACKTYPE8, PACKTYPE9, PACKTYPE10,
+	         CTNCNT1, CTNCNT2, CTNCNT3, CTNCNT4, CTNCNT5, CTNCNT6, CTNCNT7, CTNCNT8, CTNCNT9, CTNCNT10,
+            CTNQTY1, CTNQTY2, CTNQTY3, CTNQTY4, CTNQTY5, CTNQTY6, CTNQTY7, CTNQTY8, CTNQTY9, CTNQTY10,
+            NoOfMasterCtn, NoOfTTLUnit, NoOfPallet, Weight, WeightUnit, Cube, CubeUnit, GIS_ControlNo,
+	         Cust_ISA_ControlNo, Cust_GIS_ControlNo, GIS_ProcessTime, Cust_EDIAckTime, FinalizeDate, SellerName,
+            SellerCompany, SellerAddress1, SellerAddress2 ,SellerAddress3, SellerAddress4, SellerCity,
+            SellerState, SellerZip, SellerCountry, SellerContact1, SellerContact2, SellerPhone1, SellerPhone2,
+            SellerEmail1, SellerEmail2, SellerFax1, SellerFax2, HoldChannel, TrackingNo FROM DELETED 
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62401   
+         SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Insert DEL_RECEIPT Failed. (ntrReceiptHeaderDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+      END
+   END -- Added End by KS Chin
+
+
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
  DELETE ReceiptDetail FROM ReceiptDetail, Deleted
@@ -199,3 +268,8 @@ END
  END
 
 GO
+
+ALTER TABLE [dbo].[RECEIPT] ENABLE TRIGGER [ntrReceiptHeaderDelete]
+GO
+
+
