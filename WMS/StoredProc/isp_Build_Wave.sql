@@ -32,6 +32,9 @@ GO
 /*                              backend                                 */ 
 /* 26-Nov-2019  NJOW04    1.6   WMS-11199 Sort order by sku total order */
 /*                              quantity                                */
+/* 22-Nov-2021  WLChooi   1.7   WMS-18409 Extend @cValue length to      */
+/*                              NVARCHAR(4000) (WL02)                   */
+/* 22-Nov-2021  WLChooi   1.7   DevOps Combine Script                   */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Build_Wave]
@@ -51,7 +54,7 @@ AS
 
 DECLARE @bInValid          BIT,
         @cTableName        NVARCHAR(30),
-        @cValue            NVARCHAR(250),
+        @cValue            NVARCHAR(4000),   --WL02
         @cColumnName       NVARCHAR(250),
         @cCondLevel        NVARCHAR(10),
         @cColName          NVARCHAR(128),
