@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrPackDetailAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ntrPackDetailAdd]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
     DROP TRIGGER [dbo].[ntrPackDetailAdd]
 GO
 
@@ -7,68 +7,71 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
  
-/************************************************************************/    
-/* Trigger: ntrPackDetailAdd                                            */    
-/* Creation Date:                                                       */    
-/* Copyright: IDS                                                       */    
-/* Written by:                                                          */    
-/*                                                                      */    
-/* Purpose:                                                             */    
-/*                                                                      */    
-/* Input Parameters: NONE                                               */    
-/*                                                                      */    
-/* Output Parameters: NONE                                              */    
-/*                                                                      */    
-/* Return Status: NONE                                                  */    
-/*                                                                      */    
-/* Usage:                                                               */    
-/*                                                                      */    
-/* Local Variables:                                                     */    
-/*                                                                      */    
-/* Called By: When records added                                        */    
-/*                                                                      */    
-/* PVCS Version: 1.3                                                    */    
-/*                                                                      */    
-/* Version: 5.4                                                         */    
-/*                                                                      */    
-/* Data Modifications:                                                  */    
-/*                                                                      */    
-/* Updates:                                                             */    
-/* Date          Author   Ver.  Purposes                                */    
-/* 2009-Mar-03   James    1.1   Filter by checking labelno = '' to cater*/    
-/*                              for DynamicPick parallel picking        */    
-/*                              (james01)                               */    
-/* 2009-Jul-02   Shong    1.2   Bug fix for DynamicPick LabelNo(Shong01)*/    
-/* 2009-Jul-08   Vicky    1.3   Assign CartonNo to prevent different    */    
-/*                              LabelNo being assigned same CartonNo    */    
-/*                              (Vicky01)                               */    
-/* 2010-Nov-10   NJOW01   1.4   Fix the MAX(cartonno)                   */    
-/* 2011-Jan-12   NJOW02   1.5   201874-Insert copy dropid value from    */    
-/*                              previous line                           */    
-/* 2013-Jul-17   SHONG    1.6   Update PackDetail with ArchiveCop When  */  
-/*                              assign new carton number                */  
-/* 2014-Jan-08   Ung      1.7   Auto assign cartonno when labelno blank */  
-/*                              Fix duplicate cartonno even diff labelno*/  
-/*                              Add RDT compatible message              */  
-/* 2014-Apr-14   TLTING   1.8   SQL2012                                 */  
-/* 2014-May-06   TLTING   1.8   Deadlock Fix                            */  
-/* 2015-Aug-24   NJOW03   1.9   346367-copy lableno to dropid if blank  */   
-/* 2015-Nov-30   NJOW04   2.0   356837-fix insert packdetail update to  */  
-/*                              packinfo.qty                            */  
-/* 2019-Apr-23   TLTING01 2.1   Deadlock tune                           */   
-/* 2019-Jul-19   WLChooi  2.2   WMS-9661 & WMS-9663 - Add CartonGID when*/   
-/*                              add new carton - Based on storerconfig  */  
-/*                              Use nspGetRight to get Storerconfig to  */  
-/*                              filter by Facility for Pickslipno start */  
-/*                              with P only (Non-ECOM)                  */  
-/*                              For ECOM, will be done in update trigger*/  
-/*                              (WL01)                                  */  
-/* 2020-Apr-15   WLChooi  2.3   WMS-9661 Fix - Update CartonType (WL02) */  
-/* 2020-May-15   WLChooi  2.4   Insert PACKInfo table with CartonType = */  
-/*                               NULL (WL03)                            */  
-/* 2020-Sep-01   NJOW05   2.5   WMS-15009 - call custom stored proc     */  
-/* 2021-Jul-30   NJOW06   2.6   WMS-17609 - call custom stored proc to  */  
-/*                              generate packinfo trackingno            */  
+/*************************************************************************/    
+/* Trigger: ntrPackDetailAdd                                             */    
+/* Creation Date:                                                        */    
+/* Copyright: IDS                                                        */    
+/* Written by:                                                           */    
+/*                                                                       */    
+/* Purpose:                                                              */    
+/*                                                                       */    
+/* Input Parameters: NONE                                                */    
+/*                                                                       */    
+/* Output Parameters: NONE                                               */    
+/*                                                                       */    
+/* Return Status: NONE                                                   */    
+/*                                                                       */    
+/* Usage:                                                                */    
+/*                                                                       */    
+/* Local Variables:                                                      */    
+/*                                                                       */    
+/* Called By: When records added                                         */    
+/*                                                                       */    
+/* PVCS Version: 2.7                                                     */    
+/*                                                                       */    
+/* Version: 5.4                                                          */    
+/*                                                                       */    
+/* Data Modifications:                                                   */    
+/*                                                                       */    
+/* Updates:                                                              */    
+/* Date        Author   Ver.  Purposes                                   */    
+/* 2009-Mar-03 James    1.1   Filter by checking labelno = '' to cater   */    
+/*                            for DynamicPick parallel picking           */    
+/*                            (james01)                                  */    
+/* 2009-Jul-02 Shong    1.2   Bug fix for DynamicPick LabelNo(Shong01)   */    
+/* 2009-Jul-08 Vicky    1.3   Assign CartonNo to prevent different       */    
+/*                            LabelNo being assigned same CartonNo       */    
+/*                            (Vicky01)                                  */    
+/* 2010-Nov-10 NJOW01   1.4   Fix the MAX(cartonno)                      */    
+/* 2011-Jan-12 NJOW02   1.5   201874-Insert copy dropid value from       */    
+/*                            previous line                              */    
+/* 2013-Jul-17 SHONG    1.6   Update PackDetail with ArchiveCop When     */  
+/*                            assign new carton number                   */  
+/* 2014-Jan-08 Ung      1.7   Auto assign cartonno when labelno blank    */  
+/*                            Fix duplicate cartonno even diff labelno   */  
+/*                            Add RDT compatible message                 */  
+/* 2014-Apr-14 TLTING   1.8   SQL2012                                    */  
+/* 2014-May-06 TLTING   1.8   Deadlock Fix                               */  
+/* 2015-Aug-24 NJOW03   1.9   346367-copy lableno to dropid if blank     */   
+/* 2015-Nov-30 NJOW04   2.0   356837-fix insert packdetail update to     */  
+/*                            packinfo.qty                               */  
+/* 2019-Apr-23 TLTING01 2.1   Deadlock tune                              */   
+/* 2019-Jul-19 WLChooi  2.2   WMS-9661 & WMS-9663 - Add CartonGID when   */   
+/*                            add new carton - Based on storerconfig     */  
+/*                            Use nspGetRight to get Storerconfig to     */  
+/*                            filter by Facility for Pickslipno start    */  
+/*                            with P only (Non-ECOM)                     */  
+/*                            For ECOM, will be done in update trigger   */  
+/*                            (WL01)                                     */  
+/* 2020-Apr-15 WLChooi  2.3   WMS-9661 Fix - Update CartonType (WL02)    */  
+/* 2020-May-15 WLChooi  2.4   Insert PACKInfo table with CartonType =    */  
+/*                             NULL (WL03)                               */  
+/* 2020-Sep-01 NJOW05   2.5   WMS-15009 - call custom stored proc        */  
+/* 2021-Jul-30 NJOW06   2.6   WMS-17609 - call custom stored proc to     */  
+/*                            generate packinfo trackingno               */ 
+/* 2021-Nov-26 Wan01    2.7   WMS-18410 - [RG] Logitech Tote ID Packing  */
+/*                            Change Request                             */
+/* 2021-Nov-26 Wan01    2.8   DevOps Conbine Script                      */
 /************************************************************************/    
     
 CREATE TRIGGER [dbo].[ntrPackDetailAdd]    
@@ -104,7 +107,11 @@ DECLARE @nMax_CartonNo              INT -- (Vicky01)
        ,@c_PackCartonGID            NVARCHAR(10) = ''  --WL01  
        ,@c_Pickslipno               NVARCHAR(10) --NJOW06  
        ,@n_CartonNo                 INT --NJOW06  
-       ,@c_PackinfoGenTrackingNo_SP NVARCHAR(30) --NJOW06  
+       ,@c_PackinfoGenTrackingNo_SP NVARCHAR(30) --NJOW06 
+                                                 
+      ,  @c_AdvancePackGenCartonNo  NVARCHAR(10) = ''    --(Wan01)
+                                                         
+      DECLARE @t_PackdetailLabel TABLE (RowId BIGINT NOT NULL, PickSlipNo  NVARCHAR(10) NOT NULL DEFAULT (''))       --(Wan01)                                                                                                                      
     
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT    
       /* #INCLUDE <TRCCA1.SQL> */         
@@ -259,7 +266,18 @@ END
           AND   PACKDETAIL.LabelNo = INSERTED.LabelNo    
           AND   PACKDETAIL.CartonNo = INSERTED.CartonNo    -- tlting01  
           AND   ISNULL(PACKDETAIL.DropID,'') = ''    
-      END             
+      END 
+      
+      --(Wan01) - START
+      SELECT @c_AdvancePackGenCartonNo = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AdvancePackGenCartonNo')  
+      IF @c_AdvancePackGenCartonNo = '1'
+      BEGIN
+         INSERT INTO PACKDETAILLABEL (PickSlipNo, LabelNo, CartonNo) OUTPUT INSERTED.RowID, INSERTED.PickSlipNo INTO @t_PackdetailLabel
+         SELECT i.PickSlipNo, i.LabelNo, i.CartonNo
+         FROM INSERTED i
+         GROUP BY i.PickSlipNo, i.LabelNo, i.CartonNo
+      END
+      --(Wan01) - END           
                                        
       IF Exists (SELECT 1 FROM INSERTED WITH (NOLOCK) WHERE INSERTED.CartonNo = 0 AND LabelNo = '')  
       BEGIN    
@@ -293,59 +311,103 @@ END
       -- (Vicky01) - Start    
       IF Exists (SELECT 1 FROM INSERTED WITH (NOLOCK) WHERE INSERTED.CartonNo = 0)    
       BEGIN    
-              SELECT @nCartonNo = MAX(PACKDETAIL.CartonNo)  --NJOW01    
-              FROM PACKDETAIL WITH (NOLOCK)    
-              JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo AND     
-                                              PACKDETAIL.LabelNo = INSERTED.LabelNo)    
+         SELECT @nCartonNo = MAX(PACKDETAIL.CartonNo)  --NJOW01    
+         FROM PACKDETAIL WITH (NOLOCK)    
+         JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo AND     
+                                          PACKDETAIL.LabelNo = INSERTED.LabelNo)    
     
-              IF @nCartonNo = 0    
-              BEGIN    
-                  SELECT @nMax_CartonNo = MAX(PACKDETAIL.CartonNo)  
-                  FROM PACKDETAIL WITH (NOLOCK)    
-                  JOIN INSERTED WITH (NOLOCK) ON PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo    
+         IF @nCartonNo = 0    
+         BEGIN    
+            SELECT @nMax_CartonNo = MAX(PACKDETAIL.CartonNo)  
+            FROM PACKDETAIL WITH (NOLOCK)    
+            JOIN INSERTED WITH (NOLOCK) ON PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo  
     
-                 SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( INSERTED.LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)    
-                 FROM PACKDETAIL WITH (NOLOCK)    
-                 JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo AND     
-                                                 PACKDETAIL.LabelNo = INSERTED.LabelNo)    
-    
-                  UPDATE PACKDETAIL    
-                     SET CartonNo = @nMax_CartonNo + 1,    
-                         LabelLine = @cLabelLine  
-                         ,ArchiveCop = NULL  -- 2013-Jul-17  SHONG  
-                  FROM INSERTED WITH (NOLOCK)    
-                  WHERE PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo    
-                  AND   PACKDETAIL.LabelNo = INSERTED.LabelNo    
-                  AND   PACKDETAIL.CartonNo = 0    
-  
-                 IF EXISTS ( SELECT 1   
-                    FROM PACKDETAIL (NOLOCK)   
-                    JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo)    
-                    WHERE PACKDETAIL.CartonNo = @nMax_CartonNo + 1   
+            SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( INSERTED.LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)    
+            FROM PACKDETAIL WITH (NOLOCK)    
+            JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo AND     
+                                             PACKDETAIL.LabelNo = INSERTED.LabelNo)    
+
+            --(Wan01) - START
+            IF @c_AdvancePackGenCartonNo = '1'
+            BEGIN
+               SELECT TOP 1 @nMax_CartonNo = pdl.CartonNo
+               FROM PACKDETAILLABEL pdl WITH (NOLOCK)
+               JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo
+               WHERE pdl.RowId < tpl.RowId
+               AND CartonNo > 0
+               ORDER BY pdl.RowID DESC
+               
+               ;WITH GC AS 
+               ( SELECT pdl.RowID 
+                     ,  pdl.PickSlipNo
+                     ,  pdl.LabelNo
+                     ,  CartonNo = @nMax_CartonNo + ROW_NUMBER() OVER (ORDER BY pdl.RowId)
+                 FROM PACKDETAILLABEL pdl WITH (NOLOCK)
+                 JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo
+                 WHERE pdl.CartonNo = 0
+               )
+               
+               UPDATE pdl
+                  SET CartonNo  = GC.CartonNo  
+               FROM GC
+               JOIN PACKDETAILLABEL pdl ON GC.RowID = pdl.RowID
+               JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo
+                             AND INSERTED.LabelNo = pdl.LabelNo    
+               WHERE pdl.CartonNo = 0 
+               
+               UPDATE PACKDETAIL    
+                  SET CartonNo  = pdl.CartonNo  
+                     ,LabelLine = @cLabelLine  
+                     ,ArchiveCop = NULL 
+               FROM PACKDETAILLABEL pdl WITH (NOLOCK)  
+               JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo
+                             AND INSERTED.LabelNo = pdl.LabelNo    
+               WHERE PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo    
+               AND   PACKDETAIL.LabelNo = INSERTED.LabelNo    
+               AND   PACKDETAIL.CartonNo = 0                         
+            END 
+            ELSE 
+            BEGIN
+               --Original Update for AdvancePackGenCartonNo turn off
+               UPDATE PACKDETAIL    
+                  SET CartonNo = @nMax_CartonNo + 1,    
+                        LabelLine = @cLabelLine  
+                        ,ArchiveCop = NULL  -- 2013-Jul-17  SHONG  
+               FROM INSERTED WITH (NOLOCK)    
+               WHERE PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo    
+               AND   PACKDETAIL.LabelNo = INSERTED.LabelNo    
+               AND   PACKDETAIL.CartonNo = 0    
+            END
+            --(Wan01) - END
+            
+            IF EXISTS ( SELECT 1   
+               FROM PACKDETAIL (NOLOCK)   
+               JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo)    
+               WHERE PACKDETAIL.CartonNo = @nMax_CartonNo + 1   
                HAVING COUNT( DISTINCT PACKDETAIL.LabelNo) > 1)   
-                 BEGIN  
-                    SELECT @n_err = 83052    
-                    SELECT @n_continue = 3    
-                    SELECT @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+ ': CartonNo repeated (ntrPackdetailAdd)'  
-                 END  
-              END    
-              ELSE    
-              BEGIN    
-                 SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PACKDETAIL.LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)    
-                 FROM PACKDETAIL WITH (NOLOCK)    
-                 JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo AND     
-                                                 PACKDETAIL.LabelNo = INSERTED.LabelNo)    
-                 WHERE PACKDETAIL.CartonNo = @nCartonNo    
+            BEGIN  
+               SELECT @n_err = 83052    
+               SELECT @n_continue = 3    
+               SELECT @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+ ': CartonNo repeated (ntrPackdetailAdd)'  
+            END  
+         END    
+         ELSE    
+         BEGIN    
+            SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PACKDETAIL.LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)    
+            FROM PACKDETAIL WITH (NOLOCK)    
+            JOIN INSERTED WITH (NOLOCK) ON (PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo AND     
+                                             PACKDETAIL.LabelNo = INSERTED.LabelNo)    
+            WHERE PACKDETAIL.CartonNo = @nCartonNo    
                       
-                  UPDATE PACKDETAIL    
-                     SET CartonNo = @nCartonNo,    
-                         LabelLine = @cLabelLine,   
-                         ArchiveCop = NULL -- 2013-Jul-17  SHONG  
-                  FROM INSERTED WITH (NOLOCK)    
-                  WHERE PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo    
-                  AND   PACKDETAIL.LabelNo = INSERTED.LabelNo    
-                  AND   PACKDETAIL.CartonNo = 0    
-              END    
+            UPDATE PACKDETAIL    
+               SET CartonNo = @nCartonNo,    
+                     LabelLine = @cLabelLine,   
+                     ArchiveCop = NULL -- 2013-Jul-17  SHONG  
+            FROM INSERTED WITH (NOLOCK)    
+            WHERE PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo    
+            AND   PACKDETAIL.LabelNo = INSERTED.LabelNo    
+            AND   PACKDETAIL.CartonNo = 0    
+         END    
       END    
       -- (Vicky01) - End    
       ELSE IF Exists (SELECT 1     

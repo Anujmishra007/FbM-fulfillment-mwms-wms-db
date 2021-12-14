@@ -24,25 +24,28 @@ GO
 /* Version: 5.4                                                         */        
 /*                                                                      */        
 /* Modifications:                                                       */        
-/* Date         Author     Ver.  Purposes                               */    
-/* 2011-May-12  KHLim01   1.1   Insert Delete log                       */
-/* 2011-Apr-08  AQSKC     1.2   SOS210154 - Auto Shortpick When ExpQty  */
-/*                              Reduced (Kc01)                          */
-/* 2011-Jul-14  KHLim02   1.3   GetRight for Delete log                 */
-/* 2012-Aug-03  TLTING01  1.4   Add New Col to DELLOG                   */  
-/* 2013-Nov-13  NJOW01    1.5   293687 - Anti Diversity LOR Delete      */
-/*                              SerialNo                                */
-/* 2015-Nov-17  NJOW02    1.6   Delete packinfo carton if the carton is */
-/*                              deleted                                 */
-/* 2015-Nov-30  NJOW03    1.7   356837-fix delete packdetail update to  */
-/*                              packinfo.qty                            */
-/* 2017-May-29  Ung       1.8   WMS-1919 Add serial no                  */
-/* 2019-Mar-13  Ung       1.9   WMS-8134 Add PackDetailInfo             */
-/* 2020-Sep-01  NJOW04    1.10  WMS-15009 - call custom stored proc     */  
-/* 2020-AUG-06  Wan01     2.0   WMS-14315 - [CN] NIKE_O2_Ecom Packing_CR*/
-/* 2020-SEP-12  NJOW05    2.1   WMS-15001 - reverse serial# when del for*/
-/*                              config ADAllowInsertExistingSerialNo and*/
-/*                              Option1=NotAllowInsertNewSerialNo       */
+/* Date         Author  Ver.  Purposes                                  */    
+/* 2011-May-12  KHLim01 1.1   Insert Delete log                         */
+/* 2011-Apr-08  AQSKC   1.2   SOS210154 - Auto Shortpick When ExpQty    */
+/*                            Reduced (Kc01)                            */
+/* 2011-Jul-14  KHLim02 1.3   GetRight for Delete log                   */
+/* 2012-Aug-03  TLTING011.4   Add New Col to DELLOG                     */  
+/* 2013-Nov-13  NJOW01  1.5   293687 - Anti Diversity LOR Delete        */
+/*                            SerialNo                                  */
+/* 2015-Nov-17  NJOW02  1.6   Delete packinfo carton if the carton is   */
+/*                            deleted                                   */
+/* 2015-Nov-30  NJOW03  1.7   356837-fix delete packdetail update to    */
+/*                            packinfo.qty                              */
+/* 2017-May-29  Ung     1.8   WMS-1919 Add serial no                    */
+/* 2019-Mar-13  Ung     1.9   WMS-8134 Add PackDetailInfo               */
+/* 2020-Sep-01  NJOW04  1.10  WMS-15009 - call custom stored proc       */  
+/* 2020-AUG-06  Wan01   2.0   WMS-14315 - [CN] NIKE_O2_Ecom Packing_CR  */
+/* 2020-SEP-12  NJOW05  2.1   WMS-15001 - reverse serial# when del for  */
+/*                            config ADAllowInsertExistingSerialNo and  */
+/*                            Option1=NotAllowInsertNewSerialNo         */
+/* 2021-Nov-26  Wan02   2.2   WMS-18410 - [RG] Logitech Tote ID Packing */
+/*                            Change Request                            */
+/* 2021-Nov-26  Wan02   2.2   DevOps Conbine Script                     */
 /************************************************************************/        
 CREATE TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
 FOR  DELETE      
@@ -427,8 +430,32 @@ END
        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
     END             
- END      
+ END     
+  
+--(Wan02) - START
+IF @n_continue = 1 or @n_continue = 2
+BEGIN
+   ;WITH pdl AS
+    ( SELECT PACKDETAILLABEL.RowID
+      FROM PACKDETAILLABEL WITH (NOLOCK)
+      JOIN DELETED ON PACKDETAILLABEL.Pickslipno = DELETED.Pickslipno AND PACKDETAILLABEL.labelNo = DELETED.labelNo
+      LEFT JOIN PACKDETAIL (NOLOCK) ON PACKDETAILLABEL.Pickslipno = PACKDETAIL.Pickslipno AND PACKDETAILLABEL.labelNo = PACKDETAIL.labelNo
+      WHERE PACKDETAIL.labelNo IS NULL
+    )
+   DELETE p WITH (ROWLOCK)
+   FROM pdl
+   JOIN PACKDETAILLABEL p ON p.RowID = pdl.RowID
 
+   SET @n_err = @@ERROR
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PACKDETAILLABEL Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+   END
+END
+--(Wan02) - END
+ 
  --NJOW02
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
