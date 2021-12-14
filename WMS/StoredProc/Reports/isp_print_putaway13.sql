@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 28/10/2014	CSCHONG 1.0	  Change Request of Adidas Putaway Advice   */
+/* 10-MAR-2017  JayLim   1.1  SQL2012 compatibility modification (Jay01)*/
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Print_Putaway13] (
@@ -199,7 +200,7 @@ CREATE PROC [dbo].[isp_Print_Putaway13] (
 			     PACK.InnerPack,
 			     PACK.Qty,
 			     PACK.Pallet,
-			     PACK.Cube,
+			     PACK.[Cube],
 			     PACK.GrossWgt,
 			     PACK.NetWgt,
 			     PACK.OtherUnit1,
