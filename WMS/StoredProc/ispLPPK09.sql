@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-03-25  Wan      1.0   Created                                   */
+/* 2021-11-25  WLChooi  1.1   DevOps Combine Script                     */
+/* 2021-11-25  WLChooi  1.1   WMS-18445 Add Cartonization.CartonWeight  */
+/*                            when calculating Packinfo.Weight (WL01)   */
 /************************************************************************/
 CREATE PROC ispLPPK09
            @cLoadkey       NVARCHAR(10)
@@ -100,6 +103,8 @@ BEGIN
          , @CUR_ORD              CURSOR
          , @CUR_PD               CURSOR
 
+         , @n_CartonWgt          FLOAT       = 0.00   --WL01
+
    SET @n_Err      = 0
    SET @c_ErrMsg   = ''
   
@@ -125,6 +130,7 @@ BEGIN
       ,  CartonSeqNo       INT          DEFAULT(0)
       ,  CartonCube        FLOAT        DEFAULT(0.00)
       ,  [Status]          NVARCHAR(2)  DEFAULT('0')
+      ,  CartonWeight     FLOAT         DEFAULT(0.00)   --WL01
       )
    END
 
@@ -138,6 +144,7 @@ BEGIN
          ,  MaxWeight            FLOAT          NOT NULL DEFAULT (0.00)
          ,  SkuGroup             NVARCHAR(10)   NOT NULL DEFAULT ('')
          ,  MixSkuGroup          INT            NOT NULL DEFAULT(0)
+         ,  CartonWeight         FLOAT          NOT NULL DEFAULT (0.00)   --WL01
          )
    END
    
@@ -158,6 +165,7 @@ BEGIN
          ,  CubeNeed             FLOAT          NOT NULL DEFAULT (0.00)
          ,  SplitQty             INT            NOT NULL DEFAULT (0)         
          ,  SplitPick            INT            NOT NULL DEFAULT (0)
+         ,  CartonWeight         FLOAT          NOT NULL DEFAULT (0.00)   --WL01
          )
    END
    
@@ -303,7 +311,8 @@ BEGIN
          ,  [Cube]              
          ,  MaxWeight           
          ,  SkuGroup            
-         ,  MixSkuGroup           
+         ,  MixSkuGroup        
+         ,  CartonWeight   --WL01   
       )
    SELECT CartonizationGroup  
       ,  CartonType          
@@ -311,6 +320,7 @@ BEGIN
       ,  MaxWeight 
       ,  'FW'
       ,  MixSkuGroup = CASE WHEN ROW_NUMBER() OVER (ORDER BY [Cube] DESC) >= 2 THEN 1 ELSE 0 END
+      ,  ISNULL(CZ.CartonWeight, 0.00)   --WL01
    FROM CARTONIZATION CZ WITH (NOLOCK)
    WHERE CZ.CartonizationGroup = @c_CartonGroup
    ORDER BY CZ.[Cube] DESC
@@ -322,6 +332,7 @@ BEGIN
          ,  MaxWeight           
          ,  SkuGroup            
          ,  MixSkuGroup
+         ,  CartonWeight   --WL01
       )
    SELECT CartonizationGroup  
       ,  CartonType          
@@ -329,6 +340,7 @@ BEGIN
       ,  MaxWeight 
       ,  'NONFW'
       ,  1
+      ,  CartonWeight   --WL01
    FROM #CTNGroup CZ WITH (NOLOCK)
    WHERE CZ.RowRef > 1
 
@@ -410,6 +422,7 @@ BEGIN
                 @c_Cartontype = cg.CartonType
                ,@n_CartonCube = cg.[Cube]
                ,@n_CartonMix  = cg.MixSkuGroup
+               ,@n_CartonWgt  = cg.CartonWeight   --WL01
          FROM #CTNGroup AS cg WITH (NOLOCK) 
          WHERE cg.SkuGroup = @c_SkuGroup
          AND cg.MixSkuGroup IN (1, @n_MixSkuGroup)
@@ -427,13 +440,14 @@ BEGIN
          BEGIN
             PRINT '@n_MixSkuGroup: ' + CAST(@n_MixSkuGroup AS NVARCHAR) 
             SELECT @n_MixSkuGroup '@n_MixSkuGroup' , @n_SumUnpackCube '@n_SumUnpackCube', @c_SkuGroup '@c_SkuGroup'
-                  ,@n_CartonCube '@n_CartonCube'
+                  ,@n_CartonCube '@n_CartonCube', @n_CartonWgt '@n_CartonWgt'   --WL01
             
                SELECT 
                       cg.CartonType
                      ,cg.[Cube]
                      ,cg.MixSkuGroup
                      ,cg.SkuGroup
+                     ,cg.CartonWeight   --WL01
                FROM #CTNGroup AS cg WITH (NOLOCK) 
                WHERE cg.SkuGroup = @c_SkuGroup
                --AND cg.[Cube] <= @n_SumUnpackCube
@@ -467,6 +481,7 @@ BEGIN
                , CubeNeed
                , SplitQty
                , SplitPick
+               , CartonWeight   --WL01
                )
          SELECT CartonType = @c_CartonType
                ,CartonCube = @n_CartonCube
@@ -489,7 +504,7 @@ BEGIN
                ,SplitPick = CASE WHEN t.AccumulatedCube <= @n_CartonCube THEN 0 
                                  --WHEN t.StdCube > t.AccumulatedCube - @n_CartonCube THEN 1
                                  ELSE 1 END
-
+               ,CartonWeight = @n_CartonWgt   --WL01
          FROM 
          (
                SELECT RowNum = ROW_NUMBER() OVER (ORDER BY PD.SkuGroup, PD.Sku, PD.RowRef)
@@ -623,6 +638,7 @@ BEGIN
             ,PickStdCube=(p.Qty - PTC.SplitQty) * p.StdCube
             ,PickStdGrossWgt=(p.Qty - PTC.SplitQty) * p.StdGrossWgt
             ,[Status]   = CASE WHEN PTC.SplitPick = 1 AND p.[Status] NOT IN ('N') THEN 'S' ELSE p.[Status] END
+            ,CartonWeight = PTC.CartonWeight   --WL01
          FROM #PICKDETAIL_WIP p
          JOIN #PackToCarton PTC ON (p.RowRef = ptc.RowRef_PD)
          WHERE PTC.CartonType = @c_CartonType
@@ -986,7 +1002,7 @@ BEGIN
          )
       SELECT @c_PickSlipNo
             ,CartonNo = PD.CartonSeqNo 
-            ,[Weight] = ISNULL(SUM(PD.StdGrossWgt * PD.Qty),0.00)
+            ,[Weight] = ISNULL(SUM(PD.StdGrossWgt * PD.Qty),0.00) + ISNULL(PD.CartonWeight,0.00)   --WL01
             ,[Cube]   = PD.CartonCube                             
             ,Qty = ISNULL(SUM(PD.Qty),0)
             ,PD.CartonType
@@ -994,7 +1010,8 @@ BEGIN
       WHERE PD.Orderkey = @c_Orderkey
       GROUP BY PD.CartonSeqNo
             ,  PD.CartonType
-            ,  PD.CartonCube                                     
+            ,  PD.CartonCube             
+            ,  ISNULL(PD.CartonWeight,0.00)   --WL01                        
  
       SET @n_Err = @@ERROR  
       IF @n_Err <> 0  
