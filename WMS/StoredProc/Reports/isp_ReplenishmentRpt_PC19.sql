@@ -29,6 +29,10 @@ GO
 /* 04-AUG-2020 WLChooi  1.2   WMS-14531 - Add Flag if Qty < 0 (WL01)       */                
 /* 01-Jun-2021 NJOW01   1.3   WMS-16990 Support multiple sku with same EAN */
 /* 19-Jul-2021 NJOW02   1.4   Fix add ISNULL to SUM qty from lotxlocxid    */
+/* 23-Nov-2021 WLChooi  1.5   DevOps Combine Script                        */
+/* 23-Nov-2021 WLChooi  1.5   WMS-18407 Group by ItemClass and calculate   */
+/*                            Casecnt & InnerPack, Sort based on Codelkup  */
+/*                            (WL02)                                       */
 /***************************************************************************/
 CREATE PROC isp_ReplenishmentRpt_PC19
                @c_zone01      NVARCHAR(10)
@@ -64,6 +68,27 @@ BEGIN
            @n_PalletCnt  int,
            @n_CaseCnt  int,
            @n_LooseQty int
+           
+   --WL02 S
+   DECLARE @c_SQL            NVARCHAR(MAX) = ''
+         , @c_Condition      NVARCHAR(MAX) = ''
+         , @c_OrderBy        NVARCHAR(MAX) = ''
+         , @c_PZone          NVARCHAR(50)  = ''
+         , @c_Sorting        NVARCHAR(100) = ''
+         , @c_OrderByPZone   NVARCHAR(MAX) = ''
+
+   CREATE TABLE #TMP_SORTING (
+      PZone    NVARCHAR(50)
+    , Sorting  NVARCHAR(100)
+   )
+
+   INSERT INTO #TMP_SORTING(PZone, Sorting)
+   SELECT DISTINCT ISNULL(CL.Code,''), REPLACE(ISNULL(CL.UDF01,''),'Replenishment','R')
+   FROM CODELKUP CL (NOLOCK)
+   WHERE CL.LISTNAME = 'REPLENSORT'
+   AND CL.Storerkey = @c_Storerkey
+   --SELECT * FROM #TMP_SORTING
+   --WL02 E
 
    SELECT @n_continue=1,
    @b_debug = 0
@@ -85,7 +110,6 @@ BEGIN
       GOTO QUIT_SP
    END   
    --(Wan01) - END      
-
 
    DECLARE @c_priority  NVARCHAR(5)
    SELECT StorerKey, SKU, LOC FromLOC, LOC ToLOC, Lot, Id, Qty, Qty QtyMoved, Qty QtyInPickLOC,
@@ -843,41 +867,151 @@ QUIT_SP:
       RETURN
    END
 --(Wan01) - END
+   
+   --WL02 S
+   DECLARE CUR_SORT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT TS.PZone, TS.Sorting
+   FROM #TMP_SORTING TS
+   WHERE ISNULL(TS.PZone,'') <> '' 
+   AND ISNULL(TS.Sorting,'') <> ''
+   ORDER BY TS.PZone
+
+   OPEN CUR_SORT
+
+   FETCH NEXT FROM CUR_SORT INTO @c_PZone, @c_Sorting
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      IF ISNULL(@c_OrderByPZone,'') = ''
+         SET @c_OrderByPZone = ', CASE WHEN LOC.Putawayzone = ''' + TRIM(@c_PZone) + '''' + ' THEN ' + TRIM(@c_Sorting) 
+      ELSE
+         SET @c_OrderByPZone = @c_OrderByPZone + ' WHEN LOC.Putawayzone = ''' + TRIM(@c_PZone) + '''' + ' THEN ' + TRIM(@c_Sorting)
+
+      FETCH NEXT FROM CUR_SORT INTO @c_PZone, @c_Sorting
+   END
+   CLOSE CUR_SORT
+   DEALLOCATE CUR_SORT
+
+   IF ISNULL(@c_OrderByPZone,'') <> ''
+      SET @c_OrderByPZone = @c_OrderByPZone + ' ELSE R.FromLoc END'
 
    IF ( @c_zone02 = 'ALL')
    BEGIN
-      SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey,
-      SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
-      ,LA.Lottable04, R.RefNo --GOH01   --WL01
-      FROM  REPLENISHMENT R (NOLOCK) 
-      JOIN  SKU (NOLOCK) ON (SKU.Sku = R.Sku AND  SKU.StorerKey = R.StorerKey)
-      JOIN  LOC (NOLOCK) ON (LOC.Loc = R.FromLoc)
-      JOIN  PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
-      JOIN LOTATTRIBUTE LA (NOLOCK) ON (R.Lot = LA.Lot)  --GOH01
-      WHERE LOC.facility = @c_zone01
-      AND   R.confirmed = 'N' 
-      AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')       --(Wan01)
-      AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')  --(Wan01)
-      ORDER BY LOC.PutawayZone, R.Priority
+      --SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey,
+      --SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
+      --,LA.Lottable04, R.RefNo --GOH01   --WL01
+      --FROM  REPLENISHMENT R (NOLOCK) 
+      --JOIN  SKU (NOLOCK) ON (SKU.Sku = R.Sku AND  SKU.StorerKey = R.StorerKey)
+      --JOIN  LOC (NOLOCK) ON (LOC.Loc = R.FromLoc)
+      --JOIN  PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
+      --JOIN LOTATTRIBUTE LA (NOLOCK) ON (R.Lot = LA.Lot)  --GOH01
+      --WHERE LOC.facility = @c_zone01
+      --AND   R.confirmed = 'N' 
+      --AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')       --(Wan01)
+      --AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')  --(Wan01)
+      --ORDER BY LOC.PutawayZone, R.Priority
+
+      SET @c_SQL = N'SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey
+                           ,SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
+                           ,LA.Lottable04, R.RefNo
+                           ,SKU.itemclass
+                           ,ISNULL(PACK.InnerPack,0) AS InnerPack
+                     FROM  REPLENISHMENT R (NOLOCK) 
+                     JOIN  SKU (NOLOCK) ON (SKU.Sku = R.Sku AND  SKU.StorerKey = R.StorerKey)
+                     JOIN  LOC (NOLOCK) ON (LOC.Loc = R.FromLoc)
+                     JOIN  PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
+                     JOIN  LOTATTRIBUTE LA (NOLOCK) ON (R.Lot = LA.Lot)
+                     WHERE LOC.facility = @c_zone01
+                     AND   R.confirmed = ''N'' 
+                     AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = ''ALL'')     
+                     AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = ''ALL'') '
+
+      SET @c_OrderBy = 'ORDER BY LOC.PutawayZone, SKU.itemclass ' + @c_OrderByPZone
+
+      SET @c_SQL = @c_SQL + CHAR(13) + @c_OrderBy
+
+      EXEC sp_executesql @c_SQL 
+      , N'@c_zone01      NVARCHAR(10), @c_zone02      NVARCHAR(10), @c_zone03      NVARCHAR(10),
+          @c_zone04      NVARCHAR(10), @c_zone05      NVARCHAR(10), @c_zone06      NVARCHAR(10),
+          @c_zone07      NVARCHAR(10), @c_zone08      NVARCHAR(10), @c_zone09      NVARCHAR(10),
+          @c_zone10      NVARCHAR(10), @c_zone11      NVARCHAR(10), @c_zone12      NVARCHAR(10),
+          @c_Storerkey   NVARCHAR(15), @c_ReplGrp     NVARCHAR(30) '
+      , @c_zone01   
+      , @c_zone02   
+      , @c_zone03   
+      , @c_zone04   
+      , @c_zone05   
+      , @c_zone06   
+      , @c_zone07   
+      , @c_zone08   
+      , @c_zone09   
+      , @c_zone10   
+      , @c_zone11   
+      , @c_zone12   
+      , @c_Storerkey
+      , @c_ReplGrp 
    END
    ELSE
    BEGIN
-      SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey,
-      SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
-      ,LA.Lottable04, R.RefNo    --GOH01   --WL01
-      FROM  REPLENISHMENT R (NOLOCK), SKU (NOLOCK), LOC (NOLOCK), PACK (NOLOCK) -- Pack table added by Jacob. Date: Jan 03, 2001
-      , LOTATTRIBUTE LA (NOLOCK)    --GOH01
-      WHERE SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
-      AND LOC.Loc = R.ToLoc
-      AND SKU.PackKey = PACK.PackKey
-      AND LA.Lot = R.Lot      --GOH01
-      AND LOC.putawayzone in (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
-      and loc.facility = @c_zone01
-      AND confirmed = 'N'
-      AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')       --(Wan01)
-      AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')  --(Wan01)
-      ORDER BY LOC.PutawayZone, R.Priority
+      --SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey,
+      --SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
+      --,LA.Lottable04, R.RefNo    --GOH01   --WL01
+      --FROM  REPLENISHMENT R (NOLOCK), SKU (NOLOCK), LOC (NOLOCK), PACK (NOLOCK) -- Pack table added by Jacob. Date: Jan 03, 2001
+      --, LOTATTRIBUTE LA (NOLOCK)    --GOH01
+      --WHERE SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
+      --AND LOC.Loc = R.ToLoc
+      --AND SKU.PackKey = PACK.PackKey
+      --AND LA.Lot = R.Lot      --GOH01
+      --AND LOC.putawayzone in (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
+      --and loc.facility = @c_zone01
+      --AND confirmed = 'N'
+      --AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')       --(Wan01)
+      --AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')  --(Wan01)
+      --ORDER BY LOC.PutawayZone, R.Priority
+
+      SET @c_SQL = N'SELECT R.FromLoc, R.Id, R.ToLoc, R.Sku, R.Qty, R.StorerKey, R.Lot, R.PackKey
+                           ,SKU.Descr, R.Priority, LOC.PutawayZone, PACK.CASECNT, PACK.PACKUOM1, PACK.PACKUOM3, R.ReplenishmentKey
+                           ,LA.Lottable04, R.RefNo
+                           ,SKU.itemclass
+                           ,ISNULL(PACK.InnerPack,0) AS InnerPack
+                           FROM  REPLENISHMENT R (NOLOCK), SKU (NOLOCK), LOC (NOLOCK), PACK (NOLOCK)
+                           , LOTATTRIBUTE LA (NOLOCK)
+                           WHERE SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
+                           AND LOC.Loc = R.ToLoc
+                           AND SKU.PackKey = PACK.PackKey
+                           AND LA.Lot = R.Lot
+                           AND LOC.putawayzone in (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
+                           and loc.facility = @c_zone01
+                           AND confirmed = ''N''
+                           AND (R.Storerkey = @c_Storerkey OR @c_Storerkey = ''ALL'')     
+                           AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = ''ALL'') '
+
+      SET @c_OrderBy = 'ORDER BY LOC.PutawayZone, SKU.itemclass' + @c_OrderByPZone
+
+      SET @c_SQL = @c_SQL + CHAR(13) + @c_OrderBy
+
+      EXEC sp_executesql @c_SQL 
+      , N'@c_zone01      NVARCHAR(10), @c_zone02      NVARCHAR(10), @c_zone03      NVARCHAR(10),
+          @c_zone04      NVARCHAR(10), @c_zone05      NVARCHAR(10), @c_zone06      NVARCHAR(10),
+          @c_zone07      NVARCHAR(10), @c_zone08      NVARCHAR(10), @c_zone09      NVARCHAR(10),
+          @c_zone10      NVARCHAR(10), @c_zone11      NVARCHAR(10), @c_zone12      NVARCHAR(10),
+          @c_Storerkey   NVARCHAR(15), @c_ReplGrp     NVARCHAR(30) '
+      , @c_zone01   
+      , @c_zone02   
+      , @c_zone03   
+      , @c_zone04   
+      , @c_zone05   
+      , @c_zone06   
+      , @c_zone07   
+      , @c_zone08   
+      , @c_zone09   
+      , @c_zone10   
+      , @c_zone11   
+      , @c_zone12   
+      , @c_Storerkey
+      , @c_ReplGrp   
    END
+   --WL02 E
 END
 GO
 SET QUOTED_IDENTIFIER OFF 
