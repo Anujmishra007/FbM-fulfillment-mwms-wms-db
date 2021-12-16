@@ -28,9 +28,10 @@ GO
 /* 30-Dec-2020  CSCHONG   1.1 WMS-15970 revised field mapping (CS01)    */
 /* 19-Oct-2021  MINGLE    1.2 WMS-18135 modify logic (ML01)             */
 /* 19-Oct-2021  Mingle    1.2 DevOps Combine Script                     */
+/* 02-Dec-2021  CSCHONG   1.3 WMS-18464 revised field mapping (CS02)    */
 /************************************************************************/  
   
-CREATE PROC isp_packinglist_detail_07
+CREATE  PROC isp_packinglist_detail_07
             @c_Pickslipno        NVARCHAR(10),
             @c_Type              NVARCHAR(10) = 'H1'
 AS  
@@ -76,6 +77,15 @@ BEGIN
          , @c_OHUDF03             NVARCHAR(50)
          , @c_OHTYPE              NVARCHAR(30)            --CS01
          , @c_RTPDATE             NVARCHAR(10)            --CS01
+         , @c_CountryDestination  NVARCHAR(30)=''         --CS02
+         , @c_OrdGrp              NVARCHAR(20)=''         --CS02
+       --  , @c_OHUDF03             NVARCHAR(20)
+         , @c_field10             NVARCHAR(20)=''         --CS02
+         , @c_field11             NVARCHAR(4000)=''       --CS02
+         , @c_Getfield11          NVARCHAR(5)=''          --CS02  
+         , @c_Getfield13          NVARCHAR(5)=''          --CS02   
+         , @c_field13             NVARCHAR(30)=''         --CS02  
+         , @c_field21             NVARCHAR(4000)=''       --CS02
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue  = 1  
@@ -95,8 +105,8 @@ BEGIN
         c_Company        NVARCHAR(45),
         DischargePlace   NVARCHAR(30),
         Wavekey          NVARCHAR(20),
-        OHTYPE           NVARCHAR(10),
-        PmtTerm          NVARCHAR(10),
+        OHTYPE           NVARCHAR(20),      --(CS02)
+        PmtTerm          NVARCHAR(30),      --(CS02)
         SKU              NVARCHAR(20),
         PACKQty          INT,
         LabelNo          NVARCHAR(20),
@@ -109,7 +119,8 @@ BEGIN
         RPTNotes2        NVARCHAR(4000),
         RPTNotes3        NVARCHAR(4000),
         RPTNotes4        NVARCHAR(4000),
-        RPTDATE          NVARCHAR(10)
+        RPTDATE          NVARCHAR(10),
+        Field21          NVARCHAR(4000) NULL     --(CS02)     
    )
 
    CREATE TABLE #TMP_DECRYPTEDDATA (  
@@ -170,7 +181,13 @@ BEGIN
     --CS01 START
      SET @c_RTPDATE = ''
      SET @c_OHTYPE = ''
+     SET @c_OrdGrp = ''       --CS02
+     SET @c_CountryDestination = ''   --CS02
+
+
      SELECT @c_OHTYPE = OH.[type]
+           ,@c_CountryDestination = OH.CountryDestination       --CS02
+           ,@c_OrdGrp = OH.OrderGroup                           --CS02
      FROM ORDERS OH WITH (NOLOCK)
      WHERE OH.Orderkey = @c_GetOrderkey
 
@@ -181,17 +198,63 @@ BEGIN
     WHERE OI.Orderkey = @c_GetOrderkey
     --CS01 END
 
+     --CS02 START
+    
+     SET @c_field10 = 'N'
+     SET @c_field11 = ''
+     SET @c_field13 =''
+   
+     
+     SET @c_Getfield11 = 'N'
+     SET @c_Getfield13 = 'N'
+
+     SELECT @c_field10 = CASE WHEN ISNULL(c.code,'') <> '' THEN 'Y' ELSE 'N' END
+     FROM dbo.CODELKUP C WITH (NOLOCK)
+     WHERE C.LISTNAME = 'ORDTYPSEP'
+     AND C.Code=@c_CountryDestination
+     AND C.Storerkey = @c_Storerkey
+     AND C.UDF01 = '1' 
+
+    SELECT  @c_Getfield11 = CASE WHEN ISNULL(c.code,'') <> '' THEN 'Y' ELSE 'N' END
+          -- ,@c_field11 = c.Long
+     FROM dbo.CODELKUP C WITH (NOLOCK)
+     WHERE C.LISTNAME = 'ORDRMKSEP'
+     AND C.Code=@c_CountryDestination
+     AND C.Storerkey = @c_Storerkey
+     AND C.UDF01 = '1' 
+
+ -- SELECT @c_OrdGrp '@c_OrdGrp'
+   IF @c_Getfield11 = 'Y'
+   BEGIN
+    SELECT  @c_field11 = c.Long
+     FROM dbo.CODELKUP C WITH (NOLOCK)
+     WHERE C.LISTNAME = 'SEPMLOC'
+     AND C.Code=@c_OrdGrp
+     AND C.Storerkey = @c_Storerkey
+  END
+
+--SELECT @c_Getfield11 '@c_Getfield11',@c_field11 '@c_field11'
+
+     SELECT  @c_Getfield13 = CASE WHEN ISNULL(c.code,'') <> '' THEN 'Y' ELSE 'N' END
+            ,@c_field13 = c.Short
+     FROM dbo.CODELKUP C WITH (NOLOCK)
+     WHERE C.LISTNAME = 'SEPPAYMTH'
+     AND C.Code=@c_OHTYPE
+     AND C.Storerkey = @c_Storerkey
+     
+   --CS02 END
+
    IF @c_Conso = 'Y'
    BEGIN
       INSERT INTO #Temp_PACKDET07
       SELECT MAX(OH.ExternOrderkey) AS ExternOrderkey
            , MAX(t.c_contact1) AS c_Contact1
-           , MAX(ISNULL(OH.Notes,'')) AS OHNotes
+           , CASE WHEN @c_Getfield11 = 'N' THEN MAX(ISNULL(OH.Notes,'')) ELSE @c_field11 END AS OHNotes   --CS02
            , MAX(t.c_Company) AS c_Company
            , MAX(ISNULL(OH.DischargePlace,'')) AS DischargePlace
            , MAX(OH.UserDefine09) AS wavekey
-           , MAX(OH.type) AS OHTYPE
-           , MAX(OH.PmtTerm) AS PmtTerm
+           , CASE WHEN @c_field10 = 'N' THEN @c_OHTYPE ELSE @c_OrdGrp END AS OHTYPE            --CS02
+           , CASE WHEN @c_Getfield13 = 'N' THEN MAX(OH.PmtTerm) ELSE @c_field13 END AS PmtTerm    --CS02
            , PD.SKU
            , SUM(PD.Qty) AS PACKQty
            , PD.LabelNo
@@ -205,6 +268,7 @@ BEGIN
            ,MAX(ISNULL(C3.notes,''))
            ,MAX(ISNULL(C1.notes,''))
            ,@c_RTPDATE                             --CS01
+           , ''                                    --CS02
       FROM ORDERS OH (NOLOCK)
       --LEFT JOIN STORER St (NOLOCK) ON St.Storerkey = OH.ConsigneeKey
       JOIN LoadPlanDetail LPD (NOLOCK) ON LPD.Orderkey = OH.Orderkey
@@ -230,12 +294,12 @@ BEGIN
       INSERT INTO #Temp_PACKDET07
       SELECT MAX(OH.ExternOrderkey) AS ExternOrderkey
            , MAX(t.c_contact1) AS c_Contact1
-           , MAX(ISNULL(OH.Notes,'')) AS OHNotes
+           , CASE WHEN @c_Getfield11 = 'N' THEN MAX(ISNULL(OH.Notes,'')) ELSE @c_field11 END AS OHNotes     --CS02
            , MAX(t.c_Company) AS c_Company
            , MAX(ISNULL(OH.DischargePlace,'')) AS DischargePlace
            , MAX(OH.UserDefine09) AS wavekey
-           , MAX(OH.type) AS OHTYPE
-           , MAX(OH.PmtTerm) AS PmtTerm
+           , CASE WHEN @c_field10 = 'N' THEN  @c_OHTYPE ELSE @c_OrdGrp END AS OHTYPE          --CS02
+           , CASE WHEN @c_Getfield13 = 'N' THEN  MAX(OH.PmtTerm) ELSE @c_field13 END AS PmtTerm  --CS02
            , PD.SKU
            , SUM(PD.Qty) AS PACKQty
            , PD.LabelNo
@@ -249,6 +313,7 @@ BEGIN
            ,MAX(ISNULL(C3.notes,''))
            ,MAX(ISNULL(C.notes,''))  
            , @c_RTPDATE                          --CS01
+           , ''                                  --CS02
       FROM ORDERS OH (NOLOCK)
       LEFT JOIN STORER St (NOLOCK) ON St.Storerkey = OH.ConsigneeKey
       JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
@@ -259,7 +324,7 @@ BEGIN
       LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME = 'Sephora2C2' AND C1.storerkey = OH.StorerKey AND C1.code = OH.UserDefine03 --ML01  
       LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.LISTNAME = 'Sephora2C3' AND C2.storerkey = OH.StorerKey AND C2.code = OH.UserDefine03 --ML01  
       LEFT JOIN CODELKUP C3 WITH (NOLOCK) ON C3.LISTNAME = 'Sephora2C4' AND C3.storerkey = OH.StorerKey AND C3.code = OH.UserDefine03 --ML01 
-      JOIN #TMP_DECRYPTEDDATA t WITH (NOLOCK) ON (t.Orderkey = OH.Orderkey)  
+      LEFT JOIN #TMP_DECRYPTEDDATA t WITH (NOLOCK) ON (t.Orderkey = OH.Orderkey)  
       WHERE PH.Storerkey = @c_Storerkey
       AND PH.PickSlipNo = @c_Pickslipno
       AND OH.DOCTYPE = 'E'
@@ -281,6 +346,7 @@ BEGIN
    IF ISNULL(@c_ExternOrderKey,'') <> ''
    BEGIN
        SET @c_OHUDF03 = ''
+       SET @c_field21 = ''    --CS02
 
        SELECT @c_OHUDF03 = MAX(OH.Userdefine03)
        FROM ORDERS OH WITH (NOLOCK)
@@ -291,6 +357,7 @@ BEGIN
        BEGIN
           
          SELECT  @c_showqrcode = CASE WHEN ISNULL(C.short,'') = '1' THEN 'Y' ELSE 'N' END  
+                ,@c_field21 = C.Long                                                         --CS02
          FROM CODELKUP C WITH (NOLOCK) 
          WHERE C.listname = 'Sephora2C'
          AND c.Code = @c_OHUDF03
@@ -299,6 +366,7 @@ BEGIN
 
        UPDATE #Temp_PACKDET07
        SET QRCODE = CASE WHEN ISNULL(@c_showqrcode,'') <> '' THEN @c_showqrcode ELSE QRCODE END
+          ,Field21 = CASE WHEN ISNULL(@c_field21,'') <> '' THEN @c_field21 ELSE Field21 END               --CS02
        WHERE Externorderkey = @c_ExternOrderKey
        AND Pickslipno = @c_Pickslipno
        AND Storerkey =@c_Storerkey
@@ -322,7 +390,8 @@ BEGIN
                RPTNotes2,
                RPTNotes3,
                RPTNotes4,
-               RPTDATE                         --CS01
+               RPTDATE,                         --CS01
+               Field21                          --CS02
       FROM #Temp_PACKDET07
       WHERE Pickslipno = @c_Pickslipno 
       GROUP BY externorderkey,
@@ -341,7 +410,8 @@ BEGIN
                RPTNotes2,
                RPTNotes3,
                RPTNotes4,
-               RPTDATE                       --CS01
+               RPTDATE,                       --CS01
+               Field21                        --CS02
       ORDER BY Pickslipno
    END
    ELSE IF @c_Type = 'D1'
