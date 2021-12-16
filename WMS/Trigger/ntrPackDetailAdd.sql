@@ -27,7 +27,7 @@ GO
 /*                                                                       */    
 /* Called By: When records added                                         */    
 /*                                                                       */    
-/* PVCS Version: 2.7                                                     */    
+/* PVCS Version: 2.9                                                     */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
@@ -72,7 +72,8 @@ GO
 /* 2021-Nov-26 Wan01    2.7   WMS-18410 - [RG] Logitech Tote ID Packing  */
 /*                            Change Request                             */
 /* 2021-Nov-26 Wan01    2.8   DevOps Conbine Script                      */
-/************************************************************************/    
+/* 2021-DEC-15 Wan02    2.9   Add RowLock & fixed Order By               */
+/*************************************************************************/    
     
 CREATE TRIGGER [dbo].[ntrPackDetailAdd]    
 ON  [dbo].[PackDetail]    
@@ -335,7 +336,8 @@ END
                JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo
                WHERE pdl.RowId < tpl.RowId
                AND CartonNo > 0
-               ORDER BY pdl.RowID DESC
+               ORDER BY pdl.CartonNo DESC          --Wan02
+               --ORDER BY pdl.RowID DESC              --Wan02
                
                ;WITH GC AS 
                ( SELECT pdl.RowID 
@@ -347,8 +349,10 @@ END
                  WHERE pdl.CartonNo = 0
                )
                
-               UPDATE pdl
-                  SET CartonNo  = GC.CartonNo  
+               UPDATE pdl WITH (ROWLOCK)           --Wan02
+                  SET CartonNo  = GC.CartonNo 
+                  ,   EditWho = SUSER_SNAME()         --Wan02  
+                  ,   EditDate = GETDATE()            --Wan02    
                FROM GC
                JOIN PACKDETAILLABEL pdl ON GC.RowID = pdl.RowID
                JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo
