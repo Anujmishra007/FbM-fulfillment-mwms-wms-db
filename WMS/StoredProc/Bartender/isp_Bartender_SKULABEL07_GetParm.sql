@@ -16,7 +16,9 @@ GO
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */     
 /* 2021-05-25 1.1  WLChooi    WMS-17129 - Use UPC.UPC to print label (WL01)   */  
-/* 2021-05-25 1.1  WLChooi    DevOps Combine Script                           */                       
+/* 2021-05-25 1.1  WLChooi    DevOps Combine Script                           */              
+/* 2021-11-15 1.2  WLChooi    WMS-18352 - Scan SKU use ExtendedField01 to     */   
+/*                            which template to print (WL03)                  */                
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_SKULABEL07_GetParm]                      
@@ -119,7 +121,10 @@ BEGIN
    ELSE
    BEGIN
       INSERT INTO #TMP_SKU(Storerkey, SKU, ExtendedField01, Qty)
-      SELECT TOP 1 @parm01, @parm02, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END, 1
+      SELECT TOP 1 @parm01, @parm02
+                 --, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END   --WL03
+                 , ISNULL(SKUINFO.ExtendedField01,'')   --WL03
+                 , 1
       FROM SKU (NOLOCK)
       LEFT JOIN SKUINFO (NOLOCK) ON SKU.Sku = SKUINFO.Sku AND SKU.StorerKey = SKUINFO.Storerkey
       WHERE SKU.StorerKey = @parm01 AND SKU.Sku = @parm02

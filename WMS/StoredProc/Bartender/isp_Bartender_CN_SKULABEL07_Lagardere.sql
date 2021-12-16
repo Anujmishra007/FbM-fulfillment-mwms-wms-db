@@ -18,7 +18,8 @@ GO
 /* 2021-02-25 1.0  WLChooi    Created (WMS-16426)                             */        
 /* 2021-04-08 1.1  WLChooi    WMS-16426 - Add Col16 & Col17 (WL01)            */ 
 /* 2021-05-25 1.2  WLChooi    WMS-17129 - Get UPC.UPC from param (WL02)       */      
-/* 2021-05-25 1.2  WLChooi    DevOps Combine Script                           */        
+/* 2021-05-25 1.2  WLChooi    DevOps Combine Script                           */     
+/* 2021-12-02 1.3  WLChooi    WMS-18352 - Add more columns (WL03)             */    
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_CN_SKULABEL07_Lagardere]                      
@@ -130,8 +131,9 @@ BEGIN
                     + ' LEFT(ISNULL(SI.ExtendedField21,''''),80), ISNULL(SI.ExtendedField04,''''), ISNULL(SI.ExtendedField05,''''), ISNULL(SI.ExtendedField06,''''), '   + CHAR(13) +   --8
                     + ' ISNULL(SI.ExtendedField07,''''), ISNULL(ST.Company,''''), ISNULL(ST.Address2,''''), ISNULL(ST.Zip,''''), ISNULL(ST.Phone1,''''), S.Price, '   --WL02
                     + ' CASE WHEN ISNULL(@c_Sparm04,'''') = '''' THEN ISNULL(U.UPC,'''') ELSE @c_Sparm04 END, '   + CHAR(13)   --15   --WL02          
-                    + ' ISNULL(SI.ExtendedField08,''''), ISNULL(SI.ExtendedField09,''''),'''','''','''','   + CHAR(13)     --20   --WL01
-                    + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --30  
+                    + ' ISNULL(SI.ExtendedField08,''''), ISNULL(SI.ExtendedField09,''''), ISNULL(SI.ExtendedField10,''''),'   + CHAR(13)     --18   --WL01   --WL03
+                    + ' ISNULL(SI.ExtendedField11,''''), ISNULL(SI.ExtendedField12,''''), '   + CHAR(13)  --20   --WL03 
+                    + ' ISNULL(SI.ExtendedField13,''''), ISNULL(SI.ExtendedField22,''''),'''','''','''','''','''','''','''','''', '   + CHAR(13)  --30   --WL03  
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --40       
                     + ' '''','''','''','''','''','''','''','''','''','''', '   + CHAR(13)  --50       
                     + ' '''','''','''','''','''','''','''','''','''',''''  '   + CHAR(13)  --60  
