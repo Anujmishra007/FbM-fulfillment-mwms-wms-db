@@ -37,9 +37,11 @@ GO
 /*                             RCM Report - Count Sheet (Wan01)         */
 /* 22-MAY-2014   CSCHONG       Added Lottables 06-15 (CS01)             */
 /* 12-MAY-2021   Mingle        Added showlot08 and showlot12(ML01)      */
+/* 26-Nov-2021   CHONGCS       Devops Scripts Combine                   */
+/* 26-Nov-2021   CHONGCS       WMS-18381 loc barcode with config(CS02)  */
 /************************************************************************/
 
-CREATE PROC ispGetStockTakeSheet (
+CREATE  PROC ispGetStockTakeSheet (
 @c_CCKey_Start       NVARCHAR(10),
 @c_CCKey_End         NVARCHAR(10),
 @c_Sku_Start         NVARCHAR(20),
@@ -77,6 +79,27 @@ Declare @C_STORERKEY varchar (15)
          ,  @c_TableName      NVARCHAR(30)
          ,  @c_SQL            NVARCHAR(MAX)
    --(Wan01) - END
+         , @c_getstorerkey    NVARCHAR(20)= ''  --CS02
+
+
+
+     --CS02 START
+     IF ISNULL(@c_StorerKey_Start,'') <> '' AND EXISTS (SELECT 1 FROM Storer (NOLOCK) WHERE storerkey = @c_StorerKey_Start)
+     BEGIN
+        SET @c_getstorerkey = @c_StorerKey_Start  
+     END 
+     ELSE IF ISNULL(@c_StorerKey_end,'') <> '' AND @c_StorerKey_End NOT LIKE 'ZZZ%' AND EXISTS (SELECT 1 FROM Storer (NOLOCK) WHERE storerkey = @c_StorerKey_end)
+     BEGIN
+        SET @c_getstorerkey = @c_StorerKey_end 
+     END 
+     ELSE
+     BEGIN
+       SELECT TOP 1 @c_getstorerkey = StorerKey
+       FROM dbo.StockTakeSheetParameters WITH (NOLOCK)
+       WHERE StockTakeKey = @c_CCKey_Start OR StockTakeKey = @c_CCKey_End
+     END
+
+     --CS02 END
 
 create table #RESULT 
 (
@@ -105,18 +128,19 @@ cckey NVARCHAR(10) null
 , PalletCnt float null
 , CCDetailKey NVARCHAR(10) null
 , SystemQty int null
-, Lottable06 NVARCHAR(30) null		--(CS01)
-, Lottable07 NVARCHAR(30) null		--(CS01)
-, Lottable08 NVARCHAR(30) null		--(CS01)
-, Lottable09 NVARCHAR(30) null		--(CS01)
-, Lottable10 NVARCHAR(30) null		--(CS01)
-, Lottable11 NVARCHAR(30) null		--(CS01)
-, Lottable12 NVARCHAR(30) null		--(CS01)
-, Lottable13 datetime null				--(CS01)
-, Lottable14 datetime null				--(CS01)
-, Lottable15 datetime null				--(CS01)
-, showlot08 NVARCHAR(30) NULL		--(ML01)
-, showlot12 NVARCHAR(30) NULL		--(ML01)
+, Lottable06 NVARCHAR(30) null      --(CS01)
+, Lottable07 NVARCHAR(30) null      --(CS01)
+, Lottable08 NVARCHAR(30) null      --(CS01)
+, Lottable09 NVARCHAR(30) null      --(CS01)
+, Lottable10 NVARCHAR(30) null      --(CS01)
+, Lottable11 NVARCHAR(30) null      --(CS01)
+, Lottable12 NVARCHAR(30) null      --(CS01)
+, Lottable13 datetime null          --(CS01)
+, Lottable14 datetime null          --(CS01)
+, Lottable15 datetime null          --(CS01)
+, showlot08 NVARCHAR(30) NULL       --(ML01)
+, showlot12 NVARCHAR(30) NULL       --(ML01)
+, showlocbarcode NVARCHAR(5) NULL   --(CS02)
 )
 
  -- prepare result table
@@ -146,18 +170,19 @@ INSERT INTO #RESULT
 , PalletCnt
 , CCDetailKey
 , SystemQty
-, Lottable06		--(CS01)
-, Lottable07		--(CS01)	
-, Lottable08		--(CS01)
-, Lottable09		--(CS01)
-, Lottable10		--(CS01)
-, Lottable11		--(CS01)
-, Lottable12		--(CS01)
-, Lottable13		--(CS01)
-, Lottable14		--(CS01)
-, Lottable15		--(CS01)
-, showlot08		--(ML01)
-, showlot12		--(ML01)
+, Lottable06      --(CS01)
+, Lottable07      --(CS01) 
+, Lottable08      --(CS01)
+, Lottable09      --(CS01)
+, Lottable10      --(CS01)
+, Lottable11      --(CS01)
+, Lottable12      --(CS01)
+, Lottable13      --(CS01)
+, Lottable14      --(CS01)
+, Lottable15      --(CS01)
+, showlot08       --(ML01)
+, showlot12       --(ML01)
+,showlocbarcode    --(CS02)
 )
  SELECT CCDETAIL.CCKey,  -- SOS63326
   CCDETAIL.ccsheetno,
@@ -234,7 +259,7 @@ INSERT INTO #RESULT
            WHEN '2' THEN CCDETAIL.lottable10_Cnt2
            WHEN '3' THEN CCDETAIL.lottable10_Cnt3
       END as Lottable10,
-		CASE @c_CountNo
+      CASE @c_CountNo
            WHEN '1' THEN CCDETAIL.lottable11
            WHEN '2' THEN CCDETAIL.lottable11_Cnt2
            WHEN '3' THEN CCDETAIL.lottable11_Cnt3
@@ -259,13 +284,16 @@ INSERT INTO #RESULT
            WHEN '2' THEN CCDETAIL.lottable15_Cnt2
            WHEN '3' THEN CCDETAIL.lottable15_Cnt3
       END as Lottable15,
-		/*CS01 END*/
-      showlot08 = CASE WHEN CCDETAIL.StorerKey = 'IDSMED' THEN Lottable08 ELSE Lottable02 END,		--(ML01)
-      showlot12 = CASE WHEN CCDETAIL.StorerKey = 'IDSMED' THEN Lottable12 ELSE SKU.SkuGroup END		--(ML01)
+      /*CS01 END*/
+      showlot08 = CASE WHEN CCDETAIL.StorerKey = 'IDSMED' THEN Lottable08 ELSE Lottable02 END,     --(ML01)
+      showlot12 = CASE WHEN CCDETAIL.StorerKey = 'IDSMED' THEN Lottable12 ELSE SKU.SkuGroup END,      --(ML01)
+      showlocbarcode = CASE WHEN ISNULL(CL.Code,'') <> '' THEN 'Y' ELSE 'N' END                  --(CS02) 
  FROM CCDETAIL (NOLOCK)
  LEFT OUTER JOIN  LOC (NOLOCK) ON (LOC.loc = CCDETAIL.loc)
  LEFT OUTER JOIN  SKU (NOLOCK) ON (CCDETAIL.StorerKey = SKU.StorerKey AND CCDETAIL.SKU = SKU.SKU)
  LEFT OUTER JOIN  dbo.V_STORERCONFIG2 SC (NOLOCK) ON (CCDETAIL.StorerKey = SC.Storerkey AND SC.Configkey = 'CCSHEETBYPASSPA') --NJOW01
+ LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME='REPORTCFG' AND CL.code = 'SHOWLOCBARCODE' AND CL.long='r_dw_stocktake_my' --(CS02)
+                                        AND CL.Storerkey= @c_getstorerkey AND ISNULL(CL.Short,'') <> 'N'                                                    --(CS02)
  WHERE CCDETAIL.CCKey BETWEEN @c_CCKey_Start AND @c_CCKey_End
    AND   CCDETAIL.ccsheetno BETWEEN @c_ccsheetno_start AND @c_ccsheetno_end
    AND   LOC.PutawayZone BETWEEN @c_zone_start AND @c_zone_end
@@ -435,18 +463,19 @@ SELECT
 #RESULT.CCDetailKey,
 #RESULT.SystemQty,
 #RESULT1.STORERFORLOGO,
-#RESULT.Lottable06,		--(CS01)
-#RESULT.Lottable07,		--(CS01)
-#RESULT.Lottable08,		--(CS01)
-#RESULT.Lottable09,		--(CS01)
-#RESULT.Lottable10,		--(CS01)
-#RESULT.Lottable11,		--(CS01)
-#RESULT.Lottable12,		--(CS01)
-#RESULT.Lottable13,		--(CS01)
-#RESULT.Lottable14,		--(CS01)
-#RESULT.Lottable15,		--(CS01)
-#RESULT.showlot08,		--(ML01)
-#RESULT.showlot12		--(ML01)
+#RESULT.Lottable06,     --(CS01)
+#RESULT.Lottable07,     --(CS01)
+#RESULT.Lottable08,     --(CS01)
+#RESULT.Lottable09,     --(CS01)
+#RESULT.Lottable10,     --(CS01)
+#RESULT.Lottable11,     --(CS01)
+#RESULT.Lottable12,     --(CS01)
+#RESULT.Lottable13,     --(CS01)
+#RESULT.Lottable14,     --(CS01)
+#RESULT.Lottable15,     --(CS01)
+#RESULT.showlot08,      --(ML01)
+#RESULT.showlot12,      --(ML01)
+#RESULT.showlocbarcode  --(CS02)
 FROM #RESULT
 JOIN  #RESULT1 ON (#RESULT.cckey = #RESULT1.CCKEy1) --ang01 End
    WHERE (StorerKey BETWEEN @c_StorerKey_Start AND @c_StorerKey_End OR ISNULL(Storerkey,'')='') --NJOW02
