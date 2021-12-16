@@ -29,7 +29,8 @@ GO
 /*                            WaveDetailKey (ZG01)                      */  
 /* 2021-01-15  Wan01    1.2   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 2021-11-24  Wan02    1.3   LFWM-3141 - UAT - TW  Outbound - Order    */
+/* 2021-11-16  LZG      1.3   JSM-33161 - Corrected typo (ZG02)         */
+/* 2021-11-24  Wan02    1.4   LFWM-3141 - UAT - TW  Outbound - Order    */
 /*                            Remove from Wave Bug                      */
 /*                      1.3   DevOps Combine Script                     */
 /************************************************************************/     
@@ -163,7 +164,8 @@ BEGIN
       
       SET @n_PickSlipCnt = 0  
       SELECT @n_PickSlipCnt = ISNULL(SUM(CASE WHEN PH.Orderkey = @c_Orderkey THEN 1 ELSE 0 END),0)  
-      FROM WAVEDETAIL WH WITH (NOLOCK)  
+      --FROM WAVEDETAIL WH WITH (NOLOCK)     -- ZG02
+      FROM WAVE WH WITH (NOLOCK)          -- ZG02
       JOIN WAVEDETAIL WD WITH (NOLOCK) ON  WH.Wavekey = WD.Wavekey  
       JOIN PICKHEADER PH WITH (NOLOCK) ON  PH.Wavekey = WD.Wavekey  
                                        AND PH.Orderkey= WD.Orderkey  
