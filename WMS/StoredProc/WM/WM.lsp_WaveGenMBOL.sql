@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,9 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-02-24  Wan01    1.2   Fixed Pass into Sub SP to check if to execute*/
 /*                            login if @c_UserName <> SUSER_SNAME()     */
+/* 2021-09-22  Wan02    1.3   DevOps Combine Script                     */
+/* 2021-09-22  Wan02    1.3   LFWM-3074 - TW  Wave Planning Skip Load Plan*/
+/*                            Validation to Create MBOL                 */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveGenMBOL]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
@@ -36,7 +39,6 @@ CREATE PROC [WM].[lsp_WaveGenMBOL]
    ,  @n_err               INT = 0           OUTPUT                                                                                                             
    ,  @c_ErrMsg            NVARCHAR(255)= '' OUTPUT               
    ,  @c_UserName          NVARCHAR(128)= ''                                                                                                                         
-
 AS  
 BEGIN                                                                                                                                                        
    SET NOCOUNT ON                                                                                                                                           
@@ -44,27 +46,28 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF                                                                                                                                
    SET CONCAT_NULL_YIELDS_NULL OFF       
 
-   DECLARE  @n_StartTCnt      INT = @@TRANCOUNT  
-         ,  @n_Continue       INT = 1
+   DECLARE  @n_StartTCnt         INT = @@TRANCOUNT  
+         ,  @n_Continue          INT = 1
 
-         ,  @b_InsertMBOL     BIT = 0
+         ,  @b_InsertMBOL        BIT = 0
 
-         ,  @n_totweight      FLOAT = 0.00 
-         ,  @n_totcube        FLOAT = 0.00 
-         ,  @d_OrderDate      DATETIME  
-         ,  @d_Delivery_Date  DATETIME
+         ,  @n_totweight         FLOAT = 0.00 
+         ,  @n_totcube           FLOAT = 0.00 
+         ,  @d_OrderDate         DATETIME  
+         ,  @d_Delivery_Date     DATETIME
 
-         ,  @c_Facility       NVARCHAR(5)  = ''
-         ,  @c_Storerkey      NVARCHAR(15) = ''
-         ,  @c_Orderkey       NVARCHAR(10) = ''
-         ,  @c_MBOLKey        NVARCHAR(10) = ''
-         ,  @c_Loadkey        NVARCHAR(10) = ''
-         ,  @c_ExternOrderkey NVARCHAR(30) = ''
-         ,  @c_Route          NVARCHAR(10) = ''
+         ,  @c_Facility          NVARCHAR(5)  = ''
+         ,  @c_Storerkey         NVARCHAR(15) = ''
+         ,  @c_Orderkey          NVARCHAR(10) = ''
+         ,  @c_MBOLKey           NVARCHAR(10) = ''
+         ,  @c_Loadkey           NVARCHAR(10) = ''
+         ,  @c_ExternOrderkey    NVARCHAR(30) = ''
+         ,  @c_Route             NVARCHAR(10) = ''
 
-         ,  @c_OTMITFMBOL     NVARCHAR(30) = ''
-         ,  @c_SPCode         NVARCHAR(30) = ''
-         ,  @CUR_WAVEORD      CURSOR
+         ,  @c_OTMITFMBOL        NVARCHAR(30) = ''
+         ,  @c_SPCode            NVARCHAR(30) = ''
+         ,  @c_SCEMBOLShipWOLoad NVARCHAR(30) = ''       --(Wan02)
+         ,  @CUR_WAVEORD         CURSOR
 
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -98,20 +101,9 @@ BEGIN
                        + ': No Orders populates to Wave. (lsp_WaveGenMBOL)'
          GOTO EXIT_SP
       END
-
-      IF EXISTS(  SELECT 1 FROM WAVEDETAIL WD WITH (NOLOCK)
-                  JOIN ORDERS OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)
-                  WHERE WD.WaveKey = @c_WaveKey
-                  AND (OH.Loadkey = '' OR OH.Loadkey IS NULL) )
-      BEGIN
-         SET @n_continue = 3
-         SET @n_err = 555702
-         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
-                       + ': Loadplan has not builded yet. (lsp_WaveGenMBOL)'
-         GOTO EXIT_SP
-      END
-
-      SET @c_Storerkey= ''
+      
+      --(Wan02) - START
+      SET @c_Storerkey= ''             --Move Up
       SET @c_Facility = ''
       SELECT TOP 1 @c_Storerkey = OH.Storerkey
             , @c_Facility = OH.Facility
@@ -119,6 +111,25 @@ BEGIN
       JOIN ORDERS OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)
       WHERE WD.Wavekey = @c_WaveKey  
       ORDER BY WD.WaveDetailKey  
+      
+      SELECT @c_SCEMBOLShipWOLoad = sgr.Authority                             
+      FROM fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SCEMBOLShipWOLoad') sgr
+      
+      IF @c_SCEMBOLShipWOLoad = 0
+      BEGIN
+         IF EXISTS(  SELECT 1 FROM WAVEDETAIL WD WITH (NOLOCK)
+                     JOIN ORDERS OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)
+                     WHERE WD.WaveKey = @c_WaveKey
+                     AND (OH.Loadkey = '' OR OH.Loadkey IS NULL) )
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 555702
+            SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+                          + ': Loadplan has not builded yet. (lsp_WaveGenMBOL)'
+            GOTO EXIT_SP
+         END
+      END
+      --(Wan02) - END
 
       SELECT @c_OTMITFMBOL = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'OTMITFMBOL')
 
@@ -126,9 +137,10 @@ BEGIN
       BEGIN
          GOTO EXIT_SP
       END
-     
+        
       SELECT @c_SPCode = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WAVEGENMBOL_SP')
-
+      
+      BEGIN TRAN        --(Wan02)   
       IF @c_SPCode NOT IN ( '0', '1' ) 
       BEGIN
          -- Call Custom SP if SP steup in StorerConfig
@@ -181,10 +193,15 @@ BEGIN
    END CATCH
    --(mingle01) - END 
 EXIT_SP:
+   IF (XACT_STATE()) = -1  
+   BEGIN
+      ROLLBACK TRAN
+   END  
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt
       BEGIN
          ROLLBACK TRAN
       END
@@ -206,7 +223,11 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-      
+   
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END 
    REVERT
 END
 GO
