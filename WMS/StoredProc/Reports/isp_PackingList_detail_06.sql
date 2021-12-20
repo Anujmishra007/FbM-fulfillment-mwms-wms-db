@@ -1,6 +1,6 @@
 IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PackingList_detail_06]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_PackingList_detail_06]
+   DROP PROCEDURE [dbo].[isp_PackingList_detail_06]
 GO
 
 SET ANSI_NULLS OFF
@@ -8,18 +8,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-  
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PackingList_detail_06]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_PackingList_detail_06]
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-  
 /************************************************************************/    
 /* Trigger: isp_PackingList_detail_06                                   */    
 /* Creation Date: 26-MAR-2020                                           */    
@@ -30,7 +18,7 @@ GO
 /*        :                                                             */    
 /* Called By: r_dw_packinglist_detail_06_21                             */    
 /*          :                                                           */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.5                                                    */    
 /*                                                                      */    
 /* Version: 7.0                                                         */    
 /*                                                                      */    
@@ -45,6 +33,8 @@ GO
 /*                            (WL03)                                    */
 /* 2021-07-29   Mingle    1.4 WMS-17506 - Add notes and modify logic    */
 /*                            (ML01)                                    */
+/* 2021-11-11   WLChooi   1.5 DevOps Combine Script                     */
+/* 2021-11-11   WLChooi   1.5 WMS-18344 - Cater for Type = '61' (WL03)  */
 /************************************************************************/    
 CREATE PROC isp_PackingList_detail_06  
             @c_PickSlipNo     NVARCHAR(10)   
@@ -106,7 +96,7 @@ BEGIN
    )  
       
    --WL02 S
-   IF @c_ohtype = '51'
+   IF @c_ohtype IN ('51','61')   --WL03
    BEGIN
       INSERT INTO #TMP_PACKLISTDET06 
       --ML01 S
@@ -240,7 +230,7 @@ QUIT_SP:
    --SELECT * FROM #TMP_PACKLISTDET06  
    --ORDER BY Pickslipno,sku  
   
-   IF @c_ohtype = '51'
+   IF @c_ohtype IN ('51','61')   --WL03
    BEGIN
       SELECT Orderkey      
            , ExternOrderkey
