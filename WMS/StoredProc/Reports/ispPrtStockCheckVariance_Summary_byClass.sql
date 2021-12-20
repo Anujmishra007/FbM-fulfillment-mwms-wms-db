@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 2021-11-16   WLChooi 1.0   DevOps Combine Script                     */
+/* 2021-12-20   WLChooi 1.1   Fix - Convert SystemQty to Casecnt (WL01) */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispPrtStockCheckVariance_Summary_byClass] (
          @c_StockTakeKey   NVARCHAR(10),
@@ -76,7 +77,7 @@ BEGIN
           CASE WHEN ISNULL(PACK.CaseCnt,0) = 0 THEN SUM(CCDetail.Qty_Cnt2) ELSE SUM(CCDetail.Qty_Cnt2) / ISNULL(PACK.CaseCnt,0) END AS Qty_Cnt2,   
           CASE WHEN ISNULL(PACK.CaseCnt,0) = 0 THEN SUM(CCDetail.Qty_Cnt3) ELSE SUM(CCDetail.Qty_Cnt3) / ISNULL(PACK.CaseCnt,0) END AS Qty_Cnt3,   
           TRIM(PACK.PackUOM1),   
-          SUM(CCDetail.SystemQty) AS LotxLocxId_qty, 
+          CASE WHEN ISNULL(PACK.CaseCnt,0) = 0 THEN SUM(CCDetail.SystemQty) ELSE SUM(CCDetail.SystemQty) / ISNULL(PACK.CaseCnt,0) END AS LotxLocxId_qty,   --WL01 
           --VarQty_cal = CASE @c_countno
           --               WHEN '1' THEN SUM(CCDetail.Qty) - SUM(CCDetail.SystemQty)
           --               WHEN '2' THEN SUM(CCDetail.Qty_Cnt2) - SUM(CCDetail.SystemQty)
