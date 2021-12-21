@@ -28,6 +28,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 2021-12-01	CheeMun	  1.1   JSM-36972 Cater for OrderInfo for Split */
+/*                              > 1 line OrderDetail                    */
 /************************************************************************/
 
 CREATE  PROCEDURE isp_SplitWaveNotFullAllocOrder
@@ -161,6 +163,9 @@ BEGIN
 				    BREAK
 			    END
 
+		--JSM-36972 (START)
+		IF NOT EXISTS(SELECT 1 FROM ORDERINFO (NOLOCK) WHERE ORDERKEY = @c_neworderkey)
+		BEGIN
          INSERT INTO ORDERINFO
          (
          	OrderKey, OrderInfo01, OrderInfo02, OrderInfo03, OrderInfo04, OrderInfo05, OrderInfo06, OrderInfo07, OrderInfo08,
@@ -182,7 +187,9 @@ BEGIN
 				    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30102   
 				    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderinfo Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
 				    BREAK
-			    END
+			    END	
+		END
+		--JSM-36972 (END)
 
          INSERT INTO ORDERDETAIL
         (
