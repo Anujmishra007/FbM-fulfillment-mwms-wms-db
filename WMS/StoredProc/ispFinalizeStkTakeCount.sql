@@ -21,7 +21,7 @@ GO
 /*                                                                         */  
 /* Called By:                                                              */  
 /*                                                                         */  
-/* PVCS Version: 1.1                                                       */  
+/* PVCS Version: 1.2                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -31,17 +31,19 @@ GO
 /* Date        Author  Ver   Purposes                                      */  
 /* 06/06/2015  NJOW01  1.0   349528 - CC Finalize update last cc date      */
 /* 09/07/2020  NJOW02  1.1   WMS-13685 CC Finalize Extended validation     */
+/* 12/11/2021  Wan01   1.2   DevOps Combine Script.                        */
+/* 12/11/2021  Wan01   1.2   WMS-18332 - [TW]LOR_CycleCount_CR             */
 /***************************************************************************/  
 
 CREATE PROCEDURE ispFinalizeStkTakeCount
-	@c_StockTakeKey NVARCHAR(10), 
-	@n_CountNo int
+   @c_StockTakeKey NVARCHAR(10), 
+   @n_CountNo int
 AS
-	 SET NOCOUNT ON   
-	 SET ANSI_NULLS OFF
-	 SET QUOTED_IDENTIFIER OFF   
-	 SET CONCAT_NULL_YIELDS_NULL OFF  
-	
+    SET NOCOUNT ON   
+    SET ANSI_NULLS OFF
+    SET QUOTED_IDENTIFIER OFF   
+    SET CONCAT_NULL_YIELDS_NULL OFF  
+   
    DECLARE @n_Continue int
 
    SELECT @n_Continue = 1
@@ -92,11 +94,11 @@ AS
       (SELECT COUNT(DISTINCT Storerkey) FROM #STORER_CONFIG)) AND 
       (SELECT COUNT(DISTINCT Storerkey) FROM #STORER_CONFIG WHERE Configkey = 'CCFinalizeUpdLastCntDate' AND ISNULL(Svalue,'')='1') > 0
    BEGIN
-   	  SELECT @c_CCFinalizeUpdLastCntDate = '1'
+        SELECT @c_CCFinalizeUpdLastCntDate = '1'
    END
    ELSE
    BEGIN
-   	  SELECT @c_CCFinalizeUpdLastCntDate = '0'
+        SELECT @c_CCFinalizeUpdLastCntDate = '0'
    END      
    --NJOW01 End
       
@@ -159,8 +161,8 @@ AS
         IF @n_continue = 3
         BEGIN 
            RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR 
-     	     RETURN
-   	    END 
+           RETURN
+          END 
     END --    IF @n_Continue = 1 OR @n_Continue = 2  
     --NJOW02 E
    
@@ -170,51 +172,51 @@ AS
       BEGIN
          BEGIN TRAN
       
-      	UPDATE CCDETAIL
+         UPDATE CCDETAIL
             SET FinalizeFlag = 'Y'
          WHERE CCKEY = @c_StockTakeKey
-      	IF @@ERROR <> 0
-      	BEGIN
-      	   SELECT @n_continue = 3
-      		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
-      	   ROLLBACK TRAN
-      	   RETURN
-      	END
-      	ELSE
-      	  COMMIT TRAN
+         IF @@ERROR <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
+            ROLLBACK TRAN
+            RETURN
+         END
+         ELSE
+           COMMIT TRAN
       END
       ELSE IF @n_CountNo = 2 
       BEGIN
          BEGIN TRAN
       
-      	UPDATE CCDETAIL
+         UPDATE CCDETAIL
             SET FinalizeFlag_Cnt2 = 'Y'
          WHERE CCKEY = @c_StockTakeKey
-      	IF @@ERROR <> 0
-      	BEGIN
-      	   SELECT @n_continue = 3
-      		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
-      	   ROLLBACK TRAN
-      	   RETURN
-      	END
-      	ELSE
-      	  COMMIT TRAN
+         IF @@ERROR <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
+            ROLLBACK TRAN
+            RETURN
+         END
+         ELSE
+           COMMIT TRAN
       END IF @n_CountNo = 3 
       BEGIN
          BEGIN TRAN
       
-      	UPDATE CCDETAIL
+         UPDATE CCDETAIL
             SET FinalizeFlag_Cnt3 = 'Y'
          WHERE CCKEY = @c_StockTakeKey
-      	IF @@ERROR <> 0
-      	BEGIN
-      	   SELECT @n_continue = 3
-      		RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
-      	   ROLLBACK TRAN
-      	   RETURN
-      	END
-      	ELSE
-      	  COMMIT TRAN
+         IF @@ERROR <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            RAISERROR ('Error Found Finalize Stock Take ispFinalizeStkTakeCount.', 16, 1)
+            ROLLBACK TRAN
+            RETURN
+         END
+         ELSE
+           COMMIT TRAN
       END
    END
 
@@ -222,63 +224,70 @@ AS
    BEGIN
       BEGIN TRAN
 
-   	UPDATE StockTakeSheetParameters
-   		SET FinalizeStage = @n_CountNo
-   	WHERE StockTakeKey = @c_StockTakeKey
-   	IF @@ERROR <> 0
-   	BEGIN
-   	   SELECT @n_continue = 3
-   		RAISERROR ('Error Found when updaing StockTakeSheetParameters.', 16, 1)
-   	   ROLLBACK TRAN
-   	   RETURN
-   	END
-   	ELSE
-   	  COMMIT TRAN
+      UPDATE StockTakeSheetParameters
+         SET FinalizeStage = @n_CountNo
+      WHERE StockTakeKey = @c_StockTakeKey
+      IF @@ERROR <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         RAISERROR ('Error Found when updaing StockTakeSheetParameters.', 16, 1)
+         ROLLBACK TRAN
+         RETURN
+      END
+      ELSE
+        COMMIT TRAN
    END
    
    --NJOW01
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_CCFinalizeUpdLastCntDate = '1' AND @n_CountNo IN(1,2,3)
    BEGIN
-      BEGIN TRAN   	
-   	  UPDATE SKU WITH (ROWLOCK)
-   	  SET SKU.LastCycleCount = GETDATE()
-   	  FROM CCDETAIL (NOLOCK) 
-   	  JOIN SKU ON CCDETAIL.Storerkey = SKU.Storerkey AND CCDETAIL.Sku = SKU.Sku
-   	  WHERE CCDETAIL.CCKey = @c_StockTakeKey
-   	  
-   	  IF @@ERROR <> 0
-   	  BEGIN
-   	     SELECT @n_continue = 3
-   	  	RAISERROR ('Error Found when updaing StockTakeSheetParameters.', 16, 1)
-   	     ROLLBACK TRAN
-   	     RETURN
-   	  END
-   	  ELSE
-   	  BEGIN
-   	    UPDATE LOC WITH (ROWLOCK)
-   	    SET LOC.LastCycleCount = GETDATE()
-   	    FROM CCDETAIL (NOLOCK) 
-   	    JOIN LOC ON CCDETAIL.Loc = LOC.Loc
-   	    WHERE CCDETAIL.CCKey = @c_StockTakeKey
-   	    
-   	    IF @@ERROR <> 0
-   	    BEGIN
-   	       SELECT @n_continue = 3
-   	    	RAISERROR ('Error Found when updaing StockTakeSheetParameters.', 16, 1)
-   	       ROLLBACK TRAN
-   	       RETURN
-   	    END
-   	    ELSE
-   	      COMMIT TRAN
-   	  END   	    
+      BEGIN TRAN     
+        UPDATE SKU WITH (ROWLOCK)
+        SET SKU.LastCycleCount = GETDATE()
+        FROM CCDETAIL (NOLOCK) 
+        JOIN SKU ON CCDETAIL.Storerkey = SKU.Storerkey AND CCDETAIL.Sku = SKU.Sku
+        WHERE CCDETAIL.CCKey = @c_StockTakeKey
+        
+        IF @@ERROR <> 0
+        BEGIN
+           SELECT @n_continue = 3
+         RAISERROR ('Error Found when updaing StockTakeSheetParameters.', 16, 1)
+           ROLLBACK TRAN
+           RETURN
+        END
+        ELSE
+        BEGIN
+          UPDATE LOC WITH (ROWLOCK)
+          SET LOC.LastCycleCount = GETDATE()
+          FROM CCDETAIL (NOLOCK) 
+          JOIN LOC ON CCDETAIL.Loc = LOC.Loc
+          WHERE CCDETAIL.CCKey = @c_StockTakeKey
+          
+          IF @@ERROR <> 0
+          BEGIN
+             SELECT @n_continue = 3
+            RAISERROR ('Error Found when updaing StockTakeSheetParameters.', 16, 1)
+             ROLLBACK TRAN
+             RETURN
+          END
+          ELSE
+            COMMIT TRAN
+        END        
    END
+   
+   --(Wan01) - START
+   IF @n_Continue IN ( 1, 2)
+   BEGIN
+      EXEC ispPostFinalizeStkTakeCount_Wrapper
+         @c_StockTakeKey= @c_StockTakeKey
+      ,  @n_CountNo = @n_CountNo       
+   END
+   --(Wan01) - END
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
-
 
 GRANT EXECUTE ON ispFinalizeStkTakeCount to nSQL
 GO

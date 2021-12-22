@@ -72,6 +72,8 @@ GO
 /* 23-NOV-2016  Wan06      WMS-648 - GW StockTake Parameter2 Enhancement        */
 /* 21-Jan-2021  WLChooi    WMS-15985 - Generate No. Of Loc by Count Sheet (WL01)*/
 /* 03-Mar-2021  WLChooi    WMS-15985 - Fix LocPerPage Logic (WL02)              */
+/* 12-Nov-2021  Wan07      DevOps Combine Script.                               */
+/* 12-Nov-2021  Wan07      WMS-18332 - [TW]LOR_CycleCount_CR                    */
 /********************************************************************************/
 
 CREATE PROC [dbo].[ispGenCountSheet] (
@@ -262,7 +264,7 @@ SELECT @n_LinesPerPage = 999
 --WL01 S
 IF @n_LOCPerPage = 0 OR @n_LOCPerPage IS NULL OR @n_LOCPerPage = 999
 BEGIN
-	SET @c_IsLOCPerPage = 'N'
+   SET @c_IsLOCPerPage = 'N'
    SET @n_LOCPerPage = 999
 END
 --WL01 E
@@ -1828,6 +1830,13 @@ BEGIN
 END -- SOS23776
 
 DROP TABLE #RESULT
+
+--(Wan07) - START
+
+   EXEC ispPostGenCountSheet_Wrapper
+      @c_StockTakeKey= @c_StockTakeKey
+   ,  @c_StorerKey   = @c_StorerKey    
+--(Wan07) - END
 -- return results
 
 -- SELECT CCDETAIL.ccsheetno,

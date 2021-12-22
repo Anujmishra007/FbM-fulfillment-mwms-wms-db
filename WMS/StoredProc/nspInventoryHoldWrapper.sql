@@ -14,7 +14,7 @@ GO
 /* Purpose:                                                             */
 /*                                                                      */
 /*                                                                      */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -39,6 +39,9 @@ GO
 /*                              Differentiate new records - (YokeBeen01)*/
 /* 06-May-2019  WLChooi   1.5   WMS-8866 - Add Lottable04,05,13,14,15   */
 /* 23-JUL-2019  Wan01     1.6   ChannelInventoryMgmt use nspGetRight2   */
+/* 01-DEC-2021  Wan02     1.7   Fixed. Remark Delete from #LotByBatch & */
+/*                              Not to Rollback if @@Trancount not 1    */
+/* 01-DEC-2021  Wan02     1.7   DevOps Combine Script                   */
 /************************************************************************/
 CREATE PROC [dbo].[nspInventoryHoldWrapper]
      @c_lot          NVARCHAR(10)
@@ -1088,7 +1091,7 @@ BEGIN
             IF @b_Success=0
             BEGIN
                SELECT @n_continue = 3
-               DELETE FROM #LotByBatch
+               --DELETE FROM #LotByBatch        (Wan02)
                SELECT @n_Err = 60008
                SELECT @c_Errmsg = 'Execute nspInventoryHold Failed. [nspInventoryHoldWrapper]'
                GOTO EXIT_SP
@@ -1100,7 +1103,7 @@ BEGIN
 EXIT_SP:
    IF @n_continue=3
    BEGIN
-      IF (@@TRANCOUNT>@n_starttcnt)
+      IF @@TRANCOUNT = 1 AND (@@TRANCOUNT>@n_starttcnt)        --(Wan02) 
       BEGIN
          ROLLBACK TRAN
       END

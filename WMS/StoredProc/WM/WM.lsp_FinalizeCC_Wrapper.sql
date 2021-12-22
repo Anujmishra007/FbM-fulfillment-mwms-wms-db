@@ -19,12 +19,12 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date        Author   Ver  Purposes                                    */ 
+/* Date        Author   Ver   Purposes                                   */ 
 /* 2020-11-23  Wan01    1.1   LFWM-2441- UAT  Philippines  PH SCE Error  */
 /*                            in Finalizing Cycle Count and No Posting by*/
 /*                            Withdrawal or Deposit                      */
@@ -32,6 +32,8 @@ GO
 /*                            Revert when SP Raise error                 */
 /*                      1.1   Fixed Uncommitable Transaction             */
 /* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-12-02  Wan04    1.3   WMS-18332 - [TW]LOR_CycleCount_CR          */
+/*             Wan04    1.3   DevOps Combine Script                      */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_FinalizeCC_Wrapper]  
    @c_StockTakeKey         NVARCHAR(10)
@@ -75,6 +77,7 @@ BEGIN
       EXECUTE AS LOGIN = @c_UserName 
    END                                   --(Wan03) - END
    
+   BEGIN TRAN        --(Wan04)
    BEGIN TRY   --(Wan02) - START
       IF @c_ProceedWithWarning = 'N'
       BEGIN
@@ -173,15 +176,17 @@ BEGIN
    END CATCH   --(Wan02) - END
    EXIT_SP:
    
+   --(Wan04) - Move up
+   IF (XACT_STATE()) = -1     --(Wan02) - START  
+   BEGIN  
+      SET @n_Continue=3
+      ROLLBACK TRAN;  
+   END;                       --(Wan02) - END 
+      
    IF @n_Continue=3  -- Error Occured - Process And Return
-   BEGIN
-   	IF (XACT_STATE()) = -1     --(Wan02) - START  
-      BEGIN  
-         ROLLBACK TRAN;  
-      END;                       --(Wan02) - END 
-                              
+   BEGIN                              
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF  @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt         --(Wan04)
       BEGIN
          ROLLBACK TRAN
       END
