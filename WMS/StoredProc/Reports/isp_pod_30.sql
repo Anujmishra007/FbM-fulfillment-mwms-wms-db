@@ -28,7 +28,9 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author    Ver. Purposes                                 */     
+/* Date         Author    Ver. Purposes                                 */ 
+/* 09-DEC-2021  MINGLE    1.1  WMS-18477 Add sku size(ML01)             */   
+/* 09-DEC-2021  Mingle    1.1  DevOps Combine Script                    */ 
 /************************************************************************/    
 CREATE PROCEDURE [dbo].[isp_pod_30]    
         @c_mbolkey NVARCHAR(10),     
@@ -146,14 +148,15 @@ BEGIN
     ConsigneeKey   NVARCHAR(45),   
     OrderLineNumber NVARCHAR(10)  NULL,
     Sku  NVARCHAR(20)  NULL,
-    Notes1  NVARCHAR(30) null,
+    Notes1  NVARCHAR(500) null,
     Descr   NVARCHAR(30) null,
     Lottable02 NVARCHAR(10)  NULL,  
     Lottable04 DATE  NULL, 
     Lottable13 DATE  NULL,
     Uom  NVARCHAR(10)  NULL,
     Shippedqty int       NULL,
-    Notes   NVARCHAR(20)  NULL    
+    Notes   NVARCHAR(20)  NULL,
+    Size    NVARCHAR(10)  NULL   --ML01
     )     
     
       
@@ -233,7 +236,8 @@ BEGIN
       Weight,         Cube,               TotalWeight,           TotalCube,                           
       Domain,         ConsigneeKey,       OrderLineNumber,       Sku,                                
       Notes1,         Descr,              Lottable02,            Lottable04,                       
-      Lottable13,     Uom,                Shippedqty,             Notes            
+      Lottable13,     Uom,                Shippedqty,             Notes,
+      Size   --ML01            
       )        
     SELECT DISTINCT      
       a.mbolkey,     b.MbolLineNumber,    b.ExternOrderKey,    b.Orderkey,    c.type,            
@@ -385,7 +389,8 @@ BEGIN
          n.Lottable13,
          k.Uom,
          k.Shippedqty,
-         c.Notes
+         c.Notes,
+         l.Size   --ML01
          
            
     FROM MBOL a (nolock) JOIN MBOLDETAIL b  WITH (nolock) ON a.mbolkey = b.mbolkey    
@@ -607,6 +612,7 @@ BEGIN
          , Uom
          , Shippedqty
          , Notes
+         , Size   --ML01
          
          
     FROM #POD
