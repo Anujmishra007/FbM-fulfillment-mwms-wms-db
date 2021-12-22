@@ -29,11 +29,13 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 01-MAR-2021 CSCHONG  1.1   WMS-16414 revised print logic (CS01)      */
 /* 12-JUL-2021 CSCHOPNG 1.2   WMS-17456 revised print logic (CS02)      */
+/* 29-OCT-2021 CSCHONG  1.3   Devops Scripts combine                    */
+/* 29-OCT-2021 CSCHONG  1.4   WMS-18211 revised field logic (CS03)      */
 /************************************************************************/
-CREATE PROCEDURE [dbo].[ispPKBT04]
+CREATE  PROCEDURE [dbo].[ispPKBT04]
    @c_printerid  NVARCHAR(50) = '',  
    @c_labeltype  NVARCHAR(30) = '',  
-   @c_userid     NVARCHAR(18) = '',  
+   @c_userid     NVARCHAR(256) = '',   --(CS03)  
    @c_Parm01     NVARCHAR(60) = '', --Pickslipno         
    @c_Parm02     NVARCHAR(60) = '', --carton from         
    @c_Parm03     NVARCHAR(60) = '', --carton to         
@@ -102,6 +104,7 @@ BEGIN
          , @c_CLFileName      NVARCHAR( 150)
          , @c_PrnFileName     NVARCHAR( 150)
          , @n_counter         INT = 1
+         , @n_prncopy         INT = 1                    --CS03
                                                               
               
    CREATE TABLE #TEMPPRINTJOB (
@@ -128,13 +131,13 @@ BEGIN
 
    SET @c_DocType = ''
    SELECT @c_OrderKey = ORDERS.OrderKey 
-        , @c_DocType = ORDERS.DocType 
+        , @c_DocType  = ORDERS.DocType 
         , @c_OrdType  = ORDERS.Type
         , @c_ExtOrderkey = ORDERS.ExternOrderKey
         , @c_Shipperkey = ORDERS.ShipperKey
         , @c_OrdNotes2 = RTRIM(ORDERS.notes2)
         , @n_ttlcarton = CASE WHEN ISNULL(ORDERS.notes,'') <> '' AND ISNUMERIC(ORDERS.notes) = 1 THEN CONVERT(int,ORDERS.notes) else 0 END
-        ,@c_getstorerkey = ORDERS.Storerkey
+        , @c_getstorerkey = ORDERS.Storerkey
    FROM PACKHEADER (NOLOCK)
    JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
    WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
@@ -186,7 +189,7 @@ BEGIN
 --select @c_DocType '@c_DocType',@n_ttlcarton '@n_ttlcarton'
    ELSE
    BEGIN
-     IF @c_DocType = 'E' AND @n_ttlcarton = 1  AND @c_Shipperkey  <> 'SF'   
+     IF @c_DocType = 'E' AND @c_Shipperkey <> 'SF' -- AND @n_ttlcarton = 1  AND @c_Shipperkey  <> 'SF'     --CS03
      BEGIN
      
         SELECT @c_FilePath = Long, 
@@ -269,6 +272,8 @@ BEGIN
 
     IF @c_PrnFileName like 'courier_%'
     BEGIN
+       SET @n_prncopy = CASE WHEN @n_ttlcarton <> 0 THEN @n_ttlcarton ELSE 1 END     --CS03
+
        IF @c_OrdNotes2 = '4x6'
        BEGIN   
        SELECT @c_WinPrinter = WinPrinter  
@@ -287,6 +292,9 @@ BEGIN
     END
     ELSE
     BEGIN
+
+    SET @n_prncopy = 1    --CS03
+
     SELECT @c_WinPrinter = WinPrinter  
           ,@c_SpoolerGroup = ISNULL(RTRIM(SpoolerGroup),'') 
       FROM rdt.rdtPrinter WITH (NOLOCK)  
@@ -365,13 +373,16 @@ BEGIN
       END    
    END 
 
+--CS03 START
+WHILE @n_prncopy >= 1
+BEGIN
          INSERT INTO RDT.RDTPrintJob(JobName, ReportID, JobStatus, Datawindow, NoOfParms  
                               , Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10  
                               , Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, Storerkey, Function_ID)  
    VALUES(@c_PrintJobName, @c_ReportType, @c_JobStatus, '', '1'  
          ,@c_Parm01, @c_Parm02, @c_Parm03, @c_Parm04, @c_Parm05, @c_Parm06, @c_Parm07, @c_Parm08, @c_Parm09, @c_Parm10  
         -- ,'', '', '', '', '', '', '', '', '', ''   
-         ,@c_PrinterID, 1, @n_Mobile, @c_TargetDB  
+         ,@c_PrinterID,@n_prncopy, @n_Mobile, @c_TargetDB                          --CS03
         , @c_PrintCommand, 'QCOMMANDER', @c_Storerkey, '999')  
   
    SET @n_JobID = SCOPE_IDENTITY()      
@@ -388,7 +399,7 @@ BEGIN
 
    SET @c_Application = 'QCOMMANDER'
 
-   IF @c_Application = 'QCOMMANDER'  
+      IF @c_Application = 'QCOMMANDER'  
       BEGIN  
          SET @c_Command = @c_Command + ' ' + @c_JobID  
            
@@ -432,7 +443,10 @@ BEGIN
       BEGIN  
          GOTO QUIT_SP  
       END  
-  
+
+     SET @n_prncopy= @n_prncopy - 1
+ 
+END --CS03 END 
       --QCMD_END:                  
  
     --END
