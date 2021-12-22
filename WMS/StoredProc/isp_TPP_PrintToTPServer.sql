@@ -6,6 +6,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
+
 /************************************************************************/  
 /* Store Procedure: isp_TPP_PrintToTPServer                             */  
 /* Creation Date: 2-Aug-2021                                            */  
@@ -27,6 +28,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author  Ver. Purposes                                   */  
+/* 22-Dec-2012  CSCHONG 1.1  WMS-18125 extend UDF03,UDF04 length (CS01) */
 /************************************************************************/   
   
 CREATE PROC [dbo].[isp_TPP_PrintToTPServer] (  
@@ -93,8 +95,8 @@ BEGIN
           ,@c_JobNo               NVARCHAR(10)  
           ,@c_UDF01               NVARCHAR(200)            
           ,@c_UDF02               NVARCHAR(200)            
-          ,@c_UDF03               NVARCHAR(200)            
-          ,@c_UDF04               NVARCHAR(500)            
+          ,@c_UDF03               NVARCHAR(4000)     --CS01       
+          ,@c_UDF04               NVARCHAR(4000)     --CS01       
           ,@c_UDF05               NVARCHAR(4000)           
           ,@c_Orderkey            NVARCHAR(10)   
           ,@c_Platform            NVARCHAR(30)  
@@ -278,32 +280,32 @@ BEGIN
                   N'@c_Module NVARCHAR(20), @c_ReportType NVARCHAR(10), @c_Storerkey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_Shipperkey NVARCHAR(15), @c_SourceType NVARCHAR(30), @c_Platform NVARCHAR(30), @c_KeyFieldName NVARCHAR(30),  
                     @c_Param01 NVARCHAR(30) OUTPUT, @c_Param02 NVARCHAR(30) OUTPUT, @c_Param03 NVARCHAR(30) OUTPUT, @c_Param04 NVARCHAR(30) OUTPUT, @c_Param05 NVARCHAR(30) OUTPUT,   
                     @c_Param06 NVARCHAR(30) OUTPUT, @c_Param07 NVARCHAR(30) OUTPUT, @c_Param08 NVARCHAR(30) OUTPUT, @c_Param09 NVARCHAR(500) OUTPUT, @c_Param10 NVARCHAR(4000) OUTPUT,  
-                    @c_UDF01 NVARCHAR(200) OUTPUT, @c_UDF02 NVARCHAR(200) OUTPUT, @c_UDF03 NVARCHAR(200) OUTPUT, @c_UDF04 NVARCHAR(500) OUTPUT, @c_UDF05 NVARCHAR(4000) OUTPUT,   
+                    @c_UDF01 NVARCHAR(200) OUTPUT, @c_UDF02 NVARCHAR(200) OUTPUT, @c_UDF03 NVARCHAR(4000) OUTPUT, @c_UDF04 NVARCHAR(4000) OUTPUT, @c_UDF05 NVARCHAR(4000) OUTPUT,             
                     @c_Printerid NVARCHAR(10) OUTPUT,@c_Printer NVARCHAR(128) OUTPUT, @c_ContinueNextPrint NVARCHAR(5) OUTPUT ,@c_SkipPrint NVARCHAR(5) OUTPUT, @n_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT'                      
-                   ,@c_Module          
-                   ,@c_ReportType  
-                   ,@c_Storerkey  
-                   ,@c_Facility  
-                   ,@c_Shipperkey  
-                   ,@c_SourceType  
-                   ,@c_Platform  
-                   ,@c_KeyFieldName OUTPUT  
-                   ,@c_Parm01 OUTPUT     
-                   ,@c_Parm02 OUTPUT     
-                   ,@c_Parm03 OUTPUT     
-                   ,@c_Parm04 OUTPUT     
-                   ,@c_Parm05 OUTPUT     
-                   ,@c_Parm06 OUTPUT     
-                   ,@c_Parm07 OUTPUT     
-                   ,@c_Parm08 OUTPUT     
-                   ,@c_Parm09 OUTPUT     
-                   ,@c_Parm10 OUTPUT     
-                   ,@c_Printer OUTPUT  
-                   ,@c_ContinueNextPrint OUTPUT  
-                   ,@c_SkipPrint OUTPUT  
-                   ,@b_success OUTPUT  
-                   ,@n_err OUTPUT         
-                   ,@c_errmsg OUTPUT  
+                  ,@c_Module          
+                  ,@c_ReportType  
+                  ,@c_Storerkey  
+                  ,@c_Facility  
+                  ,@c_Shipperkey  
+                  ,@c_SourceType  
+                  ,@c_Platform  
+                  ,@c_KeyFieldName OUTPUT  
+                  ,@c_Parm01 OUTPUT     
+                  ,@c_Parm02 OUTPUT     
+                  ,@c_Parm03 OUTPUT     
+                  ,@c_Parm04 OUTPUT     
+                  ,@c_Parm05 OUTPUT     
+                  ,@c_Parm06 OUTPUT     
+                  ,@c_Parm07 OUTPUT     
+                  ,@c_Parm08 OUTPUT     
+                  ,@c_Parm09 OUTPUT     
+                  ,@c_Parm10 OUTPUT     
+                  ,@c_Printer OUTPUT  
+                  ,@c_ContinueNextPrint OUTPUT  
+                  ,@c_SkipPrint OUTPUT  
+                  ,@b_success OUTPUT  
+                  ,@n_err OUTPUT         
+                  ,@c_errmsg OUTPUT  
               
             IF @b_Success <> 1  
             BEGIN  
@@ -511,7 +513,8 @@ BEGIN
       RETURN  
    END  
   
-END
+END  
+
 GO
 
 SET QUOTED_IDENTIFIER OFF 
@@ -521,4 +524,3 @@ GO
 
 GRANT EXECUTE ON isp_TPP_PrintToTPServer TO NSQL
 GO
-  
