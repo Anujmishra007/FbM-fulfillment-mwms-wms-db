@@ -25,6 +25,7 @@ GO
 /* Date        Author   Ver  Purposes                                       */
 /* 2021-12-15  SYChua   1.0  JSM-39991 - Add in checking for toloc = NULL   */
 /*                           to display error message. (SY01)               */
+/* 2021-12-22  KuanYeeC 1.1  JSM-41366 - Add @n_continue (KY01)             */
 /****************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispRLWAV39]
@@ -173,7 +174,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
 
     BEGIN TRAN
 
-    --Initialize Pickdetail work in progress staging table        IF @n_continue = 1 OR @n_continue = 2
+    --Initialize Pickdetail work in progress staging table        
+    IF @n_continue = 1 OR @n_continue = 2  --(KY01)
     BEGIN
        EXEC isp_CreatePickdetail_WIP
             @c_Loadkey               = ''
@@ -488,3 +490,7 @@ RETURN_SP:
        RETURN
     END
  END --sp end
+GO
+
+GRANT EXECUTE ON ispRLWAV39 TO NSQL
+GO
