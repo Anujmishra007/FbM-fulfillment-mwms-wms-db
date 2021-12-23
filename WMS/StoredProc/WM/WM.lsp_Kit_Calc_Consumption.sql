@@ -21,7 +21,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.1                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -29,6 +29,13 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                     */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 07-Dec-2021 Chai01   1.2   LFWM-3094 - Change Data type for           */
+/*                            @n_ComponentQty, @n_ParentQty,             */
+/*                            @n_FromCompleteQty and @n_ToCompleteQty    */
+/*                            from INT to DECIMAL                        */
+/* 07-Dec-2021 Chai01   1.2   DevOps Combine Script                      */
+/* 10-Dec-2021 Chai02   1.3   LFWM-3166 - UAT - TW | Kitting To Part UOM Issue*/
+/* 10-Dec-2021 Chai02   1.3   DevOps Combine Script                      */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Kit_Calc_Consumption]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -52,8 +59,8 @@ BEGIN
    DECLARE @n_Continue     INT = '1'         
          , @n_Count        INT = 0 
          , @c_ComponentSku NVARCHAR(20) = '' 
-         , @n_ComponentQty INT = 0 
-         , @n_ParentQty    INT = 0 
+         , @n_ComponentQty DECIMAL = 0 --(Chai01)
+         , @n_ParentQty    DECIMAL = 0 --(Chai01) 
          , @n_Remainder    INT = 0
          , @n_BOMQty       INT = 0  
          , @c_NewKitLineNo NVARCHAR(5)  = ''
@@ -84,14 +91,19 @@ BEGIN
       DECLARE @c_FromSKU         NVARCHAR(20) = '',
               @c_ToSKU           NVARCHAR(20) = '',  
               @n_FromExpectedQty INT = 0,
-              @n_FromCompleteQty INT = 0,
+              @n_FromCompleteQty DECIMAL = 0, --(Chai01)
               @n_ToExpectedQty   INT = 0,
-              @n_ToCompleteQty   INT = 0
+              @n_ToCompleteQty   DECIMAL = 0, --(Chai01)
+              @n_ToUOM           NVARCHAR(10) = '', --(Chai02)
+              @n_ToPackKey       NVARCHAR(10) = '', --(Chai02)
+              @n_ToBOMQty        INT = 0 --(Chai02)
               
       SELECT @c_StorerKey = KD.StorerKey, 
              @c_ToSKU   = KD.Sku,
              @n_ToExpectedQty = KD.ExpectedQty,
-             @n_ToCompleteQty = KD.Qty 
+             @n_ToCompleteQty = KD.Qty,
+             @n_ToUOM = KD.UOM, --(Chai02)
+             @n_ToPackKey = KD.PackKey --(Chai02) 
       FROM KITDETAIL AS KD WITH (NOLOCK)
       WHERE KD.KITKey = @c_KitKey 
       AND   KD.KITLineNumber = @c_KitLineNumber 
@@ -105,6 +117,22 @@ BEGIN
                ': SKU Cannot be BLANK (lsp_Kit_Gen_Components)'               
          GOTO EXIT_SP   
       END
+
+      --START(Chai02)
+      IF ISNULL(RTRIM(@n_ToUOM),'') = ''
+      BEGIN
+         SET @n_continue =0
+         SET @n_err = 552206
+         SET @c_ErrMsg = 'UOM Cannot be BLANK'     
+      END
+
+      IF ISNULL(RTRIM(@n_ToPackKey),'') = ''
+      BEGIN
+         SET @n_continue =0
+         SET @n_err = 552207
+         SET @c_ErrMsg = 'Pack Key Cannot be BLANK'     
+      END
+      --END(Chai02)
    
       IF @n_ToCompleteQty <= 0 
       BEGIN
@@ -158,8 +186,20 @@ BEGIN
                   ': Component Qty or Parent Qty is ZERO (lsp_Kit_Gen_Components)'                 
             GOTO EXIT_SP         
          END
-      
-         SET @n_FromCompleteQty = (@n_ToCompleteQty/@n_ParentQty) * @n_ComponentQty
+
+         --START(Chai02)
+         SET @n_ToBOMQty = (SELECT CASE @n_ToUOM 
+            WHEN PACK.PACKUOM1 THEN PACK.CaseCnt 
+				WHEN PACK.PACKUOM2 THEN PACK.InnerPack  
+            WHEN PACK.PACKUOM3 THEN 1
+				WHEN PACK.PACKUOM4 THEN PACK.Pallet WHEN PACK.PACKUOM5 THEN PACK.Cube
+				WHEN PACK.PACKUOM6 THEN PACK.GrossWgt WHEN PACK.PACKUOM7 THEN PACK.NetWgt
+				WHEN PACK.PACKUOM8 THEN PACK.OtherUnit1 WHEN PACK.PACKUOM9 THEN PACK.OtherUnit2
+				END UOMQty 
+         FROM PACK WITH (NOLOCK) WHERE PACK.PackKey = @n_ToPackKey)
+         --END(Chai02)
+
+         SET @n_FromCompleteQty = (@n_ToCompleteQty*@n_ToBOMQty/@n_ParentQty) * @n_ComponentQty --(Chai02)
       
          IF ( (@n_ToCompleteQty * @n_FromExpectedQty) % @n_ToExpectedQty) > 0
          BEGIN
