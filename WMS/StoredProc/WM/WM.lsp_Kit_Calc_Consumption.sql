@@ -121,16 +121,20 @@ BEGIN
       --START(Chai02)
       IF ISNULL(RTRIM(@n_ToUOM),'') = ''
       BEGIN
-         SET @n_continue =0
+         SET @n_continue =3
          SET @n_err = 552206
-         SET @c_ErrMsg = 'UOM Cannot be BLANK'     
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
+               ': UOM Cannot be BLANK (lsp_Kit_Gen_Components)'
+         GOTO EXIT_SP
       END
 
       IF ISNULL(RTRIM(@n_ToPackKey),'') = ''
       BEGIN
-         SET @n_continue =0
+         SET @n_continue =3
          SET @n_err = 552207
-         SET @c_ErrMsg = 'Pack Key Cannot be BLANK'     
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
+               ': Pack Key Cannot be BLANK (lsp_Kit_Gen_Components)'
+         GOTO EXIT_SP
       END
       --END(Chai02)
    
