@@ -37,7 +37,9 @@ GO
 /* 31-May-2013  Shong      1.2     SOS279705 VFTBL-UCC New Interface with Diff  */
 /*                                 Data Mapping                                 */
 /* 20-May-2014  TKLIM      1.3     Added Lottables 06-15                        */
-/* 15-Dec-2018  TLTING01   1.4     Missing nolock                          */
+/* 15-Dec-2018  TLTING01   1.4     Missing nolock                               */
+/* 08-Nov-2021  LZG        1.5     JSM-29156 - Repositioned PackHeader          */
+/*                                             insertion (ZG01)                 */
 /********************************************************************************/
 
 CREATE  PROCEDURE [dbo].[ispWaveReplenUCCAlloc]
@@ -514,9 +516,10 @@ AS
          EXEC sp_executesql @c_ExecStatement
 
          OPEN UCCPickCursor
-
+   
+         -- ZG01
          --IF (@@CURSOR_ROWS > 0) AND (@c_PrevOrderKey <> @c_OrderKey)
-         IF (@c_PrevOrderKey <> @c_OrderKey)
+         /*IF (@c_PrevOrderKey <> @c_OrderKey)
          BEGIN
             IF NOT EXISTS(SELECT 1 FROM PackHeader (NOLOCK)
                           WHERE  OrderKey = @c_OrderKey)
@@ -585,7 +588,7 @@ AS
             IF @n_Carton IS NULL OR @n_Carton = NULL
                SELECT @n_Carton = 0
             */
-         END
+         END*/
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err = 16905
@@ -661,6 +664,28 @@ AS
                         DEALLOCATE UCCPickCursor
                         GOTO RETURN_SP
                      END
+               
+                     -- ZG01 (Start)
+                     IF NOT EXISTS(SELECT 1 FROM PackHeader (NOLOCK)    
+                                   WHERE  OrderKey = @c_OrderKey)    
+                     BEGIN    
+    
+                        INSERT PackHeader (PickSlipNo, StorerKey, OrderKey, OrderRefNo, ConsigneeKey, Loadkey, Route)    
+                           SELECT @c_PickSlipNo, StorerKey, OrderKey, ExternOrderKey, ConsigneeKey, @c_WaveKey, Route    
+                           FROM ORDERS (NOLOCK)    
+                           WHERE OrderKey = @c_OrderKey    
+    
+                        IF @@ERROR <> 0    
+                        BEGIN    
+                           SELECT @n_continue=3    
+                           SELECT @n_err = @@ERROR    
+                           SELECT @c_errMsg = 'Insert into PackHeader Failed (ispWaveReplenUCCAlloc)'    
+                           CLOSE UCCPickCursor    
+                           DEALLOCATE UCCPickCursor    
+                           GOTO RETURN_SP    
+                        END    
+                     END -- Not exists in PackHeader    
+                     -- ZG01 (End)
                
                      -- insert packdetail
                      SELECT @b_success = 0
