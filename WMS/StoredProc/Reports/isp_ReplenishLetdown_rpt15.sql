@@ -29,17 +29,19 @@ GO
 /*                                                                      */  
 /* Called By: r_dw_replenishletdown_rpt15                               */  
 /*                                                                      */  
-/* GitLab Version: 1.2                                                  */  
+/* GitLab Version: 1.3                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author     Purposes                                     */  
-/* 2021-07-27   WLChooi    Fix - Modify Filter (WL01)                   */
-/* 2021-07-28   WLChooi    Fix - Modify Logic advised by LIT (WL02)     */
-/* 2021-07-29   WLChooi    Fix - Modify Logic advised by LIT (WL03)     */
+/* Date         Author    Ver. Purposes                                 */  
+/* 2021-07-27   WLChooi   1.0  Fix - Modify Filter (WL01)               */
+/* 2021-07-28   WLChooi   1.1  Fix - Modify Logic advised by LIT (WL02) */
+/* 2021-07-29   WLChooi   1.2  Fix - Modify Logic advised by LIT (WL03) */
+/* 2021-11-08   WLChooi   1.3  DevOps Combine Script                    */
+/* 2021-11-08   WLChooi   1.3  WMS-18271 - Modify Logic (WL04)          */
 /************************************************************************/  
   
 CREATE PROC isp_ReplenishLetdown_rpt15 (
@@ -94,6 +96,7 @@ BEGIN
         , ISNULL(RTRIM(PD.Lot),'')        AS Lot  
         , ISNULL(RTRIM(LA.Lottable02),'') AS Lottable02  
         , ISNULL(SUM(CASE WHEN PD.UOM = 6 AND WV.WAVETYPE = '1' THEN PD.Qty ELSE 0 END),0) AS RplQty   --WL02
+        , ISNULL(SUM(PD.Qty),0) AS TotalPick   --WL04
    INTO #temppick  
    FROM WAVEDETAIL WD WITH (NOLOCK) 
    JOIN PICKDETAIL PD WITH (NOLOCK)       ON (PD.Orderkey  = WD.Orderkey)  
@@ -115,6 +118,40 @@ BEGIN
           , ISNULL(RTRIM(PD.ID),'')  
           , ISNULL(RTRIM(PD.Lot),'')  
           , ISNULL(RTRIM(LA.Lottable02),'')  
+
+   --WL04 S
+   ------NEW ADD HISTORERY PICK   
+   SELECT ISNULL(RTRIM(PD.Storerkey),'')  AS Storerkey  
+        , ISNULL(RTRIM(PD.Sku),'')        AS Sku  
+        , ISNULL(RTRIM(PD.Loc),'')        AS Loc  
+        , ISNULL(RTRIM(PD.ID),'')         AS ID  
+        , ISNULL(SUM(CASE WHEN PD.UOM = 6 AND WV.WAVETYPE = '1' THEN 0 ELSE PD.Qty END),0) AS PickQty
+        , ISNULL(RTRIM(PD.Lot),'')        AS Lot  
+        , ISNULL(RTRIM(LA.Lottable02),'') AS Lottable02  
+        , ISNULL(SUM(CASE WHEN PD.UOM = 6 AND WV.WAVETYPE = '1' THEN PD.Qty ELSE 0 END),0) AS RplQty 
+        , ISNULL(SUM(PD.Qty),0) AS TotalPick    
+   INTO #temppick_His  
+   FROM WAVEDETAIL WD WITH (NOLOCK) 
+   JOIN PICKDETAIL PD WITH (NOLOCK)       ON (PD.Orderkey  = WD.Orderkey)  
+   JOIN SKUxLOC    SL WITH (NOLOCK)       ON (SL.Storerkey = PD.Storerkey)   
+                                          AND(SL.Sku       = PD.Sku)   
+                                          AND(SL.Loc       = PD.Loc)  
+   JOIN ORDERS     OH WITH (NOLOCK)       ON (OH.OrderKey  = WD.OrderKey)
+   JOIN LOTATTRIBUTE LA WITH (NOLOCK)     ON (LA.LOT       = PD.LOT)  
+   JOIN WAVE WV WITH (NOLOCK)             ON (WD.WAVEKEY   = WV.WAVEKEY)   --WL02
+   WHERE WD.WaveKey  <> @c_Wavekey  
+   AND   OH.Facility = @c_Facility   
+   AND   SL.LocationType <> 'CASE'  
+   AND   SL.LocationType <> 'PICK'  
+   AND   PD.[Status] < '9'  
+   AND   LA.Lottable01 IN ('10','20','30')  
+   GROUP BY ISNULL(RTRIM(PD.Storerkey),'')  
+          , ISNULL(RTRIM(PD.Sku),'')  
+          , ISNULL(RTRIM(PD.Loc),'')  
+          , ISNULL(RTRIM(PD.ID),'')  
+          , ISNULL(RTRIM(PD.Lot),'')  
+          , ISNULL(RTRIM(LA.Lottable02),'')  
+   --WL04 E
   
    SELECT ISNULL(RTRIM(RP.Storerkey),'')  AS Storerkey  
         , ISNULL(RTRIM(RP.Sku),'')        AS Sku  
@@ -146,7 +183,8 @@ BEGIN
         , ISNULL(RTRIM(LLI.Sku),'')       AS Sku  
         , ISNULL(RTRIM(LLI.Loc),'')       AS Loc  
         , ISNULL(RTRIM(LLI.ID),'')        AS ID  
-        , ISNULL(LLI.Qty-LLI.QtyAllocated-LLI.QtyPicked,0)   AS Qty  
+        --, ISNULL(LLI.Qty-LLI.QtyAllocated-LLI.QtyPicked,0)   AS Qty   --WL04  
+        , ISNULL(LLI.Qty,0)               AS Qty   --WL04
         , ISNULL(RTRIM(PK.Packkey),'')    AS Packkey  
         , ISNULL(PK.CaseCnt,0)            AS CaseCnt  
         , ISNULL(RTRIM(LLI.Lot),'')       AS Lot  
@@ -164,8 +202,10 @@ BEGIN
                                      AND(LLI.Loc         = SL.Loc)  
    WHERE SL.LocationType <> 'CASE'  
    AND   SL.LocationType <> 'PICK'  
-   AND   LLI.Qty > 0  
-   AND tp.PickQty % CAST(ISNULL(PK.CaseCnt,0) AS INT)  = 0  
+   --AND   LLI.Qty > 0   --WL04  
+   AND   (LLI.Qty + LLI.QtyAllocated + LLI.QtyPicked) > 0   --WL04
+   --AND tp.PickQty % CAST(ISNULL(PK.CaseCnt,0) AS INT)  = 0  --WL04
+  
   
    -- ReplenbutNotPick: Get records that need to Replenish but not Pick in the Wave  
    SELECT DISTINCT   
@@ -190,7 +230,8 @@ BEGIN
          ,ISNULL(RTRIM(LLI.Sku),'')       AS Sku  
          ,ISNULL(RTRIM(LLI.Loc),'')       AS Loc  
          ,ISNULL(RTRIM(LLI.ID),'')        AS ID  
-         ,ISNULL(LLI.Qty-LLI.QtyAllocated-LLI.QtyPicked,0) AS Qty  
+         --,ISNULL(LLI.Qty-LLI.QtyAllocated-LLI.QtyPicked,0) AS Qty   --WL04  
+         ,ISNULL(LLI.Qty,0)               AS Qty   --WL04
          ,ISNULL(RTRIM(PK.Packkey),'')    AS Packkey  
          ,ISNULL(PK.CaseCnt,0)            AS CaseCnt  
          ,ISNULL(RTRIM(LLI.Lot),'')       AS Lot  
@@ -204,7 +245,7 @@ BEGIN
                                       AND(LLI.Loc = trp.Loc)  
                                       AND(LLI.ID  = trp.ID)  
    JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)  
-   WHERE LLI.Qty > 0  
+   WHERE  (LLI.Qty + LLI.QtyAllocated + LLI.QtyPicked) > 0      --WL04
   
    -- NoReplnPick: Get other SKU wh has no Replen & Pick But sit at loc that has Pick/Replen  
    SELECT DISTINCT LOC   
@@ -216,7 +257,8 @@ BEGIN
          ,ISNULL(RTRIM(LLI.Sku),'')       AS Sku   
          ,ISNULL(RTRIM(LLI.LOC),'')       AS LOC  
          ,ISNULL(RTRIM(LLI.ID),'')        AS ID  
-         ,ISNULL(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked, 0) AS Qty  
+         --,ISNULL(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked, 0) AS Qty   --WL04  
+         ,ISNULL(LLI.Qty, 0)              AS Qty   --WL04  
          ,ISNULL(RTRIM(S.Packkey),'')     AS Packkey  
          ,ISNULL(PK.Casecnt,0)            AS Casecnt  
          ,ISNULL(RTRIM(LLI.Lot),'')       AS Lot    
@@ -258,11 +300,12 @@ BEGIN
          ,ISNULL(RTRIM(TSL.ID),'')        AS ID  
          ,CASE ISNULL(TSL.CaseCnt,0) WHEN 0  
                THEN 0   
-               ELSE CAST(ISNULL(SUM(ISNULL(TSL.Qty,0)+ISNULL(TP.PickQty,0)),0) / ISNULL(TSL.CaseCnt,0) AS INT)   
+               ---ELSE CAST(ISNULL(SUM(ISNULL(TSL.Qty,0)+ISNULL(TP.PickQty,0)),0) / ISNULL(TSL.CaseCnt,0) AS INT)      --WL04
+			   ELSE CAST((ISNULL(SUM(ISNULL(TSL.Qty,0)),0)-ISNULL(SUM(TS.TotalPick),0)) / ISNULL(TSL.CaseCnt,0) AS INT)   --WL04   
           END                             AS Qty   
          ,CASE ISNULL(TSL.CaseCnt,0) WHEN 0  
                THEN ISNULL(SUM(ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)),0)  
-               ELSE ISNULL(SUM(ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)),0) % CAST(ISNULL(TSL.CaseCnt,0) AS INT)   
+               ELSE ISNULL(SUM(ISNULL(TSL.Qty,0)),0) % CAST(ISNULL(TSL.CaseCnt,0) AS INT)   --WL04 
           END                             AS QtyInEA  
          ,ISNULL(RTRIM(TSL.Packkey),'')   AS Packkey  
          ,ISNULL(TSL.CaseCnt,0)           AS CaseCnt  
@@ -281,17 +324,21 @@ BEGIN
          ,ISNULL(RTRIM(TRP.ToLoc), '')    AS ToLoc   
          ,CASE ISNULL(TSL.CaseCnt,0) WHEN 0  
                THEN 0  
-               ELSE CAST(ISNULL(SUM((ISNULL(TSL.Qty,0)+ ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0) - ISNULL(TRP.ReplQty,0)),0)/ ISNULL(TSL.CaseCnt,0) AS INT)                     
+               --ELSE CAST(ISNULL(SUM((ISNULL(TSL.Qty,0)+ ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0)),0)/ ISNULL(TSL.CaseCnt,0) AS INT)   --WL04                     
+			   ELSE CAST((CAST(ISNULL(SUM(ISNULL(TSL.Qty,0)),0) AS INT) - CAST(ISNULL(SUM(TS.TotalPick),0) AS INT) - CAST(ISNULL(SUM(TP.PickQty),0) AS INT) -   --WL04 
+                 CAST(ISNULL(SUM(ISNULL(TRP.ReplQty,0)),0) AS INT)) / ISNULL(TSL.CaseCnt,0) AS INT)   --WL04 
           END                             AS CaseBalRtnToRack  
          ,CASE ISNULL(TSL.CaseCnt,0) WHEN 0  
                THEN ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0)),0)  
-               ELSE ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0)),0) % CAST(ISNULL(TSL.CaseCnt,0) AS INT)   --WL03
-          END                             AS CaseBalRtnToRackInEA   
+               --ELSE ISNULL(SUM((ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)) - ISNULL(TP.PickQty,0)),0) % CAST(ISNULL(TSL.CaseCnt,0) AS INT)   --WL03   --WL04 
+			   ELSE (CAST(ISNULL(SUM(ISNULL(TSL.Qty,0)),0) AS INT)- CAST(ISNULL(SUM(TS.TotalPick),0) AS INT) - CAST(ISNULL(SUM(TP.PickQty),0) AS INT) -    --WL04 
+                 CAST(ISNULL(SUM(ISNULL(TRP.ReplQty,0)),0) AS INT)) % CAST(ISNULL(TSL.CaseCnt,0)  AS INT)   --WL04 
+          END                             AS CaseBalRtnToRackInEA    
          ,'            '                  AS MoveToLoc  
          ,@c_Facility                     AS facility  
          ,@c_Wavekey                      AS WavekeyStart  
          ,@c_Wavekey                      AS WavekeyEnd  
-         ,ISNULL(RTRIM(TSL.Lot),'')       AS Lot  
+         --,ISNULL(RTRIM(TSL.Lot),'')       AS Lot   --WL04   
          ,ISNULL(RTRIM(TSL.Lottable02),'')AS Lottable02      
    INTO  #RESULT2  
    FROM  #RESULT TSL    
@@ -307,6 +354,11 @@ BEGIN
                                  AND(TRP.Lot       = TSL.Lot)  
    LEFT JOIN LOTATTRIBUTE(NOLOCK) AS LA ON TSL.LOT=LA.LOT
    LEFT JOIN LOC(NOLOCK) AS LOC ON TSL.Loc=LOC.LOC   
+   LEFT JOIN #temppick_His AS TS  ON (TSL.Storerkey  = TS.Storerkey)   --WL04 
+                                 AND(TSL.Sku        = TS.Sku)  
+                                 AND(TSL.Loc        = TS.Loc)  
+                                 AND(TSL.ID         = TS.ID)  
+                                 AND(TSL.Lot        = TS.Lot) 
    WHERE LA.LOTTABLE01 IN ('10','20','30') AND LOC.LOCATIONGROUP<>'VIRTUAL'  
    GROUP BY ISNULL(RTRIM(TSL.Sku),'')      
          ,  ISNULL(RTRIM(TSL.Loc),'')       
@@ -314,7 +366,7 @@ BEGIN
          ,  ISNULL(RTRIM(TSL.Packkey),'')   
          ,  ISNULL(TSL.CaseCnt,0)        
          ,  ISNULL(RTRIM(TRP.ToLoc), '')  
-         ,  ISNULL(RTRIM(TSL.Lot),'')  
+         --,  ISNULL(RTRIM(TSL.Lot),'')   --WL04  
          ,  ISNULL(RTRIM(TSL.Lottable02),'')  
    HAVING ISNULL(SUM(ISNULL(TSL.Qty,0) + ISNULL(TP.PickQty,0)),0) > 0   
        OR ISNULL(SUM(ISNULL(TP.PickQty,0)),0) > 0   
@@ -324,7 +376,9 @@ BEGIN
          ,  ISNULL(RTRIM(TSL.ID),'')  
          ,  ISNULL(RTRIM(TSL.Sku),'')  
          ,  CaseBalRtnToRack  
-  
+ 
+   --WL04 S 
+   /*
    BEGIN TRANSACTION  
    SET @c_toloc = ''  
   
@@ -505,8 +559,9 @@ BEGIN
       BEGIN  
         COMMIT TRAN  
       END  
-   END  
-
+   END */
+   --WL04 E
+    
    SELECT #RESULT2.Storerkey  
         , #RESULT2.Sku  
         , #RESULT2.Lottable02    
@@ -517,8 +572,8 @@ BEGIN
         , #RESULT2.Packkey  
         , #RESULT2.CaseCnt  
         , ISNULL(SUM(#RESULT2.PickQty),0)             AS PickQty  
-        , ISNULL(SUM(#RESULT2.ReplQty),0)             AS ReplQty  
-        , ISNULL(SUM(#RESULT2.ReplQtyInEA),0)         AS ReplQtyInEA  
+        , CASE WHEN ISNULL(SUM(#RESULT2.ReplQty),0)='0' THEN '' ELSE ISNULL(SUM(#RESULT2.ReplQty),0) END AS ReplQty   --WL04  
+        , CASE WHEN ISNULL(SUM(#RESULT2.ReplQtyInEA),0)=0  THEN '' ELSE ISNULL(SUM(#RESULT2.ReplQtyInEA),0) END AS ReplQtyInEA   --WL04     
         , #RESULT2.ToLoc   
         , ISNULL(SUM(#RESULT2.CaseBalRtnToRack),0)    AS CaseBalRtnToRack  
         , ISNULL(SUM(#RESULT2.CaseBalRtnToRackInEA),0)AS CaseBalRtnToRackInEA   
@@ -550,7 +605,7 @@ BEGIN
           , ISNULL(RTRIM(SKU.Style),'')  
           , ISNULL(RTRIM(SKU.Color),'')  
           , ISNULL(RTRIM(SKU.Size),'')   
-   HAVING (SUM(ReplQty) + SUM(ReplQtyInEA)) > 0 OR (SUM(PickQty)) > 0 
+   --HAVING (SUM(ReplQty) + SUM(ReplQtyInEA)) > 0 OR (SUM(PickQty)) > 0   --WL04 
    ORDER BY #RESULT2.Loc, #RESULT2.ID  
           , ISNULL(RTRIM(SKU.Style),'')  
           , ISNULL(RTRIM(SKU.Color),'')  
@@ -569,6 +624,8 @@ BEGIN
       DROP TABLE #tempsameloc
    IF OBJECT_ID('tempdb..#result') IS NOT NULL
       DROP TABLE #result
+   IF OBJECT_ID('tempdb..#temppick_His') IS NOT NULL   --WL04
+      DROP TABLE #temppick_His
 END  
 GO
 GRANT EXECUTE ON isp_ReplenishLetdown_rpt15 to nSQL
