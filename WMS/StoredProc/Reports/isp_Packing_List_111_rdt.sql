@@ -1,5 +1,5 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Packing_List_111_rdt]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Packing_List_111_rdt]')
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
    DROP PROCEDURE [dbo].[isp_Packing_List_111_rdt]
 GO
 
@@ -25,25 +25,27 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 2021-12-28   SYCHUA    1.0 JSM-42492 Fix Editdate Display issue(SY01)*/
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_Packing_List_111_rdt] (  
-   @c_Pickslipno NVARCHAR(21) )   
- 
-AS   
-BEGIN  
-   SET NOCOUNT ON  
-  -- SET ANSI_WARNINGS OFF  
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF  
-   SET ANSI_DEFAULTS OFF  
+CREATE PROC [dbo].[isp_Packing_List_111_rdt] (
+   @c_Pickslipno NVARCHAR(21) )
+
+AS
+BEGIN
+   SET NOCOUNT ON
+  -- SET ANSI_WARNINGS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET ANSI_DEFAULTS OFF
 
    SELECT DISTINCT OH.ExternOrderKey,
                    (ISNULL(OH.C_contact1,'') + '' + ISNULL(OH.C_contact2,'')) AS OHContact,
                    (ISNULL(OH.C_Address2,'') + '' + ISNULL(OH.C_Address3,'') + ISNULL(OH.C_Address4,'')) AS OHAddress,
                    OH.C_Phone1,
-                   --FORMAT(pd.EditDate, N'yyyy?MM?dd?') AS editdate,
-                   convert(varchar, PD.EditDate, 3) AS editdate,
+                   --FORMAT(pd.EditDate, N'yyyy年MM月dd日') AS editdate,
+                   --convert(varchar, PD.EditDate, 3) AS editdate,    --SY01
+                   convert(varchar, PD.EditDate, 103) AS editdate,    --SY01
                    --PD.EditDate,
                    OH.Salesman + N'订单' AS Salesman,
                    OH.ShipperKey,
@@ -59,14 +61,15 @@ BEGIN
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
    JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = OH.Orderkey AND PD.OrderLineNumber = OD.OrderLineNumber
-   JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU       
+   JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU
    WHERE PH.Pickslipno = @c_Pickslipno
    GROUP BY OH.ExternOrderKey,
             (ISNULL(OH.C_contact1,'') + '' + ISNULL(OH.C_contact2,'')),
             (ISNULL(OH.C_Address2,'') + '' + ISNULL(OH.C_Address3,'') + ISNULL(OH.C_Address4,'')),
             OH.C_Phone1,
-            --FORMAT(pd.EditDate, N'yyyy?MM?dd?'),
-            convert(varchar, PD.EditDate, 3),
+            --FORMAT(pd.EditDate, N'yyyy年MM月dd日'),
+            --convert(varchar, PD.EditDate, 3),    --SY01
+            convert(varchar, PD.EditDate, 103),    --SY01
             --PD.EditDate,
             OH.Salesman + N'订单',
             OH.ShipperKey,
@@ -77,9 +80,6 @@ BEGIN
             PD.Sku,
             CASE WHEN ISNULL(OD.UnitPrice,'') = '' THEN '0' ELSE OD.UnitPrice END,
             CASE WHEN ISNULL(OH.B_Vat,'') = '' THEN '0' ELSE OH.B_Vat END
-            
+
 
 END -- procedure
-GO
-GRANT EXECUTE ON [dbo].[isp_Packing_List_111_rdt] TO nSQL 
-GO
