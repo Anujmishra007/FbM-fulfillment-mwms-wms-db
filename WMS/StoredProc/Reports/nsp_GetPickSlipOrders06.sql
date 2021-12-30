@@ -6,56 +6,58 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-/************************************************************************/
-/* Store Procedure:  nsp_GetPickSlipOrders06                            */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:  Create Normal Pickslip for IDSTW                           */
-/*                                                                      */
-/* Input Parameters:  @c_loadkey  - Loadkey                             */
-/*                                                                      */
-/* Output Parameters:  None                                             */
-/*                                                                      */
-/* Return Status:  None                                                 */
-/*                                                                      */
-/* Usage:  Used for report dw = r_dw_print_pickorder06                  */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.9                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 01-Feb-2005  MaryVong      Changed CaseCnt and InnerPack to store    */
-/*                            into TempQty1 and TempQty2                */
-/*                            (SOS31612 & 31630)                        */
-/* 17-Feb-2005  MaryVong      SOS30692 - Auto Scan-in when only 1 storer*/
-/*                            found and configkey is setup              */
-/* 02-Oct-2006  MaryVong      SOS59298 Add 3 new fields:                */
-/*                            Facility, Lottable02 & DeliveryNote       */
-/* 15-11-2006   ONG01         SOS59298 - Add DeliveryDate               */
-/* 29-02-2012   SPChin        SOS237725 - Bug Fix - Add filter by       */
-/*                                                  Storerkey           */
-/* 21-AUG-2013  YTWan         SOS#287046:Change sku code Pattern.(Wan01)*/
-/* 19-Feb-2014  NJOW01        300733-add consigneekey2 and sku2 with    */
-/*                            storerconfig.                             */
-/* 07-OCT-2016  Wan02         WMS-333: Sku Desc text wrap               */
-/* 31-MAR-2017  CSCHONG       WMS-1461 revise sorting sequence (CS01)   */
-/* 15-Jun-2017  SPChin        IN00354492 - Add Sorting For Temp Table   */
-/* 22-JAN-2018  Wan03         WMS-3709 - [TW-VF] CR Picking Slip Report */
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
-/* 30-Sep-2020  WLChooi       WMS-15203 - Modify calculate Case, Inner, */
-/*                            EA logic (WL01)                           */
-/* 26-Apr-2021  WLChooi       WMS-16848 - Modify Sorting (WL02)         */
-/************************************************************************/
+/***************************************************************************/
+/* Store Procedure:  nsp_GetPickSlipOrders06                               */
+/* Creation Date:                                                          */
+/* Copyright: IDS                                                          */
+/* Written by:                                                             */
+/*                                                                         */
+/* Purpose:  Create Normal Pickslip for IDSTW                              */
+/*                                                                         */
+/* Input Parameters:  @c_loadkey  - Loadkey                                */
+/*                                                                         */
+/* Output Parameters:  None                                                */
+/*                                                                         */
+/* Return Status:  None                                                    */
+/*                                                                         */
+/* Usage:  Used for report dw = r_dw_print_pickorder06                     */
+/*                                                                         */
+/* Local Variables:                                                        */
+/*                                                                         */
+/* Called By:                                                              */
+/*                                                                         */
+/* PVCS Version: 2.4                                                       */
+/*                                                                         */
+/* Version: 5.4                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date         Author      Ver. Purposes                                  */
+/* 01-Feb-2005  MaryVong    1.0  Changed CaseCnt and InnerPack to store    */
+/*                               into TempQty1 and TempQty2                */
+/*                               (SOS31612 & 31630)                        */
+/* 17-Feb-2005  MaryVong    1.1  SOS30692 - Auto Scan-in when only 1 storer*/
+/*                               found and configkey is setup              */
+/* 02-Oct-2006  MaryVong    1.2  SOS59298 Add 3 new fields:                */
+/*                               Facility, Lottable02 & DeliveryNote       */
+/* 15-11-2006   ONG01       1.3  SOS59298 - Add DeliveryDate               */
+/* 29-02-2012   SPChin      1.4  SOS237725 - Bug Fix - Add filter by       */
+/*                                                     Storerkey           */
+/* 21-AUG-2013  YTWan       1.5  SOS#287046:Change sku code Pattern.(Wan01)*/
+/* 19-Feb-2014  NJOW01      1.6  300733-add consigneekey2 and sku2 with    */
+/*                               storerconfig.                             */
+/* 07-OCT-2016  Wan02       1.7  WMS-333: Sku Desc text wrap               */
+/* 31-MAR-2017  CSCHONG     1.8  WMS-1461 revise sorting sequence (CS01)   */
+/* 15-Jun-2017  SPChin      1.9  IN00354492 - Add Sorting For Temp Table   */
+/* 22-JAN-2018  Wan03       2.0  WMS-3709 - [TW-VF] CR Picking Slip Report */
+/* 28-Jan-2019  TLTING_ext  2.1  enlarge externorderkey field length       */
+/* 30-Sep-2020  WLChooi     2.2  WMS-15203 - Modify calculate Case, Inner, */
+/*                               EA logic (WL01)                           */
+/* 26-Apr-2021  WLChooi     2.3  WMS-16848 - Modify Sorting (WL02)         */
+/* 02-Dec-2021  WLChooi     2.4  DevOps Combine Script                     */
+/* 02-Dec-2021  WLChooi     2.4  Performance Tuning (WL03)                 */
+/***************************************************************************/
 
 CREATE PROC dbo.nsp_GetPickSlipOrders06 (@c_loadkey NVARCHAR(10))
 AS
@@ -153,7 +155,8 @@ BEGIN
          
    --NJOW01
    DECLARE @c_Sku2          NVARCHAR(20),
-           @c_Consigneekey2 NVARCHAR(15)      
+           @c_Consigneekey2 NVARCHAR(15),
+           @c_UpdPickHKey   NVARCHAR(10)   --WL03      
 
    SET @c_Style   = ''
    SET @c_Color   = ''
@@ -231,38 +234,59 @@ BEGIN
       SELECT @c_PrintedFlag = 'N'
    END -- Record Not Exists
 
-   BEGIN TRAN
-   -- Uses PickType as a Printed Flag
-   UPDATE PickHeader
-   SET PickType = '1',
-   TrafficCop = NULL
-   WHERE ExternOrderKey = @c_loadkey
-   AND Zone = '3'
+   --WL03 S
+   DECLARE CUR_UPDATE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT PH.Pickheaderkey
+   FROM PICKHEADER PH (NOLOCK)
+   WHERE PH.ExternOrderKey = @c_loadkey
+   AND [Zone] = '3'
    AND PickType = '0'
+   
+   OPEN CUR_UPDATE
 
-   SELECT @n_err = @@ERROR
-   IF @n_err <> 0
+   FETCH NEXT FROM CUR_UPDATE INTO @c_UpdPickHKey
+
+   WHILE @@FETCH_STATUS <> -1
    BEGIN
-      SELECT @n_continue = 3
-      IF @@TRANCOUNT >= 1
+      BEGIN TRAN
+      -- Uses PickType as a Printed Flag
+      UPDATE PickHeader
+      SET PickType = '1',
+      TrafficCop = NULL
+      WHERE ExternOrderKey = @c_loadkey
+      AND Zone = '3'
+      AND PickType = '0'
+      AND PickHeaderKey = @c_UpdPickHKey   --WL03
+      
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
       BEGIN
-         ROLLBACK TRAN
-         GOTO FAILURE
-     END
-   END
-   ELSE
-   BEGIN
-      IF @@TRANCOUNT > 0
-      BEGIN
-         COMMIT TRAN
+         SELECT @n_continue = 3
+         IF @@TRANCOUNT >= 1
+         BEGIN
+            ROLLBACK TRAN
+            GOTO FAILURE
+        END
       END
       ELSE
       BEGIN
-         SELECT @n_continue = 3
-         ROLLBACK TRAN
-         GOTO FAILURE
+         IF @@TRANCOUNT > 0
+         BEGIN
+            COMMIT TRAN
+         END
+         ELSE
+         BEGIN
+            SELECT @n_continue = 3
+            ROLLBACK TRAN
+            GOTO FAILURE
+         END
       END
+
+      FETCH NEXT FROM CUR_UPDATE INTO @c_UpdPickHKey
    END
+   CLOSE CUR_UPDATE
+   DEALLOCATE CUR_UPDATE
+   --WL03 E
 
    DECLARE pick_cur CURSOR FOR
    SELECT PickDetail.sku,       PickDetail.loc, 
@@ -728,10 +752,20 @@ BEGIN
          ,  LogicalLoc   --WL02
      FROM #TEMP_PICK 
      ORDER BY OrderKey, LogicalLoc, LOC, SKU	--IN00354492   --WL02
-     DROP Table #TEMP_PICK  
 
- END
+   --WL03 S
+   --DROP Table #TEMP_PICK  
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_UPDATE') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_UPDATE
+      DEALLOCATE CUR_UPDATE   
+   END
+
+   IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL
+      DROP TABLE #TEMP_PICK
+   --WL03 E
+END
 GO
-
 GRANT EXECUTE ON nsp_GetPickSlipOrders06 TO NSQL
 GO
