@@ -83,3 +83,6 @@ BEGIN
 
 
 END -- procedure
+GO
+GRANT EXECUTE ON [dbo].[isp_Packing_List_111_rdt] TO nSQL 
+GO
