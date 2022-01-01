@@ -29,6 +29,8 @@ GO
 /* 2021-02-08  WLChooi  1.1   WMS-16289 - Get WaveSeqOfDay from NCounter*/
 /*                            (WL01)                                    */
 /* 2021-02-15  WLChooi  1.2   Fix Bug for WMS-16289 (WL02)              */
+/* 2021-12-29  mingle   1.3   WMS-18408 add new logic(ML01)             */
+/* 2021-12-29  mingle   1.3   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC isp_GetPickSlipWave26_1
             @c_Wavekey        NVARCHAR(10)
@@ -65,20 +67,22 @@ BEGIN
          , @n_err             INT          
          , @c_errmsg          NVARCHAR(250)
          , @c_WaveSeq         NVARCHAR(10)  
-         --WL01 E                                      
+         --WL01 E                      
+         , @c_doctype         NVARCHAR(1) --ML01                
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
   
    SELECT TOP 1 @dt_Adddate = CASE WHEN ISNULL(TD.AddDate,'')  <>'1900-01-01 00:00:00.000' 
                               THEN MIN(TD.AddDate) ELSE WH.EditDate END  
-               ,@c_Storerkey= OH.Storerkey                                           
+               ,@c_Storerkey= OH.Storerkey 
+               ,@c_doctype = OH.DocType --ML01                                          
    FROM WAVE WH  WITH (NOLOCK)
    JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)               
    JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)              
    LEFT JOIN Taskdetail TD WITH (NOLOCK) ON TD.wavekey=WH.wavekey              
    WHERE WH.Wavekey = @c_Wavekey
-   GROUP BY OH.Storerkey,TD.AddDate ,WH.EditDate
+   GROUP BY OH.Storerkey,TD.AddDate ,WH.EditDate,OH.DocType --ML01
    
    SET @d_Adddate = CONVERT (DATETIME, CONVERT(NVARCHAR(10), @dt_Adddate, 112))
  
@@ -200,7 +204,10 @@ BEGIN
          ,TTLSeq  = @n_TTLSeq                                           
          ,logicalloc = loc.logicallocation                             
          ,OrdSelectkey = @c_ordselectkey       
-         ,Colorcode = @c_colorcode          
+         ,Colorcode = @c_colorcode
+         ,doctype = @c_doctype --ML01
+         ,pd.OrderKey
+         ,ISNULL(C1.Code,'') AS clcode --ML01           
    FROM PICKDETAIL PD   WITH (NOLOCK) 
    JOIN LOC        LOC  WITH (NOLOCK) ON (PD.Loc = LOC.Loc)    
    JOIN SKU        SKU  WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
@@ -212,6 +219,7 @@ BEGIN
          GROUP BY OD.Orderkey) ODSUM ON (ODSUM.Orderkey = PD.Orderkey)
    JOIN PICKHEADER PH WITH (NOLOCK) ON (RL.PickSlipNo = PH.PickHeaderkey)
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.LISTNAME = 'ADSKUDIV' AND C.Storerkey=sku.StorerKey AND C.code=SKU.SKUGROUP
+   LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.LISTNAME = 'WAVETYPE' AND C1.Storerkey=sku.StorerKey  AND C1.code='AD_OrderP' --ML01
    WHERE PH.PickHeaderKey = @c_PickSlipNo
    AND   LOC.PutawayZone = @c_Zone                              
    AND   PD.Status < '5'
@@ -227,7 +235,9 @@ BEGIN
          ,  ISNULL(RTRIM(SKU.manufacturersku), '')
          --,  SKU.SkuGroup
          , ISNULL(C.long,'')
-         ,loc.logicallocation                                  --(CS02)
+         , loc.logicallocation                                  --(CS02)
+         , pd.OrderKey
+         ,ISNULL(C1.Code,'') --ML01
    ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), '') 
          ,  LOC.PutawayZone                                       
          ,  loc.logicallocation                                --(CS02)
@@ -240,3 +250,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_GetPickSlipWave26_1] TO nSQL 
 GO
+
+
