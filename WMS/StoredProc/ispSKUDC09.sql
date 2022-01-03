@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 03-Nov-2021 NJOW     1.0   DEVOPS combine scirpt                     */
+/* 17-Dec-2021 NJOW01   1.1   WMS-18602 change decode logic             */
 /************************************************************************/   
 
 CREATE PROCEDURE dbo.ispSKUDC09
@@ -58,7 +59,13 @@ BEGIN
    BEGIN
    	 SET @c_TmpSku = SUBSTRING(@c_Sku, 3, 14)
    	 
-   	 IF SUBSTRING(@c_Sku,17,2) IN ('10','21') 
+   	 IF SUBSTRING(@c_Sku,17,2) IN ('17') --NJOW01
+   	 BEGIN
+   	 	  SET @c_LottableVal = RTRIM(SUBSTRING(@c_Sku, 27, 15))   
+   	 	  IF CHARINDEX('37', @c_LottableVal) > 0
+   	 	     SET @c_LottableVal = LEFT(@c_LottableVal, LEN(@c_LottableVal)-3)  
+   	 END 
+   	 ELSE IF SUBSTRING(@c_Sku,17,2) IN ('10','21') 
    	 BEGIN
    	 	  SET @c_LottableVal = SUBSTRING(@c_Sku, 19, 10)
    	 END 
