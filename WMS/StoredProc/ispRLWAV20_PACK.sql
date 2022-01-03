@@ -42,6 +42,8 @@ GO
 /*             Wan06          Standardize #OptimizeItemToPack Temp Table*/
 /*                            use at isp_SubmitToCartonizeAPI           */
 /* 2021-09-27  Wan06    1.4   DevOps Combine Script                     */
+/* 2021-11-29  Wan07    1.5   Fixed. Getting other orderkey to split issue*/
+/* 2021-12-14  Wan08    1.6   Fixed. Initialize CarotNo for new pickslip*/
 /************************************************************************/
 CREATE PROC ispRLWAV20_PACK
            @c_Wavekey            NVARCHAR(10)
@@ -512,6 +514,8 @@ BEGIN
          PRINT '@c_Orderkey: ' + @c_Orderkey
       END
 
+      SET @n_CartonSeqNo = 0                 --2021-12-14 (Wan08) 
+      
       --------------------------------------------
       -- UOM = '2' 
       --------------------------------------------
@@ -1200,7 +1204,8 @@ BEGIN
                AND pw.Storerkey = @c_Storerkey
                AND   pw.Sku = @c_Sku
                AND   pw.CartonType = ''
-               AND   pw.LocLevel = @c_LocLevel      --2021-10-22               
+               AND   pw.LocLevel = @c_LocLevel      --2021-10-22   
+               AND   pw.Orderkey = @c_Orderkey      --Wan07 2021-11-29              
                ORDER BY pw.Qty DESC
                       , pw.RowRef
                
