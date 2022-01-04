@@ -21,9 +21,10 @@ GO
 /* 2019-02-20 1.3  CSCHONG    WMS-8029 revised field logic (CS02)             */
 /* 2020-09-23 1.4  WLChooi    WMS-14956 - Add new column (WL01)               */     
 /* 2020-10-14 1.5  WLChooi    Show Qty Per Carton (WL02)                      */        
+/* 2021-01-04 1.6  CSCHONG    Devops Scripts Combine and WMS-18668 (CS03)     */
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_Bartender_Shipper_Label_KR_Hanjin]                      
+CREATE  PROC [dbo].[isp_Bartender_Shipper_Label_KR_Hanjin]                      
 (  @c_Sparm01            NVARCHAR(250),              
    @c_Sparm02            NVARCHAR(250),              
    @c_Sparm03            NVARCHAR(250),              
@@ -165,7 +166,7 @@ BEGIN
              + ' JOIN PACKHEADER PH WITH (NOLOCK) ON PH.OrderKey= OH.OrderKey' + CHAR(13) +   
              + ' JOIN PACKDETAIL PD WITH (NOLOCK) ON PH.Pickslipno = PD.Pickslipno' + CHAR(13) +  
              + ' LEFT JOIN PICKDETAIL PID WITH (NOLOCK) ON PID.CaseID = PD.LabelNo ' + CHAR(13) +  
-             + ' LEFT JOIN CourierSortingCode CSC WITH (NOLOCK) ON CSC.Zip=OH.C_Zip ' + CHAR(13) +  
+             + ' LEFT JOIN CourierSortingCode CSC WITH (NOLOCK) ON CSC.Zip=OH.C_Zip AND isnull(CSC.shipperkey,'''') = '''' ' + CHAR(13) +    --CS03
              + ' LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.Listname = ''HJCOURIER'' AND CL.Storerkey = OH.Storerkey ' + CHAR(13) +     --WL01
              + ' LEFT JOIN CourierSortingCode CSC1 WITH (NOLOCK) ON CSC1.State = CL.Short AND CSC1.City = CSC.SortingCode1      
                                                                 AND CSC1.Shipperkey = ''HANJIN'' AND CSC1.Comment = ''HUB'' ' + CHAR(13) +     --WL01
