@@ -18,7 +18,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* GitLab Version: 1.0                                                   */    
+/* GitLab Version: 1.1                                                   */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
@@ -27,6 +27,8 @@ GO
 /* Updates:                                                              */    
 /* Date         Author   Ver  Purposes                                   */ 
 /* 2021-08-20   WLChooi  1.0  DevOps Combine Script                      */ 
+/* 2021-12-16   WLChooi  1.1  WMS-17722 Change Message02 & Message03 and */
+/*                            bug fix (WL01)                             */
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV46]        
@@ -120,6 +122,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
          , @c_PalletPicker            NVARCHAR(50)
          , @c_CasePicker              NVARCHAR(50) 
          , @c_PickWorkBalance         NVARCHAR(10)
+         , @n_RowID                   INT   --WL01
 
    DECLARE @n_SKUPerPTS               INT
          , @n_CurrentSplitNumber      INT
@@ -470,6 +473,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
    )
 
    CREATE TABLE #TMP_PTSSplitResult (
+      RowID       INT,   --WL01
       BUSR4       NVARCHAR(200),
       CountSKU    INT
    )
@@ -548,19 +552,19 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
       BEGIN
          --Check if need to split SKU Count
          DECLARE cur_SplitSKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-         SELECT TP.BUSR4, TP.CountSKU
+         SELECT TP.RowID, TP.BUSR4, TP.CountSKU   --WL01
          FROM #TMP_PTS TP
          ORDER BY TP.RowID
         
          OPEN cur_SplitSKU    
-         FETCH NEXT FROM cur_SplitSKU INTO @c_SKUBUSR4, @n_CountSKU  
+         FETCH NEXT FROM cur_SplitSKU INTO @n_RowID, @c_SKUBUSR4, @n_CountSKU   --WL01  
         
          WHILE @@FETCH_STATUS = 0    
          BEGIN                        
             IF @b_debug = 1
                SELECT @c_SKUBUSR4 AS SKUBUSR4, @n_CountSKU AS CountSKU, @n_TopSplitCategory AS TopSplitCategory, @n_SplitNumber AS SplitNumber
 
-            IF @n_TopSplitCategory > 1 AND @n_SplitNumber > 1
+            IF @n_TopSplitCategory >= 1 AND @n_SplitNumber >= 1   --WL01
             BEGIN
                SELECT @n_SKUPerPTS = ROUND(@n_CountSKU / @n_SplitNumber, 0)
 
@@ -576,19 +580,21 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                   
                   SET @n_RemainSKUCount = @n_RemainSKUCount - @n_SKUPerPTS
                   SET @n_CurrentSplitNumber = @n_CurrentSplitNumber - 1
-                  SET @n_TopSplitCategory = @n_TopSplitCategory - 1
+                  --SET @n_TopSplitCategory = @n_TopSplitCategory - 1   --WL01
 
-                  INSERT INTO #TMP_PTSSplitResult(BUSR4, CountSKU)
-                  VALUES(@c_SKUBUSR4 , @n_SplitCountSKU)
+                  INSERT INTO #TMP_PTSSplitResult(RowID, BUSR4, CountSKU)
+                  VALUES(@n_RowID, @c_SKUBUSR4 , @n_SplitCountSKU)
                END
+
+               SET @n_TopSplitCategory = @n_TopSplitCategory - 1   --WL01
             END
             ELSE 
             BEGIN
-               INSERT INTO #TMP_PTSSplitResult(BUSR4, CountSKU)
-               VALUES(@c_SKUBUSR4 , @n_CountSKU)
+               INSERT INTO #TMP_PTSSplitResult(RowID, BUSR4, CountSKU)
+               VALUES(@n_RowID, @c_SKUBUSR4 , @n_CountSKU)
             END
 
-            FETCH NEXT FROM cur_SplitSKU INTO @c_SKUBUSR4, @n_CountSKU  
+            FETCH NEXT FROM cur_SplitSKU INTO @n_RowID, @c_SKUBUSR4, @n_CountSKU   --WL01   
          END  
          CLOSE cur_SplitSKU    
          DEALLOCATE cur_SplitSKU
@@ -599,8 +605,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
          DECLARE CUR_PDNotes CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT TSR.BUSR4, TSR.CountSKU
          FROM #TMP_PTSSplitResult TSR
-         ORDER BY TSR.BUSR4    ASC
-                , TSR.CountSKU DESC
+         ORDER BY TSR.RowID   --WL01
+         --ORDER BY TSR.BUSR4    ASC    --WL01
+         --       , TSR.CountSKU DESC   --WL01
 
          OPEN CUR_PDNotes    
 
@@ -618,9 +625,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                            FROM #PickDetail_WIP PD
                            JOIN SKU S (NOLOCK) ON S.StorerKey = PD.Storerkey AND S.Sku = PD.Sku
                            WHERE S.BUSR4 = @c_SKUBUSR4 AND S.StorerKey = @c_Storerkey
-                           AND ISNULL(PD.Notes,'') = ''
+                           AND ISNULL(PD.Notes,'') = '' AND PD.UOM <> '2'   --WL01
                            ORDER BY PD.SKU)
             AND Storerkey = @c_Storerkey
+            AND UOM <> '2'   --WL01
 
             SET @n_cnt = @n_cnt + 1
 
@@ -1217,9 +1225,9 @@ INSERT_TASKS:
        ,@c_ToLoc --Logical to loc    
        ,@c_PickMethod  
        ,@c_Wavekey  
-       ,@c_DestinationType  
+       ,@c_Message03   --@c_DestinationType   --WL01  
        ,''  
-       ,@c_Message03  
+       ,@c_DestinationType   --@c_Message03   --WL01   
        ,@c_DropID  
        ,@c_Loadkey  
        ,@n_UCCQty - @n_Qty
