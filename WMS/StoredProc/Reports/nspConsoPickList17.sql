@@ -27,7 +27,7 @@ GO
 /*                                                                      */  
 /* Called By:                                                           */  
 /*                                                                      */  
-/* PVCS Version: 1.6                                                    */  
+/* PVCS Version: 1.7                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -43,6 +43,8 @@ GO
 /* 29-Apr-2015  CSCHONG 1.4   SOS339808  (CS01)                         */
 /* 09-Jul-2015  CSCHONG 1.5   SOS346307  (CS02)                         */
 /* 18-Nov-2020  WLChooi 1.6  WMS-15667 Add Innerpack calculation (WL01) */
+/* 15-Dec-2021  WLChooi 1.7  DevOps Combine Script                      */
+/* 15-Dec-2021  WLChooi 1.7  WMS-18587 - Add Lottable06 (WL02)          */
 /************************************************************************/  
   
 CREATE PROC nspConsoPickList17 (  
@@ -124,8 +126,10 @@ BEGIN
                                                 ELSE 0 END) ) /Pack.InnerPack)
                            ELSE 0 END,
            ISNULL(CL3.Short,'N') AS ShowInner,
-           PACK.InnerPack
+           PACK.InnerPack,
            --WL01 END
+           LOTATTRIBUTE.Lottable06,   --WL02
+           ISNULL(CL4.Short,'N') AS ShowLott06   --WL02
    INTO #TEMP_PICK   
    FROM LoadPlanDetail WITH (NOLOCK)  
    JOIN ORDERDETAIL WITH (NOLOCK) ON ( LoadPlanDetail.LoadKey = ORDERDETAIL.LoadKey AND   
@@ -145,6 +149,8 @@ BEGIN
                                        AND CL2.Storerkey = ORDERS.Storerkey AND ISNULL(CL2.Short,'') <> 'N') --NJOW04  
    LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON (CL3.ListName = 'REPORTCFG' AND CL3.Code = 'ShowInner' AND CL3.Long = 'r_dw_consolidated_pick17'  
                                        AND CL3.Storerkey = ORDERS.Storerkey AND ISNULL(CL3.Short,'') <> 'N')   --WL01
+   LEFT JOIN CODELKUP CL4 WITH (NOLOCK) ON (CL4.ListName = 'REPORTCFG' AND CL4.Code = 'ShowLott06' AND CL4.Long = 'r_dw_consolidated_pick17'  
+                                       AND CL4.Storerkey = ORDERS.Storerkey AND ISNULL(CL4.Short,'') <> 'N')   --WL02
    JOIN LOC WITH (NOLOCK) ON ( PICKDETAIL.Loc = LOC.Loc ) --NJOW01  
    WHERE ( LoadPlanDetail.LoadKey = @c_LoadKey )  
    GROUP BY LoadPlanDetail.LoadKey,     
@@ -180,7 +186,9 @@ BEGIN
             --Loadplan.UserDefine01        --(CS01)   --(CS02)
             REPLACE(CONVERT(NVARCHAR(12),Loadplan.LPuserdefDate01,106),' ','/'),
             PACK.InnerPack,         --WL01
-            ISNULL(CL3.Short,'N')   --WL01
+            ISNULL(CL3.Short,'N'),  --WL01
+            LOTATTRIBUTE.Lottable06,   --WL02
+            ISNULL(CL4.Short,'N')   --WL02
       
   DECLARE C_zone CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
   SELECT DISTINCT PutawayZone, Locationtype, GroupByPAZone, GroupByLocType  
@@ -351,7 +359,9 @@ BEGIN
             LUdef01,               --(CS01)     
             InnerCnt,              --(WL01)         
             ShowInner,             --(WL01)   
-            InnerPack              --(WL01)                                           
+            InnerPack,             --(WL01)  
+            Lottable06,            --WL02
+            ShowLott06             --WL02                                        
       FROM #TEMP_PICK     
       
    IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL   --WL01
