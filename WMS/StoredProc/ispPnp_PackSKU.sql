@@ -29,7 +29,8 @@ GO
 /* 13-MAY-2106  Wan01     1.2   Specify SP parameters                   */  
 /* 24-JAN-2018  CSCHONG   1.3   WMS-3389- cater for conso orders (CS01) */ 
 /* 05-MAR-2019  CSCHONG   1.4   WMS-8072 - pass in cartonno to          */
-/*                              isp_GenUCCLabelNo_Std (CS02)            */  
+/*                              isp_GenUCCLabelNo_Std (CS02)            */
+/* 18-NOV-2021  SPChin    1.5   JSM-32208 Bug Fixed                     */ 
 /************************************************************************/  
   
 CREATE PROC ispPnp_PackSKU  
@@ -184,7 +185,8 @@ END
 --    END  
 --    SET ROWCOUNT 0   
 -- END -- IF @n_continue = 1 OR @n_continue = 2  
-  
+
+--JSM-32208 Start  
 IF @n_continue = 1 OR @n_continue = 2  
 BEGIN  
    IF EXISTS(SELECT 1 FROM PACKDETAIL (NOLOCK)  
@@ -193,6 +195,37 @@ BEGIN
              AND   SKU = ''  
              AND   StorerKey = '')  
    BEGIN  
+        IF EXISTS(SELECT 1 FROM PACKDETAIL (NOLOCK)    
+                WHERE PickSlipNo = @c_PickSlipNo    
+                AND   CartonNo   = @n_CartonNo    
+                AND   SKU = @c_Sku    
+                AND   StorerKey = @c_Storerkey)  
+      BEGIN               
+         DELETE FROM PackDetail   
+         WHERE PickSlipNo = @c_PickSlipNo   
+         AND CartonNo = @n_CartonNo  
+         AND SKU = ''  
+         AND Storerkey = ''  
+           
+         IF @@ERROR <> 0   
+         BEGIN  
+            SELECT @n_continue = 3   
+            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err=61900   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete PackDetail Failed. (ispPnp_PackSKU)'   
+         END                 
+      END           
+   END            
+END    
+--JSM-32208 End    
+  
+IF @n_continue = 1 OR @n_continue = 2    
+BEGIN    
+   IF EXISTS(SELECT 1 FROM PACKDETAIL (NOLOCK)    
+             WHERE PickSlipNo = @c_PickSlipNo    
+             AND   CartonNo   = @n_CartonNo    
+             AND   SKU = ''    
+             AND   StorerKey = '')    
+   BEGIN
       UPDATE PACKDETAIL  
          SET Qty = Qty + @n_Qty,  
              SKU = @c_SKU,  
