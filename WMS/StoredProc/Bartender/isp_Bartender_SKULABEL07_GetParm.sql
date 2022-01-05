@@ -18,7 +18,9 @@ GO
 /* 2021-05-25 1.1  WLChooi    WMS-17129 - Use UPC.UPC to print label (WL01)   */  
 /* 2021-05-25 1.1  WLChooi    DevOps Combine Script                           */              
 /* 2021-11-15 1.2  WLChooi    WMS-18352 - Scan SKU use ExtendedField01 to     */   
-/*                            which template to print (WL03)                  */                
+/*                            which template to print (WL03)                  */
+/* 2022-01-03 1.3  WLChooi    WMS-18352 - Scan ToID, UPC use ExtendedField01  */   
+/*                            to which template to print (WL04)               */                     
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_SKULABEL07_GetParm]                      
@@ -97,21 +99,28 @@ BEGIN
    IF EXISTS (SELECT 1 FROM RECEIPTDETAIL (NOLOCK) WHERE ToId = @parm02 AND Storerkey = @parm01 AND @parm02 <> '')   --WL01
    BEGIN
       INSERT INTO #TMP_SKU(Storerkey, SKU, ExtendedField01, Qty)
-      SELECT DISTINCT RD.Storerkey, RD.SKU, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END
+      SELECT DISTINCT RD.Storerkey, RD.SKU
+                    --, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END   --WL04
+                    , ISNULL(SKUINFO.ExtendedField01,'')   --WL04
                     , SUM(RD.BeforeReceivedQty)
       FROM RECEIPT R (NOLOCK)
       JOIN RECEIPTDETAIL RD (NOLOCK) ON R.ReceiptKey = RD.Receiptkey
       JOIN SKU (NOLOCK) ON SKU.Storerkey = RD.Storerkey AND SKU.SKU = RD.SKU
       LEFT JOIN SKUINFO (NOLOCK) ON SKU.Sku = SKUINFO.Sku AND SKU.StorerKey = SKUINFO.Storerkey
       WHERE RD.StorerKey = @parm01 AND RD.ToId = @parm02
-      GROUP BY RD.Storerkey, RD.SKU, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END
+      GROUP BY RD.Storerkey, RD.SKU
+           --, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END   --WL04
+             , ISNULL(SKUINFO.ExtendedField01,'')   --WL04
       HAVING SUM(RD.BeforeReceivedQty) > 0
    END
    --WL01 S
    IF EXISTS (SELECT 1 FROM UPC (NOLOCK) WHERE UPC = @parm03 AND Storerkey = @parm01)
    BEGIN
       INSERT INTO #TMP_SKU(Storerkey, SKU, ExtendedField01, Qty, UPC)
-      SELECT @parm01, SKU.SKU, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END, 1, @parm03
+      SELECT @parm01, SKU.SKU
+           --, CASE WHEN ISNULL(SKUINFO.ExtendedField01,'') = 'A' THEN 'A' ELSE 'B' END   --WL04
+           , ISNULL(SKUINFO.ExtendedField01,'')   --WL04
+           , 1, @parm03
       FROM UPC (NOLOCK)
       JOIN SKU (NOLOCK) ON SKU.StorerKey = UPC.StorerKey AND SKU.SKU = UPC.SKU
       LEFT JOIN SKUINFO (NOLOCK) ON SKU.Sku = SKUINFO.Sku AND SKU.StorerKey = SKUINFO.Storerkey
