@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 23-SEP-2021 CSCHONG  1.1   Fix TTLCTN nto show (CS01)                */
+/* 17-DEC-2021 MINGLE   1.2   Add buyerpo and reportcfg to control(ML01)*/
+/* 17-DEC-2021 Mingle   1.2   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC isp_UCC_Carton_Label_102
             @c_StorerKey      NVARCHAR(15) 
@@ -115,7 +117,9 @@ BEGIN
           HIDETTLCTN      NVARCHAR(5) NULL,
           SKUSize         NVARCHAR(10) NULL,
           OHNotes         NVARCHAR(250) NULL,
-          HIDEFIELD       NVARCHAR(5) NULL   )  
+          HIDEFIELD       NVARCHAR(5) NULL,
+          BuyerPO         NVARCHAR(20) NULL,
+          showPOorPOKEY   NVARCHAR(5) NULL)  
 
  CREATE TABLE #TMP_LCartonLBL102Date (
           rowid           int NOT NULL identity(1,1) PRIMARY KEY,
@@ -130,14 +134,15 @@ BEGIN
 
    insert into #TMP_LCartonLBL102 (Storerkey,OrdExtOrdKey,loadkey,OHRoute,Consigneekey,Facility,ttlqty,ExternPOKey,ST_Address1,
                                   ST_Address2,ST_Address3,ST_City,ST_State,ST_Zip,DropID,cartonno,SKUStyle,TTLCtn,RecGrp,Pickslipno,
-                                  ST_Company,labelno,HideTTLCTN,SKUSize,OHNotes,HIDEFIELD)
+                                  ST_Company,labelno,HideTTLCTN,SKUSize,OHNotes,HIDEFIELD,BuyerPO,showPOorPOKEY)
    SELECT DISTINCT OH.Storerkey,OH.ExternOrderkey,OH.Loadkey,OH.Route,OH.Consigneekey,
           OH.Facility,sum(PD.qty),OH.ExternPOKey,ST.Address1,ST.Address2,ST.Address3,
           ST.city,ST.state,ST.zip,PD.dropid , PD.CartonNo ,PD.SKU,@n_ttlctn,
           ROW_NUMBER() OVER ( PARTITION BY OH.ExternOrderkey,PD.CartonNo  
                            ORDER BY OH.ExternOrderkey,cartonno ,pd.sku )/@n_Maxline + 1  as recgrp,PH.pickslipno,  
           ST.Company,PD.labelno, CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Hidettlctn,s.Size ,
-          ISNULL(OH.notes,'') AS OHNotes,CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HIDEFIELD
+          ISNULL(OH.notes,'') AS OHNotes,CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HIDEFIELD,
+          OH.BuyerPO,ISNULL(CLR2.SHORT,'') AS showPOorPOKEY
    FROM ORDERS OH WITH (NOLOCK)
    --JOIN ORDERDETAIL OD WITH (NOLOCK) 
    JOIN PackHeader PH WITH (NOLOCK) ON PH.Orderkey = OH.Orderkey
@@ -148,8 +153,10 @@ BEGIN
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'SLABYREGION' AND C.short=SOD.destination
    LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (OH.Storerkey = CLR.Storerkey AND CLR.Code = 'HIDETTLCTN'
                                        AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_ucc_carton_label_102' AND ISNULL(CLR.Short,'') <> 'N')
-    LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (OH.Storerkey = CLR1.Storerkey AND CLR1.Code = 'HIDEFIELD'
+   LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (OH.Storerkey = CLR1.Storerkey AND CLR1.Code = 'HIDEFIELD'
                                        AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_ucc_carton_label_102' AND ISNULL(CLR1.Short,'') <> 'N')
+   LEFT OUTER JOIN Codelkup CLR2 (NOLOCK) ON (OH.Storerkey = CLR2.Storerkey AND CLR2.Code = 'showPOorPOKEY'
+                                       AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_ucc_carton_label_102')
    WHERE PH.pickslipno = @c_getpickslipno
    AND OH.StorerKey = @c_storerkey
    AND PD.cartonno >= CASE WHEN @c_StartCartonNo <> '' THEN CAST(@c_StartCartonNo as INT) ELSE PD.cartonno END
@@ -158,7 +165,7 @@ BEGIN
           OH.Facility,OH.ExternPOKey,ST.Address1,ST.Address2,ST.Address3,
           ST.city,ST.state,ST.zip,PD.dropid , PD.CartonNo ,PD.SKU,PH.pickslipno,ST.company,PD.labelno,
           CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END ,s.Size,
-          ISNULL(OH.notes,'') ,ISNULL(CLR1.Code,'')
+          ISNULL(OH.notes,'') ,ISNULL(CLR1.Code,''),OH.BuyerPO,ISNULL(CLR2.SHORT,'')
    order by PH.pickslipno ,OH.ExternOrderkey,PD.cartonno , pd.sku  
 
 
@@ -189,7 +196,7 @@ QUIT_SP:
            a.Storerkey,a.ttlqty as sizeqty,a.OHRoute,a.Consigneekey,a.Facility,a.ExternPOKey,a.ST_Address1,
            a.ST_Address2,a.ST_Address3,a.ST_City,a.ST_State,a.ST_Zip,a.RecGrp,a.Pickslipno,
            REPLACE(b.ODD,' ' ,'-') AS ODD,REPLACE(b.OAD,' ' ,'-') AS OAD,a.ST_Company,a.labelno,
-           a.HIDETTLCTN as hidettlctn,a.SKUSize AS skusize,a.OHNotes,a.HIDEFIELD
+           a.HIDETTLCTN as hidettlctn,a.SKUSize AS skusize,a.OHNotes,a.HIDEFIELD,BuyerPO,showPOorPOKEY
     FROM #TMP_LCartonLBL102 a
     JOIN #TMP_LCartonLBL102Date b on b.storerkey = a.storerkey and b.OrdExtOrdKey=a.OrdExtOrdKey 
     WHERE a.pickslipno = @c_getpickslipno
