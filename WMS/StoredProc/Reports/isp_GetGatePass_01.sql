@@ -46,6 +46,9 @@ GO
 /* 02-Nov-2015  NJOW05    1.8   356088 - configure to hide externloadkey*/
 /*                              to save space between lines.            */
 /* 06-Mar-2017  TLTING    1.9   Performance tune                        */
+/* 15-Dec-2021  WLChooi   2.0   DevOps Combine Script                   */
+/* 15-Dec-2021  WLChooi   2.0   WMS-18583 - Get Pickdetail.Qty if Pack  */
+/*                              Casecnt = 0 (WL01)                      */
 /************************************************************************/
 
 CREATE PROC isp_GetGatePass_01 (@c_mbolkey NVARCHAR(10)) 
@@ -158,7 +161,9 @@ BEGIN
           , ORDERS.externorderkey
           --, ORDERS.orderkey  --NJOW01
           , MBOL.editwho
-          , ROUND(SUM(CASE WHEN PACK.casecnt > 0 THEN PICKDETAIL.qty / PACK.casecnt ELSE 0 END),2) AS totalcase
+          , CASE WHEN ISNULL(CL1.Short,'N') = 'Y'   --WL01
+                 THEN ROUND(SUM(CASE WHEN PACK.casecnt > 0 THEN PICKDETAIL.qty / PACK.casecnt ELSE PICKDETAIL.Qty END),2)   --WL01
+                 ELSE ROUND(SUM(CASE WHEN PACK.casecnt > 0 THEN PICKDETAIL.qty / PACK.casecnt ELSE 0 END),2) END AS totalcase   --WL01
           , ROUND(SUM(CASE WHEN PACK.casecnt > 0 THEN ROUND(SKU.STDGROSSWGT * PACK.CaseCnt,3) * (PICKDETAIL.qty / PACK.casecnt) ELSE 0 END),2) AS grossweight
           , @c_printflag AS PrintFlag
           , ROUND(SUM(PICKDETAIL.qty * SKU.Stdcube),4) AS CBM  --NJOW02
@@ -186,6 +191,8 @@ BEGIN
      INNER JOIN FACILITY (NOLOCK) ON (MBOL.facility = FACILITY.facility)
      JOIN LOADPLAN WITH (NOLOCK)                     --(CS01)
       ON LOADPLAN.loadkey = ORDERDETAIL.loadkey    --(CS01)
+     LEFT OUTER JOIN Codelkup CL1 (NOLOCK) ON (ORDERS.Storerkey = CL1.Storerkey AND CL1.Code = 'NoCaseCntShowQty' 
+                                          AND CL1.Listname = 'REPORTCFG' AND CL1.Long = 'r_dw_gatepass_01' AND ISNULL(CL1.Short,'') <> 'N') --WL01
      WHERE ORDERDETAIL.mbolkey = @c_mbolkey  AND MBOL.status = '9'
      GROUP BY MBOL.Mbolkey
             , MBOL.facility                
@@ -217,6 +224,7 @@ BEGIN
             , SUBSTRING(ISNULL(MBOL.Remarks,''),251,250) --NJOW04
             , Loadplan.Externloadkey                     --(CS01) 
             , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END --NJOW05
+            , ISNULL(CL1.Short,'N')   --WL01
    END
             
    IF @n_continue = 3
