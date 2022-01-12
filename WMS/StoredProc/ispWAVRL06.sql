@@ -22,7 +22,7 @@ GO
 /*                                                                      */
 /* Called By: isp_WaveReleaseToWCS_Wrapper                              */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,6 +31,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 15-Sep-2021  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Jan-2022  WLChooi  1.1  WMS-17958 - Block insert transmitlog2 if  */
+/*                            previous record is added less than 1 min  */
+/*                            (WL01)                                    */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispWAVRL06] 
@@ -58,6 +61,7 @@ BEGIN
          , @c_DocType        NVARCHAR(1)
          , @c_trmlogkey      NVARCHAR(10)
          , @c_TransmitBatch  NVARCHAR(50) = ''
+         , @dt_TLDateTime    DATETIME   --WL01
 
    IF @n_err = 1
       SET @b_debug = 1
@@ -146,6 +150,23 @@ BEGIN
       BEGIN  
          SELECT @b_success = 1
 
+         --WL01 S
+         SELECT @dt_TLDateTime = TL2.AddDate 
+         FROM TRANSMITLOG2 TL2 (NOLOCK)
+         WHERE TL2.tablename = @c_TableName
+         AND TL2.key1 = @c_PickslipNo
+         AND TL2.key2 = @c_Loadkey
+         AND TL2.key3 = @c_Storerkey
+
+         IF ISNULL(@dt_TLDateTime,'1900-01-01') <> '1900-01-01'
+         BEGIN
+            IF DATEDIFF(SECOND, @dt_TLDateTime, GETDATE()) <= 60
+            BEGIN
+               GOTO NEXT_LOOP   --Block insert if less than 60 seconds
+            END
+         END
+         --WL01 E
+
          IF (@n_continue = 1 OR @n_continue = 2)
          BEGIN
             SELECT @b_success = 1
@@ -210,7 +231,7 @@ BEGIN
              SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE Loadplan Failed. (ispWAVRL06)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
              GOTO RETURN_SP 
          END  
-
+         NEXT_LOOP:   --WL01
          FETCH NEXT FROM cur_WAVEORDER INTO @c_Storerkey, @c_Loadkey, @c_Pickslipno    
       END
       CLOSE cur_WAVEORDER  
