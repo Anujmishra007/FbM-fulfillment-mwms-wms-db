@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -31,6 +31,10 @@ GO
 /*                            deducted when using Duplicate Line function*/
 /*                            in Receipt  Trade Return module            */
 /* 28-Sep-2021 LZG      1.3   JSM-22537 - Fixed Receipt.OpenQty (ZG01)  */
+/* 30-Nov-2021 Wan03    1.4   LFWM-2946 - UAT - TW  Expected quantity of*/
+/*                            original line will change to 0 after using*/
+/*                            Duplicate Line' in ASNReceipt module      */
+/* 30-Nov-2021 Wan03    1.4   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROCEDURE [WM].[lsp_DuplicateReceiptLine]
     @c_ReceiptKey             NVARCHAR(10)
@@ -162,20 +166,27 @@ BEGIN
 
       IF @c_LastReceiveLineNo <> ''
       BEGIN
+         --(Wan03) - START
          -- ZG01 (Start)
-         SELECT @n_QtyBalance = QtyExpected - BeforeReceivedQty FROM RECEIPTDETAIL AS r WITH(NOLOCK)
-         WHERE r.ReceiptKey = @c_ReceiptKey
-         AND   r.ReceiptLineNumber = @c_OriginalLineNumber
+         --SELECT @n_QtyBalance = QtyExpected - BeforeReceivedQty FROM RECEIPTDETAIL AS r WITH(NOLOCK)
+         --WHERE r.ReceiptKey = @c_ReceiptKey
+         --AND   r.ReceiptLineNumber = @c_OriginalLineNumber
          -- ZG01 (End)
-
+         --(Wan03) - END
+         
          --(Wan02) - START
-         UPDATE RECEIPTDETAIL
-            SET QtyExpected = CASE WHEN BeforeReceivedQty > 0 THEN BeforeReceivedQty ELSE 0 END
-               --,TrafficCop =  NULL      -- ZG01
-               , EditWho  = SUSER_SNAME()
-               , EditDate = GETDATE()
-         WHERE ReceiptKey = @c_ReceiptKey
-         AND   ReceiptLineNumber = @c_OriginalLineNumber
+         SET @n_QtyBalance = 0                   --(Wan03) - START
+         IF @n_BeforeReceivedQty > 0        
+         BEGIN 
+            SET @n_QtyBalance = @n_QtyExpected - @n_BeforeReceivedQty         --(Wan03)
+            UPDATE RECEIPTDETAIL
+               SET QtyExpected = @n_BeforeReceivedQty                         --(Wan03)--CASE WHEN BeforeReceivedQty > 0 THEN BeforeReceivedQty ELSE 0 END 
+                  --,TrafficCop =  NULL                                       --(ZG01)
+                  , EditWho  = SUSER_SNAME()
+                  , EditDate = GETDATE()
+            WHERE ReceiptKey = @c_ReceiptKey
+            AND   ReceiptLineNumber = @c_OriginalLineNumber
+         END                                    --(Wan03) - END
          --(Wan02) - END
          
          SET @c_NewLineNumber = RIGHT('0000' +
@@ -216,7 +227,7 @@ BEGIN
          ExternLineNo,        StorerKey,              POKey,
          Sku,                 AltSku,                 Id,
          [Status]='0',        DateReceived,           --[QtyExpected]=CASE WHEN BeforeReceivedQty > 0 THEN QtyExpected - BeforeReceivedQty ELSE 0 END,    --(Wan02)
-         [QtyExpected]=CASE WHEN @n_QtyBalance > 0 THEN @n_QtyBalance ELSE 0 END,   -- ZG01
+         [QtyExpected]  =  @n_QtyBalance,             --(Wan03) CASE WHEN @n_QtyBalance > 0 THEN @n_QtyBalance ELSE 0 END,   -- ZG01                             
          QtyAdjusted=0,       QtyReceived=0,          UOM,
          PackKey,             VesselKey,              VoyageKey,
          XdockKey,            ContainerKey,           ToLoc,
