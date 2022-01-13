@@ -15,7 +15,7 @@ GO
 /*                                                                                        */
 /* Purpose: Dynamic lottable                                                              */                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 /*                                                                                        */ 
-/* Version: 1.2                                                                           */  
+/* Version: 1.3                                                                           */  
 /*                                                                                        */  
 /* Data Modifications:                                                                    */  
 /*                                                                                        */  
@@ -27,8 +27,11 @@ GO
 /*                                 statement                                              */
 /* 18-DEC-2020 Wan01    1.1   LFWM-2420 - UAT - TW Getting Quantity should be Greater than*/
 /*                            1000 to Explode error in Inventory QC when Explore by Packkey*/
-/* 25-MAY-2012 Wan02    1.2   LFWM-2806 - UAT - TW  Inventory QC  Explode by Packkey      */
+/* 25-MAY-2021 Wan02    1.2   LFWM-2806 - UAT - TW  Inventory QC  Explode by Packkey      */
 /*                            Original Qty not updated                                    */
+/* 28-OCT-2021 Wan03    1.3   LFWM-2944 - UAT - TW  Not able to 'Explode by PackKey' when */
+/*                            quantity is less than Pallet quantity in Inventory QC module*/
+/* 28-OCT-2021 Wan03    1.3   DevOps Combine Script                                       */
 /******************************************************************************************/
 CREATE PROCEDURE [WM].[lsp_IQC_ExplodeByPackKey_Wrapper]
     @c_QC_Key NVARCHAR(10) 
@@ -84,6 +87,8 @@ BEGIN
          ,  @c_GenID                      NVARCHAR(30) = ''
          ,  @c_GEN_ID_DURING_EXPLODE_PACK NVARCHAR(30) = ''
          ,  @c_FinalizeIQC                NVARCHAR(10) = ''
+         
+         ,  @c_AlertMsg                   NVARCHAR(255)= ''             --(Wan03)
 
    SET @b_Success = 1
    SET @c_ErrMsg =''
@@ -104,6 +109,7 @@ BEGIN
       EXECUTE AS LOGIN = @c_UserName
    END
    
+   BEGIN TRAN
    BEGIN TRY
       SELECT @c_Facility   = IQC.From_Facility
             ,@c_ToFacility = IQC.to_Facility
@@ -198,6 +204,14 @@ BEGIN
         
          IF @n_QtyToBeSplitted > 0  
          BEGIN
+            --(Wan03) - START
+            SET @b_GenID = 0  
+            IF @c_GenID = '1' AND @c_GEN_ID_DURING_EXPLODE_PACK = '1'  
+            BEGIN  
+               SET @b_GenID = 1  
+            END       
+            --(Wan03) - END
+            
             SELECT @n_PalletCnt = PACK.Pallet            
             FROM PACK (NOLOCK)                                                                                                                                                                                                                                                                                                                                                                        
             WHERE PackKey = @c_PackKey
@@ -205,18 +219,59 @@ BEGIN
             IF @n_PalletCnt = 0 
                --GOTO FETCH_NEXT
             BEGIN   
-               SET @b_Success = 0                                                                  -- CZTENG01 (START)
-               SET @n_Err     = 555151
-               SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_Err)
-                              + ': Pallet Quantity Not Setup Propery in Pack Key: ' + @c_Packkey 
-                              + ' (lsp_IQC_ExplodeByPackKey_Wrapper)'
-                              + ' |' + @c_Packkey 
-               GOTO EXIT_SP                                                                        -- CZTENG01 (END)
+               IF @b_GenID = 0               --(Wan03) 
+               BEGIN
+                  SET @b_Success = 0                                                                  -- CZTENG01 (START)
+                  SET @n_Err     = 555151
+                  SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                                 + ': Pallet Quantity Not Setup Properly in Pack Key: ' + @c_Packkey 
+                                 + ' (lsp_IQC_ExplodeByPackKey_Wrapper)'
+                                 + ' |' + @c_Packkey 
+                  GOTO EXIT_SP                                                                        -- CZTENG01 (END)
+               END
+               
+               SET @c_AlertMsg =  'Pallet Quantity Not Setup Properly in Pack Key: ' + @c_Packkey              --(Wan03)  
             END                                                                                                                                                                     
-          
-            IF @n_QtyToBeSplitted <= @n_PalletCnt        
-               BREAK
 
+            --(Wan03) - END
+            IF @n_QtyToBeSplitted <= @n_PalletCnt OR @n_PalletCnt = 0 
+            BEGIN 
+               IF @b_GenID = 1  
+               BEGIN
+                  SET @c_ToID = ''
+                  EXEC dbo.nspg_GetKey                 
+                        @KeyName = 'ID'      
+                     ,  @fieldlength = 10  
+                     ,  @keystring = @c_ToID OUTPUT      
+                     ,  @b_Success = @b_Success OUTPUT      
+                     ,  @n_err     = @n_err OUTPUT      
+                     ,  @c_errmsg  = @c_errmsg OUTPUT 
+                     
+                  IF @b_Success = 0 
+                  BEGIN
+                     SET @b_Success = 0                                                                   
+                     GOTO EXIT_SP  
+                  END
+                    
+                  UPDATE InventoryQCDetail   
+                  SET ToID = @c_ToId                   
+                     , EditDate = GETDATE()  
+                     , EditWho = @c_UserName   
+                  WHERE QC_Key = @c_QC_Key  
+                  AND   QCLineNo = @c_QCLineNo   
+                  
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+                     SET @c_ErrMsg  = 'Update InventoryQCDetail Fial. (lsp_IQC_ExplodeByPackKey_Wrapper)'   
+                                    + '( ' + @c_ErrMsg + ' )'   
+                     GOTO EXIT_SP    
+                  END        
+               END                                                    
+               GOTO FETCH_NEXT                              
+            END
+            -- (Wan03) - END
             -- Checking - START
             SET @c_FromLot= ISNULL(RTRIM(@c_FromLot),'')
             SET @c_FromLoc= ISNULL(RTRIM(@c_FromLoc),'')
@@ -259,12 +314,14 @@ BEGIN
                GOTO EXIT_SP
             END
 
-            SET @b_GenID = 0
-            IF @c_GenID = '1' AND @c_GEN_ID_DURING_EXPLODE_PACK = '1'
-            BEGIN
-               SET @b_GenID = 1
-            END
-
+            --(Wan03) - START - Move Up
+            --SET @b_GenID = 0
+            --IF @c_GenID = '1' AND @c_GEN_ID_DURING_EXPLODE_PACK = '1'
+            --BEGIN
+            --   SET @b_GenID = 1
+            --END
+            --(Wan03) - END
+            
             IF ISNULL(RTRIM(@c_Reason),'') = '' AND @b_GenID = 0
             BEGIN
                SET @b_Success = 0                                                                 
@@ -489,22 +546,59 @@ BEGIN
       DEALLOCATE CUR_InventoryQC_LINES    
    END TRY
    BEGIN CATCH
-      SET @n_continue = 3
+      SET @b_Success = 0         --(Wan03)
       SET @c_ErrMsg = 'IQC Explode Packkey fail. (lsp_IQC_ExplodeByPackKey_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
       GOTO EXIT_SP
    END CATCH 
       
    EXIT_SP: 
 
-   IF @n_continue = 3  
+   --(Wan03) - START
+   IF (XACT_STATE()) = -1        
+   BEGIN  
+      SET @b_Success = 0
+      ROLLBACK TRAN  
+   END                           
+   
+   IF @b_Success = 0            
    BEGIN   
+      IF @n_StartTCnt = 0 AND @@TRANCOUNT > 0 
+      BEGIN
+         ROLLBACK TRAN
+      END
+      
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_IQC_ExplodeByPackKey_Wrapper'
    END
-   
-   IF @b_Success = 1 AND @b_exploded = 1 
+   ELSE 
+   IF @b_Success = 1 
    BEGIN
-       SET @c_ErrMsg = 'IQC packkey exploded successfully.' 
+      IF @b_exploded = 1 
+      BEGIN
+         SET @c_ErrMsg = 'IQC packkey exploded successfully' + CASE WHEN @c_AlertMsg = '' THEN '.' ELSE ' WITH Alert : ' + @c_AlertMsg END
+      END
+      ELSE
+      IF @b_GenID = 1
+      BEGIN
+         SET @c_ErrMsg = 'IQC Explode-Pack Gen Pallet ID Successfully' + CASE WHEN @c_AlertMsg = '' THEN '.' ELSE ' WITH Alert : ' + @c_AlertMsg END
+      END
+      
+      IF @c_AlertMsg <> ''
+      BEGIN
+         SET @b_Success = 2
+      END
+      
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
    END
+
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END
+   --(Wan03) - END
+   
    REVERT
 END
 GO

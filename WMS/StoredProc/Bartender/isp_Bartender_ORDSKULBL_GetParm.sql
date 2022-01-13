@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2021-08-12 1.0  WLChooi    Created (WMS-17662) - DevOps Combine Script     */                         
+/* 2021-08-12 1.0  WLChooi    Created (WMS-17662) - DevOps Combine Script     */ 
+/* 2022-01-12 1.1  WLChooi    Bug Fix - Filter Parm02 = SKU (WL01)            */                        
 /******************************************************************************/                
 CREATE PROC [dbo].[isp_Bartender_ORDSKULBL_GetParm]                      
 (  @parm01            NVARCHAR(250),              
@@ -58,6 +59,8 @@ BEGIN
           , @c_ExecArguments    NVARCHAR(4000)
           , @n_rowno            INT
           , @n_Copy             INT  
+          , @c_Storerkey        NVARCHAR(15)    --WL01
+          , @c_Condition        NVARCHAR(100) = ''   --WL01
   
    SET @d_Trace_StartTime = GETDATE()  
    SET @c_Trace_ModuleName = ''  
@@ -84,6 +87,17 @@ BEGIN
    BEGIN
       SET @n_Copy = CASE WHEN ISNUMERIC(@parm03) = 1 THEN CAST(@parm03 AS INT) ELSE 1 END
    END
+
+   --WL01 S
+   SELECT @c_Storerkey = OH.Storerkey
+   FROM ORDERS OH (NOLOCK)
+   WHERE OH.OrderKey = @parm01
+
+   IF ISNULL(@parm02,'') <> ''
+   BEGIN
+      SET @c_Condition = ' AND S.SKU = @parm02 '
+   END
+   --WL01 E
 
    CREATE TABLE #TEMPRESULT  (
       PARM01       NVARCHAR(80),  
@@ -115,17 +129,21 @@ BEGIN
                     ' FROM ORDERDETAIL OD WITH (NOLOCK) ' + CHAR(13) +
                     ' JOIN SKU S WITH (NOLOCK) ON S.Storerkey = OD.Storerkey AND S.SKU = OD.SKU ' + CHAR(13) +
                     ' WHERE OD.Orderkey = @parm01 ' + CHAR(13) +
+                    ' AND S.Storerkey = @c_Storerkey ' + CHAR(13) +   --WL01
+                    @c_Condition + CHAR(13) +   --WL01
                     ' GROUP BY S.Storerkey, S.SKU '
          
    SET @c_SQL = @c_SQLInsert + CHAR(13) + @c_SQLJOIN    
     
    SET @c_ExecArguments = N'   @parm01           NVARCHAR(80),' +
-                           '   @parm02           NVARCHAR(80)'   
+                           '   @parm02           NVARCHAR(80),' +   --WL01   
+                           '   @c_Storerkey      NVARCHAR(15)'   --WL01   
                     
    EXEC sp_ExecuteSql     @c_SQL     
                         , @c_ExecArguments    
                         , @parm01    
                         , @parm02
+                        , @c_Storerkey   --WL01
 
    WHILE @n_Copy > 1
    BEGIN
