@@ -25,6 +25,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author        Purposes                                  */  
 /* 2021-Apr-09 CSCHONG  1.1   WMS-16024 PB-Standardize TrackingNo (CS01)*/
+/* 2021-Oct-11 MINGLE   1.2   WMS-18031 Add new field (ML01)            */
+/* 06-Oct-2021 Mingle   1.2   DevOps Combine Script                     */
 /************************************************************************/  
 CREATE PROCEDURE [dbo].[isp_Sorting_Summary_hm] (  
                  @c_pickslipno NVARCHAR(20)  
@@ -46,13 +48,14 @@ BEGIN
       PD.pickslipno as pickslipno,  
       PD.Notes as Taskname,  
       SUM(PD.Qty) as orderpiece,   
-      PT.logicalname as logicalname  
+      PT.logicalname as logicalname,
+      SUM(CASE WHEN PD.Caseid = 'SORTED' THEN PD.Qty ELSE 0 END) as SortedQty --ML01
   FROM PICKDETAIL PD WITH (nolock)    
   left join orders OH (nolock) on PD.Orderkey=OH.orderkey  
   left join packtask(nolock) PT on PT.OrderKey=PD.OrderKey    
   -- left join DeviceProfile(nolock) CP on CP.DeviceID=PT.Station and CP.DevicePosition=PT.DevicePosition  
   where PD.pickslipno=@c_pickslipno    
-  group by OH.LoadKey, OH.orderkey,OH.TrackingNo,PD.pickslipno,PD.Notes,PT.logicalname  --CS01
+  group by OH.LoadKey, OH.orderkey,OH.TrackingNo,PD.pickslipno,PD.Notes,PT.logicalname  --CS01 
    
 END
 
