@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -29,6 +29,9 @@ GO
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 27-Oct-2021 Chai01   1.2   LFWM-3070 - UAT|JP|Wave|AddParameterDescriptionOnWaveReleaseScreen*/
+/* 09-Dec-2021 Wan02    1.3   LFWM-3212 - SCE UAT SG All Order Parameter*/
+/*                            Disappeared with Operator '='             */
+/* 09-Dec-2021 Wan02    1.3   DevOps Combine Script                     */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -342,7 +345,8 @@ BEGIN
    
    END TRY  
   
-   BEGIN CATCH    
+   BEGIN CATCH 
+      SET @b_Success = 0               --Wan02
       SET @c_ErrMsg = 'Wave Order Analysis Failed. (lsp_WaveOrderAnalysis) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '  
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
@@ -351,5 +355,5 @@ BEGIN
    REVERT
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_WaveOrderAnalysis] TO nSQL 
-GO  
+GRANT EXECUTE ON  [WM].[lsp_WaveOrderAnalysis] TO [NSQL]
+GO
