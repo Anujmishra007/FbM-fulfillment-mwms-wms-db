@@ -1,6 +1,7 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_AutoBackendAllocation]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[isp_AutoBackendAllocation]
 GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -35,6 +36,9 @@ GO
 /* 23-Aug-2018  Shong   1.8   Change Begin & Commit Tran                */  
 /* 16-jUN-2019  NJOW01  1.9   618 Fix re-submit to create duplicate     */
 /*                            order in AutoallocBatchDetail table       */
+/* 20-DEC-2021  NJOW02  2.0   WMS-18620 Support sorting configuration   */
+/*                            for orders table                          */
+/* 20-DEC-2021  NJOW02  2.0   DEVOPS combine script                     */
 /************************************************************************/  
 cREATE PROC [dbo].[isp_AutoBackendAllocation] (   
      @cParameterCode NVARCHAR(10) = ''  
@@ -79,7 +83,7 @@ BEGIN
            @nTaskSeqNo            INT = 0,   
            @nRowID                INT = 0,  
            @nBatchCount           INT = 0,   
-@nMaxBatchCount        INT = 5,   
+           @nMaxBatchCount        INT = 5,   
            @n_TotalSKU            INT = 0,  
            @n_AllocatedSKU        INT = 0,   
            @b_NewTmpOrders        INT = 0,  
@@ -110,6 +114,10 @@ BEGIN
           ,@nTotalQty    INT = 0   
          , @n_StartTCnt  INT = @@TRANCOUNT       
    --(Wan01) - END  
+   
+   --NJOW02
+   DECLARE @n_spos INT
+          ,@c_Sort NVARCHAR(2000)
               
       SELECT @c_APP_DB_Name         = APP_DB_Name  
            , @c_DataStream          = DataStream   
@@ -253,9 +261,23 @@ BEGIN
       FROM V_Build_Load_Parm_Detail AS blpd WITH(NOLOCK)  
       WHERE blpd.BL_ParameterCode = @cBL_ParameterCode   
       AND   blpd.FieldName= 'No_Of_SKU_In_Order'                               
-      AND   blpd.[Type]='RESTRICT'                                   
-     
-                          
+      AND   blpd.[Type]='RESTRICT'                  
+      
+      --NJOW02    
+      SET @c_Sort = ''
+      SET @n_spos = 0
+      SET @n_spos = CHARINDEX(') AS Number', @cSQLSelect, 1)
+      IF @n_spos > 0 
+      BEGIN
+      	SET @c_Sort = LEFT(@cSQLSelect, @n_spos - 1)
+      	SET @n_spos = CHARINDEX('ORDER BY', @c_Sort, 1)  
+      	SET @c_Sort = SUBSTRING(@c_Sort, @n_spos + 8, LEN(@c_Sort))
+      	IF CHARINDEX('ORDERS', @c_Sort, 1) = 0  --none order table
+      	   OR CHARINDEX('ORDERS.[OrderKey]', @c_Sort, 1) > 0   --none custom sorting
+      	   OR CHARINDEX('MIN(', @c_Sort, 1) > 0 --detail table 
+      	   SET @c_Sort = '' --skip sort     	
+      END                  
+                               
       SET @nOrderCnt  = 0  
       SET @cSQLSelect = N'SELECT @nOrderCnt = COUNT(DISTINCT ORDERS.OrderKey) ' +   
                         N', @dOrderAddDate = MIN(ORDERS.AddDate) ' + @cSQLCondition 
@@ -407,7 +429,7 @@ BEGIN
             IF @bDebug = 1  
             BEGIN  
                PRINT '>>> @n_TempOrderCount: ' + CAST(@n_TempOrderCount AS VARCHAR(10))   
-            END  
+            END                          
                     
             IF @n_TempOrderCount > 0   
             BEGIN  
@@ -422,8 +444,10 @@ BEGIN
                               --               N' WHERE aabd.OrderKey = ORDERS.OrderKey ' + CHAR(13) +  
                               --               N' AND ( ( aabd.[Status] IN (''0'',''1'',''6'',''8'') ) ' + --(Wan01)       
                               --               N' OR ( aab.[Status] IN (''0'',''1'') ) ) ) ' +                                                               
-                              N' GROUP BY ORDERS.OrderKey '  + CHAR(13) +   
-               ISNULL(@cMax_SKU_Per_Order, '')                
+                              N' GROUP BY ORDERS.OrderKey '  + CHAR(13) +
+                              CASE WHEN ISNULL(@c_Sort,'') <> '' THEN ', ' + RTRIM(REPLACE(@c_Sort,' DESC', '')) ELSE ' ' END + CHAR(13) +   --NJOW02
+                              ISNULL(@cMax_SKU_Per_Order, '') + CHAR(13) +
+                              CASE WHEN ISNULL(@c_Sort,'') <> '' THEN ' ORDER BY ' + RTRIM(@c_Sort) ELSE '' END  --NJOW02
             END  
             ELSE  
             BEGIN  
@@ -438,7 +462,9 @@ BEGIN
                               --N' AND ( ( aabd.[Status] IN (''0'',''1'',''6'',''8'') ) ' +                --(Wan01)       
                               --N' OR ( aab.[Status] IN (''0'',''1'') ) ) ) ' +                                                 
                               N' GROUP BY ORDERS.OrderKey '  + CHAR(13) +   
-               ISNULL(@cMax_SKU_Per_Order, '')                
+                              CASE WHEN ISNULL(@c_Sort,'') <> '' THEN ', ' + RTRIM(REPLACE(@c_Sort,' DESC', '')) ELSE ' ' END + CHAR(13) +   --NJOW02
+                              ISNULL(@cMax_SKU_Per_Order, '') + CHAR(13) +              
+                              CASE WHEN ISNULL(@c_Sort,'') <> '' THEN ' ORDER BY ' + RTRIM(@c_Sort) ELSE '' END  --NJOW02
             END             
                                                                                    
             SET @cSQLParms  = N'@nAllocBatchNo INT'  
@@ -769,6 +795,5 @@ BEGIN
    --(Wan01) - END  
 END -- Procedure  
 GO
-
 GRANT EXECUTE ON [isp_AutoBackendAllocation] TO NSQL
 GO
