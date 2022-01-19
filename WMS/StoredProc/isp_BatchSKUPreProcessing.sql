@@ -39,6 +39,9 @@ GO
 /* 03-Jul-2020  CheeMun 2.0   INC1192122 - Initialize ChannelID = 0     */ 
 /* 01-Dec-2020  Shong   2.1   Handle PENDCANC SO Status  (SWT99)        */
 /* 01-Dec-2020  NJOW01  2.2   WMS-15746 get channel hold qty by config  */  
+/* 04-Jan-2022	NJOW02  2.3   WMS-18620 Allow configure order sorting   */
+/*                            by orderdate                              */
+/* 04-Jan-2022  NJOW02  2.3   DEVOPS combine script                     */
 /************************************************************************/
 CREATE PROC  [dbo].[isp_BatchSKUPreProcessing]
    @n_AllocBatchNo BIGINT
@@ -89,6 +92,8 @@ DECLARE @c_OtherParms NVARCHAR(200),  -- For CDC
   ,@n_Channel_Qty_Available         INT = 0            -- (SWT02)
   ,@n_AllocatedHoldQty              INT = 0            -- (SWT02)
   ,@n_ChannelHoldQty                INT                --NJOW01
+  ,@c_AutoAllocSort                 NVARCHAR(30)       --NJOW02
+  ,@c_AutoAllocSort_opt1            NVARCHAR(50)       --NJOW02
    
 SET @c_DefaultStrategykey = ''               --(Wan01)
 
@@ -317,7 +322,6 @@ BEGIN
       END
    END 
 END
-
 
 IF @n_continue = 1 OR @n_continue = 2
 BEGIN
@@ -679,7 +683,25 @@ BEGIN
                Begin
                   Select @n_continue = 3, @c_ErrMsg = 'isp_BatchSKUPreProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')
                End
-            END                                  
+            END            
+            
+            --NJOW02
+            SET @c_AutoAllocSort = ''  
+            SET @c_AutoAllocSort_opt1 = ''
+               
+            EXEC nspGetRight    
+                 @c_Facility  = @c_facility,   
+                 @c_StorerKey = @c_StorerKey,    
+                 @c_sku       = NULL,    
+                 @c_ConfigKey = 'AutoAllocSort',     
+                 @b_Success   = @b_Success            OUTPUT,    
+                 @c_authority = @c_AutoAllocSort      OUTPUT,     
+                 @n_err       = @n_err                OUTPUT,     
+                 @c_errmsg    = @c_errmsg             OUTPUT,
+                 @c_Option1   = @c_AutoAllocSort_Opt1 OUTPUT   
+                 
+            IF ISNULL(@c_AutoAllocSort,'') <> '1'
+               SET @c_AutoAllocSort_opt1 = ''                                  
          END -- IF @c_aStorerKey <> @c_PrevStorer
       END
       IF @n_continue = 1 OR @n_continue = 2    
@@ -1538,6 +1560,7 @@ BEGIN
          OD.MinShelfLife = @n_MinShelfLife AND
          (OD.OpenQty - OD.QtyPreAllocated - OD.QtyAllocated - OD.QtyPicked) > 0  
    ORDER BY O.Priority, --NJOW01
+            CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN O.OrderDate ELSE '' END,  --NJOW02
             CASE WHEN PACK.Pallet > 0 THEN FLOOR((OD.OpenQty - OD.QtyPreAllocated - OD.QtyAllocated - OD.QtyPicked) / PACK.Pallet) ELSE 0 END DESC, --NJOW01
             CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN (OD.OpenQty - OD.QtyPreAllocated - OD.QtyAllocated - OD.QtyPicked) % CAST(PACK.Pallet AS INT) 
                                                        ELSE (OD.OpenQty - OD.QtyPreAllocated - OD.QtyAllocated - OD.QtyPicked) END 
