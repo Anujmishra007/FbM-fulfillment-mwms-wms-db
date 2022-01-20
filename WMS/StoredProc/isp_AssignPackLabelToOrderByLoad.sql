@@ -44,7 +44,9 @@ GO
 /* 22-Oct-2020 LZG      2.4   INC1332368 - Add Channel_ID column (ZG01) */
 /* 08-Nov-2021 NJOW08   2.5   WMS-10647 allow configure custom search   */
 /*                            picketail conditon                        */
-/* 08-Nov-2011 NJOW08   2.5   DEVOPS combine script                     */
+/* 08-Nov-2021 NJOW08   2.5   DEVOPS combine script                     */
+/* 02-Dec-2021 NJOW09   2.6   WMS-18514 add label parameter to          */
+/*                            @c_GetPickDetCondition                    */
 /************************************************************************/  
   
 CREATE PROC [dbo].[isp_AssignPackLabelToOrderByLoad]  
@@ -360,6 +362,7 @@ BEGIN
                             + ',@c_UPC             NVARCHAR(30)' 
                             + ',@c_DropID          NVARCHAR(20)'
                             + ',@c_LottableValue   NVARCHAR(60)'
+                            + ',@c_LabelNo         NVARCHAR(20)' --NJOW09
     
          EXEC sp_executesql @c_SQL  
                ,  @c_SQLArgument  
@@ -375,6 +378,7 @@ BEGIN
                ,  @c_UPC
                ,  @c_DropID
                ,  @c_LottableValue
+               ,  @c_labelno  --NJOW09
     
          IF @n_cnt = 0  
             BREAK  
