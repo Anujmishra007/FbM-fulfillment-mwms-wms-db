@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_01]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_01]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_delivery_note_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_delivery_note_01]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -33,6 +33,7 @@ GO
 /* 05/02/2018   ML       1.7  Add new Show Fields                        */
 /* 30/04/2018   ML       1.8  Add new field SplitPrintKey                */
 /* 19/04/2021   ML       1.9  Performance tuning                         */
+/* 04/11/2021   ML       1.10 Add SizeSeq logic for handling Size 99-99  */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_01] (
@@ -226,6 +227,7 @@ BEGIN
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
          , @c_JoinClause         NVARCHAR(4000)
+
 
    SELECT @c_DataWidnow = 'r_hk_delivery_note_01'
         , @c_SizeList   = N'|5XS|4XS|3XS|XXXS|2XS|XXS|XS|0XS|S|00S|YS|SM|0SM|S/M|M|00M|YM|ML|0ML|M/L|L|00L|YL|F|XL|0XL|XXL|2XL|XXXL|3XL|4XL|5XL|'
@@ -858,12 +860,13 @@ BEGIN
         , LineGrouping = SL.LineGrouping
         , Size         = SL.Size
         , SizeSeq      = ROW_NUMBER() OVER(PARTITION BY SL.Storerkey, SL.DocKey, SL.LineGrouping
-                                 ORDER BY CASE
-                                    WHEN SizeScaleSeq>0 THEN FORMAT(SizeScaleSeq,'000000.00')
-                                    WHEN ISNUMERIC(SL.Size)=1 AND LTRIM(SL.Size) NOT IN ('-','+','.',',') THEN FORMAT(CONVERT(FLOAT,SL.Size)+400000,'000000.00')
-                                    WHEN RTRIM(SL.Size) LIKE N'%[0-9]H' AND ISNUMERIC(LEFT(SL.Size,LEN(SL.Size)-1))=1 THEN FORMAT(CONVERT(FLOAT,LEFT(SL.Size,LEN(SL.Size)-1)+'.5')+400000,'000000.00')
-                                    ELSE FORMAT(CHARINDEX(N'|'+LTRIM(RTRIM(SL.Size))+N'|', @c_SizeList)+800000,'000000.00')
-                                 END +'-'+ SL.Size )
+                         ORDER BY CASE
+                            WHEN SizeScaleSeq>0 THEN FORMAT(SizeScaleSeq,'000000.00')
+                            WHEN ISNUMERIC(SL.Size)=1 AND LTRIM(SL.Size) NOT IN ('-','+','.',',') THEN FORMAT(CONVERT(FLOAT,SL.Size)+400000,'000000.00')
+                            WHEN RTRIM(SL.Size) LIKE N'%[0-9]H' AND ISNUMERIC(LEFT(SL.Size,LEN(SL.Size)-1))=1 THEN FORMAT(CONVERT(FLOAT,LEFT(SL.Size,LEN(SL.Size)-1)+'.5')+400000,'000000.00')
+                            WHEN TRIM(SL.Size) LIKE N'%[ -]%' THEN FORMAT(ISNULL(TRY_PARSE(ISNULL(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1),'') AS FLOAT)+400000, CHARINDEX(N'|'+LTRIM(RTRIM(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1)))+N'|', @c_SizeList)+800000),'000000.00')
+                            ELSE FORMAT(CHARINDEX(N'|'+LTRIM(RTRIM(SL.Size))+N'|', @c_SizeList)+800000,'000000.00')
+                         END +'-'+ SL.Size )
    INTO #TEMP_SSEQ
 
    FROM (
@@ -1325,5 +1328,6 @@ BEGIN
 
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_delivery_note_01 TO NSQL
 GO
