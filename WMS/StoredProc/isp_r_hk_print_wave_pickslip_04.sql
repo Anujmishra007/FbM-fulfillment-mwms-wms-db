@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_print_wave_pickslip_04]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_print_wave_pickslip_04]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_print_wave_pickslip_04]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_print_wave_pickslip_04]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -26,6 +26,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 2021-08-26   Michael  v1.1 Add Showfield Update_PD_PickslipNo         */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_04] (
@@ -51,6 +52,7 @@ BEGIN
 
    [SHOWFIELD]
       HideLocDescr, HidePackQtyIndicator
+      Update_PD_PickslipNo
 
    [SQLJOIN]
 */
@@ -110,6 +112,7 @@ BEGIN
         LoadKey          NVARCHAR(10)
       , Storerkey        NVARCHAR(15)
       , PickSlipNo       NVARCHAR(10)
+      , PickSlipNo_New   NVARCHAR(10)
    )
 
    CREATE TABLE #TEMP_PIKDT (
@@ -254,7 +257,7 @@ BEGIN
       SET @n_NoOfPS_Required = 0
       SELECT @n_NoOfPS_Required = COUNT(DISTINCT Loadkey)
         FROM #TEMP_PICKHEADER
-       WHERE ISNULL(PickslipNo,'') = ''
+       WHERE ISNULL(PickslipNo,'')=''
 
       IF @n_NoOfPS_Required > 0
       BEGIN
@@ -275,10 +278,22 @@ BEGIN
 
          SET @n_Pickheaderkey = TRY_PARSE(ISNULL(@c_Pickheaderkey,'') AS INT) - 1
 
+         UPDATE PH
+         SET PickSlipNo_New = PSN.PickSlipNo_New
+         FROM #TEMP_PICKHEADER PH
+         JOIN (
+            SELECT Loadkey
+                 , PickSlipNo_New = 'P' + RIGHT(REPLICATE('0',9) + CONVERT(VARCHAR(10), @n_Pickheaderkey + (ROW_NUMBER() OVER(ORDER BY Loadkey)) ), 9)
+              FROM #TEMP_PICKHEADER
+             WHERE ISNULL(PickslipNo,'')=''
+             GROUP BY Loadkey
+         ) PSN ON PH.Loadkey = PSN.Loadkey
+
+
          BEGIN TRAN
 
          INSERT INTO PICKHEADER (PickHeaderKey, Orderkey, Externorderkey, WaveKey, PickType, Zone, TrafficCop, StorerKey, Loadkey)
-         SELECT 'P' + RIGHT(REPLICATE('0',9) + CONVERT(VARCHAR(10), @n_Pickheaderkey + (ROW_NUMBER() OVER(ORDER BY TMP_PH.Loadkey)) ), 9)
+         SELECT MAX(TMP_PH.PickSlipNo_New)
               , ''
               , TMP_PH.Loadkey
               , ''
@@ -289,6 +304,7 @@ BEGIN
               , TMP_PH.Loadkey
            FROM #TEMP_PICKHEADER TMP_PH
           WHERE ISNULL(TMP_PH.PickslipNo,'') = ''
+            AND ISNULL(TMP_PH.PickSlipNo_New,'')<>''
           GROUP BY TMP_PH.Loadkey
 
          SELECT @n_Err = @@ERROR
@@ -302,6 +318,27 @@ BEGIN
          BEGIN
             WHILE @@TRANCOUNT > 0
                COMMIT TRAN
+         END
+
+
+         IF EXISTS(SELECT TOP 1 1
+                    FROM #TEMP_PICKHEADER PH
+                    JOIN dbo.ORDERS       OH(NOLOCK) ON PH.Loadkey=OH.Loadkey AND ISNULL(OH.Loadkey,'')<>''
+                    JOIN dbo.CODELKUP     RC(NOLOCK) ON RC.Listname='REPORTCFG' AND RC.Code='SHOWFIELD' AND RC.Long=@c_DataWindow AND RC.Short='Y' AND RC.Storerkey=OH.Storerkey
+                   WHERE ISNULL(PH.PickslipNo,'')=''
+                     AND ISNULL(PH.PickslipNo_New,'')<>''
+                     AND TRIM(RC.UDF01) + LOWER(TRIM(RC.Notes)) + TRIM(RC.UDF01) LIKE '%,Update_PD_PickslipNo,%')
+         BEGIN
+            UPDATE PD WITH(ROWLOCK)
+               SET PickslipNo = PH.PickslipNo_New
+              FROM #TEMP_PICKHEADER PH
+              JOIN dbo.ORDERS       OH(NOLOCK) ON PH.Loadkey=OH.Loadkey AND ISNULL(OH.Loadkey,'')<>''
+              JOIN dbo.PICKDETAIL   PD         ON OH.Orderkey=PD.Orderkey
+             WHERE ISNULL(PH.PickslipNo,'')=''
+               AND ISNULL(PH.PickslipNo_New,'')<>''
+               AND ISNULL(PD.PickslipNo,'')<>ISNULL(PH.PickslipNo_New,'')
+               AND PD.Status < '9'
+               AND PD.ShipFlag <> 'Y'
          END
       END
    END
@@ -571,5 +608,6 @@ QUIT:
    END
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_print_wave_pickslip_04 TO NSQL
 GO
