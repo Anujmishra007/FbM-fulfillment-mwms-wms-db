@@ -1,5 +1,6 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenish_to_fpa_02]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_replenish_to_fpa_02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+
+drop procedure [dbo].[isp_r_hk_replenish_to_fpa_02]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -44,7 +45,10 @@ GO
 /*                            GenReplenALL, ReGenReplenALL               */
 /*                            ShowReplenkeyBC,ShowToLocBC,ShowReplenQtyBC*/
 /*                            NoGenReplenAllWhenOtherReplenExist         */
-/* 17/03/2021   ML       1.13 Fix LogicalLocation lenght issue           */
+/* 17/03/2021   ML       1.13 Fix LogicalLocation length issue           */
+/* 10/11/2021   ML       1.14 Allow ToLoc not exist in LOC table         */
+/* 29/11/2021   ML       1.15 Add ShowField: IgnoreOrderUDF08,           */
+/*                     NotAllowReplenByLoadplan, NotAllowReplenByWaveplan*/
 /*************************************************************************/
 CREATE PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02] (
        @as_Key_Type  NVARCHAR(13)
@@ -70,6 +74,7 @@ BEGIN
       ReplenExactQtySEL, ReplenExactQtyVNA
       ReplenToPickFace, TopUpPickFace, AlwaysTopUpPickFace
       ShowReplenkey, ShowReplenkeyBC, ShowToLocBC, ShowReplenQtyBC, NoGenReplenAllWhenOtherReplenExist
+      IgnoreOrderUDF08, NotAllowReplenByLoadplan, NotAllowReplenByWaveplan
 
    [WAVE/LOADPLAN-Userdefine02]
       GenReplen, GenReplenALL, ReGenReplen, ReGenReplenALL, NoGenReplen
@@ -168,6 +173,7 @@ BEGIN
          , @c_CommingleSku       NVARCHAR(1)
          , @b_UpdLoc             INT
          , @b_ReserveLocChanged  INT
+         , @b_IgnoreOrderUDF08   INT
          , @c_LastStorerkey      NVARCHAR(15)
 
    DECLARE @c_ExecStatements     NVARCHAR(MAX)
@@ -205,6 +211,7 @@ BEGIN
         , @c_Storerkey         = ''
         , @c_ShowFields        = ''
         , @c_ReserveLoc_Cond   = ''
+        , @b_IgnoreOrderUDF08  = 0
 
    SET @c_MoveIDPrefix = CASE WHEN @c_Type='LP'
                               THEN 'LP' + LTRIM(RTRIM(SUBSTRING(@c_Key, PATINDEX('%[^0 ]%', @c_Key), LEN(@c_Key)+1))) +'-'
@@ -364,21 +371,24 @@ BEGIN
       GOTO REPORT_RESULTSET
 
    -- Get Storerkey
-   SELECT @c_Storerkey       = ''
-        , @c_ShowFields      = ''
-        , @c_ReserveLoc_Cond = ''
+   SELECT @c_Storerkey        = ''
+        , @c_ShowFields       = ''
+        , @c_ReserveLoc_Cond  = ''
+        , @b_IgnoreOrderUDF08 = 0
 
    IF @c_Type = 'WP'
-      SELECT @c_Storerkey = MAX(OH.Storerkey)
+      SELECT TOP 1 @c_Storerkey = OH.Storerkey
         FROM dbo.ORDERS OH(NOLOCK)
-       WHERE OH.Userdefine08 = 'Y'
-         AND OH.Userdefine09 = @c_Key
+       WHERE OH.Userdefine09 = @c_Key
+       ORDER BY CASE WHEN OH.Userdefine08 = 'Y' THEN 1 ELSE 2 END
+              , OH.Storerkey DESC
    ELSE
    IF @c_Type = 'LP'
-      SELECT @c_Storerkey = MAX(OH.Storerkey)
+      SELECT TOP 1 @c_Storerkey = OH.Storerkey
         FROM dbo.ORDERS OH(NOLOCK)
-       WHERE ISNULL(OH.Userdefine08,'') <> 'Y'
-         AND OH.Loadkey = @c_Key
+       WHERE OH.Loadkey = @c_Key
+       ORDER BY CASE WHEN OH.Userdefine08 = 'Y' THEN 2 ELSE 1 END
+              , OH.Storerkey DESC
 
    -- Get ShowFields, ReserveLoc_Cond by Storerkey
    IF ISNULL(@c_Storerkey,'')<>''
@@ -389,6 +399,13 @@ BEGIN
        WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
          AND Storerkey = @c_Storerkey
        ORDER BY Code2
+
+      IF ISNULL(@c_ShowFields,'') LIKE '%,IgnoreOrderUDF08,%'  
+         SET @b_IgnoreOrderUDF08 = 1
+
+      IF (@c_Type = 'LP' AND ISNULL(@c_ShowFields,'') LIKE '%,NotAllowReplenByLoadplan,%') OR
+         (@c_Type = 'WP' AND ISNULL(@c_ShowFields,'') LIKE '%,NotAllowReplenByWaveplan,%')
+         GOTO REPORT_RESULTSET
 
       SELECT TOP 1
              @c_ReserveLoc_Cond  = ISNULL(RTRIM((select top 1 b.ColValue
@@ -436,8 +453,8 @@ BEGIN
               , @c_ReplenConfirmed = CASE WHEN @c_ReplenConfirmed='Y' THEN 'Y' ELSE IIF(MAX(OH.Status)>=3,'Y', 'N') END
            FROM dbo.ORDERS     OH (NOLOCK)
            JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-          WHERE OH.Userdefine08 = 'Y'
-            AND OH.Userdefine09 = @c_Key
+          WHERE OH.Userdefine09 = @c_Key
+            AND (@b_IgnoreOrderUDF08 = 1 OR OH.Userdefine08 = 'Y')
             AND LEFT(PD.DropID,LEN(@c_MoveIDPrefix)) = @c_MoveIDPrefix
       END
 
@@ -447,8 +464,11 @@ BEGIN
         +     ' FROM dbo.ORDERS     OH (NOLOCK)'
         +     ' JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey'
         +     ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
-        +    ' WHERE OH.Userdefine08 = ''Y'''
-        +      ' AND OH.Userdefine09 =  @c_Key'
+        +    ' WHERE OH.Userdefine09 =  @c_Key'
+      IF @b_IgnoreOrderUDF08 <> 1
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' AND OH.Userdefine08 = ''Y'''
+
       IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
          SET @c_ExecStatements = @c_ExecStatements
@@ -481,13 +501,17 @@ BEGIN
         +     ' JOIN dbo.LOC       LOC(NOLOCK) ON PD.Loc=LOC.Loc'
         +     ' LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) ON PD.Storerkey=RP.Storerkey AND PD.Lot=RP.Lot AND PD.Loc=RP.FromLoc AND PD.ID=RP.ID'
         +                                           ' AND RP.Qty>0 AND RP.Confirmed=''N'' AND RP.ReplenishmentGroup=@c_ReplenGroup'
-        +    ' WHERE OH.Userdefine08 = ''Y'''
-        +      ' AND OH.Userdefine09 =  @c_Key'
+        +    ' WHERE OH.Userdefine09 =  @c_Key'
         +      ' AND PD.Status<''9'''
         +      ' AND PD.Qty>0'
         +      ' AND PD.ID LIKE @c_NewIDPattern'
         +      ' AND ISNULL(PD.ToLoc,'''')<>'''''
         +      ' AND ISNULL(PD.DropID,'''')<>'''''
+
+      IF @b_IgnoreOrderUDF08 <> 1
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' AND OH.Userdefine08 = ''Y'''
+
       IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
          SET @c_ExecStatements = @c_ExecStatements
@@ -546,8 +570,8 @@ BEGIN
               , @c_ReplenConfirmed = CASE WHEN @c_ReplenConfirmed='Y' THEN 'Y' ELSE IIF(MAX(OH.Status)>=3,'Y', 'N') END
            FROM dbo.ORDERS     OH (NOLOCK)
            JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-          WHERE ISNULL(OH.Userdefine08,'') <> 'Y'
-            AND OH.Loadkey = @c_Key
+          WHERE OH.Loadkey = @c_Key
+            AND (@b_IgnoreOrderUDF08 = 1 OR ISNULL(OH.Userdefine08,'') <> 'Y')
             AND LEFT(PD.DropID,LEN(@c_MoveIDPrefix)) = @c_MoveIDPrefix
       END
 
@@ -557,8 +581,12 @@ BEGIN
         +     ' FROM dbo.ORDERS     OH (NOLOCK)'
         +     ' JOIN dbo.PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey'
         +     ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
-        +    ' WHERE ISNULL(OH.Userdefine08,'''') <> ''Y'''
-        +      ' AND OH.Loadkey = @c_Key'
+        +    ' WHERE OH.Loadkey = @c_Key'
+
+      IF @b_IgnoreOrderUDF08 <> 1
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' AND ISNULL(OH.Userdefine08,'''') <> ''Y'''
+
       IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
          SET @c_ExecStatements = @c_ExecStatements
@@ -591,13 +619,17 @@ BEGIN
         +     ' JOIN dbo.LOC       LOC(NOLOCK) ON PD.Loc=LOC.Loc'
         +     ' LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) ON PD.Storerkey=RP.Storerkey AND PD.Lot=RP.Lot AND PD.Loc=RP.FromLoc AND PD.ID=RP.ID'
         +                                           ' AND RP.Qty>0 AND RP.Confirmed=''N'' AND RP.ReplenishmentGroup=@c_ReplenGroup'
-        +    ' WHERE ISNULL(OH.Userdefine08,'''') <> ''Y'''
-        +      ' AND OH.Loadkey = @c_Key'
+        +    ' WHERE OH.Loadkey = @c_Key'
         +      ' AND PD.Status<''9'''
         +      ' AND PD.Qty>0'
         +      ' AND PD.ID LIKE @c_NewIDPattern'
         +      ' AND ISNULL(PD.ToLoc,'''')<>'''''
         +      ' AND ISNULL(PD.DropID,'''')<>'''''
+
+      IF @b_IgnoreOrderUDF08 <> 1
+         SET @c_ExecStatements = @c_ExecStatements
+           +   ' AND ISNULL(OH.Userdefine08,'''') <> ''Y'''
+
       IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
          SET @c_ExecStatements = @c_ExecStatements
@@ -679,8 +711,12 @@ BEGIN
         +  ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
         +  ' LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON RP.Storerkey=OH.Storerkey AND PD.ID LIKE @c_NewIDPattern AND'
         +       ' RP.ReplenishmentKey = IIF(LEFT(PD.ID,@n_ReplenKeyLen)<=@c_REPLENISHKEY,@c_ReplenKeyPrefix1,@c_ReplenKeyPrefix2) + LEFT(PD.ID,@n_ReplenKeyLen)'
-        + ' WHERE OH.Userdefine08 = ''Y'''
-        +   ' AND OH.Userdefine09 = @c_Key'
+        + ' WHERE OH.Userdefine09 = @c_Key'
+
+      IF @b_IgnoreOrderUDF08 <> 1
+         SET @c_ExecStatements = @c_ExecStatements
+           +' AND OH.Userdefine08 = ''Y'''
+
       IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
          SET @c_ExecStatements = @c_ExecStatements
@@ -722,8 +758,12 @@ BEGIN
         +  ' JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc = LOC.Loc'
         +  ' LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON RP.Storerkey=OH.Storerkey AND PD.ID LIKE @c_NewIDPattern AND'
         +       ' RP.ReplenishmentKey = IIF(LEFT(PD.ID,@n_ReplenKeyLen)<=@c_REPLENISHKEY,@c_ReplenKeyPrefix1,@c_ReplenKeyPrefix2) + LEFT(PD.ID,@n_ReplenKeyLen)'
-        + ' WHERE ISNULL(OH.Userdefine08,'''') <> ''Y'''
-        +   ' AND OH.Loadkey = @c_Key'
+        + ' WHERE OH.Loadkey = @c_Key'
+
+      IF @b_IgnoreOrderUDF08 <> 1
+         SET @c_ExecStatements = @c_ExecStatements
+           +' AND ISNULL(OH.Userdefine08,'''') <> ''Y'''
+
       IF ISNULL(@c_GenReplenALL,'')<>'Y'
       BEGIN
          SET @c_ExecStatements = @c_ExecStatements
@@ -768,8 +808,8 @@ BEGIN
            , Trafficcop = NULL
         FROM dbo.ORDERS     OH (NOLOCK)
         JOIN dbo.PICKDETAIL PD ON OH.Orderkey = PD.Orderkey
-       WHERE OH.Userdefine08 = 'Y'
-         AND OH.Userdefine09 = @c_Key
+       WHERE OH.Userdefine09 = @c_Key
+         AND (@b_IgnoreOrderUDF08 = 1 OR OH.Userdefine08 = 'Y')
          AND PD.Status < '9' AND PD.ShipFlag<>'Y'
          AND (PD.ToLoc<>'' OR PD.DropID<>'' OR PD.MoveRefKey<>'')
    END
@@ -783,8 +823,8 @@ BEGIN
            , Trafficcop = NULL
         FROM dbo.ORDERS     OH (NOLOCK)
         JOIN dbo.PICKDETAIL PD ON OH.Orderkey = PD.Orderkey
-       WHERE ISNULL(OH.Userdefine08,'') <> 'Y'
-         AND OH.Loadkey = @c_Key
+       WHERE OH.Loadkey = @c_Key
+         AND (@b_IgnoreOrderUDF08 = 1 OR ISNULL(OH.Userdefine08,'') <> 'Y')
          AND PD.Status < '9' AND PD.ShipFlag<>'Y'
          AND (PD.ToLoc<>'' OR PD.DropID<>'' OR PD.MoveRefKey<>'')
    END
@@ -2288,7 +2328,7 @@ REPORT_RESULTSET:
            +       ', Brand            = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_BrandExp,'')<>'' THEN @c_BrandExp ELSE '''''' END + ','''')))'
          SET @c_ExecStatements = @c_ExecStatements
            +       ', Lot              = PD.Lot'
-           +       ', TOLOC_LocationType = MAX(TOLOC.LocationType)'
+           +       ', TOLOC_LocationType = MAX(ISNULL(TOLOC.LocationType,''DYNAMICPK''))'
            +       ', FromID_Long      = RTRIM ( MAX ( CASE WHEN ISNULL(ID.PalletFlag,'''')<>'''' AND LEFT(ID.PalletFlag,COLUMNPROPERTY(OBJECT_ID(''ID''), ''Id'', ''Precision''))=PD.ID'
            +                                         ' THEN ID.PalletFlag ELSE PD.ID END ) )'
            +       ', ShowFields       = MAX( RptCfg.ShowFields )'
@@ -2302,7 +2342,7 @@ REPORT_RESULTSET:
            +   ' JOIN dbo.LOTATTRIBUTE    LA (NOLOCK) ON PD.Lot = LA.Lot'
            +   ' JOIN dbo.LOC          FRLOC (NOLOCK) ON PD.Loc = FRLOC.Loc'
            +   ' JOIN dbo.PUTAWAYZONE   FRPA (NOLOCK) ON FRLOC.PutawayZone = FRPA.PutawayZone'
-           +   ' JOIN dbo.LOC          TOLOC (NOLOCK) ON PD.ToLoc = TOLOC.Loc'
+           +   ' LEFT JOIN dbo.LOC     TOLOC (NOLOCK) ON PD.ToLoc = TOLOC.Loc'
            +   ' LEFT JOIN dbo.REPLENISHMENT RP (NOLOCK) ON PD.DropID = RP.RefNo'
            +   ' LEFT JOIN dbo.ID            ID (NOLOCK) ON PD.Id = ID.Id'
            +   ' LEFT JOIN ('
@@ -2367,5 +2407,6 @@ QUIT:
    END
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_replenish_to_fpa_02 TO NSQL
 GO
