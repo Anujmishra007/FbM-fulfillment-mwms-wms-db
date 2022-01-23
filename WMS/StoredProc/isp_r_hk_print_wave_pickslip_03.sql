@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_print_wave_pickslip_03]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_print_wave_pickslip_03]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_print_wave_pickslip_03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_print_wave_pickslip_03]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -25,8 +25,11 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
-/* 2021-04-28   Michael  v1.1 Add Configurable Fields for IDSMED         */
-/* 2021-06-24   Michael  v1.2 Add Showfield Update_PD_PickslipNo         */
+/* 2021-04-28   Michael  V1.1 Add Configurable Fields for IDSMED         */
+/* 2021-06-24   Michael  V1.2 Add Showfield Update_PD_PickslipNo         */
+/* 2021-10-08   Michael  V1.3 Add MapField: OrderType; Showfield:        */
+/*                            ExternOrderkey_BC, NoGenPickHeader         */
+/* 2021-11-30   Michael  V1.4 Fix RptCfg.ShowFields NULL value issue     */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_03] (
@@ -42,7 +45,7 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      StorerCompany, ExternOrderKey, ExternPOKey, BuyerPO, InvoiceNo, DeliveryDate, ConsigneeKey, Company, Address1, Address2
+      StorerCompany, ExternOrderKey, OrderType, ExternPOKey, BuyerPO, InvoiceNo, DeliveryDate, ConsigneeKey, Company, Address1, Address2
       Address3, PostCode, Route, RouteDesc, TrfRoom, LabelPrice, PendingFlag, Notes1, Notes2, SkuDesc
       ZoneDesc, AltSku, SUSR2, BUSR8, BUSR10, Lottable01, Lottable02, Lottable03, Lottable04, CaseCnt
       InnerPack, PackUOM1, PackUOM2, PackUOM3, StdCube, StdGrossWgt, DCC, LineRemark1, LineRemark2, LineRemark3
@@ -54,9 +57,9 @@ BEGIN
       T_CaseCnt, T_InnerPack, T_PackUOM1, T_PackUOM2, T_PackUOM3
 
    [SHOWFIELD]
-      Consigneekey, DCC, LineRemark1, LineRemark2, LineRemark3
+      Consigneekey, ExternOrderkey_BC, DCC, LineRemark1, LineRemark2, LineRemark3
       HideLottable01, HideAltSku
-      Update_PD_PickslipNo
+      Update_PD_PickslipNo, NoGenPickHeader
 
    [SQLJOIN]
 */
@@ -79,6 +82,7 @@ BEGIN
          , @c_JoinClause       NVARCHAR(MAX)
          , @c_StrCompanyExp    NVARCHAR(MAX)
          , @c_ExtOrderKeyExp   NVARCHAR(MAX)
+         , @c_OrderTypeExp     NVARCHAR(MAX)
          , @c_ExternPOKeyExp   NVARCHAR(MAX)
          , @c_BuyerPOExp       NVARCHAR(MAX)
          , @c_InvoiceNoExp     NVARCHAR(MAX)
@@ -121,56 +125,18 @@ BEGIN
    IF OBJECT_ID('tempdb..#TEMP_PIKDT') IS NOT NULL
       DROP TABLE #TEMP_PIKDT
 
-   -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 8 - By Order
-   -- Update PickType: 0=New, 1=Reprint
-   IF EXISTS(SELECT TOP 1 1 FROM PICKHEADER (NOLOCK) WHERE Wavekey = @c_Wavekey AND Zone = '8')
-   BEGIN
-      BEGIN TRAN
-
-      UPDATE dbo.PICKHEADER WITH(ROWLOCK)
-         SET PickType = '1'
-           , EditDate = GETDATE()
-           , EditWho  = SUSER_SNAME()
-           , TrafficCop = NULL
-       WHERE WaveKey = @c_Wavekey
-         AND Zone = '8'
-         AND PickType = '0'
-
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         IF @@TRANCOUNT >= 1
-         BEGIN
-            ROLLBACK TRAN
-            GOTO QUIT
-         END
-      END
-      ELSE
-      BEGIN
-         IF @@TRANCOUNT > 0
-            COMMIT TRAN
-         ELSE
-         BEGIN
-            SELECT @n_continue = 3
-            ROLLBACK TRAN
-            GOTO QUIT
-         END
-      END
-   END
-
    WHILE @@TRANCOUNT > 0
       COMMIT TRAN
 
 
    -- Generate PickHeader
    DECLARE PICK_CUR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-    SELECT OH.Orderkey, MAX(CASE WHEN RptCfg.ShowFields LIKE '%,Update_PD_PickslipNo,%' THEN 'Y' ELSE 'N' END)
+    SELECT OH.Orderkey, MAX(CASE WHEN ISNULL(RptCfg.ShowFields,'') LIKE '%,Update_PD_PickslipNo,%' THEN 'Y' ELSE 'N' END)
       FROM dbo.WAVEDETAIL WD (NOLOCK)
       JOIN dbo.ORDERS     OH (NOLOCK) ON WD.Orderkey = OH.Orderkey
       JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
-      LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
-      LEFT JOIN dbo.PICKHEADER PH2(NOLOCK) ON OH.Loadkey  = PH2.ExternOrderkey AND ISNULL(PH2.Orderkey,'')='' AND ISNULL(PH2.Zone,'')<>'8' AND ISNULL(OH.Loadkey,'')<>''
+      LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON WD.Orderkey = PH.Orderkey
+      LEFT JOIN dbo.PICKHEADER PH2(NOLOCK) ON OH.Loadkey  = PH2.ExternOrderkey AND ISNULL(PH2.Orderkey,'')='' AND ISNULL(OH.Loadkey,'')<>''
       LEFT JOIN (
          SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
               , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
@@ -183,6 +149,7 @@ BEGIN
       AND (PD.Pickmethod = '8' OR PD.Pickmethod = '')
       AND PH.PickHeaderKey IS NULL
       AND PH2.PickHeaderKey IS NULL
+      AND NOT (ISNULL(RptCfg.ShowFields,'') LIKE '%,NoGenPickHeader,%')
     GROUP BY OH.Orderkey
     ORDER BY 1
 
@@ -248,6 +215,7 @@ BEGIN
       , PickSlipNo       NVARCHAR(18)
       , OrderKey         NVARCHAR(10)
       , ExternOrderKey   NVARCHAR(50)
+      , OrderType        NVARCHAR(50)
       , ExternPOKey      NVARCHAR(50)
       , BuyerPO          NVARCHAR(50)
       , InvoiceNo        NVARCHAR(50)
@@ -307,10 +275,9 @@ BEGIN
    SELECT DISTINCT PD.Storerkey
      FROM dbo.WAVEDETAIL   WD   (NOLOCK)
      JOIN dbo.ORDERS       OH   (NOLOCK) ON WD.Orderkey = OH.Orderkey
- JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone='8'
+     JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey
      JOIN dbo.PICKDETAIL   PD   (NOLOCK) ON WD.Orderkey = PD.Orderkey
     WHERE WD.wavekey = @c_Wavekey
-      AND OH.Userdefine08 = 'Y'
       AND OH.Status >= '1' AND OH.Status <= '9'
       AND ( PD.Pickmethod = '8' OR PD.Pickmethod = ' ' )
     ORDER BY 1
@@ -330,6 +297,7 @@ BEGIN
            , @c_Storer_Logo     = ''
            , @c_StrCompanyExp   = ''
            , @c_ExtOrderKeyExp  = ''
+           , @c_OrderTypeExp    = ''
            , @c_ExternPOKeyExp  = ''
            , @c_BuyerPOExp      = ''
            , @c_InvoiceNoExp    = ''
@@ -398,6 +366,9 @@ BEGIN
            , @c_ExtOrderKeyExp = ISNULL(RTRIM((select top 1 b.ColValue
                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                  where a.SeqNo=b.SeqNo and a.ColValue='ExternOrderKey')), '' )
+           , @c_OrderTypeExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                 from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                 where a.SeqNo=b.SeqNo and a.ColValue='OrderType')), '' )
            , @c_ExternPOKeyExp = ISNULL(RTRIM((select top 1 b.ColValue
                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                  where a.SeqNo=b.SeqNo and a.ColValue='ExternPOKey')), '' )
@@ -520,7 +491,7 @@ BEGIN
 
       SET @c_ExecStatements =
         N'INSERT INTO #TEMP_PIKDT ('
-        +    ' Wavekey, Storerkey, StorerCompany, PickSlipNo, OrderKey, ExternOrderKey, ExternPOKey, BuyerPO, InvoiceNo, DeliveryDate'
+        +    ' Wavekey, Storerkey, StorerCompany, PickSlipNo, OrderKey, ExternOrderKey, OrderType, ExternPOKey, BuyerPO, InvoiceNo, DeliveryDate'
         +   ', ConsigneeKey, Company, Addr1, Addr2, Addr3, PostCode, Route, Route_Desc, TrfRoom, PrintedFlag'
         +   ', LabelPrice, PendingFlag, Notes1, Notes2, SKU, SkuDesc, Putawayzone, ZoneDesc, LogicalLocation, LOC'
         +   ', ID, AltSKU, SUSR2, BUSR8, BUSR10, Lottable01, Lottable02, Lottable03, Lottable04, Qty'
@@ -536,9 +507,9 @@ BEGIN
         +       ', PickSlipNo       = ISNULL(RTRIM(PH.PickheaderKey),'''')'
         +       ', OrderKey         = ISNULL(RTRIM(PD.Orderkey),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', ExternOrderKey   = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExtOrderKeyExp ,'')<>'' THEN @c_ExtOrderKeyExp
-                                                            ELSE 'ISNULL(RTRIM(OH.ExternOrderKey),'''')+ '' (''+ISNULL(TRIM(OH.Type),'''')+'')'''
-                                                       END + '),'''')'
+        +       ', ExternOrderKey   = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExtOrderKeyExp ,'')<>'' THEN @c_ExtOrderKeyExp  ELSE 'OH.ExternOrderKey' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+        +       ', OrderType        = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_OrderTypeExp   ,'')<>'' THEN @c_OrderTypeExp    ELSE 'OH.Type'         END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', ExternPOKey      = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExternPOKeyExp ,'')<>'' THEN @c_ExternPOKeyExp  ELSE 'OH.ExternPoKey'  END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -605,7 +576,7 @@ BEGIN
         +       ', BUSR10           = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_BUSR10Exp      ,'')<>'' THEN @c_BUSR10Exp       ELSE 'SKU.BUSR10'      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', Lottable01       = ISNULL(RTRIM(' + CASE WHEN @c_ShowFields LIKE '%,HideLottable01,%'   THEN 'NULL'
-                            ELSE CASE WHEN ISNULL(@c_Lottable01Exp,'')<>'' THEN @c_Lottable01Exp  ELSE 'LA.Lottable01' END
+                                                            ELSE CASE WHEN ISNULL(@c_Lottable01Exp,'')<>'' THEN @c_Lottable01Exp  ELSE 'LA.Lottable01' END
                                                        END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', Lottable02       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lottable02Exp  ,'')<>'' THEN @c_Lottable02Exp   ELSE 'LA.Lottable02'   END + '),'''')'
@@ -645,7 +616,10 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         +   ' FROM dbo.WAVEDETAIL   WD   (NOLOCK)'
         +   ' JOIN dbo.ORDERS       OH   (NOLOCK) ON WD.Orderkey = OH.Orderkey'
-        +   ' JOIN dbo.PICKHEADER   PH   (NOLOCK) ON WD.Orderkey = PH.Orderkey AND WD.Wavekey = PH.Wavekey AND PH.Zone=''8'''
+        +   ' JOIN ('
+        +      ' SELECT *, SeqNo = ROW_NUMBER() OVER(PARTITION BY Orderkey ORDER BY CASE WHEN Zone=''8'' THEN 1 ELSE 2 END, PickHeaderKey)'
+        +      ' FROM dbo.PICKHEADER (NOLOCK) WHERE Orderkey<>'''''
+        +    ') PH ON WD.Orderkey = PH.Orderkey AND PH.SeqNo=1'
         +   ' JOIN dbo.PICKDETAIL   PD   (NOLOCK) ON WD.Orderkey = PD.Orderkey'
         +   ' JOIN dbo.PACK         PACK (NOLOCK) ON PD.Packkey = PACK.Packkey'
         +   ' JOIN dbo.LOC          LOC  (NOLOCK) ON PD.Loc = LOC.Loc'
@@ -664,7 +638,6 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         +   ' WHERE WD.wavekey = @c_Wavekey'
         +     ' AND PD.Storerkey = @c_Storerkey'
-        +     ' AND OH.Userdefine08 = ''Y'''
         +     ' AND OH.Status >= ''1'' AND OH.Status <= ''9'''
         +     ' AND ( PD.Pickmethod = ''8'' OR PD.Pickmethod = '' '' )'
 
@@ -685,6 +658,47 @@ BEGIN
    CLOSE C_CUR_STORERKEY
    DEALLOCATE C_CUR_STORERKEY
 
+
+   -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 8 - By Order
+   -- Update PickType: 0=New, 1=Reprint
+   IF EXISTS(SELECT TOP 1 1
+             FROM #TEMP_PIKDT PIKDT
+             JOIN dbo.PICKHEADER PH(NOLOCK) ON PIKDT.PickslipNo = PH.PickHeaderkey
+             WHERE PH.PickType = '0')
+   BEGIN
+      BEGIN TRAN
+
+      UPDATE PH WITH(ROWLOCK)
+         SET PickType = '1'
+           , EditDate = GETDATE()
+           , EditWho  = SUSER_SNAME()
+           , TrafficCop = NULL
+        FROM dbo.PICKHEADER PH
+       WHERE PH.PickHeaderkey IN (SELECT DISTINCT PickslipNo FROM #TEMP_PIKDT WHERE PickslipNo<>'')
+         AND PH.PickType = '0'
+
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         IF @@TRANCOUNT >= 1
+         BEGIN
+            ROLLBACK TRAN
+            GOTO QUIT
+         END
+      END
+      ELSE
+      BEGIN
+         IF @@TRANCOUNT > 0
+            COMMIT TRAN
+         ELSE
+         BEGIN
+            SELECT @n_continue = 3
+            ROLLBACK TRAN
+            GOTO QUIT
+         END
+      END
+   END
 
 
    SELECT Wavekey            = UPPER( PIKDT.Wavekey )
@@ -835,6 +849,7 @@ BEGIN
         , Lbl_PackUOM3       = CAST( RTRIM( (select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='T_PackUOM3') ) AS NVARCHAR(50))
+        , OrderType          = MAX( PIKDT.OrderType )
 
    FROM #TEMP_PIKDT PIKDT
 
@@ -888,5 +903,6 @@ QUIT:
    END
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_print_wave_pickslip_03 TO NSQL
 GO
