@@ -28,6 +28,10 @@ GO
 /*                            param Details - Field values not getting  */
 /*                            displayed for Build types - wavebuildload */
 /*                            and wavebuildmbol                         */
+/* 2022-01-04  Wan04    1.7   LFWM-3279 - SCE UAT SG Order Parameter -  */
+/*                            Type 'SORT' - Do not have Sku_Total_Qty as*/
+/*                            in Exceed                                 */
+/* 2022-01-04  Wan04    1.7   Devops Combine Script                     */
 /************************************************************************/
 CREATE VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -166,8 +170,13 @@ SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'SORT' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
 FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('SKU')   
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'ORDERS', 'ORDERINFO')                      --(Wan04) - START 
+--AND Col.COLUMN_NAME IN ('SKU')                                                 
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')  
+UNION ALL  
+SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType  = 'SORT' 
+      ,FieldName = 'Sku_Total_OpenQty'                                              --(Wan04) - END
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'GROUP' 
@@ -178,14 +187,14 @@ AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'Traf
 AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
-SELECT BuildParmType = 'WAVEBUILDLOAD'                                        --(Wan03)
+SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
       ,CondType  = 'SORT' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
 FROM INFORMATION_SCHEMA.COLUMNS Col     
 WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
 AND Col.COLUMN_NAME IN ('SKU')   
 UNION ALL
-SELECT BuildParmType = 'WAVEBUILDLOAD'                                        --(Wan03)
+SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
       ,CondType  = 'GROUP' 
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
 FROM INFORMATION_SCHEMA.COLUMNS Col     

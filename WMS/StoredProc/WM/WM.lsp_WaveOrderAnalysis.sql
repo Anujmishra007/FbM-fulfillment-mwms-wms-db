@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -32,6 +32,9 @@ GO
 /* 09-Dec-2021 Wan02    1.3   LFWM-3212 - SCE UAT SG All Order Parameter*/
 /*                            Disappeared with Operator '='             */
 /* 09-Dec-2021 Wan02    1.3   DevOps Combine Script                     */
+/* 05-Jan-2022 Wan03    1.4   LFWM-3279 - SCE UAT SG Order Parameter -  */
+/*                            Type 'SORT' - Do not have Sku_Total_Qty as*/
+/*                            in Exceed                                 */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -123,6 +126,28 @@ BEGIN
          OrderKey NVARCHAR(10)   NULL                                                                               
       )   
    END 
+   --(Wan03) - START
+   ELSE
+   BEGIN
+      TRUNCATE TABLE #TMP_ORDERS;
+   END
+   
+   IF OBJECT_ID('tempdb..#TMP_SKUTOTQTY','u') IS NULL  
+   BEGIN                                                                                                                                      
+      CREATE TABLE #TMP_SKUTOTQTY                                                                                                                                    
+      (                                                                                                                                                           
+         RowID          INT            NOT NULL DEFAULT(0)                 
+      ,  Storerkey      NVARCHAR(15)   NOT NULL DEFAULT('')            
+      ,  Sku            NVARCHAR(20)   NOT NULL DEFAULT('')            
+      ,  Qty            INT            NOT NULL DEFAULT(0)             
+                                                                            
+      )   
+   END
+   ELSE
+   BEGIN
+      TRUNCATE TABLE #TMP_SKUTOTQTY; 
+   END
+   --(Wan03) - END   
 
    SET @c_BuildParmKey = ISNULL(RTRIM(@c_BuildParmKey),'')
 
