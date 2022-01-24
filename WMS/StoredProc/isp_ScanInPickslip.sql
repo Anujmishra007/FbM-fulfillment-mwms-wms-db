@@ -53,6 +53,7 @@ GO
 /* 07-04-2015  TLTING01   2.2   Bug fix                                    */
 /* 11-03-2020  MCTang     2.3   Add scanin2log (MC03)                      */
 /* 11-05-2020  MCTang     2.3   Add scanin3log (MC04)                      */
+/* 24-Jan-2022 MCTang     2.4   Add scanin4log & scanin5log (MC05)         */
 /***************************************************************************/
 
 ALTER PROCEDURE [dbo].[isp_ScanInPickslip]
@@ -77,6 +78,8 @@ BEGIN
          , @c_authority_scaninlog  NVARCHAR(1)  -- SOS41737
          , @c_authority_scanin2log NVARCHAR(1)  -- (MC03)
          , @c_authority_scanin3log NVARCHAR(1)  -- (MC04)
+         , @c_authority_scanin4log NVARCHAR(1)  -- (MC05)
+         , @c_authority_scanin5log NVARCHAR(1)  -- (MC05)
          , @c_storerkey            NVARCHAR(15) -- SOS41737
          , @c_cfgvalue             NVARCHAR(1)  -- SOS41737
          , @c_authority_pickinprog NVARCHAR(1)  -- (YokeBeen02)
@@ -465,6 +468,92 @@ BEGIN
             END
             --(MC04) - E
 
+            --(MC05) - S
+            SET @c_authority_scanin4log = ''
+            EXECUTE dbo.nspGetRight '',
+                     @c_StorerKey,   -- Storer
+                     '',             -- Sku
+                     'Scanin4Log',   -- ConfigKey
+                     @b_success              OUTPUT,
+                     @c_authority_scanin4log OUTPUT,
+                     @n_err                  OUTPUT,
+                     @c_errmsg               OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                + ': Retrieve of Right (Scanin4Log) Failed (isp_ScanInPickslip) ( '
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+            END
+
+            IF @c_authority_scanin4log = '1'
+            BEGIN
+               SELECT @c_cfgvalue = svalue
+               FROM StorerConfig WITH (NOLOCK)
+               WHERE Storerkey = @c_StorerKey
+               AND Configkey = 'WitronOL'
+
+               IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+               BEGIN
+                  SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+               END
+
+               EXEC dbo.ispGenTransmitLog3 'Scanin4Log', @c_LPOrderKey, @c_cfgvalue , @c_StorerKey, ''
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+               END
+            END
+
+            SET @c_authority_scanin5log = ''
+            EXECUTE dbo.nspGetRight '',
+                     @c_StorerKey,   -- Storer
+                     '',             -- Sku
+                     'Scanin5Log',   -- ConfigKey
+                     @b_success              OUTPUT,
+                     @c_authority_scanin5log OUTPUT,
+                     @n_err                  OUTPUT,
+                     @c_errmsg               OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                + ': Retrieve of Right (Scanin5Log) Failed (isp_ScanInPickslip) ( '
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+            END
+
+            IF @c_authority_scanin5log = '1'
+            BEGIN
+               SELECT @c_cfgvalue = svalue
+               FROM StorerConfig WITH (NOLOCK)
+               WHERE Storerkey = @c_StorerKey
+               AND Configkey = 'WitronOL'
+
+               IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+               BEGIN
+                  SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+               END
+
+               EXEC dbo.ispGenTransmitLog3 'Scanin5Log', @c_LPOrderKey, @c_cfgvalue , @c_StorerKey, ''
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+               END
+            END
+            --(MC05) - E
+
             -- (MC02)
             IF @n_Continue = 1 OR @n_Continue = 2
             BEGIN
@@ -799,6 +888,95 @@ BEGIN
                   END
                END -- (continue =1)
                --(MC04) - E
+
+               --(MC05) - S
+               IF @n_Continue = 1 OR @n_Continue = 2
+               BEGIN
+                  SET @c_authority_scanin4log = ''
+                  EXECUTE dbo.nspGetRight '',
+                           @c_StorerKey,   -- Storer
+                           '',             -- Sku
+                           'Scanin4Log',   -- ConfigKey
+                           @b_success              OUTPUT,
+                           @c_authority_scanin4log OUTPUT,
+                           @n_err                  OUTPUT,
+                           @c_errmsg               OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+                     SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                      + ': Retrieve of Right (Scanin4Log) Failed (isp_ScanInPickslip) ( '
+                                      + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+                  END
+
+                  IF @c_authority_scanin4log = '1'
+                  BEGIN
+                     SELECT @c_cfgvalue = svalue
+                     FROM StorerConfig WITH (NOLOCK)
+                     WHERE Storerkey = @c_StorerKey
+                     AND Configkey = 'WitronOL'
+
+                     IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                     BEGIN
+                        SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                     END
+
+                     EXEC dbo.ispGenTransmitLog3 'Scanin4Log', @c_OrderKey, @c_cfgvalue , @c_StorerKey, ''
+                        , @b_success OUTPUT
+                        , @n_err OUTPUT
+                        , @c_errmsg OUTPUT
+
+                     IF @b_success <> 1
+                     BEGIN
+                        SELECT @n_Continue = 3
+                     END
+                  END
+
+                  SET @c_authority_scanin5log = ''
+                  EXECUTE dbo.nspGetRight '',
+                           @c_StorerKey,   -- Storer
+                           '',             -- Sku
+                           'Scanin5Log',   -- ConfigKey
+                           @b_success              OUTPUT,
+                           @c_authority_scanin5log OUTPUT,
+                           @n_err                  OUTPUT,
+                           @c_errmsg               OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+                     SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                      + ': Retrieve of Right (Scanin5Log) Failed (isp_ScanInPickslip) ( '
+                                      + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+                  END
+
+                  IF @c_authority_scanin5log = '1'
+                  BEGIN
+                     SELECT @c_cfgvalue = svalue
+                     FROM StorerConfig WITH (NOLOCK)
+                     WHERE Storerkey = @c_StorerKey
+                     AND Configkey = 'WitronOL'
+
+                     IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                     BEGIN
+                        SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                     END
+
+                     EXEC dbo.ispGenTransmitLog3 'Scanin5Log', @c_OrderKey, @c_cfgvalue , @c_StorerKey, ''
+                        , @b_success OUTPUT
+                        , @n_err OUTPUT
+                        , @c_errmsg OUTPUT
+
+                     IF @b_success <> 1
+                     BEGIN
+                        SELECT @n_Continue = 3
+                     END
+                  END
+               END
+               --(MC05) - E
 
                -- (MC02)
                IF @n_Continue = 1 OR @n_Continue = 2
@@ -1168,6 +1346,92 @@ BEGIN
                END
             END
             --(MC04) - E
+
+            --(MC05) - S
+            SET @c_authority_scanin4log = ''
+            EXECUTE dbo.nspGetRight '',
+                     @c_StorerKey,   -- Storer
+                     '',             -- Sku
+                     'Scanin4Log',   -- ConfigKey
+                     @b_success              OUTPUT,
+                     @c_authority_scanin4log OUTPUT,
+                     @n_err                  OUTPUT,
+                     @c_errmsg               OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                + ': Retrieve of Right (Scanin4Log) Failed (isp_ScanInPickslip) ( '
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+            END
+
+            IF @c_authority_scanin4log = '1'
+            BEGIN
+               SELECT @c_cfgvalue = svalue
+               FROM StorerConfig WITH (NOLOCK)
+               WHERE Storerkey = @c_StorerKey
+               AND Configkey = 'WitronOL'
+
+               IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+               BEGIN
+                  SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+               END
+
+               EXEC dbo.ispGenTransmitLog3 'Scanin4Log', @c_LPOrderKey, @c_cfgvalue , @c_StorerKey, ''
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+               END
+            END
+
+            SET @c_authority_scanin5log = ''
+            EXECUTE dbo.nspGetRight '',
+                     @c_StorerKey,   -- Storer
+                     '',             -- Sku
+                     'Scanin5Log',   -- ConfigKey
+                     @b_success              OUTPUT,
+                     @c_authority_scanin5log OUTPUT,
+                     @n_err                  OUTPUT,
+                     @c_errmsg               OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                + ': Retrieve of Right (Scanin5Log) Failed (isp_ScanInPickslip) ( '
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+            END
+
+            IF @c_authority_scanin5log = '1'
+            BEGIN
+               SELECT @c_cfgvalue = svalue
+               FROM StorerConfig WITH (NOLOCK)
+               WHERE Storerkey = @c_StorerKey
+               AND Configkey = 'WitronOL'
+
+               IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+               BEGIN
+                  SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+               END
+
+               EXEC dbo.ispGenTransmitLog3 'Scanin5Log', @c_LPOrderKey, @c_cfgvalue , @c_StorerKey, ''
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+               END
+            END
+            --(MC05) - E
 
             -- (MC02)
             IF @n_Continue = 1 OR @n_Continue = 2
@@ -1562,6 +1826,92 @@ BEGIN
                END
                --(MC04) - E
 
+               --(MC05) - S
+               SET @c_authority_scanin4log = ''
+               EXECUTE dbo.nspGetRight '',
+                        @c_StorerKey,   -- Storer
+                        '',             -- Sku
+                        'Scanin4Log',   -- ConfigKey
+                        @b_success              OUTPUT,
+                        @c_authority_scanin4log OUTPUT,
+                        @n_err                  OUTPUT,
+                        @c_errmsg               OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                   + ': Retrieve of Right (Scanin4Log) Failed (isp_ScanInPickslip) ( '
+                                   + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+               END
+
+               IF @c_authority_scanin4log = '1'
+               BEGIN
+                  SELECT @c_cfgvalue = svalue
+                  FROM StorerConfig WITH (NOLOCK)
+                  WHERE Storerkey = @c_StorerKey
+                  AND Configkey = 'WitronOL'
+
+                  IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                  BEGIN
+                     SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                  END
+
+                  EXEC dbo.ispGenTransmitLog3 'Scanin4Log', @c_xdorderkey, @c_cfgvalue , @c_StorerKey, ''
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                  END
+               END
+
+               SET @c_authority_scanin5log = ''
+               EXECUTE dbo.nspGetRight '',
+                        @c_StorerKey,   -- Storer
+                        '',             -- Sku
+                        'Scanin5Log',   -- ConfigKey
+                        @b_success              OUTPUT,
+                        @c_authority_scanin5log OUTPUT,
+                        @n_err                  OUTPUT,
+                        @c_errmsg               OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                   + ': Retrieve of Right (Scanin5Log) Failed (isp_ScanInPickslip) ( '
+                                   + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+               END
+
+               IF @c_authority_scanin5log = '1'
+               BEGIN
+                  SELECT @c_cfgvalue = svalue
+                  FROM StorerConfig WITH (NOLOCK)
+                  WHERE Storerkey = @c_StorerKey
+                  AND Configkey = 'WitronOL'
+
+                  IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                  BEGIN
+                     SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                  END
+
+                  EXEC dbo.ispGenTransmitLog3 'Scanin5Log', @c_xdorderkey, @c_cfgvalue , @c_StorerKey, ''
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                  END
+               END
+               --(MC05) - E
+
                -- (MC02)
                IF @n_Continue = 1 OR @n_Continue = 2
                BEGIN
@@ -1901,6 +2251,92 @@ BEGIN
                   END
                END
                --(MC04) - E
+
+               --(MC05) - S
+               SET @c_authority_scanin4log = ''
+               EXECUTE dbo.nspGetRight '',
+                        @c_StorerKey,   -- Storer
+                        '',             -- Sku
+                        'Scanin4Log',   -- ConfigKey
+                        @b_success              OUTPUT,
+                        @c_authority_scanin4log OUTPUT,
+                        @n_err                  OUTPUT,
+                        @c_errmsg               OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                    + ': Retrieve of Right (Scanin4Log) Failed (isp_ScanInPickslip) ( '
+                                    + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+               END
+
+               IF @c_authority_scanin4log = '1'
+               BEGIN
+                  SELECT @c_cfgvalue = svalue
+                  FROM StorerConfig WITH (NOLOCK)
+                  WHERE Storerkey = @c_StorerKey
+                  AND Configkey = 'WitronOL'
+
+                  IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                  BEGIN
+                     SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                  END
+
+                  EXEC dbo.ispGenTransmitLog3 'Scanin4Log', @c_orderkey, @c_cfgvalue , @c_StorerKey, ''
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                  END
+               END
+
+               SET @c_authority_scanin5log = ''
+               EXECUTE dbo.nspGetRight '',
+                        @c_StorerKey,   -- Storer
+                        '',             -- Sku
+                        'Scanin5Log',   -- ConfigKey
+                        @b_success              OUTPUT,
+                        @c_authority_scanin5log OUTPUT,
+                        @n_err                  OUTPUT,
+                        @c_errmsg               OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_Continue = 3
+                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(dbo.fnc_RTrim(@n_err),0))
+                                    + ': Retrieve of Right (Scanin5Log) Failed (isp_ScanInPickslip) ( '
+                                    + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+               END
+
+               IF @c_authority_scanin5log = '1'
+               BEGIN
+                  SELECT @c_cfgvalue = svalue
+                  FROM StorerConfig WITH (NOLOCK)
+                  WHERE Storerkey = @c_StorerKey
+                  AND Configkey = 'WitronOL'
+
+                  IF ISNULL(RTRIM(@c_cfgvalue), '0') = '0'
+                  BEGIN
+                     SET @c_cfgvalue = ISNULL(RTRIM(@c_OrderType), '')
+                  END
+
+                  EXEC dbo.ispGenTransmitLog3 'Scanin5Log', @c_orderkey, @c_cfgvalue , @c_StorerKey, ''
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SELECT @n_Continue = 3
+                  END
+               END
+               --(MC05) - E
 
                -- (MC02)
                IF @n_Continue = 1 OR @n_Continue = 2
