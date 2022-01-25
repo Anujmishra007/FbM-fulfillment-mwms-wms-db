@@ -32,12 +32,14 @@ GO
 /* 10-Jun-2016  CSCHONG   1.1   SOS#371538 Update Externorderkey logic (CS01) */
 /* 01-Aug-2016  CSCHONG   1.2   Revised Address field for space between (CS02)*/
 /* 14-Feb-2017  CSCHONG   1.3   WMS-1072 - Revise field logic (CS03)          */
+/* 05-NOV-2018  CSCHONG   1.4   Avoid many to many join (CS04)                */    
+/* 28-Jan-2019  TLTING_ext 1.5  enlarge externorderkey field length           */
 /******************************************************************************/  
   
 CREATE PROC dbo.isp_carton_shipping_label (@c_LabelNo NVARCHAR(20))  
 AS  
 SET NOCOUNT ON
-SET ANSI_WARNINGS OFF
+SET ANSI_NULLS OFF
 SET QUOTED_IDENTIFIER OFF
 SET CONCAT_NULL_YIELDS_NULL OFF  
   
@@ -48,7 +50,7 @@ BEGIN
 	        @n_DashPos            INT,
 	        @c_ExecSQLStmt        NVARCHAR(MAX),
 	        @c_ExecArguments      NVARCHAR(MAX),
-	        @c_ExternOrderkey     NVARCHAR(30),
+	        @c_ExternOrderkey     NVARCHAR(50),   --tlting_ext
 	        @c_OrderkeyStart      NVARCHAR(10),
 	        @c_OrderkeyEnd        NVARCHAR(10),
 	        @c_ReprintFlag        NVARCHAR(1),
@@ -63,8 +65,8 @@ BEGIN
 	        @c_ErrMsg             NVARCHAR(250),  --NJOW01
 	        @b_Success            INT,  --NJOW01
 			  @n_prncopy            INT,
-			  @c_ExternOrdKey       NVARCHAR(20),   --(CS01)
-			  @c_GetExternOrdKey    NVARCHAR(20),   --(CS01)
+			  @c_ExternOrdKey       NVARCHAR(50),   --(CS01)      --tlting_ext
+			  @c_GetExternOrdKey    NVARCHAR(50),   --(CS01)      --tlting_ext
 			  @c_Getlabelno         NVARCHAR(20),   --(CS01)
 			  @n_CTNExtOrdkey       INT             --(CS01)
 			  
@@ -150,7 +152,7 @@ SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +
          'label type:' + ISNULL(ORD.ContainerType,'')
   FROM PACKHEADER PH WITH (NOLOCK)
   JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Pickslipno = PH.Pickslipno  
-  JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno
+  JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno AND PIDET.SKU = PDET.SKU  --CS04
   JOIN ORDERS ORD WITH (NOLOCK) ON ORD.Orderkey = PIDET.Orderkey
   JOIN STORER S WITH (NOLOCK) ON S.Storerkey = ORD.consigneekey
   JOIN FACILITY FAC WITH (NOLOCK) ON FAC.Facility = ORD.Facility
@@ -181,7 +183,7 @@ SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +
            @n_CtnExtOrdkey = COUNT(DISTINCT Ord.ExternOrderKey)
 	 FROM PACKHEADER PH WITH (NOLOCK)
 	 JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Pickslipno = PH.Pickslipno  
-	 JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno 
+	 JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno AND PIDET.SKU = PDET.SKU  --CS04
 	 JOIN ORDERS ORD WITH (NOLOCK) ON ORD.Orderkey = PIDET.Orderkey
 	 WHERE PDET.Labelno = @c_LabelNo
    -- GROUP BY Ord.ExternOrderKey
@@ -198,7 +200,7 @@ SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +
 			                                   ELSE ORD.ExternOrderkey END                                               --(CS03)
 			 FROM PACKHEADER PH WITH (NOLOCK)
 			 JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Pickslipno = PH.Pickslipno  
-			 JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno 
+			 JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno AND PIDET.SKU = PDET.SKU  --CS04 
 			 JOIN ORDERS ORD WITH (NOLOCK) ON ORD.Orderkey = PIDET.Orderkey
 			 WHERE PDET.Labelno = @c_LabelNo
 			
@@ -221,7 +223,7 @@ SELECT DISTINCT (FAC.descr + CASE WHEN ISNULL(FAC.descr,'') <> '' THEN ' ' END +
  SELECT TOP 1 @n_prncopy=ISNULL(ORD.ContainerQty,0)
  FROM PACKHEADER PH WITH (NOLOCK)
  JOIN PACKDETAIL PDET WITH (NOLOCK) ON PDET.Pickslipno = PH.Pickslipno  
- JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno
+ JOIN PICKDETAIL PIDET WITH (NOLOCK) ON PIDET.Caseid = PDET.Labelno AND PIDET.SKU = PDET.SKU  --CS04
  JOIN ORDERS ORD WITH (NOLOCK) ON ORD.Orderkey = PIDET.Orderkey
  WHERE PDET.Labelno = @c_LabelNo
 	
