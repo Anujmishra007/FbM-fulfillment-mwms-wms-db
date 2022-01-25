@@ -13,11 +13,11 @@ GO
 /* Copyright: LF Logistics                                              */
 /* Written by: Wan                                                      */
 /*                                                                      */
-/* Purpose:                                                             */
+/* Purpose: WMS-18500 - [CN] PB_Packing_Enhancement                     */
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-12-07  Wan      1.0   Created.                                  */
 /* 2021-12-07  Wan      1.0   DevOps Combine Script.                    */
+/* 2022-01-25  Wan01    1.1   Fixed Get RCMUsingUserID config setting   */
 /************************************************************************/
 CREATE PROC isp_GetRCMReportDW
            @c_ShortAppName          NVARCHAR(30) 
@@ -85,7 +86,7 @@ BEGIN
    
    SELECT @c_RCMUsingUserID = fgr.authority FROM dbo.fnc_GetRight2('', @c_Storerkey, '', 'RCMUsingUserID') AS fgr
 
-   IF @c_RCMUsingUserID = '0'
+   IF @c_RCMUsingUserID = '' --'0'              --(Wan01)
    BEGIN
       SELECT TOP 1 @c_RCMUsingUserID = '1'
       FROM CODELKUP (NOLOCK)
