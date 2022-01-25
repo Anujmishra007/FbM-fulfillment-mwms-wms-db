@@ -1,0 +1,32 @@
+ 
+---    ALTER SEQUENCE DC74 RESTART WITH 742513785 ;  
+
+--   SELECT NEXT VALUE FOR dbo.[DC74]  
+
+--   SELECT * from ncounter (NOLOCK) WHERE keyname = 'DC74'
+
+CREATE SEQUENCE dbo.[DC74] 
+ AS [BIGINT]
+ START WITH 742000000
+ INCREMENT BY 1
+ MINVALUE 742000000
+ MAXVALUE 749999999
+ CYCLE
+ CACHE 100
+GO
+
+grant Update on dbo.[DC74]  to NSQL
+
+/*
+SELECT current_value, * FROM sys.sequences WHERE name = 'DC74' ;
+
+
+SELECT TOP 100 * FROM CheckUpKPIDetail
+SELECT COUNT(1) FROM CheckUpKPIDetail
+
+isp_CheckUpKPI
+
+SELECT TOP 100 * FROM CheckUpKPI 
+
+
+*/
