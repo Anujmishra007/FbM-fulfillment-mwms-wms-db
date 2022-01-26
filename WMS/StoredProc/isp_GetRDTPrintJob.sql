@@ -28,10 +28,10 @@ GO
 /* 2019-07-22  Wan01    1.1   Fixed.                                    */
 /* 2019-02-25  Wan02    1.2   WM - Printing: Add Parm11 - Parm20,Printdata*/
 /* 2019-11-18  Wan03    1.2   WM - Printing: Return IsViewReport        */
-/* 2020-01-11  Wan04    1.3   WM - Printing: Return RptTextConvByINI    */
+/* 2022-01-11  Wan04    1.3   WM - Printing: Return RptTextConvByINI    */
 /*                            LFWM-3342 - CN NIKECN TCPSpooler Language */
 /*                            Conversion for POD Report Printing        */
-/* 2020-01-11  Wan04    1.3   DevOps Combined Script                    */
+/* 2022-01-11  Wan04    1.3   DevOps Combined Script                    */
 /************************************************************************/
 CREATE PROC isp_GetRDTPrintJob
             @n_JobID              BIGINT
