@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By: d_dw_print_job_search (TCPSpooler & RDTPRint.exe)         */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,10 @@ GO
 /* 2019-07-22  Wan01    1.1   Fixed.                                    */
 /* 2019-02-25  Wan02    1.2   WM - Printing: Add Parm11 - Parm20,Printdata*/
 /* 2019-11-18  Wan03    1.2   WM - Printing: Return IsViewReport        */
+/* 2020-01-11  Wan04    1.3   WM - Printing: Return RptTextConvByINI    */
+/*                            LFWM-3342 - CN NIKECN TCPSpooler Language */
+/*                            Conversion for POD Report Printing        */
+/* 2020-01-11  Wan04    1.3   DevOps Combined Script                    */
 /************************************************************************/
 CREATE PROC isp_GetRDTPrintJob
             @n_JobID              BIGINT
@@ -50,6 +54,15 @@ BEGIN
          , @c_Datawindow      NVARCHAR(50)   = ''
          , @c_Loadkey         NVARCHAR(10)   = ''
          , @c_Storerkey       NVARCHAR(15)   = ''
+         
+   DECLARE @t_REPORTCFG       TABLE ( RowID     INT          NOT NULL IDENTITY(1,1) PRIMARY KEY
+                                    , Code      NVARCHAR(30) NOT NULL DEFAULT('')
+                                    , Long      NVARCHAR(100)NOT NULL DEFAULT('')
+                                    , Short     NVARCHAR(10) NOT NULL DEFAULT('N')
+                                    , Storerkey NVARCHAR(15) NOT NULL DEFAULT('')
+                                    , UDF01     NVARCHAR(30) NOT NULL DEFAULT('')
+                                    , UDF02     NVARCHAR(30) NOT NULL DEFAULT('')                                    
+                                    )      
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -61,6 +74,34 @@ BEGIN
       COMMIT TRAN
    END 
 
+   --(Wan04) - START
+   --Group by to prevent Multi RPTTEXTCONVBYINI setup by same datawindow & storerkey 
+   INSERT INTO @t_REPORTCFG
+       (
+           Code,
+           Long,
+           Short,
+           Storerkey,
+           UDF01,
+           UDF02
+       )
+   SELECT c.Code
+      ,  c.Long
+      ,  Short = ISNULL(MAX(c.Short),'N')
+      ,  c.Storerkey
+      ,  c.UDF01
+      ,  c.UDF02
+   FROM dbo.CODELKUP AS c WITH (NOLOCK)
+   WHERE c.LISTNAME = 'REPORTCFG'
+   AND c.Code = 'RptTextConvByINI'
+   GROUP BY c.Code
+         ,  c.Long
+         ,  c.Storerkey
+         ,  c.UDF01
+         ,  c.UDF02
+   --(Wan04) - END
+   
+   
    SELECT TOP 1 @c_ReportID  = P.ReportID
             ,   @c_Datawindow= P.Datawindow
             ,   @c_Loadkey   = P.Parm1
@@ -135,9 +176,14 @@ BEGIN
          ,HeaderFlag  = ISNULL(RTRIM(VR.HeaderFlag),'N')                            --(Wan03)
          ,FooterFlag  = ISNULL(RTRIM(VR.FooterFlag),'N')                            --(Wan03)
          ,PreparedBy  = RDT.RDTPrintJob.AddWho                                      --(Wan03)
+         ,RptTextConvByINI = ISNULL(tr.Short,'N')                                   --(Wan04)
+         ,LanguageFile = ISNULL(tr.UDF01,'')                                        --(Wan04) 
+         ,[Language]   = ISNULL(tr.UDF02,'')                                        --(Wan04)                                                                                      --        
    FROM RDT.RDTPrintJob (NOLOCK)  
    JOIN RDT.RDTPrinter (NOLOCK) ON RDT.RDTPrinter.PrinterID = RDT.RDTPrintJob.Printer 
    LEFT JOIN PBSRPT_REPORTS VR (NOLOCK) ON RDT.RDTPrintJob.ReportID = VR.Rpt_Id     --(Wan03)
+   LEFT JOIN @t_REPORTCFG AS tr ON tr.Long = RDT.RDTPrintJob.Datawindow             --(Wan04)
+                                AND tr.Storerkey = RDT.RDTPrintJob.StorerKey        --(Wan04)
    WHERE JobStatus NOT IN ('9','E')             --(Wan01)  
    AND   RDT.RDTPrintJob.JobId = @n_JobID 
 
