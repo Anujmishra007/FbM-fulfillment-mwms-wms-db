@@ -42,6 +42,7 @@ GO
 /*                            Type 'SORT' - Do not have Sku_Total_Qty as*/
 /*                            in Exceed                                 */
 /* 2022-01-04  Wan05    1.6   Devops Combine Script                     */
+/* 2022-01-24  WinSern  1.7   INC1722704 @c_SQLWhere 2000 to 4000 (ws01)*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -153,7 +154,7 @@ AS
                                                                                                               
          , @c_SQL                      NVARCHAR(MAX)  = ''
          , @c_SQLParms                 NVARCHAR(2000) = ''
-         , @c_SQLWhere                 NVARCHAR(2000) = ''  
+         , @c_SQLWhere                 NVARCHAR(4000) = ''    --ws01  
          , @c_SQLCond                  NVARCHAR(4000) = ''                                                                                                               
          , @c_SQLGroupBy               NVARCHAR(2000) = ''                                                                                                                
          , @c_SQLHaving                NVARCHAR(500)  = ''                                                                                                              
