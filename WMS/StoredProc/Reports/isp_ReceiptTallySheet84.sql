@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By: r_receipt_tallysheet84                                    */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 05-Nov-2021  WLChooi 1.0   DevOps Combine Script                     */
+/* 26-Jan-2022  WLChooi 1.1   Bug Fix - Remove condition (WL01)         */
 /************************************************************************/
 CREATE PROC [dbo].[isp_ReceiptTallySheet84] (
       @c_ReceiptkeyStart NVARCHAR(10),
@@ -167,7 +168,7 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet84] (
    FROM #TMP_RD R (NOLOCK)
    JOIN UCC U (NOLOCK) ON U.Storerkey = R.StorerKey AND U.SKU = R.Sku
                       AND U.ExternKey = R.ExternReceiptkey
-                      AND U.[Status] >= 1
+                      --AND U.[Status] >= 1   --WL01
    JOIN SKU S (NOLOCK) ON S.Storerkey = R.StorerKey AND S.SKU = R.Sku
    GROUP BY R.ReceiptKey, R.SKU, R.ExternReceiptKey
           , ISNULL(U.Userdefined07,''), ISNULL(U.Userdefined09,''), ISNULL(S.SUSR2,'')
