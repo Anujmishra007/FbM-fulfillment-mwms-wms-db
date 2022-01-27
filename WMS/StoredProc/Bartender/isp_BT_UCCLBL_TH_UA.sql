@@ -18,6 +18,8 @@ GO
 /*28-Apr-2020 1.1  CSCHONG   WMS-12603 add table link logic (CS01)            */
 /*12-Mar-2021 1.2  WLChooi   WMS-16549 - New Data Source for KerryTH (WL01)   */
 /*05-May-2021 1.3  WLChooi   WMS-16549 - Bug Fix (WL01)                       */
+/*13-Jan-2022 1.4  Mingle    WMS-18725 - Remove '-' in extordkey (ML01)       */
+/*13-Jan-2022 1.5  Mingle    DevOps Combine Script                            */
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_UCCLBL_TH_UA]                            
@@ -198,7 +200,7 @@ BEGIN
    --WL01 S
    IF @c_Shipperkey = 'KerryTH'
    BEGIN
-      SET @c_SQLJOIN =   ' SELECT DISTINCT LTRIM(RTRIM(ISNULL(CL.Prefix,''''))) + LTRIM(RTRIM(ORD.ExternOrderkey)) + ' + CHAR(13)
+      SET @c_SQLJOIN =   ' SELECT DISTINCT LTRIM(RTRIM(ISNULL(CL.Prefix,''''))) + LTRIM(RTRIM(REPLACE(ORD.ExternOrderkey,''-'',''''))) + ' + CHAR(13) --ML01
                        + '                 RIGHT(''00000'' + CAST(PD.CartonNo AS NVARCHAR(10)), CL.CtnNoDigit),'+ CHAR(13)     
                        + ' ORD.ExternOrderkey,ORD.B_Contact1, '+ CHAR(13)     
                        + ' RTRIM(ORD.B_Address1), RTRIM(ORD.B_Address2),'+ CHAR(13)      --5    
@@ -245,7 +247,7 @@ BEGIN
                        +' CONVERT(NVARCHAR(80),PD.EDITDATE,103),CT.CARTONDESCRIPTION,Ord.C_City,Ord.C_State,Ord.C_Zip,' + CHAR(13)
                        +' Ord.userdefine04,ord.dischargeplace,Ord.deliveryplace,PH.Pickslipno,RTRIM(ORD.M_Company),RTRIM(ORD.M_address1), ' + CHAR(13)
                        +' ISNULL(CL.UDF01,''''), ISNULL(CL.UDF02,''''), ORD.Consigneekey, ' + CHAR(13)
-                       +' LTRIM(RTRIM(ISNULL(CL.Prefix,''''))) + LTRIM(RTRIM(ORD.ExternOrderkey)) + ' + CHAR(13)
+                       +' LTRIM(RTRIM(ISNULL(CL.Prefix,''''))) + LTRIM(RTRIM(REPLACE(ORD.ExternOrderkey,''-'',''''))) + ' + CHAR(13)
                        +' RIGHT(''00000'' + CAST(PD.CartonNo AS NVARCHAR(10)), CL.CtnNoDigit), PD.DropID '
    END
    --WL01 E

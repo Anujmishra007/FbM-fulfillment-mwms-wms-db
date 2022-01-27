@@ -25,8 +25,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 10-MAR-2017  JayLim   1.1  SQL2012 compatibility modification (Jay01)*/
 /************************************************************************/
-CREATE PROC isp_ADJ_Detail09
+CREATE PROC [dbo].[isp_ADJ_Detail09]
            @c_AdjustmentKey   NVARCHAR(10)
          , @c_userid          NVARCHAR(30)   
 AS
@@ -115,7 +116,7 @@ BEGIN
                      WHEN PACK.PACKUOM2 THEN PACK.InnerPack
                      WHEN PACK.PACKUOM3 THEN 1
                      WHEN PACK.PACKUOM4 THEN PACK.Pallet
-                     WHEN PACK.PACKUOM5 THEN PACK.Cube
+                     WHEN PACK.PACKUOM5 THEN PACK.[Cube]
                      WHEN PACK.PACKUOM6 THEN PACK.GrossWgt
                      WHEN PACK.PACKUOM7 THEN PACK.NetWgt
                      WHEN PACK.PACKUOM8 THEN PACK.OtherUnit1

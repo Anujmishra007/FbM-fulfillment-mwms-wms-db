@@ -18,7 +18,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -28,6 +28,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2022-01-05  Wan01    1.2   Fixed incorrect lsp_build_wave SP name in */
+/*                            Error Message                             */
+/* 2022-01-05  Wan01    1.2   DevOps Combine Script                     */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveMBOLChildOrder_Create] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
@@ -423,7 +426,7 @@ BEGIN
          BEGIN CATCH
             SET @n_Err     = 556657                                                                                                                             
             SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                           + ': Error Executing nspg_GetKey - WavedetailKey. (lsp_Build_Wave)' 
+                           + ': Error Executing nspg_GetKey - WavedetailKey. (lsp_WaveMBOLChildOrder_Create)'  --(Wan01) 
 
             EXEC [WM].[lsp_WriteError_List] 
                   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -457,7 +460,7 @@ BEGIN
             SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                               
             SET @n_Err     = 556658  
             SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                           + ': Insert Into WAVEDETAIL Failed. (lsp_Build_Wave) ' 
+                           + ': Insert Into WAVEDETAIL Failed. (lsp_WaveMBOLChildOrder_Create) '   --(Wan01) 
                            + '( ' + @c_ErrMsg + ') ' 
                             
             EXEC [WM].[lsp_WriteError_List] 
@@ -502,7 +505,7 @@ BEGIN
                SET @c_ErrMsg  = ERROR_MESSAGE() 
                SET @n_Err     = 556659               
                SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                              + ': UPDATE Orders Failed. (lsp_Build_Wave) ' 
+                              + ': UPDATE Orders Failed. (lsp_WaveMBOLChildOrder_Create) '   --(Wan01) 
                               + '( ' + @c_ErrMsg + ') '
 
                EXEC [WM].[lsp_WriteError_List] 

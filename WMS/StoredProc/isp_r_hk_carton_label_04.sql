@@ -26,6 +26,7 @@ GO
 /* 23/11/2017   ML       1.1  Fix duplicate order issue                  */
 /* 11/05/2018   ML       1.2  Fix DropIDPrefix no default value issue    */
 /* 07/03/2019   ML       1.3  Change to use SEQKey table for SeqTbl      */
+/* 20/10/2021   ML       1.4  WMS-18214 Add OH.Userdefine05              */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_04] (
@@ -193,7 +194,7 @@ BEGIN
         , DocKey         = MAX( CASE WHEN ISNULL(OH.Userdefine09,'')<>'' THEN OH.Loadkey ELSE OH.Orderkey END )
      FROM dbo.ORDERS     OH (NOLOCK)
      JOIN dbo.PICKHEADER PH (NOLOCK) ON OH.Loadkey = PH.ExternOrderkey AND ISNULL(OH.Loadkey,'')<>'' AND ISNULL(PH.Orderkey,'')=''
-	 LEFT JOIN #TEMP_FINALORDERKEY FOK ON OH.Orderkey = FOK.Orderkey
+    LEFT JOIN #TEMP_FINALORDERKEY FOK ON OH.Orderkey = FOK.Orderkey
     WHERE ( OH.Status BETWEEN '1' AND '9' )
       AND ( OH.Storerkey = @as_storerkey )
       AND ( @as_wavekey<>'' OR @as_loadkey<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0 )
@@ -343,28 +344,28 @@ BEGIN
 
 
    ------------------------
-   SELECT Storerkey         = UPPER( RTRIM ( ORDET.Storerkey ) )
-        , DocKey            = ISNULL( RTRIM( ORDET.DocKey ), '' )
-        , DocNumber         = MAX ( ISNULL( RTRIM ( ORDET.DocNumber ), '') )
-        , PickSlipNo        = MAX ( ISNULL( RTRIM ( ORDET.PickSlipNo ), '') )
-        , Orderkey          = MAX ( RTRIM ( ORDET.FirstOrderkey ) )
-        , Externorderkey    = MAX ( ISNULL( RTRIM ( OH.ExternOrderKey ), '') )
-        , Wavekey           = MAX ( ISNULL( RTRIM ( OH.Userdefine09 ), '') )
-        , Loadkey           = MAX ( ISNULL( RTRIM ( OH.Loadkey ), '') )
+   SELECT Storerkey         = RTRIM( UPPER( ORDET.Storerkey ) )
+        , DocKey            = RTRIM( ISNULL( ORDET.DocKey, '' ) )
+        , DocNumber         = RTRIM( ISNULL( MAX( ORDET.DocNumber ), '') )
+        , PickSlipNo        = RTRIM( ISNULL( MAX( ORDET.PickSlipNo ), '') )
+        , Orderkey          = RTRIM( MAX( ORDET.FirstOrderkey ) )
+        , Externorderkey    = RTRIM( ISNULL( MAX( OH.ExternOrderKey ), '') )
+        , Wavekey           = RTRIM( ISNULL( MAX( OH.Userdefine09 ), '') )
+        , Loadkey           = RTRIM( ISNULL( MAX( OH.Loadkey ), '') )
         , Deliverydate      = MAX ( OH.DeliveryDate )
-        , ConsigneeKey      = RTRIM ( ISNULL( MAX( CASE WHEN LEFT(OH.ConsigneeKey, LEN(@c_ConsigneePrefix))=@c_ConsigneePrefix
-                                           THEN SUBSTRING(OH.ConsigneeKey, LEN(@c_ConsigneePrefix)+1, LEN(OH.ConsigneeKey))
-                                           ELSE OH.ConsigneeKey END ), '' ) )
-        , C_Company         = MAX ( ISNULL( RTRIM ( ORDET.C_Company ), '' ) )
-        , C_Address1        = MAX ( ISNULL( RTRIM ( ORDET.C_Address1 ), '' ) )
-        , C_Address2        = MAX ( ISNULL( RTRIM ( ORDET.C_Address2 ), '' ) )
-        , C_Address3        = MAX ( ISNULL( RTRIM ( ORDET.C_Address3 ), '' ) )
-        , C_Address4        = MAX ( ISNULL( RTRIM ( ORDET.C_Address4 ), '' ) )
-        , Notes             = MAX ( ISNULL( RTRIM ( ORDET.Notes ), '' ) )
-        , Notes2            = MAX ( ISNULL( RTRIM ( ORDET.Notes2 ), '' ) )
-        , Route             = MAX ( ISNULL( RTRIM( OH.Route ), '' ) )
-        , PickZone          = ISNULL( RTRIM ( ORDET.PickZone ), '' )
-        , Qty               = SUM ( ORDET.Qty )
+        , ConsigneeKey      = RTRIM( ISNULL( MAX( CASE WHEN LEFT(OH.ConsigneeKey, LEN(@c_ConsigneePrefix))=@c_ConsigneePrefix
+                                     THEN SUBSTRING(OH.ConsigneeKey, LEN(@c_ConsigneePrefix)+1, LEN(OH.ConsigneeKey))
+                                     ELSE OH.ConsigneeKey END ), '' ) )
+        , C_Company         = RTRIM( ISNULL( MAX( ORDET.C_Company ), '' ) )
+        , C_Address1        = RTRIM( ISNULL( MAX( ORDET.C_Address1 ), '' ) )
+        , C_Address2        = RTRIM( ISNULL( MAX( ORDET.C_Address2 ), '' ) )
+        , C_Address3        = RTRIM( ISNULL( MAX( ORDET.C_Address3 ), '' ) )
+        , C_Address4        = RTRIM( ISNULL( MAX( ORDET.C_Address4 ), '' ) )
+        , Notes             = RTRIM( ISNULL( MAX( ORDET.Notes ), '' ) )
+        , Notes2            = RTRIM( ISNULL( MAX( ORDET.Notes2 ), '' ) )
+        , Route             = RTRIM( ISNULL( MAX( OH.Route ), '' ) )
+        , PickZone          = RTRIM( ISNULL( ORDET.PickZone, '' ) )
+        , Qty               = SUM( ORDET.Qty )
         , ShoeGroup         = ORDET.ShoeGroup
         , LabelCount        = CEILING(CASE WHEN EXISTS(select top 1 1
                                       from dbo.fnc_DelimSplit(MAX(RptCfg2.Delim),MAX(RptCfg2.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg2.Delim),MAX(RptCfg2.Notes2)) b
@@ -373,8 +374,9 @@ BEGIN
                                    WHEN MAX(ORDET.CartonCBM)>0 THEN SUM(ORDET.Qty * ORDET.stdcube) / MAX(ORDET.CartonCBM)
                                    ELSE 1
                               END)
-        , ZoneCount         = MAX ( ISNULL( ZC.ZoneCount, 0 ) )
-        , ConsolPick        = MAX ( ISNULL( RTRIM ( ORDET.ConsolPick ), '' ) )
+        , ZoneCount         = MAX( ISNULL( ZC.ZoneCount, 0 ) )
+        , ConsolPick        = RTRIM( ISNULL( MAX( ORDET.ConsolPick ), '' ) )
+        , CustPOType        = RTRIM( ISNULL( MAX( OH.Userdefine05 ), '' ) )
 
    INTO #TEMP_ORDET2
 
@@ -391,12 +393,14 @@ BEGIN
 
    GROUP BY ORDET.Storerkey
           , ORDET.DocKey
-          , ORDET.PickZone
+          , ISNULL( ORDET.PickZone, '' )
           , ORDET.ShoeGroup
 
 
    ------------------------
-   SELECT X.*
+   SELECT X.Storerkey, X.DocKey, X.DocNumber, X.PickSlipNo, X.Orderkey, X.Externorderkey, X.Wavekey, X.Loadkey, X.Deliverydate
+        , X.ConsigneeKey, X.C_Company, X.C_Address1, X.C_Address2, X.C_Address3, X.C_Address4, X.Notes, X.Notes2, X.Route
+        , X.PickZone, X.Qty, X.LabelCount, X.ZoneCount, X.ConsolPick
         , SeqNo             = SeqTbl.Rowref
         , DropID            = ISNULL(RTRIM(@c_DropIDPrefix),'ID') + ISNULL( RTRIM( X.DocKey ), '' ) + ISNULL( RTRIM( X.PickZone ), '') + FORMAT(SeqTbl.Rowref, '0000')
         , ShowFields        = RptCfg.ShowFields
@@ -404,6 +408,7 @@ BEGIN
         , Lbl_DocNumber     = CAST( RTRIM( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_DocNumber') ) AS NVARCHAR(500))
+        , CustPOType        = X.CustPOType
    FROM (
       SELECT Storerkey         = Storerkey
            , DocKey            = DocKey
@@ -428,6 +433,7 @@ BEGIN
            , LabelCount        = SUM( LabelCount )
            , ZoneCount         = MAX( ZoneCount )
            , ConsolPick        = MAX( ConsolPick )
+           , CustPOType        = MAX( CustPOType )
            FROM #TEMP_ORDET2
           GROUP BY Storerkey
                  , DocKey

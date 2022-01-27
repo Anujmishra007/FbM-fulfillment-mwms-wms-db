@@ -37,6 +37,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver  Purposes                                   */
+/* 12-Nov-2021 NJOW01   1.0  WMS-18368 update sequence no to load plan  */
+/* 12-Nov-2021 NJOW01   1.0  DEVOPS combine script                      */
 /************************************************************************/
 CREATE PROC [dbo].[ispWAVLP06]
    @c_WaveKey NVARCHAR(10),
@@ -282,12 +284,12 @@ BEGIN
            BEGIN
              SELECT @n_continue = 3
            END
-           
-           INSERT INTO LoadPlan (LoadKey, Facility, SuperOrderFlag, Load_Userdef1)
-           VALUES (@c_loadkey, @c_Facility, @c_SuperOrderFlag, @c_FieldVal01)
-           
+
            SELECT @n_loadcount = @n_loadcount + 1         
            
+           INSERT INTO LoadPlan (LoadKey, Facility, SuperOrderFlag, Load_Userdef1, Userdefine02)
+           VALUES (@c_loadkey, @c_Facility, @c_SuperOrderFlag, @c_FieldVal01, CAST(@n_loadcount AS NVARCHAR))  --NJOW01
+                      
            IF @b_debug = 1
               PRINT 'New1 @c_Loadkey=' + @c_Loadkey           
            --loop the orders of the group
@@ -503,6 +505,5 @@ BEGIN
    END         
 END   
 GO
-
 GRANT EXECUTE ON ispWAVLP06 TO NSQL
 GO

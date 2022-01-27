@@ -27,6 +27,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 12-Dec-2021  NJOW01  1.0   WMS-18497 allocate pick from bulk if stock*/
+/*                            >= casecnt                                */
+/* 12-Dec-2021  NJOW01  1.0   DEVOPS combine script                     */
 /************************************************************************/
 CREATE  PROC [dbo].[nspALCONV5]
    @c_WaveKey    NVARCHAR(10),   
@@ -115,13 +118,16 @@ BEGIN
       JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)  
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID AND ID.STATUS <> ''HOLD'')  
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOT.STATUS <> ''HOLD'')         
-      JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT     
+      JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT                       
+      JOIN SKU (NOLOCK) ON LOTxLOCxID.Storerkey = SKU.Storerkey AND LOTxLOCxID.Sku = SKU.Sku
+      JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey 
       WHERE LOC.LocationFlag = ''NONE''  
       AND LOC.Status <> ''HOLD''
       AND LOC.Facility = @c_Facility  
       AND LOTxLOCxID.STORERKEY = @c_StorerKey  
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
       AND LOTxLOCxID.SKU = @c_SKU ' + CHAR(13) +        
+      CASE WHEN @c_UOM IN('6','7') THEN ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= PACK.Casecnt ' ELSE '' END +  --NJOW01
       CASE WHEN ISNULL(RTRIM(@c_LocationType),'') = '' THEN ''   
            ELSE ' AND LOC.LocationType IN(' + @c_LocationType + ')' + CHAR(13) END +        
       CASE WHEN ISNULL(RTRIM(@c_LocationCategory),'') = '' THEN ''         

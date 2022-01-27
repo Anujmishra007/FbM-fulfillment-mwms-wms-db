@@ -1,33 +1,39 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_10]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_10]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_delivery_note_10]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_delivery_note_10]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-/*************************************************************************/
-/* Stored Procedure: isp_r_hk_delivery_note_10                           */
-/* Creation Date: 13-Mar-2019                                            */
-/* Copyright: LFL                                                        */
-/* Written by: Michael Lam (HK LIT)                                      */
-/*                                                                       */
-/* Purpose: Delivery note                                                */
-/*                                                                       */
-/* Called By: Report Module. Datawidnow r_hk_delivery_note_10            */
-/*                                                                       */
-/* PVCS Version: 1.0                                                     */
-/*                                                                       */
-/* Version: 7.0                                                          */
-/*                                                                       */
-/* Data Modifications:                                                   */
-/*                                                                       */
-/* Updates:                                                              */
-/* Date         Author   Ver  Purposes                                   */
-/* 23/06/2020   ML       1.1  Add Total_Doc_Amount                       */
-/* 08/07/2020   ML       1.2  Add new fields                             */
-/* 01/09/2020   ML       1.3  Remvoe non-necessary join to PACKHEADER    */
-/*                            when inserting discrete #TEMP_FINALORDERKEY*/
-/*************************************************************************/
+/****************************************************************************/
+/* Stored Procedure: isp_r_hk_delivery_note_10                              */
+/* Creation Date: 13-Mar-2019                                               */
+/* Copyright: LFL                                                           */
+/* Written by: Michael Lam (HK LIT)                                         */
+/*                                                                          */
+/* Purpose: Delivery note                                                   */
+/*                                                                          */
+/* Called By: Report Module. Datawidnow r_hk_delivery_note_10               */
+/*                                                                          */
+/* PVCS Version: 1.0                                                        */
+/*                                                                          */
+/* Version: 7.0                                                             */
+/*                                                                          */
+/* Data Modifications:                                                      */
+/*                                                                          */
+/* Updates:                                                                 */
+/* Date         Author   Ver  Purposes                                      */
+/* 23/06/2020   ML       1.1  Add Total_Doc_Amount                          */
+/* 08/07/2020   ML       1.2  Add new fields                                */
+/* 01/09/2020   ML       1.3  Remvoe non-necessary join to PACKHEADER       */
+/*                            when inserting discrete #TEMP_FINALORDERKEY   */
+/* 29/11/2021   ML       1.4  WMS-18469 Add                                 */
+/*      1 MapField:  DeliveryDate, LineRef4-9, Currency                     */
+/*      2 MapValue:  T_LineRef4-9, T_Signature, T_CompanyStamp,             */
+/*                   N_*_LineRef4-9, N_Width_Currency, N_*_Signature,       */
+/*                   N_*_CompanyStamp, N_Height_LineHeading                 */
+/*      3 ShowField: LineRef4-9, Signature, CompanyStamp, AllowOrderStatus<5*/
+/****************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_10] (
        @as_storerkey       NVARCHAR(15)
@@ -47,38 +53,45 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      BrandLogoCode, ReportTitle, SplitPrintKey, DocNumber, ExternOrderkey, LFLRefNo, ReferenceNo,
+      BrandLogoCode, ReportTitle, SplitPrintKey, DeliveryDate, DocNumber, ExternOrderkey, LFLRefNo, ReferenceNo,
       ReferenceNo2, ReferenceNo3, ReferenceNo4, ReferenceNo5, Remark,
       BilltoKey, B_Company, B_Address, B_Phone, B_Fax, B_Contact, Consigneekey, C_Company, C_Address, C_Phone, C_Fax, C_Contact
-      LineGrouping, OrderLineNo, Descr, LineRemark, LineRef1, LineRef2, LineRef3,
-      Qty, UOM, Unitprice, Discount, Amount, GrossAmount,
+      LineGrouping, OrderLineNo, Descr, LineRemark, LineRef1, LineRef2, LineRef3, LineRef4, LineRef5, LineRef6, LineRef7, LineRef8, LineRef9
+      Qty, UOM, Unitprice, Discount, Amount, GrossAmount, Currency
       ShowField, ConsigneePrefix
    [MAPVALUE]
       T_CopyDescr, T_ReportTitle, T_BillTo, T_B_Phone, T_ShipTo, T_C_Phone,
       T_DeliveryDate, T_DocNumber, T_LFLRefNo, T_ReferenceNo, T_ReferenceNo2, T_ReferenceNo3, T_ReferenceNo4, T_ReferenceNo5, T_Remark,
-      T_LineNo, T_Sku, T_Descr, T_LineRemark, T_LineRef1, T_LineRef2, T_LineRef3,
+      T_LineNo, T_Sku, T_Descr, T_LineRemark, T_LineRef1, T_LineRef2, T_LineRef3, T_LineRef4, T_LineRef5, T_LineRef6, T_LineRef7, T_LineRef8, T_LineRef9
       T_Qty, T_UOM, T_UnitPrice, T_PriceFormat, T_Discount, T_Amount, T_GrossAmount, T_TotalQty, T_TotalAmount, T_TotalCarton,
-      T_ReceivedBy, T_TermsNCond1, T_TermsNCond2,
-      N_Xpos1, N_Xpos_S_Company, N_Xpos_LineNo, N_Xpos_Sku, N_Xpos_Descr, N_Xpos_LineRemark, N_Xpos_LineRef1, N_Xpos_LineRef2, N_Xpos_LineRef3,
+      T_ReceivedBy, T_Signature, T_CompanyStamp, T_TermsNCond1, T_TermsNCond2,
+      N_Xpos1, N_Xpos_S_Company, N_Xpos_Remark
+      N_Xpos_LineNo, N_Xpos_Sku, N_Xpos_Descr, N_Xpos_LineRemark, N_Xpos_LineRef1, N_Xpos_LineRef2, N_Xpos_LineRef3,
+      N_Xpos_LineRef4, N_Xpos_LineRef5, N_Xpos_LineRef6, N_Xpos_LineRef7, N_Xpos_LineRef8, N_Xpos_LineRef9,
       N_Xpos_Qty, N_Xpos_UOM, N_Xpos_UnitPrice, N_Xpos_Discount, N_Xpos_Amount, N_Xpos_GrossAmount,
-      N_Xpos_TermsNCond1, N_Xpos_TermsNCond2, N_Xpos_ReceivedBy, N_Xpos_TotalQty, N_Xpos_TotalAmount,
-      N_Ypos_TermsNCond1, N_Ypos_TermsNCond2, N_Ypos_ReceivedBy,
-      N_Width_S_Company, N_Width_LineNo, N_Width_Sku, N_Width_Descr, N_Width_LineRemark, N_Width_LineRef1, N_Width_LineRef2, N_Width_LineRef3,
-      N_Width_Qty, N_Width_UOM, N_Width_UnitPrice, N_Width_Discount, N_Width_Amount, N_Width_GrossAmount,
-      N_Width_TermsNCond1, N_Width_TermsNCond2, N_Width_ReceivedBy, N_Width_TotalQty, N_Width_TotalAmount
+      N_Xpos_TermsNCond1, N_Xpos_TermsNCond2, N_Xpos_ReceivedBy, N_Xpos_Signature, N_Xpos_CompanyStamp, N_Xpos_TotalQty, N_Xpos_TotalAmount,
+      N_Ypos_LineRef1, N_Ypos_LineRef2, N_Ypos_LineRef3, N_Ypos_LineRef4, N_Ypos_LineRef5, N_Ypos_LineRef6, N_Ypos_LineRef7, N_Ypos_LineRef8, N_Ypos_LineRef9
+      N_Ypos_TermsNCond1, N_Ypos_TermsNCond2, N_Ypos_ReceivedBy, N_Ypos_Signature, N_Ypos_CompanyStamp,
+      N_Width_S_Company, N_Width_Remark
+      N_Width_LineNo, N_Width_Sku, N_Width_Descr, N_Width_LineRemark, N_Width_LineRef1, N_Width_LineRef2, N_Width_LineRef3,
+      N_Width_LineRef4, N_Width_LineRef5, N_Width_LineRef6, N_Width_LineRef7, N_Width_LineRef8, N_Width_LineRef9
+      N_Width_Qty, N_Width_UOM, N_Width_UnitPrice, N_Width_Discount, N_Width_Amount, N_Width_GrossAmount, N_Width_Currency
+      N_Width_TermsNCond1, N_Width_TermsNCond2, N_Width_ReceivedBy, N_Width_Signature, N_Width_CompanyStamp, N_Width_TotalQty, N_Width_TotalAmount
    [SHOWFIELD]
       UseLFLogo, UseCode39, UsePackDetail,
       Storer_B_ComAddr, AddressDirectConcate, City, State, Zip, Fax, Contact, Country, OrderType,
       ReferenceNo, ReferenceNo2, ReferenceNo3, ReferenceNo4, ReferenceNo5,
-      ChineseDescr, LineRef1, LineRef2, LineRef3, LineRemark, ChineseLineRemark, UnitPrice, Discount, Amount, GrossAmount, TotalAmount,
+      ChineseDescr, LineRef1, LineRef2, LineRef3, LineRef4, LineRef5, LineRef6, LineRef7, LineRef8, LineRef9
+      LineRemark, ChineseLineRemark, UnitPrice, Discount, Amount, GrossAmount, TotalAmount,
+      Signature, CompanyStamp
       HidePrintDate, HidePageNo, HideBarcode, HideLFLRefNo, HideStorerCompany, HideStorerAddress, HideBillToKey, HideBillToCompany, HideBillToAddress, HideBillToPhone,
       HideConsigneeKey, HideShipToCompany, HideShipToAddress, HideShipToPhone, HideAddress4, HideC_Phone1, HideRemark, HideDeliveryDate, HideDocNumber,
       HideLineNo, HideSku, HideDescr, HideUOM, HideTotalQty, HideTotalCarton, HideReceivedBy, HideDataWindowName,
-      Remark_SFont, Dethdr_SFont, Dethdr_SFont2, Detline_SFont, Detline_SFont2, Detline_SFont3, Detftr_SFont, Detftr_SFont2, Descr_SFont,
+      Remark_SFont, Dethdr_SFont, Dethdr_SFont2, Dethdr_SFont3, Detline_SFont, Detline_SFont2, Detline_SFont3, Detftr_SFont, Detftr_SFont2, Detftr_SFont3, Descr_SFont,
       TermsNCond1_Bold, TermsNCond1_Italic, TermsNCond2_Bold, TermsNCond2_Italic,
       LineGrouping_Separateline,
       BoldDeliveryDate, BoldDocNumber, BoldLFLRefNo, BoldReferenceNo, BoldReferenceNo2, BoldReferenceNo3, BoldReferenceNo4, BoldReferenceNo5,
-      PrintByOrder, WaterMark, DescrAutoHeight, LineRemarkAutoHeight, SumAmount, Total_Doc_Amount
+      PrintByOrder, WaterMark, DescrAutoHeight, LineRemarkAutoHeight, SumAmount, Total_Doc_Amount, AllowOrderStatus<5
    [SQLJOIN]
 */
 
@@ -141,46 +154,54 @@ BEGIN
       DROP TABLE #TEMP_COPYDESCR
 
    DECLARE @c_DataWidnow         NVARCHAR(40)
-         , @c_BRAND_Logo_CodeExp NVARCHAR(4000)
-         , @c_ReportTitleExp     NVARCHAR(4000)
-         , @c_SplitPrintKeyExp   NVARCHAR(4000)
-         , @c_DocNumberExp       NVARCHAR(4000)
-         , @c_ExternOrderkeyExp  NVARCHAR(4000)
-         , @c_LFLRefNoExp        NVARCHAR(4000)
-         , @c_ReferenceNoExp     NVARCHAR(4000)
-         , @c_ReferenceNo2Exp    NVARCHAR(4000)
-         , @c_ReferenceNo3Exp    NVARCHAR(4000)
-         , @c_ReferenceNo4Exp    NVARCHAR(4000)
-         , @c_ReferenceNo5Exp    NVARCHAR(4000)
-         , @c_RemarkExp          NVARCHAR(4000)
-         , @c_BilltoKeyExp       NVARCHAR(4000)
-         , @c_B_CompanyExp       NVARCHAR(4000)
-         , @c_B_AddressExp       NVARCHAR(4000)
-         , @c_B_PhoneExp         NVARCHAR(4000)
-         , @c_B_FaxExp           NVARCHAR(4000)
-         , @c_B_ContactExp       NVARCHAR(4000)
-         , @c_ConsigneekeyExp    NVARCHAR(4000)
-         , @c_C_CompanyExp       NVARCHAR(4000)
-         , @c_C_AddressExp       NVARCHAR(4000)
-         , @c_C_PhoneExp         NVARCHAR(4000)
-         , @c_C_FaxExp           NVARCHAR(4000)
-         , @c_C_ContactExp       NVARCHAR(4000)
-         , @c_LineGroupingExp    NVARCHAR(4000)
-         , @c_DescrExp           NVARCHAR(4000)
-         , @c_LineRemarkExp      NVARCHAR(4000)
-         , @c_LineRef1Exp        NVARCHAR(4000)
-         , @c_LineRef2Exp        NVARCHAR(4000)
-         , @c_LineRef3Exp        NVARCHAR(4000)
-         , @c_UnitpriceExp       NVARCHAR(4000)
-         , @c_QtyExp             NVARCHAR(4000)
-         , @c_UOMExp             NVARCHAR(4000)
-         , @c_DiscountExp        NVARCHAR(4000)
-         , @c_AmountExp          NVARCHAR(4000)
-         , @c_GrossAmountExp     NVARCHAR(4000)
-         , @c_ShowFieldExp       NVARCHAR(4000)
-         , @c_OrderLineNoExp     NVARCHAR(4000)
+         , @c_BRAND_Logo_CodeExp NVARCHAR(MAX)
+         , @c_ReportTitleExp     NVARCHAR(MAX)
+         , @c_SplitPrintKeyExp   NVARCHAR(MAX)
+         , @c_DeliveryDateExp    NVARCHAR(MAX)
+         , @c_DocNumberExp       NVARCHAR(MAX)
+         , @c_ExternOrderkeyExp  NVARCHAR(MAX)
+         , @c_LFLRefNoExp        NVARCHAR(MAX)
+         , @c_ReferenceNoExp     NVARCHAR(MAX)
+         , @c_ReferenceNo2Exp    NVARCHAR(MAX)
+         , @c_ReferenceNo3Exp    NVARCHAR(MAX)
+         , @c_ReferenceNo4Exp    NVARCHAR(MAX)
+         , @c_ReferenceNo5Exp    NVARCHAR(MAX)
+         , @c_RemarkExp          NVARCHAR(MAX)
+         , @c_BilltoKeyExp       NVARCHAR(MAX)
+         , @c_B_CompanyExp       NVARCHAR(MAX)
+         , @c_B_AddressExp       NVARCHAR(MAX)
+         , @c_B_PhoneExp         NVARCHAR(MAX)
+         , @c_B_FaxExp           NVARCHAR(MAX)
+         , @c_B_ContactExp       NVARCHAR(MAX)
+         , @c_ConsigneekeyExp    NVARCHAR(MAX)
+         , @c_C_CompanyExp       NVARCHAR(MAX)
+         , @c_C_AddressExp       NVARCHAR(MAX)
+         , @c_C_PhoneExp         NVARCHAR(MAX)
+         , @c_C_FaxExp           NVARCHAR(MAX)
+         , @c_C_ContactExp       NVARCHAR(MAX)
+         , @c_LineGroupingExp    NVARCHAR(MAX)
+         , @c_DescrExp           NVARCHAR(MAX)
+         , @c_LineRemarkExp      NVARCHAR(MAX)
+         , @c_LineRef1Exp        NVARCHAR(MAX)
+         , @c_LineRef2Exp        NVARCHAR(MAX)
+         , @c_LineRef3Exp        NVARCHAR(MAX)
+         , @c_LineRef4Exp        NVARCHAR(MAX)
+         , @c_LineRef5Exp        NVARCHAR(MAX)
+         , @c_LineRef6Exp        NVARCHAR(MAX)
+         , @c_LineRef7Exp        NVARCHAR(MAX)
+         , @c_LineRef8Exp        NVARCHAR(MAX)
+         , @c_LineRef9Exp        NVARCHAR(MAX)
+         , @c_UnitpriceExp       NVARCHAR(MAX)
+         , @c_QtyExp             NVARCHAR(MAX)
+         , @c_UOMExp             NVARCHAR(MAX)
+         , @c_DiscountExp        NVARCHAR(MAX)
+         , @c_AmountExp          NVARCHAR(MAX)
+         , @c_GrossAmountExp     NVARCHAR(MAX)
+         , @c_CurrencyExp        NVARCHAR(MAX)
+         , @c_ShowFieldExp       NVARCHAR(MAX)
+         , @c_OrderLineNoExp     NVARCHAR(MAX)
          , @c_ConsigneePrefix    NVARCHAR(15)
-         , @c_CopyDescr          NVARCHAR(4000)
+         , @c_CopyDescr          NVARCHAR(MAX)
          , @c_Storerkey          NVARCHAR(15)
          , @n_PickslipNoCnt      INT
          , @n_OrderkeyCnt        INT
@@ -188,7 +209,7 @@ BEGIN
          , @b_UsePackDetail      INT
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
-         , @c_JoinClause         NVARCHAR(4000)
+         , @c_JoinClause         NVARCHAR(MAX)
 
 
    SELECT @c_DataWidnow = 'r_hk_delivery_note_10'
@@ -198,6 +219,7 @@ BEGIN
       , Storerkey        NVARCHAR(15)
       , ReportTitle      NVARCHAR(500)
       , SplitPrintKey    NVARCHAR(500)
+      , DeliveryDate     NVARCHAR(500)
       , DocNumber        NVARCHAR(500)
       , ExternOrderkey   NVARCHAR(500)
       , LFLRefNo         NVARCHAR(500)
@@ -228,11 +250,18 @@ BEGIN
       , LineRef1         NVARCHAR(500)
       , LineRef2         NVARCHAR(500)
       , LineRef3         NVARCHAR(500)
+      , LineRef4         NVARCHAR(500)
+      , LineRef5         NVARCHAR(500)
+      , LineRef6         NVARCHAR(500)
+      , LineRef7         NVARCHAR(500)
+      , LineRef8         NVARCHAR(500)
+      , LineRef9         NVARCHAR(500)
       , Unitprice        MONEY
       , Qty              INT
       , Discount         FLOAT
       , Amount           MONEY
       , GrossAmount      MONEY
+      , Currency         NVARCHAR(500)
       , ShowField        NVARCHAR(4000)
       , UOM              NVARCHAR(10)
       , ConsigneePrefix  NVARCHAR(15)
@@ -305,7 +334,13 @@ BEGIN
                          +       ', Storerkey  = MAX( OH.Storerkey )'
                          +   ' FROM dbo.ORDERS        OH (NOLOCK)'
                          +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>'''''
-                         +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
+                         +   ' LEFT JOIN ('
+                         +      ' SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))'
+                         +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+                         +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
+                         +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
+                         +  ' WHERE OH.Status >= CASE WHEN RptCfg.ShowFields LIKE ''%,AllowOrderStatus<5,%'' THEN ''0'' ELSE ''5'' END AND OH.Status <= ''9'''
+
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN
       IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
@@ -350,7 +385,7 @@ BEGIN
                          +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
                          +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
                          +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
-                         +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
+                         +  ' WHERE OH.Status >= CASE WHEN RptCfg.ShowFields LIKE ''%,AllowOrderStatus<5,%'' THEN ''0'' ELSE ''5'' END AND OH.Status <= ''9'''
                          +    ' AND OH.Loadkey<>'''''
                          +    ' AND FOK.Orderkey IS NULL'
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
@@ -424,6 +459,7 @@ BEGIN
       SELECT @c_BRAND_Logo_CodeExp = ''
            , @c_ReportTitleExp     = ''
            , @c_SplitPrintKeyExp   = ''
+           , @c_DeliveryDateExp    = ''
            , @c_DocNumberExp       = ''
            , @c_ExternOrderkeyExp  = ''
            , @c_LFLRefNoExp        = ''
@@ -451,12 +487,19 @@ BEGIN
            , @c_LineRef1Exp        = ''
            , @c_LineRef2Exp        = ''
            , @c_LineRef3Exp        = ''
+           , @c_LineRef4Exp        = ''
+           , @c_LineRef5Exp        = ''
+           , @c_LineRef6Exp        = ''
+           , @c_LineRef7Exp        = ''
+           , @c_LineRef8Exp        = ''
+           , @c_LineRef9Exp        = ''
            , @c_UnitpriceExp       = ''
            , @c_QtyExp             = ''
            , @c_UOMExp             = ''
            , @c_DiscountExp        = ''
            , @c_AmountExp          = ''
            , @c_GrossAmountExp     = ''
+           , @c_CurrencyExp        = ''
            , @c_ShowFieldExp       = ''
            , @c_OrderLineNoExp     = ''
            , @c_ConsigneePrefix    = ''
@@ -500,6 +543,9 @@ BEGIN
            , @c_SplitPrintKeyExp   = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='SplitPrintKey')), '' )
+           , @c_DeliveryDateExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='DeliveryDate')), '' )
            , @c_DocNumberExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='DocNumber')), '' )
@@ -581,6 +627,24 @@ BEGIN
            , @c_LineRef3Exp        = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='LineRef3')), '' )
+           , @c_LineRef4Exp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineRef4')), '' )
+           , @c_LineRef5Exp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineRef5')), '' )
+           , @c_LineRef6Exp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineRef6')), '' )
+           , @c_LineRef7Exp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineRef7')), '' )
+           , @c_LineRef8Exp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineRef8')), '' )
+           , @c_LineRef9Exp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LineRef9')), '' )
            , @c_UnitpriceExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='Unitprice')), '' )
@@ -599,6 +663,9 @@ BEGIN
            , @c_GrossAmountExp     = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='GrossAmount')), '' )
+           , @c_CurrencyExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Currency')), '' )
            , @c_ShowFieldExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='ShowField')), '' )
@@ -624,12 +691,12 @@ BEGIN
 
       ----------
       SET @c_ExecStatements = N'INSERT INTO #TEMP_ORDET'
-          +' (Orderkey, Storerkey, ReportTitle, SplitPrintKey, DocNumber, ExternOrderkey, LFLRefNo, ReferenceNo, ReferenceNo2'
+          +' (Orderkey, Storerkey, ReportTitle, SplitPrintKey, DeliveryDate, DocNumber, ExternOrderkey, LFLRefNo, ReferenceNo, ReferenceNo2'
           + ', ReferenceNo3, ReferenceNo4, ReferenceNo5, Remark, PickslipNo'
           + ', BilltoKey, B_Company, B_Address, B_Phone, B_Fax, B_Contact, Consigneekey, C_Company, C_Address, C_Phone, C_Fax, C_Contact'
           + ', LineGrouping, OrderLineNumber, Sku, Descr, LineRemark'
-          + ', LineRef1, LineRef2, LineRef3'
-          + ', Qty, UOM, Unitprice, Discount, Amount, GrossAmount, ShowField, OrderLineNo'
+          + ', LineRef1, LineRef2, LineRef3, LineRef4, LineRef5, LineRef6, LineRef7, LineRef8, LineRef9'
+          + ', Qty, UOM, Unitprice, Discount, Amount, GrossAmount, Currency, ShowField, OrderLineNo'
           + ', ConsigneePrefix, BRAND_Logo_Code, ConsolPick, DocKey, FirstOrderkey)'
           +' SELECT OH.OrderKey'
                + ', OH.Storerkey'
@@ -637,6 +704,8 @@ BEGIN
                + ', '              + CASE WHEN ISNULL(@c_ReportTitleExp    ,'')<>'' THEN @c_ReportTitleExp     ELSE 'NULL' END
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SplitPrintKeyExp  ,'')<>'' THEN @c_SplitPrintKeyExp   ELSE '''''' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DeliveryDateExp   ,'')<>'' THEN @c_DeliveryDateExp    ELSE 'CONVERT(NVARCHAR(10),OH.DeliveryDate,120)' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DocNumberExp      ,'')<>'' THEN @c_DocNumberExp       ELSE 'UPPER(IIF(FOK.ConsolPick=''Y'',FOK.DocKey,OH.ExternOrderkey))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -695,6 +764,18 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef3Exp       ,'')<>'' THEN @c_LineRef3Exp        ELSE ''''''                END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef4Exp       ,'')<>'' THEN @c_LineRef4Exp        ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef5Exp       ,'')<>'' THEN @c_LineRef5Exp        ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef6Exp       ,'')<>'' THEN @c_LineRef6Exp        ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef7Exp       ,'')<>'' THEN @c_LineRef7Exp        ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef8Exp       ,'')<>'' THEN @c_LineRef8Exp        ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LineRef9Exp       ,'')<>'' THEN @c_LineRef9Exp        ELSE ''''''                END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL('       + CASE WHEN ISNULL(@c_QtyExp            ,'')<>'' THEN @c_QtyExp             ELSE 'PD.Qty'              END + ',0)'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UOMExp            ,'')<>'' THEN @c_UOMExp             ELSE 'PACK.PackUOM3'       END + '),'''')'
@@ -706,6 +787,8 @@ BEGIN
                + ', '              + CASE WHEN ISNULL(@c_AmountExp         ,'')<>'' THEN @c_AmountExp          ELSE 'NULL'                END
       SET @c_ExecStatements = @c_ExecStatements
                + ', '              + CASE WHEN ISNULL(@c_GrossAmountExp    ,'')<>'' THEN @c_GrossAmountExp     ELSE 'NULL'                END
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', '              + CASE WHEN ISNULL(@c_CurrencyExp       ,'')<>'' THEN @c_CurrencyExp        ELSE 'NULL'                END
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShowFieldExp      ,'')<>'' THEN @c_ShowFieldExp       ELSE ''''''                END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -782,7 +865,7 @@ BEGIN
         , DocNumber         = MAX ( ISNULL( RTRIM ( ORDET.DocNumber ), '') )
         , Externorderkey    = MAX ( ISNULL( RTRIM ( ORDET.ExternOrderKey ), '') )
         , Loadkey           = MAX ( ISNULL( RTRIM ( OH.Loadkey ), '') )
-        , Deliverydate      = MAX ( OH.DeliveryDate )
+        , Deliverydate      = MAX ( RTRIM ( ORDET.DeliveryDate ) )
         , ReferenceNo       = MAX ( ISNULL( RTRIM ( ORDET.ReferenceNo ), '') )
         , S_Company         = MAX ( ISNULL( RTRIM ( STORER.Company ), '' ) )
         , S_Address1        = MAX ( ISNULL( STORER.Address1, '' ) )
@@ -831,7 +914,7 @@ BEGIN
 
         , LineGrouping      = RTRIM ( ORDET.LineGrouping )
         , Line_No           = ROW_NUMBER() OVER(PARTITION BY ORDET.DocKey, COPY.Copies
-                              ORDER BY ORDET.LineGrouping, ORDET.OrderLineNo, ORDET.Sku, ORDET.LineRef1, ORDET.LineRef2, ORDET.LineRef3, ORDET.Unitprice, ORDET.UOM )
+                              ORDER BY ORDET.LineGrouping, ORDET.OrderLineNo, ORDET.Sku, ORDET.LineRef1, ORDET.LineRef2, ORDET.LineRef3, ORDET.LineRef4, ORDET.LineRef5, ORDET.LineRef6, ORDET.LineRef7, ORDET.LineRef8, ORDET.LineRef9, ORDET.Unitprice, ORDET.UOM )
         , Sku               = RTRIM ( ORDET.Sku )
         , LineRef1          = RTRIM ( ORDET.LineRef1 )
         , LineRef2          = RTRIM ( ORDET.LineRef2 )
@@ -1061,13 +1144,13 @@ BEGIN
         , S_B_Fax2          = MAX ( ISNULL( LTRIM(RTRIM(STORER.B_Fax2)),'' ) )
         , ReportTitle       = MAX ( RTRIM ( ORDET.ReportTitle ) )
         , LFLRefNo          = MAX ( ISNULL( RTRIM ( ORDET.LFLRefNo ), '') )
-        , Lbl_BillTo        = CAST( RTRIM( (select top 1 b.ColValue
+        , Lbl_BillTo        = CAST( RTRIM( (select top 1 replace(b.ColValue, '\n', char(10))
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_BillTo') ) AS NVARCHAR(500))
         , Lbl_B_Phone       = CAST( RTRIM( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_B_Phone') ) AS NVARCHAR(500))
-        , Lbl_ShipTo        = CAST( RTRIM( (select top 1 b.ColValue
+        , Lbl_ShipTo        = CAST( RTRIM( (select top 1 replace(b.ColValue, '\n', char(10))
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_ShipTo') ) AS NVARCHAR(500))
         , Lbl_C_Phone       = CAST( RTRIM( (select top 1 b.ColValue
@@ -1114,7 +1197,130 @@ BEGIN
         , N_Width_S_Company = CAST( RTRIM( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='N_Width_S_Company') ) AS NVARCHAR(50))
-
+        , LineRef4          = RTRIM ( ORDET.LineRef4 )
+        , LineRef5          = RTRIM ( ORDET.LineRef5 )
+        , LineRef6          = RTRIM ( ORDET.LineRef6 )
+        , LineRef7          = RTRIM ( ORDET.LineRef7 )
+        , LineRef8          = RTRIM ( ORDET.LineRef8 )
+        , LineRef9          = RTRIM ( ORDET.LineRef9 )
+        , Currency          = MAX( ORDET.Currency )
+        , Lbl_LineRef4      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_LineRef4') ) AS NVARCHAR(500))
+        , Lbl_LineRef5      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_LineRef5') ) AS NVARCHAR(500))
+        , Lbl_LineRef6      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_LineRef6') ) AS NVARCHAR(500))
+        , Lbl_LineRef7      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_LineRef7') ) AS NVARCHAR(500))
+        , Lbl_LineRef8      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_LineRef8') ) AS NVARCHAR(500))
+        , Lbl_LineRef9      = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_LineRef9') ) AS NVARCHAR(500))
+        , Lbl_Signature     = CAST( RTRIM( (select top 1 replace(b.ColValue, '\n', char(10))
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Signature') ) AS NVARCHAR(500))
+        , Lbl_CompanyStamp  = CAST( RTRIM( (select top 1 replace(b.ColValue, '\n', char(10))
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_CompanyStamp') ) AS NVARCHAR(500))
+        , N_Xpos_Remark     = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_Remark') ) AS NVARCHAR(50))
+        , N_Xpos_LineRef4   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_LineRef4') ) AS NVARCHAR(50))
+        , N_Xpos_LineRef5   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_LineRef5') ) AS NVARCHAR(50))
+        , N_Xpos_LineRef6   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_LineRef6') ) AS NVARCHAR(50))
+        , N_Xpos_LineRef7   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_LineRef7') ) AS NVARCHAR(50))
+        , N_Xpos_LineRef8   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_LineRef8') ) AS NVARCHAR(50))
+        , N_Xpos_LineRef9   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_LineRef9') ) AS NVARCHAR(50))
+        , N_Xpos_Signature  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_Signature') ) AS NVARCHAR(50))
+        , N_Xpos_CompanyStamp= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Xpos_CompanyStamp') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef1   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef1') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef2   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef2') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef3   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef3') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef4   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef4') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef5   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef5') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef6   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef6') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef7   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef7') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef8   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef8') ) AS NVARCHAR(50))
+        , N_Ypos_LineRef9   = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_LineRef9') ) AS NVARCHAR(50))
+        , N_Ypos_Signature  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_Signature') ) AS NVARCHAR(50))
+        , N_Ypos_CompanyStamp= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Ypos_CompanyStamp') ) AS NVARCHAR(50))
+        , N_Width_Remark    = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_Remark') ) AS NVARCHAR(50))
+        , N_Width_LineRef4  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_LineRef4') ) AS NVARCHAR(50))
+        , N_Width_LineRef5  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_LineRef5') ) AS NVARCHAR(50))
+        , N_Width_LineRef6  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_LineRef6') ) AS NVARCHAR(50))
+        , N_Width_LineRef7  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_LineRef7') ) AS NVARCHAR(50))
+        , N_Width_LineRef8  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_LineRef8') ) AS NVARCHAR(50))
+        , N_Width_LineRef9  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_LineRef9') ) AS NVARCHAR(50))
+        , N_Width_Currency  = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_Currency') ) AS NVARCHAR(50))
+        , N_Width_Signature = CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_Signature') ) AS NVARCHAR(50))
+        , N_Width_CompanyStamp= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Width_CompanyStamp') ) AS NVARCHAR(50))
+        , N_Height_LineHeading= CAST( RTRIM( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='N_Height_LineHeading') ) AS NVARCHAR(50))
    FROM #TEMP_ORDET ORDET
    JOIN dbo.ORDERS     OH (NOLOCK) ON (ORDET.FirstOrderKey = OH.Orderkey)
    JOIN dbo.STORER STORER (NOLOCK) ON (OH.StorerKey = STORER.StorerKey)
@@ -1150,6 +1356,12 @@ BEGIN
           , ORDET.LineRef1
           , ORDET.LineRef2
           , ORDET.LineRef3
+          , ORDET.LineRef4
+          , ORDET.LineRef5
+          , ORDET.LineRef6
+          , ORDET.LineRef7
+          , ORDET.LineRef8
+          , ORDET.LineRef9
           , ORDET.Unitprice
           , ORDET.Discount
           , CASE WHEN RptCfg.ShowFields LIKE '%,SumAmount,%' THEN 0 ELSE ORDET.Amount END
@@ -1160,5 +1372,6 @@ BEGIN
 
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_delivery_note_10 TO NSQL
 GO

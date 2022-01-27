@@ -20,6 +20,7 @@ GO
 /* 2020-10-27 1.2  CSCHONG    Performance tunning (CS02)                      */    
 /* 2021-04-02 1.3  CSCHONG    WMS-16024 PB-Standardize TrackingNo (CS03)      */    
 /* 2021-06-03 1.4  CSCHONG    WMS-17157 revised field logic (CS04)            */  
+/* 2022-01-12 1.5  KuanYeeC   Change F.ADDRESS1 to 3, and Cater 80CH (KY01)   */ 
 /******************************************************************************/          
             
 CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_VIP]                 
@@ -252,7 +253,7 @@ BEGIN
                       + CHAR(13)     
                       +' ISNULL(STO.SUSR2,''''), ' --11  
                       + CHAR(13)   
-                      +' ISNULL(RTRIM(LTRIM(F.Address1)),'''') + ISNULL(RTRIM(LTRIM(F.Address2)),'''') + ISNULL(RTRIM(LTRIM(F.Address1)),''''), ' --12  
+                      +' LEFT(ISNULL(RTRIM(LTRIM(F.Address1)),'''') + ISNULL(RTRIM(LTRIM(F.Address2)),'''') + ISNULL(RTRIM(LTRIM(F.Address3)),''''), 80), ' --12       --(KY01)  
                       + CHAR(13)   
                       +' ISNULL(ORD.Notes,''''), '''', ORD.Storerkey, ' --15  
                       + CHAR(13)   
@@ -518,7 +519,7 @@ BEGIN
     
       SET @c_ExecStatements = N'SELECT @c_Col55 = ' + @c_GetCol55 + ' FROM ORDERS (NOLOCK) WHERE Orderkey = @c_OrderKey '    
     
-      SET @c_ExecArguments = N'@c_GetCol55   NVARCHAR(80) '    
+      SET @c_ExecArguments = N'@c_GetCol55   NVARCHAR(100) '    
                              +',@c_OrderKey  NVARCHAR(30)'    
                              +',@c_Col55     NVARCHAR(20) OUTPUT'    
     

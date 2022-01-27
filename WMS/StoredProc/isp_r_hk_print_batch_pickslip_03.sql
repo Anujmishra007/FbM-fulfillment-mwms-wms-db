@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_print_batch_pickslip_03]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_print_batch_pickslip_03]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_print_batch_pickslip_03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_print_batch_pickslip_03]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -24,6 +24,9 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 2021-10-08   Michael  V1.1 Fix mult-PickHeader created when using SCE */
+/*                            Add Showfield: NoGenPickHeader             */
+/* 2021-11-30   Michael  V1.4 Fix RptCfg.ShowFields NULL value issue     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_batch_pickslip_03] (
@@ -44,8 +47,8 @@ BEGIN
 
    [SHOWFIELD]
       LineRemark1, LineRemark2, LineRemark3
-      HideAltSku
-
+      HideAltSku, NoGenPickHeader
+      
 */
    DECLARE @c_DataWindow       NVARCHAR(40)  = 'r_hk_print_batch_pickslip_03'
          , @n_continue         INT           = 1
@@ -68,39 +71,6 @@ BEGIN
    IF OBJECT_ID('tempdb..#TEMP_PIKDT') IS NOT NULL
       DROP TABLE #TEMP_PIKDT
 
-   -- Uses PickType as a Printed Flag
-   IF EXISTS(SELECT TOP 1 1 FROM PICKHEADER (NOLOCK) WHERE ExternOrderkey = @c_Loadkey AND Zone = '9')
-   BEGIN
-      BEGIN TRAN
-
-      UPDATE dbo.PICKHEADER WITH(ROWLOCK)
-         SET PickType = '1'
-           , EditDate = GETDATE()
-           , EditWho  = SUSER_SNAME()
-           , TrafficCop = NULL
-       WHERE ExternOrderkey = @c_Loadkey
-         AND Zone = '9'
-         AND PickType = '0'
-
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         IF @@TRANCOUNT >= 1
-            ROLLBACK TRAN
-      END
-      ELSE
-      BEGIN
-         IF @@TRANCOUNT > 0
-            COMMIT TRAN
-         ELSE
-         BEGIN
-            SELECT @n_continue = 3
-            ROLLBACK TRAN
-         END
-      END
-   END
-
    WHILE @@TRANCOUNT > 0
       COMMIT TRAN
 
@@ -111,12 +81,21 @@ BEGIN
       FROM dbo.LOADPLANDETAIL  LPD(NOLOCK)
       JOIN dbo.ORDERS          OH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
       JOIN dbo.PICKDETAIL      PD (NOLOCK) ON LPD.Orderkey = PD.Orderkey
-      LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON LPD.Loadkey = PH.ExternOrderkey AND PH.Zone='9'
+      LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON OH.Orderkey = PH.Orderkey
+      LEFT JOIN dbo.PICKHEADER PH2(NOLOCK) ON OH.Loadkey  = PH2.ExternOrderkey AND ISNULL(PH2.Orderkey,'')='' AND ISNULL(OH.Loadkey,'')<>''
+      LEFT JOIN (
+         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+      ) RptCfg
+      ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1
      WHERE LPD.Loadkey = @c_Loadkey
        AND OH.UserDefine08 = 'N' -- only unalLocated order flag are taken into consideration - used for loadplan allocation only.
        AND PD.Status < '5'
        AND (PD.Pickmethod = '8' OR PD.Pickmethod = '')
        AND PH.PickHeaderKey IS NULL
+       AND PH2.PickHeaderKey IS NULL
+       AND NOT (ISNULL(RptCfg.ShowFields,'') LIKE '%,NoGenPickHeader,%')
     ORDER BY 1
 
    OPEN PICK_CUR
@@ -220,10 +199,9 @@ BEGIN
    SELECT DISTINCT PD.Storerkey
      FROM dbo.LOADPLANDETAIL LPD WITH (NOLOCK)
      JOIN dbo.ORDERS         OH  WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
-     JOIN dbo.PICKHEADER     PH  WITH (NOLOCK) ON LPD.Loadkey = PH.ExternOrderkey AND PH.Zone='9'
-     JOIN dbo.PICKDETAIL     PD  WITH (NOLOCK) ON LPD.OrderKey = PD.OrderKey
+     JOIN dbo.PICKHEADER     PH  WITH (NOLOCK) ON OH.Loadkey = PH.ExternOrderkey AND ISNULL(PH.Orderkey,'')='' AND ISNULL(OH.Loadkey,'')<>''
+     JOIN dbo.PICKDETAIL     PD  WITH (NOLOCK) ON OH.OrderKey = PD.OrderKey
     WHERE LPD.Loadkey = @c_Loadkey
-      AND OH.UserDefine08 = 'N' -- only unalLocated order flag are taken into consideration - used for loadplan alLocation only.
       AND OH.Status >= '1' AND OH.Status <= '9'
       AND ( PD.PickMethod = '8' OR PD.PickMethod = '' )
     ORDER BY 1
@@ -338,7 +316,11 @@ BEGIN
         +  ' FROM dbo.LOADPLANDETAIL LPD  WITH (NOLOCK)'
         +  ' JOIN dbo.LOADPLAN       LP   WITH (NOLOCK) ON LPD.Loadkey = LP.Loadkey'
         +  ' JOIN dbo.ORDERS         OH   WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey'
-        +  ' JOIN dbo.PICKHEADER     PH   WITH (NOLOCK) ON LPD.Loadkey = PH.ExternOrderkey AND PH.Zone=''9'''
+        +  ' JOIN ('
+        +     ' SELECT *, SeqNo = ROW_NUMBER() OVER(PARTITION BY ExternOrderkey ORDER BY CASE WHEN Zone=''9'' THEN 1 ELSE 2 END, PickHeaderKey)'
+        +     ' FROM dbo.PICKHEADER (NOLOCK) WHERE ExternOrderkey<>'''' AND ISNULL(Orderkey,'''')='''''
+        +   ') PH ON OH.Loadkey = PH.ExternOrderkey AND PH.SeqNo=1'
+
         +  ' JOIN dbo.PICKDETAIL     PD   WITH (NOLOCK) ON LPD.OrderKey = PD.OrderKey'
         +  ' JOIN dbo.SKU            SKU  WITH (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku'
         +  ' JOIN dbo.PACK           PACK WITH (NOLOCK) ON SKU.PackKey = PACK.PackKey'
@@ -351,7 +333,6 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         + ' WHERE OH.Storerkey = @c_Storerkey'
         +   ' AND LPD.Loadkey  = @c_Loadkey'
-        +   ' AND OH.UserDefine08 = ''N'''
         +   ' AND OH.Status >= ''1'' AND OH.Status <= ''9'''
         +   ' AND ( PD.PickMethod = ''8'' OR PD.PickMethod = '''' )'
 
@@ -372,6 +353,43 @@ BEGIN
 
    CLOSE C_CUR_STORERKEY
    DEALLocATE C_CUR_STORERKEY
+
+
+   -- Uses PickType as a Printed Flag
+   IF EXISTS(SELECT TOP 1 1
+             FROM #TEMP_PIKDT PIKDT
+             JOIN dbo.PICKHEADER PH(NOLOCK) ON PIKDT.PickslipNo = PH.PickHeaderkey
+             WHERE PH.PickType = '0')
+   BEGIN
+      BEGIN TRAN
+
+      UPDATE PH WITH(ROWLOCK)
+         SET PickType = '1'
+           , EditDate = GETDATE()
+           , EditWho  = SUSER_SNAME()
+           , TrafficCop = NULL
+        FROM dbo.PICKHEADER PH
+       WHERE PH.PickHeaderkey IN (SELECT DISTINCT PickslipNo FROM #TEMP_PIKDT WHERE PickslipNo<>'')
+         AND PH.PickType = '0'
+
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         IF @@TRANCOUNT >= 1
+            ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         IF @@TRANCOUNT > 0
+            COMMIT TRAN
+         ELSE
+         BEGIN
+            SELECT @n_continue = 3
+            ROLLBACK TRAN
+         END
+      END
+   END
 
 
    SELECT Loadkey         = UPPER( X.Loadkey )
@@ -458,5 +476,6 @@ QUIT:
    END
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_print_batch_pickslip_03 TO NSQL
 GO

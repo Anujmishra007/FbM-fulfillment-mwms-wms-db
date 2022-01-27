@@ -26,6 +26,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 05/01/2018   ML       1.1  Update TrackingNo                          */
 /* 13/03/2018   ML       1.2  Fix TrackingNo not update issue            */
+/* 08/12/2021   ML       1.3  WMS-18543 Add MAPFIELD: DocNumber          */
+/*                            MAPVALUE: T_DocNumber                      */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_01] (
@@ -41,10 +43,10 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      ReferenceNo, ItemGroup, DeliveryDateWithTime, EstimateCartonCBM
+      DocNumber, ReferenceNo, ItemGroup, DeliveryDateWithTime, EstimateCartonCBM
       Update_Orders_TrackingNo, Update_CartonShipmentDetail_TrackingNumber
    [MAPVALUE]
-      T_ReferenceNo, StoredProc
+      T_DocNumber, T_ReferenceNo, StoredProc
    [SHOWFIELD]
    [SQLJOIN]
 */
@@ -57,15 +59,16 @@ BEGIN
    DECLARE @c_DataWidnow         NVARCHAR(40)
          , @n_StartTCnt          INT
          , @b_FromRCMRpt         INT
-         , @c_ReferenceNoExp     NVARCHAR(4000)
-         , @c_ItemGroupExp       NVARCHAR(4000)
+         , @c_DocNumberExp       NVARCHAR(MAX)
+         , @c_ReferenceNoExp     NVARCHAR(MAX)
+         , @c_ItemGroupExp       NVARCHAR(MAX)
          , @c_Storerkey          NVARCHAR(15)
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
-         , @c_JoinClause         NVARCHAR(4000)
-         , @c_StoredProc         NVARCHAR(4000)
-         , @c_Upd_Ord_TrackingNo NVARCHAR(4000)
-         , @c_Upd_CtnShpDt_TrkNo NVARCHAR(4000)
+         , @c_JoinClause         NVARCHAR(MAX)
+         , @c_StoredProc         NVARCHAR(MAX)
+         , @c_Upd_Ord_TrackingNo NVARCHAR(MAX)
+         , @c_Upd_CtnShpDt_TrkNo NVARCHAR(MAX)
 
    SELECT @c_DataWidnow  = 'r_hk_picking_control_list_01'
         , @n_StartTCnt   = @@TRANCOUNT
@@ -129,6 +132,7 @@ BEGIN
       , Wavekey          NVARCHAR(10)
       , Loadkey          NVARCHAR(10)
       , PickslipNo       NVARCHAR(18)
+      , DocNumber        NVARCHAR(500)
       , ReferenceNo      NVARCHAR(500)
       , ItemGroup        NVARCHAR(500)
       , OrderQty         INT
@@ -165,7 +169,7 @@ BEGIN
         , DocKey         = MAX( CASE WHEN ISNULL(OH.Userdefine09,'')<>'' THEN OH.Loadkey ELSE OH.Orderkey END )
      FROM dbo.ORDERS     OH (NOLOCK)
      JOIN dbo.PICKHEADER PH (NOLOCK) ON OH.Loadkey = PH.ExternOrderkey AND ISNULL(OH.Loadkey,'')<>'' AND ISNULL(PH.Orderkey,'')=''
-	 LEFT JOIN #TEMP_FINALORDERKEY FOK ON OH.Orderkey = FOK.Orderkey
+    LEFT JOIN #TEMP_FINALORDERKEY FOK ON OH.Orderkey = FOK.Orderkey
     WHERE OH.UserDefine09<>''
       AND (@as_storerkey = CHAR(9) OR OH.Storerkey = @as_storerkey)
       AND OH.UserDefine09 = @as_wavekey
@@ -186,7 +190,8 @@ BEGIN
       IF @@FETCH_STATUS<>0
          BREAK
 
-      SELECT @c_ReferenceNoExp     = ''
+      SELECT @c_DocNumberExp       = ''
+           , @c_ReferenceNoExp     = ''
            , @c_ItemGroupExp       = ''
            , @c_Upd_Ord_TrackingNo = ''
            , @c_Upd_CtnShpDt_TrkNo = ''
@@ -201,7 +206,10 @@ BEGIN
 
 
       SELECT TOP 1
-             @c_ReferenceNoExp     = ISNULL(RTRIM((select top 1 b.ColValue
+             @c_DocNumberExp       = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='DocNumber')), '' )
+           , @c_ReferenceNoExp     = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='ReferenceNo')), '' )
            , @c_ItemGroupExp       = ISNULL(RTRIM((select top 1 b.ColValue
@@ -270,13 +278,14 @@ BEGIN
       ----------
       SET @c_ExecStatements = N'INSERT INTO #TEMP_ORDET'
           +' (OrderKey, Storerkey, Wavekey, Loadkey, PickslipNo'
-          +', ReferenceNo, ItemGroup, OrderQty, AllocQty, StdCube'
+          +', DocNumber, ReferenceNo, ItemGroup, OrderQty, AllocQty, StdCube'
           +', Putawayzone, ConsolPick, DocKey, FirstOrderkey, SeqNo)'
           +' SELECT OH.OrderKey'
                + ', OH.Storerkey'
                + ', OH.Userdefine09'
                + ', OH.Loadkey'
                + ', FOK.PickslipNo'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DocNumberExp      ,'')<>'' THEN @c_DocNumberExp       ELSE 'FOK.DocKey' END + '),'''')'
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ReferenceNoExp    ,'')<>'' THEN @c_ReferenceNoExp     ELSE '''''' END + '),'''')'
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ItemGroupExp      ,'')<>'' THEN @c_ItemGroupExp       ELSE '''''' END + '),'''')'
                + ', OD.OriginalQty'
@@ -345,19 +354,23 @@ BEGIN
                            FOR XML PATH('') ), 1, 2, '') AS NVARCHAR(500) )
         , CBM            = SUM ( ORDET.StdCube * ORDET.OrderQty )
         , EstimateCtnCBM = CAST( (select top 1 b.ColValue
-                              from dbo.fnc_DelimSplit(MAX(RptCfg.Delim),MAX(RptCfg.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg.Delim),MAX(RptCfg.Notes2)) b
-                             where a.SeqNo=b.SeqNo and a.ColValue='EstimateCartonCBM') AS NVARCHAR(30) )
+                               from dbo.fnc_DelimSplit(MAX(RptCfg.Delim),MAX(RptCfg.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg.Delim),MAX(RptCfg.Notes2)) b
+                               where a.SeqNo=b.SeqNo and a.ColValue='EstimateCartonCBM') AS NVARCHAR(30) )
         , Putawayzones   = CAST( ( SELECT TOP 3 CONVERT(NCHAR(10),a.PutawayZone), CONVERT(NCHAR(10),ISNULL(SUM(a.AllocQty),0))
                             FROM #TEMP_ORDET a(NOLOCK)
                             WHERE a.PickslipNo=ORDET.PickslipNo AND a.PutawayZone<>'' AND a.AllocQty<>0
                             GROUP BY a.Putawayzone
                             ORDER BY 1
                             FOR XML PATH('') ) AS NVARCHAR(500) )
-        , Company       = MAX ( RTRIM( STORER.Company ) )
-        , datawindow    = @c_DataWidnow
+        , Company        = MAX ( RTRIM( STORER.Company ) )
+        , datawindow     = @c_DataWidnow
         , Lbl_ReferenceNo= CAST( RTRIM( (select top 1 b.ColValue
-                                from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
-                                where a.SeqNo=b.SeqNo and a.ColValue='T_ReferenceNo') ) AS NVARCHAR(500))
+                               from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                               where a.SeqNo=b.SeqNo and a.ColValue='T_ReferenceNo') ) AS NVARCHAR(500))
+        , DocNumber      = MAX ( ISNULL( RTRIM ( ORDET.DocNumber ), '') )
+        , Lbl_DocNumber  = CAST( RTRIM( (select top 1 b.ColValue
+                               from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                               where a.SeqNo=b.SeqNo and a.ColValue='T_DocNumber') ) AS NVARCHAR(500))
 
    FROM #TEMP_ORDET ORDET
    JOIN dbo.ORDERS OH (NOLOCK) ON ORDET.FirstOrderkey = OH.Orderkey

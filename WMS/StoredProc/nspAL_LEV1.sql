@@ -16,7 +16,7 @@ GO
 /*                                                                       */            
 /* Called By:                                                            */            
 /*                                                                       */            
-/* PVCS Version: 1.2                                                     */            
+/* PVCS Version: 1.3                                                     */            
 /*                                                                       */            
 /* Version: 7.0                                                          */            
 /*                                                                       */            
@@ -27,6 +27,7 @@ GO
 /* 05-Dec-2018  NJOW01  1.0   Fix - short allocation                     */
 /* 27-DEC-2018  Grick01 1.1   INC0513699 - Check for PendingMoveIn(G01)  */
 /* 27-Feb-2020  Wan01   1.2   Dynamic SQL review, impact SQL cache log   */ 
+/* 17-Jan-2022  KY01    1.3   JSM-46456-Extend @c_SKU NVARCHAR(20) (KY01)*/ 
 /*************************************************************************/            
 
 CREATE PROC nspAL_LEV1
@@ -215,7 +216,7 @@ BEGIN
           RTRIM(ISNULL(@c_OrderBy,''))
 
    EXEC sp_executesql @c_SQL 
-      , N'@c_Storerkey  NVARCHAR(15), @c_Sku NVARCHAR(15), @c_Facility NVARCHAR(5), 
+      , N'@c_Storerkey  NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5),             --(KY01)
           @c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18),
           @d_Lottable04 DATETIME,     @d_Lottable05 DATETIME,     @c_Lottable06 NVARCHAR(30), 
           @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), 

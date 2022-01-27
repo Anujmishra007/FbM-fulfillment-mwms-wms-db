@@ -1,4 +1,4 @@
-﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_return_note_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_return_note_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[isp_r_hk_return_note_01]
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -23,6 +23,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 04/11/2021   ML       1.1  Add SizeSeq logic for handling Size 99-99  */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_return_note_01] (
@@ -809,12 +810,13 @@ BEGIN
         , LineGrouping = SL.LineGrouping
         , Size         = SL.Size
         , SizeSeq      = ROW_NUMBER() OVER(PARTITION BY SL.Storerkey, SL.DocKey, SL.LineGrouping
-                                 ORDER BY CASE
-                                    WHEN SizeScaleSeq>0 THEN FORMAT(SizeScaleSeq,'000000.00')
-                                    WHEN ISNUMERIC(SL.Size)=1 AND LTRIM(SL.Size) NOT IN ('-','+','.',',') THEN FORMAT(CONVERT(FLOAT,SL.Size)+400000,'000000.00')
-                                    WHEN RTRIM(SL.Size) LIKE N'%[0-9]H' AND ISNUMERIC(LEFT(SL.Size,LEN(SL.Size)-1))=1 THEN FORMAT(CONVERT(FLOAT,LEFT(SL.Size,LEN(SL.Size)-1)+'.5')+400000,'000000.00')
-                                    ELSE FORMAT(CHARINDEX(N'|'+LTRIM(RTRIM(SL.Size))+N'|', @c_SizeList)+800000,'000000.00')
-                                 END +'-'+ SL.Size )
+                         ORDER BY CASE
+                            WHEN SizeScaleSeq>0 THEN FORMAT(SizeScaleSeq,'000000.00')
+                            WHEN ISNUMERIC(SL.Size)=1 AND LTRIM(SL.Size) NOT IN ('-','+','.',',') THEN FORMAT(CONVERT(FLOAT,SL.Size)+400000,'000000.00')
+                            WHEN RTRIM(SL.Size) LIKE N'%[0-9]H' AND ISNUMERIC(LEFT(SL.Size,LEN(SL.Size)-1))=1 THEN FORMAT(CONVERT(FLOAT,LEFT(SL.Size,LEN(SL.Size)-1)+'.5')+400000,'000000.00')
+                            WHEN TRIM(SL.Size) LIKE N'%[ -]%' THEN FORMAT(ISNULL(TRY_PARSE(ISNULL(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1),'') AS FLOAT)+400000, CHARINDEX(N'|'+LTRIM(RTRIM(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1)))+N'|', @c_SizeList)+800000),'000000.00')
+                            ELSE FORMAT(CHARINDEX(N'|'+LTRIM(RTRIM(SL.Size))+N'|', @c_SizeList)+800000,'000000.00')
+                         END +'-'+ SL.Size )
    INTO #TEMP_SSEQ
 
    FROM (

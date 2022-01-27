@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_07a]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_picking_control_list_07a]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_picking_control_list_07a]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_picking_control_list_07a]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -25,6 +25,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 19/09/2019   ML       1.1  1. Include PD.Status = 3                   */
 /*                            2. Exclude PD.UOM = 2 (FCP)                */
+/* 11/08/2021   ML       1.2  WMS-17708 Add MAPFILED: Suggest_PAZone,    */
+/*                            T_Suggest_PAZone, T_PutawayZone            */
 /*************************************************************************/
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_07a] (
        @as_storerkey NVARCHAR(15)
@@ -37,41 +39,119 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @c_DataWindow       NVARCHAR(40)
-         , @n_Ttl_Carton       INT
+/* CODELKUP.REPORTCFG
+   [MAPFIELD]
+      Suggest_PAZone, T_Suggest_PAZone, T_PutawayZone
 
+   [SQLJOIN]
+*/
 
-   SET @c_DataWindow   = 'r_hk_picking_control_list_07a'
+   DECLARE @c_DataWindow          NVARCHAR(40)  = 'r_hk_picking_control_list_07a'
+         , @c_ExecStatements      NVARCHAR(MAX) = ''
+         , @c_ExecArguments       NVARCHAR(MAX) = ''
+         , @c_JoinClause          NVARCHAR(MAX) = ''
+         , @c_ShowFields          NVARCHAR(MAX) = ''
+         , @c_Suggest_PAZoneExp   NVARCHAR(MAX) = ''
+         , @c_T_Suggest_PAZoneExp NVARCHAR(MAX) = ''
+         , @c_T_PutawayZoneExp    NVARCHAR(MAX) = ''
+         , @n_Ttl_Carton          INT           = 0
+
 
    IF OBJECT_ID('tempdb..#TEMP_PICKDETAIL') IS NOT NULL
       DROP TABLE #TEMP_PICKDETAIL
 
+   CREATE TABLE #TEMP_PICKDETAIL (
+        Storerkey          NVARCHAR(30)
+      , CustomerGroupCode  NVARCHAR(40)
+      , Wavekey            NVARCHAR(20)
+      , Wave_AddDate       DATETIME
+      , CaseID             NVARCHAR(40)
+      , PutawayZone        NVARCHAR(20)
+      , PickZone           NVARCHAR(20)
+      , Loc                NVARCHAR(20)
+      , Qty                INT
+      , ReqReplen          VARCHAR (1 )
+      , Suggest_PAZone     NVARCHAR(50)
+      , T_Suggest_PAZone   NVARCHAR(50)
+      , T_PutawayZone      NVARCHAR(50)
+   )
 
-   SELECT Storerkey         = RTRIM(ISNULL(OH.Storerkey,''))
-        , CustomerGroupCode = RTRIM(ISNULL(ST.CustomerGroupCode,''))
-        , Wavekey           = RTRIM(ISNULL(OH.Userdefine09,''))
-        , Wave_AddDate      = WAVE.AddDate
-        , CaseID            = RTRIM(ISNULL(PD.CaseID,''))
-        , PutawayZone       = RTRIM(ISNULL(LOC.PutawayZone,''))
-        , PickZone          = RTRIM(ISNULL(LOC.PickZone,''))
-        , Loc               = RTRIM(ISNULL(PD.Loc,''))
-        , Qty               = PD.Qty
-        , ReqReplen         = IIF(LOC.LocationType='OTHER','Y','N')
-     INTO #TEMP_PICKDETAIL
-     FROM dbo.ORDERS      OH(NOLOCK)
-     JOIN dbo.STORER      ST(NOLOCK) ON OH.Storerkey = ST.Storerkey
-     JOIN dbo.WAVE      WAVE(NOLOCK) ON OH.Userdefine09 = WAVE.Wavekey
-     JOIN dbo.PICKDETAIL  PD(NOLOCK) ON OH.Orderkey = PD.Orderkey
-     JOIN dbo.LOC        LOC(NOLOCK) ON PD.Loc = LOC.Loc
-    WHERE OH.Storerkey    = @as_storerkey
-      AND OH.Userdefine09 = @as_wavekey
-      AND OH.Userdefine09<>''
-      AND PD.Status <= '3'
-      AND ISNULL(PD.UOM,'') <> '2'
-      AND PD.Qty > 0
+   SELECT TOP 1
+          @c_ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+     FROM dbo.CodeLkup (NOLOCK)
+    WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+      AND Storerkey = @as_storerkey
+    ORDER BY Code2
+
+   SELECT TOP 1
+          @c_JoinClause = Notes
+     FROM dbo.CodeLkup (NOLOCK)
+    WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y'
+      AND Storerkey = @as_storerkey
+    ORDER BY Code2
+
+   SELECT TOP 1
+          @c_Suggest_PAZoneExp  = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='Suggest_PAZone')), '' )
+        , @c_T_Suggest_PAZoneExp= ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='T_Suggest_PAZone')), '' )
+        , @c_T_PutawayZoneExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='T_PutawayZone')), '' )
+     FROM dbo.CodeLkup (NOLOCK)
+    WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
+      AND Storerkey = @as_storerkey
+    ORDER BY Code2
 
 
-   SET @n_Ttl_Carton = 0
+   SET @c_ExecStatements =
+      N'INSERT INTO #TEMP_PICKDETAIL (Storerkey, CustomerGroupCode, Wavekey, Wave_AddDate, CaseID, PutawayZone, PickZone, Loc, Qty, ReqReplen,'
+     +                              ' Suggest_PAZone, T_Suggest_PAZone, T_PutawayZone)'
+     +' SELECT Storerkey         = ISNULL(RTRIM(OH.Storerkey),'''')'
+     +      ', CustomerGroupCode = ISNULL(RTRIM(ST.CustomerGroupCode),'''')'
+     +      ', Wavekey           = ISNULL(RTRIM(OH.Userdefine09),'''')'
+     +      ', Wave_AddDate      = WAVE.AddDate'
+     +      ', CaseID            = ISNULL(RTRIM(PD.CaseID),'''')'
+     +      ', PutawayZone       = ISNULL(RTRIM(LOC.PutawayZone),'''')'
+     +      ', PickZone          = ISNULL(RTRIM(LOC.PickZone),'''')'
+     +      ', Loc               = ISNULL(RTRIM(PD.Loc),'''')'
+     +      ', Qty               = PD.Qty'
+     +      ', ReqReplen         = IIF(LOC.LocationType=''OTHER'',''Y'',''N'')'
+   SET @c_ExecStatements = @c_ExecStatements
+     +      ', Suggest_PAZone    = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Suggest_PAZoneExp  ,'')<>'' THEN @c_Suggest_PAZoneExp   ELSE ''''''              END + '),'''')'
+   SET @c_ExecStatements = @c_ExecStatements
+     +      ', T_Suggest_PAZone  = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_T_Suggest_PAZoneExp,'')<>'' THEN @c_T_Suggest_PAZoneExp ELSE '''Suggested First PA Zone:''' END + '),'''')'
+   SET @c_ExecStatements = @c_ExecStatements
+     +      ', T_PutawayZone     = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_T_PutawayZoneExp   ,'')<>'' THEN @c_T_PutawayZoneExp    ELSE '''PutawayZone'''   END + '),'''')'
+
+   SET @c_ExecStatements = @c_ExecStatements
+     + ' FROM dbo.ORDERS     OH  (NOLOCK)'
+     + ' JOIN dbo.STORER     ST  (NOLOCK) ON OH.Storerkey = ST.Storerkey'
+     + ' JOIN dbo.WAVE       WAVE(NOLOCK) ON OH.Userdefine09 = WAVE.Wavekey'
+     + ' JOIN dbo.PICKDETAIL PD  (NOLOCK) ON OH.Orderkey = PD.Orderkey'
+     + ' JOIN dbo.LOC        LOC (NOLOCK) ON PD.Loc = LOC.Loc'
+   SET @c_ExecStatements = @c_ExecStatements
+     + CASE WHEN ISNULL(@c_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_JoinClause)),'') END
+
+   SET @c_ExecStatements = @c_ExecStatements
+     +' WHERE OH.Storerkey    = @as_storerkey'
+     +  ' AND OH.Userdefine09 = @as_wavekey'
+     +  ' AND OH.Userdefine09<>'''''
+     +  ' AND PD.Status <= ''3'''
+     +  ' AND ISNULL(PD.UOM,'''') <> ''2'''
+     +  ' AND PD.Qty > 0'
+
+   SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
+                        + ',@as_wavekey NVARCHAR(10)'
+
+   EXEC sp_ExecuteSql @c_ExecStatements
+                    , @c_ExecArguments
+                    , @as_storerkey
+                    , @as_wavekey
+
+
    SELECT @n_Ttl_Carton = COUNT(DISTINCT CaseID) FROM #TEMP_PICKDETAIL WHERE CaseID <>''
 
 
@@ -96,6 +176,9 @@ BEGIN
         , Datawindow        = @c_DataWindow
         , Section           = 2
         , PageNo            = ROW_NUMBER() OVER(PARTITION BY Z.Storerkey, Z.Wavekey ORDER BY Z.ReqReplen, Z.Suggest_PAZone, FLOOR((Z.SeqNo+5) / 6))
+        , ShowFields        = @c_ShowFields
+        , Lbl_Suggest_PAZone= MAX(Z.T_Suggest_PAZone)
+        , Lbl_PutawayZone   = MAX(Z.T_PutawayZone)
    FROM (
       SELECT Y.*
            , SeqNo = ROW_NUMBER() OVER(PARTITION BY Y.Storerkey, Y.Wavekey, Y.ReqReplen, Y.Suggest_PAZone  ORDER BY Y.CaseID)
@@ -104,12 +187,16 @@ BEGIN
               , CustomerGroupCode = MAX(X.CustomerGroupCode)
               , Wavekey           = X.Wavekey
               , Wave_AddDate      = MAX(X.Wave_AddDate)
-              , Suggest_PAZone    = ISNULL((SELECT TOP 1 a.PutawayZone FROM #TEMP_PICKDETAIL a
+              , Suggest_PAZone    = CASE WHEN ISNULL(@c_Suggest_PAZoneExp,'')<>'' THEN MAX(X.Suggest_PAZone)
+                                         ELSE ISNULL((SELECT TOP 1 a.PutawayZone FROM #TEMP_PICKDETAIL a
                                              WHERE a.Storerkey=X.Storerkey AND a.Wavekey=X.Wavekey AND a.CaseID=X.CaseID
                                                AND a.CaseID<>'' GROUP BY a.CaseID, a.PutawayZone
                                              ORDER BY SUM(a.Qty) DESC, a.PutawayZone), '')
+                                    END
               , CaseID            = X.CaseID
               , ReqReplen         = MAX(X.ReqReplen)
+              , T_Suggest_PAZone  = MAX(X.T_Suggest_PAZone)
+              , T_PutawayZone     = MAX(X.T_PutawayZone)
          FROM #TEMP_PICKDETAIL X
          GROUP BY X.Storerkey
                 , X.Wavekey
@@ -124,16 +211,17 @@ BEGIN
 
    UNION ALL
 
-   SELECT Storerkey         = X.Storerkey
-        , CustomerGroupCode = MAX(X.CustomerGroupCode)
-        , Wavekey           = X.Wavekey
-        , Wave_AddDate      = MAX(X.Wave_AddDate)
+
+   SELECT Storerkey         = Y.Storerkey
+        , CustomerGroupCode = MAX(Y.CustomerGroupCode)
+        , Wavekey           = Y.Wavekey
+        , Wave_AddDate      = MAX(Y.Wave_AddDate)
         , ReqReplen         = ''
-        , Suggest_PAZone    = X.PutawayZone
-        , PA_PickZone       = COUNT(DISTINCT X.PickZone)
-        , PA_PickLoc        = COUNT(DISTINCT X.Loc)
-        , PA_NoOfCtn        = COUNT(DISTINCT X.CaseID)
-        , Qty               = SUM(X.Qty)
+        , Suggest_PAZone    = Y.Suggest_PAZone
+        , PA_PickZone       = COUNT(DISTINCT Y.PickZone)
+        , PA_PickLoc        = COUNT(DISTINCT Y.Loc)
+        , PA_NoOfCtn        = COUNT(DISTINCT Y.CaseID)
+        , Qty               = SUM(Y.Qty)
         , LineSeq           = 0
         , CaseID_01         = ''
         , CaseID_02         = ''
@@ -145,13 +233,30 @@ BEGIN
         , Datawindow        = @c_DataWindow
         , Section           = 1
         , PageNo            = 0
-   FROM #TEMP_PICKDETAIL X
-   GROUP BY X.Storerkey
-          , X.Wavekey
-          , X.PutawayZone
+        , ShowFields        = @c_ShowFields
+        , Lbl_Suggest_PAZone= MAX(Y.T_Suggest_PAZone)
+        , Lbl_PutawayZone   = MAX(Y.T_PutawayZone)
+   FROM (
+      SELECT Storerkey         = X.Storerkey
+           , CustomerGroupCode = X.CustomerGroupCode
+           , Wavekey           = X.Wavekey
+           , Wave_AddDate      = X.Wave_AddDate
+           , Suggest_PAZone    = CASE WHEN ISNULL(@c_Suggest_PAZoneExp,'')<>'' THEN X.Suggest_PAZone ELSE X.PutawayZone END
+           , PickZone          = X.PickZone
+           , Loc               = X.Loc
+           , CaseID            = X.CaseID
+           , Qty               = X.Qty
+           , T_Suggest_PAZone  = X.T_Suggest_PAZone
+           , T_PutawayZone     = X.T_PutawayZone
+      FROM #TEMP_PICKDETAIL X
+   ) Y
+   GROUP BY Y.Storerkey
+          , Y.Wavekey
+          , Y.Suggest_PAZone
 
    ORDER BY Storerkey, Wavekey, Section, ReqReplen, Suggest_PAZone, LineSeq
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_picking_control_list_07a TO NSQL
 GO

@@ -25,6 +25,8 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 2019-04-04   ML       1.1  Jira WMS8570 - Add Brand code              */
+/* 2021-08-02   ML       1.2  WMS-17623 - Add Extend Validation          */
+/* 2021-09-02   ML       1.3  If Multi-Sku Carton Then ToZone = Residual */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_replenishment_report_07] (
@@ -37,33 +39,19 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cDataWidnow         NVARCHAR(40)
-         , @n_StartTCnt         INT
-         , @c_Storerkey         NVARCHAR(15)
-         , @b_MultiOrderGroup   INT
-         , @b_InvalidOrderGroup INT
-         , @b_BlankLoadkey      INT
-         , @c_OrderGroup        NVARCHAR(60)
-         , @b_Success           INT
-         , @n_Err               INT
-         , @c_ErrMsg            NVARCHAR(250)
-
-   IF ISNULL(@as_wavekey,'')=''
-   BEGIN
-      RAISERROR ('Wavekey is Blank', 16, 1) WITH SETERROR
-      GOTO QUIT
-   END
-
-   SELECT @cDataWidnow  = 'r_hk_replenishment_report_07'
-        , @n_StartTCnt  = @@TRANCOUNT
-        , @b_MultiOrderGroup   = 0
-        , @b_InvalidOrderGroup = 0
-        , @b_BlankLoadkey      = 0
-        , @c_OrderGroup        = ''
-        , @c_ErrMsg            = ''
-        , @c_Storerkey         = (SELECT TOP 1 Storerkey FROM ORDERS (NOLOCK) WHERE Userdefine09<>'' AND Userdefine09=@as_wavekey)
-
-
+   DECLARE @c_DataWindow        NVARCHAR(40)  = 'r_hk_replenishment_report_07'
+         , @n_StartTCnt         INT           = @@TRANCOUNT
+         , @c_Storerkey         NVARCHAR(15)  = (SELECT TOP 1 Storerkey FROM dbo.ORDERS (NOLOCK) WHERE Userdefine09<>'' AND Userdefine09=@as_wavekey ORDER BY Orderkey)
+         , @b_MultiOrderGroup   INT           = 0
+         , @b_InvalidOrderGroup INT           = 0
+         , @b_BlankLoadkey      INT           = 0
+         , @c_OrderGroup        NVARCHAR(60)  = ''
+         , @b_Success           INT           = 0
+         , @n_Err               INT           = 0
+         , @c_ErrMsg            NVARCHAR(500) = ''
+         , @c_ExtValidateExp    NVARCHAR(MAX) = ''
+         , @c_ExecStatements    NVARCHAR(MAX)
+         , @c_ExecArguments     NVARCHAR(MAX)
 
    IF OBJECT_ID('tempdb..#TEMP_PICKDETAIL') IS NOT NULL
       DROP TABLE #TEMP_PICKDETAIL
@@ -82,9 +70,15 @@ BEGIN
       , PikDetUOM        NVARCHAR(10)
       , ToZone           NVARCHAR(60)
       , Remarks          NVARCHAR(200)
-      , ErrMsg           NVARCHAR(250)
+      , ErrMsg           NVARCHAR(500)
       , Brand            NVARCHAR(60)
    )
+
+   IF ISNULL(@as_wavekey,'')=''
+   BEGIN
+      SET @c_ErrMsg = 'Wavekey is Blank'
+      GOTO REPORT
+   END
 
 
    SELECT TOP 1
@@ -93,18 +87,17 @@ BEGIN
         , @b_BlankLoadkey      = MAX(X.BlankLoadKey)
         , @c_OrderGroup        = MAX(X.OrderGroup)
    FROM (
-      SELECT DISTINCt
+      SELECT DISTINCT
              Wavekey      = ISNULL(a.Userdefine09,'')
            , OrderGroup   = CASE WHEN a.OrderGroup='W' AND ISNULL(a.DeliveryNote,'') NOT IN ( '','NA') THEN a.DeliveryNote ELSE b.UDF02 END    --D=Discrete C=Consolidate
            , BlankLoadKey = IIF(ISNULL(a.Loadkey,'')='', 1, 0)
-        FROM ORDERS   a(NOLOCK)
-        JOIN CODELKUP b(NOLOCK) ON a.OrderGroup = b.Code AND a.Storerkey = b.Storerkey AND b.Listname = 'ORDERGROUP'
+        FROM dbo.ORDERS   a(NOLOCK)
+        JOIN dbo.CODELKUP b(NOLOCK) ON a.OrderGroup = b.Code AND a.Storerkey = b.Storerkey AND b.Listname = 'ORDERGROUP'
    ) X
    WHERE X.Wavekey = @as_wavekey
    GROUP BY X.Wavekey
 
 
-   SET @c_ErrMsg = ''
    IF ISNULL(@b_MultiOrderGroup, 0) <> 0
       SET @c_ErrMsg += IIF(@c_ErrMsg<>'',', ', '') + 'Multiple OrderGroup Found'
 
@@ -115,9 +108,44 @@ BEGIN
       SET @c_ErrMsg += IIF(@c_ErrMsg<>'',', ', '') + 'Blank Loadkey Found'
 
    IF ISNULL(@c_ErrMsg,'')<>''
+      GOTO REPORT
+
+
+   SELECT TOP 1
+          @c_ExtValidateExp =  Notes
+     FROM dbo.CodeLkup (NOLOCK)
+    WHERE Listname='REPORTCFG' AND Code='SQLCHECK' AND Long=@c_DataWindow AND Short='Y'
+      AND Storerkey = @c_Storerkey
+    ORDER BY Code2
+
+   IF ISNULL(@c_ExtValidateExp,'')<>''
    BEGIN
-      RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR
-      GOTO QUIT
+      SET @c_ExecStatements = N'INSERT INTO #TEMP_PICKDETAIL (ErrMsg) ' + @c_ExtValidateExp
+      SET @c_ExecArguments  = N'@as_wavekey NVARCHAR(10)'
+
+      EXEC sp_ExecuteSql @c_ExecStatements
+                       , @c_ExecArguments
+                       , @as_wavekey
+
+      IF @@ROWCOUNT>0
+      BEGIN
+         UPDATE #TEMP_PICKDETAIL
+            SET Storerkey   = @c_Storerkey
+              , Wavekey     = @as_wavekey
+              , PutawayZone = ''
+              , PA_Descr    = ''
+              , LogicalLoc  = ''
+              , Loc         = ''
+              , ID          = ''
+              , Sku         = ''
+              , Sku_Descr   = ''
+              , Qty         = 0
+              , PikDetUOM   = ''
+              , ToZone      = ''
+              , Remarks     = ''
+              , Brand       = ''
+         GOTO REPORT
+      END
    END
 
 
@@ -132,8 +160,8 @@ BEGIN
 
       IF @b_Success = 0
       BEGIN
-         RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR
-         GOTO QUIT
+         SET @c_ErrMsg = 'Get Discrete PickslipNo Error: ' + ISNULL(@c_ErrMsg,'')
+         GOTO REPORT
       END
    END
    ELSE
@@ -148,12 +176,10 @@ BEGIN
 
       IF @b_Success = 0
       BEGIN
-         RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR
-         GOTO QUIT
+         SET @c_ErrMsg = 'Get Conso PickslipNo Error: ' + ISNULL(@c_ErrMsg,'')
+         GOTO REPORT
       END
    END
-
-
 
    INSERT INTO #TEMP_PICKDETAIL (
           Storerkey, Wavekey, PutawayZone, PA_Descr, LogicalLoc, Loc, ID,
@@ -172,21 +198,24 @@ BEGIN
            , Sku_Descr   = RTRIM( SKU.Descr )
            , Qty         = PD.Qty
            , PikDetUOM   = RTRIM( PD.UOM )
-           , ToZone      = CASE WHEN PD.UOM='2' THEN 'FCP'
+           , ToZone      = CASE WHEN (SELECT COUNT(DISTINCT Sku) FROM dbo.LOTxLOCxID a(NOLOCK)
+                                      WHERE a.Storerkey=PD.Storerkey AND a.ID=PD.ID AND a.ID<>'' AND a.Qty>0) > 1    -- Multi Sku Carton
+                                THEN 'Residual'
+                                WHEN PD.UOM='2' THEN 'FCP'
                                 WHEN PD.UOM IN ('6', '7') THEN
                                    CASE WHEN
-                                     (SELECT SUM(b.Qty) FROM ORDERS a(NOLOCK), PICKDETAIL b(NOLOCK)
+                                     (SELECT SUM(b.Qty) FROM dbo.ORDERS a(NOLOCK), dbo.PICKDETAIL b(NOLOCK)
                                          WHERE a.Orderkey=b.Orderkey AND b.Status<>'9'
                                            AND a.Storerkey=OH.Storerkey AND a.Userdefine09=OH.Userdefine09
                                            AND b.ID=PD.ID AND b.Sku=PD.Sku AND b.Loc=PD.Loc AND b.Lot=PD.Lot) =
-                                     (SELECT SUM(a.Qty) FROM LOTxLOCxID a(NOLOCK)
+                                     (SELECT SUM(a.Qty) FROM dbo.LOTxLOCxID a(NOLOCK)
                                          WHERE a.Storerkey=OH.Storerkey
                                            AND a.ID=PD.ID AND a.Sku=PD.Sku AND a.Loc=PD.Loc AND a.Lot=PD.Lot)
                                         THEN 'DP'
                                      ELSE 'Residual'
                                 END
                            END
-           , Remarks     = CAST(STUFF((SELECT DISTINCT ', ', RTRIM(a.Userdefine09) FROM ORDERS a(NOLOCK), PICKDETAIL b(NOLOCK)
+           , Remarks     = CAST(STUFF((SELECT DISTINCT ', ', RTRIM(a.Userdefine09) FROM dbo.ORDERS a(NOLOCK), dbo.PICKDETAIL b(NOLOCK)
                            WHERE a.Orderkey=b.Orderkey AND a.Userdefine09<>'' AND b.ID<>'' AND a.Userdefine09<>OH.Userdefine09 AND b.ID=PD.ID
                            FOR XML PATH('')),1,2,'') AS NVARCHAR(200))
            , Brand       = RTRIM( LEFT(DIV.UDF01, 3) )
@@ -205,11 +234,18 @@ BEGIN
           X.ToZone, X.Remarks
 
 
-   IF NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_PICKDETAIL)
+REPORT:
+   IF ISNULL(@c_ErrMsg,'')<>''
+   BEGIN
+      TRUNCATE TABLE #TEMP_PICKDETAIL
+      INSERT INTO #TEMP_PICKDETAIL (
+             Storerkey, Wavekey, PutawayZone, PA_Descr, LogicalLoc, Loc, ID, Sku, Sku_Descr, Qty, PikDetUOM, ToZone, Remarks, ErrMsg, Brand)
+      VALUES(@c_Storerkey, @as_wavekey, '', '', '', '', '', '', '', 0, '', '', '', @c_ErrMsg, '')
+   END
+   ELSE IF NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_PICKDETAIL)
    BEGIN
       INSERT INTO #TEMP_PICKDETAIL (
-           Storerkey, Wavekey, PutawayZone, PA_Descr, LogicalLoc, Loc, ID,
-           Sku, Sku_Descr, Qty, PikDetUOM, ToZone, Remarks, ErrMsg, Brand)
+             Storerkey, Wavekey, PutawayZone, PA_Descr, LogicalLoc, Loc, ID, Sku, Sku_Descr, Qty, PikDetUOM, ToZone, Remarks, ErrMsg, Brand)
       VALUES(@c_Storerkey, @as_wavekey, '', '', '', '', '', '', '', 0, '', '', '', 'No Replenishment Record', '')
    END
 
@@ -217,12 +253,11 @@ BEGIN
    SELECT Storerkey, Wavekey, PutawayZone, PA_Descr, LogicalLoc
         , Loc, ID, Sku, Sku_Descr, Qty, PikDetUOM
         , ToZone, Remarks, ErrMsg
-        , DWName = @cDataWidnow
+        , DWName = @c_DataWindow
         , Brand
      FROM #TEMP_PICKDETAIL
     ORDER BY Wavekey, PutawayZone, LogicalLoc, Loc, ID, Sku
 
-QUIT:
    WHILE @@TRANCOUNT > @n_StartTCnt
    BEGIN
       COMMIT TRAN

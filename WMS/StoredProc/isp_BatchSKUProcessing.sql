@@ -2,6 +2,7 @@ IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Batc
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[isp_BatchSKUProcessing]
 GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -50,6 +51,9 @@ GO
 /* 12-May-2021  Shong   2.8   Performance Tuning SWT-2021-05-12         */
 /* 22-Jun-2021  NJOW02  2.9   WMS-17326 Add pre-allocation sp and support*/
 /*                            lot01 as hostwhcode when assign order line*/
+/* 21-Dec-2021	NJOW03  3.0   WMS-18620 Allow configure order sorting   */
+/*                            by orderdate                              */
+/* 12-Dec-2021  NJOW03  3.0   DEVOPS combine script                     */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -107,8 +111,10 @@ BEGIN
          ,  @c_SOStatus                     NVARCHAR(10) = '' -- (SWT04)
          ,  @c_Status                       NVARCHAR(10) = '' -- (SWT04)
          ,  @n_ChannelHoldQty               INT     --NJOW01
-         ,  @c_PreAllocationSP              NVARCHAR(200)  --NJOW02
-  
+         ,  @c_PreAllocationSP              NVARCHAR(200) --NJOW02
+         ,  @c_AutoAllocSort                NVARCHAR(30)  --NJOW03
+         ,  @c_AutoAllocSort_opt1           NVARCHAR(50)  --NJOW03
+
    DECLARE   
          @c_Lottable06 NVARCHAR(30),              @c_Lottable07 NVARCHAR(30),  
          @c_Lottable08 NVARCHAR(30),              @c_Lottable09 NVARCHAR(30),   
@@ -354,8 +360,26 @@ BEGIN
         @b_Success   = @b_Success               OUTPUT,  
         @c_authority = @c_ALFullPLTByBal        OUTPUT,  
         @n_err       = @n_err                   OUTPUT,  
-        @c_errmsg    = @c_errmsg                OUTPUT  
-     
+        @c_errmsg    = @c_errmsg                OUTPUT
+          
+   --NJOW03     
+   SET @c_AutoAllocSort = ''  
+   SET @c_AutoAllocSort_opt1 = ''
+      
+   EXEC nspGetRight    
+        @c_Facility  = @c_facility,   
+        @c_StorerKey = @c_StorerKey,    
+        @c_sku       = NULL,    
+        @c_ConfigKey = 'AutoAllocSort',     
+        @b_Success   = @b_Success            OUTPUT,    
+        @c_authority = @c_AutoAllocSort      OUTPUT,     
+        @n_err       = @n_err                OUTPUT,     
+        @c_errmsg    = @c_errmsg             OUTPUT,
+        @c_Option1   = @c_AutoAllocSort_Opt1 OUTPUT   
+        
+   IF ISNULL(@c_AutoAllocSort,'') <> '1'
+      SET @c_AutoAllocSort_opt1 = ''
+           
     --(Wan04) - START
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
@@ -2496,9 +2520,9 @@ BEGIN
                    o.LooseQty
                    ,ORDERS.SOStatus, ORDERS.[Status] -- (SWT04)  
             FROM   #OPORDERLINES o  
-            JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey --NJOW03  
-            JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku --NJOW03  
-            JOIN   PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey --NJOW03              
+            JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey 
+            JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku 
+            JOIN   PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey            
             WHERE  o.StorerKey = @c_aStorerKey AND  
                    o.SKU = @c_aSKU AND  
                    o.LOT = @c_aLOT AND  
@@ -2507,16 +2531,17 @@ BEGIN
                    o.Qty > 0 AND  
                    o.StrategyKey = @c_aStrategyKey AND  
                    o.UOMQty = @n_OriginUOMQty  
-          ORDER BY ORDERS.Priority, --NJOW03  
-                     CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
+          ORDER BY ORDERS.Priority, 
+                     CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03          
+                     CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, 
                      CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                       / PACK.CaseCnt) ELSE 0 END DESC, --NJOW03  
+                       / PACK.CaseCnt) ELSE 0 END DESC,  
                      CASE WHEN PACK.InnerPack > 0 THEN FLOOR(CASE WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
                                                                   WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                                                             / PACK.InnerPack) ELSE 0 END DESC, --NJOW03  
+                                                             / PACK.InnerPack) ELSE 0 END DESC, 
                      CASE WHEN PACK.InnerPack > 0 THEN o.Qty % CAST(PACK.InnerPack AS INT)  
                           WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
-                          WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC --NJOW03                                          
+                          WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC                                        
       END  
       ELSE  
       BEGIN  
@@ -2529,9 +2554,9 @@ BEGIN
                       ,ORDERS.SOStatus, ORDERS.[Status] -- (SWT04)  
                FROM   #OPORDERLINES o  
                JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber  
-               JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey --NJOW03  
-               JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku --NJOW03  
-               JOIN   PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey --NJOW03              
+               JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey  
+               JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku 
+               JOIN   PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey            
                WHERE  o.StorerKey = @c_aStorerKey AND  
                       o.SKU = @c_aSKU AND  
                       o.Facility = @c_aFacility AND  
@@ -2544,16 +2569,17 @@ BEGIN
                       OD.Lottable03 = @c_Lottable03 AND  
                       OD.Lottable04 = @d_Lottable04 AND  
                       OD.Lottable05 = @d_Lottable05     
-               ORDER BY ORDERS.Priority, --NJOW03  
-                        CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
+               ORDER BY ORDERS.Priority, 
+                        CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03                         
+                        CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, 
                         CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                                                              / PACK.CaseCnt) ELSE 0 END DESC, --NJOW03  
+                                                              / PACK.CaseCnt) ELSE 0 END DESC,   
                         CASE WHEN PACK.InnerPack > 0 THEN FLOOR(CASE WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
                                                                      WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                                                                / PACK.InnerPack) ELSE 0 END DESC, --NJOW03  
+                                                                / PACK.InnerPack) ELSE 0 END DESC, 
                         CASE WHEN PACK.InnerPack > 0 THEN o.Qty % CAST(PACK.InnerPack AS INT)  
                              WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
-                             WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC --NJOW03           
+                             WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC        
               
           END  
           ELSE  
@@ -2564,9 +2590,9 @@ BEGIN
                      ,ORDERS.SOStatus, ORDERS.[Status] -- (SWT04)   
                FROM   #OPORDERLINES o  
                JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber  
-               JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey --NJOW03  
-               JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku --NJOW03  
-               JOIN   PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey --NJOW03              
+               JOIN   ORDERS WITH (NOLOCK) ON o.Orderkey = ORDERS.Orderkey 
+               JOIN   SKU (NOLOCK) ON o.Storerkey = SKU.Storerkey AND o.Sku = SKU.Sku 
+               JOIN   PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey              
                WHERE  o.StorerKey = @c_aStorerKey AND  
                       o.SKU = @c_aSKU AND  
                       o.Facility = @c_aFacility AND  
@@ -2574,7 +2600,7 @@ BEGIN
                       o.Qty > 0 AND  
                       o.StrategyKey = @c_aStrategyKey AND  
                       o.UOMQty = @n_OriginUOMQty  AND
-                      OD.Lottable01 = @c_Lottable01 AND --NJOW02
+                      OD.Lottable01 = @c_Lottable01 AND 
                       OD.Lottable02 = @c_Lottable02 AND
                       OD.Lottable03 = @c_Lottable03 AND
                       OD.Lottable04 = @d_Lottable04 AND
@@ -2634,16 +2660,17 @@ BEGIN
                                             ELSE 0  
                                        END  
                             )*/  
-               ORDER BY ORDERS.Priority, --NJOW03  
-                        CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, --NJOW03  
+               ORDER BY ORDERS.Priority,   
+                        CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03                         
+                        CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC,  
                         CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                                                              / PACK.CaseCnt) ELSE 0 END DESC, --NJOW03  
+                                                              / PACK.CaseCnt) ELSE 0 END DESC, 
                         CASE WHEN PACK.InnerPack > 0 THEN FLOOR(CASE WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
                                                                      WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
-                                                                / PACK.InnerPack) ELSE 0 END DESC, --NJOW03  
+                                                                / PACK.InnerPack) ELSE 0 END DESC, 
                         CASE WHEN PACK.InnerPack > 0 THEN o.Qty % CAST(PACK.InnerPack AS INT)  
                              WHEN PACK.CaseCnt > 0 THEN o.Qty % CAST(PACK.CaseCnt AS INT)  
-                             WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC --NJOW03           
+                             WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END DESC          
          END              
       END  
   
@@ -2870,6 +2897,5 @@ BEGIN
    END  
 END 
 GO
-
 GRANT EXECUTE ON isp_BatchSKUProcessing To nSQL
 GO

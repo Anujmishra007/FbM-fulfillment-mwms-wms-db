@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_02]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_02]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_delivery_note_02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_delivery_note_02]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -28,6 +28,8 @@ GO
 /* 30/04/2018   ML       1.2  Add ExternOrderkey barcode in section 1 & 2*/
 /* 23/07/2020   ML       1.3  Performance tunning                        */
 /* 01/02/2021   ML       1.4  WMS-16288 - Add Parm DeliveryDate          */
+/* 25/11/2021   ML       1.5  WMS-18440 - Nike SEC - change the delivery */
+/*                                        note layout                    */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_02] (
@@ -60,6 +62,7 @@ BEGIN
 
    DECLARE @n_Col         INT
          , @n_Col2        INT
+         , @c_DataWindow  NVARCHAR(40) = 'r_hk_delivery_note_02'
 
    SELECT @n_Col  = 22
         , @n_Col2 = 6    -- ML01
@@ -86,11 +89,12 @@ BEGIN
       , ExternOrderkey   NVARCHAR(50)
       , Loadkey          NVARCHAR(10)
       , DeliveryDate     DATE
+      , RptVersion       NVARCHAR(10)
    )
 
    -- Get Orderkey
    SET @c_ExecStatements =
-       N'INSERT INTO #TEMP_ORDERKEY (Orderkey, ExternOrderkey, Loadkey, DeliveryDate)'
+       N'INSERT INTO #TEMP_ORDERKEY (Orderkey, ExternOrderkey, Loadkey, DeliveryDate, RptVersion)'
      + ' SELECT *'
      + ' FROM ('
      +    ' SELECT DISTINCT'
@@ -98,7 +102,17 @@ BEGIN
      +          ', ExternOrderkey = OH.ExternOrderkey'
      +          ', Loadkey        = OH.Loadkey'
      +          ', DeliveryDate   = CONVERT(DATE, FIRST_VALUE(OH.DeliveryDate) OVER(PARTITION BY OH.Loadkey ORDER BY OH.ExternOrderkey))'
+     +          ', RptVersion     = CASE WHEN OH.AddDate >='
+     +                                ' (select top 1 TRY_PARSE(ISNULL(b.ColValue,'''') AS DATETIME) from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b'
+     +                                 ' where a.SeqNo=b.SeqNo and a.ColValue=''V2_EffectiveDate'')'
+     +                            ' THEN ''V2'' ELSE ''V1'' END'
      +    ' FROM dbo.ORDERS OH WITH (NOLOCK)'
+     +    ' LEFT JOIN ('
+     +       ' SELECT Storerkey, Notes = RTRIM(Notes), Notes2 = RTRIM(Notes2), Delim = LTRIM(RTRIM(UDF01))'
+     +             ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+     +         ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''MAPVALUE'' AND Long=@c_DataWindow AND Short=''Y'''
+     +     ') RptCfg3'
+     +    ' ON RptCfg3.Storerkey=OH.StorerKey AND RptCfg3.SeqNo=1'
      +    ' WHERE OH.Loadkey <> '''''
    SET @c_ExecStatements = @c_ExecStatements
      +    CASE WHEN @as_storerkey = CHAR(9)   THEN '' ELSE ' AND OH.Storerkey = @as_storerkey' END
@@ -118,11 +132,13 @@ BEGIN
 
    SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
                         + ',@as_deliverydate NVARCHAR(10)'
+                        + ',@c_DataWindow  NVARCHAR(40)'
 
    EXEC sp_ExecuteSql @c_ExecStatements
                     , @c_ExecArguments
                     , @as_storerkey
                     , @as_deliverydate
+                    , @c_DataWindow
 
 
    -- Final Result
@@ -242,10 +258,10 @@ BEGIN
      +            ', ST_Fax1        = ISNULL( RTRIM( MAX( ST.B_Fax1 ) ), '''' )'
      +            ', Logo_Path      = RTRIM( MAX( ST.Logo ) )'
      +            ', C_Company      = ISNULL( RTRIM( MAX( OH.C_Company ) ), '''' )'
-     +            ', C_Address1     = ISNULL( RTRIM( MAX( OH.C_Address1 ) ), '''' )'
-     +            ', C_Address2     = ISNULL( RTRIM( MAX( OH.C_Address2 ) ), '''' )'
-     +            ', C_Address3     = ISNULL( RTRIM( MAX( OH.C_Address3 ) ), '''' )'
-     +            ', C_Address4     = ISNULL( RTRIM( MAX( OH.C_Address4 ) ), '''' )'
+     +            ', C_Address1     = ISNULL( RTRIM( MAX( CASE WHEN ORD.RptVersion=''V2'' THEN ''''          ELSE OH.C_Address1 END ) ), '''' )'
+     +            ', C_Address2     = ISNULL( RTRIM( MAX( CASE WHEN ORD.RptVersion=''V2'' THEN OH.C_Address3 ELSE OH.C_Address2 END ) ), '''' )'
+     +            ', C_Address3     = ISNULL( RTRIM( MAX( CASE WHEN ORD.RptVersion=''V2'' THEN OH.C_Address1 ELSE OH.C_Address3 END ) ), '''' )'
+     +            ', C_Address4     = ISNULL( RTRIM( MAX( CASE WHEN ORD.RptVersion=''V2'' THEN OH.C_Address2 ELSE OH.C_Address4 END ) ), '''' )'
      +            ', C_City         = ISNULL( RTRIM( MAX( OH.C_City ) ), '''' )'
      +            ', C_Country      = ISNULL( RTRIM( MAX( OH.C_Country ) ), '''' )'
      +            ', Route          = ISNULL( RTRIM( MAX( OH.Route ) ), '''' )'
@@ -403,6 +419,7 @@ BEGIN
      +      ' WHERE a.Loadkey <> '''''
      +      ' AND b.Qty > 0'
      +      ' AND a.C_Address1 <> '''''
+     +      ' AND ORD.RptVersion=''V1'''
      +      ' GROUP BY a.Loadkey, a.ExternOrderkey, a.C_Address1'
      +    ') X'
      +   ' GROUP BY X.Loadkey, X.ExternOrderkey, X.Remark, X.SeqNo'
@@ -424,5 +441,6 @@ BEGIN
                     , @n_Col2
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_delivery_note_02 TO NSQL
 GO

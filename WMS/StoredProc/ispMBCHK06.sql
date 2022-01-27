@@ -18,7 +18,7 @@ GO
 /* Called By: isp_ValidateMBOL/isp_MBOL_ExtendedValidation              */
 /*            (Storerconfig MBOLExtendedValidation/ListName.Long)       */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -31,6 +31,7 @@ GO
 /* 23-NOV-2016  Wan03    1.3  WMS-648 - GW StockTake Parameter2         */
 /*                            Enhancement                               */
 /* 01-Feb-2017  MT       1.4  IN00255004 - query performance issue      */
+/* 26-Feb-2021  SPChin   1.5  INC1295209 - Bug Fixed                    */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispMBCHK06]
       @cMBOLKey   NVARCHAR(10)
@@ -82,7 +83,7 @@ BEGIN
            @c_StorerSQL2      NVARCHAR(800),
            @c_AgencySQL       NVARCHAR(800),
            @c_AgencySQL2      NVARCHAR(800),
-  @c_ABCSQL          NVARCHAR(800),
+           @c_ABCSQL          NVARCHAR(800),
            @c_ABCSQL2         NVARCHAR(800),
            @c_SkuGroupSQL     NVARCHAR(800),
            @c_SkuGroupSQL2    NVARCHAR(800)
@@ -125,8 +126,18 @@ BEGIN
       Loc NVARCHAR(10) NULL)
 
    SELECT @n_continue = 1, @b_debug = 0, @n_Err = 0, @nSuccess  = 1, @c_ErrMsg  = ''
-
-   TRUNCATE TABLE #ErrorLogDetail
+   
+   --INC1295209 Start
+   IF ISNULL(OBJECT_ID('tempdb..#ErrorLogDetail'),'') = ''  
+   BEGIN
+      CREATE TABLE #ErrorLogDetail  
+         (RowNo      Int IDENTITY(1,1) Primary key,  
+          Key1       NVARCHAR(30) NULL,  
+          Key2       NVARCHAR(30) NULL,  
+          Key3       NVARCHAR(30) NULL,  
+          LineText   NVARCHAR(MAX) ) 
+   END
+   --INC1295209 End
 
    INSERT INTO #SKUXLOC
    SELECT DISTINCT PD.Storerkey, PD.Sku, PD.Loc

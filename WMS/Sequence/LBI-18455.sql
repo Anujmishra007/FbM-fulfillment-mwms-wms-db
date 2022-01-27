@@ -1,0 +1,39 @@
+-- LBI-18455
+
+--  SELECT  top 10 * FROM Ncounter where keyname  = 'LBI-18455'
+ 
+
+IF NOT EXISTS ( SELECT 1 FROM sys.sequences WHERE name = 'LBI-18455' ) 
+AND NOT EXISTS ( SELECT 1 FROM Ncounter where keyname  = 'LBI-18455' ) 
+BEGIN
+CREATE SEQUENCE dbo.[LBI-18455] 
+ AS [BIGINT]
+ START WITH 1
+ INCREMENT BY 1
+ MINVALUE 1
+ MAXVALUE 9999989999
+ CYCLE
+ CACHE 50
+ 
+grant Update on dbo.[LBI-18455]  to NSQL
+
+END
+GO
+ 
+
+
+/*
+
+ SELECT NEXT VALUE FOR dbo.[LBI-18455] 
+
+ALTER SEQUENCE [LBI-18455] INCREMENT BY 6689;
+ 
+ SELECT NEXT VALUE FOR dbo.[LBI-18455] 
+ 
+ALTER SEQUENCE  [LBI-18455]  INCREMENT BY 1;
+
+*/
+/*
+SELECT current_value, * FROM sys.sequences WHERE name = 'LBI-18455' ;
+ 
+*/

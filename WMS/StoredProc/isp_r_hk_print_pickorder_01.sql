@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_print_pickorder_01]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_print_pickorder_01]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_print_pickorder_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_print_pickorder_01]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -24,6 +24,8 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 2021-08-26   Michael  v1.1 Add Showfield Update_PD_PickslipNo         */
+/* 2021-11-30   Michael  V1.4 Fix RptCfg.ShowFields NULL value issue     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_pickorder_01] (
@@ -50,7 +52,7 @@ BEGIN
 
    [SHOWFIELD]
       LineRemark1, LineRemark2, LineRemark3
-
+      Update_PD_PickslipNo
 */
    DECLARE @c_DataWindow        NVARCHAR(40)  = 'r_hk_print_pickorder_01'
          , @n_continue          INT           = 1
@@ -58,6 +60,7 @@ BEGIN
          , @c_PickHeaderkey     NVARCHAR(10)
          , @c_TmpLoadkey        NVARCHAR(10)
          , @c_TmpOrderkey       NVARCHAR(10)
+         , @c_Update_PD_PSNo    NVARCHAR(10)
          , @c_errmsg            NVARCHAR(255)
          , @b_success           INT
          , @n_err               INT
@@ -167,21 +170,28 @@ BEGIN
 
    -- Generate PickHeader
    DECLARE PICK_CUR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-    SELECT DISTINCT OH.Loadkey, OH.Orderkey
+    SELECT OH.Loadkey, OH.Orderkey, MAX(CASE WHEN ISNULL(RptCfg.ShowFields,'') LIKE '%,Update_PD_PickslipNo,%' THEN 'Y' ELSE 'N' END)
       FROM dbo.LOADPLANDETAIL  LPD(NOLOCK)
       JOIN dbo.ORDERS          OH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
       JOIN dbo.PICKDETAIL      PD (NOLOCK) ON LPD.Orderkey = PD.Orderkey
       LEFT JOIN dbo.PICKHEADER PH (NOLOCK) ON LPD.Loadkey = PH.ExternOrderkey AND PH.Zone='8'
+      LEFT JOIN (
+         SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
+              , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+           FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWindow AND Short='Y'
+      ) RptCfg
+      ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1
      WHERE LPD.Loadkey = @c_Loadkey
        AND PD.Status < '5'
        AND PH.PickHeaderKey IS NULL
+    GROUP BY OH.Loadkey, OH.Orderkey
     ORDER BY 1, 2
 
    OPEN PICK_CUR
 
    WHILE 1=1
    BEGIN
-      FETCH NEXT FROM PICK_CUR INTO @c_TmpLoadkey, @c_TmpOrderkey
+      FETCH NEXT FROM PICK_CUR INTO @c_TmpLoadkey, @c_TmpOrderkey, @c_Update_PD_PSNo
 
       IF @@FETCH_STATUS<>0
          BREAK
@@ -212,6 +222,17 @@ BEGIN
       BEGIN
          WHILE @@TRANCOUNT > 0
             COMMIT TRAN
+      END
+      
+      IF ISNULL(@c_Update_PD_PSNo,'')='Y'
+      BEGIN
+         UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
+            SET PickslipNo = @c_Pickheaderkey
+              , TrafficCop = NULL
+          WHERE Orderkey = @c_TmpOrderkey
+            AND Status < '9'
+            AND ShipFlag <> 'Y'
+            AND ISNULL(PickslipNo,'') <> @c_Pickheaderkey
       END
    END
 
@@ -814,5 +835,6 @@ QUIT:
    END
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_print_pickorder_01 TO NSQL
 GO

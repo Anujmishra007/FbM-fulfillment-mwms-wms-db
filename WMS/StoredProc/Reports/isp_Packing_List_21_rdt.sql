@@ -30,8 +30,6 @@ GO
 /* 10-Nov-2016  SHONG     1.1   Performance Tuning  (SWT01)                   */
 /* 11-Nov-2017  CSCHONG   1.2   Remove case (CS02)                            */
 /* 27-Oct-2021  MINGLE    1.3   Modify logic (ML01)                           */
-/* 20-Dec-2021  MINGLE    1.4   Add new mapping (ML02)                        */
-/* 20-DEC-2021  Mingle    1.4   DevOps Combine Script                         */
 /******************************************************************************/     
 CREATE PROC [dbo].[isp_Packing_List_21_rdt]             
        (@c_Orderkey NVARCHAR(10),
@@ -144,15 +142,13 @@ BEGIN
           Salesman       =  CASE WHEN OH.Salesman = 'PDD' THEN '' ELSE OH.Salesman END,   --ML01
           Shipperkey     =  OH.shipperkey,
           SCompany       =  STO.company,
-          RecGrp         =  (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine,
-          clshort        =  CASE WHEN OH.ECOM_Platform = CL.Code THEN CL.Short ELSE '' END   --ML02
+          RecGrp         =  (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine 
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = ORDDET.Orderkey 
                             AND PD.orderlinenumber = ORDDET.orderlinenumber
    JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU AND S.Storerkey=PD.Storerkey
-   JOIN STORER STO WITH (NOLOCK) ON OH.shipperkey = STO.Storerkey 
-   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = 'SKEPLAT' AND CL.Storerkey = OH.StorerKey  --ML02                     
+   JOIN STORER STO WITH (NOLOCK) ON OH.shipperkey = STO.Storerkey                           
    WHERE OH.Orderkey = @c_getOrdKey  --(SWT01) 
     -- AND PD.Orderkey = @c_getOrdKey  --@c_orderkey  --(CS01) 
      --AND PD.Caseid = CASE WHEN ISNULL(@c_labelno,'') <> '' THEN  @c_labelno ELSE PD.Caseid END
@@ -197,15 +193,13 @@ BEGIN
           Salesman       =  CASE WHEN OH.Salesman = 'PDD' THEN '' ELSE OH.Salesman END,   --ML01
           Shipperkey     =  OH.shipperkey,
           SCompany       =  STO.company,
-          RecGrp         =  (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine,
-          clshort        =  CASE WHEN OH.ECOM_Platform = CL.Code THEN CL.Short ELSE '' END   --ML02 
+          RecGrp         =  (Row_Number() OVER (PARTITION BY PD.Orderkey ORDER BY PD.LOC Asc)-1)/@n_NoOfLine 
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = ORDDET.Orderkey 
                             AND PD.orderlinenumber = ORDDET.orderlinenumber
    JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU AND S.Storerkey=PD.Storerkey
-   JOIN STORER STO WITH (NOLOCK) ON OH.shipperkey = STO.Storerkey   
-   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = 'SKEPLAT' AND CL.Storerkey = OH.StorerKey  --ML02                        
+   JOIN STORER STO WITH (NOLOCK) ON OH.shipperkey = STO.Storerkey                           
    WHERE OH.Orderkey = @c_getOrdKey  --(SWT01) 
     -- AND PD.Orderkey = @c_getOrdKey  --@c_orderkey  --(CS01) 
      --AND PD.Caseid = CASE WHEN ISNULL(@c_labelno,'') <> '' THEN  @c_labelno ELSE PD.Caseid END

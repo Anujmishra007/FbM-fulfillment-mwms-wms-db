@@ -27,6 +27,8 @@ GO
 /* 15-Jun-2021  CSCHONG       WMS-16910 revised field logic (CS01)      */
 /* 24-Jul-2021  CSCHONG       WMS-16910 revised field logic (CS02)      */
 /* 28-JUL-2021  CSCHONG       WMS-17587 fix dupliacte qty issue (CS03)  */
+/* 24-JAN-2022  MINGLE        WMS-18724 add new field(ML01)             */
+/* 24-JAN-2022  MINGLE        DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC [dbo].[isp_CartonManifestLabel36_RDT] (
       @c_Orderkey      NVARCHAR(10) 
@@ -44,6 +46,7 @@ BEGIN
          , @c_ODUDF02      NVARCHAR(18)
          , @c_DeliveryMode NVARCHAR(30)
          , @n_CAMT         FLOAT
+         , @c_editdate     NVARCHAR(50)
 
    SET @n_IsRDT     = 0
    SET @n_StartTCnt = @@TRANCOUNT
@@ -58,6 +61,8 @@ BEGIN
   SET @c_ODUDF02 = ''
   SET @c_DeliveryMode = ''
   SET @n_CAMT = 0
+  SET @c_editdate = ''
+
 
    SELECT @c_sku = MAX(OD.SKU)
          ,@c_ODUDF02 = MAX(ISNULL(OD.Userdefine02,''))
@@ -115,6 +120,9 @@ BEGIN
          ,  Carton_Wgt = PACKHEADER.TotCtnWeight
          ,  C_State     = ISNULL(RTRIM(ORDERS.C_State),'')  
          ,  VOLWGT = CAST((PACKHEADER.TOTCTNCUBE/3500) AS DECIMAL(10,7))
+         ,  editdate = CONVERT(VARCHAR(50),Packheader.editdate,101) + ' ' + FORMAT(Packheader.editdate,'hh:mm:ss tt')   --ML01
+         ,  LBC = CASE WHEN SHPC.Code = 'PHSDLBC' THEN 'No automatic RTS' ELSE '' END   --ML01
+         , Packheader.editdate   --ML01 
    FROM  PACKDETAIL  WITH (NOLOCK) 
    JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
    JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
@@ -176,6 +184,8 @@ BEGIN
          ,  PACKHEADER.TOTCTNCUBE
          ,PACKHEADER.TotCtnWeight
          , ISNULL(RTRIM(ORDERS.C_State),'') 
+         , CASE WHEN SHPC.Code = 'PHSDLBC' THEN 'No automatic RTS' ELSE '' END   --ML01
+         , Packheader.editdate   --ML01
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
@@ -185,3 +195,4 @@ END
 GO
 GRANT EXECUTE ON dbo.isp_CartonManifestLabel36_RDT TO NSQL
 GO
+

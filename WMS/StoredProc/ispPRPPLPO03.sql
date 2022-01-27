@@ -27,7 +27,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 06-OCT-2021  NJOW      1.0 DEVOPS combine script                     */
-/* 20-OCT-2021  NJOW01    1.1 Fix stamp Userdefined06 to Userdefined09  */
+/* 20-OCT-2021  NJOW01    1.1 WMS-17224 Fix stamp Userdefined06 to      */
+/*                            Userdefined09                             */
+/* 31-OCT-2021  NJOW02    1.2 WMS-17224 Back List skip stamp QC flag    */
+/* 18-NOV-2021  NJOW02    1.2 DEVOPS combine script                     */
 /************************************************************************/
 CREATE PROC [dbo].[ispPRPPLPO03]
            @c_Receiptkey      NVARCHAR(10)
@@ -69,6 +72,7 @@ BEGIN
           ,@n_NoofArticleToQC     INT = 0
           ,@n_NoofArtical_HV      INT = 0
           ,@c_Style               NVARCHAR(20)
+          ,@c_BlackListSkipQCFlag NVARCHAR(10) = 'N' --NJOW02
                     
    DECLARE @c_Body                NVARCHAR(MAX),          
            @c_Subject             NVARCHAR(255),          
@@ -113,6 +117,15 @@ BEGIN
          FROM dbo.fnc_DelimSplit (',', @c_POLineNumbers) T
          WHERE #PREPPL_PO.SeqNo = T.SeqNo
       END
+      
+      --NJOW02
+      SELECT POD.* 
+      INTO #TMP_PODETAIL
+      FROM PO (NOLOCK) 
+      JOIN PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
+      LEFT JOIN RECEIPTDETAIL RD (NOLOCK) ON POD.Storerkey = RD.Storerkey AND POD.Sku = RD.Sku AND POD.Pokey = RD.Pokey AND POD.POLineNumber = RD.POLineNumber
+      WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO)
+      AND RD.Receiptkey IS NULL
    END
    
    IF @n_continue IN(1,2)
@@ -123,7 +136,7 @@ BEGIN
                      WHEN ISNULL(LTRIM(S.Susr1),'') = '1' THEN 'BL'
                      ELSE '' END
          FROM PO (NOLOCK)
-         JOIN PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
+         JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
          LEFT JOIN STORER S (NOLOCK) ON PO.SellerName = S.Storerkey AND S.Type = '5'
          JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
          WHERE PO.POKey IN(SELECT POKey FROM #PREPPL_PO)
@@ -202,6 +215,7 @@ BEGIN
          @c_Option5   = @c_option5 OUTPUT               
 
       SELECT @c_PercentageofArticle = dbo.fnc_GetParamValueFromString('@c_PercentageofArticle', @c_option5, @c_PercentageofArticle)
+      SELECT @c_BlackListSkipQCFlag = dbo.fnc_GetParamValueFromString('@c_BlackListSkipQCFlag', @c_option5, @c_BlackListSkipQCFlag) --NJOW02
 
       IF ISNUMERIC(@c_PercentageofArticle) = 1 
       BEGIN
@@ -209,16 +223,20 @@ BEGIN
 
       	 SELECT @n_NoofArticleToQC = CEILING(@n_PercentageofArticle * COUNT(DISTINCT SKU.Style))
       	 FROM PO (NOLOCK)
-      	 JOIN PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
+      	 JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
       	 JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
+      	 LEFT JOIN STORER S (NOLOCK) ON PO.SellerName = S.Storerkey AND S.Type = '5' AND S.Susr1 = '1' AND @c_BlackListSkipQCFlag = 'Y'  --NJOW02
       	 WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO) 
+      	 AND S.Storerkey IS NULL --NJOW02
       	       	       	 
       	 SELECT @n_NoofArtical_HV = COUNT(DISTINCT SKU.Style)
       	 FROM PO (NOLOCK)
-      	 JOIN PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
+      	 JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
       	 JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
       	 JOIN UCC (NOLOCK) ON UCC.Externkey = POD.ExternPokey AND UCC.UccNo = POD.Userdefine01 AND UCC.Storerkey = PO.Storerkey AND UCC.Userdefined08 = 'HV'
+      	 LEFT JOIN STORER S (NOLOCK) ON PO.SellerName = S.Storerkey AND S.Type = '5' AND S.Susr1 = '1' AND @c_BlackListSkipQCFlag = 'Y'  --NJOW02
       	 WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO)
+      	 AND S.Storerkey IS NULL --NJOW02
       	 
       	 SELECT @n_NoofArticleToQC = @n_NoofArticleToQC - @n_NoofArtical_HV 
       	 
@@ -227,11 +245,13 @@ BEGIN
       	    DECLARE CUR_ARTICLE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       	       SELECT SKU.Style
       	       FROM PO (NOLOCK)
-      	       JOIN PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
+      	       JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
       	       JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
       	       JOIN UCC (NOLOCK) ON UCC.Externkey = POD.ExternPokey AND UCC.UccNo = POD.Userdefine01 AND UCC.Storerkey = PO.Storerkey AND UCC.Sku = POD.Sku AND UCC.Userdefined08 <> 'HV' 
+          	   LEFT JOIN STORER S (NOLOCK) ON PO.SellerName = S.Storerkey AND S.Type = '5' AND S.Susr1 = '1' AND @c_BlackListSkipQCFlag = 'Y'  --NJOW02
       	       WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO)
       	       AND ISNULL(SKU.SUSR2,'') <> '1'
+            	 AND S.Storerkey IS NULL --NJOW02
       	       GROUP BY SKU.Style
       	       ORDER BY SUM(POD.QtyOrdered), SKU.Style 
 
@@ -244,12 +264,14 @@ BEGIN
                DECLARE CUR_UCC_QC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
                   SELECT UCC.UccNo          
           	      FROM PO (NOLOCK)                     
-      	          JOIN PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
+      	          JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.Pokey = POD.Pokey
       	          JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
       	          JOIN UCC (NOLOCK) ON UCC.Externkey = POD.ExternPokey AND UCC.UccNo = POD.Userdefine01 AND UCC.Storerkey = PO.Storerkey AND UCC.Userdefined08 <> 'HV' 
+              	  LEFT JOIN STORER S (NOLOCK) ON PO.SellerName = S.Storerkey AND S.Type = '5' AND S.Susr1 = '1' AND @c_BlackListSkipQCFlag = 'Y'  --NJOW02
       	          WHERE PO.Pokey IN(SELECT POKey FROM #PREPPL_PO)
       	          AND ISNULL(SKU.SUSR2,'') <> '1'
       	          AND SKU.Style = @c_Style
+               	  AND S.Storerkey IS NULL --NJOW02
                           
                OPEN CUR_UCC_QC
                
@@ -292,7 +314,7 @@ BEGIN
    	   DECLARE CUR_POSKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PO.Storerkey, POD.Sku, ISNULL(MXU.MaxUccNo,0)      
          FROM PO (NOLOCK)
-         JOIN PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
+         JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
          JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
          JOIN V_STORERCONFIG2 SC (NOLOCK) ON PO.Storerkey = SC.Storerkey AND SC.Configkey = 'INSERTUCC' AND SC.Svalue = '1'          
          OUTER APPLY (SELECT TOP 1 CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END AS MaxUccNo 
@@ -334,7 +356,7 @@ BEGIN
                SELECT UCCNo
                FROM UCC (NOLOCK) 
                OUTER APPLY (SELECT TOP 1 POD.Userdefine01 FROM PO (NOLOCK)
-                            JOIN PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
+                            JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
                             WHERE PO.POKey IN(SELECT POKey FROM #PREPPL_PO)
                             AND POD.Userdefine01 = UCC.UccNo
                             AND POD.Storerkey = UCC.Storerkey
@@ -403,7 +425,7 @@ BEGIN
       DECLARE CUR_SKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT PO.Storerkey, POD.Sku
          FROM PO (NOLOCK)
-         JOIN PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
+         JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
          LEFT JOIN SKUXLOC SL (NOLOCK) ON POD.Storerkey = SL.Storerkey AND POD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')         
          WHERE PO.POKey IN(SELECT POKey FROM #PREPPL_PO)
          AND SL.Loc IS NULL

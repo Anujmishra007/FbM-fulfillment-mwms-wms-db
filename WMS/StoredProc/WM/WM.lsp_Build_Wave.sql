@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.5                                                    */                                                                                  
+/* PVCS Version: 1.6                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -38,6 +38,11 @@ GO
 /*                            after setup the Group condition           */
 /* 2021-09-06  Wan04    1.5   LFWM-2953 - UAT - ID  Include missing     */
 /*                            'NOT LIKE' operator in Order Parameter    */
+/* 2022-01-04  Wan05    1.6   LFWM-3279 - SCE UAT SG Order Parameter -  */
+/*                            Type 'SORT' - Do not have Sku_Total_Qty as*/
+/*                            in Exceed                                 */
+/* 2022-01-04  Wan05    1.6   Devops Combine Script                     */
+/* 2022-01-24  WinSern  1.7   INC1722704 @c_SQLWhere 2000 to 4000 (ws01)*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -121,7 +126,11 @@ AS
          , @b_GroupFlag                BIT            = 0          
          , @c_SortBy                   NVARCHAR(2000) = ''                                                                                                                
          , @c_SortSeq                  NVARCHAR(10)   = ''    
-         , @c_GroupBySortField         NVARCHAR(2000) = ''                                                                                                                       
+         , @c_GroupBySortField         NVARCHAR(2000) = ''  
+         
+         , @b_DeleteSkuTotQty          BIT            = 0               --(Wan05)
+         , @c_SortBySkuTotalQty        NVARCHAR(2000) = ''              --(Wan05)
+         , @c_SQLInsSkuTotQty          NVARCHAR(MAX)  = ''              --(Wan05)
                                                                                                                     
          , @c_Field01                  NVARCHAR(60)   = ''                                                                                                                  
          , @c_Field02                  NVARCHAR(60)   = ''                                                                                                                  
@@ -145,7 +154,7 @@ AS
                                                                                                               
          , @c_SQL                      NVARCHAR(MAX)  = ''
          , @c_SQLParms                 NVARCHAR(2000) = ''
-         , @c_SQLWhere                 NVARCHAR(2000) = ''  
+         , @c_SQLWhere                 NVARCHAR(4000) = ''    --ws01  
          , @c_SQLCond                  NVARCHAR(4000) = ''                                                                                                               
          , @c_SQLGroupBy               NVARCHAR(2000) = ''                                                                                                                
          , @c_SQLHaving                NVARCHAR(500)  = ''                                                                                                              
@@ -227,10 +236,33 @@ AS
       BEGIN                                                                                                                                      
          CREATE TABLE #TMP_ORDERS                                                                                                                                    
          (                                                                                                                                                           
-            OrderKey       NVARCHAR(10)   NULL                                                                               
+            OrderKey       NVARCHAR(10)   NULL  
          )   
          SET @b_DeleteTmpOrders = 1                                                                                             
       END 
+      --(Wan05) - START
+      ELSE
+      BEGIN
+         TRUNCATE TABLE #TMP_ORDERS;
+      END
+      
+      IF OBJECT_ID('tempdb..#TMP_SKUTOTQTY','u') IS NULL  
+      BEGIN                                                                                                                                      
+         CREATE TABLE #TMP_SKUTOTQTY                                                                                                                                    
+         (                                                                                                                                                           
+            RowID          INT            NOT NULL DEFAULT(0)                 
+         ,  Storerkey      NVARCHAR(15)   NOT NULL DEFAULT('')            
+         ,  Sku            NVARCHAR(20)   NOT NULL DEFAULT('')            
+         ,  Qty            INT            NOT NULL DEFAULT(0)             
+                                                                            
+         )   
+         SET @b_DeleteSkuTotQty = 1                                                                                             
+      END 
+      ELSE
+      BEGIN
+         TRUNCATE TABLE #TMP_SKUTOTQTY;
+      END
+      --(Wan05) - END      
                                                                                                                                                             
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
@@ -387,10 +419,33 @@ AS
                                           ,@c_ParmBuildType                                                                               
       WHILE @@FETCH_STATUS <> -1                             
       BEGIN                                                                                                                                                       
-         -- Get Column Type                                                                                                                                       
+         -- Get Column Type
+         --(Wan05) - START
+         SET @c_TableName = ''   
+         IF CHARINDEX('.', @c_FieldName, 1) = 0 
+         BEGIN
+            IF @c_FieldName = 'SKU_TOTAL_OPENQTY'
+            BEGIN
+               SET @c_SortBySkuTotalQty = CASE WHEN @c_Operator = 'DESC' THEN 'MAX(TMP2.Qty) DESC, MAX(TMP2.RowID) DESC'
+                                               WHEN @c_Operator = 'ASC'  THEN 'MIN(TMP2.Qty), MIN(TMP2.RowID)'
+                                               ELSE ''
+                                          END
+                                          
+               SET @c_SQLInsSkuTotQty = N'INSERT INTO #TMP_SKUTOTQTY ( RowID, Storerkey, Sku, Qty )'  
+                                     + CHAR(13) + 'SELECT RowID = ROW_NUMBER() OVER (ORDER BY SUM(o.OpenQty), o.StorerKey, o.Sku)'
+                                     + CHAR(13) + ',o.Storerkey, o.Sku, Qty=SUM(o.OpenQty)'  
+                                     + CHAR(13) + 'FROM #tOrderData t'  
+                                     + CHAR(13) + 'JOIN dbo.ORDERDETAIL o WITH (NOLOCK) ON o.Orderkey = t.Orderkey'
+                                     + CHAR(13) + 'GROUP BY o.Storerkey, o.Sku'
+            END
+            
+            GOTO NEXT_SORT
+         END 
+         --(Wan05) - END 
+                                                                                                                               
          SET @c_TableName = LEFT(@c_FieldName, CHARINDEX('.', @c_FieldName) - 1)                                                                                   
          SET @c_ColName   = SUBSTRING(@c_FieldName,                                                                                                                
-                            CHARINDEX('.', @c_FieldName) + 1, LEN(@c_FieldName) - CHARINDEX('.', @c_FieldName))                                                            
+                              CHARINDEX('.', @c_FieldName) + 1, LEN(@c_FieldName) - CHARINDEX('.', @c_FieldName))    
                                                                                                                                                             
          SET @c_ColType = ''                                                                                                                                       
          SELECT @c_ColType = DATA_TYPE                                                                                                                             
@@ -504,7 +559,8 @@ AS
          BEGIN 
             SET @b_JoinPickDetail = 1
          END 
-                                                                
+         
+         NEXT_SORT:                             --(Wan05)                                                     
          FETCH NEXT FROM @CUR_BUILD_SORT INTO @c_FieldName
                                              ,@c_Operator
                                              ,@c_ParmBuildType                                                                              
@@ -516,6 +572,7 @@ AS
       BEGIN                                                                                                                                
          SET @c_SortBy = 'ORDERS.[OrderKey]'
       END
+      
       ------------------------------------------------------
       -- Get Build Wave Condition: General
       ------------------------------------------------------
@@ -780,6 +837,7 @@ AS
       --AND   sc.SValue = '1'
       --Wan02 - END 
 
+      BUILD_WAVE_SQL:                                                               --(Wan05)
       SET @c_SQL = ''
 
       SET @c_SQL = N'INSERT INTO #tOrderData(RNUM,OrderKey,ExternOrderKey,Consigneekey,C_Company,OpenQty'
@@ -798,7 +856,13 @@ AS
          + CHAR(13) + 'LEFT OUTER JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey' 
          + CHAR(13) + 'LEFT OUTER JOIN ORDERINFO (NOLOCK) ON ORDERS.OrderKey = ORDERINFO.OrderKey' 
          + CHAR(13) + 'LEFT OUTER JOIN SKU (NOLOCK) ON ORDERS.StorerKey = SKU.StorerKey AND ORDERDETAIL.SKU = SKU.SKU' 
-         + CHAR(13) + 'LEFT OUTER JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = ORDERS.OrderKey'    
+         + CHAR(13) + 'LEFT OUTER JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = ORDERS.OrderKey' 
+         --(Wan05) - START 
+         + CASE WHEN @c_SQLInsSkuTotQty = ''
+                THEN CHAR(13) + 'LEFT OUTER JOIN #TMP_SKUTOTQTY TMP2(NOLOCK) ON TMP2.Storerkey = ORDERDETAIL.Storerkey AND TMP2.SKU = SKU.SKU'
+                ELSE ''  
+                END
+         --(Wan05) - END
          + CASE WHEN @b_JoinPickDetail = 0 AND @b_JoinLoc = 0 
                 THEN ''
                 ELSE 
@@ -857,6 +921,26 @@ AS
       END
 
       SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere +  @c_SQLGroupBy + @c_SQLHaving           --(Wan03)
+      
+      --(Wan05) - START
+      IF @c_SQLInsSkuTotQty <> '' AND @c_SortBySkuTotalQty <> ''
+      BEGIN
+         SET @c_SQLParms= N' @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @n_MaxOpenQty INT'      
+                
+         EXEC SP_EXECUTESQL @c_SQL
+                           ,@c_SQLParms
+                           ,@c_StorerKey 
+                           ,@c_Facility   
+                           ,@n_MaxOpenQty                  
+         
+         EXEC (@c_SQLInsSkuTotQty)
+         
+         TRUNCATE TABLE #tOrderData;
+         SET @c_SortBy = @c_SortBySkuTotalQty + CASE WHEN @c_SortBy = '' THEN '' ELSE ', ' END + @c_SortBy  
+         SET @c_SQLInsSkuTotQty = ''
+         GOTO BUILD_WAVE_SQL
+      END 
+      --(Wan05) - END            
 
       SET @c_SQLBuildWave = @c_SQL     --2020-07-10  -- To Debug
 
@@ -1464,6 +1548,13 @@ EXIT_SP:
    BEGIN
       DROP TABLE #TMP_ORDERS
    END
+   
+   --(Wan05) - START
+   IF @b_DeleteSkuTotQty = 1
+   BEGIN
+      DROP TABLE #TMP_SKUTOTQTY
+   END
+   --(Wan05) - END
                                                                                                                                                    
    IF @n_Continue = 3                                                                                                                                            
    BEGIN                                                                                                                                                       

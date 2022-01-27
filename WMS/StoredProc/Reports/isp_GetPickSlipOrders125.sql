@@ -27,6 +27,8 @@ GO
 /* Updates:                                                              */    
 /* Date         Author   Ver  Purposes                                   */  
 /* 14-Oct-2021  WLChooi  1.0  DevOps Combine Script                      */
+/* 16-Dec-2021  Mingle   1.1  Add new mappings(ML01)                     */
+/* 16-DEC-2021  Mingle   1.1  DevOps Combine Script                      */
 /*************************************************************************/  
 CREATE PROC [dbo].[isp_GetPickSlipOrders125] (@c_loadkey NVARCHAR(10))     
 AS    
@@ -85,7 +87,9 @@ BEGIN
            @n_packcasecnt INT,  
            @c_externorderkey NVARCHAR(30),  
            @n_pickslips_required INT,  
-           @c_skugroup NVARCHAR(10)     
+           @c_skugroup NVARCHAR(10),
+           @c_skunotes1 NVARCHAR(200), --ML01
+           @c_extfield01 NVARCHAR(30) --ML01    
      
    DECLARE @c_PrevOrderKey     NVARCHAR(10),  
            @n_Pallets          INT,  
@@ -154,7 +158,7 @@ BEGIN
       DeliveryDate       DATETIME NULL,  
       RetailSku          NVARCHAR(20) NULL,  
       BuyerPO            NVARCHAR(20) NULL,  
-      InvoiceNo          NVARCHAR(10) NULL,  
+      InvoiceNo          NVARCHAR(20) NULL,  
       OrderDate          DATETIME NULL,   
       OVAS               NVARCHAR(30) NULL,  
       SKUGROUP           NVARCHAR(10) NULL,  
@@ -162,7 +166,9 @@ BEGIN
       stdcube            DECIMAL(30,5),              
       GrossWgt           DECIMAL(30,5),
       OrderType          NVARCHAR(250),
-      QtyPerCtn          NVARCHAR(100)             
+      QtyPerCtn          NVARCHAR(100),
+      SKUNOTES1          NVARCHAR(200) NULL,  --ML01
+      extfield01         NVARCHAR(30) NULL   --ML01   
    )  
      
    SELECT TOP 1 @c_storerkey = Storerkey  
@@ -234,7 +240,9 @@ BEGIN
        stdcube,
        GrossWgt,
        OrderType,
-       QtyPerCtn
+       QtyPerCtn,
+       SKUNOTES1, --ML01
+       extfield01 --ML01
    )
    SELECT (  
               SELECT PICKHEADERKEY  
@@ -305,7 +313,10 @@ BEGIN
           CASE WHEN ISNULL(SKU.STDGROSSWGT,0) = 0 THEN SKU.GrossWgt ELSE SKU.STDGROSSWGT END,
           ISNULL(CL.[Description],''),
           --TRIM(ISNULL(PACK.PackKey,'')) + ' = ' + CAST(ISNULL(PACK.CaseCnt,0) AS NVARCHAR(20)) AS QtyPerCtn
-          PACK.PackUOM3 AS QtyPerCtn
+          --PACK.PackUOM3 AS QtyPerCtn
+          PACK.PackKey, --ML01
+          SKU.NOTES1, --ML01
+          SKUINFO.ExtendedField01 --ML01
    FROM Pickdetail (NOLOCK)  
    JOIN ORDERS (NOLOCK) ON Pickdetail.Orderkey = ORDERS.Orderkey  
    JOIN Lotattribute (NOLOCK) ON Pickdetail.Lot = Lotattribute.Lot  
@@ -315,7 +326,8 @@ BEGIN
    JOIN Storer (NOLOCK) ON Pickdetail.Storerkey = Storer.Storerkey  
    JOIN SKU (NOLOCK) ON Pickdetail.SKU = SKU.SKU AND Pickdetail.Storerkey = SKU.Storerkey  
    JOIN Pack (NOLOCK) ON Pickdetail.Packkey = Pack.Packkey  
-   JOIN LOC (NOLOCK) ON Pickdetail.LOC = LOC.LOC  
+   JOIN LOC (NOLOCK) ON Pickdetail.LOC = LOC.LOC 
+   LEFT JOIN SKUINFO (NOLOCK) ON SkuInfo.Sku = SKU.Sku AND SkuInfo.Storerkey = PICKDETAIL.Storerkey --ML01
    LEFT JOIN Routemaster (NOLOCK) ON ORDERS.[Route] = Routemaster.[Route]  
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'ORDERTYPE' AND ORDERS.[Type] = CL.Code
    WHERE Loadplandetail.LoadKey = @c_LoadKey  
@@ -355,7 +367,10 @@ BEGIN
             CASE WHEN ISNULL(SKU.STDGROSSWGT,0) = 0 THEN SKU.GrossWgt ELSE SKU.STDGROSSWGT END,
             ISNULL(CL.[Description],''),
             --TRIM(ISNULL(PACK.PackKey,'')) + ' = ' + CAST(ISNULL(PACK.CaseCnt,0) AS NVARCHAR(20))
-            PACK.PackUOM3
+            --PACK.PackUOM3
+            PACK.PackKey, --ML01
+            SKU.NOTES1, --ML01
+            SKUINFO.ExtendedField01 --ML01
          
    UPDATE #temp_pick  
    SET    cartons_cal = CASE packcasecnt  
@@ -535,7 +550,9 @@ BEGIN
       ,  #TEMP_PICK.stdcube
       ,  #TEMP_PICK.GrossWgt    
       ,  #TEMP_PICK.OrderType        
-      ,  #TEMP_PICK.QtyPerCtn                                                                       
+      ,  #TEMP_PICK.QtyPerCtn   
+      ,  #TEMP_PICK.SKUNOTES1  --ML01
+      ,  #TEMP_PICK.extfield01 --ML01                                                                   
    FROM  #TEMP_PICK  
      
    IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL
@@ -549,3 +566,4 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_GetPickSlipOrders125] TO nSQL 
 GO
+

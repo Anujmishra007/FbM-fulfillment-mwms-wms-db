@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Purposes                                       */ 
 /* 21-JUL-2021  CSCHONG  WMS-17294 revised field logic (CS01)           */
+/* 10-DEC-2021  MINGLE   WMS-18541 add filter (ML01)                    */
+/* 10-DEC-2021  Mingle   DevOps Combine Script                          */
 /************************************************************************/  
   
 CREATE PROC dbo.isp_GetPickSlipWave30 (  
@@ -148,7 +150,8 @@ BEGIN
    JOIN orders WITH (NOLOCK) ON  pickdetail.orderkey = orders.orderkey  
    JOIN loc WITH (NOLOCK) ON  pickdetail.loc = loc.loc  
    left outer join RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey) 
-   WHERE WD.WaveKey = @c_waveKey  
+   WHERE WD.WaveKey = @c_waveKey
+   AND ORDERS.Doctype = 'E'   --ML01
    GROUP BY RefKeyLookup.PickSlipNo,orders.loadkey ,orders.orderkey ,
             ISNULL(ORDERS.UserDefine09, '') ,      
             ORDERS.Storerkey,  

@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_carton_label_03]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_carton_label_03]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_carton_label_03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_carton_label_03]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -23,6 +23,12 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 12/08/2021   ML       1.1  WMS-17709                                  */
+/*                            1. Add new fields:                         */
+/*                               T_Carton, T_TotalQty, T_ToCustomer,     */
+/*                               T_CompanyFrom, Indicator1, Indicator2   */
+/*                               Indicator3                              */
+/*                            2. Fix incorrect CartonMax issue           */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_03] (
@@ -41,13 +47,14 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      DocNum, DocKey, InvoiceNo, Userdefine04, C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_Zip, C_Country
-      Route, CompanyFrom, DropID, ExtraBarcode
-      T_DocNum, T_DocKey, T_InvoiceNo, T_Userdefine04
+      LabelNo, DocNum, DocKey, InvoiceNo, CartonNo, TotalQty, RefNo, Userdefine04
+      C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_Zip, C_Country, Route, CompanyFrom, DropID, ExtraBarcode
+      T_DocNum, T_DocKey, T_InvoiceNo, T_RefNo, T_Userdefine04, T_Carton, T_TotalQty, T_ToCustomer, T_CompanyFrom
+      Indicator1, Indicator2, Indicator3
 
    [MAPVALUE]
-      T_DocNum, T_DocNum_Conso, T_DocKey, T_DocKey_Conso, T_InvoiceNo, T_InvoiceNo_Conso, T_Userdefine04
-      N_Width_T_DocNum, N_Width_T_DocKey, N_Width_T_InvoiceNo, N_Width_T_Userdefine04
+      T_DocNum, T_DocNum_Conso, T_DocKey, T_DocKey_Conso, T_InvoiceNo, T_InvoiceNo_Conso, T_RefNo, T_Userdefine04
+      T_Carton, T_TotalQty, T_ToCustomer, T_CompanyFrom
 
    [SHOWFIELD]
       FromCust, ExtraBarcode_HR
@@ -63,9 +70,13 @@ BEGIN
       DROP TABLE #TEMP_PAKDT
 
    DECLARE @c_DataWindow         NVARCHAR(40)
+         , @c_LabelNoExp         NVARCHAR(MAX)
          , @c_DocNumExp          NVARCHAR(MAX)
          , @c_DocKeyExp          NVARCHAR(MAX)
          , @c_InvoiceNoExp       NVARCHAR(MAX)
+         , @c_CartonNoExp        NVARCHAR(MAX)
+         , @c_TotalQtyExp        NVARCHAR(MAX)
+         , @c_RefNoExp           NVARCHAR(MAX)
          , @c_Userdefine04Exp    NVARCHAR(MAX)
          , @c_C_CompanyExp       NVARCHAR(MAX)
          , @c_C_Address1Exp      NVARCHAR(MAX)
@@ -78,10 +89,18 @@ BEGIN
          , @c_CompanyFromExp     NVARCHAR(MAX)
          , @c_DropIDExp          NVARCHAR(MAX)
          , @c_ExtraBarcodeExp    NVARCHAR(MAX)
+         , @c_Indicator1Exp      NVARCHAR(MAX)
+         , @c_Indicator2Exp      NVARCHAR(MAX)
+         , @c_Indicator3Exp      NVARCHAR(MAX)
          , @c_T_DocNumExp        NVARCHAR(MAX)
          , @c_T_DocKeyExp        NVARCHAR(MAX)
          , @c_T_InvoiceNoExp     NVARCHAR(MAX)
+         , @c_T_RefNoExp         NVARCHAR(MAX)
          , @c_T_Userdefine04Exp  NVARCHAR(MAX)
+         , @c_T_CartonExp        NVARCHAR(MAX)
+         , @c_T_TotalQtyExp      NVARCHAR(MAX)
+         , @c_T_ToCustomerExp    NVARCHAR(MAX)
+         , @c_T_CompanyFromExp   NVARCHAR(MAX)
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
          , @c_JoinClause         NVARCHAR(MAX)
@@ -99,10 +118,11 @@ BEGIN
       , ExternOrderKey   NVARCHAR(50)
       , Storerkey        NVARCHAR(15)
       , Loadkey          NVARCHAR(10)
-      , DocNum           NVARCHAR(500)
-      , DocKey           NVARCHAR(500)
-      , InvoiceNo        NVARCHAR(500)
-      , Userdefine04     NVARCHAR(500)
+      , DocNum           NVARCHAR(50)
+      , DocKey           NVARCHAR(50)
+      , InvoiceNo        NVARCHAR(50)
+      , RefNo            NVARCHAR(50)
+      , Userdefine04     NVARCHAR(50)
       , C_Company        NVARCHAR(500)
       , C_Address1       NVARCHAR(500)
       , C_Address2       NVARCHAR(500)
@@ -111,18 +131,27 @@ BEGIN
       , C_Zip            NVARCHAR(500)
       , C_Country        NVARCHAR(500)
       , Route            NVARCHAR(500)
-      , CompanyFrom      NVARCHAR(500)
-      , DropID           NVARCHAR(500)
-      , ExtraBarcode     NVARCHAR(500)
-      , T_DocNum         NVARCHAR(500)
-      , T_DocKey         NVARCHAR(500)
-      , T_InvoiceNo      NVARCHAR(500)
-      , T_Userdefine04   NVARCHAR(500)
-      , ConsolPick       NVARCHAR(1)
-      , LabelNo          NVARCHAR(20)
+      , CompanyFrom      NVARCHAR(50)
+      , DropID           NVARCHAR(50)
+      , ExtraBarcode     NVARCHAR(50)
+      , T_DocNum         NVARCHAR(50)
+      , T_DocKey         NVARCHAR(50)
+      , T_InvoiceNo      NVARCHAR(50)
+      , T_RefNo          NVARCHAR(50)
+      , T_Userdefine04   NVARCHAR(50)
+      , T_Carton         NVARCHAR(50)
+      , T_TotalQty       NVARCHAR(50)
+      , T_ToCustomer     NVARCHAR(50)
+      , T_CompanyFrom    NVARCHAR(50)
+      , Indicator1       NVARCHAR(50)
+      , Indicator2       NVARCHAR(50)
+      , Indicator3       NVARCHAR(50)
+      , LabelNo          NVARCHAR(50)
+      , CartonNoStr      NVARCHAR(50)
+      , TotalQty         INT
       , CartonNo         INT
       , CartonMax        INT
-      , Qty              INT
+      , ConsolPick       NVARCHAR(1)
    )
 
    -- Final Orderkey
@@ -133,7 +162,14 @@ BEGIN
       , ConsolPick       NVARCHAR(1)
       , Storerkey        NVARCHAR(15)
       , TotPikQty        INT
+      , TotPakQty        INT
+      , CartonMax        INT
    )
+   SELECT *
+     INTO #TEMP_FINALORDERKEY2
+     FROM #TEMP_FINALORDERKEY
+    WHERE 1=2
+
 
    INSERT INTO #TEMP_FINALORDERKEY(Orderkey, PickslipNo, Loadkey, ConsolPick, Storerkey)
    SELECT OH.Orderkey
@@ -164,12 +200,14 @@ BEGIN
      JOIN (
         SELECT DISTINCT
                PickslipNo    = FOK.PickslipNo
-             , TotPikQty     = SUM(PD.Qty) OVER(PARTITION BY FOK.PickslipNo)
+             , TotPikQty     = SUM(PD.Qty)
           FROM #TEMP_FINALORDERKEY FOK
           JOIN dbo.PICKDETAIL      PD (NOLOCK) ON FOK.Orderkey = PD.Orderkey
+         GROUP BY FOK.PickslipNo
      ) PIK ON FOK.PickslipNo = PIK.PickslipNo
 
 
+    INSERT INTO #TEMP_FINALORDERKEY2 (PickslipNo, Orderkey, Loadkey, ConsolPick, Storerkey, TotPikQty, TotPakQty, CartonMax)
     SELECT DISTINCT
            PickslipNo        = FOK.PickslipNo
          , Orderkey          = FIRST_VALUE(FOK.Orderkey)   OVER(PARTITION BY FOK.PickslipNo ORDER BY FOK.Orderkey)
@@ -178,19 +216,22 @@ BEGIN
          , Storerkey         = FIRST_VALUE(FOK.Storerkey)  OVER(PARTITION BY FOK.PickslipNo ORDER BY FOK.Orderkey)
          , TotPikQty         = FIRST_VALUE(FOK.TotPikQty)  OVER(PARTITION BY FOK.PickslipNo ORDER BY FOK.Orderkey)
          , TotPakQty         = 0
-      INTO #TEMP_FINALORDERKEY2
+         , CartonMax         = 0
       FROM #TEMP_FINALORDERKEY FOK
 
 
    UPDATE FOK
       SET TotPakQty     = PAK.TotPakQty
+        , CartonMax     = CASE WHEN PAK.TotPakQty>=FOK.TotPikQty THEN PAK.CartonMax END
      FROM #TEMP_FINALORDERKEY2 FOK
      JOIN (
         SELECT DISTINCT
                PickslipNo    = FOK.PickslipNo
-             , TotPakQty     = SUM(PD.Qty) OVER(PARTITION BY FOK.PickslipNo)
+             , TotPakQty     = SUM(PD.Qty)
+             , CartonMax     = MAX(PD.CartonNo)
           FROM #TEMP_FINALORDERKEY2 FOK
-          JOIN dbo.PACKDETAIL        PD (NOLOCK) ON FOK.PickslipNo = PD.PickslipNo
+          JOIN dbo.PACKDETAIL       PD (NOLOCK) ON FOK.PickslipNo = PD.PickslipNo
+         GROUP BY FOK.PickslipNo
      ) PAK ON FOK.PickslipNo = PAK.PickslipNo
 
 
@@ -210,9 +251,13 @@ BEGIN
       IF @@FETCH_STATUS<>0
          BREAK
 
-      SELECT @c_DocNumExp          = ''
+      SELECT @c_LabelNoExp         = ''
+           , @c_DocNumExp          = ''
            , @c_DocKeyExp          = ''
            , @c_InvoiceNoExp       = ''
+           , @c_CartonNoExp        = ''
+           , @c_TotalQtyExp        = ''
+           , @c_RefNoExp           = ''
            , @c_Userdefine04Exp    = ''
            , @c_C_CompanyExp       = ''
            , @c_C_Address1Exp      = ''
@@ -228,7 +273,15 @@ BEGIN
            , @c_T_DocNumExp        = ''
            , @c_T_DocKeyExp        = ''
            , @c_T_InvoiceNoExp     = ''
+           , @c_T_RefNoExp         = ''
            , @c_T_Userdefine04Exp  = ''
+           , @c_T_CartonExp        = ''
+           , @c_T_TotalQtyExp      = ''
+           , @c_T_ToCustomerExp    = ''
+           , @c_T_CompanyFromExp   = ''
+           , @c_Indicator1Exp      = ''
+           , @c_Indicator2Exp      = ''
+           , @c_Indicator3Exp      = ''
            , @c_JoinClause         = ''
 
       SELECT TOP 1
@@ -239,7 +292,10 @@ BEGIN
        ORDER BY Code2
 
       SELECT TOP 1
-             @c_DocNumExp          = ISNULL(RTRIM((select top 1 b.ColValue
+             @c_LabelNoExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='LabelNo')), '' )
+           , @c_DocNumExp          = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='DocNum')), '' )
            , @c_DocKeyExp          = ISNULL(RTRIM((select top 1 b.ColValue
@@ -248,6 +304,15 @@ BEGIN
            , @c_InvoiceNoExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='InvoiceNo')), '' )
+           , @c_CartonNoExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='CartonNo')), '' )
+           , @c_TotalQtyExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='TotalQty')), '' )
+           , @c_RefNoExp           = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='RefNo')), '' )
            , @c_Userdefine04Exp    = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='Userdefine04')), '' )
@@ -293,9 +358,33 @@ BEGIN
            , @c_T_InvoiceNoExp     = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='T_InvoiceNo')), '' )
+           , @c_T_RefNoExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_RefNo')), '' )
            , @c_T_Userdefine04Exp  = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='T_Userdefine04')), '' )
+           , @c_T_CartonExp        = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_Carton')), '' )
+           , @c_T_TotalQtyExp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_TotalQty')), '' )
+           , @c_T_ToCustomerExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_ToCustomer')), '' )
+           , @c_T_CompanyFromExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='T_CompanyFrom')), '' )
+           , @c_Indicator1Exp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Indicator1')), '' )
+           , @c_Indicator2Exp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Indicator2')), '' )
+           , @c_Indicator3Exp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Indicator3')), '' )
         FROM dbo.CodeLkup (NOLOCK)
        WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
          AND Storerkey = @c_Storerkey
@@ -304,10 +393,10 @@ BEGIN
 
       ----------
       SET @c_ExecStatements = N'INSERT INTO #TEMP_PAKDT'
-          +' (PickslipNo, Orderkey, ExternOrderKey, Storerkey, Loadkey, DocNum, DocKey, InvoiceNo, Userdefine04, C_Company'
+          +' (PickslipNo, Orderkey, ExternOrderKey, Storerkey, Loadkey, DocNum, DocKey, InvoiceNo, RefNo, Userdefine04, C_Company'
           + ', C_Address1, C_Address2, C_Address3, C_Address4, C_Zip, C_Country, Route, CompanyFrom, DropID, ExtraBarcode'
-          + ', T_DocNum, T_DocKey, T_InvoiceNo, T_Userdefine04'
-          + ', ConsolPick, LabelNo, CartonNo, CartonMax, Qty)'
+          + ', T_DocNum, T_DocKey, T_InvoiceNo, T_RefNo, T_Userdefine04, T_Carton, T_TotalQty, T_ToCustomer, T_CompanyFrom, Indicator1, Indicator2, Indicator3'
+          + ', LabelNo, CartonNoStr, TotalQty, CartonNo, CartonMax, ConsolPick)'
           +' SELECT FOK.PickslipNo'
                + ', OH.OrderKey'
                + ', OH.ExternOrderKey'
@@ -319,6 +408,8 @@ BEGIN
                +        ', RTRIM(' + CASE WHEN ISNULL(@c_DocKeyExp        ,'')<>'' THEN @c_DocKeyExp         ELSE 'NULL'              END + ')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_InvoiceNoExp     ,'')<>'' THEN @c_InvoiceNoExp      ELSE 'OH.InvoiceNo'      END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RefNoExp         ,'')<>'' THEN @c_RefNoExp          ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Userdefine04Exp  ,'')<>'' THEN @c_Userdefine04Exp   ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -350,13 +441,33 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_InvoiceNoExp   ,'')<>'' THEN @c_T_InvoiceNoExp    ELSE 'NULL'              END + ')'
       SET @c_ExecStatements = @c_ExecStatements
+               +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_RefNoExp       ,'')<>'' THEN @c_T_RefNoExp        ELSE 'NULL'              END + ')'
+      SET @c_ExecStatements = @c_ExecStatements
                +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_Userdefine04Exp,'')<>'' THEN @c_T_Userdefine04Exp ELSE 'NULL'              END + ')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', FOK.ConsolPick'
-               + ', PD.LabelNo'
+               +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_CartonExp      ,'')<>'' THEN @c_T_CartonExp       ELSE 'NULL'              END + ')'
+      SET @c_ExecStatements = @c_ExecStatements
+               +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_TotalQtyExp    ,'')<>'' THEN @c_T_TotalQtyExp     ELSE 'NULL'              END + ')'
+      SET @c_ExecStatements = @c_ExecStatements
+               +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_ToCustomerExp  ,'')<>'' THEN @c_T_ToCustomerExp   ELSE 'NULL'              END + ')'
+      SET @c_ExecStatements = @c_ExecStatements
+               +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_CompanyFromExp ,'')<>'' THEN @c_T_CompanyFromExp  ELSE 'NULL'              END + ')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Indicator1Exp    ,'')<>'' THEN @c_Indicator1Exp     ELSE 'NULL'              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Indicator2Exp    ,'')<>'' THEN @c_Indicator2Exp     ELSE 'NULL'              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Indicator3Exp    ,'')<>'' THEN @c_Indicator3Exp     ELSE 'NULL'              END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LabelNoExp       ,'')<>'' THEN @c_LabelNoExp        ELSE 'PD.LabelNo'        END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_CartonNoExp      ,'')<>'' THEN @c_CartonNoExp       ELSE 'ISNULL(CONVERT(VARCHAR(10),PD.CartonNo),'''')+''  of  ''+ISNULL(CONVERT(VARCHAR(10),FOK.CartonMax),'''')' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               +       ', ISNULL(' + CASE WHEN ISNULL(@c_TotalQtyExp      ,'')<>'' THEN @c_TotalQtyExp       ELSE 'PD.Qty'            END + ',0)'
+      SET @c_ExecStatements = @c_ExecStatements
                + ', PD.CartonNo'
-               + ', CartonMax= CASE WHEN FOK.TotPakQty>=FOK.TotPikQty THEN (MAX(PD.CartonNo) OVER(PARTITION BY FOK.PickslipNo)) END'
-               + ', PD.Qty'
+               + ', FOK.CartonMax'
+               + ', FOK.ConsolPick'
           +' FROM #TEMP_FINALORDERKEY2 FOK'
           +' JOIN dbo.ORDERS      OH (NOLOCK) ON FOK.Orderkey=OH.Orderkey'
           +' JOIN dbo.PACKDETAIL  PD (NOLOCK) ON FOK.PickslipNo=PD.PickslipNo'
@@ -406,15 +517,15 @@ BEGIN
         , C_Zip            = RTRIM( MAX( PAKDT.C_Zip ) )
         , C_Country        = RTRIM( MAX( PAKDT.C_Country ) )
         , Route            = RTRIM( MAX( PAKDT.Route ) )
-        , CompanyFrom      = RTRIM( MAX( CASE WHEN PAKDT.CompanyFrom IS NOT NULL            THEN PAKDT.CompanyFrom
-                                              WHEN RptCfg.ShowFields LIKE '%,FromCust,%'    THEN STR.Company  ELSE LFL.Company END ) )
+        , CompanyFrom      = RTRIM( MAX( ISNULL(CASE WHEN PAKDT.CompanyFrom IS NOT NULL            THEN PAKDT.CompanyFrom
+                                                     WHEN RptCfg.ShowFields LIKE '%,FromCust,%'    THEN STR.Company  ELSE LFL.Company END, '') ) )
         , DropID           = RTRIM( MAX( PAKDT.DropID ) )
         , PrintDate        = CONVERT(CHAR(19), GETDATE(), 120)
         , ConsolPick       = RTRIM( MAX( PAKDT.ConsolPick ) )
         , LabelNo          = RTRIM( PAKDT.LabelNo )
-        , CartonNo         = PAKDT.CartonNo
+        , CartonNo         = MAX( PAKDT.CartonNo )
         , CartonMax        = MAX( PAKDT.CartonMax )
-        , Qty              = SUM( PAKDT.Qty )
+        , TotalQty         = SUM( PAKDT.TotalQty )
         , ShowFields       = RTRIM( MAX( RptCfg.ShowFields ) )
         , Lbl_DocNum       = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_DocNum) IS NOT NULL            THEN MAX(PAKDT.T_DocNum)
                              WHEN MAX( PAKDT.ConsolPick ) = 'Y'
@@ -434,20 +545,50 @@ BEGIN
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_DocKey'), 'SO#:')
                              END ) AS NVARCHAR(50))
-        , Lbl_InvoiceNo    = CAST( RTRIM( ISNULL( CASE WHEN MAX(PAKDT.T_InvoiceNo) IS NOT NULL THEN MAX(PAKDT.T_InvoiceNo)
+        , Lbl_InvoiceNo    = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_InvoiceNo) IS NOT NULL THEN MAX(PAKDT.T_InvoiceNo)
                              WHEN MAX( PAKDT.ConsolPick ) = 'Y'
-                             THEN (select top 1 b.ColValue
+                             THEN ISNULL( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
-                                   where a.SeqNo=b.SeqNo and a.ColValue='T_InvoiceNo_Conso')
-                             ELSE (select top 1 b.ColValue
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_InvoiceNo_Conso'), 'Pick Ticket:')
+                             ELSE ISNULL( (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
-                                   where a.SeqNo=b.SeqNo and a.ColValue='T_InvoiceNo')
-                             END, 'Pick Ticket:') ) AS NVARCHAR(50))
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_InvoiceNo'), 'Pick Ticket:')
+                             END ) AS NVARCHAR(50))
         , Lbl_Userdefine04 = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_Userdefine04) IS NOT NULL      THEN MAX(PAKDT.T_Userdefine04)
                              ELSE (select top 1 b.ColValue
                                    from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                    where a.SeqNo=b.SeqNo and a.ColValue='T_Userdefine04') END) AS NVARCHAR(50))
         , ExtraBarcode     = RTRIM( MAX( PAKDT.ExtraBarcode ) )
+        , CartonNoStr      = RTRIM( MAX( PAKDT.CartonNoStr ) )
+        , Lbl_Carton       = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_Carton) IS NOT NULL THEN MAX(PAKDT.T_Carton)
+                             ELSE ISNULL( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_Carton'), 'Carton:')
+                             END ) AS NVARCHAR(50))
+        , Lbl_TotalQty     = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_TotalQty) IS NOT NULL THEN MAX(PAKDT.T_TotalQty)
+                             ELSE ISNULL( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_TotalQty'), 'Total Qty:')
+                             END ) AS NVARCHAR(50))
+        , Lbl_RefNo        = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_RefNo) IS NOT NULL THEN MAX(PAKDT.T_RefNo)
+                             ELSE ISNULL( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_RefNo'), '')
+                             END ) AS NVARCHAR(50))
+        , Lbl_ToCustomer   = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_ToCustomer) IS NOT NULL THEN MAX(PAKDT.T_ToCustomer)
+                             ELSE ISNULL( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_ToCustomer'), 'To: Customer')
+                             END ) AS NVARCHAR(50))
+        , Lbl_CompanyFrom  = CAST( RTRIM( CASE WHEN MAX(PAKDT.T_CompanyFrom) IS NOT NULL THEN MAX(PAKDT.T_CompanyFrom)
+                             ELSE ISNULL( (select top 1 b.ColValue
+                                   from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                   where a.SeqNo=b.SeqNo and a.ColValue='T_CompanyFrom'), 'From:')
+                             END ) AS NVARCHAR(50))
+        , RefNo            = RTRIM( MAX( PAKDT.RefNo ) )
+        , Indicator1       = RTRIM( MAX( PAKDT.Indicator1 ) )
+        , Indicator2       = RTRIM( MAX( PAKDT.Indicator2 ) )
+        , Indicator3       = RTRIM( MAX( PAKDT.Indicator3 ) )
 
    FROM #TEMP_PAKDT PAKDT
 
@@ -471,7 +612,12 @@ BEGIN
    GROUP BY PAKDT.PickSlipNo
           , PAKDT.CartonNo
           , PAKDT.LabelNo
+
+   ORDER BY PAKDT.PickSlipNo
+          , PAKDT.CartonNo
+          , PAKDT.LabelNo
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_carton_label_03 TO NSQL
 GO

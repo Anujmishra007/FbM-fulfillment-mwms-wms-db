@@ -7,26 +7,29 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Procedure: nspALCONV6                                         */
-/* Creation Date: 14-SEP-2020                                           */
-/* Copyright: LFL                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: WMS-14759 - CN Converse Allocation                          */
-/*          UOM7 - wave conso loose from pick if fulfill                */
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/************************************************************************/
+/*************************************************************************/
+/* Stored Procedure: nspALCONV6                                          */
+/* Creation Date: 14-SEP-2020                                            */
+/* Copyright: LFL                                                        */
+/* Written by:                                                           */
+/*                                                                       */
+/* Purpose: WMS-14759 - CN Converse Allocation                           */
+/*          UOM7 - wave conso loose from pick if stock >= casecnt        */
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/* PVCS Version: 1.0                                                     */
+/*                                                                       */
+/* Version: 7.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author  Ver   Purposes                                   */
+/* 12-Dec-2021  NJOW01  1.0   WMS-18497 allocate piece from pick if stock*/
+/*                            >= casecnt                                 */
+/* 12-Dec-2021  NJOW01  1.0   DEVOPS combine script                      */
+/*************************************************************************/
 CREATE  PROC [dbo].[nspALCONV6]
    @c_WaveKey    NVARCHAR(10),   
    @c_Facility   NVARCHAR(5),     
@@ -61,15 +64,16 @@ BEGIN
    DECLARE @c_SQL         NVARCHAR(MAX),    
            @c_SQLParm     NVARCHAR(MAX),
            @c_SortBy      NVARCHAR(2000),
-           @n_PickBalance INT           
+           @n_PickBalance INT,
+           @n_CaseCnt     INT           
           
    DECLARE @c_LocationType     NVARCHAR(100),    
            @c_LocationCategory NVARCHAR(100)
   
    DECLARE @c_key1        NVARCHAR(10),    
            @c_key2        NVARCHAR(5),    
-           @c_key3        NCHAR(1)    
-                           
+           @c_key3        NCHAR(1)
+                              
    IF LEN(@c_OtherParms) > 0  
    BEGIN   	    
       SET @c_key1 = LEFT(@c_OtherParms, 10) --Orderkey, Loadkey(conso), Wavekey(conso)
@@ -92,6 +96,13 @@ BEGIN
       
       RETURN       	
    END 
+   
+   --NJOW01
+   SELECT @n_Casecnt = PACK.Casecnt
+   FROM SKU (NOLOCK) 
+   JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+   WHERE SKU.Storerkey = @c_Storerkey
+   AND SKU.Sku = @c_Sku          
         
    SET @c_LocationType = '''PICK'''
    SET @c_LocationCategory = '''OTHER'''
@@ -141,7 +152,8 @@ BEGIN
    EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @n_PickBalance OUTPUT, @c_Facility, @c_StorerKey, @c_SKU, @n_QtyLeftToFulfill, @c_Lottable01, @c_Lottable02, @c_Lottable03,  
                       @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12                        
 
- 	 IF ISNULL(@n_PickBalance,0) < @n_QtyLeftToFulfill
+ 	 --IF ISNULL(@n_PickBalance,0) < @n_QtyLeftToFulfill
+ 	 IF ISNULL(@n_PickBalance,0) < @n_Casecnt  --NJOW01
    BEGIN
       DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
       SELECT TOP 0 NULL, NULL, NULL, NULL, NULL

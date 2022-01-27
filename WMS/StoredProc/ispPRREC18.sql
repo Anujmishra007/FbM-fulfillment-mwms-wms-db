@@ -28,8 +28,10 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 20-Dec-2021  CSCHONG 1.1   Devops Scripts Combine                       */
+/* 20-Dec-2021  CSCHONG 1.2   WMS-18522 - revised logic (CS01)             */
 /***************************************************************************/  
-CREATE PROC [dbo].[ispPRREC18]  
+CREATE  PROC [dbo].[ispPRREC18]  
 (     @c_Receiptkey  NVARCHAR(10)  
   ,   @c_ReceiptLineNumber  NVARCHAR(5) = ''      
   ,   @b_Success     INT           OUTPUT
@@ -53,6 +55,9 @@ BEGIN
          , @c_UserDefine03       NVARCHAR(30) = N''
          , @c_Style              NVARCHAR(20) = N''
          , @c_Color              NVARCHAR(10) = N''
+         , @c_RDUserDefine02     NVARCHAR(30) = N''    --CS01
+         , @n_Count              INT                   --CS01
+		   , @n_RALineNo           NVARCHAR(30) = N''    --CS01
    
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -75,7 +80,8 @@ BEGIN
       DECLARE CUR_RECDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT  rd.ReceiptLineNumber,
                   s.Style,
-                  s.Color
+                  s.Color,
+                  rd.UserDefine02                --CS01
          FROM   RECEIPTDETAIL rd (NOLOCK)
          JOIN   SKU s (NOLOCK) ON s.StorerKey = rd.StorerKey
                                AND s.Sku      = rd.Sku
@@ -84,44 +90,118 @@ BEGIN
       
       OPEN CUR_RECDET  
       
-      FETCH NEXT FROM CUR_RECDET INTO @c_ReceiptLineNumber, @c_Style, @c_Color
+      FETCH NEXT FROM CUR_RECDET INTO @c_ReceiptLineNumber, @c_Style, @c_Color,@c_RDUserDefine02    --CS01
       
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)          
       BEGIN
+           --CS01 START
+           SET @n_Count = 0
+		     SET @n_RALineNo = ''
+
+		  SELECT TOP 1 @n_Count = 1,@n_RALineNo = rd.UserDefine02  --Got is exists and RA file's same style and color's lineno
+        FROM  RECEIPT r (NOLOCK)  
+        JOIN  RECEIPTDETAIL rd (NOLOCK) ON rd.ReceiptKey = r.ReceiptKey  
+        JOIN SKU s (NOLOCK) ON s.StorerKey = rd.StorerKey AND s.Sku = rd.Sku WHERE r.StorerKey = @c_Storerkey  
+                           AND r.UserDefine03   = @c_UserDefine03  
+                           AND rd.QtyExpected   > 0  
+                           AND s.Style          = @c_Style  
+                           AND s.Color          = @c_Color
+		  ORDER BY rd.UserDefine02 DESC     
+
+          --CS01 END
+
           IF @c_RecType = 'ASN'
-           AND NOT EXISTS (    SELECT      1
-                               FROM  RECEIPT r (NOLOCK)
-                               JOIN  RECEIPTDETAIL rd (NOLOCK) ON rd.ReceiptKey = r.ReceiptKey
-                               JOIN SKU s (NOLOCK) ON s.StorerKey = rd.StorerKey AND s.Sku = rd.Sku
-                               WHERE r.StorerKey = @c_Storerkey
-                               AND r.UserDefine03   = @c_UserDefine03
-                               AND rd.QtyExpected   > 0
-                               AND s.Style          = @c_Style
-                               AND s.Color          = @c_Color)
-      BEGIN
-          UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-          SET UserDefine03 = 'NONASN', TrafficCop = NULL 
-          WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber
-      END;
-      ELSE
-      BEGIN
-       UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-       SET UserDefine03 = @c_RecType, TrafficCop = NULL 
-       WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber
-      END
+          BEGIN        --CS01 START
+   
+      --     AND NOT EXISTS (    SELECT      1
+      --                         FROM  RECEIPT r (NOLOCK)
+      --                         JOIN  RECEIPTDETAIL rd (NOLOCK) ON rd.ReceiptKey = r.ReceiptKey
+      --                         JOIN SKU s (NOLOCK) ON s.StorerKey = rd.StorerKey AND s.Sku = rd.Sku
+      --                         WHERE r.StorerKey = @c_Storerkey
+      --                         AND r.UserDefine03   = @c_UserDefine03
+      --                         AND rd.QtyExpected   > 0
+      --                         AND s.Style          = @c_Style
+      --                         AND s.Color          = @c_Color)
+      --BEGIN
+      --    UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+      --    SET UserDefine03 = 'NONASN', TrafficCop = NULL 
+      --    WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber
+      --END;
+      --ELSE
+      --BEGIN
+      -- UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+      -- SET UserDefine03 = @c_RecType, TrafficCop = NULL 
+      -- WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber
+      --END
             
-         SET @n_err = @@ERROR  
+      --   SET @n_err = @@ERROR  
          
-         IF @n_err <> 0   
-         BEGIN  
-            SET @n_continue = 3  
-            SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)  
-            SET @n_err = 82020    
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (ispPRREC18)' 
-                         + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
-         END  
+      --   IF @n_err <> 0   
+      --   BEGIN  
+      --      SET @n_continue = 3  
+      --      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)  
+      --      SET @n_err = 82020    
+      --      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (ispPRREC18)' 
+      --                   + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+      --   END  
+
+
+            IF (ISNULL(@n_Count,0) = 0)  
+            BEGIN  --Style and Color not in RA file 
+                  UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+                  SET UserDefine03 = 'NONASN', TrafficCop = NULL   
+                  WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber  
+             END
+	          ELSE 
+	          BEGIN
+	              IF EXISTS (SELECT      1  
+                           FROM  RECEIPT r (NOLOCK)  
+                           JOIN  RECEIPTDETAIL rd (NOLOCK) ON rd.ReceiptKey = r.ReceiptKey  
+                           JOIN SKU s (NOLOCK) ON s.StorerKey = rd.StorerKey AND s.Sku = rd.Sku                                 
+                           WHERE r.StorerKey = @c_Storerkey  
+                                 AND r.ReceiptKey   = @c_ReceiptKey  
+                                 AND rd.QtyExpected   > 0  
+                                 AND s.Style          = @c_Style  
+                                 AND s.Color          = @c_Color)  
+	               BEGIN  --Style and Color in RA and also in this ASN[SSCC], whatever size
+                      UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+                      SET UserDefine03 = 'ASN', TrafficCop = NULL   
+                      WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber  
+		            END
+		            ELSE
+                  BEGIN  --Style and Color in RA but not in this ASN[SSCC]
+		                UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+                      SET UserDefine03 = 'LOOSE', TrafficCop = NULL   
+                      WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber  
+		            END
+             END
+	       END
+          ELSE  
+          BEGIN  ---For RA
+	          UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+              SET UserDefine03 = @c_RecType, TrafficCop = NULL   
+              WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber  
+          END
+		  
+		  IF ISNULL(@c_RDUserDefine02,'')=''   --update if lineno is empty, if RA also no lineno, also will update to empty
+		  BEGIN
+		      UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
+              SET UserDefine02 = @n_RALineNo, TrafficCop = NULL   
+              WHERE ReceiptKey = @c_ReceiptKey AND ReceiptLineNumber = @c_ReceiptLineNumber  
+          END
+              
+         SET @n_err = @@ERROR    
+           
+         IF @n_err <> 0     
+         BEGIN    
+            SET @n_continue = 3    
+            SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+            SET @n_err = 82020      
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (ispPRREC18)'   
+                         + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '    
+         END  --CS01 END 
          
-      FETCH NEXT FROM CUR_RECDET INTO @c_ReceiptLineNumber, @c_Style, @c_Color
+      FETCH NEXT FROM CUR_RECDET INTO @c_ReceiptLineNumber, @c_Style, @c_Color,@c_RDUserDefine02           --CS01
       END            
       CLOSE CUR_RECDET
       DEALLOCATE CUR_RECDET 
