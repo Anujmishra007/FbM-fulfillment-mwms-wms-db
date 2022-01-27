@@ -37,6 +37,7 @@ GO
 /*                              instead of Pickslipno for Remy          */  
 /* 28-Jan-2019  TLTING_ext 1.8 enlarge externorderkey field length      */
 /* 29-Nov-2019  mingle01   1.9  Add codelkup to hide lottable01         */
+/* 14-Jan-2021  mingle01   2.0  Add lottable10(ML02)                    */
 /************************************************************************/  
   
 CREATE PROC dbo.nsp_GetPickSlipOrders35 (@c_LoadKey NVARCHAR(10))  
@@ -111,7 +112,8 @@ CREATE PROC dbo.nsp_GetPickSlipOrders35 (@c_LoadKey NVARCHAR(10))
          ShowField        NVARCHAR(1)  NULL, -- CS01  
          BuyerPO          NVARCHAR(40) NULL, --WL01  
          ShowBuyerPo      NVARCHAR(1)  NULL, --WL01
-         HideLottable01   NVARCHAR(1)  NULL ) --mingle01
+         HideLottable01   NVARCHAR(1)  NULL, --mingle01
+         Lottable10       NVARCHAR(30) NULL) --ML02 
 
    INSERT INTO #TEMP_PICK  
          (PickSlipNo,          LoadKey,          OrderKey,         ConsigneeKey,  
@@ -125,7 +127,7 @@ CREATE PROC dbo.nsp_GetPickSlipOrders35 (@c_LoadKey NVARCHAR(10))
           Lottable04,          Lottable05,       packpallet,       packcasecnt,  
           externorderkey,      LogicalLoc,       Areakey,          DeliveryDate,  
           Lottable03,          Lottable01,       ShowField, --NJOW01  --(CS01)  
-          BuyerPO,             ShowBuyerPo,      HideLottable01)     --WL01  --mingle01
+          BuyerPO,             ShowBuyerPo,      HideLottable01,   Lottable10)     --WL01  --mingle01 --ML02
               
    
    SELECT DISTINCT  
@@ -185,7 +187,8 @@ CREATE PROC dbo.nsp_GetPickSlipOrders35 (@c_LoadKey NVARCHAR(10))
          CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS ShowField,  
          ISNULL(Orders.BuyerPO,''), --WL01  
          CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS ShowBuyerPo,   --WL01  
-         CASE WHEN ISNULL(CLR2.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideLottable01 --mingle01
+         CASE WHEN ISNULL(CLR2.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HideLottable01, --mingle01
+         LotAttribute.Lottable10 --ML02
    FROM LoadPlanDetail (NOLOCK)  
    JOIN Orders (NOLOCK) ON (Orders.Orderkey = LoadPlanDetail.Orderkey)  
    JOIN Storer (NOLOCK) ON (Orders.StorerKey = Storer.StorerKey)  
@@ -249,7 +252,8 @@ CREATE PROC dbo.nsp_GetPickSlipOrders35 (@c_LoadKey NVARCHAR(10))
             CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END,   --CS01  
             ISNULL(Orders.BuyerPO,''), --WL01  
             CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END,  --WL01
-            CASE WHEN ISNULL(CLR2.Code,'') <> '' THEN 'Y' ELSE 'N' END   --mingle01
+            CASE WHEN ISNULL(CLR2.Code,'') <> '' THEN 'Y' ELSE 'N' END,   --mingle01
+            LotAttribute.Lottable10 --ML02
 
    BEGIN TRAN  
    -- Uses PickType AS a Printed Flag  
@@ -399,6 +403,7 @@ CREATE PROC dbo.nsp_GetPickSlipOrders35 (@c_LoadKey NVARCHAR(10))
            , BuyerPO        --WL01  
            , ShowBuyerPo    --WL01  
            , HideLottable01 --mingle01
+           , Lottable10     --ML02
       FROM #TEMP_PICK  
       ORDER BY CASE WHEN @n_SortByNotesCustOrd = 1 THEN Notes1 + Notes2 ELSE '' END  
              , CASE WHEN @n_SortByNotesCustOrd = 1 THEN ExternOrderkey  ELSE '' END  
@@ -417,3 +422,5 @@ END
 GO
 GRANT EXECUTE ON nsp_GetPickSlipOrders35 TO NSQL
 GO
+
+EXEC nsp_GetPickSlipOrders35 '0002113405' 
