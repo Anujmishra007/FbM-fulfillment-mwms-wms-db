@@ -38,7 +38,9 @@ GO
 /* 04-Sep-2018  TLTING        Add archive ReceiptSerialno                           */  
 /* 15-Aug-2019  kocy          Add archive ReceiptInfo (kocy01)                      */ 
 /* 27-Jan-2022  kocy          latest script deployment with date condition check    */
-/*                            and extra where clause (kocy02)                       */ 
+/*                            and extra where clause (kocy02)                       */
+/* 28-Jan-2022  kocy          extend @c_whereclause from length nvarchar(350)       */ 
+/*                            to nvarchar(4000) (kocy03)                            */
 /************************************************************************************/  
 CREATE  PROCEDURE [dbo].[nspArchiveReceipt2]  
    @c_archivekey   NVARCHAR(10),  
@@ -75,7 +77,7 @@ BEGIN  -- main
          @c_ReceiptStorerKeyEnd              NVARCHAR(15),  
          @c_ReceiptStart                     NVARCHAR(10),  
          @c_ReceiptEnd                       NVARCHAR(10),  
-         @c_whereclause                      NVARCHAR(350),  
+         @c_whereclause                      NVARCHAR(4000),  --kocy03
          @c_temp                             NVARCHAR(254),  
          @CopyRowsToArchiveDatabase          NVARCHAR(1),  
          @n_archive_ReceiptSerialno_records  INT,  

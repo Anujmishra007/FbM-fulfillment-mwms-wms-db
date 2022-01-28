@@ -10,32 +10,34 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/  
-/* Stored Proc : nspArchiveReceipt                                      */  
-/* Creation Date:                                                       */  
-/* Copyright: IDS                                                       */  
-/* Written by:                                                          */  
-/*                                                                      */  
-/* Purpose:                                                             */  
-/*                                                                      */  
-/* Called By: /                                                         */  
-/*                                                                      */  
-/* PVCS Version: 1.9                                                    */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author        Purposes                                  */  
-/* 10-Aug-2005  Ong     SOS38267 Obselete sku & storerkey               */  
-/* 21-Oct-2005  June      SOS42269 Include condition ASNStatus = '9'    */  
-/* 15-Nov-2005  MaryVong      Print statement only when debug turn on   */  
-/* 28-Nov-2005  Shong         Change Commit Level and Fixing some       */  
-/*                            Performance Issues.                       */  
-/* 04-Sep-2018  TLTING        Add archive ReceiptSerialno               */   
-/* 15-Aug-2019  kocy          Add archive ReceiptInfo                   */  
-/************************************************************************/  
+/******************************************************************************/
+/* Stored Proc : nspArchiveReceipt                                            */
+/* Creation Date:                                                             */
+/* Copyright: IDS                                                             */
+/* Written by:                                                                */
+/*                                                                            */
+/* Purpose:                                                                   */
+/*                                                                            */
+/* Called By: /                                                               */
+/*                                                                            */
+/* PVCS Version: 1.9                                                          */
+/*                                                                            */
+/* Version: 5.4                                                               */
+/*                                                                            */
+/* Data Modifications:                                                        */
+/*                                                                            */
+/* Updates:                                                                   */
+/* Date         Author        Purposes                                        */
+/* 10-Aug-2005  Ong     SOS38267 Obselete sku & storerkey                     */
+/* 21-Oct-2005  June      SOS42269 Include condition ASNStatus = '9'          */
+/* 15-Nov-2005  MaryVong      Print statement only when debug turn on         */
+/* 28-Nov-2005  Shong         Change Commit Level and Fixing some             */
+/*                            Performance Issues.                             */
+/* 04-Sep-2018  TLTING        Add archive ReceiptSerialno                     */
+/* 15-Aug-2019  kocy          Add archive ReceiptInfo (kocy01)                */
+/* 28-Jan-2022  kocy          extend @c_whereclause from length nvarchar(350) */
+/*                            to nvarchar(4000) (kocy02)                      */
+/******************************************************************************/ 
 CREATE PROCEDURE [dbo].[nspArchiveReceipt]  
    @c_archivekey   NVARCHAR(10),  
    @b_Success      int           OUTPUT,  
@@ -70,7 +72,7 @@ BEGIN  -- main
          @c_ReceiptStorerKeyEnd              NVARCHAR(15),  
          @c_ReceiptStart                     NVARCHAR(10),  
          @c_ReceiptEnd                       NVARCHAR(10),  
-         @c_whereclause                      NVARCHAR(350),  
+         @c_whereclause                      NVARCHAR(4000),   --kocy02  
          @c_temp                             NVARCHAR(254),  
          @CopyRowsToArchiveDatabase          NVARCHAR(1),  
          @n_archive_ReceiptSerialno_records  INT,  
