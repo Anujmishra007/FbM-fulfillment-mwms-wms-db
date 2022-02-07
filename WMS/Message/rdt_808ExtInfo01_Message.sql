@@ -1,0 +1,5 @@
+-- rdt_PTLCart_Assign_PickslipPosTote_Lottable
+execute rdt.rdtDropMsg 124351, 124400
+
+execute rdt.rdtAddMsg 124351, 10, '[**]                ', 'us_english', 808
+execute rdt.rdtAddMsg 124352, 10, '[MULTI LOC]         ', 'us_english', 808

@@ -1,0 +1,7 @@
+--rdt_1819ExtPASP24
+rdt.rdtDropMsg 139501 , 139550
+
+execute rdt.rdtAddMsg 139501, 10, '39501^No Suggest Loc',   'us_english', 1819
+
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 139501 AND 139550

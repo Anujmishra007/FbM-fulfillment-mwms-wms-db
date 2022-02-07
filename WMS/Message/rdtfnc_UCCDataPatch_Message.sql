@@ -1,0 +1,21 @@
+-- rdtfnc_UCCDataPatch, 63351 - 63400
+--execute rdt.rdtdropmsg 63351, 63400
+
+execute rdt.rdtAddMsg 63351, 10, '63351^LOC needed',     'us_english'
+execute rdt.rdtAddMsg 63352, 10, '63352^Invalid LOC',    'us_english'
+execute rdt.rdtAddMsg 63353, 10, '63353^Diff facility',  'us_english'
+execute rdt.rdtAddMsg 63354, 10, '63354^UCCMultiSKU/PO', 'us_english'
+execute rdt.rdtAddMsg 63355, 10, '63355^Invalid status', 'us_english'
+execute rdt.rdtAddMsg 63356, 10, '63356^Invalid UCCQTY', 'us_english'
+execute rdt.rdtAddMsg 63357, 10, '63357^Upd Failed',     'us_english'
+execute rdt.rdtAddMsg 63358, 10, '63358^NoInvToOffSet',  'us_english'
+execute rdt.rdtAddMsg 63359, 10, '63359^Option needed',  'us_english'
+execute rdt.rdtAddMsg 63360, 10, '63360^Invalid option', 'us_english'
+execute rdt.rdtAddMsg 63361, 10, '63361^SKU required',   'us_english'
+execute rdt.rdtAddMsg 63362, 10, '63362^Invalid SKU',    'us_english'
+execute rdt.rdtAddMsg 63363, 10, '63363^SameBarCodeSKU', 'us_english'
+execute rdt.rdtAddMsg 63364, 10, '63364^QTY required',   'us_english'
+execute rdt.rdtAddMsg 63365, 10, '63365^Invalid Qty',    'us_english'
+execute rdt.rdtAddMsg 63366, 10, '63366^Upd Failed',     'us_english'
+execute rdt.rdtAddMsg 63367, 10, '63367^NoInv2OffSet',   'us_english'
+execute rdt.rdtAddMsg 63368, 10, '63368^UCC needed',     'us_english'

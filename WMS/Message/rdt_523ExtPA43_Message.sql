@@ -1,0 +1,6 @@
+--rdt_523ExtPA43
+rdt.rdtDropMsg 177901,177950
+
+execute rdt.rdtAddMsg 177901, 10, '177901^HostWHCodeErr',   'us_english', 523
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 177901 AND 177950

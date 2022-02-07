@@ -1,0 +1,10 @@
+-- nspRFPA02 (range 60951 - 60975)
+execute rdt.rdtAddMsg 60951, 10, '60951 Invalid Toloc. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60952, 10, '60952 Error On Execute nspg_GETSKU. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60953, 10, '60953 Data Not Found - by STORER, SKU & LOC. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60954, 10, '60954 Get More Than 1 Qty - by STORER, SKU & LOC. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60955, 10, '60955 FromLoc Is Blank - by STORER, SKU & LOC. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60956, 10, '60956 Bad Input - STORER Or SKU. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60957, 10, '60957 Quantity Not Available. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60958, 10, '60958 Failed To Delete RFPutaway. (nspRFPA02)', 'us_english'
+execute rdt.rdtAddMsg 60959, 10, '60959 Failed To Update LOTxLOCxID. (nspRFPA02)', 'us_english'

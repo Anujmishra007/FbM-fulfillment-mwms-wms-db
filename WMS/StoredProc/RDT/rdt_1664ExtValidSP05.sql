@@ -1,0 +1,93 @@
+if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1664ExtValidSP05]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+   drop procedure [rdt].[rdt_1664ExtValidSP05]
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/************************************************************************/
+/* Store procedure: rdt_1664ExtValidSP05                                */
+/* Copyright      : LF Logistics                                        */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date       Rev  Author     Purposes                                  */
+/* 2021-08-14 1.0  James        WMS-17717 Created                       */
+/************************************************************************/
+
+CREATE PROC rdt.rdt_1664ExtValidSP05 (
+   @nMobile         INT,
+   @nFunc           INT,
+   @cLangCode       NVARCHAR( 3),
+   @cStorerKey      NVARCHAR( 15),
+   @cMBOLKey        NVARCHAR( 10),
+   @cOrderKey       NVARCHAR( 10),
+   @cTrackNo        NVARCHAR( 18),
+   @nValid          INT            OUTPUT,
+   @nErrNo          INT            OUTPUT,
+   @cErrMsg         NVARCHAR( 20)  OUTPUT,
+   @cErrMsg1        NVARCHAR( 20)  OUTPUT,
+   @cErrMsg2        NVARCHAR( 20)  OUTPUT,
+   @cErrMsg3        NVARCHAR( 20)  OUTPUT,
+   @cErrMsg4        NVARCHAR( 20)  OUTPUT,
+   @cErrMsg5        NVARCHAR( 20)  OUTPUT
+)
+AS
+
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @cDriverName    NVARCHAR( 30)
+   DECLARE @cShipperKey    NVARCHAR( 15)
+   DECLARE @nStep          INT
+   DECLARE @nInputKey      INT
+
+   SELECT 
+      @nStep = Step, 
+      @nInputKey = InputKey
+   FROM rdt.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+   
+   IF @nFunc = 1664 -- Track no to MBOL creation
+   BEGIN
+       IF @nStep = 2 -- Track no
+       BEGIN
+          IF @nInputKey = 1 -- ENTER
+          BEGIN
+            -- Cannot Mix shipperkey
+            SELECT @cDriverName = DRIVERName
+            FROM dbo.MBOL WITH (NOLOCK)
+            WHERE MbolKey = @cMBOLKey
+         
+            SELECT @cShipperKey = ShipperKey
+            FROM dbo.ORDERS WITH (NOLOCK)
+            WHERE TrackingNo = @cTrackNo
+            AND   StorerKey = @cStorerKey
+         
+            IF @cDriverName <> @cShipperKey
+            BEGIN
+                SET @nErrNo = 173351
+                SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv ShipperKey
+
+                SET @nValid = 0 -- Insert message queue
+                GOTO QUIT
+            END
+          END
+       END
+   END
+
+Quit:
+
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON RDT.rdt_1664ExtValidSP05 TO NSQL
+GO

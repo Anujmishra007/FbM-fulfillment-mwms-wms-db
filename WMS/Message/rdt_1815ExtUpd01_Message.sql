@@ -1,0 +1,6 @@
+-- rdt_1815ExtUpd01
+rdt.rdtDropMsg 177451, 177500
+
+execute rdt.rdtAddMsg 177451, 10, '177451 UPD Task Fail',    'us_english', 1815
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 177451 AND 177500

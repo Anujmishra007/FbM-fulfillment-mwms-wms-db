@@ -1,0 +1,39 @@
+-- rdt_841ExtUpdSP19
+exec rdt.rdtDropMsg 174501 , 174550	
+
+execute rdt.rdtAddMsg 174501, 10, '174501SKuNotIntote',     'us_english', 841
+execute rdt.rdtAddMsg 174502, 10, '174502SKUNotInOrder',   'us_english', 841
+execute rdt.rdtAddMsg 174503, 10, '174503QtyExceeded',      'us_english', 841
+execute rdt.rdtAddMsg 174504, 10, '174504UpdEcommFail',    'us_english', 841
+execute rdt.rdtAddMsg 174505, 10, '174505GetDetKeyFail',      'us_english', 841
+execute rdt.rdtAddMsg 174506, 10, '174506InstPKHdrFail',        'us_english', 841
+execute rdt.rdtAddMsg 174507, 10, '174507InsPickHdrFail',   'us_english', 841
+execute rdt.rdtAddMsg 174508, 10, '174508UpdPickDetFail',   'us_english', 841
+execute rdt.rdtAddMsg 174509, 10, '174509CreatePHdrFail',   'us_english', 841
+execute rdt.rdtAddMsg 174510, 10, '174510ToteCompleted',   'us_english', 841
+execute rdt.rdtAddMsg 174511, 10, '174511NoLabelNoGen',     'us_english', 841
+execute rdt.rdtAddMsg 174512, 10, '174512NoTrackNoGenerated',   'us_english', 841
+execute rdt.rdtAddMsg 174513, 10, '174513InsCtnShpmentDetFail',      'us_english', 841
+execute rdt.rdtAddMsg 174514, 10, '174514UpdOrderFail',    'us_english', 841
+execute rdt.rdtAddMsg 174515, 10, '174515UpdPickDetFull',      'us_english', 841
+execute rdt.rdtAddMsg 174516, 10, '174516UpdPackDetFail',        'us_english', 841
+execute rdt.rdtAddMsg 174517, 10, '174517OverPacked',   'us_english', 841
+execute rdt.rdtAddMsg 174518, 10, '174518InsPackDetFail',   'us_english', 841
+execute rdt.rdtAddMsg 174519, 10, '174519UpdPackDetFail',   'us_english', 841
+execute rdt.rdtAddMsg 174520, 10, '174520InsPInfoFail',   'us_english', 841
+execute rdt.rdtAddMsg 174521, 10, '174521UpdEcommFail',     'us_english', 841
+execute rdt.rdtAddMsg 174522, 10, '174522UpdOrdFail',   'us_english', 841
+execute rdt.rdtAddMsg 174523, 10, '174523UpdPickInfoFail',      'us_english', 841
+execute rdt.rdtAddMsg 174524, 10, '174524UpdPickDetailFail',    'us_english', 841
+execute rdt.rdtAddMsg 174525, 10, '174525UpdPickDetailFail',      'us_english', 841
+execute rdt.rdtAddMsg 174526, 10, '174526UpdOrdFail',        'us_english', 841
+execute rdt.rdtAddMsg 174527, 10, '174517OverPacked',   'us_english', 841
+execute rdt.rdtAddMsg 174528, 10, '174528UpdPackDetFail',   'us_english', 841
+execute rdt.rdtAddMsg 174529, 10, '174529UpdOrderFail',   'us_english', 841
+execute rdt.rdtAddMsg 174530, 10, '174530InsTrackLogFail',   'us_english', 841
+execute rdt.rdtAddMsg 174531, 10, '174531InsCtnShpmentDetFail',     'us_english', 841
+execute rdt.rdtAddMsg 174532, 10, '174532UpdPickInfoFail',   'us_english', 841
+execute rdt.rdtAddMsg 174533, 10, '174533UpdPickDetailFail',      'us_english', 841
+execute rdt.rdtAddMsg 174534, 10, '174534UpdPackDetFail',    'us_english', 841
+execute rdt.rdtAddMsg 174535, 10, '174535UpdOrdFail',      'us_english', 841
+execute rdt.rdtAddMsg 174536, 10, '174536UpdPackDetFail',        'us_english', 841

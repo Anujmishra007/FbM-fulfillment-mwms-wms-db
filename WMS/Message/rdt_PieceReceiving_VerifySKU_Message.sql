@@ -1,0 +1,22 @@
+--rdt_PieceReceiving_VerifySKU
+execute rdt.rdtDropMsg 80951, 81000
+
+execute rdt.rdtAddMsg 80951, 10, '80951 Setup Weight  ',   'us_english'
+execute rdt.rdtAddMsg 80952, 10, '80952 Setup Cube    ',   'us_english'
+execute rdt.rdtAddMsg 80953, 10, '80953 Setup Length  ',   'us_english'
+execute rdt.rdtAddMsg 80954, 10, '80954 Setup Width   ',   'us_english'
+execute rdt.rdtAddMsg 80955, 10, '80955 Setup Height  ',   'us_english'
+execute rdt.rdtAddMsg 80956, 10, '80956 Setup Inner   ',   'us_english'
+execute rdt.rdtAddMsg 80957, 10, '80957 Setup Case    ',   'us_english'
+execute rdt.rdtAddMsg 80958, 10, '80958 Setup Pallet  ',   'us_english'
+execute rdt.rdtAddMsg 80959, 10, '80959 Bad Weight    ',   'us_english'
+execute rdt.rdtAddMsg 80960, 10, '80960 Bad Cube      ',   'us_english'
+execute rdt.rdtAddMsg 80961, 10, '80961 Bad Length    ',   'us_english'
+execute rdt.rdtAddMsg 80962, 10, '80962 Bad Width     ',   'us_english'
+execute rdt.rdtAddMsg 80963, 10, '80963 Bad Height    ',   'us_english'
+execute rdt.rdtAddMsg 80964, 10, '80964 Bad Inner     ',   'us_english'
+execute rdt.rdtAddMsg 80965, 10, '80965 Bad Case      ',   'us_english'
+execute rdt.rdtAddMsg 80966, 10, '80966 Bad Pallet    ',   'us_english'
+execute rdt.rdtAddMsg 80967, 10, '80967 NoChg,HvInvBal',   'us_english'
+execute rdt.rdtAddMsg 80968, 10, '80968 UPD SKU Fail  ',   'us_english'
+execute rdt.rdtAddMsg 80969, 10, '80969 UPD Pack Fail ',   'us_english'

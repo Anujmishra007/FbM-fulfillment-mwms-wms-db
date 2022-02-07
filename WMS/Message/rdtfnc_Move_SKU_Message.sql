@@ -1,0 +1,30 @@
+
+-- rdtfnc_Move (range 60551 - 60600)
+execute rdt.rdtDropMsg 60551, 60600
+
+execute rdt.rdtAddMsg 60551, 10, '60551 LOC needed',     'us_english'
+execute rdt.rdtAddMsg 60552, 10, '60552 Invalid LOC',    'us_english'
+execute rdt.rdtAddMsg 60553, 10, '60553 Diff facility',  'us_english'
+execute rdt.rdtAddMsg 60554, 10, '60554 LOC have UCC',   'us_english'
+execute rdt.rdtAddMsg 60555, 10, '60555 Invalid ID',     'us_english'
+execute rdt.rdtAddMsg 60556, 10, '60556 SKU needed',     'us_english'
+execute rdt.rdtAddMsg 60557, 10, '60557 Invalid SKU',    'us_english'
+execute rdt.rdtAddMsg 60558, 10, '60558 No QTY to move', 'us_english'
+execute rdt.rdtAddMsg 60559, 10, '60559 Invalid QTY',    'us_english'
+execute rdt.rdtAddMsg 60560, 10, '60560 Invalid QTY',    'us_english'
+execute rdt.rdtAddMsg 60561, 10, '60561 QTY needed',     'us_english'
+execute rdt.rdtAddMsg 60562, 10, '60562 QTYAVL NotEnuf', 'us_english'
+execute rdt.rdtAddMsg 60563, 10, '60563 ToLOC needed',   'us_english'
+execute rdt.rdtAddMsg 60564, 10, '60564 Invalid LOC',    'us_english'
+execute rdt.rdtAddMsg 60565, 10, '60565 Diff facility',  'us_english'
+execute rdt.rdtAddMsg 60566, 10, '60566^Same FromToLOC', 'us_english'
+
+-- SOS276237
+execute rdt.rdtAddMsg 60567, 10, '60567^Same FromToID',  'us_english'
+
+-- WMS6353
+execute rdt.rdtAddMsg 60568, 10, '60568^Invalid Format', 'us_english'
+execute rdt.rdtAddMsg 60569, 10, '60569^Invalid Format', 'us_english'
+
+--WMS9016
+execute rdt.rdtAddMsg 60570, 10, '60570^SameBarCodeSKU', 'us_english'

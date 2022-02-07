@@ -1,0 +1,23 @@
+-- ntrPickDetailUpdate
+execute rdt.rdtdropmsg 61601, 61650
+
+execute rdt.rdtAddMsg 61601, 10, '61601 Change2HOLDLOC', 'us_english'
+execute rdt.rdtAddMsg 61602, 10, '61602 UPD PKDtl Fail', 'us_english'
+execute rdt.rdtAddMsg 61603, 10, '61603 Item Shipped  ', 'us_english'
+execute rdt.rdtAddMsg 61604, 10, '61604 L1-3 not match', 'us_english'
+execute rdt.rdtAddMsg 61605, 10, '61605 DropIDNotMatch', 'us_english'
+execute rdt.rdtAddMsg 61606, 10, '61606 UPDCongSKUFail', 'us_english'
+execute rdt.rdtAddMsg 61607, 10, '61607 INSCongSKUFail', 'us_english'
+execute rdt.rdtAddMsg 61608, 10, '61608 Pick confirmed', 'us_english'
+execute rdt.rdtAddMsg 61609, 10, '61609 OrderCancelled', 'us_english'
+execute rdt.rdtAddMsg 61610, 10, '61610 Pick confirmed', 'us_english'
+execute rdt.rdtAddMsg 61611, 10, '61611 OrderCancelled', 'us_english'
+execute rdt.rdtAddMsg 61612, 10, '61612 No MBOL       ', 'us_english'
+execute rdt.rdtAddMsg 61613, 10, '61613 Bad UpdateSrc ', 'us_english'
+execute rdt.rdtAddMsg 61614, 10, '61614 PickInProgress', 'us_english'
+execute rdt.rdtAddMsg 61615, 10, '61615 PreAlocPD Fail', 'us_english'
+execute rdt.rdtAddMsg 61616, 10, '61616 UPD LOT Fail  ', 'us_english'
+execute rdt.rdtAddMsg 61617, 10, '61617 UPD LLI Fail  ', 'us_english'
+execute rdt.rdtAddMsg 61618, 10, '61618 UPDSKUxLOCFail', 'us_english'
+execute rdt.rdtAddMsg 61619, 10, '61619 UPD OrdDtlFail', 'us_english'
+execute rdt.rdtAddMsg 61620, 10, '61620 UPD PKDtl Fail', 'us_english'

@@ -1,0 +1,15 @@
+--rdtfnc_Case_Pick
+--execute rdt.rdtdropmsg 67276, 67325
+execute rdt.rdtAddMsg 67276, 10, '67276^PlsScanIn1Opt',  'us_english'
+execute rdt.rdtAddMsg 67277, 10, '67277^OnlyScanIn1Opt', 'us_english'
+execute rdt.rdtAddMsg 67278, 10, '67278^InvalidCaseID',  'us_english'
+execute rdt.rdtAddMsg 67279, 10, '67279^URN Not Found',  'us_english'
+execute rdt.rdtAddMsg 67280, 10, '67280^InvalidURNNo',   'us_english'
+execute rdt.rdtAddMsg 67281, 10, '67281^NoLoginPrinter', 'us_english'
+execute rdt.rdtAddMsg 67282, 10, '67282^DWNOTSetup',     'us_english'
+execute rdt.rdtAddMsg 67283, 10, '67283^TgetDB Not Set', 'us_english'
+execute rdt.rdtAddMsg 67284, 10, '67284^LOADNotFound',   'us_english'
+execute rdt.rdtAddMsg 67285, 10, '67285^MBOLNotFound',   'us_english'
+execute rdt.rdtAddMsg 67286, 10, '67286^CaseScanned',    'us_english'
+execute rdt.rdtAddMsg 67287, 10, '67287^InsertRecFail',  'us_english'
+execute rdt.rdtAddMsg 67288, 10, '67288^InsertPRTFail',  'us_english'

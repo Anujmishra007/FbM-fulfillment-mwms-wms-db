@@ -1,0 +1,6 @@
+--rdt_803ExtValid02
+rdt.rdtDropMsg 178351, 178400
+
+execute rdt.rdtAddMsg 178351, 10, '178351^Task Not Done', 'us_english', 803
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 178351 AND 178400

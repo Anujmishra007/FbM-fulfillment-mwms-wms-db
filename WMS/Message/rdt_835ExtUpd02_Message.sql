@@ -1,0 +1,7 @@
+--rdt_835ExtUpd02
+rdt.rdtDropMsg 179551 , 179600
+
+execute rdt.rdtAddMsg 179551, 10, '179551 Loose UCC Err',   'us_english', 835
+
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 179551 AND 179600

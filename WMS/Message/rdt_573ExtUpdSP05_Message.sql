@@ -1,0 +1,7 @@
+--rdt_573ExtUpdSP05
+execute rdt.rdtDropMsg 159951 , 160000	
+
+execute rdt.rdtAddMsg 159951 , 10, '59951^UPDATE UCC ERR  ', 'us_english', 573
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 159951 AND 160000	
+

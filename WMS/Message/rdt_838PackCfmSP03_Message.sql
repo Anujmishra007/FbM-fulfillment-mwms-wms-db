@@ -1,0 +1,6 @@
+--rdt_838PackCfmSP03
+rdt.rdtDropMsg 147151 , 147200
+
+execute rdt.rdtAddMsg 147151, 10, '47151^INS PKInf Fail',   'us_english', 838
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 146851 AND 147200

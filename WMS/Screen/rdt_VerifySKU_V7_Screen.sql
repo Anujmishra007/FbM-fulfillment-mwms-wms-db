@@ -1,0 +1,18 @@
+
+-- 3951 = Verif SKU screen
+DELETE rdt.RDTScn WHERE Scn = 3951 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 3951, 'ENG'
+   ,@cLine01 = '%20d01'
+   ,@cLine02 = '%20d02' 	
+   ,@cLine03 = '%20d03' 	
+   ,@cLine04 = '%20d04'
+   ,@cLine05 = '%20i05'
+   ,@cLine06 = '%20d06'
+   ,@cLine07 = '%20i07'
+   ,@cLine08 = '%20d08'
+   ,@cLine09 = '%20i09'
+   ,@cLine10 = '%20d10'
+   ,@cLine11 = '%20i11'
+   ,@cLine12 = '%20d12'
+   ,@cLine13 = '%20i13'
+   ,@cLine14 = '%e'

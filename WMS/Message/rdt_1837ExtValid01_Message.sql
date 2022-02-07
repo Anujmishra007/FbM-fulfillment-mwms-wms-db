@@ -1,0 +1,6 @@
+--rdt_1837ExtValid01
+rdt.rdtDropMsg 144351 , 144400
+
+execute rdt.rdtAddMsg 144351, 10, '44351^PPA req',          'us_english', 1837
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 144351 AND 144400

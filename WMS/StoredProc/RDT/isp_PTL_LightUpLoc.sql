@@ -1,0 +1,321 @@
+IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[PTL].[isp_PTL_LightUpLoc]') AND Type in (N'P', N'PC'))
+   DROP PROCEDURE [PTL].[isp_PTL_LightUpLoc]
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+    
+/******************************************************************************/    
+/* Stored Procedure:  isp_PTL_LightUpLoc                                      */    
+/* Copyright: IDS                                                             */    
+/* Purpose: BondDPC Integration SP                                            */    
+/*                                                                            */    
+/* Modifications log:                                                         */    
+/*                                                                            */    
+/* Date       Rev  Author     Purposes                                        */    
+/* 2013-02-15 1.0  Shong      Created                                         */    
+/* 2015-06-25 1.2  ChewKP     Change to PTL.Schema (ChewKP02)                 */    
+/* 2016-03-22 1.3  Ung        Update PTLTran.LightUp                          */    
+/* 2017-08-16 1.4  ChewKP     Performance Fix (ChewKP03)                      */  
+/* 2019-07-06 1.5  YeeKung    Add Zone feature     (yeekung01)                */   
+/* 2020-11-01 1.6  YeeKung    WMS-14911 Add Fn Close(yeekung02)               */   
+/* 2020-11-01 1.6  YeeKung    WMS-16066 Add loc pickzone(yeekung02)           */   
+/******************************************************************************/    
+CREATE PROC [PTL].[isp_PTL_LightUpLoc]    
+(    
+   @n_Func           INT    
+  ,@n_PTLKey         BIGINT    
+  ,@c_DisplayValue   NVARCHAR(5)    
+  ,@b_Success        INT OUTPUT    
+  ,@n_Err            INT OUTPUT    
+  ,@c_ErrMsg         NVARCHAR(215) OUTPUT    
+  ,@c_ForceColor     NVARCHAR(20) = ''    
+  ,@c_DeviceID       NVARCHAR(20) = ''    
+  ,@c_DevicePos      NVARCHAR(10) = ''    
+  ,@c_DeviceIP       NVARCHAR(40) = ''    
+  ,@c_LModMode       NVARCHAR(10) = ''    
+  ,@c_DeviceProLogKey NVARCHAR(10) = ''    
+)    
+AS    
+BEGIN    
+   SET NOCOUNT ON    
+   SET QUOTED_IDENTIFIER OFF    
+   SET ANSI_NULLS OFF    
+   SET CONCAT_NULL_YIELDS_NULL OFF    
+    
+   DECLARE --@c_DeviceIP        VARCHAR(40),    
+           @c_LightCommand    VARCHAR(MAX),    
+           @c_TCPMessage      VARCHAR(2000),    
+           @n_IsRDT           INT,    
+           @n_StartTCnt       INT,    
+           @n_Continue        INT,    
+           @c_DeviceType      NVARCHAR(20),    
+           --@c_DeviceProLogKey NVARCHAR(10),    
+           @c_LightAction     NVARCHAR(20),    
+           @c_PTLKey          CHAR(10),    
+           @n_LenOfValues     INT,      
+           @c_CommandValue    NVARCHAR(15),     
+           @nTranCount        INT,    
+           @cPTSZone          NVARCHAR(10)    
+        
+   DECLARE @c_StorerKey      NVARCHAR(15)                
+          --,@c_DeviceID       VARCHAR(20)                
+          --,@c_DevicePos      VARCHAR(10)       
+          --,@c_LModMode       NVARCHAR(10)    
+          ,@n_LightLinkLogKey INT    
+          ,@dAddDate         DATETIME    
+          ,@cLoc             NVARCHAR(20)
+    
+   SET @n_StartTCnt = @@TRANCOUNT    
+   SET @n_Continue = 1    
+    
+--   IF NOT EXISTS(SELECT 1 FROM PTL.PTLTran p WITH (NOLOCK)    
+--                 WHERE p.PTLKey = @n_PTLKey    
+--                   AND p.[Status]<>'9')    
+--   BEGIN    
+--      SET @n_Err = 94052    
+--      SET @c_ErrMsg = '94052 - No Record Found in PTLTRAN, PTLKey=' + CAST(@n_PTLKey AS VARCHAR(10))    
+--      SET @n_Continue=3    
+--      GOTO EXIT_SP    
+--   END    
+    
+   IF @c_DeviceID = '' AND  @c_DevicePos = '' AND  @c_DeviceIP = ''    
+   BEGIN    
+      IF ISNULL(@n_PTLKey,0) = 0    
+      BEGIN    
+         SET @n_Err = 94051    
+         SET @c_ErrMsg = '94051 - PTLKey Requied'    
+         SET @n_Continue=3    
+         GOTO Quit    
+      END    
+    
+    
+      --SET @c_DeviceIP = ''    
+      SELECT @c_StorerKey = p.Storerkey,    
+             @c_DeviceID  = p.DeviceID,    
+             @c_DeviceIP  = p.IPAddress,    
+             @c_DevicePos = p.DevicePosition,    
+             @c_LModMode  = p.LightMode    
+             --@c_DisplayValue = p.DisplayValue    
+      FROM   PTL.PTLTran AS p WITH (NOLOCK)    
+      WHERE p.PTLKey = @n_PTLKey    
+      AND   p.[Status]<>'9'    
+    
+    
+   END    
+   ELSE --IF @c_DeviceID <> ''    
+   BEGIN    
+      SELECT   @c_DeviceType = ll.DeviceType    
+              --,@c_DeviceProLogKey = ll.DeviceProfileLogKey    
+              ,@c_StorerKey = ll.StorerKey  
+              , @cLoc=  ll.Loc
+      FROM DeviceProfile ll WITH (NOLOCK)    
+      WHERE ll.DeviceID = @c_DeviceID   
+      AND ll.DevicePosition=@c_DevicePos 
+      AND ll.IPAddress=@c_DeviceIP
+   END    
+    
+   IF ISNULL(RTRIM(@c_LModMode),'')  = ''    
+   BEGIN    
+      SET @c_LModMode = rdt.RDTGetConfig( @n_Func, 'LightMode', @c_StorerKey)    
+   END    
+    
+   IF ISNULL(RTRIM(@c_DeviceIP), '') = ''    
+   BEGIN    
+      SET @n_Err = 94053    
+      SET @c_ErrMsg = '94053 - IP Address cannot be NULL'    
+      SET @n_Continue=3    
+      GOTO Quit    
+   END    
+    
+   IF ISNULL(RTRIM(@c_DevicePos),'') = ''    
+   BEGIN    
+      SET @n_Err = 94054    
+      SET @c_ErrMsg = '94054 - DevicePosition cannot be NULL'    
+      SET @n_Continue = 3    
+      GOTO Quit    
+   END    
+    
+   IF ISNULL(RTRIM(@c_LModMode),'') = ''    
+   BEGIN    
+      SET @n_Err = 94055    
+      SET @c_ErrMsg = '94055 - LightMode cannot be NULL'    
+      SET @n_Continue =3    
+      GOTO Quit    
+   END    
+    
+   IF NOT EXISTS(SELECT 1 FROM DeviceProfile As dp WITH (NOLOCK)    
+                 WHERE dp.IPAddress = @c_DeviceIP    
+                 AND   dp.DevicePosition = @c_DevicePos)    
+   BEGIN    
+      SET @n_Err = 94056    
+      SET @c_ErrMsg = '94055 - Device Position and Location cannot be found in DeviceProfile'    
+      SET @n_Continue = 3    
+      GOTO Quit    
+   END    
+  
+   SET @c_LightAction  = 'Operation'    
+   SELECT @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, @c_LModMode, ISNULL(@c_ForceColor,'') )    
+   SET @n_LenOfValues = LEN(@c_DisplayValue)   
+   
+   --(yeekung01)    
+   SELECT @cPTSZone=Putawayzone    
+   FROM LOC WITH (NOLOCK)    
+   WHERE LOC=@c_DeviceID    
+
+   IF ISNULL(@cPTSZone,'')=''
+   BEGIN
+      SELECT @cPTSZone=Putawayzone    
+      FROM LOC WITH (NOLOCK)    
+      WHERE LOC=@cLoc  
+   END
+               
+   IF LEN(RTRIM(@c_DisplayValue)) >= 5    
+   BEGIN    
+--      SELECT @c_CommandValue = SUBSTRING(p.DisplayValue,1,5)    
+--      FROM   PTL.PTLTran AS p WITH (NOLOCK)    
+--      WHERE p.PTLKey = @n_PTLKey    
+--      AND   p.[Status]='0'    
+    
+        SET @c_CommandValue = SUBSTRING(@c_DisplayValue,1,5)    
+   END    
+   ELSE IF @n_LenOfValues < 5    
+   BEGIN    
+      SELECT @c_CommandValue = CASE @n_LenOfValues    
+                               WHEN '0'  THEN '$20$20$20$20$20'    
+                               WHEN '1'  THEN '$20$20$20$20' + @c_DisplayValue    
+                               WHEN '2'  THEN '$20$20$20' + @c_DisplayValue    
+                               WHEN '3'  THEN '$20$20' + @c_DisplayValue    
+                               WHEN '4'  THEN '$20' + @c_DisplayValue    
+      END    
+   END   
+     
+   DECLARE @cFnButton NVARCHAR(10),  
+           @cFnCommadValue NVARCHAR(100)  
+  
+  
+   SET @cFnButton=rdt.RDTGetConfig( @n_Func, 'FnButtonClose', @c_StorerKey)    
+  
+   IF @cFnButton='1'  
+   BEGIN  
+       SET @cFnCommadValue= 'PP5050501m1$31$22$FFm2$31$22$FFm3$31$FF$3Fma$42'  
+       SET @c_LightCommand=@cFnCommadValue+@c_DevicePos+@c_CommandValue++'$20$20CLO'  
+   END  
+   ELSE  
+   BEGIN  
+    
+      SET @c_LightCommand = @c_LightCommand + @c_DevicePos + @c_CommandValue --+ @c_DisplayValue    
+   END  
+  
+   SET @dAddDate = Getdate()    
+    
+   INSERT INTO PTL.LFLightLinkLOG(    
+          Application, LocalEndPoint,   RemoteEndPoint,    
+          SourceKey,      MessageType,     Data,    
+          Status,      AddDate,         DeviceIPAddress )    
+   VALUES(    
+          'LFLigthLink', '' , '',    
+          @n_PTLKey, 'COMMAND', @c_LightCommand,    
+          '0', @dAddDate, @c_DeviceIP  )    
+    
+   SET @n_LightLinkLogKey = @@identity    
+   SET @c_TCPMessage = @n_LightLinkLogKey    
+    
+   --(yeekung01)       
+   EXEC PTL.isp_PTL_SendMsg @c_StorerKey, @c_TCPMessage, @b_success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @c_DeviceType          
+                           ,@c_DeviceID,@n_Func,@cPTSZone     
+    
+   IF @n_Err <> 0    
+   BEGIN    
+      SET @n_Continue=3    
+      GOTO Quit    
+   END    
+   ELSE    
+   BEGIN    
+      -- Handling transaction    
+      SET @nTranCount = @@TRANCOUNT    
+      BEGIN TRAN  -- Begin our own transaction    
+      SAVE TRAN isp_PTL_LightUpLoc -- For rollback or commit only our own transaction       
+    
+      INSERT INTO PTL.LightInput ( IPAddress, DevicePosition, OutputData, Status, AddDate )    
+      VALUES ( @c_DeviceIP, @c_DevicePos, @c_DisplayValue, '9' , @dAddDate )    
+    
+    
+      IF NOT EXISTS (SELECT 1 FROM PTL.LightStatus AS ls WITH (NOLOCK)    
+                  WHERE ls.IPAddress = @c_DeviceIP    
+                  AND   ls.DevicePosition = @c_DevicePos)    
+      BEGIN    
+         INSERT INTO PTL.LightStatus          
+         (  IPAddress,        DevicePosition,   DeviceID,          
+            [Status],       PTLKey,           PTLType,          
+            StorerKey,        UserName,         DisplayValue,          
+            ReceiveValue,     ReceiveTime,      Remarks, Func,          
+            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd, EditWho, EditDate )          
+         VALUES          
+         (  @c_DeviceIP,      @c_DevicePos,     @c_DeviceID,          
+            '0',              @n_PTLKey,        '',          
+            @c_StorerKey,     SUSER_SNAME(),    @c_DisplayValue,          
+            '',               NULL,             '',    @n_Func,          
+    '',               '',               @c_DeviceProLogKey, @c_LightCommand, SUSER_SNAME(), GetDate() )    
+      END    
+      ELSE    
+      BEGIN    
+         UPDATE PTL.LightStatus WITH (ROWLOCK)     
+            SET [Status] = '0',    
+                PTLKey   = @n_PTLKey,    
+                PTLType  = '',    
+                StorerKey = @c_StorerKey,    
+                UserName = SUSER_SNAME(),    
+                DisplayValue = @c_DisplayValue,    
+                ReceiveValue = '',    
+                ReceiveTime = NULL,    
+                Remarks = '',    
+                ErrorMessage = '',    
+                SourceKey = '',    
+                DeviceProfileLogKey = @c_DeviceProLogKey,    
+                LightCmd = @c_LightCommand,    
+                Func = @n_Func,
+                EditWho = SUSER_SNAME(),          
+                EditDate = GetDATE()        
+         WHERE IPAddress = @c_DeviceIP    
+         AND   DevicePosition = @c_DevicePos    
+      END    
+    
+      UPDATE PTL.PTLTRAN WITH (ROWLOCK) SET    
+         STATUS = '1',    
+         LightUp = '1'    
+      WHERE PTLKey = @n_PTLKey    
+    
+      IF @@ERROR <> 0    
+      BEGIN    
+         SET @n_Err = 94057    
+         SET @c_ErrMsg = '94057 - Update PTLTRAN Fail'    
+         SET @n_Continue = 3    
+         GOTO RollBackTran    
+      END    
+    
+      COMMIT TRAN isp_PTL_LightUpLoc    
+   END    
+    
+   GOTO Quit    
+    
+RollBackTran:    
+   ROLLBACK TRAN isp_PTL_LightUpLoc -- Only rollback change made here    
+Quit:    
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
+      COMMIT TRAN    
+END    
+    
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON PTL.isp_PTL_LightUpLoc TO NSQL
+GO
+

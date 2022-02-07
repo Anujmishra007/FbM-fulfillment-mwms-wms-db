@@ -1,0 +1,6 @@
+--rdt_647ExtValid01
+execute rdt.rdtdropmsg 165551 , 165600	
+
+execute rdt.rdtAddMsg 165551, 10, '65551^PID DUPLICATE',   'us_english', 647
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 148351 AND 165600

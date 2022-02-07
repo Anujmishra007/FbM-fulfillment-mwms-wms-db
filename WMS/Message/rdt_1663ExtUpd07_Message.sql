@@ -1,0 +1,6 @@
+--rdt_1663ExtUpd07
+exec rdt.rdtdropmsg 160351 , 160400
+
+execute rdt.rdtAddMsg 160351, 10, '60351^UPD MBDtl Fail', 'us_english', 1663
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 160351 AND 160400

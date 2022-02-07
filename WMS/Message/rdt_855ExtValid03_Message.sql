@@ -1,0 +1,6 @@
+--rdt_855ExtValid03
+exec rdt.rdtDropMsg 137651 , 137700
+
+execute rdt.rdtAddMsg 137651 ,10, 'DISCREPANCY FOUND',      'us_english', 855
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 137651 AND 137700

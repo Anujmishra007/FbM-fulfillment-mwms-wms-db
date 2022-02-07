@@ -1,0 +1,23 @@
+-- rdt_Print
+execute rdt.rdtDropMsg 110701, 110750
+
+execute rdt.rdtAddMsg 110701, 10, '110701ReportNotSetup', 'us_english'
+execute rdt.rdtAddMsg 110702, 10, '110702NoLabelPrinter', 'us_english'
+execute rdt.rdtAddMsg 110703, 10, '110703NoPaperPrinter', 'us_english'
+execute rdt.rdtAddMsg 110704, 10, '110704ParamNotMatch ', 'us_english'
+execute rdt.rdtAddMsg 110705, 10, '110705Bad ProcessSP ', 'us_english'
+execute rdt.rdtAddMsg 110706, 10, '110706PrinterNoSetup', 'us_english'
+execute rdt.rdtAddMsg 110707, 10, '110707SpoolNot Setup', 'us_english'
+execute rdt.rdtAddMsg 110708, 10, '110708INS PrnJobFail', 'us_english'
+execute rdt.rdtAddMsg 110709, 10, '110709INS QTask Fail', 'us_english'
+execute rdt.rdtAddMsg 110710, 10, '110710BarTender Fail', 'us_english'
+execute rdt.rdtAddMsg 110711, 10, '110711DirectPrn Fail', 'us_english'
+execute rdt.rdtAddMsg 110712, 10, '110712DW not setup  ', 'us_english'
+execute rdt.rdtAddMsg 110713, 10, '110713INS PrnJobFail', 'us_english'
+execute rdt.rdtAddMsg 110714, 10, '110714NoDefPrnInGRP ', 'us_english'
+execute rdt.rdtAddMsg 110715, 10, '110715INS PrnJobFail', 'us_english'
+execute rdt.rdtAddMsg 110716, 10, '110716UPD QTask Fail', 'us_english'
+execute rdt.rdtAddMsg 110717, 10, '110717UPD PrnJobFail', 'us_english'
+execute rdt.rdtAddMsg 110718, 10, '110718SpoolNot Setup', 'us_english'
+execute rdt.rdtAddMsg 110719, 10, '110719INS PrnJobFail', 'us_english'
+execute rdt.rdtAddMsg 110720, 10, '110720UPD PrnJobFail', 'us_english'
