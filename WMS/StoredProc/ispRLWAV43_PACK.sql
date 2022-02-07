@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,6 +32,10 @@ GO
 /* 2021-10-27  Wan03    1.2   Fixed Cannot Find Cartontype for UCC (FC) */
 /* 2021-10-28  Wan04    1.3   Fixed Create @t_OptimizeCZGroup_FC record */
 /*                            Once for B2B FC cartanization             */
+/* 2021-11-05  Wan04    1.4   ID -Spilt Pickdetail to include Channel_ID*/
+/* 2021-12-07  Wan05    1.5   To Fixed Inifinity Loop to Submit API     */
+/* 2022-01-20  Wan06    1.6   To Fixed Inifinity Loop to Submit API     */
+/*                            New Fixed if Last record <= packaccess    */
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -74,7 +78,7 @@ BEGIN
          , @c_Size               NVARCHAR(10) = ''
          , @n_RecCnt             NVARCHAR(20) = ''       --(Wan03)
          
-         , @n_SplitToAccessQty   INT          = 0        --Wan02                           
+         , @n_SplitToAccessQty   INT         = 0         --Wan02   
 
          , @n_CartonSeqNo        INT         = 0
          , @c_CartonGroup_B2B    NVARCHAR(10)= ''
@@ -103,7 +107,8 @@ BEGIN
          , @n_QtyRemain_ToPack   INT         = 0          
          , @n_ID_ToPack          INT         = 0
          , @n_ID_ToUpd           INT         = 0  
-         
+         , @n_TotalToPack        INT         = 0         --(Wan06) 
+                                                         --         
          , @b_MinQty1ToPack      BIT         = 0
          
          , @n_ItemToPackCnt      INT         = 0 
@@ -166,6 +171,17 @@ BEGIN
          ,  CartonHeight         FLOAT          NOT NULL DEFAULT (0.00)
          )
          
+   --(Wan05) - START - Change to use Variable Table      
+   DECLARE @t_OptimizeResult     TABLE
+         (  ContainerID          NVARCHAR(10)   NULL  DEFAULT('')    
+         ,  AlgorithmID          NVARCHAR(10)   NULL  DEFAULT('')  
+         ,  IsCompletePack       NVARCHAR(10)   NULL  DEFAULT('')  
+         ,  ID                   INT            NULL  DEFAULT('')  
+         ,  SKU                  NVARCHAR(20)   NULL  DEFAULT('')  
+         ,  Qty                  INT            NULL  DEFAULT(0)  
+         )    
+   --(Wan05) - END
+   --      
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
@@ -246,17 +262,19 @@ BEGIN
          )
    END
    
-   IF OBJECT_ID('tempdb..#OptimizeResult','U') IS NULL  
-   BEGIN  
-      CREATE TABLE #OptimizeResult  
-         (  ContainerID       NVARCHAR(10)   NULL  DEFAULT('')  
-         ,  AlgorithmID       NVARCHAR(10)   NULL  DEFAULT('')
-         ,  IsCompletePack    NVARCHAR(10)   NULL  DEFAULT('')
-         ,  ID                INT            NULL  DEFAULT('')
-         ,  SKU               NVARCHAR(20)   NULL  DEFAULT('')
-         ,  Qty               INT            NULL  DEFAULT(0)
-         )  
-   END 
+   --(Wan05) - START - Change to use Variable Table
+   --IF OBJECT_ID('tempdb..@t_OptimizeResult','U') IS NULL  
+   --BEGIN  
+   --   CREATE TABLE #OptimizeResult  
+   --      (  ContainerID       NVARCHAR(10)   NULL  DEFAULT('')  
+   --      ,  AlgorithmID       NVARCHAR(10)   NULL  DEFAULT('')
+   --      ,  IsCompletePack    NVARCHAR(10)   NULL  DEFAULT('')
+   --      ,  ID                INT            NULL  DEFAULT('')
+   --      ,  SKU               NVARCHAR(20)   NULL  DEFAULT('')
+   --      ,  Qty               INT            NULL  DEFAULT(0)
+   --      )  
+   --END 
+   --(Wan05) - END - Change to use Variable Table
 
    BEGIN TRAN
 
@@ -947,8 +965,10 @@ BEGIN
 
             WHILE 1 = 1
             BEGIN 
-               TRUNCATE TABLE #OptimizeResult;
-               INSERT INTO #OptimizeResult (ContainerID, AlgorithmID, IsCompletePack, ID, SKU, Qty)  
+               --TRUNCATE TABLE @t_OptimizeResult;    --(Wan05) Change to use variable table
+               DELETE FROM @t_OptimizeResult;         --(Wan05) Change to use variable table
+               
+               INSERT INTO @t_OptimizeResult (ContainerID, AlgorithmID, IsCompletePack, ID, SKU, Qty)  
                EXEC isp_SubmitToCartonizeAPI  
                     @c_CartonGroup = @c_CartonGroup_B2B   
                   , @c_CartonType  = @c_CartonType_B2B_w    
@@ -970,7 +990,7 @@ BEGIN
                SELECT @c_IsCompletePack = ore.IsCompletePack
                      ,@c_Sku_Optimize  = ore.Sku 
                      ,@n_Qty_Optimize  = ore.Qty
-               FROM #OptimizeResult AS ore 
+               FROM @t_OptimizeResult AS ore 
                
                SET @n_ID_ToPack = 0
                SET @n_Qty_ToPack = 0
@@ -988,6 +1008,15 @@ BEGIN
                   --TO_pack = 8,  remain =  4, original = 12      -- Pack to current  
                   --TO_pack = 10, remain =  2, original = 12      -- pack to new -- know as it is fit
                   --to_pack = 2,  remain = 10, original = 12      -- pack to new
+                  
+                  SELECT @n_TotalToPack = SUM(oitp.Quantity)         --(Wan06) - START
+                  FROM #OptimizeItemToPack AS oitp
+                  
+                  IF @n_TotalToPack > @n_Qty_ToPack
+                  BEGIN
+                     SET @n_Qty_ToPack = @n_TotalToPack
+                     SET @n_OrignalQty_ToPack = @n_Qty_ToPack
+                  END                                                --(Wan06)  - END
                   
                   SET @n_Qty_ToUpd = @n_Qty_ToPack
                   SET @n_QtyRemain_ToPack = @n_OrignalQty_ToPack - @n_Qty_ToPack
@@ -1081,6 +1110,26 @@ BEGIN
                         SET @c_CartonType_B2B = ''
                         SET @n_CartonSeqNo = @n_CartonSeqNo - 1
                      END
+                     --(Wan05) - START 
+                     ELSE IF @n_Qty_ToUpd <= @n_PackAccessQty AND @n_PackAccessQty > 0 
+                     BEGIN
+                        UPDATE pw                                    --(Wan06)
+                           SET pw.SplitToAccessQty = 1                
+                        FROM #OptimizeItemToPack AS oitp
+                        JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = oitp.RowRef
+                        
+                        -- delete last record and submit API to check & 
+                        DELETE oitp                
+                        FROM #OptimizeItemToPack AS oitp  
+                        WHERE oitp.ID = @n_ID_ToPack 
+                        
+                        --SET @n_PackAccessQty = 0                   --(Wan06)
+                        --SET @n_SplitToAccessQty = 1                --(Wan06)
+                        SET @n_CartonSeqNo = @n_CartonSeqNo - 1      --(Wan06)
+
+                        BREAK
+                     END
+                     --(Wan05) - END
                   END
                END
 
@@ -1450,6 +1499,7 @@ BEGIN
                      ,  Taskdetailkey
                      ,  TaskManagerReasonkey
                      ,  Notes 
+                     ,  Channel_ID              --(Wan04) - Spilt Pickdetail to include Channel_ID 
                      )
                SELECT PickDetailKey = @c_NewPickDetailKey
                     , CaseID = @c_LabelNo
@@ -1484,7 +1534,8 @@ BEGIN
                     , PickSlipNo = CASE WHEN @c_DocType = 'N' THEN @c_PickSlipNo ELSE p.PickSlipNo END 
                     , p.Taskdetailkey
                     , p.TaskManagerReasonkey
-                    , @c_PickDetailKey + ', Originalqty = ' + CAST(p.Qty + @n_Qty AS VARCHAR)      
+                    , @c_PickDetailKey + ', Originalqty = ' + CAST(p.Qty + @n_Qty AS VARCHAR) 
+                    , p.Channel_ID              --(Wan04) - Spilt Pickdetail to include Channel_ID       
                FROM dbo.PICKDETAIL AS p WITH (NOLOCK) 
                WHERE p.PickDetailKey = @c_PickDetailKey
 
