@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-09  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/* 2021-10-26  Wan01    1.1   CR 2.7 Change FAILPTL flag to InvoiceNo   */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV43_PTL]
@@ -187,12 +188,12 @@ BEGIN
    -- Clear Orders Fail Indicator on Previous run - START
    ------------------------------------------------------ 
    UPDATE o WITH (ROWLOCK)
-   SET   UserDefine10= '' -- Need TO refer to FBR
+   SET   InvoiceNo = ''                --Wan01
       ,  EditWho = SUSER_SNAME()
       ,  EditDate= GETDATE()
       ,  TrafficCop = NULL
    FROM dbo.ORDERS AS o
-   WHERE o.UserDefine10 = 'FAILPTL'
+   WHERE o.InvoiceNo = 'FAILPTL'       --Wan01
    AND EXISTS (SELECT 1 FROM @t_MultiOrder AS tmo 
                WHERE tmo.PTLLoc = ''
                AND tmo.Orderkey = o.OrderKey
@@ -251,7 +252,7 @@ BEGIN
          COMMIT TRAN
       END
       
-      ; WITH DELORD ( OrderKey ) AS 
+      ; WITH UPDORD ( OrderKey ) AS       --Wan01 
       ( SELECT TOP (@n_NoOfLargeVolOrd - @n_NoOfLargeLoc) tmo.Orderkey 
         FROM @t_MultiOrder AS tmo
         WHERE tmo.Volume > @n_CubicCapacity_Max   
@@ -259,12 +260,12 @@ BEGIN
       )
  
       UPDATE o WITH (ROWLOCK)
-      SET   UserDefine10= 'FAILPTL' -- Need TO refer to FBR
+      SET   InvoiceNo = 'FAILPTL'         --Wan01
          ,  EditWho = SUSER_SNAME()
          ,  EditDate= GETDATE()
          ,  TrafficCop = NULL
-      FROM DEL_ORDERS do 
-      JOIN ORDERS o ON o.Orderkey = do.Orderkey
+      FROM UPDORD uo                      --Wan01 
+      JOIN ORDERS o ON o.Orderkey = uo.Orderkey
          
       IF @@ERROR <> 0 
       BEGIN
@@ -481,7 +482,7 @@ BEGIN
       END
       
       UPDATE o WITH (ROWLOCK)
-      SET   UserDefine10= 'FAILPTL' -- Need TO refer to FBR
+      SET   InvoiceNo = 'FAILPTL'         --Wan01
          ,  EditWho = SUSER_SNAME()
          ,  EditDate= GETDATE()
          ,  TrafficCop = NULL
