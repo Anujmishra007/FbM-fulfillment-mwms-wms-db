@@ -1,0 +1,11 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+CREATE VIEW [BI].[V_BillOfMaterial] AS 
+SELECT * 
+   FROM [BillOfMaterial] WITH (NOLOCK) 
+GO
+GRANT SELECT ON  [BI].[V_BillOfMaterial] TO [JReportRole]
+GO

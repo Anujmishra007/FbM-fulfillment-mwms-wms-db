@@ -1,0 +1,127 @@
+: CN UAT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN SB1 : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+Msg 208, Level 16, State 1, Server VMCNWMSDBVT4, Procedure V_eComConfigPromo, Line 5
+Invalid object name 'BI.eComPromo'.
+Msg 15151, Level 16, State 1, Server VMCNWMSDBVT4, Line 2
+Cannot find the object 'V_eComConfigPromo', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: CN SEP : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_DEV : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SIT : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_UAT : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_CHN : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_eComConfigPromo, Line 5
+Invalid object name 'BI.eComPromo'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_eComConfigPromo', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SGP : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_eComConfigPromo, Line 5
+Invalid object name 'BI.eComPromo'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_eComConfigPromo', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : GTWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_eComConfigPromo, Line 5
+Invalid object name 'BI.eComPromo'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_eComConfigPromo', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_eComConfigPromo.sql 
+----------------------------------------------------------------------------- 

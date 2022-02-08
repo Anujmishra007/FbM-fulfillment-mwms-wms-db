@@ -1,0 +1,26 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_POLL_ALLOCATE] 
+AS 
+SELECT [orderkey]
+, [EffectiveDate]
+, [RetryCount]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [TrafficCop]
+, [ArchiveCop]
+, [TimeStamp]
+FROM [POLL_ALLOCATE] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_POLL_ALLOCATE] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_POLL_ALLOCATE] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_POLL_ALLOCATE] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_POLL_ALLOCATE] TO [NSQL]
+GO

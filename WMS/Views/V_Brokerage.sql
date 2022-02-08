@@ -1,0 +1,17 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+CREATE   VIEW [dbo].[V_Brokerage]
+AS
+SELECT * 
+FROM dbo.Brokerage WITH (NOLOCK)
+GO
+GRANT DELETE ON  [dbo].[V_Brokerage] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_Brokerage] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_Brokerage] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_Brokerage] TO [NSQL]
+GO

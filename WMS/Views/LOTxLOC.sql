@@ -1,0 +1,45 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+
+
+
+
+
+
+
+
+
+CREATE VIEW [dbo].[LOTxLOC]
+( Lot,
+Loc,
+Storerkey,
+Sku,
+Qty
+) AS
+SELECT    LOTxLOCxID.Lot,
+LOTxLOCxID.Loc,
+LOTxLOCxID.Storerkey,
+LOTxLOCxID.Sku,
+Sum(Qty)
+FROM LOTxLOCxID
+GROUP BY  LOTxLOCxID.Lot,
+LOTxLOCxID.Loc,
+LOTxLOCxID.Storerkey,
+LOTxLOCxID.Sku
+HAVING Sum(Qty) > 0
+
+
+
+
+GO
+GRANT DELETE ON  [dbo].[LOTxLOC] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[LOTxLOC] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[LOTxLOC] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[LOTxLOC] TO [NSQL]
+GO

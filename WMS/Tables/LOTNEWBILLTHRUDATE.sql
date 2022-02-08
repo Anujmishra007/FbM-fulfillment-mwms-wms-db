@@ -1,0 +1,21 @@
+CREATE TABLE [dbo].[LOTNEWBILLTHRUDATE]
+(
+[Lot] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_LOTNEWBILLTHRUDATE_Lot] DEFAULT (' '),
+[BillThruDate] [datetime] NOT NULL CONSTRAINT [DF_LOTNEWBILLTHRUDATE_BillThruDate] DEFAULT (getdate()),
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOTNEWBILLTHRUDATE_AddWho] DEFAULT (suser_sname())
+) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[LOTNEWBILLTHRUDATE] ADD CONSTRAINT [PKLOTNEWBILLTHRUDATE] PRIMARY KEY CLUSTERED ([Lot]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[LOTNEWBILLTHRUDATE] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[LOTNEWBILLTHRUDATE] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[LOTNEWBILLTHRUDATE] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[LOTNEWBILLTHRUDATE] TO [NSQL]
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'LOTNEWBILLTHRUDATE', 'COLUMN', N'AddWho'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Unique pre-populated numeric value associated with a specific product. A unique combination.', 'SCHEMA', N'dbo', 'TABLE', N'LOTNEWBILLTHRUDATE', 'COLUMN', N'Lot'
+GO

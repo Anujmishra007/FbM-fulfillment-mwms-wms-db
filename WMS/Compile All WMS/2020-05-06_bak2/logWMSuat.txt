@@ -1,0 +1,811 @@
+: CN UAT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SB1 : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBVT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSDBVT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSDBVT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSDBVT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSDBVT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBVT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSDBVT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSDBVT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBVT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSDBVT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server CNWMSDBPD6, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server CNWMSDBPD6, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server CNWMSDBPD6, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD6, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server CNWMSDBPD6, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server CNWMSDBPD6, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD6, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server CNWMSDBPD6, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server CNWMSDBPD6, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server CNWMSDBPD6, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSHNMDBVT1, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSHNMDBVT1, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSHNMDBVT1, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSHNMDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSHNMDBVT1, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSHNMDBVT1, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSHNMDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSHNMDBVT1, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSHNMDBVT1, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSHNMDBVT1, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSUAMDBVT1, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSUAMDBVT1, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSUAMDBVT1, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSUAMDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSUAMDBVT1, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSUAMDBVT1, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSUAMDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSUAMDBVT1, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSUAMDBVT1, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSUAMDBVT1, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSSKEDBVT1, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSSKEDBVT1, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSSKEDBVT1, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSSKEDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSSKEDBVT1, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSSKEDBVT1, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSSKEDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSSKEDBVT1, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSSKEDBVT1, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSSKEDBVT1, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSNKEDBVT1, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMCNWMSNKEDBVT1, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMCNWMSNKEDBVT1, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMCNWMSNKEDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMCNWMSNKEDBVT1, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSNKEDBVT1, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMCNWMSNKEDBVT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMCNWMSNKEDBVT1, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSNKEDBVT1, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMCNWMSNKEDBVT1, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN SEP : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMACWMSVIPDBHA1, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMACWMSVIPDBHA1, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMACWMSVIPDBHA1, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMACWMSVIPDBHA1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMACWMSVIPDBHA1, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMACWMSVIPDBHA1, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMACWMSVIPDBHA1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMACWMSVIPDBHA1, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMACWMSVIPDBHA1, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMACWMSVIPDBHA1, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: GT UT1 : LFL_WMS_DEV : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: GT UT1 : PFCMODEL : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 1778, Level 16, State 1, Server VMGBWMSDBDV4, Line 1
+Column 'dbo.FACILITY.Facility' is not the same data type as referencing column 'eComConfig.Facility' in foreign key 'FK_eComConfig_FACILITY'.
+Msg 1750, Level 16, State 1, Server VMGBWMSDBDV4, Line 1
+Could not create constraint or index. See previous errors.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMAUWMSDBUT1, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMAUWMSDBUT1, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMAUWMSDBUT1, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMAUWMSDBUT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMAUWMSDBUT1, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMAUWMSDBUT1, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMAUWMSDBUT1, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMAUWMSDBUT1, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMAUWMSDBUT1, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMAUWMSDBUT1, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMTHWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMTHWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMTHWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMTHWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMTHWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMINWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMINWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMINWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMINWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMINWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMINWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMINWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMINWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMINWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMINWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMKRWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMKRWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMKRWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMKRWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMKRWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMKRWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMKRWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMKRWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMKRWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMKRWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMKRWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMTHWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMTHWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMTHWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMTHWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMTHWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMTHWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMTHWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMTHWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMTHWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMTHWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMTHWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'eComConfig' in the database.
+Msg 2714, Level 16, State 5, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'FK_eComConfig_FACILITY' in the database.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComConfig'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComConfigUpdate, Line 2
+There is already an object named 'ntrBIeComConfigUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.eComPromo.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 2
+There is already an object named 'eComPromo' in the database.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_ADDextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'BI.eComPromo'.
+Msg 2714, Level 16, State 2, Server VMSGWMSDBUT4, Procedure ntrBIeComPromoUpdate, Line 2
+There is already an object named 'ntrBIeComPromoUpdate' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAgg.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAgg' in the database.
+----------------------------------------------------------------------------- 
+--  BI.IMLAggLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'IMLAggLog' in the database.
+----------------------------------------------------------------------------- 
+--  BI.OrderStage.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.eComConfig.sql 
+
+Sqlcmd: Warning: The last operation was terminated because the user pressed CTRL+C.

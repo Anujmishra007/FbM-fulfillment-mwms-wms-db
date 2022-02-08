@@ -1,0 +1,14 @@
+CREATE TABLE [dbo].[IDKey]
+(
+[IDKey] [bigint] NOT NULL IDENTITY(1, 1),
+[AddDate] [datetime] NULL
+) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[IDKey] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[IDKey] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[IDKey] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[IDKey] TO [NSQL]
+GO

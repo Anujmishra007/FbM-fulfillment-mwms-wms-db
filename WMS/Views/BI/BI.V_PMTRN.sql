@@ -1,0 +1,30 @@
+IF OBJECT_ID('BI.V_PMTRN','V') IS NOT NULL
+   DROP VIEW  BI.V_PMTRN
+GO
+--https://jiralfl.atlassian.net/browse/WMS-13190
+
+
+CREATE VIEW [BI].[V_PMTRN]
+AS 
+SELECT *
+FROM dbo.PMTRN WITH (NOLOCK) 
+GO
+
+GRANT SELECT ON BI.V_PMTRN TO [JREPORTROLE]
+GO
+
+--------------------------------------------------------
+IF OBJECT_ID('BI.V_PMINV','V') IS NOT NULL
+   DROP VIEW  BI.V_PMINV
+GO
+--https://jiralfl.atlassian.net/browse/WMS-13190
+
+CREATE VIEW [BI].[V_PMINV]
+AS 
+SELECT *
+FROM dbo.PMINV WITH (NOLOCK) 
+GO
+
+GRANT SELECT ON BI.V_PMINV TO [JREPORTROLE]
+GO
+

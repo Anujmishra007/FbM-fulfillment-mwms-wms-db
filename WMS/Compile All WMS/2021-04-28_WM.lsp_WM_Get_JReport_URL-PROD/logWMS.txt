@@ -1,0 +1,117 @@
+: CN LIVE : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+Msg 2714, Level 16, State 6, Server CNWMSDBPD5, Line 1
+There is already an object named 'ExecutionLog' in the database.
+Msg 1779, Level 16, State 1, Server CNWMSDBPD5, Line 1
+Table 'ExecutionLog' already has a primary key defined on it.
+Msg 1750, Level 16, State 1, Server CNWMSDBPD5, Line 1
+Could not create constraint or index. See previous errors.
+Msg 1913, Level 16, State 1, Server CNWMSDBPD5, Line 1
+The operation failed because an index or statistics with name 'IX_ExecutionLog_TimeStart' already exists on table 'dbo.ExecutionLog'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.HostName'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.LogId'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.Sch'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.SP'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.TimeStart'.
+Msg 15233, Level 16, State 1, Server CNWMSDBPD5, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.UserName'.
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: DUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: HK LV01 : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 

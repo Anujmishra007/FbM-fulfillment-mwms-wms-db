@@ -1,0 +1,12 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+--https://jiralfl.atlassian.net/browse/WMS-15455
+CREATE VIEW [BI].[V_SKU_Log] 
+AS 
+SELECT * FROM SKU_Log WITH (NOLOCK)
+GO
+GRANT SELECT ON  [BI].[V_SKU_Log] TO [JReportRole]
+GO

@@ -1,0 +1,11 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+CREATE VIEW [BI].[V_StorerConfig] AS 
+SELECT * 
+   FROM [StorerConfig] WITH (NOLOCK) 
+GO
+GRANT SELECT ON  [BI].[V_StorerConfig] TO [JReportRole]
+GO

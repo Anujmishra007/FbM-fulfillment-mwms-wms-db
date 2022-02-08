@@ -1,0 +1,10 @@
+SET QUOTED_IDENTIFIER ON
+GO
+SET ANSI_NULLS ON
+GO
+CREATE VIEW [RDT].[V_rdtDataCapture]  
+AS  
+SELECT *
+FROM [RDT].[rdtDataCapture] WITH (nolock)
+
+GO

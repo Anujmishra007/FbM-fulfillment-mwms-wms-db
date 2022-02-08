@@ -1,0 +1,267 @@
+: CN UAT : CNWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server WVSHWMSEXDBUT01, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server WVSHWMSEXDBUT01, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : GTWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS_UAT 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: VMGBWMSDBDV4  : LFL_WMS_DEV 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_UAT 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_CHN 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SGP 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+Msg 2714, Level 16, State 3, Server VMSGWMSDBUT4, Procedure V_RDTWATLOG, Line 8
+There is already an object named 'V_RDTWATLOG' in the database.
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 2714, Level 16, State 3, Server VMSGWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 8
+There is already an object named 'V_RDTWATTEAMLOG' in the database.
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMINWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMINWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMKRWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMKRWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMKRWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+Msg 208, Level 16, State 1, Server VMKRWMSDBUT4, Procedure V_RDTWATTEAMLOG, Line 10
+Invalid object name 'RDT.RDTWATTEAMLOG'.
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 1
+Cannot find the object 'V_RDTWATTEAMLOG', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+Msg 2714, Level 16, State 3, Server VMSGWMSDBUT4, Procedure V_RDTWATLOG, Line 8
+There is already an object named 'V_RDTWATLOG' in the database.
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS 
+--  BI.V_RDTMSG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATLOG.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_RDTWATTEAMLOG.sql 
+----------------------------------------------------------------------------- 

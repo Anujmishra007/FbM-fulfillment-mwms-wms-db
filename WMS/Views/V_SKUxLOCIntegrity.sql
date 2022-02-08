@@ -1,0 +1,17 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+
+Create view [dbo].[V_SKUxLOCIntegrity]
+AS SELECT * from dbo.SKUxLOCIntegrity
+GO
+GRANT DELETE ON  [dbo].[V_SKUxLOCIntegrity] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_SKUxLOCIntegrity] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_SKUxLOCIntegrity] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_SKUxLOCIntegrity] TO [NSQL]
+GO

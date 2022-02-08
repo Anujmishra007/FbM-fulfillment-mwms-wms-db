@@ -1,0 +1,12 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+  
+CREATE VIEW [BI].[V_AllocShortageLog]  
+AS 
+SELECT * 
+FROM dbo.AllocShortageLog WITH (NOLOCK)  
+GO
+GRANT SELECT ON  [BI].[V_AllocShortageLog] TO [JReportRole]
+GO

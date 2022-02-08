@@ -1,0 +1,26 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+
+CREATE VIEW [dbo].[V_STORERCFGxCODELKUP_COL]
+( Storerkey,Configkey,Cols) AS
+SELECT Storerkey
+      ,Configkey
+      ,Cols = ISNULL((REPLACE(REPLACE(CONVERT(VARCHAR(4000),
+                              (SELECT RTRIM(Long) FROM CODELKUP WITH (NOLOCK) 
+										 WHERE ListName = SC.SValue
+                               AND Short = 'ENABLED'
+                               FOR XML PATH('col'), TYPE)), '<col>', '<'), '</col>', '>')),'')
+FROM STORERCONFIG SC WITH (NOLOCK)
+
+GO
+GRANT DELETE ON  [dbo].[V_STORERCFGxCODELKUP_COL] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_STORERCFGxCODELKUP_COL] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_STORERCFGxCODELKUP_COL] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_STORERCFGxCODELKUP_COL] TO [NSQL]
+GO

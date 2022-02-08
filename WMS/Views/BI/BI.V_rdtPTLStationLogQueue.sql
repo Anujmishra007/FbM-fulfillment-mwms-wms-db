@@ -1,0 +1,12 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+CREATE VIEW [BI].[V_rdtPTLStationLogQueue]
+AS
+SELECT *
+FROM rdt.rdtPTLStationLogQueue WITH (NOLOCK)
+GO
+GRANT SELECT ON  [BI].[V_rdtPTLStationLogQueue] TO [JReportRole]
+GO

@@ -1,0 +1,147 @@
+CREATE TABLE [dbo].[TTMStrategy]
+(
+[TTMStrategyKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TTMStrategy_TTMStrategyKey] DEFAULT (' '),
+[Descr] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TTMStrategy_Descr] DEFAULT (' '),
+[InterleaveTasks] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TTMStrategy_InterleaveTasks] DEFAULT ('0'),
+[AddDate] [datetime] NOT NULL CONSTRAINT [DF_TTMStrategy_AddDate] DEFAULT (getdate()),
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TTMStrategy_AddWho] DEFAULT (suser_sname()),
+[EditDate] [datetime] NOT NULL CONSTRAINT [DF_TTMStrategy_EditDate] DEFAULT (getdate()),
+[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TTMStrategy_EditWho] DEFAULT (suser_sname()),
+[TrafficCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+) ON [PRIMARY]
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+
+/************************************************************************/
+/* Trigger: ntrTTMStrategyUpdate                                        */
+/* Creation Date:  18-March-2020                                        */
+/* Copyright: IDS                                                       */
+/* Written by:  TLTING                                                  */
+/*                                                                      */
+/* Purpose: TTMStrategy Update                                          */
+/*                                                                      */
+/* Input Parameters:                                                    */
+/*                                                                      */
+/* Output Parameters:                                                   */
+/*                                                                      */
+/* Return Status:                                                       */
+/*                                                                      */
+/* Usage:                                                               */
+/*                                                                      */
+/* Local Variables:                                                     */
+/*                                                                      */
+/* Called By: When records updated                                      */
+/*                                                                      */
+/* PVCS Version: 1.5                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author   Ver  Purposes                                  */
+/************************************************************************/
+
+CREATE TRIGGER [dbo].[ntrTTMStrategyUpdate]
+ON [dbo].[TTMStrategy] FOR UPDATE
+AS 
+BEGIN
+   IF @@ROWCOUNT = 0
+   BEGIN
+      RETURN
+   END  
+   
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+	SET CONCAT_NULL_YIELDS_NULL OFF
+	
+	DECLARE	 @n_err              INT           -- Error number returned by stored procedure or this trigger
+	,         @c_errmsg           NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+	,         @n_continue         INT                 
+	,         @n_starttcnt        INT           -- Holds the current transaction count
+	,         @n_cnt              INT                  
+	
+	SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
+
+   IF UPDATE(ArchiveCop)
+   BEGIN
+   	SELECT @n_continue = 4 
+   END
+   
+   -- TLTING01
+	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
+	BEGIN
+		UPDATE TTMStrategy WITH (ROWLOCK)
+		SET EditDate = GETDATE(),
+		    EditWho  = SUSER_SNAME(),
+		    TrafficCop = NULL	
+		FROM TTMStrategy , INSERTED WITH (NOLOCK)
+		WHERE TTMStrategy.TTMStrategyKey = INSERTED.TTMStrategyKey
+
+		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+		IF @n_err <> 0
+		BEGIN
+			SELECT @n_continue = 3
+			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62303   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+			SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": UPDATE Failed on TTMStrategy table. (ntrTTMStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTrim(RTrim(@c_errmsg)) + " ) "
+		END
+	END
+
+   IF UPDATE(TrafficCop)
+   BEGIN
+   	SELECT @n_continue = 4 
+   END   
+    
+	
+	IF @n_continue=3  -- Error Occured - Process And Return
+	BEGIN
+		IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
+		BEGIN
+			ROLLBACK TRAN
+		END
+		EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrTTMStrategyUpdate"
+		RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+		RETURN
+	END
+	ELSE
+	BEGIN
+		WHILE @@TRANCOUNT > @n_starttcnt
+		BEGIN
+			COMMIT TRAN
+		END
+		RETURN
+	END
+END
+GO
+ALTER TABLE [dbo].[TTMStrategy] ADD CONSTRAINT [PKTTMStrategy] PRIMARY KEY NONCLUSTERED ([TTMStrategyKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[TTMStrategy] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[TTMStrategy] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[TTMStrategy] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[TTMStrategy] TO [NSQL]
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'AddDate'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'AddWho'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Type a description of the task dispatch sub strategy. Required field.', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'Descr'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'EditDate'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'EditWho'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Indicates whether the system will rotate through the task types when assigning tasks to users. For example, if the user previously got a putaway task, the next task may be a pick task. A value of 0 = No and 1 = Yes. Required field.', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'InterleaveTasks'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'TrafficCop'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Type a unique code identifying the task dispatch sub strategy. Required field.', 'SCHEMA', N'dbo', 'TABLE', N'TTMStrategy', 'COLUMN', N'TTMStrategyKey'
+GO

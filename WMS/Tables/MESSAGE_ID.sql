@@ -1,0 +1,23 @@
+CREATE TABLE [dbo].[MESSAGE_ID]
+(
+[MsgId] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_MESSAGE_ID_MSgId] DEFAULT (' '),
+[MsgIcon] [nvarchar] (12) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_MESSAGE_ID_MSgIcon] DEFAULT (' '),
+[MsgButton] [nvarchar] (17) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_MESSAGE_ID_MsgButton] DEFAULT (' '),
+[MsgDefaultButton] [int] NOT NULL CONSTRAINT [DF_MESSAGE_ID_MsgDefaultButton] DEFAULT ((0)),
+[MsgSeverity] [int] NOT NULL CONSTRAINT [DF_MESSAGE_ID_MsgSeverity] DEFAULT ((0)),
+[MsgPrint] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_MESSAGE_ID_MsgPrint] DEFAULT (' '),
+[MsgUserInput] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_MESSAGE_ID_MsgUserInput] DEFAULT (' ')
+) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[MESSAGE_ID] ADD CONSTRAINT [PK_msgid] PRIMARY KEY CLUSTERED ([MsgId]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[MESSAGE_ID] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[MESSAGE_ID] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[MESSAGE_ID] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[MESSAGE_ID] TO [NSQL]
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Message.', 'SCHEMA', N'dbo', 'TABLE', N'MESSAGE_ID', 'COLUMN', N'MsgId'
+GO

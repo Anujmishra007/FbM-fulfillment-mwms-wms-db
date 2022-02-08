@@ -1,0 +1,20 @@
+CREATE TABLE [RDT].[RDTLoginLog]
+(
+[RowRef] [int] NOT NULL IDENTITY(1, 1),
+[Mobile] [int] NOT NULL,
+[UserName] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ClientIP] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Remarks] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTLoginLog_Remarks] DEFAULT (''),
+[AddDate] [datetime] NOT NULL CONSTRAINT [DF_RDTLoginLog_AddDate] DEFAULT (getdate())
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[RDTLoginLog] ADD CONSTRAINT [PK_RDTLoginLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[RDTLoginLog] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[RDTLoginLog] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[RDTLoginLog] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[RDTLoginLog] TO [NSQL]
+GO

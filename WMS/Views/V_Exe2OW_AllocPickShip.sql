@@ -1,0 +1,14 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_Exe2OW_AllocPickShip] AS SELECT * FROM Exe2OW_AllocPickShip WITH (NOLOCK)  
+GO
+GRANT DELETE ON  [dbo].[V_Exe2OW_AllocPickShip] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_Exe2OW_AllocPickShip] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_Exe2OW_AllocPickShip] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_Exe2OW_AllocPickShip] TO [NSQL]
+GO

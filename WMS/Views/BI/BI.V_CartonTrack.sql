@@ -1,0 +1,12 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+CREATE VIEW [BI].[V_CartonTrack] 
+AS 
+SELECT * 
+FROM dbo.CartonTrack WITH (NOLOCK) 
+GO
+GRANT SELECT ON  [BI].[V_CartonTrack] TO [JReportRole]
+GO

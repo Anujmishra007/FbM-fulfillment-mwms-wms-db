@@ -1,0 +1,98 @@
+: CN LIVE : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+Msg 2627, Level 14, State 1, Server CNWMSDBPD5, Line 1
+Violation of PRIMARY KEY constraint 'PKNSQLConfig'. Cannot insert duplicate key in object 'dbo.NSQLCONFIG'. The duplicate key value is (JReportURL).
+The statement has been terminated.
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+Msg 2627, Level 14, State 1, Server VMAUWMSDBPD1, Line 1
+Violation of PRIMARY KEY constraint 'PKNSQLConfig'. Cannot insert duplicate key in object 'dbo.NSQLCONFIG'. The duplicate key value is (JReportURL).
+The statement has been terminated.
+----------------------------------------------------------------------------- 
+: DUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: HK LV01 : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+Msg 2627, Level 14, State 1, Server VMHKWMSDBPD4, Line 1
+Violation of PRIMARY KEY constraint 'PKNSQLConfig'. Cannot insert duplicate key in object 'dbo.NSQLCONFIG'. The duplicate key value is (JReportURL).
+The statement has been terminated.
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  INSERTdbo.NSQLConfigJReportURL.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 

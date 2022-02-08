@@ -1,0 +1,14 @@
+SET QUOTED_IDENTIFIER ON
+GO
+SET ANSI_NULLS ON
+GO
+
+--https://jiralfl.atlassian.net/browse/WMS-12777
+CREATE VIEW [BI].[V_GUI]   
+AS   
+SELECT *  
+FROM [GUI] WITH (NOLOCK)   
+  
+GO
+GRANT SELECT ON  [BI].[V_GUI] TO [JReportRole]
+GO

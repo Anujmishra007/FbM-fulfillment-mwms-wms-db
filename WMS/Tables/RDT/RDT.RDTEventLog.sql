@@ -1,0 +1,20 @@
+CREATE TABLE [RDT].[RDTEventLog]
+(
+[RowRef] [int] NOT NULL IDENTITY(1, 1),
+[StartDate] [datetime] NOT NULL CONSTRAINT [DF_RDTEventLog_StartDate] DEFAULT (getdate()),
+[UserID] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTEventLog_UserID] DEFAULT (''),
+[Activity] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTEventLog_Activity] DEFAULT (''),
+[FunctionID] [int] NOT NULL CONSTRAINT [DF_RDTEventLog_FunctionID] DEFAULT ((0)),
+[ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[RDTEventLog] ADD CONSTRAINT [PKRDTEventLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[RDTEventLog] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[RDTEventLog] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[RDTEventLog] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[RDTEventLog] TO [NSQL]
+GO

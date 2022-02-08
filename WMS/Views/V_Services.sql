@@ -1,0 +1,25 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_Services] 
+AS 
+SELECT [Servicekey]
+, [Descrip]
+, [SupportFlag]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [TrafficCop]
+, [Timestamp]
+FROM [Services] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_Services] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_Services] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_Services] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_Services] TO [NSQL]
+GO

@@ -1,0 +1,26 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_WAVEDETAIL] 
+AS 
+SELECT [WaveDetailKey]
+, [WaveKey]
+, [OrderKey]
+, [ProcessFlag]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [TrafficCop]
+, [ArchiveCop]
+FROM [WAVEDETAIL] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_WAVEDETAIL] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_WAVEDETAIL] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_WAVEDETAIL] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_WAVEDETAIL] TO [NSQL]
+GO

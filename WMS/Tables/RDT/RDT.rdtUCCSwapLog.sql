@@ -1,0 +1,24 @@
+CREATE TABLE [RDT].[rdtUCCSwapLog]
+(
+[RowRef] [int] NOT NULL IDENTITY(1, 1),
+[ReceiptKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtUCCSwapLog_ReceiptKey] DEFAULT (''),
+[LOC] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtUCCSwapLog_LOC] DEFAULT (''),
+[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtUCCSwapLog_SKU] DEFAULT (''),
+[QTY] [int] NOT NULL CONSTRAINT [DF_rdtUCCSwapLog_QTY] DEFAULT (''),
+[ExternKey] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtUCCSwapLog_ExternKey] DEFAULT (''),
+[AddDate] [datetime] NULL CONSTRAINT [DF_rdtUCCSwapLog_AddDate] DEFAULT (getdate()),
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtUCCSwapLog_AddWho] DEFAULT (suser_sname())
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[rdtUCCSwapLog] ADD CONSTRAINT [PK_rdtUCCSwapLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_rdtUCCSwapLog_ReceiptKey_LOC_SKU_QTY] ON [RDT].[rdtUCCSwapLog] ([ReceiptKey], [LOC], [SKU], [QTY]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[rdtUCCSwapLog] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[rdtUCCSwapLog] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[rdtUCCSwapLog] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[rdtUCCSwapLog] TO [NSQL]
+GO

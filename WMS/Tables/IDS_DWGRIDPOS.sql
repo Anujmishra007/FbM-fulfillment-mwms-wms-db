@@ -1,0 +1,24 @@
+CREATE TABLE [dbo].[IDS_DWGRIDPOS]
+(
+[UserId] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[WindowName] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_IDS_DWGRIDPOS_WindowName] DEFAULT (''),
+[DataWindowObjName] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_IDS_DWGRIDPOS_DataWindowObjName] DEFAULT (''),
+[DWPosition] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[DWColor] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[WinWidth] [int] NULL CONSTRAINT [DF_IDS_DWGRIDPOS_WinWidth] DEFAULT ((0)),
+[WinHeight] [int] NULL CONSTRAINT [DF_IDS_DWGRIDPOS_WinHeight] DEFAULT ((0)),
+[WinState] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[WinCtrlObjName] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_IDS_DWGRIDPOS_WinCtrlObjName] DEFAULT (''),
+[WinCtrlObjProperties] [nvarchar] (2000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[IDS_DWGRIDPOS] ADD CONSTRAINT [PK_IDS_DWGRIDPOS] PRIMARY KEY CLUSTERED ([UserId], [WindowName], [DataWindowObjName], [WinCtrlObjName]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[IDS_DWGRIDPOS] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[IDS_DWGRIDPOS] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[IDS_DWGRIDPOS] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[IDS_DWGRIDPOS] TO [NSQL]
+GO

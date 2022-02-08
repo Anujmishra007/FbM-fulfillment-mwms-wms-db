@@ -1,0 +1,15 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+--ChannelInv
+CREATE VIEW [dbo].[V_ChannelInv] AS SELECT * FROM ChannelInv WITH (NOLOCK)
+GO
+GRANT DELETE ON  [dbo].[V_ChannelInv] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_ChannelInv] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_ChannelInv] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_ChannelInv] TO [NSQL]
+GO

@@ -1,0 +1,21 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_Pl_Usr]
+AS
+SELECT *
+FROM JPTSecure.dbo.pl_usr (nolock)
+
+
+
+
+GO
+GRANT DELETE ON  [dbo].[V_Pl_Usr] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_Pl_Usr] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_Pl_Usr] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_Pl_Usr] TO [NSQL]
+GO

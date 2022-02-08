@@ -1,0 +1,21 @@
+CREATE TABLE [RDT].[rdtPTLCartLog_Doc]
+(
+[RowRef] [int] NOT NULL IDENTITY(1, 1),
+[CartID] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[DocKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLCartLog_Doc_AddWho] DEFAULT (suser_sname()),
+[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLCartLog_Doc_AddDate] DEFAULT (getdate())
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[rdtPTLCartLog_Doc] ADD CONSTRAINT [PK_rdtPTLCartLog_Doc] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=80) ON [PRIMARY]
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_rdtPTLCartLog_Doc_CartID_DocKey] ON [RDT].[rdtPTLCartLog_Doc] ([CartID], [DocKey]) WITH (FILLFACTOR=80) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[rdtPTLCartLog_Doc] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[rdtPTLCartLog_Doc] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[rdtPTLCartLog_Doc] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[rdtPTLCartLog_Doc] TO [NSQL]
+GO

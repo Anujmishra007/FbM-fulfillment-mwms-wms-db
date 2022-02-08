@@ -1,0 +1,27 @@
+CREATE TABLE [RDT].[rdtMoveToIDLog]
+(
+[RowRef] [int] NOT NULL IDENTITY(1, 1),
+[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_StorerKey] DEFAULT (''),
+[ToID] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_ToID] DEFAULT (''),
+[FromLOT] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_FromLOT] DEFAULT (''),
+[FromLOC] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_FromLOC] DEFAULT (''),
+[FromID] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_FromID] DEFAULT (''),
+[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_SKU] DEFAULT (''),
+[QTY] [int] NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_QTY] DEFAULT ((0)),
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_AddWho] DEFAULT (suser_name()),
+[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_AddDate] DEFAULT (getdate()),
+[UCC] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMoveToIDLog_UCC] DEFAULT ('')
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[rdtMoveToIDLog] ADD CONSTRAINT [PK_rdtMoveToIDLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [IX_rdtMoveToIDLog_StorerKey_ToID] ON [RDT].[rdtMoveToIDLog] ([StorerKey], [ToID]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[rdtMoveToIDLog] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[rdtMoveToIDLog] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[rdtMoveToIDLog] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[rdtMoveToIDLog] TO [NSQL]
+GO

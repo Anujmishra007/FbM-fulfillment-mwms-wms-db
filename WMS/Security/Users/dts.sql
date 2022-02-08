@@ -1,0 +1,2 @@
+CREATE USER [dts] FOR LOGIN [dts]
+GO

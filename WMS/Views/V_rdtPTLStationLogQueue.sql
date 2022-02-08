@@ -1,0 +1,11 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+CREATE VIEW [dbo].[V_rdtPTLStationLogQueue]
+AS
+SELECT *
+FROM rdt.rdtPTLStationLogQueue WITH (NOLOCK)
+GO
+GRANT SELECT ON  [dbo].[V_rdtPTLStationLogQueue] TO [NSQL]
+GO

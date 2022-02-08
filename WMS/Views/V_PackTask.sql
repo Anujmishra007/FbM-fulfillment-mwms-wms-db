@@ -1,0 +1,16 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+CREATE VIEW [dbo].[V_PackTask]
+AS SELECT * FROM dbo.PackTask (NOLOCK)
+GO
+GRANT DELETE ON  [dbo].[V_PackTask] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_PackTask] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_PackTask] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_PackTask] TO [NSQL]
+GO
