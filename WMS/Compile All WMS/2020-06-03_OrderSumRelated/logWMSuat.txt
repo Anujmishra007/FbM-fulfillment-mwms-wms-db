@@ -1,0 +1,937 @@
+: CN UAT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 209
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 209
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 210
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 210
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 210
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 211
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 211
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 213
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 213
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 213
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 214
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 214
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 214
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 215
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 215
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 215
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 216
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 216
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 216
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 217
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 217
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 217
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 218
+Invalid column name 'MBOL_NotValid'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 189
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 189
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 190
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 190
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 190
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 191
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 191
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 193
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 193
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 193
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 194
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 194
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 194
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 195
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 195
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 195
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 196
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 196
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 196
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 197
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 197
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 197
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 198
+Invalid column name 'MBOL_NotValid'.
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 209
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 209
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 210
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 210
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 210
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 211
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 211
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 213
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 213
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 213
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 214
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 214
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 214
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 215
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 215
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 215
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 216
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 216
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 216
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 217
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 217
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 217
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 218
+Invalid column name 'MBOL_NotValid'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 189
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 189
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 190
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 190
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 190
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 191
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 191
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 193
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 193
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 193
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 194
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 194
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 194
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 195
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 195
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 195
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 196
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 196
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 196
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 197
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 197
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 197
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 198
+Invalid column name 'MBOL_NotValid'.
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+The module 'isp_OrderSum' depends on the missing object 'dbo.isp_OrderStageArc'. The module will still be created; however, it cannot run successfully until the object exists.
+The module 'isp_OrderSum' depends on the missing object 'dbo.isp_OrderStage'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 206
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 207
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 208
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 209
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 209
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 210
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 210
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 210
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 211
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 211
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 212
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 213
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 213
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 213
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 214
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 214
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 214
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 215
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 215
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 215
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 216
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 216
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 216
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 217
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 217
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 217
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 218
+Invalid column name 'MBOL_NotValid'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 186
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 187
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 188
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 189
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 189
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 190
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 190
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 190
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 191
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 191
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 192
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 193
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 193
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 193
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 194
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 194
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 194
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 195
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 195
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 195
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 196
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 196
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 196
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 197
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 197
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 197
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStage, Line 198
+Invalid column name 'MBOL_NotValid'.
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 206
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 207
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 208
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 209
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 209
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 210
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 210
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 210
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 211
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 211
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 212
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 213
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 213
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 213
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 214
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 214
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 214
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 215
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 215
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 215
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 216
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 216
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 216
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 217
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 217
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 217
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 218
+Invalid column name 'MBOL_NotValid'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'StorerKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'ExternOrderKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'DeliveryDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'ConsigneeKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 186
+Invalid column name 'C_City'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'Type'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'OrderGroup'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'AddDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 187
+Invalid column name 'EditDate'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'MBOLKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'LoadKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'Facility'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'ShipperKey'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 188
+Invalid column name 'ECOM_PRESALE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 189
+Invalid column name 'PreSale'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 189
+Invalid column name 'ECOM_SINGLE_FLAG'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 190
+Invalid column name 'UserDefine01'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 190
+Invalid column name 'UserDefine02'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 190
+Invalid column name 'UserDefine03'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 191
+Invalid column name 'Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 191
+Invalid column name 'Units'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'PickDet_Lines'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'Orders_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'Lines_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 192
+Invalid column name 'Units_Open'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 193
+Invalid column name 'Orders_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 193
+Invalid column name 'Lines_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 193
+Invalid column name 'Units_ALLOC'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 194
+Invalid column name 'Orders_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 194
+Invalid column name 'Lines_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 194
+Invalid column name 'Units_Pick_Packed'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 195
+Invalid column name 'Orders_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 195
+Invalid column name 'Lines_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 195
+Invalid column name 'Units_Shipped'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 196
+Invalid column name 'Orders_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 196
+Invalid column name 'Lines_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 196
+Invalid column name 'Units_Cancelled'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 197
+Invalid column name 'PickDetails_Inserted'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 197
+Invalid column name 'Orders_OverRun'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 197
+Invalid column name 'Orders_PendBuildLoad'.
+Msg 207, Level 16, State 1, Server VMCNWMSDBUT4, Procedure isp_OrderStageArc, Line 198
+Invalid column name 'MBOL_NotValid'.
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+The module 'isp_OrderSum' depends on the missing object 'dbo.isp_OrderStageArc'. The module will still be created; however, it cannot run successfully until the object exists.
+The module 'isp_OrderSum' depends on the missing object 'dbo.isp_OrderStage'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SB1 : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SVT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: CN SEP : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: GT UT1 : LFL_WMS_DEV : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: GT UT1 : PFCMODEL : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+Msg 207, Level 16, State 1, Server VMGBWMSDBDV4, Procedure isp_OrderStage, Line 51
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMGBWMSDBDV4, Procedure isp_OrderStage, Line 51
+Invalid column name 'TrackingNo'.
+Msg 207, Level 16, State 1, Server VMGBWMSDBDV4, Procedure isp_OrderStage, Line 37
+Invalid column name 'DocType'.
+Msg 207, Level 16, State 1, Server VMGBWMSDBDV4, Procedure isp_OrderStage, Line 37
+Invalid column name 'TrackingNo'.
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+The module 'isp_OrderStageArc' depends on the missing object 'dbo.ispLogQuery'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+The module 'isp_OrderSum' depends on the missing object 'dbo.isp_OrderStage'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+The module 'isp_OrderStage' depends on the missing object 'dbo.ispLogQuery'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+The module 'isp_OrderStageArc' depends on the missing object 'dbo.ispLogQuery'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  isp_OrderStage.sql 
+The module 'isp_OrderStage' depends on the missing object 'dbo.ispLogQuery'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+--  isp_OrderStageArc.sql 
+The module 'isp_OrderStageArc' depends on the missing object 'dbo.ispLogQuery'. The module will still be created; however, it cannot run successfully until the object exists.
+----------------------------------------------------------------------------- 
+--  isp_OrderSum.sql 
+----------------------------------------------------------------------------- 

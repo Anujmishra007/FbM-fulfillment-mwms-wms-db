@@ -1,0 +1,42 @@
+-- UCC Replenish From, 63651 - 63700
+--execute rdt.rdtDropMsg 63651, 63700
+
+execute rdt.rdtAddMsg 63651, 10, '63651 Need REPLENGRP', 'us_english'
+execute rdt.rdtAddMsg 63652, 10, '63652 No replen task', 'us_english'
+execute rdt.rdtAddMsg 63653, 10, '63653 Invalid LOC',    'us_english'
+execute rdt.rdtAddMsg 63654, 10, '63654 Diff facility',  'us_english'
+execute rdt.rdtAddMsg 63655, 10, '63655 No replen task', 'us_english'
+execute rdt.rdtAddMsg 63656, 10, '63656 Need UCC',       'us_english'
+execute rdt.rdtAddMsg 63657, 10, '63657 UCCNotOnReplen', 'us_english'
+execute rdt.rdtAddMsg 63658, 10, '63658 Invalid UCC',    'us_english'
+execute rdt.rdtAddMsg 63659, 10, '63659 No UCC to swap', 'us_english'
+execute rdt.rdtAddMsg 63660, 10, '63660 Upd PKDtl fail', 'us_english'
+execute rdt.rdtAddMsg 63661, 10, '63661 Task changed',   'us_english'
+execute rdt.rdtAddMsg 63662, 10, '63662 Upd PKDtl fail', 'us_english'
+execute rdt.rdtAddMsg 63663, 10, '63663 Task changed',   'us_english'
+execute rdt.rdtAddMsg 63664, 10, '63664 UpdReplenfail',  'us_english'
+execute rdt.rdtAddMsg 63665, 10, '63665 Task changed',   'us_english'
+execute rdt.rdtAddMsg 63666, 10, '63666 Upd PKDtl fail', 'us_english'
+execute rdt.rdtAddMsg 63667, 10, '63667 Task changed',   'us_english'
+execute rdt.rdtAddMsg 63668, 10, '63668 UpdNewUCCfail',  'us_english'
+execute rdt.rdtAddMsg 63669, 10, '63669 UpdOldUCCfail',  'us_english'
+execute rdt.rdtAddMsg 63670, 10, '63670 UpdRepConffail', 'us_english'
+execute rdt.rdtAddMsg 63671, 10, '63671 UpdUCCPickfail', 'us_english'
+execute rdt.rdtAddMsg 63672, 10, '63672 UpdRepConffail', 'us_english'
+execute rdt.rdtAddMsg 63673, 10, '63673 UpdUCCReplfail', 'us_english'
+execute rdt.rdtAddMsg 63674, 10, '63674 DWNOTSetup',     'us_english'
+execute rdt.rdtAddMsg 63675, 10, '63675 TgetDB Not Set', 'us_english'
+execute rdt.rdtAddMsg 63676, 10, '63676 InsertPRTFail',  'us_english'
+execute rdt.rdtAddMsg 63677, 10, '63677 Invalid UCC',    'us_english'
+execute rdt.rdtAddMsg 63678, 10, '63678 LoadNotExist',   'us_english'
+execute rdt.rdtAddMsg 63679, 10, '63679 OffsetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 63680, 10, '63680 UpdPackQtyFail', 'us_english'
+
+-- SOS127398
+execute rdt.rdtAddMsg 63681, 10, '63681^InvalidLoadKey', 'us_english'
+execute rdt.rdtAddMsg 63682, 10, '63682^LoadNotInWave',  'us_english'
+execute rdt.rdtAddMsg 63683, 10, '63683^No replen task', 'us_english'
+execute rdt.rdtAddMsg 63684, 10, '63684^SKUNotInLoad',   'us_english'
+
+-- (ChewKP01)
+execute rdt.rdtAddMsg 63685, 10, '63685^InvalidUCC',   'us_english'

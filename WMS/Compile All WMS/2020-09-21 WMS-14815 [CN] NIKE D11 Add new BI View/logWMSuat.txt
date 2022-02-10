@@ -1,0 +1,287 @@
+: CN UAT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_DEV : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SIT : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_UAT : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_CHN : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_ExternOrders, Line 6
+Invalid object name 'dbo.ExternOrders'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_ExternOrders', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_ExternOrdersDetail, Line 6
+Invalid object name 'dbo.ExternOrdersDetail'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_ExternOrdersDetail', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SGP : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_ExternOrders, Line 6
+Invalid object name 'dbo.ExternOrders'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_ExternOrders', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 208, Level 16, State 1, Server VMGBWMSDBDV4, Procedure V_ExternOrdersDetail, Line 6
+Invalid object name 'dbo.ExternOrdersDetail'.
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the object 'V_ExternOrdersDetail', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : GTWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: GT  : PFCMODEL : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMGBWMSDBDV4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMINWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+Msg 15151, Level 16, State 1, Server VMKRWMSDBUT4, Line 2
+Cannot find the user 'JReportRole', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+Msg 208, Level 16, State 1, Server VMTHWMSDBUT4, Procedure V_ExternOrders, Line 6
+Invalid object name 'dbo.ExternOrders'.
+Msg 15151, Level 16, State 1, Server VMTHWMSDBUT4, Line 2
+Cannot find the object 'V_ExternOrders', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_ExternOrdersDetail.sql 
+Msg 208, Level 16, State 1, Server VMTHWMSDBUT4, Procedure V_ExternOrdersDetail, Line 6
+Invalid object name 'dbo.ExternOrdersDetail'.
+Msg 15151, Level 16, State 1, Server VMTHWMSDBUT4, Line 2
+Cannot find the object 'V_ExternOrdersDetail', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+--  BI.V_rdtSortAndPackLOC.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  BI.V_ExternOrders.sql 
+----------------------------------------------------------------------------- 

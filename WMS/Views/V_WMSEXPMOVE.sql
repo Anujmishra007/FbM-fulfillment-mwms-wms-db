@@ -1,0 +1,27 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_WMSEXPMOVE] 
+AS 
+SELECT [SKU]
+, [Lottable01]
+, [Lottable02]
+, [Lottable03]
+, [Lottable04]
+, [Lottable05]
+, [Qty]
+, [FromWhCode]
+, [ToWhCode]
+, [ITRNKEY]
+, [Transflag]
+FROM [WMSEXPMOVE] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_WMSEXPMOVE] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_WMSEXPMOVE] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_WMSEXPMOVE] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_WMSEXPMOVE] TO [NSQL]
+GO

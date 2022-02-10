@@ -1,0 +1,71 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+  CREATE VIEW [dbo].[V_XDOCKDETAIL]   
+AS   
+SELECT [XDOCKKEY]  
+, [XDOCKLineNumber]  
+, [ReceivedQty]  
+, [ReceivedGrossWeight]  
+, [ReceivedNetWeight]  
+, [ReceivedCube]  
+, [ExpectedQty]  
+, [ExpectedGrossWeight]  
+, [ExpectedNetWeight]  
+, [ExpectedCube]  
+, [ShippedQty]  
+, [ShippedGrossWeight]  
+, [ShippedNetWeight]  
+, [ShippedCube]  
+, [UOMWeight]  
+, [UOMCube]  
+, [RateClass]  
+, [Storerkey]  
+, [Sku]  
+, [SkuDescription]  
+, [Lottable01]  
+, [Lottable02]  
+, [Lottable03]  
+, [Lottable04]  
+, [Lottable05]
+, [Lottable06]
+, [Lottable07]
+, [Lottable08]
+, [Lottable09]
+, [Lottable10]
+, [Lottable11]
+, [Lottable12]
+, [Lottable13]
+, [Lottable14]
+, [Lottable15]  
+, [ToLoc]  
+, [ToId]  
+, [ConditionCode]  
+, [ChargeableWeight]  
+, [Rate]  
+, [Extension]  
+, [UOMVolume]  
+, [Length]  
+, [Width]  
+, [Height]  
+, [Notes]  
+, [EffectiveDate]  
+, [AddDate]  
+, [AddWho]  
+, [EditDate]  
+, [EditWho]  
+, [TrafficCop]  
+, [ArchiveCop]  
+FROM [XDOCKDETAIL] (NOLOCK)   
+  
+GO
+GRANT DELETE ON  [dbo].[V_XDOCKDETAIL] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_XDOCKDETAIL] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_XDOCKDETAIL] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_XDOCKDETAIL] TO [NSQL]
+GO

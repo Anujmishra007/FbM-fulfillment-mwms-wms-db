@@ -1,0 +1,26 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_HIERROR] 
+AS 
+SELECT [HiErrorGroup]
+, [ErrorText]
+, [ErrorType]
+, [SourceKey]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [TrafficCop]
+, [TimeStamp]
+FROM [HIERROR] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_HIERROR] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_HIERROR] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_HIERROR] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_HIERROR] TO [NSQL]
+GO

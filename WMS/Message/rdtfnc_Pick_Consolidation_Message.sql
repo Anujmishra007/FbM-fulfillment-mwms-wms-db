@@ -1,0 +1,25 @@
+-- rdtfnc_Pick_Consolidation
+-- rdt.rdtDROPMsg 85901 , 85950
+
+execute rdt.rdtAddMsg 85901, 10, '85901^ORDER KEY REQ',  'us_english'
+execute rdt.rdtAddMsg 85902, 10, '85902^INVALID ORDERS', 'us_english'
+execute rdt.rdtAddMsg 85903, 10, '85903^ORDERS PACKED',  'us_english'
+execute rdt.rdtAddMsg 85904, 10, '85904^PICKZONE req',   'us_english'
+execute rdt.rdtAddMsg 85905, 10, '85905^INV PICK CONSO', 'us_english'
+execute rdt.rdtAddMsg 85906, 10, '85906^NO SUGGEST LOC', 'us_english'
+execute rdt.rdtAddMsg 85907, 10, '85907^INS PLOG FAIL',  'us_english'
+execute rdt.rdtAddMsg 85908, 10, '85908^FINAL LOC req',  'us_english'
+execute rdt.rdtAddMsg 85909, 10, '85909^LOC NOT MATCH',  'us_english'
+execute rdt.rdtAddMsg 85910, 10, '85910^UPD PLOG FAIL',  'us_english'
+execute rdt.rdtAddMsg 85911, 10, '85911^UPD DOOR FAIL',  'us_english'
+execute rdt.rdtAddMsg 85912, 10, '85912^UPD PLOG FAIL',  'us_english'
+execute rdt.rdtAddMsg 85913, 10, '85913^UPD PLOG FAIL',  'us_english'
+execute rdt.rdtAddMsg 85914, 10, '85914^NO PICKSLIP',    'us_english'
+execute rdt.rdtAddMsg 85915, 10, '85915^ORDER PICKED',   'us_english'
+execute rdt.rdtAddMsg 85916, 10, '85916^PKZONE PICKED',  'us_english'
+execute rdt.rdtAddMsg 85917, 10, '85917^INVALID PKZONE', 'us_english'
+execute rdt.rdtAddMsg 85918, 10, '85918^PRT LABEL FAIL', 'us_english'
+execute rdt.rdtAddMsg 85919, 10, '85919^PRINT RPT FAIL', 'us_english'
+execute rdt.rdtAddMsg 85920, 10, '85920^PRT LABEL FAIL', 'us_english'
+execute rdt.rdtAddMsg 85921, 10, '85921^PRINT RPT FAIL', 'us_english'
+

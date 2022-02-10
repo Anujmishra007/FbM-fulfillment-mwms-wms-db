@@ -1,0 +1,20 @@
+--rdt_ClusterPickCfm13
+execute rdt.rdtdropmsg 132651 , 132700
+
+execute rdt.rdtAddMsg 132651, 10, '32651^OffSetPDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132652, 10, '32652^OffSetPDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132653, 10, '32653^OffSetPDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132654, 10, '32654^GetDetKeyFail',    'us_english'
+execute rdt.rdtAddMsg 132655, 10, '32655^Ins PDtl Fail',    'us_english'
+execute rdt.rdtAddMsg 132656, 10, '32656^OffSetPDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132657, 10, '32657^OffSetPDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132658, 10, '32658^SKU OverPacked',   'us_english'
+execute rdt.rdtAddMsg 132659, 10, '32659^InsPHdrFail',      'us_english'
+execute rdt.rdtAddMsg 132660, 10, '32660^GenLabelFail',     'us_english'
+execute rdt.rdtAddMsg 132661, 10, '32661^InsPackDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132662, 10, '32662^InsPackDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132663, 10, '32663^UpdPackDtlFail',   'us_english'
+execute rdt.rdtAddMsg 132664, 10, '32664^UPDPKLockFail',    'us_english'
+execute rdt.rdtAddMsg 132665, 10, '32665^Scan In Fail',     'us_english'
+execute rdt.rdtAddMsg 132666, 10, '32666^Scan In Fail',     'us_english'
+execute rdt.rdtAddMsg 132667, 10, '32667^ShortPick Fail',   'us_english'

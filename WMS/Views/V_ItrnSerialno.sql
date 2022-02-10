@@ -1,0 +1,10 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+CREATE VIEW [dbo].[V_ItrnSerialno]
+as
+SELECT * 
+FROM dbo.ItrnSerialno (NOLOCK)
+GO

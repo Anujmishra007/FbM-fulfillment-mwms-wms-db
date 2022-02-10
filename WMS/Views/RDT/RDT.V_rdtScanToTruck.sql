@@ -1,0 +1,16 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+CREATE VIEW [RDT].[V_rdtScanToTruck]
+AS Select *
+FROM [RDT].[rdtScanToTruck] with (NOLOCK)
+GO
+GRANT DELETE ON  [RDT].[V_rdtScanToTruck] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[V_rdtScanToTruck] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[V_rdtScanToTruck] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[V_rdtScanToTruck] TO [NSQL]
+GO

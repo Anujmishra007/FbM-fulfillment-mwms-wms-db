@@ -1,0 +1,12 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+   CREATE VIEW [dbo].[V_TrackingID] AS
+   SELECT *
+   FROM dbo.TrackingID WITH (NOLOCK) 
+
+GO
+GRANT SELECT ON  [dbo].[V_TrackingID] TO [NSQL]
+GO

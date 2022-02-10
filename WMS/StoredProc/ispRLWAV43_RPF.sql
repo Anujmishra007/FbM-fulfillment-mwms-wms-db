@@ -18,7 +18,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -28,6 +28,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2021-07-19  WLChooi  1.0   Created - DevOps Combine Script           */
 /* 2021-11-08  Wan01    1.1   CR 2.8 Skip Gen Normal Repl Task          */
+/* 2021-11-30  Wan02    1.2   WMS-17299 - CR 2.82.Normal repl Task      */
+/*                            System Qty must be 0                      */
+/* 2022-01-05  Wan03    1.2   WMS-17299 - CR 2.9. Revise Priority Values*/
+/*                            for TM RPF Task. Additional validation to */
+/*                            prompt HomeLoc Assignment                 */
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -128,7 +133,9 @@ BEGIN
          
          , @c_Release_Opt5       NVARCHAR(4000) = ''           --Wan01
          , @c_SkipNormalReplTask NVARCHAR(1) = 'N'             --Wan01
-     
+         , @c_TaskPriorityDPP    NVARCHAR(10)= '5'             --Wan03
+         , @c_TaskPriority       NVARCHAR(10)= '5'             --Wan03         
+         
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
    SET @n_err      = 0  
@@ -484,6 +491,10 @@ BEGIN
       GOTO QUIT_SP  
    END    
     
+   --(Wan03) -- START
+   SET @c_TaskPriorityDPP = '5'
+   SELECT @c_TaskPriorityDPP = dbo.fnc_GetParamValueFromString('@c_DPPTaskPriority', @c_Release_Opt5, @c_TaskPriorityDPP) 
+   --(Wan03) -- END 
    ------------------------------------------------------------------------------------  
    -- Calculate To Loc  
    ------------------------------------------------------------------------------------  
@@ -926,7 +937,8 @@ BEGIN
             SET @c_LogicalToLoc = @c_ToLoc  
             SET @c_TransitLoc = ''  
             SET @c_FinalLoc = ''  
-            SET @c_FinalID = ''  
+            SET @c_FinalID = '' 
+            SET @c_TaskPriority = '5'              --(Wan03) 
 
             --To PackStation
             IF @c_ToLocType IN ( 'PS', 'ST' ) AND @c_TaskType = 'RPF'  
@@ -945,7 +957,14 @@ BEGIN
                   SET @c_TransitLoc = ''  
                  
                SET @c_FinalLoc = @c_LogicalToLoc  
-               SET @c_FinalID = @c_ID                                               
+               SET @c_FinalID = @c_ID   
+               
+               --(Wan03) - START
+               IF @c_UOM = '7' 
+               BEGIN
+                  SET @c_TaskPriority = @c_TaskPriorityDPP
+               END 
+               --(Wan03) - END                                           
             END   
             
             SELECT @c_AreaKey = ISNULL(AD.AreaKey,'')
@@ -1005,7 +1024,7 @@ BEGIN
                ,  @c_ID          -- to id    
                ,  @c_SourceType  --Sourcetype    
                ,  @c_Wavekey     --Sourcekey    
-               ,  '5'            -- Priority    
+               ,  @c_TaskPriority-- Priority                --Wan03   
                ,  '9'            -- Sourcepriority    
                ,  '0'            -- Status    
                ,  @c_LogicalFromLoc --Logical from loc    
@@ -1119,6 +1138,7 @@ NEXT_LOOP:
       GOTO UPDATE_ADPHLDPLoc
    END
    --(Wan01) -- END
+   
    -------------------------------------------------------------------------------------  
    -- Enable Gen General replenishment task - START
    -------------------------------------------------------------------------------------  
@@ -1304,6 +1324,7 @@ NEXT_LOOP:
          SET @c_PickMethod= 'PP'  
          SET @c_UOM = '7'  
          SET @n_Qty = 0  
+         SET @c_TaskPriority = '5'              --(Wan03)
   
          SET @b_success = 1    
          EXECUTE nspg_getkey    
@@ -1391,7 +1412,7 @@ NEXT_LOOP:
             ,  @c_UOM         -- UOM,    
             ,  @n_UCCQty      -- UOMQty,    
             ,  @n_UCCQty      --Qty  
-            ,  @n_UCCQty      --systemqty  
+            ,  @n_Qty         --systemqty       --(Wan02) systemqty = 0 @n_UCCQty        
             ,  @c_Lot     
             ,  @c_Fromloc     
             ,  @c_ID          -- from id    
@@ -1399,7 +1420,7 @@ NEXT_LOOP:
             ,  @c_ID          -- to id    
             ,  @c_SourceType  --Sourcetype    
             ,  @c_Wavekey     --Sourcekey    
-            ,  '5'            -- Priority    
+            ,  @c_TaskPriority-- Priority             (Wan03)    
             ,  '9'            -- Sourcepriority    
             ,  '0'            -- Status    
             ,  @c_LogicalFromLoc --Logical from loc    

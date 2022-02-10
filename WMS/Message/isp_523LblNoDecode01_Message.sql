@@ -1,0 +1,7 @@
+--isp_523LblNoDecode01
+rdt.rdtDropMsg 139551 , 139600
+
+execute rdt.rdtAddMsg 139551, 10, '39551^SKU NOT EXISTS',   'us_english', 523
+
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 139551 AND 139600

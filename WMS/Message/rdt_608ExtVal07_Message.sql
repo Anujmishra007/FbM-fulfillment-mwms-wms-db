@@ -1,0 +1,8 @@
+--rdt_608ExtVal07
+exec rdt.rdtDropMsg 145451 , 145500
+
+execute rdt.rdtAddMsg 145451, 10, '45451^OVER RECEIPT',   'us_english', 608
+
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 145451 AND 145500
+

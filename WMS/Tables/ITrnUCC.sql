@@ -1,0 +1,30 @@
+CREATE TABLE [dbo].[ITrnUCC]
+(
+[ITrnUCCKey] [int] NOT NULL IDENTITY(1, 1),
+[ItrnKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[UCCNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Qty] [int] NOT NULL CONSTRAINT [DF_ITrnUCC_Qty] DEFAULT ((0)),
+[FromStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ITrnUCC_FromStatus] DEFAULT (' '),
+[ToStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ITrnUCC_ToStatus] DEFAULT (' '),
+[TrafficCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[AddDate] [datetime] NULL CONSTRAINT [DF_ITrnUCC_AddDate] DEFAULT (getdate()),
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ITrnUCC_AddWho] DEFAULT (suser_sname())
+) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[ITrnUCC] ADD CONSTRAINT [PK_ITrnUCC] PRIMARY KEY CLUSTERED ([ITrnUCCKey]) WITH (FILLFACTOR=80) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [IDX_ITrnUCC_ItrnKey] ON [dbo].[ITrnUCC] ([ItrnKey]) WITH (FILLFACTOR=80) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [IDX_ITrnUCC_UCCNo_StorerKey] ON [dbo].[ITrnUCC] ([UCCNo], [StorerKey]) WITH (FILLFACTOR=80) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[ITrnUCC] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[ITrnUCC] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[ITrnUCC] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[ITrnUCC] TO [NSQL]
+GO

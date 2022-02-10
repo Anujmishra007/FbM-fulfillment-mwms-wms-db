@@ -1,0 +1,16 @@
+-- Order, position, tote
+DELETE rdt.RDTScn WHERE Scn = 4497 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4497, 'ENG'
+   ,@cLine01 = 'ORDERKEY:      %05d05'
+   ,@cLine02 = '%10i01'
+   ,@cLine03 = ''
+   ,@cLine04 = 'STATION:'
+   ,@cLine05 = '%10d02'
+   ,@cLine06 = ''
+   ,@cLine07 = 'POSITION:'
+   ,@cLine08 = '%10i03'
+   ,@cLine09 = ''
+   ,@cLine10 = 'CARTON ID:     %05d06'
+   ,@cLine11 = '%20i04'
+   ,@cLine14 = '%e'
+   ,@nFunc = 805

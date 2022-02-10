@@ -1,0 +1,21 @@
+CREATE TABLE [dbo].[LEAF_Chart_HDR]
+(
+[ChartName] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_LEAF_Chart_HDR_ChartName] DEFAULT (''),
+[RDLC] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LEAF_Chart_HDR_RDLC] DEFAULT (''),
+[URL] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LEAF_Chart_HDR_URL] DEFAULT (''),
+[AddDate] [datetime] NOT NULL CONSTRAINT [DF_LEAF_Chart_HDR_AddDate] DEFAULT (getdate()),
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_LEAF_Chart_HDR_AddWho] DEFAULT (suser_sname()),
+[EditDate] [datetime] NOT NULL CONSTRAINT [DF_LEAF_Chart_HDR_EditDate] DEFAULT (getdate()),
+[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_LEAF_Chart_HDR_EditWho] DEFAULT (suser_sname())
+) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[LEAF_Chart_HDR] ADD CONSTRAINT [PK_LEAF_Chart_HDR] PRIMARY KEY CLUSTERED ([ChartName]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[LEAF_Chart_HDR] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[LEAF_Chart_HDR] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[LEAF_Chart_HDR] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[LEAF_Chart_HDR] TO [NSQL]
+GO

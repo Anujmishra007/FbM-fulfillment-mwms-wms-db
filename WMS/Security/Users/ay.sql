@@ -1,0 +1,2 @@
+CREATE USER [ay] FOR LOGIN [ay]
+GO

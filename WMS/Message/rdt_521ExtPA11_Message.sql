@@ -1,0 +1,6 @@
+--rdt_521ExtPA11
+rdt.rdtDropMsg 178001, 178050
+
+execute rdt.rdtAddMsg 178001, 10, '178001^HostWHCodeErr',   'us_english', 521
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 178001 AND 178050

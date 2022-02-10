@@ -1,0 +1,6 @@
+--rdt_523ExtValidSP06
+rdt.rdtDropMsg 142251 , 142300
+
+execute rdt.rdtAddMsg 142251, 10, '42251^Over Loc Max',   'us_english', 523
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 142251 AND 142300

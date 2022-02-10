@@ -1,0 +1,24 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_CLPORDER] 
+AS 
+SELECT [CLPOrderKey]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [TrafficCop]
+, [ArchiveCop]
+, [TimeStamp]
+FROM [CLPORDER] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_CLPORDER] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_CLPORDER] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_CLPORDER] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_CLPORDER] TO [NSQL]
+GO

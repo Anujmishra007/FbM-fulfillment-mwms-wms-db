@@ -1,0 +1,6 @@
+--rdt_1822ExtUpd01
+rdt.rdtDropMsg 140751 , 140800
+
+execute rdt.rdtAddMsg 140751, 10, '40751^PickCfm Fail',   'us_english', 1822
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 140751 AND 140800

@@ -1,0 +1,31 @@
+-- 4760 = LoadKey screen
+DELETE rdt.RDTScn WHERE Scn = 4760 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4760, 'ENG'
+   ,@cLine01 = 'LOADKEY: %10i01'
+   ,@cLine02 = ''
+   ,@cLine03 = 'SCANNED: %10d02'
+   ,@cLine04 = ''
+   ,@cLine05 = 'TOTAL LOAD: %05d03'
+   ,@cLine06 = ''
+   ,@cLine07 = ''
+   ,@cLine14 = '%e'
+   ,@nFunc = 579
+   
+-- 4761 = UCC screen
+DELETE rdt.RDTScn WHERE Scn = 4761 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4761, 'ENG'
+   ,@cLine01 = 'LOADKEY:  %10d01'
+   ,@cLine02 = 'SCAN/TTL: %09d02'
+   ,@cLine03 = ''
+   ,@cLine04 = 'UCC/CASE:'
+   ,@cLine05 = '%60i03'
+   ,@cLine06 = ''
+   ,@cLine07 = 'POS: %10d04'
+   ,@cLine08 = ''
+   ,@cLine09 = '%20d05'
+   ,@cLine10 = '%20d06'
+   ,@cLine11 = '%20d07'
+   ,@cLine12 = '%20d08'
+   ,@cLine13 = '%20d09'
+   ,@cLine14 = '%e'
+   ,@nFunc = 579

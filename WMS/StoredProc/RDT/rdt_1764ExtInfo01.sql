@@ -1,0 +1,84 @@
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_1764ExtInfo01') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
+   DROP PROCEDURE rdt.rdt_1764ExtInfo01
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/************************************************************************/
+/* Store procedure: rdt_1764ExtInfo01                                   */
+/* Purpose: Extended info                                               */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date         Author    Ver.  Purposes                                */
+/* 2015-01-27   Ung       1.0   SOS331666 Created                       */
+/* 2021-09-30   James     1.1   WMS-18045 Add Wave.Descr (james01)      */
+/************************************************************************/
+
+CREATE PROCEDURE rdt.rdt_1764ExtInfo01
+    @nMobile         INT 
+   ,@nFunc           INT 
+   ,@cLangCode       NVARCHAR( 3) 
+   ,@nStep           INT 
+   ,@cTaskdetailKey  NVARCHAR( 10) 
+   ,@cExtendedInfo1  NVARCHAR( 20) OUTPUT
+   ,@nErrNo          INT           OUTPUT 
+   ,@cErrMsg         NVARCHAR( 20) OUTPUT
+   ,@nAfterStep      INT = 0
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @cUOM        NVARCHAR(10)
+   DECLARE @cTaskType   NVARCHAR(10)
+   DECLARE @cWaveKey    NVARCHAR( 10)
+   DECLARE @cDescr      NVARCHAR( 60)
+   
+   -- TM Replen From
+   IF @nFunc = 1764
+   BEGIN
+      -- Get TaskDetail info
+      SET @cTaskType = ''
+      SET @cUOM = ''
+      SELECT 
+         @cTaskType = TaskType, 
+         @cUOM = UOM, 
+         @cWaveKey = WaveKey 
+      FROM TaskDetail WITH (NOLOCK) 
+      WHERE TaskdetailKey = @cTaskdetailKey
+      
+      IF @nAfterStep = 6   -- TOLOC 
+      BEGIN
+         SELECT @cDescr = Descr 
+         FROM dbo.WAVE WITH (NOLOCK) 
+         WHERE WaveKey = @cWaveKey
+         
+         IF @cTaskType = 'RP1'
+            SET @cExtendedInfo1 = 'UOM: ' + @cUOM + '     RM:' + SUBSTRING( @cDescr, 1, 10)
+      END
+      
+      IF @nAfterStep = 7   -- Get next task
+      BEGIN
+         IF @cTaskType = 'RP1'
+            SET @cExtendedInfo1 = 'LAST UOM: ' + @cUOM
+      END
+   END
+
+Quit:
+
+END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_1764ExtInfo01 TO NSQL
+GO

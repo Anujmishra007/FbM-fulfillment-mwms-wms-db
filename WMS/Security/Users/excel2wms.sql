@@ -1,0 +1,3 @@
+CREATE USER [excel2wms] FOR LOGIN [excel2wms] WITH DEFAULT_SCHEMA=[excel2wms]
+GO
+REVOKE CONNECT TO [excel2wms]

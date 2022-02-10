@@ -1,0 +1,26 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+CREATE TRIGGER [RDT].[ntrRDTDynamicPickLogUpdate]
+ON  [RDT].[RDTDynamicPickLog] 
+FOR UPDATE AS
+   IF @@ROWCOUNT = 0
+   BEGIN
+      RETURN
+   END 
+
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   
+   IF NOT UPDATE(AddDate)
+   BEGIN   
+      UPDATE [RDT].[RDTDynamicPickLog] WITH (ROWLOCK) SET
+         AddDate = GETDATE()
+      FROM [RDT].[RDTDynamicPickLog]
+         INNER JOIN [INSERTED] ON [RDT].[RDTDynamicPickLog].RowRef = [INSERTED].RowRef
+   END   
+GO

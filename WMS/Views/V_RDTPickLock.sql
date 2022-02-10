@@ -1,0 +1,18 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_RDTPickLock]  
+AS  
+SELECT     RDT.rdtPickLock.*  
+FROM         RDT.rdtPickLock   (NOLOCK)
+  
+GO
+GRANT DELETE ON  [dbo].[V_RDTPickLock] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_RDTPickLock] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_RDTPickLock] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_RDTPickLock] TO [NSQL]
+GO

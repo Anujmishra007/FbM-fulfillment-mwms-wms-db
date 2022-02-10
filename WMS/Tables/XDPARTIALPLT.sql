@@ -1,0 +1,32 @@
+CREATE TABLE [dbo].[XDPARTIALPLT]
+(
+[Rowid] [int] NOT NULL IDENTITY(1, 1),
+[DropId] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ConsigneeKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[DeliveryDate] [datetime] NOT NULL,
+[Col1] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col2] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col3] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col4] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col5] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col6] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col7] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col8] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col9] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Col10] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CumWeight] [float] NULL CONSTRAINT [DF_XDPARTIALPLT_CumWeight] DEFAULT ((0)),
+[CumCube] [float] NULL CONSTRAINT [DF_XDPARTIALPLT_CumCube] DEFAULT ((0))
+) ON [PRIMARY]
+GO
+ALTER TABLE [dbo].[XDPARTIALPLT] ADD CONSTRAINT [PK_XDPARTIALPLT] PRIMARY KEY CLUSTERED ([Rowid]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+CREATE NONCLUSTERED INDEX [IX_XDPARTIALPLT] ON [dbo].[XDPARTIALPLT] ([ConsigneeKey], [DeliveryDate], [Col1]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [dbo].[XDPARTIALPLT] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[XDPARTIALPLT] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[XDPARTIALPLT] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[XDPARTIALPLT] TO [NSQL]
+GO

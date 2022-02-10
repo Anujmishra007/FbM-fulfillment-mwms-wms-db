@@ -1,0 +1,9 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW   [BI].[V_TaskManagerUserDetail] AS 
+SELECT * FROM dbo.TaskManagerUserDetail WITH (NOLOCK)
+GO
+GRANT SELECT ON  [BI].[V_TaskManagerUserDetail] TO [JReportRole]
+GO

@@ -1,0 +1,46 @@
+--rdt_1812SwapID03
+execute rdt.rdtDropMsg 148701 ,148750
+
+execute rdt.rdtAddMsg 148701, 10, '48701^NeedID', 'us_english', 1812
+execute rdt.rdtAddMsg 148702, 10, '48702^BadTaskDtlKey', 'us_english', 1812
+execute rdt.rdtAddMsg 148703, 10, '48703^InvalidID', 'us_english', 1812
+execute rdt.rdtAddMsg 148704, 10, '48704^IDMultiRec', 'us_english', 1812
+execute rdt.rdtAddMsg 148705, 10, '48705^LocNotMatch', 'us_english', 1812
+execute rdt.rdtAddMsg 148706, 10, '48706^SKUNotMatch', 'us_english', 1812
+execute rdt.rdtAddMsg 148707, 10, '48707^IDpicked', 'us_english', 1812
+execute rdt.rdtAddMsg 148708, 10, '48708^IDtasktaken', 'us_english', 1812
+execute rdt.rdtAddMsg 148709, 10, '48709^UpdtaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148710, 10, '48710^UpdtaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148711, 10, '48711^UpdtaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148712, 10, '48712^UpdtaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148713, 10, '48713^UpdtaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148714, 10, '48714^UpdtaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148715, 10, '48715^PickCaseFirst', 'us_english', 1812
+execute rdt.rdtAddMsg 148716, 10, '48716^UpdTaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148717, 10, '48717^NothingSwapped', 'us_english', 1812
+execute rdt.rdtAddMsg 148718, 10, '48718^UpdTaskFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148719, 10, '48719^PickCaseFirst', 'us_english', 1812
+execute rdt.rdtAddMsg 148720, 10, '48720^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148721, 10, '48721^GetPDKeyFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148722, 10, '48722^InsPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148723, 10, '48723^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148724, 10, '48724^UpdTDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148725, 10, '48725^GetTDKeyFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148726, 10, '48726^InsTDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148727, 10, '48727^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148728, 10, '48728^CannotSwap', 'us_english', 1812
+execute rdt.rdtAddMsg 148729, 10, '48729^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148730, 10, '48730^GetPDKeyFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148731, 10, '48731^InsPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148732, 10, '48732^UpdTDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148733, 10, '48733^GetTDKeyFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148734, 10, '48734^InsTDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148735, 10, '48735^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148736, 10, '48736^FPKTask', 'us_english', 1812
+execute rdt.rdtAddMsg 148737, 10, '48737^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148738, 10, '48738^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148739, 10, '48739^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148740, 10, '48740^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148741, 10, '48741^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148742, 10, '48742^UpdPDFail', 'us_english', 1812
+execute rdt.rdtAddMsg 148743, 10, '48743^UpdPDFail', 'us_english', 1812

@@ -1,0 +1,6 @@
+--rdt_1580ExtSNVal02
+rdt.rdtDropMsg 147351 , 147400
+
+execute rdt.rdtAddMsg 147351, 10, '47351^Invalid SRNo',  'us_english', 1580
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 147351 AND 147400

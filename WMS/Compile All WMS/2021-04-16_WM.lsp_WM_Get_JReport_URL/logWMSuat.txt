@@ -1,0 +1,172 @@
+: CN UAT : CNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_DEV : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SIT : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_UAT : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_CHN : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SGP : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: GT  : GTWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+Msg 2714, Level 16, State 6, Server VMSGWMSDBUT4, Line 1
+There is already an object named 'ExecutionLog' in the database.
+Msg 1779, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Table 'ExecutionLog' already has a primary key defined on it.
+Msg 1750, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+Could not create constraint or index. See previous errors.
+Msg 1913, Level 16, State 1, Server VMSGWMSDBUT4, Line 1
+The operation failed because an index or statistics with name 'IX_ExecutionLog_TimeStart' already exists on table 'dbo.ExecutionLog'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.HostName'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.LogId'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.Sch'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.SP'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.TimeStart'.
+Msg 15233, Level 16, State 1, Server VMSGWMSDBUT4, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'dbo.ExecutionLog.UserName'.
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS : : : : : : : : : : : : : : : : : : : : : : : : : : : : : 
+--  dbo.ExecutionLog.sql 
+----------------------------------------------------------------------------- 
+--  WM.lsp_WM_Get_JReport_URL.sql 
+----------------------------------------------------------------------------- 

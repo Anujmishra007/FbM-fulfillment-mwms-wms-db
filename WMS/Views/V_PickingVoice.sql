@@ -1,0 +1,10 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+
+CREATE VIEW [dbo].[V_PickingVoice]
+AS SELECT * FROM dbo.PickingVoice (NOLOCK)
+
+GO

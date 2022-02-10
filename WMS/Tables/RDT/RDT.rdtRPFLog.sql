@@ -1,0 +1,21 @@
+CREATE TABLE [RDT].[rdtRPFLog]
+(
+[RowRef] [int] NOT NULL IDENTITY(1, 1),
+[TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[QTY] [int] NOT NULL,
+[DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[UCCNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtRPFLog_AddWho] DEFAULT (suser_sname()),
+[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtRPFLog_AddDate] DEFAULT (getdate())
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[rdtRPFLog] ADD CONSTRAINT [PK_rdtRPFLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[rdtRPFLog] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[rdtRPFLog] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[rdtRPFLog] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[rdtRPFLog] TO [NSQL]
+GO

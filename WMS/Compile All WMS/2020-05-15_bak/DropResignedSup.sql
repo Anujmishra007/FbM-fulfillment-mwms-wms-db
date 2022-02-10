@@ -1,0 +1,12 @@
+/*
+USE master
+GO
+DROP LOGIN WongJieShin
+GO
+DROP LOGIN ChinKaiCheah
+GO
+DROP LOGIN YongShuanMeng
+GO
+DROP LOGIN Calebdong
+GO
+*/

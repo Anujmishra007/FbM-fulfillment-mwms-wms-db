@@ -1,0 +1,87 @@
+if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtUpd03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+   drop procedure [rdt].[rdt_1663ExtUpd03]
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/******************************************************************************/
+/* Store procedure: rdt_1663ExtUpd03                                          */
+/* Copyright      : LF Logistics                                              */
+/*                                                                            */
+/* Date       Rev  Author   Purposes                                          */
+/* 2018-08-27 1.0  Ung      WMS-6128 Created                                  */
+/* 2018-11-08 1.1  Ung      WMS-7003 Check interface had sent (TLog2 archived)*/
+/******************************************************************************/
+
+CREATE PROC [RDT].[rdt_1663ExtUpd03](
+   @nMobile       INT,
+   @nFunc         INT,
+   @cLangCode     NVARCHAR( 3),
+   @nStep         INT,
+   @nInputKey     INT,
+   @cFacility     NVARCHAR( 5),
+   @cStorerKey    NVARCHAR( 15),
+   @cPalletKey    NVARCHAR( 20), 
+   @cPalletLOC    NVARCHAR( 10), 
+   @cMBOLKey      NVARCHAR( 10), 
+   @cTrackNo      NVARCHAR( 20), 
+   @cOrderKey     NVARCHAR( 10), 
+   @cShipperKey   NVARCHAR( 15),  
+   @cCartonType   NVARCHAR( 10),  
+   @cWeight       NVARCHAR( 10), 
+   @cOption       NVARCHAR( 1),  
+   @nErrNo        INT            OUTPUT,
+   @cErrMsg       NVARCHAR( 20)  OUTPUT
+) AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @bSuccess INT
+
+   IF @nFunc = 1663 -- TrackNoToPallet
+   BEGIN
+      IF @nStep = 1
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Consignment planning interface 
+            -- (send MBOL, IKEA return a flag, store at MBOL header, indicate permission to ship, and user close MBOL to ship)
+            IF EXISTS( SELECT 1 FROM MBOL WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND OtherReference = '')
+            BEGIN
+               EXEC dbo.ispGenTransmitLog2
+                    'WSMBOLADDLOG' -- TableName
+                  , @cMBOLKey      -- Key1
+                  , ''             -- Key2
+                  , @cStorerKey    -- Key3
+                  , ''             -- Batch
+                  , @bSuccess  OUTPUT
+                  , @nErrNo    OUTPUT
+                  , @cErrMsg   OUTPUT
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 128251
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen TLOG2 Fail
+                  GOTO Quit
+               END
+            END
+         END
+      END
+   END
+
+Quit:
+
+END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON RDT.rdt_1663ExtUpd03 TO NSQL
+GO

@@ -1,0 +1,6 @@
+--rdt_843ExtValid01
+rdt.rdtDropMsg 146501 , 146550
+
+execute rdt.rdtAddMsg 146501, 10, '46501^ToteID In Used',  'us_english', 843
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 146501 AND 146550

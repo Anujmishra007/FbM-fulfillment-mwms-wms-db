@@ -1,0 +1,60 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_ACCUMULATEDCHARGES] 
+AS 
+SELECT [AccumulatedChargesKey]
+, [Descrip]
+, [Status]
+, [PrintCount]
+, [ServiceKey]
+, [StorerKey]
+, [Sku]
+, [Lot]
+, [ID]
+, [UOMShow]
+, [TariffKey]
+, [TariffDetailKey]
+, [TaxGroupKey]
+, [Rate]
+, [Base]
+, [MasterUnits]
+, [SystemGeneratedCharge]
+, [Debit]
+, [Credit]
+, [BilledUnits]
+, [ChargeType]
+, [LineType]
+, [BillFromDate]
+, [BillThruDate]
+, [SourceKey]
+, [SourceType]
+, [AccessorialDetailKey]
+, [GLDistributionKey]
+, [InvoiceBatch]
+, [InvoiceKey]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [CostRate]
+, [CostBase]
+, [CostMasterUnits]
+, [CostUOMShow]
+, [CostSystemGeneratedCharge]
+, [Cost]
+, [CostUnits]
+, [TrafficCop]
+, [ReferenceKey]
+, [InvoiceDate]
+FROM [ACCUMULATEDCHARGES] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_ACCUMULATEDCHARGES] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_ACCUMULATEDCHARGES] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_ACCUMULATEDCHARGES] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_ACCUMULATEDCHARGES] TO [NSQL]
+GO

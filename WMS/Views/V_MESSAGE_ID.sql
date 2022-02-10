@@ -1,0 +1,23 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_MESSAGE_ID] 
+AS 
+SELECT [MsgId]
+, [MsgIcon]
+, [MsgButton]
+, [MsgDefaultButton]
+, [MsgSeverity]
+, [MsgPrint]
+, [MsgUserInput]
+FROM [MESSAGE_ID] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_MESSAGE_ID] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_MESSAGE_ID] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_MESSAGE_ID] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_MESSAGE_ID] TO [NSQL]
+GO

@@ -1,0 +1,80 @@
+CREATE TABLE [RDT].[RDTScn]
+(
+[Scn] [int] NOT NULL,
+[Lang_Code] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[Line01] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line02] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line03] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line04] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line05] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line06] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line07] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line08] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line09] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line10] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line11] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line12] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line13] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line14] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line15] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line16] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line17] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line18] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line19] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line20] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line21] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line22] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line23] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line24] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line25] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line26] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line27] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line28] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line29] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line30] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line31] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line32] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line33] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line34] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line35] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line36] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line37] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line38] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line39] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line40] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line41] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line42] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line43] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line44] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line45] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line46] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line47] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line48] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line49] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line50] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line51] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line52] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line53] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line54] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line55] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line56] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line57] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line58] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line59] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Line60] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Func] [int] NOT NULL CONSTRAINT [DF_RDTScn_Func] DEFAULT ((0)),
+[PrecompileSQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_PrecompileSQL] DEFAULT (''),
+[PrecompileXML] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_PrecompileXML] DEFAULT (''),
+[ScreenFormat] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_ScreenFormat] DEFAULT ('')
+) ON [PRIMARY]
+GO
+ALTER TABLE [RDT].[RDTScn] ADD CONSTRAINT [PK_RDTScn] PRIMARY KEY CLUSTERED ([Scn], [Lang_Code]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+GRANT DELETE ON  [RDT].[RDTScn] TO [NSQL]
+GO
+GRANT INSERT ON  [RDT].[RDTScn] TO [NSQL]
+GO
+GRANT SELECT ON  [RDT].[RDTScn] TO [NSQL]
+GO
+GRANT UPDATE ON  [RDT].[RDTScn] TO [NSQL]
+GO

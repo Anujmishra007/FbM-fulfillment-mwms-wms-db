@@ -1,0 +1,7 @@
+--rdt_1581RcptCfm06
+ exec rdt.rdtDropMsg 161651, 161700
+
+execute rdt.rdtAddMsg 161651, 10, '61651INVALID RECTYPE',   'us_english', 1581
+execute rdt.rdtAddMsg 161652, 10, '161652^UPD RDTL FAIL',   'us_english', 1581
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 161651 AND 161700

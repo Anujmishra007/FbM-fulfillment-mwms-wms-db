@@ -1,0 +1,7 @@
+-- rdt_Capture_SKUInfo_Confirm
+rdt.rdtDropMsg 132501 , 132550
+
+execute rdt.rdtAddMsg 132501, 10, '32501^UPDATE SKU ERR',   'us_english', 826
+
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 132501 AND 132550

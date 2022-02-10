@@ -1,0 +1,23 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_ERRLOG] 
+AS 
+SELECT [LogDate]
+, [UserId]
+, [ErrorID]
+, [SystemState]
+, [Module]
+, [ErrorText]
+, [TrafficCop]
+FROM [ERRLOG] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_ERRLOG] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_ERRLOG] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_ERRLOG] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_ERRLOG] TO [NSQL]
+GO

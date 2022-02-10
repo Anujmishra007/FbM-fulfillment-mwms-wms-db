@@ -1,0 +1,13 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+
+CREATE    VIEW [BI].[V_Brokerage]
+AS
+SELECT * 
+FROM dbo.Brokerage WITH (NOLOCK)
+GO
+GRANT SELECT ON  [BI].[V_Brokerage] TO [JReportRole]
+GO

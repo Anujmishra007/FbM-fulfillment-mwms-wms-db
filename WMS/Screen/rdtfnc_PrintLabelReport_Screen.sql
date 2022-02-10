@@ -1,0 +1,45 @@
+-- 3580 = Option screen
+DELETE rdt.RDTScn WHERE Scn = 3580 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 3580, 'ENG'
+   ,@cLine01 = 'PRINT LABEL/REPORT'
+   ,@cLine03 = '%20d01'
+   ,@cLine04 = '%20d02'
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%20d04'
+   ,@cLine07 = '%20d05'
+   ,@cLine08 = '%20d06'
+   ,@cLine09 = '%20d07'
+   ,@cLine10 = '%20d08'
+   ,@cLine11 = '%20d09'
+   ,@cLine13 = 'LABEL/REPORT: %02i10'
+   ,@cLine14 = '%e'
+   ,@nFunc = 593
+ 
+-- 3581 = Param screen
+DELETE rdt.RDTScn WHERE Scn = 3581 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 3581, 'ENG'
+   ,@cLine01 = '%20d11'
+   ,@cLine02 = ''
+   ,@cLine03 = '%20d01'
+   ,@cLine04 = '%60i02'
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%60i04'
+   ,@cLine07 = '%20d05'
+   ,@cLine08 = '%60i06'
+   ,@cLine09 = '%20d07'
+   ,@cLine10 = '%60i08'
+   ,@cLine11 = '%20d09'
+   ,@cLine12 = '%60i10'
+   ,@cLine14 = '%e'
+   ,@nFunc = 593
+
+-- 3582 = Msg screen
+DELETE rdt.RDTScn WHERE Scn = 3582 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 3582, 'ENG'
+   ,@cLine01 = 'LABEL/REPORT SENT TO'
+   ,@cLine02 = 'PRINTER'
+   ,@cLine03 = ''
+   ,@cLine04 = 'PRESS ENTER OR ESC'
+   ,@cLine05 = 'TO CONTINUE.'
+   ,@cLine14 = '%e'
+   ,@nFunc = 593

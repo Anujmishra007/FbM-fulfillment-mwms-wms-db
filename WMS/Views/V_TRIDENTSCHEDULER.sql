@@ -1,0 +1,29 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_TRIDENTSCHEDULER] 
+AS 
+SELECT [TridentSchedulerKey]
+, [Hikey]
+, [HiImpExp]
+, [NextRunDate]
+, [LastRunDate]
+, [Frequency]
+, [StartWindow]
+, [StartString]
+, [EnableFlag]
+, [SkipDays]
+, [SkipTime]
+, [AddDate]
+, [AddWho]
+FROM [TRIDENTSCHEDULER] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_TRIDENTSCHEDULER] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_TRIDENTSCHEDULER] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_TRIDENTSCHEDULER] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_TRIDENTSCHEDULER] TO [NSQL]
+GO

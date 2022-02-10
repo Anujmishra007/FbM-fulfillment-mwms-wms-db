@@ -1,0 +1,11 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+CREATE VIEW [BI].[V_PutawayZone] AS     
+SELECT * 
+   FROM [PutawayZone] WITH (NOLOCK)  
+GO
+GRANT SELECT ON  [BI].[V_PutawayZone] TO [JReportRole]
+GO

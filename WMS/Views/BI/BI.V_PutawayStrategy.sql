@@ -1,0 +1,9 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW   [BI].[V_PutawayStrategy] AS 
+SELECT * FROM dbo.PutawayStrategy WITH (NOLOCK)
+GO
+GRANT SELECT ON  [BI].[V_PutawayStrategy] TO [JReportRole]
+GO

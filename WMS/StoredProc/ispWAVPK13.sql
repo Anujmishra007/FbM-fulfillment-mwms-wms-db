@@ -31,6 +31,8 @@ GO
 /*                                        using Storerconfig (WL02)     */
 /* 2021-07-27   WLChooi  1.3  WMS-17575 - Limit Max Qty Per CTN (WL03)  */
 /* 2021-08-11   WLChooi  1.4  Bug Fix for WMS-17575 (WL04)              */
+/* 2022-02-07   WLChooi  1.5  DevOps Combine Script                     */
+/* 2022-02-07   WLChooi  1.5  WMS-18862 - Limit Max SKU Per CTN (WL05)  */
 /************************************************************************/  
   
 CREATE PROC [dbo].[ispWAVPK13]  
@@ -60,7 +62,10 @@ BEGIN
            @c_AllPickslipno                NVARCHAR(4000) = '',
            @c_GetPickslipno                NVARCHAR(10) = '',   --WL01
            @n_MaxLinePerCarton             INT,       --WL02
-           @n_TTLCTN                       INT = 1    --WL02
+           @n_TTLCTN                       INT = 1,   --WL02
+           @c_PrevSKU                      NVARCHAR(20),    --WL05
+           @n_CountSKU                     INT = 0,         --WL05
+           @n_MaxSKUPerCarton              INT = 0          --WL05
    
    --WL03 S
    DECLARE @n_CurrentQtyPerCtn             INT = 0
@@ -108,11 +113,17 @@ BEGIN
       WHERE WD.Wavekey = @c_Wavekey
 
       SELECT @n_MaxLinePerCarton = CASE WHEN ISNUMERIC(SC.OPTION2) = 1 THEN SC.OPTION2 ELSE 0 END   -- 0 as unlimited
+           , @n_MaxSKUPerCarton  = CASE WHEN ISNUMERIC(SC.OPTION3) = 1 THEN SC.OPTION3 ELSE 0 END   -- 0 as unlimited   --WL05
       FROM Storerconfig SC (NOLOCK)
       WHERE SC.Storerkey = @c_Storerkey AND SC.Configkey = 'WAVGENPACKFROMPICKED_SP'
       
       IF ISNULL(@n_MaxLinePerCarton,0) = 0
-         SET @n_MaxLinePerCarton = 0
+         SET @n_MaxLinePerCarton = 99999   --WL05
+      
+      --WL05 S
+      IF ISNULL(@n_MaxSKUPerCarton,0) = 0
+         SET @n_MaxSKUPerCarton = 99999
+      --WL05 E
    END 
    --WL02 E
     
@@ -301,6 +312,11 @@ BEGIN
          
          WHILE @@FETCH_STATUS <> -1
          BEGIN
+            --WL05 S
+            IF ISNULL(@c_PrevSKU,'') <> @c_SKU
+               SET @n_CountSKU = @n_CountSKU + 1
+            --WL05 E
+
             IF @n_Qty = @n_MaxLinePerCarton AND @n_FirstCarton = 1
             BEGIN
                SET @n_CurrentQtyPerCtn = 0
@@ -309,7 +325,7 @@ BEGIN
                SELECT @c_SKU, @n_Qty, @n_CartonNo
             
                SET @n_CartonNo = @n_CartonNo + 1
-               
+               SET @n_CountSKU = 0   --WL05
             END
             ELSE IF @n_Qty = @n_MaxLinePerCarton
             BEGIN
@@ -320,6 +336,7 @@ BEGIN
                SELECT @c_SKU, @n_Qty, @n_CartonNo
             
                SET @n_CartonNo = @n_CartonNo + 1
+               SET @n_CountSKU = 0   --WL05
             END
             ELSE
             BEGIN
@@ -330,17 +347,35 @@ BEGIN
                   
                   INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
                   SELECT @c_SKU, @n_Qty, @n_CartonNo
+
+                  SET @n_CountSKU = 0   --WL05
                END
                ELSE
                BEGIN
-                  INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
-                  SELECT @c_SKU, @n_Qty, @n_CartonNo
+                  --WL05 S
+                  IF @n_CountSKU > @n_MaxSKUPerCarton
+                  BEGIN
+                     SET @n_CurrentQtyPerCtn = @n_Qty
+                     SET @n_CartonNo = @n_CartonNo + 1
+                     
+                     INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                     SELECT @c_SKU, @n_Qty, @n_CartonNo
+                  
+                     SET @n_CountSKU = 0   --WL05
+                  END   
+                  ELSE
+                  BEGIN
+                     INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                     SELECT @c_SKU, @n_Qty, @n_CartonNo
             
-                  SET @n_CurrentQtyPerCtn = @n_CurrentQtyPerCtn + @n_Qty
+                     SET @n_CurrentQtyPerCtn = @n_CurrentQtyPerCtn + @n_Qty
+                  END
+                  --WL05 E
                END
             END
 
             SET @n_FirstCarton = 0
+            SET @c_PrevSKU = @c_SKU   --WL05
             
             FETCH NEXT FROM CUR_Carton INTO @c_SKU, @n_Qty
          END
@@ -605,6 +640,11 @@ NEXT_LOOP:
          
          WHILE @@FETCH_STATUS <> -1
          BEGIN
+            --WL05 S
+            IF ISNULL(@c_PrevSKU,'') <> @c_SKU
+               SET @n_CountSKU = @n_CountSKU + 1
+            --WL05 E
+
             IF @n_Qty = @n_MaxLinePerCarton AND @n_FirstCarton = 1
             BEGIN
                SET @n_CurrentQtyPerCtn = 0
@@ -613,7 +653,7 @@ NEXT_LOOP:
                SELECT @c_SKU, @n_Qty, @n_CartonNo
             
                SET @n_CartonNo = @n_CartonNo + 1
-               
+               SET @n_CountSKU = 0   --WL05
             END
             ELSE IF @n_Qty = @n_MaxLinePerCarton
             BEGIN
@@ -624,6 +664,7 @@ NEXT_LOOP:
                SELECT @c_SKU, @n_Qty, @n_CartonNo
             
                SET @n_CartonNo = @n_CartonNo + 1
+               SET @n_CountSKU = 0   --WL05
             END
             ELSE
             BEGIN
@@ -634,17 +675,35 @@ NEXT_LOOP:
                   
                   INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
                   SELECT @c_SKU, @n_Qty, @n_CartonNo
+
+                  SET @n_CountSKU = 0   --WL05
                END
                ELSE
                BEGIN
-                  INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
-                  SELECT @c_SKU, @n_Qty, @n_CartonNo
+                  --WL05 S
+                  IF @n_CountSKU > @n_MaxSKUPerCarton
+                  BEGIN
+                     SET @n_CurrentQtyPerCtn = @n_Qty
+                     SET @n_CartonNo = @n_CartonNo + 1
+                     
+                     INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                     SELECT @c_SKU, @n_Qty, @n_CartonNo
+                  
+                     SET @n_CountSKU = 0   --WL05
+                  END   
+                  ELSE
+                  BEGIN
+                     INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
+                     SELECT @c_SKU, @n_Qty, @n_CartonNo
             
-                  SET @n_CurrentQtyPerCtn = @n_CurrentQtyPerCtn + @n_Qty
+                     SET @n_CurrentQtyPerCtn = @n_CurrentQtyPerCtn + @n_Qty
+                  END
+                  --WL05 E
                END
             END
 
             SET @n_FirstCarton = 0
+            SET @c_PrevSKU = @c_SKU   --WL05
             
             FETCH NEXT FROM CUR_Carton INTO @c_SKU, @n_Qty
          END

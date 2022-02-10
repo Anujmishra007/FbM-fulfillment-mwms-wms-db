@@ -1,0 +1,6 @@
+--rdt_1666ExtPltCfm01
+rdt.rdtDropMsg 141651 , 141700
+
+execute rdt.rdtAddMsg 141651, 10, '41651^INS MBDtl Fail',     'us_english', 1666
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 141651 AND 141700

@@ -1,0 +1,25 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_ITRNHDR] 
+AS 
+SELECT [HeaderType]
+, [ItrnKey]
+, [HeaderKey]
+, [AddDate]
+, [AddWho]
+, [EditDate]
+, [EditWho]
+, [TrafficCop]
+, [ArchiveCop]
+FROM [ITRNHDR] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_ITRNHDR] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_ITRNHDR] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_ITRNHDR] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_ITRNHDR] TO [NSQL]
+GO

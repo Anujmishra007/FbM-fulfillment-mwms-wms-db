@@ -1,0 +1,32 @@
+-- rdt_ANF_DropID01
+-- EXEC RDT.RDTDROPMSG 90401 , 90450
+
+execute rdt.rdtAddMsg '90401', 10, '90401^INVALID DROPID',  'us_english'
+execute rdt.rdtAddMsg '90402', 10, '90402^DEL DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90403', 10, '90403^DEL DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90404', 10, '90404^INS DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90405', 10, '90405^INS DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90406', 10, '90406^UPD PPACK FAIL',  'us_english'
+execute rdt.rdtAddMsg '90407', 10, '90407^INS DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90408', 10, '90408^UPD PPACK FAIL',  'us_english'
+execute rdt.rdtAddMsg '90409', 10, '90409^INVALID DROPID',  'us_english'
+execute rdt.rdtAddMsg '90410', 10, '90410^UPD DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90411', 10, '90411^UPD PPACK FAIL',  'us_english'
+execute rdt.rdtAddMsg '90412', 10, '90412^UPD DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90413', 10, '90413^UPD PPACK FAIL',  'us_english'
+execute rdt.rdtAddMsg '90414', 10, '90414^INVALID DROPID',  'us_english'
+execute rdt.rdtAddMsg '90415', 10, '90415^DEL DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90416', 10, '90416^DEL DID FAIL',    'us_english'
+
+execute rdt.rdtAddMsg '90403', 10, '90403^INS DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90404', 10, '90404^INVALID DROPID',  'us_english'
+execute rdt.rdtAddMsg '90405', 10, '90405^UPD DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90406', 10, '90406^INVALID DROPID',  'us_english'
+execute rdt.rdtAddMsg '90407', 10, '90407^DEL DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90408', 10, '90408^DEL DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90409', 10, '90409^UPD DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90410', 10, '90410^DEL DDTL FAIL',   'us_english'
+execute rdt.rdtAddMsg '90411', 10, '90411^DEL DID FAIL',    'us_english'
+execute rdt.rdtAddMsg '90412', 10, '90412^UPD PPACK FAIL',  'us_english'
+execute rdt.rdtAddMsg '90413', 10, '90413^UPD PPACK FAIL',  'us_english'
+-- SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 90401 AND 90450

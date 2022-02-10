@@ -1,0 +1,25 @@
+-- rdtfnc_Carton_Consolidation                                     
+-- execute rdt.rdtDropMsg 71966, 72013                  
+
+execute rdt.rdtAddMsg 71966, 10, '71966^PSlip req',      'us_english'
+execute rdt.rdtAddMsg 71967, 10, '71967^Inv PSlip',      'us_english'
+execute rdt.rdtAddMsg 71968, 10, '71968^ORD Ship/CANC',  'us_english'
+execute rdt.rdtAddMsg 71969, 10, '71966^CARTON req',     'us_english'
+execute rdt.rdtAddMsg 71970, 10, '71970^Inv CARTON',     'us_english'
+execute rdt.rdtAddMsg 71971, 10, '71971^OPTION req',     'us_english'
+execute rdt.rdtAddMsg 71972, 10, '71972^Inv OPTION',     'us_english'
+execute rdt.rdtAddMsg 71973, 10, '71973^SKU Req',        'us_english'
+execute rdt.rdtAddMsg 71974, 10, '71974^Invalid SKU',    'us_english'
+execute rdt.rdtAddMsg 71975, 10, '71975^SameBarcodeSKU', 'us_english'
+execute rdt.rdtAddMsg 71976, 10, '71976^SKU NOT EXISTS', 'us_english'
+execute rdt.rdtAddMsg 71977, 10, '71977^NO QTY TO MOVE', 'us_english'
+execute rdt.rdtAddmsg 71978, 10, '71978^Invalid QTY',    'us_english'
+execute rdt.rdtAddmsg 71979, 10, '71979^QTYMV > QTYAVL', 'us_english'
+execute rdt.rdtAddmsg 71980, 10, '71980^Invalid QTY',    'us_english'
+execute rdt.rdtAddmsg 71981, 10, '71981^TO CARTON Req',  'us_english'
+execute rdt.rdtAddmsg 71982, 10, '71982^SAME CARTON',    'us_english'
+execute rdt.rdtAddmsg 71983, 10, '71983^INV TO CARTON',  'us_english'
+execute rdt.rdtAddmsg 71984, 10, '71984^TO CARTON Req',  'us_english'
+execute rdt.rdtAddmsg 71985, 10, '71985^SAME CARTON',    'us_english'
+execute rdt.rdtAddmsg 71986, 10, '71986^INV TO CARTON',  'us_english'
+

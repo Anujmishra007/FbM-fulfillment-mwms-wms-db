@@ -1,0 +1,6 @@
+--rdt_838ExtUpd07
+rdt.rdtDropMsg 146301 , 146350
+
+execute rdt.rdtAddMsg 146301, 10, '46301^Repack Error',  'us_english', 838
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 146301 AND 146350

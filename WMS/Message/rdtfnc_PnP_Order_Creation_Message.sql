@@ -1,0 +1,22 @@
+-- rdtfnc_PnP_Order_Creation
+-- rdt.rdtDROPMsg 81951, 82000
+
+execute rdt.rdtAddMsg 81951, 10, '81951^OPTION needed',  'us_english'
+execute rdt.rdtAddMsg 81952, 10, '81952^INVALID OPTION', 'us_english'
+execute rdt.rdtAddMsg 81953, 10, '81953^STORE needed ',  'us_english'
+execute rdt.rdtAddMsg 81954, 10, '81954^INVALID STORE',  'us_english'
+execute rdt.rdtAddMsg 81955, 10, '81955^LABELNO needed', 'us_english'
+execute rdt.rdtAddMsg 81956, 10, '81956^INVALID LABEL',  'us_english'
+execute rdt.rdtAddMsg 81957, 10, '81957^INV CTN TYPE',   'us_english'
+execute rdt.rdtAddMsg 81958, 10, '81958^SKU REQUIRED',   'us_english'
+execute rdt.rdtAddMsg 81959, 10, '81959^Invalid SKU',    'us_english'
+execute rdt.rdtAddMsg 81960, 10, '81960^SameBarCodeSKU', 'us_english'
+execute rdt.rdtAddMsg 81961, 10, '81961^Invalid Qty',    'us_english'
+execute rdt.rdtAddMsg 81962, 10, '81962^INVALID LBL NO', 'us_english'
+execute rdt.rdtAddMsg 81963, 10, '81963^PACK CFM FAIL',  'us_english'
+execute rdt.rdtAddMsg 81964, 10, '81964^INVALID OPTION', 'us_english'
+execute rdt.rdtAddMsg 81965, 10, '81965^SCAN OUT FAIL',  'us_english'
+execute rdt.rdtAddMsg 81966, 10, '81966^INVALID UxL',    'us_english'
+execute rdt.rdtAddMsg 81967, 10, '81967^QTYAVAL X ENUF', 'us_english'
+execute rdt.rdtAddMsg 81968, 10, '81968^INV SECTION',    'us_english'
+execute rdt.rdtAddMsg 81969, 10, '81969^PICKCFM FAIL',   'us_english'

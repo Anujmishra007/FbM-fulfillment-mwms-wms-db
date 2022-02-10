@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -37,6 +37,9 @@ GO
 /*                            Location                                  */
 /*                            FC UCC qty allocated for UOM '2' and '6'  */
 /* 2021-11-11  Wan05    1.3   Add Validation: Lose ID For None Bulk Loc */
+/* 2022-01-05  Wan06    1.4   WMS-17299 - CR 2.9. Revise Priority Values*/
+/*                            for TM RPF Task. Additional validation to */
+/*                            prompt HomeLoc Assignment                 */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV43_VLDN]
@@ -92,6 +95,7 @@ BEGIN
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
          , PickZone                 NVARCHAR(10)   NULL     DEFAULT('')    
          , DocType                  NVARCHAR(10)   NOT NULL DEFAULT('') 
+         , PickLocType              NVARCHAR(10)   NOT NULL DEFAULT('')             --(Wan06)
          )
       
    --Wan01
@@ -326,18 +330,23 @@ BEGIN
       GOTO QUIT_SP  
    END    
 
-   INSERT INTO @t_SkuPickZone (PickZone, DocType)
-   SELECT PickZone = l.PickZone, o.DocType 
+   INSERT INTO @t_SkuPickZone (PickZone, DocType, PickLocType)                                  --(Wan06)
+   SELECT PickZone = l.PickZone, o.DocType
+         ,CASE WHEN l2.LocationType = 'DPBULK' THEN 'DPBULK' ELSE 'NONDPBULK' END               --(Wan06)
    FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)  
    JOIN dbo.ORDERS AS o WITH (NOLOCK) ON w.OrderKey = o.OrderKey
    JOIN dbo.PICKDETAIL AS p WITH (NOLOCK) ON p.Orderkey = o.Orderkey 
+   JOIN dbo.LOC AS l2 WITH (NOLOCK) ON l2.loc = p.Loc                                           --(Wan06)
    LEFT JOIN SKUxLOC AS sl WITH (NOLOCK) ON sl.Storerkey = p.Storerkey AND sl.Sku = p.Sku AND sl.LocationType = 'PICK' 
    LEFT JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = sl.Loc AND l.LocationType = 'DYNPPICK' AND l.Facility = @c_Facility
    WHERE w.Wavekey = @c_Wavekey
    GROUP BY l.PickZone
          ,  o.DocType
+         ,  CASE WHEN l2.LocationType = 'DPBULK' THEN 'DPBULK' ELSE 'NONDPBULK' END             --(Wan06)
    
-   IF EXISTS (SELECT 1 FROM @t_SkuPickZone AS tspz WHERE tspz.PickZone IS NULL)    
+   IF EXISTS (SELECT 1 FROM @t_SkuPickZone AS tspz WHERE tspz.PickZone IS NULL
+              AND tspz.PickLocType = 'NONDPBULK'                                                --(Wan06)
+            )    
    BEGIN    
       SET @n_Continue = 3    
       SET @n_Err = 61090    

@@ -1,0 +1,25 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+CREATE VIEW [dbo].[V_WMSEXPSOH] 
+AS 
+SELECT [TransDate]
+, [Sku]
+, [Qty]
+, [Lottable01]
+, [Lottable02]
+, [Lottable03]
+, [Lottable04]
+, [Lottable05]
+, [HostWhCode]
+FROM [WMSEXPSOH] (NOLOCK) 
+GO
+GRANT DELETE ON  [dbo].[V_WMSEXPSOH] TO [NSQL]
+GO
+GRANT INSERT ON  [dbo].[V_WMSEXPSOH] TO [NSQL]
+GO
+GRANT SELECT ON  [dbo].[V_WMSEXPSOH] TO [NSQL]
+GO
+GRANT UPDATE ON  [dbo].[V_WMSEXPSOH] TO [NSQL]
+GO

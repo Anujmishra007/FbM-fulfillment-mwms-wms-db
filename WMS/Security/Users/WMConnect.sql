@@ -1,0 +1,2 @@
+CREATE USER [WMConnect] FOR LOGIN [WMConnect]
+GO

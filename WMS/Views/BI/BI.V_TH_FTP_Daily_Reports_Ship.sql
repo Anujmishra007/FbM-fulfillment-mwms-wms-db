@@ -1,0 +1,57 @@
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER VIEW [BI].[V_TH_FTP_Daily_Reports_Ship] AS 
+SELECT
+   O.StorerKey,
+   O.ExternOrderKey,
+   O.OrderDate,
+   O.DeliveryDate,
+   O.EditDate,
+   O.ConsigneeKey,
+   O.C_Company,
+   PD.OrderLineNumber,
+   PD.Sku,
+   S.DESCR,
+   Sum(PD.Qty) AS 'SumQTY',
+   P.CaseCnt,
+   P.InnerPack 
+FROM
+   dbo.ORDERS O with (nolock)
+JOIN dbo.PICKDETAIL PD with (nolock) ON O.OrderKey = PD.OrderKey 
+      AND O.StorerKey = PD.Storerkey 
+JOIN dbo.SKU S with (nolock) ON PD.Sku = S.Sku 
+      AND PD.Storerkey = S.StorerKey 
+JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
+WHERE
+   (
+(O.StorerKey = 'FTP' 
+      AND convert(date, O.EditDate) = convert(date, getdate() - 1))
+   )
+GROUP BY
+   O.StorerKey,
+   O.ExternOrderKey,
+   O.OrderDate,
+   O.DeliveryDate,
+   O.EditDate,
+   O.ConsigneeKey,
+   O.C_Company,
+   PD.OrderLineNumber,
+   PD.Sku,
+   S.DESCR,
+   P.CaseCnt,
+   P.InnerPack
+GO
+GRANT SELECT ON  [BI].[V_TH_FTP_Daily_Reports_Ship] TO [JReportRole]
+GO
+
+/*
+EXEC AS LOGIN = 'JReportUserTH'
+SELECT SUSER_SNAME()
+SELECT * FROM [BI].[V_TH_FTP_Daily_Reports_Ship]
+
+REVERT;
+*/

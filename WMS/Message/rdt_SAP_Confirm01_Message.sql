@@ -1,0 +1,23 @@
+
+execute rdt.rdtaddmsg 151601, 10, '51601^UPD PKDtl Fail','us_english'
+execute rdt.rdtaddmsg 151602, 10, '51602^UPD PKDtl Fail','us_english'
+execute rdt.rdtaddmsg 151603, 10, '51603^GetKeyFail','us_english'
+execute rdt.rdtaddmsg 151604, 10, '51604^INSPKDtlFail','us_english'
+execute rdt.rdtaddmsg 151605, 10, '51605^INSPKDtlFail','us_english'
+execute rdt.rdtaddmsg 151606, 10, '51606^UPDPKDtlFail','us_english'
+execute rdt.rdtaddmsg 151607, 10, '51607^Offset Fail','us_english'
+execute rdt.rdtaddmsg 151608, 10, '51608^GetKeyFail','us_english'
+execute rdt.rdtaddmsg 151609, 10, '51609^INSPackHdrFail','us_english'
+execute rdt.rdtaddmsg 151610, 10, '51610^UPDPackDtlFail','us_english'
+execute rdt.rdtaddmsg 151611, 10, '51611^INSPackDtlFail','us_english'
+execute rdt.rdtaddmsg 151612, 10, '51612^INSPackDtlFail','us_english'
+execute rdt.rdtaddmsg 151613, 10, '51613^Scan In Fail','us_english'
+execute rdt.rdtaddmsg 151614, 10, '51614^Fail PackCfm','us_english'
+execute rdt.rdtaddmsg 151615, 10, '51615^Scan In Fail','us_english'
+execute rdt.rdtaddmsg 151616, 10, '51616^INS PINFO FAIL','us_english'
+execute rdt.rdtaddmsg 151617, 10, '51617^UPD PINFO FAIL','us_english'
+execute rdt.rdtaddmsg 151618, 10, '51618^InsDropID','us_english'
+execute rdt.rdtaddmsg 151619, 10, '51619^InsDropIDDetail','us_english'
+execute rdt.rdtaddmsg 151620, 10, '51620^UpdPHFail','us_english'
+
+

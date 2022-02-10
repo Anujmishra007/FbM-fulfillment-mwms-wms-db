@@ -1,0 +1,16 @@
+--rdt_ClusterPickCfm01
+--execute rdt.rdtdropmsg 55301 , 55350
+execute rdt.rdtAddMsg 55301, 10, '55301^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55302, 10, '55302^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55303, 10, '55303^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55304, 10, '55304^GetDetKeyFail',  'us_english'
+execute rdt.rdtAddMsg 55305, 10, '55305^Ins PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 55306, 10, '55306^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55307, 10, '55307^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55308, 10, '55308^SKU OverPacked', 'us_english'
+execute rdt.rdtAddMsg 55309, 10, '55309^InsPHdrFail',    'us_english'
+execute rdt.rdtAddMsg 55310, 10, '55310^GenLabelFail',   'us_english'
+execute rdt.rdtAddMsg 55311, 10, '55311^InsPackDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55312, 10, '55312^InsPackDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55313, 10, '55313^UpdPackDtlFail', 'us_english'
+execute rdt.rdtAddMsg 55314, 10, '55314^UPDPKLockFail',  'us_english'

@@ -1,0 +1,30 @@
+-- rdtfnc_ToteConsolidation
+-- execute rdt.rdtDropMsg 70416 - 70465
+
+execute rdt.rdtAddMsg 70416, 10, '70416^GetDetKey Fail', 'us_english'
+execute rdt.rdtAddMsg 70417, 10, '70417^InstPKHdr Fail', 'us_english'
+execute rdt.rdtAddMsg 70418, 10, '70418^Scan In Fail',   'us_english'
+execute rdt.rdtAddMsg 70419, 10, '70419^UpdPickDetailFail', 'us_english'
+execute rdt.rdtAddMsg 70420, 10, '70420^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70421, 10, '70420^GetDetKeyFail',  'us_english'
+execute rdt.rdtAddMsg 70422, 10, '70422^Ins PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 70423, 10, '70423^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70424, 10, '70424^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70425, 10, '70425^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70426, 10, '70426^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70427, 10, '70427^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70428, 10, '70428^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70429, 10, '70429^GetDetKeyFail',  'us_english'
+execute rdt.rdtAddMsg 70430, 10, '70430^Ins PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 70431, 10, '70431^SEE_SUPERVISOR', 'us_english'
+execute rdt.rdtAddMsg 70432, 10, '70432^SEE_SUPERVISOR', 'us_english'
+execute rdt.rdtAddMsg 70433, 10, '70433^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70434, 10, '70434^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70435, 10, '70435^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70436, 10, '70436^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70437, 10, '70437^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70438, 10, '70438^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70439, 10, '70439^OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 70440, 10, '70440^OffSetPDtlFail', 'us_english'
+
+select * from rdt.rdtmsg (nolock) where message_id between 70416 and 70465

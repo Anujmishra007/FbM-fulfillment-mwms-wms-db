@@ -1,0 +1,30 @@
+-- rdtfnc_SerialNoCapture
+execute rdt.rdtDropMsg 62501, 62550
+
+execute rdt.rdtAddMsg 62501, 10, '62501 PSNo Required',  'us_english'
+execute rdt.rdtAddMsg 62502, 10, '62502 Invalid PSNo',   'us_english'
+execute rdt.rdtAddMsg 62503, 10, '62503 PS Not Scan In', 'us_english'
+execute rdt.rdtAddMsg 62504, 10, '62504 PS Not ScanOut', 'us_english'
+execute rdt.rdtAddMsg 62505, 10, '62505 PS Scanned',     'us_english'
+execute rdt.rdtAddMsg 62506, 10, '62506 SKU/UPC needed', 'us_english'
+execute rdt.rdtAddMsg 62507, 10, '62507 Invalid SKU',    'us_english'
+execute rdt.rdtAddMsg 62508, 10, '62508 SameBarCodeSKU', 'us_english'
+execute rdt.rdtAddMsg 62509, 10, '62509 SKU NotInOrder', 'us_english'
+execute rdt.rdtAddMsg 62510, 10, '62510 NonSSCCSKU',     'us_english'
+execute rdt.rdtAddMsg 62511, 10, '62511 No Qty Found',   'us_english'
+execute rdt.rdtAddMsg 62512, 10, '62512 Scanned All',    'us_english'
+execute rdt.rdtAddMsg 62513, 10, '62513 LotNo Required', 'us_english'
+execute rdt.rdtAddMsg 62514, 10, '62514 Need SerialNo',  'us_english'
+execute rdt.rdtAddMsg 62515, 10, '62515 Inv Serial No',  'us_english'
+execute rdt.rdtAddMsg 62516, 10, '62516 NoCaseCnt',      'us_english'
+execute rdt.rdtAddMsg 62517, 10, '62517 Dup SNo+LotNo',  'us_english'
+execute rdt.rdtAddMsg 62518, 10, '62518 Duplicate SNo',  'us_english'
+execute rdt.rdtAddMsg 62519, 10, '62519 QTY over scan',  'us_english'
+execute rdt.rdtAddMsg 62520, 10, '62520 QTY required',   'us_english'
+execute rdt.rdtAddMsg 62521, 10, '62521 Invalid QTY',    'us_english'
+execute rdt.rdtAddMsg 62522, 10, '62522 QTY over scan',  'us_english'
+execute rdt.rdtAddMsg 62523, 10, '62523 Invalid Option', 'us_english'
+execute rdt.rdtAddMsg 62524, 10, '62524^SKU/UPC needed', 'us_english'
+
+--WMS-10383
+execute rdt.rdtAddMsg 62525, 10, '62525^Invalid Format', 'us_english'

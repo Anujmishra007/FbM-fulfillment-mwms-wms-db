@@ -1,0 +1,11 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+CREATE VIEW [BI].[V_ReceiptDetail] AS 
+SELECT * 
+   FROM [ReceiptDetail] WITH (NOLOCK)  
+GO
+GRANT SELECT ON  [BI].[V_ReceiptDetail] TO [JReportRole]
+GO

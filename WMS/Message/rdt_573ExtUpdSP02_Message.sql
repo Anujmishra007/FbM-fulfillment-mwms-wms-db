@@ -1,0 +1,7 @@
+--rdt_573ExtUpdSP02
+execute rdt.rdtDropMsg 130151 , 130200	
+
+execute rdt.rdtAddMsg 130151 , 10, '30151^INSERT UCC ERR  ', 'us_english', 573
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 130151 AND 130200	
+

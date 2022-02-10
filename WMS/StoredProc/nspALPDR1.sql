@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPDR1]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALPDR1]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,8 +25,11 @@ GO
 /* Date        Author   Ver.  Purposes                                  */    
 /* 16-Apr-2019 NJOW01   1.0   Fix LOC.LocationFlag = 'NONE'             */
 /* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */  
+/* 21-Jan-2022 NJOW02   1.2   WMS-18820 allow certain B2B consignee     */
+/*                            using B2C alloction flow                  */
+/* 21-Jan-2022 NJOW02   1.2   DEVOPS combine script                     */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspALPDR1]        
+CREATE OR ALTER PROC [dbo].[nspALPDR1]        
    @c_DocumentNo NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -79,7 +77,8 @@ BEGIN
            @c_DocType            NVARCHAR(1),
            @c_OrderType          NVARCHAR(10),
            @c_OrderBy            NVARCHAR(2000),
-           @c_Condition          NVARCHAR(4000)           
+           @c_Condition          NVARCHAR(4000),
+           @c_Consigneekey       NVARCHAR(15) --NJOW02           
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
@@ -127,7 +126,8 @@ BEGIN
       IF ISNULL(@c_key2,'') <> ''  --Dicrete
       BEGIN
          SELECT TOP 1 @c_Doctype = O.DocType,
-                      @c_OrderType = O.Type
+                      @c_OrderType = O.Type,
+                      @c_Consigneekey = O.Consigneekey --NJOW02
          FROM ORDERS O (NOLOCK)
          WHERE O.Orderkey = @c_Orderkey
       END
@@ -135,18 +135,19 @@ BEGIN
       BEGIN
          SET @c_OrderType = SUBSTRING(@c_OtherParms, 17, 10) --W=Wave          
 
-         SELECT TOP 1 @c_Doctype = O.DocType
+         SELECT TOP 1 @c_Doctype = O.DocType,
+                      @c_Consigneekey = O.Consigneekey  --NJOW02
          FROM ORDERS O (NOLOCK)
          WHERE O.Orderkey = @c_Orderkey
       END                           
    END
    
    IF @c_DocType <> 'E'  -- Skip for B2B
+      AND @c_Consigneekey <> 'WDW00001' --this b2b consignee use b2c allocation flow  --NJOW02
    BEGIN
        GOTO EXIT_SP
    END   
-   
-      
+         
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
    JOIN Storer (nolock) ON Sku.Storerkey = Storer.Storerkey

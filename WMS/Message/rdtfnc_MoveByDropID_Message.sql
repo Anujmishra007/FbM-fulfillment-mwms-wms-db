@@ -1,0 +1,41 @@
+execute rdt.rdtAddMsg 63861, 10, '63861 DROPID needed',  'us_english'
+execute rdt.rdtAddMsg 63862, 10, '63862 Invalid ID',     'us_english'
+execute rdt.rdtAddMsg 63863, 10, '63863 Option needed',  'us_english'
+execute rdt.rdtAddMsg 63864, 10, '63864 Invalid Option', 'us_english'
+execute rdt.rdtAddMsg 63865, 10, '63865 SKU/UPC needed', 'us_english'
+execute rdt.rdtAddMsg 63866, 10, '63866 Invalid SKU',    'us_english'
+execute rdt.rdtAddMsg 63867, 10, '63867 SameBarCodeSKU', 'us_english'
+execute rdt.rdtAddMsg 63868, 10, '63868 Invalid Date',   'us_english'
+execute rdt.rdtAddMsg 63869, 10, '63869 No QTY to move', 'us_english'
+execute rdt.rdtAddMsg 63870, 10, '63870 No record',      'us_english'
+execute rdt.rdtAddMsg 63871, 10, '63871 Invalid Qty',    'us_english'
+execute rdt.rdtAddMsg 63872, 10, '63872 Invalid Qty',    'us_english'
+execute rdt.rdtAddMsg 63873, 10, '63873 QTY needed',     'us_english'
+execute rdt.rdtAddMsg 63874, 10, '63874 QTYAVL NotEnuf', 'us_english'
+execute rdt.rdtAddMsg 63875, 10, '63875 Invalid ID',     'us_english'
+execute rdt.rdtAddMsg 63876, 10, '63876 Invalid ID',     'us_english'
+execute rdt.rdtAddMsg 63877, 10, '63877 Invalid ID',     'us_english'
+execute rdt.rdtAddMsg 63878, 10, '63878 Invalid ID',     'us_english'
+execute rdt.rdtAddMsg 63879, 10, '63879 Upd PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 63880, 10, '63880 Option needed',  'us_english'
+execute rdt.rdtAddMsg 63881, 10, '63881 Invalid Option', 'us_english'
+execute rdt.rdtAddMsg 63882, 10, '63882 Upd PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 63883, 10, '63883 Upd PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 63884, 10, '63884 Upd PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 63885, 10, '63885 GetDetKey fail', 'us_english'
+execute rdt.rdtAddMsg 63886, 10, '63886 Upd PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 63887, 10, '63887 SKUNotInPDtl',   'us_english'
+
+--SOS 156663
+execute rdt.rdtAddMsg 63888, 10, '63888^Invalid DropID', 'us_english' 
+execute rdt.rdtAddMsg 63889, 10, '63889^Wrong Consignee', 'us_english' 
+execute rdt.rdtAddMsg 63890, 10, '63890^Wrong Consignee', 'us_english' 
+execute rdt.rdtAddMsg 63891, 10, '63891^Invalid DropID', 'us_english' 
+execute rdt.rdtAddMsg 63892, 10, '63892^Invalid DropID', 'us_english' 
+execute rdt.rdtAddMsg 63893, 10, '63893^Invalid DropID', 'us_english' 
+
+--SOS 172046
+--'63894 Mix orderkey not allowed!'
+
+--rdt.rdtdropmsg 63887, 63888
+

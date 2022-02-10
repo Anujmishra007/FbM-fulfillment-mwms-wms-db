@@ -1,0 +1,6 @@
+-- rdt_1153DelUpd01
+exec rdt.rdtDropMsg 99901 , 99950
+
+execute rdt.rdtAddMsg 99901 ,10, '99901^DEL JOB FAIL',     'us_english',1153
+
+SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE MESSAGE_ID BETWEEN 99901 AND 99950
