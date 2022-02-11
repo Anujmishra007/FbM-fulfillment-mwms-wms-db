@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtfnc_TM_Replen]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdtfnc_TM_Replen]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -55,7 +52,7 @@ GO
 /* 2021-11-09 3.8  Chermaine  WMS-17383 Add AutoGen DropID in St1 (cc01)      */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_TM_Replen](
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -172,7 +169,8 @@ DECLARE
    @cExtendedValidateSP NVARCHAR( 20),
    @cAutoGenDropID      NVARCHAR( 1),  --(cc01)
    @bSuccess            INT,
-
+   @cExtendedWCSSP      NVARCHAR( 20),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -281,7 +279,8 @@ SELECT
    @cSwapTaskSP        = V_String41,
    @cDecodeSP          = V_String42,
    @cSwapUCCSP         = V_String43,
-
+   @cExtendedWCSSP     = V_String44,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -431,6 +430,10 @@ BEGIN
    
  --(cc01)      
    SET @cAutoGenDropID = rdt.RDTGetConfig( @nFunc, 'AutoGenDropID', @cStorerKey)
+
+   SET @cExtendedWCSSP = rdt.RDTGetConfig( @nFunc, 'ExtendedWCSSP', @cStorerKey)
+   IF @cExtendedWCSSP = '0'
+      SET @cExtendedWCSSP = ''
 
    -- Disable QTY field
    IF @cDisableQTYFieldSP <> ''
@@ -2538,6 +2541,27 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
+      -- Insert WCS ( conveyor info). Due to WSC db could be different server (linked server)
+      -- the wcs stored proc cannot put within transaction block (no rollback allowed)
+      -- Extended wcs
+      IF @cExtendedWCSSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedWCSSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedWCSSP) +
+               ' @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  ' 
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         END
+      END
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
 
@@ -3404,6 +3428,7 @@ BEGIN
       V_String41   = @cSwapTaskSP,
       V_String42   = @cDecodeSP,
       V_String43   = @cSwapUCCSP,
+      V_String44   = @cExtendedWCSSP,
 
       V_Integer1   = @nQTY_RPL,
       V_Integer2   = @nPQTY_RPL,
