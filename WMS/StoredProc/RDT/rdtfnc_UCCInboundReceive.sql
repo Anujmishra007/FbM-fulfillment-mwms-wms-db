@@ -1,6 +1,3 @@
-if exists (select * from sys.sysobjects where id = object_id(N'[rdt].[rdtfnc_UCCInboundReceive]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_UCCInboundReceive]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -45,18 +42,19 @@ GO
 /* 2018-10-01 2.6  Gan        Performance                               */
 /* 2018-10-11 2.7  James      WMS-6612 Add rdt_decode (james05)         */
 /* 2019-07-08 2.8  Ung        Fix performance tuning                    */
-/* 2019-07-17 2.9  James      WMS9861 Add loc prefix (james06)          */   
+/* 2019-07-17 2.9  James      WMS9861 Add loc prefix (james06)          */
 /*                            Add RDTFormat to ID                       */
-/* 2019-09-23 3.0  YeeKung    INC0844732 Bug Fixed (yeekung01)          */  
+/* 2019-09-23 3.0  YeeKung    INC0844732 Bug Fixed (yeekung01)          */
 /* 2019-11-01 3.1  James      WMS-11006 Move ExtendedValidateSP @ step 4*/
 /*                            into transaction block (james07)          */
 /* 2020-03-03 3.2  James      WMS-12334 Add extinfo @ screen 4 (james08)*/
 /* 2021-06-09 3.3  Chermaine  WMS-17155 Add Facility check on st1 (cc01)*/
+/* 2022-01-24 3.4  Ung        WMS-18776 Add Carton type                 */
 /************************************************************************/
-CREATE PROC rdt.rdtfnc_UCCInboundReceive (
-   @nMobile    int,
-   @nErrNo     int  OUTPUT,
-   @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 NVARCHAR max
+CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
+   @nMobile    INT,
+   @nErrNo     INT            OUTPUT,
+   @cErrMsg    NVARCHAR(1024) OUTPUT
 )
 AS
 
@@ -67,13 +65,14 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variable
 DECLARE
-   @i           INT,
-   @bSuccess    INT, 
-   @cOption     NVARCHAR( 1),
-   @cScanUCC    NVARCHAR( 5), 
-   @cSQL        NVARCHAR( MAX),
-   @cSQLParam   NVARCHAR( MAX),    
-   @curCR       CURSOR
+   @i            INT,
+   @bSuccess     INT,
+   @cOption      NVARCHAR( 1),
+   @cScanUCC     NVARCHAR( 5),
+   @cSQL         NVARCHAR( MAX),
+   @cSQLParam    NVARCHAR( MAX),
+   @curCR        CURSOR,
+   @tExtUpdate   VARIABLETABLE
 
 -- RDT.RDTMobRec variable
 DECLARE
@@ -120,12 +119,12 @@ DECLARE
    @cRefNo                 NVARCHAR( 20), -- (james04)
    @cColumnName            NVARCHAR( 20), -- (james04)
    @cStorerGroup           NVARCHAR( 20),
-   @n_Err                  INT, 
+   @n_Err                  INT,
    @nRowRef                INT,
    @nRowCount              INT,
-   @cExtendedValidateSP    NVARCHAR(30),  -- (ChewKP04) 
-   @cExtendedUpdateSP      NVARCHAR(30),  -- (ChewKP05) 
-   @tReceiptDetail         VariableTable, -- (ChewKP05) 
+   @cExtendedValidateSP    NVARCHAR(30),  -- (ChewKP04)
+   @cExtendedUpdateSP      NVARCHAR(30),  -- (ChewKP05)
+   @tReceiptDetail         VariableTable, -- (ChewKP05)
    @cFinalizeRD            NVARCHAR(1),
    @cDecodeSP              NVARCHAR( 20), -- (james05)
    @cBarcode               NVARCHAR( 60), -- (james05)
@@ -133,6 +132,9 @@ DECLARE
    @cExtendedInfo          NVARCHAR( 20), -- (james08)
    @cExtInfoSP             NVARCHAR( 20), -- (james08)
    @tExtInfoVar            VARIABLETABLE, -- (james08)
+   @cCartonType            NVARCHAR(10),
+   @cTrackCartonType       NVARCHAR(1), 
+   @cTrackCartonTypeSP     NVARCHAR(20), 
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -181,12 +183,15 @@ SELECT
    @cBypassASNBlankCheck     = V_String10,
    @cDefaultReceiptDetailLoc = V_String11, -- (ChewKP03)
    @cRefNo              = V_String12, -- (james04)
-   @cExtendedValidateSP = V_String13, -- (ChewKP04) 
-   @cExtendedUpdateSP   = V_String14, -- (ChewKP05)  
+   @cExtendedValidateSP = V_String13, -- (ChewKP04)
+   @cExtendedUpdateSP   = V_String14, -- (ChewKP05)
    @cFinalizeRD         = V_String15,
    @cDecodeSP           = V_String16,
    @cLOCLookupSP        = V_String17,
    @cExtendedInfoSP     = V_String18,
+   @cCartonType         = V_String19,
+   @cTrackCartonType    = V_String20,
+   @cTrackCartonTypeSP  = V_String21,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -216,6 +221,7 @@ BEGIN
    IF @nStep = 3 GOTO Step_3   -- Scn = 692. ID
    IF @nStep = 4 GOTO Step_4   -- Scn = 693. UCC, QTY, counter
    IF @nStep = 5 GOTO Step_5   -- Scn = 694. Message, counter, option
+   IF @nStep = 6 GOTO Step_6   -- Scn = 695. Pre carton type
 END
 RETURN -- Do nothing if incorrect step
 
@@ -237,10 +243,13 @@ BEGIN
    SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
-   SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)  
-   IF @cExtendedUpdateSP = '0'  
-      SET @cExtendedUpdateSP = ''  
-
+   SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+   SET @cTrackCartonTypeSP = rdt.rdtGetConfig( @nFunc, 'TrackCartonTypeSP', @cStorerKey)
+   IF @cTrackCartonTypeSP = '0'
+      SET @cTrackCartonTypeSP = ''
+      
    -- (james05)
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
@@ -256,7 +265,7 @@ BEGIN
 
    -- Clear log table
    DELETE FROM rdt.rdtConReceiveLog WHERE Mobile = @nMobile
-                     
+
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign in
@@ -332,25 +341,25 @@ BEGIN
          ISNULL( @cRefNo, '') = ''  -- (james04)
       BEGIN
          SET @nErrNo = 62226
-         SET @cErrMsg = rdt.rdtgetmessage( 62226, @cLangCode,'DSP') --ASN/Ref needed
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --ASN/Ref needed
          GOTO Step_1_Fail
       END
-      
-      --Check ASN facility (cc01)  
+
+      --Check ASN facility (cc01)
       IF EXISTS (SELECT facility FROM receipt (NOLOCK) WHERE ReceiptKey in (@cReceiptKey1 ,@cReceiptKey2,@cReceiptKey3,@cReceiptKey4,@cReceiptKey5)
                   EXCEPT
                   SELECT @cFacility)
       BEGIN
-      	SET @nErrNo = 62247    
-         SET @cErrMsg = rdt.rdtgetmessage( 62247, @cLangCode,'DSP') --Diff facility  
-         GOTO Step_1_Fail   
+      	SET @nErrNo = 62247
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Diff facility
+         GOTO Step_1_Fail
       END
 
       IF ISNULL( @cRefNo, '') <> ''
       BEGIN
          -- Get storer config
          SET @cColumnName = rdt.RDTGetConfig( @nFunc, 'RefNoLookupColumn', @cStorerKey)
-            
+
          -- Get lookup field data type
          DECLARE @cDataType NVARCHAR(128)
          SET @cDataType = ''
@@ -361,14 +370,14 @@ BEGIN
          BEGIN
             SET @nErrNo = 62242
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad RefNoSetup
-            EXEC rdt.rdtSetFocusField @nMobile, 7 -- RefNo            
+            EXEC rdt.rdtSetFocusField @nMobile, 7 -- RefNo
             GOTO Quit
          END
-         
+
          -- Check data is correct type
          IF @cDataType = 'nvarchar' SET @n_Err = 1                                ELSE
-         IF @cDataType = 'datetime' SET @n_Err = rdt.rdtIsValidDate( @cRefNo)     ELSE 
-         IF @cDataType = 'int'      SET @n_Err = rdt.rdtIsInteger(   @cRefNo)     ELSE 
+         IF @cDataType = 'datetime' SET @n_Err = rdt.rdtIsValidDate( @cRefNo)     ELSE
+         IF @cDataType = 'int'      SET @n_Err = rdt.rdtIsInteger(   @cRefNo)     ELSE
          IF @cDataType = 'float'    SET @n_Err = rdt.rdtIsValidQTY(  @cRefNo, 20)
          IF @n_Err = 0
          BEGIN
@@ -387,40 +396,40 @@ BEGIN
             FETCH NEXT FROM @curCR INTO @nRowRef
             WHILE @@FETCH_STATUS = 0
             BEGIN
-               DELETE rdt.rdtConReceiveLog WHERE RowRef = @nRowRef 
+               DELETE rdt.rdtConReceiveLog WHERE RowRef = @nRowRef
                FETCH NEXT FROM @curCR INTO @nRowRef
             END
          END
-      
+
          -- Insert log
-         SET @cSQL = 
-            ' INSERT INTO rdt.rdtConReceiveLog (Mobile, ReceiptKey) ' + 
-            ' SELECT @nMobile, ReceiptKey ' + 
-            ' FROM dbo.Receipt WITH (NOLOCK) ' + 
-            ' WHERE Facility = @cFacility ' + 
-               ' AND Status <> ''9'' ' + 
-               CASE WHEN @cDataType IN ('int', 'float') 
-                    THEN ' AND ISNULL( ' + @cColumnName + ', 0) = @cRefNo ' 
-                    ELSE ' AND ISNULL( ' + @cColumnName + ', '''') = @cRefNo ' 
-               END + 
+         SET @cSQL =
+            ' INSERT INTO rdt.rdtConReceiveLog (Mobile, ReceiptKey) ' +
+            ' SELECT @nMobile, ReceiptKey ' +
+            ' FROM dbo.Receipt WITH (NOLOCK) ' +
+            ' WHERE Facility = @cFacility ' +
+               ' AND Status <> ''9'' ' +
+               CASE WHEN @cDataType IN ('int', 'float')
+                    THEN ' AND ISNULL( ' + @cColumnName + ', 0) = @cRefNo '
+                    ELSE ' AND ISNULL( ' + @cColumnName + ', '''') = @cRefNo '
+               END +
             ' AND StorerKey = @cStorerKey ' +
-            ' ORDER BY ReceiptKey ' + 
-            ' SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT ' 
+            ' ORDER BY ReceiptKey ' +
+            ' SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT '
          SET @cSQLParam =
-            ' @nMobile      INT, ' + 
-            ' @cFacility    NVARCHAR(5),  ' + 
-            ' @cStorerKey   NVARCHAR(15), ' + 
-            ' @cColumnName  NVARCHAR(20), ' +  
-            ' @cRefNo       NVARCHAR(20), ' + 
-            ' @nRowCount    INT OUTPUT,   ' + 
+            ' @nMobile      INT, ' +
+            ' @cFacility    NVARCHAR(5),  ' +
+            ' @cStorerKey   NVARCHAR(15), ' +
+            ' @cColumnName  NVARCHAR(20), ' +
+            ' @cRefNo       NVARCHAR(20), ' +
+            ' @nRowCount    INT OUTPUT,   ' +
             ' @nErrNo       INT OUTPUT    '
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-            @nMobile, 
-            @cFacility, 
-            @cStorerKey, 
-            @cColumnName, 
-            @cRefNo, 
-            @nRowCount OUTPUT, 
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile,
+            @cFacility,
+            @cStorerKey,
+            @cColumnName,
+            @cRefNo,
+            @nRowCount OUTPUT,
             @nErrNo    OUTPUT
 
          IF @nErrNo <> 0
@@ -434,8 +443,8 @@ BEGIN
             GOTO Quit
          END
 
-         IF EXISTS (SELECT 1 
-                    FROM rdt.rdtConReceiveLog C WITH (NOLOCK) 
+         IF EXISTS (SELECT 1
+                    FROM rdt.rdtConReceiveLog C WITH (NOLOCK)
                     JOIN dbo.Receipt R WITH (NOLOCK) ON ( C.ReceiptKey = R.ReceiptKey)
                     WHERE Mobile = @nMobile
                     AND   ( (Status >= '9') OR (ASNStatus >= '9')))
@@ -463,10 +472,10 @@ BEGIN
          END
 
 
-         IF EXISTS ( SELECT 1 FROM rdt.rdtConReceiveLog WITH (NOLOCK) 
-                     WHERE Mobile = @nMobile 
-                     GROUP BY Mobile 
-                     HAVING COUNT( 1) = 1) 
+         IF EXISTS ( SELECT 1 FROM rdt.rdtConReceiveLog WITH (NOLOCK)
+                     WHERE Mobile = @nMobile
+                     GROUP BY Mobile
+                     HAVING COUNT( 1) = 1)
          BEGIN
             SELECT TOP 1
                @cExternReceiptKey = ExternReceiptKey
@@ -486,7 +495,7 @@ BEGIN
             (@cReceiptKey5 <> '' AND @cReceiptKey5 IN (@cReceiptKey1, @cReceiptKey2, @cReceiptKey3, @cReceiptKey4))
          BEGIN
             SET @nErrNo = 62241
-            SET @cErrMsg = rdt.rdtgetmessage( 62241, @cLangCode,'DSP') --Duplicate ASN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Duplicate ASN
             GOTO Quit
          END
 
@@ -520,7 +529,7 @@ BEGIN
                   IF @@ROWCOUNT = 0
                   BEGIN
                      SET @nErrNo = 62227
-                     SET @cErrMsg = rdt.rdtgetmessage( 62227, @cLangCode,'DSP') -- Invalid ASN
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid ASN
                      GOTO Step_1_Fail
                   END
 
@@ -528,7 +537,7 @@ BEGIN
                   IF @cStatus >= '9' -- 9=Closed, C-Cancel
                   BEGIN
                      SET @nErrNo = 62228
-                     SET @cErrMsg = rdt.rdtgetmessage( 62228, @cLangCode,'DSP') -- ASN closed
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- ASN closed
                      GOTO Step_1_Fail
                   END
 
@@ -544,18 +553,18 @@ BEGIN
                   IF @nOutstandingQTY = 0
                   BEGIN
                      SET @nErrNo = 62229
-                     SET @cErrMsg = rdt.rdtgetmessage( 62229, @cLangCode,'DSP') --ASN received
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --ASN received
                      GOTO Step_1_Fail
                   END
                END
                SET @i = @i + 1
 
-               IF NOT EXISTS ( SELECT 1 FROM rdt.rdtConReceiveLog WITH (NOLOCK) 
-                               WHERE Mobile = @nMobile 
+               IF NOT EXISTS ( SELECT 1 FROM rdt.rdtConReceiveLog WITH (NOLOCK)
+                               WHERE Mobile = @nMobile
                                AND   ReceiptKey = @cReceiptKey)
                BEGIN
                   INSERT INTO rdt.rdtConReceiveLog (Mobile, ReceiptKey) VALUES (@nMobile, @cReceiptKey)
-                  
+
                   IF @@ERROR <> 0
                   BEGIN
                      DELETE FROM rdt.rdtConReceiveLog WHERE Mobile = @nMobile
@@ -635,7 +644,7 @@ BEGIN
       BEGIN
          SET @cDefaultToLoc = ''
       END
-         
+
       -- Prepare next screen var
       SET @cLOC = ''
       SET @cOutField01 = @cReceiptKey1
@@ -649,7 +658,7 @@ BEGIN
 
       -- Go to next screen
       SET @nScn = @nScn + 1
-      SET @nStep = @nStep + 1      
+      SET @nStep = @nStep + 1
    END
 
    IF @nInputKey = 0 -- Esc or No
@@ -703,21 +712,21 @@ BEGIN
          IF @cLOC = '' OR @cLOC IS NULL
          BEGIN
             SET @nErrNo = 62230
-            SET @cErrMsg = rdt.rdtgetmessage( 62230, @cLangCode, 'DSP') --'LOC needed'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'LOC needed'
             GOTO Step_2_Fail
          END
 
-		   -- (james06)        
-		   IF @cLOCLookupSP = 1              
-		   BEGIN              
-			   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			      @cLOC       OUTPUT,               
-			      @nErrNo     OUTPUT,               
-			      @cErrMsg    OUTPUT              
+		   -- (james06)
+		   IF @cLOCLookupSP = 1
+		   BEGIN
+			   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+			      @cLOC       OUTPUT,
+			      @nErrNo     OUTPUT,
+			      @cErrMsg    OUTPUT
 
-			   IF @nErrNo <> 0              
-				   GOTO Step_2_Fail              
-		   END 
+			   IF @nErrNo <> 0
+				   GOTO Step_2_Fail
+		   END
 
          -- Get the location
          DECLARE @cChkFacility NVARCHAR( 5)
@@ -730,7 +739,7 @@ BEGIN
          IF @@ROWCOUNT = 0
          BEGIN
             SET @nErrNo = 62231
-            SET @cErrMsg = rdt.rdtgetmessage( 62231, @cLangCode, 'DSP') --'Invalid LOC'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid LOC'
             GOTO Step_2_Fail
          END
 
@@ -738,23 +747,23 @@ BEGIN
          IF @cChkFacility <> @cFacility
          BEGIN
             SET @nErrNo = 62232
-            SET @cErrMsg = rdt.rdtgetmessage( 62232, @cLangCode, 'DSP') --'Facility diff'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Facility diff'
             GOTO Step_2_Fail
          END
       END
       ELSE
       BEGIN
-		   -- (james06)        
-		   IF @cLOCLookupSP = 1              
-		   BEGIN              
-			   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			      @cLOC       OUTPUT,               
-			      @nErrNo     OUTPUT,               
-			      @cErrMsg    OUTPUT              
+		   -- (james06)
+		   IF @cLOCLookupSP = 1
+		   BEGIN
+			   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+			      @cLOC       OUTPUT,
+			      @nErrNo     OUTPUT,
+			      @cErrMsg    OUTPUT
 
-			   IF @nErrNo <> 0              
-				   GOTO Step_2_Fail              
-		   END 
+			   IF @nErrNo <> 0
+				   GOTO Step_2_Fail
+		   END
       END
 
       -- Prepare next screen var
@@ -767,7 +776,7 @@ BEGIN
       SET @cOutField06 = @cExternReceiptKey
       SET @cOutField07 = @cLOC
       SET @cOutField08 = ''
-      SET @cOutField09 = @cRefNo      
+      SET @cOutField09 = @cRefNo
 
       -- Go to next screen
       SET @nScn = @nScn + 1
@@ -821,11 +830,11 @@ BEGIN
          FETCH NEXT FROM @curCR INTO @nRowRef
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            DELETE rdt.rdtConReceiveLog WHERE RowRef = @nRowRef 
+            DELETE rdt.rdtConReceiveLog WHERE RowRef = @nRowRef
             FETCH NEXT FROM @curCR INTO @nRowRef
          END
       END
-         
+
       -- Prepare prev screen var
       SET @cReceiptKey1 = ''
       SET @cReceiptKey2 = ''
@@ -892,7 +901,7 @@ BEGIN
       IF (@cID = '' OR @cID IS NULL) AND @cUCCInboundReceiveIDOptional <> '1'
       BEGIN
          SET @nErrNo = 62233
-         SET @cErrMsg = rdt.rdtgetmessage( 62233, @cLangCode,'DSP') -- ID needed
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- ID needed
          GOTO Step_3_Fail
       END
 
@@ -912,9 +921,9 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cID     = @cID     OUTPUT, 
-               @nErrNo  = @nErrNo  OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cID     = @cID     OUTPUT,
+               @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
                @cType   = 'ID'
          END
@@ -942,7 +951,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode,
                @cReceiptKey, @cLOC, @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
          END
 
@@ -958,6 +967,7 @@ BEGIN
 
       IF (@nDisAllowDuplicateIdsOnRFRcpt = '1') AND
          (@cID <> '' AND @cID IS NOT NULL)
+      BEGIN
          IF EXISTS( SELECT [ID]
             FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
@@ -966,9 +976,62 @@ BEGIN
                AND LOC.Facility = @cFacility)
          BEGIN
             SET @nErrNo = 62234
-            SET @cErrMsg = rdt.rdtgetmessage( 62234, @cLangCode, 'DSP') --'Duplicate ID'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Duplicate ID'
             GOTO Step_3_Fail
          END
+      END
+
+      -- Track carton type
+      IF @cTrackCartonTypeSP <> ''
+      BEGIN
+         SET @cTrackCartonType = ''
+         IF @cTrackCartonTypeSP = '1'
+            SET @cTrackCartonType = '1'
+
+         ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cTrackCartonTypeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cTrackCartonTypeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey1, @cReceiptKey2, @cReceiptKey3, @cReceiptKey4, @cReceiptKey5, ' + 
+               ' @cLoc, @cID, @cUCC, @cTrackCartonType OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile           INT,           ' +
+               ' @nFunc             INT,           ' +
+               ' @cLangCode         NVARCHAR( 3),  ' +
+               ' @nStep             INT,           ' +
+               ' @nInputKey         INT,           ' +
+               ' @cFacility         NVARCHAR( 5),  ' +
+               ' @cStorerKey        NVARCHAR( 15), ' +
+               ' @cReceiptKey1      NVARCHAR(20),  ' + 
+               ' @cReceiptKey2      NVARCHAR(20),  ' + 
+               ' @cReceiptKey3      NVARCHAR(20),  ' + 
+               ' @cReceiptKey4      NVARCHAR(20),  ' + 
+               ' @cReceiptKey5      NVARCHAR(20),  ' + 
+               ' @cLoc              NVARCHAR( 10), ' +
+               ' @cID               NVARCHAR( 18), ' +
+               ' @cUCC              NVARCHAR( 20), ' +
+               ' @cTrackCartonType  NVARCHAR( 1)  OUTPUT, ' + 
+               ' @nErrNo            INT           OUTPUT, ' +
+               ' @cErrMsg           NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey1, @cReceiptKey2, @cReceiptKey3, @cReceiptKey4, @cReceiptKey5,
+               @cLoc, @cID, @cUCC, @cTrackCartonType OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
+      IF @cTrackCartonType = '1'
+      BEGIN
+         SET @cOutField01 = ''
+
+         SET @nStep = @nStep + 3
+         SET @nScn = @nScn + 3
+
+         GOTO Quit
+      END
 
       -- Get UCC scanned
       IF @cUCCReceivedDetail <> '1'
@@ -984,7 +1047,7 @@ BEGIN
       BEGIN
          SELECT @cScanUCC = COUNT( DISTINCT IsNull( RTRIM(RD.UserDefine01), ''))
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey         
+         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
          WHERE CR.Mobile = @nMobile
             AND BeforeReceivedQty > 0 -- Received
       END
@@ -996,7 +1059,7 @@ BEGIN
       SET @cOutField03 = '' --UCC
       SET @cOutField04 = '' --QTY
       SET @cOutField05 = CASE WHEN ISNULL(@cBypassASNBlankCheck, '') <> '1' THEN @cScanUCC + '/' + @cTotalUCC ELSE '' END  -- (james02)
-      
+
       -- (ChewKP04)
 
       SET @cExtInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfo', @cStorerKey)
@@ -1073,7 +1136,7 @@ BEGIN
                                 , @cOutField10  OUTPUT
          END
       END
-      ELSE 
+      ELSE
       BEGIN
          SET @cOutField06 = '' -- (ChewKP02)
          SET @cOutField07 = '' -- (ChewKP02)
@@ -1096,25 +1159,25 @@ BEGIN
                ' @cLangCode         NVARCHAR( 3),  ' +
                ' @nStep             INT,           ' +
                ' @nInputKey         INT,           ' +
-               ' @cFacility         NVARCHAR( 5),  ' + 
+               ' @cFacility         NVARCHAR( 5),  ' +
                ' @cStorerKey        NVARCHAR( 15), ' +
                ' @cLoc              NVARCHAR( 10), ' +
                ' @cID               NVARCHAR( 18), ' +
                ' @cUCC              NVARCHAR( 20), ' +
-               ' @tExtInfoVar       VariableTable READONLY, ' + 
-               ' @cExtendedInfo     NVARCHAR( 20) OUTPUT    ' 
+               ' @tExtInfoVar       VariableTable READONLY, ' +
+               ' @cExtendedInfo     NVARCHAR( 20) OUTPUT    '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cLoc, @cID, @cUCC, @tExtInfoVar, @cExtendedInfo OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
-               
-            SET @cOutField15 = @cExtendedInfo               
+
+            SET @cOutField15 = @cExtendedInfo
          END
       END
-      
+
       -- Remain in current screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
@@ -1178,7 +1241,7 @@ BEGIN
       IF @cUCC = '' OR @cUCC IS NULL
       BEGIN
          SET @nErrNo = 62235
-         SET @cErrMsg = rdt.rdtgetmessage( 62235, @cLangCode,'DSP') -- UCC needed
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- UCC needed
          GOTO Step_4_Fail
       END
 
@@ -1189,9 +1252,9 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cUCC    = @cUCC     OUTPUT, 
-               @nErrNo  = @nErrNo  OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUCC    = @cUCC     OUTPUT,
+               @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
                @cType   = 'UCC'
          END
@@ -1219,7 +1282,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode,
                @cReceiptKey, @cLOC, @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
          END
 
@@ -1248,8 +1311,8 @@ BEGIN
                                     ' , @cID                   ' +
                                     ' , @cUCC                  ' +
                                     ' , @nErrNo       OUTPUT   ' +
-                                    ' , @cErrMSG      OUTPUT   ' 
-    
+                                    ' , @cErrMSG      OUTPUT   '
+
 
             SET @cExecArguments =
                       N'@nMobile     INT, ' +
@@ -1267,32 +1330,32 @@ BEGIN
                        '@cID         NVARCHAR(18),           ' +
                        '@cUCC        NVARCHAR(20),           ' +
                        '@nErrNo      INT  OUTPUT,            ' +
-                       '@cErrMsg     NVARCHAR(1024) OUTPUT  ' 
-                     
+                       '@cErrMsg     NVARCHAR(1024) OUTPUT  '
+
 
             EXEC sp_executesql @cExecStatements, @cExecArguments,
-                                @nMobile             
-                              , @nFunc                 
-                              , @cLangCode             
-                              , @nStep                 
-                              , @cStorerKey            
-                              , @cFacility             
-                              , @cReceiptKey1           
-                              , @cReceiptKey2       
-                              , @cReceiptKey3        
-                              , @cReceiptKey4        
-                              , @cReceiptKey5        
-                              , @cLoc                  
-                              , @cID                   
-                              , @cUCC                  
-                              , @nErrNo       OUTPUT   
-                              , @cErrMSG      OUTPUT   
+                                @nMobile
+                              , @nFunc
+                              , @cLangCode
+                              , @nStep
+                              , @cStorerKey
+                              , @cFacility
+                              , @cReceiptKey1
+                              , @cReceiptKey2
+                              , @cReceiptKey3
+                              , @cReceiptKey4
+                              , @cReceiptKey5
+                              , @cLoc
+                              , @cID
+                              , @cUCC
+                              , @nErrNo       OUTPUT
+                              , @cErrMSG      OUTPUT
 
 
-           IF @nErrNo <> 0 
-           BEGIN 
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
-               GOTO Step_4_Fail 
+           IF @nErrNo <> 0
+           BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Step_4_Fail
            END
          END
 	   END
@@ -1356,7 +1419,7 @@ BEGIN
       IF @@ROWCOUNT = 0
       BEGIN
          SET @nErrNo = 62236
-         SET @cErrMsg = rdt.rdtgetmessage( 62236, @cLangCode,'DSP') -- Invalid UCC
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid UCC
          GOTO Step_4_Fail
       END
 
@@ -1379,7 +1442,7 @@ BEGIN
                SELECT TOP 1 @cUCCReceiptKey = RD.ReceiptKey
                FROM dbo.ReceiptDetail RD WITH (NOLOCK)
                JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
-               JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey   
+               JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
                WHERE CR.Mobile = @nMobile
                AND   PODetail.UserDefine01 = @cUCC
             END
@@ -1389,7 +1452,7 @@ BEGIN
                SELECT TOP 1 @cUCCReceiptKey = RD.ReceiptKey
                FROM dbo.ReceiptDetail RD WITH (NOLOCK)
                JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
-               JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey                  
+               JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
                WHERE CR.Mobile = @nMobile
                AND   PODetail.UserDefine01 = @cUCC
             END
@@ -1410,7 +1473,7 @@ BEGIN
                SELECT TOP 1 @cUCCReceiptKey = RD.ReceiptKey
                FROM dbo.ReceiptDetail RD WITH (NOLOCK)
                JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
-               WHERE CR.Mobile = @nMobile 
+               WHERE CR.Mobile = @nMobile
                AND   RD.UserDefine01 = @cUCC
             END
          END
@@ -1436,7 +1499,7 @@ BEGIN
          WHERE BeforeReceivedQTY > 0)
       BEGIN
          SET @nErrNo = 62237
-         SET @cErrMsg = rdt.rdtgetmessage( 62237, @cLangCode,'DSP') -- Double scan
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Double scan
          GOTO Step_4_Fail
       END
 
@@ -1466,19 +1529,19 @@ BEGIN
       SET @nQTY = 0
       WHILE @@FETCH_STATUS = 0
       BEGIN
-         IF (@cFinalizeRD = '0' OR  @cFinalizeRD = '2') --(yeekung01)  
+         IF (@cFinalizeRD = '0' OR  @cFinalizeRD = '2') --(yeekung01)
          BEGIN
             -- Update ReceiptDetail
             UPDATE dbo.ReceiptDetail SET
                ToLOC = CASE WHEN @cDefaultReceiptDetailLoc = '1' THEN ToLoc ELSE @cLOC END , -- stamp LOC  -- (ChewKP03)
                ToID = CASE WHEN @cUCCRcvSkipUpdTOID = '1' THEN ToID ELSE @cID END, -- stamp ID  (james03)
-               BeforeReceivedQTY = QTYExpected, 
-               EditWho = SUSER_SNAME(), 
+               BeforeReceivedQTY = QTYExpected,
+               EditWho = SUSER_SNAME(),
                EditDate = GETDATE()
             FROM dbo.ReceiptDetail RD
             WHERE ReceiptKey = @cReceiptKey
                AND ReceiptLineNumber = @cReceiptLineNumber
-            SET @nErrNo = @@ERROR 
+            SET @nErrNo = @@ERROR
             IF @nErrNo <> 0
             BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -1490,22 +1553,22 @@ BEGIN
             UPDATE dbo.ReceiptDetail SET
                ToLOC = CASE WHEN @cDefaultReceiptDetailLoc = '1' THEN ToLoc ELSE @cLOC END , -- stamp LOC  -- (ChewKP03)
                ToID = CASE WHEN @cUCCRcvSkipUpdTOID = '1' THEN ToID ELSE @cID END, -- stamp ID  (james03)
-               BeforeReceivedQTY = QTYExpected, 
-               QTYReceived = QTYExpected, 
-               FinalizeFlag = 'Y', 
-               EditWho = SUSER_SNAME(), 
+               BeforeReceivedQTY = QTYExpected,
+               QTYReceived = QTYExpected,
+               FinalizeFlag = 'Y',
+               EditWho = SUSER_SNAME(),
                EditDate = GETDATE()
             FROM dbo.ReceiptDetail RD
             WHERE ReceiptKey = @cReceiptKey
                AND ReceiptLineNumber = @cReceiptLineNumber
-            SET @nErrNo = @@ERROR 
+            SET @nErrNo = @@ERROR
             IF @nErrNo <> 0
             BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                GOTO RollBackTran
             END
          END
-         IF @cFinalizeRD = '2' 
+         IF @cFinalizeRD = '2'
          BEGIN
             EXEC dbo.ispFinalizeReceipt
                 @c_ReceiptKey        = @cReceiptKey
@@ -1519,7 +1582,7 @@ BEGIN
                GOTO RollBackTran
             END
          END
-         
+
          -- EventLog
          EXEC RDT.rdt_STD_EventLog
             @cActionType   = '2', -- Receiving
@@ -1540,10 +1603,9 @@ BEGIN
          FETCH NEXT FROM @curRD INTO @cReceiptKey, @cReceiptLineNumber, @nQTYExpected
       END
 
-      -- ExtendedUpdate -- (ChewKP05) 
+      -- ExtendedUpdate -- (ChewKP05)
       IF @cExtendedUpdateSP <> ''
 	   BEGIN
-         
 	      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
@@ -1562,9 +1624,11 @@ BEGIN
                                     ' , @cLoc                  ' +
                                     ' , @cID                   ' +
                                     ' , @cUCC                  ' +
+                                    ' , @cCartonType           ' +
+                                    ' , @tExtUpdate            ' +
                                     ' , @nErrNo       OUTPUT   ' +
-                                    ' , @cErrMSG      OUTPUT   ' 
-    
+                                    ' , @cErrMSG      OUTPUT   '
+
 
             SET @cExecArguments =
                       N'@nMobile     INT, ' +
@@ -1582,34 +1646,38 @@ BEGIN
                        '@cLoc        NVARCHAR(20),           ' +
                        '@cID         NVARCHAR(18),           ' +
                        '@cUCC        NVARCHAR(20),           ' +
-                       '@nErrNo      INT  OUTPUT,            ' +
-                       '@cErrMsg     NVARCHAR(1024) OUTPUT  ' 
-                     
+                       '@cCartonType NVARCHAR(10),           ' +
+                       '@tExtUpdate  VariableTable  READONLY,' +
+                       '@nErrNo      INT            OUTPUT,  ' +
+                       '@cErrMsg     NVARCHAR(1024) OUTPUT   '
+
 
             EXEC sp_executesql @cExecStatements, @cExecArguments,
-                                @nMobile             
-                              , @nFunc                 
-                              , @cLangCode             
-                              , @nStep      
-                              , @nInputKey           
-                              , @cStorerKey            
-                              , @cFacility             
-                              , @cReceiptKey1           
-                              , @cReceiptKey2       
-                              , @cReceiptKey3        
-                              , @cReceiptKey4        
-                              , @cReceiptKey5        
-                              , @cLoc                  
-                              , @cID                   
-                              , @cUCC         
-                              , @nErrNo       OUTPUT   
-                              , @cErrMSG      OUTPUT   
+                                @nMobile
+                              , @nFunc
+                              , @cLangCode
+                              , @nStep
+                              , @nInputKey
+                              , @cStorerKey
+                              , @cFacility
+                              , @cReceiptKey1
+                              , @cReceiptKey2
+                              , @cReceiptKey3
+                              , @cReceiptKey4
+                              , @cReceiptKey5
+                              , @cLoc
+                              , @cID
+                              , @cUCC
+                              , @cCartonType
+                              , @tExtUpdate
+                              , @nErrNo       OUTPUT
+                              , @cErrMSG      OUTPUT
 
 
-           IF @nErrNo <> 0 
-           BEGIN 
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
-               GOTO RollBackTran 
+           IF @nErrNo <> 0
+           BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO RollBackTran
            END
          END
 	   END
@@ -1624,7 +1692,7 @@ BEGIN
          SELECT @cScanUCC = COUNT( DISTINCT IsNull( RTRIM(PODetail.UserDefine01), '')) -- (Vicky01)
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
          JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
-         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey                  
+         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
          WHERE CR.Mobile = @nMobile
          AND   RD.BeforeReceivedQTY > 0 -- Received
       END
@@ -1632,7 +1700,7 @@ BEGIN
       BEGIN
          SELECT @cScanUCC = COUNT( DISTINCT IsNull( RTRIM(RD.UserDefine01), '')) -- (Vicky01)
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey                  
+         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
          WHERE CR.Mobile = @nMobile
          AND   RD.BeforeReceivedQTY > 0 -- Received
       END
@@ -1753,30 +1821,30 @@ BEGIN
          BEGIN
             SET @cExtendedInfo = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' + 
-               ' @cLoc, @cID, @cUCC, @tExtInfoVar, @cExtendedInfo OUTPUT ' 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cLoc, @cID, @cUCC, @tExtInfoVar, @cExtendedInfo OUTPUT '
             SET @cSQLParam =
                ' @nMobile           INT,           ' +
                ' @nFunc             INT,           ' +
                ' @cLangCode         NVARCHAR( 3),  ' +
                ' @nStep             INT,           ' +
                ' @nInputKey         INT,           ' +
-               ' @cFacility         NVARCHAR( 5),  ' + 
+               ' @cFacility         NVARCHAR( 5),  ' +
                ' @cStorerKey        NVARCHAR( 15), ' +
                ' @cLoc              NVARCHAR( 10), ' +
                ' @cID               NVARCHAR( 18), ' +
                ' @cUCC              NVARCHAR( 20), ' +
-               ' @tExtInfoVar       VariableTable READONLY, ' + 
-               ' @cExtendedInfo     NVARCHAR( 20) OUTPUT    ' 
+               ' @tExtInfoVar       VariableTable READONLY, ' +
+               ' @cExtendedInfo     NVARCHAR( 20) OUTPUT    '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cLoc, @cID, @cUCC, @tExtInfoVar, @cExtendedInfo OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
-               
-            SET @cOutField15 = @cExtendedInfo               
+
+            SET @cOutField15 = @cExtendedInfo
          END
       END
    END
@@ -1835,7 +1903,7 @@ BEGIN
       IF @cOption = '' OR @cOption IS NULL
       BEGIN
          SET @nErrNo = 62239
-         SET @cErrMsg = rdt.rdtgetmessage( 62239, @cLangCode, 'DSP') -- Option needed
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Option needed
          GOTO Step_5_Fail
       END
 
@@ -1843,7 +1911,7 @@ BEGIN
       IF (@cOption <> '1' AND @cOption <> '2')
       BEGIN
          SET @nErrNo = 62240
-         SET @cErrMsg = rdt.rdtgetmessage( 62240, @cLangCode, 'DSP') -- Invalid Option
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Option
          GOTO Step_5_Fail
       END
 
@@ -1858,7 +1926,7 @@ BEGIN
             FETCH NEXT FROM @curCR INTO @nRowRef
             WHILE @@FETCH_STATUS = 0
             BEGIN
-               DELETE rdt.rdtConReceiveLog WHERE RowRef = @nRowRef 
+               DELETE rdt.rdtConReceiveLog WHERE RowRef = @nRowRef
                FETCH NEXT FROM @curCR INTO @nRowRef
             END
          END
@@ -1870,12 +1938,14 @@ BEGIN
          SET @cReceiptKey4 = ''
          SET @cReceiptKey5 = ''
          SET @cExternReceiptKey = ''
+         SET @cRefNo = ''
          SET @cOutField01 = @cReceiptKey1
          SET @cOutField02 = @cReceiptKey2
          SET @cOutField03 = @cReceiptKey3
          SET @cOutField04 = @cReceiptKey4
          SET @cOutField05 = @cReceiptKey5
          SET @cOutField06 = @cExternReceiptKey
+         SET @cOutField07 = @cRefNo
 
          EXEC rdt.rdtSetFocusField @nMobile, 1 -- ReceiptKey1
 
@@ -1915,12 +1985,144 @@ GOTO Quit
 
 
 /********************************************************************************
+Step 6. screen = 695
+   CartonType (Field01, input)
+********************************************************************************/
+Step_6:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      DECLARE @cCartonTypeBarcode  NVARCHAR(30)
+
+      -- Screen mapping
+      SET @cCartonType = LEFT( @cInField01, 10)
+      SET @cCartonTypeBarcode = @cInField01
+
+      -- Check blank
+      IF @cCartonType = ''
+      BEGIN
+         SET @nErrNo = 62248
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedCartonType
+         GOTO Quit
+      END
+
+      -- Check carton type
+      IF NOT EXISTS( SELECT TOP 1 1
+         FROM Cartonization C WITH (NOLOCK)
+            JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+         WHERE S.StorerKey = @cStorerKey
+            AND C.CartonType = @cCartonType)
+      BEGIN
+         -- Get carton type base on barcode
+         SELECT @cCartonType = CartonType
+         FROM Cartonization C WITH (NOLOCK)
+            JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+         WHERE S.StorerKey = @cStorerKey
+            AND C.Barcode = @cCartonTypeBarcode
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 62249
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad CartonType
+            GOTO Quit
+         END
+      END
+
+      -- Get UCC scanned
+      IF @cUCCReceivedDetail <> '1'
+      BEGIN
+         SELECT @cScanUCC = COUNT( DISTINCT IsNull( RTRIM(PODetail.UserDefine01), '')) -- (Vicky01)
+         FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+         JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
+         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
+         WHERE CR.Mobile = @nMobile
+            AND BeforeReceivedQty > 0 -- Received
+      END
+      ELSE
+      BEGIN
+         SELECT @cScanUCC = COUNT( DISTINCT IsNull( RTRIM(RD.UserDefine01), ''))
+         FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+         JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
+         WHERE CR.Mobile = @nMobile
+            AND BeforeReceivedQty > 0 -- Received
+      END
+
+      -- Prepare next screen var
+      SET @cUCC = ''
+      SET @cOutField01 = @cLOC
+      SET @cOutField02 = @cID
+      SET @cOutField03 = '' --UCC
+      SET @cOutField04 = '' --QTY
+      SET @cOutField05 = CASE WHEN ISNULL(@cBypassASNBlankCheck, '') <> '1' THEN @cScanUCC + '/' + @cTotalUCC ELSE '' END  -- (james02)
+      SET @cOutField06 = ''
+      SET @cOutField07 = ''
+      SET @cOutField08 = ''
+      SET @cOutField15 = '' -- ExtInfo
+
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cLoc, @cID, @cUCC, @tExtInfoVar, @cExtendedInfo OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile           INT,           ' +
+               ' @nFunc             INT,           ' +
+               ' @cLangCode         NVARCHAR( 3),  ' +
+               ' @nStep             INT,           ' +
+               ' @nInputKey         INT,           ' +
+               ' @cFacility         NVARCHAR( 5),  ' +
+               ' @cStorerKey        NVARCHAR( 15), ' +
+               ' @cLoc              NVARCHAR( 10), ' +
+               ' @cID               NVARCHAR( 18), ' +
+               ' @cUCC              NVARCHAR( 20), ' +
+               ' @tExtInfoVar       VariableTable READONLY, ' +
+               ' @cExtendedInfo     NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cLoc, @cID, @cUCC, @tExtInfoVar, @cExtendedInfo OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+
+            SET @cOutField15 = @cExtendedInfo
+         END
+      END
+
+      SET @nScn = @nScn - 2
+      SET @nStep = @nStep - 2
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Prepare prev screen var
+      SET @cID = ''
+      SET @cOutField01 = @cReceiptKey1
+      SET @cOutField02 = @cReceiptKey2
+      SET @cOutField03 = @cReceiptKey3
+      SET @cOutField04 = @cReceiptKey4
+      SET @cOutField05 = @cReceiptKey5
+      SET @cOutField06 = @cExternReceiptKey
+      SET @cOutField07 = @cLOC
+      SET @cOutField08 = '' -- ID
+
+      -- Go to prev screen
+      SET @nScn = @nScn - 3
+      SET @nStep = @nStep - 3
+   END
+END
+GOTO Quit
+
+/********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
 BEGIN
    UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -1948,12 +2150,15 @@ BEGIN
       V_String10 = @cBypassASNBlankCheck,
       V_String11 = @cDefaultReceiptDetailLoc, -- (ChewKP01)
       V_String12 = @cRefNo,   -- (james04)
-      V_String13 = @cExtendedValidateSP, -- (ChewKP04) 
-      V_String14 = @cExtendedUpdateSP, -- (ChewKP05) 
+      V_String13 = @cExtendedValidateSP, -- (ChewKP04)
+      V_String14 = @cExtendedUpdateSP, -- (ChewKP05)
       V_String15 = @cFinalizeRD,
       V_String16 = @cDecodeSP,
       V_String17 = @cLOCLookupSP,
       V_String18 = @cExtendedInfoSP,
+      V_String19 = @cCartonType,
+      V_String20 = @cTrackCartonType,
+      V_String21 = @cTrackCartonTypeSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

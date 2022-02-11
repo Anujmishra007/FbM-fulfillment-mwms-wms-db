@@ -1,32 +1,27 @@
-
 -- rdtfnc_UCCInboundReceive
 exec rdt.rdtDropMsg 62226, 62250
 
-execute rdt.rdtAddMsg 62226, 10, '62226^ASN/Ref needed', 'us_english'
-execute rdt.rdtAddMsg 62227, 10, '62227^Invalid ASN',    'us_english'
-execute rdt.rdtAddMsg 62228, 10, '62228^ASN closed',     'us_english'
-execute rdt.rdtAddMsg 62229, 10, '62229^ASN received',   'us_english'
-execute rdt.rdtAddMsg 62230, 10, '62230^LOC needed',     'us_english'
-execute rdt.rdtAddMsg 62231, 10, '62231^Invalid LOC',    'us_english'
-execute rdt.rdtAddMsg 62232, 10, '62232^Facility diff',  'us_english'
-execute rdt.rdtAddMsg 62233, 10, '62233^ID needed',      'us_english'
-execute rdt.rdtAddMsg 62234, 10, '62234^Duplicate ID',   'us_english'
-execute rdt.rdtAddMsg 62235, 10, '62235^UCC needed',     'us_english'
-execute rdt.rdtAddMsg 62236, 10, '62236^Invalid UCC',    'us_english'
-execute rdt.rdtAddMsg 62237, 10, '62237^Double scan',    'us_english'
-execute rdt.rdtAddMsg 62238, 10, '62238^UpdRcptDtlFail', 'us_english'
-execute rdt.rdtAddMsg 62239, 10, '62239^Option needed',  'us_english'
-execute rdt.rdtAddMsg 62240, 10, '62240^Invalid Option', 'us_english'
-execute rdt.rdtAddMsg 62241, 10, '62241^Duplicate ASN',  'us_english'
-
--- SOS354977
-execute rdt.rdtAddMsg 62242, 10, '62242^Bad RefNoSetup', 'us_english'
-execute rdt.rdtAddMsg 62243, 10, '62243^Invalid RefNo',  'us_english'
-execute rdt.rdtAddMsg 62244, 10, '62244^RefNo NotInASN', 'us_english'
-execute rdt.rdtAddMsg 62245, 10, '62245^ASN Closed',     'us_english'
-
--- WMS9861
-execute rdt.rdtAddMsg 62246, 10, '62246^Invalid Format', 'us_english'
-
---wms-17155
-execute rdt.rdtAddMsg 62247, 10, '62247^Diff facility ', 'us_english'
+execute rdt.rdtAddMsg 62226, 10, '62226 ASN/Ref needed', 'us_english'
+execute rdt.rdtAddMsg 62227, 10, '62227 Invalid ASN   ', 'us_english'
+execute rdt.rdtAddMsg 62228, 10, '62228 ASN closed    ', 'us_english'
+execute rdt.rdtAddMsg 62229, 10, '62229 ASN received  ', 'us_english'
+execute rdt.rdtAddMsg 62230, 10, '62230 LOC needed    ', 'us_english'
+execute rdt.rdtAddMsg 62231, 10, '62231 Invalid LOC   ', 'us_english'
+execute rdt.rdtAddMsg 62232, 10, '62232 Facility diff ', 'us_english'
+execute rdt.rdtAddMsg 62233, 10, '62233 ID needed     ', 'us_english'
+execute rdt.rdtAddMsg 62234, 10, '62234 Duplicate ID  ', 'us_english'
+execute rdt.rdtAddMsg 62235, 10, '62235 UCC needed    ', 'us_english'
+execute rdt.rdtAddMsg 62236, 10, '62236 Invalid UCC   ', 'us_english'
+execute rdt.rdtAddMsg 62237, 10, '62237 Double scan   ', 'us_english'
+execute rdt.rdtAddMsg 62238, 10, '62238 UpdRcptDtlFail', 'us_english'
+execute rdt.rdtAddMsg 62239, 10, '62239 Option needed ', 'us_english'
+execute rdt.rdtAddMsg 62240, 10, '62240 Invalid Option', 'us_english'
+execute rdt.rdtAddMsg 62241, 10, '62241 Duplicate ASN ', 'us_english'
+execute rdt.rdtAddMsg 62242, 10, '62242 Bad RefNoSetup', 'us_english'
+execute rdt.rdtAddMsg 62243, 10, '62243 Invalid RefNo ', 'us_english'
+execute rdt.rdtAddMsg 62244, 10, '62244 RefNo NotInASN', 'us_english'
+execute rdt.rdtAddMsg 62245, 10, '62245 ASN Closed    ', 'us_english'
+execute rdt.rdtAddMsg 62246, 10, '62246 Invalid Format', 'us_english'
+execute rdt.rdtAddMsg 62247, 10, '62247 Diff facility ', 'us_english'
+execute rdt.rdtAddMsg 62248, 10, '62248 NeedCartonType', 'us_english'
+execute rdt.rdtAddMsg 62249, 10, '62249 Bad CartonType', 'us_english'
