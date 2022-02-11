@@ -1728,11 +1728,11 @@ BEGIN
                AND OD.Status >= '1'
                AND OD.Status < '5'
                AND NOT EXISTS ( SELECT 1 FROM RDT.rdtPickLock RPL WITH (NOLOCK)    -- INC1408845
-                                WHERE RPL.Orderkey = O.OrderKey    
-                                AND   RPL.WaveKey = O.UserDefine09    
-                                AND   RPL.Storerkey = O.StorerKey    
-                                AND   RPL.[Status] = '1'    
-                                AND   RPL.AddWho = @cUserName)  
+                                WHERE RPL.Orderkey = O.OrderKey
+                                AND   RPL.WaveKey = O.UserDefine09
+                                AND   RPL.Storerkey = O.StorerKey
+                                AND   RPL.[Status] = '1'
+                                AND   RPL.AddWho = @cUserName)
             GROUP BY O.UserDefine09, O.LoadKey, O.OrderKey, O.Storerkey
          END
          ELSE
@@ -6498,7 +6498,7 @@ BEGIN
 
             SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cNewLOC
             IF ISNULL( @cLocDescr, '') = ''
-               SET @cLocDescr = @cLOC
+               SET @cLocDescr = @cNewLOC     -- ZG01
 
             IF ISNULL( @cNewLoc, '') = ''
             BEGIN
