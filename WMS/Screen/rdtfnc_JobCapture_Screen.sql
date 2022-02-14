@@ -52,7 +52,7 @@ EXECUTE rdt.rdtAddScn 5223, 'ENG'
    ,@cLine07 = 'LOC:'
    ,@cLine08 = '%30d03' --WMS15084
    ,@cLine09 = ''
-   ,@cLine10 = 'QTY: %05i04'
+   ,@cLine10 = 'QTY: %05i04 %05d05'
    ,@cLine14 = '%e'
    ,@nFunc = 705
 
@@ -87,7 +87,7 @@ EXECUTE rdt.rdtAddScn 5225, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'  
    ,@cLine11 = ''
-   ,@cLine12 = ''  
+   ,@cLine12 = 'REC: %05d11'  
    ,@cLine13 = ''
    ,@cLine14 = '%e'
    ,@nFunc = 705

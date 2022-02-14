@@ -40,11 +40,12 @@ GO
 /* 2020-Jan-17 2.4  Chermaine   WMS-11844 Add Column (cc04)             */
 /* 2019-Oct-22 2.5  Ung         WMS-10638 Add CartonNo                  */
 /* 2020-Dec-14 2.6  YeeKung     WMS-15895 Extend loc length (yeekung01) */
+/* 2021-Aug-24 2.7  Ung         Use EventDateTime param                 */
 /************************************************************************/    
 
 CREATE PROC [RDT].[rdt_STD_EventLog] (  
 	@cActionType         NVARCHAR(30) = '',  
-	@dtEventDateTime     DATETIME = '',  
+	@dtEventDateTime     DATETIME = NULL,  
 	@cUserID             NVARCHAR(15) = '',  
 	@nMobileNo           INT,  
 	@nFunctionID         INT,  
@@ -211,6 +212,9 @@ BEGIN
 	BEGIN  
 		SELECT @nRowRef = 0  
 	END  
+	
+	IF @dtEventDateTime IS NULL
+	   SET @dtEventDateTime = GETDATE()
   
 	INSERT INTO RDT.rdtSTDEventLog (EventType,    ActionType,   EventDateTime,   UserID,         MobileNo,  
 											  FunctionID,   Facility,     StorerKey,       Location,       ToLocation,    
@@ -235,7 +239,7 @@ BEGIN
                                    OptionDefinition,  TransType, CountNo,       CartonID,       CartonNo, --(cc01)
                                    Barcode,      ContainerKey)	--(cc03)   
   
-	VALUES (@nEventType,    @cActionType,   GETDATE(),      @cUserID,        @nMobileNo,  
+	VALUES (@nEventType,    @cActionType,   @dtEventDateTime, @cUserID,      @nMobileNo,  
 			  @nFunctionID,   @cFacility,     @cStorerKey,    @cLocation,      @cToLocation,     
 			  @cPutawayZone,  @cPickZone,     @cID,           @cToID,          @cSKU,  
 			  @cComponentSKU, @cUOM,          @nQTY,          @cLot,           @cToLot,  

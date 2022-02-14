@@ -10,10 +10,9 @@ execute rdt.rdtAddMsg 128506, 10, '128506Need LOC      ', 'us_english', 705
 execute rdt.rdtAddMsg 128507, 10, '128507Invalid LOC   ', 'us_english', 705
 execute rdt.rdtAddMsg 128508, 10, '128508Need QTY      ', 'us_english', 705
 execute rdt.rdtAddMsg 128509, 10, '128509Invalid QTY   ', 'us_english', 705
-execute rdt.rdtAddMsg 128510, 10, '28510^Setup Column',   'us_english', 705
-execute rdt.rdtAddMsg 128511, 10, '28511^Value Required', 'us_english', 705
-
---wms-17049
-execute rdt.rdtAddMsg 128512, 10, '28512^Need data     ', 'us_english', 705
-
-SELECT * FROM rdt.rdtMsg (NOLOCK) WHERE Message_ID BETWEEN 128501 and 128550
+execute rdt.rdtAddMsg 128510, 10, '128510Setup Column  ', 'us_english', 705
+execute rdt.rdtAddMsg 128511, 10, '128511Value Required', 'us_english', 705
+execute rdt.rdtAddMsg 128512, 10, '128512Need data     ', 'us_english', 705
+execute rdt.rdtAddMsg 128513, 10, '128513Need option   ', 'us_english', 705
+execute rdt.rdtAddMsg 128514, 10, '128514Invalid option', 'us_english', 705
+execute rdt.rdtAddMsg 128515, 10, '128515Invalid format', 'us_english', 705
