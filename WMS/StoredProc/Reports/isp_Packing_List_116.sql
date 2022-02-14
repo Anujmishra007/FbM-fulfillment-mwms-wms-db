@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */          
 /* Date         Author    Ver Purposes                                  */   
 /* 01-Nov-2021  WLChooi   1.0 DevOps Combine Script                     */   
+/* 26-Jan-2022  Mingle    1.1 WMS-18769 Modify logic(ML01)              */
 /************************************************************************/          
 CREATE PROC [dbo].[isp_Packing_List_116]       
             @c_Sourcekey    NVARCHAR(15)             
@@ -112,7 +113,8 @@ BEGIN
         , ISNULL(SKU.Measurement,'') AS Measurement
         , ISNULL(SKU.Size,'') AS Size
         , ISNULL(SKU.NOTES1,'') AS NOTES1
-        , ISNULL(SKU.STDNETWGT,0.00) AS STDNETWGT
+        --, ISNULL(SKU.STDNETWGT,0.00) AS STDNETWGT
+        , ROUND(ISNULL(SKU.STDNETWGT,0.00) * PD.Qty,2) AS STDNETWGT   --ML01
         , PD.LabelNo
         , PD.SKU
         , PD.Qty
@@ -130,8 +132,8 @@ BEGIN
           CASE WHEN ISNULL(ST.Zip,'')     = '' THEN '' ELSE TRIM(ISNULL(ST.Zip,''))     + ',' END + 
           CASE WHEN ISNULL(ST.Country,'') = '' THEN '' ELSE TRIM(ISNULL(ST.Country,'')) END AS Address2
         , ISNULL(ST.Phone1,'') AS Phone1
-        , PACKIF.SumCube
-        , PACKIF.SumWeight
+        , ROUND(PACKIF.SumCube,2)   --ML01
+        , ROUND(PACKIF.SumWeight,2)   --ML01
    FROM ORDERS OH (NOLOCK)
    JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
    JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
