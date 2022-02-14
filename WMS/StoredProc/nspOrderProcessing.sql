@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspOrderProcessing]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[nspOrderProcessing]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -106,9 +101,12 @@ GO
 /* 01-Dec-2020  NJOW16   3.7  WMS-15746 get channel hold qty by config  */  
 /* 17-FEB-2021  LZG      3.8  INC1430235 - Extended to NVARCHAR 128 to  */
 /*                            follow WMS tables AddWho & EditWho (ZG01) */
+/* 14-FEB-2022  NJOW17   3.9  WMS-18820 Allow disable superorderflag    */
+/*                            logic in discrete allocation by config    */
+/* 14-FEB-2022  NJOW17   3.9  DEVOPS combine script                     */
 /************************************************************************/  
   
-CREATE PROC [dbo].[nspOrderProcessing]  
+CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
      @c_OrderKey     NVARCHAR(10)  
    , @c_oskey        NVARCHAR(10)  
    , @c_docarton     NVARCHAR(1)  
@@ -187,8 +185,16 @@ BEGIN
          @c_Lottable_Parm NVARCHAR(20),             
          @c_SQLExecute NVARCHAR(4000),  
          @c_ParameterName NVARCHAR(200),            
-         @n_OrdinalPosition INT   
-           
+         @n_OrdinalPosition INT
+         
+   --NJOW17
+   DECLARE @c_AutoUpdSupordflag         NVARCHAR(30),
+           @c_sfoption1                 NVARCHAR(50),
+           @c_sfoption2                 NVARCHAR(50),
+           @c_sfoption3                 NVARCHAR(50),
+           @c_sfoption4                 NVARCHAR(50),
+           @c_sfoption5                 NVARCHAR(4000)           
+                                     
    -- Added By SHONG - Performance Tuning Rev 1.0  
    DECLARE  @c_PHeaderKey NVARCHAR(18),  
             @c_CaseId   NVARCHAR(10)  
@@ -448,7 +454,7 @@ BEGIN
          SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation of Temp Table #op_cartonlines Failed.(nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
    END  
-  
+   
    -- Get Super Order Flag  
    SELECT @c_SuperFlag = 'N'  
    IF LEN(@c_OrderKey) = 0 OR @c_OrderKey IS NULL  
@@ -456,8 +462,32 @@ BEGIN
       SELECT @c_SuperFlag = CASE WHEN SuperOrderFlag = 'Y' THEN 'Y'  
                                  ELSE 'N'  
                             END  
-        FROM LoadPlan (NOLOCK)  
-       WHERE LoadKey = @c_oskey  
+      FROM LoadPlan (NOLOCK)  
+      WHERE LoadKey = @c_oskey  
+      
+      --NJOW17
+      IF @c_SuperFlag = 'Y'
+      BEGIN
+         Execute nspGetRight                                
+            @c_Facility   = @c_facility,                     
+            @c_StorerKey  = @c_StorerKey,                    
+            @c_sku        = '',                           
+            @c_ConfigKey  = 'AutoUpdSupordflag', -- Configkey         
+            @b_Success    = @b_success   OUTPUT,             
+            @c_authority  = @c_AutoUpdSupordflag OUTPUT,             
+            @n_err        = @n_err       OUTPUT,             
+            @c_errmsg     = @c_errmsg     OUTPUT,             
+            @c_Option1    = @c_sfoption1  OUTPUT,               
+            @c_Option2    = @c_sfoption2  OUTPUT,               
+            @c_Option3    = @c_sfoption3  OUTPUT,               
+            @c_Option4    = @c_sfoption4  OUTPUT,               
+            @c_Option5    = @c_sfoption5  OUTPUT                
+         
+         IF dbo.fnc_GetParamValueFromString('@c_SkipSuperOrderFlagInDiscAlloc', @c_sfoption5, 'N') = 'Y'
+         BEGIN         
+            SELECT @c_SuperFlag = 'N'  
+         END
+      END         
    END  
   
    SET @d_step2 = GETDATE()  
