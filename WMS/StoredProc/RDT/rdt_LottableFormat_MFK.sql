@@ -13,7 +13,8 @@ GO
 /* Purpose:                                                             */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2021-06-20 1.0  YeeKung    WMS-16535 Created                         */  
+/* 2021-06-20 1.0  YeeKung    WMS-16535 Created                         */ 
+/* 2022-02-14 1.1  YeeKung    Fix quit After END								*/
 /************************************************************************/  
   
              
@@ -86,5 +87,14 @@ BEGIN
    SET @cLottable = convert(varchar,(dateadd(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, dateadd(yy, @cJulianDate/1000 - 1900, 0)) ),103)      
    GOTO QUIT  
   
+QUIT:
 END  
-QUIT:  
+GO    
+
+SET QUOTED_IDENTIFIER OFF  
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON  rdt.rdt_LottableFormat_MFK TO NSQL
+GO  

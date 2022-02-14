@@ -16,6 +16,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2020-06-20 1.0  YeeKung    WMS-13456 Created                         */
+/* 2022-02-14 1.1  YeeKung    Fix quit After END								*/
 /************************************************************************/
 
            
@@ -76,8 +77,8 @@ BEGIN
    SET @cLottable = @cDayCode+'/'+@cMonthCode+'/'+CAST(@nYear AS nvarchar(4))
    GOTO QUIT
 
-END
 QUIT:
+END
 GO    
 
 SET QUOTED_IDENTIFIER OFF  

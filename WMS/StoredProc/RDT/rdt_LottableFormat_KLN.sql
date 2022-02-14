@@ -15,6 +15,7 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2021-06-20 1.0  YeeKung    WMS-16535 Created                         */ 
+/* 2022-02-14 1.1  YeeKung    Fix quit After END								*/
 /************************************************************************/  
   
              
@@ -95,8 +96,9 @@ BEGIN
  
    GOTO QUIT  
   
-END  
-QUIT:  
+  
+QUIT:
+END 
 GO    
 
 SET QUOTED_IDENTIFIER OFF  
