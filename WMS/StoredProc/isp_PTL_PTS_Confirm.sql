@@ -242,7 +242,7 @@ BEGIN
                   ,@cSourceKey = SourceKey
                   ,@cUserName = EditWho
                   ,@cIPAddress = IPAddress
-    FROM PTL.PTLTran PTL WITH (NOLOCK)   
+    FROM dbo.PTLTran PTL WITH (NOLOCK)   
     WHERE PTL.PTLKey = @nPTLKey
 
     SELECT @nMobile = Mobile

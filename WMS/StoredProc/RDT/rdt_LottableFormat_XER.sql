@@ -1,27 +1,23 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdt_LottableFormat_PARIS]') 
-AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [RDT].[rdt_LottableFormat_PARIS]
+IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdt_LottableFormat_XER]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [RDT].[rdt_LottableFormat_XER]
 GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO
-         
-			
+GO               
 /************************************************************************/  
-/* Store procedure: rdt_LottableFormat_PARIS                            */  
+/* Store procedure: rdt_LottableFormat_XER                              */  
 /* Copyright      : IDS                                                 */  
 /*                                                                      */  
 /* Purpose:                                                             */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2020-06-20 1.0  YeeKung    WMS-13456 Created                         */  
-/* 2021-09-13 1.1  YeeKung    WMS 16535 - SG - PRESTIGE Batch Decoding 5*/
+/* 2021-06-20 1.0  YeeKung    WMS-16535 Created                         */ 
 /************************************************************************/  
   
              
-CREATE PROCEDURE [RDT].[rdt_LottableFormat_PARIS](             
+CREATE PROCEDURE rdt.rdt_LottableFormat_XER(             
     @nMobile          INT                
    ,@nFunc            INT                
    ,@cLangCode        NVARCHAR( 3)                
@@ -43,55 +39,52 @@ BEGIN
    SET ANSI_NULLS OFF                
    SET CONCAT_NULL_YIELDS_NULL OFF   
   
-   DECLARE @cYearCode NVARCHAR(20),
-           @nYear INT,  
-           @nDay INT,
-           @cJulianDate NVARCHAR(20)  
-  
-   SET @cLottable= REPLACE(@cLottable,' ','')  
-
+   DECLARE @cYearCode NVARCHAR(20),  
+           @cJulianDate NVARCHAR(20) 
+   DECLARE @nMonth NVARCHAR(2),
+           @nYear INT
    
-   IF ISNUMERIC(SUBSTRING(@cLottable,1,1))='0'
-   BEGIN 
-      SET @cLottable = SUBSTRING(@cLottable,2,LEN(@cLottable))
-
-      IF ISNUMERIC(SUBSTRING(@cLottable,1,1))='0'
-         SET @cLottable = SUBSTRING(@cLottable,2,LEN(@cLottable))
-   END
+   SET @cLottable= REPLACE(@cLottable,' ','')  
   
-   IF (LEN(@cLottable)NOT BETWEEN 5 AND 8)      
+   IF (LEN(@cLottable) NOT IN (5,6))      
    BEGIN      
-      SET @nErrNo = 154101              
+      SET @nErrNo = 175001              
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Batch                                  
       GOTO Quit        
-   END 
+   END    
 
-   SET @cYearCode ='20'+(SUBSTRING(@cLottable,1,2))  
-   SET @nYear = @cYearCode
-   SET @nDay = (SUBSTRING(@cLottable,3,3))
-   
-             
+   SELECT @cYearCode=short
+   FROM codelkup (NOLOCK) 
+   WHERE listname='RDTDecode'
+   AND code='XERJOFF'
+   AND code2 =SUBSTRING(@cLottable,4,2)
+
+   SET @nYear = CAST (@cYearCode AS INT)
+
    IF ((@nYear % 4 = 0 AND @nYear % 100 <> 0) OR @nYear % 400 = 0)          
    BEGIN          
-      IF (@nDay > 366 or @nDay = 0)          
+      IF (CAST(SUBSTRING(@cLottable,1,3) AS INT) > 366 or CAST(SUBSTRING(@cLottable,1,3) AS INT) = 0)          
       BEGIN           
-         SET @nErrNo = 58317          
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidDay                 
+         SET @nErrNo = 175002          
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidDay                  
          GOTO Quit          
       END          
    END          
    ELSE          
    BEGIN          
-      IF (@nDay > 365 or @nDay = 0)          
+      IF (CAST(SUBSTRING(@cLottable,1,3) AS INT) > 365 or CAST(SUBSTRING(@cLottable,1,3) AS INT) = 0)          
       BEGIN           
-         SET @nErrNo = 58318          
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidDay                  
-         GOTO Quit          
+         SET @nErrNo = 175002          
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidDay                
+         GOTO Quit     
       END          
-   END       
- 
-   SET @cJulianDate=@cYearCode+(SUBSTRING(@cLottable,3,3))  
+   END 
+
+   SET @cJulianDate=@cYearCode+(SUBSTRING(@cLottable,1,3))  
    SET @cLottable = convert(varchar,(dateadd(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, dateadd(yy, @cJulianDate/1000 - 1900, 0)) ),103)      
+   GOTO QUIT  
+
+ 
    GOTO QUIT  
   
 END  
@@ -103,5 +96,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON  rdt.rdt_LottableFormat_PARIS TO NSQL
-GO
+GRANT EXECUTE ON  rdt.rdt_LottableFormat_XER TO NSQL
+GO  
