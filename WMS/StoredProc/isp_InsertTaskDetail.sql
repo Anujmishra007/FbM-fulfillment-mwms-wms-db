@@ -1,11 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_InsertTaskDetail]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_InsertTaskDetail]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Stored Procedure: isp_InsertTaskDetail                               */
 /* Creation Date: 25-May-2017                                           */
@@ -50,9 +46,11 @@ GO
 /*                                         And @c_LinkTaskToPick_SQL    */
 /* 04-03-2021   WLChooi  2.5  Fixes - Insert Channel_ID into Pickdetail */
 /*                            Table (WL01)                              */
+/* 14-12-2021   NJOW14   2.6  WMS-18495 if qty 0 still allow insert     */
+/* 14-14-2021   NJOW14   2.6  DEVOPS combine script                     */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_InsertTaskDetail]   
+CREATE OR ALTER PROC [dbo].[isp_InsertTaskDetail]   
     @c_TaskDetailKey         NVARCHAR(10)   = '' OUTPUT     
    ,@c_TaskType              NVARCHAR(10)   = ''      
    ,@c_Storerkey             NVARCHAR(15)   = ''      
@@ -466,7 +464,8 @@ BEGIN
    SET @n_QtyRemain = @n_Qty
    SET @n_SystemQtyRemain = @n_SystemQty
       
-   WHILE @n_cnt > 0 AND @n_QtyRemain > 0 AND @n_continue IN(1,2) --loop by carton or task
+  --WHILE @n_cnt > 0 AND @n_QtyRemain > 0 AND @n_continue IN(1,2) --loop by carton or task
+   WHILE @n_cnt > 0 AND (@n_QtyRemain > 0 OR (@n_Qty = 0 AND @c_SplitTaskByCase = 'N')) AND @n_continue IN(1,2) --loop by carton or task   --NJOW14
    BEGIN      
       --NJOW09 Start
       IF @c_SplitTaskByCase = 'Y'
@@ -1280,7 +1279,5 @@ BEGIN
 	 END  
 END  
 GO
-
-
 GRANT EXECUTE ON [isp_InsertTaskDetail] TO NSQL
 GO
