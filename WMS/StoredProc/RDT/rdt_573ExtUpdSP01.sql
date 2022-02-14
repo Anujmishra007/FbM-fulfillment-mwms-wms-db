@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_573ExtUpdSP01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_573ExtUpdSP01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,26 +11,29 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 24-10-2017  1.0  ChewKP   WMS-3222 Created                           */
 /* 16-08-2018  1.1  Ung      WMS-6029 Add UCC less than 18 char         */
+/* 24-01-2022  1.2  Ung      WMS-18776 Add CartonType and VariableTable */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_573ExtUpdSP01] (
-  @nMobile     INT, 
-  @nFunc       INT, 
-  @cLangCode   NVARCHAR(3), 
-  @nStep       INT, 
-  @nInputKey   INT,      
-  @cStorerKey  NVARCHAR(15), 
-  @cFacility   NVARCHAR(5), 
-  @cReceiptKey1 NVARCHAR(20),          
-  @cReceiptKey2 NVARCHAR(20),          
-  @cReceiptKey3 NVARCHAR(20),          
-  @cReceiptKey4 NVARCHAR(20),          
-  @cReceiptKey5 NVARCHAR(20),          
-  @cLoc        NVARCHAR(20),           
-  @cID         NVARCHAR(18),           
-  @cUCC        NVARCHAR(20),           
-  @nErrNo      INT  OUTPUT,            
-  @cErrMsg     NVARCHAR(1024) OUTPUT  
+CREATE OR ALTER PROC [rdt].[rdt_573ExtUpdSP01] (
+   @nMobile     INT, 
+   @nFunc       INT, 
+   @cLangCode   NVARCHAR(3), 
+   @nStep       INT, 
+   @nInputKey   INT,      
+   @cStorerKey  NVARCHAR(15), 
+   @cFacility   NVARCHAR(5), 
+   @cReceiptKey1 NVARCHAR(20),          
+   @cReceiptKey2 NVARCHAR(20),          
+   @cReceiptKey3 NVARCHAR(20),          
+   @cReceiptKey4 NVARCHAR(20),          
+   @cReceiptKey5 NVARCHAR(20),          
+   @cLoc        NVARCHAR(20),           
+   @cID         NVARCHAR(18),           
+   @cUCC        NVARCHAR(20),     
+   @cCartonType   NVARCHAR(10),
+   @tExtUpdate    VariableTable READONLY,      
+   @nErrNo      INT  OUTPUT,            
+   @cErrMsg     NVARCHAR(1024) OUTPUT  
 ) AS
 BEGIN
    SET NOCOUNT ON

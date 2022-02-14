@@ -17,6 +17,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2021-08-11  1.0  James    WMS-17661. Created                         */
 /* 2021-11-03  1.1  LZG      JSM-30383 - Order by descending (ZG01)     */
+/* 2022-01-25  1.2  AwYoung  JSM-48088 - Get Latest Label only (AAY001) */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_593Print34] (
@@ -138,13 +139,15 @@ BEGIN
       DECLARE @tRDTPrintJob AS VariableTable
       DECLARE @curPrint   CURSOR
       SET @curPrint = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-      SELECT DISTINCT PD.LabelNo, PH.OrderKey
+      --SELECT DISTINCT PD.LabelNo, PH.OrderKey  --AAY001
+   SELECT DISTINCT TOP 1 PD.LabelNo, PH.OrderKey
       FROM dbo.PackDetail PD WITH (NOLOCK)
       JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
       WHERE ( @cParam1 = '') OR ( PD.DropID = @cParam1)
       AND   ( @cParam2 = '') OR ( PH.OrderKey = @cParam2)
       AND   PH.StorerKey = @cStorerKey
-      ORDER BY 1
+      --ORDER BY 1 --AAY001
+   ORDER BY PD.LABELNO DESC
       OPEN @curPrint
       FETCH NEXT FROM @curPrint INTO @cLabelNo, @cOrderKey
       WHILE @@FETCH_STATUS = 0

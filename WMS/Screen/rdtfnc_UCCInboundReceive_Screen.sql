@@ -84,5 +84,13 @@ EXECUTE rdt.rdtAddScn 694, 'ENG',
    @cLine13 = '', 
    @cLine14 = '%e'
 
-UPDATE RDT.RDTScn SET Func = 573 WHERE Scn Between 690 AND 694 
+-- 695 = Carton type
+DELETE rdt.RDTScn WHERE Scn = 695 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 695, 'ENG', 
+   @cLine01 = '', 
+   @cLine02 = 'CARTON TYPE:', 
+   @cLine03 = '%30i01', 
+   @cLine14 = '%e'
+
+UPDATE RDT.RDTScn SET Func = 573 WHERE Scn Between 690 AND 695 
 
