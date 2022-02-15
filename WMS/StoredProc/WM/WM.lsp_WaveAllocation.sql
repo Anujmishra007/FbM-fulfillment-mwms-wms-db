@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.5                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,7 @@ GO
 /*                            job to QCommander                         */
 /* 2021-05-21  Wan02    1.3   LFWM-2803 - UATCN Allocate error          */
 /* 2021-07-01  Wan03    1.4   LFWM-2808 - CN Allocate Enhancement       */
+/* 2022-02-10  Wan04    1.5   Add Submit Qcommander By Priority         */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -101,6 +102,7 @@ BEGIN
          ,  @c_CmdType                    NVARCHAR(10)   = ''  --(Wan01)
          ,  @c_TaskType                   NVARCHAR(1)    = ''  --(Wan01)
          ,  @c_TransmitLogKey             NVARCHAR(10)   = ''  --(Wan01)
+         ,  @n_Priority                   INT            = 0   --(Wan04)
 
          ,  @CUR_WAVELOAD                 CURSOR
          ,  @CUR_ORD                      CURSOR
@@ -567,6 +569,7 @@ BEGIN
           ,  @c_IniFilePath     = qcfg.IniFilePath    --'C:\COMObject\GenericTCPSocketClient\config.ini'
           ,  @c_CmdType         = qcfg.CmdType        --'SQL' 
           ,  @c_TaskType        = qcfg.TaskType       --'O'
+          ,  @n_Priority        = qcfg.[Priority]     -- O
       FROM   QCmd_TransmitlogConfig qcfg WITH (NOLOCK)  
       WHERE qcfg.TableName      = 'MANUALALLOC'
       AND   qcfg.[App_Name]     = 'WMS'  
@@ -683,6 +686,7 @@ BEGIN
                         ,  @bSuccess          = @b_Success   OUTPUT      
                         ,  @nErr              = @n_Err       OUTPUT      
                         ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
+                        ,  @nPriority         = @n_Priority             --(Wan04)             
                END TRY
                BEGIN CATCH
                   SET @n_Err = 555760
@@ -921,6 +925,7 @@ BEGIN
                         ,  @bSuccess          = @b_Success   OUTPUT      
                         ,  @nErr              = @n_Err       OUTPUT      
                         ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
+                        ,  @nPriority         = @n_Priority             --(Wan04)
                      END TRY
 
                      BEGIN CATCH
@@ -1151,6 +1156,7 @@ BEGIN
                         ,  @bSuccess          = @b_Success   OUTPUT      
                         ,  @nErr              = @n_Err       OUTPUT      
                         ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
+                        ,  @nPriority         = @n_Priority             --(Wan04)
                END TRY
 
                BEGIN CATCH
@@ -1353,6 +1359,7 @@ BEGIN
                         ,  @bSuccess          = @b_Success   OUTPUT      
                         ,  @nErr              = @n_Err       OUTPUT      
                         ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
+                        ,  @nPriority         = @n_Priority             --(Wan04)
                      END TRY
 
                      BEGIN CATCH
@@ -1507,7 +1514,8 @@ BEGIN
                   ,  @cAPPDBName        = @c_APP_DB_Name                                                   
                   ,  @bSuccess          = @b_Success   OUTPUT      
                   ,  @nErr              = @n_Err       OUTPUT      
-                  ,  @cErrMsg           = @c_ErrMsg    OUTPUT    
+                  ,  @cErrMsg           = @c_ErrMsg    OUTPUT
+                  ,  @nPriority         = @n_Priority             --(Wan04)    
             END TRY
 
             BEGIN CATCH
@@ -1647,7 +1655,8 @@ BEGIN
                   ,  @cAPPDBName        = @c_APP_DB_Name                                                   
                   ,  @bSuccess          = @b_Success   OUTPUT      
                   ,  @nErr              = @n_Err       OUTPUT      
-                  ,  @cErrMsg           = @c_ErrMsg    OUTPUT    
+                  ,  @cErrMsg           = @c_ErrMsg    OUTPUT 
+                  ,  @nPriority         = @n_Priority             --(Wan04)   
             END TRY
 
             BEGIN CATCH
