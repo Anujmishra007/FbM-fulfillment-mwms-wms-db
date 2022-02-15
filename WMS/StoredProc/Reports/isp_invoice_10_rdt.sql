@@ -35,10 +35,14 @@ GO
 /* Updates:                                                             */      
 /* Date         Author   Ver  Purposes                                  */      
 /* 06-OCT-2021  CSCHONG  1.0  Devops scripts combine                    */
+/* 17-NOV-2021  CSCHONG  1.1  WMS-18242 add additional parameter (CS01) */
+/* 21-Nov-2021  CSCHONG  1.2  WMS-18242 revised field logic (CS02)      */
 /************************************************************************/      
       
-CREATE PROC dbo.isp_invoice_10_rdt (        
-      @c_ExternOrderKey        NVARCHAR(50)     
+CREATE  PROC dbo.isp_invoice_10_rdt (        
+      @c_ExternOrderKey        NVARCHAR(50) = '', 
+      @c_Orderkey              NVARCHAR(20) = '',
+      @c_invoiceno             NVARCHAR(20) = ''     
 )      
 AS      
 BEGIN      
@@ -193,7 +197,8 @@ BEGIN
                GShipToAddr1     = G.ShipToAddr1     , 
                GShipToAddr2     = G.ShipToAddr2     , 
                GBillToName2     = G.BillToName2     , 
-               GAddDate         = PH.AddDate         , 
+               GAddDate         = CASE WHEN G.Userdefine04  = '' OR G.Userdefine04 = '00000000' THEN PH.AddDate 
+                                  ELSE CASE WHEN ISDATE(G.Userdefine04) = 1  THEN CAST(G.Userdefine04 AS DATE) END END  ,   --CS02
                GInvoiceNo       = G.InvoiceNo       , 
                GExternOrderKey  = G.ExternOrderKey  , 
                GUserdefine01    = CASE WHEN ISNULL(OH.Type,'')<>'Myntra' THEN ISNULL(G.ExternOrderKey,'')  ELSE ISNULL(G.UserDefine02,'') END    , 
@@ -261,7 +266,9 @@ JOIN dbo.STORER ST WITH (NOLOCK) ON ST.StorerKey=G.Storerkey
 JOIN ORDERS OH WITH (NOLOCK)  ON OH.buyerpo = G.ExternOrderKey 
 LEFT JOIN SKU S WITH (NOLOCK) ON GD.SKU = S.SKU AND S.STORERKEY = GD.StorerKey
 LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON PH.ORDERKEY = OH.ORDERKEY
-WHERE G.ExternOrderKey = @c_ExternOrderKey
+WHERE G.ExternOrderKey = CASE WHEN ISNULL(@c_ExternOrderKey,'') <> '' THEN @c_ExternOrderKey ELSE G.ExternOrderKey END   --CS01
+AND OH.OrderKey = CASE WHEN ISNULL(@c_Orderkey,'') <> '' THEN @c_Orderkey ELSE OH.orderkey END   --CS01
+AND G.invoiceno = CASE WHEN ISNULL(@c_invoiceno,'') <> '' THEN @c_invoiceno ELSE G.invoiceno END   --CS01
 ORDER BY G.ExternOrderKey,GD.SKU
                           
    SET @c_TTLUPrice = ''
@@ -271,7 +278,7 @@ ORDER BY G.ExternOrderKey,GD.SKU
    SELECT  @n_TTLGDTTY = SUM(gdqty)
        --   ,@n_TTLCGST_AMOUNT = SUM(CAST(CGST_AMOUNT AS DECIMAL(10,2)))
    FROM #INV10RDT_1
-   WHERE GExternOrderKey = @c_ExternOrderKey
+   --WHERE GExternOrderKey = @c_ExternOrderKey     --CS01
         
  --SELECT @n_TTLCGST_AMOUNT '@n_TTLCGST_AMOUNT'
               
