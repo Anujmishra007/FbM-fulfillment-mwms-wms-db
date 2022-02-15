@@ -32,6 +32,7 @@ GO
 /* 2021-05-21  Wan02    1.3   LFWM-2803 - UATCN Allocate error          */
 /* 2021-07-01  Wan03    1.4   LFWM-2808 - CN Allocate Enhancement       */
 /* 2022-02-10  Wan04    1.5   Add Submit Qcommander By Priority         */
+/* 2022-02-10  Wan04    1.5   DevOps Combine Script                     */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
