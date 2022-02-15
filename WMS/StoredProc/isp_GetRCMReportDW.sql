@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,8 @@ GO
 /* 2021-12-07  Wan      1.0   Created.                                  */
 /* 2021-12-07  Wan      1.0   DevOps Combine Script.                    */
 /* 2022-01-25  Wan01    1.1   Fixed Get RCMUsingUserID config setting   */
+/* 2022-02-10  WLChooi  1.2   Fixed Datawindow Name being truncated when*/
+/*                            inserting TraceInfo (WL01)                */
 /************************************************************************/
 CREATE PROC isp_GetRCMReportDW
            @c_ShortAppName          NVARCHAR(30) 
@@ -78,6 +80,9 @@ BEGIN
          , @c_PB_Datawindow_DF      NVARCHAR(30) = @c_PB_Datawindow
          
          , @dt_sysdate              DATETIME     = GETDATE()
+
+         , @c_DW1                   NVARCHAR(20) = ''   --WL01
+         , @c_DW2                   NVARCHAR(20) = ''   --WL01
 
    SET @n_err      = 0
    SET @c_errmsg   = ''
@@ -199,6 +204,13 @@ QUIT_SP:
       END
    END
 
+   --WL01 S
+   SET @c_DW1 = SUBSTRING(@c_PB_Datawindow, 1, 20)
+
+   IF LEN(TRIM(@c_PB_Datawindow)) > 20
+      SET @c_DW2 = SUBSTRING(@c_PB_Datawindow, 21, 20)
+   --WL01 E
+
    EXEC dbo.isp_InsertTraceInfo
          @c_TraceCode = N'RCMREPORT4WM'
        , @c_TraceName = N'RCMREPORT4WM'                
@@ -209,8 +221,8 @@ QUIT_SP:
        , @c_Step3 = @c_ReportType                  
        , @c_Step4 = @c_JReportFlag                  
        , @c_Step5 = N''                   
-       , @c_Col1  = @c_PB_Datawindow                  
-       , @c_Col2  = N''                    
+       , @c_Col1  = @c_DW1   --WL01                 
+       , @c_Col2  = @c_DW2   --WL01                   
        , @c_Col3  = N''                    
        , @c_Col4  = N''                    
        , @c_Col5  = N''                    
