@@ -27,7 +27,7 @@ GO
 /*                                                                       */        
 /* Called By: When records added                                         */        
 /*                                                                       */        
-/* PVCS Version: 2.9                                                     */        
+/* PVCS Version: 3.2                                                     */        
 /*                                                                       */        
 /* Version: 5.4                                                          */        
 /*                                                                       */        
@@ -73,9 +73,9 @@ GO
 /*                            Change Request                             */    
 /* 2021-Nov-26 Wan01    2.8   DevOps Conbine Script                      */    
 /* 2021-DEC-15 Wan02    2.9   Add RowLock & fixed Order By               */    
-/* 2021-DEC-16 Wan03    2.9   Add TRace                                  */    
 /* 2021-DEC-29 Wan05    3.1   JSM-41421 Gen 1 PackDetailLabel Rec with   */
 /*                                          same Carton                  */ 
+/* 2022-FEB-09 Wan04    3.2   Enhancement if reduce 1 carton Multi label#*/
 /*************************************************************************/        
         
 CREATE TRIGGER [dbo].[ntrPackDetailAdd]        
@@ -114,27 +114,22 @@ DECLARE @nMax_CartonNo              INT -- (Vicky01)
        ,@c_PackinfoGenTrackingNo_SP NVARCHAR(30) --NJOW06     
                                                      
       , @c_AdvancePackGenCartonNo   NVARCHAR(10) = ''    --(Wan01)    
-          
-      -- (Wan03)    
-      , @n_NoOfPD_Ins               INT  = 0                 
-      , @c_MinLabelNoPD_Ins         NVARCHAR(20) = ''    
-      , @c_MaxLabelNoPD_Ins         NVARCHAR(20) = ''    
-      , @n_NewCartonNo_Upd          INT  = 0    
-      , @c_LabelNoPDL_Ins           NVARCHAR(20) = ''    
-      , @c_Pickslipno_Ins           NVARCHAR(10) = ''    
-          
-   DECLARE @t_TraceCartonLabel   TABLE     
-      ( RowID        BIGINT       NOT NULL DEFAULT(0)    
-      , PickSlipNo   NVARCHAR(10) NOT NULL DEFAULT ('')    
-      , Labelno      NVARCHAR(20) NOT NULL DEFAULT ('')    
-      , CartonNo     INT          NOT NULL DEFAULT (0)    
-      , AddDate      DATETIME     NOT NULL DEFAULT ('')  
-      , EditDate     DATETIME     NOT NULL DEFAULT ('')    
-      , EditWho      NVARCHAR(50) NOT NULL DEFAULT ('')   
-      )    
-          
-                                                                    
-   DECLARE @t_PackdetailLabel TABLE (RowId BIGINT NOT NULL, PickSlipNo  NVARCHAR(10) NOT NULL DEFAULT (''))       --(Wan01)         
+
+      , @n_RowID_LastCarton         BIGINT       = 0     --(Wan04)
+                
+   DECLARE @t_PackdetailLabel TABLE (RowId BIGINT NOT NULL, PickSlipNo  NVARCHAR(10) NOT NULL DEFAULT (''))       --(Wan01) 
+   
+   DECLARE @t_CartonUpd TABLE       (CartonNo INT NOT NULL DEFAULT (0))                                             --(Wan04)       
+   DECLARE @n_MaxCartonNo_Upd       INT    = 0                                                                           --(Wan04)
+         , @n_RowID_UPD             BIGINT = 0
+         , @n_CartonNo_PDL          INT    = 0                                                                 
+         , @n_CartonNo_Upd          INT    = 0
+         , @c_PickSlipNo_Upd        NVARCHAR(10) = ''
+         , @c_LabelNo_Upd           NVARCHAR(20) = '' 
+         , @n_Try                   INT    = 0   
+         , @c_ms                    CHAR(5) =  ''
+         , @c_delay                 NVARCHAR(12) = '00:00:0'  
+         , @CUR_UPD                 CURSOR          
                                                                                                                   
         
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT        
@@ -361,7 +356,8 @@ END
             --(Wan01) - START    
             IF @c_AdvancePackGenCartonNo = '1'    
             BEGIN    
-               SELECT TOP 1 @nMax_CartonNo = pdl.CartonNo    
+               SELECT TOP 1 @nMax_CartonNo = pdl.CartonNo   
+                            , @n_RowID_LastCarton = pdl.RowId             --(Wan04) 
                FROM PACKDETAILLABEL pdl WITH (NOLOCK)    
                JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo    
                WHERE pdl.RowId < tpl.RowId    
@@ -369,36 +365,87 @@ END
                ORDER BY pdl.CartonNo DESC          --Wan02    
                --ORDER BY pdl.RowID DESC              --Wan02    
                  
-               INSERT INTO @t_TraceCartonLabel (RowID, PickSlipNo, Labelno, CartonNo, AddDate, EditDate, EditWho)    
-               SELECT pdl.RowID     
-                     ,  pdl.PickSlipNo    
-                     ,  pdl.LabelNo    
-                     ,  CartonNo = @nMax_CartonNo + ROW_NUMBER() OVER (ORDER BY pdl.RowId)    
-                     ,  pdl.AddDate  
-                     ,  pdl.EditDate, pdl.EditWho   
-               FROM PACKDETAILLABEL pdl WITH (NOLOCK)    
-               JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo    
-               WHERE pdl.CartonNo = 0     
+               --(Wan04) - START    
+               --;WITH GC AS     
+               --( SELECT pdl.RowID     
+               --      ,  pdl.PickSlipNo    
+               --      ,  pdl.LabelNo    
+               -- ,  CartonNo = @nMax_CartonNo + ROW_NUMBER() OVER (ORDER BY pdl.RowId)    
+               --  FROM PACKDETAILLABEL pdl WITH (NOLOCK)    
+               --  JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo    
+               --  WHERE pdl.CartonNo = 0    
+               --)    
                    
-               ;WITH GC AS     
-               ( SELECT pdl.RowID     
-                     ,  pdl.PickSlipNo    
-                     ,  pdl.LabelNo    
-                ,  CartonNo = @nMax_CartonNo + ROW_NUMBER() OVER (ORDER BY pdl.RowId)    
-                 FROM PACKDETAILLABEL pdl WITH (NOLOCK)    
-                 JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo    
-                 WHERE pdl.CartonNo = 0    
-               )    
+               --UPDATE pdl WITH (ROWLOCK)           --Wan02    
+               --   SET CartonNo  = GC.CartonNo     
+               --   ,   EditWho = SUSER_SNAME()         --Wan02      
+               --   ,   EditDate = GETDATE()            --Wan02        
+               --FROM GC    
+               --JOIN PACKDETAILLABEL pdl ON GC.RowID = pdl.RowID    
+               --JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo    
+               --              AND INSERTED.LabelNo = pdl.LabelNo        
+               --WHERE pdl.CartonNo = 0 
                    
-               UPDATE pdl WITH (ROWLOCK)           --Wan02    
-                  SET CartonNo  = GC.CartonNo     
-                  ,   EditWho = SUSER_SNAME()         --Wan02      
-                  ,   EditDate = GETDATE()            --Wan02        
-               FROM GC    
-               JOIN PACKDETAILLABEL pdl ON GC.RowID = pdl.RowID    
-               JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo    
-                             AND INSERTED.LabelNo = pdl.LabelNo        
-               WHERE pdl.CartonNo = 0     
+               SET @n_Try = 0          
+               RETRY:
+               
+               SET @CUR_UPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+               SELECT pdl.RowID 
+                     ,CartonNo = @nMax_CartonNo + ROW_NUMBER() OVER (ORDER BY pdl.PickSlipNo, pdl.RowId)
+                     ,pdl.PickSlipNo
+                     ,pdl.LabelNo
+                     ,pdl.CartonNo 
+               FROM PACKDETAILLABEL pdl WITH (NOLOCK)
+               JOIN @t_PackdetailLabel AS tpl ON tpl.PickSlipNo = pdl.PickSlipNo
+               WHERE pdl.RowID > @n_RowID_LastCarton
+                 
+               OPEN @CUR_UPD
+   
+               FETCH NEXT FROM @CUR_UPD INTO @n_RowID_UPD, @n_CartonNo_Upd, @c_PickSlipNo_Upd, @c_LabelNo_Upd, @n_CartonNo_PDL
+               WHILE @@FETCH_STATUS <> -1
+               BEGIN
+                  IF @n_CartonNo_PDL = 0 AND EXISTS ( SELECT 1 FROM  INSERTED
+                                                      WHERE Inserted.PickSlipNo = @c_PickSlipNo_Upd
+                                                      AND   Inserted.LabelNo = @c_LabelNo_Upd
+                                                    )
+                  BEGIN
+                     IF EXISTS (SELECT 1 FROM PACKDETAILLABEL pdl WITH (NOLOCK) WHERE pdl.PickSlipNo = @c_PickSlipNo_Upd AND pdl.CartonNo = @n_CartonNo_Upd)
+                     BEGIN
+                        SET @n_Try = @n_Try + 1
+                        BREAK
+                     END
+                     
+                     SET @n_MaxCartonNo_Upd = @n_CartonNo_Upd - 1             -- Need to Set correct @nMax_CartonNo as check repeated CartonNo by  @nMax_CartonNo + 1
+                     UPDATE pdl WITH (ROWLOCK)           
+                              SET CartonNo  = @n_CartonNo_Upd  
+                              ,   EditWho = SUSER_SNAME()          
+                              ,   EditDate = GETDATE()  
+                     FROM PACKDETAILLABEL pdl 
+                     JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo  
+                                   AND INSERTED.LabelNo = pdl.LabelNo      
+                     WHERE pdl.CartonNo = 0   
+                     AND   pdl.RowID = @n_RowID_UPD 
+                     
+                     SET @n_Try = 0  
+                  END
+                  FETCH NEXT FROM @CUR_UPD INTO @n_RowID_UPD, @n_CartonNo_Upd, @c_PickSlipNo_Upd, @c_LabelNo_Upd, @n_CartonNo_PDL
+               END
+               CLOSE @CUR_UPD
+               DEALLOCATE @CUR_UPD  
+               
+               IF @n_Try > 0 AND @n_Try <= 5
+               BEGIN
+                  SET @c_ms =CONVERT(CHAR(5) , CONVERT(DECIMAL(5,3), RAND()))
+                  SET @c_delay = @c_delay + @c_ms
+                  WAITFOR DELAY @c_delay
+                  GOTO RETRY
+               END
+               
+               IF @n_MaxCartonNo_Upd <> @nMax_CartonNo                   -- Need to Set correct @nMax_CartonNo as check repeated CartonNo by  @nMax_CartonNo + 1
+               BEGIN
+                  SET @nMax_CartonNo = @n_MaxCartonNo_Upd              
+               END               
+               --(Wan04) - END
                    
                UPDATE PACKDETAIL        
                   SET CartonNo  = pdl.CartonNo      
@@ -410,25 +457,6 @@ END
                WHERE PACKDETAIL.PickSlipNo = INSERTED.PickSlipNo        
                AND   PACKDETAIL.LabelNo = INSERTED.LabelNo        
                AND   PACKDETAIL.CartonNo = 0      
-                   
-        -- (Wan03) - TRACE - START    
-               SET @n_NewCartonNo_Upd = @nMax_CartonNo + 1    
-                   
-               SELECT @n_NoOfPD_Ins = COUNT(1)    
-               , @c_MinLabelNoPD_Ins = MIN(INSERTED.LabelNo)     
-               , @c_MaxLabelNoPD_Ins = MAX(INSERTED.LabelNo)     
-               , @c_PickSlipNo_Ins = MIN(INSERTED.PickSlipNo)     
-               FROM INSERTED             
-    
-               INSERT INTO @t_TraceCartonLabel (RowID, PickSlipNo, Labelno, CartonNo, AddDate, EditDate, EditWho)    
-               SELECT TOP 5 pdl.RowID, pdl.PickSlipNo, pdl.LabelNo, pdl.CartonNo, pdl.AddDate, pdl.EditDate, pdl.EditWho    
-               FROM PACKDETAILLABEL pdl WITH (NOLOCK)      
-               JOIN INSERTED ON  INSERTED.PickSlipNo = pdl.PickSlipNo    
-                             --AND INSERTED.LabelNo = pdl.LabelNo      
-               WHERE pdl.CartonNo >= @nMax_CartonNo
-               ORDER BY pdl.RowID    
-               -- (Wan03) - TRACE - END    
-                                          
             END     
             ELSE     
             BEGIN    
@@ -722,17 +750,6 @@ END
          EXECUTE nsp_logerror @n_err, @c_errmsg, 'ntrPackDetailAdd'        
  --RAISERROR @n_err @c_errmsg        
          RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012      
-             
-         --(Wan03) - Trace START    
-         IF @c_Storerkey = 'LOGITECH' OR @c_AdvancePackGenCartonNo = '1'  
-         BEGIN    
-            INSERT INTO TRACEINFO (TraceName, TimeIn, [TimeOut], Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3, Col4, Col5)      
-            SELECT 'ntrPackDetailAdd', GETDATE(), ttcl.EditDate   
-            , CAST(@n_NoOfPD_Ins AS NVARCHAR) + '-' + @c_Storerkey, @c_MinLabelNoPD_Ins, @c_MaxLabelNoPD_Ins, SUSER_SNAME(), CAST(@n_NewCartonNo_Upd AS NVARCHAR)    
-            , CAST(ttcl.RowID AS NVARCHAR) + '-' + ttcl.EditWho, ttcl.PickSlipNo, ttcl.Labelno, CAST(ttcl.CartonNo AS NVARCHAR), CONVERT(NVARCHAR(25), ttcl.AddDate, 121)    
-            FROM @t_TraceCartonLabel AS ttcl    
-         END    
-         --(Wan03) - Trace END    
              
          RETURN        
          END        
