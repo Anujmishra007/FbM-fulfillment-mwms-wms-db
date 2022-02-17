@@ -27,6 +27,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 2021-12-16   Mingle    1.1   Filter by orderkey/wavekey(ML01)        */
+/* 2021-12-16   Mingle    1.1   DevOps Combine Script                   */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_delivery_note54_rpt]
@@ -37,6 +39,7 @@ CREATE PROCEDURE [dbo].[isp_delivery_note54_rpt]
  @dt_DeliverydateStart   DATETIME =NULL,
  @dt_DeliverydateEnd     DATETIME =NULL,
  @c_storerkey            NVARCHAR(20)
+
 AS
 BEGIN
    SET NOCOUNT ON    
@@ -63,6 +66,7 @@ BEGIN
          , @c_Col03_Field   NVARCHAR(60)
          , @c_Col13         NVARCHAR(80)
          , @c_GetStorerkey  NVARCHAR(20)
+         , @c_GetUserdefine09 NVARCHAR(20)
 
 
       CREATE TABLE #TMP_DELNOTE54_ORDERS    
@@ -103,6 +107,32 @@ BEGIN
         SET   @c_Col13        = ''
 
  --SELECT @dt_OrderDateStart '@dt_OrderDateStart'
+   
+   --START ML01
+   CREATE TABLE #TMP_ORDERS (  
+    ORDERKEY  NVARCHAR(10),  
+   )  
+ 
+
+  IF EXISTS (SELECT 1 FROM ORDERS WITH (NOLOCK)  
+              WHERE Userdefine09 BETWEEN @c_Orderkey_start AND @c_Orderkey_end)  
+   BEGIN  
+      INSERT INTO #TMP_ORDERS(orderkey)
+  	   SELECT ORDERS.ORDERKEY 
+      FROM ORDERS WITH (NOLOCK) 
+      --JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
+  	   WHERE ORDERS.USERDEFINE09 BETWEEN @c_Orderkey_start AND @c_Orderkey_end 
+   END             
+   ELSE  
+   BEGIN  
+      INSERT INTO #TMP_ORDERS(orderkey)
+  	   SELECT ORDERS.ORDERKEY 
+      FROM ORDERS WITH (NOLOCK) 
+      WHERE ORDERS.ORDERKEY BETWEEN  @c_Orderkey_start AND @c_Orderkey_end 
+   END  
+   --END ML01
+  
+
 
        INSERT INTO #TMP_DELNOTE54_ORDERS    
                   ( Orderkey      
@@ -115,9 +145,9 @@ BEGIN
    FROM ORDERS OH WITH (NOLOCK)
    LEFT JOIN dbo.STORER S WITH (NOLOCK) ON S.StorerKey=OH.StorerKey AND S.type='1'
    LEFT JOIN dbo.STORER ST WITH (NOLOCK) ON ST.ConsigneeFor=OH.storerkey AND ST.type='2'
-   WHERE OH.Orderkey >= CASE WHEN ISNULL(@c_Orderkey_start,'') = '' THEN OH.Orderkey ELSE @c_Orderkey_start END
-   AND OH.Orderkey <= CASE WHEN ISNULL(@c_Orderkey_end,'') = '' THEN OH.Orderkey ELSE @c_Orderkey_end END
-   AND OH.Orderdate  >= CASE WHEN ISNULL( @dt_OrderDateStart,'') <> '' THEN  @dt_OrderDateStart ELSE OH.Orderdate END
+   --JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.OrderKey = OH.OrderKey
+   JOIN #TMP_ORDERS t ON OH.orderkey = t.orderkey
+   WHERE OH.Orderdate  >= CASE WHEN ISNULL( @dt_OrderDateStart,'') <> '' THEN  @dt_OrderDateStart ELSE OH.Orderdate END
    AND OH.Orderdate  <= CASE WHEN ISNULL(@dt_OrderDateEnd,'') <> '' THEN @dt_OrderDateEnd ELSE OH.Orderdate END
    AND OH.deliverydate  >= CASE WHEN ISNULL( @dt_DeliverydateStart,'') <> '' THEN  @dt_DeliverydateStart ELSE OH.deliverydate END
    AND OH.deliverydate  <= CASE WHEN ISNULL(@dt_DeliverydateEnd,'') <> '' THEN @dt_DeliverydateEnd ELSE OH.deliverydate END
@@ -251,3 +281,5 @@ GO
 
 GRANT EXECUTE ON isp_delivery_note54_rpt TO NSQL
 GO
+
+
