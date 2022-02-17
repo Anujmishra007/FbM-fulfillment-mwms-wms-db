@@ -12,5 +12,7 @@ execute rdt.rdtAddMsg 176158, 10, '176158InvalidTrackNo', 'us_english', 1663
 execute rdt.rdtAddMsg 176159, 10, '176159InvalidPallet ', 'us_english', 1663
 execute rdt.rdtAddMsg 176160, 10, '176160InvalidTrackNo', 'us_english', 1663
 execute rdt.rdtAddMsg 176161, 10, '176161Inv ShipperKey', 'us_english', 1663
+execute rdt.rdtAddMsg 176162, 10, '176162Inv MBOL.UDF5 ', 'us_english', 1663
+execute rdt.rdtAddMsg 176163, 10, '176163InvMBOL.OthRef', 'us_english', 1663
 
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 176151 AND 176200

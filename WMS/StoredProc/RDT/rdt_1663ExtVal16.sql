@@ -10,9 +10,10 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2021-09-24 1.0  James    WMS-17778 Created base on rdt_1663ExtVal04        */
-/* 2021-11-11 1.1  Pakyuen  INC1667905 (PY01)                                 */ 
+/* 2021-11-11 1.1  Pakyuen  INC1667905 (PY01)                                 */   
 /* 2022-01-26 1.2  Ung      WMS-18622 Change pallet must be same shipper to   */
 /*                          same shipper group                                */
+/* 2022-01-25 1.3  Ung      WMS-18774 Add check MBOL field                    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal16](
@@ -47,19 +48,21 @@ BEGIN
       ShipperKey NVARCHAR( 15) NOT NULL
    )
 
-   DECLARE @cActTrackingNo NVARCHAR( 60)
-   DECLARE @nEstCtnCount   INT
-   DECLARE @nCtnCount      INT
-   DECLARE @nStart         INT
-   DECLARE @nEnd           INT
-   DECLARE @cUserdefine10  NVARCHAR(20)
-   DECLARE @cVerifyM_FAX2  NVARCHAR( 1)
-   DECLARE @cM_Fax2        NVARCHAR( 18)
-   DECLARE @cOtherM_Fax2   NVARCHAR( 18)
-   DECLARE @cOtherOrderKey NVARCHAR( 10)
-   DECLARE @cOrdShipperKey NVARCHAR( 15)
+   DECLARE @cActTrackingNo    NVARCHAR( 60)
+   DECLARE @nEstCtnCount      INT
+   DECLARE @nCtnCount         INT
+   DECLARE @nStart            INT
+   DECLARE @nEnd              INT
+   DECLARE @cUserdefine10     NVARCHAR(20)
+   DECLARE @cVerifyM_FAX2     NVARCHAR( 1)
+   DECLARE @cVerifyM_UDF5     NVARCHAR( 1)
+   DECLARE @cVerifyM_OthRef   NVARCHAR( 1)
+   DECLARE @cM_Fax2           NVARCHAR( 18)
+   DECLARE @cOtherM_Fax2      NVARCHAR( 18)
+   DECLARE @cOtherOrderKey    NVARCHAR( 10)
+   DECLARE @cOrdShipperKey    NVARCHAR( 15)
    DECLARE @cVerifyShipperKey NVARCHAR( 1)
-   DECLARE @nExists        INT
+   DECLARE @nExists           INT
    DECLARE @cOtherShipperkey  NVARCHAR( 15)  
    DECLARE @cOtherM_Fax2Group   NVARCHAR( 30)  
    DECLARE @cM_Fax2Group        NVARCHAR( 30)  
@@ -257,6 +260,37 @@ BEGIN
                END
             END
 
+            -- Get MBOL info
+            DECLARE @cUserdefine05 NVARCHAR( 20)
+            DECLARE @cOtherReference NVARCHAR( 30)
+            SELECT
+               @cUserdefine05 = ISNULL( Userdefine05, ''),
+               @cOtherReference = OtherReference
+            FROM dbo.MBOL WITH (NOLOCK)
+            WHERE MBOLKey = @cMBOLKey
+
+            SET @cVerifyM_UDF5 = rdt.rdtGetConfig( @nFunc, 'VerifyM_UDF5', @cStorerKey)
+            IF @cVerifyM_UDF5 = '1'
+            BEGIN
+               IF @cUserdefine05 = ''
+               BEGIN
+                  SET @nErrNo = 176162
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv MBOL.UDF5
+                  GOTO Quit
+               END
+            END
+
+            SET @cVerifyM_OthRef = rdt.rdtGetConfig( @nFunc, 'VerifyM_OthRef', @cStorerKey)
+            IF @cVerifyM_OthRef = '1'
+            BEGIN
+               IF @cOtherReference = ''
+               BEGIN
+                  SET @nErrNo = 176163
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv MBOL.OthRef
+                  GOTO Quit
+               END
+            END
+
             DECLARE @cOtherTrackNo NVARCHAR( 20)
             DECLARE @nRowCount INT
 
@@ -358,16 +392,16 @@ BEGIN
                   SELECT DISTINCT O.OrderKey, O.ShipperKey
                   FROM PalletDetail PD WITH (NOLOCK)
                      JOIN CartonTrack CT WITH (NOLOCK) ON (PD.StorerKey = @cStorerKey AND PD.CaseID = CT.TrackingNo)
-                     -- JOIN Orders O WITH (NOLOCK) ON (CT.LabelNo = O.OrderKey AND O.ShipperKey LIKE CT.CarrierName + '%')    
+                    -- JOIN Orders O WITH (NOLOCK) ON (CT.LabelNo = O.OrderKey AND O.ShipperKey LIKE CT.CarrierName + '%')    
                      JOIN Orders O WITH (NOLOCK) ON (CT.LabelNo = O.OrderKey )  --py01  
                   WHERE PD.PalletKey = @cPalletKey
 
                   -- Get all orders track no
                   SELECT @nOrderTrackNo = COUNT(1)
                   FROM CartonTrack CT WITH (NOLOCK)
-                     -- JOIN @tOrders O ON (CT.LabelNo = O.OrderKey AND O.ShipperKey LIKE CT.CarrierName + '%')    
-                     JOIN @tOrders O ON (CT.LabelNo = O.OrderKey )  --py01  
-                  -- WHERE CT.TrackingNo LIKE '%-%'
+                    -- JOIN @tOrders O ON (CT.LabelNo = O.OrderKey AND O.ShipperKey LIKE CT.CarrierName + '%')    
+                    JOIN @tOrders O ON (CT.LabelNo = O.OrderKey )  --py01  
+                  --WHERE CT.TrackingNo LIKE '%-%'
                   WHERE (( O.ShipperKey = 'SN' AND CT.TrackingNo NOT LIKE '%-%') OR ( O.ShipperKey <> 'SN' AND CT.TrackingNo LIKE '%-%'))
                END
 
