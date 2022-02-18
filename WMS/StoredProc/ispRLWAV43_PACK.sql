@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -36,6 +36,10 @@ GO
 /* 2021-12-07  Wan05    1.5   To Fixed Inifinity Loop to Submit API     */
 /* 2022-01-20  Wan06    1.6   To Fixed Inifinity Loop to Submit API     */
 /*                            New Fixed if Last record <= packaccess    */
+/* 2022-02-09  Wan07    1.7   CR 3.0 Link Deviceprofile by storerkey    */ 
+/*                            Fixed. For allocated stock from DPBULK,use*/ 
+/*                            DBBULK's PickZone to find PackStation     */
+/*                            regardless if there is Home Loc setup.    */
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -401,45 +405,78 @@ BEGIN
    
    UPDATE pw
       SET pw.PickLogicalloc = l.LogicalLocation
-         ,pw.PickZone     = l.PickZone
-         ,pw.PackZone     = ISNULL(c.Short,'')
-         ,pw.PackStation  = CASE WHEN c.Short = pw.PickLoc THEN 1 ELSE 0 END
-         ,pw.PickItemCube = CASE WHEN c.Short = pw.PickLoc 
-                                 THEN pw.PickItemCube
-                                 ELSE (pw.Qty / (1.00 * pw.PackQtyIndicator)) * pw.StdCube
-                                 END
-         ,pw.PickItemWgt  = CASE WHEN c.Short = pw.PickLoc 
-                                 THEN pw.PickItemWgt
-                                 ELSE (pw.Qty / (1.00 * pw.PackQtyIndicator)) * pw.StdGrossWgt
-                                 END
-         ,pw.[Length]= CASE WHEN c.Short = pw.PickLoc 
-                            THEN pw.[Length]         
-                            ELSE pw.[Length] / (1.00 * pw.PackQtyIndicator)  
-                            END
-         ,pw.Width   = CASE WHEN c.Short = pw.PickLoc 
-                            THEN pw.Width
-                            ELSE pw.Width    / (1.00 * pw.PackQtyIndicator) 
-                            END 
-         ,pw.Height  = CASE WHEN c.Short = pw.PickLoc
-                            THEN pw.Height 
-                            ELSE pw.Height   / (1.00 * pw.PackQtyIndicator) 
-                            END
-   FROM @t_ORDERS AS tor        
+         ,pw.PickZone     = CASE WHEN l.LocationType = 'DPBULK' THEN l.PickZone ELSE l2.PickZone END                                      --(Wan07)
+         --,pw.PackZone     = ISNULL(c.Short,'')                                                                                          --(Wan07)
+         --,pw.PackStation  = CASE WHEN c.Short = pw.PickLoc THEN 1 ELSE 0 END                                                            --(Wan07)
+         --,pw.PickItemCube = CASE WHEN c.Short = pw.PickLoc                                                                              --(Wan07)
+         --                        THEN pw.PickItemCube                                                                                   --(Wan07)
+         --                        ELSE (pw.Qty / (1.00 * pw.PackQtyIndicator)) * pw.StdCube                                              --(Wan07)
+         --                        END                                                                                                    --(Wan07)
+         --,pw.PickItemWgt  = CASE WHEN c.Short = pw.PickLoc                                                                              --(Wan07)
+         --                        THEN pw.PickItemWgt                                                                                    --(Wan07)
+         --                        ELSE (pw.Qty / (1.00 * pw.PackQtyIndicator)) * pw.StdGrossWgt                                          --(Wan07)
+         --                        END                                                                                                    --(Wan07)
+         --,pw.[Length]= CASE WHEN c.Short = pw.PickLoc                                                                                   --(Wan07)
+         --                   THEN pw.[Length]                                                                                            --(Wan07)
+         --                   ELSE pw.[Length] / (1.00 * pw.PackQtyIndicator)                                                             --(Wan07)
+         --                   END                                                                                                         --(Wan07)
+         --,pw.Width   = CASE WHEN c.Short = pw.PickLoc                                                                                   --(Wan07)
+         --                   THEN pw.Width                                                                                               --(Wan07)
+         --                   ELSE pw.Width    / (1.00 * pw.PackQtyIndicator)                                                             --(Wan07)
+         --                   END                                                                                                         --(Wan07)
+         --,pw.Height  = CASE WHEN c.Short = pw.PickLoc                                                                                   --(Wan07)
+         --                   THEN pw.Height                                                                                              --(Wan07)
+         --                   ELSE pw.Height   / (1.00 * pw.PackQtyIndicator)                                                             --(Wan07)
+         --                   END                                                                                                         --(Wan07)
+   FROM @t_ORDERS AS tor                                                                                                                  --(Wan07)
    JOIN #PICKDETAIL_WIP AS pw ON pw.Orderkey = tor.Orderkey
    JOIN dbo.LOC AS l WITH (NOLOCK) ON pw.PickLoc = l.Loc
-   JOIN dbo.SKUxLOC AS sul WITH (NOLOCK) ON sul.StorerKey = pw.Storerkey AND sul.Sku = pw.Sku AND sul.LocationType = 'PICK'
-   JOIN dbo.LOC AS l2 WITH (NOLOCK) ON sul.Loc = l2.Loc AND l2.LocationType = 'DYNPPICK'
-   LEFT OUTER JOIN dbo.CODELKUP AS c ON  c.LISTNAME  = 'ADPickZone'
-                                     AND c.Code      = l2.PickZone
+   LEFT OUTER JOIN dbo.SKUxLOC AS sul WITH (NOLOCK) ON sul.StorerKey = pw.Storerkey AND sul.Sku = pw.Sku AND sul.LocationType = 'PICK'    --(Wan07)
+   LEFT OUTER JOIN dbo.LOC AS l2 WITH (NOLOCK) ON sul.Loc = l2.Loc AND l2.LocationType = 'DYNPPICK'                                       --(Wan07)
+   --LEFT OUTER JOIN dbo.CODELKUP AS c ON  c.LISTNAME  = 'ADPickZone'                                                                     --(Wan07)
+   --                                  AND c.Code      = l2.PickZone
+   --                                  AND c.Storerkey = pw.Storerkey
+   --                                  AND c.code2     = tor.DocType
+
+   --(Wan07) - START
+   UPDATE pw  
+        SET pw.PackZone = ISNULL(c.Short,'')    
+         ,  pw.PackStation  = CASE WHEN c.Short = pw.PickLoc THEN 1 ELSE 0 END                                                            
+         ,  pw.PickItemCube = CASE WHEN c.Short = pw.PickLoc 
+                                   THEN pw.PickItemCube
+                                   ELSE (pw.Qty / (1.00 * pw.PackQtyIndicator)) * pw.StdCube
+                                   END
+         ,  pw.PickItemWgt  = CASE WHEN c.Short = pw.PickLoc 
+                                   THEN pw.PickItemWgt
+                                   ELSE (pw.Qty / (1.00 * pw.PackQtyIndicator)) * pw.StdGrossWgt
+                                   END
+         ,  pw.[Length]= CASE WHEN c.Short = pw.PickLoc 
+                              THEN pw.[Length]         
+                              ELSE pw.[Length] / (1.00 * pw.PackQtyIndicator)  
+                              END
+         ,  pw.Width   = CASE WHEN c.Short = pw.PickLoc 
+                              THEN pw.Width
+                              ELSE pw.Width    / (1.00 * pw.PackQtyIndicator) 
+                              END 
+         ,  pw.Height  = CASE WHEN c.Short = pw.PickLoc
+                              THEN pw.Height 
+                              ELSE pw.Height   / (1.00 * pw.PackQtyIndicator) 
+                              END                                                                                                                                                 
+   FROM @t_ORDERS AS tor          
+   JOIN #PICKDETAIL_WIP AS pw ON pw.Orderkey = tor.Orderkey
+   LEFT OUTER JOIN dbo.CODELKUP AS c ON  c.LISTNAME  = 'ADPickZone'                                                                     
+                                     AND c.Code      = pw.PickZone            -- Original Pick From Zone to PackStation
                                      AND c.Storerkey = pw.Storerkey
                                      AND c.code2     = tor.DocType
-
+   --(Wan07) - END 
+   
    UPDATE pw
       SET pw.PackZone = l.PickZone 
         , pw.PackStation  = CASE WHEN pw.PickLoc = l.pickzone THEN 1 ELSE 0 END
    FROM #PICKDETAIL_WIP AS pw
    JOIN dbo.PackTask AS pt WITH (NOLOCK) ON pt.Orderkey = pw.Orderkey AND pt.OrderMode LIKE 'M%'
    JOIN dbo.DeviceProfile AS dp WITH (NOLOCK) ON dp.DevicePosition = pt.DevicePosition
+                                              AND dp.Storerkey = pw.Storerkey                --Wan07
    JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = dp.Loc
    
    

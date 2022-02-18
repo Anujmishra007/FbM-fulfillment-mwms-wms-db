@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -40,6 +40,9 @@ GO
 /* 2022-01-05  Wan06    1.4   WMS-17299 - CR 2.9. Revise Priority Values*/
 /*                            for TM RPF Task. Additional validation to */
 /*                            prompt HomeLoc Assignment                 */
+/* 2022-02-09  Wan07    1.5   Fixed. For allocated stock from DPBULK,use*/ 
+/*                            DBBULK's PickZone to find PackStation     */
+/*                            regardless if there is Home Loc setup.    */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLWAV43_VLDN]
@@ -331,7 +334,8 @@ BEGIN
    END    
 
    INSERT INTO @t_SkuPickZone (PickZone, DocType, PickLocType)                                  --(Wan06)
-   SELECT PickZone = l.PickZone, o.DocType
+   SELECT PickZone = CASE WHEN l2.LocationType = 'DPBULK' THEN l2.PickZone ELSE l.PickZone END  --(Wan07)
+         ,o.DocType
          ,CASE WHEN l2.LocationType = 'DPBULK' THEN 'DPBULK' ELSE 'NONDPBULK' END               --(Wan06)
    FROM dbo.WAVEDETAIL AS w WITH (NOLOCK)  
    JOIN dbo.ORDERS AS o WITH (NOLOCK) ON w.OrderKey = o.OrderKey
@@ -340,7 +344,7 @@ BEGIN
    LEFT JOIN SKUxLOC AS sl WITH (NOLOCK) ON sl.Storerkey = p.Storerkey AND sl.Sku = p.Sku AND sl.LocationType = 'PICK' 
    LEFT JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = sl.Loc AND l.LocationType = 'DYNPPICK' AND l.Facility = @c_Facility
    WHERE w.Wavekey = @c_Wavekey
-   GROUP BY l.PickZone
+   GROUP BY CASE WHEN l2.LocationType = 'DPBULK' THEN l2.PickZone ELSE l.PickZone END           --(Wan07)
          ,  o.DocType
          ,  CASE WHEN l2.LocationType = 'DPBULK' THEN 'DPBULK' ELSE 'NONDPBULK' END             --(Wan06)
    

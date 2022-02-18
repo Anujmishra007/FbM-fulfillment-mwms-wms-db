@@ -17,7 +17,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -27,7 +27,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2021-07-21  Wan      1.0   Created.                                  */  
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */  
-/* 2021-09-28  Wan01    1.1   Check Build CPK Case Qty against Pick Qty */  
+/* 2021-09-28  Wan01    1.1   Check Build CPK Case Qty against Pick Qty */ 
+/* 2022-02-09  Wan02    1.2   CR 3.0 Link Deviceprofile by storerkey    */  
+/*                            Fixed. For allocated stock from DPBULK,use*/ 
+/*                            DBBULK's PickZone to find PackStation     */
+/*                            regardless if there is Home Loc setup.    */
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV43_CPK]  
    @c_Wavekey     NVARCHAR(10)      
@@ -206,27 +210,39 @@ BEGIN
   
    UPDATE cw  
       SET cw.PickLogicalloc = l.LogicalLocation  
-         ,cw.PickZone     = l.PickZone  
+         ,cw.PickZone     = CASE WHEN l.LocationType = 'DPBULK' THEN l.PickZone ELSE l2.PickZone END                                         --(Wan02)
          ,cw.PickAreakey  = ISNULL(ad.Areakey,'')  
-         ,cw.PackZone     = ISNULL(c.Short,'')  
- --        ,cw.PackStation  = CASE WHEN c.Short = cw.PickLoc THEN 1 ELSE 0 END  
+ --        ,cw.PackZone     = ISNULL(c.Short,'')  
+ --        ,cw.PackStation  = CASE WHEN c.Short = cw.PickLoc THEN 1 ELSE 0 END                                                               --(Wan02)
    FROM @t_ORDERS AS tor          
    JOIN #CPK_WIP AS cw ON cw.Orderkey = tor.Orderkey  
    JOIN dbo.LOC AS l WITH (NOLOCK) ON cw.PickLoc = l.Loc  
-   JOIN dbo.SKUxLOC AS sul WITH (NOLOCK) ON sul.StorerKey = cw.Storerkey AND sul.Sku = cw.Sku AND sul.LocationType = 'PICK'  
-   JOIN dbo.LOC AS l2 WITH (NOLOCK) ON sul.Loc = l2.Loc AND l2.LocationType = 'DYNPPICK'  
+   LEFT OUTER JOIN dbo.SKUxLOC AS sul WITH (NOLOCK) ON sul.StorerKey = cw.Storerkey AND sul.Sku = cw.Sku AND sul.LocationType = 'PICK'       --(Wan02)  
+   LEFT OUTER JOIN dbo.LOC AS l2 WITH (NOLOCK) ON sul.Loc = l2.Loc AND l2.LocationType = 'DYNPPICK'                                          --(Wan02)
    LEFT OUTER JOIN dbo.AreaDetail AS ad WITH (NOLOCK) ON ad.PutawayZone = l.PickZone  
+   --LEFT OUTER JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME  = 'ADPickZone'                                                          --(Wan02)
+   --                                                AND c.Code      = l2.PickZone  
+   --                                                AND c.Storerkey = cw.Storerkey  
+   --                                                AND c.code2     = tor.DocType  
+                                                   
+   --(Wan02) - START
+   UPDATE cw  
+      SET cw.PackZone = ISNULL(c.Short,'')  
+   FROM @t_ORDERS AS tor          
+   JOIN #CPK_WIP AS cw ON cw.Orderkey = tor.Orderkey  
    LEFT OUTER JOIN dbo.CODELKUP AS c WITH (NOLOCK) ON  c.LISTNAME  = 'ADPickZone'  
-                                                   AND c.Code      = l2.PickZone  
+                                                   AND c.Code      = cw.PickZone  
                                                    AND c.Storerkey = cw.Storerkey  
-                                                   AND c.code2     = tor.DocType  
+                                                   AND c.code2     = tor.DocType 
+   --(Wan02) - END                                                
   
    UPDATE cw  
       SET cw.PackZone = l.PickZone   
   --      , cw.PackStation  = CASE WHEN cw.PickLoc = l.pickzone THEN 1 ELSE 0 END  
    FROM #CPK_WIP AS cw  
    JOIN dbo.PackTask AS pt WITH (NOLOCK) ON pt.Orderkey = cw.Orderkey AND pt.OrderMode LIKE 'M%'  
-   JOIN dbo.DeviceProfile AS dp WITH (NOLOCK) ON dp.DevicePosition = pt.DevicePosition  
+   JOIN dbo.DeviceProfile AS dp WITH (NOLOCK) ON  dp.DevicePosition = pt.DevicePosition 
+                                              AND dp.Storerkey = cw.Storerkey                --Wan02
    JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = dp.Loc  
       
    IF EXISTS ( SELECT 1    
