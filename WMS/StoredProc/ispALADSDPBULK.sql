@@ -15,9 +15,9 @@ GO
 /*                                                                      */
 /* Purpose: WMS-17271 - RG - Adidas Allocation Strategy                 */
 /*        : Loose Quantity from DPBULK                                  */
-/* Called By:                                                           */
+/* Called By: ispPRALC06                                                */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-08  Wan      1.0   Created.                                  */
 /* 2021-10-08  Wan      1.0   DevOps Combine Script                     */
+/* 2022-02-09  Wan01    1.1   CR 1.5. Exclude Lot & ID Hold Inventory   */
 /************************************************************************/
 CREATE PROC dbo.[ispALADSDPBulk]
       @c_Wavekey           NVARCHAR(10)  
@@ -91,8 +92,10 @@ BEGIN
    
    SET @c_SQL = N'SELECT lli.Lot, lli.Loc, lli.ID, QtyAvailable = lli.Qty - lli.QtyAllocated - lli.QtyPicked, ''1'''
               + ' FROM dbo.LOTxLOCxID AS lli WITH (NOLOCK)' 
-              + ' JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = lli.Loc'
+              + ' JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = lli.Loc AND l.[Status] NOT IN (''HOLD'')'               --(Wan01)
               + ' JOIN dbo.LOTATTRIBUTE AS l2 WITH (NOLOCK) ON l2.Lot = lli.Lot'
+              + ' JOIN dbo.LOT AS l3 WITH (NOLOCK) ON l3.Lot = lli.Lot AND l3.[Status] NOT IN (''HOLD'')'            --(Wan01)
+              + ' JOIN dbo.ID AS i WITH (NOLOCK) ON i.ID = lli.ID AND i.[Status] NOT IN (''HOLD'')'                  --(Wan01)
               + ' WHERE lli.StorerKey = @c_StorerKey'
               + ' AND lli.Sku = @c_SKU'
               + ' AND l.Facility = @c_Facility'

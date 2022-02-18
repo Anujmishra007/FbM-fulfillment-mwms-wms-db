@@ -15,9 +15,9 @@ GO
 /*                                                                      */
 /* Purpose: WMS-17271 - RG - Adidas Allocation Strategy                 */
 /*        : FUll Case - UCCNo PickCode                                  */
-/* Called By:                                                           */
+/* Called By: ispPRALC06                                                */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,7 @@ GO
 /* 2021-10-06  Wan      1.0   DevOps Combine Script                     */
 /* 2021-10-22  Wan01    1.1   Exclude Normal Replen UCC for UOM 2 & 6   */
 /*                            where UCC.Status = '1'                    */
+/* 2022-02-09  Wan02    1.2   CR 1.5. Exclude Lot & ID Hold Inventory   */
 /************************************************************************/
 CREATE PROC dbo.[ispALADSFC]
       @c_Wavekey           NVARCHAR(10)  
@@ -148,12 +149,14 @@ BEGIN
                      END              
               + ', u.UCCNo'
               + ' FROM dbo.LOTxLOCxID AS lli WITH (NOLOCK)' 
-              + ' JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = lli.Loc'
+              + ' JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = lli.Loc AND l.[Status] NOT IN (''HOLD'')'               --(Wan02)
               + ' JOIN dbo.UCC AS u WITH (NOLOCK) ON u.Lot = lli.Lot'
               +                                 ' AND u.loc= lli.LOC'
               +                                 ' AND u.ID = lli.ID'
               +  CASE WHEN @c_UOM = '7' THEN ' AND u.[Status] IN ( ''1'',''3'')' ELSE ' AND u.[Status] = ''1''' END
-              + ' JOIN dbo.LOTATTRIBUTE AS l2 WITH (NOLOCK) ON l2.Lot = lli.Lot'    
+              + ' JOIN dbo.LOTATTRIBUTE AS l2 WITH (NOLOCK) ON l2.Lot = lli.Lot' 
+              + ' JOIN dbo.LOT AS l3 WITH (NOLOCK) ON l3.Lot = lli.Lot AND l3.[Status] NOT IN (''HOLD'')'            --(Wan02)
+              + ' JOIN dbo.ID AS i WITH (NOLOCK) ON i.ID = lli.ID AND i.[Status] NOT IN (''HOLD'')'                  --(Wan02)   
               + ' LEFT OUTER JOIN TASKDETAIL AS td WITH (NOLOCK) ON td.storerkey = u.storerkey AND td.caseid = u.uccno'    --Wan01. Need LEFT JOIN Taskdetail for UOM '2', '6', ,'7'     
               +  CASE WHEN @c_UOM = '7' THEN 
                 ' LEFT OUTER JOIN #ALLOCATE_DROPID AS ad ON u.UCCNo = ad.DropID'
