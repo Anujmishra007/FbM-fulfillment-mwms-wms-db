@@ -23,8 +23,12 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/* 2022-01-25  Wan01    1.2   LFWM-3297 - [VN] - SCE UAT - Assign Pick   */
+/*                            Location - Single Pick Face Per SKU        */
+/*                            Validation Failed                          */
+/* 2022-01-25  Wan01    1.2   DevOps Combine Script                      */
 /*************************************************************************/   
 CREATE PROC [WM].[lsp_Validate_SkuxLoc_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -46,18 +50,20 @@ BEGIN
    SET ARITHABORT ON
   
    DECLARE     
-      @x_XMLSchema         XML
-   ,  @x_XMLData           XML 
-   ,  @c_TableColumns      NVARCHAR(MAX) = N''
-   ,  @c_ColumnName        NVARCHAR(128) = N''
-   ,  @c_DataType          NVARCHAR(128) = N''
-   ,  @c_TableName         NVARCHAR(30)  = N''
-   ,  @c_SQL               NVARCHAR(MAX) = N''
-   ,  @c_SQLSchema         NVARCHAR(MAX) = N''
-   ,  @c_SQLData           NVARCHAR(MAX) = N''   
-   ,  @n_Continue          INT = 1 
+      @x_XMLSchema            XML
+   ,  @x_XMLData              XML 
+   ,  @c_TableColumns         NVARCHAR(MAX) = N''
+   ,  @c_ColumnName           NVARCHAR(128) = N''
+   ,  @c_DataType             NVARCHAR(128) = N''
+   ,  @c_TableName            NVARCHAR(30)  = N''
+   ,  @c_SQL                  NVARCHAR(MAX) = N''
+   ,  @c_SQLSchema            NVARCHAR(MAX) = N''
+   ,  @c_SQLData              NVARCHAR(MAX) = N''   
+   ,  @n_Continue             INT = 1 
 
-   ,  @n_Count             INT = 1
+   ,  @n_Count                INT = 1
+   
+   ,  @c_SinglePickFacePerSKU NVARCHAR(10) = ''             --(Wan01)
    
    --(mingle01) - START
    BEGIN TRY
@@ -142,6 +148,10 @@ BEGIN
       FROM  #SKUxLOC SL  
       ORDER BY RowId 
 
+      --(Wan01) - START
+      SELECT @c_SinglePickFacePerSKU = dbo.fnc_GetRight('', @c_Storerkey, '', 'SinglePickFacePerSKU')
+      --(Wan01) - END
+      
       SET @n_Count = 0
       SELECT @n_Count = 1
       FROM  SKU WITH (NOLOCK) 
@@ -260,6 +270,41 @@ BEGIN
             GOTO EXIT_SP         
          END
       END
+      
+      --(Wan01) - START
+      IF @c_SinglePickFacePerSKU = '1'
+      BEGIN
+         IF EXISTS ( SELECT 1 FROM dbo.SKUxLOC AS sul WITH (NOLOCK) 
+                     WHERE sul.StorerKey = @c_Storerkey
+                     AND sul.Sku = @c_Sku
+                     AND sul.Loc <> @c_Loc
+                     AND sul.LocationType IN ('PICK', 'CASE')
+         )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 552307
+            SET @c_errmsg = 'Multi Pick Loc For Sku: ' + RTRIM(@c_Sku)+ ' is not allowed.'
+                          + '. (lsp_Validate_SkuxLoc_Std)'
+                         + ' |' + RTRIM(@c_Sku)
+            GOTO EXIT_SP               
+         END
+         
+         IF EXISTS ( SELECT 1 FROM dbo.SKUxLOC AS sul WITH (NOLOCK) 
+                     WHERE sul.StorerKey = @c_Storerkey
+                     AND sul.Sku <> @c_Sku
+                     AND sul.Loc = @c_Loc
+                     AND sul.LocationType IN ('PICK', 'CASE')
+         )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 552308
+            SET @c_errmsg = 'Multi Sku For Pick Location: ' + RTRIM(@c_Loc)+ ' is not allowed.'
+                          + '. (lsp_Validate_SkuxLoc_Std)'
+                         + ' |' + RTRIM(@c_Loc)
+            GOTO EXIT_SP               
+         END
+      END
+      --(Wan01) - END
    END TRY
    
    BEGIN CATCH
