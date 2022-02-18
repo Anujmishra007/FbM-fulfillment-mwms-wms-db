@@ -14,7 +14,7 @@
 /* 2020-11-24 1.4  Ung     WMS-14691 add serial no params                  */          
 /* 2021-05-28 1.5  YeeKung WMS-17175 change receiptlineno(yeekung01)       */        
 /***************************************************************************/                      
-CREATE PROC [RDT].[rdt_638RcvCfm03](                      
+CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm03](                      
    @nFunc          INT,          
    @nMobile        INT,          
    @cLangCode      NVARCHAR( 3),          

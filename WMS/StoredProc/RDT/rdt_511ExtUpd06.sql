@@ -13,7 +13,7 @@ GO
 /* 2021-12-22 1.0  James      WMS-17576. Created                        */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_511ExtUpd06] (
+CREATE OR ALTER PROC [RDT].[rdt_511ExtUpd06] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),

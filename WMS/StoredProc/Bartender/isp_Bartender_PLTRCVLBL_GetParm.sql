@@ -1,13 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Bartender_PLTRCVLBL_GetParm') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Bartender_PLTRCVLBL_GetParm]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO   
-
 
 /******************************************************************************/                 
 /* Copyright: IDS                                                             */                 
@@ -19,7 +13,7 @@ GO
 /* 2018-08-15 1.0  CSCHONG    Created (WMS-5834)                              */                 
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_Bartender_PLTRCVLBL_GetParm]                      
+CREATE OR ALTER PROC [dbo].[isp_Bartender_PLTRCVLBL_GetParm]                      
 (  @parm01            NVARCHAR(250),              
    @parm02            NVARCHAR(250),              
    @parm03            NVARCHAR(250),              
@@ -127,8 +121,3 @@ BEGIN
 GO
 GRANT EXECUTE ON [dbo].[isp_Bartender_PLTRCVLBL_GetParm] TO nsql
 GO
-
-  
-   
-  
-  

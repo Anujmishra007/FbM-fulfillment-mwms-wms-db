@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[Fnc_Hex_To_Char]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[Fnc_Hex_To_Char]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -37,7 +32,7 @@ GO
 /* DD-MMM-YYYY                                                          */  
 /************************************************************************/  
   
-CREATE FUNCTION [dbo].[Fnc_Hex_To_Char] (  
+CREATE OR ALTER FUNCTION [dbo].[Fnc_Hex_To_Char] (  
    @x VARBINARY(100), -- binary hex value  
    @l INT             -- number of bytes  
 ) RETURNS VARCHAR(200)  
