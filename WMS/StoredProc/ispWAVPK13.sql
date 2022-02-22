@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: Wave                                                      */  
 /*                                                                      */  
-/* GitLab Version: 1.3                                                  */  
+/* GitLab Version: 1.6                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
