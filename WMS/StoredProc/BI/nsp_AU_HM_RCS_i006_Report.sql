@@ -8,7 +8,6 @@ GO
 /* Date         Author      Ver.  Purposes                                 */
 /* 06-Sep-2021  JohnChuah   1.0   Created                                  */
 /* 08-Dec-2021  AwYoung,A   1.1   Updated for AU                           */
-/* testig  */
 /***************************************************************************/
 
 CREATE OR ALTER PROC BI.nsp_AU_HM_RCS_i006_Report
