@@ -43,6 +43,8 @@ GO
 /*                            in Exceed                                 */
 /* 2022-01-04  Wan05    1.6   Devops Combine Script                     */
 /* 2022-01-24  WinSern  1.7   INC1722704 @c_SQLWhere 2000 to 4000 (ws01)*/
+/* 2022-02-16  Wan06    1.8   LFWM-3346 - CN NIKECN UAT Wave Release to */
+/*                            limit Qty per wave                        */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -1299,6 +1301,15 @@ AS
             GOTO EXIT_SP
          END
 
+         --(Wan06) - START
+         IF @n_TotalOpenQty + @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0
+         BEGIN
+            SET @c_WaveKey = ''
+            SET @n_FetchOrderStatus = -1
+            GOTO INSERT_DETLOG
+         END
+         --(Wan06) - END
+         
          BEGIN TRAN                                                                                                                                      
          SET @d_EditDate = GETDATE()   
       
@@ -1398,11 +1409,11 @@ AS
          SET @n_TotalWeight  = @n_TotalWeight + @n_Weight
          SET @n_TotalCube    = @n_TotalCube + @n_Cube
 
-         SET @n_OrderCnt     = @n_OrderCnt + 1    
-         SET @n_TotalOrderCnt= @n_TotalOrderCnt + 1 
-         SET @n_TotalOpenQty = @n_TotalOpenQty + @n_OpenQty
+         SET @n_OrderCnt     = @n_OrderCnt + 1                               
+         --SET @n_TotalOrderCnt= @n_TotalOrderCnt + 1                            --(Wan06) Variable not use for any purposes                    
+         SET @n_TotalOpenQty = @n_TotalOpenQty + @n_OpenQty                    
 
-         IF (@n_OrderCnt >= @n_MaxOrders) OR
+         IF (@n_OrderCnt + 1 > @n_MaxOrders) OR                                  --(Wan06)
             (@n_TotalOpenQty >= @n_MaxOpenQty AND @n_MaxOpenQty > 0)
          BEGIN
             SET @c_WaveKey = ''
