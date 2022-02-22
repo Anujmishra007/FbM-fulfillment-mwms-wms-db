@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispWAVPK13]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispWAVPK13]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,9 +28,10 @@ GO
 /* 2021-08-11   WLChooi  1.4  Bug Fix for WMS-17575 (WL04)              */
 /* 2022-02-07   WLChooi  1.5  DevOps Combine Script                     */
 /* 2022-02-07   WLChooi  1.5  WMS-18862 - Limit Max SKU Per CTN (WL05)  */
+/* 2022-02-22   WLChooi  1.6  JSM-53092 - Bug Fix (WL06)                */
 /************************************************************************/  
   
-CREATE PROC [dbo].[ispWAVPK13]  
+CREATE OR ALTER PROC [dbo].[ispWAVPK13]  
    @c_Wavekey   NVARCHAR(10),  
    @b_Success   INT      OUTPUT,  
    @n_Err       INT      OUTPUT,  
@@ -348,7 +344,7 @@ BEGIN
                   INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
                   SELECT @c_SKU, @n_Qty, @n_CartonNo
 
-                  SET @n_CountSKU = 0   --WL05
+                  SET @n_CountSKU = 1   --WL05   --WL06
                END
                ELSE
                BEGIN
@@ -361,7 +357,7 @@ BEGIN
                      INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
                      SELECT @c_SKU, @n_Qty, @n_CartonNo
                   
-                     SET @n_CountSKU = 0   --WL05
+                     SET @n_CountSKU = 1   --WL05   --WL06
                   END   
                   ELSE
                   BEGIN
@@ -676,7 +672,7 @@ NEXT_LOOP:
                   INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
                   SELECT @c_SKU, @n_Qty, @n_CartonNo
 
-                  SET @n_CountSKU = 0   --WL05
+                  SET @n_CountSKU = 1   --WL05   --WL06
                END
                ELSE
                BEGIN
@@ -689,7 +685,7 @@ NEXT_LOOP:
                      INSERT INTO #TMP_AssignCTN(SKU, Qty, CartonNo)
                      SELECT @c_SKU, @n_Qty, @n_CartonNo
                   
-                     SET @n_CountSKU = 0   --WL05
+                     SET @n_CountSKU = 1   --WL05   --WL06
                   END   
                   ELSE
                   BEGIN
