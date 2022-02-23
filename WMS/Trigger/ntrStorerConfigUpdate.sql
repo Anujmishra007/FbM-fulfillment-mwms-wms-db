@@ -1,10 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStorerConfigUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrStorerConfigUpdate]
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -42,10 +38,11 @@ GO
 /* 2021-Nov-26  Wan01   1.4   WMS-18410 - [RG] Logitech Tote ID Packing */
 /*                            Change Request                            */
 /* 2021-Nov-26  Wan01   1.4   DevOps Conbine Script                     */
+/* 2022-Feb-22  TLTING  1.5   prevent bulk update                       */ 
 /************************************************************************/
 
-CREATE TRIGGER ntrStorerConfigUpdate
-ON  StorerConfig
+CREATE OR ALTER TRIGGER [dbo].[ntrStorerConfigUpdate]
+ON  [dbo].[StorerConfig]
 FOR UPDATE
 AS
 BEGIN
@@ -80,7 +77,7 @@ BEGIN
       WHERE StorerConfig.Storerkey = INSERTED.Storerkey
          AND StorerConfig.Facility = INSERTED.Facility         -- tlting01
          AND StorerConfig.ConfigKey = INSERTED.ConfigKey
-   
+  
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
       BEGIN
@@ -89,6 +86,21 @@ BEGIN
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table StorerConfig. (ntrStorerConfigUpdate)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
       END
    END
+
+   IF ( (Select count(1) FROM  StorerConfig   (NOLOCK), INSERTED
+         WHERE   StorerConfig.Storerkey = INSERTED.Storerkey
+         AND StorerConfig.Facility = INSERTED.Facility         -- tlting01
+         AND StorerConfig.ConfigKey = INSERTED.ConfigKey
+       ) > 100 ) 
+       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn'    )
+   BEGIN
+      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62508   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table StorerConfig. Batch Update not allow! (ntrStorerConfigUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+          
+   END
+
 
    --NJOW01
    IF ( @n_continue = 1 or @n_continue = 2 ) AND UPDATE(Svalue)
@@ -179,4 +191,3 @@ BEGIN
 END
 
 
-GO

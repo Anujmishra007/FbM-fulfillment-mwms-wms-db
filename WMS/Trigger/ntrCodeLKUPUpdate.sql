@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrCodeLKUPUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrCodeLKUPUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,9 +25,10 @@ GO
 /* 2011-Dec-19  KHLim01  1.1  additional PK                             */ 
 /* 28-Oct-2013  TLTING   1.2  Review Editdate column update             */ 
 /* 14-Apr-2015  KHLim02  1.3  additional PK code2                       */ 
+/* 22-Feb-2022  TLTING   1.4  prevent bulk update                       */ 
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrCodeLKUPUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrCodeLKUPUpdate]  
 ON  [dbo].[CODELKUP]   
 FOR UPDATE  
 AS  
@@ -84,7 +81,20 @@ BEGIN
    BEGIN  
       SELECT @n_continue = 4   
    END  
-  
+ 
+    IF ( (Select count(1) FROM  CodeLKUP A (NOLOCK), INSERTED
+       WHERE INSERTED.LISTNAME = A.LISTNAME AND INSERTED.Code = A.Code AND INSERTED.Storerkey = A.Storerkey AND A.code2 = INSERTED.code2 
+       ) > 100 ) 
+       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn'    )
+   BEGIN
+      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85805   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table CodeLKUP. Batch Update not allow! (ntrCodeLKUPUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+          
+   END
+
+
   
    /* #INCLUDE <TRPU_2.SQL> */  
    IF @n_continue=3  -- Error Occured - Process And Return  
