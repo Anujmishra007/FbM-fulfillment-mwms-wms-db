@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -30,9 +30,11 @@ GO
 /* 2021-09-28  Wan01    1.2   DevOps Combine Script.                     */
 /* 2021-08-12  wan01    1.2   Fixed. 1) to rollback for xact_status      */
 /*                            2) Start Transaction For Batch Commit      */
+/* 2021-12-02  Wan02    1.3   LFWM-2997 - UAT CN - Outbound Ship Reference*/
+/*                            for CSHP                                  */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveReleaseTask]                                                                                                                     
-      @c_WaveKey              NVARCHAR(10)
+      @c_WaveKey              NVARCHAR(10) = ''       --(Wan02) Call From MBOLScreen
    ,  @c_Loadkey              NVARCHAR(10) = ''
    ,  @c_MBolkey              NVARCHAR(10) = ''
    ,  @b_Success              INT = 1           OUTPUT  
@@ -101,7 +103,7 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      IF @c_Loadkey <> '' AND @c_MBolkey <> ''
+      IF @c_Loadkey <> '' AND @c_MBolkey <> '' AND @c_WaveKey <> ''        --(Wan02)
       BEGIN
          SET @n_continue = 3
          SET @n_err = 555801
@@ -125,9 +127,12 @@ BEGIN
       END
       ELSE IF @c_MBolkey <> ''
       BEGIN 
-         SELECT @n_OrderCnt = 1 
-         FROM MBOLDETAIL MD WITH (NOLOCK)
-         WHERE MD.MBolKey = @c_MBolkey 
+         --(Wan02) - START -- There is Sub Sub-Stored Prod / scenario to generate MBOLDETAIL FROM Container
+         SET @n_OrderCnt = 1
+         --SELECT @n_OrderCnt = 1 
+         --FROM MBOLDETAIL MD WITH (NOLOCK)
+         --WHERE MD.MBolKey = @c_MBolkey
+         --(Wan02) - END 
       END
 
       IF @n_OrderCnt = 0
@@ -308,7 +313,7 @@ BEGIN
          END
       END
 
-      SET @c_ErrMsg = 'Wave Release Task Completed.'
+      SET @c_ErrMsg = CASE WHEN @c_WaveKey = '' THEN 'Release Task Completed.' ELSE 'Wave Release Task Completed.' END        --(Wan02)
    END TRY
    
    BEGIN CATCH
