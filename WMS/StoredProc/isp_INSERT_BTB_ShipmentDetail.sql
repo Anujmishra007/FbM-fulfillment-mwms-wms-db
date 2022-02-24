@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_INSERT_BTB_ShipmentDetail]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_INSERT_BTB_ShipmentDetail]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By: nep_n_cst_btb_shipmentdetail.ue_populatefrombusobj        */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -31,8 +26,11 @@ GO
 /* 2020-OCT-14 NJOW01   1.4   WMS-15167 add externorderkey to           */
 /*                            BTBShipmentdetail                         */
 /* 2021-JAN-13 WAN04    1.5   WMS-15957-SG-CBF - BTB Form E Declaration */
+/* 2021-Dec-09 WLChooi  1.6   DevOps Combine Script                     */
+/* 2021-Dec-09 WLChooi  1.6   WMS-18489 SG - LOGITECH - Back to Back    */
+/*                            Declaration (WL01)                        */
 /************************************************************************/
-CREATE PROC isp_INSERT_BTB_ShipmentDetail
+CREATE OR ALTER PROC isp_INSERT_BTB_ShipmentDetail
            @c_Wavekey         NVARCHAR(10)
          , @c_BTB_ShipmentKey NVARCHAR(10)
          , @b_Success         INT            OUTPUT
@@ -105,6 +103,10 @@ BEGIN
          , @CUR_COL              CURSOR
 
          , @n_MaxDetailPerCOO    INT
+
+         , @c_SKUSUSR5           NVARCHAR(50)   = ''   --WL01
+         , @c_CCountry           NVARCHAR(100)  = ''   --WL01
+         , @c_CountryList        NVARCHAR(4000) = ''   --WL01
    --(Wan01) - END
    
    --(Wan04) - START
@@ -433,7 +435,8 @@ BEGIN
       +  ' ,  QtyExported= SUM(PICKDETAIL.Qty)'
       +  CASE WHEN @c_ItemColNames = '' THEN  ' , BTBShipItem = ''''' ELSE ' , BTBShipItem = ' + @c_ItemColNames END
       +  ' ,  CASE WHEN CONS.Storerkey IS NOT NULL THEN ISNULL(ORDERS.ExternOrderkey,'''') ELSE '''' END ' --NJOW01
-      +  ' ,  CustomLotNo =' + CASE WHEN @c_SQLCustomLotNo = '' THEN '''''' ELSE @c_SQLCustomLotNo END     --(Wan04)    
+      +  ' ,  CustomLotNo =' + CASE WHEN @c_SQLCustomLotNo = '' THEN '''''' ELSE @c_SQLCustomLotNo END     --(Wan04) 
+      +  ' ,  C_Country = MAX(ORDERS.C_Country) '   --WL01   
       +  ' FROM WAVEDETAIL   WITH (NOLOCK)'
       +  ' JOIN ORDERDETAIL  WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERDETAIL.Orderkey)'
       +  ' JOIN PICKDETAIL   WITH (NOLOCK) ON (ORDERDETAIL.Orderkey = PICKDETAIL.Orderkey)'
@@ -447,6 +450,7 @@ BEGIN
       +  ' JOIN ORDERS WITH (NOLOCK) ON (ORDERDETAIL.Orderkey = ORDERS.Orderkey)'  --NJOW01
       +  ' LEFT JOIN STORER CONS (NOLOCK) ON (ORDERS.Consigneekey = CONS.Storerkey AND (CONS.SUSR1=''B2BDN'' OR CONS.SUSR2=''B2BDN'' OR CONS.SUSR3=''B2BDN'' OR CONS.SUSR4=''B2BDN'' OR CONS.SUSR5=''B2BDN''))' --NJOW01
       +  ' WHERE WAVEDETAIL.Wavekey = @c_Wavekey'
+      +  CASE WHEN @c_FormType = '' THEN '' ELSE ' AND ORDERS.SpecialHandling = @c_FormType' END   --WL01
       +  ' GROUP BY '+ @c_SQLCOO 
       +         ' , '+ @c_SQLHSCode
       +         ' , ORDERDETAIL.Storerkey'
@@ -464,11 +468,13 @@ BEGIN
       +        ' ,  BTBShipItem'
    
    SET @c_SQLParms =
-         N'@c_Wavekey   NVARCHAR(10)'
+         N'  @c_Wavekey   NVARCHAR(10)'
+        + ', @c_FormType  NVARCHAR(10)'   --WL01
 
    EXEC sp_executesql   @c_SQL
                      ,  @c_SQLParms   
                      ,  @c_Wavekey   
+                     ,  @c_FormType   --WL01
 
    --(Wan01) - END
    OPEN CUR_BTB_SHIP
@@ -486,9 +492,79 @@ BEGIN
                                  ,  @c_BTBShipItem                      --(Wan01)          
                                  ,  @c_ExternOrderkey  --NJOW01
                                  ,  @c_CustomLotNo                      --(Wan04) 
+                                 ,  @c_CCountry   --WL01
    BEGIN TRAN
    WHILE @@FETCH_STATUS <> -1
    BEGIN
+      --WL01 S
+      SELECT @c_SKUSUSR5 = ISNULL(S.SUSR5,'')
+      FROM SKU S (NOLOCK)
+      WHERE S.StorerKey = @c_Storerkey
+      AND S.SKU = @c_Sku
+      
+      --Check Form D Declaration
+      IF @c_FormType = 'D'
+      BEGIN 
+         IF @c_SKUSUSR5 LIKE 'FORM%'
+         BEGIN
+            SELECT @c_CountryList = REPLACE(@c_SKUSUSR5, 'FORM' + TRIM(@c_FormType), '')
+
+            IF EXISTS (SELECT 1 FROM dbo.fnc_DelimSplit('-', @c_CountryList) WHERE ColValue = @c_CCountry)
+            BEGIN
+               IF @c_COO NOT IN ('MY','VN')   --For Form D declarations, allocated lottable11 must be MY or VN
+               BEGIN
+                  GOTO NEXT_REC
+               END
+               ELSE
+               BEGIN
+                  GOTO CONTINUE_EXEC
+               END
+            END
+            ELSE
+            BEGIN
+               GOTO NEXT_REC
+            END
+         END
+         ELSE
+         BEGIN
+            GOTO NEXT_REC
+         END
+      END
+      IF @c_FormType = 'E'
+      BEGIN
+         IF @c_SKUSUSR5 LIKE 'FORM%'
+         BEGIN
+            SELECT @c_CountryList = REPLACE(@c_SKUSUSR5, 'FORM' + TRIM(@c_FormType), '')
+
+            IF EXISTS (SELECT 1 FROM dbo.fnc_DelimSplit('-', @c_CountryList) WHERE ColValue = @c_CCountry)
+            BEGIN
+               IF @c_COO NOT IN ('CN')   --For Form E declarations, allocated lottable11 must be CN
+               BEGIN
+                  GOTO NEXT_REC
+               END
+               ELSE
+               BEGIN
+                  GOTO CONTINUE_EXEC
+               END
+            END
+            ELSE
+            BEGIN
+               GOTO NEXT_REC
+            END
+         END
+         ELSE
+         BEGIN
+            GOTO NEXT_REC
+         END
+      END
+      ELSE  --@c_FormType NOT IN ('D','E')
+      BEGIN
+         GOTO NEXT_REC
+      END
+
+      CONTINUE_EXEC:
+      --WL01 E
+
       --(Wan03) - START
       SET @n_TotalQtyExported = 0
       SELECT @n_TotalQtyExported = T.TotalQtyExported
@@ -738,6 +814,7 @@ BEGIN
                                  ,  @c_BTBShipItem                   --(Wan01)    
                                  ,  @c_ExternOrderkey  --NJOW01
                                  ,  @c_CustomLotNo                   --(Wan04) 
+                                 ,  @c_CCountry   --WL01
    END
    CLOSE CUR_BTB_SHIP
    DEALLOCATE CUR_BTB_SHIP 
