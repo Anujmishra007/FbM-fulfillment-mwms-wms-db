@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispOrderBatching]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispOrderBatching]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -88,11 +83,13 @@ GO
 /*                            loc into two batch by config. Sort by loc */
 /* 19-Aug-2020  NJOW10  3.2   WMS-14811 determine single/multi order    */
 /*                            by ECOM_SINGLE_Flag                       */
-/* 05-Oct-2021  NJOW    3.3   DEVOPS combine scritp                     */
+/* 05-Oct-2021  NJOW    3.3   DEVOPS combine script                     */
 /* 05-Oct-2021	NJOW11  3.4   WMS-18023 split batch by qty limit        */
+/* 11-Feb-2022  NJOW12  3.5   WMS-18863 M9 Split batch by lottable02    */
+/* 11-Feb-2022  NJOW12  3.5   DEVOPS Combine script                     */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispOrderBatching]  
+CREATE OR ALTER PROC [dbo].[ispOrderBatching]  
      @c_LoadKey     NVARCHAR(10)
    , @n_OrderCount  INT
    , @c_PickZones   NVARCHAR(4000)OUTPUT  --(Wan01) Return PickZOnes
@@ -149,6 +146,9 @@ BEGIN
    ,  @c_OrdBatchM9LocNotSplitBth  NVARCHAR(30) --NJOW09
    ,  @n_NextLocOrdCnt             INT          --NJOW09
    ,  @c_OrdBatchBySingleFlag      NVARCHAR(10) --NJOW10
+   ,  @c_OrdBatchM9Lot2SplitBth    NVARCHAR(30) --NJOW12
+   ,  @n_GroupNo                   INT          --NJOW12
+   ,  @n_PrevGroupNo               INT          --NJOW12
    
    --NJOW11
    DECLARE 
@@ -216,6 +216,14 @@ BEGIN
       CREATE INDEX #IDX_PICKLOC_LOC ON #TMP_PICKLOC (Loc)
    END
    --(Wan01) - END   
+
+  --NJOW12
+  CREATE TABLE #SkuLot2Grouping
+   ( rowref      INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+      Sku        NVARCHAR(20),
+      Lottable02 NVARCHAR(18) NOT NULL DEFAULT (''),
+      GroupNo    INT NOT NULL DEFAULT (0)
+   )        
 
    --DECLARE @t_OrderTable TABLE (
    --   OrderKey  NVARCHAR(10),
@@ -428,6 +436,18 @@ BEGIN
       , @c_authority = @c_OrdBatchBySingleFlag   OUTPUT    
       , @n_err       = @n_err             OUTPUT    
       , @c_errmsg    = @c_errmsg          OUTPUT     
+      
+   --NJOW12
+   SET @c_OrdBatchM9Lot2SplitBth = ''
+   EXEC nspGetRight  
+        @c_Facility  = @c_Facility   
+      , @c_StorerKey = @c_StorerKey  
+      , @c_sku       = NULL 
+      , @c_ConfigKey = 'OrdBatchM9Lot2SplitBth' 
+      , @b_Success   = @b_Success         OUTPUT  
+      , @c_authority = @c_OrdBatchM9Lot2SplitBth   OUTPUT    
+      , @n_err       = @n_err             OUTPUT    
+      , @c_errmsg    = @c_errmsg          OUTPUT           
       
    --(Wan01) - START
    SET @c_BatchOrderZoneFromTask = ''
@@ -851,7 +871,22 @@ BEGIN
          SET @c_BatchCode = 'B' + @c_BatchCode
       END
       
+      --NJOW12
+      IF @c_OrdBatchM9Lot2SplitBth = '1' AND @c_Mode = '9' --Single order
+      BEGIN
+         TRUNCATE TABLE #SkuLot2Grouping
+         
+         INSERT INTO #SkuLot2Grouping (Sku, Lottable02, GroupNo)
+         SELECT PD.sku, LA.lottable02, ROW_NUMBER() OVER(PARTITION BY PD.sku ORDER BY PD.sku) 
+         FROM #OrderTable O (NOLOCK)
+         JOIN PICKDETAIL PD (NOLOCK) ON O.OrderKey =  PD.OrderKey
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot
+         GROUP BY PD.Sku, LA.Lottable02
+         ORDER BY 2, PD.Sku               
+      END
+      
       SET @n_CurrBatchQty = 0  --NJOW11
+      SET @n_PrevGroupNo = 0  --NJOW12
       WHILE (@n_Count > 0)
       BEGIN
          IF @c_Mode = '9' --NJOW04  single order
@@ -879,6 +914,27 @@ BEGIN
               LEFT JOIN SKUXLOC SL (NOLOCK) ON L.Loc = SL.Loc AND PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')
               GROUP BY O.Orderkey
               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/                        		
+         	END
+         	ELSE IF @c_OrdBatchM9Lot2SplitBth = '1'  --NJOW12
+         	BEGIN
+              SET @n_GroupNo = 0
+              SELECT TOP 1 
+                     @c_OrderKey = O.OrderKey,
+                     @n_GroupNo = MIN(G.GroupNo)
+              FROM #OrderTable O
+              JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+              JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot
+              JOIN #SkuLot2Grouping G (NOLOCK) ON PD.Sku = G.Sku AND LA.Lottable02 = G.Lottable02
+              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+              GROUP BY O.Orderkey
+              ORDER BY MIN(G.GroupNo), MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey   
+
+              IF ISNULL(@n_GroupNo, 0) <> ISNULL(@n_PrevGroupNo,0) AND @n_PrevGroupNo <> 0 -- close current batch and process this order again in next batch
+              BEGIN
+              	 SET @n_PrevGroupNo = @n_GroupNo              	
+                 GOTO CloseBatch
+              END               
+              SET @n_PrevGroupNo = @n_GroupNo                    		         		                            
          	END
          	ELSE
          	BEGIN
