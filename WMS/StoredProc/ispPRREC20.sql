@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPRREC20]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPRREC20]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +15,7 @@ GO
 /* Called By:                                                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.2                                                       */
 /*                                                                         */
 /* Version: 7.0                                                            */
 /*                                                                         */
@@ -29,8 +25,9 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 14-OCT-2021  CSCHONG 1.0   Devops Scripts Combine                       */
 /* 14-OCT-2021  CSCHONG 1.1   WMS-17880 revised report logic (CS01)        */
+/* 16-Feb-2022  WLChooi 1.2   WMS-18932 - Add check condition (WL01)       */
 /***************************************************************************/  
-CREATE PROC [dbo].[ispPRREC20]  
+CREATE OR ALTER PROC [dbo].[ispPRREC20]  
 (     @c_Receiptkey  NVARCHAR(10)  
   ,   @c_ReceiptLineNumber  NVARCHAR(5) = ''      
   ,   @b_Success     INT           OUTPUT
@@ -53,6 +50,7 @@ BEGIN
          , @c_CLKCode            NVARCHAR(20)
          , @c_GetToid            NVARCHAR(18)
          , @c_UpdateLot03        NVARCHAR(5)
+         , @c_UserDefine01       NVARCHAR(50)   --WL01
    
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -61,6 +59,26 @@ BEGIN
    SET @n_Continue = 1  
    SET @n_StartTranCount = @@TRANCOUNT  
    
+   --WL01 S
+   --Validation
+   IF @n_Continue IN (1,2)
+   BEGIN
+      SELECT @c_UserDefine01 = R.UserDefine01
+           , @c_Storerkey    = R.StorerKey
+      FROM RECEIPT R (NOLOCK)
+      WHERE R.ReceiptKey = @c_Receiptkey
+
+      IF EXISTS (SELECT 1
+                 FROM CODELKUP (NOLOCK)
+                 WHERE LISTNAME = 'HONRECTYPE'
+                 AND Storerkey = @c_Storerkey
+                 AND Code = @c_UserDefine01)
+      BEGIN
+         GOTO QUIT_SP
+      END
+   END
+   --WL01 E
+
    IF @n_Continue IN(1,2)
    BEGIN          
       DECLARE CUR_RECDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -76,24 +94,24 @@ BEGIN
       FETCH NEXT FROM CUR_RECDET INTO @c_ToID, @c_ReceiptLineNumber, @c_Storerkey
       
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)          
-        BEGIN
+      BEGIN
  
-          SET @c_CLKCode = ''
-          SET @c_GetToid = ''
-          SET @c_Lottable03 = ''
+         SET @c_CLKCode = ''
+         SET @c_GetToid = ''
+         SET @c_Lottable03 = ''
 
-          SET @c_GetToid =  SUBSTRING(@c_ToID,4,2)
+         SET @c_GetToid =  SUBSTRING(@c_ToID,4,2)
 
          IF EXISTS (SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
-             WHERE C.listname = 'HMALOC' AND C.Storerkey = @c_Storerkey
-             AND C.short = @c_GetToid ) --AND @c_GetToid <> 'AP'   --CS01
+                    WHERE C.listname = 'HMALOC' AND C.Storerkey = @c_Storerkey
+                    AND C.short = @c_GetToid ) --AND @c_GetToid <> 'AP'   --CS01
          BEGIN
-             SELECT  @c_CLKCode = C.code
-             FROM dbo.CODELKUP C WITH (NOLOCK)
-             WHERE C.listname = 'HMALOC' AND C.Storerkey = @c_Storerkey
-             AND C.short = @c_GetToid
+            SELECT  @c_CLKCode = C.code
+            FROM dbo.CODELKUP C WITH (NOLOCK)
+            WHERE C.listname = 'HMALOC' AND C.Storerkey = @c_Storerkey
+            AND C.short = @c_GetToid
 
-             SET @c_Lottable03 = ISNULL(@c_CLKCode,'')
+            SET @c_Lottable03 = ISNULL(@c_CLKCode,'')
                    
             UPDATE RECEIPTDETAIL WITH (ROWLOCK)
             SET Lottable03 =   @c_Lottable03
@@ -111,10 +129,10 @@ BEGIN
                             + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
             END   
          END
-      FETCH NEXT FROM CUR_RECDET INTO @c_ToID, @c_ReceiptLineNumber, @c_Storerkey
+         FETCH NEXT FROM CUR_RECDET INTO @c_ToID, @c_ReceiptLineNumber, @c_Storerkey
       END            
-        CLOSE CUR_RECDET
-        DEALLOCATE CUR_RECDET                                    
+      CLOSE CUR_RECDET
+      DEALLOCATE CUR_RECDET                                    
    END
     
    QUIT_SP:
