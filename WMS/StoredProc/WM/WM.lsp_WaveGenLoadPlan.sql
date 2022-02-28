@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveGenLoadPlan]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveGenLoadPlan] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -26,9 +21,10 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */
 /* 2021-02-24  Wan01    1.1   Fixed Pass into Sub SP to check if to execute*/
-/*                            login if @c_UserName <> SUSER_SNAME()     */  
+/*                            login if @c_UserName <> SUSER_SNAME()     */ 
+/* 2022-02-25  Wan02    1.2   Fix Blocking & Add Begin Tran             */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveGenLoadPlan]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_WaveGenLoadPlan]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
    ,  @b_Success           INT = 1           OUTPUT  
    ,  @n_err               INT = 0           OUTPUT                                                                                                             
@@ -91,6 +87,7 @@ BEGIN
    WHERE WD.Wavekey = @c_WaveKey    
    ORDER BY WD.WaveDetailKey  
 
+   BEGIN TRAN
    BEGIN TRY
       EXEC nspGetRight
             @c_Facility   = @c_Facility         
@@ -101,6 +98,15 @@ BEGIN
           , @b_Success    = @b_Success                OUTPUT
           , @n_err        = @n_err                    OUTPUT
           , @c_errmsg     = @c_errmsg                 OUTPUT
+      
+      --(Wan02) - START    
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @c_ErrMsg = @c_ErrMsg + '. (lsp_WaveGenLoadPlan)' 
+         GOTO EXIT_SP  
+      END
+      --(Wan02) - END
    END TRY
    BEGIN CATCH
          SET @n_Continue = 3
@@ -166,10 +172,17 @@ BEGIN
    END
 
 EXIT_SP:
+   --(Wan02) - START
+   IF (XACT_STATE()) = -1  
+   BEGIN
+      ROLLBACK TRAN  
+   END
+   --(Wan02) - END
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF  @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt               --(Wan02)
       BEGIN
          ROLLBACK TRAN
       END
@@ -191,7 +204,13 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-      
+    
+   --(Wan02) - START 
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END 
+   --(Wan02) - END  
    REVERT
 END
 GO
