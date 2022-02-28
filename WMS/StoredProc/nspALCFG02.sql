@@ -31,6 +31,7 @@ GO
 /* 11-May-2020 Wan01    1.3  Dynamic SQL review, impact SQL cache log       */  
 /* 23-Jun-2021 NJOW04   1.4  WMS-17326 allow skip lottable filtering        */
 /* 28-Feb-2022 CLVN01	1.5  JSM-54130 Add AllocateStrategyKey to condition */
+/* 28-Feb-2022 CLVN01	1.5  Fix CURSOR_CANDIDATES syntax error             */
 /****************************************************************************/
 
 CREATE PROC nspALCFG02
@@ -879,7 +880,8 @@ BEGIN
                               " JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey =  SKU.Storerkey AND SKU.Sku =  SKUXLOC.Sku) " +
                               " JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) " +
                               " JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) " +
-                              " WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +
+                              --" WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +	--(CLVN01)
+							  " WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +		--(CLVN01)
                               " AND LOTxLOCxID.Sku = @c_Sku " +
                               " AND LOC.Facility = @c_Facility " +
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
