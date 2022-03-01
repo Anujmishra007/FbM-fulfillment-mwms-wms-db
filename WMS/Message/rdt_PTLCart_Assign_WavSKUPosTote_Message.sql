@@ -15,5 +15,4 @@ execute rdt.rdtAddMsg 54261, 10, '54261^Need ToteID   ', 'us_english', 808
 execute rdt.rdtAddMsg 54262, 10, '54262^Tote Assigned ', 'us_english', 808
 execute rdt.rdtAddMsg 54263, 10, '54263^INS Log Fail  ', 'us_english', 808
 execute rdt.rdtAddMsg 54264, 10, '54264^INS PTL Fail  ', 'us_english', 808
-execute rdt.rdtAddMsg 54265, 10, '54265^Invalid Format', 'us_english', 808
 
