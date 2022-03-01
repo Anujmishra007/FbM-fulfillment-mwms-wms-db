@@ -1,10 +1,6 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PTLCart_Assign_WavSKUPosTote]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE rdt.rdt_PTLCart_Assign_WavSKUPosTote
-GO
-
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /******************************************************************************/
@@ -14,9 +10,10 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 06-05-2015 1.0  Ung      SOS336312 Created                                 */
 /* 26-01-2018 1.1  Ung      Change to PTL.Schema                              */
+/* 28-02-2022 1.2  Ung      WMS-19007 Add tote ID format                      */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_PTLCart_Assign_WavSKUPosTote (
+CREATE OR ALTER PROC [RDT].[rdt_PTLCart_Assign_WavSKUPosTote] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -88,7 +85,7 @@ BEGIN
 		SET @cOutField05 = '' -- Position
 		SET @cOutField06 = '' -- ToteID
 		SET @cOutField07 = CAST( @nTotalTote AS NVARCHAR(5)) --TotalTote
-   		
+
       IF @cWaveKey = ''
       BEGIN
          -- Enable disable field
@@ -392,6 +389,16 @@ BEGIN
          GOTO Quit
       END
 
+      -- Check format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ToteID', @cToteID) = 0
+      BEGIN
+         SET @nErrNo = 54265
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         EXEC rdt.rdtSetFocusField @nMobile, 6 -- ToteID
+         SET @cOutField06 = ''
+         GOTO Quit
+      END
+
       -- Check tote assigned
       IF EXISTS( SELECT 1
          FROM rdt.rdtPTLCartLog WITH (NOLOCK)
@@ -514,5 +521,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_PTLCart_Assign_WavSKUPosTote TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_PTLCart_Assign_WavSKUPosTote] TO [NSQL]
 GO
