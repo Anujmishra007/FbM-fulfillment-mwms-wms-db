@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV38]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV38]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,8 +24,11 @@ GO
 /* 2021-07-19  Wan01    1.1   Fixed.RPF UPdate Taskdetailkey to wrong sku*/
 /* 2021-08-09  Wan02    1.1   Fixed.Generate RPF for empty string or NULL*/
 /*                            pickdetail.taskdetailkey                   */
+/* 2021-01-12  NJOW01   1.2   WMS-18717 Remove PK and SPK task if wave   */
+/*                            userdefine01 = ''. Create transmitlog     */
+/* 2021-01-12  NJOW01   1.2   DEVOPS combine script                      */
 /*************************************************************************/       
-CREATE PROCEDURE [dbo].[ispRLWAV38]          
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV38]          
                  @c_wavekey      NVARCHAR(10)      
                 ,@b_Success      int        OUTPUT      
                 ,@n_err          int        OUTPUT      
@@ -158,6 +156,8 @@ BEGIN
    
    IF ISNULL(@c_Userdefine01,'') <> ''
    BEGIN
+      --NJOW01 Removed
+      /*
       SELECT @n_zonecnt1 = COUNT(DISTINCT colvalue) FROM dbo.fnc_DelimSplit(',', @c_Userdefine01) WHERE ISNULL(colvalue,'') <> ''        
         
       SELECT @n_zonecnt2 = COUNT(DISTINCT Putawayzone)  
@@ -171,6 +171,7 @@ BEGIN
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid Putawayzone Parameters Passed at userdefine01 (ispRLWAV38)'     
          GOTO RETURN_SP     
       END 
+      */
          
       IF EXISTS(  SELECT 1 
                   FROM REPLENISHMENT (NOLOCK) 
@@ -528,6 +529,7 @@ BEGIN
    WHERE w.WaveKey = @c_Wavekey
    AND o.[Type] <> 'LULUECOM'
    AND o.UserDefine10 NOT IN ('170146','170149')
+   AND ISNULL(@c_Userdefine01,'') = ''  --NJOW01
 
    IF @b_PTL = 1
    BEGIN      
@@ -724,6 +726,7 @@ BEGIN
    
    -----Retail Order Initialization and Validation-----     
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_OrderType = 'RETAIL'    
+      AND ISNULL(@c_Userdefine01,'') = '' --NJOW01 
    BEGIN   
     
       -----Generate RETAIL Order Tasks-----    
@@ -805,10 +808,11 @@ BEGIN
       END    
       CLOSE @CUR_PICK_R    
       DEALLOCATE @CUR_PICK_R    
-   END    
+   END  
     
    -----Generate ECOM Order Tasks-----   
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_OrderType = 'ECOM'    
+      AND ISNULL(@c_Userdefine01,'') = '' --NJOW01 
    BEGIN 
       WITH EORDUPD ( Orderkey, OrderMode )
       AS (
@@ -968,7 +972,7 @@ BEGIN
       BEGIN
          SET @c_tasktype    = 'RPF'  
          SET @c_SourceType  = 'ispRLWAV38-RPF' 
-         SET @c_ToLoc       = 'LULUWS01'          
+         SET @c_ToLoc       = 'LULUWS01'                                
          SET @c_LogicalToLoc= ''      
          SET @c_Priority    = '5'
          SET @c_TaskStatus  = 'N'            --2021-06-25 CR2.1
@@ -1289,6 +1293,17 @@ BEGIN
       DEALLOCATE @CUR_PICK_RPL              
    END
     
+   --NJOW01  
+   IF (@n_continue = 1 OR @n_continue = 2) AND ISNULL(@c_Userdefine01,'') <> '' 
+   BEGIN
+      EXEC dbo.ispGenTransmitLog2 'WSWAVERLS1', @c_Wavekey, '', @c_StorerKey, ''  
+        , @b_success OUTPUT  
+        , @n_err OUTPUT  
+        , @c_errmsg OUTPUT
+        
+      IF @b_Success <> 1
+         SET @n_continue = 3            
+   END      
     
    -----Update Wave Status-----    
    IF @n_continue = 1 or @n_continue = 2      
@@ -1311,29 +1326,32 @@ BEGIN
    END      
   
    -- Make sure all pickdetail have taskdetailkey stamped (Chee01)  
-   SET @n_Cnt = 0
-   ;WITH PICK (PickDetailKey, TaskDetailKey)
-    AS ( SELECT PD.PickDetailKey, TaskDetailKey = ISNULL(PD.TaskDetailKey,'')
-         FROM WAVEDETAIL WD  WITH (NOLOCK)     
-         JOIN PICKDETAIL PD  WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey) 
-         JOIN LOC            WITH (NOLOCK) ON (PD.Loc = LOC.Loc) 
-         WHERE WD.Wavekey = @c_Wavekey  
-         AND PD.Storerkey = @c_Storerkey
-         AND PD.[Status] < '5' 
-         AND NOT EXISTS (  SELECT 1 FROM STRING_SPLIT(@c_Userdefine01, ',') WHERE [Value] = LOC.PutawayZone )  
-        )
-
-   SELECT @n_Cnt = COUNT(1)
-   FROM PICK P
-   WHERE P.Taskdetailkey = ''
-   
-   IF @n_Cnt = 1
-   BEGIN    
-      SET @n_continue = 3      
-      SET @n_err = 81210  
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': TaskDetailkey not updated to pickdetail. (ispRLWAV38)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '         
-      GOTO RETURN_SP    
-   END   
+   IF ISNULL(@c_Userdefine01,'') = ''  --NJOW01
+   BEGIN
+      SET @n_Cnt = 0
+      ;WITH PICK (PickDetailKey, TaskDetailKey)
+       AS ( SELECT PD.PickDetailKey, TaskDetailKey = ISNULL(PD.TaskDetailKey,'')
+            FROM WAVEDETAIL WD  WITH (NOLOCK)     
+            JOIN PICKDETAIL PD  WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey) 
+            JOIN LOC            WITH (NOLOCK) ON (PD.Loc = LOC.Loc) 
+            WHERE WD.Wavekey = @c_Wavekey  
+            AND PD.Storerkey = @c_Storerkey
+            AND PD.[Status] < '5' 
+            AND NOT EXISTS (  SELECT 1 FROM STRING_SPLIT(@c_Userdefine01, ',') WHERE [Value] = LOC.PutawayZone )  
+           )
+      
+      SELECT @n_Cnt = COUNT(1)
+      FROM PICK P
+      WHERE P.Taskdetailkey = ''
+      
+      IF @n_Cnt = 1
+      BEGIN    
+         SET @n_continue = 3      
+         SET @n_err = 81210  
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': TaskDetailkey not updated to pickdetail. (ispRLWAV38)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '         
+         GOTO RETURN_SP    
+      END   
+   END
     
    RETURN_SP:    
     
