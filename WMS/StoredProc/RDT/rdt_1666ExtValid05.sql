@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_1666ExtValid05]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1666ExtValid05]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -16,7 +13,7 @@ GO
 /* 2021-11-07  1.0  Chermaine   WMS-18206 Created                       */    
 /************************************************************************/      
       
-CREATE PROC [RDT].[rdt_1666ExtValid05] (      
+CREATE OR ALTER PROC [RDT].[rdt_1666ExtValid05] (      
    @nMobile        INT,      
    @nFunc          INT,      
    @cLangCode      NVARCHAR( 3),      
@@ -92,17 +89,17 @@ BEGIN
             
             IF @nMBolDetailCnt > 0    
             BEGIN 
-            	IF EXISTS (SELECT 1 
-                        FROM PALLETDETAIL PltDt WITH (NOLOCK)
-                        JOIN MBOLDETAIL MB WITH (NOLOCK) ON (PltDt.UserDefine02 = MB.OrderKey)
-                        WHERE PltDt.StorerKey = @cStorerKey
-                        AND PltDt.PalletKey = @cPalletID
-                        AND MB.MbolKey = @cMbolKey)
-               BEGIN
-            	   SET @nErrNo = 178602      
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltID Scanned     
-                  GOTO Quit   
-               END
+            	--IF EXISTS (SELECT 1 
+             --           FROM PALLETDETAIL PltDt WITH (NOLOCK)
+             --           JOIN MBOLDETAIL MB WITH (NOLOCK) ON (PltDt.UserDefine02 = MB.OrderKey)
+             --           WHERE PltDt.StorerKey = @cStorerKey
+             --           AND PltDt.PalletKey = @cPalletID
+             --           AND MB.MbolKey = @cMbolKey)
+             --  BEGIN
+            	--   SET @nErrNo = 178602      
+             --     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltID Scanned     
+             --     GOTO Quit   
+             --  END
                
                SET @cDestinationCountry = ''      
                SELECT 
