@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ispWAVRL05]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[ispWAVRL05]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -32,9 +28,11 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 29-MAR-2021  CSCHONG  1.1  WMS-15654 revised logic (CS01)            */
+/* 21-Jan-2022  NJOW01   1.2  WMS-18717 skip if wave.userdefine01<>''   */
+/* 21-jAN-2022  NJOW01   1.2  DEVOPS combine script                     */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispWAVRL05] 
+CREATE OR ALTER PROC [dbo].[ispWAVRL05] 
    @c_WaveKey  NVARCHAR(10),
    @b_Success  INT OUTPUT,
    @n_err      INT OUTPUT,
@@ -70,6 +68,7 @@ BEGIN
          , @c_PTLPKZoneReq   NVARCHAR( 1)   --CS01
          , @c_GetStorerkey   NVARCHAR(15)   --CS01
          , @n_cntptsloc      INT            --CS01
+         , @c_Userdefine01   NVARCHAR(20)   --NJOW01
 
    IF @n_err = 1
       SET @b_debug = 1
@@ -95,7 +94,8 @@ BEGIN
                     @c_Userdefine09 = WAVE.UserDefine09
                   , @c_Userdefine04 = ISNULL(RTRIM(WAVE.Userdefine04),'')        --(Wan01)
                   , @c_Userdefine08 = ISNULL(RTRIM(WAVE.Userdefine08),'')        --(Wan01)
-                  , @c_GetStorerkey = ORDERS.Storerkey                           --(CS01)
+                  , @c_GetStorerkey = ORDERS.Storerkey    --(CS01)   
+                  , @c_Userdefine01 = WAVE.Userdefine01  --NJOW01                    
        FROM WAVE (NOLOCK)
        JOIN WAVEDETAIL (NOLOCK) ON WAVE.Wavekey = WAVEDETAIL.WaveKey
        JOIN ORDERS (NOLOCK) ON WAVEDETAIL.Orderkey = ORDERS.Orderkey        
@@ -104,6 +104,10 @@ BEGIN
        IF @b_debug=1
           PRINT '@c_Userdefine05:' + RTRIM(@c_Userdefine05) + ' @c_Userdefine09:' + RTRIM(@c_Userdefine09) 
               + '@c_Userdefine04:' + RTRIM(@c_Userdefine04) + ' @c_Userdefine08:' + RTRIM(@c_Userdefine08) 
+
+      --NJOW01
+      IF ISNULL(@c_userdefine01,'') <> ''
+         GOTO RETURN_SP
 
       --(Wan01) - START
       SET @c_Userdefine05 = ISNULL(RTRIM(@c_Userdefine05),'')
@@ -125,11 +129,8 @@ BEGIN
 
        IF @b_debug=1
           PRINT 'Conbined @c_Userdefine05:' + RTRIM(@c_Userdefine05)  
-      --(Wan01) - END                  
+      --(Wan01) - END                        
    END
-
-
-   
 
     --CS01 START Get RDT.Storerconfig for PTLStationLogQueue
     SELECT TOP 1 @c_PTLPKZoneReq = ISNULL(svalue,0)
@@ -424,7 +425,6 @@ BEGIN
    RETURN
 END
 GO
-
 GRANT EXECUTE ON [dbo].[ispWAVRL05] TO nSQL 
 GO
 
