@@ -1,8 +1,3 @@
-
- IF exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_invoice_10_rdt]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_invoice_10_rdt]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -37,12 +32,14 @@ GO
 /* 06-OCT-2021  CSCHONG  1.0  Devops scripts combine                    */
 /* 17-NOV-2021  CSCHONG  1.1  WMS-18242 add additional parameter (CS01) */
 /* 21-Nov-2021  CSCHONG  1.2  WMS-18242 revised field logic (CS02)      */
+/* 18-Feb-2022  CSCHONG  1.3  WMS-18242 remove invoiceno parameter      */
+/*                           and performance tunning  (CS03)            */
 /************************************************************************/      
       
-CREATE  PROC dbo.isp_invoice_10_rdt (        
+CREATE OR ALTER  PROC dbo.isp_invoice_10_rdt (        
       @c_ExternOrderKey        NVARCHAR(50) = '', 
-      @c_Orderkey              NVARCHAR(20) = '',
-      @c_invoiceno             NVARCHAR(20) = ''     
+      @c_Orderkey              NVARCHAR(20) = ''
+      --@c_invoiceno             NVARCHAR(20) = ''     
 )      
 AS      
 BEGIN      
@@ -66,8 +63,46 @@ BEGIN
           , @n_cartonno        INT
           , @n_TTLGDTTY        INT
           , @c_TTLUPrice       NVARCHAR(20) 
-          , @n_TTLCGST_AMOUNT  DECIMAL(10,2)                   
- 
+          , @n_TTLCGST_AMOUNT  DECIMAL(10,2)               
+
+ --START CS03  
+   CREATE TABLE #TMP_GUIORDERS ( 
+    Storerkey          NVARCHAR(20),
+    GExternOrderKey    NVARCHAR(50),   
+    ORDERKEY           NVARCHAR(10), 
+    GInvoiceNo         NVARCHAR(20)   
+   )    
+   
+  
+  IF ISNULL(@c_ExternOrderKey,'') <> '' AND EXISTS (SELECT 1 FROM GUI WITH (NOLOCK)    
+              WHERE ExternOrderKey = @c_ExternOrderKey   )
+   BEGIN 
+     IF NOT EXISTS (SELECT 1 FROM #TMP_GUIORDERS WHERE GExternOrderKey = @c_ExternOrderKey)
+     BEGIN     
+
+      INSERT INTO #TMP_GUIORDERS(Storerkey,GExternOrderKey,orderkey,GInvoiceNo)  
+      SELECT DISTINCT G.Storerkey,G.ExternOrderKey,OH.OrderKey,G.InvoiceNo  
+      FROM GUI G WITH (NOLOCK)
+      JOIN ORDERS OH WITH (NOLOCK) ON 'a' +  G.ExternOrderKey = OH.externorderkey
+      WHERE G.ExternOrderKey = @c_ExternOrderKey   
+
+    END
+   END               
+   ELSE IF ISNULL(@c_Orderkey,'') <> '' AND EXISTS (SELECT 1 FROM Orders WITH (NOLOCK)    
+              WHERE OrderKey = @c_Orderkey   )   
+   BEGIN  
+     IF NOT EXISTS (SELECT 1 FROM #TMP_GUIORDERS WHERE orderkey = @c_OrderKey)
+     BEGIN   
+         INSERT INTO #TMP_GUIORDERS(Storerkey,GExternOrderKey,orderkey,GInvoiceNo)  
+         SELECT DISTINCT G.Storerkey,G.ExternOrderKey,OH.OrderKey,G.InvoiceNo  
+         FROM ORDERS OH  WITH (NOLOCK)
+         JOIN GUI G WITH (NOLOCK)  ON G.EXTERNORDERKEY = Substring( OH.EXTERNORDERKEY , 2,Len(RTRIM(OH.EXTERNORDERKEY)) -1)
+         WHERE OH.OrderKey = @c_OrderKey 
+     END
+   END    
+   
+   --END CS03  
+       
            
    CREATE TABLE #INV10RDT_1(      
       rowid              INT NOT NULL identity(1,1) PRIMARY KEY,       
@@ -264,11 +299,14 @@ FROM GUI G WITH (NOLOCK)
 JOIN dbo.GUIDetail GD WITH (NOLOCK) ON GD.InvoiceNo = G.InvoiceNo AND GD.ExternOrderkey = G.ExternOrderKey
 JOIN dbo.STORER ST WITH (NOLOCK) ON ST.StorerKey=G.Storerkey
 JOIN ORDERS OH WITH (NOLOCK)  ON OH.buyerpo = G.ExternOrderKey 
-LEFT JOIN SKU S WITH (NOLOCK) ON GD.SKU = S.SKU AND S.STORERKEY = GD.StorerKey
+JOIN SKU S WITH (NOLOCK) ON GD.SKU = S.SKU AND S.STORERKEY = GD.StorerKey
 LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON PH.ORDERKEY = OH.ORDERKEY
-WHERE G.ExternOrderKey = CASE WHEN ISNULL(@c_ExternOrderKey,'') <> '' THEN @c_ExternOrderKey ELSE G.ExternOrderKey END   --CS01
-AND OH.OrderKey = CASE WHEN ISNULL(@c_Orderkey,'') <> '' THEN @c_Orderkey ELSE OH.orderkey END   --CS01
-AND G.invoiceno = CASE WHEN ISNULL(@c_invoiceno,'') <> '' THEN @c_invoiceno ELSE G.invoiceno END   --CS01
+--CS03 S
+JOIN #TMP_GUIORDERS GOH ON GOH.Storerkey=G.Storerkey AND GOH.GExternOrderKey =G.ExternOrderKey AND GOH.GInvoiceNo =G.InvoiceNo
+--WHERE G.ExternOrderKey = CASE WHEN ISNULL(@c_ExternOrderKey,'') <> '' THEN @c_ExternOrderKey ELSE G.ExternOrderKey END   --CS01
+--AND OH.OrderKey = CASE WHEN ISNULL(@c_Orderkey,'') <> '' THEN @c_Orderkey ELSE OH.orderkey END   --CS01
+--AND G.invoiceno = CASE WHEN ISNULL(@c_invoiceno,'') <> '' THEN @c_invoiceno ELSE G.invoiceno END   --CS01
+--CS03 E
 ORDER BY G.ExternOrderKey,GD.SKU
                           
    SET @c_TTLUPrice = ''
@@ -348,6 +386,10 @@ ORDER BY G.ExternOrderKey,GD.SKU
    IF OBJECT_ID('tempdb..#INV10RDT_1 ','u') IS NOT NULL       
    DROP TABLE #INV10RDT_1      
    
+
+        
+   IF OBJECT_ID('tempdb..#TMP_GUIORDERS ','u') IS NOT NULL       
+   DROP TABLE #TMP_GUIORDERS   
 END 
 
 GO
