@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_1641ExtUpdSP12]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_1641ExtUpdSP12]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -20,7 +17,7 @@ GO
 /* 2021-11-05  1.0  Chermaine WMS-18186 Created                         */
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdt_1641ExtUpdSP12] (  
+CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP12] (  
    @nMobile     INT,  
    @nFunc       INT,  
    @cLangCode   NVARCHAR( 3),  
@@ -209,7 +206,7 @@ BEGIN
          FETCH NEXT FROM C_PalletOrder INTO @cpalletorderkey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            SELECT @nPackCarton=MAX(cartonNo)
+            SELECT @nPackCarton=COUNT(DISTINCT PD.LabelNo) 
             from packdetail PD(Nolock) join
             packheader PH (nolock) ON PD.PickSlipNo=PH.PickSlipNo
             where PH.StorerKey=@cStorerKey
