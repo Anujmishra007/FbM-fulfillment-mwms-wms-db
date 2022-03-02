@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_CartonManifestLabel38_rdt]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_CartonManifestLabel38_rdt]
-GO
- 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -29,7 +24,7 @@ GO
 /* Date         Author  Ver   Purposes                                  */   
 /* 2021-10-25   mingle  1.0   Created - DevOps Combine Script           */       
 /************************************************************************/      
-CREATE PROC dbo.isp_CartonManifestLabel38_rdt (            
+CREATE OR ALTER PROC dbo.isp_CartonManifestLabel38_rdt (            
        @c_DropID       NVARCHAR(20)  
 )      
 AS      
@@ -60,7 +55,12 @@ BEGIN
                             FROM PACKHEADER PH WITH (NOLOCK)                                      
                             JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)   
                             WHERE PD.PickSlipNo = @c_pickslipno)                                    
-         ,CartonNo       = ISNULL(RTRIM(PACKDETAIL.CartonNo),'')  
+         --,CartonNo       = ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
+         --START ML01  
+         ,Cartonno = (Select Count(Distinct PD2.Cartonno) 
+          FROM PackDetail PD2 
+          WHERE PD2.Cartonno < PACKDETAIL.Cartonno + 1 AND PD2.PickSlipNo = @c_pickslipno)
+         --END ML01
          ,DropID         = ISNULL(RTRIM(PACKDETAIL.DropID),'')  
          ,Style          = ISNULL(RTRIM(SKU.Style),'')   
          ,SkuDesc        = ''--ISNULL(RTRIM(SKU.Descr),'')      
@@ -80,13 +80,14 @@ BEGIN
    WHERE PACKDETAIL.DROPID = @c_DropID AND PACKDETAIL.Storerkey = 'ADIDAS'  
    GROUP BY PACKHEADER.Loadkey  
          ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
-         ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')  
+         --,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')  
          ,  ISNULL(RTRIM(PACKDETAIL.DropID),'')  
          ,  ISNULL(RTRIM(SKU.Style),'')  
          --,  ISNULL(RTRIM(SKU.Descr),'')   
          ,  ISNULL(CL.SHORT,'N')    
          ,  ISNULL(CL1.SHORT,'N')  
-         ,  ISNULL(ORDERS.M_VAT,'')  
+         ,  ISNULL(ORDERS.M_VAT,'')
+         ,  PACKDETAIL.Cartonno  
    ORDER BY PACKHEADER.Loadkey  
          ,  ISNULL(RTRIM(PACKDETAIL.DropID),'')  
          ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')  
@@ -97,4 +98,6 @@ END
 GO
 GRANT EXECUTE ON isp_CartonManifestLabel38_rdt TO NSQL
 GO
+
+
 

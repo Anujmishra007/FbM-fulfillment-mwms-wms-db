@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_UCC_Carton_Label_110_rdt]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_UCC_Carton_Label_110_rdt]
-GO
- 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -29,7 +24,7 @@ GO
 /* Date         Author  Ver   Purposes                                  */       
 /* 2021-10-24   Mingle  1.0   Created - DevOps Combine Script           */         
 /************************************************************************/          
-CREATE PROC dbo.isp_UCC_Carton_Label_110_rdt (          
+CREATE OR ALTER PROC dbo.isp_UCC_Carton_Label_110_rdt (          
        @c_DropID       NVARCHAR(20)      
 )          
 AS          
@@ -163,9 +158,13 @@ BEGIN
    CtnCnt1 = (SELECT COUNT(DISTINCT PD.LabelNo)                                             
               FROM PACKHEADER PH WITH (NOLOCK)                                             
               JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)          
-              WHERE PD.PickSlipNo = @c_pickslipno),                                          
-   RefNo2 = ISNULL(RTRIM(PACKD.CartonNo),''),                                                   
-   --RefNo2 = CASE WHEN PACKH.Status = '9' THEN 'NOT PACKED CONFIRMED' ELSE ISNULL(RTRIM(PACKD.CartonNo),'') END,                                                   
+              WHERE PD.PickSlipNo = @c_pickslipno),                                                                                              
+   --RefNo2 = CASE WHEN PACKH.Status = '9' THEN 'NOT PACKED CONFIRMED' ELSE ISNULL(RTRIM(PACKD.CartonNo),'') END,   
+   --START ML01  
+   Cartonno = (Select Count(Distinct PD2.Cartonno) 
+   FROM PackDetail PD2 
+   WHERE PD2.Cartonno < PACKD.Cartonno + 1 AND PD2.PickSlipNo = @c_pickslipno),
+   --END ML01                                                
    DeliveryDate = CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.Userdefine10, '') = ''      
                        THEN REPLACE( CONVERT(NVARCHAR(11), ORDERS.DeliveryDate, 106), ' ', '-')  ELSE '' END,       
    UserDefine03 = CASE WHEN ISNULL(ORDERS.UserDefine03, '') <> '' AND ISDATE(ORDERS.UserDefine03) = 1      
@@ -227,7 +226,8 @@ BEGIN
    STORER.City,          
    STORER.Phone1,          
    STORER.Fax1,                           
-   ISNULL(RTRIM(PACKD.CartonNo),''),                           
+   --ISNULL(RTRIM(PACKD.CartonNo),''),  
+   PACKD.CartonNo,                        
    ORDERS.DeliveryDate,                                      
    CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.Userdefine10, '') = ''       
         THEN REPLACE( CONVERT(NVARCHAR(11), ORDERS.DeliveryDate, 106), ' ', '-')  ELSE '' END,         
@@ -249,5 +249,4 @@ END
 GO
 GRANT EXECUTE ON isp_UCC_Carton_Label_110_rdt TO NSQL
 GO
-
 
