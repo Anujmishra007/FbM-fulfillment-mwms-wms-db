@@ -16,7 +16,8 @@ GO
 /*                                                                            */                         
 /* Date       Rev  Author     Purposes                                        */                         
 /* 2015-06-08 1.0  CSCHONG    Created(WMS-2044 )                              */      
-/* 2021-01-14 1.1  LZG        INC1402338 - Fixed duplicate Qty (ZG01)         */      
+/* 2021-01-14 1.1  LZG        INC1402338 - Fixed duplicate Qty (ZG01)         */
+/* 2022-03-03 1.2  WC         JSM-54987 - Extend Desc column to 80 (WC01)     */ 
 /******************************************************************************/                        
                           
 CREATE PROC [dbo].[isp_BT_Bartender_JP_Shipper_Content_Label_FJ]                               
@@ -52,7 +53,7 @@ BEGIN
       @c_Labelno         NVARCHAR(20),  
       @c_GetLabelNo      NVARCHAR(20),  
       @c_Col10           NVARCHAR(30),  
-      @c_Col11           NVARCHAR(30)  
+      @c_Col11           NVARCHAR(80)       --WC01
   
  Declare          
             
@@ -97,59 +98,59 @@ BEGIN
   
  DECLARE     
       @c_colORDDETSKU1     NVARCHAR(60),       
-      @c_ColSDESCR1        NVARCHAR(60),  
+      @c_ColSDESCR1        NVARCHAR(80),    --WC01 
       @c_ColPDQty1         NVARCHAR(5),      
       @c_colORDDETSKU2     NVARCHAR(60),       
-      @c_ColSDESCR2        NVARCHAR(60),  
+      @c_ColSDESCR2        NVARCHAR(80),    --WC01
       @c_ColPDQty2         NVARCHAR(5),            
       @c_colORDDETSKU3     NVARCHAR(60),       
-      @c_ColSDESCR3        NVARCHAR(60),  
+      @c_ColSDESCR3        NVARCHAR(80),    --WC01
       @c_ColPDQty3         NVARCHAR(5),   
       @c_colORDDETSKU4     NVARCHAR(60),       
-      @c_ColSDESCR4        NVARCHAR(60),  
+      @c_ColSDESCR4        NVARCHAR(80),    --WC01 
       @c_ColPDQty4         NVARCHAR(5),    
       @c_colORDDETSKU5     NVARCHAR(60),       
-      @c_ColSDESCR5        NVARCHAR(60),  
+      @c_ColSDESCR5        NVARCHAR(80),    --WC01  
       @c_ColPDQty5         NVARCHAR(5),   
       @c_colORDDETSKU6     NVARCHAR(60),       
-      @c_ColSDESCR6        NVARCHAR(60),  
+      @c_ColSDESCR6        NVARCHAR(80),    --WC01  
       @c_ColPDQty6         NVARCHAR(5),  
       @c_colORDDETSKU7     NVARCHAR(60),       
-      @c_ColSDESCR7        NVARCHAR(60),  
+      @c_ColSDESCR7        NVARCHAR(80),    --WC01  
       @c_ColPDQty7         NVARCHAR(5),   
       @c_colORDDETSKU8     NVARCHAR(60),       
-      @c_ColSDESCR8        NVARCHAR(60),  
+      @c_ColSDESCR8        NVARCHAR(80),    --WC01  
       @c_ColPDQty8         NVARCHAR(5)  
   
   
 DECLARE   
       @c_colORDDETSKU9      NVARCHAR(60),       
-      @c_ColSDESCR9         NVARCHAR(60),  
+      @c_ColSDESCR9         NVARCHAR(80),    --WC01  
       @c_ColPDQty9          NVARCHAR(5),  
       @c_colORDDETSKU10     NVARCHAR(60),       
-      @c_ColSDESCR10        NVARCHAR(60),  
+      @c_ColSDESCR10        NVARCHAR(80),    --WC01 
       @c_ColPDQty10         NVARCHAR(5),  
       @c_colORDDETSKU11     NVARCHAR(60),       
-      @c_ColSDESCR11        NVARCHAR(60),  
+      @c_ColSDESCR11        NVARCHAR(80),    --WC01   
       @c_ColPDQty11         NVARCHAR(5),  
       @c_colORDDETSKU12     NVARCHAR(60),       
-      @c_ColSDESCR12        NVARCHAR(60),  
+      @c_ColSDESCR12        NVARCHAR(80),    --WC01 
       @c_ColPDQty12         NVARCHAR(5),  
       @c_colORDDETSKU13     NVARCHAR(60),       
-      @c_ColSDESCR13        NVARCHAR(60),  
+      @c_ColSDESCR13        NVARCHAR(80),    --WC01  
       @c_ColPDQty13         NVARCHAR(5),  
       @c_colORDDETSKU14     NVARCHAR(60),       
-      @c_ColSDESCR14        NVARCHAR(60),  
+      @c_ColSDESCR14        NVARCHAR(80),    --WC01  
       @c_ColPDQty14         NVARCHAR(5),  
       @c_colORDDETSKU15     NVARCHAR(60),       
-      @c_ColSDESCR15        NVARCHAR(60),  
+      @c_ColSDESCR15        NVARCHAR(80),    --WC01  
       @c_ColPDQty15         NVARCHAR(5),  
       @c_colORDDETSKU16     NVARCHAR(60),       
-      @c_ColSDESCR16        NVARCHAR(60),  
+      @c_ColSDESCR16        NVARCHAR(80),    --WC01   
       @c_ColPDQty16         NVARCHAR(5),  
                
       @c_ColContentsku    NVARCHAR(20),   
-      @c_ColContentDescr  NVARCHAR(60),   
+      @c_ColContentDescr  NVARCHAR(80),       --WC01   
       @c_ColContentqty    NVARCHAR(5),    
       @c_CartonType       NVARCHAR(10),  
       @c_GETCartonType    NVARCHAR(10),  
@@ -249,7 +250,7 @@ DECLARE
       [ID]          [INT] IDENTITY(1,1) NOT NULL,          
       [OrderKey]    [NVARCHAR] (10) NULL,                                    
       [ORDSku]      [NCHAR] (20) NULL,  
-      [SDESCR]      [NVARCHAR](60) NULL,                           
+      [SDESCR]      [NVARCHAR](80) NULL,   --WC01                           
       [TTLPICKQTY]  [INT] NULL,          
       [Retrieve]    [NVARCHAR] (1) default 'N')               
           
