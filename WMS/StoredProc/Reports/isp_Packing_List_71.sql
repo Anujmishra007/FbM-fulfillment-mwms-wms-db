@@ -30,6 +30,7 @@ GO
 /* 2020-03-25   WLChooi   1.3 WMS-12621 - Add QRCode, modify layout and */
 /*                            logic (WL03)                              */
 /* 2021-11-10   LZG       1.4 JSM-32522-Changed to PickDetail.Qty (ZG01)*/
+/* 2022-02-10   SPChin    1.5 JSM-46792 - Bug Fixed                     */
 /************************************************************************/
 
 CREATE PROC isp_Packing_List_71
@@ -158,7 +159,7 @@ BEGIN
               -- , SKU.RetailSKU
                , OD.Userdefine01 --OD.Userdefine03   --WL03
                , ISNULL(CL3.NOTES,'')
-               , PID.Qty                             -- ZG01
+               , SUM(PID.Qty)               --JSM-46792, ZG01
                , ISNULL(CL1.UDF01,'')
                , dbo.fn_Encode_IDA_Code128 (LTRIM(RTRIM(PH.PICKSLIPNO)))
                , dbo.fn_Encode_IDA_Code128 (LTRIM(RTRIM(OS.ORDERKEY)))
@@ -178,7 +179,7 @@ BEGIN
          JOIN ORDERDETAIL OD(NOLOCK) ON OD.ORDERKEY = OS.ORDERKEY
          JOIN SKU (NOLOCK) ON OD.SKU = SKU.SKU AND OD.STORERKEY = SKU.STORERKEY
          JOIN PACKHEADER PH (NOLOCK) ON PH.ORDERKEY =OS.ORDERKEY AND PH.STORERKEY = OS.STORERKEY
-         JOIN PACKDETAIL PD (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO AND PD.SKU = OD.SKU
+         --JOIN PACKDETAIL PD (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO AND PD.SKU = OD.SKU  --JSM-46792
          JOIN PICKDETAIL PID (NOLOCK) ON PID.Orderkey = OD.Orderkey AND PID.SKU = OD.SKU AND PID.OrderLineNumber = OD.OrderLineNumber   --WL02
          LEFT JOIN CODELKUP CL1 (NOLOCK) ON OS.STORERKEY = CL1.STORERKEY AND CL1.LISTNAME ='ECDLMODE' and CL1.Code = OS.Shipperkey and CL1.Code2 = ''   --WL03
          LEFT JOIN CODELKUP CL2 (NOLOCK) ON OS.STORERKEY = CL2.STORERKEY AND CL2.LISTNAME ='PLATFORM' and CL2.Code = OI.Platform
@@ -196,7 +197,7 @@ BEGIN
               -- , SKU.RetailSKU
                , OD.Userdefine01 --OD.Userdefine03   --WL03
                , ISNULL(CL3.NOTES,'')
-               , PID.Qty                             -- ZG01
+               --, PID.Qty                           --JSM-46792, ZG01
                , ISNULL(CL1.UDF01,'')
                , OI.Ecomorderid
                , PID.Loc
