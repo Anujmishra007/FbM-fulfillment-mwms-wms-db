@@ -99,7 +99,8 @@ BEGIN
           ,@cUseUdf04AsTrackNo   NVARCHAR( 1)   -- (james03)
     
    DECLARE @nWeight FLOAT,    
-           @nCube   FLOAT    
+           @nCube   FLOAT,
+           @cOrderKey NVARCHAR(20)
     
    DECLARE @cTrackingNo NVARCHAR(20)    
     
@@ -126,7 +127,33 @@ BEGIN
 
    IF @nStep = 2        
    BEGIN        
-      SET @nCartonNo = 0       
+      SET @nCartonNo = 0   
+      
+      IF NOT EXISTS (SELECT 1 FROM rdt.rdtECOMMLog ECOMM WITH (NOLOCK)    
+                  WHERE ToteNo = @cDropID    
+                  AND ExpectedQty > ScannedQty    
+                  AND Status < '5'    
+                  AND Orderkey = @cPrevOrderkey    
+                  AND AddWho = @cUserName)    
+      BEGIN    
+          SET @cOrderkey = ''    
+      END    
+      ELSE    
+      BEGIN    
+          SET @cOrderkey = @cPrevOrderkey    
+      END    
+
+      IF ISNULL(RTRIM(@cOrderkey),'') = ''    
+      BEGIN    
+         -- processing new order    
+         SELECT @cOrderkey   = MIN(RTRIM(ISNULL(Orderkey,'')))    
+         FROM rdt.rdtECOMMLog WITH (NOLOCK)    
+         WHERE ToteNo = @cDropID    
+         AND   Status IN ('0', '1')    
+         AND   Sku = @cSKU    
+         AND   AddWho = @cUserName    
+    
+      END
       
       IF ISNULL( @cPickSlipno ,'') = ''        
       BEGIN        

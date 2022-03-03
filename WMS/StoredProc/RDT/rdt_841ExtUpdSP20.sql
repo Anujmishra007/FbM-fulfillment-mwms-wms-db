@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_841ExtUpdSP20]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_841ExtUpdSP20]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,28 +12,30 @@ GO
 /* Modifications log:                                                   */  
 /* Date        Rev  Author   Purposes                                   */  
 /* 2021-08-12   1.0  yeekung  WMS-17055. Created                        */
+/* 2021-07-27   1.1  Chermain WMS-17410 Add VariableTable Param (cc01)  */
 /************************************************************************/  
 
-CREATE PROC [RDT].[rdt_841ExtUpdSP20] (  
-   @nMobile     INT,  
-   @nFunc       INT,  
-   @cLangCode   NVARCHAR( 3),  
-   @cUserName   NVARCHAR( 15),  
-   @cFacility   NVARCHAR( 5),  
-   @cStorerKey  NVARCHAR( 15),  
-   @cDropID     NVARCHAR( 20),  
-   @cSKU        NVARCHAR( 20),  
-   @nStep       INT,  
-   @cPickslipNo NVARCHAR( 10),  
+CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP20] (  
+   @nMobile       INT,  
+   @nFunc         INT,  
+   @cLangCode     NVARCHAR( 3),  
+   @cUserName     NVARCHAR( 15),  
+   @cFacility     NVARCHAR( 5),  
+   @cStorerKey    NVARCHAR( 15),  
+   @cDropID       NVARCHAR( 20),  
+   @cSKU          NVARCHAR( 20),  
+   @nStep         INT,  
+   @cPickslipNo   NVARCHAR( 10),  
    @cPrevOrderkey NVARCHAR(10),  
-   @cTrackNo     NVARCHAR( 20),  
-   @cTrackNoFlag NVARCHAR(1)   OUTPUT,  
-   @cOrderKeyOut NVARCHAR(10)  OUTPUT,  
-   @nErrNo       INT           OUTPUT,  
-   @cErrMsg      NVARCHAR( 20) OUTPUT,
-   @cCartonType  NVARCHAR( 20) = '',  --(yeekung01)
-   @cSerialNo                 NVARCHAR( 30), 
-   @nSerialQTY                INT 
+   @cTrackNo      NVARCHAR( 20),  
+   @cTrackNoFlag  NVARCHAR(1)   OUTPUT,  
+   @cOrderKeyOut  NVARCHAR(10)  OUTPUT,  
+   @nErrNo        INT           OUTPUT,  
+   @cErrMsg       NVARCHAR( 20) OUTPUT,  -- screen limitation, 20 char max  
+   @cCartonType   NVARCHAR( 20) ='',  --(yeekung01) 
+   @cSerialNo     NVARCHAR( 30), 
+   @nSerialQTY    INT,
+   @tExtUpd       VariableTable READONLY  
 ) AS  
 BEGIN  
    SET NOCOUNT ON  
