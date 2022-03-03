@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave_35]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [dbo].[isp_GetPickSlipWave_35]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +14,7 @@ GO
 /* Called By: RCM - Generate Pickslip                                   */
 /*          : Datawindow - r_dw_print_wave_pickslip_35                  */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -27,8 +23,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 28-Oct-2021  WLChooi  1.0  DevOps Combine Script                     */
+/* 03-Mar-2022  WLChooi  1.1  WMS-18172 Change DeliveryDate column(WL01)*/
 /************************************************************************/
-CREATE PROC dbo.isp_GetPickSlipWave_35 (  
+CREATE OR ALTER PROC dbo.isp_GetPickSlipWave_35 (  
    @c_wavekey_type          NVARCHAR(13)  
 )  
 AS  
@@ -295,7 +292,8 @@ BEGIN
       PICKDETAIL.PICKDETAILKey,
       PACK.Casecnt,
       ORDERS.ExternOrderKey,
-      ISNULL(ORDERS.DeliveryDate, ''), 
+      --ISNULL(ORDERS.DeliveryDate, ''),   --WL01
+      CASE WHEN ISDATE(ORDERS.UserDefine10) = 1 THEN CONVERT(DATE, ORDERS.UserDefine10) ELSE NULL END,   --WL01
       ORDERS.[Route],
       ISNULL(ORDERS.C_Address1, ''),   
       ISNULL(ORDERS.C_Address2, ''),   
@@ -351,7 +349,8 @@ BEGIN
             ORDERS.Storerkey,  
             WD.WaveKey,PICKDETAIL.PICKDETAILKey,
             ORDERS.ExternOrderKey,
-            ISNULL(ORDERS.DeliveryDate, ''),
+            --ISNULL(ORDERS.DeliveryDate, ''),   --WL01
+            CASE WHEN ISDATE(ORDERS.UserDefine10) = 1 THEN CONVERT(DATE, ORDERS.UserDefine10) ELSE NULL END,   --WL01
             ORDERS.[Route],
             ISNULL(ORDERS.C_Address1, ''),   
             ISNULL(ORDERS.C_Address2, ''), 
