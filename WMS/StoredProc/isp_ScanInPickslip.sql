@@ -1,7 +1,3 @@
-USE [TWWMS]
-GO
-
-/****** Object:  StoredProcedure [dbo].[isp_ScanInPickslip]    Script Date: 5/12/2020 10:23:40 AM ******/
 SET ANSI_NULLS OFF
 GO
 
@@ -55,8 +51,7 @@ GO
 /* 11-05-2020  MCTang     2.3   Add scanin3log (MC04)                      */
 /* 24-Jan-2022 MCTang     2.4   Add scanin4log & scanin5log (MC05)         */
 /***************************************************************************/
-
-ALTER PROCEDURE [dbo].[isp_ScanInPickslip]
+CREATE OR ALTER PROCEDURE [dbo].[isp_ScanInPickslip]
    @c_PickSlipNo NVARCHAR(10),
    @c_PickerID   NVARCHAR(18),
    @n_err        INT = 0            OUTPUT,

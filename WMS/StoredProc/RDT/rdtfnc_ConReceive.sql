@@ -422,8 +422,8 @@ BEGIN
       --SET @cColumnName = rdt.RDTGetConfig( @nFunc, 'RefNoLookupColumn', @cStorerKey)
          
       ---- Get lookup field data type
-      --DECLARE @cDataType NVARCHAR(128)
-      --SET @cDataType = ''
+      DECLARE @cDataType NVARCHAR(128)
+      SET @cDataType = ''
       --SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Receipt' AND COLUMN_NAME = @cColumnName
 
       ---- Check lookup field

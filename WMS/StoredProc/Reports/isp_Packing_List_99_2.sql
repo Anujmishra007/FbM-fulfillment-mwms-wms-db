@@ -1,4 +1,8 @@
-  
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
 /************************************************************************/    
 /* Stored Proc: isp_Packing_List_99_2                                   */    
 /* Creation Date: 18-Mar-2021                                           */    
@@ -19,7 +23,7 @@
 /* Date         Author    Ver Purposes                                  */     
 /************************************************************************/    
     
-CREATE PROC isp_Packing_List_99_2   
+CREATE OR ALTER PROC isp_Packing_List_99_2   
             @as_pickslipno     NVARCHAR(10)  
 AS  
 BEGIN  

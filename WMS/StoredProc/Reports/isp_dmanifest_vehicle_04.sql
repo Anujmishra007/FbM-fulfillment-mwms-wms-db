@@ -1,4 +1,8 @@
-  
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
 /************************************************************************/          
 /* Stored Procedure: isp_dmanifest_vehicle_04                           */          
 /* Creation Date: 2020-09-01                                            */          
@@ -21,7 +25,7 @@
 /* 12-May-2021 mingle01  1.2   WMS-16488 - Add new mapping(ML01)        */      
 /************************************************************************/          
           
-CREATE PROC isp_dmanifest_vehicle_04 (          
+CREATE OR ALTER PROC isp_dmanifest_vehicle_04 (          
     @c_mbolkey NVARCHAR(10)          
  )          
  AS          

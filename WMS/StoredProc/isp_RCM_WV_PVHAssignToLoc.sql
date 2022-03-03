@@ -1,12 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_RCM_WV_PVHAssignToLoc]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_RCM_WV_PVHAssignToLoc]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /************************************************************************/
 /* Stored Procedure: isp_RCM_WV_PVHAssignToLoc                          */
@@ -33,7 +28,7 @@ GO
 /* 2019-01-18   LZG       1.2   INC0550137 - Performance tune (ZG01)    */
 /************************************************************************/
 
-CREATE  PROCEDURE [dbo].[isp_RCM_WV_PVHAssignToLoc]
+CREATE OR ALTER  PROCEDURE [dbo].[isp_RCM_WV_PVHAssignToLoc]
    @c_Wavekey  NVARCHAR(10),
    @b_success  int OUTPUT,
    @n_err      int OUTPUT,

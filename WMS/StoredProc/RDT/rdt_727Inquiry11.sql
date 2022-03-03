@@ -13,8 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                     */
 /* 2022-01-28 1.0  Ung        WMS-18845 Created                            */
 /***************************************************************************/
-
-CREATE PROC [RDT].[rdt_727Inquiry11] (
+CREATE OR ALTER PROC [RDT].[rdt_727Inquiry11] (
  	@nMobile      INT,  
    @nFunc        INT,  
    @nStep        INT,  

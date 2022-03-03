@@ -1,3 +1,8 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
 /******************************************************************************/                          
 /* Store Procedure: isp_GetDispatchLabel_11                                   */                          
 /* Creation Date: 05-Mar-2021                                                 */                          
@@ -20,7 +25,7 @@
 /* Date         Author    Ver.  Purposes                                      */             
 /******************************************************************************/                 
               
-CREATE PROC isp_GetDispatchLabel_11                         
+CREATE OR ALTER PROC isp_GetDispatchLabel_11                         
        (@c_MBOLNumber     NVARCHAR(10),            
         @c_ORDERNumber    NVARCHAR(10) = '',            
         @c_CurrentPage    NVARCHAR(10) = '',            
