@@ -1,6 +1,6 @@
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
@@ -57,8 +57,8 @@ BEGIN
    	      ,@c_ConsigneeKey	   NVARCHAR(15)
 
    CREATE TABLE #Temp_Loc (ToLoc NVARCHAR(20))
-   CREATE INDEX IDX_TOLOC ON #Temp_Loc (ToLoc) 
-
+   CREATE INDEX IDX_TOLOC ON #Temp_Loc (ToLoc) 
+   
    SELECT @n_Continue = 1, @b_success = 1, @n_starttcnt=@@TRANCOUNT, @c_errmsg='', @n_err=0
 
    SET @n_Cnt = 0
