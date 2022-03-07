@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1764CreateTask06]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1764CreateTask06]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,9 +10,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 2021-01-29  1.0  James     WMS-15656. Created                        */
+/* 2022-02-21  1.1  yeekung   WMS-18718 add wave.userdefine01 (yeekung01)*/
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_1764CreateTask06] (
+CREATE OR ALTER PROC [rdt].[rdt_1764CreateTask06] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -68,6 +66,7 @@ BEGIN
    DECLARE @nQTY              INT
    DECLARE @nIsFromYogaMat    INT = 0
    DECLARE @nLoseID           INT
+   DECLARE @cWavekey          NVARCHAR(20)
 
    -- Init var
    SET @nErrNo = 0
@@ -109,7 +108,8 @@ BEGIN
    SET @cExtendedPutawaySP = rdt.rdtGetConfig( @nFunc, 'ExtendedPutawaySP', @cStorerKey)
    IF @cExtendedPutawaySP = '0'
       SET @cExtendedPutawaySP = ''  
-      
+   
+
    -- Handling transaction
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_1764CreateTask06 -- For rollback or commit only our own transaction
@@ -126,7 +126,7 @@ BEGIN
    FETCH NEXT FROM @curRPTLog INTO @cOrgTaskKey, @cFromLoc
    WHILE @@FETCH_STATUS = 0
    BEGIN
-      SELECT TOP 1 @cOrdType = O.[Type]
+      SELECT TOP 1 @cOrdType = O.[Type],@cWavekey=pd.WaveKey
       FROM dbo.PICKDETAIL PD WITH (NOLOCK)
       JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)
       WHERE PD.TaskDetailKey = @cOrgTaskKey
@@ -136,6 +136,15 @@ BEGIN
       FROM dbo.LOC WITH (NOLOCK)
       WHERE Facility = @cFacility
       AND   Loc = @cFromLoc
+
+      
+      IF EXISTS (SELECT 1 
+            FROM wave (nolock)
+            where wavekey=@cwavekey
+            and userdefine01<>'') and  @cPutawayZone <> 'LULUCP'
+      BEGIN
+         BREAK
+      END
       
       IF @cOrdType = 'LULUECOM' OR @cPutawayZone = 'LULUCP'
       BEGIN
