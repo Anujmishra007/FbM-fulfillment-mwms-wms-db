@@ -40,5 +40,9 @@ execute rdt.rdtAddMsg 179436, 10, '179436UpdPickInfoFail ',  'us_english',841
 execute rdt.rdtAddMsg 179437, 10, '179437UpdOrdFail ',  'us_english',841
 execute rdt.rdtAddMsg 179438, 10, '179438GetRightFail',  'us_english',841
 execute rdt.rdtAddMsg 179439, 10, '179439AutoMBOLPack',  'us_english',841
+execute rdt.rdtAddMsg 179440, 10, '179440UpdPackDetFail', 'us_english', 841
+execute rdt.rdtAddMsg 179441, 10, '179441UpdOrdFail ',  'us_english',841
+execute rdt.rdtAddMsg 179442, 10, '179442UpdPHFail ',  'us_english',841
 execute rdt.rdtAddMsg 179443, 10, 'PLS USE BOX',         'us_english', 841
 execute rdt.rdtAddMsg 179444, 10, 'PLS USE GWP',         'us_english', 841
+execute rdt.rdtAddMsg 179445, 10, '179445UpdPickInfoFail',         'us_english', 841

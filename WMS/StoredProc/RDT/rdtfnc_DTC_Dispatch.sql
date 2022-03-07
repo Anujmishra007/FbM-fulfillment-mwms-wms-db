@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_DTC_Dispatch]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-	DROP PROCEDURE [RDT].[rdtfnc_DTC_Dispatch]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -70,7 +66,7 @@ GO
 /*2021-07-22 1.40 Chermain WMS-17410 Add Weight in scn7 & Add VariableTable  */
 /*                         table for externalUpdateSP & Add ExtInfo st7(cc01)*/
 /*****************************************************************************/  
-CREATE PROC [RDT].[rdtfnc_DTC_Dispatch](  
+CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -189,6 +185,8 @@ DECLARE
    @cCube               NVARCHAR( 10),  --(cc01)
    @cWeight             NVARCHAR( 10),  --(cc01)
    @cRefNo              NVARCHAR( 20),  --(cc01)
+   @cRefNoLookupSP       NVARCHAR( 20),   -- (james14)      
+   @cRefNoInsLogSP       NVARCHAR( 20),   -- (james14)    
    @tExtUpd             VariableTable,  --(cc01)
    @cAllowWeightZero    NVARCHAR( 1),   --(cc01) 
    @cAllowCubeZero      NVARCHAR( 1),   --(cc01)
@@ -492,11 +490,12 @@ Step 1. screen = 3910
 Step_1:  
 BEGIN  
    IF @nInputKey = 1 -- ENTER  
- BEGIN  
+   BEGIN  
       -- Screen mapping  
       SET @cToteno  = @cInField01  
       SET @cWaveKey = @cInField02  
-      SET @cLoadKey = @cInField03  
+      SET @cLoadKey = @cInField03 
+      SET @cRefno   = @cInField04 
         
         
       /****************************  
@@ -524,6 +523,43 @@ BEGIN
          END
       END  
       -- End  
+
+      -- (james14)       -- Lookup ref no         
+      IF @cRefNo <> ''          
+      BEGIN            
+         SET @cRefNoLookupSP = rdt.RDTGetConfig( @nFunc, 'RefNoLookupSP', @cStorerkey)                                
+         IF @cRefNoLookupSP = '0'                               
+            SET @cRefNoLookupSP = ''                      
+            -- Custom get orderkey sp. Can do swap lot inside the sp and insert ecommlog              
+         IF @cRefNoLookupSP <> '' AND EXISTS ( SELECT 1 FROM dbo.sysobjects WHERE name = @cRefNoLookupSP AND type = 'P')   
+         BEGIN                 
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cRefNoLookupSP) +                    
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cRefNo,                        
+            @cToteNo OUTPUT, @cWaveKey OUTPUT, @cLoadKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '                 
+            SET @cSQLParam =                    
+            '@nMobile                     INT,           ' +                  
+            '@nFunc                       INT,           ' +                  
+            '@cLangCode                   NVARCHAR( 3),  ' +               
+            '@nStep                       INT,           ' +                  
+            '@nInputKey                   INT,           ' +                  
+            '@cStorerkey                  NVARCHAR( 15), ' +                  
+            '@cRefNo                      NVARCHAR( 20), ' +                  
+            '@cToteNo                     NVARCHAR( 20) OUTPUT,     ' +                  
+            '@cWaveKey                    NVARCHAR( 10) OUTPUT,     ' +                  
+            '@cLoadKey                    NVARCHAR( 10) OUTPUT,     ' +                  
+            '@nErrNo                      INT           OUTPUT,     ' +           
+            '@cErrMsg                     NVARCHAR( 20) OUTPUT      '                
+              
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                    
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cRefNo,                      
+            @cToteNo OUTPUT, @cWaveKey OUTPUT, @cLoadKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT                  
+            IF @nErrNo <> 0               
+            BEGIN                  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')                   
+               GOTO Step_1_Fail               
+            END         
+         END           
+      END    
         
       -- (ChewKP01)   
       IF ISNULL(RTRIM(@cWavekey),'')  <> '' OR ISNULL(RTRIM(@cLoadKey),'')  <> ''   
