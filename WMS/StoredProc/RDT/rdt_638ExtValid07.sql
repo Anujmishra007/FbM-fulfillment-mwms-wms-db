@@ -175,6 +175,7 @@ AS
                   @cErrMsg,
                   'NOT fully received',
                   'Please check received qty'
+                  SET @nErrNo = 174305 
 
                   GOTO Quit  
                END  
