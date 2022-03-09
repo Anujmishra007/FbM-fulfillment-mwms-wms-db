@@ -1,9 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_CN_UCCLabel_01_UA]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_BT_Bartender_CN_UCCLabel_01_UA]
-
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,9 +12,10 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
 /* 2018-02-01 1.0  CSCHONG    Created (WMS-3883)                              */ 
+/* 2022-02-27 1.1  MINGLE     add new col5&6(ML01) (WMS-18936)                */
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_BT_Bartender_CN_UCCLabel_01_UA]                      
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_CN_UCCLabel_01_UA]                      
 (  @c_Sparm01            NVARCHAR(250),              
    @c_Sparm02            NVARCHAR(250),              
    @c_Sparm03            NVARCHAR(250),              
@@ -149,8 +144,7 @@ BEGIN
       [Col59] [NVARCHAR] (80) NULL,              
       [Col60] [NVARCHAR] (80) NULL             
      )        
-     
-     
+      
       CREATE TABLE [#TEMPLLISKU03] (                   
       [ID]          [INT] IDENTITY(1,1) NOT NULL,                                      
       [Storerkey]   [NVARCHAR] (20) NULL,  
@@ -159,8 +153,8 @@ BEGIN
       [Qty]         INT , 
       [Retrieve]    [NVARCHAR] (1) default 'N')         
   	        
-  SET @c_SQLJOIN = +' SELECT DISTINCT U.uccno,u.sku,s.ALTSKU,s.packkey,'''','+ CHAR(13)      --5      
-             + ' '''','''','''','''','''','     --10  
+  SET @c_SQLJOIN = +' SELECT DISTINCT U.uccno,u.sku,s.ALTSKU,s.packkey,SUSER_SNAME(),'+ CHAR(13)      --5  --ML01    
+             + ' convert(varchar, getdate(), 20),'''','''','''','''','     --10                            --ML01
              + ' '''','''','''','''','''','     --15  
              + ' '''','''','''','''','''','     --20       
              + CHAR(13) +      
@@ -247,6 +241,6 @@ GRANT EXECUTE ON [dbo].[isp_BT_Bartender_CN_UCCLabel_01_UA] TO nsql
 GO
 
   
-   
+
   
   

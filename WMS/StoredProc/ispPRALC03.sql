@@ -29,6 +29,7 @@ GO
 /* 15-May-2018  NJOW01  1.2   WMS-3801 Enhancements                     */
 /* 09-July-2018	NJOW02  1.3   WMS-5635 zone sorting based on multiple   */
 /*                            codelkup by consignee                     */
+/* 28-Jul-2021	NJOW03  1.4   WMS-17580 exclude lottable12=INACCESSIBLE */
 /************************************************************************/  
 CREATE PROC ispPRALC03 (
      @c_OrderKey        NVARCHAR(10)  
@@ -299,6 +300,8 @@ BEGIN
             
       SELECT @c_LimitString = RTRIM(@c_LimitString) + ' AND NOT EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) WHERE SUBSTRING(CODELKUP.Code,3,1) = LOTATTRIBUTE.Lottable11 ' +
                                                       ' AND CODELKUP.Listname =''NONSTKITF'' AND CODELKUP.Long = ''NIKECN'') ' --NJOW02
+                                                      
+      SELECT @c_LimitString = RTRIM(@c_LimitString) + ' AND Lottable12 <> ''INACCESSIBLE'' '  --NJOW03                                                
       
       /*
       --NJOW01 Start         		

@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_1836ConfirmSP03]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1836ConfirmSP03]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -13,9 +10,10 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 2020-03-24   James     1.0   WMS-15659 Created                             */
 /* 2021-08-03   James     1.1   Fix full case pick error (james01)            */
+/* 2022-02-23   YeeKung   1.2   WMS-18969 add wave.userdefine01(yeekung01)    */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_1836ConfirmSP03]
+CREATE OR ALTER  PROCEDURE [RDT].[rdt_1836ConfirmSP03]
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -498,6 +496,15 @@ BEGIN
                AND   WaveKey = @cWavekey
                AND   StorerKey = @cStorerKey
                ORDER BY 1
+
+            IF EXISTS(SELECT 1               --(yeekung01)
+                      FROM wave (NOLOCK)
+                      where wavekey=@cWavekey
+                      --and storerkey=@cStorerKey
+                      and userdefine01<>'')
+            BEGIN
+               SET @cToLoc='LULUGRS'
+            END
          END
          ELSE  -- @cTaskType = 'PK'
          BEGIN
