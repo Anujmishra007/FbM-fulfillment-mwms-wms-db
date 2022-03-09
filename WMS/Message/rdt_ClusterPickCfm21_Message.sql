@@ -1,0 +1,21 @@
+--rdt_ClusterPickCfm21
+execute rdt.rdtdropmsg 181151, 181200
+
+execute rdt.rdtAddMsg 181151, 10, '181151OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181152, 10, '181152OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181153, 10, '181153OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181154, 10, '181154GetDetKeyFail',  'us_english'
+execute rdt.rdtAddMsg 181155, 10, '181155Ins PDtl Fail',  'us_english'
+execute rdt.rdtAddMsg 181156, 10, '181156INS RefKeyFail', 'us_english'
+execute rdt.rdtAddMsg 181157, 10, '181157OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181158, 10, '181158OffSetPDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181159, 10, '181159SKU OverPacked', 'us_english'
+execute rdt.rdtAddMsg 181160, 10, '181160InsPHdrFail',    'us_english'
+execute rdt.rdtAddMsg 181161, 10, '181161GenLabelFail',   'us_english'
+execute rdt.rdtAddMsg 181162, 10, '181162InsPackDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181163, 10, '181163InsPackDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181164, 10, '181164UpdPackDtlFail', 'us_english'
+execute rdt.rdtAddMsg 181165, 10, '181165UpdCaseID Fail', 'us_english'
+execute rdt.rdtAddMsg 181166, 10, '181166UPDPKLockFail',  'us_english'
+execute rdt.rdtAddMsg 181167, 10, '181167UPDPKLockFail',  'us_english'
+execute rdt.rdtAddMsg 181168, 10, '1811687UPDPKLockFail',  'us_english'
