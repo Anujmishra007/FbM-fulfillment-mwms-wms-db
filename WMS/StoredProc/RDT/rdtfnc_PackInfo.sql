@@ -790,7 +790,6 @@ BEGIN
                SET @cOutField08 = ''
                GOTO QUIT
             END
-            INSERT INTO traceinfo(TraceName, TimeIn, Col1) VALUES ('921', GETDATE(), @cWeight)
          END
          SET @cOutField08 = @cWeight
       END
