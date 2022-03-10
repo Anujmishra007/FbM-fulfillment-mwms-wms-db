@@ -1,3 +1,8 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPALVF02]')
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
+DROP PROCEDURE [dbo].[ispPALVF02]
+GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -13,7 +18,7 @@ GO
 /*                                                                      */    
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.1                                                    */    
+/* PVCS Version: 1.0                                                    */    
 /*                                                                      */    
 /* Version: 1.0                                                         */    
 /*                                                                      */    
@@ -22,11 +27,8 @@ GO
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */    
 /* 26-Nov-2019  NJOW01  1.0   WMS-10650 Exclude ECOM Wave type          */ 
-/* 10-Mar-2022  WLChooi 1.1   DevOps Combine Script                     */
-/* 10-Mar-2022  WLChooi 1.1   INC1759472 - Performance Tune - Optimize  */ 
-/*                            #NumPool Insertion (WL01)                 */
 /************************************************************************/    
-CREATE OR ALTER PROC [dbo].[ispPALVF02]        
+CREATE  PROC [dbo].[ispPALVF02]        
     @c_WaveKey                      NVARCHAR(10)
   , @c_UOM                          NVARCHAR(10)
   , @c_LocationTypeOverride         NVARCHAR(10)
@@ -82,12 +84,8 @@ BEGIN
       @n_PickQty           INT,
       @c_PackKey           NVARCHAR(10),  
       @c_PickMethod        NVARCHAR(1),
-      @c_WaveType          NVARCHAR(20), --NJOW01
-      @n_Qty               INT,   --WL01
-      @n_SeqNo             INT,   --WL01
-      @n_SumUCC            INT,   --WL01
-      @c_QuitFlag          NVARCHAR(1) = 'N',   --WL01
-      @n_TableCount        INT    --WL01
+      @c_WaveType          NVARCHAR(20) --NJOW01
+
 
    -- FROM VNA BULK Area 
    SET @c_LocationType = 'OTHER'      
@@ -216,17 +214,14 @@ BEGIN
    /*******************************/
 
    DECLARE CURSOR_ORDERLINES CURSOR FAST_FORWARD READ_ONLY FOR 
-   SELECT DISTINCT SKU, StorerKey, Facility, Lottable01, Lottable02, Lottable03, OrderQty   --WL01
+   SELECT DISTINCT SKU, StorerKey, Facility, Lottable01, Lottable02, Lottable03
    FROM #ORDERLINES
 
    OPEN CURSOR_ORDERLINES               
-   FETCH NEXT FROM CURSOR_ORDERLINES INTO @c_SKU, @c_StorerKey, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03, @n_Qty   --WL01
+   FETCH NEXT FROM CURSOR_ORDERLINES INTO @c_SKU, @c_StorerKey, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03
           
    WHILE (@@FETCH_STATUS <> -1)          
    BEGIN 
-      SET @n_SeqNo = 1   --WL01
-      SET @c_QuitFlag = 'N'   --WL01
-      SET @n_SumUCC = 0   --WL01
 
       IF @b_Debug = 1
       BEGIN
@@ -277,38 +272,10 @@ BEGIN
          
       EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_Lottable01, @c_Lottable02, @c_Lottable03 
 
-      --WL01 S
-      --INSERT INTO #NumPool (UCCQty, CntCount)
-      --SELECT UCCQty, SUM(CntCount)
-      --FROM #UCCxLOTxLOCxID WITH (NOLOCK)
-      --GROUP BY UCCQty
-
-      SELECT @n_TableCount = COUNT(1)
-      FROM #UCCxLOTxLOCxID
-
-      --Only insert best fit UCCQty, do not insert all UCCQty due to performance concern
-      WHILE (@c_QuitFlag = 'N' AND @n_TableCount >= @n_SeqNo)
-      BEGIN
-         INSERT INTO #NumPool (UCCQty, CntCount)   
-         SELECT TOP (@n_SeqNo) UCCQty, SUM(CntCount)
-         FROM #UCCxLOTxLOCxID WITH (NOLOCK)
-         GROUP BY UCCQty
-         ORDER BY UCCQty
-
-         SELECT @n_SumUCC = SUM(UCCQty)
-         FROM #NumPool WITH (NOLOCK)
-
-         IF @n_SumUCC >= @n_Qty
-         BEGIN
-            SET @c_QuitFlag = 'Y'
-         END
-         ELSE
-         BEGIN
-            SET @n_SeqNo = @n_SeqNo + 1
-            DELETE FROM #NumPool
-         END
-      END
-      --WL01 E
+      INSERT INTO #NumPool (UCCQty, CntCount)
+      SELECT UCCQty, SUM(CntCount)
+      FROM #UCCxLOTxLOCxID WITH (NOLOCK)
+      GROUP BY UCCQty
 
       -- Get Lower Bound to reduce loop size
       SELECT @n_LowerBound = MIN(UCCQty)
@@ -880,7 +847,7 @@ BEGIN
          PRINT '--------------------------------------------' + CHAR(13)
       END
 
-      FETCH NEXT FROM CURSOR_ORDERLINES INTO @c_SKU, @c_StorerKey, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03 , @n_Qty   --WL01    
+      FETCH NEXT FROM CURSOR_ORDERLINES INTO @c_SKU, @c_StorerKey, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03       
    END -- END WHILE FOR CURSOR_ORDERLINES             
    CLOSE CURSOR_ORDERLINES          
    DEALLOCATE CURSOR_ORDERLINES
@@ -896,37 +863,37 @@ BEGIN
 
 QUIT:
 
-   IF (SELECT CURSOR_STATUS('global','CURSOR_ORDERLINES')) >=0   --WL01
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_ORDERLINES')) >=0 
    BEGIN
       CLOSE CURSOR_ORDERLINES           
       DEALLOCATE CURSOR_ORDERLINES      
    END  
 
-   IF (SELECT CURSOR_STATUS('global','CURSOR_ORDERLINE_SKU')) >=0   --WL01
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_ORDERLINE_SKU')) >=0 
    BEGIN
       CLOSE CURSOR_ORDERLINE_SKU           
       DEALLOCATE CURSOR_ORDERLINE_SKU      
    END  
 
-   IF (SELECT CURSOR_STATUS('global','CURSOR_COMBINATION')) >=0   --WL01
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_COMBINATION')) >=0 
    BEGIN
       CLOSE CURSOR_COMBINATION           
       DEALLOCATE CURSOR_COMBINATION      
    END  
 
-   IF (SELECT CURSOR_STATUS('global','CURSOR_COMBINATION_INNER')) >=0   --WL01
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_COMBINATION_INNER')) >=0 
    BEGIN
       CLOSE CURSOR_COMBINATION_INNER           
       DEALLOCATE CURSOR_COMBINATION_INNER      
    END  
 
-   IF (SELECT CURSOR_STATUS('global','CURSOR_SPLITLIST')) >=0   --WL01
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_SPLITLIST')) >=0 
    BEGIN
       CLOSE CURSOR_SPLITLIST           
       DEALLOCATE CURSOR_SPLITLIST      
    END  
 
-   IF (SELECT CURSOR_STATUS('global','CURSOR_PICKDETAIL')) >=0   --WL01
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_PICKDETAIL')) >=0 
    BEGIN
       CLOSE CURSOR_PICKDETAIL           
       DEALLOCATE CURSOR_PICKDETAIL      
