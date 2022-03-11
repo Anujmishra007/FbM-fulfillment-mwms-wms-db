@@ -19,8 +19,8 @@ EXECUTE rdt.rdtAddScn 5800, 'ENG',
    ,@cLine09 = ''
    ,@cLine10 = ''
    ,@cLine11 = ''
-   ,@cLine12 = ''
-   ,@cLine13 = 'CLOSE PALLET(1=YES)%01i02'
+   ,@cLine12 = 'CLOSE PALLET(1=YES)%01i02'   -- WMS-19061
+   ,@cLine13 = '%20d15'                      -- WMS-19061
    ,@cLine14 = '%e'
    ,@nFunc = 1653
 
