@@ -1,0 +1,6 @@
+--rdt_855ExtValid04
+rdt.rdtDropMsg 183801 , 183850
+
+execute rdt.rdtAddMsg 183801, 10, '183801 PPA Done     ',    'us_english', 855
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 183801 AND 183850
