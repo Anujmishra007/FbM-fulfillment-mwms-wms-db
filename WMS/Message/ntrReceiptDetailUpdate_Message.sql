@@ -67,6 +67,8 @@ execute rdt.rdtAddMsg 94211, 10, '94211 SNoQtyNotTally', 'us_english'
 execute rdt.rdtAddMsg 94212, 10, '94212 UPD SNO fail  ', 'us_english'
 execute rdt.rdtAddMsg 94213, 10, '94213 GetKey fail   ', 'us_english'
 execute rdt.rdtAddMsg 94214, 10, '94214 INS SNO fail  ', 'us_english'
+execute rdt.rdtAddMsg 94215, 10, '94215 Channel req   ', 'us_english'
+execute rdt.rdtAddMsg 94216, 10, '94216 UPD RCPT Fail ', 'us_english'
 
 --WMS-11215
-execute rdt.rdtAddMsg 94215, 10, '94215 GetRight Fail ', 'us_english'
+execute rdt.rdtAddMsg 94217, 10, '94217 GetRight Fail ', 'us_english'
