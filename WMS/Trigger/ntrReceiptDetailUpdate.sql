@@ -169,6 +169,7 @@ GO
 /*                              CopyRecDetValueToLottable.                  */
 /* 13-Jul-2020  NJOW12    5.1   WMS-14228 storerconfig add facility         */
 /* 27-Aug-2021  TLTING06  5.3   Extend ExternReceiptKey field length        */
+/* 14-Mar-2022  James     5.4   Fix RDT error no & message (james03)        */
 /****************************************************************************/ 
  
 CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -1037,7 +1038,7 @@ BEGIN
  
             IF @b_success <> 1 
             BEGIN 
-               SELECT @n_err = 94215 -- @n_err2 
+               SELECT @n_err = 94217 -- @n_err2 
                SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptDetailUpdate' + dbo.fnc_RTrim(@c_errmsg) 
                GOTO QUIT 
             END 
