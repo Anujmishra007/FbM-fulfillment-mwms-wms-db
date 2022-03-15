@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_513Confirm02') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_513Confirm02
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -16,9 +12,12 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 2018-12-18   Ung       1.0   WMS-6467 Created                              */
 /* 2019-07-31   Ung       1.1   WMS-9941 Add QTYPrinted                       */
+/* 2021-06-01   James     1.2   WMS-17130 Ignore filter from id if it is not  */
+/*                              key in. Deduct QTYPrinted (james01)           */
+/*                              Add deduct pendingmovein                      */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_513Confirm02
+CREATE OR ALTER PROCEDURE rdt.rdt_513Confirm02
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -41,6 +40,9 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cPrePackIndicator NVARCHAR( 30)
+   DECLARE @nPackQtyIndicator INT
+   
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
@@ -55,6 +57,13 @@ BEGIN
             DECLARE @cLOCCat NVARCHAR(10)
             SELECT @cLOCCat = LocationCategory FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
 
+            SELECT 
+               @cPrePackIndicator = PrePackIndicator,
+               @nPackQtyIndicator = PackQtyIndicator 
+            FROM dbo.SKU WITH (NOLOCK) 
+            WHERE StorerKey = @cStorerKey 
+            AND   SKU = @cSKU
+            
             -- Receiving stage
             IF @cLOCCat = 'STAGING'
             BEGIN
@@ -64,6 +73,7 @@ BEGIN
                DECLARE @nQTY_Move   INT
                DECLARE @cLOT        NVARCHAR(10)
                DECLARE @nRowRef     INT
+               DECLARE @nRF_Qty     INT
                
                SET @nQTY_Bal = @nQTY
 
@@ -76,11 +86,12 @@ BEGIN
                   SELECT RowRef, LOT, QTY
                   FROM dbo.RFPutaway WITH (NOLOCK)
                   WHERE FromLOC = @cFromLOC
-                     AND FromID = @cFromID
+                     AND (( ISNULL( @cFromID, '') = '') OR ( FromID = @cFromID))
                      AND StorerKey = @cStorerKey
                      AND SKU = @cSKU
                      AND SuggestedLOC = @cToLOC
                      AND QTYPrinted > 0
+                     AND qty <> 0
                   ORDER BY RowRef
                OPEN @curRF
                FETCH NEXT FROM @curRF INTO @nRowRef, @cLOT, @nQTY_RF
@@ -123,13 +134,25 @@ BEGIN
                   END
                   ELSE
                   BEGIN
+                  	/*Tracing purpose*/
+                  	DECLARE @nOri_Qty INT, @nOri_QtyPrinted INT, @nAf_Qty INT, @nAf_QtyPrinted INT
+                  	SELECT @nOri_Qty = Qty, @nOri_QtyPrinted = QTYPrinted
+                  	FROM dbo.RFPUTAWAY WITH (NOLOCK)
+                  	WHERE RowRef = @nRowRef
+                  	
                      UPDATE dbo.RFPutaway SET 
-                        QTY = QTY - @nQTY_Move
+                        QTY = QTY - @nQTY,
+                        QTYPrinted = QTYPrinted - @nQTY
                      WHERE RowRef = @nRowRef
+
                      IF @@ERROR <> 0
                         GOTO RollBackTran
+
+                     SELECT @nAf_Qty = Qty, @nAf_QtyPrinted = QTYPrinted
+                  	FROM dbo.RFPUTAWAY WITH (NOLOCK)
+                  	WHERE RowRef = @nRowRef
                   END
-                  
+
                   -- Reduce QTY
                   SET @nQTY_Bal = @nQTY_Bal - @nQTY_Move
 
@@ -148,6 +171,41 @@ BEGIN
                   GOTO RollBackTran
                END
 
+               -- Booking (RFPutaway) qty empty only need clear 
+               IF EXISTS ( SELECT 1
+                           FROM dbo.RFPutaway WITH (NOLOCK)
+                           WHERE FromLOC = @cFromLOC
+                           AND  (( ISNULL( @cFromID, '') = '') OR ( FromID = @cFromID))
+                           AND   StorerKey = @cStorerKey
+                           AND   SKU = @cSKU
+                           AND   SuggestedLOC = @cToLOC)
+               BEGIN
+                  SELECT @nRF_Qty = ISNULL( SUM( QTY), 0)
+                  FROM dbo.RFPutaway WITH (NOLOCK)
+                  WHERE FromLOC = @cFromLOC
+                  AND  (( ISNULL( @cFromID, '') = '') OR ( FromID = @cFromID))
+                  AND   StorerKey = @cStorerKey
+                  AND   SKU = @cSKU
+                  AND   SuggestedLOC = @cToLOC
+
+                  IF @nRF_Qty = 0
+                  BEGIN
+                     -- Unlock  suggested location
+                     EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+                        ,@cFromLOC      --@cFromLOC
+                        ,@cFromID--@cFromID
+                        ,@cToLOC --@cSuggestedLOC
+                        ,''      --@cStorerKey
+                        ,@nErrNo  OUTPUT
+                        ,@cErrMsg OUTPUT
+                     IF @nErrNo <> 0
+                     BEGIN
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                        GOTO RollBackTran
+                     END
+                  END
+               END
+               
                COMMIT TRAN rdt_513Confirm02
             END
             
@@ -175,7 +233,21 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                   GOTO RollBackTran
                END
-               
+
+               -- Unlock  suggested location
+               EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+                  ,@cFromLOC      --@cFromLOC
+                  ,@cFromID--@cFromID
+                  ,@cToLOC --@cSuggestedLOC
+                  ,''      --@cStorerKey
+                  ,@nErrNo  OUTPUT
+                  ,@cErrMsg OUTPUT
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO RollBackTran
+               END
+            
                COMMIT TRAN rdt_513Confirm02
             END
          END
