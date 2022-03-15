@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1764GetTask08]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1764GetTask08]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,9 +10,10 @@ GO
 /*                                                                            */
 /* Date        Rev  Author    Purposes                                        */
 /* 16-08-2011  1.0  Ung       WMS-10161 Created (from rdt_TMRPFTask_ANF)      */
+/* 03-03-2022  1.1  Ung       WMS-19012 Add UserKeyOverRide                   */
 /******************************************************************************/
 
-CREATE PROC [rdt].[rdt_1764GetTask08] (
+CREATE OR ALTER PROC [rdt].[rdt_1764GetTask08] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -144,7 +142,11 @@ BEGIN
                   WHERE PermissionType = TaskDetail.TaskType
                      AND TMU.UserKey = @cUserName
                      AND TMU.Permission = '1')
-         ORDER BY TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC1.LogicalLocation
+            ,LOC1.LOC
    ELSE
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TOP 1
@@ -168,7 +170,11 @@ BEGIN
                   WHERE PermissionType = TaskDetail.TaskType
                      AND TMU.UserKey = @cUserName
                      AND TMU.Permission = '1')
-         ORDER BY TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC1.LogicalLocation
+            ,LOC1.LOC
 
    OPEN @curRPTask
    WHILE (1=1)
