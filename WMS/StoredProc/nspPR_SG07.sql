@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR_SG07]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPR_SG07]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -23,14 +20,16 @@ GO
 /* Data Modifications:                                                  */ 
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author  Rev  Purposes								            */
+/* Date        Author  Rev  Purposes								                    */
 /* 03/01/2019  NJOW01  1.0  WMS-7293 PRSG only sort by lottable08 and   */
 /*                          try allocate COPACK in same pallet          */
 /* 23/09/2021  WLChooi 1.1  DevOps Script Combine                       */
 /* 23/09/2021  WLChooi 1.2  WMS-18029 - Add FilterEmptyLotXX Codelkup   */
 /*                          (WL01)                                      */
+/* 21/01/2022  NJOW02  1.3  WMS-18786 Change sorting                    */
+/* 21/01/2022  NJOW02  1.3  DEVOPS combine script                       */
 /************************************************************************/
-CREATE PROC nspPR_SG07 (
+CREATE OR ALTER PROC nspPR_SG07 (
    @c_storerkey NVARCHAR(15) ,
    @c_sku NVARCHAR(20) ,
    @c_lot NVARCHAR(10) ,
@@ -71,7 +70,8 @@ BEGIN
            @n_QtyMaxByCase INT,
            @c_SortBy NVARCHAR(1000),  --NJOW01   
            @c_Skucopack1 NVARCHAR(20), --NJOW01
-           @c_skucopack2 NVARCHAR(20) --NJOW01
+           @c_skucopack2 NVARCHAR(20), --NJOW01            
+           @c_PRFULLCS   NVARCHAR(10) = 'N'  --NJOW02
    
    --NJOW01        
    DECLARE @c_lottable01_CP2 NVARCHAR(18) ,
@@ -102,7 +102,7 @@ BEGIN
 
    SELECT @c_Orderkey = LEFT(@c_OtherParms,10)
    SELECT @c_OrderLineNumber = SUBSTRING(@c_OtherParms, 11,5)
-   
+         
    --NJOW01 S For PRHK only
    CREATE TABLE #TMP_ID (ID NVARCHAR(18) NULL,
                          Lottable05 DATETIME NULL,
@@ -212,6 +212,29 @@ BEGIN
          END
       END
    END
+   
+   --NJOW02
+   IF EXISTS(SELECT 1 
+             FROM ORDERS O (NOLOCK)
+             JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+             JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+             JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+             JOIN CODELKUP CL (NOLOCK) ON O.Storerkey = CL.Storerkey AND O.Consigneekey = CL.Code 
+             WHERE O.Orderkey = @c_Orderkey
+             AND OD.OrderLineNumber = @c_OrderLineNumber
+             AND CL.Listname = 'PRFULLCS'
+             AND PACK.CaseCnt > 0
+             AND OD.OpenQty >= PACK.CaseCnt)
+   BEGIN
+      SELECT @c_PRFULLCS = 'Y'                      
+      
+      SELECT @n_Casecnt = PACK.Casecnt  
+      FROM ORDERDETAIL OD (NOLOCK)
+      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+      JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+      WHERE OD.Orderkey = @c_Orderkey
+      AND OD.OrderLineNumber = @c_OrderLineNumber      
+   END   
    	   
    IF ISNULL(@c_Lottable01,'') <> '' 
    BEGIN
@@ -415,12 +438,12 @@ BEGIN
    BEGIN
       SET @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTATTRIBUTE.Lottable15 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) + ''''
    END
-
+   
 	 --NJOW01
 	 IF @c_Storerkey = 'PRSG'
-	    SET @c_SortBy = 'ORDER BY CASE WHEN ISNULL(MIN(LOTATTRIBUTE.Lottable08),'''') <> '''' THEN 1 ELSE 2 END, MIN(LOTATTRIBUTE.Lottable08), MIN(LOTATTRIBUTE.Lottable05), MIN(LOTATTRIBUTE.Lot)'  
+	    SET @c_SortBy = 'ORDER BY CASE WHEN ISNULL(MIN(LOTATTRIBUTE.Lottable08),'''') <> '''' THEN 1 ELSE 2 END, MIN(LOTATTRIBUTE.Lottable08), MIN(LOTATTRIBUTE.Lottable05), QTYAVAILABLE, MIN(LOTATTRIBUTE.Lot)'  --NJOW02
 	 ELSE
-	    SET @c_SortBy = 'ORDER BY MIN(LOTATTRIBUTE.Lottable05), MIN(LOTATTRIBUTE.Lot)'  
+	    SET @c_SortBy = 'ORDER BY MIN(LOTATTRIBUTE.Lottable05), QTYAVAILABLE, MIN(LOTATTRIBUTE.Lot)'  --NJOW02
 	          	 
 	 IF @c_CaseNoMixLot26 = 'Y'
 	 BEGIN	 	     	 	  
@@ -470,7 +493,11 @@ BEGIN
        	   
           SELECT @c_SQLStatement = " DECLARE CURSOR_AVAILABLELOT CURSOR FAST_FORWARD READ_ONLY FOR " +
                " SELECT LOT.LOT, " +
-               " QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) )  " +
+               CASE WHEN @c_PRFULLCS = 'Y' AND @n_CaseCnt > 0 THEN  --NJOW02
+                 " QTYAVAILABLE = SUM(FLOOR((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) / @n_CaseCnt) * @n_CaseCnt ) - MAX(ISNULL(P.QTYPREALLOCATED,0)) " 
+               ELSE
+                 " QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) )  " 
+               END +
                " FROM LOT WITH (NOLOCK) " +
                " JOIN LOTATTRIBUTE (NOLOCK) ON (LOT.lot = LOTATTRIBUTE.lot) " +   
                " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
@@ -493,6 +520,9 @@ BEGIN
                " AND LOC.Facility = @c_facility "  +
                " AND LOTATTRIBUTE.Lottable02 = @c_lottable02 "  +
                " AND LOTATTRIBUTE.Lottable06 = @c_lottable06 "  +
+               CASE WHEN @c_PRFULLCS = 'Y' THEN  --NJOW02
+                  " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED >= @n_Casecnt "
+               ELSE " " END +                            
                ISNULL(RTRIM(@c_Condition),'')  + 
                " GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, LOTATTRIBUTE.Lottable08 " +
                --" GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, LOTxLOCxID.LOC, LOTxLOCxID.QTY " +
@@ -501,12 +531,13 @@ BEGIN
 		           --" ORDER BY Lotattribute.Lottable05, Lot.Lot "
 		            		     
           EXEC sp_executesql @c_SQLStatement,
-              N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_facility NVARCHAR(5), @c_Lottable02 NVARCHAR(18), @c_Lottable06 NVARCHAR(30)', 
+              N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_facility NVARCHAR(5), @c_Lottable02 NVARCHAR(18), @c_Lottable06 NVARCHAR(30), @n_CaseCnt INT', 
               @c_Storerkey,
               @c_Sku,
               @c_Facility,
               @c_Lottable02_W,
-              @c_Lottable06_W
+              @c_Lottable06_W,
+              @n_CaseCnt --NJOW02
 
           SET @n_QtyToTake = 0
           
@@ -600,11 +631,15 @@ BEGIN
 	    END   
       
    	  IF @c_Storerkey = 'PRHK'
-	       SET @c_SortBy = 'ORDER BY CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE ''3'' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE ''ZZZZZZZZZZ'' END, LOTATTRIBUTE.Lottable05, LOT.Lot'  
+	       SET @c_SortBy = 'ORDER BY CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE ''3'' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE ''ZZZZZZZZZZ'' END, LOTATTRIBUTE.Lottable05, QTYAVAILABLE, LOT.Lot'   --NJOW02
       
       SELECT @c_SQLStatement = " DECLARE CURSOR_AVAILABLELOT CURSOR FAST_FORWARD READ_ONLY FOR " +
             " SELECT LOT.LOT, " +
-            " QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) )  " +
+            CASE WHEN @c_PRFULLCS = 'Y' AND @n_CaseCnt > 0 THEN  --NJOW02
+              " QTYAVAILABLE = SUM(FLOOR((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) / @n_CaseCnt) * @n_CaseCnt ) - MAX(ISNULL(P.QTYPREALLOCATED,0)) " 
+            ELSE
+              " QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) )  " 
+            END +
             " FROM LOT WITH (NOLOCK) " +
             " JOIN LOTATTRIBUTE (NOLOCK) ON (LOT.lot = LOTATTRIBUTE.lot) " +   
             " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
@@ -626,18 +661,22 @@ BEGIN
             " AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' " +     
             " AND LOC.LocationFlag = 'NONE' " +  
             " AND LOC.Facility = @c_facility "  +
+             CASE WHEN @c_PRFULLCS = 'Y' THEN  --NJOW02
+                " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED >= @n_Casecnt "
+             ELSE " " END +             
             ISNULL(RTRIM(@c_Condition),'')  + 
             " GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE '3' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE 'ZZZZZZZZZZ' END " +
-            " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) >= @n_UOMBase " +
+            " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) >= @n_UOMBase "  +
             @c_SortBy --NJOW01                   
   
       EXEC sp_executesql @c_SQLStatement,
-           N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_facility NVARCHAR(5), @n_UOMBase INT, @n_qtylefttofulfill INT', 
+           N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_facility NVARCHAR(5), @n_UOMBase INT, @n_qtylefttofulfill INT, @n_Casecnt INT',   --NJOW02
            @c_Storerkey,
            @c_Sku,
            @c_Facility,
            @n_UOMBase,
-           @n_qtylefttofulfill            		        
+           @n_qtylefttofulfill,
+           @n_Casecnt --NJOW02
 
        SET @n_QtyToTake = 0
        
@@ -650,18 +689,21 @@ BEGIN
        	     SET @n_QtyToTake = @n_QtyLeftToFulfill
        	  ELSE
        	     SET @n_QtyToTake = @n_QtyAvailable
-       	            	        	  
-          IF ISNULL(@c_SQL,'') = ''
-          BEGIN
-             SET @c_SQL = N'   
-                   DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
-                   SELECT '''  + @c_Storerkey + ''', ''' + @c_Sku + ''', ''' + @c_Lot + ''', ' + CAST(@n_QtyToTake AS NVARCHAR(10))
-          END
-          ELSE
-          BEGIN
-             SET @c_SQL = @c_SQL + N'  
-                   UNION ALL
-                   SELECT '''  + @c_Storerkey + ''', ''' + @c_Sku + ''', ''' + @c_Lot + ''', ' + CAST(@n_QtyToTake AS NVARCHAR(10))
+       	  
+       	  IF @n_QtytoTake > 0 
+       	  BEGIN           	        	  
+             IF ISNULL(@c_SQL,'') = ''
+             BEGIN
+                SET @c_SQL = N'   
+                      DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR   
+                      SELECT '''  + @c_Storerkey + ''', ''' + @c_Sku + ''', ''' + @c_Lot + ''', ' + CAST(@n_QtyToTake AS NVARCHAR(10))
+             END
+             ELSE
+             BEGIN
+                SET @c_SQL = @c_SQL + N'  
+                      UNION ALL
+                      SELECT '''  + @c_Storerkey + ''', ''' + @c_Sku + ''', ''' + @c_Lot + ''', ' + CAST(@n_QtyToTake AS NVARCHAR(10))
+             END
           END
        
        	  SELECT @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake 
