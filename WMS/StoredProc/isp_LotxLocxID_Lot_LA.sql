@@ -1,3 +1,10 @@
+
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_LotxLocxID_Lot_LA]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+   DROP PROCEDURE [dbo].[isp_LotxLocxID_Lot_LA]
+GO
+
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -22,10 +29,8 @@ GO
 /* Date         Author    Ver Purposes                                  */
 /* 15-Mar-2018  SWT01     1.1 Assign Column Name to Result              */
 /* 27-Oct-2020  WLChooi   1.2 WMS-15498 - Add Lottable01-05 (WL01)      */
-/* 26-Nov-2021  Mingle    1.3 WMS-18336 - Add Status (ML01)             */
-/* 26-Nov-2021  Mingle    1.3 DevOps Combine Script                     */ 
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_LotxLocxID_Lot_LA] 
+CREATE PROC [dbo].[isp_LotxLocxID_Lot_LA] 
             @c_StorerKey   NVARCHAR(15)
           , @c_SKU         NVARCHAR(20)
           , @c_Facility    NVARCHAR(5) 
@@ -124,28 +129,18 @@ BEGIN
    END
    
    SET @c_SQL  = N' SELECT LOTxLOCxID.Lot'   
-               +       ' , CASE WHEN (LOT.Status = ''HOLD'') THEN ''HOLD (LOT)'' '    --ML01
-               +       '        WHEN (LOC.Status = ''HOLD'') THEN ''HOLD (LOC)'' '
-               +       '        WHEN (ID.Status = ''HOLD'') THEN ''HOLD (ID)'' '
-               +       '        ELSE ''OK'' END as Status '
                +       ' , SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated- LOTxLOCxID.QtyPicked) AS QtyAvailable ' -- SWT01
                +       ' , LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05'   --WL01
                +  ' FROM LOTxLOCxID WITH (NOLOCK)'
                +  ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOTxLOCxID.Lot = LOTATTRIBUTE.Lot)'
                +  ' JOIN LOC WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)'
-               +  ' JOIN LOT WITH (NOLOCK) ON (LOTxLOCxID.Lot = LOT.Lot)'     --ML01
-               +  ' JOIN ID WITH (NOLOCK) ON (LOTxLOCxID.ID = ID.ID)'
                +  ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey'
                +  ' AND LOTxLOCxID.Sku = @c_Sku'
                +  ' AND LOC.Facility = @c_Facility'
                +  ' AND (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated- LOTxLOCxID.QtyPicked) > 0'
                +  @c_LAConditions
                +  ' GROUP BY LOTxLOCxID.Lot'
-               +  '        , CASE WHEN (LOT.Status = ''HOLD'') THEN ''HOLD (LOT)'' '
-               +  '               WHEN (LOC.Status = ''HOLD'') THEN ''HOLD (LOC)'' '
-               +  '               WHEN (ID.Status = ''HOLD'') THEN ''HOLD (ID)'' '
-               +  '               ELSE ''OK'' END '
-               +  '        ,LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05'   --WL01
+               +  '        , LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05'   --WL01
 
    EXEC SP_ExecuteSQL @c_SQL
                ,N'@c_Storerkey  NVARCHAR(15)
@@ -193,6 +188,3 @@ GO
 
 GRANT EXECUTE ON [dbo].[isp_LotxLocxID_Lot_LA] TO nSQL 
 GO
-
-
-
