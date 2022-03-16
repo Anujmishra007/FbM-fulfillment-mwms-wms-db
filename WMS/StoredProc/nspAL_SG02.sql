@@ -1,12 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspAL_SG02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspAL_SG02]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
-
 /************************************************************************/
 /* Stored Procedure: nspAL_SG02                                         */
 /* Creation Date: 28-Jun-2018                                           */
@@ -29,8 +24,10 @@ GO
 /* 03/01/2019   NJOW02   1.1  WMS-7293 try allocate COPACK in same      */
 /*                            pallet                                    */
 /* 02/10/2019   NJOW03   1.2  Fix sorting                               */
+/* 21/01/2022   NJOW04   1.3  WMS-18786 Change sorting                  */
+/* 21/01/2022   NJOW04   1.3  DEVOPS combine script                     */
 /************************************************************************/
-CREATE  PROC    nspAL_SG02
+CREATE OR ALTER PROC    nspAL_SG02
    @c_lot NVARCHAR(10) ,
    @c_uom NVARCHAR(10) ,
    @c_HostWHCode NVARCHAR(10),
@@ -61,7 +58,10 @@ BEGIN
            @c_Lottable10 NVARCHAR(30),
            @c_Lottable11 NVARCHAR(30),
            @c_Lottable12 NVARCHAR(30),
-           @c_Lottable02Prefix NVARCHAR(10)
+           @c_Lottable02Prefix NVARCHAR(10),
+           @c_Orderkey   NVARCHAR(10),       --NJOW04
+           @c_OrderLineNumber NVARCHAR(5),   --NJOW04       
+           @n_CaseCnt    INT = 0             --NJOW04
            
    CREATE TABLE #TMP_ID (ID NVARCHAR(18) NULL,
                          Lottable05 DATETIME NULL,
@@ -70,7 +70,34 @@ BEGIN
    SET @c_SQL = ''
    SET @c_Skucopack1 = ''
    SET @c_Skucopack2 = ''
+  
+   --NJOW04 Start
+   SELECT @c_Orderkey = LEFT(@c_OtherParms,10)
+   SELECT @c_OrderLineNumber = SUBSTRING(@c_OtherParms, 11,5)
    
+   IF EXISTS(SELECT 1 
+             FROM ORDERS O (NOLOCK)
+             JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+             JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+             JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+             JOIN CODELKUP CL (NOLOCK) ON O.Storerkey = CL.Storerkey AND O.Consigneekey = CL.Code 
+             WHERE O.Orderkey = @c_Orderkey
+             AND OD.OrderLineNumber = @c_OrderLineNumber
+             AND CL.Listname = 'PRFULLCS'
+             AND PACK.CaseCnt > 0
+             AND OD.OpenQty >= PACK.CaseCnt)  --the consignee only allocate full case
+   BEGIN      
+      SELECT @n_Casecnt = PACK.CaseCnt
+      FROM LOT (NOLOCK)
+      JOIN SKU (NOLOCK) ON LOT.Storerkey = SKU.Storerkey AND LOT.Sku = SKU.Sku
+      JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+      WHERE LOT.Lot = @c_Lot
+      
+      IF @n_CaseCnt > 0   
+        SET @n_uombase = @n_CaseCnt      
+   END
+   --NJOW04 E
+      
    --NJOW02 -S      
    SELECT @C_Skucopack1 = SKU.Sku,
           @c_Storerkey = SKU.Storerkey
@@ -101,7 +128,7 @@ BEGIN
              @c_Lottable03 = Lottable03,
              @c_Lottable06 = Lottable06,
              @c_Lottable07 = Lottable07,
-     @c_Lottable08 = Lottable08,
+             @c_Lottable08 = Lottable08,
              @c_Lottable09 = Lottable09,
              @c_Lottable10 = Lottable10,
              @c_Lottable11 = Lottable11,
@@ -152,7 +179,7 @@ BEGIN
       AND LOTATTRIBUTE.Lottable11 = CASE WHEN ISNULL(@c_Lottable11,'') <> '' THEN @c_Lottable11 ELSE LOTATTRIBUTE.Lottable11 END 
       AND LOTATTRIBUTE.Lottable12 = CASE WHEN ISNULL(@c_Lottable12,'') <> '' THEN @c_Lottable12 ELSE LOTATTRIBUTE.Lottable12 END 
       GROUP BY LOTxLOCxID.ID, CASE WHEN ALLOCID.ID IS NOT NULL THEN '1' ELSE '2' END,  ISNULL(COPACK1.Qty,0)
-      HAVING SUM(LOTxLOCxID.Qty) = ISNULL(COPACK1.Qty,0) --only get the pallet with all copack item have tally qty
+      HAVING SUM(LOTxLOCxID.Qty) = ISNULL(COPACK1.Qty,0)  --only get the pallet with all copack item have tally qty
    END   
    --NJOW02 E
           
@@ -177,7 +204,7 @@ BEGIN
    AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase 
    AND ( #TMP_ID.ID IS NOT NULL   
          OR ISNULL(@c_Skucopack1,'') = '' ) 
-   ORDER BY CASE WHEN #TMP_ID.ID IS NOT NULL THEN CONVERT(NVARCHAR, #TMP_ID.Lottable05,112) ELSE 'ZZZZZZZZZZ' END, LOC.LogicalLocation, LOC.LOC  --NJOW02
+   ORDER BY CASE WHEN #TMP_ID.ID IS NOT NULL THEN CONVERT(NVARCHAR, #TMP_ID.Lottable05,112) ELSE 'ZZZZZZZZZZ' END, CASE WHEN LOC.LogicalLocation IN('','WCS01') THEN 1 ELSE 0 END, LOC.LOC  --NJOW02  --NJOW04
    
    SET @n_QtyOrderRemainByUOM = FLOOR(@n_QtyLeftToFulfill / @n_uombase) * @n_uombase 
                          
@@ -194,19 +221,22 @@ BEGIN
    	  END
    	  ELSE
    	  BEGIN
+         /*  --NJOW04 Request to remove
          SELECT TOP 1 @c_Loc = LOC, @c_ID = ID, @n_QtyAvailable = QtyAvailable
          FROM #TMP_INV
          WHERE Allocated = 'N'     
          AND QtyAvailable <= @n_QtyOrderRemainByUOM         
          ORDER BY Seq, QtyAvailable Desc, Loc  --Fix
          --ORDER BY Seq, Lottable05, QtyAvailable Desc, Loc
+         */
          
          IF ISNULL(@c_Loc,'') = ''
          BEGIN
             SELECT TOP 1 @c_Loc = LOC, @c_ID = ID, @n_QtyAvailable = QtyAvailable
             FROM #TMP_INV
             WHERE Allocated = 'N'     
-            ORDER BY Seq, QtyAvailable DESC, Loc  --Fix
+            ORDER BY Seq, QtyAvailable, Loc  --NJOW04
+            --ORDER BY Seq, QtyAvailable DESC, Loc  --Fix
             --ORDER BY Seq, Lottable05, QtyAvailable Loc  
          END
       END
