@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_TMCCRelease_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -20,7 +15,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.1                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -30,8 +25,11 @@ GO
 /*                            enable Release cycle count task action button*/
 /* 2021-02-09  mingle01 1.2   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-12-16  Wan02    1.3   DevOps Combine Script                      */
+/* 2021-12-16  Wan02    1.3   LFWM-3258 - CN NIKECN UAT Release cycle    */
+/*                            count Options Deviation                    */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
    @c_CountType            NVARCHAR(10)  
 ,  @c_Storerkey            NVARCHAR(15)
 ,  @c_Sku                  NVARCHAR(20)
@@ -113,6 +111,7 @@ BEGIN
    END
    --(mingle01) - END
    
+   BEGIN TRAN              --(Wan02)
    --(mingle01) - START
    BEGIN TRY
       SET @c_GroupKeyTableField = ISNULL(RTRIM(@c_GroupKeyTableField),'')
@@ -319,13 +318,14 @@ BEGIN
          AND   [Status]   = '0'
          AND   PickMethod = @c_PickMethod 
          AND   FromLoc  = @c_Loc
+         AND   Storerkey= @c_Storerkey             --(Wan02)
 
          IF @n_Count > 0
          BEGIN
             GOTO EXIT_SP         
          END
 
-         SET @c_Storerkey = ''
+         --SET @c_Storerkey = ''                   --(Wan02)
          SET @c_Sku = ''
       END
 
@@ -680,12 +680,28 @@ BEGIN
       BEGIN
          SET @n_TotalSkuCnt = @n_TotalTaskCnt 
 
-         SELECT @n_TotalLocCnt = COUNT(DISTINCT FROMLOC)
-         FROM TASKDETAIL WITH (NOLOCK)
-         WHERE TaskType = @c_TaskType
-         AND   SourceKey= @c_CCKey
+         --(Wan02) - START
+         --SELECT @n_TotalLocCnt = COUNT(DISTINCT FROMLOC)
+         --FROM TASKDETAIL WITH (NOLOCK)
+         --WHERE TaskType = @c_TaskType
+         --AND   SourceKey= @c_CCKey
+         SET @c_SQL = N'SELECT @n_TotalLocCnt = COUNT(DISTINCT FROMLOC)'
+                    + ' FROM ' + CASE WHEN @c_AlertKey = '' THEN 'TASKDETAIL_WIP' ELSE 'TASKDETAIL' END +' WITH (NOLOCK)' 
+                    + ' WHERE TaskType = @c_TaskType'
+                    + ' AND   SourceKey= @c_CCKey'
+         SET @c_SQLParms = N'@n_TotalLocCnt  INT OUTPUT' 
+                         + ',@c_TaskType     NVARCHAR(10)'  
+                         + ',@c_CCKey        NVARCHAR(10)' 
+                         
+         EXECUTE sp_ExecuteSQL @c_SQL
+                              ,@c_SQLParms 
+                              ,@n_TotalLocCnt   OUTPUT
+                              ,@c_TaskType   
+                              ,@c_CCKey   
+         --(Wan02) - END                        
+                                                                        
       END
-      ELSE IF  @c_CountType = 'SKU'
+      ELSE IF  @c_CountType = 'LOC'             --(Wan02)
       BEGIN
          SET @n_TotalLocCnt = @n_TotalTaskCnt 
          SET @n_TotalSkuCnt = 0
@@ -698,12 +714,20 @@ BEGIN
       GOTO EXIT_SP
    END CATCH
    --(mingle01) - END
+   
    EXIT_SP:
+   --(Wan02) - START
+   IF (XACT_STATE()) = -1  
+   BEGIN
+      SET @n_Continue = 3 
+      ROLLBACK TRAN
+   END 
+   --(Wan02) - END
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF  @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt               --(Wan02)
       BEGIN
          ROLLBACK TRAN
       END
@@ -734,7 +758,12 @@ BEGIN
       END
       SET @n_WarningNo = 0
    END
-
+   
+   WHILE @@TRANCOUNT < @n_StartTCnt             --(Wan03) - START
+   BEGIN 
+      BEGIN TRAN
+   END                                          --(Wan03) - END
+   
    REVERT      
 END  
 GO
