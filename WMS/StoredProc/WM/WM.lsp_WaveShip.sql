@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveShip]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveShip] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -30,8 +25,14 @@ GO
 /*                            ProceduresSQL queries                     */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2022-03-07  Wan02    1.2   LFWM-3393 - PROD - CN  MBOL unable mark   */
+/*                            ship                                      */
+/*                            Enhancement: Not to rollback WMS_ERROR_list*/
+/*                            record                                    */
+/*                            Add Container Validate as per Exceed      */
+/*                            DevOps Combine Script                     */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveShip] 
+CREATE OR ALTER PROC [WM].[lsp_WaveShip] 
       @c_WaveKey              NVARCHAR(10)                     -- Mandatory to pass In Wavekey                                                                                               
    ,  @c_MBOLkey              NVARCHAR(10)  = ''               -- IF Ship By MBOL & Re-Ship, mandatory to pass in MBOLKey    
    ,  @c_ShipMode             NVARCHAR(10)  = ''               -- IF Ship By MBOL & Re-Ship, @c_ShipMode = 'MBOL' , IF Ship By Wave & Re-Ship, @c_ShipMode = 'WAVE'   
@@ -58,7 +59,7 @@ BEGIN
          ,  @n_MBOLCnt           INT = 0
          ,  @n_TotalWaveMBOL     INT = 0
          ,  @b_ReturnCode        INT = 0
-         ,  @n_LogWarningNo      INT = 0
+         ,  @n_LogWarningNo      INT = @n_WarningNo   --(Wan02)
 
          ,  @c_TableName         NVARCHAR(50)   = 'MBOLDETAIL'
          ,  @c_SourceType        NVARCHAR(50)   = 'lsp_WaveShip'
@@ -70,10 +71,34 @@ BEGIN
          ,  @c_ReplaceString     NVARCHAR(50) = ''
 
          ,  @c_WaveKey_MBOL      NVARCHAR(10) = ''    --(Wan01)
+         
+         ,  @c_Facility          NVARCHAR(5)  = ''    --(Wan02)
+         ,  @c_Storerkey         NVARCHAR(15) = ''    --(Wan02)         
+         ,  @c_MBOLGenContainer  NVARCHAR(30) = ''    --(Wan02)
 
          ,  @CUR_MBOLMGMT        CURSOR               --(Wan01)
          ,  @CUR_MBOL            CURSOR
          ,  @CUR_MER             CURSOR
+         
+         ,  @c_Refkey1        NVARCHAR(20)   = ''                    --(Wan02)
+         ,  @c_Refkey2        NVARCHAR(20)   = ''                    --(Wan02)
+         ,  @c_Refkey3        NVARCHAR(20)   = ''                    --(Wan02)
+         
+         ,  @CUR_ERRLIST      CURSOR                                 --(Wan02)
+         
+   DECLARE  @t_WMSErrorList   TABLE                                  --(Wan02)
+         (  RowID             INT            IDENTITY(1,1) 
+         ,  TableName         NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  SourceType        NVARCHAR(50)   NOT NULL DEFAULT('')
+         ,  Refkey1           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Refkey2           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Refkey3           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  WriteType         NVARCHAR(50)   NOT NULL DEFAULT('')
+         ,  LogWarningNo      INT            NOT NULL DEFAULT(0)
+         ,  ErrCode           INT            NOT NULL DEFAULT(0)
+         ,  Errmsg            NVARCHAR(255)  NOT NULL DEFAULT('')  
+         )
+
 
    DECLARE @tMBOL TABLE
       (  RowRef         INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
@@ -143,6 +168,18 @@ BEGIN
             INSERT INTO @tMBOL (MBOLKey)
             VALUES (@c_MBOLkey)
          END 
+         
+         --(Wan02) - START
+         SELECT TOP 1 @c_Facility = o.Facility
+                  ,  @c_Storerkey = o.StorerKey
+         FROM @tMBOL t
+         JOIN MBOLDETAIL AS m WITH (NOLOCK) ON m.MbolKey = t.MBOLKey 
+         JOIN dbo.ORDERS AS o WITH (NOLOCK) ON m.OrderKey = o.OrderKey
+         ORDER BY t.RowRef
+               ,  m.MbolLineNumber 
+               
+         SELECT @c_MBOLGenContainer = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'MBOLGenContainer') 
+         --(Wan02) - END       
 
          SET @CUR_MBOL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT RowRef, MBOLKey
@@ -168,20 +205,25 @@ BEGIN
                SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
                              + ': ERROR lsp_Validate_WaveShip_Std. (lsp_WaveShip)'
 
-               EXEC [WM].[lsp_WriteError_List] 
-                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                  ,  @c_TableName   = @c_TableName
-                  ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_WaveKey
-                  ,  @c_Refkey2     = @c_MBOLkey
-                  ,  @c_Refkey3     = ''
-                  ,  @c_WriteType   = 'ERROR' 
-                  ,  @n_err2        = @n_err 
-                  ,  @c_errmsg2     = @c_errmsg 
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT 
-               GOTO NEXT_MBOL  
+               --(Wan02) - START               
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'ERROR', 0, @n_err, @c_errmsg)   
+                     
+               --EXEC [WM].[lsp_WriteError_List] 
+               --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               --   ,  @c_TableName   = @c_TableName
+               --   ,  @c_SourceType  = @c_SourceType
+               --   ,  @c_Refkey1     = @c_WaveKey
+               --   ,  @c_Refkey2     = @c_MBOLkey
+               --   ,  @c_Refkey3     = ''
+               --   ,  @c_WriteType   = 'ERROR' 
+               --   ,  @n_err2        = @n_err 
+               --   ,  @c_errmsg2     = @c_errmsg 
+               --   ,  @b_Success     = @b_Success   OUTPUT 
+               --   ,  @n_err         = @n_err       OUTPUT 
+               --   ,  @c_errmsg      = @c_errmsg    OUTPUT 
+               GOTO VALIDATE_NEXT_MBOL    
+               --(Wan02) - END                 
             END CATCH 
 
             UPDATE @tMBOL SET ValidatePass = 1
@@ -226,7 +268,7 @@ BEGIN
                SET @n_Continue = 1
 
                IF @n_WarningNo < 2
-               BEGIN
+               BEGIN                  
                   EXEC [dbo].[isp_ValidateMBOL]  
                        @c_MBOLkey   = @c_MBOLkey
                      , @b_ReturnCode= @b_ReturnCode   OUTPUT
@@ -239,20 +281,24 @@ BEGIN
                      SET @n_Err = 556756
                      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Validate MBOL Fail - Wave. (lsp_WaveShip)'   
                                  + '(' + @c_ErrMsg + ')' 
-                                       
-                     EXEC [WM].[lsp_WriteError_List] 
-                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                        ,  @c_TableName   = @c_TableName
-                        ,  @c_SourceType  = @c_SourceType
-                        ,  @c_Refkey1     = @c_WaveKey
-                        ,  @c_Refkey2     = @c_MBOLkey
-                        ,  @c_Refkey3     = ''
-                        ,  @c_WriteType   = 'ERROR' 
-                        ,  @n_err2        = @n_err 
-                        ,  @c_errmsg2     = @c_errmsg 
-                        ,  @b_Success     = @b_Success   OUTPUT 
-                        ,  @n_err         = @n_err       OUTPUT 
-                        ,  @c_errmsg      = @c_errmsg    OUTPUT
+                     
+                     --(Wan02) - START               
+                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                     VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'ERROR', 0, @n_err, @c_errmsg)                    
+                     --EXEC [WM].[lsp_WriteError_List] 
+                     --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     --   ,  @c_TableName   = @c_TableName
+                     --   ,  @c_SourceType  = @c_SourceType
+                     --   ,  @c_Refkey1     = @c_WaveKey
+                     --   ,  @c_Refkey2     = @c_MBOLkey
+                     --   ,  @c_Refkey3     = ''
+                     --   ,  @c_WriteType   = 'ERROR' 
+                     --   ,  @n_err2        = @n_err 
+                     --   ,  @c_errmsg2     = @c_errmsg 
+                     --   ,  @b_Success     = @b_Success   OUTPUT 
+                     --   ,  @n_err         = @n_err       OUTPUT 
+                     --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+                     --(Wan02) - END
 
                      --GOTO EXIT_SP
                      GOTO NEXT_MBOL
@@ -274,21 +320,26 @@ BEGIN
                      WHILE @@FETCH_STATUS <> -1
                      BEGIN
                         SET @n_LogWarningNo = 2
+                        
+                        --(Wan02) - START               
+                        INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                        VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'WARNING', @n_LogWarningNo, @n_err, @c_errmsg)  
                          
-                        EXEC [WM].[lsp_WriteError_List] 
-                              @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                           ,  @c_TableName   = @c_TableName
-                           ,  @c_SourceType  = @c_SourceType
-                           ,  @c_Refkey1     = @c_WaveKey
-                           ,  @c_Refkey2     = @c_MBOLkey
-                           ,  @c_Refkey3     = ''
-                           ,  @n_LogWarningNo= @n_LogWarningNo
-                           ,  @c_WriteType   = 'WARNING' 
-                           ,  @n_err2        = 0 
-                           ,  @c_errmsg2     = @c_errmsg 
-                           ,  @b_Success     = @b_Success   OUTPUT 
-                           ,  @n_err         = @n_err       OUTPUT 
-                           ,  @c_errmsg      = @c_errmsg    OUTPUT
+                        --EXEC [WM].[lsp_WriteError_List] 
+                        --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        --   ,  @c_TableName   = @c_TableName
+                        --   ,  @c_SourceType  = @c_SourceType
+                        --   ,  @c_Refkey1     = @c_WaveKey
+                        --   ,  @c_Refkey2     = @c_MBOLkey
+                        --   ,  @c_Refkey3     = ''
+                        --   ,  @n_LogWarningNo= @n_LogWarningNo
+                        --   ,  @c_WriteType   = 'WARNING' 
+                        --   ,  @n_err2        = 0 
+                        --   ,  @c_errmsg2     = @c_errmsg 
+                        --   ,  @b_Success     = @b_Success   OUTPUT 
+                        --   ,  @n_err         = @n_err       OUTPUT 
+                        --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+                        --(Wan02) - END
 
                         FETCH NEXT FROM @CUR_MER INTO @c_errmsg       
                      END
@@ -299,56 +350,119 @@ BEGIN
                   END
                END
 
-               --BEGIN TRAN
+               --(Wan02) - START                 
+               BEGIN TRAN
+               IF @c_MBOLGenContainer = '1'
+               BEGIN
+                  BEGIN TRY
+                     EXEC isp_MBOLGenContainer
+                       @c_MBOLkey   = @c_MBOLkey
+                     , @b_Success   = @b_Success   OUTPUT
+                     , @n_Err       = @n_Err       OUTPUT 
+                     , @c_ErrMsg    = @c_ErrMsg    OUTPUT 
+                     
+                     IF @b_Success = 0
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
+                  END TRY
+               
+                  BEGIN CATCH
+                     SET @n_Continue = 3
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+                  END CATCH
+                  
+                  IF @n_Continue = 3
+                  BEGIN
+                     SET @n_Err = 556763
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Generating Container - Wave. (lsp_WaveShip)'   
+                                    + '(' + @c_ErrMsg + ')' 
+                     
+                     --(Wan02) - START               
+                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                     VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'ERROR', 0, @n_err, @c_errmsg)                 
+                     --EXEC [WM].[lsp_WriteError_List] 
+                     --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     --   ,  @c_TableName   = @c_TableName
+                     --   ,  @c_SourceType  = @c_SourceType
+                     --   ,  @c_Refkey1     = @c_WaveKey
+                     --   ,  @c_Refkey2     = @c_MBOLkey
+                     --   ,  @c_Refkey3     = ''
+                     --   ,  @c_WriteType   = 'ERROR' 
+                     --   ,  @n_err2        = @n_err 
+                     --   ,  @c_errmsg2     = @c_errmsg 
+                     --   ,  @b_Success     = @b_Success   OUTPUT 
+                     --   ,  @n_err         = @n_err       OUTPUT 
+                     --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+                     GOTO NEXT_MBOL
+                  END
+               END      
+               --(Wan02) - END
+            
                BEGIN TRY
                   EXEC [dbo].[isp_ShipMBOL]  
                        @c_MBOLkey   = @c_MBOLkey
                      , @b_Success   = @b_Success      OUTPUT
                      , @n_Err       = @n_Err          OUTPUT 
                      , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
+                     
+                     IF @b_Success = 0                --(Wan02)
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
                END TRY
 
                BEGIN CATCH
                   SET @n_Continue = 3
                   SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH
+               
+               IF @n_Continue = 3                     --(Wan02)
+               BEGIN
                   SET @n_Err = 556751
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ShipMBOL - Wave. (lsp_WaveShip)'   
                               + '(' + @c_ErrMsg + ')' 
+                  
+                  --(Wan02) - START               
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'ERROR', 0, @n_err, @c_errmsg)  
                        
-                  EXEC [WM].[lsp_WriteError_List] 
-                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                     ,  @c_TableName   = @c_TableName
-                     ,  @c_SourceType  = @c_SourceType
-                     ,  @c_Refkey1     = @c_WaveKey
-                     ,  @c_Refkey2     = @c_MBOLkey
-                     ,  @c_Refkey3     = ''
-                     ,  @c_WriteType   = 'ERROR' 
-                     ,  @n_err2        = @n_err 
-                     ,  @c_errmsg2     = @c_errmsg 
-                     ,  @b_Success     = @b_Success   OUTPUT 
-                     ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT
+                  --EXEC [WM].[lsp_WriteError_List] 
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_WaveKey
+                  --   ,  @c_Refkey2     = @c_MBOLkey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR' 
+                  --   ,  @n_err2        = @n_err 
+                  --   ,  @c_errmsg2     = @c_errmsg 
+                  --   ,  @b_Success     = @b_Success   OUTPUT 
+                  --   ,  @n_err         = @n_err       OUTPUT 
+                  --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+               
+                  --IF (XACT_STATE()) = -1  
+                  --BEGIN
+                  --   IF @@TRANCOUNT > 0 
+                  --   BEGIN
+                  --      ROLLBACK TRAN
+                  --   END
 
-                  IF (XACT_STATE()) = -1  
-                  BEGIN
-                     IF @@TRANCOUNT > 0 
-                     BEGIN
-                        ROLLBACK TRAN
-                     END
-
-                     WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
-                     BEGIN
-                        BEGIN TRAN
-                     END
-                  END
+                  --   WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
+                  --   BEGIN
+                  --      BEGIN TRAN
+                  --   END
+                  --END
                    
-                  IF @b_Success = 0 OR @n_Err > 0       
-                  BEGIN
-                     SET @n_Continue = 3
-                  END
+                  --IF @b_Success = 0 OR @n_Err > 0       
+                  --BEGIN
+                  --   SET @n_Continue = 3
+                  --END
+                  --(Wan02) - END
 
                   GOTO NEXT_MBOL
-               END CATCH
+               END
                
                BEGIN TRY
                   UPDATE MBOL 
@@ -362,55 +476,142 @@ BEGIN
                   SET @c_ErrMsg = ERROR_MESSAGE()
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update MBOL Table Fail - Wave. (lsp_WaveShip)'   
                                 + '(' + @c_ErrMsg + ')' 
+                  
+                  --(Wan02) - START               
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'ERROR', 0, @n_err, @c_errmsg)                
                        
-                  EXEC [WM].[lsp_WriteError_List] 
-                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                     ,  @c_TableName   = @c_TableName
-                     ,  @c_SourceType  = @c_SourceType
-                     ,  @c_Refkey1     = @c_WaveKey
-                     ,  @c_Refkey2     = @c_MBOLkey
-                     ,  @c_Refkey3     = ''
-                     ,  @c_WriteType   = 'ERROR' 
-                     ,  @n_err2        = @n_err 
-                     ,  @c_errmsg2     = @c_errmsg 
-                     ,  @b_Success     = @b_Success   OUTPUT 
-                     ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT
+                  --EXEC [WM].[lsp_WriteError_List] 
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_WaveKey
+                  --   ,  @c_Refkey2     = @c_MBOLkey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR' 
+                  --   ,  @n_err2        = @n_err 
+                  --   ,  @c_errmsg2     = @c_errmsg 
+                  --   ,  @b_Success     = @b_Success   OUTPUT 
+                  --   ,  @n_err         = @n_err       OUTPUT 
+                  --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+     
+                  --IF (XACT_STATE()) = -1  
+                  --BEGIN
+                  --   IF @@TRANCOUNT > 0 
+                  --   BEGIN
+                  --      ROLLBACK TRAN
+                  --   END
 
-                  IF (XACT_STATE()) = -1  
-                  BEGIN
-                     IF @@TRANCOUNT > 0 
-                     BEGIN
-                        ROLLBACK TRAN
-                     END
-
-                     WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
-                     BEGIN
-                        BEGIN TRAN
-                     END
-                  END 
+                  --   WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
+                  --   BEGIN
+                  --      BEGIN TRAN
+                  --   END
+                  --END 
+                  --(Wan02) - END
                   GOTO NEXT_MBOL
                END CATCH
                
                SET @c_ErrMsg = 'Shipment is successfull.'
 
-               SET @c_WriteType = 'MESSAGE'  
-               EXEC [WM].[lsp_WriteError_List] 
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'MESSAGE', 0, @n_err, @c_errmsg)  
+         
+               --SET @c_WriteType = 'MESSAGE'  
+               --EXEC [WM].[lsp_WriteError_List] 
+               --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               --   ,  @c_TableName   = @c_TableName
+               --   ,  @c_SourceType  = @c_SourceType
+               --   ,  @c_Refkey1     = @c_WaveKey
+               --   ,  @c_Refkey2     = @c_MBOLkey
+               --   ,  @c_Refkey3     = ''
+               --   ,  @c_WriteType   = @c_WriteType
+               --   ,  @n_err2        = 0 
+               --   ,  @c_errmsg2     = @c_ErrMsg
+               --   ,  @b_Success     = @b_Success   OUTPUT 
+               --   ,  @n_err         = @n_err       OUTPUT 
+               --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+               NEXT_MBOL:
+               
+               --(Wan02) - START
+               IF (XACT_STATE()) = -1  
+               BEGIN
+                  SET @n_Continue = 3
+               END 
+               
+               IF @n_Continue = 3
+               BEGIN
+                  IF @@TRANCOUNT > 0 
+                  BEGIN
+                     ROLLBACK TRAN
+                  END
+               END
+               ELSE
+               BEGIN
+                  WHILE @@TRANCOUNT > 0
+                  BEGIN
+                     COMMIT TRAN
+                  END
+               END
+              
+               SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT   twl.TableName         
+                     ,  twl.SourceType        
+                     ,  twl.Refkey1           
+                     ,  twl.Refkey2           
+                     ,  twl.Refkey3           
+                     ,  twl.WriteType         
+                     ,  twl.LogWarningNo      
+                     ,  twl.ErrCode           
+                     ,  twl.Errmsg               
+               FROM @t_WMSErrorList AS twl
+               ORDER BY twl.RowID
+   
+               OPEN @CUR_ERRLIST
+   
+               FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName         
+                                                 , @c_SourceType        
+                                                 , @c_Refkey1           
+                                                 , @c_Refkey2           
+                                                 , @c_Refkey3           
+                                                 , @c_WriteType         
+                                                 , @n_LogWarningNo      
+                                                 , @n_Err           
+                                                 , @c_Errmsg            
+   
+               WHILE @@FETCH_STATUS <> -1
+               BEGIN
+                  EXEC [WM].[lsp_WriteError_List] 
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                   ,  @c_TableName   = @c_TableName
                   ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_WaveKey
-                  ,  @c_Refkey2     = @c_MBOLkey
-                  ,  @c_Refkey3     = ''
+                  ,  @c_Refkey1     = @c_Refkey1
+                  ,  @c_Refkey2     = @c_Refkey2
+                  ,  @c_Refkey3     = @c_Refkey3
+                  ,  @n_LogWarningNo= @n_LogWarningNo
                   ,  @c_WriteType   = @c_WriteType
-                  ,  @n_err2        = 0 
-                  ,  @c_errmsg2     = @c_ErrMsg
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-               NEXT_MBOL:
-
+                  ,  @n_err2        = @n_err 
+                  ,  @c_errmsg2     = @c_errmsg 
+                  ,  @b_Success     = @b_Success    
+                  ,  @n_err         = @n_err        
+                  ,  @c_errmsg      = @c_errmsg         
+     
+                  FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName         
+                                                    , @c_SourceType        
+                                                    , @c_Refkey1           
+                                                    , @c_Refkey2           
+                                                    , @c_Refkey3           
+                                                    , @c_WriteType         
+                                                    , @n_LogWarningNo      
+                                                    , @n_Err           
+                                                    , @c_Errmsg     
+               END
+               CLOSE @CUR_ERRLIST
+               DEALLOCATE @CUR_ERRLIST
+               
+               DELETE FROM @t_WMSErrorList;
+               --(Wan02) - END
+               
                FETCH NEXT FROM @CUR_MBOL INTO @c_MBOLKey 
             END
             CLOSE @CUR_MBOL
@@ -435,20 +636,23 @@ BEGIN
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Validate MBOL Fail - Ship Ref.Unit. (lsp_WaveShip)'   
                                  + '(' + @c_ErrMsg + ')' 
 
-                  EXEC [WM].[lsp_WriteError_List] 
-                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                     ,  @c_TableName   = @c_TableName
-                     ,  @c_SourceType  = @c_SourceType
-                     ,  @c_Refkey1     = @c_WaveKey
-                     ,  @c_Refkey2     = @c_MBOLkey
-                     ,  @c_Refkey3     = ''
-                     ,  @c_WriteType   = 'ERROR' 
-                     ,  @n_err2        = @n_err 
-                     ,  @c_errmsg2     = @c_errmsg 
-                     ,  @b_Success     = @b_Success   OUTPUT 
-                     ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT
-
+                  --(Wan02) - START
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', @n_LogWarningNo, @n_err, @c_errmsg)                                    
+                  --EXEC [WM].[lsp_WriteError_List] 
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_WaveKey
+                  --   ,  @c_Refkey2     = @c_MBOLkey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR' 
+                  --   ,  @n_err2        = @n_err 
+                  --   ,  @c_errmsg2     = @c_errmsg 
+                  --   ,  @b_Success     = @b_Success   OUTPUT 
+                  --   ,  @n_err         = @n_err       OUTPUT 
+                  --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+                  --(Wan02) - END
                   GOTO EXIT_SP                      
                END  
 
@@ -467,22 +671,26 @@ BEGIN
                                        
                   WHILE @@FETCH_STATUS <> -1
                   BEGIN
-                     SET @n_LogWarningNo = 2                     
-                     EXEC [WM].[lsp_WriteError_List] 
-                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                        ,  @c_TableName   = @c_TableName
-                        ,  @c_SourceType  = @c_SourceType
-                        ,  @c_Refkey1     = @c_WaveKey
-                        ,  @c_Refkey2     = @c_MBOLkey
-                        ,  @c_Refkey3     = ''
-                        ,  @n_LogWarningNo= @n_LogWarningNo
-                        ,  @c_WriteType   = 'WARNING' 
-                        ,  @n_err2        = 0 
-                        ,  @c_errmsg2     = @c_errmsg 
-                        ,  @b_Success     = @b_Success   OUTPUT 
-                        ,  @n_err         = @n_err       OUTPUT 
-                        ,  @c_errmsg      = @c_errmsg    OUTPUT
-
+                     SET @n_LogWarningNo = 2   
+                     
+                     --(Wan02) - START
+                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                     VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'WARNING', @n_LogWarningNo, @n_err, @c_errmsg)                    
+                     --EXEC [WM].[lsp_WriteError_List] 
+                     --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     --   ,  @c_TableName   = @c_TableName
+                     --   ,  @c_SourceType  = @c_SourceType
+                     --   ,  @c_Refkey1     = @c_WaveKey
+                     --   ,  @c_Refkey2     = @c_MBOLkey
+                     --   ,  @c_Refkey3     = ''
+                     --   ,  @n_LogWarningNo= @n_LogWarningNo
+                     --   ,  @c_WriteType   = 'WARNING' 
+                     --   ,  @n_err2        = 0 
+                     --   ,  @c_errmsg2     = @c_errmsg 
+                     --   ,  @b_Success     = @b_Success   OUTPUT 
+                     --   ,  @n_err         = @n_err       OUTPUT 
+                     --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+                     --(Wan02) - END
                      FETCH NEXT FROM @CUR_MER INTO @c_errmsg       
                   END
                   CLOSE @CUR_MER
@@ -492,54 +700,104 @@ BEGIN
                END
             END
 
-            --BEGIN TRAN
+            BEGIN TRAN                 --(Wan02)
+            --(Wan02) - START    
+            IF @c_MBOLGenContainer = '1'
+            BEGIN
+               BEGIN TRY
+                  EXEC isp_MBOLGenContainer
+                     @c_MBOLkey   = @c_MBOLkey
+                  , @b_Success   = @b_Success   OUTPUT
+                  , @n_Err       = @n_Err       OUTPUT 
+                  , @c_ErrMsg    = @c_ErrMsg    OUTPUT 
+                  
+                  IF @b_Success = 0
+                  BEGIN
+                     SET @n_Continue = 3
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH
+                 
+               IF @n_Continue = 3
+               BEGIN
+                  SET @n_Err = 556764
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Generating Container - Ship Ref.Unit. (lsp_WaveShip)'   
+                                 + '(' + @c_ErrMsg + ')' 
+
+                  --(Wan02) - START
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', 0, @n_err, @c_errmsg) 
+
+                  GOTO EXIT_SP                      
+               END
+            END
+            --(Wan02) - END
+
             BEGIN TRY
                EXEC [dbo].[isp_ShipMBOL]  
                     @c_MBOLkey   = @c_MBOLkey
                   , @b_Success   = @b_Success      OUTPUT
                   , @n_Err       = @n_Err          OUTPUT 
                   , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
+                  
+               IF @b_Success = 0 
+               BEGIN
+                  SET @n_Continue = 3
+               END  
             END TRY
-
+            --(Wan02) - START
             BEGIN CATCH
-               SET @n_Err = 556753
+               SET @n_Continue = 3
                SET @c_ErrMsg = ERROR_MESSAGE()
+            END CATCH
+            
+            IF @n_Continue = 3
+            BEGIN
+               SET @n_Err = 556753
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ShipMBOL - Ship Ref.Unit. (lsp_WaveShip)'   
                              + '(' + @c_ErrMsg + ')' 
-                       
-               EXEC [WM].[lsp_WriteError_List] 
-                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                  ,  @c_TableName   = @c_TableName
-                  ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_WaveKey
-                  ,  @c_Refkey2     = @c_MBOLkey
-                  ,  @c_Refkey3     = ''
-                  ,  @c_WriteType   = 'ERROR' 
-                  ,  @n_err2        = @n_err 
-                  ,  @c_errmsg2     = @c_errmsg 
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+               
 
-               IF (XACT_STATE()) = -1  
-               BEGIN
-                  IF @@TRANCOUNT > 0 
-                  BEGIN
-                     ROLLBACK TRAN
-                  END
-                  WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
-                  BEGIN
-                     BEGIN TRAN
-                  END
-               END  
-            END CATCH
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', 0, @n_err, @c_errmsg) 
+               
+               GOTO EXIT_SP         
+               --EXEC [WM].[lsp_WriteError_List] 
+               --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               --   ,  @c_TableName   = @c_TableName
+               --   ,  @c_SourceType  = @c_SourceType
+               --   ,  @c_Refkey1     = @c_WaveKey
+               --   ,  @c_Refkey2     = @c_MBOLkey
+               --   ,  @c_Refkey3     = ''
+               --   ,  @c_WriteType   = 'ERROR' 
+               --   ,  @n_err2        = @n_err 
+               --   ,  @c_errmsg2     = @c_errmsg 
+               --   ,  @b_Success     = @b_Success   OUTPUT 
+               --   ,  @n_err         = @n_err       OUTPUT 
+               --   ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-            IF @b_Success = 0 OR @n_Err> 0 
-            BEGIN
-               SET @n_Continue = 3
-               GOTO EXIT_SP
-            END
+               --IF (XACT_STATE()) = -1  
+               --BEGIN
+               --   IF @@TRANCOUNT > 0 
+               --   BEGIN
+               --      ROLLBACK TRAN
+               --   END
+               --   WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
+               --   BEGIN
+               --      BEGIN TRAN
+               --   END
+               --END  
+            END 
 
+            --IF @b_Success = 0 OR @n_Err> 0 
+            --BEGIN
+            --   SET @n_Continue = 3
+            --   GOTO EXIT_SP
+            --END
+            --(Wan02) - END
             --BEGIN TRAN
             BEGIN TRY
                UPDATE MBOL 
@@ -553,33 +811,36 @@ BEGIN
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update MBOL Table Fail - Ship Ref.Unit. (lsp_WaveShip)'   
                              + '(' + @c_ErrMsg + ')' 
-                       
-               EXEC [WM].[lsp_WriteError_List] 
-                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                  ,  @c_TableName   = @c_TableName
-                  ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_WaveKey
-                  ,  @c_Refkey2     = @c_MBOLkey
-                  ,  @c_Refkey3     = ''
-                  ,  @c_WriteType   = 'ERROR' 
-                  ,  @n_err2        = @n_err 
-                  ,  @c_errmsg2     = @c_errmsg 
-                  ,  @b_Success     = @b_Success   OUTPUT 
-                  ,  @n_err         = @n_err       OUTPUT 
-                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+               --(Wan02) - START
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', 0, @n_err, @c_errmsg)          
+               --EXEC [WM].[lsp_WriteError_List] 
+               --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+               --   ,  @c_TableName   = @c_TableName
+               --   ,  @c_SourceType  = @c_SourceType
+               --   ,  @c_Refkey1     = @c_WaveKey
+               --   ,  @c_Refkey2     = @c_MBOLkey
+               --   ,  @c_Refkey3     = ''
+               --   ,  @c_WriteType   = 'ERROR' 
+               --   ,  @n_err2        = @n_err 
+               --   ,  @c_errmsg2     = @c_errmsg 
+               --   ,  @b_Success     = @b_Success   OUTPUT 
+               --   ,  @n_err         = @n_err       OUTPUT 
+               --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+               
+               --IF (XACT_STATE()) = -1  
+               --BEGIN
+               --   IF @@TRANCOUNT > 0 
+               --   BEGIN
+               --      ROLLBACK TRAN
+               --   END
 
-               IF (XACT_STATE()) = -1  
-               BEGIN
-                  IF @@TRANCOUNT > 0 
-                  BEGIN
-                     ROLLBACK TRAN
-                  END
-
-                  WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
-                  BEGIN
-                     BEGIN TRAN
-                  END
-               END 
+               --   WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
+               --   BEGIN
+               --      BEGIN TRAN
+               --   END
+               --END 
+               --(Wan02) - END
                GOTO EXIT_SP 
             END CATCH
 
@@ -619,32 +880,36 @@ BEGIN
                         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE Table Fail - Ship Ref. Management. (lsp_WaveShip)'   
                                        + '(' + @c_ErrMsg + ')' 
                        
-                        EXEC [WM].[lsp_WriteError_List] 
-                              @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                           ,  @c_TableName   = @c_TableName
-                           ,  @c_SourceType  = @c_SourceType
-                           ,  @c_Refkey1     = @c_WaveKey
-                           ,  @c_Refkey2     = @c_MBOLKey
-                           ,  @c_Refkey3     = ''
-                           ,  @c_WriteType   = 'ERROR' 
-                           ,  @n_err2        = @n_err 
-                           ,  @c_errmsg2     = @c_errmsg 
-                           ,  @b_Success     = @b_Success   OUTPUT 
-                           ,  @n_err         = @n_err       OUTPUT 
-                           ,  @c_errmsg      = @c_errmsg    OUTPUT
-
-                        IF (XACT_STATE()) = -1  
-                        BEGIN
-                           IF @@TRANCOUNT > 0 
-                           BEGIN
-                              ROLLBACK TRAN
-                           END
-
-                           WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
-                           BEGIN
-                              BEGIN TRAN
-                           END
-                        END 
+                        --(Wan02) - START
+                        INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                        VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', 0, @n_err, @c_errmsg)  
+                        --EXEC [WM].[lsp_WriteError_List] 
+                        --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        --   ,  @c_TableName   = @c_TableName
+                        --   ,  @c_SourceType  = @c_SourceType
+                        --   ,  @c_Refkey1     = @c_WaveKey
+                        --   ,  @c_Refkey2     = @c_MBOLKey
+                        --   ,  @c_Refkey3     = ''
+                        --   ,  @c_WriteType   = 'ERROR' 
+                        --   ,  @n_err2        = @n_err 
+                        --   ,  @c_errmsg2     = @c_errmsg 
+                        --   ,  @b_Success     = @b_Success   OUTPUT 
+                        --   ,  @n_err         = @n_err       OUTPUT 
+                        --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+                        
+                        --IF (XACT_STATE()) = -1  
+                        --BEGIN
+                        --   IF @@TRANCOUNT > 0 
+                        --   BEGIN
+                        --      ROLLBACK TRAN
+                        --   END
+                        --
+                        --   WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
+                        --   BEGIN
+                        --      BEGIN TRAN
+                        --   END
+                        --END 
+                        --(Wan02) - END
 
                         GOTO EXIT_SP 
                      END CATCH
@@ -659,27 +924,35 @@ BEGIN
 
             SET @c_ErrMsg = 'Shipment is successful.'
 
+            --(Wan02) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'MESSAGE', 0, @n_err, @c_errmsg)  
             SET @c_WriteType = 'MESSAGE'  
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_WaveKey
-               ,  @c_Refkey2     = @c_MBOLkey
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = @c_WriteType
-               ,  @n_err2        = 0 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
-               ,  @c_errmsg      = @c_errmsg    OUTPUT
+            --EXEC [WM].[lsp_WriteError_List] 
+            --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            --   ,  @c_TableName   = @c_TableName
+            --   ,  @c_SourceType  = @c_SourceType
+            --   ,  @c_Refkey1     = @c_WaveKey
+            --   ,  @c_Refkey2     = @c_MBOLkey
+            --   ,  @c_Refkey3     = ''
+            --   ,  @c_WriteType   = @c_WriteType
+            --   ,  @n_err2        = 0 
+            --   ,  @c_errmsg2     = @c_errmsg 
+            --   ,  @b_Success     = @b_Success   OUTPUT 
+            --   ,  @n_err         = @n_err       OUTPUT 
+            --   ,  @c_errmsg      = @c_errmsg    OUTPUT
+            --(Wan02) - END
          END
    END TRY
    
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
-      GOTO EXIT_SP
+      --(Wan02)
+      INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+      VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', 0, @n_err, @c_errmsg)  
+      
+      GOTO EXIT_SP_WITH_ERROR_CATCH
    END CATCH
    --(mingle01) - END
 EXIT_SP:
@@ -724,58 +997,63 @@ EXIT_SP:
                   SET @c_ErrMsg = ERROR_MESSAGE()
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE Table Fail. (lsp_WaveShip)'   
                                  + '(' + @c_ErrMsg + ')' 
-                    
-                  EXEC [WM].[lsp_WriteError_List] 
-                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-                     ,  @c_TableName   = @c_TableName
-                     ,  @c_SourceType  = @c_SourceType
-                     ,  @c_Refkey1     = @c_WaveKey
-                     ,  @c_Refkey2     = @c_MBOLKey
-                     ,  @c_Refkey3     = ''
-                     ,  @c_WriteType   = 'ERROR' 
-                     ,  @n_err2        = @n_err 
-                     ,  @c_errmsg2     = @c_errmsg 
-                     ,  @b_Success     = @b_Success   OUTPUT 
-                     ,  @n_err         = @n_err       OUTPUT 
-                     ,  @c_errmsg      = @c_errmsg    OUTPUT
+                  
+                  --(Wan02) - START
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'ERROR', 0, @n_err, @c_errmsg)   
+                  --EXEC [WM].[lsp_WriteError_List] 
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_WaveKey
+                  --   ,  @c_Refkey2     = @c_MBOLKey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR' 
+                  --   ,  @n_err2        = @n_err 
+                  --   ,  @c_errmsg2     = @c_errmsg 
+                  --   ,  @b_Success     = @b_Success   OUTPUT 
+                  --   ,  @n_err         = @n_err       OUTPUT 
+                  --   ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-                  IF (XACT_STATE()) = -1  
-                  BEGIN
-                     IF @@TRANCOUNT > 0 
-                     BEGIN
-                        ROLLBACK TRAN
-                     END
+                  --IF (XACT_STATE()) = -1  
+                  --BEGIN
+                  --   IF @@TRANCOUNT > 0 
+                  --   BEGIN
+                  --      ROLLBACK TRAN
+                  --   END
 
-                     WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
-                     BEGIN
-                        BEGIN TRAN
-                     END
-                  END  
+                  --   WHILE @@TRANCOUNT > 0 AND @@TRANCOUNT < @n_StartTCnt
+                  --   BEGIN
+                  --      BEGIN TRAN
+                  --   END
+                  --END 
+                  --(Wan02) - END
                END CATCH
             END
          END
       END
    END
    --START
-   IF @n_ErrGroupKey = 0
+   --IF @n_ErrGroupKey = 0                                     --(Wan02)
+   IF NOT EXISTS (SELECT 1 FROM @t_WMSErrorList)               --(Wan02)
    BEGIN
       SET @c_ErrMsg = 'No Shipment To Process.'
-      EXEC [WM].[lsp_WriteError_List] 
-         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
-      ,  @c_TableName   = @c_TableName
-      ,  @c_SourceType  = @c_SourceType
-      ,  @c_Refkey1     = @c_WaveKey
-      ,  @c_Refkey2     = @c_MBOLKey
-      ,  @c_Refkey3     = ''
-      ,  @c_WriteType   = 'MESSAGE' 
-      ,  @n_err2        = @n_err 
-      ,  @c_errmsg2     = @c_errmsg 
-      ,  @b_Success     = @b_Success    
-      ,  @n_err         = @n_err        
-      ,  @c_errmsg      = @c_errmsg    
+
+      INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+      VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'MESSAGE', 0, @n_err, @c_errmsg) 
    END
    --END
-
+   
+   EXIT_SP_WITH_ERROR_CATCH:
+   
+   --(Wan02) - START
+   SET @n_WarningNo = @n_LogWarningNo
+   IF (XACT_STATE()) = -1 
+   BEGIN
+      SET @n_Continue = 3
+   END
+   --(Wan02) - END
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -805,6 +1083,63 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
+   
+   --(Wan02) - START
+   SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT   twl.TableName         
+         ,  twl.SourceType        
+         ,  twl.Refkey1           
+         ,  twl.Refkey2           
+         ,  twl.Refkey3           
+         ,  twl.WriteType         
+         ,  twl.LogWarningNo      
+         ,  twl.ErrCode           
+         ,  twl.Errmsg               
+   FROM @t_WMSErrorList AS twl
+   ORDER BY twl.RowID
+   
+   OPEN @CUR_ERRLIST
+   
+   FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName         
+                                     , @c_SourceType        
+                                     , @c_Refkey1           
+                                     , @c_Refkey2           
+                                     , @c_Refkey3           
+                                     , @c_WriteType         
+                                     , @n_LogWarningNo      
+                                     , @n_Err           
+                                     , @c_Errmsg            
+   
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      EXEC [WM].[lsp_WriteError_List] 
+         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+      ,  @c_TableName   = @c_TableName
+      ,  @c_SourceType  = @c_SourceType
+      ,  @c_Refkey1     = @c_Refkey1
+      ,  @c_Refkey2     = @c_Refkey2
+      ,  @c_Refkey3     = @c_Refkey3
+      ,  @n_LogWarningNo= @n_LogWarningNo
+      ,  @c_WriteType   = @c_WriteType
+      ,  @n_err2        = @n_err 
+      ,  @c_errmsg2     = @c_errmsg 
+      ,  @b_Success     = @b_Success    
+      ,  @n_err         = @n_err        
+      ,  @c_errmsg      = @c_errmsg         
+     
+      FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName         
+                                        , @c_SourceType        
+                                        , @c_Refkey1           
+                                        , @c_Refkey2           
+                                        , @c_Refkey3           
+                                        , @c_WriteType         
+                                        , @n_LogWarningNo      
+                                        , @n_Err           
+                                        , @c_Errmsg     
+   END
+   CLOSE @CUR_ERRLIST
+   DEALLOCATE @CUR_ERRLIST
+   --(Wan02) - END
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
