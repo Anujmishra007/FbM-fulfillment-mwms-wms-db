@@ -2,7 +2,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
 /************************************************************************/
 /* Store procedure: rdtfnc_SSCC_Receiving                               */
 /* Copyright      : IDS                                                 */
@@ -13,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2021-12-09 1.0  James    WMS-18515. Created                          */
+/* 17-03-2022 1.1  Leong    JSM-57674 - Add RDTGetConfig                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdtfnc_SSCC_Receiving (
@@ -35,71 +35,71 @@ DECLARE
    @nFunc               INT,
    @nScn                INT,
    @nStep               INT,
-   @cLangCode           NVARCHAR( 3),
+   @cLangCode           NVARCHAR(3),
    @nMenu               INT,
-   @nInputKey           NVARCHAR( 3),
+   @nInputKey           NVARCHAR(3),
 
-   @cStorerkey          NVARCHAR( 15),
-   @cUserName           NVARCHAR( 18),
-   @cFacility           NVARCHAR( 5),
-   @cPrinter            NVARCHAR( 10),
+   @cStorerkey          NVARCHAR(15),
+   @cUserName           NVARCHAR(18),
+   @cFacility           NVARCHAR(5),
+   @cPrinter            NVARCHAR(10),
 
-   @cReceiptKey         NVARCHAR( 10),
-   @cLOC                NVARCHAR( 10),
-   @cID                 NVARCHAR( 18),
-   @cSKU                NVARCHAR( 20),
-   @cSKUDesc            NVARCHAR( 60),
-   @cUOM                NVARCHAR( 10),
-   @cQty                NVARCHAR( 5),
-   @cOption             NVARCHAR( 1),
+   @cReceiptKey         NVARCHAR(10),
+   @cLOC                NVARCHAR(10),
+   @cID                 NVARCHAR(18),
+   @cSKU                NVARCHAR(20),
+   @cSKUDesc            NVARCHAR(60),
+   @cUOM                NVARCHAR(10),
+   @cQty                NVARCHAR(5),
+   @cOption             NVARCHAR(1),
 
-   @cLottableLabel      NVARCHAR( 20),
-   @cLottable01         NVARCHAR( 18),
-   @cLottable02         NVARCHAR( 18),
-   @cLottable03         NVARCHAR( 18),
+   @cLottableLabel      NVARCHAR(20),
+   @cLottable01         NVARCHAR(18),
+   @cLottable02         NVARCHAR(18),
+   @cLottable03         NVARCHAR(18),
    @dLottable04         DATETIME,
    @dLottable05         DATETIME,
 
-   @cLottable06         NVARCHAR( 30),      --(CS01)
-   @cLottable07         NVARCHAR( 30),      --(CS01)
-   @cLottable08         NVARCHAR( 30),      --(CS01)
-   @cLottable09         NVARCHAR( 30),      --(CS01)
-   @cLottable10         NVARCHAR( 30),      --(CS01)
-   @cLottable11         NVARCHAR( 30),      --(CS01)
-   @cLottable12         NVARCHAR( 30),      --(CS01)
-   @dLottable13         DATETIME,           --(CS01)
-   @dLottable14         DATETIME,           --(CS01)
-   @dLottable15         DATETIME,           --(CS01)
+   @cLottable06         NVARCHAR(30),      --(CS01)
+   @cLottable07         NVARCHAR(30),      --(CS01)
+   @cLottable08         NVARCHAR(30),      --(CS01)
+   @cLottable09         NVARCHAR(30),      --(CS01)
+   @cLottable10         NVARCHAR(30),      --(CS01)
+   @cLottable11         NVARCHAR(30),      --(CS01)
+   @cLottable12         NVARCHAR(30),      --(CS01)
+   @dLottable13         DATETIME,          --(CS01)
+   @dLottable14         DATETIME,          --(CS01)
+   @dLottable15         DATETIME,          --(CS01)
 
-   @cTempLotLabel       NVARCHAR( 20),
-   @cTempLottable01     NVARCHAR( 18), --input field lottable01 from lottable screen
-   @cTempLottable02     NVARCHAR( 18), --input field lottable02 from lottable screen
-   @cTempLottable03     NVARCHAR( 18), --input field lottable03 from lottable screen
-   @cTempLottable04     NVARCHAR( 16), --input field lottable04 from lottable screen
-   @cTempLottable05     NVARCHAR( 16), --input field lottable05 from lottable screen
+   @cTempLotLabel       NVARCHAR(20),
+   @cTempLottable01     NVARCHAR(18), --input field lottable01 from lottable screen
+   @cTempLottable02     NVARCHAR(18), --input field lottable02 from lottable screen
+   @cTempLottable03     NVARCHAR(18), --input field lottable03 from lottable screen
+   @cTempLottable04     NVARCHAR(16), --input field lottable04 from lottable screen
+   @cTempLottable05     NVARCHAR(16), --input field lottable05 from lottable screen
 
-   @cLottable01Label    NVARCHAR( 20),
-   @cLottable02Label    NVARCHAR( 20),
-   @cLottable03Label    NVARCHAR( 20),
-   @cLottable04Label    NVARCHAR( 20),
-   @cLottable05Label    NVARCHAR( 20),
+   @cLottable01Label    NVARCHAR(20),
+   @cLottable02Label    NVARCHAR(20),
+   @cLottable03Label    NVARCHAR(20),
+   @cLottable04Label    NVARCHAR(20),
+   @cLottable05Label    NVARCHAR(20),
 
-   @cLottable06Label    NVARCHAR( 20),          --(CS01)
-   @cLottable07Label    NVARCHAR( 20),          --(CS01)
-   @cLottable08Label    NVARCHAR( 20),          --(CS01)
-   @cLottable09Label    NVARCHAR( 20),          --(CS01)
-   @cLottable10Label    NVARCHAR( 20),          --(CS01)
-   @cLottable11Label    NVARCHAR( 20),          --(CS01)
-   @cLottable12Label    NVARCHAR( 20),          --(CS01)
-   @cLottable13Label    NVARCHAR( 20),           --(CS01)
-   @cLottable14Label    NVARCHAR( 20),           --(CS01)
-   @cLottable15Label    NVARCHAR( 20),           --(CS01)
+   @cLottable06Label    NVARCHAR(20),          --(CS01)
+   @cLottable07Label    NVARCHAR(20),          --(CS01)
+   @cLottable08Label    NVARCHAR(20),          --(CS01)
+   @cLottable09Label    NVARCHAR(20),          --(CS01)
+   @cLottable10Label    NVARCHAR(20),          --(CS01)
+   @cLottable11Label    NVARCHAR(20),          --(CS01)
+   @cLottable12Label    NVARCHAR(20),          --(CS01)
+   @cLottable13Label    NVARCHAR(20),           --(CS01)
+   @cLottable14Label    NVARCHAR(20),           --(CS01)
+   @cLottable15Label    NVARCHAR(20),           --(CS01)
 
-   @cTempLotLabel01     NVARCHAR( 20),
-   @cTempLotLabel02 NVARCHAR( 20),
-   @cTempLotLabel03     NVARCHAR( 20),
-   @cTempLotLabel04     NVARCHAR( 20),
-   @cTempLotLabel05     NVARCHAR( 20),
+   @cTempLotLabel01     NVARCHAR(20),
+   @cTempLotLabel02     NVARCHAR(20),
+   @cTempLotLabel03     NVARCHAR(20),
+   @cTempLotLabel04     NVARCHAR(20),
+   @cTempLotLabel05     NVARCHAR(20),
 
    @dTempLottable04     DATETIME,
    @dTempLottable05     DATETIME,
@@ -108,21 +108,21 @@ DECLARE
    @dTempLottable14     DATETIME,            --(CS01)
    @dTempLottable15     DATETIME,            --(CS01)
 
-   @cExtendedInfoSP     NVARCHAR( 20),
-   @cExtendedInfo       NVARCHAR( 20),
-   @cExtendedValidateSP NVARCHAR( 20),
-   @cExtendedUpdateSP   NVARCHAR( 20),
-   @cSQL                NVARCHAR( MAX),
-   @cSQLParam           NVARCHAR( MAX),
-   @cSSCC               NVARCHAR( 30),
-   @cChk_Facility       NVARCHAR( 5),
-   @cChk_StorerKey      NVARCHAR( 15),
-   @cChk_Status         NVARCHAR( 10),
-   @cChk_ASNStatus      NVARCHAR( 10),
-   @cChk_FinalizeFlag   NVARCHAR( 10),
-   @cConditionCode      NVARCHAR( 10),
-   @cSubreasonCode      NVARCHAR( 10),
-   @cReceiptLineNumber  NVARCHAR( 5),
+   @cExtendedInfoSP     NVARCHAR(20),
+   @cExtendedInfo       NVARCHAR(20),
+   @cExtendedValidateSP NVARCHAR(20),
+   @cExtendedUpdateSP   NVARCHAR(20),
+   @cSQL                NVARCHAR(MAX),
+   @cSQLParam           NVARCHAR(MAX),
+   @cSSCC               NVARCHAR(30),
+   @cChk_Facility       NVARCHAR(5),
+   @cChk_StorerKey      NVARCHAR(15),
+   @cChk_Status         NVARCHAR(10),
+   @cChk_ASNStatus      NVARCHAR(10),
+   @cChk_FinalizeFlag   NVARCHAR(10),
+   @cConditionCode      NVARCHAR(10),
+   @cSubreasonCode      NVARCHAR(10),
+   @cReceiptLineNumber  NVARCHAR(5),
    @nChk_RCVQty         INT,
    @nTTL_SSCC           INT,
    @nTTL_SCANNED        INT,
@@ -135,30 +135,30 @@ DECLARE
    @tExtUpdateVar       VARIABLETABLE,
    @tConfirmVar         VARIABLETABLE,
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
+   @cInField01 NVARCHAR(60),   @cOutField01 NVARCHAR(60),
+   @cInField02 NVARCHAR(60),   @cOutField02 NVARCHAR(60),
+   @cInField03 NVARCHAR(60),   @cOutField03 NVARCHAR(60),
+   @cInField04 NVARCHAR(60),   @cOutField04 NVARCHAR(60),
+   @cInField05 NVARCHAR(60),   @cOutField05 NVARCHAR(60),
+   @cInField06 NVARCHAR(60),   @cOutField06 NVARCHAR(60),
+   @cInField07 NVARCHAR(60),   @cOutField07 NVARCHAR(60),
+   @cInField08 NVARCHAR(60),   @cOutField08 NVARCHAR(60),
+   @cInField09 NVARCHAR(60),   @cOutField09 NVARCHAR(60),
+   @cInField10 NVARCHAR(60),   @cOutField10 NVARCHAR(60),
+   @cInField11 NVARCHAR(60),   @cOutField11 NVARCHAR(60),
+   @cInField12 NVARCHAR(60),   @cOutField12 NVARCHAR(60),
+   @cInField13 NVARCHAR(60),   @cOutField13 NVARCHAR(60),
+   @cInField14 NVARCHAR(60),   @cOutField14 NVARCHAR(60),
+   @cInField15 NVARCHAR(60),   @cOutField15 NVARCHAR(60),
 
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1),
+   @cFieldAttr01 NVARCHAR(1), @cFieldAttr02 NVARCHAR(1),
+   @cFieldAttr03 NVARCHAR(1), @cFieldAttr04 NVARCHAR(1),
+   @cFieldAttr05 NVARCHAR(1), @cFieldAttr06 NVARCHAR(1),
+   @cFieldAttr07 NVARCHAR(1), @cFieldAttr08 NVARCHAR(1),
+   @cFieldAttr09 NVARCHAR(1), @cFieldAttr10 NVARCHAR(1),
+   @cFieldAttr11 NVARCHAR(1), @cFieldAttr12 NVARCHAR(1),
+   @cFieldAttr13 NVARCHAR(1), @cFieldAttr14 NVARCHAR(1),
+   @cFieldAttr15 NVARCHAR(1),
 
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
@@ -258,6 +258,15 @@ BEGIN
    SET @cSKUDesc = ''
    SET @nTTL_SCANNED = ''
    SET @nTTL_SSCC = ''
+
+   -- JSM-57674
+   SET @cExtendedValidateSP = rdt.RDTGetConfig(@nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
+
+   SET @cExtendedUpdateSP = rdt.RDTGetConfig(@nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
 
    -- Prep next screen var
    SET @cOutField01 = '' -- SSCC
@@ -600,7 +609,7 @@ BEGIN
          ORDER BY 1
 
          SELECT @cSKUDesc = DESCR
-        FROM dbo.SKU WITH (NOLOCK)
+         FROM dbo.SKU WITH (NOLOCK)
          WHERE StorerKey = @cStorerkey
          AND   Sku = @cSKU
 
@@ -624,7 +633,6 @@ BEGIN
 
          SET @cSSCC = ''
       END
-
    END
 
    IF @nInputKey = 0 -- ESC
@@ -676,7 +684,7 @@ BEGIN
 
       -- Check option valid
       IF @cOption NOT IN ( '1', '9')
-    BEGIN
+      BEGIN
          SET @nErrNo = 179812
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
          GOTO Step_Finalize_Fail
@@ -711,7 +719,7 @@ BEGIN
                '@cLottable01   NVARCHAR( 18), ' +
                '@cLottable02   NVARCHAR( 18), ' +
                '@cLottable03   NVARCHAR( 18), ' +
-    '@dLottable04   DATETIME,      ' +
+               '@dLottable04   DATETIME,      ' +
                '@dLottable05   DATETIME,      ' +
                '@cLottable06   NVARCHAR( 30), ' +
                '@cLottable07   NVARCHAR( 30), ' +
@@ -762,6 +770,7 @@ BEGIN
             @cReceiptKey   = @cReceiptKey,
             @nErrNo        = @nErrNo  OUTPUT,
             @cErrMsg       = @cErrMsg OUTPUT
+         
          IF @nErrNo <> 0
          BEGIN
             ROLLBACK TRAN -- Step_FinalizeASN
@@ -914,7 +923,6 @@ BEGIN
        V_UOM = @cUOM,
        V_QTY = @nQTY,
 
-
        V_String1  = @cOption,
        V_String2  = @cExtendedInfoSP,
        V_String3  = @cExtendedInfo,
@@ -948,15 +956,12 @@ BEGIN
        FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
        FieldAttr15  = @cFieldAttr15
 
-
    WHERE Mobile = @nMobile
 END
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
 GRANT EXECUTE ON RDT.rdtfnc_SSCC_Receiving TO NSQL
 GO
