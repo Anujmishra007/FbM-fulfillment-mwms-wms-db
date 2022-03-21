@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Wave_BuildLoad]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Wave_BuildLoad]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -32,8 +27,11 @@ GO
 /*                            if @c_UserName <> SUSER_SNAME()           */
 /* 2021-03-23  Wan02    1.3   LWMS-2664 - [CN] Allocation_After_Generate*/
 /*                            _Load                                     */
+/* 2022-03-08  Wan03    1.4   WMS-19025 - THA-adidas-Create SP for      */
+/*                            generate LoadPlan By Wave                 */
+/*                            DevOps Combine Script                     */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
    ,  @c_Facility       NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey      NVARCHAR(15)                                                                                                                            
@@ -89,6 +87,9 @@ AS
          , @c_TableName                NVARCHAR(30)   = ''                                                                                                                
          , @c_ColName                  NVARCHAR(100)  = ''                                                                                                                 
          , @c_ColType                  NVARCHAR(128)  = ''
+         , @c_BuildTypeValue           NVARCHAR(4000) = ''              --(Wan03)
+         , @b_ValidTable               INT            = 0               --(Wan03)
+         , @b_ValidColumn              INT            = 0               --(Wan03)
 
          , @n_cnt                      INT            = 0 
          , @n_BuildGroupCnt            INT            = 0       
@@ -336,7 +337,8 @@ AS
    SELECT TOP 10 
          BPD.FieldName
       ,  BPD.Operator
-      ,  BPD.[Type]                                                                                                           
+      ,  BPD.[Type]  
+      ,  BuildTypeValue = ISNULL(BPD.[Value],'')                        --(Wan03)                                                                                                    
    FROM  BUILDPARMDETAIL BPD WITH (NOLOCK)                                                                                                                               
    WHERE BPD.BuildParmKey = @c_BuildParmKey                                                                                                                                
    AND   BPD.[Type]  IN ('SORT','GROUP')                                                                                                                             
@@ -346,14 +348,78 @@ AS
                                                                                                                                                             
    FETCH NEXT FROM @CUR_BUILD_SORT INTO @c_FieldName
                                        ,@c_Operator
-                                       ,@c_ParmBuildType                                                                               
+                                       ,@c_ParmBuildType   
+                                       ,@c_BuildTypeValue               --(Wan03)                                                                                           
    WHILE @@FETCH_STATUS <> -1                             
    BEGIN                                                                                                                                                       
-      -- Get Column Type                                                                                                                                       
-      SET @c_TableName = LEFT(@c_FieldName, CHARINDEX('.', @c_FieldName) - 1)                                                                                   
-      SET @c_ColName   = SUBSTRING(@c_FieldName,                                                                                                                
-                         CHARINDEX('.', @c_FieldName) + 1, LEN(@c_FieldName) - CHARINDEX('.', @c_FieldName))                                                            
-                 
+      -- Get Column Type   
+      -- (Wan03) - START
+      
+      SET @c_BuildTypeValue = dbo.fnc_GetParamValueFromString('@c_CustomFieldName',@c_BuildTypeValue, '')
+   
+      IF @c_ParmBuildType = 'GROUP' AND @c_BuildTypeValue <> '' 
+      BEGIN
+         SET @c_TableName = 'ORDERS'         
+         SET @c_FieldName = @c_BuildTypeValue
+         SET @c_ColType = 'nvarchar'
+         
+         -- IF @c_BuildTypeValue is a SQL FUNCTION
+         SET @c_BuildTypeValue = TRANSLATE(@c_BuildTypeValue, ',', ' ')
+         SET @c_BuildTypeValue = TRANSLATE(@c_BuildTypeValue, ')', ' ')
+         SET @c_BuildTypeValue = STUFF(@c_BuildTypeValue, 1, CHARINDEX('(',@c_BuildTypeValue),'')
+         
+         --1. STC=>Split String by 1 empty space with Split column has '.'; Split_Text
+         --2. VC => Split Each Split_Text's Column into Single Character IN a-z, 0-9 and . value. Gen RowID per Split_Text column, n = Character's id reference
+         --3. TC => Concat character per Split_Text Column for Gen RowID = n
+         --Lastly, Find If Valid Tablename and Column Name
+         ;WITH STC AS 
+         (  SELECT TableName = LEFT(ss.[value], CHARINDEX('.', ss.[value]) -1)
+                  ,Split_Text = ss.[value]
+            FROM STRING_SPLIT(@c_BuildTypeValue,' ') AS ss                    
+            WHERE CHARINDEX('.',ss.[value]) > 0
+         )
+         , x AS 
+         (
+              SELECT TOP (100) n = ROW_NUMBER() OVER (ORDER BY Number)
+              FROM master.dbo.spt_values ORDER BY Number
+         )
+         , VC AS
+         (
+            SELECT Single_Char = SUBSTRING(STC.Split_Text, x.n, 1)
+                 , STC.Split_Text
+                 , STC.TableName    
+                 , x.n
+                 , RowID = ROW_NUMBER() OVER (PARTITION BY STC.Split_Text ORDER BY STC.Split_Text)
+            FROM STC 
+            JOIN x ON x.n <= LEN(STC.Split_Text) 
+            WHERE SUBSTRING(STC.Split_Text, x.n, 1) LIKE '[A-Z,0-9,.]'
+         )
+         , TC AS
+         (
+            SELECT VC.Split_Text
+               , VC.TableName  
+               , BuildCol = STRING_AGG(VC.Single_Char,'')
+            FROM VC WHERE VC.RowiD = VC.n
+            GROUP BY VC.Split_Text
+                   , VC.TableName  
+         )
+         SELECT @b_ValidTable  = ISNULL(MIN(IIF(TC.TableName = @c_TableName, 1 , 0 )),0)
+               ,@b_ValidColumn = ISNULL(MIN(IIF(c.COLUMN_NAME IS NOT NULL , 1 , 0 )),0)
+         FROM TC
+         LEFT OUTER JOIN INFORMATION_SCHEMA.COLUMNS c WITH (NOLOCK) ON c.TABLE_NAME = TC.TableName AND c.TABLE_NAME + '.' + c.COLUMN_NAME = TC.BuildCol 
+
+
+         IF @b_ValidTable = 0 SET @c_TableName = ''
+         IF @b_ValidColumn = 0 SET @c_ColType = ''
+      END
+      ELSE
+      BEGIN
+      -- (Wan03) - END
+         SET @c_TableName = LEFT(@c_FieldName, CHARINDEX('.', @c_FieldName) - 1)                                                                                   
+         SET @c_ColName   = SUBSTRING(@c_FieldName,                                                                                                                
+                            CHARINDEX('.', @c_FieldName) + 1, LEN(@c_FieldName) - CHARINDEX('.', @c_FieldName))     
+      END-- (Wan03)
+                       
       IF @c_TableName NOT IN ('ORDERS')
       BEGIN
          SET @n_Continue = 3                                                                                                                                     
@@ -362,12 +428,15 @@ AS
                         + ': Only allow Sort/Group for ORDERS table. (lsp_Wave_BuildLoad)'                                                                                            
          GOTO EXIT_SP              
       END
-                                                                                                                                                                  
-      SET @c_ColType = ''                                                                                                                                       
-      SELECT @c_ColType = DATA_TYPE                                                                                                                             
-      FROM   INFORMATION_SCHEMA.COLUMNS WITH (NOLOCK)                                                                                                                       
-      WHERE  TABLE_NAME = @c_TableName                                                                                                                          
-      AND    COLUMN_NAME = @c_ColName                                                                                                                            
+                       
+      IF NOT (@c_ParmBuildType = 'GROUP' AND @c_BuildTypeValue <> '')               --(Wan03) 
+      BEGIN 
+         SET @c_ColType = ''                                                                                                                                           
+         SELECT @c_ColType = DATA_TYPE                                                                                                                             
+         FROM   INFORMATION_SCHEMA.COLUMNS WITH (NOLOCK)                                                                                                                       
+         WHERE  TABLE_NAME = @c_TableName                                                                                                                          
+         AND    COLUMN_NAME = @c_ColName                                                                                                                            
+      END                                                                           --(Wan03) 
                                                                                                                                                             
       IF ISNULL(RTRIM(@c_ColType), '') = ''                                                                                                                     
       BEGIN                                                          
@@ -426,8 +495,10 @@ AS
          END                                                                                                                                                   
                                                                                                                                 
          IF @c_ColType IN ('char', 'nvarchar', 'varchar', 'nchar') -- SWT02                                                                                                      
-         BEGIN                                                                                                                                                 
-            SET @c_SQLField = @c_SQLField + CHAR(13) + ',' + RTRIM(@c_FieldName)                                                                                       
+         BEGIN  
+            IF @c_SQLField <> ''                                                                                                                                             
+               SET @c_SQLField = @c_SQLField + CHAR(13)                                                                                                                                                
+            SET @c_SQLField = @c_SQLField + ',' + RTRIM(@c_FieldName)                                                                                       
             SET @c_SQLBuildByGroupWhere = @c_SQLBuildByGroupWhere 
                                  + CHAR(13) + ' AND ' + RTRIM(@c_FieldName) + '='                                                                            
                                  + CASE WHEN @n_BuildGroupCnt = 1  THEN '@c_Field01'                                                                                                      
@@ -444,8 +515,11 @@ AS
          END                                                                                                                                                   
                                                                                                                                                             
          IF @c_ColType IN ('datetime')                                                                                                                          
-         BEGIN                                                                                                                                                 
-            SET @c_SQLField = @c_SQLField + CHAR(13) +  ', CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)'                                                       
+         BEGIN   
+            IF @c_SQLField <> ''                                                                                                                                             
+               SET @c_SQLField = @c_SQLField + CHAR(13) 
+               
+            SET @c_SQLField = @c_SQLField + ', CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)'                                                       
             SET @c_SQLBuildByGroupWhere = @c_SQLBuildByGroupWhere 
                                  + CHAR(13) + ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='                      
                                  + CASE WHEN @n_BuildGroupCnt = 1  THEN '@c_Field01'                                                                                                      
@@ -464,7 +538,8 @@ AS
                                                                
       FETCH NEXT FROM @CUR_BUILD_SORT INTO @c_FieldName
                                           ,@c_Operator
-                                          ,@c_ParmBuildType                                                                              
+                                          ,@c_ParmBuildType   
+                                          ,@c_BuildTypeValue               --(Wan03)                                                                            
    END                                                                                                                                                         
    CLOSE @CUR_BUILD_SORT                                                                                                                                   
    DEALLOCATE @CUR_BUILD_SORT  
@@ -608,7 +683,6 @@ AS
                               + CHAR(13) + @c_SQLWhere
                               + CHAR(13) + ' GROUP BY ORDERS.Storerkey ' 
                               + CHAR(13) + @c_SQLFieldGroupBy
-                              + CHAR(13) + @c_SQLFieldGroupBy    
 
       EXEC SP_EXECUTESQL @c_SQLBuildByGroup 
             , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_WaveKey NVARCHAR(10)'  
@@ -697,7 +771,6 @@ START_BUILDLOAD:
       PRINT '--3.Do Initial Value Set Up--'                                                                                                                 
       SET @d_StartTime_Debug = GETDATE()                                                                                                                       
    END                                                                                                                                                         
-                                                                                                                                                       
            
    SET @n_MaxOrders =  @n_MaxLoadOrders                                                                                                                                   
    IF @n_MaxLoadOrders = 0                                                                                                                                          
