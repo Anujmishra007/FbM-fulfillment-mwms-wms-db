@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[WM].[lsp_FinalizeReceipt_Wrapper]') AND OBJECTPROPERTY(Id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 1.6                                                       */
+/* PVCS Version: 1.7                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -35,9 +32,11 @@ GO
 /*                            dialog to confirm.                           */
 /* 2022-01-20  Wan06    1.6   LFWM-2977 - [CN] Lacoste_Fianlize_ASN        */
 /* 2022-01-20  Wan06    1.6   DevOps Combine Script                        */
+/* 2022-03-16  Wan07    1.7   LFWM-3438 - UAT-CN SCE finalize receipt stuck*/
+/*                            Fix InifinityLoop in getting POKey           */
 /***************************************************************************/
 
-CREATE PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
       @c_ReceiptKey              NVARCHAR(10)
     , @c_ReceiptLineNumber       NVARCHAR(5)    = ''
     , @b_Success                 INT            = 1  OUTPUT
@@ -632,7 +631,8 @@ BEGIN
             SET @c_ASNReason = ''
             SET @c_POKey     = ''
             SET @c_ExternReceiptKey = ''
-            SELECT @c_ReceiptLineNo      = RD.ReceiptLineNumber
+            SELECT TOP 1                                                            --(Wan07)
+                   @c_ReceiptLineNo      = RD.ReceiptLineNumber
                   ,@c_Storerkey          = RD.Storerkey
                   ,@c_Sku                = RTRIM(RD.Sku)
                   ,@n_QtyExpected        = ISNULL(RD.QtyExpected,0)
@@ -1796,13 +1796,13 @@ BEGIN
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN
-
          SET @c_Toloc     = ''
          SET @c_ToID      = ''
          SET @c_ASNReason = ''
          SET @c_POKey     = ''
          SET @c_ExternReceiptKey = ''
-         SELECT @c_ReceiptLineNo      = RD.ReceiptLineNumber
+         SELECT TOP 1                                                               --(Wan07)
+                @c_ReceiptLineNo      = RD.ReceiptLineNumber
                ,@c_Storerkey          = RD.Storerkey
                ,@c_Sku                = RD.Sku
                ,@n_BeforeReceivedQty  = ISNULL(RD.BeforeReceivedQty,0)
@@ -1812,7 +1812,7 @@ BEGIN
                ,@c_ASNReason          = ISNULL(RTRIM(RD.UserDefine03),'')
          FROM @tRECEIPTDETAIL t
          JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
-                                 AND t.ReceiptLineNumber = RD.ReceiptLineNumber
+                               AND t.ReceiptLineNumber = RD.ReceiptLineNumber
          WHERE RD.ReceiptLineNumber > @c_ReceiptLineNo
          AND    RD.FinalizeFlag <> 'Y'
          ORDER BY RD.ReceiptLineNumber
@@ -1937,26 +1937,29 @@ BEGIN
          END
       END
 
-      SET @c_POKey     = ''
+
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN
+         SET @c_POKey     = ''                                                      --(Wan07)
          SET @c_ExternReceiptKey = ''
          SET @c_ExternLineNo     = ''
          SET @n_SumBeforeReceivedQty = 0
          SET @n_SumFreeGoodQtyReceived = 0
-         SELECT @c_POKey              = ISNULL(RTRIM(RD.POkey),'')
-               ,@c_ReceiptLineNo      = MAX(RD.ReceiptLineNumber)
+         SELECT TOP 1                                                               --(Wan07)
+                @c_ReceiptLineNo      = MAX(RD.ReceiptLineNumber)
+               ,@c_POKey              = ISNULL(RTRIM(RD.POkey),'')
                ,@c_ExternReceiptKey   = ISNULL(RTRIM(RD.ExternReceiptKey),'')
                ,@c_ExternLineNo       = ISNULL(RTRIM(RD.ExternLineNo),'')
                ,@n_SumBeforeReceivedQty  = ISNULL(SUM(RD.BeforeReceivedQty),0)
                ,@n_SumFreeGoodQtyReceived= ISNULL(SUM(RD.FreeGoodQtyReceived),0)
          FROM @tRECEIPTDETAIL t
          JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
-        AND t.ReceiptLineNumber = RD.ReceiptLineNumber
-         WHERE RD.ExternReceiptKey > @c_ExternReceiptKey
-         AND   RD.ExternLineNo > @c_ExternLineNo
-         AND   RD.POkey > @c_POKey
+                               AND t.ReceiptLineNumber = RD.ReceiptLineNumber
+         --WHERE RD.ExternReceiptKey > @c_ExternReceiptKey
+         --AND   RD.ExternLineNo > @c_ExternLineNo
+         WHERE RD.ReceiptLineNumber > @c_ReceiptLineNo                              --(Wan07)
+         AND   RD.POkey <> ''                                                       --(Wan07)
          AND   RD.FinalizeFlag <> 'Y'
          AND   RD.Conditioncode = 'OK'
          AND  (RD.SubReasonCode IS NULL OR RD.SubReasonCode = '')
@@ -2389,7 +2392,8 @@ BEGIN
 
          WHILE 1 = 1
          BEGIN
-            SELECT @c_ReceiptLineNo     = RD.ReceiptLineNumber
+            SELECT TOP 1                                                         --(Wan07)
+                   @c_ReceiptLineNo     = RD.ReceiptLineNumber
                   ,@c_Storerkey         = RD.Storerkey
                   ,@c_Sku               = RD.Sku
                   ,@c_ToID              = ISNULL(RTRIM(RD.ToID),'')
