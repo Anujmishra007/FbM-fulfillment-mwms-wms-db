@@ -77,11 +77,6 @@ BEGIN
 
    END
 
-   SELECT @c_getWeight = [Weight]
-   FROM PACKINFO WITH (NOLOCK)
-   WHERE Pickslipno = @c_getpickslipno
-   AND Cartonno BETWEEN @c_StartCartonNo AND @c_EndCartonNo
-
    SELECT @n_ttlctn = MAX(cartonno)
    FROM PACKDETAIL WITH (NOLOCK)
    WHERE Pickslipno = @c_getpickslipno    --CS01
@@ -155,11 +150,12 @@ BEGIN
           ST.Company,PD.labelno, CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Hidettlctn,s.Size ,
           ISNULL(OH.notes,'') AS OHNotes,CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HIDEFIELD,
           OH.BuyerPO,ISNULL(CLR2.SHORT,'') AS showPOorPOKEY,OH.C_Company,OH.C_Address1,OH.C_Address2,OH.C_Address3,
-          OH.C_City,OH.C_State,OH.C_Zip,PD.LOTTABLEVALUE,CONVERT(NVARCHAR(11),OH.DeliveryDate,106),@c_getWeight
+          OH.C_City,ISNULL(OH.C_State,''),OH.C_Zip,PD.LOTTABLEVALUE,CONVERT(NVARCHAR(11),OH.DeliveryDate,106),PIF.Weight
    FROM ORDERS OH WITH (NOLOCK)
    --JOIN ORDERDETAIL OD WITH (NOLOCK) 
    JOIN PackHeader PH WITH (NOLOCK) ON PH.Orderkey = OH.Orderkey
    JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.Pickslipno = PH.pickslipno
+   LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.CartonNo = PD.CartonNo AND PIF.PickSlipNo = PH.PickSlipNo
    --LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = OH.Consigneekey 
    LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = OH.StorerKey
    LEFT JOIN SKU S WITH (NOLOCK) ON S.storerkey = PD.Storerkey AND S.SKU = PD.SKU 
@@ -180,7 +176,7 @@ BEGIN
           ST.city,ST.state,ST.zip,PD.dropid , PD.CartonNo ,PD.SKU,PH.pickslipno,ST.company,PD.labelno,
           CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END ,s.Size,
           ISNULL(OH.notes,'') ,ISNULL(CLR1.Code,''),OH.BuyerPO,ISNULL(CLR2.SHORT,''),
-          OH.C_Company,OH.C_Address1,OH.C_Address2,OH.C_Address3,OH.C_City,OH.C_State,OH.C_Zip,PD.LOTTABLEVALUE,OH.DeliveryDate
+          OH.C_Company,OH.C_Address1,OH.C_Address2,OH.C_Address3,OH.C_City,ISNULL(OH.C_State,''),OH.C_Zip,PD.LOTTABLEVALUE,OH.DeliveryDate,PIF.Weight
    order by PH.pickslipno ,OH.ExternOrderkey,PD.cartonno , pd.sku  
 
 
@@ -233,4 +229,20 @@ GO
 
 
 
- 
+ --select * from CODELKUP (nolock) where LISTNAME = 'REPORTCFG' and Code = 'ADSCAN'
+ --EXEC isp_UCC_Carton_Label_111 'prestige','P022132649','1','4'   
+ --EXEC isp_UCC_Carton_Label_111 'prestige','P022133245','1','3'
+ --EXEC isp_UCC_Carton_Label_111 'prestige','P022136993','1','1'
+
+ --SELECT Weight
+ --  FROM PACKINFO WITH (NOLOCK)
+ --  WHERE Pickslipno = 'P000044452'
+ --  AND Cartonno BETWEEN '1' AND '4'
+
+ --  SELECT * FROM PACKINFO(NOLOCK) WHERE pickslipno = 'P022132649'
+
+-- select dbo.fnc_DecryptPWD(usr_pwd),* from phtsecure..pl_usr (nolock)
+--where usr_login like '%IT%'
+--order by usr_pwd_date DESC
+
+   
