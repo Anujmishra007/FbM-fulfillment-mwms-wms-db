@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveOrderAnalysis]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveOrderAnalysis] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.5                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -35,8 +30,10 @@ GO
 /* 05-Jan-2022 Wan03    1.4   LFWM-3279 - SCE UAT SG Order Parameter -  */
 /*                            Type 'SORT' - Do not have Sku_Total_Qty as*/
 /*                            in Exceed                                 */
+/* 22-FEB-2022 Wan04    1.5   LFWM-3290 - PROD CN Wave Release  Can not */
+/*                            display all parameter correctly           */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)  
    ,  @c_BuildParmGroup    NVARCHAR(30)  
@@ -47,6 +44,7 @@ CREATE PROC [WM].[lsp_WaveOrderAnalysis]
    ,  @c_ErrMsg            NVARCHAR(255)       OUTPUT               
    ,  @c_UserName          NVARCHAR(128)= ''                                                                                                                         
    ,  @d_debug             INT   = 0         --2020-07-10
+   ,  @c_SortPreference    NVARCHAR(100)= ''             --(Wan05)   -- Sort column + Sort type, If multiple Columns Sorting, seperate by ','
 AS  
 BEGIN                                                                                                                                                        
    SET NOCOUNT ON                                                                                                                                           
@@ -89,16 +87,26 @@ BEGIN
          , @CUR_PARMKEY       CURSOR
          , @c_BuildParmDesc   NVARCHAR(60)   = '' -- (Chai01)
 
-   DECLARE @t_WaveOrderAnalysis TABLE
-         (  BuildParmKey      NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  TotalBuild        INT            NOT NULL DEFAULT(0)
-         ,  BuildOrders       INT            NOT NULL DEFAULT(0) 
-         ,  WavedOrders       INT            NOT NULL DEFAULT(0) 
-         ,  Allocated         INT            NOT NULL DEFAULT(0) 
-         ,  Picked            INT            NOT NULL DEFAULT(0) 
-         ,  RemainOrders      INT            NOT NULL DEFAULT(0)
-         ,  BuildParmDesc     NVARCHAR(60)   NOT NULL DEFAULT('') -- (Chai01)
-         )
+   --(Wan05) - START    // Change to Temp Table FROM Variable table
+   IF OBJECT_ID('tempdb..#t_WaveOrderAnalysis','u') IS NULL  
+   BEGIN 
+      CREATE TABLE #t_WaveOrderAnalysis
+            (  BuildParmKey      NVARCHAR(10)   NOT NULL DEFAULT('')
+            ,  TotalBuild        INT            NOT NULL DEFAULT(0)
+            ,  BuildOrders       INT            NOT NULL DEFAULT(0) 
+            ,  WavedOrders       INT            NOT NULL DEFAULT(0) 
+            ,  Allocated         INT            NOT NULL DEFAULT(0) 
+            ,  Picked            INT            NOT NULL DEFAULT(0) 
+            ,  RemainOrders      INT            NOT NULL DEFAULT(0)
+            ,  SummWaved         INT            NOT NULL DEFAULT(0)
+            ,  SummWavedPctg     DECIMAL(10,2)  NOT NULL DEFAULT(0)
+            ,  SummAllocated     INT            NOT NULL DEFAULT(0)
+            ,  SummAllocPctg     DECIMAL(10,2)  NOT NULL DEFAULT(0)
+            ,  SummTotalOrders   INT            NOT NULL DEFAULT(0)
+            ,  BuildParmDesc     NVARCHAR(60)   NOT NULL DEFAULT('') -- (Chai01)
+            )
+   END 
+   --(Wan05) - END
 
    SET @n_Err = 0  
    
@@ -303,7 +311,7 @@ BEGIN
 
       SET @n_TotalBuild = @n_BuildOrders + @n_WavedOrders
 
-      INSERT INTO @t_WaveOrderAnalysis
+      INSERT INTO #t_WaveOrderAnalysis                            --(Wan05)
          (  BuildParmKey 
          ,  TotalBuild        
          ,  BuildOrders      
@@ -353,21 +361,44 @@ BEGIN
       END
    END
 
-   SELECT   BuildParmKey     
-         ,  TotalBuild            
-         ,  BuildOrders          
-         ,  WavedOrders            
-         ,  Allocated        
-         ,  Picked
-         ,  RemainOrders
-         ,  SummWaved      = @n_WavedOrders
-         ,  SummWavedPctg  = @n_WavedPctg
-         ,  SummAllocated  = @n_NoOfAllocated
-         ,  SummAllocPctg  = @n_AllocPctg
-         ,  SummTotalOrders= @n_TotalOrders
-         ,  BuildParmDesc -- (Chai01)
-   FROM @t_WaveOrderAnalysis
-   
+   --(Wan05) - START
+   UPDATE #t_WaveOrderAnalysis
+   SET SummWaved      = @n_WavedOrders
+      ,SummWavedPctg  = @n_WavedPctg
+      ,SummAllocated  = @n_NoOfAllocated
+      ,SummAllocPctg  = @n_AllocPctg
+      ,SummTotalOrders= @n_TotalOrders
+  
+
+   SET @c_SortPreference = ISNULL(@c_SortPreference,'')
+   IF @c_SortPreference = ''
+   BEGIN
+      SET @c_SortPreference = N' ORDER BY BuildParmKey ASC'
+   END
+   ELSE 
+   BEGIN
+      SET @c_SortPreference = N' ORDER BY ' +  @c_SortPreference
+   END
+ 
+   SET @c_SQL = N'SELECT   BuildParmKey'     
+              + ',  TotalBuild'           
+              + ',  BuildOrders'          
+              + ',  WavedOrders'            
+              + ',  Allocated'        
+              + ',  Picked'
+              + ',  RemainOrders'
+              + ',  SummWaved'
+              + ',  SummWavedPctg'
+              + ',  SummAllocated'
+              + ',  SummAllocPctg'
+              + ',  SummTotalOrders'
+              + ',  BuildParmDesc' -- (Chai01)
+              + ' FROM #t_WaveOrderAnalysis'   
+              + @c_SortPreference
+
+   EXEC (@c_SQL)
+   --(Wan05) - END 
+
    END TRY  
   
    BEGIN CATCH 
