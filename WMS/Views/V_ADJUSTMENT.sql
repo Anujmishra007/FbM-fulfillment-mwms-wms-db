@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ADJUSTMENT] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ADJUSTMENT]
+AS
 SELECT [AdjustmentKey]
 , [StorerKey]
 , [EffectiveDate]
@@ -32,7 +33,7 @@ SELECT [AdjustmentKey]
 , [UserDefine10]
 , [FinalizedFlag]
 , [DocType]
-FROM [ADJUSTMENT] (NOLOCK) 
+FROM [ADJUSTMENT] (NOLOCK)
 
 
 GO

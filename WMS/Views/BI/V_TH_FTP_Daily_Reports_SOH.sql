@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_FTP_Daily_Reports_SOH] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_FTP_Daily_Reports_SOH] AS
 SELECT
    X.StorerKey,
    L.Facility,
@@ -22,19 +21,19 @@ SELECT
    S.ALTSKU,
    P.CaseCnt,
    P.PackUOM2,
-   P.InnerPack 
+   P.InnerPack
 FROM
    dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc 
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey 
-      AND X.Sku = A.Sku 
-      AND X.Lot = A.Lot 
-JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey 
-      AND X.Sku = S.Sku 
+JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey
+      AND X.Sku = A.Sku
+      AND X.Lot = A.Lot
+JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey
+      AND X.Sku = S.Sku
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
 WHERE
    (
-(X.StorerKey = 'FTP' 
+(X.StorerKey = 'FTP'
       AND X.Qty > 0)
    )
 GROUP BY

@@ -1,10 +1,15 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog https://jiralfl.atlassian.net/browse/WMS-18581
 /* Date          Author      Ver.  Purposes									                     */
 /* 15-DEC-2021   GYWONG      1.0   Created									                     */
 /******************************************************************************************/
-CREATE OR ALTER VIEW [BI].[V_TH_NESP_PendingPO] 
-AS 
+CREATE OR ALTER VIEW [BI].[V_TH_NESP_PendingPO]
+AS
 SELECT DISTINCT
    AL1.AddDate,
    AL1.StorerKey,
@@ -30,22 +35,22 @@ SELECT DISTINCT
    AL1.SellerState,
    AL1.SellerZip,
    AL1.OpenQty,
-   AL1.Notes 
+   AL1.Notes
 
 FROM dbo.PO AL1 WITH (NOLOCK)
-LEFT OUTER JOIN dbo.RECEIPT AL2 WITH (NOLOCK) ON (AL1.POKey = AL2.POKey) 
+LEFT OUTER JOIN dbo.RECEIPT AL2 WITH (NOLOCK) ON (AL1.POKey = AL2.POKey)
 WHERE
-AL1.StorerKey = 'UA' 
+AL1.StorerKey = 'UA'
 AND AL1.Status NOT IN ('9','CANC')
 
-GO 
+GO
 GRANT SELECT ON  [BI].[V_TH_NESP_PendingPO]  TO [JReportRole]
 GO
 
 /*
 EXEC AS LOGIN = 'JReportUserTH'
 SELECT SUSER_SNAME()
-SELECT * FROM [BI].[V_TH_NESP_PendingPO] 
+SELECT * FROM [BI].[V_TH_NESP_PendingPO]
 
 REVERT;
 */

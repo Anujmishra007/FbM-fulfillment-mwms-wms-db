@@ -1,16 +1,19 @@
-IF OBJECT_ID('BI.V_JRPT_MHAP_MHDC_PackingSlip','V') IS NOT NULL
-   DROP VIEW  BI.V_JRPT_MHAP_MHDC_PackingSlip
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+IF OBJECT_ID('BI.V_JRPT_MHAP_MHDC_PackingSlip','V') IS NOT NULL
 --https://jiralfl.atlassian.net/browse/WMS-14416
-CREATE VIEW BI.V_JRPT_MHAP_MHDC_PackingSlip
+CREATE OR ALTER VIEW BI.V_JRPT_MHAP_MHDC_PackingSlip
 AS
 SELECT ROW_NUMBER() OVER (PARTITION BY O.LoadKey ORDER BY PD.Sku) AS RowNo,
        O.LoadKey,
        O.MBOLKey,
        --REPLACE(LTRIM(REPLACE(O.externorderkey,'0',' ')),' ','0') AS TLBNo,
-       --C.eta AS DATE, 
-       --C.etadestination AS ETASH, 
-       --C.bookingreference AS ContainerNo, 
+       --C.eta AS DATE,
+       --C.etadestination AS ETASH,
+       --C.bookingreference AS ContainerNo,
        --C.seal01 AS SealNo,
        O.IntermodalVehicle AS MODE,
        PD.Sku AS SAPITEMCODE,
@@ -31,22 +34,22 @@ LEFT JOIN dbo.SKU      WITH (NOLOCK) ON sku.Sku = PD.Sku AND sku.StorerKey = O.S
 --LEFT JOIN dbo.PACK   P WITH (NOLOCK) ON P.PackKey = PD.PackKey
 --LEFT OUTER JOIN dbo.CONTAINER C WITH (NOLOCK) ON C.mbolkey = O.mbolkey
 WHERE O.StorerKey in ('MHAP')
---AND O.loadkey in ('0001352071') 
+--AND O.loadkey in ('0001352071')
 --AND O.loadkey in ('0001386661')
 GROUP BY O.LoadKey,
          O.MBOLKey,
          --O.externorderkey,
-         --C.eta, 
-         --C.etadestination, 
-         --C.bookingreference, 
+         --C.eta,
+         --C.etadestination,
+         --C.bookingreference,
          --C.seal01,
          O.IntermodalVehicle,
          PD.Sku,
-         sku.DESCR,  
-         sku.SKUGROUP, 
-         sku.CountryOfOrigin, 
-         sku.NetWgt, 
-         sku.AvgCaseWeight, 
+         sku.DESCR,
+         sku.SKUGROUP,
+         sku.CountryOfOrigin,
+         sku.NetWgt,
+         sku.AvgCaseWeight,
          sku.Length
 GO
 

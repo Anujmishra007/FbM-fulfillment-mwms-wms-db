@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_JNJTRKIT_Inventory_Stock] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_JNJTRKIT_Inventory_Stock] AS
 SELECT
    X.Loc,
    X.Sku,
@@ -23,31 +22,31 @@ SELECT
    A.Lottable06,
    Case
       When
-         A.Lottable07 = '1' 
+         A.Lottable07 = '1'
       Then
-         'Good Received' 
+         'Good Received'
       When
-         A.Lottable07 = '2' 
+         A.Lottable07 = '2'
       Then
-         'Quarantined' 
+         'Quarantined'
       When
-         A.Lottable07 = '3' 
+         A.Lottable07 = '3'
       Then
-         'Damaged' 
+         'Damaged'
       Else
-         A.Lottable07 
+         A.Lottable07
    End AS 'Stock Type'
-, A.Lottable02 
+, A.Lottable02
 FROM
    dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey 
-      AND X.Sku = A.Sku 
-      AND X.Lot = A.Lot 
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey
+      AND X.Sku = A.Sku
+      AND X.Lot = A.Lot
 JOIN dbo.SKU S with (nolock) ON X.Sku = S.Sku
       AND X.StorerKey = S.StorerKey
 WHERE
    (
-(X.Qty > 0 
+(X.Qty > 0
       AND A.StorerKey = 'JNJTRKIT')
    )
 --ORDER BY

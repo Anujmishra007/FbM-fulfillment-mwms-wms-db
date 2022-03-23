@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_MATA_FG_Ageing_Daily] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_MATA_FG_Ageing_Daily] AS
 select
    a.Storerkey,
    a.Facility,
@@ -19,7 +18,7 @@ select
    a.RO_NO,
    'Hold_Status' = b.status,
    b.description,
-   a.WH_Facility 
+   a.WH_Facility
 from
    (
       select
@@ -28,163 +27,163 @@ from
          ll.SKU,
          ll.Qty,
          Inprocess = QtyAllocated + QtyPicked,
-         Customer = 
+         Customer =
          case
             when
-               lota.lottable01 = 'MICHELIN' 
+               lota.lottable01 = 'MICHELIN'
             then
-               'MICHELIN' 
+               'MICHELIN'
             else
-               substring (lota.lottable01, 5, 4) 
+               substring (lota.lottable01, 5, 4)
          end
-, Serial = lota.lottable02 , Rethread = substring(lota.lottable03, 1, 1) , 'ProducedDate' = 
+, Serial = lota.lottable02 , Rethread = substring(lota.lottable03, 1, 1) , 'ProducedDate' =
          case
             when
-               lota.lottable01 = 'MICHELIN' 
+               lota.lottable01 = 'MICHELIN'
             then
-               YMD 
+               YMD
             else
-               convert(varchar(10), lota.lottable05, 111) 
+               convert(varchar(10), lota.lottable05, 111)
          end
-, 'Age_Month' = 
+, 'Age_Month' =
          case
             when
-               lota.lottable01 = 'MICHELIN' 
+               lota.lottable01 = 'MICHELIN'
             then
-               isnull(datediff(mm, YMD, getdate()), '9999') 
+               isnull(datediff(mm, YMD, getdate()), '9999')
             else
-               isnull(datediff(mm, convert(varchar(10), lota.lottable05, 111), getdate()), '9999') 
+               isnull(datediff(mm, convert(varchar(10), lota.lottable05, 111), getdate()), '9999')
          end
-, RO_NO = substring(lota.Lottable03, 20 - charindex('/', REVERSE(substring(lota.Lottable03, 1, 18))), 12) , WH_Facility = lota.lottable12 
+, RO_NO = substring(lota.Lottable03, 20 - charindex('/', REVERSE(substring(lota.Lottable03, 1, 18))), 12) , WH_Facility = lota.lottable12
       from
          lotattribute lota with (nolock)
 		 JOIN lotxlocxid ll with (nolock) ON lota.lot = ll.lot
-         JOIN loc l with (nolock) ON ll.loc = l.loc 
+         JOIN loc l with (nolock) ON ll.loc = l.loc
          left outer join
             (
                select
                   *,
-                  YMD = yy + '/' + mth + '/' + right(str(dt), 2) 
+                  YMD = yy + '/' + mth + '/' + right(str(dt), 2)
                from
                   (
                      select
                         *,
-                        dt = 
+                        dt =
                         case
                            when
-                              Mth = '01' 
+                              Mth = '01'
                            then
-                              dy 
+                              dy
                            when
-                              Mth = '02' 
+                              Mth = '02'
                            then
-                              dy - 31 
+                              dy - 31
                            when
-                              Mth = '03' 
+                              Mth = '03'
                            then
-                              dy - 59 
+                              dy - 59
                            when
-                              Mth = '04' 
+                              Mth = '04'
                            then
-                              dy - 90 
+                              dy - 90
                            when
-                              Mth = '05' 
+                              Mth = '05'
                            then
-                              dy - 120 
+                              dy - 120
                            when
-                              Mth = '06' 
+                              Mth = '06'
                            then
-                              dy - 151 
+                              dy - 151
                            when
-                              Mth = '07' 
+                              Mth = '07'
                            then
-                              dy - 181 
+                              dy - 181
                            when
-                              Mth = '08' 
+                              Mth = '08'
                            then
-                              dy - 212 
+                              dy - 212
                            when
-                              Mth = '09' 
+                              Mth = '09'
                            then
-                              dy - 243 
+                              dy - 243
                            when
-                              Mth = '10' 
+                              Mth = '10'
                            then
-                              dy - 273 
+                              dy - 273
                            when
-                              Mth = '11' 
+                              Mth = '11'
                            then
-                              dy - 304 
+                              dy - 304
                            when
-                              Mth = '12' 
+                              Mth = '12'
                            then
-                              dy - 334 
+                              dy - 334
                         end
                      from
                         (
                            select
                               *,
-                              Mth = 
+                              Mth =
                               case
                                  when
-                                    dy between '001' and '031' 
+                                    dy between '001' and '031'
                                  then
-                                    '01' 
+                                    '01'
                                  when
-                                    dy between '032' and '059' 
+                                    dy between '032' and '059'
                                  then
-                                    '02' 
+                                    '02'
                                  when
-                                    dy between '060' and '090' 
+                                    dy between '060' and '090'
                                  then
-                                    '03' 
+                                    '03'
                                  when
-                                    dy between '091' and '120' 
+                                    dy between '091' and '120'
                                  then
-                                    '04' 
+                                    '04'
                                  when
-                                    dy between '121' and '151' 
+                                    dy between '121' and '151'
                                  then
-                                    '05' 
+                                    '05'
                                  when
-                                    dy between '152' and '181' 
+                                    dy between '152' and '181'
                                  then
-                                    '06' 
+                                    '06'
                                  when
-                                    dy between '182' and '212' 
+                                    dy between '182' and '212'
                                  then
-                                    '07' 
+                                    '07'
                                  when
-                                    dy between '213' and '243' 
+                                    dy between '213' and '243'
                                  then
-                                    '08' 
+                                    '08'
                                  when
-                                    dy between '244' and '273' 
+                                    dy between '244' and '273'
                                  then
-                                    '09' 
+                                    '09'
                                  when
-                                    dy between '274' and '304' 
+                                    dy between '274' and '304'
                                  then
-                                    '10' 
+                                    '10'
                                  when
-                                    dy between '305' and '334' 
+                                    dy between '305' and '334'
                                  then
-                                    '11' 
+                                    '11'
                                  when
-                                    dy between '335' and '366' 
+                                    dy between '335' and '366'
                                  then
-                                    '12' 
+                                    '12'
                               end
                            from
                               (
                                  select
                                     lot,
                                     lottable02,
-                                    YY = 
+                                    YY =
                                     Case
                                        when
-                                          substring(lottable02, 1, 1) between 0 and 9 
-                                          and substring(lottable02, 5, 1) in 
+                                          substring(lottable02, 1, 1) between 0 and 9
+                                          and substring(lottable02, 5, 1) in
                                           (
                                              'c',
                                              'r',
@@ -194,38 +193,38 @@ from
                                           )
                                           --('b','f','k','t','n','p')
                                        then
-                                          '201' + substring(lottable02, 1, 1) 
+                                          '201' + substring(lottable02, 1, 1)
                                        when
-                                          substring(lottable02, 1, 1) between 0 and 9 
-                                          and substring(lottable02, 5, 1) in 
+                                          substring(lottable02, 1, 1) between 0 and 9
+                                          and substring(lottable02, 5, 1) in
                                           (
                                              'b', 'f', 'p', 't', 'k', 'e'
                                           )
                                        then
-                                          '199' + substring(lottable02, 1, 1) 
+                                          '199' + substring(lottable02, 1, 1)
                                        else
-                                          '200' + substring(lottable02, 1, 1) 
+                                          '200' + substring(lottable02, 1, 1)
                                     end
-, DY = substring(lottable02, 2, 3) 
+, DY = substring(lottable02, 2, 3)
                                  from
                                     lotattribute with (nolock)
                                  where
-                                    storerkey = 'MATA' 
-                                    and lot in 
+                                    storerkey = 'MATA'
+                                    and lot in
                                     (
                                        select
-                                          lot 
+                                          lot
                                        from
                                           lotxlocxid with (nolock)
                                        where
-                                          storerkey = 'MATA' 
+                                          storerkey = 'MATA'
                                           and qty <> 0
                                     )
-                                    and substring(lottable02, 1, 1) between '0' and '9' 
-                                    and substring(lottable02, 2, 1) between '0' and '9' 
-                                    and substring(lottable02, 3, 1) between '0' and '9' 
-                                    and substring(lottable02, 4, 1) between '0' and '9' 
-                                    and substring(lottable02, 5, 1) in 
+                                    and substring(lottable02, 1, 1) between '0' and '9'
+                                    and substring(lottable02, 2, 1) between '0' and '9'
+                                    and substring(lottable02, 3, 1) between '0' and '9'
+                                    and substring(lottable02, 4, 1) between '0' and '9'
+                                    and substring(lottable02, 5, 1) in
                                     (
                                        'c',
                                        'r',
@@ -247,44 +246,44 @@ from
                                     )
                                     --('b','f','k','t','n','p','a','g','l','w','u')
                               )
-                              PD 
+                              PD
                         )
-                        YYMMDD 
+                        YYMMDD
                   )
-                  YYYYMMDD 
+                  YYYYMMDD
             )
-            live 
-            on ll.lot = live.lot 
+            live
+            on ll.lot = live.lot
       where
-         ll.storerkey = 'MATA' 
-         and ll.qty <> 0 
-         --and ll.lot = lota.lot 
-         --and ll.loc = l.loc 
-         and l.facility in 
+         ll.storerkey = 'MATA'
+         and ll.qty <> 0
+         --and ll.lot = lota.lot
+         --and ll.loc = l.loc
+         and l.facility in
          (
             'IND',
             'MCNKA',
             'MCNKF'
          )
    )
-   a 
+   a
    left outer join
       (
          select
             'INVSKU' = inh.sku,
             inh.lottable02,
             inh.status,
-            cdk.description 
+            cdk.description
          from
             inventoryhold inh with (nolock)
-         JOIN codelkup cdk with (nolock) ON inh.status = cdk.code 
+         JOIN codelkup cdk with (nolock) ON inh.status = cdk.code
          where
-            inh.storerkey = 'MATA' 
-            and cdk.code like 'MATA%' 
+            inh.storerkey = 'MATA'
+            and cdk.code like 'MATA%'
             and cdk.listname = 'INVHOLD'
       )
-      b 
-      on a.serial = b.lottable02 
+      b
+      on a.serial = b.lottable02
 --order by
 --   a.serial
 GO

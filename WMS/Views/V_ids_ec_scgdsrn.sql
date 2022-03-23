@@ -1,15 +1,16 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ids_ec_scgdsrn] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ids_ec_scgdsrn]
+AS
 SELECT [externreceiptkey]
 , [pokey]
 , [sku]
 , [goodqty]
 , [badqty]
-FROM [ids_ec_scgdsrn] (NOLOCK) 
+FROM [ids_ec_scgdsrn] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ids_ec_scgdsrn] TO [NSQL]
 GO

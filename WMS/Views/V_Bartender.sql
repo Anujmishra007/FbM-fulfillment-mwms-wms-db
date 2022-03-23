@@ -1,8 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Bartender]
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Bartender]
 AS
 SELECT SUBSTRING(ISNULL(RTRIM(LTRIM(C.[Long])),''),1,30) AS ServerIP
      , ISNULL(RTRIM(C.[StorerKey]),'')                   AS StorerKey

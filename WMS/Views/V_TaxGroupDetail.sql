@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TaxGroupDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TaxGroupDetail]
+AS
 SELECT [TaxGroupKey]
 , [TaxRateKey]
 , [GLDistributionKey]
@@ -11,7 +12,7 @@ SELECT [TaxGroupKey]
 , [AddWho]
 , [EditDate]
 , [EditWho]
-FROM [TaxGroupDetail] (NOLOCK) 
+FROM [TaxGroupDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TaxGroupDetail] TO [NSQL]
 GO

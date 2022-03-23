@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER view [BI].[V_TH_YVSER-12_Order intransit] as 
+CREATE OR ALTER view [BI].[V_TH_YVSER-12_Order intransit] as
 SELECT
    convert(date, GetDate(), 103) as 'Date Now',
    S.BUSR1,
@@ -29,32 +28,32 @@ SELECT
    P.ExternPOKey as 'ExtPO2'
 FROM
    dbo.PO P with (nolock)
-JOIN dbo.PODetail PD with (nolock) ON P.StorerKey = PD.StorerKey 
-      AND P.POKey = PD.POKey 
-      AND P.ExternPOKey = PD.ExternPOKey 
-JOIN dbo.SKU S with (nolock) ON PD.StorerKey = S.StorerKey 
+JOIN dbo.PODetail PD with (nolock) ON P.StorerKey = PD.StorerKey
+      AND P.POKey = PD.POKey
+      AND P.ExternPOKey = PD.ExternPOKey
+JOIN dbo.SKU S with (nolock) ON PD.StorerKey = S.StorerKey
       AND PD.Sku = S.Sku
 WHERE
    (
-(P.StorerKey = 'YVESR' 
-      AND P.Status NOT IN 
+(P.StorerKey = 'YVESR'
+      AND P.Status NOT IN
       (
          '9',
          'CANC'
       )
-      AND Convert(date, P.EffectiveDate, 112) <= Convert(date, GetDate() - 1, 112) 
-      AND len(S.MANUFACTURERSKU) > 2 
-      AND P.ExternPOKey not in 
+      AND Convert(date, P.EffectiveDate, 112) <= Convert(date, GetDate() - 1, 112)
+      AND len(S.MANUFACTURERSKU) > 2
+      AND P.ExternPOKey not in
       (
          select
-            Receipt.ExternReceiptKey 
+            Receipt.ExternReceiptKey
          from
             Receipt with (nolock)
          where
-            Receipt.StorerKey = 'YVESR' 
+            Receipt.StorerKey = 'YVESR'
             and Receipt.ASNStatus = '9'
       )
-      AND 
+      AND
       (
          NOT P.ExternStatus = 'CANC'
       )

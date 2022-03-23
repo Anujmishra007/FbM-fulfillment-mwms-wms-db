@@ -1,15 +1,16 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_OriginAllocQty] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_OriginAllocQty]
+AS
 SELECT [OrderKey]
 , [OrderLineNumber]
 , [QtyAllocated]
 , [AddDate]
 , [AddWho]
-FROM [OriginAllocQty] (NOLOCK) 
+FROM [OriginAllocQty] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_OriginAllocQty] TO [NSQL]
 GO

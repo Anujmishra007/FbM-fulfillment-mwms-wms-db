@@ -1,12 +1,13 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_RDTPickLock]  
-AS  
-SELECT     RDT.rdtPickLock.*  
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_RDTPickLock]
+AS
+SELECT     RDT.rdtPickLock.*
 FROM         RDT.rdtPickLock   (NOLOCK)
-  
+
 GO
 GRANT DELETE ON  [dbo].[V_RDTPickLock] TO [NSQL]
 GO

@@ -1,10 +1,10 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [dbo].[v_ReceiptSerialno]
+CREATE OR ALTER VIEW [dbo].[v_ReceiptSerialno]
 as
-SELECT * 
+SELECT *
 FROM dbo.ReceiptSerialno (NOLOCK)
 GO

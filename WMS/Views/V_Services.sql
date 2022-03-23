@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Services] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Services]
+AS
 SELECT [Servicekey]
 , [Descrip]
 , [SupportFlag]
@@ -13,7 +14,7 @@ SELECT [Servicekey]
 , [EditWho]
 , [TrafficCop]
 , [Timestamp]
-FROM [Services] (NOLOCK) 
+FROM [Services] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_Services] TO [NSQL]
 GO

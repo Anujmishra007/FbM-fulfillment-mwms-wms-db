@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PreAllocateStrategyDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PreAllocateStrategyDetail]
+AS
 SELECT [PreAllocateStrategyKey]
 , [PreAllocateStrategyLineNumber]
 , [DESCR]
@@ -15,7 +16,7 @@ SELECT [PreAllocateStrategyKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [PreAllocateStrategyDetail] (NOLOCK) 
+FROM [PreAllocateStrategyDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PreAllocateStrategyDetail] TO [NSQL]
 GO

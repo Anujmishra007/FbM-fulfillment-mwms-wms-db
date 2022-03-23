@@ -1,11 +1,11 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [dbo].[V_ExternOrdersDetail]
+CREATE OR ALTER VIEW [dbo].[V_ExternOrdersDetail]
 as
-Select * 
+Select *
 from dbo.ExternOrdersDetail (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ExternOrdersDetail] TO [NSQL]

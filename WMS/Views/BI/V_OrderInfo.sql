@@ -1,8 +1,9 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
-CREATE VIEW [BI].[V_OrderInfo] AS   
+
+CREATE OR ALTER VIEW [BI].[V_OrderInfo] AS
 SELECT OrderKey
 , OrderInfo01
 , OrderInfo02
@@ -38,8 +39,8 @@ SELECT OrderKey
 , OTM_OrderOwner
 , OTM_BillTo
 , OTM_NotifyParty
-, CourierTimeStamp   
-   FROM [OrderInfo] WITH (NOLOCK)   
+, CourierTimeStamp
+   FROM [OrderInfo] WITH (NOLOCK)
 GO
 GRANT SELECT ON  [BI].[V_OrderInfo] TO [JReportRole]
 GO

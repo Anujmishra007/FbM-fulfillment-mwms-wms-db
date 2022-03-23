@@ -1,9 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-create view [dbo].[V_RDSColorDetail]
+CREATE OR ALTER VIEW [dbo].[V_RDSColorDetail]
 as
 SElect
 RDSColorLine	,
@@ -17,7 +17,7 @@ AddWho	,
 EditDate	,
 EditWho	,
 ArchiveCop	,
-TrafficCop	
+TrafficCop
 FROM RDSColorDetail with (NOLOCK)
 
 GO

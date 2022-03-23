@@ -1,10 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-create view [dbo].[V_IDS_TRAN_001]
+CREATE OR ALTER VIEW [dbo].[V_IDS_TRAN_001]
 as
 	select convert(NVARCHAR(10), rtrim(upper(itrn.itrnkey))) as 'itrn_itrnkey',
 		itrn.trantype as 'itrn_trantype',
@@ -78,46 +77,46 @@ as
 		pack.palletti as 'cc_units_per_layer',
 		pack.pallethi as 'cc_layers_per_pl',
 		itrn_orderkey = case itrn.sourcetype
-								when 'ntrpickdetailupdate' then (select convert(NVARCHAR(10), rtrim(upper(orderkey))) 
+								when 'ntrpickdetailupdate' then (select convert(NVARCHAR(10), rtrim(upper(orderkey)))
 																			from pickdetail (nolock)
 																			where pickdetailkey = itrn.sourcekey)
 								else ''
 							 end,
 		itrn_orderlineno = case itrn.sourcetype
-									when 'ntrpickdetailupdate' then (select convert(NVARCHAR(5), rtrim(upper(orderlinenumber))) 
+									when 'ntrpickdetailupdate' then (select convert(NVARCHAR(5), rtrim(upper(orderlinenumber)))
 																				from pickdetail (nolock)
 																				where pickdetailkey = itrn.sourcekey)
 									else ''
 								 end,
-		itrn_receiptkey = case 
-									when itrn.sourcetype in ('ntrreceiptdetailadd', 'ntrreceiptdetailupdate') 
+		itrn_receiptkey = case
+									when itrn.sourcetype in ('ntrreceiptdetailadd', 'ntrreceiptdetailupdate')
 										then convert(NVARCHAR(10), rtrim(upper(substring(itrn.sourcekey,1,10))))
 									else ''
 								end,
-		itrn_receiptlineno = case 
-										when itrn.sourcetype in ('ntrreceiptdetailadd', 'ntrreceiptdetailupdate') 
+		itrn_receiptlineno = case
+										when itrn.sourcetype in ('ntrreceiptdetailadd', 'ntrreceiptdetailupdate')
 											then convert(NVARCHAR(5), rtrim(upper(substring(itrn.sourcekey,11,5))))
 										else ''
 									end,
-		itrn_kitkey = case 
+		itrn_kitkey = case
 							when itrn.sourcetype in ('ntrkitdetailadd','ntrkitdetailupdate')
 								then convert(NVARCHAR(10), rtrim(upper(substring(itrn.sourcekey,1,10))))
 							else ''
 						  end,
 		itrn_transferkey = case itrn.sourcetype
-									when 'ntrtransferdetailupdate' 
+									when 'ntrtransferdetailupdate'
 										then convert(NVARCHAR(10), rtrim(upper(substring(itrn.sourcekey,1,10))))
 								 	else ''
 								 end,
 	   itrn_transfer_type = case itrn.sourcetype
-										when 'ntrtransferdetailupdate' 
+										when 'ntrtransferdetailupdate'
 											then (select type
 													from transfer (nolock)
 													where transferkey = substring(itrn.sourcekey,1,10))
 									 	else ''
 									end,
 		itrn_transfer_type_desc = case itrn.sourcetype
-											when 'ntrtransferdetailupdate' 
+											when 'ntrtransferdetailupdate'
 												then (select description
 														from transfer (nolock) join codelkup (nolock)
 															on transfer.type = codelkup.code
@@ -126,14 +125,14 @@ as
 										 	else ''
 										end,
 		itrn_transfer_reason = case itrn.sourcetype
-										when 'ntrtransferdetailupdate' 
+										when 'ntrtransferdetailupdate'
 											then (select convert(NVARCHAR(10), rtrim(upper(reasoncode)))
 													from transfer (nolock)
 													where transferkey = substring(itrn.sourcekey,1,10))
 										else ''
 									  end,
 		itrn_transfer_reason_desc = case itrn.sourcetype
-												when 'ntrtransferdetailupdate' 
+												when 'ntrtransferdetailupdate'
 													then (select description
 															from transfer (nolock) join codelkup (nolock)
 																on transfer.reasoncode = codelkup.code
@@ -142,19 +141,19 @@ as
 											 	else ''
 											end,
 		itrn_adjustmentkey = case itrn.sourcetype
-										when 'ntradjustmentdetailadd' 
+										when 'ntradjustmentdetailadd'
 											then convert(NVARCHAR(10), rtrim(upper(substring(itrn.sourcekey,1,10))))
 									 	else ''
 									 end,
 	   itrn_adjustment_type = case itrn.sourcetype
-										when 'ntradjustmentdetailadd' 
+										when 'ntradjustmentdetailadd'
 											then (select convert(NVARCHAR(3), rtrim(upper(adjustment.adjustmenttype)))
 													from adjustment (nolock)
 													where adjustmentkey = substring(itrn.sourcekey,1,10))
 									 	else ''
 									end,
 		itrn_adjustment_type_desc = case itrn.sourcetype
-												when 'ntradjustmentdetailadd' 
+												when 'ntradjustmentdetailadd'
 													then (select description
 															from adjustment (nolock) join codelkup (nolock)
 																on adjustment.adjustmenttype = codelkup.code
@@ -163,14 +162,14 @@ as
 											 	else ''
 											end,
 		itrn_adjustment_ref = case itrn.sourcetype
-										when 'ntradjustmentdetailadd' 
+										when 'ntradjustmentdetailadd'
 											then (select customerrefno
 													from adjustment (nolock)
 													where adjustmentkey = substring(itrn.sourcekey,1,10))
 									 	else ''
 									end,
 		itrn_adjustment_reason = case itrn.sourcetype
-											when 'ntradjustmentdetailadd' 
+											when 'ntradjustmentdetailadd'
 												then (select convert(NVARCHAR(10), rtrim(upper(reasoncode)))
 														from adjustmentdetail (nolock)
 														where adjustmentkey = substring(itrn.sourcekey,1,10)
@@ -178,7 +177,7 @@ as
 											else ''
 										 end,
 		itrn_adjustment_reason_desc = case itrn.sourcetype
-													when 'ntradjustmentdetailadd' 
+													when 'ntradjustmentdetailadd'
 														then (select description
 																from adjustmentdetail (nolock) join codelkup (nolock)
 																	on adjustmentdetail.reasoncode = codelkup.code

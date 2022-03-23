@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ChartOfAccounts] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ChartOfAccounts]
+AS
 SELECT [ChartofAccountsKey]
 , [Descrip]
 , [SupportFlag]
@@ -12,7 +13,7 @@ SELECT [ChartofAccountsKey]
 , [EditDate]
 , [EditWho]
 , [TrafficCop]
-FROM [ChartOfAccounts] (NOLOCK) 
+FROM [ChartOfAccounts] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ChartOfAccounts] TO [NSQL]
 GO

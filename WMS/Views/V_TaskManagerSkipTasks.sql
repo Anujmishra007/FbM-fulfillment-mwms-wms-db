@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TaskManagerSkipTasks] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TaskManagerSkipTasks]
+AS
 SELECT [USERID]
 , [TaskDetailKey]
 , [TaskType]
@@ -14,7 +15,7 @@ SELECT [USERID]
 , [FromId]
 , [ToId]
 , [adddate]
-FROM [TaskManagerSkipTasks] (NOLOCK) 
+FROM [TaskManagerSkipTasks] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TaskManagerSkipTasks] TO [NSQL]
 GO

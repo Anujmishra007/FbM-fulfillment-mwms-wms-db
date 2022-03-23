@@ -1,11 +1,11 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE view [dbo].[V_Adjustment_Qty]
+CREATE OR ALTER VIEW [dbo].[V_Adjustment_Qty]
 as
-select a.facility, a.customerrefno, a.effectivedate, a.adjustmenttype, ad.storerkey, ad.sku, ad.lot, s.skugroup, 
+select a.facility, a.customerrefno, a.effectivedate, a.adjustmenttype, ad.storerkey, ad.sku, ad.lot, s.skugroup,
 	ad.qty,
              pos_adj_qty = case when ad.qty > 0 then ad.qty else 0 end,
 	neg_adj_qty = case when ad.qty < 0 then ad.qty else 0 end

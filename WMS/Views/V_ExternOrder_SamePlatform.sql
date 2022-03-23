@@ -1,14 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
-CREATE VIEW [dbo].[V_ExternOrder_SamePlatform]
- AS 
-   WITH  
-      tab2(MAXExternOrdersKey, ExternOrderKey,PlatformOrderNo, count1, Maxdate) 
+
+CREATE OR ALTER VIEW [dbo].[V_ExternOrder_SamePlatform]
+ AS
+   WITH
+      tab2(MAXExternOrdersKey, ExternOrderKey,PlatformOrderNo, count1, Maxdate)
       AS
       (
-         SELECT MAX(ExternOrdersKey), ExternOrderKey,PlatformOrderNo, COUNT(1) as count1, MAX(shippeddate) as MaxDate 
+         SELECT MAX(ExternOrdersKey), ExternOrderKey,PlatformOrderNo, COUNT(1) as count1, MAX(shippeddate) as MaxDate
          FROM Externorders(NOLOCK)
          WHERE PlatformOrderNo <>'' AND Status='9'
          GROUP BY ExternOrderKey, PlatformOrderNo

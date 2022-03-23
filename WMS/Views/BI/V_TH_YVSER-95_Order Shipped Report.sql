@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER view [BI].[V_TH_YVSER-95_Order Shipped Report] as 
+CREATE OR ALTER view [BI].[V_TH_YVSER-95_Order Shipped Report] as
 SELECT
    O.ExternOrderKey,
    O.OrderKey,
@@ -26,63 +25,63 @@ SELECT
    O.C_State,
    Case
       when
-         O.Type = 'B2S' 
+         O.Type = 'B2S'
       then
-         'B2S' 
+         'B2S'
       else
-         'Retail' 
+         'Retail'
    end as 'Type'
 ,
    Case
       when
-         SUBSTRING ( O.ExternOrderKey, 1, 4 ) = 'YTTS' 
-         and O.Notes = '' 
+         SUBSTRING ( O.ExternOrderKey, 1, 4 ) = 'YTTS'
+         and O.Notes = ''
       then
-         OD.UserDefine01 
+         OD.UserDefine01
       else
-         O.Notes 
+         O.Notes
    end as 'Notes'
-, O.C_contact1, O.C_Address1, O.C_Address2, O.C_Address3, O.C_Address4, 
+, O.C_contact1, O.C_Address1, O.C_Address2, O.C_Address3, O.C_Address4,
    Case
       when
-         O.Type = 'B2S' 
+         O.Type = 'B2S'
       then
-         O.TrackingNo 
+         O.TrackingNo
       else
-         P.TrackCol01 
+         P.TrackCol01
    end as 'Tracking'
-, 
+,
    Case
       when
-         SUBSTRING ( O.ExternOrderKey, 1, 4 ) = 'YTTS' 
+         SUBSTRING ( O.ExternOrderKey, 1, 4 ) = 'YTTS'
       THEN
-         'TELES' 
+         'TELES'
       when
-         SUBSTRING ( O.ExternOrderKey, 1, 4 ) = 'YVES' 
+         SUBSTRING ( O.ExternOrderKey, 1, 4 ) = 'YVES'
       THEN
-         'B2S' 
+         'B2S'
       else
-         'RETAIL' 
+         'RETAIL'
    end as 'Order Type'
 FROM
    ORDERS O with (nolock)
    LEFT OUTER JOIN
       ORDERDETAIL OD with (nolock)
-      ON (O.OrderKey = OD.OrderKey) 
+      ON (O.OrderKey = OD.OrderKey)
    LEFT OUTER JOIN
       SKU S with (nolock)
-      ON (OD.Sku = S.Sku AND OD.StorerKey = S.StorerKey) 
+      ON (OD.Sku = S.Sku AND OD.StorerKey = S.StorerKey)
    LEFT OUTER JOIN
       POD P with (nolock)
-      ON (O.OrderKey = P.OrderKey) 
+      ON (O.OrderKey = P.OrderKey)
 WHERE
    (
-(O.StorerKey = 'YVESR' 
-      AND O.Status = '9' 
-      AND O.AddDate >= {ts '2021-05-27 17:00:00.000'} 
-      AND O.EditDate >= convert(varchar(10), getdate() - 1, 120) 
-      and O.EditDate < convert(varchar(10), getdate(), 120) 
-      AND P.AddDate >= convert(varchar(10), getdate() - 1, 120) 
+(O.StorerKey = 'YVESR'
+      AND O.Status = '9'
+      AND O.AddDate >= {ts '2021-05-27 17:00:00.000'}
+      AND O.EditDate >= convert(varchar(10), getdate() - 1, 120)
+      and O.EditDate < convert(varchar(10), getdate(), 120)
+      AND P.AddDate >= convert(varchar(10), getdate() - 1, 120)
       and P.AddDate < convert(varchar(10), getdate(), 120))
    )
 GO

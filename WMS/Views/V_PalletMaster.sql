@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PalletMaster] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PalletMaster]
+AS
 SELECT [Pallet_type]
 , [Descr]
 , [Maxcube]
@@ -13,7 +14,7 @@ SELECT [Pallet_type]
 , [AddDate]
 , [EditWho]
 , [EditDate]
-FROM [PalletMaster] (NOLOCK) 
+FROM [PalletMaster] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PalletMaster] TO [NSQL]
 GO

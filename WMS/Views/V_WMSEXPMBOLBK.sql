@@ -1,19 +1,20 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_WMSEXPMBOLBK]   
-AS   
-SELECT [ExternOrderkey]  
-, [Consigneekey]  
-, [ExternLineNo]  
-, [SKU]  
-, [OriginalQty]  
-, [ShippedQty]  
-, [Shortqty]  
-, [TRANSFLAG]  
-, [MBOLKey]  
-FROM [WMSEXPMBOLBK] (NOLOCK)   
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_WMSEXPMBOLBK]
+AS
+SELECT [ExternOrderkey]
+, [Consigneekey]
+, [ExternLineNo]
+, [SKU]
+, [OriginalQty]
+, [ShippedQty]
+, [Shortqty]
+, [TRANSFLAG]
+, [MBOLKey]
+FROM [WMSEXPMBOLBK] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_WMSEXPMBOLBK] TO [NSQL]
 GO

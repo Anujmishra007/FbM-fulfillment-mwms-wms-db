@@ -1,6 +1,5 @@
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -11,7 +10,6 @@ GO
 /* Date			Author      Ver.	Purposes										*/
 /* 2021/11/24	BLLim		1.0		https://jiralfl.atlassian.net/browse/WMS-18451	*/
 /************************************************************************************/
-
 CREATE OR ALTER view [BI].[V_TH_CTXTH-4 Inventory_Movement] as
 SELECT 	DISTINCT
 		I.StorerKey as 'Storerkey',

@@ -1,18 +1,19 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_SKUStrategy] 
-AS 
-SELECT StorerKey, SKU, SKU.StrategyKey, 'PreallocateStrategy ' AS Strategy, PreallocateStrategyDetail.PreAllocateStrategyKey, 
-       PreAllocateStrategyLineNumber AS StrategyLineNumber, PreallocateStrategyDetail.UOM, PreAllocatePickCode, '0' AS RetryIfQtyRemain 
-from SKU (NOLOCK) 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_SKUStrategy]
+AS
+SELECT StorerKey, SKU, SKU.StrategyKey, 'PreallocateStrategy ' AS Strategy, PreallocateStrategyDetail.PreAllocateStrategyKey,
+       PreAllocateStrategyLineNumber AS StrategyLineNumber, PreallocateStrategyDetail.UOM, PreAllocatePickCode, '0' AS RetryIfQtyRemain
+from SKU (NOLOCK)
 JOIN Strategy (NOLOCK) ON SKU.StrategyKey = Strategy.StrategyKey
 JOIN PreallocateStrategyDetail (NOLOCK) ON (Strategy.PreAllocateStrategyKey = PreallocateStrategyDetail.PreAllocateStrategyKey)
 UNION ALL
-SELECT StorerKey, SKU, SKU.StrategyKey, 'AllocateStrategy ' AS Strategy, AllocateStrategyDetail.AllocateStrategyKey, 
-       AllocateStrategyLineNumber, AllocateStrategyDetail.UOM, AllocateStrategyDetail.PickCode, RetryIfQtyRemain 
-from SKU (NOLOCK) 
+SELECT StorerKey, SKU, SKU.StrategyKey, 'AllocateStrategy ' AS Strategy, AllocateStrategyDetail.AllocateStrategyKey,
+       AllocateStrategyLineNumber, AllocateStrategyDetail.UOM, AllocateStrategyDetail.PickCode, RetryIfQtyRemain
+from SKU (NOLOCK)
 JOIN Strategy (NOLOCK) ON SKU.StrategyKey = Strategy.StrategyKey
 JOIN AllocateStrategy (NOLOCK) ON (Strategy.AllocateStrategyKey = AllocateStrategy.AllocateStrategyKey)
 JOIN AllocateStrategyDetail (NOLOCK) ON (Strategy.AllocateStrategyKey = AllocateStrategyDetail.AllocateStrategyKey)

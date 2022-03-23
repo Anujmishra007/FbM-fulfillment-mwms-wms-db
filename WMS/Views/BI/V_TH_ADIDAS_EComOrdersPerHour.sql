@@ -1,7 +1,12 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --TH-SINOTH-Add Views in THWMS PROD Catalog https://jiralfl.atlassian.net/browse/WMS-18650
 /* Date          Author      Ver.  Purposes									                     */
-/* 28-Dec-2021   JarekLim    1.0   Created									                     */												
+/* 28-Dec-2021   JarekLim    1.0   Created									                     */
 /******************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_ADIDAS_EComOrdersPerHour]
 AS

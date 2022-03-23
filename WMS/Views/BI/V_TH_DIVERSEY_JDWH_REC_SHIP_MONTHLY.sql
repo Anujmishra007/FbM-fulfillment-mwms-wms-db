@@ -1,14 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog  https://jiralfl.atlassian.net/browse/WMS-18745
 /* Date         Author      Ver.  Purposes									                  */
 /* 12-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_JDWH_REC_SHIP_MONTHLY]
-AS 
+AS
 SELECT
   A.DeliveryDate_d,
   A.Externorderkey,
@@ -101,7 +102,7 @@ GROUP BY A.DeliveryDate_d,
          A.orderkey,
          A.type
 --ORDER BY DeliveryDate_d
-GO 
+GO
 
 GRANT SELECT ON [BI].[V_TH_DIVERSEY_JDWH_REC_SHIP_MONTHLY] TO [JReportRole]
 GO
@@ -111,7 +112,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM [BI].[V_TH_DIVERSEY_JDWH_REC_SHIP_MONTHLY] 
+SELECT * FROM [BI].[V_TH_DIVERSEY_JDWH_REC_SHIP_MONTHLY]
 
 revert;
 */

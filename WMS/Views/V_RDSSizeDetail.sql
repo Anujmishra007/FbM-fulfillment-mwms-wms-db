@@ -1,9 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-create view [dbo].[V_RDSSizeDetail]
+CREATE OR ALTER VIEW [dbo].[V_RDSSizeDetail]
 as
 SElect
 RDSSizeLine	,
@@ -17,7 +17,7 @@ AddWho	,
 EditDate	,
 EditWho	,
 ArchiveCop	,
-TrafficCop	
+TrafficCop
 FROM RDSSizeDetail with (NOLOCK)
 
 GO

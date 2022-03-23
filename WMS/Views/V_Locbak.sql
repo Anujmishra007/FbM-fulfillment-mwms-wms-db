@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Locbak] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Locbak]
+AS
 SELECT [Loc]
 , [LocationType]
 , [PutawayZone]
@@ -12,7 +13,7 @@ SELECT [Loc]
 , [Addwho]
 , [Editdate]
 , [Editwho]
-FROM [Locbak] (NOLOCK) 
+FROM [Locbak] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_Locbak] TO [NSQL]
 GO

@@ -1,9 +1,9 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [dbo].[V_skuxloc_loc]
+CREATE OR ALTER VIEW [dbo].[V_skuxloc_loc]
 AS
 SELECT     dbo.LOC.Facility
          , dbo.LOC.Loc
@@ -20,7 +20,7 @@ SELECT     dbo.LOC.Facility
         (SELECT     Loc, COUNT(DISTINCT Sku) AS NoOfSkuAssigned, CASE WHEN SL1.SKU IS NOT NULL THEN '1' ELSE '0' END AS SkuAssigned
          FROM          dbo.SKUxLOC AS SL1 WITH (NOLOCK)
          WHERE      (LocationType IN ('PICK', 'CASE'))
-         GROUP BY Loc, CASE WHEN SL1.SKU IS NOT NULL THEN '1' ELSE '0' END) 
+         GROUP BY Loc, CASE WHEN SL1.SKU IS NOT NULL THEN '1' ELSE '0' END)
      AS SL ON SL.Loc = dbo.LOC.Loc
 
 GO

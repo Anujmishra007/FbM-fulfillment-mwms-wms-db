@@ -1,8 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
- Create VIEW [dbo].[V_rdsOrderDetailSize]  AS  
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_rdsOrderDetailSize]  AS
 SELECT rdsOrderNo,
 rdsOrderLineNo,
 SKU,

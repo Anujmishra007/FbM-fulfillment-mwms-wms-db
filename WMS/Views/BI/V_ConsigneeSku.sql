@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
@@ -12,7 +12,6 @@ GO
 /* 24-Jun-2020  Billy    1.0   Created                                     */
 /* 28-Sep-2021  KHLim    1.1   WMS-18038 CN Jreport Add View to BI Schema  */
 /***************************************************************************/
-
 CREATE OR ALTER VIEW [BI].[V_ConsigneeSKU]
 AS
 SELECT *

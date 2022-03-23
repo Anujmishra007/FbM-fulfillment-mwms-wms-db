@@ -1,9 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-create view [dbo].[V_rdsUser]
+CREATE OR ALTER VIEW [dbo].[V_rdsUser]
 as
 SElect
 UserId	,
@@ -16,7 +16,7 @@ LastLogin	,
 AddDate	,
 AddWho	,
 EditDate	,
-EditWho	
+EditWho
 FROM rdsUser with (NOLOCK)
 
 GO

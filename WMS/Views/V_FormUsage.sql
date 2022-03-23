@@ -1,11 +1,11 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [dbo].[V_FormUsage] 
-AS 
-SELECT CASE [UDF03] 
+CREATE OR ALTER VIEW [dbo].[V_FormUsage]
+AS
+SELECT CASE [UDF03]
             WHEN 'w_wave_maintenance'         THEN 'Wave Planning'
             WHEN 'w_inventory_move'           THEN 'Inventory Move'
             WHEN 'w_orders_maintenance'       THEN 'Shipment Orders'
@@ -27,19 +27,19 @@ SELECT CASE [UDF03]
             WHEN 'w_report_view'              THEN 'Report Module'
             WHEN 'w_adjustment_maintenance'   THEN 'Inventory Adjustment'
             WHEN 'nep_w_kit_maintenance'      THEN 'Kitting'
-            WHEN 'w_unallocate'               THEN 'Unallocate Orders' 
-            WHEN 'w_stocktake_parm_maintenance_new' THEN 'Stock Take '            
-            ELSE [UDF03] 
-      END as WindowName, 
-      DATEPART(year,  LogDate) As [Year], 
-      DATEPART(month, LogDate) As [Month],       
-       Count( DISTINCT Convert(char(10), LogDate, 112) ) NoOfDays, 
-       Count( DISTINCT UDF05) as NoOfUsers, 
-       ( Count(*) / Count( DISTINCT Convert(char(10), LogDate, 112) ) ) AS EverageDayClicked  
+            WHEN 'w_unallocate'               THEN 'Unallocate Orders'
+            WHEN 'w_stocktake_parm_maintenance_new' THEN 'Stock Take '
+            ELSE [UDF03]
+      END as WindowName,
+      DATEPART(year,  LogDate) As [Year],
+      DATEPART(month, LogDate) As [Month],
+       Count( DISTINCT Convert(char(10), LogDate, 112) ) NoOfDays,
+       Count( DISTINCT UDF05) as NoOfUsers,
+       ( Count(*) / Count( DISTINCT Convert(char(10), LogDate, 112) ) ) AS EverageDayClicked
   FROM [IDS_GeneralLog] WITH (NOLOCK)
 WHERE UDF04 = 'OPENWIN'
 GROUP BY [UDF03],
-      DATEPART(year,  LogDate), 
+      DATEPART(year,  LogDate),
       DATEPART(month, LogDate)
 
 GO

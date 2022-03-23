@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER VIEW [BI].[V_TH_NUTRA_Shipconfirm_Report_1600and1700] AS
@@ -17,27 +16,27 @@ SELECT
    O.OrderKey,
    case
       when
-         O.ConsigneeKey = '' 
+         O.ConsigneeKey = ''
       then
-         O.C_Company 
+         O.C_Company
       when
-         O.ConsigneeKey is null 
+         O.ConsigneeKey is null
       then
-         O.C_Company 
+         O.C_Company
       else
-         O.ConsigneeKey 
+         O.ConsigneeKey
    end AS 'Ship_To.'
-, O.C_Address1 + O.C_Address2 + O.C_Address3 + O.C_Address4 AS 'Address', O.StorerKey 
+, O.C_Address1 + O.C_Address2 + O.C_Address3 + O.C_Address4 AS 'Address', O.StorerKey
 FROM
    dbo.ORDERS O with (nolock)
-JOIN dbo.ORDERDETAIL OD with (nolock) ON O.OrderKey = OD.OrderKey 
-JOIN dbo.SKU S with (nolock) ON OD.Sku = S.Sku 
+JOIN dbo.ORDERDETAIL OD with (nolock) ON O.OrderKey = OD.OrderKey
+JOIN dbo.SKU S with (nolock) ON OD.Sku = S.Sku
       AND OD.StorerKey = S.StorerKey
 WHERE
    (
-(O.StorerKey = 'NUTRA' 
-      AND convert(char(10), O.EditDate, 103) = convert(char(10), getdate(), 103) 
-      AND O.Status = '9' 
+(O.StorerKey = 'NUTRA'
+      AND convert(char(10), O.EditDate, 103) = convert(char(10), getdate(), 103)
+      AND O.Status = '9'
       AND OD.ShippedQty <> 0)
    )
 --ORDER BY

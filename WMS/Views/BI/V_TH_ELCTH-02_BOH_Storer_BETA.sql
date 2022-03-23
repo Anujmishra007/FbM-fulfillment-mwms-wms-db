@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER VIEW [BI].[V_TH_ELCTH-02_BOH_Storer_BETA] as
@@ -17,17 +16,17 @@ SELECT
    A.Lottable03,
    convert(varchar, A.Lottable04, 103) as 'Exp Date',
    convert(varchar, A.Lottable05, 103) as 'Rec Date'
-FROM dbo.LOTxLOCxID X with (nolock) 
-LEFT OUTER JOIN dbo.LOTATTRIBUTE A with (nolock) 
-      ON (X.StorerKey = A.StorerKey 
-      AND X.Lot = A.Lot 
-      AND X.Sku = A.Sku) 
-LEFT OUTER JOIN dbo.SKU S with (nolock) 
-      ON (X.StorerKey = S.StorerKey 
-      AND X.Sku = S.Sku) 
-LEFT OUTER JOIN dbo.LOC L with (nolock) 
-      ON (X.Loc = L.Loc) 
-WHERE X.StorerKey = 'ELCCS' 
+FROM dbo.LOTxLOCxID X with (nolock)
+LEFT OUTER JOIN dbo.LOTATTRIBUTE A with (nolock)
+      ON (X.StorerKey = A.StorerKey
+      AND X.Lot = A.Lot
+      AND X.Sku = A.Sku)
+LEFT OUTER JOIN dbo.SKU S with (nolock)
+      ON (X.StorerKey = S.StorerKey
+      AND X.Sku = S.Sku)
+LEFT OUTER JOIN dbo.LOC L with (nolock)
+      ON (X.Loc = L.Loc)
+WHERE X.StorerKey = 'ELCCS'
 AND L.Facility = '3101X'
 GROUP BY
    X.StorerKey,

@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ContainerBilling] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ContainerBilling]
+AS
 SELECT [ContainerBillingKey]
 , [DocType]
 , [ContainerType]
@@ -17,7 +18,7 @@ SELECT [ContainerBillingKey]
 , [AddWho]
 , [EditDate]
 , [EditWho]
-FROM [ContainerBilling] (NOLOCK) 
+FROM [ContainerBilling] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ContainerBilling] TO [NSQL]
 GO

@@ -1,7 +1,12 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --TH_CTX_LCTH_ADIDAS View in THWMS PROD Catalog https://jiralfl.atlassian.net/browse/WMS-18651
 /* Date          Author      Ver.  Purposes									                     */
-/* 28-Dec-2021   Rungtham   1.0   Created									                     */												
+/* 28-Dec-2021   Rungtham   1.0   Created									                     */
 /******************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_ADIDAS_Daily_Return_Receipt0003]
 AS
@@ -35,7 +40,7 @@ SELECT DISTINCT
 FROM dbo.V_SKU AL1 WITH (NOLOCK)
 JOIN dbo.V_RECEIPTDETAIL AL2 WITH (NOLOCK) ON AL2.StorerKey = AL1.StorerKey AND AL2.Sku = AL1.Sku
 JOIN dbo.V_RECEIPT AL3 WITH (NOLOCK) ON AL2.ReceiptKey = AL3.ReceiptKey
-WHERE 
+WHERE
 AL2.StorerKey = 'ADIDAS'
 AND AL3.FinalizeDate > CONVERT(nvarchar, GETDATE() - 2, 102)
 AND AL3.FinalizeDate <= CONVERT(nvarchar, GETDATE() - 1, 102)

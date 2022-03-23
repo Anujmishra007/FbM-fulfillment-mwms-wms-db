@@ -1,10 +1,10 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [RDT].[V_rdtTrackLog] 
-AS 
+CREATE OR ALTER VIEW [RDT].[V_rdtTrackLog]
+AS
 SELECT [RowRef]
       ,[Mobile]
       ,[Username]

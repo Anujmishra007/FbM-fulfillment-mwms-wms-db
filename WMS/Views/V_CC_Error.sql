@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_CC_Error] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_CC_Error]
+AS
 SELECT [StorerKey]
 , [Sku]
 , [Lot]
@@ -12,7 +13,7 @@ SELECT [StorerKey]
 , [Qty]
 , [Remark]
 , [AddDate]
-FROM [CC_Error] (NOLOCK) 
+FROM [CC_Error] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_CC_Error] TO [NSQL]
 GO

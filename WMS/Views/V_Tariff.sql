@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Tariff] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Tariff]
+AS
 SELECT [TariffKey]
 , [Descrip]
 , [SupportFlag]
@@ -20,7 +21,7 @@ SELECT [TariffKey]
 , [RSPeriodType]
 , [SplitMonthPercentBefore]
 , [CaptureEndOfMonth]
-FROM [Tariff] (NOLOCK) 
+FROM [Tariff] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_Tariff] TO [NSQL]
 GO

@@ -1,23 +1,21 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-  
-  
-  
- CREATE VIEW [dbo].[V_WithdrawStock]   
-AS   
-SELECT [StorerKey]  
-, [SKU]  
-, [LOT]  
-, [ID]  
-, [Loc]  
-, [Qty]  
-, [Lottable01]  
-, [Lottable02]  
-, [Lottable03]  
-, [Lottable04]  
-, [Lottable05]  
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_WithdrawStock]
+AS
+SELECT [StorerKey]
+, [SKU]
+, [LOT]
+, [ID]
+, [Loc]
+, [Qty]
+, [Lottable01]
+, [Lottable02]
+, [Lottable03]
+, [Lottable04]
+, [Lottable05]
 , [Lottable06]
 , [Lottable07]
 , [Lottable08]
@@ -28,11 +26,11 @@ SELECT [StorerKey]
 , [Lottable13]
 , [Lottable14]
 , [Lottable15]
-, [RowId]  
-, [Sourcekey]  
-, [Sourcetype]  
-FROM [WithdrawStock] (NOLOCK)   
-  
+, [RowId]
+, [Sourcekey]
+, [Sourcetype]
+FROM [WithdrawStock] (NOLOCK)
+
 GO
 GRANT DELETE ON  [dbo].[V_WithdrawStock] TO [NSQL]
 GO

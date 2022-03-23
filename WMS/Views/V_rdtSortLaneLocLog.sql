@@ -1,12 +1,12 @@
-SET QUOTED_IDENTIFIER OFF
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 --https://jiralfl.atlassian.net/browse/WMS-11749
-CREATE VIEW [dbo].[V_rdtSortLaneLocLog]
+CREATE OR ALTER VIEW [dbo].[V_rdtSortLaneLocLog]
 AS
-SELECT * 
+SELECT *
 FROM RDT.rdtSortLaneLocLog WITH (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_rdtSortLaneLocLog] TO [NSQL]

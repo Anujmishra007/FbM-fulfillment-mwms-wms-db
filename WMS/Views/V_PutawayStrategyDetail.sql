@@ -1,8 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PutawayStrategyDetail] AS SELECT * FROM PutawayStrategyDetail WITH (NOLOCK)
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PutawayStrategyDetail] AS SELECT * FROM PutawayStrategyDetail WITH (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PutawayStrategyDetail] TO [NSQL]
 GO

@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ControlTable] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ControlTable]
+AS
 SELECT [type]
 , [filename]
 , [trandate]
@@ -11,7 +12,7 @@ SELECT [type]
 , [rec_posted]
 , [totalqty]
 , [addwho]
-FROM [ControlTable] (NOLOCK) 
+FROM [ControlTable] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ControlTable] TO [NSQL]
 GO

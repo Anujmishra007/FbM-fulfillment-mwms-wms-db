@@ -1,12 +1,12 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [dbo].[V_RCMUsage_Summ]
-AS 
-SELECT [UDF02] as EventName, 
-        CASE [UDF03] 
+CREATE OR ALTER VIEW [dbo].[V_RCMUsage_Summ]
+AS
+SELECT [UDF02] as EventName,
+        CASE [UDF03]
             WHEN 'w_wave_maintenance'         THEN 'Wave Planning'
             WHEN 'w_inventory_move'           THEN 'Inventory Move'
             WHEN 'w_orders_maintenance'       THEN 'Shipment Orders'
@@ -28,24 +28,24 @@ SELECT [UDF02] as EventName,
             WHEN 'w_report_view'              THEN 'Report Module'
             WHEN 'w_adjustment_maintenance'   THEN 'Inventory Adjustment'
             WHEN 'nep_w_kit_maintenance'      THEN 'Kitting'
-            WHEN 'w_unallocate'               THEN 'Unallocate Orders' 
-            WHEN 'w_stocktake_parm_maintenance_new' THEN 'Stock Take '            
-            ELSE [UDF03] 
+            WHEN 'w_unallocate'               THEN 'Unallocate Orders'
+            WHEN 'w_stocktake_parm_maintenance_new' THEN 'Stock Take '
+            ELSE [UDF03]
        END as WindowName,
-       DATEPART(year,  LogDate) As [Year], 
-       DATEPART(month, LogDate) As [Month], 
-       SUM(CAST( ISNULL([UDF06],'1') as Int)) as UsageCount, 
-       Count( DISTINCT Convert(char(10), LogDate, 112) ) NoOfDays, 
-       Count( DISTINCT UDF05) as NoOfUsers, 
-       ( SUM(CAST( ISNULL([UDF06],'1') as Int)) / Count( DISTINCT Convert(char(10), LogDate, 112) ) ) AS EverageDayClicked   
+       DATEPART(year,  LogDate) As [Year],
+       DATEPART(month, LogDate) As [Month],
+       SUM(CAST( ISNULL([UDF06],'1') as Int)) as UsageCount,
+       Count( DISTINCT Convert(char(10), LogDate, 112) ) NoOfDays,
+       Count( DISTINCT UDF05) as NoOfUsers,
+       ( SUM(CAST( ISNULL([UDF06],'1') as Int)) / Count( DISTINCT Convert(char(10), LogDate, 112) ) ) AS EverageDayClicked
   FROM [IDS_GeneralLog] WITH (NOLOCK)
-WHERE UDF04 = 'RMCLICK' 
+WHERE UDF04 = 'RMCLICK'
 AND [UDF02] NOT IN ('ue_modifymode','ue_standards', 'pfc_lastpage','pfc_nextpage', 'ue_help','ue_showOther','ue_hiderequiredmode',
  'ue_refresh','ue_viewdetail','ue_save','ue_viewmode',
- 'ue_ShowFormorTab') 
-GROUP BY [UDF03], [UDF02], 
+ 'ue_ShowFormorTab')
+GROUP BY [UDF03], [UDF02],
     DATEPART(year,  LogDate),
-    DATEPART(month, LogDate) 
+    DATEPART(month, LogDate)
 
 GO
 GRANT DELETE ON  [dbo].[V_RCMUsage_Summ] TO [NSQL]

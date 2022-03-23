@@ -1,13 +1,14 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog  https://jiralfl.atlassian.net/browse/WMS-18745
 /* Date         Author      Ver.  Purposes									                  */
 /* 12-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_OUTBOUND] 
+CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_OUTBOUND]
 AS
 SELECT
   CONVERT(date, AL1.AddDate) as AddDate,
@@ -28,7 +29,7 @@ SELECT
   AL2.ShippedQty,
   AL1.StorerKey
 
-FROM dbo.ORDERS AL1 WITH (NOLOCK) 
+FROM dbo.ORDERS AL1 WITH (NOLOCK)
 LEFT JOIN dbo.ORDERDETAIL AL2 WITH (NOLOCK) ON AL1.StorerKey = AL2.StorerKey AND AL1.OrderKey = AL2.OrderKey
 JOIN dbo.SKU AL3 WITH (NOLOCK) ON AL2.StorerKey = AL3.StorerKey AND AL2.Sku = AL3.Sku
 
@@ -37,7 +38,7 @@ AND (NOT AL1.Status = 'CANC')
 AND  AL1.AddDate >= CONVERT (DATE,DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0))
 AND  AL1.AddDate <= CONVERT (DATE,DATEADD (DD, 1,GETDATE()))
 
-GROUP BY 
+GROUP BY
 CONVERT(date, AL1.AddDate),
  AL1.ExternOrderKey,
  AL2.Sku,
@@ -56,7 +57,7 @@ CONVERT(date, AL1.AddDate),
  AL1.StorerKey
 
  GO
- 
+
 GRANT SELECT ON [BI].[V_TH_DIVERSEY_OUTBOUND] TO [JReportRole]
 GO
 
@@ -65,7 +66,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM [BI].[V_TH_DIVERSEY_OUTBOUND] 
+SELECT * FROM [BI].[V_TH_DIVERSEY_OUTBOUND]
 
 revert;
 */

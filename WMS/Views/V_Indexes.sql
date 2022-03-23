@@ -1,13 +1,14 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Indexes] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Indexes]
+AS
 SELECT [vcTableName]
 , [nmPriority]
 , [dtLastUpdated]
-FROM [Indexes] (NOLOCK) 
+FROM [Indexes] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_Indexes] TO [NSQL]
 GO

@@ -1,10 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [dbo].[V_idsStkTrfDoc] 
-AS 
+CREATE OR ALTER VIEW [dbo].[V_idsStkTrfDoc]
+AS
 SELECT  [STDNo]
 , [Facility]
 , [TruckNo]
@@ -19,7 +19,7 @@ SELECT  [STDNo]
 , [AddWho]
 , [SourceID]
 , [ArchiveCop]
-FROM [idsStkTrfDoc] (NOLOCK) 
+FROM [idsStkTrfDoc] (NOLOCK)
 
 
 GO

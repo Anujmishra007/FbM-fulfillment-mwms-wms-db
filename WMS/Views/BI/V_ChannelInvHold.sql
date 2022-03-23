@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
@@ -12,8 +12,7 @@ GO
 /* Date         Author    Ver.  Purposes                                   */
 /* 11-Jun-2021  ZiWei    1.0   Created                                     */
 /***************************************************************************/
-
-CREATE OR ALTER VIEW [Bi].[V_ChannelInvHold] 
+CREATE OR ALTER VIEW [Bi].[V_ChannelInvHold]
 AS SELECT * FROM ChannelInvHold WITH (NOLOCK)
 GO
 

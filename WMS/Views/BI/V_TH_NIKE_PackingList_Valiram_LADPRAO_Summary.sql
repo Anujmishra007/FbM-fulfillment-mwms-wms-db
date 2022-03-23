@@ -1,15 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog https://jiralfl.atlassian.net/browse/WMS-18818
 /* Date         Author      Ver.  Purposes									                  */
 /* 21-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-
 CREATE OR ALTER VIEW [BI].[V_TH_NIKE_PackingList_Valiram_LADPRAO_Summary]
-AS 
+AS
 SELECT
   AL1.UserDefine06 as GIDate,
   MAX(AL3.CartonNo) as TotalCarton,
@@ -20,7 +20,7 @@ SELECT
 FROM dbo.PackDetail AS AL3 WITH (NOLOCK)
 INNER JOIN dbo.PackHeader AS AL2 WITH (NOLOCK) ON AL3.PickSlipNo = AL2.PickSlipNo
 INNER JOIN dbo.ORDERS AS AL1 WITH (NOLOCK) ON AL2.OrderKey = AL1.OrderKey
-  
+
 WHERE AL1.UserDefine06 = CONVERT(varchar,  GETDATE() , 102)
 AND AL1.Status IN ('5', '9')
 AND AL2.ConsigneeKey = '0005092752'
@@ -41,7 +41,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_NIKE_PackingList_Valiram_LADPRAO_Summary]  
+SELECT * FROM  [BI].[V_TH_NIKE_PackingList_Valiram_LADPRAO_Summary]
 
 revert;
 */

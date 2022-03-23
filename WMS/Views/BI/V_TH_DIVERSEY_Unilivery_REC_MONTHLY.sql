@@ -1,14 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog  https://jiralfl.atlassian.net/browse/WMS-18745
 /* Date         Author      Ver.  Purposes									                  */
 /* 12-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_Unilivery_REC_MONTHLY] 
-AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_Unilivery_REC_MONTHLY]
+AS
 SELECT
   AL2.StorerKey,
   AL1.DeliveryDate,
@@ -23,8 +24,8 @@ SELECT
 FROM dbo.ORDERS AL1 WITH (NOLOCK)
 JOIN dbo.ORDERDETAIL AL2 WITH (NOLOCK) ON AL1.OrderKey = AL2.OrderKey --AND AL1.StorerKey =AL2.StorerKey
 WHERE AL2.StorerKey = '06700'
-AND AL1.DeliveryDate>= DATEADD(month, DATEDIFF(month, 0, GETDATE())-1, 0) 
-AND AL1.DeliveryDate < DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0) 
+AND AL1.DeliveryDate>= DATEADD(month, DATEDIFF(month, 0, GETDATE())-1, 0)
+AND AL1.DeliveryDate < DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
 AND AL1.Facility IN ('619', '619EP')
 
 GO
@@ -37,7 +38,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM [BI].[V_TH_DIVERSEY_Unilivery_REC_MONTHLY] 
+SELECT * FROM [BI].[V_TH_DIVERSEY_Unilivery_REC_MONTHLY]
 
 revert;
 */

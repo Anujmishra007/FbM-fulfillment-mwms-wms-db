@@ -1,15 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --TH-Create VIEW on Database (THWMS) on PROD  https://jiralfl.atlassian.net/browse/WMS-18766
 /* Date         Author      Ver.  Purposes									                  */
 /* 14-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-
-CREATE  OR ALTER VIEW [BI].[V_TH_DMCTH_Daily_Reports_SOH] 
-AS 
+CREATE  OR ALTER VIEW [BI].[V_TH_DMCTH_Daily_Reports_SOH]
+AS
 SELECT
    X.StorerKey,
    L.Facility,
@@ -27,14 +27,14 @@ SELECT
    A.Lottable02,
    A.Lottable04,
    A.Lottable03,
-   A.Lottable05 
+   A.Lottable05
 
 FROM dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc 
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey AND X.Sku = A.Sku AND X.Lot = A.Lot 
-JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey AND X.Sku = S.Sku 
+JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey AND X.Sku = A.Sku AND X.Lot = A.Lot
+JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey AND X.Sku = S.Sku
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
-WHERE X.StorerKey = 'DMCTH' 
+WHERE X.StorerKey = 'DMCTH'
 AND X.Qty > 0
 GO
 
@@ -46,7 +46,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_DMCTH_Daily_Reports_SOH]  
+SELECT * FROM  [BI].[V_TH_DMCTH_Daily_Reports_SOH]
 
 revert;
 */

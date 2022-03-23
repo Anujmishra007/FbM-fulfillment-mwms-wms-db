@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_AccessorialDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_AccessorialDetail]
+AS
 SELECT [Accessorialkey]
 , [AccessorialDetailkey]
 , [Descrip]
@@ -23,7 +24,7 @@ SELECT [Accessorialkey]
 , [CostBase]
 , [CostMasterUnits]
 , [CostUOMShow]
-FROM [AccessorialDetail] (NOLOCK) 
+FROM [AccessorialDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_AccessorialDetail] TO [NSQL]
 GO

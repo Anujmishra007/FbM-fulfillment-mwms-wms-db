@@ -1,8 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TH_CustomerLotInfo]
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TH_CustomerLotInfo]
 AS Select * from  TH_CustomerLotInfo (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TH_CustomerLotInfo] TO [NSQL]

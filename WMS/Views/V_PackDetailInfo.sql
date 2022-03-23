@@ -1,11 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-Create VIEW [dbo].[V_PackDetailInfo] 
-AS 
+CREATE OR ALTER VIEW [dbo].[V_PackDetailInfo]
+AS
 SELECT * FROM PackDetailInfo (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PackDetailInfo] TO [NSQL]

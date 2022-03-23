@@ -1,12 +1,11 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER view [BI].[V_TH_YVSER-16_Stock Balance SUM-Closed] as 
+CREATE OR ALTER view [BI].[V_TH_YVSER-16_Stock Balance SUM-Closed] as
 select x.InventoryPosting, x.GroupDivisionCode, x.ItemCategory, x.ProductGroup, x.ValueDate,
-    x.ItemNo, x.FranceCode, x.Description, 
+    x.ItemNo, x.FranceCode, x.Description,
     sum(x.ReceiveLabelling) as 'Receive & Labelling',
     sum(x.Specialbin) as 'Special bin',
 	sum(x.allocated_n_Picked)  as 'Allocated + Picked qty',
@@ -19,12 +18,12 @@ select x.InventoryPosting, x.GroupDivisionCode, x.ItemCategory, x.ProductGroup, 
     sum(x.RemainingDayLessthan180) as RemainingDayLessthan180,
     Y.StockTrackingLot
 from (
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
-    0 as RemainingDayMorethan540, 
+    0 as StockSpoilExpireVariance,
+    0 as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     0 as ReceiveLabelling,
@@ -33,16 +32,16 @@ from (
  from SKU sku with (nolock)
  JOIN LOTxLOCxID soh with (nolock) ON sku.StorerKey = soh.StorerKey and sku.sku = soh.sku
  JOIN LOTAttribute att with (nolock) ON soh.StorerKey = att.Storerkey and soh.sku = att.sku and soh.lot = att.lot
- JOIN LOC loc with (nolock) ON soh.loc = loc.loc 
+ JOIN LOC loc with (nolock) ON soh.loc = loc.loc
  where sku.StorerKey = 'YVESR'
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
- union 
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ union
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     sum(soh.Qty) as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
-    0 as RemainingDayMorethan540, 
+    0 as StockSpoilExpireVariance,
+    0 as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     0 as ReceiveLabelling,
@@ -51,16 +50,16 @@ from (
  from SKU sku with (nolock)
  JOIN LOTxLOCxID soh with (nolock) ON sku.StorerKey = soh.StorerKey and sku.sku = soh.sku
  JOIN LOTAttribute att with (nolock) ON soh.StorerKey = att.Storerkey and soh.sku = att.sku and soh.lot = att.lot
- JOIN LOC loc with (nolock) ON soh.loc = loc.loc 
+ JOIN LOC loc with (nolock) ON soh.loc = loc.loc
  where sku.StorerKey = 'YVESR'
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
- union 
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ union
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    sum(soh.Qty) as StockSpoilExpireVariance, 
-    0 as RemainingDayMorethan540, 
+    sum(soh.Qty) as StockSpoilExpireVariance,
+    0 as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     0 as ReceiveLabelling,
@@ -73,13 +72,13 @@ from (
  where sku.StorerKey = 'YVESR'
  and loc.loc in (select lk.Code from CODELKUP lk with (nolock) where lk.StorerKey = 'YVESR' and lk.ListName = 'YREXSOH')
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
- union 
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ union
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
-    sum(soh.Qty) as RemainingDayMorethan540, 
+    0 as StockSpoilExpireVariance,
+    sum(soh.Qty) as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     0 as ReceiveLabelling,
@@ -93,14 +92,14 @@ from (
  and loc.loc not in (select lk.Code from CODELKUP lk with (nolock) where lk.StorerKey = 'YVESR' and lk.ListName = 'YREXSOH')
  and att.Lottable04 >= GetDate()+540 and sku.Lottable02Label = 'BATCH_NO'
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
- union 
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ union
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
+    0 as StockSpoilExpireVariance,
     0 as RemainingDayMorethan540,
-    sum(soh.Qty) as RemainingDayLessthan540,     
+    sum(soh.Qty) as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     0 as ReceiveLabelling,
     0 as Specialbin,
@@ -113,13 +112,13 @@ from (
  and loc.loc not in (select lk.Code from CODELKUP lk with (nolock) where lk.StorerKey = 'YVESR' and lk.ListName = 'YREXSOH')
  and att.Lottable04 < GetDate()+540 and att.Lottable04 >= GetDate()+180 and sku.Lottable02Label = 'BATCH_NO'
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
- union 
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ union
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
-    0 as RemainingDayMorethan540, 
+    0 as StockSpoilExpireVariance,
+    0 as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     sum(soh.Qty) as RemainingDayLessthan180,
     0 as ReceiveLabelling,
@@ -134,12 +133,12 @@ from (
  and att.Lottable04 < GetDate()+180 and sku.Lottable02Label = 'BATCH_NO'
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
  union
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
-    0 as RemainingDayMorethan540, 
+    0 as StockSpoilExpireVariance,
+    0 as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     sum(soh.qty) as ReceiveLabelling,
@@ -148,17 +147,17 @@ from (
  from SKU sku with (nolock)
  JOIN LOTxLOCxID soh with (nolock) ON sku.StorerKey = soh.StorerKey and sku.sku = soh.sku
  JOIN LOTAttribute att with (nolock) ON soh.StorerKey = att.Storerkey and soh.sku = att.sku and soh.lot = att.lot
- JOIN LOC loc with (nolock) ON soh.loc = loc.loc 
+ JOIN LOC loc with (nolock) ON soh.loc = loc.loc
  where sku.StorerKey = 'YVESR'
  and loc.loc in(select loc from loc with (nolock) where loc like'AKQ%' and hostwhcode ='YVESR' or loc in('RECEIVESTG','RETURNSTG','YRRWCPK','YRFGCPK'))
  group by sku.Busr1, sku.Busr3, sku.Busr4, sku.Busr5, sku.sku, sku.ManufacturerSku, sku.Descr
  union
- select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory, 
-    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo, 
-    sku.ManufacturerSku as FranceCode, sku.Descr as Description, 
+ select sku.Busr1 as InventoryPosting, sku.Busr3 as GroupDivisionCode, sku.Busr4 as ItemCategory,
+    sku.Busr5 as ProductGroup, Convert(varchar, GetDate(), 103) as ValueDate, sku.sku as ItemNo,
+    sku.ManufacturerSku as FranceCode, sku.Descr as Description,
     0 as TotalWarehouse,
-    0 as StockSpoilExpireVariance, 
-    0 as RemainingDayMorethan540, 
+    0 as StockSpoilExpireVariance,
+    0 as RemainingDayMorethan540,
     0 as RemainingDayLessthan540,
     0 as RemainingDayLessthan180,
     0 as ReceiveLabelling,
@@ -177,7 +176,7 @@ left join
 select y.sku
 ,case when y.busr7 ='Yes' and y.busr8 ='Yes' then 'Y' else 'N' end as StockTrackingLot
 from sku as y with (nolock)
-where y.storerkey ='YVESR' 
+where y.storerkey ='YVESR'
 )Y on  x.itemno = y.sku
 group by x.InventoryPosting, x.GroupDivisionCode, x.ItemCategory, x.ProductGroup, x.ValueDate,
   x.ItemNo, x.FranceCode, x.Description,y.sku,y.StockTrackingLot

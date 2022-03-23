@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_InvHoldSkuLog] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_InvHoldSkuLog]
+AS
 SELECT [StorerKey]
 , [Sku]
 , [Facility]
@@ -15,7 +16,7 @@ SELECT [StorerKey]
 , [EditWho]
 , [EditDate]
 , [Msgtext]
-FROM [InvHoldSkuLog] (NOLOCK) 
+FROM [InvHoldSkuLog] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_InvHoldSkuLog] TO [NSQL]
 GO

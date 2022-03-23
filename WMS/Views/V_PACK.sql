@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PACK] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PACK]
+AS
 SELECT [PackKey]
 , [PackDescr]
 , [PackUOM1]
@@ -85,7 +86,7 @@ SELECT [PackKey]
 , [TrafficCop]
 , [ArchiveCop]
 , [Timestamp]
-FROM [PACK] (NOLOCK) 
+FROM [PACK] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PACK] TO [NSQL]
 GO

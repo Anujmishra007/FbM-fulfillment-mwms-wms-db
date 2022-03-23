@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_C4_Rec_Exp] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_C4_Rec_Exp]
+AS
 SELECT [Messageh]
 , [MessageDate]
 , [Rev_Date]
@@ -19,7 +20,7 @@ SELECT [Messageh]
 , [Documentkey]
 , [Adddate]
 , [EditDate]
-FROM [C4_Rec_Exp] (NOLOCK) 
+FROM [C4_Rec_Exp] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_C4_Rec_Exp] TO [NSQL]
 GO

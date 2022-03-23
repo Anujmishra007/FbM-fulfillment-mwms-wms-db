@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_help] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_help]
+AS
 SELECT [topic]
 , [context]
 , [langid]
@@ -15,7 +16,7 @@ SELECT [topic]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [help] (NOLOCK) 
+FROM [help] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_help] TO [NSQL]
 GO

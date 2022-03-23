@@ -1,7 +1,12 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --TH_CTX_LCTH_ADIDAS View in THWMS PROD Catalog https://jiralfl.atlassian.net/browse/WMS-18651
 /* Date          Author      Ver.  Purposes									                     */
-/* 28-Dec-2021   JarekLim    1.0   Created									                     */												
+/* 28-Dec-2021   JarekLim    1.0   Created									                     */
 /******************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_ADIDAS_Inventory_Adjustment_Report15]
 AS
@@ -36,7 +41,7 @@ JOIN dbo.V_ADJUSTMENTDETAIL AL2 WITH (NOLOCK) ON AL1.AdjustmentKey = AL2.Adjustm
 JOIN dbo.V_CODELKUP AL3 WITH (NOLOCK) ON AL2.StorerKey = AL3.Storerkey AND AL2.ReasonCode = AL3.Code
 JOIN dbo.V_LOC AL4 WITH (NOLOCK) ON AL2.Loc = AL4.Loc
 JOIN dbo.V_SKU AL5 WITH (NOLOCK) ON AL2.StorerKey = AL5.StorerKey AND AL2.Sku = AL5.Sku
-WHERE 
+WHERE
   AL1.StorerKey = 'ADIDAS'
   AND AL3.LISTNAME = 'ADJREASON'
 GO

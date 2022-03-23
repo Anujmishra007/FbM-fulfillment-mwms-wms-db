@@ -1,9 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-create view [dbo].[V_RDSStyle]
+CREATE OR ALTER VIEW [dbo].[V_RDSStyle]
 as
 SElect
 Storerkey	,
@@ -24,7 +24,7 @@ AddWho	,
 EditDate	,
 EditWho	,
 ArchiveCop	,
-TrafficCop	
+TrafficCop
 FROM RDSStyle with (NOLOCK)
 
 GO

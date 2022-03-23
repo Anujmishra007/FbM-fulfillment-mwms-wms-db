@@ -1,38 +1,39 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_FatClient]      
-AS       
-SELECT       
-   DATEPART(year,  login_date) As [Year],       
-   DATEPART(month, login_date) As [Month],       
-   Application,       
-   COUNT(Distinct HostName) As FatClient       
-FROM USER_CONNECTIONS WITH (NOLOCK)       
-LEFT OUTER JOIN CODELKUP ON (CODELKUP.ListName = 'TSServer'       
-                         AND CODELKUP.Code = USER_CONNECTIONS.Hostname)      
-WHERE [Application] = 'WMS'      
-AND   CODELKUP.Code IS NULL       
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_FatClient]
+AS
+SELECT
+   DATEPART(year,  login_date) As [Year],
+   DATEPART(month, login_date) As [Month],
+   Application,
+   COUNT(Distinct HostName) As FatClient
+FROM USER_CONNECTIONS WITH (NOLOCK)
+LEFT OUTER JOIN CODELKUP ON (CODELKUP.ListName = 'TSServer'
+                         AND CODELKUP.Code = USER_CONNECTIONS.Hostname)
+WHERE [Application] = 'WMS'
+AND   CODELKUP.Code IS NULL
 AND   login_name <> 'wmsgt'
 and   HostName not in (
-'IDS-WMS-UNG', 
+'IDS-WMS-UNG',
 'IDS-PFC-Leong',
 'IDS-WMS-AUDREY',
 'IDS-WMS-wtshong',
-'IDS-WMS-vicky', 
-'IDS-WMS-TTL',    
-'IDS-WMS-leong', 
+'IDS-WMS-vicky',
+'IDS-WMS-TTL',
+'IDS-WMS-leong',
 'IDS-WMS-njow',
-'IDS-WMS-gtgoh', 
-'IDS-WMS-ckp', 
+'IDS-WMS-gtgoh',
+'IDS-WMS-ckp',
 'IDS-WMS-chinsp',
-'IDS-GT-USER',  
-'IDS-WMS-PHLEE', 
-'ids-wmsrt-khlim', 
-'ids-wms-ybyong', 
+'IDS-GT-USER',
+'IDS-WMS-PHLEE',
+'ids-wmsrt-khlim',
+'ids-wms-ybyong',
 'IDS-WMS-MCTANG',
-'IDS-GIT-NAZRUL', 
+'IDS-GIT-NAZRUL',
 'IDS-RT-SCHUA',
 'ids-git-ntan',
 'IDS-GIT-CRYSTLE',
@@ -61,12 +62,12 @@ and   HostName not in (
 'MYSLFA08MCT',
 'MYSLFA110101',
 'MYSLFA110116'
-  )    
-GROUP BY       
-   DATEPART(month, login_date),       
-   DATEPART(year,  login_date),      
-   Application       
- 
+  )
+GROUP BY
+   DATEPART(month, login_date),
+   DATEPART(year,  login_date),
+   Application
+
 
 GO
 GRANT DELETE ON  [dbo].[V_FatClient] TO [NSQL]

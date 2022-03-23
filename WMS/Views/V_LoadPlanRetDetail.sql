@@ -1,10 +1,11 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
-CREATE VIEW [dbo].[V_LoadPlanRetDetail]
+
+CREATE OR ALTER VIEW [dbo].[V_LoadPlanRetDetail]
 AS
-SELECT     LoadKey, LoadLineNumber, ReceiptKey, ExternReceiptKey, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Weight, Cube, 
+SELECT     LoadKey, LoadLineNumber, ReceiptKey, ExternReceiptKey, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Weight, Cube,
                       ExternLoadKey, ExternLineNo
 FROM         dbo.LoadPlanRetDetail WITH (NOLOCK)
 

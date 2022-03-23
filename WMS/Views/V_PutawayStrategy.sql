@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PutawayStrategy] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PutawayStrategy]
+AS
 SELECT [PutawayStrategyKey]
 , [Descr]
 , [AddDate]
@@ -13,7 +14,7 @@ SELECT [PutawayStrategyKey]
 , [TrafficCop]
 , [ArchiveCop]
 , [Timestamp]
-FROM [PutawayStrategy] (NOLOCK) 
+FROM [PutawayStrategy] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PutawayStrategy] TO [NSQL]
 GO

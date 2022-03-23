@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_IDSCNDailyInventory] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_IDSCNDailyInventory]
+AS
 SELECT [Storerkey]
 , [Sku]
 , [Loc]
@@ -17,7 +18,7 @@ SELECT [Storerkey]
 , [EditDate]
 , [EditWho]
 , [InventoryDate]
-FROM [IDSCNDailyInventory] (NOLOCK) 
+FROM [IDSCNDailyInventory] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_IDSCNDailyInventory] TO [NSQL]
 GO

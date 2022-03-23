@@ -1,9 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-create view [dbo].[V_rdsPO]
+CREATE OR ALTER VIEW [dbo].[V_rdsPO]
 as
 SElect
 rdsPONo	,
@@ -74,7 +74,7 @@ UserDefine07	,
 UserDefine08	,
 UserDefine09	,
 UserDefine10	,
-xdockpokey	
+xdockpokey
 FROM rdsPO with (NOLOCK)
 
 GO

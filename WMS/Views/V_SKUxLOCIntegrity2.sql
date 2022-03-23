@@ -1,10 +1,10 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-Create View [dbo].[V_SKUxLOCIntegrity2]
-as 
+CREATE OR ALTER VIEW [dbo].[V_SKUxLOCIntegrity2]
+as
 Select SKUxLOCIntegrity.SeqNo
 ,SKUxLOCIntegrity.Facility
 ,SKUxLOCIntegrity.Loc
@@ -14,7 +14,7 @@ Select SKUxLOCIntegrity.SeqNo
 ,SKUxLOCIntegrity.ID
 ,SKUxLOCIntegrity.Qty
 ,SKUxLOCIntegrity.EntryValue
-,SKUxLOCIntegrity.Code 
+,SKUxLOCIntegrity.Code
 ,SKUxLOCIntegrity.QtyCount
 , skuxloc.QtyAllocated
 , skuxloc.QtyPicked

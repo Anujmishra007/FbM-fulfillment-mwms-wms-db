@@ -1,5 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-CREATE VIEW [dbo].[V_PackdetailLabel]
+CREATE OR ALTER VIEW [dbo].[V_PackdetailLabel]
 AS SELECT * FROM PackdetailLabel (NOLOCK)
 GO

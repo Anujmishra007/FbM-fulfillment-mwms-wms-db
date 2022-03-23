@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_FxRATE] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_FxRATE]
+AS
 SELECT [CurrencyKey]
 , [Descrip]
 , [BaseCurrency]
@@ -14,7 +15,7 @@ SELECT [CurrencyKey]
 , [AddWho]
 , [EditDate]
 , [EditWho]
-FROM [FxRATE] (NOLOCK) 
+FROM [FxRATE] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_FxRATE] TO [NSQL]
 GO

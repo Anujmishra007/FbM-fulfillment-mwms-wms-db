@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TariffDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TariffDetail]
+AS
 SELECT [TariffDetailKey]
 , [TariffKey]
 , [ChargeType]
@@ -29,7 +30,7 @@ SELECT [TariffDetailKey]
 , [UOM2Mult]
 , [UOM3Mult]
 , [UOM4Mult]
-FROM [TariffDetail] (NOLOCK) 
+FROM [TariffDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TariffDetail] TO [NSQL]
 GO

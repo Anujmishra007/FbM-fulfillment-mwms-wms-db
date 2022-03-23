@@ -1,15 +1,16 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PhysicalParameters] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PhysicalParameters]
+AS
 SELECT [PhysicalParmKey]
 , [StorerKeyMin]
 , [StorerKeyMax]
 , [SkuMin]
 , [SkuMax]
-FROM [PhysicalParameters] (NOLOCK) 
+FROM [PhysicalParameters] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PhysicalParameters] TO [NSQL]
 GO

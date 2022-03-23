@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_ViewReportPrintType]')) 
-   DROP VIEW [dbo].[V_ViewReportPrintType]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************/
 /* View: V_ViewReportPrintType                                             */
 /* Creation Date: 2020-09-11                                               */
@@ -26,8 +23,8 @@ GO
 /* Date        Author   Ver   Purposes                                     */
 /* 2020-11-19  Wan01    1.0   Created                                      */
 /***************************************************************************/
-CREATE VIEW [dbo].[V_ViewReportPrintType]
-AS 
+CREATE OR ALTER VIEW [dbo].[V_ViewReportPrintType]
+AS
 SELECT  CODELKUP.ListName
       , CODELKUP.Code
       , CODELKUP.[Description]
@@ -42,15 +39,15 @@ SELECT  CODELKUP.ListName
       , CODELKUP.UDF03
       , CODELKUP.UDF04
       , CODELKUP.UDF05
-FROM CODELKUP WITH (NOLOCK) 
+FROM CODELKUP WITH (NOLOCK)
 WHERE CODELKUP.LISTNAME = 'WMPrintTyp'
 AND   CODELKUP.Long = 'DataWindow'
 GO
 GRANT SELECT ON [dbo].[V_ViewReportPrintType] TO nSQL
-GO   
+GO
 
 
 
 
 
- 
+

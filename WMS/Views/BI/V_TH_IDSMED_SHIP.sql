@@ -1,9 +1,9 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE   VIEW [BI].[V_TH_IDSMED_SHIP] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_IDSMED_SHIP] AS
 SELECT DISTINCT
    O.StorerKey,
    O.OrderKey,
@@ -25,18 +25,18 @@ SELECT DISTINCT
    OD.Lottable02,
    convert(varchar, OD.Lottable04, 103) AS 'Expire Date',
    O.Notes,
-   S.STDCUBE 
+   S.STDCUBE
 FROM
    dbo.ORDERS O with (nolock)
-JOIN dbo.ORDERDETAIL OD with (nolock) ON O.OrderKey = OD.OrderKey 
-      AND O.StorerKey = OD.StorerKey 
-JOIN dbo.SKU S with (nolock) ON OD.StorerKey = S.StorerKey 
+JOIN dbo.ORDERDETAIL OD with (nolock) ON O.OrderKey = OD.OrderKey
+      AND O.StorerKey = OD.StorerKey
+JOIN dbo.SKU S with (nolock) ON OD.StorerKey = S.StorerKey
       AND OD.Sku = S.Sku
 WHERE
    (
-(convert(varchar, O.EditDate, 112) >= convert(varchar, getdate() - 1, 112) 
-      and convert(varchar, O.EditDate, 112) < convert(varchar, getdate(), 112) 
-      AND O.StorerKey = 'IDSMED' 
+(convert(varchar, O.EditDate, 112) >= convert(varchar, getdate() - 1, 112)
+      and convert(varchar, O.EditDate, 112) < convert(varchar, getdate(), 112)
+      AND O.StorerKey = 'IDSMED'
       AND O.Status = '9')
    )
 GO

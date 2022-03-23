@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ids_label_count] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ids_label_count]
+AS
 SELECT [storerkey]
 , [salesord]
 , [shipdate]
@@ -18,7 +19,7 @@ SELECT [storerkey]
 , [phone]
 , [nocarton]
 , [printdate]
-FROM [ids_label_count] (NOLOCK) 
+FROM [ids_label_count] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ids_label_count] TO [NSQL]
 GO

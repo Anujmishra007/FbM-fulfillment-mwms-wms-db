@@ -1,29 +1,28 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-    
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [dbo].[V_WaveOrderLn]   
-AS   
-SELECT [Facility]  
-, [WaveKey]  
-, [OrderKey]  
-, [OrderLineNumber]  
-, [Sku]  
-, [StorerKey]  
-, [OpenQty]  
-, [QtyAllocated]  
-, [QtyPicked]  
-, [QtyReplenish]  
-, [UOM]  
-, [PackKey]  
-, [Status]  
-, [Lottable01]  
-, [Lottable02]  
-, [Lottable03]  
-, [Lottable04]  
-, [Lottable05]  
+CREATE OR ALTER VIEW [dbo].[V_WaveOrderLn]
+AS
+SELECT [Facility]
+, [WaveKey]
+, [OrderKey]
+, [OrderLineNumber]
+, [Sku]
+, [StorerKey]
+, [OpenQty]
+, [QtyAllocated]
+, [QtyPicked]
+, [QtyReplenish]
+, [UOM]
+, [PackKey]
+, [Status]
+, [Lottable01]
+, [Lottable02]
+, [Lottable03]
+, [Lottable04]
+, [Lottable05]
 , [Lottable06]
 , [Lottable07]
 , [Lottable08]
@@ -34,9 +33,9 @@ SELECT [Facility]
 , [Lottable13]
 , [Lottable14]
 , [Lottable15]
-, [LoadKey]  
-FROM [WaveOrderLn] (NOLOCK)   
-  
+, [LoadKey]
+FROM [WaveOrderLn] (NOLOCK)
+
 GO
 GRANT DELETE ON  [dbo].[V_WaveOrderLn] TO [NSQL]
 GO

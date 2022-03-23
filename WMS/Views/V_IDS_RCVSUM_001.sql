@@ -1,10 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-create view [dbo].[V_IDS_RCVSUM_001]
+CREATE OR ALTER VIEW [dbo].[V_IDS_RCVSUM_001]
 as
 	select distinct convert(NVARCHAR(10), rtrim(upper(receipt.receiptkey))) as 'r_receiptkey',
 				convert(NVARCHAR(20), rtrim(upper(receipt.externreceiptkey))) as 'r_externreceiptkey',
@@ -16,7 +15,7 @@ as
 				receipt.carriername as 'r_carriername',
 				receipt.carrieraddress1 as 'r_carrieraddress1',
 				receipt.carrieraddress2 as 'r_carrieraddress2',
-				convert(NVARCHAR(45), rtrim(upper(receipt.carriercity))) as 'r_carriercity',	
+				convert(NVARCHAR(45), rtrim(upper(receipt.carriercity))) as 'r_carriercity',
 				receipt.carrierstate as 'r_carrierstate',
 				receipt.carrierzip as 'r_carrierzip',
 				receipt.carrierreference as 'r_carrierreference',
@@ -117,10 +116,10 @@ as
 				po.loadingdate as 'po_loadingdate',
 				po.reasoncode as 'po_reasoncode',
 				isnull(storerconfig.svalue, '0') as 'owitf'
-	from receipt (nolock) 
+	from receipt (nolock)
 	join storer (nolock)
 		on receipt.storerkey = storer.storerkey
-   left outer join receiptdetail (nolock) 
+   left outer join receiptdetail (nolock)
       on receipt.receiptkey = receiptdetail.receiptkey
 	left outer join po (nolock)
 		on receiptdetail.pokey = po.pokey

@@ -1,12 +1,13 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ids_lp_nested_orderkey] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ids_lp_nested_orderkey]
+AS
 SELECT [orderkey]
 , [storerkey]
-FROM [ids_lp_nested_orderkey] (NOLOCK) 
+FROM [ids_lp_nested_orderkey] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ids_lp_nested_orderkey] TO [NSQL]
 GO

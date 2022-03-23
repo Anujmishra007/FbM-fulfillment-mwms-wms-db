@@ -1,8 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_CheckUpKPILog]
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_CheckUpKPILog]
 AS
 SELECT [vx]          =CASE a.[Status] WHEN 0 THEN 'v' ELSE 'X' END
       ,               a.[LogDate]

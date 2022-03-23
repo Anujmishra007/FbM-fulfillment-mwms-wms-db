@@ -1,15 +1,13 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-
-
-CREATE VIEW [dbo].[V_Logi_Monthly_Outbound_SN_Discrepancy]
+CREATE OR ALTER VIEW [dbo].[V_Logi_Monthly_Outbound_SN_Discrepancy]
 
 AS
 
-Select O.StorerKey, 
+Select O.StorerKey,
        ShippedDate = MB.EditDate,
 	   O.OrderKey,
 	   O.ExternOrderKey,
@@ -26,11 +24,11 @@ Select O.StorerKey,
 From dbo.V_MBOL MB with (nolock) Inner Join dbo.V_Orders O with (nolock) ON MB.MBOLKEY = O.MBOLKEY
      Inner Join dbo.V_OrderDetail OD with (nolock) ON OD.StorerKey = O.StorerKey and OD.OrderKey = O.OrderKey
 	 Inner Join dbo.V_SKU S with (nolock) ON S.StorerKey = OD.StorerKey and S.SKU = OD.SKU
-	 
-	 Left Outer Join 
-	 
-	 (Select SN.StorerKey, SN.OrderKey, SN.SKU, 
-			 ML_SN_QTY = SUM(Case When Right(SN.SerialNo, 1) = 'M' Then 1 Else 0 End), 
+
+	 Left Outer Join
+
+	 (Select SN.StorerKey, SN.OrderKey, SN.SKU,
+			 ML_SN_QTY = SUM(Case When Right(SN.SerialNo, 1) = 'M' Then 1 Else 0 End),
 			 CL_SN_QTY = SUM(Case When Right(SN.SerialNo, 1) = 'C' Then 1 Else 0 End),
 			 _9L_SN_QTY = SUM(Case When Right(SN.SerialNo, 1) = '9' Then 1 Else 0 End),
 			 SUM(SN.Qty) Qty
@@ -43,19 +41,19 @@ From dbo.V_MBOL MB with (nolock) Inner Join dbo.V_Orders O with (nolock) ON MB.M
 Where O.StorerKey IN ('LOGITECH','LOGIEU')
 And MB.Status = '9'
 And MB.EditDate >= substring (convert(varchar,dateadd(month,-1,dateadd(day,-datepart(day,getdate())+1,getdate())),21),1,10)
-And MB.EditDate < substring(convert(varchar,dateadd(day,-datepart(day,getdate())+1,getdate()),21),1,10) 
---And MB.EditDate >= (Select Min(DateAdd(dd, 1, Convert(Date, Short))) From V_CodeLkup with (nolock) 
---					Where ListName = 'LOGIFISCAL' 
+And MB.EditDate < substring(convert(varchar,dateadd(day,-datepart(day,getdate())+1,getdate()),21),1,10)
+--And MB.EditDate >= (Select Min(DateAdd(dd, 1, Convert(Date, Short))) From V_CodeLkup with (nolock)
+--					Where ListName = 'LOGIFISCAL'
 --					And StorerKey = O.StorerKey
 --					And Short >= substring (convert(varchar,dateadd(month,-2,dateadd(day,-datepart(day,getdate())+1,getdate())),21),1,10)
 --					And Short < substring (convert(varchar,dateadd(month,-1,dateadd(day,-datepart(day,getdate())+1,getdate())),21),1,10))
 
---And MB.EditDate < (Select Min(DateAdd(dd, 1, Convert(Date, Short))) From V_CodeLkup with (nolock) 
---					Where ListName = 'LOGIFISCAL' 
+--And MB.EditDate < (Select Min(DateAdd(dd, 1, Convert(Date, Short))) From V_CodeLkup with (nolock)
+--					Where ListName = 'LOGIFISCAL'
 --					And StorerKey = O.StorerKey
 --					And Short >= substring (convert(varchar,dateadd(month,-1,dateadd(day,-datepart(day,getdate())+1,getdate())),21),1,10)
---					And Short < substring (convert(varchar,dateadd(month,0,dateadd(day,-datepart(day,getdate())+1,getdate())),21),1,10)) 
-Group By O.StorerKey, 
+--					And Short < substring (convert(varchar,dateadd(month,0,dateadd(day,-datepart(day,getdate())+1,getdate())),21),1,10))
+Group By O.StorerKey,
          MB.EditDate,
 		 S.BUSR7,
 		 O.OrderKey,

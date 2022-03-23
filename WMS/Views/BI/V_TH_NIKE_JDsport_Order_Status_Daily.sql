@@ -1,15 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog https://jiralfl.atlassian.net/browse/WMS-18818
 /* Date         Author      Ver.  Purposes									                  */
 /* 21-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-
 CREATE OR ALTER VIEW [BI].[V_TH_NIKE_JDsport_Order_Status_Daily]
-AS 
+AS
 SELECT DISTINCT
   CASE
     WHEN AL1.Status = '9' THEN '9-Shipped'
@@ -20,7 +20,7 @@ SELECT DISTINCT
     WHEN AL1.Status = '0' THEN '0-Open'
     ELSE (AL1.Status)
   END as [OrderStatus],
-  
+
   AL1.ExternOrderKey as [Nike DD No.],
   AL1.C_Company as Customer_Name,
   CONVERT(char(10), AL1.DeliveryDate, 120) as DeliveryDate,
@@ -47,15 +47,15 @@ JOIN dbo.ORDERS AS AL1  WITH (NOLOCK) ON AL2.OrderKey = AL1.OrderKey AND AL2.Sto
 JOIN dbo.SKU AS AL3 WITH (NOLOCK) ON AL2.StorerKey = AL3.StorerKey AND AL2.Sku = AL3.Sku
 FULL OUTER JOIN dbo.PackHeader AS AL5 WITH (NOLOCK) ON AL5.StorerKey = AL1.StorerKey AND AL5.OrderKey = AL1.OrderKey
 FULL OUTER JOIN dbo.PackDetail AS AL4 WITH (NOLOCK) ON AL5.PickSlipNo = AL4.PickSlipNo
-  
-WHERE 
+
+WHERE
 AL1.StorerKey = 'NIKETH'
 AND  AL1.DeliveryDate >= CONVERT(date, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0))
 AND AL1.DeliveryDate < CONVERT(date, DATEADD(D, -1, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) + 1, 0)))
 AND AL1.ConsigneeKey IN ('0005085214', '0005086004', '0005086041', '0005086150', '0005089459', '0005089460', '0005091865', '0005093450', '0005093451')
 AND AL1.Status <> 'CANC'
 
-GROUP BY 
+GROUP BY
          AL1.Status,
          --AL2.UserDefine04,
          AL1.ExternOrderKey,
@@ -86,7 +86,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_NIKE_JDsport_Order_Status_Daily]  
+SELECT * FROM  [BI].[V_TH_NIKE_JDsport_Order_Status_Daily]
 
 revert;
 */

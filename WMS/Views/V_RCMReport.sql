@@ -1,10 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [dbo].[V_RCMReport] 
-AS 
+CREATE OR ALTER VIEW [dbo].[V_RCMReport]
+AS
 SELECT [ComputerName]
 , [StorerKey]
 , [ReportType]
@@ -25,7 +25,7 @@ SELECT [ComputerName]
 ,ExtendParmDefault4
 ,ExtendParmDefault5
 ,AutoPrint
-FROM dbo.[RCMReport] (NOLOCK) 
+FROM dbo.[RCMReport] (NOLOCK)
 
 GO
 GRANT DELETE ON  [dbo].[V_RCMReport] TO [NSQL]

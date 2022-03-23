@@ -1,12 +1,10 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-
-
-CREATE VIEW [dbo].[V_PackDet] 
-as 
+CREATE OR ALTER VIEW [dbo].[V_PackDet]
+as
 SELECT *  from dbo.PackDet (NOLOCK)
 
 

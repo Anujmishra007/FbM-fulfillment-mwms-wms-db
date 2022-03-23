@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM sys.views WHERE OBJECT_ID = OBJECT_ID(N'[dbo].[V_BTBShipment_Wave]'))
-   DROP VIEW [dbo].[V_BTBShipment_Wave]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************/
 /* View: V_BTBShipment_Wave                                                */
 /* Creation Date: 2020-06-18                                               */
@@ -25,8 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                     */
 /* 20-Oct-2020 Leong    1.1   INC1325877 - Bug fix.                        */
 /***************************************************************************/
-
-CREATE VIEW [dbo].[V_BTBShipment_Wave]
+CREATE OR ALTER VIEW [dbo].[V_BTBShipment_Wave]
 AS
 SELECT WD.WAVEKEY
 FROM WAVEDETAIL WD (NOLOCK)

@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_LotxIdDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_LotxIdDetail]
+AS
 SELECT [LotxIdDetailKey]
 , [ReceiptKey]
 , [ReceiptLineNumber]
@@ -23,7 +24,7 @@ SELECT [LotxIdDetailKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [LotxIdDetail] (NOLOCK) 
+FROM [LotxIdDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_LotxIdDetail] TO [NSQL]
 GO

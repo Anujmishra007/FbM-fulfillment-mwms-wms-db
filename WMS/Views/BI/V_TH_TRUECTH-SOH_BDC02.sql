@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_TRUECTH-SOH_BDC02] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_TRUECTH-SOH_BDC02] AS
 SELECT
    X.StorerKey AS 'Client',
    S.SKUGROUP,
@@ -29,7 +28,7 @@ SELECT
          (
             L.Status
          )
-         = 'HOLD' 
+         = 'HOLD'
       then
 (X.Qty) - (
          Case
@@ -37,40 +36,40 @@ SELECT
                (
                   L.Loc
                )
-               = 'TCOVER7020' 
+               = 'TCOVER7020'
             then
-(X.Qty) - (X.QtyAllocated) - (X.QtyPicked) 
+(X.Qty) - (X.QtyAllocated) - (X.QtyPicked)
             else
-               '0' 
+               '0'
          end
-) 
+)
          Else
-            '0' 
+            '0'
    End AS 'Qty on Receiving Location'
-, 
+,
    Case
       when
          (
             L.Loc
          )
-         = 'TCOVER7020' 
+         = 'TCOVER7020'
       then
-(X.Qty) - (X.QtyAllocated) - (X.QtyPicked) 
+(X.Qty) - (X.QtyAllocated) - (X.QtyPicked)
       else
-         '0' 
+         '0'
    end AS 'AvailableQty'
 FROM
    dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey 
-      AND X.Sku = S.Sku 
+JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey
+      AND X.Sku = S.Sku
 JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.Lot = A.Lot 
-      AND X.StorerKey = A.StorerKey 
-      AND X.Sku = A.Sku 
-JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey 
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.Lot = A.Lot
+      AND X.StorerKey = A.StorerKey
+      AND X.Sku = A.Sku
+JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
 WHERE
    (
-(X.StorerKey = 'TRUECTH' 
+(X.StorerKey = 'TRUECTH'
       AND L.Facility = 'BDC02')
    )
 GO

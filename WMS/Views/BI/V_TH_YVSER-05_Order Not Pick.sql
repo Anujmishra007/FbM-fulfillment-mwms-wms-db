@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER view [BI].[V_TH_YVSER-05_Order Not Pick] as
@@ -16,28 +15,28 @@ select
    O.SequenceNo as 'PriorityTransferTo',
    O.Priority as 'Partner',
    O.Status,
-   datediff(dd, O.OrderDate, GetDate()) as 'CountOfDay' 
+   datediff(dd, O.OrderDate, GetDate()) as 'CountOfDay'
 from
    Orders O with (nolock)
-JOIN OrderDetail OD with (nolock) ON O.StorerKey = OD.StorerKey 
-   and O.OrderKey = OD.OrderKey 
-   and O.ExternOrderKey = OD.ExternOrderKey 
-JOIN SKU S with (nolock) ON OD.StorerKey = S.StorerKey 
-   and OD.sku = S.sku 
+JOIN OrderDetail OD with (nolock) ON O.StorerKey = OD.StorerKey
+   and O.OrderKey = OD.OrderKey
+   and O.ExternOrderKey = OD.ExternOrderKey
+JOIN SKU S with (nolock) ON OD.StorerKey = S.StorerKey
+   and OD.sku = S.sku
 where
-   O.StorerKey = 'YVESR' 
-   and O.Status not in 
+   O.StorerKey = 'YVESR'
+   and O.Status not in
    (
       '9',
       'CANC'
    )
-   and O.SOStatus not in 
+   and O.SOStatus not in
    (
       '9',
       'CANC'
    )
-   and convert(varchar, O.OrderDate, 112) <= convert(varchar, GetDate() - 1, 112) 
-   and O.BillToKey = 'LFWH' 
+   and convert(varchar, O.OrderDate, 112) <= convert(varchar, GetDate() - 1, 112)
+   and O.BillToKey = 'LFWH'
 group by
    convert(varchar, O.OrderDate, 103),
    convert(varchar, O.EffectiveDate, 103),
@@ -49,7 +48,7 @@ group by
    O.SequenceNo,
    O.Priority,
    O.Status,
-   datediff(dd, O.OrderDate, GetDate()) 
+   datediff(dd, O.OrderDate, GetDate())
 GO
 GRANT SELECT ON  [BI].[V_TH_YVSER-05_Order Not Pick] TO [JReportRole]
 GO

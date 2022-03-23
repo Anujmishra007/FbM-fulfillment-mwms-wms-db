@@ -1,12 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
- 
-
-
-CREATE VIEW [dbo].[V_AllocShortageLog]
+CREATE OR ALTER VIEW [dbo].[V_AllocShortageLog]
 AS SELECT * FROM dbo.AllocShortageLog
 GO
 GRANT DELETE ON  [dbo].[V_AllocShortageLog] TO [NSQL]

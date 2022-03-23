@@ -1,5 +1,6 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_BuildParm_Columns]')) 
-   DROP VIEW [dbo].[V_BuildParm_Columns]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -33,342 +34,342 @@ GO
 /*                            in Exceed                                 */
 /* 2022-01-04  Wan04    1.7   Devops Combine Script                     */
 /************************************************************************/
-CREATE VIEW V_BuildParm_Columns AS
+CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
-UNION ALL   
-SELECT BuildParmType = 'BUILDLOADPARM'
-      ,CondType = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)     
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')  
 UNION ALL
 SELECT BuildParmType = 'BUILDLOADPARM'
-      ,CondType = 'RESTRICT' 
+      ,CondType = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
+UNION ALL
+SELECT BuildParmType = 'BUILDLOADPARM'
+      ,CondType = 'RESTRICT'
       ,FieldName= 'Max_Orders_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'BUILDLOADPARM'
-      ,CondType = 'RESTRICT' 
+      ,CondType = 'RESTRICT'
       ,FieldName= 'Max_Qty_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'BUILDLOADPARM'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('SKU')   
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('SKU')
 UNION ALL
 SELECT BuildParmType = 'BUILDLOADPARM'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
 SELECT BuildParmType = 'BACKENDALLOC'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
-UNION ALL   
-SELECT BuildParmType = 'BACKENDALLOC'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)     
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')   
 UNION ALL
 SELECT BuildParmType = 'BACKENDALLOC'
-      ,CondType = 'RESTRICT' 
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
+UNION ALL
+SELECT BuildParmType = 'BACKENDALLOC'
+      ,CondType = 'RESTRICT'
       ,FieldName= 'Max_Orders_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'BACKENDALLOC'
-      ,CondType = 'RESTRICT' 
+      ,CondType = 'RESTRICT'
       ,FieldName= 'Max_Qty_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'BACKENDALLOC'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('SKU')   
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('SKU')
 UNION ALL
 SELECT BuildParmType = 'BACKENDALLOC'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
-UNION ALL   
-SELECT BuildParmType = 'RELEASEORD'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)     
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')   
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
-      ,CondType = 'RESTRICT' 
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
+UNION ALL
+SELECT BuildParmType = 'RELEASEORD'
+      ,CondType = 'RESTRICT'
       ,FieldName= 'Max_Orders_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
-      ,CondType = 'RESTRICT' 
-      ,FieldName= 'Max_Qty_Per_Load'                      
+      ,CondType = 'RESTRICT'
+      ,FieldName= 'Max_Qty_Per_Load'
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('SKU')   
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('SKU')
 UNION ALL
 SELECT BuildParmType = 'RELEASEORD'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
-UNION ALL   
-SELECT BuildParmType = 'BUILDWAVEPARM'
-      ,CondType = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)     
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')  
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'ORDERS', 'ORDERINFO')                      --(Wan04) - START 
---AND Col.COLUMN_NAME IN ('SKU')                                                 
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')  
-UNION ALL  
+      ,CondType = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
+UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
-      ,CondType  = 'SORT' 
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'ORDERS', 'ORDERINFO')                      --(Wan04) - START
+--AND Col.COLUMN_NAME IN ('SKU')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+UNION ALL
+SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType  = 'SORT'
       ,FieldName = 'Sku_Total_OpenQty'                                              --(Wan04) - END
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('SKU')   
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('SKU')
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDMBOL'                                        --(Wan03)
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')    
-AND Col.COLUMN_NAME IN ('SKU')   
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('SKU')
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDMBOL'                                        --(Wan03)
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
 UNION ALL
 SELECT BuildParmType = 'OTM-ASN'
-      ,CondType  = 'CONDITION'    
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('RECEIPT')                                           -- (Wan01)
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-UNION ALL   
-SELECT BuildParmType = 'OTM-ASN'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('RECEIPTDETAIL', 'SKU')    
-AND Col.COLUMN_NAME IN ('SKU')   
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
 SELECT BuildParmType = 'OTM-ASN'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('RECEIPT','RECEIPTDETAIL','SKU','LOC')    
-AND Col.COLUMN_NAME NOT IN ('EditWho','AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('RECEIPTDETAIL', 'SKU')
+AND Col.COLUMN_NAME IN ('SKU')
+UNION ALL
+SELECT BuildParmType = 'OTM-ASN'
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('RECEIPT','RECEIPTDETAIL','SKU','LOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho','AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
 SELECT BuildParmType = 'OTM-ORD'
-      ,CondType  = 'CONDITION'   
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('ORDERS')                                            -- (Wan01)
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-UNION ALL   
-SELECT BuildParmType = 'OTM-ORD'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'PICKDETAIL', 'SKU')    
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
 SELECT BuildParmType = 'OTM-ORD'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'PICKDETAIL', 'SKU')
+UNION ALL
+SELECT BuildParmType = 'OTM-ORD'
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
-UNION ALL   
-SELECT BuildParmType = 'OTM-LP'                                 
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('LOADPLAN','ORDERS')                                 --(Wan01)    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
-SELECT BuildParmType = 'OTM-LP'  
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')    
+SELECT BuildParmType = 'OTM-LP'
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('LOADPLAN','ORDERS')                                 --(Wan01)
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
-SELECT BuildParmType = 'OTM-LP'  
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+SELECT BuildParmType = 'OTM-LP'
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')
+UNION ALL
+SELECT BuildParmType = 'OTM-LP'
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
 --(Wan02) - START
-SELECT BuildParmType = 'OTM-CLP'                                 
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('LOADPLAN','ORDERS')                                  
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+SELECT BuildParmType = 'OTM-CLP'
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('LOADPLAN','ORDERS')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
-SELECT BuildParmType = 'OTM-CLP'  
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')    
+SELECT BuildParmType = 'OTM-CLP'
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')
 UNION ALL
-SELECT BuildParmType = 'OTM-CLP'  
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+SELECT BuildParmType = 'OTM-CLP'
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 --(Wan02) - END
 UNION ALL
 SELECT BuildParmType = 'OTM-WAV'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('WAVE','LOADPLAN','ORDERS')                          -- (Wan01) 
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('WAVE','LOADPLAN','ORDERS')                          -- (Wan01)
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
 SELECT BuildParmType = 'OTM-WAV'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('WAVE','WAVEDETAIL','LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')    
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('WAVE','WAVEDETAIL','LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')
 UNION ALL
 SELECT BuildParmType = 'OTM-WAV'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('WAVE','WAVEDETAIL','LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')  
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
 SELECT BuildParmType = 'OTM-MBL'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('MBOL','ORDERS')                                     -- (Wan01)    
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('MBOL','ORDERS')                                     -- (Wan01)
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
 SELECT BuildParmType = 'OTM-MBL'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')    
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')
 UNION ALL
 SELECT BuildParmType = 'OTM-MBL'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime') 
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
 SELECT BuildParmType = 'OTM-MBLUPD'
-      ,CondType  = 'CONDITION' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)      
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('MBOL','ORDERS')                                         
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('MBOL','ORDERS')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
 SELECT BuildParmType = 'OTM-MBLUPD'
-      ,CondType  = 'SORT' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)   
-FROM INFORMATION_SCHEMA.COLUMNS Col     
-WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')    
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN','LOADPLANDETAIL','ORDERDETAIL','PICKDETAIL','SKU')
 UNION ALL
 SELECT BuildParmType = 'OTM-MBLUPD'
-      ,CondType  = 'GROUP' 
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) 
-FROM INFORMATION_SCHEMA.COLUMNS Col     
+      ,CondType  = 'GROUP'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
-AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')     
-AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')   
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 GO
 
 GRANT SELECT ON V_BuildParm_Columns TO nSQL
-GO               
+GO

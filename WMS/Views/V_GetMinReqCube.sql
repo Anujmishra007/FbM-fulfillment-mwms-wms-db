@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_GetMinReqCube]')) 
-   DROP VIEW [dbo].[V_GetMinReqCube]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************/
 /* View: V_GetMinReqCube                                                   */
 /* Creation Date: 2020-09-11                                               */
@@ -25,12 +22,12 @@ GO
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
 /***************************************************************************/
-CREATE VIEW [dbo].[V_GetMinReqCube]
-AS 
+CREATE OR ALTER VIEW [dbo].[V_GetMinReqCube]
+AS
 SELECT  ORDERS.Orderkey
       , MinReqCube = ISNULL(CODELKUP.Notes,'')
       , CubeFactor = CONVERT( DECIMAL(12,6),CASE WHEN ISNUMERIC(CODELKUP.UDF01) = 0 THEN '1.000000' ELSE CODELKUP.UDF01 END )
-FROM ORDERS WITH (NOLOCK) 
+FROM ORDERS WITH (NOLOCK)
 JOIN STORER WITH (NOLOCK) ON STORER.Storerkey = ORDERS.Consigneekey
 LEFT OUTER JOIN CODELKUP  WITH (NOLOCK) ON CODELKUP.ListName = 'LOGICUSREQ'
                                        AND CODELKUP.Code = STORER.SUSR5
@@ -38,10 +35,10 @@ LEFT OUTER JOIN CODELKUP  WITH (NOLOCK) ON CODELKUP.ListName = 'LOGICUSREQ'
 WHERE CODELKUP.LISTNAME IS NOT NULL
 GO
 GRANT SELECT ON [dbo].[V_GetMinReqCube] TO nSQL
-GO   
+GO
 
 
 
 
 
- 
+

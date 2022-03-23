@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TriganticCC] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TriganticCC]
+AS
 SELECT [CCKey]
 , [Facility]
 , [StorerKey]
@@ -14,7 +15,7 @@ SELECT [CCKey]
 , [AdjCode]
 , [AdjCodeDesc]
 , [AdjType]
-FROM [TriganticCC] (NOLOCK) 
+FROM [TriganticCC] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TriganticCC] TO [NSQL]
 GO

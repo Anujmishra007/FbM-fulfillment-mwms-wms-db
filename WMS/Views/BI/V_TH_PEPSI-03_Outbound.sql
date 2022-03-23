@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER VIEW [BI].[V_TH_PEPSI-03_Outbound] as
@@ -17,22 +16,22 @@ SELECT
    S.DESCR,
    OD.Sku,
    OD.ShippedQty + OD.QtyPicked as 'QTY Pick and shipped',
-   DATEDIFF ( dy, O.EditDate, 
+   DATEDIFF ( dy, O.EditDate,
    (
       getdate()
-   ) 
+   )
 )as 'Aging',
-   getdate() as 'date' 
+   getdate() as 'date'
 FROM
    dbo.ORDERS O with (nolock)
-JOIN dbo.ORDERDETAIL OD with (nolock) ON O.OrderKey = OD.OrderKey 
-      AND O.StorerKey = OD.StorerKey 
-JOIN dbo.SKU S with (nolock) ON OD.StorerKey = S.StorerKey 
+JOIN dbo.ORDERDETAIL OD with (nolock) ON O.OrderKey = OD.OrderKey
+      AND O.StorerKey = OD.StorerKey
+JOIN dbo.SKU S with (nolock) ON OD.StorerKey = S.StorerKey
       AND OD.Sku = S.Sku
 WHERE
    (
-(O.StorerKey = 'PEPSI' 
-      AND O.Status IN 
+(O.StorerKey = 'PEPSI'
+      AND O.Status IN
       (
          '5',
          '9'

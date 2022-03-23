@@ -1,5 +1,9 @@
-SET ANSI_NULLS OFF;  SET QUOTED_IDENTIFIER OFF;
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+SET ANSI_NULLS OFF;  SET QUOTED_IDENTIFIER OFF;
 /***************************************************************************/
 --https://jiralfl.atlassian.net/browse/WMS-15595
 /* Date         Author      Ver.  Purposes                                 */
@@ -7,7 +11,7 @@ GO
 /***************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_ReceiptSerialno]
 AS
-SELECT * 
+SELECT *
 FROM dbo.ReceiptSerialno (NOLOCK)
 GO
 

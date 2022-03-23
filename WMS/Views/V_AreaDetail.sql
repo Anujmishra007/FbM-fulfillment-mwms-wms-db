@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_AreaDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_AreaDetail]
+AS
 SELECT [AreaKey]
 , [PutawayZone]
 , [AddDate]
@@ -12,7 +13,7 @@ SELECT [AreaKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [AreaDetail] (NOLOCK) 
+FROM [AreaDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_AreaDetail] TO [NSQL]
 GO

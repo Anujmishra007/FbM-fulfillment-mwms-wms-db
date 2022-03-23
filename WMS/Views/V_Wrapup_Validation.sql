@@ -1,13 +1,9 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_Wrapup_Validation]')) 
-   DROP VIEW [dbo].[V_Wrapup_Validation]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-CREATE VIEW V_Wrapup_Validation AS
+CREATE OR ALTER VIEW V_Wrapup_Validation AS
 SELECT  SC.Listname
       , [Config]        = SC.Code
       , [ConfigDescr]   = SC.Description
@@ -19,7 +15,7 @@ SELECT  SC.Listname
       , [RoleType]      = CL.Short
       , [RoleCatagory]  = CL.Long
       , [RoleSQL1]      = CL.Notes
-      , [RoleSQL2]      = CL.Notes2 
+      , [RoleSQL2]      = CL.Notes2
 FROM CODELKUP CL WITH (NOLOCK)
 JOIN CODELKUP SC WITH (NOLOCK) ON (SC.ListName = 'VALDNCFG')
                                AND(SC.UDF01 = CL.ListName)

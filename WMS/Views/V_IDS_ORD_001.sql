@@ -1,10 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-CREATE view [dbo].[V_IDS_ORD_001]
+CREATE OR ALTER VIEW [dbo].[V_IDS_ORD_001]
 as
 	select loadplan.casecnt as 'loadplan_casecnt',
 				loadplan.palletcnt as 'loadplan_palletcnt',
@@ -170,7 +169,7 @@ as
 				convert(NVARCHAR(10), rtrim(upper(pod.poisonformno))) as 'pod_poison_form_no',
 				convert(NVARCHAR(10), rtrim(upper(pod.chequeno))) as 'pod_cheque_no',
             POD.InvDespatchDate as 'POD_InvDespatchDate',
-            POD.PodFiledDate as 'POD_PodFiledDate', 
+            POD.PodFiledDate as 'POD_PodFiledDate',
             POD.InvCancelDate as 'POD_InvCancelDate',
             POD.RedeliveryCount as 'POD_RedeliveryCount',
             POD.ReturnRefNo as 'POD_ReturnRefNo',
@@ -231,12 +230,12 @@ as
             sku.busr1 as 'sku_2nd_descr',
             sku.busr2 as 'sku_3rd_descr',
 				sku.stdcube as 'sku_stdcube'
-	from orders (nolock) 
+	from orders (nolock)
 	join storer (nolock)
 		on orders.storerkey = storer.storerkey
    left outer join orderdetail (nolock)
 		on orders.orderkey = orderdetail.orderkey
-   left outer join sku (nolock) on orderdetail.storerkey = sku.storerkey and orderdetail.sku = sku.sku 
+   left outer join sku (nolock) on orderdetail.storerkey = sku.storerkey and orderdetail.sku = sku.sku
 	left outer join facility (nolock)
 		on orders.facility = facility.facility
 	left outer join (select distinct case
@@ -283,7 +282,7 @@ as
 	left outer join (select code, description as 'code_desc'
 						  from codelkup (nolock)
 						  where listname = 'SOSTATUS') as code_ordsostatus
-		on orders.sostatus = code_ordsostatus.code	
+		on orders.sostatus = code_ordsostatus.code
 	left outer join (select code, description as 'code_desc'
 						  from codelkup (nolock)
 						  where listname = 'SALESCODE') as code_salesman

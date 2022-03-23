@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ids_inventory_balance] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ids_inventory_balance]
+AS
 SELECT [exportdate]
 , [storerkey]
 , [sku]
@@ -14,7 +15,7 @@ SELECT [exportdate]
 , [qty]
 , [qtyallocated]
 , [qtypicked]
-FROM [ids_inventory_balance] (NOLOCK) 
+FROM [ids_inventory_balance] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ids_inventory_balance] TO [NSQL]
 GO

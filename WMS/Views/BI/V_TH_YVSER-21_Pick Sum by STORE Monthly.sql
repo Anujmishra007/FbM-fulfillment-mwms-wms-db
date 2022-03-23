@@ -1,17 +1,16 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER view [BI].[V_TH_YVSER-21_Pick Sum by STORE Monthly] as 
-select xx.PostingDate, 
-		xx.TransferOrderNo, 
+CREATE OR ALTER view [BI].[V_TH_YVSER-21_Pick Sum by STORE Monthly] as
+select xx.PostingDate,
+		xx.TransferOrderNo,
 		xx.DestinationNo,
-		xx.DestinationName, 
-		sum(xx.RequestSKUs) as RequestSKUs, 
+		xx.DestinationName,
+		sum(xx.RequestSKUs) as RequestSKUs,
 		sum(xx.RequestQty) as RequestQty,
-		sum(xx.ShippedSKUs) as ShippedSKUs, 
+		sum(xx.ShippedSKUs) as ShippedSKUs,
 		sum(xx.ShippedQty) as ShippedQty,
 		(sum(xx.RequestSKUs)-sum(xx.ShippedSKUs)) as VarianceSKUs,
 		(sum(xx.RequestQty)-sum(xx.ShippedQty)) as VarianceQty,
@@ -21,16 +20,16 @@ from (
 	   x.TransferToName as DestinationName, count(distinct x.ItemNo) as RequestSKUs, sum(x.RequestQty) as RequestQty,
 	   count(distinct x.ItemNo) as ShippedSKUs, sum(x.QuantityShipped) as ShippedQty
 	from (
-		select convert(varchar, h.DeliveryDate, 103) as DeviDate, convert(varchar, h.OrderDate, 103) as RequestDate, 
-			convert(varchar, h.EditDate, 103) as ShippedDate, h.ExternOrderKey as DocumentNo, h.OrderKey as RefLFDocumentNo, 
+		select convert(varchar, h.DeliveryDate, 103) as DeviDate, convert(varchar, h.OrderDate, 103) as RequestDate,
+			convert(varchar, h.EditDate, 103) as ShippedDate, h.ExternOrderKey as DocumentNo, h.OrderKey as RefLFDocumentNo,
 			d.SKU as ItemNo, sku.Descr as ItemName, sku.susr3 as DivisionCode, d.OriginalQty as RequestQty,
 			d.ShippedQty as QuantityShipped, d.OriginalQty-d.ShippedQty as Variance, (d.ShippedQty*100)/d.OriginalQty as PctPerformance,
 			h.ConsigneeKey as TransferToCode, h.C_Company as TransferToName
 		from Orders h with (nolock)
-		JOIN OrderDetail d with (nolock) ON h.StorerKey = d.StorerKey 
-			and h.OrderKey = d.OrderKey 
-			and h.ExternOrderKey = d.ExternOrderKey 
-		JOIN SKU sku with (nolock) ON d.StorerKey = sku.StorerKey 
+		JOIN OrderDetail d with (nolock) ON h.StorerKey = d.StorerKey
+			and h.OrderKey = d.OrderKey
+			and h.ExternOrderKey = d.ExternOrderKey
+		JOIN SKU sku with (nolock) ON d.StorerKey = sku.StorerKey
 			and d.sku = sku.sku
 		where h.StorerKey = 'YVESR'
 		and h.Status = '9' and h.SOStatus = '9' and d.Status = '9'

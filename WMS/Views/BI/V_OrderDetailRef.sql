@@ -1,11 +1,11 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [BI].[V_OrderDetailRef]
+CREATE OR ALTER VIEW [BI].[V_OrderDetailRef]
 AS
-SELECT * 
+SELECT *
 FROM [dbo].[OrderDetailRef] with (NOLOCK)
 GO
 GRANT SELECT ON  [BI].[V_OrderDetailRef] TO [JReportRole]

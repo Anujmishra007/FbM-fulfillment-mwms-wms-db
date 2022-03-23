@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_SINOTH_SOTracking] AS  
+CREATE OR ALTER VIEW [BI].[V_TH_SINOTH_SOTracking] AS
 SELECT AL1.externorderkey
 , AL1.shiptocode
 , AL1.type
@@ -18,7 +17,7 @@ SELECT AL1.externorderkey
 , AL1.state
 , AL1.zip
 , AL1.sostatus
-, AL1.facility 
+, AL1.facility
 FROM (
 SELECT LTrim(O.ExternOrderKey)
 , O.ConsigneeKey
@@ -33,31 +32,31 @@ SELECT LTrim(O.ExternOrderKey)
 , ST.City
 , ST.State
 , ST.Zip
-, case 
-	when O.Status = '0' and O.ConsigneeKey <>  'SN00001' then 'OPEN' 
-	when O.Status = '1' and O.ConsigneeKey <>  'SN00001'  then 'PICKING'  
-	when O.Status = '2' and O.ConsigneeKey <>  'SN00001'  then 'PICKING' 
-	when O.Status = '3' and O.ConsigneeKey <>  'SN00001' then 'PICKING' 
-	when O.Status = '5' and O.ConsigneeKey <>  'SN00001' then 'INVOICE' 
-	when O.Status = '9' and O.ConsigneeKey <>  'SN00001'  then 'INVOICE' 
-	when O.Status = 'CANC' and O.ConsigneeKey <>  'SN00001'  then 'CANCEL'  
+, case
+	when O.Status = '0' and O.ConsigneeKey <>  'SN00001' then 'OPEN'
+	when O.Status = '1' and O.ConsigneeKey <>  'SN00001'  then 'PICKING'
+	when O.Status = '2' and O.ConsigneeKey <>  'SN00001'  then 'PICKING'
+	when O.Status = '3' and O.ConsigneeKey <>  'SN00001' then 'PICKING'
+	when O.Status = '5' and O.ConsigneeKey <>  'SN00001' then 'INVOICE'
+	when O.Status = '9' and O.ConsigneeKey <>  'SN00001'  then 'INVOICE'
+	when O.Status = 'CANC' and O.ConsigneeKey <>  'SN00001'  then 'CANCEL'
 	else 'Transfer' end
-, O.Facility 
+, O.Facility
 FROM dbo.ORDERS O with (nolock)
-JOIN dbo.TRANSMITLOG3 TL with (nolock) ON O.StorerKey=TL.key3 
-		AND O.OrderKey=TL.key1 
+JOIN dbo.TRANSMITLOG3 TL with (nolock) ON O.StorerKey=TL.key3
+		AND O.OrderKey=TL.key1
 JOIN dbo.STORER ST with (nolock) ON O.ConsigneeKey=ST.StorerKey
-WHERE ((O.Facility IN ('3101','3101F','BPFZ1','BPI04','CNX01') 
-AND TL.tablename='PICKCFMLOG' 
+WHERE ((O.Facility IN ('3101','3101F','BPFZ1','BPI04','CNX01')
+AND TL.tablename='PICKCFMLOG'
 AND convert(varchar, TL.EditDate, 112)>= convert(varchar, getdate()-1, 112)
-and convert(varchar, TL.EditDate, 112) < convert(varchar, getdate(), 112) 
-AND TL.transmitflag='9' AND (NOT O.Status='CANC') 
-AND (NOT O.Type='COPACK') 
-AND ST.ConsigneeFor='SINOTH'))) 
-AL1 (externorderkey, shiptocode, type, shiptoname, deliverydate, address1, address2, address3, address4, city, state, zip, sostatus, facility)  
+and convert(varchar, TL.EditDate, 112) < convert(varchar, getdate(), 112)
+AND TL.transmitflag='9' AND (NOT O.Status='CANC')
+AND (NOT O.Type='COPACK')
+AND ST.ConsigneeFor='SINOTH')))
+AL1 (externorderkey, shiptocode, type, shiptoname, deliverydate, address1, address2, address3, address4, city, state, zip, sostatus, facility)
 
-UNION ALL 
- 
+UNION ALL
+
 SELECT AL2.externorderkey
 , AL2.shiptocode
 , AL2.type
@@ -71,7 +70,7 @@ SELECT AL2.externorderkey
 , AL2.state
 , AL2.zip
 , AL2.sostatus
-, AL2.facility 
+, AL2.facility
 FROM (
 SELECT LTrim(O.ExternOrderKey)
 , O.ConsigneeKey
@@ -86,24 +85,24 @@ SELECT LTrim(O.ExternOrderKey)
 , ST.City
 , ST.State
 , ST.Zip
-, case 
-	when O.Status = '0' and O.ConsigneeKey <>  'SN00001' then 'OPEN' 
-	when O.Status = '1' and O.ConsigneeKey <>  'SN00001'  then 'PICKING'  
-	when O.Status = '2' and O.ConsigneeKey <>  'SN00001'  then 'PICKING' 
-	when O.Status = '3' and O.ConsigneeKey <>  'SN00001' then 'PICKING' 
-	when O.Status = '5' and O.ConsigneeKey <>  'SN00001' then 'INVOICE' 
-	when O.Status = '9' and O.ConsigneeKey <>  'SN00001'  then 'INVOICE' 
-	when O.Status = 'CANC' and O.ConsigneeKey <>  'SN00001'  then 'CANCEL'  
+, case
+	when O.Status = '0' and O.ConsigneeKey <>  'SN00001' then 'OPEN'
+	when O.Status = '1' and O.ConsigneeKey <>  'SN00001'  then 'PICKING'
+	when O.Status = '2' and O.ConsigneeKey <>  'SN00001'  then 'PICKING'
+	when O.Status = '3' and O.ConsigneeKey <>  'SN00001' then 'PICKING'
+	when O.Status = '5' and O.ConsigneeKey <>  'SN00001' then 'INVOICE'
+	when O.Status = '9' and O.ConsigneeKey <>  'SN00001'  then 'INVOICE'
+	when O.Status = 'CANC' and O.ConsigneeKey <>  'SN00001'  then 'CANCEL'
 	else 'Transfer' end
-, O.Facility 
+, O.Facility
 FROM dbo.ORDERS O with (nolock)
 JOIN dbo.STORER ST with (nolock) ON O.ConsigneeKey=ST.StorerKey
-WHERE ((ST.ConsigneeFor='SINOTH' 
-AND O.StorerKey='SINOTH' 
-AND O.Facility IN ('3101','3101F','BPFZ1','BPI04','CNX01') 
-AND (NOT O.Type='COPACK') 
-AND O.Status IN ('0', '1', '2', '3', 'CANC')))) 
-AL2 (externorderkey, shiptocode, type, shiptoname, deliverydate, address1, address2, address3, address4, city, state, zip, sostatus, facility) 
+WHERE ((ST.ConsigneeFor='SINOTH'
+AND O.StorerKey='SINOTH'
+AND O.Facility IN ('3101','3101F','BPFZ1','BPI04','CNX01')
+AND (NOT O.Type='COPACK')
+AND O.Status IN ('0', '1', '2', '3', 'CANC'))))
+AL2 (externorderkey, shiptocode, type, shiptoname, deliverydate, address1, address2, address3, address4, city, state, zip, sostatus, facility)
 GO
 GRANT SELECT ON  [BI].V_TH_SINOTH_SOTracking TO [JReportRole]
 GO

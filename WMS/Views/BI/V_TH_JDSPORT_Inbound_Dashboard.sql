@@ -1,15 +1,14 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_JDSPORT_Inbound_Dashboard] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_JDSPORT_Inbound_Dashboard] AS
 SELECT
    R.ReceiptKey,
    R.ExternReceiptKey,
    R.Status AS 'FullReceiveStatus',
-   CASE (R.ASNStatus) 
+   CASE (R.ASNStatus)
    WHEN '0'
    THEN 'OPEN'
    WHEN '9'
@@ -31,14 +30,14 @@ SELECT
    S.SKUGROUP AS 'Skugroup'
 FROM
    dbo.RECEIPT R with (nolock)
-JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey 
+JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey
 JOIN dbo.SKU S with (nolock) ON RD.Sku = S.Sku
 WHERE
    (
-(R.StorerKey = 'JDSPORTS' 
-      AND 
+(R.StorerKey = 'JDSPORTS'
+      AND
       (
-         R.AddDate >= Convert(VarChar(10), GetDate() - 32, 121) 
+         R.AddDate >= Convert(VarChar(10), GetDate() - 32, 121)
          and R. Adddate < Convert(VarChar(10), GetDate(), 121)
       )
 )

@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_DSG_Inventory_on_hand] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DSG_Inventory_on_hand] AS
 SELECT
    X.StorerKey,
    L.Facility,
@@ -24,30 +23,30 @@ SELECT
    C.Short,
    case
       when
-         P.CaseCnt <> 0 
+         P.CaseCnt <> 0
       then
-(Sum ( X.Qty )) / P.CaseCnt 
+(Sum ( X.Qty )) / P.CaseCnt
       else
-         0 
+         0
    end 'QTYPerCase'
 , P.CaseCnt, S.SUSR3, A.Lottable03, A.Lottable06, Right((A.Lottable01), 4) + '-' + substring((A.Lottable01), 3, 2) + '-' + left((A.Lottable01), 2) AS ' DateMFG'
-FROM dbo.LOTxLOCxID X with (nolock) 
+FROM dbo.LOTxLOCxID X with (nolock)
 JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey
       AND X.Sku = S.Sku
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
-JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc 
-JOIN dbo.CODELKUP C with (nolock) ON S.SKUGROUP = C.Code 
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey 
-      AND X.Lot = A.Lot 
+JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
+JOIN dbo.CODELKUP C with (nolock) ON S.SKUGROUP = C.Code
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey
+      AND X.Lot = A.Lot
       AND X.Sku = A.Sku
 WHERE
-X.StorerKey = 'DSGTH' 
-      AND L.Facility IN 
+X.StorerKey = 'DSGTH'
+      AND L.Facility IN
       (
          '18120', '18130', '18140'
       )
 GROUP BY
-   X.StorerKey, L.Facility, X.Loc, X.Lot, A.Lottable01, A.Lottable02, A.Lottable04, A.Lottable05, X.Sku, S.DESCR, P.Pallet, L.HOSTWHCODE, C.Short, P.CaseCnt, S.SUSR3, A.Lottable03, A.Lottable06, Right((A.Lottable01), 4) + '-' + substring((A.Lottable01), 3, 2) + '-' + left((A.Lottable01), 2) 
+   X.StorerKey, L.Facility, X.Loc, X.Lot, A.Lottable01, A.Lottable02, A.Lottable04, A.Lottable05, X.Sku, S.DESCR, P.Pallet, L.HOSTWHCODE, C.Short, P.CaseCnt, S.SUSR3, A.Lottable03, A.Lottable06, Right((A.Lottable01), 4) + '-' + substring((A.Lottable01), 3, 2) + '-' + left((A.Lottable01), 2)
 
 --ORDER BY
 --   15 DESC, 2, 3, 9

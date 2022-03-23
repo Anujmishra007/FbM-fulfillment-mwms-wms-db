@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_DSG_FG_SOH_Reports_SIL2-1] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DSG_FG_SOH_Reports_SIL2-1] AS
 SELECT
    L.Facility,
    X.StorerKey,
@@ -27,16 +26,16 @@ SELECT
    LOT.QtyOnHold,
    LOT.QtyPicked AS 'Qtypicked2'
 FROM dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.SKU S with (nolock) ON X.Sku = S.Sku 
-      AND X.StorerKey = S.StorerKey 
+JOIN dbo.SKU S with (nolock) ON X.Sku = S.Sku
+      AND X.StorerKey = S.StorerKey
 JOIN dbo.PACK P with (nolock) ON P.PackKey = S.PACKKey
 JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
 JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.Lot = A.Lot
-JOIN dbo.LOT LOT with (nolock) ON X.Lot = LOT.Lot 
-      AND X.StorerKey = LOT.StorerKey 
+JOIN dbo.LOT LOT with (nolock) ON X.Lot = LOT.Lot
+      AND X.StorerKey = LOT.StorerKey
       AND X.Sku = LOT.Sku
-WHERE X.StorerKey = 'DSGTH' 
-AND X.Qty > 0 
+WHERE X.StorerKey = 'DSGTH'
+AND X.Qty > 0
 AND A.Lottable03 LIKE 'FG%'
 GROUP BY
    L.Facility,

@@ -1,10 +1,10 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
 
-CREATE VIEW [dbo].[V_PackInfo_Test] 
-AS 
+CREATE OR ALTER VIEW [dbo].[V_PackInfo_Test]
+AS
 SELECT PickSlipNo
 ,CartonNo
 ,[Weight]
@@ -20,5 +20,5 @@ SELECT PickSlipNo
 ,Width
 ,Height
 ,[ItemCube] = [Cube]
-FROM [dbo].[PackInfo] (NOLOCK) 
+FROM [dbo].[PackInfo] (NOLOCK)
 GO

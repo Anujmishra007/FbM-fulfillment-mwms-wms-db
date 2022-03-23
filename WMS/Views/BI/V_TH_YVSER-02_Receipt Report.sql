@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER view [BI].[V_TH_YVSER-02_Receipt Report] as
@@ -23,15 +22,15 @@ SELECT DISTINCT
    sum(RD.QtyReceived) as 'QtyReceived'
 FROM
    dbo.RECEIPT R with (nolock)
-JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey 
+JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey
       AND R.StorerKey = RD.StorerKey
-JOIN dbo.SKU S with (nolock) ON RD.Sku = S.Sku 
-      AND RD.StorerKey = S.StorerKey 
+JOIN dbo.SKU S with (nolock) ON RD.Sku = S.Sku
+      AND RD.StorerKey = S.StorerKey
 WHERE
    (
-(R.StorerKey = 'YVESR' 
-      AND R.Status = '9' 
-      AND R.ASNStatus = '9' 
+(R.StorerKey = 'YVESR'
+      AND R.Status = '9'
+      AND R.ASNStatus = '9'
       AND convert(varchar, R.ReceiptDate, 112) >= convert(varchar, getdate() - 10, 112) )
    )
 GROUP BY
@@ -47,7 +46,7 @@ GROUP BY
    RD.Lottable02,
    RD.Lottable03,
    RD.Lottable04,
-   RD.UOM 
+   RD.UOM
 GO
 GRANT SELECT ON  [BI].[V_TH_YVSER-02_Receipt Report] TO [JReportRole]
 GO

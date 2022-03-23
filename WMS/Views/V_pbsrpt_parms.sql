@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_pbsrpt_parms] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_pbsrpt_parms]
+AS
 SELECT [rpt_id]
 , [parm_no]
 , [parm_datatype]
@@ -15,7 +16,7 @@ SELECT [rpt_id]
 , [data]
 , [attributes]
 , [visible]
-FROM [pbsrpt_parms] (NOLOCK) 
+FROM [pbsrpt_parms] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_pbsrpt_parms] TO [NSQL]
 GO

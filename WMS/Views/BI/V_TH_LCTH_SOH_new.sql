@@ -1,7 +1,12 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --TH_CTX_LCTH_ADIDAS View in THWMS PROD Catalog https://jiralfl.atlassian.net/browse/WMS-18651
 /* Date          Author      Ver.  Purposes									                     */
-/* 28-Dec-2021   Rungtham    1.0   Created									                     */												
+/* 28-Dec-2021   Rungtham    1.0   Created									                     */
 /******************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_LCTH_SOH_new]
 AS
@@ -24,9 +29,9 @@ SELECT
          (
             AL5.Status
          )
-         = 'Hold' 
+         = 'Hold'
       then
-(AL1.Qty) 
+(AL1.Qty)
       else
          '0' end )
 		 ) as 'Qty Avaliable'
@@ -35,9 +40,9 @@ SELECT
          (
             AL5.Status
          )
-         = 'Hold' 
+         = 'Hold'
       then
-(AL1.Qty) 
+(AL1.Qty)
       else
          '0'
    end  as 'QTYonHold'
@@ -51,22 +56,22 @@ SELECT
 	  when (AL3.SKUGROUP) = 'TOOLS' then 'TOOLS'
 	  when (AL3.SKUGROUP) = 'TNS1' then 'TOUGHENED NON-STICK'
 	  end as 'Product category'
-, AL3.Color, AL4.Lottable02, AL3.Style 
+, AL3.Color, AL4.Lottable02, AL3.Style
 FROM
    dbo.V_LOTxLOCxID AL1 WITH (NOLOCK)
-JOIN dbo.V_SKU AL3 WITH (NOLOCK) ON AL1.StorerKey = AL3.StorerKey AND AL1.Sku = AL3.Sku 
-JOIN dbo.V_PACK AL2 WITH (NOLOCK) ON AL3.PACKKey = AL2.PackKey 
-JOIN dbo.V_LOTATTRIBUTE AL4 WITH (NOLOCK) ON AL1.StorerKey = AL4.StorerKey AND AL1.Sku = AL4.Sku AND AL1.Lot = AL4.Lot 
+JOIN dbo.V_SKU AL3 WITH (NOLOCK) ON AL1.StorerKey = AL3.StorerKey AND AL1.Sku = AL3.Sku
+JOIN dbo.V_PACK AL2 WITH (NOLOCK) ON AL3.PACKKey = AL2.PackKey
+JOIN dbo.V_LOTATTRIBUTE AL4 WITH (NOLOCK) ON AL1.StorerKey = AL4.StorerKey AND AL1.Sku = AL4.Sku AND AL1.Lot = AL4.Lot
 JOIN dbo.V_LOC AL5 WITH (NOLOCK) ON AL1.Loc = AL5.Loc
 WHERE
-   
-(AL1.StorerKey = 'LCTH' 
-      AND 
+
+(AL1.StorerKey = 'LCTH'
+      AND
       (
          NOT AL1.Qty = 0
       )
       AND AL5.Facility = 'BNK19')
-   
+
 GO
 
 GRANT SELECT ON [BI].[V_TH_LCTH_SOH_new] TO [JReportRole]

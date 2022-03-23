@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PutawayTask] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PutawayTask]
+AS
 SELECT [Transkey]
 , [TaskDetailKey]
 , [ID]
@@ -15,7 +16,7 @@ SELECT [Transkey]
 , [AddWho]
 , [EditDate]
 , [EditWho]
-FROM [PutawayTask] (NOLOCK) 
+FROM [PutawayTask] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PutawayTask] TO [NSQL]
 GO

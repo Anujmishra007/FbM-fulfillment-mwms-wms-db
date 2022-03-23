@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_MUNTH_InventoryStock] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_MUNTH_InventoryStock] AS
 SELECT
    X.StorerKey,
    L.Facility,
@@ -19,30 +18,30 @@ SELECT
    convert(varchar, A.Lottable04, 103) AS 'Expried Date',
    Case
       When
-         X.Loc in 
+         X.Loc in
          (
             'A20240101',
             'A20220102'
          )
       Then
-         'Damage' 
+         'Damage'
       Else
-         'OK' 
+         'OK'
    End AS 'StockType'
 , convert(varchar, A.Lottable03, 103) AS 'MFG Date'
 FROM
    dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey 
-      AND X.Sku = A.Sku 
-      AND X.Lot = A.Lot 
-JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc 
-JOIN dbo.SKU S with (nolock) ON X.Sku = S.Sku 
-      AND X.StorerKey = S.StorerKey 
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey
+      AND X.Sku = A.Sku
+      AND X.Lot = A.Lot
+JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
+JOIN dbo.SKU S with (nolock) ON X.Sku = S.Sku
+      AND X.StorerKey = S.StorerKey
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
 WHERE
    (
-(X.Qty > 0 
-      AND A.StorerKey = 'MUNTH' 
+(X.Qty > 0
+      AND A.StorerKey = 'MUNTH'
       AND L.Facility = 'LKB01')
    )
 --ORDER BY

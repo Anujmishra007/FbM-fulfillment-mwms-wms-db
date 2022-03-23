@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_GLDistribution] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_GLDistribution]
+AS
 SELECT [GLDistributionKey]
 , [SupportFlag]
 , [Descrip]
@@ -12,7 +13,7 @@ SELECT [GLDistributionKey]
 , [EditDate]
 , [EditWho]
 , [TrafficCop]
-FROM [GLDistribution] (NOLOCK) 
+FROM [GLDistribution] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_GLDistribution] TO [NSQL]
 GO

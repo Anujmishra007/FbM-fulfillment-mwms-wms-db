@@ -1,11 +1,11 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
-CREATE VIEW [dbo].[v_IT69]
+CREATE OR ALTER VIEW [dbo].[v_IT69]
 AS
-SELECT                     a.OrderKey , a.Sku , c.UserDefine04, b.Lottable01, b.Lottable02, b.Lottable03, a.Lot, a.Qty, a.QtyMoved, a.Status, a.Loc, a.ID, SUBSTRING(b.Lottable02, 5, 2) + RTRIM(b.Sku) 
+SELECT                     a.OrderKey , a.Sku , c.UserDefine04, b.Lottable01, b.Lottable02, b.Lottable03, a.Lot, a.Qty, a.QtyMoved, a.Status, a.Loc, a.ID, SUBSTRING(b.Lottable02, 5, 2) + RTRIM(b.Sku)
                                       + SUBSTRING(b.Lottable02, 1, 12) + SUBSTRING(b.Lottable02, 14, 2) AS barcode, a.PickDetailKey
 FROM                         dbo.PICKDETAIL AS a WITH (nolock) INNER JOIN
                                       dbo.LOTATTRIBUTE AS b WITH (nolock) ON a.Lot = b.Lot INNER JOIN
@@ -21,8 +21,8 @@ GO
 GRANT UPDATE ON  [dbo].[v_IT69] TO [NSQL]
 GO
 EXEC sp_addextendedproperty N'MS_DiagramPane1', N'[0E232FF0-B466-11cf-A24F-00AA00A3EFFF, 1.00]
-Begin DesignProperties = 
-   Begin PaneConfigurations = 
+Begin DesignProperties =
+   Begin PaneConfigurations =
       Begin PaneConfiguration = 0
          NumPanes = 4
          Configuration = "(H (1[25] 4[36] 2[20] 3) )"
@@ -85,14 +85,14 @@ Begin DesignProperties =
       End
       ActivePaneConfig = 0
    End
-   Begin DiagramPane = 
-      Begin Origin = 
+   Begin DiagramPane =
+      Begin Origin =
          Top = 0
          Left = 0
       End
-      Begin Tables = 
+      Begin Tables =
          Begin Table = "a"
-            Begin Extent = 
+            Begin Extent =
                Top = 6
                Left = 38
                Bottom = 136
@@ -102,7 +102,7 @@ Begin DesignProperties =
             TopColumn = 0
          End
          Begin Table = "b"
-            Begin Extent = 
+            Begin Extent =
                Top = 6
                Left = 293
                Bottom = 136
@@ -112,7 +112,7 @@ Begin DesignProperties =
             TopColumn = 0
          End
          Begin Table = "c"
-            Begin Extent = 
+            Begin Extent =
                Top = 6
                Left = 501
                Bottom = 136
@@ -123,9 +123,9 @@ Begin DesignProperties =
          End
       End
    End
-   Begin SQLPane = 
+   Begin SQLPane =
    End
-   Begin DataPane = 
+   Begin DataPane =
       Begin ParameterDefaults = ""
       End
       Begin ColumnWidths = 9
@@ -140,7 +140,7 @@ Begin DesignProperties =
          Width = 1500
       End
    End
-   Begin CriteriaPane = 
+   Begin CriteriaPane =
       Begin ColumnWidths = 11
          Column = 1440
          Alias = 900

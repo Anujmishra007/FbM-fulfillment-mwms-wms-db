@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_pbcatedt] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_pbcatedt]
+AS
 SELECT [pbe_name]
 , [pbe_edit]
 , [pbe_type]
@@ -11,7 +12,7 @@ SELECT [pbe_name]
 , [pbe_seqn]
 , [pbe_flag]
 , [pbe_work]
-FROM [pbcatedt] (NOLOCK) 
+FROM [pbcatedt] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_pbcatedt] TO [NSQL]
 GO

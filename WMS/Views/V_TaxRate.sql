@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TaxRate] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TaxRate]
+AS
 SELECT [TaxRateKey]
 , [TaxAuthority]
 , [SupportFlag]
@@ -13,7 +14,7 @@ SELECT [TaxRateKey]
 , [AddWho]
 , [EditDate]
 , [EditWho]
-FROM [TaxRate] (NOLOCK) 
+FROM [TaxRate] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TaxRate] TO [NSQL]
 GO

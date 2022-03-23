@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Section] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Section]
+AS
 SELECT [SectionKey]
 , [Descr]
 , [AddDate]
@@ -12,7 +13,7 @@ SELECT [SectionKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [Section] (NOLOCK) 
+FROM [Section] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_Section] TO [NSQL]
 GO

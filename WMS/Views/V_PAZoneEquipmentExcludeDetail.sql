@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PAZoneEquipmentExcludeDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PAZoneEquipmentExcludeDetail]
+AS
 SELECT [PutawayZone]
 , [EquipmentProfileKey]
 , [Descr]
@@ -13,7 +14,7 @@ SELECT [PutawayZone]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [PAZoneEquipmentExcludeDetail] (NOLOCK) 
+FROM [PAZoneEquipmentExcludeDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PAZoneEquipmentExcludeDetail] TO [NSQL]
 GO

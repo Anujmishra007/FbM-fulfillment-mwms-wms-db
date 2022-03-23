@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_MUNTH_Receive] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_MUNTH_Receive] AS
 SELECT
    R.StorerKey,
    convert(varchar, RD.EditDate, 103) AS 'ReceiptDate',
@@ -26,21 +25,21 @@ SELECT
    ST.Company,
    RD.ToId  AS 'ID Pallet'
 FROM
-   dbo.RECEIPT R with (nolock) 
-JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey 
-      AND R.StorerKey = RD.StorerKey 
-JOIN dbo.SKU S with (nolock) ON RD.StorerKey = S.StorerKey 
+   dbo.RECEIPT R with (nolock)
+JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey
+      AND R.StorerKey = RD.StorerKey
+JOIN dbo.SKU S with (nolock) ON RD.StorerKey = S.StorerKey
       AND RD.Sku = S.Sku
    LEFT OUTER JOIN
-      dbo.STORER ST with (nolock) 
-      ON (R.CarrierKey = ST.StorerKey) 
+      dbo.STORER ST with (nolock)
+      ON (R.CarrierKey = ST.StorerKey)
 WHERE
    (
-(R.StorerKey = 'MUNTH' 
-      AND RD.QtyReceived > 0 
-      AND convert(varchar, R.EditDate, 112) >= convert(varchar, getdate() - 1, 112) 
-      and convert(varchar, R.EditDate, 112) < convert(varchar, getdate(), 112) 
-      AND R.ASNStatus = '9' 
+(R.StorerKey = 'MUNTH'
+      AND RD.QtyReceived > 0
+      AND convert(varchar, R.EditDate, 112) >= convert(varchar, getdate() - 1, 112)
+      and convert(varchar, R.EditDate, 112) < convert(varchar, getdate(), 112)
+      AND R.ASNStatus = '9'
       AND R.Facility = 'LKB01')
    )
 --ORDER BY

@@ -1,7 +1,12 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --TH_CTX_LCTH_ADIDAS View in THWMS PROD Catalog https://jiralfl.atlassian.net/browse/WMS-18651
 /* Date          Author      Ver.  Purposes									                     */
-/* 28-Dec-2021   Rungtham    1.0   Created									                     */												
+/* 28-Dec-2021   Rungtham    1.0   Created									                     */
 /******************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_CITYFR_2_Holding_inout]
 AS
@@ -30,7 +35,7 @@ from DBO.V_RECEIPT r WITH (NOLOCK) INNER join V_RECEIPTDETAIL rd WITH (NOLOCK) O
 	left join DBO.V_STORER st WITH (NOLOCK) ON r.CarrierKey=st.StorerKey
 	left join DBO.V_PACK p WITH (NOLOCK) ON s.PACKKey=p.PackKey
 where r.StorerKey='CITYFR' and convert(date,rd.DateReceived)=convert(date,getdate()-1) and rd.FinalizeFlag='Y' and rd.QtyReceived>0
-group by case when rd.Lottable06='CTX' then 'CTX Holding' when rd.Lottable06='CFF' then 'CITYFR' when rd.Lottable06='T&G' then 'T&G' else 'Other' end, 
+group by case when rd.Lottable06='CTX' then 'CTX Holding' when rd.Lottable06='CFF' then 'CITYFR' when rd.Lottable06='T&G' then 'T&G' else 'Other' end,
 	r.RECType,r.EditDate,r.ReceiptKey,r.ExternReceiptKey,r.CarrierKey,st.Company,rd.Sku,s.DESCR,rd.Lottable01,rd.Lottable02,rd.Lottable03,rd.Lottable05,p.PackUOM3,case when rd.Lottable06='CTX' then 'CTX Holding' when rd.Lottable06='CFF' then 'CITYFR' when rd.Lottable06='T&G' then 'T&G' else 'Other' end,rd.Lottable06
 
 union all

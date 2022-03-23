@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Accessorial] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Accessorial]
+AS
 SELECT [Accessorialkey]
 , [Descrip]
 , [SupportFlag]
@@ -16,7 +17,7 @@ SELECT [Accessorialkey]
 , [EditWho]
 , [TrafficCop]
 , [Timestamp]
-FROM [Accessorial] (NOLOCK) 
+FROM [Accessorial] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_Accessorial] TO [NSQL]
 GO

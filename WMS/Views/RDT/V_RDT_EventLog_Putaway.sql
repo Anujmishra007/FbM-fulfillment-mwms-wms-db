@@ -1,20 +1,20 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [RDT].[V_RDT_EventLog_Putaway]
-AS 
+CREATE OR ALTER VIEW [RDT].[V_RDT_EventLog_Putaway]
+AS
 SELECT  EventNum     ,
         EventType    ,
         ActionType   ,
-        (SELECT RTRIM(Description) FROM dbo.CODELKUP WITH (NOLOCK) 
+        (SELECT RTRIM(Description) FROM dbo.CODELKUP WITH (NOLOCK)
          WHERE ActionType = Code and ListName = 'RDTACTTYPE') Action_Type,
         EventDateTime,
         UserID       ,
         MobileNo     ,
         FunctionID   ,
-        (SELECT DISTINCT RTRIM(Message_Text) FROM RDT.RDTMsg WITH (NOLOCK) 
+        (SELECT DISTINCT RTRIM(Message_Text) FROM RDT.RDTMsg WITH (NOLOCK)
          WHERE FunctionID = message_id and Lang_Code = 'ENG') Function_Name,
         Facility     ,
         StorerKey    ,
@@ -40,7 +40,7 @@ SELECT  EventNum     ,
         RefNo3       ,
         RefNo4       ,
         RefNo5       ,
-        RowRef       
+        RowRef
 FROM rdt.rdtSTDEventLog L WITH (NOLOCK)
 WHERE Eventtype = 7
 

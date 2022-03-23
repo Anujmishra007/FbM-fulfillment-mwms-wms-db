@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER view [BI].[V_TH_YVSER-07_PO receipt] as
@@ -15,34 +14,34 @@ SELECT
    (
       Case
          When
-            R.Facility = 'KT01' 
+            R.Facility = 'KT01'
          then
-            'KTWH' 
+            'KTWH'
          when
-            R.Facility = 'BDC01' 
+            R.Facility = 'BDC01'
          then
-            'BNWH' 
+            'BNWH'
          when
-            R.Facility = 'LKDC' 
+            R.Facility = 'LKDC'
          then
-            'LKWH' 
+            'LKWH'
          else
-            'UNKNOW' 
-      end 
+            'UNKNOW'
+      end
    )as 'Facility'
 FROM
    dbo.PO PO with (nolock)
-JOIN dbo.RECEIPT R with (nolock) ON PO.StorerKey = R.StorerKey 
-      AND PO.ExternPOKey = R.ExternReceiptKey 
-JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey 
-      AND R.ExternReceiptKey = RD.ExternReceiptKey 
+JOIN dbo.RECEIPT R with (nolock) ON PO.StorerKey = R.StorerKey
+      AND PO.ExternPOKey = R.ExternReceiptKey
+JOIN dbo.RECEIPTDETAIL RD with (nolock) ON R.ReceiptKey = RD.ReceiptKey
+      AND R.ExternReceiptKey = RD.ExternReceiptKey
       AND R.StorerKey = RD.StorerKey
 WHERE
    (
-(R.StorerKey = 'YVESR' 
-      AND R.RECType <> 'GRN' 
-      AND R.Status = '9' 
-      AND R.ASNStatus = '9' 
+(R.StorerKey = 'YVESR'
+      AND R.RECType <> 'GRN'
+      AND R.Status = '9'
+      AND R.ASNStatus = '9'
       AND convert(varchar, RD.Lottable05, 112) = convert(varchar, GetDate() - 1, 112))
    )
 GO

@@ -1,31 +1,29 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
- 
- 
- 
-CREATE VIEW [dbo].[V_INVENTORYHOLD]   
-AS   
-SELECT [InventoryHoldKey]  
-, [Lot]  
-, [Id]  
-, [Loc]  
-, [Hold]  
-, [Status]  
-, [DateOn]  
-, [WhoOn]  
-, [DateOff]  
-, [WhoOff]  
-, [TrafficCop]  
-, [ArchiveCop]  
-, [SKU]  
-, [Storerkey]  
-, [Lottable01]  
-, [Lottable02]  
-, [Lottable03]  
-, [Lottable04]  
-, [Lottable05]  
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_INVENTORYHOLD]
+AS
+SELECT [InventoryHoldKey]
+, [Lot]
+, [Id]
+, [Loc]
+, [Hold]
+, [Status]
+, [DateOn]
+, [WhoOn]
+, [DateOff]
+, [WhoOff]
+, [TrafficCop]
+, [ArchiveCop]
+, [SKU]
+, [Storerkey]
+, [Lottable01]
+, [Lottable02]
+, [Lottable03]
+, [Lottable04]
+, [Lottable05]
 , [Lottable06]
 , [Lottable07]
 , [Lottable08]
@@ -37,8 +35,8 @@ SELECT [InventoryHoldKey]
 , [Lottable14]
 , [Lottable15]
 , [Remark]
-FROM [INVENTORYHOLD] (NOLOCK)   
-  
+FROM [INVENTORYHOLD] (NOLOCK)
+
 GO
 GRANT DELETE ON  [dbo].[V_INVENTORYHOLD] TO [NSQL]
 GO

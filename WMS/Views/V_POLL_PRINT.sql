@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_POLL_PRINT] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_POLL_PRINT]
+AS
 SELECT [printtype]
 , [orderkey]
 , [caseid]
@@ -16,7 +17,7 @@ SELECT [printtype]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [POLL_PRINT] (NOLOCK) 
+FROM [POLL_PRINT] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_POLL_PRINT] TO [NSQL]
 GO

@@ -1,7 +1,12 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************************/
 --TH_CTX_LCTH_ADIDAS View in THWMS PROD Catalog https://jiralfl.atlassian.net/browse/WMS-18651
 /* Date          Author      Ver.  Purposes									                     */
-/* 28-Dec-2021   Rungtham    1.0   Created									                     */												
+/* 28-Dec-2021   Rungtham    1.0   Created									                     */
 /******************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_ADIDAS_PendingOrders_Report08]
 AS
@@ -51,7 +56,7 @@ JOIN dbo.V_SKU AL3 WITH (NOLOCK) ON AL3.StorerKey = AL2.StorerKey AND AL3.Sku = 
 JOIN dbo.V_ORDERS AL1 WITH (NOLOCK) ON AL1.OrderKey = AL2.OrderKey AND AL1.StorerKey = AL2.StorerKey
 LEFT OUTER JOIN dbo.V_MBOL AL4
        ON AL4.MbolKey = AL1.MBOLKey
-WHERE 
+WHERE
 	AL1.StorerKey = 'ADIDAS'
 
 GROUP BY AL1.StorerKey,

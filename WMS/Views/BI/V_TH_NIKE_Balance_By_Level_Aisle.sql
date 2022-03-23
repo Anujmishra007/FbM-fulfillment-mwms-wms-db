@@ -1,15 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog https://jiralfl.atlassian.net/browse/WMS-18818
 /* Date         Author      Ver.  Purposes									                  */
 /* 21-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-
 CREATE OR ALTER VIEW [BI].[V_TH_NIKE_Balance_By_Level_Aisle]
-AS 
+AS
 SELECT
   AL1.StorerKey,
   AL4.Facility,
@@ -37,13 +37,13 @@ SELECT
   CASE
     WHEN AL2.SUSR4 = '000013' THEN 'GOLF'
     ELSE 'NTL'
-  END as [Type] 
-  
+  END as [Type]
+
 FROM dbo.LOTxLOCxID AS AL1 WITH (NOLOCK)
 INNER JOIN dbo.SKU AS AL2 WITH (NOLOCK) ON AL1.StorerKey = AL2.StorerKey AND AL1.Sku = AL2.Sku
 INNER JOIN dbo.LOTATTRIBUTE AS AL3 WITH (NOLOCK) ON AL1.Lot = AL3.Lot  AND AL1.Sku = AL3.Sku AND AL1.StorerKey = AL3.StorerKey
 INNER JOIN dbo.LOC AS AL4 WITH (NOLOCK) ON AL1.Loc = AL4.Loc
-  
+
 WHERE AL1.StorerKey = 'niketh'
 AND AL1.Qty <> 0
 
@@ -78,7 +78,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_NIKE_Balance_By_Level_Aisle]  
+SELECT * FROM  [BI].[V_TH_NIKE_Balance_By_Level_Aisle]
 
 revert;
 */

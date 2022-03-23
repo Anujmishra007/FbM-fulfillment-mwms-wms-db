@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 --ChannelAttributeConfig
-CREATE VIEW [dbo].[V_ChannelAttributeConfig] AS SELECT * FROM ChannelAttributeConfig WITH (NOLOCK)
+CREATE OR ALTER VIEW [dbo].[V_ChannelAttributeConfig] AS SELECT * FROM ChannelAttributeConfig WITH (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ChannelAttributeConfig] TO [NSQL]
 GO

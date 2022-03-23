@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_DSG_DailyReport_v5] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DSG_DailyReport_v5] AS
 SELECT DISTINCT
    R.ReceiptDate,
    RD.ExternReceiptKey,
@@ -22,23 +21,23 @@ SELECT DISTINCT
    RD.ToId,
    RD.ContainerKey,
    RD.UserDefine01,
-   R.ReceiptKey 
+   R.ReceiptKey
 FROM dbo.RECEIPTDETAIL RD with (nolock)
-JOIN dbo.RECEIPT R with (nolock) ON RD.ReceiptKey = R.ReceiptKey 
+JOIN dbo.RECEIPT R with (nolock) ON RD.ReceiptKey = R.ReceiptKey
 	AND	RD.StorerKey = R.StorerKey
-JOIN dbo.SKU S with (nolock) ON RD.Sku = S.Sku 
+JOIN dbo.SKU S with (nolock) ON RD.Sku = S.Sku
 	AND R.StorerKey = S.StorerKey
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
-JOIN dbo.LOC L with (nolock) ON RD.ToLoc = L.Loc 
+JOIN dbo.LOC L with (nolock) ON RD.ToLoc = L.Loc
 WHERE
-(R.Facility IN 
+(R.Facility IN
       (
          '18120',
          '18130',
          '18140'
       )
-      AND RD.StorerKey = 'DSGTH' 
-      AND R.ASNStatus = '9' 
+      AND RD.StorerKey = 'DSGTH'
+      AND R.ASNStatus = '9'
       AND convert(date, R.ReceiptDate) between convert(date, getdate() - 1) and convert(date, getdate()))
 GROUP BY
    R.ReceiptDate,
@@ -54,7 +53,7 @@ GROUP BY
    RD.ToId,
    RD.ContainerKey,
    RD.UserDefine01,
-   R.ReceiptKey 
+   R.ReceiptKey
 --ORDER BY
 --   7
 --   --Level

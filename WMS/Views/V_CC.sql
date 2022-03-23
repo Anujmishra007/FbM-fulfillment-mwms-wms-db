@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_CC] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_CC]
+AS
 SELECT [CCKey]
 , [Storerkey]
 , [Sku]
@@ -18,7 +19,7 @@ SELECT [CCKey]
 , [ArchiveCop]
 , [Timestamp]
 , [Facility]
-FROM [CC] (NOLOCK) 
+FROM [CC] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_CC] TO [NSQL]
 GO

@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_UploadPODetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_UploadPODetail]
+AS
 SELECT [POkey]
 , [PoLineNumber]
 , [Storerkey]
@@ -20,7 +21,7 @@ SELECT [POkey]
 , [Best_bf_Date]
 , [ExpiryDate]
 , [SerialLot]
-FROM [UploadPODetail] (NOLOCK) 
+FROM [UploadPODetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_UploadPODetail] TO [NSQL]
 GO

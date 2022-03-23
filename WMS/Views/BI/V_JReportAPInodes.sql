@@ -1,8 +1,9 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
-CREATE  VIEW  [BI].[V_JReportAPInodes] AS
+
+CREATE OR ALTER VIEW  [BI].[V_JReportAPInodes] AS
 SELECT OutputURL = n.NSQLDescrip + s.OPTION5 + '/' + c.NSQLDescrip + '/' + j.SecondLvl + '/' + j.FolderPath
    ,j.*
    ,n.[ConfigKey]

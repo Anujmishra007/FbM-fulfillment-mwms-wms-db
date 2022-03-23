@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_Strategy] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_Strategy]
+AS
 SELECT [StrategyKey]
 , [Descr]
 , [PreAllocateStrategyKey]
@@ -21,7 +22,7 @@ SELECT [StrategyKey]
 , [VASStrategyKey]
 , [ABCPAStrategyKey]
 , [TransferStrategyKey]
-FROM [Strategy] (NOLOCK) 
+FROM [Strategy] (NOLOCK)
 
 GO
 GRANT DELETE ON  [dbo].[V_Strategy] TO [NSQL]

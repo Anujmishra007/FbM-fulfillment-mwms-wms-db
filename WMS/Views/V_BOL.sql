@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_BOL] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_BOL]
+AS
 SELECT [BolKey]
 , [Status]
 , [ExternBolKey]
@@ -40,7 +41,7 @@ SELECT [BolKey]
 , [PlaceReceipt]
 , [ShipperReference]
 , [ForwarderReference]
-FROM [BOL] (NOLOCK) 
+FROM [BOL] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_BOL] TO [NSQL]
 GO

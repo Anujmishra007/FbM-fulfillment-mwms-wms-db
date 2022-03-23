@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TaskManagerUserDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TaskManagerUserDetail]
+AS
 SELECT [UserKey]
 , [UserLineNumber]
 , [PermissionType]
@@ -16,7 +17,7 @@ SELECT [UserKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [TaskManagerUserDetail] (NOLOCK) 
+FROM [TaskManagerUserDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TaskManagerUserDetail] TO [NSQL]
 GO

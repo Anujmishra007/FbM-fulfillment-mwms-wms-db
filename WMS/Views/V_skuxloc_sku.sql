@@ -1,9 +1,10 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
+
 --(Wan01) 30-OCT-2013 Add Fields ABCEA, ABCCS
-CREATE VIEW [dbo].[V_skuxloc_sku]
+CREATE OR ALTER VIEW [dbo].[V_skuxloc_sku]
 AS
 SELECT     dbo.SKU.StorerKey
          , dbo.SKU.Sku
@@ -23,7 +24,7 @@ SELECT     dbo.SKU.StorerKey
         (SELECT     StorerKey, Sku, CASE WHEN SL.LOC IS NOT NULL THEN '1' ELSE '0' END AS LocAssigned, COUNT(DISTINCT Loc) AS NoOfLocAssigned
          FROM          dbo.SKUxLOC AS SL WITH (NOLOCK)
          WHERE      (LocationType IN ('CASE', 'PICK'))
-         GROUP BY StorerKey, Sku, CASE WHEN SL.LOC IS NOT NULL THEN '1' ELSE '0' END) 
+         GROUP BY StorerKey, Sku, CASE WHEN SL.LOC IS NOT NULL THEN '1' ELSE '0' END)
          AS SL1 ON SL1.StorerKey = dbo.SKU.StorerKey AND SL1.Sku = dbo.SKU.Sku
 
 

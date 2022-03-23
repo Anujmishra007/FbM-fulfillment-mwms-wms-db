@@ -1,17 +1,18 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
-create view [dbo].[v_NIKECN_ChkLOTMinMaxApart90Days] as
 
-select loc.facility, lli.loc, lli.sku, lli.lot, 
-   convert( char( 10), la.lottable05, 120) AS lottable05, 
-   (lli.qty + lli.qtyallocated) AS QTY, 
+CREATE OR ALTER VIEW [dbo].[v_NIKECN_ChkLOTMinMaxApart90Days] as
+
+select loc.facility, lli.loc, lli.sku, lli.lot,
+   convert( char( 10), la.lottable05, 120) AS lottable05,
+   (lli.qty + lli.qtyallocated) AS QTY,
    la.lottable01, la.lottable02, la.lottable03, la.lottable04
 from lotxlocxid lli (nolock)
    inner join lotattribute la (nolock) on (lli.lot = la.lot)
    inner join loc (nolock) on (lli.loc = loc.loc)
-   inner join 
+   inner join
    (
       select lli.loc, lli.storerkey, lli.sku
       from lotxlocxid lli (nolock)

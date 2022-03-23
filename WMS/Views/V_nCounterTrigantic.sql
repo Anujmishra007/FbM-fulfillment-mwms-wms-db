@@ -1,12 +1,13 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_nCounterTrigantic] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_nCounterTrigantic]
+AS
 SELECT [keyname]
 , [keycount]
-FROM [nCounterTrigantic] (NOLOCK) 
+FROM [nCounterTrigantic] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_nCounterTrigantic] TO [NSQL]
 GO

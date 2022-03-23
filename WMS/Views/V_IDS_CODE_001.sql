@@ -1,10 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-create view [dbo].[V_IDS_CODE_001]
+CREATE OR ALTER VIEW [dbo].[V_IDS_CODE_001]
 as
 	select upper(listname) as 'cd_listname',
 				upper(code) as 'cd_code',

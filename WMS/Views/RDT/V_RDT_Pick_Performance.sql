@@ -1,12 +1,12 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [RDT].[V_RDT_Pick_Performance]
-AS 
-SELECT L.UserID, 
-      -- L.functionid, 
+CREATE OR ALTER VIEW [RDT].[V_RDT_Pick_Performance]
+AS
+SELECT L.UserID,
+      -- L.functionid,
        CONVERT(CHAR(10), L1.EventDateTime, 103) AS StartDate,
        SUBSTRING(CONVERT(CHAR( 5), L1.EventDateTime, 108),1,5) AS StartTime,
        SUBSTRING(CONVERT(CHAR( 5), L2.EventDatetime, 108),1,5) AS EndTime,
@@ -46,9 +46,9 @@ JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.Storerkey = L.Storerkey and SKU.SKU = L.S
 JOIN dbo.Pack PK WITH (NOLOCK) ON (SKU.Packkey = PK.Packkey)
 WHERE L.Actiontype = 3 -- WD
 AND L.Eventtype = 3 -- Picking
-GROUP BY L.UserID, 
-         --L.functionid, 
-         L1.Eventdatetime, 
+GROUP BY L.UserID,
+         --L.functionid,
+         L1.Eventdatetime,
          L2.EventDatetime,
          L.RowRef
 

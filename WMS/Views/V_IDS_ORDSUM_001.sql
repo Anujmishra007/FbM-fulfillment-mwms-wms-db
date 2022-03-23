@@ -1,10 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-CREATE view [dbo].[V_IDS_ORDSUM_001]
+CREATE OR ALTER VIEW [dbo].[V_IDS_ORDSUM_001]
 as
 	select loadplan.casecnt as 'loadplan_casecnt',
 				loadplan.palletcnt as 'loadplan_palletcnt',
@@ -154,7 +153,7 @@ as
 				mbol.depotstatus as 'mbol_depotstatus',
 				mbol.adddate as 'mbol_adddate',
 				mbol.editdate as 'mbol_editdate'
-	from orders (nolock) 
+	from orders (nolock)
 	join storer (nolock)
 		on orders.storerkey = storer.storerkey
    left outer join orderdetail (nolock)
@@ -203,7 +202,7 @@ as
 	left outer join (select code, description as 'code_desc'
 						  from codelkup (nolock)
 						  where listname = 'SOSTATUS') as code_ordsostatus
-		on orders.sostatus = code_ordsostatus.code	
+		on orders.sostatus = code_ordsostatus.code
 	left outer join (select code, description as 'code_desc'
 						  from codelkup (nolock)
 						  where listname = 'SALESCODE') as code_salesman

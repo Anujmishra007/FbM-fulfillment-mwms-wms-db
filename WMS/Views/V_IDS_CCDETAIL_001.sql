@@ -1,10 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-create view [dbo].[V_IDS_CCDETAIL_001]
+CREATE OR ALTER VIEW [dbo].[V_IDS_CCDETAIL_001]
 as
 	select convert(NVARCHAR(10), rtrim(upper(ccdetail.cckey))) as 'cc_cckey',
 		convert(NVARCHAR(10), rtrim(upper(ccdetail.ccdetailkey))) as 'cc_ccdetailkey',
@@ -61,7 +60,7 @@ as
 		code_lottable02.code_desc as 'cc_l2_label_desc',
 		ccdetail.lottable02 as 'cc_l2',
 		sku.lottable03label as 'cc_l3_label',
-		code_lottable03.code_desc as 'cc_l3_label_desc',	
+		code_lottable03.code_desc as 'cc_l3_label_desc',
 		ccdetail.lottable03 as 'cc_l3',
 		sku.lottable04label as 'cc_l4_label',
 		code_lottable04.code_desc as 'cc_l4_label_desc',

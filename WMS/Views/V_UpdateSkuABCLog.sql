@@ -1,9 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE   VIEW [dbo].[V_UpdateSkuABCLog]
+CREATE OR ALTER VIEW [dbo].[V_UpdateSkuABCLog]
 AS
 SELECT [vx]          =CASE a.[Status] WHEN 0 THEN 'v' ELSE 'X' END
       ,               a.[LogDate]

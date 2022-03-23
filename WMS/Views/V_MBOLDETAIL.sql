@@ -1,15 +1,16 @@
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
-GO
-/* this Ciew cannot use SELECT * , which as compute column/Allaise column (, [ItemCube] = [cube]    )  */  
-/* 20201010  TTLING01 add new column  [DriverName], [VehicleNo]    */ 
+
+/* this Ciew cannot use SELECT * , which as compute column/Allaise column (, [ItemCube] = [cube]    )  */
+/* 20201010  TTLING01 add new column  [DriverName], [VehicleNo]    */
 /* 2021-02-22  kocy  make change to able SELECT * with added compute column/Allaise column (, [ItemCube] = [cube]    ) */
-CREATE   VIEW [dbo].[V_MBOLDETAIL]       
-AS       
-SELECT *      
-, [ItemCube] = [Cube]      
-FROM [dbo].[MBOLDETAIL] (NOLOCK)       
+CREATE OR ALTER VIEW [dbo].[V_MBOLDETAIL]
+AS
+SELECT *
+, [ItemCube] = [Cube]
+FROM [dbo].[MBOLDETAIL] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_MBOLDETAIL] TO [NSQL]
 GO

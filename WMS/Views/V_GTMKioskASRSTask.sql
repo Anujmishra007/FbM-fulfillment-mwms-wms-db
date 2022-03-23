@@ -1,13 +1,9 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_GTMKioskASRSTask]')) 
-   DROP VIEW [dbo].[V_GTMKioskASRSTask]
-GO
-
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-CREATE VIEW V_GTMKioskASRSTask AS
+
+CREATE OR ALTER VIEW V_GTMKioskASRSTask AS
 SELECT TaskType = 'ASRSQC'
    ,   GTMWorkStation  = Code
    ,   LogicalPickFrom = 'b'

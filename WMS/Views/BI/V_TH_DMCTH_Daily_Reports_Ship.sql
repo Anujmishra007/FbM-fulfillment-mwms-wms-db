@@ -1,14 +1,14 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --TH-Create VIEW on Database (THWMS) on PROD  https://jiralfl.atlassian.net/browse/WMS-18766
 /* Date         Author      Ver.  Purposes									                  */
 /* 14-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-
-CREATE OR ALTER VIEW [BI].[V_TH_DMCTH_Daily_Reports_Ship] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DMCTH_Daily_Reports_Ship] AS
 SELECT
    O.StorerKey,
    O.Facility,
@@ -28,14 +28,14 @@ SELECT
    OD.Lottable05,
    P.PackUOM3,
    P.CaseCnt,
-   OD.ShippedQty 
+   OD.ShippedQty
 
 FROM dbo.ORDERS O with (nolock)
 LEFT OUTER JOIN dbo.ORDERDETAIL OD with (nolock) ON O.StorerKey = OD.StorerKey AND O.OrderKey = OD.OrderKey
 LEFT OUTER JOIN dbo.SKU S with (nolock) ON OD.StorerKey = S.StorerKey AND OD.Sku = S.Sku
 LEFT OUTER JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
 
-WHERE O.StorerKey = 'DMCTH' 
+WHERE O.StorerKey = 'DMCTH'
 AND  O.EditDate = convert(date, getdate() - 1)
 GO
 
@@ -47,7 +47,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_DMCTH_Daily_Reports_Ship] 
+SELECT * FROM  [BI].[V_TH_DMCTH_Daily_Reports_Ship]
 
 revert;
 */

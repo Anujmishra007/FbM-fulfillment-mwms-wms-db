@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_DSG_FG_Inventory_Balances] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DSG_FG_Inventory_Balances] AS
 SELECT
    X.StorerKey,
    L.Facility,
@@ -21,16 +20,16 @@ SELECT
    A.Lottable05 AS 'Receipt Date',
    A.Lottable04 AS 'Expiry Date',
    L.HOSTWHCODE AS 'JDE Location',
-   A.Lottable03 
+   A.Lottable03
 FROM dbo.LOTxLOCxID X with (nolock)
 JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey
 	AND X.Sku = S.Sku
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.Lot = A.Lot 
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.Lot = A.Lot
 	AND X.StorerKey = A.StorerKey
-JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc 
-WHERE X.StorerKey = 'DSGTH' 
-AND L.HOSTWHCODE LIKE '%FGSL%' 
+JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
+WHERE X.StorerKey = 'DSGTH'
+AND L.HOSTWHCODE LIKE '%FGSL%'
 AND X.Qty > 0
 GROUP BY
    X.StorerKey,
@@ -45,7 +44,7 @@ GROUP BY
    A.Lottable05,
    A.Lottable04,
    L.HOSTWHCODE,
-   A.Lottable03 
+   A.Lottable03
 --ORDER BY
 --   15,
 --   2,

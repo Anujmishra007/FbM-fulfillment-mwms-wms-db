@@ -1,7 +1,8 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************/
 -- Purpose: Pls Create view on DB THWMS(PROD) https://jiralfl.atlassian.net/browse/WMS-19109
 /* Updates:																   */
@@ -24,35 +25,35 @@ SELECT
    AL1.Zip,
    case
       when
-         AL2.Status = '0' 
+         AL2.Status = '0'
       then
-         'OPEN' 
+         'OPEN'
       when
-         AL2.Status = '1' 
+         AL2.Status = '1'
       then
-         'PICKING' 
+         'PICKING'
       when
-         AL2.Status = '2' 
+         AL2.Status = '2'
       then
-         'PICKING' 
+         'PICKING'
       when
-         AL2.Status = '3' 
+         AL2.Status = '3'
       then
-         'PICKING' 
+         'PICKING'
       when
-         AL2.Status = '5' 
+         AL2.Status = '5'
       then
-         'PICKED' 
+         'PICKED'
       when
-         AL2.Status = '9' 
+         AL2.Status = '9'
       then
-         'SHIPPED' 
+         'SHIPPED'
       when
-         AL2.Status = 'CANC' 
+         AL2.Status = 'CANC'
       then
-         'CANCEL' 
+         'CANCEL'
       else
-         'OPEN' 
+         'OPEN'
    end as 'SOSTATUS'
 , AL2.Facility, AL2.AddDate, AL2.BuyerPO, AL2.EditDate  as 'Status Timing'
 FROM
@@ -60,10 +61,10 @@ FROM
    join BI.V_ORDERS AL2 with (nolock) on  AL2.ConsigneeKey = AL1.StorerKey
 WHERE
    (
-(AL1.ConsigneeFor = 'ELCTH' 
-      AND AL2.StorerKey = 'ELCTH' 
-      AND AL2.Facility = '3101E' 
-      AND 
+(AL1.ConsigneeFor = 'ELCTH'
+      AND AL2.StorerKey = 'ELCTH'
+      AND AL2.Facility = '3101E'
+      AND
       (
          NOT AL2.Type = 'COPACK'
       )
@@ -79,7 +80,7 @@ GO
 
 EXEC AS LOGIN = 'JReportUserTH'
 SELECT SUSER_SNAME()
-SELECT * FROM BI.V_TH_ELCTH_03_SOTracking_Auto 
+SELECT * FROM BI.V_TH_ELCTH_03_SOTracking_Auto
 
 REVERT;
 

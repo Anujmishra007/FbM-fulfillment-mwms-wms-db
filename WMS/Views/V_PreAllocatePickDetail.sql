@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_PreAllocatePickDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_PreAllocatePickDetail]
+AS
 SELECT [PreAllocatePickDetailKey]
 , [OrderKey]
 , [OrderLineNumber]
@@ -27,7 +28,7 @@ SELECT [PreAllocatePickDetailKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [PreAllocatePickDetail] (NOLOCK) 
+FROM [PreAllocatePickDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_PreAllocatePickDetail] TO [NSQL]
 GO

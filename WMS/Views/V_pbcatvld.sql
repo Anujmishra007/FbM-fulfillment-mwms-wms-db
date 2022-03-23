@@ -1,15 +1,16 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_pbcatvld] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_pbcatvld]
+AS
 SELECT [pbv_name]
 , [pbv_vald]
 , [pbv_type]
 , [pbv_cntr]
 , [pbv_msg]
-FROM [pbcatvld] (NOLOCK) 
+FROM [pbcatvld] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_pbcatvld] TO [NSQL]
 GO

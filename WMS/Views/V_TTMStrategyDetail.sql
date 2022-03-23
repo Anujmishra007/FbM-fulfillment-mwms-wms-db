@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_TTMStrategyDetail] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_TTMStrategyDetail]
+AS
 SELECT [TTMStrategyKey]
 , [TTMStrategyLineNumber]
 , [Descr]
@@ -16,7 +17,7 @@ SELECT [TTMStrategyKey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [TTMStrategyDetail] (NOLOCK) 
+FROM [TTMStrategyDetail] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_TTMStrategyDetail] TO [NSQL]
 GO

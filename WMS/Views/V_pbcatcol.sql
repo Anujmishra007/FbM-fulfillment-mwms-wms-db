@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_pbcatcol] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_pbcatcol]
+AS
 SELECT [pbc_tnam]
 , [pbc_tid]
 , [pbc_ownr]
@@ -24,7 +25,7 @@ SELECT [pbc_tnam]
 , [pbc_cmnt]
 , [pbc_edit]
 , [pbc_tag]
-FROM [pbcatcol] (NOLOCK) 
+FROM [pbcatcol] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_pbcatcol] TO [NSQL]
 GO

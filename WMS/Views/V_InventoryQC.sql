@@ -1,10 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [dbo].[V_InventoryQC] 
-AS 
+CREATE OR ALTER VIEW [dbo].[V_InventoryQC]
+AS
 SELECT  [QC_Key]
 , [StorerKey]
 , [Reason]
@@ -29,7 +29,7 @@ SELECT  [QC_Key]
 , [Notes]
 , [FinalizeFlag]
 , [ArchiveCop]
-FROM [InventoryQC] (NOLOCK) 
+FROM [InventoryQC] (NOLOCK)
 
 
 GO

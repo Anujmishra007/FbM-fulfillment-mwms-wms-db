@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER view [BI].[V_TH_YVSER-08_Remaining Day Morethan 18M] as
@@ -17,16 +16,16 @@ SELECT
    X.Qty - (X.QtyAllocated + X.QtyPicked + X.QtyExpected + X.QtyPickInProcess)  as 'Qty Avl'
 FROM
    dbo.LOTxLOCxID X with (nolock)
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey 
-      AND X.Sku = A.Sku 
-      AND X.Lot = A.Lot 
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey
+      AND X.Sku = A.Sku
+      AND X.Lot = A.Lot
 JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
-JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey 
-      AND X.Sku = S.Sku 
+JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey
+      AND X.Sku = S.Sku
 WHERE
    (
-(S.StorerKey = 'YVESR' 
-      AND L.Loc NOT IN 
+(S.StorerKey = 'YVESR'
+      AND L.Loc NOT IN
       (
          'EXPSTG',
          'LOSSWH',
@@ -36,7 +35,7 @@ WHERE
          'VARRECLOC',
          'VARRETURN'
       )
-      AND A.Lottable04 >= GetDate() - 540 
+      AND A.Lottable04 >= GetDate() - 540
       AND X.Qty <> 0)
    )
 GO

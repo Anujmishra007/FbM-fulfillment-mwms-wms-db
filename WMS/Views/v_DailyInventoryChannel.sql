@@ -1,12 +1,11 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-CREATE VIEW [dbo].[v_DailyInventoryChannel]
+CREATE OR ALTER VIEW [dbo].[v_DailyInventoryChannel]
 AS
-Select   * from dbo.DailyInventoryChannel (NOLOCK) 
+Select   * from dbo.DailyInventoryChannel (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[v_DailyInventoryChannel] TO [NSQL]
 GO

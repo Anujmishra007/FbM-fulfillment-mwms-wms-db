@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 --ChannelTransferDetail
-CREATE VIEW [dbo].[V_ChannelTransferDetail] AS SELECT * FROM ChannelTransferDetail WITH (NOLOCK)
+CREATE OR ALTER VIEW [dbo].[V_ChannelTransferDetail] AS SELECT * FROM ChannelTransferDetail WITH (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ChannelTransferDetail] TO [NSQL]
 GO

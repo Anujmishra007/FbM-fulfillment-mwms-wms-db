@@ -1,7 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 CREATE OR ALTER VIEW [BI].[V_TH_4CARE_Inbound_report] AS
@@ -16,21 +15,21 @@ SELECT
    RD.ToId,
    case
       when
-         RD.Lottable01 = 'UR' 
+         RD.Lottable01 = 'UR'
       then
-         'Saleable' 
+         'Saleable'
       else
-         RD.Lottable01 
+         RD.Lottable01
    end AS 'Status'
-, RD.Lottable02, RD.Lottable03, RD.Lottable04, RD.Lottable05 
+, RD.Lottable02, RD.Lottable03, RD.Lottable04, RD.Lottable05
 FROM
    dbo.RECEIPT R with (nolock)
-join dbo.RECEIPTDETAIL RD with (nolock) on R.ReceiptKey = RD.ReceiptKey 
-      AND R.StorerKey = RD.StorerKey 
-join dbo.SKU S with (nolock) on RD.Sku = S.Sku 
+join dbo.RECEIPTDETAIL RD with (nolock) on R.ReceiptKey = RD.ReceiptKey
+      AND R.StorerKey = RD.StorerKey
+join dbo.SKU S with (nolock) on RD.Sku = S.Sku
       AND RD.StorerKey = S.StorerKey
-WHERE R.StorerKey = '4CARE' 
-AND convert(varchar, R.EditDate, 112) >= convert(varchar, getdate() - 1, 112) 
+WHERE R.StorerKey = '4CARE'
+AND convert(varchar, R.EditDate, 112) >= convert(varchar, getdate() - 1, 112)
 AND R.ASNStatus = '9'
 GO
 GRANT SELECT ON  [BI].V_TH_4CARE_Inbound_report TO [JReportRole]

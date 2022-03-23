@@ -1,14 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog https://jiralfl.atlassian.net/browse/WMS-18818
 /* Date         Author      Ver.  Purposes									                  */
 /* 21-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
 CREATE OR ALTER VIEW [BI].[V_TH_NIKE_JDsport_Order_Status_NewForm]
-AS 
+AS
 SELECT DISTINCT
   CASE
     WHEN AL1.Status = '9' THEN '9-Shipped'
@@ -19,7 +20,7 @@ SELECT DISTINCT
     WHEN AL1.Status = '0' THEN '0-Open'
     ELSE (AL1.Status)
   END as [OrderStatus],
-   
+
   AL1.ExternOrderKey as [Nike DD No.],
   AL1.C_Company as Customer_Name,
   CONVERT(char(10), AL1.DeliveryDate, 120) as DeliveryDate,
@@ -38,14 +39,14 @@ FROM dbo.ORDERS AS AL1 WITH (NOLOCK)
 JOIN dbo.ORDERDETAIL AS AL2 WITH (NOLOCK) ON AL1.OrderKey = AL2.OrderKey AND AL1.StorerKey = AL2.StorerKey
 JOIN dbo.SKU AS AL3 WITH (NOLOCK) ON AL2.StorerKey = AL3.StorerKey AND AL2.Sku = AL3.Sku
 LEFT JOIN dbo.STORER AS AL4 WITH (NOLOCK) ON AL1.ConsigneeKey= AL4.StorerKey
-	   
+
 WHERE AL1.StorerKey = 'NIKETH'
-AND  AL1.DeliveryDate >= CONVERT(date, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)) 
+AND  AL1.DeliveryDate >= CONVERT(date, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0))
 AND AL1.DeliveryDate < CONVERT(date, DATEADD(D, -1, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) + 1, 0)))
 AND AL1.Status <> 'CANC'
 
 GROUP BY AL1.Status,
-         AL1.ExternOrderKey,  
+         AL1.ExternOrderKey,
          AL1.C_Company,
          AL1.DeliveryDate,
          AL1.OrderKey,
@@ -69,7 +70,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_NIKE_JDsport_Order_Status_NewForm]  
+SELECT * FROM  [BI].[V_TH_NIKE_JDsport_Order_Status_NewForm]
 
 revert;
 */

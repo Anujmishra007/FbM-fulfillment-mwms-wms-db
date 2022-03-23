@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_ApptId] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_ApptId]
+AS
 SELECT [ApptId]
 , [StartDateTime]
 , [EndDateTime]
@@ -32,7 +33,7 @@ SELECT [ApptId]
 , [AddDate]
 , [EditWho]
 , [EditDate]
-FROM [ApptId] (NOLOCK) 
+FROM [ApptId] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_ApptId] TO [NSQL]
 GO

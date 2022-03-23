@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_InterfaceLog] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_InterfaceLog]
+AS
 SELECT [InterfaceKey]
 , [SourceKey]
 , [StorerKey]
@@ -32,7 +33,7 @@ SELECT [InterfaceKey]
 , [EditWho]
 , [EditDate]
 , [Msgtext]
-FROM [InterfaceLog] (NOLOCK) 
+FROM [InterfaceLog] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_InterfaceLog] TO [NSQL]
 GO

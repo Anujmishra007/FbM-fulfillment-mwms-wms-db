@@ -1,10 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE VIEW [dbo].[V_WorkOrderJobDetailSummary] 
-AS 
+CREATE OR ALTER VIEW [dbo].[V_WorkOrderJobDetailSummary]
+AS
 SELECT JobKey
       ,WorkStation = (SELECT TOP 1 WORKORDERJOB.WorkStation FROM WORKORDERJOB WITH (NOLOCK)
 							 WHERE WORKORDERJOB.JobKey = WORKORDERJOBDETAIL.JobKey
@@ -18,18 +18,18 @@ SELECT JobKey
                                               AND(WORKORDERREQUESTINPUTS.Sku = SKU.Sku)
 							 WHERE WORKORDERJOB.JobKey = WORKORDERJOBDETAIL.JobKey)
 		,NoOfTasks   = (SELECT COUNT(1) FROM TASKDETAIL WITH (NOLOCK)
-							 WHERE TASKDETAIL.SourceType = 'VAS' 
+							 WHERE TASKDETAIL.SourceType = 'VAS'
 							 AND LEFT(TASKDETAIL.Sourcekey,10) = WORKORDERJOBDETAIL.JobKey
                                                          AND TASKDETAIL.Status <> 'X')
 		,NoOfPendingTasks   = (SELECT COUNT(1) FROM TASKDETAIL WITH (NOLOCK)
-									  WHERE TASKDETAIL.SourceType = 'VAS' 
+									  WHERE TASKDETAIL.SourceType = 'VAS'
 									  AND LEFT(TASKDETAIL.Sourcekey,10) = WORKORDERJOBDETAIL.JobKey
 									  AND TASKDETAIL.Status = '0')
 		,NoOfCompletedTasks = (SELECT COUNT(1) FROM TASKDETAIL WITH (NOLOCK)
-									  WHERE TASKDETAIL.SourceType = 'VAS' 
+									  WHERE TASKDETAIL.SourceType = 'VAS'
 									  AND LEFT(TASKDETAIL.Sourcekey,10) = WORKORDERJOBDETAIL.JobKey
 									  AND TASKDETAIL.Status = '9')
-FROM WORKORDERJOBDETAIL WITH (NOLOCK) 
+FROM WORKORDERJOBDETAIL WITH (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_WorkOrderJobDetailSummary] TO [NSQL]
 GO

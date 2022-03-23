@@ -1,17 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
-
-
-
-
-
-
-
-
-CREATE View [dbo].[V_UnCloseASN] as
+CREATE OR ALTER VIEW [dbo].[V_UnCloseASN] as
    select distinct receipt.receiptkey
    from receipt (nolock), storerconfig (nolock), receiptdetail a (nolock)
    where receipt.storerkey = storerconfig.storerkey

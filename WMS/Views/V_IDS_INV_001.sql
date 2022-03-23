@@ -1,19 +1,20 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_IDS_INV_001]
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_IDS_INV_001]
 AS
-SELECT LOC.Facility, 
-		Facility.Descr AS 'facility_Descr',			
-		LOTXLOCXID.StorerKey AS 'Storer', 			
+SELECT LOC.Facility,
+		Facility.Descr AS 'facility_Descr',
+		LOTXLOCXID.StorerKey AS 'Storer',
 		STORER.Company AS 'company',
-		SKU.SUSR3 AS 'principal',			
+		SKU.SUSR3 AS 'principal',
 		CODE_PRINCIPAL.CODE_DESC AS 'principal_desc',
-		LOTXLOCXID.SKU, 
-		SKU.MANUFACTURERSKU, 
+		LOTXLOCXID.SKU,
+		SKU.MANUFACTURERSKU,
 		SKU.RETAILSKU,
-	   SKU.ALTSKU, 
+	   SKU.ALTSKU,
 		SKU.Descr,
 		(SKU.BUSR1 + SKU.BUSR2) AS 'second_lang_Descr',
 		UPPER(SKU.Class) AS 'class',
@@ -29,9 +30,9 @@ SELECT LOC.Facility,
 		SKU.BUSR8 AS 'poison_flag',
 		SKU.BUSR9 AS 'condition',
 		SKU.ShelfLife AS 'shelflife',
-		LOTxLOCxID.Qty, 
-		LOTxLOCxID.QtyAllocated, 
-		LOTxLOCxID.QtyPicked, 
+		LOTxLOCxID.Qty,
+		LOTxLOCxID.QtyAllocated,
+		LOTxLOCxID.QtyPicked,
 		LOTxLOCxID.QtyPickInProcess,
 		ISNULL(ON_HOLD.QtyOnhold, 0) AS 'QtyOnhold',
 		SKU.Price,
@@ -77,7 +78,7 @@ SELECT LOC.Facility,
 		SKU.STDNETWGT AS 'STD_NET_WEIGHT',
 		SKU.STDCUBE AS 'STD_CUBE',
 		LOTxLOCxID.Lot AS 'SYS_LOT_NO',
-		LOTxLOCxID.Loc AS 'LOCATION', 
+		LOTxLOCxID.Loc AS 'LOCATION',
 		LOC.PutawayZONe AS 'LOC_ZONE',
 		PUTAWAYZONE.ZONeCategory AS 'LOC_ZONE_CATEGORY',
 		LOC.ChargingPallet AS 'LOC_CHARGING_PALLET',
@@ -85,12 +86,12 @@ SELECT LOC.Facility,
 		LOC.CubicCapacity AS 'LOC_CUBIC_CAPACITY',
 		LOC.WeightCapacity AS 'LOC_WEIGHT_CAPACITY',
 		LOTxLOCxID.ID AS 'MUID',
-		(LOTXLOCXID.Qty - 
-			LOTXLOCXID.Qtyallocated - 
-				LOTXLOCXID.Qtypicked - 
-					LOTXLOCXID.Qtypickinprocess - 
+		(LOTXLOCXID.Qty -
+			LOTXLOCXID.Qtyallocated -
+				LOTXLOCXID.Qtypicked -
+					LOTXLOCXID.Qtypickinprocess -
 						ISNULL(ON_HOLD.QtyONhold, 0)) AS 'Qtyavailable'
-FROM dbo.LOTXLOCXID LOTXLOCXID (NOLOCK) 
+FROM dbo.LOTXLOCXID LOTXLOCXID (NOLOCK)
 JOIN dbo.LOTATTRIBUTE LOTATTRIBUTE (NOLOCK, INDEX(pklotattribute))
 ON LOTXLOCXID.Lot = LOTATTRIBUTE.Lot
 JOIN LOT (NOLOCK)
@@ -109,16 +110,16 @@ JOIN STORER (NOLOCK)
 JOIN PACK (NOLOCK)
 	ON SKU.Packkey = PACK.Packkey
 LEFT OUTER JOIN (
-						SELECT LOTXLOCXID.SKU, LOTXLOCXID.LOT, 
-									 LOTXLOCXID.LOC, 
-									 LOTXLOCXID.ID, 
+						SELECT LOTXLOCXID.SKU, LOTXLOCXID.LOT,
+									 LOTXLOCXID.LOC,
+									 LOTXLOCXID.ID,
 									 SUM(LOTXLOCXID.QTY) AS QTYONhold
-						FROM LOTXLOCXID (NOLOCK) 
+						FROM LOTXLOCXID (NOLOCK)
 						JOIN LOC (NOLOCK) ON LOTXLOCXID.loc = LOC.loc
 						 AND LOC.locatiONflag = 'HOLD'
 						JOIN ID (NOLOCK)
 							ON LOTXLOCXID.ID = ID.ID
-						 AND ID.Status = 'HOLD'	
+						 AND ID.Status = 'HOLD'
 						JOIN LOT (NOLOCK)
 							ON LOTXLOCXID.Lot = LOT.Lot
 						 AND LOT.QtyONhold > 0

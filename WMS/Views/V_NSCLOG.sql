@@ -1,9 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_NSCLOG] 
-AS 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_NSCLOG]
+AS
 SELECT [nsclogkey]
 , [tablename]
 , [key1]
@@ -17,7 +18,7 @@ SELECT [nsclogkey]
 , [EditWho]
 , [TrafficCop]
 , [ArchiveCop]
-FROM [NSCLOG] (NOLOCK) 
+FROM [NSCLOG] (NOLOCK)
 GO
 GRANT DELETE ON  [dbo].[V_NSCLOG] TO [NSQL]
 GO

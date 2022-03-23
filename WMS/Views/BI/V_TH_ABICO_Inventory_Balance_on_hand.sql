@@ -1,14 +1,14 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --TH-Create VIEW on Database (THWMS) on PROD  https://jiralfl.atlassian.net/browse/WMS-18766
 /* Date         Author      Ver.  Purposes									                  */
 /* 14-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-
-CREATE OR ALTER VIEW [BI].[V_TH_ABICO_Inventory_Balance_On_Hand] 
+CREATE OR ALTER VIEW [BI].[V_TH_ABICO_Inventory_Balance_On_Hand]
 AS
 SELECT
    X.StorerKey,
@@ -20,7 +20,7 @@ SELECT
    X.Loc,
    X.Id,
    Sum ( X.Qty ) AS 'QTY',
-   Sum ( X.QtyAllocated ) AS 'QtyAllocated', 
+   Sum ( X.QtyAllocated ) AS 'QtyAllocated',
    Sum ( X.QtyPicked ) AS 'QtyPicked',
    P.Pallet,
    A.Lottable02,
@@ -31,15 +31,15 @@ SELECT
    P.CaseCnt,
    SUM ( X.QtyExpected ) AS 'QtyExpected',
    convert(varchar, A.Lottable05, 103) + ' ' + convert(varchar, A.Lottable05, 24) AS 'ReceiptDate',
-   A.Lottable01 
+   A.Lottable01
 FROM dbo.LOTxLOCxID X WITH (nolock)
-JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey AND X.Sku = S.Sku 
-JOIN dbo.PACK P with (nolock) ON S.PackKey = P.PACKKey 
+JOIN dbo.SKU S with (nolock) ON X.StorerKey = S.StorerKey AND X.Sku = S.Sku
+JOIN dbo.PACK P with (nolock) ON S.PackKey = P.PACKKey
 JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.Lot = A.Lot AND X.StorerKey = A.StorerKey
-JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc 
+JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
 
 WHERE X.StorerKey = 'ABICO'
-   
+
 GROUP BY
    X.StorerKey,
    L.Facility,
@@ -68,7 +68,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM  [BI].[V_TH_ABICO_Inventory_Balance_On_Hand] 
+SELECT * FROM  [BI].[V_TH_ABICO_Inventory_Balance_On_Hand]
 
 revert;
 */

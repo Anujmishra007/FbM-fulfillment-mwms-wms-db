@@ -1,10 +1,9 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE OR ALTER VIEW [BI].[V_TH_JDSPORT_Daily_Inventory_Reports] AS 
+CREATE OR ALTER VIEW [BI].[V_TH_JDSPORT_Daily_Inventory_Reports] AS
 SELECT
    S.StorerKey,
    L.HOSTWHCODE,
@@ -35,37 +34,37 @@ SELECT
    X.QtyPicked,
    Case
       when
-         S.SKUGROUP = 'T' 
+         S.SKUGROUP = 'T'
       Then
-         'T_Textiles' 
+         'T_Textiles'
       when
-         S.SKUGROUP = 'F' 
+         S.SKUGROUP = 'F'
       Then
-         'F_Footwear' 
+         'F_Footwear'
       when
-         S.SKUGROUP = 'W' 
+         S.SKUGROUP = 'W'
       then
-         'W_Accessories' 
+         'W_Accessories'
       else
-         ' ' 
+         ' '
    end AS 'Prodgroup'
-, S.BUSR6, S.BUSR2, A.Lottable03 AS 'Manufacture', P.PackUOM3 AS 'Base UOM', 
+, S.BUSR6, S.BUSR2, A.Lottable03 AS 'Manufacture', P.PackUOM3 AS 'Base UOM',
    (
       X.Qty
    )
    - ((X.QtyAllocated) + (X.QtyPicked))AS 'QtyAvailable', A.Lottable01, A.Lottable02, A.Lottable09, A.Lottable06, A.Lottable04, P.PackUOM1, A.Lottable03, A.Lottable05, A.Lottable07, A.Lottable08, A.Lottable10
 FROM
-   dbo.LOTxLOCxID X  with (nolock) 
+   dbo.LOTxLOCxID X  with (nolock)
 RIGHT OUTER JOIN dbo.SKU S with (nolock) ON X.Sku = S.Sku
 	  AND X.StorerKey = S.StorerKey
-JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey 
-      AND X.Lot = A.Lot 
-	  AND X.Sku = A.Sku 
+JOIN dbo.LOTATTRIBUTE A with (nolock) ON X.StorerKey = A.StorerKey
+      AND X.Lot = A.Lot
+	  AND X.Sku = A.Sku
 JOIN dbo.LOC L with (nolock) ON X.Loc = L.Loc
 JOIN dbo.PACK P with (nolock) ON S.PACKKey = P.PackKey
 WHERE
    (
-(S.StorerKey = 'JDSPORTS' 
+(S.StorerKey = 'JDSPORTS'
       AND X.Qty > 0)
    )
 GO

@@ -1,17 +1,18 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-CREATE VIEW [dbo].[V_SKU_Putaway_Strategy] 
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [dbo].[V_SKU_Putaway_Strategy]
 AS
-SELECT s.StorerKey, 
-       s.Sku, 
+SELECT s.StorerKey,
+       s.Sku,
        s.StrategyKey,
-       psd.PutawayStrategyKey,  
-       psd.PutawayStrategyLineNumber, 
-       psd.PAType, 
+       psd.PutawayStrategyKey,
+       psd.PutawayStrategyLineNumber,
+       psd.PAType,
        c.[Description] AS PA_Description,
-       psd.FROMLOC, 
+       psd.FROMLOC,
        psd.TOLOC,
        psd.AreaKey, psd.Zone, psd.LocType, psd.LocSearchType,
        psd.DimensionRestriction01, psd.DimensionRestriction02,
@@ -45,10 +46,10 @@ SELECT s.StorerKey,
        psd.LocAisleExclude04, psd.LocAisleExclude05, psd.LocAisleExclude06,
        psd.PutawayZone01, psd.PutawayZone02, psd.PutawayZone03, psd.PutawayZone04,
        psd.PutawayZone05
-FROM SKU s WITH (NOLOCK) 
-JOIN Strategy STG WITH (NOLOCK) ON STG.StrategyKey = s.StrategyKey 
-JOIN PutawayStrategyDetail psd WITH (NOLOCK) ON psd.PutawayStrategyKey = STG.PutawayStrategyKey 
-LEFT OUTER JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'PATYPE' AND c.Code = psd.PAType 
+FROM SKU s WITH (NOLOCK)
+JOIN Strategy STG WITH (NOLOCK) ON STG.StrategyKey = s.StrategyKey
+JOIN PutawayStrategyDetail psd WITH (NOLOCK) ON psd.PutawayStrategyKey = STG.PutawayStrategyKey
+LEFT OUTER JOIN CODELKUP c WITH (NOLOCK) ON c.LISTNAME = 'PATYPE' AND c.Code = psd.PAType
 
 GO
 GRANT DELETE ON  [dbo].[V_SKU_Putaway_Strategy] TO [NSQL]

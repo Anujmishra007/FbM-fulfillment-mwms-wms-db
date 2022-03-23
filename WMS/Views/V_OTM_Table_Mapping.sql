@@ -1,10 +1,11 @@
-IF EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'[dbo].[V_OTM_Table_Mapping]')) 
-   DROP VIEW [dbo].[V_OTM_Table_Mapping]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-CREATE VIEW V_OTM_Table_Mapping AS
-SELECT 'ASNADDOTM ' AS TableName, 'RECEIPT' AS PhysicalTableName, 'ReceiptKey' AS Key1, 
-       'DocType' AS Key2, 'StorerKey' AS Key3, 'OTM-ASN' AS ParmType   
+CREATE OR ALTER VIEW V_OTM_Table_Mapping AS
+SELECT 'ASNADDOTM ' AS TableName, 'RECEIPT' AS PhysicalTableName, 'ReceiptKey' AS Key1,
+       'DocType' AS Key2, 'StorerKey' AS Key3, 'OTM-ASN' AS ParmType
 UNION SELECT 'CANCASNOTM', 'RECEIPT', 'ReceiptKey', 'DocType', 'StorerKey', 'OTM-ASN'
 UNION SELECT 'RCPTOTM',    'RECEIPT', 'ReceiptKey', 'DocType', 'StorerKey', 'OTM-ASN'
 UNION SELECT 'CANCSOOTM',  'ORDERS',  'OrderKey', 'Status', 'StorerKey', 'OTM-ORD'

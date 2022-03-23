@@ -1,14 +1,15 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************************/
 --[TH] - JReport_Add_View in PRD Catalog  https://jiralfl.atlassian.net/browse/WMS-18745
 /* Date         Author      Ver.  Purposes									                  */
 /* 12-Jan-2022  gywong      1.0   Created									                     */
 /***************************************************************************************/
-CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_06701_STOCK_BALANCE] 
-AS 
+CREATE OR ALTER VIEW [BI].[V_TH_DIVERSEY_06701_STOCK_BALANCE]
+AS
  SELECT
   AL4.Loc,
   AL4.Facility,
@@ -37,7 +38,7 @@ WHERE AL1.StorerKey = '06701'
 AND AL4.Facility = '619'
 AND AL1.Qty > 0
 
-GO 
+GO
 
 GRANT SELECT ON [BI].[V_TH_DIVERSEY_06701_STOCK_BALANCE]  TO [JReportRole]
 GO
@@ -47,7 +48,7 @@ EXEC AS LOGIN = 'JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT * FROM [BI].[V_TH_DIVERSEY_06701_STOCK_BALANCE] 
+SELECT * FROM [BI].[V_TH_DIVERSEY_06701_STOCK_BALANCE]
 
 revert;
 */
