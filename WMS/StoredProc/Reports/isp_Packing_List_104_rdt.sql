@@ -28,8 +28,8 @@ GO
 /************************************************************************/  
   
 CREATE PROC isp_Packing_List_104_rdt  
-            @c_Pickslipno    NVARCHAR(15),       - Could be Storerkey/Pickslipno/Orderkey
-            @c_Orderkey      NVARCHAR(10) = ''   - Could be Orderkey
+            @c_Pickslipno    NVARCHAR(15),       -- Could be Storerkey/Pickslipno/Orderkey
+            @c_Orderkey      NVARCHAR(10) = ''   -- Could be Orderkey
 AS  
 BEGIN  
    SET NOCOUNT ON  
