@@ -1,42 +1,47 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Delivery_Receipt09]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [dbo].[isp_Delivery_Receipt09]
+USE [MYWMS]
 GO
 
+/****** Object:  StoredProcedure [dbo].[isp_Delivery_Receipt09]    Script Date: 3/25/2022 11:34:00 AM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/  
-/* Stored Proc: isp_Delivery_Receipt09                                  */  
-/* Creation Date: 01-Feb-2021                                           */  
-/* Copyright: LF Logistics                                              */  
-/* Written by: WLChooi                                                  */  
-/*                                                                      */  
-/* Purpose: WMS-16276 - LEGO Delivery Note                              */  
-/*        :                                                             */  
-/* Called By: r_dw_delivery_receipt09                                   */  
-/*          :                                                           */  
-/* GitLab Version: 1.5                                                  */  
-/*                                                                      */  
-/* Version: 7.0                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author    Ver Purposes                                  */ 
-/* 2021-03-16   WLChooi   1.1 WMS-16276 - Add new columns (WL01)        */
-/* 2021-03-22   WLChooi   1.2 WMS-16276 - Change sorting and column     */
-/*                            logic (WL02)                              */
-/* 2021-03-25   WLChooi   1.3 Change date column due to urgent request  */
-/*                            from LIT (WL03)                           */
-/* 2021-04-06   WLChooi   1.4 WMS-16276 - Change to 6 d.p for Total CBM */
-/*                            and Weight (WL04)                         */
-/* 2021-04-15   WLChooi   1.5 Fix Sorting (WL05)                        */  
-/* 2021-04-12   WLChooi   1.6 WMS-16789 - Logic Fix For LEGO and add new*/
-/*                            columns to cater for LEGOP (WL06)         */
-/************************************************************************/  
-CREATE PROC [dbo].[isp_Delivery_Receipt09]
+
+
+/*****************************************************************************/  
+/* Stored Proc: isp_Delivery_Receipt09                                       */  
+/* Creation Date: 01-Feb-2021                                                */  
+/* Copyright: LF Logistics                                                   */  
+/* Written by: WLChooi                                                       */  
+/*                                                                           */  
+/* Purpose: WMS-16276 - LEGO Delivery Note                                   */  
+/*        :                                                                  */  
+/* Called By: r_dw_delivery_receipt09                                        */  
+/*          :                                                                */  
+/* GitLab Version: 1.5                                                       */  
+/*                                                                           */  
+/* Version: 7.0                                                              */  
+/*                                                                           */  
+/* Data Modifications:                                                       */  
+/*                                                                           */  
+/* Updates:                                                                  */  
+/* Date         Author    Ver Purposes                                       */ 
+/* 2021-03-16   WLChooi   1.1 WMS-16276 - Add new columns (WL01)             */
+/* 2021-03-22   WLChooi   1.2 WMS-16276 - Change sorting and column          */
+/*                            logic (WL02)                                   */
+/* 2021-03-25   WLChooi   1.3 Change date column due to urgent request       */
+/*                            from LIT (WL03)                                */
+/* 2021-04-06   WLChooi   1.4 WMS-16276 - Change to 6 d.p for Total CBM      */
+/*                            and Weight (WL04)                              */
+/* 2021-04-15   WLChooi   1.5 Fix Sorting (WL05)                             */  
+/* 2021-04-12   WLChooi   1.6 WMS-16789 - Logic Fix For LEGO and add new     */
+/*                            columns to cater for LEGOP (WL06)              */
+/* 2022-03-18   CalvinK   1.7 JSM-57929 Add UserDefine03 conditions (CLVN01) */
+/* 2022-03-25   CalvinK   1.8 JSM-57929 Alter UserDefine04 (CLVN02)          */
+/*****************************************************************************/  
+ALTER PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
 AS  
 BEGIN  
@@ -206,7 +211,7 @@ BEGIN
         , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END AS SKU
         , CASE WHEN OH.Storerkey = 'LEGOP'   --WL06  
                     THEN S.AltSKU            --WL06 
-               WHEN ISNULL(OD.UserDefine03,'') = 'Y'
+               WHEN ISNULL(OD.UserDefine03,'') IN ('Y', 'TRUE')		--CLVN01
                     THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
                ELSE 
                     CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
@@ -219,7 +224,11 @@ BEGIN
         , TTLWeight = CAST(0.000000 AS DECIMAL(30,6))   --WL04
         , TTLCBM    = CAST(0.000000 AS DECIMAL(30,6))   --WL04
         , C.Containerkey
-        , OH.UserDefine04
+        --, OH.UserDefine04										--(CLVN02)
+		, UserDefine04 = CASE LOWER(OH.UserDefine04) 			--(CLVN02)
+							WHEN 'true' THEN 'Y'				--(CLVN02)
+							WHEN 'false' THEN 'N'				--(CLVN02)
+							ELSE OH.UserDefine04 END			--(CLVN02)
         , ISNULL(OH.C_State,'') AS C_State
         , OD.Notes2
         , MAX(t.TTLQty)   --WL01   --WL06
@@ -280,7 +289,7 @@ BEGIN
           , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END
           , CASE WHEN OH.Storerkey = 'LEGOP'   --WL06  
                       THEN S.AltSKU            --WL06 
-                 WHEN ISNULL(OD.UserDefine03,'') = 'Y'
+                 WHEN ISNULL(OD.UserDefine03,'') IN ('Y', 'TRUE')		--CLVN01
                       THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
                  ELSE 
                       CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
@@ -290,7 +299,11 @@ BEGIN
           , OD.UserDefine04
           , OH.StorerKey
           , C.Containerkey
-          , OH.UserDefine04
+          --, OH.UserDefine04									--(CLVN02)
+		  , CASE LOWER(OH.UserDefine04) 						--(CLVN02)
+							WHEN 'true' THEN 'Y'				--(CLVN02)
+							WHEN 'false' THEN 'N'				--(CLVN02)
+							ELSE OH.UserDefine04 END			--(CLVN02)
           , ISNULL(OH.C_State,'')
           , OD.Notes2
    UNION ALL   --WithOUT Containerkey
@@ -321,7 +334,7 @@ BEGIN
         , Notes2B = ''
         , CASE WHEN OH.Storerkey = 'LEGOP' THEN OD.OrderLineNumber ELSE OD.UserDefine02 END   --WL06
         , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END AS SKU
-        , CASE WHEN ISNULL(OD.UserDefine03,'') = 'Y' 
+        , CASE WHEN ISNULL(OD.UserDefine03,'') IN ('Y', 'TRUE')		--CLVN01
                THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
                ELSE CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
           END AS UPC
@@ -333,7 +346,11 @@ BEGIN
         , TTLWeight = CAST(0.000000 AS DECIMAL(30,6))   --WL04
         , TTLCBM    = CAST(0.000000 AS DECIMAL(30,6))   --WL04
         , ''
-        , OH.UserDefine04
+        --, OH.UserDefine04										--(CLVN02)
+		, UserDefine04 = CASE LOWER(OH.UserDefine04) 			--(CLVN02)
+							WHEN 'true' THEN 'Y'				--(CLVN02)
+							WHEN 'false' THEN 'N'				--(CLVN02)
+							ELSE OH.UserDefine04 END			--(CLVN02)
         , ISNULL(OH.C_State,'') AS C_State
         , OD.Notes2
         , MAX(PIDET.Qty)   --WL01
@@ -382,7 +399,7 @@ BEGIN
           , OH.Notes2
           , CASE WHEN OH.Storerkey = 'LEGOP' THEN OD.OrderLineNumber ELSE OD.UserDefine02 END   --WL06
           , CASE WHEN OD.ConsoOrderLineNo > 0 THEN '_' + LTRIM(RTRIM(S.SKU)) ELSE LTRIM(RTRIM(S.SKU)) END
-          , CASE WHEN ISNULL(OD.UserDefine03,'') = 'Y' 
+          , CASE WHEN ISNULL(OD.UserDefine03,'') IN ('Y', 'TRUE')		--CLVN01
                  THEN CASE WHEN ISNULL(OD.RetailSku,'') <> '' THEN OD.RetailSku ELSE S.AltSku END 
                  ELSE CASE WHEN LEN(EOD.Notes) > 101 THEN SUBSTRING(EOD.Notes,101, 20) ELSE S.AltSku END 
             END
@@ -390,7 +407,11 @@ BEGIN
           , P.CaseCnt
           , OD.UserDefine04
           , OH.StorerKey
-          , OH.UserDefine04
+          --, OH.UserDefine04									--(CLVN02)
+		  , CASE LOWER(OH.UserDefine04) 						--(CLVN02)
+							WHEN 'true' THEN 'Y'				--(CLVN02)
+							WHEN 'false' THEN 'N'				--(CLVN02)
+							ELSE OH.UserDefine04 END			--(CLVN02)
           , ISNULL(OH.C_State,'')
           , OD.Notes2
 
@@ -496,10 +517,4 @@ QUIT_SP:
 END -- procedure
 GO
 
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
 
-GRANT EXECUTE ON [dbo].[isp_Delivery_Receipt09] TO nSQL 
-GO
