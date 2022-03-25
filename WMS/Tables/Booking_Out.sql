@@ -42,7 +42,12 @@ CREATE TABLE [dbo].[Booking_Out]
 [VehicleType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Carrierkey] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [FinalizeFlag] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Booking_Out_FinalizeFlag] DEFAULT ('N'),
-[ToLoc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_BOOKING_OUT_ToLoc] DEFAULT ('')
+[ToLoc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_BOOKING_OUT_ToLoc] DEFAULT (''),
+Banner nvarchar(100),
+SubBanner nvarchar(100),
+Wave nvarchar(20),
+ShipmentGroupProfile nvarchar(100),
+ShipmentGroup nvarchar(100)
 ) ON [PRIMARY]
 GO
 
@@ -64,3 +69,16 @@ EXEC sp_addextendedproperty N'MS_Description', N'From Loc', 'SCHEMA', N'dbo', 'T
 GO
 EXEC sp_addextendedproperty N'MS_Description', N'To Loc', 'SCHEMA', N'dbo', 'TABLE', N'Booking_Out', 'COLUMN', N'ToLoc'
 GO
+
+
+/*
+
+ALTER TABLE Booking_Out
+ADD 	Banner nvarchar(100),
+	SubBanner nvarchar(100),
+	Wave nvarchar(20),
+	ShipmentGroupProfile nvarchar(100),
+	ShipmentGroup nvarchar(100);
+GO
+
+*/

@@ -17,7 +17,15 @@ CREATE TABLE [dbo].[TMS_Shipment]
 [Addwho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_TMS_Shipment_Addwho] DEFAULT (suser_sname()),
 [AddDate] [datetime] NULL CONSTRAINT [DF_TMS_Shipment_AddDate] DEFAULT (getdate()),
 [Editwho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_TMS_Shipment_Editwho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NULL CONSTRAINT [DF_TMS_Shipment_EditDate] DEFAULT (getdate())
+[EditDate] [datetime] NULL CONSTRAINT [DF_TMS_Shipment_EditDate] DEFAULT (getdate()),
+Banner nvarchar(100),
+SubBanner nvarchar(100),
+Wave nvarchar(20),
+ShipmentGroupProfile nvarchar(100),
+ShipmentGroup nvarchar(100),
+AppointmentID nvarchar(20),
+Principal nvarchar(90),
+BookingNo int
 ) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[TMS_Shipment] ADD CONSTRAINT [PKTMS_Shipment] PRIMARY KEY CLUSTERED ([Rowref]) ON [PRIMARY]
@@ -30,3 +38,20 @@ GRANT SELECT ON  [dbo].[TMS_Shipment] TO [NSQL]
 GO
 GRANT UPDATE ON  [dbo].[TMS_Shipment] TO [NSQL]
 GO
+
+/* 
+--WMS-18951
+
+ALTER TABLE TMS_Shipment
+ADD 	Banner nvarchar(100),
+	SubBanner nvarchar(100),
+	Wave nvarchar(20),
+	ShipmentGroupProfile nvarchar(100),
+	ShipmentGroup nvarchar(100),
+	AppointmentID nvarchar(20),
+	Principal nvarchar(90),
+	BookingNo int;
+GO
+
+
+*/
