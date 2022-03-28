@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-IF OBJECT_ID('BI.V_JRPT_MHAP_MHDC_PackingSlip','V') IS NOT NULL
 --https://jiralfl.atlassian.net/browse/WMS-14416
 CREATE OR ALTER VIEW BI.V_JRPT_MHAP_MHDC_PackingSlip
 AS

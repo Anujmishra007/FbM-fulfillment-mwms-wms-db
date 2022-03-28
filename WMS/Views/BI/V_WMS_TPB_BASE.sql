@@ -3,8 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-SET ANSI_NULLS OFF;
-SET QUOTED_IDENTIFIER OFF;
+
 /***************************************************************************/
 -- https://jiralfl.atlassian.net/browse/WMS-15782
 /* Updates:                                                                */
