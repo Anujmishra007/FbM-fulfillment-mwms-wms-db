@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT Name FROM dbo.sysobjects WHERE Name = 'nsp_FullPallet_ReplenishmentRpt02' AND Type = 'P' )
-   DROP PROC nsp_FullPallet_ReplenishmentRpt02
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -16,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: r_full_Pallet_replenishment_report02                         */
 /*                                                                         */
-/* PVCS Version: 1.5                                                      */
+/* PVCS Version: 1.6                                                      */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -32,9 +29,12 @@ GO
 /* 14-Dec-2009  Leong      1.3   SOS#156197 - Pass In StorerKey            */
 /* 05-MAR-2018  Wan01      1.4   WM - Add Functype                         */
 /* 05-OCT-2018  CZTENG01   1.5   WM - Add ReplGrp                          */
+/* 09-Mar-2022  WLChooi    1.6   DevOps Combine Script                     */
+/* 09-Mar-2022  WLChooi    1.6   WMS-19114 Add config to filter Lottable03 */
+/*                               (WL01)                                    */
 /***************************************************************************/
 
-CREATE PROC nsp_FullPallet_ReplenishmentRpt02
+CREATE OR ALTER PROC [dbo].[nsp_FullPallet_ReplenishmentRpt02]
    @c_zone01    NVARCHAR(10),
    @c_zone02    NVARCHAR(10),
    @c_zone03    NVARCHAR(10),
@@ -125,19 +125,34 @@ BEGIN
                   ReplenishmentKey,
                   LA.Lottable02,  -- SOS#152090
                   LA.Lottable04   -- SOS#152090
-         FROM     REPLENISHMENT R ( NOLOCK ),
-                  SKU (NOLOCK),
-                  LOC (NOLOCK),
-                  PACK (NOLOCK), -- Pack table added by Jacob Date Jan 03, 2001
-                  LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
-         WHERE    SKU.Sku = R.Sku AND
-                  SKU.StorerKey = R.StorerKey AND
-                  LOC.Loc = R.ToLoc AND
-                  SKU.PackKey = PACK.PackKey AND
-                  R.confirmed = 'N' AND
-                  LOC.Facility = @c_zone01 AND -- SOS#140132
-                  LA.LOT = R.LOT -- SOS#152090
-             AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --(Wan01)
+         --WL01 S
+         FROM REPLENISHMENT R (NOLOCK)
+         JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
+         JOIN LOC (NOLOCK) ON LOC.Loc = R.ToLoc
+         JOIN PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
+         LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
+                                       AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+         WHERE R.confirmed = 'N'
+         AND LOC.Facility = @c_zone01
+         AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+         AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
+                       WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
+                  ELSE 0 END )
+         --FROM     REPLENISHMENT R ( NOLOCK ),
+         --         SKU (NOLOCK),
+         --         LOC (NOLOCK),
+         --         PACK (NOLOCK), -- Pack table added by Jacob Date Jan 03, 2001
+         --         LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
+         --WHERE    SKU.Sku = R.Sku AND
+         --         SKU.StorerKey = R.StorerKey AND
+         --         LOC.Loc = R.ToLoc AND
+         --         SKU.PackKey = PACK.PackKey AND
+         --         R.confirmed = 'N' AND
+         --         LOC.Facility = @c_zone01 AND -- SOS#140132
+         --         LA.LOT = R.LOT -- SOS#152090
+         --    AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --(Wan01)
+         --WL01 E
          ORDER BY LOC.PutawayZone,
                   R.Priority
       END
@@ -160,20 +175,36 @@ BEGIN
                      ReplenishmentKey,
                      LA.Lottable02,  -- SOS#152090
                      LA.Lottable04   -- SOS#152090
-            FROM     REPLENISHMENT R ( NOLOCK ),
-                     SKU (NOLOCK),
-                     LOC (NOLOCK),
-                     PACK (NOLOCK), -- Pack table added by Jacob Date Jan 03, 2001
-                     LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
-            WHERE    SKU.Sku = R.Sku AND
-                     SKU.StorerKey = R.StorerKey AND
-                     LOC.Loc = R.ToLoc AND
-                     SKU.PackKey = PACK.PackKey AND
-                     R.confirmed = 'N' AND
-                     LOC.Facility = @c_zone01 AND -- SOS#140132
-                     R.Storerkey = @c_storerkey AND
-                     LA.LOT = R.LOT -- SOS#152090
-                AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --(Wan01)
+            --WL01 S
+            FROM REPLENISHMENT R (NOLOCK)
+            JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
+            JOIN LOC (NOLOCK) ON LOC.Loc = R.ToLoc
+            JOIN PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
+            JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
+            LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
+                                          AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+            WHERE R.confirmed = 'N'
+            AND LOC.Facility = @c_zone01
+            AND R.Storerkey = @c_storerkey
+            AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+            AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
+                          WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
+                     ELSE 0 END )
+            --FROM     REPLENISHMENT R ( NOLOCK ),
+            --         SKU (NOLOCK),
+            --         LOC (NOLOCK),
+            --         PACK (NOLOCK), -- Pack table added by Jacob Date Jan 03, 2001
+            --         LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
+            --WHERE    SKU.Sku = R.Sku AND
+            --         SKU.StorerKey = R.StorerKey AND
+            --         LOC.Loc = R.ToLoc AND
+            --         SKU.PackKey = PACK.PackKey AND
+            --         R.confirmed = 'N' AND
+            --         LOC.Facility = @c_zone01 AND -- SOS#140132
+            --         R.Storerkey = @c_storerkey AND
+            --         LA.LOT = R.LOT -- SOS#152090
+            --    AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --(Wan01)
+            --WL01 E
             ORDER BY LOC.PutawayZone,
                      R.Priority
       END -- ( @c_storerkey = 'ALL' )
@@ -200,30 +231,49 @@ BEGIN
                   ReplenishmentKey,
                   LA.Lottable02,  -- SOS#152090
                   LA.Lottable04   -- SOS#152090
-         FROM     REPLENISHMENT R ( NOLOCK ),
-                  SKU (NOLOCK),
-                  LOC (NOLOCK),
-                  PACK (NOLOCK), -- Pack table added by Jacob. Date: Jan 03, 2001
-                  LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
-         WHERE    SKU.Sku = R.Sku AND
-                  SKU.StorerKey = R.StorerKey AND
-                  LOC.Loc = R.ToLoc AND
-                  SKU.PackKey = PACK.PackKey AND
-                  R.confirmed = 'N' AND
-                  LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
-                                       @c_zone05, @c_zone06, @c_zone07,
-                                       @c_zone08, @c_zone09, @c_zone10,
-                                       @c_zone11, @c_zone12 ) AND
-                  LOC.Facility = @c_zone01 AND -- SOS#140132
-                  LA.LOT = R.LOT -- SOS#152090
-             AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)
+         --WL01 S
+         FROM REPLENISHMENT R (NOLOCK)
+         JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
+         JOIN LOC (NOLOCK) ON LOC.Loc = R.ToLoc
+         JOIN PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
+         LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
+                                       AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+         WHERE R.confirmed = 'N'
+         AND LOC.Facility = @c_zone01
+         AND LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
+                                  @c_zone05, @c_zone06, @c_zone07,
+                                  @c_zone08, @c_zone09, @c_zone10,
+                                  @c_zone11, @c_zone12 )
+         AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+         AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
+                       WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
+                  ELSE 0 END )
+         --FROM     REPLENISHMENT R ( NOLOCK ),
+         --         SKU (NOLOCK),
+         --         LOC (NOLOCK),
+         --         PACK (NOLOCK), -- Pack table added by Jacob. Date: Jan 03, 2001
+         --         LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
+         --WHERE    SKU.Sku = R.Sku AND
+         --         SKU.StorerKey = R.StorerKey AND
+         --         LOC.Loc = R.ToLoc AND
+         --         SKU.PackKey = PACK.PackKey AND
+         --         R.confirmed = 'N' AND
+         --         LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
+         --                              @c_zone05, @c_zone06, @c_zone07,
+         --                              @c_zone08, @c_zone09, @c_zone10,
+         --                              @c_zone11, @c_zone12 ) AND
+         --         LOC.Facility = @c_zone01 AND -- SOS#140132
+         --         LA.LOT = R.LOT -- SOS#152090
+         --    AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)
+         --WL01 E
          ORDER BY LOC.PutawayZone,
                   R.FromLOC,
                   R.Sku
       END
       ELSE
       BEGIN
-         SELECT   R.FromLOC,
+            SELECT   R.FromLOC,
                      R.Id,
                      R.ToLoc,
                      R.Sku,
@@ -240,24 +290,43 @@ BEGIN
                      ReplenishmentKey,
                      LA.Lottable02,  -- SOS#152090
                      LA.Lottable04   -- SOS#152090
-            FROM     REPLENISHMENT R ( NOLOCK ),
-                     SKU (NOLOCK),
-                     LOC (NOLOCK),
-                     PACK (NOLOCK), -- Pack table added by Jacob. Date: Jan 03, 2001
-                     LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
-            WHERE    SKU.Sku = R.Sku AND
-                     SKU.StorerKey = R.StorerKey AND
-                     LOC.Loc = R.ToLoc AND
-                     SKU.PackKey = PACK.PackKey AND
-                     R.confirmed = 'N' AND
-                     LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
-                                          @c_zone05, @c_zone06, @c_zone07,
-                                          @c_zone08, @c_zone09, @c_zone10,
-                                          @c_zone11, @c_zone12 ) AND
-                     LOC.Facility = @c_zone01 AND -- SOS#140132
-                     R.Storerkey = @c_storerkey AND
-                     LA.LOT = R.LOT -- SOS#152090
-                AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)
+            --WL01 S
+            FROM REPLENISHMENT R (NOLOCK)
+            JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
+            JOIN LOC (NOLOCK) ON LOC.Loc = R.ToLoc
+            JOIN PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
+            JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
+            LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
+                                          AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+            WHERE R.confirmed = 'N'
+            AND LOC.Facility = @c_zone01
+            AND LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
+                                     @c_zone05, @c_zone06, @c_zone07,
+                                     @c_zone08, @c_zone09, @c_zone10,
+                                     @c_zone11, @c_zone12 )
+            AND R.Storerkey = @c_storerkey
+            AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+            AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
+                          WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
+                     ELSE 0 END )
+            --FROM     REPLENISHMENT R ( NOLOCK ),
+            --         SKU (NOLOCK),
+            --         LOC (NOLOCK),
+            --         PACK (NOLOCK), -- Pack table added by Jacob. Date: Jan 03, 2001
+            --         LOTATTRIBUTE LA (NOLOCK) -- SOS#152090
+            --WHERE    SKU.Sku = R.Sku AND
+            --         SKU.StorerKey = R.StorerKey AND
+            --         LOC.Loc = R.ToLoc AND
+            --         SKU.PackKey = PACK.PackKey AND
+            --         R.confirmed = 'N' AND
+            --         LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
+            --                              @c_zone05, @c_zone06, @c_zone07,
+            --                              @c_zone08, @c_zone09, @c_zone10,
+            --                              @c_zone11, @c_zone12 ) AND
+            --         LOC.Facility = @c_zone01 AND -- SOS#140132
+            --         R.Storerkey = @c_storerkey AND
+            --         LA.LOT = R.LOT -- SOS#152090
+            --    AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL') --(Wan01)
 
             ORDER BY LOC.PutawayZone,
                      R.FromLOC,
@@ -267,6 +336,5 @@ BEGIN
    QUIT_SP:                                                                   --(Wan01)
 END
 GO
-
-GRANT EXECUTE ON nsp_FullPallet_ReplenishmentRpt02 TO NSQL
+GRANT EXECUTE ON  [dbo].[nsp_FullPallet_ReplenishmentRpt02] TO [NSQL]
 GO
