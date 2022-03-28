@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Print_Report]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_Print_Report]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -38,8 +33,11 @@ GO
 /* 2021-09-24  Wan03    1.3   DevOps Combine Script                     */
 /* 2021-11-05  Wan04    1.4   LFWM-3029 - UAT CN - Wave report Carters  */
 /*                            PRINT issue                               */
+/* 2022-01-03  Wan05    1.5   Fixed. Set @n_Continue =  2 if Error      */
+/*                            Fixed. Add Criteria parameters            */
+/*                            Add Call to PreGenRptData                 */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Print_Report]
+CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
          , @c_ReportID           NVARCHAR(10)
          , @c_Storerkey          NVARCHAR(15)
@@ -167,6 +165,11 @@ BEGIN
          , @c_CriteriaParm13        NVARCHAR(60)      = ''
          , @c_CriteriaParm14        NVARCHAR(60)      = ''
          , @c_CriteriaParm15        NVARCHAR(60)      = ''
+         , @c_CriteriaParm16        NVARCHAR(60)      = ''              --(Wan05)
+         , @c_CriteriaParm17        NVARCHAR(60)      = ''              --(Wan05)
+         , @c_CriteriaParm18        NVARCHAR(60)      = ''              --(Wan05)
+         , @c_CriteriaParm19        NVARCHAR(60)      = ''              --(Wan05)
+         , @c_CriteriaParm20        NVARCHAR(60)      = ''              --(Wan05)
          , @c_CriteriaMatching01    NVARCHAR(100)     = ''
          , @c_CriteriaMatching02    NVARCHAR(100)     = ''
          , @c_CriteriaMatching03    NVARCHAR(100)     = ''
@@ -193,6 +196,8 @@ BEGIN
          , @c_SQL                   NVARCHAR(MAX)
          , @c_SQLParms              NVARCHAR(MAX)
 
+         , @c_PreGenRptData_SP      NVARCHAR(50)      = ''  --(Wan05)
+         
          , @CUR_GROUP               CURSOR
          , @CUR_PARM                CURSOR
 
@@ -422,7 +427,12 @@ BEGIN
                IF @n_NoofParms = 12 SET @c_CriteriaParm12= @c_Parm
                IF @n_NoofParms = 13 SET @c_CriteriaParm13= @c_Parm
                IF @n_NoofParms = 14 SET @c_CriteriaParm14= @c_Parm
-               IF @n_NoofParms = 15 SET @c_CriteriaParm15= @c_Parm                                  
+               IF @n_NoofParms = 15 SET @c_CriteriaParm15= @c_Parm 
+               IF @n_NoofParms = 16 SET @c_CriteriaParm16= @c_Parm               --(Wan05)    
+               IF @n_NoofParms = 17 SET @c_CriteriaParm17= @c_Parm               --(Wan05)
+               IF @n_NoofParms = 18 SET @c_CriteriaParm18= @c_Parm               --(Wan05)
+               IF @n_NoofParms = 19 SET @c_CriteriaParm19= @c_Parm               --(Wan05)
+               IF @n_NoofParms = 20 SET @c_CriteriaParm20= @c_Parm               --(Wan05)                                   
             END
          END
          SET @n_ParmsCnt = @n_ParmsCnt + 1
@@ -441,6 +451,7 @@ BEGIN
              ,CriteriaMatching04 = ISNULL(RTRIM(WMRD.CriteriaMatching04),'')
              ,CriteriaMatching05 = ISNULL(RTRIM(WMRD.CriteriaMatching05),'')
              ,PreprintSP         = ISNULL(RTRIM(WMRD.PreprintSP),'')
+             ,PreGenRptData_SP   = ISNULL(RTRIM(WMRD.PreGenRptDataSP),'')     --(Wan05)
       FROM dbo.WMREPORT       WMR  WITH (NOLOCK)
       JOIN dbo.WMREPORTDETAIL WMRD WITH (NOLOCK) ON (WMR.ReportID = WMRD.ReportID)
       JOIN WM.fnc_Get_WMReportDetail (@c_ReportID, @c_Storerkey, @c_Facility, @c_UserName, @c_ComputerName, 'N') MD
@@ -465,6 +476,7 @@ BEGIN
                                     , @c_CriteriaMatching04
                                     , @c_CriteriaMatching05
                                     , @c_PreprintSP
+                                    , @c_PreGenRptData_SP                        --(Wan05)
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          --(Wan01) - START
@@ -543,6 +555,11 @@ BEGIN
                            + ',@c_CriteriaParm13 NVARCHAR(60) '
                            + ',@c_CriteriaParm14 NVARCHAR(60) '
                            + ',@c_CriteriaParm15 NVARCHAR(60) '
+                           + ',@c_CriteriaParm16 NVARCHAR(60) '                  --(Wan05)
+                           + ',@c_CriteriaParm17 NVARCHAR(60) '                  --(Wan05)
+                           + ',@c_CriteriaParm18 NVARCHAR(60) '                  --(Wan05)
+                           + ',@c_CriteriaParm19 NVARCHAR(60) '                  --(Wan05)
+                           + ',@c_CriteriaParm20 NVARCHAR(60) '                  --(Wan05) 
 
             EXEC sp_ExecuteSQL @c_SQL
                              , @c_SQLParms
@@ -562,6 +579,11 @@ BEGIN
                              , @c_CriteriaParm13  
                              , @c_CriteriaParm14  
                              , @c_CriteriaParm15
+                             , @c_CriteriaParm16                                 --(Wan05)
+                             , @c_CriteriaParm17                                 --(Wan05)
+                             , @c_CriteriaParm18                                 --(Wan05)
+                             , @c_CriteriaParm19                                 --(Wan05)
+                             , @c_CriteriaParm20                                 --(Wan05)  
 
             IF @b_ContinuePrint = 0 
             BEGIN 
@@ -756,6 +778,70 @@ BEGIN
             END        
          END
 
+         --(Wan05) - START
+         IF @c_PreGenRptData_SP <> ''
+         BEGIN
+            ; WITH SPP AS 
+            ( SELECT RowID = ROW_NUMBER() OVER (ORDER BY CASE WHEN p.NAME = '@c_PreGenRptData' THEN 9999 ELSE p.parameter_id END ASC)
+                   , p.[Name]
+              FROM sys.parameters AS p (NOLOCK) WHERE p.[object_id] = OBJECT_ID(@c_PreGenRptData_SP)
+            )
+            SELECT @c_SQL = STRING_AGG (SPP.[Name] + '=' + CASE WHEN SPP.[Name] = '@c_PreGenRptData' THEN '''Y''' ELSE '@c_Parm' + CONVERT(CHAR(1),SPP.RowID) END
+                                       , ',') 
+                              WITHIN GROUP ( ORDER BY SPP.RowID ASC )
+            FROM SPP 
+            
+            IF @c_SQL <> '' AND @c_SQL IS NOT NULL AND CHARINDEX('PreGenRptData',@c_SQL,1) > 0
+            BEGIN
+               SET @c_SQL = N'EXEC ' + @c_PreGenRptData_SP + ' ' + @c_SQL
+               
+               SET @c_SQLParms= N'@c_Parm1  NVARCHAR(60) '
+                              + ',@c_Parm2  NVARCHAR(60) '
+                              + ',@c_Parm3  NVARCHAR(60) '
+                              + ',@c_Parm4  NVARCHAR(60) '
+                              + ',@c_Parm5  NVARCHAR(60) '
+                              + ',@c_Parm6  NVARCHAR(60) '
+                              + ',@c_Parm7  NVARCHAR(60) '
+                              + ',@c_Parm8  NVARCHAR(60) '
+                              + ',@c_Parm9  NVARCHAR(60) '
+                              + ',@c_Parm10 NVARCHAR(60) '
+                              + ',@c_Parm11 NVARCHAR(60) '
+                              + ',@c_Parm12 NVARCHAR(60) '
+                              + ',@c_Parm13 NVARCHAR(60) '
+                              + ',@c_Parm14 NVARCHAR(60) '
+                              + ',@c_Parm15 NVARCHAR(60) '
+                              + ',@c_Parm16 NVARCHAR(60) '
+                              + ',@c_Parm17 NVARCHAR(60) '
+                              + ',@c_Parm18 NVARCHAR(60) '
+                              + ',@c_Parm19 NVARCHAR(60) '
+                              + ',@c_Parm20 NVARCHAR(60) '                           
+
+               EXEC sp_ExecuteSQL @c_SQL
+                                , @c_SQLParms
+                                , @c_Parm1   
+                                , @c_Parm2   
+                                , @c_Parm3   
+                                , @c_Parm4   
+                                , @c_Parm5   
+                                , @c_Parm6   
+                                , @c_Parm7   
+                                , @c_Parm8   
+                                , @c_Parm9   
+                                , @c_Parm10  
+                                , @c_Parm11  
+                                , @c_Parm12  
+                                , @c_Parm13  
+                                , @c_Parm14  
+                                , @c_Parm15
+                                , @c_Parm16  
+                                , @c_Parm17  
+                                , @c_Parm18  
+                                , @c_Parm19  
+                                , @c_Parm20                                
+               
+            END
+         END
+         --(Wan05) - END
          --(Wan01) - START
          PRINT_START:
          IF @c_PrintType IN ( 'JReport', 'LogiReport')   --Wan02
@@ -790,13 +876,14 @@ BEGIN
 
             IF @b_Success = 0 
             BEGIN
+               SET @n_Continue = 3                 --(Wan05)
                SET @n_err = 552656
-               SET @c_ErrMsg = ERROR_MESSAGE()
+               --SET @c_ErrMsg = ERROR_MESSAGE()   --(Wan05)
                SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing lsp_WM_Get_ModuleReport_URL. (lsp_WM_Print_Report)'
                              + '( ' + @c_errmsg + ' )'
                GOTO EXIT_SP
             END
-
+   
             INSERT INTO @RPTURL (ReportID, DetailRowID, REPORT_URL)
             VALUES (@c_ReportID, @n_RowID, @c_ReturnURL)
 
@@ -976,7 +1063,7 @@ BEGIN
                                        , @c_CriteriaMatching04
                                        , @c_CriteriaMatching05
                                        , @c_PreprintSP
-
+                                       , @c_PreGenRptData_SP                        --(Wan05)
       END 
       CLOSE @CUR_GROUP
       DEALLOCATE @CUR_GROUP
