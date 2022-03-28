@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Get_WebReport_URL]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_Get_WebReport_URL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -26,9 +21,12 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 2020-08-13  Wan      1.1   Created.                                  */
+/* 2020-08-13  Wan      1.0   Created.                                  */
+/* 2022-01-03  Wan01    1.1   DevOps Script Combine                     */
+/* 2022-01-03  Wan01    1.1   Fixed. Error # is 6 NVARCHAR              */
+/*                      1.1   Add Detail Level Logi report Catalogue    */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Get_WebReport_URL]
+CREATE OR ALTER PROC [WM].[lsp_WM_Get_WebReport_URL]
            @c_ReportID     NVARCHAR(10)
          , @n_DetailRowID  BIGINT   = 0
          , @c_Parm1        NVARCHAR(200)  = ''
@@ -137,6 +135,8 @@ BEGIN
             , @c_ReportParmName18= WMRD.ReportParmName18
             , @c_ReportParmName19= WMRD.ReportParmName19
             , @c_ReportParmName20= WMRD.ReportParmName20
+            , @c_ReportCatalog   = CASE WHEN WMRD.ReportCatalog = '' THEN @c_ReportCatalog ELSE WMRD.ReportCatalog END     --(Wan01)
+            , @c_CatalogFolder   = CASE WHEN WMRD.ReportCatalog = '' THEN @c_CatalogFolder ELSE '' END                     --(Wan01)
       FROM dbo.WMREPORTDETAIL WMRD WITH (NOLOCK)
       WHERE WMRD.ReportID = @c_ReportID
       AND   WMRD.RowID    = @n_DetailRowID
@@ -145,14 +145,14 @@ BEGIN
       BEGIN  
          SET @n_Continue = 3  
          SET @n_err      = 558651   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-         SET @c_ErrMsg   ='NSQL'+CONVERT(NVARCHAR(5),@n_Err) 
+         SET @c_ErrMsg   ='NSQL'+CONVERT(NVARCHAR(6),@n_Err)         --(Wan01)
                          + ': NSQLConfig: Either Report Template OR Report Catalog is not setup (lsp_WM_Get_WebReport_URL)'          
          GOTO EXIT_SP        
       END
 
       IF RIGHT(@c_ReportURL,1)     <> '/' SET @c_ReportURL     = @c_ReportURL     + '/'
       IF RIGHT(@c_ReportFolder,1)  <> '/' SET @c_ReportFolder  = @c_ReportFolder  + '/'
-      IF RIGHT(@c_CatalogFolder,1) <> '/' SET @c_CatalogFolder = @c_CatalogFolder + '/'
+      IF RIGHT(@c_CatalogFolder,1) <> '/' AND @c_CatalogFolder <> '' SET @c_CatalogFolder = @c_CatalogFolder + '/'         --(Wan01)
 
       IF LEFT(@c_ReportFileName,1) = '/' AND LEN(@c_ReportFileName) > 1 SET @c_ReportFileName = RIGHT(@c_ReportFileName, LEN(@c_ReportFileName) - 1)
 
