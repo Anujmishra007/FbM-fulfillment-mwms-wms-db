@@ -11,7 +11,8 @@ GO
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
-/* 2022-01-03 1.0  Ung      WMS-18656 created                                 */
+/* 2022-01-03 1.0  Ung      WMS-18656 Created                                 */
+/* 2022-03-24 1.1  Ung      WMS-19133 Change record by user instead of mobile */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_MoveToLOC_Confirm (
@@ -103,7 +104,7 @@ BEGIN
       -- Find the line with same SKU
       SELECT @nRowRef = RowRef
       FROM rdt.rdtMoveToLOCLog WITH (NOLOCK)
-      WHERE Mobile = @nMobile
+      WHERE AddWho = SUSER_SNAME()
          AND SKU = @cSKU
       
       IF @nRowRef > 0
@@ -135,7 +136,7 @@ BEGIN
          @nTotalSKU = COUNT( DISTINCT SKU), 
          @nTotalQTY = SUM( QTY)
       FROM rdt.rdtMoveToLOCLog WITH (NOLOCK)
-      WHERE Mobile = @nMobile
+      WHERE AddWho = SUSER_SNAME()
       
       GOTO Quit
    END
@@ -150,7 +151,7 @@ BEGIN
       SET @curLog = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT RowRef, SKU, QTY
          FROM rdt.rdtMoveToLOCLog WITH (NOLOCK)
-         WHERE Mobile = @nMobile
+         WHERE AddWho = SUSER_SNAME()
          ORDER BY RowRef
       OPEN @curLog
       FETCH NEXT FROM @curLog INTO @nRowRef, @cSKU, @nQTY
@@ -210,7 +211,7 @@ BEGIN
       SET @curLog = CURSOR FOR
          SELECT Rowref
          FROM rdt.rdtMoveToLOCLog WITH (NOLOCK)
-         WHERE Mobile = @nMobile
+         WHERE AddWho = SUSER_SNAME()
       OPEN @curLog
       FETCH NEXT FROM @curLog INTO @nRowref
       WHILE @@FETCH_STATUS = 0
