@@ -16,7 +16,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2018-08-16 1.0  CSCHONG    Created (WMS-6031)                              */                 
+/* 2018-08-16 1.0  CSCHONG    Created (WMS-6031)                              */
+/* 2018-10-05 1.1  CHEEMUN    INC0416314 - Bug Fix                            */
 /******************************************************************************/                
                   
 CREATE PROC [dbo].[isp_Bartender_TH_PRODUCTLBL_GetParm]                      
@@ -93,7 +94,7 @@ BEGIN
     
     SET @c_ExecArguments = ''
 
-    SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 = RH.storerkey ,PARM2 = RH.RECEIPTKEY,PARM3=RD.SKU,PARM4='''',PARM5='''',' + CHAR(13) +
+    SET @c_SQLJOIN = ' SELECT DISTINCT PARM1 =RH.storerkey ,PARM2 = RH.RECEIPTKEY ,PARM3=RD.SKU,PARM4='''',PARM5='''',' + CHAR(13) +  --INC0416314  
                      ' PARM6= '''',PARM7='''',PARM8='''',PARM9='''',PARM10='''',Key1=''sku'',Key2='''',Key3='''',Key4='''',Key5='''' ' + CHAR(13) +
                      ' FROM RECEIPT RH WITH (NOLOCK)  ' + CHAR(13) +
                      ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.Receiptkey = RD.Receiptkey)' + CHAR(13) +
