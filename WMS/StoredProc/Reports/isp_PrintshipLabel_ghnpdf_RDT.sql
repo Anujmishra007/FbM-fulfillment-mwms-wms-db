@@ -21,8 +21,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 07-JAN-2022 CSCHONG  1.1   Devops Scripts combine                    */
+/* 14-MAR-2022 CSCHONG  1.2   WMS-18618 revised print logic (CS01)      */
 /************************************************************************/
-CREATE OR ALTER PROC isp_PrintshipLabel_ghnpdf_RDT  
+CREATE OR ALTER PROC isp_PrintshipLabel_ghnpdf_RDT
             @c_OrderKey     NVARCHAR(20)  
 
 AS  
@@ -86,7 +87,8 @@ BEGIN
       ,  FooterNotes        NVARCHAR(500)  
 )
   
-   IF EXISTS (SELECT 1 FROM ORDERS oh WITH (NOLOCK) WHERE oh.OrderKey = @c_orderkey AND oh.Status >= '5' AND oh.TrackingNo <> '')
+   --IF EXISTS (SELECT 1 FROM ORDERS oh WITH (NOLOCK) WHERE oh.OrderKey = @c_orderkey AND oh.Status >= '5' AND oh.TrackingNo <> '')     --CS01
+   IF EXISTS (SELECT 1 FROM ORDERS oh WITH (NOLOCK) WHERE oh.OrderKey = @c_orderkey AND oh.DocType = 'E' AND oh.TrackingNo <> '')      --CS01
    BEGIN
    SELECT @c_storerkey = oh.StorerKey
          --,@c_orderkey = oh.Orderkey
@@ -113,7 +115,7 @@ BEGIN
      WHERE OD.OrderKey = @c_orderkey
 
 
-   SET @c_COD = @c_CODtitle + CAST(@n_TTLUnitPrice AS NVARCHAR(20)) + SPACE(2) + @c_moneysymbol
+   SET @c_COD = @c_CODtitle + CAST(FORMAT(@n_TTLUnitPrice, 'N','en-us') AS NVARCHAR(20)) + SPACE(2) + @c_moneysymbol   --CS01
 
    --SELECT @c_COD '@c_COD'
 
