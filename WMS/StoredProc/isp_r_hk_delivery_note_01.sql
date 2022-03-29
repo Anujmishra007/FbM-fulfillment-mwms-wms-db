@@ -34,6 +34,7 @@ GO
 /* 30/04/2018   ML       1.8  Add new field SplitPrintKey                */
 /* 19/04/2021   ML       1.9  Performance tuning                         */
 /* 04/11/2021   ML       1.10 Add SizeSeq logic for handling Size 99-99  */
+/* 23/03/2022   ML       1.11 Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_01] (
@@ -234,51 +235,51 @@ BEGIN
         , @n_Col        = 24
 
    CREATE TABLE #TEMP_ORDET (
-        Orderkey        NVARCHAR(10)
-      , Storerkey       NVARCHAR(15)
-      , ReportTitle     NVARCHAR(500)
-      , SplitPrintKey   NVARCHAR(500)
-      , DocNumber       NVARCHAR(500)
-      , ExternOrderkey  NVARCHAR(500)
-      , LFLRefNo        NVARCHAR(500)
-      , ReferenceNo     NVARCHAR(500)
-      , ReferenceNo2    NVARCHAR(500)
-      , ReferenceNo3    NVARCHAR(500)
-      , ReferenceNo4    NVARCHAR(500)
-      , ReferenceNo5    NVARCHAR(500)
-      , Remark          NVARCHAR(500)
-      , PickSlipNo      NVARCHAR(18)
-      , LineGrouping    NVARCHAR(500)
-      , OrderLineNumber NVARCHAR(5 )
-      , Sku             NVARCHAR(20)
-      , Style           NVARCHAR(500)
-      , Color           NVARCHAR(500)
-      , Measurement     NVARCHAR(500)
-      , Size            NVARCHAR(10)
-      , SizeScaleSeq    INT
-      , Descr           NVARCHAR(500)
-      , LineRemark      NVARCHAR(500)
-      , LineRef1        NVARCHAR(500)
-      , LineRef2        NVARCHAR(500)
-      , LineRef3        NVARCHAR(500)
-      , Unitprice       FLOAT
-      , Qty             INT
-      , Discount        FLOAT
-      , Amount          FLOAT
-      , GrossAmount     FLOAT
-      , ShowField       NVARCHAR(4000)
-      , UOM             NVARCHAR(10)
-      , ConsigneePrefix NVARCHAR(15)
-      , BRAND_Logo_Code NVARCHAR(500)
-      , ConsolPick      NVARCHAR(1)
-      , DocKey          NVARCHAR(10)
-      , FirstOrderkey   NVARCHAR(10)
+        Orderkey        NVARCHAR(10)   NULL
+      , Storerkey       NVARCHAR(15)   NULL
+      , ReportTitle     NVARCHAR(500)  NULL
+      , SplitPrintKey   NVARCHAR(500)  NULL
+      , DocNumber       NVARCHAR(500)  NULL
+      , ExternOrderkey  NVARCHAR(500)  NULL
+      , LFLRefNo        NVARCHAR(500)  NULL
+      , ReferenceNo     NVARCHAR(500)  NULL
+      , ReferenceNo2    NVARCHAR(500)  NULL
+      , ReferenceNo3    NVARCHAR(500)  NULL
+      , ReferenceNo4    NVARCHAR(500)  NULL
+      , ReferenceNo5    NVARCHAR(500)  NULL
+      , Remark          NVARCHAR(500)  NULL
+      , PickSlipNo      NVARCHAR(18)   NULL
+      , LineGrouping    NVARCHAR(500)  NULL
+      , OrderLineNumber NVARCHAR(5 )   NULL
+      , Sku             NVARCHAR(20)   NULL
+      , Style           NVARCHAR(500)  NULL
+      , Color           NVARCHAR(500)  NULL
+      , Measurement     NVARCHAR(500)  NULL
+      , Size            NVARCHAR(10)   NULL
+      , SizeScaleSeq    INT            NULL
+      , Descr           NVARCHAR(500)  NULL
+      , LineRemark      NVARCHAR(500)  NULL
+      , LineRef1        NVARCHAR(500)  NULL
+      , LineRef2        NVARCHAR(500)  NULL
+      , LineRef3        NVARCHAR(500)  NULL
+      , Unitprice       FLOAT          NULL
+      , Qty             INT            NULL
+      , Discount        FLOAT          NULL
+      , Amount          FLOAT          NULL
+      , GrossAmount     FLOAT          NULL
+      , ShowField       NVARCHAR(4000) NULL
+      , UOM             NVARCHAR(10)   NULL
+      , ConsigneePrefix NVARCHAR(15)   NULL
+      , BRAND_Logo_Code NVARCHAR(500)  NULL
+      , ConsolPick      NVARCHAR(1)    NULL
+      , DocKey          NVARCHAR(10)   NULL
+      , FirstOrderkey   NVARCHAR(10)   NULL
    )
 
    CREATE TABLE #TEMP_COPYDESCR (
-        Copies          INT
-      , CopyDescr       NVARCHAR(4000)
-      , Storerkey       NVARCHAR(15)
+        Copies          INT            NULL
+      , CopyDescr       NVARCHAR(4000) NULL
+      , Storerkey       NVARCHAR(15)   NULL
    )
 
 
@@ -864,7 +865,8 @@ BEGIN
                             WHEN SizeScaleSeq>0 THEN FORMAT(SizeScaleSeq,'000000.00')
                             WHEN ISNUMERIC(SL.Size)=1 AND LTRIM(SL.Size) NOT IN ('-','+','.',',') THEN FORMAT(CONVERT(FLOAT,SL.Size)+400000,'000000.00')
                             WHEN RTRIM(SL.Size) LIKE N'%[0-9]H' AND ISNUMERIC(LEFT(SL.Size,LEN(SL.Size)-1))=1 THEN FORMAT(CONVERT(FLOAT,LEFT(SL.Size,LEN(SL.Size)-1)+'.5')+400000,'000000.00')
-                            WHEN TRIM(SL.Size) LIKE N'%[ -]%' THEN FORMAT(ISNULL(TRY_PARSE(ISNULL(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1),'') AS FLOAT)+400000, CHARINDEX(N'|'+LTRIM(RTRIM(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1)))+N'|', @c_SizeList)+800000),'000000.00')
+                            WHEN TRIM(SL.Size) LIKE N'%[ -]%' THEN FORMAT(ISNULL(TRY_PARSE(ISNULL(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1),'') AS FLOAT)+400000,
+                                                                   CHARINDEX(N'|'+LTRIM(RTRIM(LEFT(TRIM(SL.Size),PATINDEX('%[ -]%',TRIM(SL.Size))-1)))+N'|', @c_SizeList)+800000),'000000.00')
                             ELSE FORMAT(CHARINDEX(N'|'+LTRIM(RTRIM(SL.Size))+N'|', @c_SizeList)+800000,'000000.00')
                          END +'-'+ SL.Size )
    INTO #TEMP_SSEQ
