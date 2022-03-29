@@ -1,10 +1,11 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_carton_label_09]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_carton_label_09]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_carton_label_09]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_carton_label_09]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /*************************************************************************/
 /* Store Procedure: isp_r_hk_carton_label_09                             */
 /* Creation Date: 24-Apr-2018                                            */
@@ -29,7 +30,8 @@ GO
 /* 05/03/2021  ML       WMS-16440 Add MapField: UDF04ShowBarcode         */
 /* 18/03/2021  ML       WMS-16440 Add MapField: UserDefine04             */
 /* 10/06/2021  ML       WMS-17263 Change all fields Configurable         */
-/* 24/06/2021  ML       Handle printing from boht EXceed and RDT         */
+/* 24/06/2021  ML       Handle printing from both EXceed and RDT         */
+/* 23/03/2022  ML       Add NULL to Temp Table                           */
 /*************************************************************************/
 -- From EXceed Packing: PickSlipNo, CartonNoStart, CartonNoEnd, LabelNoStart, LabelNoEnd
 -- From RDT: Storerkey, PickSlipNo/Orderkey/ExtOrderkey, CartonNoStart, CartonNoEnd, LabelNoStart, LabelNoEnd
@@ -85,7 +87,7 @@ BEGIN
       IF CHARINDEX('-',@c_PickSlipNo) > 0
       BEGIN
          --To retrieve Orderkey/ExternOrderKey Start
-     SET @c_Temp = SUBSTRING(@c_PickSlipNo, 1, CHARINDEX('-',@c_PickSlipNo)-1)
+         SET @c_Temp = SUBSTRING(@c_PickSlipNo, 1, CHARINDEX('-',@c_PickSlipNo)-1)
          IF EXISTS(SELECT TOP 1 1 FROM dbo.ORDERS(NOLOCK) WHERE Orderkey=@c_Temp)
             SET @c_OrderkeyStart = @c_Temp
          ELSE
@@ -150,36 +152,36 @@ BEGIN
       DROP TABLE #TEMP_RESULT
 
    CREATE TABLE #TEMP_RESULT (
-        PickSlipNo        NVARCHAR(500)
-      , LabelNo           NVARCHAR(500)
-      , LabelNo_Format    NVARCHAR(500)
-      , ExternOrderKey    NVARCHAR(500)
-      , CartonNo          INT
-      , CartonNoText      NVARCHAR(500)
-      , Userdefine04      NVARCHAR(500)
-      , C_Company         NVARCHAR(500)
-      , C_Address1        NVARCHAR(500)
-      , C_Address2        NVARCHAR(500)
-      , C_Address3        NVARCHAR(500)
-      , C_Address4        NVARCHAR(500)
-      , ConsigneeKey      NVARCHAR(500)
-      , Route             NVARCHAR(500)
-      , C_Zip             NVARCHAR(500)
-      , SysDate           NVARCHAR(500)
-      , C_Contact         NVARCHAR(500)
-      , CartonType        NVARCHAR(500)
-      , OrderKey          NVARCHAR(500)
-      , DeliveryDate      NVARCHAR(500)
-      , ZipCodeFrom       NVARCHAR(500)
-      , ShowFields        NVARCHAR(4000)
-      , UDF04ShowBarcode  NVARCHAR(500)
-      , ShipFrom          NVARCHAR(500)
-      , TrackingNo        NVARCHAR(500)
-      , TrackingNo_Format NVARCHAR(500)
-      , Lbl_ExtOrderkey   NVARCHAR(500)
-      , Lbl_Orderkey      NVARCHAR(500)
-      , Lbl_DeliveryDate  NVARCHAR(500)
-      , Lbl_Consignee     NVARCHAR(500)
+        PickSlipNo        NVARCHAR(500)  NULL
+      , LabelNo           NVARCHAR(500)  NULL
+      , LabelNo_Format    NVARCHAR(500)  NULL
+      , ExternOrderKey    NVARCHAR(500)  NULL
+      , CartonNo          INT            NULL
+      , CartonNoText      NVARCHAR(500)  NULL
+      , Userdefine04      NVARCHAR(500)  NULL
+      , C_Company         NVARCHAR(500)  NULL
+      , C_Address1        NVARCHAR(500)  NULL
+      , C_Address2        NVARCHAR(500)  NULL
+      , C_Address3        NVARCHAR(500)  NULL
+      , C_Address4        NVARCHAR(500)  NULL
+      , ConsigneeKey      NVARCHAR(500)  NULL
+      , Route             NVARCHAR(500)  NULL
+      , C_Zip             NVARCHAR(500)  NULL
+      , SysDate           NVARCHAR(500)  NULL
+      , C_Contact         NVARCHAR(500)  NULL
+      , CartonType        NVARCHAR(500)  NULL
+      , OrderKey          NVARCHAR(500)  NULL
+      , DeliveryDate      NVARCHAR(500)  NULL
+      , ZipCodeFrom       NVARCHAR(500)  NULL
+      , ShowFields        NVARCHAR(4000) NULL
+      , UDF04ShowBarcode  NVARCHAR(500)  NULL
+      , ShipFrom          NVARCHAR(500)  NULL
+      , TrackingNo        NVARCHAR(500)  NULL
+      , TrackingNo_Format NVARCHAR(500)  NULL
+      , Lbl_ExtOrderkey   NVARCHAR(500)  NULL
+      , Lbl_Orderkey      NVARCHAR(500)  NULL
+      , Lbl_DeliveryDate  NVARCHAR(500)  NULL
+      , Lbl_Consignee     NVARCHAR(500)  NULL
    )
 
    SELECT @c_JoinClause          = ''
@@ -366,7 +368,7 @@ BEGIN
    SET @c_ExecStatements = @c_ExecStatements
      +      ', Lbl_DeliveryDate = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lbl_DeliveryDateExp,'')<>'' THEN @c_Lbl_DeliveryDateExp ELSE '''Delivery Date:''' END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
-     +      ', Lbl_Consignee    = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lbl_ConsigneeExp   ,'')<>'' THEN @c_Lbl_ConsigneeExp    ELSE '''To'''            END + '),'''')'
+     +      ', Lbl_Consignee    = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Lbl_ConsigneeExp   ,'')<>'' THEN @c_Lbl_ConsigneeExp    ELSE '''To'''             END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
      +  ' FROM dbo.ORDERS     OH (NOLOCK) '
      +  ' JOIN dbo.PACKHEADER PH (NOLOCK) ON OH.OrderKey = PH.OrderKey'
@@ -467,5 +469,6 @@ BEGIN
           , X.CartonNo
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_carton_label_09 TO NSQL
 GO
