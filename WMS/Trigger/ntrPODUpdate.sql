@@ -64,10 +64,8 @@ GO
 /*                              Validation Enhancement (Wan01)          */  
 /* 12-Aug-2014  MCTang     1.9  New Interface Trigger Points (MC01)     */  
 /* 09-Sep-2014  TLTING     2.0  Doc Status Tracking Log TLTING03        */  
-/* 11-May-2015  TLTING     2.1  Disable Trigantics                      */  
-/* 06-Oct-2017  CheeMun    2.2  IN00484052 - Add Log for update POD     */    
-/*                              (temp only).                            */  
-/* 18-Nov-2021  Wan01      2.3  WMS-18336 - MYS–SBUXM–Default value in  */  
+/* 11-May-2015  TLTING     2.1  Disable Trigantics                      */   
+/* 18-Nov-2021  Wan01      2.2  WMS-18336 - MYS–SBUXM–Default value in  */  
 /*                              POD Entry column upon update POD Status */  
 /* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */   
 /************************************************************************/    
@@ -126,28 +124,6 @@ END
    END    
    -- (SHONG_20060417)    
      
-   --IN00484052 (START)    
-   DECLARE @c_PMBOLKey          NVARCHAR(10),      
-           @c_POrderkey         NVARCHAR(10),    
-       @c_PODReceivedDate   NVARCHAR(120),    
-       @c_PODDate01     NVARCHAR(120),    
-       @c_Status      NVARCHAR(20)    
-       
-   SELECT @c_PMBOLKey   = INSERTED.MBOLKey,    
-      @c_POrderkey        = INSERTED.Orderkey,    
-      @c_PODReceivedDate  = CONVERT(NVARCHAR(120),INSERTED.PodReceivedDate, 121),     
-      @c_PODDate01    = CONVERT(NVARCHAR(120),INSERTED.PodDate01, 121),     
-      @c_Status       = 'POD ' + INSERTED.STATUS    
- FROM INSERTED        
-    
-     
-    EXEC isp_Sku_log    
-    @cStorerKey  = @c_PMBOLKey    
-  , @cSKU        = @c_POrderkey    
-  , @cFieldName  = @c_Status    
-  , @cOldValue   = @c_PODReceivedDate    
-  , @cNewValue   = @c_PODDate01    
-   --IN00484052 (END)    
          
    DECLARE @b_ColumnsUpdated VARBINARY(1000)       --MC01  
    SET @b_ColumnsUpdated = COLUMNS_UPDATED()       --MC01  
