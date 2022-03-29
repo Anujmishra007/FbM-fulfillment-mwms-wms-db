@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_carton_label_16]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_carton_label_16]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_carton_label_16]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_carton_label_16]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -23,14 +23,15 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 23/03/2022   ML       1.2  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_16] (
-       @as_pickslipno      NVARCHAR(20)
-     , @as_startcartonno   NVARCHAR(20)
-     , @as_endcartonno     NVARCHAR(20)
-     , @as_startlabelno    NVARCHAR(20) = ''
-     , @as_endlabelno      NVARCHAR(20) = ''
+       @as_pickslipno      NVARCHAR(20)         -- PickslipNo       / Storerkey
+     , @as_startcartonno   NVARCHAR(20)         -- Start CartonNo   / Orderkey
+     , @as_endcartonno     NVARCHAR(20)         -- End CartonNo     /
+     , @as_startlabelno    NVARCHAR(20) = ''    -- Start LabelNo    /
+     , @as_endlabelno      NVARCHAR(20) = ''    -- End LabelNo      /
 )
 AS
 BEGIN
@@ -88,41 +89,42 @@ BEGIN
    SELECT @c_DataWindow = 'r_hk_carton_label_16'
 
    CREATE TABLE #TEMP_PAKDT (
-        PickslipNo       NVARCHAR(18)
-      , Storerkey        NVARCHAR(15)
-      , Orderkey         NVARCHAR(10)
-      , ExternOrderkey   NVARCHAR(500)
-      , Trackingno       NVARCHAR(500)
-      , C_Address        NVARCHAR(500)
-      , C_Zip            NVARCHAR(500)
-      , C_Contact1       NVARCHAR(500)
-      , C_Phone1         NVARCHAR(500)
-      , B_Company        NVARCHAR(500)
-      , B_Address        NVARCHAR(500)
-      , B_Phone1         NVARCHAR(500)
-      , CurrencyCode     NVARCHAR(500)
-      , InvoiceAmount    NVARCHAR(500)
-      , ShipOrigin       NVARCHAR(500)
-      , Destination      NVARCHAR(500)
-      , SF_AccountNo     NVARCHAR(500)
-      , SkuDescr         NVARCHAR(500)
-      , Qty              INT
-      , ShipDate         DATE
-      , TotalCarton      INT
-      , CartonNo         INT
+        PickslipNo       NVARCHAR(18)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
+      , Orderkey         NVARCHAR(10)  NULL
+      , ExternOrderkey   NVARCHAR(500) NULL
+      , Trackingno       NVARCHAR(500) NULL
+      , C_Address        NVARCHAR(500) NULL
+      , C_Zip            NVARCHAR(500) NULL
+      , C_Contact1       NVARCHAR(500) NULL
+      , C_Phone1         NVARCHAR(500) NULL
+      , B_Company        NVARCHAR(500) NULL
+      , B_Address        NVARCHAR(500) NULL
+      , B_Phone1         NVARCHAR(500) NULL
+      , CurrencyCode     NVARCHAR(500) NULL
+      , InvoiceAmount    NVARCHAR(500) NULL
+      , ShipOrigin       NVARCHAR(500) NULL
+      , Destination      NVARCHAR(500) NULL
+      , SF_AccountNo     NVARCHAR(500) NULL
+      , SkuDescr         NVARCHAR(500) NULL
+      , Qty              INT           NULL
+      , ShipDate         DATE          NULL
+      , TotalCarton      INT           NULL
+      , CartonNo         INT           NULL
    )
 
    -- Final Orderkey
    CREATE TABLE #TEMP_FINALORDERKEY (
-        PickslipNo       NVARCHAR(10)
-      , Orderkey         NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , Storerkey        NVARCHAR(15)
+        PickslipNo       NVARCHAR(10)  NULL
+      , Orderkey         NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , Storerkey        NVARCHAR(15)  NULL
    )
 
    IF EXISTS( SELECT TOP 1 1 FROM dbo.ORDERS (NOLOCK) WHERE Storerkey = @as_pickslipno AND Orderkey = @as_startcartonno)
    BEGIN
+      -- From View Report / RDT
       INSERT INTO #TEMP_FINALORDERKEY(Orderkey, PickslipNo, Loadkey, ConsolPick, Storerkey)
       SELECT OH.Orderkey
            , PH.PickHeaderkey
@@ -147,6 +149,7 @@ BEGIN
    END
    ELSE
    BEGIN
+      -- From Pack Module
       SELECT @b_FromPackModule = 1
            , @n_CartonNoFrom   = ISNULL( IIF(ISNULL(@as_startcartonno,'')='', 0, TRY_PARSE(@as_startcartonno AS FLOAT)), 0 )
            , @n_CartonNoTo     = ISNULL( IIF(ISNULL(@as_endcartonno  ,'')='', 0, TRY_PARSE(@as_endcartonno   AS FLOAT)), 0 )
@@ -303,9 +306,11 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                +        ', RTRIM(' + CASE WHEN ISNULL(@c_TrackingnoExp    ,'')<>'' THEN @c_TrackingnoExp     ELSE 'OH.Trackingno'     END + ')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_AddressExp     ,'')<>'' THEN @c_C_AddressExp      ELSE 'TRIM(TRIM(TRIM(TRIM(ISNULL(OH.C_Address1,''''))+'' ''+TRIM(ISNULL(OH.C_Address2,'''')))+'' ''+TRIM(ISNULL(OH.C_Address3,'''')))+'' ''+TRIM(ISNULL(OH.C_Address4,'''')))' END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_AddressExp     ,'')<>'' THEN @c_C_AddressExp
+                                     ELSE 'TRIM(TRIM(TRIM(TRIM(ISNULL(OH.C_Address1,''''))+'' ''+TRIM(ISNULL(OH.C_Address2,'''')))+'' ''+TRIM(ISNULL(OH.C_Address3,'''')))+'' ''+TRIM(ISNULL(OH.C_Address4,'''')))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_ZipExp         ,'')<>'' THEN @c_C_ZipExp          ELSE 'TRIM(TRIM(TRIM(TRIM(ISNULL(OH.C_City,''''))+'' ''+TRIM(ISNULL(OH.C_State,'''')))+'' ''+TRIM(ISNULL(OH.C_Zip,'''')))+'' ''+TRIM(ISNULL(OH.C_Country,'''')))' END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_ZipExp         ,'')<>'' THEN @c_C_ZipExp
+                                     ELSE 'TRIM(TRIM(TRIM(TRIM(ISNULL(OH.C_City,''''))+'' ''+TRIM(ISNULL(OH.C_State,'''')))+'' ''+TRIM(ISNULL(OH.C_Zip,'''')))+'' ''+TRIM(ISNULL(OH.C_Country,'''')))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_Contact1Exp    ,'')<>'' THEN @c_C_Contact1Exp     ELSE 'OH.C_Contact1'     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -313,7 +318,9 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_CompanyExp     ,'')<>'' THEN @c_B_CompanyExp      ELSE 'ST.B_Company'      END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_AddressExp     ,'')<>'' THEN @c_B_AddressExp      ELSE 'TRIM(TRIM(TRIM(TRIM(TRIM(ISNULL(ST.B_Address1,''''))+'' ''+TRIM(ISNULL(ST.B_Address2,'''')))+'' ''+TRIM(ISNULL(ST.B_Address3,'''')))+'' ''+TRIM(ISNULL(ST.B_Address4,'''')))+'' ''+TRIM(ISNULL(ST.B_City,'''')))' END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_AddressExp     ,'')<>'' THEN @c_B_AddressExp
+                                     ELSE 'TRIM(TRIM(TRIM(TRIM(TRIM(ISNULL(ST.B_Address1,''''))+'' ''+TRIM(ISNULL(ST.B_Address2,'''')))+'' ''+TRIM(ISNULL(ST.B_Address3,'''')))+'' ''+TRIM(ISNULL(ST.B_Address4,'''')))+'' ''+TRIM(ISNULL(ST.B_City,'''')))'
+                                     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_Phone1Exp      ,'')<>'' THEN @c_B_Phone1Exp       ELSE 'ST.B_Phone1'       END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -425,5 +432,6 @@ BEGIN
           , PAKDT.CartonNo
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_carton_label_16 TO NSQL
 GO
