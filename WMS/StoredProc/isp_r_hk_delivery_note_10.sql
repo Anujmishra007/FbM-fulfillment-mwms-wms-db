@@ -33,6 +33,7 @@ GO
 /*                   N_*_LineRef4-9, N_Width_Currency, N_*_Signature,       */
 /*                   N_*_CompanyStamp, N_Height_LineHeading                 */
 /*      3 ShowField: LineRef4-9, Signature, CompanyStamp, AllowOrderStatus<5*/
+/* 23/03/2022   ML       1.5  Add NULL to Temp Table                        */
 /****************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_10] (
@@ -215,67 +216,67 @@ BEGIN
    SELECT @c_DataWidnow = 'r_hk_delivery_note_10'
 
    CREATE TABLE #TEMP_ORDET (
-        Orderkey         NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , ReportTitle      NVARCHAR(500)
-      , SplitPrintKey    NVARCHAR(500)
-      , DeliveryDate     NVARCHAR(500)
-      , DocNumber        NVARCHAR(500)
-      , ExternOrderkey   NVARCHAR(500)
-      , LFLRefNo         NVARCHAR(500)
-      , ReferenceNo      NVARCHAR(500)
-      , ReferenceNo2     NVARCHAR(500)
-      , ReferenceNo3     NVARCHAR(500)
-      , ReferenceNo4     NVARCHAR(500)
-      , ReferenceNo5     NVARCHAR(500)
-      , Remark           NVARCHAR(500)
-      , PickSlipNo       NVARCHAR(10)
-      , BilltoKey        NVARCHAR(4000)
-      , B_Company        NVARCHAR(4000)
-      , B_Address        NVARCHAR(4000)
-      , B_Phone          NVARCHAR(4000)
-      , B_Fax            NVARCHAR(4000)
-      , B_Contact        NVARCHAR(4000)
-      , Consigneekey     NVARChAR(4000)
-      , C_Company        NVARCHAR(4000)
-      , C_Address        NVARCHAR(4000)
-      , C_Phone          NVARCHAR(4000)
-      , C_Fax            NVARCHAR(4000)
-      , C_Contact        NVARCHAR(4000)
-      , LineGrouping     NVARCHAR(500)
-      , OrderLineNumber  NVARCHAR(5 )
-      , Sku              NVARCHAR(20)
-      , Descr            NVARCHAR(500)
-      , LineRemark       NVARCHAR(500)
-      , LineRef1         NVARCHAR(500)
-      , LineRef2         NVARCHAR(500)
-      , LineRef3         NVARCHAR(500)
-      , LineRef4         NVARCHAR(500)
-      , LineRef5         NVARCHAR(500)
-      , LineRef6         NVARCHAR(500)
-      , LineRef7         NVARCHAR(500)
-      , LineRef8         NVARCHAR(500)
-      , LineRef9         NVARCHAR(500)
-      , Unitprice        MONEY
-      , Qty              INT
-      , Discount         FLOAT
-      , Amount           MONEY
-      , GrossAmount      MONEY
-      , Currency         NVARCHAR(500)
-      , ShowField        NVARCHAR(4000)
-      , UOM              NVARCHAR(10)
-      , ConsigneePrefix  NVARCHAR(15)
-      , BRAND_Logo_Code  NVARCHAR(500)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(10)
-      , FirstOrderkey    NVARCHAR(10)
-      , OrderLineNo      NVARCHAR(500)
+        Orderkey         NVARCHAR(10)   NULL
+      , Storerkey        NVARCHAR(15)   NULL
+      , ReportTitle      NVARCHAR(500)  NULL
+      , SplitPrintKey    NVARCHAR(500)  NULL
+      , DeliveryDate     NVARCHAR(500)  NULL
+      , DocNumber        NVARCHAR(500)  NULL
+      , ExternOrderkey   NVARCHAR(500)  NULL
+      , LFLRefNo         NVARCHAR(500)  NULL
+      , ReferenceNo      NVARCHAR(500)  NULL
+      , ReferenceNo2     NVARCHAR(500)  NULL
+      , ReferenceNo3     NVARCHAR(500)  NULL
+      , ReferenceNo4     NVARCHAR(500)  NULL
+      , ReferenceNo5     NVARCHAR(500)  NULL
+      , Remark           NVARCHAR(500)  NULL
+      , PickSlipNo       NVARCHAR(10)   NULL
+      , BilltoKey        NVARCHAR(4000) NULL
+      , B_Company        NVARCHAR(4000) NULL
+      , B_Address        NVARCHAR(4000) NULL
+      , B_Phone          NVARCHAR(4000) NULL
+      , B_Fax            NVARCHAR(4000) NULL
+      , B_Contact        NVARCHAR(4000) NULL
+      , Consigneekey     NVARChAR(4000) NULL
+      , C_Company        NVARCHAR(4000) NULL
+      , C_Address        NVARCHAR(4000) NULL
+      , C_Phone          NVARCHAR(4000) NULL
+      , C_Fax            NVARCHAR(4000) NULL
+      , C_Contact        NVARCHAR(4000) NULL
+      , LineGrouping     NVARCHAR(500)  NULL
+      , OrderLineNumber  NVARCHAR(5 )   NULL
+      , Sku              NVARCHAR(20)   NULL
+      , Descr            NVARCHAR(500)  NULL
+      , LineRemark       NVARCHAR(500)  NULL
+      , LineRef1         NVARCHAR(500)  NULL
+      , LineRef2         NVARCHAR(500)  NULL
+      , LineRef3         NVARCHAR(500)  NULL
+      , LineRef4         NVARCHAR(500)  NULL
+      , LineRef5         NVARCHAR(500)  NULL
+      , LineRef6         NVARCHAR(500)  NULL
+      , LineRef7         NVARCHAR(500)  NULL
+      , LineRef8         NVARCHAR(500)  NULL
+      , LineRef9         NVARCHAR(500)  NULL
+      , Unitprice        MONEY          NULL
+      , Qty              INT            NULL
+      , Discount         FLOAT          NULL
+      , Amount           MONEY          NULL
+      , GrossAmount      MONEY          NULL
+      , Currency         NVARCHAR(500)  NULL
+      , ShowField        NVARCHAR(4000) NULL
+      , UOM              NVARCHAR(10)   NULL
+      , ConsigneePrefix  NVARCHAR(15)   NULL
+      , BRAND_Logo_Code  NVARCHAR(500)  NULL
+      , ConsolPick       NVARCHAR(1)    NULL
+      , DocKey           NVARCHAR(10)   NULL
+      , FirstOrderkey    NVARCHAR(10)   NULL
+      , OrderLineNo      NVARCHAR(500)  NULL
    )
 
    CREATE TABLE #TEMP_COPYDESCR (
-        Copies          INT
-      , CopyDescr       NVARCHAR(4000)
-      , Storerkey       NVARCHAR(15)
+        Copies           INT
+      , CopyDescr        NVARCHAR(4000) NULL
+      , Storerkey        NVARCHAR(15)   NULL
    )
 
 
@@ -312,12 +313,12 @@ BEGIN
 
    -- Final Orderkey, PickslipNo List
    CREATE TABLE #TEMP_FINALORDERKEY (
-        Orderkey         NVARCHAR(10)
-      , PickslipNo       NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
+        Orderkey         NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(10)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
    )
    SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
                         + ',@as_wavekey NVARCHAR(10)'
@@ -914,7 +915,8 @@ BEGIN
 
         , LineGrouping      = RTRIM ( ORDET.LineGrouping )
         , Line_No           = ROW_NUMBER() OVER(PARTITION BY ORDET.DocKey, COPY.Copies
-                              ORDER BY ORDET.LineGrouping, ORDET.OrderLineNo, ORDET.Sku, ORDET.LineRef1, ORDET.LineRef2, ORDET.LineRef3, ORDET.LineRef4, ORDET.LineRef5, ORDET.LineRef6, ORDET.LineRef7, ORDET.LineRef8, ORDET.LineRef9, ORDET.Unitprice, ORDET.UOM )
+                              ORDER BY ORDET.LineGrouping, ORDET.OrderLineNo, ORDET.Sku, ORDET.LineRef1, ORDET.LineRef2, ORDET.LineRef3, ORDET.LineRef4, ORDET.LineRef5
+                                     , ORDET.LineRef6, ORDET.LineRef7, ORDET.LineRef8, ORDET.LineRef9, ORDET.Unitprice, ORDET.UOM )
         , Sku               = RTRIM ( ORDET.Sku )
         , LineRef1          = RTRIM ( ORDET.LineRef1 )
         , LineRef2          = RTRIM ( ORDET.LineRef2 )
