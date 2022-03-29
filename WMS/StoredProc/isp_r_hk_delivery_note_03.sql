@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_delivery_note_03]') and OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_delivery_note_03]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_delivery_note_03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_delivery_note_03]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -35,6 +35,7 @@ GO
 /* 17/12/2019   ML       1.8  Fix UOM Grouping issue                     */
 /* 23/06/2020   ML       1.9  Add Total_Doc_Amount                       */
 /* 08/07/2020   ML       1.10 Add new fields                             */
+/* 23/03/2022   ML       1.11 Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_03] (
@@ -202,59 +203,59 @@ BEGIN
    SELECT @c_DataWidnow = 'r_hk_delivery_note_03'
 
    CREATE TABLE #TEMP_ORDET (
-        Orderkey         NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , ReportTitle      NVARCHAR(500)
-      , SplitPrintKey    NVARCHAR(500)
-      , DocNumber        NVARCHAR(500)
-      , ExternOrderkey   NVARCHAR(500)
-      , LFLRefNo         NVARCHAR(500)
-      , ReferenceNo      NVARCHAR(500)
-      , ReferenceNo2     NVARCHAR(500)
-      , ReferenceNo3     NVARCHAR(500)
-      , ReferenceNo4     NVARCHAR(500)
-      , ReferenceNo5     NVARCHAR(500)
-      , Remark           NVARCHAR(500)
-      , PickSlipNo       NVARCHAR(10)
-      , BilltoKey        NVARCHAR(4000)
-      , B_Company        NVARCHAR(4000)
-      , B_Address        NVARCHAR(4000)
-      , B_Phone          NVARCHAR(4000)
-      , B_Fax            NVARCHAR(4000)
-      , B_Contact        NVARCHAR(4000)
-      , Consigneekey     NVARChAR(4000)
-      , C_Company        NVARCHAR(4000)
-      , C_Address        NVARCHAR(4000)
-      , C_Phone          NVARCHAR(4000)
-      , C_Fax            NVARCHAR(4000)
-      , C_Contact        NVARCHAR(4000)
-      , LineGrouping     NVARCHAR(500)
-      , OrderLineNumber  NVARCHAR(5 )
-      , Sku              NVARCHAR(20)
-      , Descr            NVARCHAR(500)
-      , LineRemark       NVARCHAR(500)
-      , LineRef1         NVARCHAR(500)
-      , LineRef2         NVARCHAR(500)
-      , LineRef3         NVARCHAR(500)
-      , Unitprice        MONEY
-      , Qty              INT
-      , Discount         FLOAT
-      , Amount           MONEY
-      , GrossAmount      MONEY
-      , ShowField        NVARCHAR(4000)
-      , UOM              NVARCHAR(10)
-      , ConsigneePrefix  NVARCHAR(15)
-      , BRAND_Logo_Code  NVARCHAR(500)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(10)
-      , FirstOrderkey    NVARCHAR(10)
-      , OrderLineNo      NVARCHAR(500)
+        Orderkey         NVARCHAR(10)   NULL
+      , Storerkey        NVARCHAR(15)   NULL
+      , ReportTitle      NVARCHAR(500)  NULL
+      , SplitPrintKey    NVARCHAR(500)  NULL
+      , DocNumber        NVARCHAR(500)  NULL
+      , ExternOrderkey   NVARCHAR(500)  NULL
+      , LFLRefNo         NVARCHAR(500)  NULL
+      , ReferenceNo      NVARCHAR(500)  NULL
+      , ReferenceNo2     NVARCHAR(500)  NULL
+      , ReferenceNo3     NVARCHAR(500)  NULL
+      , ReferenceNo4     NVARCHAR(500)  NULL
+      , ReferenceNo5     NVARCHAR(500)  NULL
+      , Remark           NVARCHAR(500)  NULL
+      , PickSlipNo       NVARCHAR(10)   NULL
+      , BilltoKey        NVARCHAR(4000) NULL
+      , B_Company        NVARCHAR(4000) NULL
+      , B_Address        NVARCHAR(4000) NULL
+      , B_Phone          NVARCHAR(4000) NULL
+      , B_Fax            NVARCHAR(4000) NULL
+      , B_Contact        NVARCHAR(4000) NULL
+      , Consigneekey     NVARChAR(4000) NULL
+      , C_Company        NVARCHAR(4000) NULL
+      , C_Address        NVARCHAR(4000) NULL
+      , C_Phone          NVARCHAR(4000) NULL
+      , C_Fax            NVARCHAR(4000) NULL
+      , C_Contact        NVARCHAR(4000) NULL
+      , LineGrouping     NVARCHAR(500)  NULL
+      , OrderLineNumber  NVARCHAR(5 )   NULL
+      , Sku              NVARCHAR(20)   NULL
+      , Descr            NVARCHAR(500)  NULL
+      , LineRemark       NVARCHAR(500)  NULL
+      , LineRef1         NVARCHAR(500)  NULL
+      , LineRef2         NVARCHAR(500)  NULL
+      , LineRef3         NVARCHAR(500)  NULL
+      , Unitprice        MONEY          NULL
+      , Qty              INT            NULL
+      , Discount         FLOAT          NULL
+      , Amount           MONEY          NULL
+      , GrossAmount      MONEY          NULL
+      , ShowField        NVARCHAR(4000) NULL
+      , UOM              NVARCHAR(10)   NULL
+      , ConsigneePrefix  NVARCHAR(15)   NULL
+      , BRAND_Logo_Code  NVARCHAR(500)  NULL
+      , ConsolPick       NVARCHAR(1)    NULL
+      , DocKey           NVARCHAR(10)   NULL
+      , FirstOrderkey    NVARCHAR(10)   NULL
+      , OrderLineNo      NVARCHAR(500)  NULL
    )
 
    CREATE TABLE #TEMP_COPYDESCR (
-        Copies          INT
-      , CopyDescr       NVARCHAR(4000)
-      , Storerkey       NVARCHAR(15)
+        Copies           INT            NULL
+      , CopyDescr        NVARCHAR(4000) NULL
+      , Storerkey        NVARCHAR(15)   NULL
    )
 
 
@@ -291,12 +292,12 @@ BEGIN
 
    -- Final Orderkey, PickslipNo List
    CREATE TABLE #TEMP_FINALORDERKEY (
-        Orderkey         NVARCHAR(10)
-      , PickslipNo       NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
+        Orderkey         NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(10)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
    )
    SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
                         + ',@as_wavekey NVARCHAR(10)'
@@ -1168,5 +1169,6 @@ BEGIN
 
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_delivery_note_03 TO NSQL
 GO
