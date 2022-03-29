@@ -30,6 +30,7 @@ GO
 /* 2021-10-08   Michael  V1.3 Add MapField: OrderType; Showfield:        */
 /*                            ExternOrderkey_BC, NoGenPickHeader         */
 /* 2021-11-30   Michael  V1.4 Fix RptCfg.ShowFields NULL value issue     */
+/* 2022-03-23   Michael  V1.5 Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_03] (
@@ -209,64 +210,64 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PIKDT (
-        Wavekey          NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , StorerCompany    NVARCHAR(50)
-      , PickSlipNo       NVARCHAR(18)
-      , OrderKey         NVARCHAR(10)
-      , ExternOrderKey   NVARCHAR(50)
-      , OrderType        NVARCHAR(50)
-      , ExternPOKey      NVARCHAR(50)
-      , BuyerPO          NVARCHAR(50)
-      , InvoiceNo        NVARCHAR(50)
-      , DeliveryDate     DATETIME
-      , ConsigneeKey     NVARCHAR(50)
-      , Company          NVARCHAR(50)
-      , Addr1            NVARCHAR(50)
-      , Addr2            NVARCHAR(50)
-      , Addr3            NVARCHAR(50)
-      , PostCode         NVARCHAR(50)
-      , Route            NVARCHAR(50)
-      , Route_Desc       NVARCHAR(60)
-      , TrfRoom          NVARCHAR(50)
-      , PrintedFlag      NVARCHAR(1)
-      , LabelPrice       NVARCHAR(50)
-      , PendingFlag      NVARCHAR(50)
-      , Notes1           NVARCHAR(500)
-      , Notes2           NVARCHAR(500)
-      , SKU              NVARCHAR(20)
-      , SkuDesc          NVARCHAR(60)
-      , Putawayzone      NVARCHAR(10)
-      , ZoneDesc         NVARCHAR(60)
-      , LogicalLocation  NVARCHAR(18)
-      , LOC              NVARCHAR(10)
-      , ID               NVARCHAR(18)
-      , AltSKU           NVARCHAR(50)
-      , SUSR2            NVARCHAR(50)
-      , BUSR8            NVARCHAR(50)
-      , BUSR10           NVARCHAR(50)
-      , Lottable01       NVARCHAR(50)
-      , Lottable02       NVARCHAR(50)
-      , Lottable03       NVARCHAR(50)
-      , Lottable04       DATETIME
-      , Qty              INT
-      , CaseCnt          INT
-      , InnerPack        INT
-      , PackUOM1         NVARCHAR(50)
-      , PackUOM2         NVARCHAR(50)
-      , PackUOM3         NVARCHAR(50)
-      , Cartons          INT
-      , Inners           INT
-      , Pieces           INT
-      , StdCube          FLOAT
-      , StdGrossWgt      FLOAT
-      , DCC              NVARCHAR(50)
-      , LineRemark1      NVARCHAR(500)
-      , LineRemark2      NVARCHAR(500)
-      , LineRemark3      NVARCHAR(500)
-      , DWName           NVARCHAR(40)
-      , ShowFields       NVARCHAR(4000)
-      , Storer_Logo      NVARCHAR(60)
+        Wavekey          NVARCHAR(10)   NULL
+      , Storerkey        NVARCHAR(15)   NULL
+      , StorerCompany    NVARCHAR(50)   NULL
+      , PickSlipNo       NVARCHAR(18)   NULL
+      , OrderKey         NVARCHAR(10)   NULL
+      , ExternOrderKey   NVARCHAR(50)   NULL
+      , OrderType        NVARCHAR(50)   NULL
+      , ExternPOKey      NVARCHAR(50)   NULL
+      , BuyerPO          NVARCHAR(50)   NULL
+      , InvoiceNo        NVARCHAR(50)   NULL
+      , DeliveryDate     DATETIME       NULL
+      , ConsigneeKey     NVARCHAR(50)   NULL
+      , Company          NVARCHAR(50)   NULL
+      , Addr1            NVARCHAR(50)   NULL
+      , Addr2            NVARCHAR(50)   NULL
+      , Addr3            NVARCHAR(50)   NULL
+      , PostCode         NVARCHAR(50)   NULL
+      , Route            NVARCHAR(50)   NULL
+      , Route_Desc       NVARCHAR(60)   NULL
+      , TrfRoom          NVARCHAR(50)   NULL
+      , PrintedFlag      NVARCHAR(1)    NULL
+      , LabelPrice       NVARCHAR(50)   NULL
+      , PendingFlag      NVARCHAR(50)   NULL
+      , Notes1           NVARCHAR(500)  NULL
+      , Notes2           NVARCHAR(500)  NULL
+      , SKU              NVARCHAR(20)   NULL
+      , SkuDesc          NVARCHAR(60)   NULL
+      , Putawayzone      NVARCHAR(10)   NULL
+      , ZoneDesc         NVARCHAR(60)   NULL
+      , LogicalLocation  NVARCHAR(18)   NULL
+      , LOC              NVARCHAR(10)   NULL
+      , ID               NVARCHAR(18)   NULL
+      , AltSKU           NVARCHAR(50)   NULL
+      , SUSR2            NVARCHAR(50)   NULL
+      , BUSR8            NVARCHAR(50)   NULL
+      , BUSR10           NVARCHAR(50)   NULL
+      , Lottable01       NVARCHAR(50)   NULL
+      , Lottable02       NVARCHAR(50)   NULL
+      , Lottable03       NVARCHAR(50)   NULL
+      , Lottable04       DATETIME       NULL
+      , Qty              INT            NULL
+      , CaseCnt          INT            NULL
+      , InnerPack        INT            NULL
+      , PackUOM1         NVARCHAR(50)   NULL
+      , PackUOM2         NVARCHAR(50)   NULL
+      , PackUOM3         NVARCHAR(50)   NULL
+      , Cartons          INT            NULL
+      , Inners           INT            NULL
+      , Pieces           INT            NULL
+      , StdCube          FLOAT          NULL
+      , StdGrossWgt      FLOAT          NULL
+      , DCC              NVARCHAR(50)   NULL
+      , LineRemark1      NVARCHAR(500)  NULL
+      , LineRemark2      NVARCHAR(500)  NULL
+      , LineRemark3      NVARCHAR(500)  NULL
+      , DWName           NVARCHAR(40)   NULL
+      , ShowFields       NVARCHAR(4000) NULL
+      , Storer_Logo      NVARCHAR(60)   NULL
    )
 
 
