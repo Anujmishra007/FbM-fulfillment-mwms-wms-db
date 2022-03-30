@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Validate_ReceiptDetail_Std]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Validate_ReceiptDetail_Std]
-GO
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -26,8 +21,10 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2020-12-04  Wan01    1.1   LFWM-2410 - UAT  Philippines  PH SCE No    */
 /*                            Prompt For Entering Expired Stocks         */
+/* 2021-02-25  Wan02    1.2   Add Big Outer Try/Catch                    */  
+/*                            -Fix Error Msg and Error #                 */  
 /*************************************************************************/   
-CREATE PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
+CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
 , @b_Success            INT           OUTPUT
@@ -104,255 +101,264 @@ BEGIN
    ,  @c_VLDLotLabelExist  NVARCHAR(30) = ''
    -- (Wan01) - END
 
-   IF OBJECT_ID('tempdb..#RECEIPTDETAIL') IS NOT NULL
-   BEGIN
-      DROP TABLE #RECEIPTDETAIL
-   END
-
-   CREATE TABLE #RECEIPTDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
-   SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-   SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
-   DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
-         ,x.value('@DataType','NVARCHAR(128)') AS datatype
-   FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
-      
-   OPEN CUR_SCHEMA
-
-   FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_TableName = ''
-      IF CHARINDEX('.', @c_ColumnName) > 0 
+   --(Wan02) - START
+   BEGIN TRY
+      IF OBJECT_ID('tempdb..#RECEIPTDETAIL') IS NOT NULL
       BEGIN
-         SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-         SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         DROP TABLE #RECEIPTDETAIL
       END
 
-      SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-      SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-      SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+      CREATE TABLE #RECEIPTDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
+
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
+            ,x.value('@DataType','NVARCHAR(128)') AS datatype
+      FROM @x_XMLSchema.nodes('/Table/Column') TempXML (x)
          
+      OPEN CUR_SCHEMA
+
       FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-   END
-   CLOSE CUR_SCHEMA
-   DEALLOCATE CUR_SCHEMA
-       
-       
-   IF LEN(@c_SQLSchema) > 0 
-   BEGIN
-      SET @c_SQL = N'ALTER TABLE #RECEIPTDETAIL  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
-         
-      EXEC (@c_SQL)
 
-      SET @c_SQL = N' INSERT INTO #RECEIPTDETAIL' --+  @c_UpdateTable 
-                  + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                  + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                  + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
-         
-      EXEC sp_executeSQl @c_SQL
-                        , N'@x_XMLData xml'
-                        , @x_XMLData
-      
-   END
-
-   DECLARE 
-         @c_ReceiptKey           NVARCHAR(10) = ''
-      ,  @c_ReceiptLineNo        NVARCHAR(5)  = ''
-      ,  @c_Facility             NVARCHAR(5)  = ''
-      ,  @c_Facility_LOC         NVARCHAR(5)  = ''
-      ,  @c_Storerkey            NVARCHAR(15) = ''
-      ,  @c_ToLoc                NVARCHAR(10) = ''
-
-   SELECT TOP 1 
-         @c_ReceiptKey   = RD.ReceiptKey
-      ,  @c_ReceiptLineNo= RD.ReceiptLineNumber
-      ,  @c_Storerkey    = RD.Storerkey
-      ,  @c_Sku          = RD.Sku            --(Wan01)
-      ,  @c_ToLoc        = RTRIM(RD.ToLoc)
-      ,  @c_Lottable01   = RD.Lottable01     --(Wan01)
-      ,  @c_Lottable02   = RD.Lottable02     --(Wan01)
-      ,  @c_Lottable03   = RD.Lottable03     --(Wan01)
-      ,  @dt_Lottable04  = RD.Lottable04     --(Wan01)
-      ,  @dt_Lottable05  = RD.Lottable05     --(Wan01)
-      ,  @c_Lottable06   = RD.Lottable06     --(Wan01)
-      ,  @c_Lottable07   = RD.Lottable07     --(Wan01)
-      ,  @c_Lottable08   = RD.Lottable08     --(Wan01)
-      ,  @c_Lottable09   = RD.Lottable09     --(Wan01)
-      ,  @c_Lottable10   = RD.Lottable10     --(Wan01)
-      ,  @c_Lottable11   = RD.Lottable11     --(Wan01)
-      ,  @c_Lottable12   = RD.Lottable12     --(Wan01)
-      ,  @dt_Lottable13  = RD.Lottable13     --(Wan01)
-      ,  @dt_Lottable14  = RD.Lottable14     --(Wan01)
-      ,  @dt_Lottable15  = RD.Lottable15     --(Wan01)
-   FROM  #RECEIPTDETAIL RD  
-
-   SELECT TOP 1 
-         @c_Facility = RTRIM(R.Facility)
-   FROM  RECEIPT R WITH (NOLOCK) 
-   WHERE R.ReceiptKey = @c_ReceiptKey 
-
-   IF @c_ToLoc <> ''
-   BEGIN
-      SELECT @n_Cnt = 1
-         ,   @c_Facility_LOC = L.Facility  
-      FROM LOC L WITH (NOLOCK) 
-      WHERE L.Loc = @c_ToLoc  
-
-      IF @n_Cnt = 0
+      WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 555251
-         SET @c_errmsg = 'Invalid Loc: ' + @c_ToLoc + '. (lsp_Validate_ReceiptDetail_Std)'
-                       + ' |' + @c_ToLoc 
-         GOTO EXIT_SP
-      END
-
-
-      IF @c_Facility_LOC <> @c_Facility AND @c_Facility <> ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 555252
-         SET @c_errmsg = 'Loc: ' + @c_ToLoc + ' does not belong to facility: ' + @c_Facility + '. (lsp_Validate_ReceiptDetail_Std)'
-                       + ' |' + @c_ToLoc + '|' + @c_Facility
-         GOTO EXIT_SP
-      END
-   END
-
-   --(Wan01) - START
-   SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
-        , @c_Lottable02Label = ISNULL(RTRIM(Lottable02Label),'')
-        , @c_Lottable03Label = ISNULL(RTRIM(Lottable03Label),'')
-        , @c_Lottable04Label = ISNULL(RTRIM(Lottable04Label),'')
-        , @c_Lottable05Label = ISNULL(RTRIM(Lottable05Label),'')
-        , @c_Lottable06Label = ISNULL(RTRIM(Lottable06Label),'')
-        , @c_Lottable07Label = ISNULL(RTRIM(Lottable07Label),'')
-        , @c_Lottable08Label = ISNULL(RTRIM(Lottable08Label),'')
-        , @c_Lottable09Label = ISNULL(RTRIM(Lottable09Label),'')
-        , @c_Lottable10Label = ISNULL(RTRIM(Lottable10Label),'')
-        , @c_Lottable11Label = ISNULL(RTRIM(Lottable11Label),'')
-        , @c_Lottable12Label = ISNULL(RTRIM(Lottable12Label),'')
-        , @c_Lottable13Label = ISNULL(RTRIM(Lottable13Label),'')
-        , @c_Lottable14Label = ISNULL(RTRIM(Lottable14Label),'')
-        , @c_Lottable15Label = ISNULL(RTRIM(Lottable15Label),'')
-   FROM SKU S WITH (NOLOCK)
-   WHERE S.Storerkey = @c_Storerkey
-   AND S.Sku = @c_Sku
-
-   SELECT @c_CNNikeITF        = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CNNikeITF')
-   SELECT @c_VLDLotLabelExist = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateLotLabelExist')
-
-   SET @n_Cnt = 1
-   WHILE @n_Cnt <= 15
-   BEGIN
-      SET @c_LottableValue= CASE @n_Cnt WHEN 1  THEN @c_Lottable01
-                                        WHEN 2  THEN @c_Lottable02
-                                        WHEN 3  THEN @c_Lottable03
-                                        WHEN 4  THEN CONVERT(NVARCHAR(10), @dt_Lottable04, 112)
-                                        WHEN 5  THEN CONVERT(NVARCHAR(10), @dt_Lottable05, 112)
-                                        WHEN 6  THEN @c_Lottable06
-                                        WHEN 7  THEN @c_Lottable07
-                                        WHEN 8  THEN @c_Lottable08
-                                        WHEN 9  THEN @c_Lottable09
-                                        WHEN 10 THEN @c_Lottable10
-                                        WHEN 11 THEN @c_Lottable11
-                                        WHEN 12 THEN @c_Lottable12
-                                        WHEN 13 THEN CONVERT(NVARCHAR(10), @dt_Lottable13, 112)
-                                        WHEN 14 THEN CONVERT(NVARCHAR(10), @dt_Lottable14, 112)
-                                        WHEN 15 THEN CONVERT(NVARCHAR(10), @dt_Lottable15, 112)
-                                        END
-      
-      SET @c_LottableLabel= CASE @n_Cnt WHEN 1  THEN @c_Lottable01Label
-                                        WHEN 2  THEN @c_Lottable02Label
-                                        WHEN 3  THEN @c_Lottable03Label
-                                        WHEN 4  THEN @c_Lottable04Label
-                                        WHEN 5  THEN @c_Lottable05Label
-                                        WHEN 6  THEN @c_Lottable06Label
-                                        WHEN 7  THEN @c_Lottable07Label
-                                        WHEN 8  THEN @c_Lottable08Label
-                                        WHEN 9  THEN @c_Lottable09Label
-                                        WHEN 10 THEN @c_Lottable10Label
-                                        WHEN 11 THEN @c_Lottable11Label
-                                        WHEN 12 THEN @c_Lottable12Label
-                                        WHEN 13 THEN @c_Lottable13Label
-                                        WHEN 14 THEN @c_Lottable14Label
-                                        WHEN 15 THEN @c_Lottable15Label
-                                        END
-
-      IF @n_Cnt = 3 
-      BEGIN
-         IF @c_LottableLabel = 'LOGL_WHSE'
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
          BEGIN
-            SET @n_RowCnt = 0
-            IF @c_LottableLabel <> ''
-            BEGIN
-               SELECT TOP 1 @n_RowCnt = 1
-               FROM CODELKUP CL WITH (NOLOCK)
-               WHERE CL.ListName = 'LOGICALWH'
-               AND CL.Code = @c_LottableValue
-            END
-
-            IF @n_RowCnt = 0
-            BEGIN
-               SET @n_Continue = 3
-               SET @n_Err = 555253
-               SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Invalid Logical Warehouse Value: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_LottableValue
-               GOTO EXIT_SP
-            END
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
          END
 
-         IF @c_CNNikeITF = '1' AND @c_LottableLabel = 'SUB-INV'
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_SQLData = @c_SQLData + 'x.value(''@' + @c_TableName + @c_ColumnName + ''', ''' + @c_DataType + ''') AS ['  + @c_ColumnName + '], '
+            
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      END
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+          
+          
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #RECEIPTDETAIL  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+            
+         EXEC (@c_SQL)
+
+         SET @c_SQL = N' INSERT INTO #RECEIPTDETAIL' --+  @c_UpdateTable 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
+            
+         EXEC sp_executeSQl @c_SQL
+                           , N'@x_XMLData xml'
+                           , @x_XMLData
+         
+      END
+
+      DECLARE 
+            @c_ReceiptKey           NVARCHAR(10) = ''
+         ,  @c_ReceiptLineNo        NVARCHAR(5)  = ''
+         ,  @c_Facility             NVARCHAR(5)  = ''
+         ,  @c_Facility_LOC         NVARCHAR(5)  = ''
+         ,  @c_Storerkey            NVARCHAR(15) = ''
+         ,  @c_ToLoc                NVARCHAR(10) = ''
+
+      SELECT TOP 1 
+            @c_ReceiptKey   = RD.ReceiptKey
+         ,  @c_ReceiptLineNo= RD.ReceiptLineNumber
+         ,  @c_Storerkey    = RD.Storerkey
+         ,  @c_Sku          = RD.Sku            --(Wan01)
+         ,  @c_ToLoc        = RTRIM(RD.ToLoc)
+         ,  @c_Lottable01   = RD.Lottable01     --(Wan01)
+         ,  @c_Lottable02   = RD.Lottable02     --(Wan01)
+         ,  @c_Lottable03   = RD.Lottable03     --(Wan01)
+         ,  @dt_Lottable04  = RD.Lottable04     --(Wan01)
+         ,  @dt_Lottable05  = RD.Lottable05     --(Wan01)
+         ,  @c_Lottable06   = RD.Lottable06     --(Wan01)
+         ,  @c_Lottable07   = RD.Lottable07     --(Wan01)
+         ,  @c_Lottable08   = RD.Lottable08     --(Wan01)
+         ,  @c_Lottable09   = RD.Lottable09     --(Wan01)
+         ,  @c_Lottable10   = RD.Lottable10     --(Wan01)
+         ,  @c_Lottable11   = RD.Lottable11     --(Wan01)
+         ,  @c_Lottable12   = RD.Lottable12     --(Wan01)
+         ,  @dt_Lottable13  = RD.Lottable13     --(Wan01)
+         ,  @dt_Lottable14  = RD.Lottable14     --(Wan01)
+         ,  @dt_Lottable15  = RD.Lottable15     --(Wan01)
+      FROM  #RECEIPTDETAIL RD  
+
+      SELECT TOP 1 
+            @c_Facility = RTRIM(R.Facility)
+      FROM  RECEIPT R WITH (NOLOCK) 
+      WHERE R.ReceiptKey = @c_ReceiptKey 
+
+      IF @c_ToLoc <> ''
+      BEGIN
+         SELECT @n_Cnt = 1
+            ,   @c_Facility_LOC = L.Facility  
+         FROM LOC L WITH (NOLOCK) 
+         WHERE L.Loc = @c_ToLoc  
+
+         IF @n_Cnt = 0
          BEGIN
-            SET @n_RowCnt = 0
-            IF @c_LottableLabel <> ''
+            SET @n_Continue = 3
+            SET @n_Err = 555251
+            SET @c_errmsg = 'Invalid Loc: ' + @c_ToLoc + '. (lsp_Validate_ReceiptDetail_Std)'
+                          + ' |' + @c_ToLoc 
+            GOTO EXIT_SP
+         END
+
+
+         IF @c_Facility_LOC <> @c_Facility AND @c_Facility <> ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 555252
+            SET @c_errmsg = 'Loc: ' + @c_ToLoc + ' does not belong to facility: ' + @c_Facility + '. (lsp_Validate_ReceiptDetail_Std)'
+                          + ' |' + @c_ToLoc + '|' + @c_Facility
+            GOTO EXIT_SP
+         END
+      END
+
+      --(Wan01) - START
+      SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
+           , @c_Lottable02Label = ISNULL(RTRIM(Lottable02Label),'')
+           , @c_Lottable03Label = ISNULL(RTRIM(Lottable03Label),'')
+           , @c_Lottable04Label = ISNULL(RTRIM(Lottable04Label),'')
+           , @c_Lottable05Label = ISNULL(RTRIM(Lottable05Label),'')
+           , @c_Lottable06Label = ISNULL(RTRIM(Lottable06Label),'')
+           , @c_Lottable07Label = ISNULL(RTRIM(Lottable07Label),'')
+           , @c_Lottable08Label = ISNULL(RTRIM(Lottable08Label),'')
+           , @c_Lottable09Label = ISNULL(RTRIM(Lottable09Label),'')
+           , @c_Lottable10Label = ISNULL(RTRIM(Lottable10Label),'')
+           , @c_Lottable11Label = ISNULL(RTRIM(Lottable11Label),'')
+           , @c_Lottable12Label = ISNULL(RTRIM(Lottable12Label),'')
+           , @c_Lottable13Label = ISNULL(RTRIM(Lottable13Label),'')
+           , @c_Lottable14Label = ISNULL(RTRIM(Lottable14Label),'')
+           , @c_Lottable15Label = ISNULL(RTRIM(Lottable15Label),'')
+      FROM SKU S WITH (NOLOCK)
+      WHERE S.Storerkey = @c_Storerkey
+      AND S.Sku = @c_Sku
+
+      SELECT @c_CNNikeITF        = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CNNikeITF')
+      SELECT @c_VLDLotLabelExist = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateLotLabelExist')
+
+      SET @n_Cnt = 1
+      WHILE @n_Cnt <= 15
+      BEGIN
+         SET @c_LottableValue= CASE @n_Cnt WHEN 1  THEN @c_Lottable01
+                                           WHEN 2  THEN @c_Lottable02
+                                           WHEN 3  THEN @c_Lottable03
+                                           WHEN 4  THEN CONVERT(NVARCHAR(10), @dt_Lottable04, 112)
+                                           WHEN 5  THEN CONVERT(NVARCHAR(10), @dt_Lottable05, 112)
+                                           WHEN 6  THEN @c_Lottable06
+                                           WHEN 7  THEN @c_Lottable07
+                                           WHEN 8  THEN @c_Lottable08
+                                           WHEN 9  THEN @c_Lottable09
+                                           WHEN 10 THEN @c_Lottable10
+                                           WHEN 11 THEN @c_Lottable11
+                                           WHEN 12 THEN @c_Lottable12
+                                           WHEN 13 THEN CONVERT(NVARCHAR(10), @dt_Lottable13, 112)
+                                           WHEN 14 THEN CONVERT(NVARCHAR(10), @dt_Lottable14, 112)
+                                           WHEN 15 THEN CONVERT(NVARCHAR(10), @dt_Lottable15, 112)
+                                           END
+         
+         SET @c_LottableLabel= CASE @n_Cnt WHEN 1  THEN @c_Lottable01Label
+                                           WHEN 2  THEN @c_Lottable02Label
+                                           WHEN 3  THEN @c_Lottable03Label
+                                           WHEN 4  THEN @c_Lottable04Label
+                                           WHEN 5  THEN @c_Lottable05Label
+                                           WHEN 6  THEN @c_Lottable06Label
+                                           WHEN 7  THEN @c_Lottable07Label
+                                           WHEN 8  THEN @c_Lottable08Label
+                                           WHEN 9  THEN @c_Lottable09Label
+                                           WHEN 10 THEN @c_Lottable10Label
+                                           WHEN 11 THEN @c_Lottable11Label
+                                           WHEN 12 THEN @c_Lottable12Label
+                                           WHEN 13 THEN @c_Lottable13Label
+                                           WHEN 14 THEN @c_Lottable14Label
+                                           WHEN 15 THEN @c_Lottable15Label
+                                           END
+
+         SET @c_Cnt = RIGHT('00' + CONVERT(NVARCHAR(2), @n_Cnt),2)                                       
+         IF @n_Cnt = 3 
+         BEGIN
+            IF @c_LottableLabel = 'LOGL_WHSE'
             BEGIN
                SET @n_RowCnt = 0
-               SELECT TOP 1 @n_RowCnt = 1
-               FROM CODELKUP CL WITH (NOLOCK)
-               WHERE CL.ListName = 'SUBINVCODE'
-               AND CL.Code = @c_LottableValue
-
-               IF @n_RowCnt = 0
+               IF @c_LottableLabel <> ''
                BEGIN
                   SELECT TOP 1 @n_RowCnt = 1
                   FROM CODELKUP CL WITH (NOLOCK)
-                  WHERE CL.ListName = 'BJSUBINV'
+                  WHERE CL.ListName = 'LOGICALWH'
                   AND CL.Code = @c_LottableValue
+               END
+
+               IF @n_RowCnt = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 555253
+                  SET @c_errmsg = 'Lottable' + @c_Cnt + '. Invalid Logical Warehouse Value: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
+                                 + '|' + @c_Cnt + '|' + @c_LottableValue
+                  GOTO EXIT_SP
                END
             END
 
-            IF @n_RowCnt = 0
+            IF @c_CNNikeITF = '1' AND @c_LottableLabel = 'SUB-INV'
             BEGIN
-               SET @n_Continue = 3
-               SET @n_Err = 555254
-               SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Invalid Sub Inventory Code: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_LottableValue
-               GOTO EXIT_SP
+               SET @n_RowCnt = 0
+               IF @c_LottableLabel <> ''
+               BEGIN
+                  SET @n_RowCnt = 0
+                  SELECT TOP 1 @n_RowCnt = 1
+                  FROM CODELKUP CL WITH (NOLOCK)
+                  WHERE CL.ListName = 'SUBINVCODE'
+                  AND CL.Code = @c_LottableValue
+
+                  IF @n_RowCnt = 0
+                  BEGIN
+                     SELECT TOP 1 @n_RowCnt = 1
+                     FROM CODELKUP CL WITH (NOLOCK)
+                     WHERE CL.ListName = 'BJSUBINV'
+                     AND CL.Code = @c_LottableValue
+                  END
+               END
+
+               IF @n_RowCnt = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 555254
+                  SET @c_errmsg = 'Lottable' + @c_Cnt + '. Invalid Sub Inventory Code: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
+                                 + '|' + @c_Cnt + '|' + @c_LottableValue
+                  GOTO EXIT_SP
+               END
             END
          END
-      END
 
-      IF @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND
-         (
-            ( @n_Cnt NOT IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '' ) OR
-            ( @n_Cnt IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '19000101' )
-         )
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 555254
-         SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_ReceiptDetail_Std)'
-                        + '|' + @c_Cnt + '|' + @c_Sku
-         GOTO EXIT_SP
-      END
-      
-      SET @n_Cnt = @n_Cnt + 1
-   END 
-   --(Wan01) - END
-
+         IF @c_VLDLotLabelExist = '1' AND @c_LottableLabel = '' AND
+            (
+               ( @n_Cnt NOT IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '' ) OR
+               ( @n_Cnt IN (4,5,13,14,15) AND ISNULL(@c_LottableValue,'') <> '19000101' )
+            )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 555255
+            SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_ReceiptDetail_Std)'
+                           + '|' + @c_Cnt + '|' + @c_Sku
+            GOTO EXIT_SP
+         END
+         
+         SET @n_Cnt = @n_Cnt + 1
+      END 
+      --(Wan01) - END
+   END TRY
+   BEGIN CATCH
+      SET @n_Continue = 3
+      SET @c_ErrMsg = ERROR_MESSAGE()
+      GOTO EXIT_SP
+   END CATCH
+   --(Wan02) - END
    EXIT_SP:
    
    IF @n_Continue = 3
