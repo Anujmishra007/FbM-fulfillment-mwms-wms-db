@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_599ExtUpd01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_599ExtUpd01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO      
+
 /************************************************************************/    
 /* Store procedure: rdt_599ExtUpd01                                     */    
 /* Copyright      : LF Logistics                                        */  
@@ -16,9 +13,11 @@ GO
 /*                                                                      */    
 /* Date         Author    Ver.  Purposes                                */    
 /* 2021-10-18   James     1.0   WMS-18084 Created                       */    
+/* 2022-03-11   James     1.1   WMS-19126 Add option to decide whether  */
+/*                              reverse by id or sku (james01)          */
 /************************************************************************/    
     
-CREATE PROCEDURE rdt.rdt_599ExtUpd01    
+CREATE OR ALTER PROCEDURE rdt.rdt_599ExtUpd01    
    @nMobile        INT,  
    @nFunc          INT,  
    @cLangCode      NVARCHAR( 3),  
@@ -62,7 +61,10 @@ BEGIN
    DECLARE @cUCCNo         NVARCHAR( 20)  
    DECLARE @cur_PreSort    CURSOR  
    DECLARE @cur_UCC        CURSOR  
-     
+   DECLARE @cur_RD         CURSOR
+   DECLARE @nReverve_ByID  INT
+   DECLARE @cRD_Line       NVARCHAR( 5)
+   
    SET @nErrNo = 0  
      
    -- Handling transaction              
@@ -74,13 +76,29 @@ BEGIN
    BEGIN  
       IF @nInputKey = 1  
       BEGIN  
-         IF ISNULL( @cID, '') = ''  
-         BEGIN  
-            SET @nErrNo = 178901    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Pallet req'    
-            GOTO RollBackTran      
-         END  
-              
+      	IF @cOption = '1'
+      	BEGIN
+            IF ISNULL( @cID, '') = ''  
+            BEGIN  
+               SET @nErrNo = 178901    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Pallet req'    
+               GOTO RollBackTran      
+            END  
+            
+            SET @nReverve_ByID = 1
+      	END
+         ELSE
+      	BEGIN
+            IF ISNULL( @cSKU, '') = ''  
+            BEGIN  
+               SET @nErrNo = 178904    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'SKU req'    
+               GOTO RollBackTran      
+            END  
+            
+            SET @nReverve_ByID = 0
+      	END
+         	
          DECLARE @tUCC TABLE  
          (  
             Seq       INT IDENTITY(1,1) NOT NULL,  
@@ -92,7 +110,7 @@ BEGIN
          FROM rdt.rdtPreReceiveSort WITH (NOLOCK)  
          WHERE Storerkey = @cStorerKey  
          AND   ReceiptKey = @cReceiptKey  
-         AND   ID = @cID  
+         AND   (( @nReverve_ByID = 1 AND ID = @cID) OR ( @nReverve_ByID = 0 AND SKU = @cSKU))  
          AND   [STATUS] = '9'  
          ORDER BY 1  
          OPEN @cur_PreSort  
@@ -142,6 +160,34 @@ BEGIN
   
             FETCH NEXT FROM @cur_UCC INTO @nUCC_RowRef  
          END  
+         
+         SET @cur_RD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT ReceiptLineNumber 
+         FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
+         AND   StorerKey = @cStorerKey
+         AND   (( @nReverve_ByID = 1 AND ToId = @cID) OR ( @nReverve_ByID = 0 AND SKU = @cSKU)) 
+         AND   BeforeReceivedQty = 0
+         OPEN @cur_RD
+         FETCH NEXT FROM @cur_RD INTO @cRD_Line
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+         	UPDATE dbo.ReceiptDetail SET 
+         	   ToId = '',
+         	   EditWho = SUSER_SNAME(),
+         	   EditDate = GETDATE()
+         	WHERE ReceiptKey = @cReceiptKey
+         	AND   ReceiptLineNumber = @cRD_Line
+         	
+            IF @@ERROR <> 0      
+            BEGIN  
+               SET @nErrNo = 178905    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'ReverseToIDEr'    
+               GOTO RollBackTran      
+            END  
+            
+         	FETCH NEXT FROM @cur_RD INTO @cRD_Line
+         END
       END  
    END  
         
