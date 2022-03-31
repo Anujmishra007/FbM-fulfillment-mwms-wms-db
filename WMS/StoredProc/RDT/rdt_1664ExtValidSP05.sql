@@ -1,6 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1664ExtValidSP05]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1664ExtValidSP05]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,10 +11,11 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
-/* 2021-08-14 1.0  James        WMS-17717 Created                       */
+/* 2021-08-14 1.0  James      WMS-17717 Created                         */
+/* 2022-03-29 1.1  Ung        WMS-19266 Add mix platform                */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_1664ExtValidSP05 (
+CREATE OR ALTER PROC rdt.rdt_1664ExtValidSP05 (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -41,10 +39,12 @@ AS
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cDriverName    NVARCHAR( 30)
-   DECLARE @cShipperKey    NVARCHAR( 15)
-   DECLARE @nStep          INT
-   DECLARE @nInputKey      INT
+   DECLARE @cDriverName       NVARCHAR( 30)
+   DECLARE @cOtherReference   NVARCHAR( 30)
+   DECLARE @cPlatform         NVARCHAR( 20)
+   DECLARE @cShipperKey       NVARCHAR( 15)
+   DECLARE @nStep             INT
+   DECLARE @nInputKey         INT
 
    SELECT 
       @nStep = Step, 
@@ -54,30 +54,48 @@ AS
    
    IF @nFunc = 1664 -- Track no to MBOL creation
    BEGIN
-       IF @nStep = 2 -- Track no
-       BEGIN
-          IF @nInputKey = 1 -- ENTER
-          BEGIN
-            -- Cannot Mix shipperkey
-            SELECT @cDriverName = DRIVERName
+      IF @nStep = 2 -- Track no
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Get MBOL info
+            SELECT 
+               @cDriverName = DriverName, 
+               @cOtherReference = OtherReference
             FROM dbo.MBOL WITH (NOLOCK)
             WHERE MbolKey = @cMBOLKey
-         
+            
+            -- Get order info
             SELECT @cShipperKey = ShipperKey
             FROM dbo.ORDERS WITH (NOLOCK)
             WHERE TrackingNo = @cTrackNo
             AND   StorerKey = @cStorerKey
-         
-            IF @cDriverName <> @cShipperKey
+            
+            SELECT @cPlatform = ISNULL( Platform, '') 
+            FROM dbo.OrderInfo WITH (NOLOCK) 
+            WHERE OrderKey = @cOrderKey
+            
+            -- Cannot Mix shipperkey
+            IF @cDriverName <> @cShipperKey AND @cDriverName <> 'ALL'
             BEGIN
                 SET @nErrNo = 173351
-                SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv ShipperKey
-
+                SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mismatch MBOL
+            
                 SET @nValid = 0 -- Insert message queue
                 GOTO QUIT
             END
-          END
-       END
+
+            -- Cannot Mix platform
+            IF @cOtherReference <> @cPlatform AND @cOtherReference <> 'ALL'
+            BEGIN
+                SET @nErrNo = 173352
+                SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mismatch MBOL
+            
+                SET @nValid = 0 -- Insert message queue
+                GOTO QUIT
+            END
+         END
+      END
    END
 
 Quit:
