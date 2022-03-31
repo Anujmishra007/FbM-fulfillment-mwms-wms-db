@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ispLPRLPRO01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispLPRLPRO01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -22,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By: isp_LoadReleaseToProcess_Wrapper                          */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -34,9 +29,11 @@ GO
 /* 10-Jan-2022  WLChooi  1.1  WMS-17958 - Block insert transmitlog2 if  */
 /*                            previous record is added less than 1 min  */
 /*                            (WL01)                                    */
+/* 21-Jan-2022  WLChooi  1.2  WMS-18802 - Configure Key1, Key2 & Key3 in*/
+/*                            Storerconfig.Option5 (WL02)               */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispLPRLPRO01] 
+CREATE OR ALTER PROC [dbo].[ispLPRLPRO01] 
    @c_Loadkey  NVARCHAR(10),
    @c_CallFrom NVARCHAR(50),    --BuildLoad / ManualLoad
    @b_Success  INT OUTPUT,
@@ -62,6 +59,62 @@ BEGIN
          , @c_trmlogkey      NVARCHAR(10)
          , @c_TransmitBatch  NVARCHAR(50) = ''
          , @dt_TLDateTime    DATETIME   --WL01
+
+   --WL02 S
+   DECLARE @c_GetStorerkey          NVARCHAR(15)
+         , @c_SQL                   NVARCHAR(4000)          
+         , @c_ExecStatements        NVARCHAR(4000)      
+         , @c_ExecArguments         NVARCHAR(4000)
+         , @c_Authority             NVARCHAR(50)
+         , @c_Option1               NVARCHAR(50)
+         , @c_Option2               NVARCHAR(50)
+         , @c_Option3               NVARCHAR(50)
+         , @c_Option4               NVARCHAR(50)
+         , @c_Option5               NVARCHAR(4000)
+         , @c_B2BSelectStatement    NVARCHAR(4000)
+         , @c_B2CSelectStatement    NVARCHAR(4000)
+         , @c_Configkey             NVARCHAR(100) = 'LoadReleaseToProcess_SP'
+         , @c_CustomMsg             NVARCHAR(1)
+         , @c_SkipGen               NVARCHAR(1) = 'Y'
+
+   SELECT @c_GetStorerkey = OH.Storerkey
+   FROM LOADPLANDETAIL LPD (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = LPD.OrderKey
+   WHERE LPD.LoadKey = @c_Loadkey
+
+   EXECUTE nspGetRight                                
+      @c_Facility  = @c_Facility,                     
+      @c_StorerKey = @c_GetStorerkey,                    
+      @c_Sku       = '',
+      @c_ConfigKey = @c_Configkey,
+      @b_Success   = @b_Success   OUTPUT,             
+      @c_authority = @c_Authority OUTPUT,             
+      @n_err       = @n_err       OUTPUT,             
+      @c_errmsg    = @c_errmsg    OUTPUT,             
+      @c_Option1   = @c_Option1   OUTPUT,               
+      @c_Option2   = @c_Option2   OUTPUT,               
+      @c_Option3   = @c_Option3   OUTPUT,               
+      @c_Option4   = @c_Option4   OUTPUT,               
+      @c_Option5   = @c_Option5   OUTPUT 
+
+   IF ISNULL(@c_B2BSelectStatement,'') = ''
+      SELECT @c_B2BSelectStatement = dbo.fnc_GetParamValueFromString('@c_B2BSelectStatement', @c_Option5, @c_B2BSelectStatement) 
+
+   IF ISNULL(@c_B2CSelectStatement,'') = ''
+      SELECT @c_B2CSelectStatement = dbo.fnc_GetParamValueFromString('@c_B2CSelectStatement', @c_Option5, @c_B2CSelectStatement) 
+   
+   IF ISNULL(@c_CustomMsg,'') = ''
+      SELECT @c_CustomMsg = dbo.fnc_GetParamValueFromString('@c_CustomMsg', @c_Option5, @c_CustomMsg) 
+   
+   IF ISNULL(@c_CustomMsg,'') = ''
+      SET @c_CustomMsg = 'N'
+      
+   IF ISNULL(@c_B2BSelectStatement,'') = ''
+      SET @c_B2BSelectStatement = ' ORDERS.Storerkey, ORDERS.Loadkey, PICKHEADER.PickHeaderkey '
+
+   IF ISNULL(@c_B2CSelectStatement,'') = ''
+      SET @c_B2CSelectStatement = ' ORDERS.Storerkey, ORDERS.Loadkey, PICKDETAIL.PickSlipNo '
+   --WL02 E
 
    IF @n_err = 1
       SET @b_debug = 1
@@ -97,33 +150,73 @@ BEGIN
       BEGIN
          SET @c_TableName = 'WSRCSWVB2B'
 
-         DECLARE cur_LOADORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT DISTINCT OH.Storerkey, OH.Loadkey, PH.PickHeaderkey
-         FROM LOADPLANDETAIL LPD (NOLOCK)
-         JOIN ORDERS OH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
-         JOIN PICKHEADER PH (NOLOCK) ON OH.Orderkey = PH.Orderkey
-         JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'WSRCSWVCON' AND CL.Short = '1'
-                                  AND CL.Long  = OH.Facility
-                                  AND CL.UDF01 = OH.DocType
-                                  AND CL.UDF02 = ISNULL(OH.ECOM_SINGLE_Flag,'')
-                                  AND CL.UDF03 = OH.[Status]
-         WHERE LPD.LoadKey = @c_Loadkey
+         --WL02 S
+         --DECLARE cur_LOADORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         --SELECT DISTINCT OH.Storerkey, OH.Loadkey, PH.PickHeaderkey
+         --FROM LOADPLANDETAIL LPD (NOLOCK)
+         --JOIN ORDERS OH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+         --JOIN PICKHEADER PH (NOLOCK) ON OH.Orderkey = PH.Orderkey
+         --JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'WSRCSWVCON' AND CL.Short = '1'
+         --                         AND CL.Long  = OH.Facility
+         --                         AND CL.UDF01 = OH.DocType
+         --                         AND CL.UDF02 = ISNULL(OH.ECOM_SINGLE_Flag,'')
+         --                         AND CL.UDF03 = OH.[Status]
+         --WHERE LPD.LoadKey = @c_Loadkey
+
+         SET @c_SQL = ' DECLARE cur_LOADORDER CURSOR FAST_FORWARD READ_ONLY FOR ' + CHAR(13)
+                    + ' SELECT DISTINCT ' + @c_B2BSelectStatement + CHAR(13)
+                    + ' FROM LOADPLANDETAIL (NOLOCK) ' + CHAR(13)
+                    + ' JOIN ORDERS (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey ' + CHAR(13)
+                    + ' JOIN PICKHEADER (NOLOCK) ON ORDERS.Orderkey = PICKHEADER.Orderkey ' + CHAR(13)
+                    + ' JOIN CODELKUP (NOLOCK) ON CODELKUP.LISTNAME = ''WSRCSWVCON'' AND CODELKUP.Short = ''1'' ' + CHAR(13)
+                    + '                       AND CODELKUP.Long  = ORDERS.Facility ' + CHAR(13)
+                    + '                       AND CODELKUP.UDF01 = ORDERS.DocType ' + CHAR(13)
+                    + '                       AND CODELKUP.UDF02 = ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') ' + CHAR(13)
+                    + '                       AND CODELKUP.UDF03 = ORDERS.[Status] ' + CHAR(13)
+                    + ' WHERE LOADPLANDETAIL.LoadKey = @c_Loadkey '
+
+         SET @c_ExecArguments = N'  @c_Loadkey            NVARCHAR(10) '
+
+         EXEC sp_ExecuteSql  @c_SQL  
+                           , @c_ExecArguments   
+                           , @c_Loadkey
+         --WL02 E
       END
       ELSE IF @c_DocType = 'E'
       BEGIN
          SET @c_TableName = 'WSRCSWVB2C'
 
-         DECLARE cur_LOADORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT DISTINCT OH.Storerkey, OH.Loadkey, PD.PickSlipNo
-         FROM LOADPLANDETAIL LPD (NOLOCK)
-         JOIN ORDERS OH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
-         JOIN PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
-         JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'WSRCSWVCON' AND CL.Short = '1'
-                                  AND CL.Long  = OH.Facility
-                                  AND CL.UDF01 = OH.DocType
-                                  AND CL.UDF02 = ISNULL(OH.ECOM_SINGLE_Flag,'')
-                                  AND CL.UDF03 = OH.[Status]
-         WHERE LPD.LoadKey = @c_Loadkey
+         --WL02 S
+         --DECLARE cur_LOADORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         --SELECT DISTINCT OH.Storerkey, OH.Loadkey, PD.PickSlipNo
+         --FROM LOADPLANDETAIL LPD (NOLOCK)
+         --JOIN ORDERS OH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
+         --JOIN PICKDETAIL PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
+         --JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'WSRCSWVCON' AND CL.Short = '1'
+         --                         AND CL.Long  = OH.Facility
+         --                         AND CL.UDF01 = OH.DocType
+         --                         AND CL.UDF02 = ISNULL(OH.ECOM_SINGLE_Flag,'')
+         --                         AND CL.UDF03 = OH.[Status]
+         --WHERE LPD.LoadKey = @c_Loadkey
+
+         SET @c_SQL = ' DECLARE cur_LOADORDER CURSOR FAST_FORWARD READ_ONLY FOR ' + CHAR(13)
+                    + ' SELECT DISTINCT ' + @c_B2CSelectStatement + CHAR(13)
+                    + ' FROM LOADPLANDETAIL (NOLOCK) ' + CHAR(13)
+                    + ' JOIN ORDERS (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey ' + CHAR(13)
+                    + ' JOIN PICKDETAIL (NOLOCK) ON ORDERS.Orderkey = PICKDETAIL.Orderkey ' + CHAR(13)
+                    + ' JOIN CODELKUP (NOLOCK) ON CODELKUP.LISTNAME = ''WSRCSWVCON'' AND CODELKUP.Short = ''1'' ' + CHAR(13)
+                    + '                        AND CODELKUP.Long  = ORDERS.Facility ' + CHAR(13)
+                    + '                        AND CODELKUP.UDF01 = ORDERS.DocType ' + CHAR(13)
+                    + '                        AND CODELKUP.UDF02 = ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') ' + CHAR(13)
+                    + '                        AND CODELKUP.UDF03 = ORDERS.[Status] ' + CHAR(13)
+                    + ' WHERE LOADPLANDETAIL.LoadKey = @c_Loadkey '
+
+         SET @c_ExecArguments = N'  @c_Loadkey            NVARCHAR(10) '
+
+         EXEC sp_ExecuteSql  @c_SQL  
+                           , @c_ExecArguments   
+                           , @c_Loadkey
+         --WL02 E
       END
       ELSE
       BEGIN
@@ -190,6 +283,8 @@ BEGIN
                      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert into TRANSMITLOG2 Failed. (ispLPRLPRO01)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
                      GOTO RETURN_SP 
                   END
+
+                  SET @c_SkipGen = 'N'   --WL02
                END
             END
          END
@@ -226,10 +321,19 @@ BEGIN
    END  
 
 RETURN_SP:
-   IF ISNULL(@c_errmsg,'') = ''
+   IF ISNULL(@c_errmsg,'') = '' AND @c_CustomMsg <> 'Y'   --WL02
       SET @c_errmsg = 'Auto-Sorting API record generated successfully.'
+   --WL02 S
+   ELSE IF ISNULL(@c_errmsg,'') = '' AND @c_CustomMsg = 'Y'
+   BEGIN
+      IF @c_SkipGen = 'Y'
+         SET @c_errmsg = 'EDI record generated failed.'
+      ELSE
+         SET @c_errmsg = 'Auto-Sorting API record generated successfully.'
+   END
+   --WL02 E
 
-   IF (SELECT CURSOR_STATUS('LOCAL','cur_LOADORDER')) >=0 
+   IF (SELECT CURSOR_STATUS('GLOBAL','cur_LOADORDER')) >=0   --WL02 
    BEGIN
       CLOSE cur_LOADORDER           
       DEALLOCATE cur_LOADORDER      
