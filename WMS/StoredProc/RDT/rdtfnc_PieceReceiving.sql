@@ -253,7 +253,8 @@ DECLARE
    @cFlowThruScreen     NVARCHAR( 1),  
    @cBackToASNScnWhenFullyRcv   NVARCHAR( 1),  
    @cAutoGotoLotScn     NVARCHAR( 1), --(cc01)  
-   @cDecodeLottableSP   NVARCHAR(20), --(cc02)  
+   @cDecodeLottableSP   NVARCHAR(20), --(cc02) 
+   @cBUSR1              NVARCHAR( 30), -- (james23)
    @cSuggestedLocSP     NVARCHAR(20), --(cc03)  
    @cSuggestedLoc       NVARCHAR(10), --(cc03)  
   
