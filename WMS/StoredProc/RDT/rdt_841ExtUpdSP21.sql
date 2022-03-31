@@ -34,7 +34,8 @@ CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP21] (
    @cErrMsg      NVARCHAR( 20) OUTPUT,
    @cCartonType  NVARCHAR( 20) = '',  --(yeekung01)
    @cSerialNo                 NVARCHAR( 30), 
-   @nSerialQTY                INT 
+   @nSerialQTY                INT ,
+   @tExtUpd       VariableTable READONLY
 ) AS  
 BEGIN  
    SET NOCOUNT ON  
