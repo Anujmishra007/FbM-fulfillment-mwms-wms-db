@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdtVFHKUCCRcvExtChk' AND type = 'P')
-   DROP PROC rdt.rdtVFHKUCCRcvExtChk
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -21,9 +18,11 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 12-09-2012  1.0  Ung         SOS279908. Created                      */
 /* 20-01-2016  1.1  Ung         SOS361679. Add ExternKey                */
+/* 26-11-2021  1.2  James       WMS-18455 Check UCC.UDF03 has value only*/
+/*                              check ReceiptDetail.UDF03 (james01)     */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdtVFHKUCCRcvExtChk
+CREATE OR ALTER PROCEDURE rdt.rdtVFHKUCCRcvExtChk
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -63,15 +62,18 @@ BEGIN
    -- Check UCC format
    IF @@ROWCOUNT > 0
    BEGIN
-      -- Get ReceiptDetail info
-      IF NOT EXISTS( SELECT TOP 1 1 
-         FROM dbo.ReceiptDetail WITH (NOLOCK) 
-         WHERE ReceiptKey = @cReceiptKey
-            AND RTRIM( UserDefine03) + RTRIM( UserDefine02) = @cUCCUDF03)
+      IF ISNULL( @cUCCUDF03, '') <> '' -- (james01)
       BEGIN
-         SET @nErrNo = 81851
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UDF3 Not In RD
-         GOTO Quit
+         -- Get ReceiptDetail info
+         IF NOT EXISTS( SELECT TOP 1 1 
+            FROM dbo.ReceiptDetail WITH (NOLOCK) 
+            WHERE ReceiptKey = @cReceiptKey
+               AND RTRIM( UserDefine03) + RTRIM( UserDefine02) = @cUCCUDF03)
+         BEGIN
+            SET @nErrNo = 81851
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UDF3 Not In RD
+            GOTO Quit
+         END
       END
       
       -- Check ExternKey in ASN
