@@ -1,13 +1,10 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_StkAdj_AlertNotification_PH]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [dbo].[isp_StkAdj_AlertNotification_PH]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
 /***************************************************************************/
-/* Stored Proc : isp_StkAdj_AlertNotification_PH                         	*/
+/* Stored Proc : isp_StkAdj_AlertNotification_PH                          */
 /* Creation Date: 2020-08-18                                               */
 /* Copyright: LFL                                                          */
 /* Written by: WLChooi                                                     */
@@ -29,9 +26,11 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author      Ver   Purposes                                  */
+/* 31-Mar-2022 NJOW01      1.0   WMS-19535 add facility column             */
+/* 31-Mar-2022 NJOW01      1.0   DEVOPS combine script                     */
 /***************************************************************************/
 
-CREATE PROC isp_StkAdj_AlertNotification_PH 
+CREATE OR ALTER PROC isp_StkAdj_AlertNotification_PH 
   @cRecipientList NVARCHAR(max), 
   @cStartStorer   NVARCHAR(60) = '',
   @cEndStorer     NVARCHAR(60) = 'ZZZZZZZZZZ',
@@ -57,11 +56,12 @@ BEGIN
       SET @tableHTML = 
           N'<H1>Stock Adjustments Alert Notification</H1>' +
           N'<table border="1">' +
-          N'<tr><th>Storer</th><th>Storer Name</th><th>Adjustment No</th>' +
+          N'<tr><th>Storer</th><th>Storer Name</th><th>Facility</th><th>Adjustment No</th>' +
           N'<th>Remarks</th><th>Reasons</th>' +
           N'<th>Variances</th></tr>' +
           CAST ( ( SELECT td = A.StorerKey, '', 
                           td = STORER.CustomerGroupCode, '',
+                          td = A.Facility, '',
                           td = A.AdjustmentKey, '', 
                           td = A.Remarks, '', 
                           td = ISNULL(CL.Description,'No Reason'), '', 
@@ -82,7 +82,7 @@ BEGIN
                      AND AD.StorerKey Between @cStartStorer and @cEndStorer 
                      AND LOC.Facility Between @cStartFacility and @cEndFacility 
                      AND AD.FinalizedFlag = 'Y'
-                   GROUP BY A.StorerKey, A.AdjustmentKey, A.Remarks, ISNULL(CL.Description,'No Reason'), STORER.CustomerGroupCode  
+                   GROUP BY A.StorerKey, A.AdjustmentKey, A.Remarks, ISNULL(CL.Description,'No Reason'), STORER.CustomerGroupCode, A.Facility  
                    ORDER BY A.StorerKey, A.AdjustmentKey
             FOR XML PATH('tr'), TYPE 
           ) AS NVARCHAR(MAX) ) +
