@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_SOCombineORD_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_SOCombineORD_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,8 +22,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-02-09  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2021-04-13  Wan01    1.2   Remove Debug select variables             */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_SOCombineORD_Wrapper] 
+CREATE OR ALTER PROC [WM].[lsp_SOCombineORD_Wrapper] 
       @c_ToOrderKey           NVARCHAR(10)
    ,  @c_OrderKeys            NVARCHAR(4000)             --List of OrderKeys, seperated by '|'
    ,  @b_Success              INT = 1           OUTPUT  
@@ -119,7 +115,7 @@ BEGIN
       WHERE OH.Orderkey = @c_ToOrderkey
 
       
-      select @c_ToOrderKey '@c_ToOrderKey 1'
+      --select @c_ToOrderKey '@c_ToOrderKey 1'              --Wan01
       IF @c_BuyerPO <> '' -- Get the TO Orderkey if buyerpo not the min value
       BEGIN
          SET @c_ToOrderKey_New = ''
@@ -142,7 +138,7 @@ BEGIN
          END
       END -- END
 
-      select @c_ToOrderKey '@c_ToOrderKey 2'
+      --select @c_ToOrderKey '@c_ToOrderKey 2'              --(Wan01)
       SELECT @c_ToFacility    = OH.Facility
          ,   @c_ToStorerkey   = OH.Storerkey
          ,   @c_ToShipTo      = OH.ConsigneeKey
