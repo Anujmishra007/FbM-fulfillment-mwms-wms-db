@@ -24,6 +24,7 @@ GO
 /* Date         Author    Ver Purposes                                  */
 /* 11-OCT-2021  CSCHONG   1.0 Devops Scripts combine                    */
 /* 11-MAR-2022  MINGLE    1.1 add new fields(ML01)                      */
+/* 01-APR-2022  MINGLE    1.2 fix record duplicate(ML02)                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_ReceiptPreTallySheet10]
@@ -274,7 +275,7 @@ BEGIN
           (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc,
           (t.UCCUDF08),
           CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Hideskubarcode,
-          PO.Userdefine02,       --ML01
+          MAX(PO.Userdefine02),       --ML02
           PO.SellersReference,   --ML01
           ISNULL(CLR2.SHORT,'') AS SHOWFIELD --ML01
     FROM RECEIPT (NOLOCK)
@@ -319,7 +320,7 @@ BEGIN
             ISNULL(t.UCCNoCnt,0) ,
              t.UCCUDF08,--t.UCCNo ,
           CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END,
-          PO.Userdefine02,       --ML01
+          --PO.Userdefine02,       --ML02
           PO.SellersReference,   --ML01
           ISNULL(CLR2.SHORT,'')  --ML01 
    ORDER BY RECEIPT.Receiptkey,
@@ -373,6 +374,6 @@ GO
 GRANT EXECUTE ON  [dbo].[isp_ReceiptPreTallySheet10] TO [NSQL]
 GO
 
---EXEC isp_ReceiptPreTallySheet10 '0004255198','0004255198','adidas','adidas','' 
+
 
 
