@@ -2,6 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO 
+
 /************************************************************************/    
 /* Stored Procedure: isp_importer_label                                 */    
 /* Creation Date: 17-Sep-2014                                           */    
@@ -29,8 +30,6 @@ GO
 /* 17-SEP-2020  CSCHONG 1.4   WMS-15207 revised field logic (CS03)      */
 /* 07-Jan-2021  NJOW03  1.5   WMS-15811 lottable01 filtring by qty      */ 
 /* 03-Mar-2021  NJOW04  1.6   Fix sku to 20 characters                  */
-/* 21-Feb-2022  WLChooi 1.7   DevOps Combine Script                     */
-/* 21-Feb-2022  WLChooi 1.7   WMS-18970 - Print MfgDate for MY (WL01)   */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[isp_importer_label] (    
@@ -51,9 +50,7 @@ CREATE OR ALTER PROC [dbo].[isp_importer_label] (
            @n_NoOfLabel INT,
            @n_Qty       INT,
            @n_Cnt       INT,
-           @c_ColTitle  NVARCHAR(10),
-           @c_Country   NVARCHAR(10),     --WL01
-           @dt_MfgDate  DATETIME          --WL01
+           @c_ColTitle  NVARCHAR(10)
 
    IF ISNUMERIC(@c_qty) = 1
       SET @n_Qty = CAST(@c_Qty AS INT)
@@ -65,58 +62,6 @@ CREATE OR ALTER PROC [dbo].[isp_importer_label] (
    SELECT TOP 1 @c_Orderkey = Orderkey
    FROM PICKHEADER(NOLOCK)
    WHERE PickHeaderkey = @c_Pickslipno
-
-   --WL01 S
-   SELECT @c_Country = N.NSQLValue
-   FROM NSQLCONFIG N (NOLOCK)
-   WHERE N.ConfigKey = 'Country'
-
-   IF @c_Country = 'MY'
-   BEGIN
-      DECLARE CUR_RESULT_MY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT SUM(PD.Qty), 
-             MAX(LA.Lottable04),
-             'EXP Date: '
-      FROM ORDERS O (NOLOCK)
-      JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
-      JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
-      JOIN STORER ST (NOLOCK) ON ST.StorerKey = O.ConsigneeKey
-      JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot 
-      WHERE O.OrderKey = @c_Orderkey 
-      AND PD.Sku = @c_Sku
-      AND SKU.SUSR3 = 'EXP'
-      AND ST.SUSR1 = 'EXPLABEL' 
-      AND O.UserDefine01 = 'Y'
-      AND SKU.SkuGroup = 'STOCK'
-      GROUP BY PD.Sku, ISNULL(SKU.ShelfLife,0), SKU.BUSR6
-
-      OPEN CUR_RESULT_MY   
-        
-      FETCH NEXT FROM CUR_RESULT_MY INTO @n_NoOfLabel, @dt_MfgDate, @c_ColTitle
-        
-      WHILE @@FETCH_STATUS <> -1  
-      BEGIN
-         SET @n_Cnt = 1
-      
-         IF @n_Qty > 0
-            SET @n_NoOfLabel = @n_Qty
-      
-         WHILE @n_NoOfLabel > 0 AND @n_Cnt > 0
-         BEGIN
-            INSERT INTO #TMP_LABELS (ExpDate, Coltitle) 
-            VALUES (@dt_MfgDate, @c_ColTitle)
-      
-            SELECT @n_NoOfLabel = @n_NoOfLabel - 1
-         END
-         
-         FETCH NEXT FROM CUR_RESULT_MY INTO @n_NoOfLabel, @dt_MfgDate, @c_ColTitle
-      END
-      CLOSE CUR_RESULT_MY
-      DEALLOCATE CUR_RESULT_MY
-
-      GOTO QUIT_SP
-   END
-   --WL01 E
   
    /*CS02 Start*/
    
@@ -124,8 +69,8 @@ CREATE OR ALTER PROC [dbo].[isp_importer_label] (
    SELECT  SUM(PD.Qty), 
           --CS03 START
           -- CASE WHEN ISNULL(SKU.ShelfLife,0)=0 THEN NULL ELSE 
-          --                   CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN MAX(LA.Lottable04 ) - ISNULL(SKU.ShelfLife,0)
-          --                         ELSE MAX(LA.Lottable05) + ISNULL(SKU.ShelfLife,0) END END  --(CS01)
+          --	             CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN MAX(LA.Lottable04 ) - ISNULL(SKU.ShelfLife,0)
+          --	             	ELSE MAX(LA.Lottable05) + ISNULL(SKU.ShelfLife,0) END END  --(CS01)
           --, CASE WHEN SKU.BUSR6 IN ('GIVENCHY COSMETICS','GIVENCHY SKINCARE') THEN 'MFG Date:' ELSE 'EXP Date: ' END  --(CS01)
          MAX(LA.Lottable04 ), 'EXP Date: '
         --CS03 END
@@ -156,41 +101,23 @@ CREATE OR ALTER PROC [dbo].[isp_importer_label] (
       BEGIN
          SET @n_NoOfLabel = @n_Qty
       END  */
-         /*CS02 End*/
+	   /*CS02 End*/
 
       --NJOW03
-           IF ISNULL(@c_Lottable01,'') <> '' AND @n_Qty > 0
-              SET @n_NoOfLabel = @n_Qty
+   	  IF ISNULL(@c_Lottable01,'') <> '' AND @n_Qty > 0
+   	     SET @n_NoOfLabel = @n_Qty
 
       WHILE @n_NoOfLabel > 0 AND @n_Cnt > 0
       BEGIN
          INSERT INTO #TMP_LABELS (ExpDate,coltitle) VALUES (@dt_ExpDate,@c_ColTitle)        --(CS01)
-             SELECT @n_NoOfLabel = @n_NoOfLabel - 1
+      	 SELECT @n_NoOfLabel = @n_NoOfLabel - 1
       END
       
       FETCH NEXT FROM CUR_RESULT INTO  @n_NoOfLabel, @dt_ExpDate,   @c_ColTitle
    END   
       
-   QUIT_SP:   --WL01
    SELECT * 
    FROM #TMP_LABELS    
-
-   --WL01 S
-   IF CURSOR_STATUS('LOCAL', 'CUR_RESULT_MY') IN (0 , 1)
-   BEGIN
-      CLOSE CUR_RESULT_MY
-      DEALLOCATE CUR_RESULT_MY   
-   END
-
-   IF CURSOR_STATUS('LOCAL', 'CUR_RESULT') IN (0 , 1)
-   BEGIN
-      CLOSE CUR_RESULT
-      DEALLOCATE CUR_RESULT   
-   END
-
-   IF OBJECT_ID('tempdb..#TMP_LABELS') IS NOT NULL
-      DROP TABLE #TMP_LABELS  
-   --WL01 E
 END    
 GO
 
