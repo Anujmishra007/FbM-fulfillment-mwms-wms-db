@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_PACK]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV43_PACK]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -40,8 +35,10 @@ GO
 /*                            Fixed. For allocated stock from DPBULK,use*/ 
 /*                            DBBULK's PickZone to find PackStation     */
 /*                            regardless if there is Home Loc setup.    */
+/* 2022-03-18  Wan08    1.8   WMS-19219 - RG -Adidas Cartonization Logic*/
+/*                            Update                                    */
 /************************************************************************/
-CREATE PROC [dbo].[ispRLWAV43_PACK]
+CREATE OR ALTER PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
 ,  @b_Success     INT            = 1   OUTPUT
 ,  @n_Err         INT            = 0   OUTPUT
@@ -112,7 +109,12 @@ BEGIN
          , @n_ID_ToPack          INT         = 0
          , @n_ID_ToUpd           INT         = 0  
          , @n_TotalToPack        INT         = 0         --(Wan06) 
-                                                         --         
+                                                        
+         , @n_SkuQty_ToPack      INT         = 0         --(Wan08)
+         , @n_SkuOrigQty_ToPack  INT         = 0         --(Wan08)
+         , @n_SkuItemToPackCnt   INT         = 0         --(Wan08)
+         , @n_Qty_ToDel          INT         = 0         --(Wan08)
+                  
          , @b_MinQty1ToPack      BIT         = 0
          
          , @n_ItemToPackCnt      INT         = 0 
@@ -252,7 +254,7 @@ BEGIN
    BEGIN
       CREATE TABLE #OptimizeItemToPack 
          (
-            ID          INT                     IDENTITY(1,1)
+            ID          INT                     IDENTITY(1,1)  PRIMARY KEY
          ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT('') 
          ,  SKU         NVARCHAR(20)   NOT NULL DEFAULT('')
          ,  Dim1        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
@@ -265,6 +267,21 @@ BEGIN
          ,  SortID      INT            NOT NULL DEFAULT(0)         
          )
    END
+   
+   --(Wan08) - START
+   IF OBJECT_ID('tempdb..#ItemToPackBySku','U') IS NULL
+   BEGIN
+      CREATE TABLE #ItemToPackBySku 
+         (
+            ID          INT            NOT NULL DEFAULT(0)  PRIMARY KEY
+         ,  RowRef      INT            NOT NULL DEFAULT(0)
+         ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT('') 
+         ,  SKU         NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Quantity    INT            NOT NULL DEFAULT(0)
+         ,  OriginalQty INT            NOT NULL DEFAULT(0)
+         )
+   END
+   --(Wan08) - END
    
    --(Wan05) - START - Change to use Variable Table
    --IF OBJECT_ID('tempdb..@t_OptimizeResult','U') IS NULL  
@@ -391,6 +408,7 @@ BEGIN
    AND   p.Qty > 0 
    AND   p.[Status] < '5' 
    ORDER BY p.OrderKey 
+
    
    --Handle Share UCC Repl in Another Wave
    UPDATE pw
@@ -595,6 +613,16 @@ BEGIN
          BEGIN
             BREAK
          END
+         
+         --(Wan08) - START Sku cannot fix into Tote 
+         IF @n_StdCube > @n_MaxCube_B2C 
+         BEGIN
+            SET @n_Continue = 3  
+            SET @n_err = 64005    
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Sku''s cube > Tote''s cube. (ispRLWAV43_PACK)'     
+            GOTO QUIT_SP
+         END
+         --(Wan08) - END   Sku cannot fix into Tote 
          
          IF @n_RemainingCube < @n_StdCube OR @c_LabelNo = ''         --New Carton
          BEGIN
@@ -855,7 +883,7 @@ BEGIN
          SELECT TOP 1
                  @c_PickZone = pw.PickZone   -- Mezzanine
                , @c_SkuGroup = pw.SkuGroup   -- Division
-               , @c_Style    = pw.Style
+               --, @c_Style    = pw.Style                --(Wan08)
                --, @c_Size     = pw.Size 
                , @c_CartonGroup_B2B = pw.CartonGroup
                , @n_PackAccessQty   = CASE WHEN @n_PackAccessQty = 0 THEN @n_PackAccessQty ELSE pw.PackAccessQty END
@@ -883,14 +911,17 @@ BEGIN
                      )
          GROUP BY pw.PickZone   
                ,  pw.SkuGroup
-               ,  pw.Style
+               --,  pw.Style                             --(Wan08)
                --,  pw.Size 
                ,  pw.CartonGroup
                ,  pw.PackAccessQty
          ORDER BY pw.PickZone   
                ,  pw.SkuGroup  
-               ,  pw.Style
+               --,  pw.Style                             --(Wan08)
                --,  pw.Size
+               , MIN(pw.Color)                           --(Wan08)
+               , MIN(pw.[Size])                          --(Wan08)
+               , MIN(pw.PickLogicalloc)                  --(Wan08)
 
          IF @@ROWCOUNT = 0 
          BEGIN
@@ -914,6 +945,8 @@ BEGIN
             ORDER BY ocg.RowRef DESC  
          
             TRUNCATE TABLE #OptimizeItemToPack;
+            
+            --(Wan08) Filter by Pickzone, SkuGroup and Sort BY pw.Style, pw.Color, pw.Size, pw.PickLogicalloc                      
             ;WITH ACCVOL(Storerkey, SKU, Color, Size, [Length], Width, Height, Quantity, RowRef, AccumulateCube, AccumulateWgt
                         ,RemainQtyCube, RemainQtyWgt, StdGrossWgt, SortID) AS
             (  SELECT pw.Storerkey
@@ -925,12 +958,12 @@ BEGIN
                      ,pw.Height 
                      ,pw.Qty 
                      ,pw.RowRef     
-                     ,AccumulateCube = SUM(pw.PickItemCube) OVER( ORDER BY pw.Color, pw.Size, pw.Sku, pw.RowRef )  
-                     ,AccumulateWgt  = SUM(pw.PickItemWgt)  OVER( ORDER BY pw.Color, pw.Size, pw.Sku, pw.RowRef )  
-                     ,RemainQtyCube = FLOOR((@n_MaxCube_B2B + pw.PickItemCube - SUM(pw.PickItemCube) OVER( ORDER BY pw.Color, pw.Size, pw.Sku, pw.RowRef )) / pw.StdCube)
-                     ,RemainQtyWgt  = FLOOR((@n_MaxWeight_B2B + pw.PickItemWgt - SUM(pw.PickItemWgt) OVER( ORDER BY pw.Color, pw.Size, pw.Sku, pw.RowRef )) / pw.StdGrossWgt)
+                     ,AccumulateCube = SUM(pw.PickItemCube) OVER( ORDER BY pw.Style, pw.Color, pw.Size, pw.PickLogicalloc, pw.Sku, pw.RowRef )  
+                     ,AccumulateWgt  = SUM(pw.PickItemWgt)  OVER( ORDER BY pw.Style, pw.Color, pw.Size, pw.PickLogicalloc, pw.Sku, pw.RowRef )  
+                     ,RemainQtyCube = FLOOR((@n_MaxCube_B2B + pw.PickItemCube - SUM(pw.PickItemCube) OVER( ORDER BY pw.Style, pw.Color, pw.Size, pw.PickLogicalloc, pw.Sku, pw.RowRef )) / pw.StdCube)
+                     ,RemainQtyWgt  = FLOOR((@n_MaxWeight_B2B + pw.PickItemWgt - SUM(pw.PickItemWgt) OVER( ORDER BY pw.Style, pw.Color, pw.Size, pw.PickLogicalloc, pw.Sku, pw.RowRef )) / pw.StdGrossWgt)
                      ,pw.StdGrossWgt  
-                     ,SortID = ROW_NUMBER() OVER( ORDER BY pw.Color, pw.Size, pw.Sku, pw.RowRef )                 
+                     ,SortID = ROW_NUMBER() OVER( ORDER BY pw.Style, pw.Color, pw.Size, pw.PickLogicalloc, pw.Sku, pw.RowRef )                 
                FROM #PICKDETAIL_WIP AS pw 
                WHERE pw.Orderkey = @c_Orderkey    
                AND pw.PackStation = 0
@@ -938,7 +971,7 @@ BEGIN
                AND pw.CartonType = ''
                AND pw.PickZone  = @c_PickZone
                AND pw.SkuGroup  = @c_SkuGroup
-               AND pw.Style     = @c_Style
+               --AND pw.Style     = @c_Style                                           --(Wan08)                                                                 
                AND pw.SplitToAccessQty IN (0, @n_SplitToAccessQty)                     --Wan02
                AND EXISTS (SELECT 1 FROM #PICKDETAIL_WIP AS pw2
                            WHERE pw2.Orderkey = @c_Orderkey    
@@ -996,7 +1029,7 @@ BEGIN
             FROM #OptimizeItemToPack AS oitp
             ORDER BY oitp.SortID DESC
             
-            SET @n_CartonSeqNo = @n_CartonSeqNo + 1
+            --SET @n_CartonSeqNo = @n_CartonSeqNo + 1             --(Wan08)
             SET @c_CartonType_B2B_w = @c_CartonType_B2B
             SET @n_MaxCube_B2B_w = @n_MaxCube_B2B
 
@@ -1029,15 +1062,45 @@ BEGIN
                      ,@n_Qty_Optimize  = ore.Qty
                FROM @t_OptimizeResult AS ore 
                
-               SET @n_ID_ToPack = 0
-               SET @n_Qty_ToPack = 0
-               SET @n_QtyRemain_ToPack = 0
-               SELECT TOP 1 @n_ID_ToPack  = oitp.ID
-                           ,@c_Sku_ToPack = oitp.Sku
-                           ,@n_Qty_ToPack = oitp.Quantity
-                           ,@n_OrignalQty_ToPack  = oitp.OriginalQty
-               FROM #OptimizeItemToPack AS oitp
-               ORDER BY oitp.ID DESC
+               
+               IF @c_IsCompletePack IN('','FAIL') OR @c_CartonType_B2B_w = @c_CartonType_B2B       --(Wan08) Increse performance
+               BEGIN
+                  SET @n_ID_ToPack = 0
+                  SET @n_Qty_ToPack = 0
+                  SET @n_QtyRemain_ToPack = 0
+                  SELECT TOP 1 @n_ID_ToPack  = oitp.ID
+                              ,@c_Sku_ToPack = oitp.Sku
+                              ,@n_Qty_ToPack = oitp.Quantity
+                              ,@n_OrignalQty_ToPack  = oitp.OriginalQty
+                  FROM #OptimizeItemToPack AS oitp
+                  ORDER BY oitp.ID DESC
+                  
+                  --(Wan08) - START
+                  TRUNCATE TABLE #ItemToPackBySku;
+                  ;WITH gs AS 
+                  (  SELECT oitp.ID, oitp.RowRef, oitp.Storerkey, oitp.Sku, oitp.Quantity, oitp.OriginalQty
+                     FROM #OptimizeItemToPack AS oitp
+                     WHERE oitp.ID = @n_ID_ToPack
+                     UNION ALL
+                     SELECT ID = gs.ID - 1, oitp.RowRef, oitp.Storerkey, oitp.Sku, oitp.Quantity, oitp.OriginalQty
+                     FROM gs
+                     JOIN #OptimizeItemToPack AS oitp ON gs.ID - 1 = oitp.ID
+                     WHERE oitp.Sku = @c_Sku_ToPack
+                  )
+                  INSERT INTO #ItemToPackBySku
+                  SELECT gs.ID, gs.RowRef, gs.Storerkey, gs.Sku, gs.Quantity, gs.OriginalQty
+                  FROM gs
+                  ORDER BY gs.ID
+                  
+                  SELECT @n_SkuQty_ToPack = SUM(itpbs.Quantity) 
+                     ,   @n_SkuOrigQty_ToPack = SUM(itpbs.OriginalQty)
+                     ,   @n_SkuItemToPackCnt = COUNT(1)
+                  FROM #ItemToPackBySku AS itpbs
+                  WHERE itpbs.SKU = @c_Sku_ToPack
+                  GROUP BY itpbs.Storerkey, itpbs.SKU
+                  --(Wan08) - END
+               END                                                                                 --(Wan08) - Increase performance
+               
                
                IF @c_IsCompletePack = 'TRUE'    
                BEGIN
@@ -1046,28 +1109,52 @@ BEGIN
                   --TO_pack = 10, remain =  2, original = 12      -- pack to new -- know as it is fit
                   --to_pack = 2,  remain = 10, original = 12      -- pack to new
                   
-                  SELECT @n_TotalToPack = SUM(oitp.Quantity)         --(Wan06) - START
-                  FROM #OptimizeItemToPack AS oitp
+                  SET @n_TotalToPack = 0                                                                 --(Wan08)
+                  SELECT @n_TotalToPack = SUM(pw.Qty)                                                    --(Wan08) --(Wan06) - START
+                  --FROM #OptimizeItemToPack AS oitp                                                     --(Wan08) 
+                  FROM #PICKDETAIL_WIP AS pw                                                             --(Wan08)
+                  WHERE pw.Orderkey = @c_Orderkey                                                        --(Wan08)
+                  AND pw.PackStation = 0                                                                 --(Wan08)
+                  AND pw.UOM IN ('6', '7')                                                               --(Wan08)
+                  AND pw.CartonType = ''                                                                 --(Wan08)
+                  AND pw.PickZone  = @c_PickZone                                                         --(Wan08)
+                  AND pw.SkuGroup  = @c_SkuGroup                                                         --(Wan08)
+                  AND pw.Sku = @c_Sku_ToPack                                                             --(Wan08)                                                                 
+                  AND pw.SplitToAccessQty IN (0, @n_SplitToAccessQty)   
+                  GROUP BY pw.Orderkey                                                                   --(Wan08)       
                   
-                  IF @n_TotalToPack > @n_Qty_ToPack
+                  SET @n_Qty_ToUpd = @n_Qty_ToPack                                                       --(Wan08)
+                  SET @n_QtyRemain_ToPack = @n_TotalToPack - @n_Qty_ToPack                               --(Wan08)
+                  
+                  IF @n_SkuQty_ToPack > @n_Qty_ToPack       --@n_TotalToPack > @n_Qty_ToPack             --(Wan08)
                   BEGIN
-                     SET @n_Qty_ToPack = @n_TotalToPack
-                     SET @n_OrignalQty_ToPack = @n_Qty_ToPack
-                  END                                                --(Wan06)  - END
+                     --SET @n_Qty_ToPack = @n_TotalToPack                                                --(Wan08)
+                     --SET @n_OrignalQty_ToPack = @n_Qty_ToPack                                          --(Wan08) 
+                     SET @n_Qty_ToUpd = @n_SkuQty_ToPack                                                 --(Wan08)
+                     SET @n_QtyRemain_ToPack = @n_TotalToPack - @n_SkuQty_ToPack                         --(Wan08) 
+                  END                                                                                             --(Wan06)  - END
                   
-                  SET @n_Qty_ToUpd = @n_Qty_ToPack
-                  SET @n_QtyRemain_ToPack = @n_OrignalQty_ToPack - @n_Qty_ToPack
+                  --SET @n_Qty_ToUpd = @n_Qty_ToPack                                                     --(Wan08)
+                  --SET @n_QtyRemain_ToPack = @n_OrignalQty_ToPack - @n_Qty_ToPack                       --(Wan08)
                   
                   IF @n_Qty_ToUpd <= @n_PackAccessQty
                   BEGIN
                      SET @n_Qty_ToUpd = 0
                   END
                   
-                  IF @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty
+                  IF @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty 
                   BEGIN
                      SET @n_Qty_ToUpd = 0
                   END
                   
+                  --(Wan08) - START
+                  --Not to reduce qty if @n_Qty_ToUpd > 0,        
+                  --if @n_Qty_ToPack use to calc qty_toupd if @n_QtyRemain_ToPack <= @n_PackAccessQty
+                  IF @n_Qty_ToUpd > 0  
+                  BEGIN                  
+                     SET @n_Qty_ToPack = @n_Qty_ToUpd
+                  END
+                  --(Wan08) - START
                END
                ELSE
                BEGIN         
@@ -1100,18 +1187,134 @@ BEGIN
                   --to_pack = 2,  remain = 10, original = 12      -- pack to new
                   
                   -- Reduce By 1 if cannot fit into Large Carton
-                  SET @n_Qty_ToUpd = @n_Qty_ToPack - 1   
-                  SET @n_QtyRemain_ToPack = 0
-            
-                  IF @n_Qty_ToUpd <= @n_PackAccessQty 
+                  --SET @n_Qty_ToUpd = @n_Qty_ToPack - 1          --(Wan08)  
+                  SET @n_QtyRemain_ToPack = 0                   
+    
+                  SET @n_Qty_ToUpd = @n_SkuQty_ToPack - 1         --(Wan08)    
+                  
+                  --Notes: @n_Qty_ToPack < @n_SkuQty_ToPack < @n_PackAccessQty
+                  IF @n_Qty_ToUpd <= @n_PackAccessQty             --Comparing Total Qty of Sku against PackAccessQty, 
                   BEGIN
                      SET @n_Qty_ToUpd = 0
                   END
+                  --(Wan08) - START
+                  ELSE
+                  BEGIN
+                     SET @n_Qty_ToUpd = @n_Qty_ToPack - 1         --Reducing qty for Last record of sku
+                  END
+                  --(Wan08) - END
                END
 
-               
                IF @n_Qty_ToUpd = 0     --Delete current to pack to new carton, need to check able to delete before execute               
                BEGIN
+                  --(Wan08) - START
+                  SELECT @n_ItemToPackCnt = COUNT(1) 
+                  FROM #OptimizeItemToPack AS oitp 
+
+                  SET @n_ItemToPackCnt = @n_ItemToPackCnt - @n_SkuItemToPackCnt 
+
+                  IF @n_ItemToPackCnt = 0 
+                  BEGIN
+                     IF @c_IsCompletePack = 'FALSE' AND @n_PackAccessQty = 0 
+                     BEGIN
+                        SET @c_CartonType_B2B = ''
+                        BREAK
+                     END 
+                     -------------------------------------------------------------------------------------------------------------------------------------
+                     --IF @c_IsCompletePack = 'FALSE' AND @n_PackAccessQty > 0 THEN Update Sku to SplitAccessQty
+                     --IF @c_IsCompletePack = 'TRUE'  AND @n_Qty_ToPack <= @n_PackAccessQty AND @n_PackAccessQty > 0 THEN Update Sku to SplitAccessQty
+                     -------------------------------------------------------------------------------------------------------------------------------------
+         
+                     -------------------------------------------------------------------------------------------------------------------------------------
+                     -- aceeesqty = 2, to_pack = 11, remain = 1, original = 12, then to_pack = 10  and split 10 and 2 with no carton type, take 10 to submit API, pack 10
+                     -- aceeesqty = 7, to_pack = 11, remain = 2, original = 13, then to_pack = 12  and split  2 with no carton type, take 12 to submit API, pack 12
+                     -------------------------------------------------------------------------------------------------------------------------------------
+                     IF @c_IsCompletePack = 'TRUE' AND @n_PackAccessQty > 0 AND @n_SkuQty_ToPack > @n_PackAccessQty
+                        AND @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty 
+                     BEGIN
+                        IF @n_SkuOrigQty_ToPack - @n_PackAccessQty <= @n_PackAccessQty
+                        BEGIN
+                           SET @n_Qty_ToUpd  = @n_SkuOrigQty_ToPack - @n_PackAccessQty
+                           SET @n_Qty_ToPack = @n_Qty_ToUpd
+                        END
+                        ELSE
+                        BEGIN
+                           SET @n_Qty_ToUpd = @n_SkuOrigQty_ToPack - @n_PackAccessQty
+                           IF @n_Qty_ToPack > @n_SkuQty_ToPack - @n_Qty_ToUpd 
+                           BEGIN
+                              SET @n_Qty_ToUpd = @n_Qty_ToPack - (@n_SkuQty_ToPack - @n_Qty_ToUpd)
+                           END
+                           ELSE
+                           BEGIN
+                              SET @n_Qty_ToDel = @n_SkuQty_ToPack - @n_Qty_ToUpd    
+                              SET @n_ID_ToUpd = @n_ID_ToPack
+                              
+                              WHILE 1 = 1 AND @n_Qty_ToDel > 0
+                              BEGIN
+                                 SELECT TOP 1 @n_ID_ToUpd = oitp.ID
+                                             ,@n_Qty_ToPack = oitp.Quantity
+                                 FROM #OptimizeItemToPack AS oitp  
+                                 WHERE oitp.ID <= @n_ID_ToUpd  
+                                 ORDER BY oitp.ID DESC
+                              
+                                 IF @@ROWCOUNT = 0 
+                                 BEGIN
+                                    BREAK
+                                 END 
+
+                                 IF @n_Qty_ToPack <= @n_Qty_ToDel
+                                 BEGIN
+                                    DELETE oitp                
+                                    FROM #OptimizeItemToPack AS oitp  
+                                    WHERE oitp.ID = @n_ID_ToUpd  
+                                 END
+                                 ELSE
+                                 BEGIN
+                                    UPDATE oitp 
+                                       SET oitp.Quantity = oitp.Quantity - @n_Qty_ToDel
+                                    FROM #OptimizeItemToPack AS oitp  
+                                    WHERE oitp.ID = @n_ID_ToUpd 
+                                 END
+                                 SET @n_Qty_ToDel = @n_Qty_ToDel - @n_Qty_ToPack
+                              END
+                              SET @n_Qty_ToUpd = 0
+                              SET @n_Qty_ToPack = @n_SkuQty_ToPack
+                           END
+                        END   
+                     END
+                  END
+                  
+                  IF @c_IsCompletePack = 'TRUE' AND @n_Qty_ToUpd = 0
+                  BEGIN
+                     SET @n_Qty_ToPack = @n_SkuQty_ToPack
+                  END
+                  
+                  IF @n_ItemToPackCnt > 0 OR (@n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0)
+                  BEGIN
+                     DELETE oitp             -- delete last record and submit API to check 
+                     FROM #OptimizeItemToPack AS oitp
+                     JOIN #ItemToPackBySku AS itpbs ON itpbs.ID = oitp.ID
+                  END
+
+                  IF @n_ItemToPackCnt > 0 
+                  BEGIN 
+                     CONTINUE 
+                  END
+
+                  ----------------------------
+                  --When @n_PackAccessQty > 0
+                  ----------------------------
+                  IF @n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0
+                  BEGIN
+                     UPDATE pw                                   
+                     SET pw.SplitToAccessQty = 1                
+                     FROM #ItemToPackBySku AS itpbs 
+                     JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = itpbs.RowRef      
+                     BREAK
+                  END
+               END  -- IF @n_Qty_ToUpd = 0
+               
+               /*
                   SET @n_ItemToPackCnt = 0
                   SELECT @n_ItemToPackCnt = COUNT(1) 
                   FROM #OptimizeItemToPack AS oitp
@@ -1169,6 +1372,8 @@ BEGIN
                      --(Wan05) - END
                   END
                END
+               */
+               --(Wan08) - END
 
                IF @n_Qty_ToUpd > 0 AND @n_Qty_ToUpd <> @n_Qty_ToPack  -- Reduce Qty to send to API to check if fit or split record to be process by <= access qty
                BEGIN
@@ -1220,6 +1425,18 @@ BEGIN
                END
             END   
          
+            --(Wan08) - START
+            IF NOT EXISTS ( SELECT 1 FROM #OptimizeItemToPack AS oitp)
+            BEGIN
+               BREAK
+            END 
+
+            IF @c_CartonType_B2B <> ''
+            BEGIN
+               SET @n_CartonSeqNo = @n_CartonSeqNo + 1     
+            END
+            --(Wan08) - END
+            
             SET @b_SplitPickdetail = 0
          
             SELECT @b_SplitPickdetail = 1
