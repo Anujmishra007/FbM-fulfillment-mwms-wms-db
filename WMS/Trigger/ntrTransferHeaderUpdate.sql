@@ -2,9 +2,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTransferHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrTransferHeaderUpdate]
-GO
 
 /************************************************************************/
 /* Name     : ntrTransferHeaderUpdate                                   */
@@ -58,9 +55,12 @@ GO
 /*                              Transfer with zero qty transfer. (Wan02)*/
 /* 18-Aug-2015  MCTang    1.6   Add New Trigger SOS#336465 (MC01)       */
 /* 21-Feb-2015  TLTING03  1.6   Block update finalised Transfer         */
+/* 01-Mar-2022  NJOW01    1.7   WMS-19042 update diffrent value for     */
+/*                              TRFLOG transmitlog by config            */
+/* 01-Mar-2022  NJOW01    1.7   DEVOPS combine script                   */
 /************************************************************************/
 
-CREATE TRIGGER ntrTransferHeaderUpdate
+CREATE  OR ALTER TRIGGER ntrTransferHeaderUpdate
 ON  Transfer
 FOR UPDATE
 AS
@@ -98,6 +98,10 @@ BEGIN
          , @c_INVTRFITF             NVARCHAR(1)    -- Added by June on 22-Feb-2007 (SOS68834)
          , @c_authority_wtntrfitf   NVARCHAR(1)    -- (YokeBeen01)
          , @c_MSFTRFITF             NVARCHAR(1)    -- (MC01)
+         , @c_TransferType          NVARCHAR(12)   -- NJOW01
+         , @c_CustomerRefno         NVARCHAR(20)   -- NJOW01
+         , @c_TRFLOG_Opt5           NVARCHAR(4000) -- NJOW01
+         , @c_PickRequest_TrfType   NVARCHAR(30)   -- NJOW01
 
    --(YokeBeen02) - START
    DECLARE @c_FromStorerKey         nvarchar(15)
@@ -642,16 +646,17 @@ BEGIN
                 @c_ReasonCode = INSERTED.ReasonCode
          FROM INSERTED
 
-         EXECUTE nspGetRight
-                  NULL,			-- facility
-                  @c_storerkey, 		-- Storerkey
-                  NULL,			-- Sku
-                  'TRFLOG',		-- Configkey
-                  @b_success		OUTPUT,
-                  @c_TRFLOG		OUTPUT,
-                  @n_err			OUTPUT,
-                  @c_errmsg		OUTPUT
-
+         EXECUTE nspGetRight                                
+                @c_Facility   = NULL,                     
+                @c_StorerKey  = @c_StorerKey,                    
+                @c_sku        = NULL,                          
+                @c_ConfigKey  = 'TRFLOG', -- Configkey         
+                @b_Success    = @b_success     OUTPUT,             
+                @c_authority  = @c_TRFLOG      OUTPUT,             
+                @n_err        = @n_err         OUTPUT,             
+                @c_errmsg     = @c_errmsg      OUTPUT,             
+                @c_Option5    = @c_TRFLOG_opt5 OUTPUT   --NJOW01             
+   
          IF @b_success <> 1
          BEGIN
             SELECT @n_continue = 3
@@ -660,12 +665,38 @@ BEGIN
 
          IF @c_TRFLOG = '1'
          BEGIN
-            SELECT @c_transferkey = Transferkey FROM INSERTED (NOLOCK)
+            SELECT @c_transferkey = Transferkey, 
+                   @c_TransferType = INSERTED.Type,  --NJOW01
+                   @c_CustomerRefNo = INSERTED.CustomerRefNo  --NJOW01
+            FROM INSERTED (NOLOCK)
+            
+            --NJOW01 S
+            SELECT @c_PickRequest_TrfType = dbo.fnc_GetParamValueFromString('@c_PickRequest_TrfType', @c_TRFLOG_opt5, @c_PickRequest_TrfType)
 
-            EXEC ispGenTransmitLog3 'TRFLOG', @c_transferkey, @c_ReasonCode, @c_storerkey, ''
-               , @b_success OUTPUT
-               , @n_err OUTPUT
-               , @c_errmsg OUTPUT
+            IF ISNULL(@c_PickRequest_TrfType,'') = @c_TransferType
+            BEGIN
+               EXEC ispGenTransmitLog3 'TRFLOG', @c_transferkey, @c_ReasonCode, @c_storerkey, @c_CustomerRefNo
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+               
+               IF @b_success = 1
+               BEGIN
+                  UPDATE TRANSMITLOG3 WITH (ROWLOCK)
+                  SET transmitflag = 'H'
+                  WHERE Tablename = 'TRFLOG'
+                  AND Key1 = @c_Transferkey
+                  AND Key2 = @c_ReasonCode
+                  AND Key3 = @c_Storerkey
+               END                  
+            END  --NJOW01 E
+            ELSE
+            BEGIN           
+               EXEC ispGenTransmitLog3 'TRFLOG', @c_transferkey, @c_ReasonCode, @c_storerkey, ''
+                  , @b_success OUTPUT
+                  , @n_err OUTPUT
+                  , @c_errmsg OUTPUT
+            END
 
             IF @b_success <> 1
             BEGIN
