@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_838DataCap03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_838DataCap03]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,9 +10,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 14-12-2021 1.0  Chermaine   WMS-18503 Created                        */
+/* 14-02-2022 1.1  YeeKung     WMS-18323 Add params (yeekung01)         */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_838DataCap03 (
+CREATE OR ALTER PROC rdt.rdt_838DataCap03 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -44,6 +42,12 @@ CREATE PROC rdt.rdt_838DataCap03 (
    @cPackData1       NVARCHAR( 30)  OUTPUT, 
    @cPackData2       NVARCHAR( 30)  OUTPUT, 
    @cPackData3       NVARCHAR( 30)  OUTPUT,
+	@cPackLabel1      NVARCHAR( 20)  OUTPUT, --(yeekung01)
+   @cPackLabel2      NVARCHAR( 20)  OUTPUT, --(yeekung01)
+   @cPackLabel3      NVARCHAR( 20)  OUTPUT, --(yeekung01)
+	@cPackAttr1       NVARCHAR( 1)   OUTPUT, --(yeekung01)
+   @cPackAttr2       NVARCHAR( 1)   OUTPUT, --(yeekung01)
+   @cPackAttr3       NVARCHAR( 1)   OUTPUT, --(yeekung01)
    @cDataCapture     NVARCHAR( 1)   OUTPUT, 
    @nErrNo           INT            OUTPUT,
    @cErrMsg          NVARCHAR( 20)  OUTPUT
@@ -76,6 +80,13 @@ BEGIN
    BEGIN
       SET @cDataCapture = '1'---- need to capture
       SET @cPackData1 = ''
+      
+      SET @cPackAttr1=''
+      SET @cPackAttr2=''
+      SET @cPackAttr3=''
+	   SET @cPackLabel1='Data 1:'--(yeekung01)
+	   SET @cPackLabel2='Data 2:'--(yeekung01)
+	   SET @cPackLabel3='Data 3:'--(yeekung01)
       EXEC rdt.rdtSetFocusField @nMobile, 1 -- PackData1  
    END   
    ELSE

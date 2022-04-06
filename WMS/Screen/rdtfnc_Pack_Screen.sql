@@ -116,14 +116,13 @@ EXECUTE rdt.rdtAddScn 4657, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 838
 
--- 4659 = Data capture screen
+-- 4659 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 4659 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4659, 'ENG'
-   ,@cLine01 = 'Data 1:'
-   ,@cLine02 = '%20i01'
-   ,@cLine03 = 'Data 2:'
-   ,@cLine04 = '%20i02'
-   ,@cLine05 = 'Data 3:'
-   ,@cLine06 = '%20i03'
-   ,@cLine14 = '%e'
-   ,@nFunc = 838
+   ,@cLine01 = N'%20d01'
+   ,@cLine02 = N'%20i02'
+   ,@cLine03 = N'%20d03'
+   ,@cLine04 = N'%20i04'
+   ,@cLine05 = N'%20d05'
+   ,@cLine06 = N'%20i06'
+   ,@cLine14 = N'%e'
