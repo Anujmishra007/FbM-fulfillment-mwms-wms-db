@@ -8,7 +8,7 @@ GO
 /* Copyright: LF Logistics                                              */
 /* Written by: MINGLE                                                   */
 /*                                                                      */
-/* Purpose: WMS-19002- MYS每PRESTIGE每New Carton UCCLabel for Prestige    */
+/* Purpose: WMS-19002- MYS每PRESTIGE每New Carton UCCLabel for Prestige  */
 /*                                                                      */
 /*        :                                                             */
 /* Called By: r_dw_ucc_carton_label_111                                 */
@@ -99,16 +99,16 @@ BEGIN
           ExternPOKey     NVARCHAR(20) NULL,
           OHRoute         NVARCHAR(20) NULL,
           DropID          NVARCHAR(20) NULL,
-          ST_Address1     NVARCHAR(45) NULL,
-          ST_Address2     NVARCHAR(45) NULL,
-          ST_Address3     NVARCHAR(45) NULL, 
-          ST_Address4     NVARCHAR(45) NULL,
-          ST_City         NVARCHAR(45) NULL, 
-          ST_State        NVARCHAR(45) NULL, 
-          ST_Zip          NVARCHAR(45) NULL,
+          ST2_Address1     NVARCHAR(45) NULL,
+          ST2_Address2     NVARCHAR(45) NULL,
+          ST2_Address3     NVARCHAR(45) NULL, 
+          ST2_Address4     NVARCHAR(45) NULL,
+          ST2_City         NVARCHAR(45) NULL, 
+          ST2_State        NVARCHAR(45) NULL, 
+          ST2_Zip          NVARCHAR(45) NULL,
           RecGrp          INT,
           Pickslipno      NVARCHAR(20) NULL,
-          ST_Company      NVARCHAR(45) NULL,
+          ST2_Company      NVARCHAR(45) NULL,
           Labelno         NVARCHAR(20) NULL,
           HIDETTLCTN      NVARCHAR(5) NULL,
           SKUSize         NVARCHAR(10) NULL,
@@ -116,13 +116,13 @@ BEGIN
           HIDEFIELD       NVARCHAR(5) NULL,
           BuyerPO         NVARCHAR(20) NULL,
           showPOorPOKEY   NVARCHAR(5) NULL,
-          C_Company       NVARCHAR(45) NULL,
-          C_Address1      NVARCHAR(45) NULL,
-          C_Address2      NVARCHAR(45) NULL,
-          C_Address3      NVARCHAR(45) NULL,
-          C_City          NVARCHAR(45) NULL,
-          C_State         NVARCHAR(45) NULL,
-          C_Zip           NVARCHAR(45) NULL,
+          ST1_Company       NVARCHAR(45) NULL,
+          ST1_Address1      NVARCHAR(45) NULL,
+          ST1_Address2      NVARCHAR(45) NULL,
+          ST1_Address3      NVARCHAR(45) NULL,
+          ST1_City          NVARCHAR(45) NULL,
+          ST1_State         NVARCHAR(45) NULL,
+          ST1_Zip           NVARCHAR(45) NULL,
           LottableValue   NVARCHAR(60) NULL,
           OHDeliveryDate  NVARCHAR(11),
           [Weight]        FLOAT NULL)
@@ -138,28 +138,28 @@ BEGIN
           SLA             INT )
          
 
-   insert into #TMP_LCartonLBL111 (Storerkey,OrdExtOrdKey,loadkey,OHRoute,Consigneekey,Facility,ttlqty,ExternPOKey,ST_Address1,
-                                  ST_Address2,ST_Address3,ST_Address4,ST_City,ST_State,ST_Zip,DropID,cartonno,SKUStyle,TTLCtn,RecGrp,Pickslipno,
-                                  ST_Company,labelno,HideTTLCTN,SKUSize,OHNotes,HIDEFIELD,BuyerPO,showPOorPOKEY,
-                                  C_Company,C_Address1,C_Address2,C_Address3,C_City,C_State,C_Zip,LottableValue,OHDeliveryDate,[Weight])
+   insert into #TMP_LCartonLBL111 (Storerkey,OrdExtOrdKey,loadkey,OHRoute,Consigneekey,Facility,ttlqty,ExternPOKey,ST2_Address1,
+                                  ST2_Address2,ST2_Address3,ST2_Address4,ST2_City,ST2_State,ST2_Zip,DropID,cartonno,SKUStyle,TTLCtn,RecGrp,Pickslipno,
+                                  ST2_Company,labelno,HideTTLCTN,SKUSize,OHNotes,HIDEFIELD,BuyerPO,showPOorPOKEY,
+                                  ST1_Company,ST1_Address1,ST1_Address2,ST1_Address3,ST1_City,ST1_State,ST1_Zip,LottableValue,OHDeliveryDate,[Weight])
    SELECT DISTINCT OH.Storerkey,OH.ExternOrderkey,OH.Loadkey,OH.Route,OH.Consigneekey,
-          OH.Facility,sum(PD.qty),OH.ExternPOKey,ST.Address1,ST.Address2,ST.Address3,ST.Address4,
-          ST.city,ST.state,ST.zip,PD.dropid , PD.CartonNo ,PD.SKU,@n_ttlctn,
+          OH.Facility,sum(PD.qty),OH.ExternPOKey,ST2.Address1,ST2.Address2,ST2.Address3,ST2.Address4,
+          ST2.city,ST2.state,ST2.zip,PD.dropid , PD.CartonNo ,PD.SKU,@n_ttlctn,
           ROW_NUMBER() OVER ( PARTITION BY OH.ExternOrderkey,PD.CartonNo  
                            ORDER BY OH.ExternOrderkey,pd.cartonno ,pd.sku )/@n_Maxline + 1  as recgrp,PH.pickslipno,  
-          ST.Company,PD.labelno, CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Hidettlctn,s.Size ,
+          ST2.Company,PD.labelno, CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Hidettlctn,s.Size ,
           ISNULL(OH.notes,'') AS OHNotes,CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS HIDEFIELD,
-          OH.BuyerPO,ISNULL(CLR2.SHORT,'') AS showPOorPOKEY,OH.C_Company,OH.C_Address1,OH.C_Address2,OH.C_Address3,
-          OH.C_City,ISNULL(OH.C_State,''),OH.C_Zip,PD.LOTTABLEVALUE,CONVERT(NVARCHAR(11),OH.DeliveryDate,106),PIF.Weight
+          OH.BuyerPO,ISNULL(CLR2.SHORT,'') AS showPOorPOKEY,ST1.Company,ST1.Address1,ST1.Address2,ST1.Address3,
+          ST1.City,ISNULL(ST1.State,''),ST1.Zip,PD.LOTTABLEVALUE,CONVERT(NVARCHAR(11),OH.DeliveryDate,106),PIF.Weight
    FROM ORDERS OH WITH (NOLOCK)
    --JOIN ORDERDETAIL OD WITH (NOLOCK) 
    JOIN PackHeader PH WITH (NOLOCK) ON PH.Orderkey = OH.Orderkey
    JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.Pickslipno = PH.pickslipno
    LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.CartonNo = PD.CartonNo AND PIF.PickSlipNo = PH.PickSlipNo
-   --LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = OH.Consigneekey 
-   LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = OH.StorerKey
+   LEFT JOIN STORER ST1 WITH (NOLOCK) ON ST1.Storerkey = OH.Consigneekey 
+   LEFT JOIN STORER ST2 WITH (NOLOCK) ON ST2.Storerkey = OH.StorerKey
    LEFT JOIN SKU S WITH (NOLOCK) ON S.storerkey = PD.Storerkey AND S.SKU = PD.SKU 
-   LEFT JOIN storersodefault SOD WITH (NOLOCK) ON SOD.storerkey = ST.Storerkey
+   LEFT JOIN storersodefault SOD WITH (NOLOCK) ON SOD.storerkey = ST2.Storerkey
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'SLABYREGION' AND C.short=SOD.destination
    LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (OH.Storerkey = CLR.Storerkey AND CLR.Code = 'HIDETTLCTN'
                                        AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_ucc_carton_label_111' AND ISNULL(CLR.Short,'') <> 'N')
@@ -172,11 +172,11 @@ BEGIN
    AND PD.cartonno >= CASE WHEN @c_StartCartonNo <> '' THEN CAST(@c_StartCartonNo as INT) ELSE PD.cartonno END
    AND PD.cartonno <= CASE WHEN @c_EndCartonNo <> '' THEN CAST(@c_EndCartonNo as INT) ELSE PD.cartonno END
    GROUP BY OH.Storerkey,OH.ExternOrderkey,OH.Loadkey,OH.Route,OH.Consigneekey,
-          OH.Facility,OH.ExternPOKey,ST.Address1,ST.Address2,ST.Address3,ST.Address4,
-          ST.city,ST.state,ST.zip,PD.dropid , PD.CartonNo ,PD.SKU,PH.pickslipno,ST.company,PD.labelno,
+          OH.Facility,OH.ExternPOKey,ST2.Address1,ST2.Address2,ST2.Address3,ST2.Address4,
+          ST2.city,ST2.state,ST2.zip,PD.dropid , PD.CartonNo ,PD.SKU,PH.pickslipno,ST2.company,PD.labelno,
           CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END ,s.Size,
           ISNULL(OH.notes,'') ,ISNULL(CLR1.Code,''),OH.BuyerPO,ISNULL(CLR2.SHORT,''),
-          OH.C_Company,OH.C_Address1,OH.C_Address2,OH.C_Address3,OH.C_City,ISNULL(OH.C_State,''),OH.C_Zip,PD.LOTTABLEVALUE,OH.DeliveryDate,PIF.Weight
+          ST1.Company,ST1.Address1,ST1.Address2,ST1.Address3,ST1.City,ISNULL(ST1.State,''),ST1.Zip,PD.LOTTABLEVALUE,OH.DeliveryDate,PIF.Weight
    order by PH.pickslipno ,OH.ExternOrderkey,PD.cartonno , pd.sku  
 
 
@@ -204,11 +204,11 @@ SET ODD = CASE WHEN storerkey = 'Skechers' THEN CONVERT(NVARCHAR(11),ODD_date - 
 QUIT_SP:
    
     SELECT a.loadkey,a.OrdExtOrdKey as externorderkey,a.TTLCtn as CtnCnt1,a.cartonno,a.DropID,a.SKUStyle as style,
-           a.Storerkey,a.ttlqty as sizeqty,a.OHRoute,a.Consigneekey,a.Facility,a.ExternPOKey,a.ST_Address1,
-           a.ST_Address2,a.ST_Address3,a.ST_Address4,a.ST_City,a.ST_State,a.ST_Zip,a.RecGrp,a.Pickslipno,
-           REPLACE(b.ODD,' ' ,'-') AS ODD,REPLACE(b.OAD,' ' ,'-') AS OAD,a.ST_Company,a.labelno,
+           a.Storerkey,a.ttlqty as sizeqty,a.OHRoute,a.Consigneekey,a.Facility,a.ExternPOKey,a.ST2_Address1,
+           a.ST2_Address2,a.ST2_Address3,a.ST2_Address4,a.ST2_City,a.ST2_State,a.ST2_Zip,a.RecGrp,a.Pickslipno,
+           REPLACE(b.ODD,' ' ,'-') AS ODD,REPLACE(b.OAD,' ' ,'-') AS OAD,a.ST2_Company,a.labelno,
            a.HIDETTLCTN as hidettlctn,a.SKUSize AS skusize,a.OHNotes,a.HIDEFIELD,BuyerPO,showPOorPOKEY,
-           a.C_Company,a.C_Address1,a.C_Address2,a.C_Address3,a.C_City,a.C_State,a.C_Zip,a.LottableValue,a.OHDeliveryDate,a.[Weight]
+           a.ST1_Company,a.ST1_Address1,a.ST1_Address2,a.ST1_Address3,a.ST1_City,a.ST1_State,a.ST1_Zip,a.LottableValue,a.OHDeliveryDate,a.[Weight]
     FROM #TMP_LCartonLBL111 a
     JOIN #TMP_LCartonLBL111Date b on b.storerkey = a.storerkey and b.OrdExtOrdKey=a.OrdExtOrdKey 
     WHERE a.pickslipno = @c_getpickslipno
@@ -229,20 +229,6 @@ GO
 
 
 
- --select * from CODELKUP (nolock) where LISTNAME = 'REPORTCFG' and Code = 'ADSCAN'
- --EXEC isp_UCC_Carton_Label_111 'prestige','P022132649','1','4'   
- --EXEC isp_UCC_Carton_Label_111 'prestige','P022133245','1','3'
- --EXEC isp_UCC_Carton_Label_111 'prestige','P022136993','1','1'
 
- --SELECT Weight
- --  FROM PACKINFO WITH (NOLOCK)
- --  WHERE Pickslipno = 'P000044452'
- --  AND Cartonno BETWEEN '1' AND '4'
-
- --  SELECT * FROM PACKINFO(NOLOCK) WHERE pickslipno = 'P022132649'
-
--- select dbo.fnc_DecryptPWD(usr_pwd),* from phtsecure..pl_usr (nolock)
---where usr_login like '%IT%'
---order by usr_pwd_date DESC
-
+ 
    
