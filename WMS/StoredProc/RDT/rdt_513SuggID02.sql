@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 20-12-2017  1.0  ChewKP      WMS-3501 Created                        */
+/* 06-04-2022  1.1  yeekung     Change error message(yeekung01)         */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_513SuggID02 (

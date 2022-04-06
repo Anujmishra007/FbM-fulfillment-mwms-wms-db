@@ -1,7 +1,7 @@
 -- rdt_PickCase_GetTask
-execute rdt.rdtDropMsg 180051 , 180060
+execute rdt.rdtDropMsg 184701 , 184750
 
 
-execute rdt.rdtAddMsg 180051, 10, '80051^NoMoreTask', 'us_english', 957
-execute rdt.rdtAddMsg 180052, 10, '80052^NoMoreTask', 'us_english', 957
+execute rdt.rdtAddMsg 184701, 10, '184701NoMoreTask', 'us_english', 957
+execute rdt.rdtAddMsg 184702, 10, '184702NoMoreTask', 'us_english', 957
 
