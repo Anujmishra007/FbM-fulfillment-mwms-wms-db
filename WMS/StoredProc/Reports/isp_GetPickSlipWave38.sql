@@ -14,7 +14,7 @@ GO
 /* Called By: RCM - Generate Pickslip                                   */
 /*          : Datawindow - r_dw_print_wave_pickslip_38                  */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 08-Mar-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 06-Apr-2022  WLChooi  1.1  Fix - Default Priority Value (WL01)       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave38] (  
    @c_wavekey_type          NVARCHAR(13)  
@@ -271,13 +272,13 @@ BEGIN
                     , @c_Loadkey
                     , @c_Storerkey
                     , @c_Consigneekey
-                    , @c_Priority
+                    , '5'   --@c_Priority   --WL01
                     , '5'
                     , 'LP'
                     , @c_Loadkey
                     , '0'
                     , ''
-         
+
                SET @n_err = @@ERROR
                           
                IF @n_err <> 0      
