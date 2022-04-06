@@ -107,7 +107,7 @@ BEGIN
                   AND OrderKey = @cOrderKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 180071
+                  SET @nErrNo = 185601
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD MBDtl Fail
                END
                
@@ -199,7 +199,7 @@ BEGIN
                            , @cErrMsg   OUTPUT
                      IF @bSuccess <> 1
                      BEGIN
-                        SET @nErrNo = 180072
+                        SET @nErrNo = 185602
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen TLOG3 Fail
                         GOTO Quit
                      END
