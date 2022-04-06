@@ -1,6 +1,6 @@
 --rdt_LottableFormat_ValidateIsDate
---execute rdt.rdtDropMsg 180001 - 180010
+execute rdt.rdtDropMsg 184601  - 184650
 
-execute rdt.rdtAddMsg 180001, 10, '80001^InvDateFormat',    'us_english'
+execute rdt.rdtAddMsg 184601, 10, '184601InvDateFormat',    'us_english'
 
 

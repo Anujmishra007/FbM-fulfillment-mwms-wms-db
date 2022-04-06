@@ -15,6 +15,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 30-11-2017  1.0  ChewKP      WMS-3175. Created                       */
+/* 06-04-2022  1.1  yeekung     Change error message(yeekung01)         */
 /************************************************************************/
 
 CREATE PROCEDURE rdt.rdt_LottableFormat_ValidateIsDate
@@ -42,8 +43,8 @@ BEGIN
    --BEGIN
       IF RDT.rdtIsValidDate( @cLottableValue) = 0
       BEGIN
-         SET @nErrNo = 180001    
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvDateFormat    
+         SET @nErrNo = 180601     
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvDateFormat (yeekung01)   
          GOTO Quit  
       END
       ELSE 
