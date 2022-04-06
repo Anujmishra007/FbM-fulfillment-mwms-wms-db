@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Pack_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_Pack_Confirm]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -26,9 +23,10 @@ GO
 /*                             Refno, RefNo2, UPC and DropID (james01)  */
 /* 24-06-2021 1.9  LZG         JSM-5541 Added PickSlipNo & LabelNo into */
 /*                             RDTStdEventLog (ZG01)                    */
+/* 17-02-2022 2.0  Ung         WMS-18900 Add force use standard logic   */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_Pack_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_Pack_Confirm] (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -56,6 +54,7 @@ CREATE PROC [RDT].[rdt_Pack_Confirm] (
    ,@cPackData1      NVARCHAR( 30)
    ,@cPackData2      NVARCHAR( 30)
    ,@cPackData3      NVARCHAR( 30)
+   ,@nUseStandard    INT = 0
 )
 AS
 BEGIN
@@ -71,19 +70,22 @@ BEGIN
    DECLARE @cNewLine       NVARCHAR(1)
    DECLARE @cNewCarton     NVARCHAR(1)
    DECLARE @cGenLabelNo_SP NVARCHAR(20)
-   DECLARE @cConfirmSP     NVARCHAR(20)
+   DECLARE @cConfirmSP     NVARCHAR(20) = ''
    DECLARE @cPackDetailCartonID  NVARCHAR( 20)
 
    -- Get storer configure
-   SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
-   IF @cConfirmSP = '0'
-      SET @cConfirmSP = ''
-
+   IF @nUseStandard = 0
+   BEGIN
+      SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
+      IF @cConfirmSP = '0'
+         SET @cConfirmSP = ''
+   END
+   
    /***********************************************************************************************
                                               Custom confirm
    ***********************************************************************************************/
    -- Custom logic
-   IF @cConfirmSP <> ''
+   IF @cConfirmSP <> '' 
    BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConfirmSP AND type = 'P')
       BEGIN
