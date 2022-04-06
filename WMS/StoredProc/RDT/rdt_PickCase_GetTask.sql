@@ -13,6 +13,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 29-10-2018 1.0  ChewKP     WMS-6666 Created                                */
+/* 06-04-2022 1.1  yeekung     Change error message(yeekung01)                */
 /******************************************************************************/
 
 CREATE PROC rdt.rdt_PickCase_GetTask (
@@ -625,7 +626,7 @@ BEGIN
    IF @cSuggSKU IS NULL
    BEGIN
       
-      SET @nErrNo = 180051
+      SET @nErrNo = 184701
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more task
       SET @nErrNo = -1 -- No more task
    END

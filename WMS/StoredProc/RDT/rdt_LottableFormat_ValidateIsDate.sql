@@ -43,7 +43,7 @@ BEGIN
    --BEGIN
       IF RDT.rdtIsValidDate( @cLottableValue) = 0
       BEGIN
-         SET @nErrNo = 180601     
+         SET @nErrNo = 184601      
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvDateFormat (yeekung01)   
          GOTO Quit  
       END

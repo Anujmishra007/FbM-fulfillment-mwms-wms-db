@@ -13,6 +13,7 @@ GO
 /*                                                                      */
 /* Date       Rev Author      Purposes                                  */
 /* 2018-10-25 1.0 James       WMS6789 Created                           */
+/* 06-04-2022 1.1 yeekung     Change error message(yeekung01)         */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_545ExtGetLoc01 (
@@ -75,7 +76,7 @@ BEGIN
             
                IF @nErrNo <> 0
                BEGIN
-                  SET @nErrNo = 180041
+                  SET @nErrNo = 185551
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Lock LOC fail
                   GOTO Quit
                END
@@ -83,7 +84,7 @@ BEGIN
                -- Check LOC available
                IF @nRowCount <> 1
                BEGIN
-                  SET @nErrNo = 180042
+                  SET @nErrNo = 185552
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- No avail LOC
                   GOTO Quit
                END
