@@ -2,6 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO   
+
 /************************************************************************/    
 /* Stored Procedure: ispPALVF02                                         */    
 /* Creation Date:                                                       */    
@@ -22,7 +23,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */    
 /* 26-Nov-2019  NJOW01  1.0   WMS-10650 Exclude ECOM Wave type          */    
-/* 11-MAR-2022  KuanYee 1.1   INC1759472 Performance Tune - Optimize    */    
+/* 11-MAR-2022  KuanYee 1.1   INC1759472 Performance Tune -             */    
 /*                            #CombinationPool Insertion (KY01)         */    
 /* 18-MAR-2022  SYCHUA  1.2   Bug Fix check for UCCQty (SY01)           */    
 /************************************************************************/    
@@ -207,7 +208,7 @@ BEGIN
    END    
     
    /*******************************/    
-  /***  LOOP BY DISTINCT SKU   ***/    
+   /***  LOOP BY DISTINCT SKU   ***/    
    /*******************************/    
     
    DECLARE CURSOR_ORDERLINES CURSOR FAST_FORWARD READ_ONLY FOR    
@@ -246,7 +247,7 @@ BEGIN
          JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON LOT.LOT = LA.LOT    
          JOIN UCC WITH (NOLOCK) ON (UCC.SKU = LOTxLOCxID.SKU AND UCC.LOT = LOT.LOT AND UCC.LOC = LOC.LOC AND UCC.ID = ID.ID    
                                           AND UCC.Status < ''4'')    
-      WHERE LOC.LocationFlag <> ''HOLD''    
+         WHERE LOC.LocationFlag <> ''HOLD''    
          AND LOC.LocationFlag <> ''DAMAGE''    
          AND LOC.Status <> ''HOLD''    
          AND LOC.Facility = @c_Facility    
@@ -280,7 +281,7 @@ BEGIN
     
       /*****************************************************************************/    
       /***  START PRE-ALLOC UCC (Get Combination of pool numbers for orderQty)   ***/    
-/*****************************************************************************/    
+      /*****************************************************************************/    
       SET @c_SQL = N'    
       DECLARE CURSOR_ORDERLINE_SKU CURSOR FAST_FORWARD READ_ONLY FOR    
       SELECT OrderKey, OrderLineNumber, OrderQty    
@@ -336,7 +337,7 @@ BEGIN
             UPDATE #ORDERLINES WITH (ROWLOCK)    
             SET Result = @c_Result    
             WHERE OrderKey = @c_OrderKey    
-              AND OrderLineNumber = @c_OrderLineNumber    
+            AND OrderLineNumber = @c_OrderLineNumber    
     
             SELECT    
                @n_CntCount = CntCount,    
@@ -413,42 +414,48 @@ BEGIN
                   SET @n_Count = 1    
     
                   WHILE (@n_Count <= @n_CntCount)    
-                  BEGIN    
-                     IF (@n_UCCQty * @n_Count) <= @n_OrderQty        --KY01    
-                     BEGIN                                           --KY01    
+                     BEGIN                                           
                      INSERT INTO #CombinationPool    
                      VALUES (@n_UCCQty * @n_Count,    
                              CAST(@n_UCCQty AS NVARCHAR) + ' * ' + CAST(@n_Count AS NVARCHAR))    
     
-                     DECLARE CURSOR_COMBINATION_INNER CURSOR FAST_FORWARD READ_ONLY FOR    
-                     SELECT [Sum], Subset    
-                     FROM #CombinationPool WITH (NOLOCK)    
-                     --WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR), Subset) = 0          --SY01    
-                     WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR) + ' * ', Subset) = 0    --SY01    
+                     --DECLARE CURSOR_COMBINATION_INNER CURSOR FAST_FORWARD READ_ONLY FOR    
+                     --SELECT [Sum], Subset    
+                     --FROM #CombinationPool WITH (NOLOCK)    
+                     ----WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR), Subset) = 0          --SY01    
+                     --WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR) + ' * ', Subset) = 0    --SY01    
+                     --
+                     --OPEN CURSOR_COMBINATION_INNER    
+                     --FETCH NEXT FROM CURSOR_COMBINATION_INNER INTO @n_Sum, @c_Subset    
+                     --WHILE (@@FETCH_STATUS <> -1)    
+                     --BEGIN    
+                     --    IF (@n_Sum + @n_UCCQty * @n_Count) <= @n_OrderQty       --KY01    
+                     --    BEGIN                                                   --KY01    
+                     --         INSERT INTO #CombinationPool    
+                     --         VALUES (@n_Sum + @n_UCCQty * @n_Count,    
+                     --           @c_Subset + ' + ' + CAST(@n_UCCQty AS NVARCHAR) + ' * ' + CAST(@n_Count AS NVARCHAR))    
+                     --   END  --KY01    
+                     --   FETCH NEXT FROM CURSOR_COMBINATION_INNER INTO @n_Sum, @c_Subset    
+                     --END -- END WHILE FOR CURSOR_COMBINATION_INNER    
+                     --CLOSE CURSOR_COMBINATION_INNER    
+                     --DEALLOCATE CURSOR_COMBINATION_INNER   
+                     ;WITH CTE AS(                                                        --KY01
+                        SELECT [Sum], Subset 
+                        FROM #CombinationPool --WITH (NOLOCK)
+                        WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR) + ' * ', Subset) = 0 --SY01 
+                      )
+                      INSERT INTO #CombinationPool 
+                      SELECT CTE.[Sum] + @n_UCCQty * @n_Count, CTE.Subset + ' + ' + CAST(@n_UCCQty AS NVARCHAR) + ' * ' + CAST(@n_Count AS NVARCHAR)
+                      FROM CTE
     
-                     OPEN CURSOR_COMBINATION_INNER    
-                     FETCH NEXT FROM CURSOR_COMBINATION_INNER INTO @n_Sum, @c_Subset    
-                     WHILE (@@FETCH_STATUS <> -1)    
-                     BEGIN    
-                         IF (@n_Sum + @n_UCCQty * @n_Count) <= @n_OrderQty       --KY01    
-                         BEGIN                                                   --KY01    
-INSERT INTO #CombinationPool    
-               VALUES (@n_Sum + @n_UCCQty * @n_Count,    
-                                @c_Subset + ' + ' + CAST(@n_UCCQty AS NVARCHAR) + ' * ' + CAST(@n_Count AS NVARCHAR))    
-                        END  --KY01    
-                        FETCH NEXT FROM CURSOR_COMBINATION_INNER INTO @n_Sum, @c_Subset    
-                     END -- END WHILE FOR CURSOR_COMBINATION_INNER    
-                     CLOSE CURSOR_COMBINATION_INNER    
-                     DEALLOCATE CURSOR_COMBINATION_INNER    
-    
-                     END    --KY01    
+                
                      SET @n_Count = @n_Count + 1    
                   END    
     
                   FETCH NEXT FROM CURSOR_COMBINATION INTO @n_UCCQty, @n_CntCount    
                END -- END WHILE FOR CURSOR_COMBINATION    
                CLOSE CURSOR_COMBINATION    
-  DEALLOCATE CURSOR_COMBINATION    
+               DEALLOCATE CURSOR_COMBINATION    
     
                IF @b_Debug = 1    
                BEGIN    
@@ -516,7 +523,7 @@ INSERT INTO #CombinationPool
                      @n_CntCount = CntCount,    
                      @n_Count = CntCount - @n_CntNeeded    
                   FROM #NumPool WITH (NOLOCK)    
-        WHERE UCCQty = @n_UCCQty    
+                  WHERE UCCQty = @n_UCCQty    
     
                   -- Update #NumPool.cntCount    
                   UPDATE #NumPool WITH (ROWLOCK)    
@@ -540,7 +547,7 @@ INSERT INTO #CombinationPool
                   END -- IF @n_Count > 0    
                   ELSE    
                   BEGIN    
-      DELETE FROM #CombinationPool WITH (ROWLOCK)    
+                     DELETE FROM #CombinationPool WITH (ROWLOCK)    
                      WHERE CHARINDEX(CAST(@n_UCCQty AS NVARCHAR) + ' * ', Subset) > 0    
     
                      IF @b_Debug = 1    
@@ -602,7 +609,8 @@ INSERT INTO #CombinationPool
       IF @n_Count > 0    
       BEGIN    
          /**************************************************************/    
-         /***  START ALLOC UCC (Get Min Location of Pre-Alloc Qty)   ***/     /**************************************************************/    
+         /***  START ALLOC UCC (Get Min Location of Pre-Alloc Qty)   ***/     
+         /**************************************************************/    
     
          IF @b_Debug = 1    
          BEGIN    
