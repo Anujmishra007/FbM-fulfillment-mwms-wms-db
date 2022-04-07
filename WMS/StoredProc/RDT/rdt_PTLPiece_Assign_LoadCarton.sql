@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PTLPiece_Assign_LoadCarton]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE rdt.rdt_PTLPiece_Assign_LoadCarton
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,9 +11,11 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 02-10-2020 1.0  YeeKung  WMS-15181 Created                                 */
 /* 26-11-2020 1.1  YeeKung  WMS-15702 Add Params (yeekung01)                  */
+/* 15-11-2021 1.2  YeeKung  WMS-18376 Add order by (yeekung02)                */
+/* 07-04-2022 1.3  YeeKung  Fix screen (yeekung02)  4603->4609                */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_PTLPiece_Assign_LoadCarton (
+CREATE OR ALTER PROC rdt.rdt_PTLPiece_Assign_LoadCarton (
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -125,7 +124,7 @@ BEGIN
       END
 		
 		-- Go to loadkey, carton screen
-		SET @nScn = 4603
+		SET @nScn = 4609  --(yeekung03)
    END
       
    IF @cType = 'POPULATE-OUT'
@@ -264,6 +263,7 @@ BEGIN
                   AND PD.Status <> '4'
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+               ORDER BY o.OrderKey  --(yeekung02)
             OPEN @curOrder
             FETCH NEXT FROM @curOrder INTO @cOrderKey
             WHILE @@FETCH_STATUS = 0

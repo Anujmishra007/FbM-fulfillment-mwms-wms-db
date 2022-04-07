@@ -1,7 +1,7 @@
 
 -- Wave, carton, carton
-DELETE rdt.RDTScn WHERE Scn = 4603 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 4603, 'ENG'
+DELETE rdt.RDTScn WHERE Scn = 4609 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4609, 'ENG'
    ,@cLine01 = 'LoadKey:'
    ,@cLine02 = '%20i01'
    ,@cLine03 = 'ORDERKEY:      %05d05'
