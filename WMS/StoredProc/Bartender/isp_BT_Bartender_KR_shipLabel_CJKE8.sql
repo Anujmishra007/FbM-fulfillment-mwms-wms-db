@@ -17,7 +17,8 @@ GO
 /* Modifications log:                                                         */                       
 /*                                                                            */                       
 /* Date       Rev  Author     Purposes                                        */                       
-/* 2021-05-11 1.0  CSCHONG    Created (WMS-16921)                             */           
+/* 2021-05-11 1.0  CSCHONG    Created (WMS-16921)                             */  
+/* 2021-06-21 1.8  Mingle     WMS-17230 - Add new col 36,37(ML01)             */         
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_Bartender_KR_shipLabel_CJKE8]                                     
@@ -79,7 +80,9 @@ BEGIN
       @n_MAxCarton         INT,      
       @c_OHDisPlace        NVARCHAR(30),      
       @c_OHNotes           NVARCHAR(80),              
-      @c_CLNotes           NVARCHAR(80)              
+      @c_CLNotes           NVARCHAR(80),
+      @c_CL1Long            NVARCHAR(80),            --ML01
+      @c_CL1Notes          NVARCHAR(80)              --ML01              
            
             
   DECLARE          
@@ -230,13 +233,14 @@ BEGIN
    ISNULL(pd.LabelNo,''),ISNULL(o.m_country,''),ISNULL(o.m_state,''),ISNULL(o.Userdefine03,''),ISNULL(o.m_city,''),       --13      
    ISNULL(o.m_contact1,''),pd.CartonNo,o.ExternOrderKey,ISNULL(o.M_contact2,''),ISNULL(o.c_city,''),ISNULL(o.b_city,''),      
    ISNULL(o.m_address4,''),pd.LabelNo,MAX(pd.CartonNo),pd.pickslipno,o.DischargePlace,ISNULL(o.m_address3,''),      
-   SUBSTRING(o.Notes,1,80), ISNULL(CL.Notes,'')                                                
+   SUBSTRING(o.Notes,1,80), ISNULL(CL.Notes,''),ISNULL(CL1.LONG,''),ISNULL(CL1.Notes,'')  --ML01                                              
    FROM PackHeader AS ph WITH (NOLOCK)       
    JOIN PackDetail AS pd ON pd.PickSlipNo = ph.PickSlipNo       
    JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey        
    JOIN Storer ST WITH (NOLOCK) ON ST.storerkey=o.storerkey        
    LEFT JOIN PACKINFO PIF (NOLOCK) ON PD.CartonNo = PIF.CartonNo AND PD.Pickslipno = PIF.Pickslipno       
-   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.Listname = 'CARRIERBOX' AND CL.Code = ISNULL(PIF.CartonType,'') AND CL.Storerkey = PH.Storerkey        
+   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.Listname = 'CARRIERBOX' AND CL.Code = ISNULL(PIF.CartonType,'') AND CL.Storerkey = PH.Storerkey  
+   LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON CL1.Listname = 'IICFAC' AND CL1.Code = O.Facility AND CL1.Storerkey = PH.Storerkey --ML01      
    WHERE pd.pickslipno =@c_Sparm1  AND pd.labelno = @c_Sparm2        
    GROUP BY o.C_Company,ISNULL(o.C_Phone1,''),(ISNULL(o.C_Address1,'') + ISNULL(o.C_Address2,'') + ISNULL(o.C_Address3,'')),      
    ISNULL(o.C_Zip,''),ISNULL(ST.Notes2,''),(SUBSTRING(o.C_Company,1,LEN(o.C_Company) - LEN(RIGHT(o.C_Company, 1))) + '*'),       
@@ -245,7 +249,7 @@ BEGIN
    ISNULL(pd.UPC,''),ISNULL(o.m_country,''),ISNULL(o.m_state,''),ISNULL(o.Userdefine03,''),ISNULL(o.m_city,''),      
    ISNULL(o.m_contact1,''),pd.CartonNo,o.ExternOrderKey,ISNULL(o.M_contact2,''),ISNULL(o.c_city,''),ISNULL(o.b_city,''),      
    ISNULL(o.m_country,''),ISNULL(o.m_address4,''),pd.LabelNo,pd.pickslipno,o.DischargePlace,ISNULL(o.m_address3,''),      
-   SUBSTRING(o.Notes,1,80),ISNULL(CL.Notes,'')                                                
+   SUBSTRING(o.Notes,1,80),ISNULL(CL.Notes,''),ISNULL(CL1.LONG,''),ISNULL(CL1.Notes,'') --ML01                                              
               
    OPEN CUR_StartRecLoop                          
                      
@@ -253,7 +257,7 @@ BEGIN
               @c_OHPhone1descr,@c_OHUDF04descr,@c_OHUDF04,@c_OHMCountry,      
               @c_OHMState,@c_OHUDF03,@c_OHMcity ,@c_OHMContact1,@n_CartonNo,@c_ExtOrdkey,@c_OHMContact2,      
               @c_OHccity,@c_OHbcity,@c_OHMAdd4,@c_labelno, @n_MAxCarton ,@c_Pickslipno ,@c_OHDisPlace,@c_OHMAdd3      
-             ,@c_OHNotes,@c_CLNotes                          --(CS01)    --WL01      
+             ,@c_OHNotes,@c_CLNotes,@c_CL1Long,@c_CL1Notes                          --(CS01)    --WL01    --ML01      
                                                              
                        
    WHILE @@FETCH_STATUS <> -1                          
@@ -274,7 +278,7 @@ BEGIN
              @c_OHUDF04descr,@c_labelno,@c_OHMCountry,@c_OHMState,'','',       --13        
              '','','','','','','',                                             --20             
              @c_OHMAdd3,@c_OHMAdd4,@c_OHMContact1,@n_CartonNo,@c_ExtOrdkey,@c_OHMContact2,       --26      
-             @c_OHccity,@c_OHbcity,@c_OHDisPlace,@c_OHMAdd4,@c_labelno, @n_MAxCarton,@c_OHMcity,@c_OHNotes,@c_CLNotes,'','','','',   --39        
+             @c_OHccity,@c_OHbcity,@c_OHDisPlace,@c_OHMAdd4,@c_labelno, @n_MAxCarton,@c_OHMcity,@c_OHNotes,@c_CLNotes,@c_CL1Long,@c_CL1Notes,'','',   --39  --ML01      
              '','','','','','','','','','',''        --50         
              ,'','','','','','','','',@c_Pickslipno,'O')                
                 
@@ -289,7 +293,7 @@ BEGIN
                                             @c_OHPhone1descr,@c_OHUDF04descr,@c_OHUDF04,@c_OHMCountry,      
                                             @c_OHMState,@c_OHUDF03,@c_OHMcity ,@c_OHMContact1,@n_CartonNo,@c_ExtOrdkey,@c_OHMContact2,      
                                             @c_OHccity,@c_OHbcity,@c_OHMAdd4,@c_labelno, @n_MAxCarton,@c_Pickslipno   ,@c_OHDisPlace,@c_OHMAdd3       
-                                           ,@c_OHNotes,@c_CLNotes                                              
+                                           ,@c_OHNotes,@c_CLNotes,@c_CL1Long,@c_CL1Notes      --ML01                                              
                 
    END -- While                           
    CLOSE CUR_StartRecLoop                          
