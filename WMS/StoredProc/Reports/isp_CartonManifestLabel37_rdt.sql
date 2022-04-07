@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_CartonManifestLabel37_rdt]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_CartonManifestLabel37_rdt]
-GO
- 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -18,7 +13,7 @@ GO
 /*                                                                      */    
 /* Called By: r_dw_carton_manifest_label_37_rdt                         */    
 /*                                                                      */    
-/* GitLab Version: 1.2                                                  */    
+/* GitLab Version: 1.3                                                  */    
 /*                                                                      */    
 /* Version: 5.4                                                         */    
 /*                                                                      */    
@@ -30,8 +25,9 @@ GO
 /* 2021-11-11  WLChooi  1.1   WMS-17265 - Add CartonType and Userkey    */
 /*                            (WL01)                                    */
 /* 2021-11-15  WLChooi  1.2   WMS-17265- Add BuyerPO (WL02)             */
+/* 2022-03-31  WLChooi  1.3   WMS-17265 - Modify Column Mapping (WL03)  */
 /************************************************************************/    
-CREATE PROC dbo.isp_CartonManifestLabel37_rdt (    
+CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel37_rdt] (    
        @c_Pickslipno   NVARCHAR(10),     
        @c_FromCartonNo NVARCHAR(10),    
        @c_ToCartonNo   NVARCHAR(10),
@@ -55,7 +51,7 @@ BEGIN
    SET @b_debug = 0    
     
    SELECT Loadkey        = PACKHEADER.Loadkey
-         ,ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
+         ,ExternOrderkey = ISNULL(RTRIM(OD.UserDefine02),'')   --WL03
          ,CtnCnt1        = (SELECT COUNT(DISTINCT PD.LabelNo)                                    
                             FROM PACKHEADER PH WITH (NOLOCK)                                    
                             JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo) 
@@ -87,11 +83,14 @@ BEGIN
                 WHERE TASKDETAIL.Storerkey = PACKHEADER.StorerKey              --WL01
                 AND TASKDETAIL.Caseid = PACKDETAIL.LabelNo                     --WL01
                 AND TASKDETAIL.TaskType = 'CPK') AS TD                         --WL01
+   CROSS APPLY (SELECT TOP 1 ISNULL(ORDERDETAIL.UserDefine02,'') AS UserDefine02  --WL03
+                FROM ORDERDETAIL (NOLOCK)                                         --WL03
+                WHERE ORDERDETAIL.OrderKey = ORDERS.OrderKey) AS OD               --WL03
    WHERE PACKHEADER.PickSlipNo = @c_Pickslipno 
    --AND PACKD.CartonNo BETWEEN CAST(@c_FromCartonNo AS INT) AND CAST(@c_ToCartonNo AS INT) 
    AND PACKDETAIL.LabelNo BETWEEN @c_FromLabelNo AND @c_ToLabelNo
    GROUP BY PACKHEADER.Loadkey
-         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
+         ,  ISNULL(RTRIM(OD.UserDefine02),'')   --WL03
          ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
          ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
          ,  ISNULL(RTRIM(SKU.Style),'')
@@ -104,11 +103,10 @@ BEGIN
    ORDER BY PACKHEADER.Loadkey
          ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
          ,  ISNULL(RTRIM(PACKDETAIL.CartonNo),'')
-         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')
+         ,  ISNULL(RTRIM(OD.UserDefine02),'')   --WL03
          ,  ISNULL(RTRIM(SKU.Style),'')  
 
 END 
 GO
-GRANT EXECUTE ON isp_CartonManifestLabel37_rdt TO NSQL
+GRANT EXECUTE ON [dbo].[isp_CartonManifestLabel37_rdt] TO NSQL
 GO
-
