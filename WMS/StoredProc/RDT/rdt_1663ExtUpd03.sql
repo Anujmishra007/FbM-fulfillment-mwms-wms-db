@@ -12,8 +12,9 @@ GO
 /* Copyright      : LF Logistics                                              */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
-/* 2018-08-27 1.0  Ung      WMS-6128 Created                                  */
-/* 2018-11-08 1.1  Ung      WMS-7003 Check interface had sent (TLog2 archived)*/
+/* 2018-08-27 1.0  Ung      WMS-6128 Created                                  */  
+/* 2018-11-08 1.1  Ung      WMS-7003 Check interface had sent (TLog2 archived)*/  
+/* 2020-09-08 1.2  YeeKung  WMS-15056 add update carrierkey(yeekung01)        */
 /******************************************************************************/
 
 CREATE PROC [RDT].[rdt_1663ExtUpd03](
@@ -43,6 +44,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @bSuccess INT
+   DECLARE @cCarrierkey NVARCHAR(20)
 
    IF @nFunc = 1663 -- TrackNoToPallet
    BEGIN
@@ -54,6 +56,27 @@ BEGIN
             -- (send MBOL, IKEA return a flag, store at MBOL header, indicate permission to ship, and user close MBOL to ship)
             IF EXISTS( SELECT 1 FROM MBOL WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND OtherReference = '')
             BEGIN
+
+               
+               SELECT @cCarrierkey=UDF01
+                FROM  dbo.CODELKUP (NOLOCK) 
+               WHERE Storerkey=@cstorerkey 
+                  AND LISTNAME='IKCourier' 
+                  AND code2=@cFacility 
+                  AND Long=LEFT(@cPalletKey,5)
+
+               UPDATE MBOL WITH (ROWLOCK)
+               SET carrierkey=@cCarrierkey
+               WHERE MBOLKey = @cMBOLKey AND OtherReference = ''
+
+               IF @@ERROR<>0
+               BEGIN
+                  SET @nErrNo = 128252
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdateMBOLFail
+                  GOTO Quit
+               END
+
+
                EXEC dbo.ispGenTransmitLog2
                     'WSMBOLADDLOG' -- TableName
                   , @cMBOLKey      -- Key1
