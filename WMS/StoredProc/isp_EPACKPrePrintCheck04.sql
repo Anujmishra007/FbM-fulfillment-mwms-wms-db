@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_EPACKPrePrintCheck04]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_EPACKPrePrintCheck04]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: isp_EPACKPrePrintCheck_Wrapper                            */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,8 +21,11 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-Mar-2022 WLChooi  1.1   DevOps Combine Script                     */
+/* 28-Mar-2022 WLChooi  1.1   WMS-19347 - Use Codelkup to store Brand   */
+/*                            - UserDefine01 (WL01)                     */
 /************************************************************************/
-CREATE PROC [dbo].[isp_EPACKPrePrintCheck04]
+CREATE OR ALTER PROC [dbo].[isp_EPACKPrePrintCheck04]
            @c_PickSlipNo      NVARCHAR(10)
          , @c_CartonNoStart   NVARCHAR(10)
          , @c_CartonNoEnd     NVARCHAR(10)
@@ -73,11 +71,22 @@ BEGIN
       WHERE PICKSLIPNO = @c_PickSlipNo
    
       --0 = Fail, 1 = Print, 2 = Not To Print 
+      --WL01 S
+      --IF NOT EXISTS( SELECT 1
+      --               FROM ORDERS O (NOLOCK)
+      --               WHERE O.ORDERKEY =  @c_Orderkey
+      --               AND O.DocType = 'E' 
+      --               AND O.UserDefine01 = 'VC30')
       IF NOT EXISTS( SELECT 1
                      FROM ORDERS O (NOLOCK)
-                     WHERE O.ORDERKEY =  @c_Orderkey
-                     AND O.DocType = 'E' 
-                     AND O.UserDefine01 = 'VC30')
+                     JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'TNFBRAND' 
+                                              AND CL.Storerkey = O.Storerkey
+                                              AND CL.Code = O.UserDefine01
+                                              AND CL.Short = 'Y'
+                                              AND CL.Long = 'r_dw_packing_list_93_rdt'
+                                              AND CL.code2 = O.DocType
+                     WHERE O.ORDERKEY =  @c_Orderkey)
+      --WL01 E
       BEGIN
 	      SET @n_continue = 2
 	      SET @b_Success  = 2
@@ -127,7 +136,5 @@ QUIT_SP:
    END
 END -- procedure
 GO
-
 GRANT EXECUTE ON [dbo].[isp_EPACKPrePrintCheck04] TO NSQL
 GO
-

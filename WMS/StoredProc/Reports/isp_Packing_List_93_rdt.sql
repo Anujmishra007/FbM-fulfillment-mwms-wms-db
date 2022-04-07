@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Packing_List_93_rdt]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [dbo].[isp_Packing_List_93_rdt]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,8 +25,10 @@ GO
 /*                            SUM(PICKDETAIL.Qty) instead (WL01)        */
 /* 2021-10-26   Mingle    1.2 WMS-18229 Modify logic(ML01)              */
 /* 2021-10-26   Mingle    1.2 DevOps Combine Script                     */
+/* 2022-03-28   WLChooi   1.3 WMS-19347 - Use Codelkup to store Brand   */
+/*                            - UserDefine01 (WL02)                     */
 /************************************************************************/  
-CREATE PROC [dbo].[isp_Packing_List_93_rdt]
+CREATE OR ALTER PROC [dbo].[isp_Packing_List_93_rdt]
             @c_Pickslipno    NVARCHAR(15),      --Could be Storerkey/Pickslipno/Orderkey
             @c_Orderkey      NVARCHAR(10) = ''  --Could be Orderkey
 AS  
@@ -96,6 +94,7 @@ BEGIN
         , PH.PickSlipNo
         , OH.OrderKey
         , ISNULL(CL.Long,'') AS QRCode
+        , OH.UserDefine01   --WL02
    FROM ORDERS OH (NOLOCK)
    JOIN PACKHEADER PH (NOLOCK) ON OH.OrderKey = PH.OrderKey
    --JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.PickSlipNo                      --WL01
@@ -105,8 +104,16 @@ BEGIN
    JOIN #TMP_Orders t ON t.Orderkey = OH.Orderkey
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'TNFQRCode' AND CL.Code = OH.Salesman
                                  AND CL.Storerkey = OH.StorerKey
-   WHERE OH.UserDefine01 = 'VC30'
-   AND OH.DocType = 'E'
+   --WL02 S
+   JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME = 'TNFBRAND' 
+                             AND CL1.Storerkey = OH.Storerkey
+                             AND CL1.Code = OH.UserDefine01
+                             AND CL1.Short = 'Y'
+                             AND CL1.Long = 'r_dw_packing_list_93_rdt'
+                             AND CL1.code2 = OH.DocType
+   --WHERE OH.UserDefine01 = 'VC30'
+   --AND OH.DocType = 'E'
+   --WL02 E
    --WL01 S
    GROUP BY CASE WHEN OH.StorerKey = '18405' THEN ISNULL(OH.orderkey,'') ELSE ISNULL(OH.Externorderkey,'') END  --ML01
           --ISNULL(OH.Externorderkey,'')
@@ -123,6 +130,7 @@ BEGIN
           , PH.PickSlipNo
           , OH.OrderKey
           , ISNULL(CL.Long,'')
+          , OH.UserDefine01   --WL02
    --WL01 E
 
 QUIT_SP:  
