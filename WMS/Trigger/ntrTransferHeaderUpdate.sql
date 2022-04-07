@@ -37,7 +37,7 @@ GO
 /* 2006-06-08   Vicky     1.0   SOS#51627 - Insertion of CIBATRF only   */
 /*                              when Codelkup.Listname = 'TRANTYPE' and */
 /*                              Codelkup.Long = 'CV'                    */
-/* 2007-02-22   June      1.0   SOS68834 - Add configkey 'INVTRFITF'	   */
+/* 2007-02-22   June      1.0   SOS68834 - Add configkey 'INVTRFITF'	*/
 /* 2008-08-19   Leong     1.0   SOS114421 - change StorerKey to 'C4TH'  */
 /* 17-Mar-2009  TLTING    1.1   Change user_name() to SUSER_SNAME()     */
 /* 03-Nov-2010  YokeBeen  1.2   FBR#195034 - Added new trigger point    */
@@ -58,6 +58,7 @@ GO
 /* 01-Mar-2022  NJOW01    1.7   WMS-19042 update diffrent value for     */
 /*                              TRFLOG transmitlog by config            */
 /* 01-Mar-2022  NJOW01    1.7   DEVOPS combine script                   */
+/* 07-Apr-2022  CLVN01    1.8   JSM-61467 Fix Missed Deployment         */
 /************************************************************************/
 
 CREATE  OR ALTER TRIGGER ntrTransferHeaderUpdate
@@ -203,7 +204,7 @@ BEGIN
 
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
-      IF EXISTS (SELECT 1 FROM DELETED  WHERE   DELETED.STATUS = '9' )
+      IF EXISTS (SELECT 1 FROM DELETED  WHERE   DELETED.STATUS = '9' ) AND NOT UPDATE(CustomerRefNo)	--CLVN01
                     -- TLTING03
       BEGIN
          SET @n_continue = 3
