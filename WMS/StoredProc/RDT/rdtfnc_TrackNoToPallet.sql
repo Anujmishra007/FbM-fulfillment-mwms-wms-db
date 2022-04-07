@@ -1,6 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdtfnc_TrackNoToPallet]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_TrackNoToPallet]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -40,9 +37,10 @@ GO
 /* 2019-11-12 2.5  Shong    Set Remarks=ECOM when insert into MBOL            */  
 /* 2020-03-20 2.6  James    WMS-12486 Allow screen to accept track no as 40   */
 /*                          chars and decode (james03)                        */
+/* 2020-09-8  2.7  YeeKung  WMS-15056 Add Extendedvalidatesp(yeekung01)       */ 
 /******************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_TrackNoToPallet](  
+CREATE OR ALTER  PROC [RDT].[rdtfnc_TrackNoToPallet](  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -451,7 +449,49 @@ BEGIN
             SET @cErrMsg = ''  
             GOTO Quit  
          END  
-      END  
+      END
+      
+      -- Extended validate      
+      IF @cExtendedValidateSP <> ''     --(yeekung01) 
+      BEGIN      
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')      
+         BEGIN      
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +      
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +      
+               ' @cPalletKey, @cPalletLOC, @cMBOLKey, @cTrackNo, @cOrderKey, @cShipperKey, @cCartonType, @cWeight, @cOption, ' +       
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+            SET @cSQLParam =      
+               '@nMobile         INT,           ' +      
+               '@nFunc           INT,           ' +      
+               '@cLangCode       NVARCHAR( 3),  ' +      
+               '@nStep           INT,           ' +      
+               '@nInputKey       INT,           ' +      
+               '@cFacility       NVARCHAR( 5),  ' +      
+               '@cStorerKey      NVARCHAR( 15), ' +      
+               '@cPalletKey      NVARCHAR( 20), ' +       
+               '@cPalletLOC      NVARCHAR( 10), ' +       
+               '@cMBOLKey        NVARCHAR( 10), ' +       
+               '@cTrackNo        NVARCHAR( 20), ' +       
+               '@cOrderKey       NVARCHAR( 10), ' +       
+               '@cShipperKey     NVARCHAR( 15), ' +        
+               '@cCartonType     NVARCHAR( 10), ' +        
+               '@cWeight         NVARCHAR( 10), ' +       
+               '@cOption         NVARCHAR( 1),  ' +       
+               '@nErrNo          INT            OUTPUT,   ' +      
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT    '      
+      
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,      
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,       
+               @cPalletKey, @cPalletLOC, @cMBOLKey, @cTrackNo, @cOrderKey, @cShipperKey, @cCartonType, @cWeight, @cOption,       
+               @nErrNo OUTPUT, @cErrMsg OUTPUT       
+      
+            IF @nErrNo <> 0      
+            BEGIN      
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg      
+               GOTO Quit      
+            END      
+         END      
+      END     
   
       -- Extended update  
       IF @cExtendedUpdateSP <> ''  
