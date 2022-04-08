@@ -1,11 +1,15 @@
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrRCMReportUpdate]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrRCMReportUpdate]
 GO
 
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrRCMReportUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrRCMReportUpdate]
+SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
+ 
 
 /************************************************************************/
 /* Trigger: ntrRCMReportUpdate                                			   */
@@ -37,10 +41,11 @@ GO
 /* Date         Author    Purposes                                      */
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 04-Mar-2022  TLTING     prevent bulk update                          */
 /************************************************************************/
 
-CREATE TRIGGER ntrRCMReportUpdate 
-ON RCMReport
+CREATE   TRIGGER [dbo].[ntrRCMReportUpdate] 
+ON [dbo].[RCMReport]
 FOR UPDATE
 AS
 BEGIN
@@ -67,7 +72,7 @@ BEGIN
 
 	IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)
 	BEGIN
-		UPDATE RCMReport
+		UPDATE dbo.RCMReport
 		SET EditDate = GETDATE(),
 	  	    EditWho = SUSER_SNAME()
 		FROM  RCMReport,INSERTED
@@ -83,6 +88,14 @@ BEGIN
 			SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Editdate/User Failed On Table RCMReport. (ntrRCMReportUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
 		END
 	END
+
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=90208   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table RCMReport. Batch Update not allow! (ntrRCMReportUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
 
 	/* Return Statement */
 	IF @n_continue=3  -- Error Occured - Process And Return
@@ -115,7 +128,8 @@ BEGIN
 END
 
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+ALTER TABLE [dbo].[RCMReport] ENABLE TRIGGER [ntrRCMReportUpdate]
 GO
-SET ANSI_NULLS OFF 
-GO
+
+

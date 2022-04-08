@@ -1,11 +1,14 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrFacilityUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrFacilityUpdate]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrFacilityUpdate]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrFacilityUpdate]
 GO
 
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/  
 /* Trigger: ntrFacilityUpdate                                           */  
 /* Creation Date:                                                       */  
@@ -28,9 +31,10 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 28-Oct-2013  TLTING   1.1  Review Editdate column update             */  
 /* 26-Jun-2018  NJOW01   1.0  WMS-5221 disallow update type to PHYSICAL */
+/* 04-Mar-2022  TLTING   1.2  prevent bulk update                       */ 
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrFacilityUpdate]  
+CREATE   TRIGGER [dbo].[ntrFacilityUpdate]  
 ON  [dbo].[FACILITY]   
 FOR UPDATE  
 AS  
@@ -88,6 +92,15 @@ BEGIN
                          +' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '  
       END  
    END  
+
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67408   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Facility. Batch Update not allow! (ntrFacilityUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
    /* END Added */
   
    /* #INCLUDE <TRPU_2.SQL> */  
@@ -118,3 +131,9 @@ BEGIN
       RETURN  
    END  
 END  
+GO
+
+ALTER TABLE [dbo].[FACILITY] ENABLE TRIGGER [ntrFacilityUpdate]
+GO
+
+

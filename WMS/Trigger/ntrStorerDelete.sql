@@ -1,13 +1,48 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStorerDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrStorerDelete]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrStorerDelete]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrStorerDelete]
 GO
 
-CREATE TRIGGER ntrStorerDelete
-ON dbo.STORER
+SET ANSI_NULLS OFF
+GO
 
--- Added by YokeBeen on 14-Jan-2003 for SOS#8859.
--- Edited by KHLim02 on 14-Jul-2011 for GetRight for Delete log
+SET QUOTED_IDENTIFIER OFF
+GO
 
+
+
+/*********************************************************************************/  
+/* Trigger:  ntrStorerDelete                                                     */
+/* Creation Date:                                                                */
+/* Copyright: IDS                                                                */
+/* Written by:                                                                   */
+/*                                                                               */
+/* Purpose:  Trigger point upon any Delete on the Storer                         */
+/*                                                                               */
+/* Return Status:  None                                                          */
+/*                                                                               */
+/* Usage:                                                                        */
+/*                                                                               */
+/* Local Variables:                                                              */
+/*                                                                               */
+/* Called By: When records Deleted                                               */
+/*                                                                               */
+/* PVCS Version: 1.0                                                             */
+/*                                                                               */
+/* Version: 5.4                                                                  */
+/*                                                                               */
+/* Data Modifications:                                                           */
+/*                                                                               */
+/* Updates:                                                                      */
+/* Date         Author    Ver.  Purposes                                         */
+/* 14-Jan-2003  YokeBeen  1.1   SOS#8859                                         */ 
+/* 14-Jul-2011  KHLim02   1.2   for GetRight for Delete log                      */
+/* 04-Mar-2022  TLTING    1.3   prevent bulk Delete                              */ 
+/*********************************************************************************/  
+ 
+
+CREATE   TRIGGER [dbo].[ntrStorerDelete]
+ON [dbo].[STORER]
 FOR DELETE
 AS
 BEGIN
@@ -15,9 +50,10 @@ IF @@ROWCOUNT = 0
 BEGIN
 	RETURN
 END
-   SET NOCOUNT ON
-   SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
+SET NOCOUNT ON
+SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
 
 DECLARE @b_Success  int,       -- Populated by calls to stored procedures - was the proc successful?
 @n_err              int,       -- Error number returned by stored procedure or this trigger
@@ -33,6 +69,14 @@ SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 IF (SELECT COUNT(*) FROM DELETED) = (SELECT COUNT(*) FROM DELETED WHERE DELETED.ArchiveCop = '9')
 BEGIN
 	SELECT @n_continue = 4
+END
+
+IF ( (SELECT COUNT(1) FROM   Deleted  ) > 100 ) 
+      AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+BEGIN      
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63908   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Delete Failed On Table Storer. Batch Delete not allow! (ntrStorerDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
 END
 
 IF @n_continue = 1 or @n_continue = 2
@@ -132,4 +176,8 @@ END
 END
 
 GO
+
+ALTER TABLE [dbo].[STORER] ENABLE TRIGGER [ntrStorerDelete]
+GO
+
 

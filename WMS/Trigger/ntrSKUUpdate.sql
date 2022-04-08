@@ -1,12 +1,14 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrSKUUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrSKUUpdate]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrSkuUpdate]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrSkuUpdate]
 GO
 
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /***************************************************************************/
 /* Trigger: ntrSkuUpdate                                                   */
@@ -57,9 +59,10 @@ GO
 /*                            when UPDATE record (WL01)                    */
 /* 15-Mar-2021  KHChan   1.7  LFI-1646 - Trigger for Webservice (KH01)     */
 /* 18-Aug-2021  NJOW01   1.7  WMS-17763 Update active based on skustatus   */
+/* 04-Mar-2022  TLTING03 1.8  prevent bulk update                          */ 
 /***************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrSKUUpdate] ON [dbo].[SKU]
+CREATE   TRIGGER [dbo].[ntrSKUUpdate] ON [dbo].[SKU]
 FOR UPDATE
 AS
 BEGIN
@@ -176,6 +179,14 @@ BEGIN
    END
    -- End Add
 
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67408   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table SKU. Batch Update not allow! (ntrSkuUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
    IF UPDATE(TrafficCop)
    BEGIN
    	--WL01 START
@@ -271,7 +282,9 @@ BEGIN
 
    -- (YokeBeen01) - Start
    -- IF @n_continue = 1 OR @n_continue = 2   -- tlting01
-   -- BEGIN
+   -- TLTING03
+    IF @n_continue <> 3 
+    BEGIN
       -- Retrieve related info from INSERTED table into a cursor for TransmitLog Insertion
       DECLARE C_TransmitLogUpdate CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
        SELECT DISTINCT
@@ -982,7 +995,7 @@ BEGIN
       END -- WHILE @@FETCH_STATUS <> -1
       CLOSE C_TransmitLogUpdate
       DEALLOCATE C_TransmitLogUpdate
-   --  END   -- tlting01 remove
+   END   -- TLTING03  -- tlting01 remove
    -- (YokeBeen01) - End
 
    -- Added By Ricky Yee for IDSV5
@@ -1132,3 +1145,9 @@ QUIT:
       RETURN
    END
 END
+GO
+
+ALTER TABLE [dbo].[SKU] ENABLE TRIGGER [ntrSKUUpdate]
+GO
+
+

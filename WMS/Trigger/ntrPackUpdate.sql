@@ -1,12 +1,14 @@
-
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPackUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPackUpdate]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrPackUpdate]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrPackUpdate]
 GO
+
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************/
 /* Trigger: ntrPackUpdate                                                  */
 /* Creation Date:                                                          */
@@ -43,9 +45,10 @@ GO
 /* 09-Sep-2020  WLChooi  1.9  WMS-15120 - Update SKU table from Pack for CN*/
 /*                            (WL02)                                       */
 /* 02-Oct-2020  TLTING02 1.10 EXCEPT replace UPDATE() -actual value changed*/
+/* 04-Mar-2022  TLTING   1.11 prevent bulk update                          */ 
 /***************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPackUpdate]
+CREATE   TRIGGER [dbo].[ntrPackUpdate]
 ON  [dbo].[PACK]
 FOR UPDATE
 AS
@@ -58,18 +61,18 @@ BEGIN
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF	
-   DECLARE @b_Success int          -- Populated by calls to stored procedures - was the proc successful?
-         , @n_err int              -- Error number returned by stored procedure or this trigger
-         , @n_err2 int             -- For Additional Error Detection
+   DECLARE @b_Success INT          -- Populated by calls to stored procedures - was the proc successful?
+         , @n_err INT              -- Error number returned by stored procedure or this trigger
+         , @n_err2 INT             -- For Additional Error Detection
          , @c_errmsg NVARCHAR(250)     -- Error message returned by stored procedure or this trigger
-         , @n_continue int                 
-         , @n_starttcnt int        -- Holds the current transaction count
+         , @n_continue INT                 
+         , @n_starttcnt INT        -- Holds the current transaction count
          , @c_preprocess NVARCHAR(250) -- preprocess
          , @c_pstprocess NVARCHAR(250) -- post process
-         , @n_cnt int              
+         , @n_cnt INT              
          , @c_Country    NVARCHAR(10) = ''  --WL01
          , @c_authority  NVARCHAR(1)  = ''  --WL01  
-         , @C_TEST nvarchar(100)  
+         , @C_TEST NVARCHAR(100)  
 
    -- (YokeBeen01) - Start
    DECLARE @c_Storerkey NVARCHAR(15) 
@@ -117,6 +120,15 @@ BEGIN
                          +' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
       END
    END
+
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85883   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table PACK. Batch Update not allow! (ntrPACKUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
    /* END Added */
    
    IF UPDATE(TrafficCop)
@@ -372,6 +384,9 @@ QUIT_SP:
    END
 END
 
+GO
+
+ALTER TABLE [dbo].[PACK] ENABLE TRIGGER [ntrPackUpdate]
 GO
 
 

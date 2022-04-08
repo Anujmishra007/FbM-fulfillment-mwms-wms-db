@@ -1,11 +1,14 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPutawayZoneUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPutawayZoneUpdate]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrPutawayZoneUpdate]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrPutawayZoneUpdate]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Trigger: ntrPutawayZoneUpdate                                        */
 /* Creation Date:                                                       */
@@ -38,9 +41,10 @@ GO
 /* 22-May-2012  TLTING01 1.1  DM Integrity issue - Update editdate B4   */
 /*                             ArchiveCop                               */
 /* 28-Oct-2013  TLTING   1.2  Review Editdate column update             */
+/* 04-Mar-2022  TLTING   1.3  prevent bulk update                       */ 
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
+CREATE   TRIGGER [dbo].[ntrPutawayZoneUpdate]
  ON [dbo].[PutawayZone]
  FOR UPDATE
  AS
@@ -61,8 +65,8 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  @n_starttcnt        int,       -- Holds the current transaction count
  @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
- IF (select count(*) from DELETED) =
- (select count(*) from DELETED where DELETED.ArchiveCop = '9')
+ IF (select count(1) from DELETED) =
+ (select count(1) from DELETED where DELETED.ArchiveCop = '9')
  BEGIN
  SELECT @n_continue = 4
  END
@@ -81,11 +85,20 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  BEGIN
  SELECT @n_continue = 4
  END
+
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+         AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=86310   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table PutawayZone. Batch Update not allow! (ntrPutawayZoneUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
       /* #INCLUDE <TRPZU1.SQL> */     
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM SKU, Deleted
+ IF EXISTS(SELECT 1
+ FROM SKU (NOLOCK), Deleted
  WHERE SKU.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -95,8 +108,8 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM LOC, Deleted
+ IF EXISTS(SELECT 1
+ FROM LOC (NOLOCK), Deleted
  WHERE LOC.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -106,8 +119,8 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM PutawayStrategyDetail, Deleted
+ IF EXISTS(SELECT 1
+ FROM PutawayStrategyDetail (NOLOCK), Deleted
  WHERE PutawayStrategyDetail.Zone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -117,8 +130,8 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM PAZoneEquipmentExcludeDetail, Deleted
+ IF EXISTS(SELECT 1
+ FROM PAZoneEquipmentExcludeDetail (NOLOCK), Deleted
  WHERE PAZoneEquipmentExcludeDetail.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -128,8 +141,8 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM AreaDetail, Deleted
+ IF EXISTS(SELECT 1
+ FROM AreaDetail (NOLOCK), Deleted
  WHERE AreaDetail.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -166,3 +179,8 @@ CREATE TRIGGER [dbo].[ntrPutawayZoneUpdate]
  END
 
 GO
+
+ALTER TABLE [dbo].[PutawayZone] ENABLE TRIGGER [ntrPutawayZoneUpdate]
+GO
+
+

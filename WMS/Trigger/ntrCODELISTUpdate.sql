@@ -1,6 +1,6 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrCARTONIZATIONUpdate]') 
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrCODELISTUpdate]') 
 AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrCARTONIZATIONUpdate]
+DROP TRIGGER [dbo].[ntrCODELISTUpdate]
 GO
 
 SET ANSI_NULLS OFF
@@ -11,12 +11,12 @@ GO
 
 
 /*********************************************************************************/  
-/* Trigger:  ntrCARTONIZATIONUpdate                                              */
+/* Trigger:  ntrCODELISTUpdate                                                   */
 /* Creation Date:                                                                */
 /* Copyright: IDS                                                                */
 /* Written by:                                                                   */
 /*                                                                               */
-/* Purpose:  Trigger point upon any Update on the CARTONIZATION                  */
+/* Purpose:  Trigger point upon any Update on the CODELIST                       */
 /*                                                                               */
 /* Return Status:  None                                                          */
 /*                                                                               */
@@ -34,11 +34,11 @@ GO
 /*                                                                               */
 /* Updates:                                                                      */
 /* Date         Author    Ver.  Purposes                                         */
-/* 04-Mar-2022  TLTING    1.1   prevent bulk update                              */ 
+/* 04-Mar-2022  TLTING    1.0   Initial  - prevent bulk update                   */ 
 /*********************************************************************************/  
 
-CREATE   TRIGGER [dbo].[ntrCARTONIZATIONUpdate]
-ON  [dbo].[CARTONIZATION]
+CREATE   TRIGGER [dbo].[ntrCODELISTUpdate]
+ON  [dbo].[CODELIST]
 FOR UPDATE
 AS
 BEGIN -- main
@@ -58,9 +58,6 @@ BEGIN -- main
          , @n_starttcnt          int       -- Holds the current transaction count
          , @c_TrafficCop         NCHAR(1)
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT      
-
-   SELECT @c_TrafficCop = TrafficCop
-   FROM INSERTED
    
    IF UPDATE(TrafficCop)  
    BEGIN
@@ -69,17 +66,17 @@ BEGIN -- main
 
    IF (@n_continue = 1 or @n_continue = 2)  AND NOT UPDATE(EditDate)
    BEGIN
-    	  	 UPDATE CARTONIZATION WITH (ROWLOCK)
-   	  	 SET CARTONIZATION.EditWho = SUSER_SNAME(),
-   	  	     CARTONIZATION.EditDate = GETDATE(),
-   	  	     CARTONIZATION.TrafficCop = NULL
-   	  	 FROM CARTONIZATION JOIN INSERTED ON CARTONIZATION.CartonizationKey = INSERTED.CartonizationKey
+    	  	 UPDATE CODELIST WITH (ROWLOCK)
+   	  	 SET CODELIST.EditWho = SUSER_SNAME(),
+   	  	     CODELIST.EditDate = GETDATE(),
+   	  	     CODELIST.TrafficCop = NULL
+   	  	 FROM CODELIST JOIN INSERTED ON CODELIST.LISTNAME = INSERTED.LISTNAME
       SELECT @n_err = @@ERROR 
       IF @n_err <> 0
       BEGIN
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67404   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table CARTONIZATION. (ntrCARTONIZATIONUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table CODELIST. (ntrCODELISTUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
       END
     END
 
@@ -88,7 +85,7 @@ BEGIN -- main
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67408   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table CARTONIZATION. Batch Update not allow! (ntrCARTONIZATIONUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table CODELIST. Batch Update not allow! (ntrCODELISTUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
 
@@ -105,7 +102,7 @@ BEGIN -- main
        COMMIT TRAN
        END
     END
-    EXECUTE nsp_logerror @n_err, @c_errmsg, 'ntrCARTONIZATIONUpdate'
+    EXECUTE nsp_logerror @n_err, @c_errmsg, 'ntrCODELISTUpdate'
     RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
     RETURN
    END
@@ -120,7 +117,7 @@ BEGIN -- main
 END -- main
 GO
 
-ALTER TABLE [dbo].[CARTONIZATION] ENABLE TRIGGER [ntrCARTONIZATIONUpdate]
+ALTER TABLE [dbo].[CODELIST] ENABLE TRIGGER [ntrCODELISTUpdate]
 GO
 
 

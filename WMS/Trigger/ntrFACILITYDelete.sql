@@ -1,11 +1,14 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrFACILITYDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrFACILITYDelete]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrFACILITYDelete]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrFACILITYDelete]
 GO
 
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Trigger: ntrFACILITYDelete                                           */
@@ -37,9 +40,10 @@ GO
 /* Date         Author     Ver.  Purposes                               */
 /* 14-Jul-2011  KHLim02    1.0   GetRight for Delete log                */
 /* 02-May-2018  NJOW01     1.1   WMS-4914 facility delete validation    */
+/* 04-Mar-2022  TLTING     1.2   prevent bulk Delete                    */ 
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrFACILITYDelete]
+CREATE   TRIGGER [dbo].[ntrFACILITYDelete]
 ON [dbo].[FACILITY]
 FOR DELETE
 AS
@@ -53,8 +57,8 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @b_Success     int,       -- Populated by calls to stored procedures - was the proc successful?
-            @n_err         int,       -- Error number returned by stored procedure or this trigger
+   DECLARE  @b_Success     INT,       -- Populated by calls to stored procedures - was the proc successful?
+            @n_err         INT,       -- Error number returned by stored procedure or this trigger
             @c_errmsg      NVARCHAR(250), -- Error message returned by stored procedure or this trigger
             @n_continue    int,       -- continuation flag: 1=Continue, 2=failed but continue processsing, 3=failed do not continue processing, 4=successful but skip further processing
             @n_starttcnt   int,       -- Holds the current transaction count
@@ -99,6 +103,14 @@ BEGIN
       END
    END
  
+   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
+       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68108   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table Facility. Batch Delete not allow! (ntrFacilityDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
    --NJOW01
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
@@ -111,7 +123,7 @@ BEGIN
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Facility refer by location. Not allow to delete. (ntrFACILITYDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
    	  END          
    END
-   
+ 
       /* #INCLUDE <TRCOND2.SQL> */
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN
@@ -139,3 +151,9 @@ BEGIN
       RETURN
    END
 END
+GO
+
+ALTER TABLE [dbo].[FACILITY] ENABLE TRIGGER [ntrFACILITYDelete]
+GO
+
+

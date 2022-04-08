@@ -1,10 +1,14 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStorerUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrStorerUpdate]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrStorerUpdate]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrStorerUpdate]
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/  
 /* Trigger: ntrStorerUpdate                                             */  
@@ -32,8 +36,9 @@ GO
 /* 26-Jun-2018  NJOW01   1.3  WMS-5221 validate CustomerGroupCode and   */
 /*                            CustomerGroupName                         */
 /* 27-Apr-2020  CSCHONG  1.4  WMS-12867 (CS01)                          */
+/* 04-Mar-2022  TLTING   1.5  prevent bulk update                       */ 
 /************************************************************************/  
-CREATE TRIGGER ntrStorerUpdate ON STORER
+CREATE   TRIGGER [dbo].[ntrStorerUpdate] ON [dbo].[STORER]
 FOR UPDATE
 AS
 BEGIN
@@ -69,6 +74,14 @@ BEGIN
          , @b_success             INT
 
    SELECT @n_continue = 1, @n_starttcnt = @@TRANCOUNT
+
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85811   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Storer. Batch Update not allow! (ntrStorerUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
 
    IF @n_continue=1 OR @n_continue=2 --NJOW01
    BEGIN
@@ -263,3 +276,9 @@ BEGIN
       RETURN
    END
 END
+GO
+
+ALTER TABLE [dbo].[STORER] ENABLE TRIGGER [ntrStorerUpdate]
+GO
+
+

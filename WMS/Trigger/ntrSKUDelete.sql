@@ -1,11 +1,14 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrSKUDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrSKUDelete]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrSKUDelete]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrSKUDelete]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /***************************************************************************/
 /* Trigger: ntrSKUDelete                                                   */
@@ -34,10 +37,11 @@ GO
 /* 22-May-2012  YTWan    1.5  SOS#244027: SkuInfo (Wan01)                  */
 /* 11-Nov-2020  WLChooi  1.6  WMS-15671 - SKUTrigger_SP - call custom SP   */
 /*                            when DELETE record (WL02)                    */
+/* 04-Mar-2022  TLTING01 1.7  Initial ver. prevent bulk Delete             */
 /***************************************************************************/
 
-CREATE TRIGGER ntrSKUDelete
- ON  SKU
+CREATE   TRIGGER [dbo].[ntrSKUDelete]
+ ON  [dbo].[SKU]
  FOR DELETE
  AS
  BEGIN
@@ -60,30 +64,41 @@ CREATE TRIGGER ntrSKUDelete
            ,@n_starttcnt     int  -- KHLim03
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  -- KHLim03
 
-   IF (SELECT COUNT(*) FROM DELETED) = (SELECT COUNT(*) FROM DELETED WHERE DELETED.ArchiveCop = '9') -- KHLim03
+   IF (SELECT COUNT(1) FROM DELETED) = (SELECT COUNT(1) FROM DELETED WHERE DELETED.ArchiveCop = '9') -- KHLim03
    BEGIN
 	   SELECT @n_continue = 4
    END
 
-   --(Wan01) - START
-   IF EXISTS (SELECT 1
-              FROM SKUInfo WITH (NOLOCK)
-              JOIN DELETED
-              ON  ( SKUInfo.Storerkey = DELETED.Storerkey )
-              AND ( SKUInfo.Sku = DELETED.Sku ))
-   BEGIN
-      DELETE FROM SKUInfo WITH (ROWLOCK)  
-      FROM SkuInfo
-      JOIN DELETED ON  ( SKUInfo.Storerkey = DELETED.Storerkey )
-                   AND ( SKUInfo.Sku = DELETED.Sku )
-       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-       IF @n_err <> 0
-       BEGIN
-          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68103   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Trigger Failed on SkuInfo table update. (ntrSKUDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
-       END                   
+   IF ( (SELECT COUNT(1) FROM   Deleted  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68108   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Delete Failed On Table SKU. Batch Delete not allow! (ntrSKUDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
-   --(Wan01) - END
+
+   IF @n_continue <> 3   -- TLTING01
+   BEGIN
+      --(Wan01) - START
+      IF EXISTS (SELECT 1
+                 FROM SKUInfo WITH (NOLOCK)
+                 JOIN DELETED
+                 ON  ( SKUInfo.Storerkey = DELETED.Storerkey )
+                 AND ( SKUInfo.Sku = DELETED.Sku ))
+      BEGIN
+         DELETE FROM SKUInfo WITH (ROWLOCK)  
+         FROM SkuInfo
+         JOIN DELETED ON  ( SKUInfo.Storerkey = DELETED.Storerkey )
+                      AND ( SKUInfo.Sku = DELETED.Sku )
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68103   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Trigger Failed on SkuInfo table update. (ntrSKUDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+          END                   
+      END
+      --(Wan01) - END
+   END
    
    IF @n_continue = 1 or @n_continue = 2   -- KHLim03
    BEGIN
@@ -180,11 +195,39 @@ CREATE TRIGGER ntrSKUDelete
       END
    END  
    --WL01 END
+
+
+      /* #INCLUDE <TRTHD2.SQL> */
+   IF @n_continue=3  -- Error Occured - Process And Return
+   BEGIN
+      IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_starttcnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrSKUDelete"
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN
+   END
+   ELSE
+   BEGIN
+      WHILE @@TRANCOUNT > @n_starttcnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
  END
 
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+ALTER TABLE [dbo].[SKU] ENABLE TRIGGER [ntrSKUDelete]
 GO
-SET ANSI_NULLS OFF 
-GO
+
 

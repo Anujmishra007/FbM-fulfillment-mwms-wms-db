@@ -1,16 +1,48 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPutawayZoneDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPutawayZoneDelete]
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrPutawayZoneDelete]') 
+AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
+DROP TRIGGER [dbo].[ntrPutawayZoneDelete]
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 
-/* 14-Jul-2011  KHLim02       GetRight for Delete log                   */
+SET QUOTED_IDENTIFIER OFF
+GO
 
-CREATE TRIGGER ntrPutawayZoneDelete
- ON PutawayZone
+
+
+/*********************************************************************************/  
+/* Trigger:  ntrPutawayZoneDelete                                                */
+/* Creation Date:                                                                */
+/* Copyright: IDS                                                                */
+/* Written by:                                                                   */
+/*                                                                               */
+/* Purpose:  Trigger point upon any Delete on the PutawayZone                    */
+/*                                                                               */
+/* Return Status:  None                                                          */
+/*                                                                               */
+/* Usage:                                                                        */
+/*                                                                               */
+/* Local Variables:                                                              */
+/*                                                                               */
+/* Called By: When records Deleted                                               */
+/*                                                                               */
+/* PVCS Version: 1.0                                                             */
+/*                                                                               */
+/* Version: 5.4                                                                  */
+/*                                                                               */
+/* Data Modifications:                                                           */
+/*                                                                               */
+/* Updates:                                                                      */
+/* Date         Author    Ver.  Purposes                                         */
+/* 14-Jul-2011  KHLim02   1.1   GetRight for Delete log                          */ 
+/* 04-Mar-2022  TLTING    1.2   prevent bulk Delete                              */ 
+/*********************************************************************************/  
+ 
+  
+
+CREATE   TRIGGER [dbo].[ntrPutawayZoneDelete]
+ ON [dbo].[PutawayZone]
  FOR DELETE
  AS
  BEGIN
@@ -19,9 +51,10 @@ CREATE TRIGGER ntrPutawayZoneDelete
  RETURN
  END
   
-   SET NOCOUNT ON
-   SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
+ SET NOCOUNT ON
+ SET ANSI_NULLS OFF
+ SET QUOTED_IDENTIFIER OFF
+ SET CONCAT_NULL_YIELDS_NULL OFF
 
  DECLARE @b_Success       int,       -- Populated by calls to stored procedures - was the proc successful?
  @n_err              int,       -- Error number returned by stored procedure or this trigger
@@ -31,16 +64,25 @@ CREATE TRIGGER ntrPutawayZoneDelete
  @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
 ,@c_authority        NVARCHAR(1)  -- KHLim02
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
- IF (select count(*) from DELETED) =
- (select count(*) from DELETED where DELETED.ArchiveCop = '9')
+ IF (select count(1) from DELETED) =
+ (select count(1) from DELETED where DELETED.ArchiveCop = '9')
  BEGIN
  SELECT @n_continue = 4
  END
+
+ IF ( (SELECT COUNT(1) FROM   Deleted  ) > 100 ) 
+   AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+ BEGIN      
+   SELECT @n_continue = 3
+   SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68108   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+   SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Delete Failed On Table PutawayZone. Batch Delete not allow! (ntrPutawayZoneDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+ END
+
       /* #INCLUDE <TRPZD1.SQL> */     
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM SKU, Deleted
+ IF EXISTS(SELECT 1
+ FROM SKU (NOLOCK), Deleted
  WHERE SKU.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -50,8 +92,8 @@ CREATE TRIGGER ntrPutawayZoneDelete
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM LOC, Deleted
+ IF EXISTS(SELECT 1
+ FROM LOC (NOLOCK), Deleted
  WHERE LOC.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -61,8 +103,8 @@ CREATE TRIGGER ntrPutawayZoneDelete
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM PutawayStrategyDetail, Deleted
+ IF EXISTS(SELECT 1
+ FROM PutawayStrategyDetail (NOLOCK), Deleted
  WHERE PutawayStrategyDetail.Zone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -72,8 +114,8 @@ CREATE TRIGGER ntrPutawayZoneDelete
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM PAZoneEquipmentExcludeDetail, Deleted
+ IF EXISTS(SELECT 1
+ FROM PAZoneEquipmentExcludeDetail (NOLOCK), Deleted
  WHERE PAZoneEquipmentExcludeDetail.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -83,8 +125,8 @@ CREATE TRIGGER ntrPutawayZoneDelete
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
- IF EXISTS(SELECT *
- FROM AreaDetail, Deleted
+ IF EXISTS(SELECT 1
+ FROM AreaDetail (NOLOCK), Deleted
  WHERE AreaDetail.PutawayZone = Deleted.PutawayZone)
  BEGIN
  SELECT @n_continue = 3
@@ -153,8 +195,8 @@ CREATE TRIGGER ntrPutawayZoneDelete
  END
 
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+ALTER TABLE [dbo].[PutawayZone] ENABLE TRIGGER [ntrPutawayZoneDelete]
 GO
-SET ANSI_NULLS OFF 
-GO
+
 
