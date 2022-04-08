@@ -1,5 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ReTriggerTransmitLog_MoveData]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ReTriggerTransmitLog_MoveData]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -19,10 +17,13 @@ GO
 /* PVCS Version: 1.0                                                    */  
 /*                                                                      */  
 /* Modifications:                                                       */  
-/* Date         Author    Ver.  Purposes                                */  
+/* Date         Author    Ver.  Purposes                                */ 
+/* 27-JAN-2022  CSCHONG   1.0    Devops Scripts Combine                 */    
+/* 27-JUL-2021  CSCHONG   1.1   WMS-10009 update archive itrn trafficop */
+/*                              before move (CS01)                      */
 /************************************************************************/  
   
-CREATE PROCEDURE [dbo].[isp_ReTriggerTransmitLog_MoveData]  
+CREATE OR ALTER  PROCEDURE [dbo].[isp_ReTriggerTransmitLog_MoveData]  
      @c_SourceDB    NVARCHAR(30)  
    , @c_TargetDB    NVARCHAR(30)  
    , @c_TableSchema NVARCHAR(10)  
@@ -80,15 +81,15 @@ BEGIN
    SET @c_TableName = ISNULL(RTRIM(LTRIM(@c_TableName)),'')  
 END  
   
-IF ISNULL(RTRIM(LTRIM(@c_TableName)),'') = 'UCC' AND ISNULL(RTRIM(LTRIM(@c_KeyColumn)),'') = 'UCC_RowRef'  
-BEGIN  
+--IF ISNULL(RTRIM(LTRIM(@c_TableName)),'') = 'UCC' AND ISNULL(RTRIM(LTRIM(@c_KeyColumn)),'') = 'UCC_RowRef'  
+--BEGIN  
   
-   SELECT @n_Continue = 3  
-   SET @n_err = 700004    
-   SELECT @c_errmsg = 'ERROR. Not allow to move UCC by column UCC_RowRef. (isp_ReTriggerTransmitLog_MoveData)'  
+--   SELECT @n_Continue = 3  
+--   SET @n_err = 700004    
+--   SELECT @c_errmsg = 'ERROR. Not allow to move UCC by column UCC_RowRef. (isp_ReTriggerTransmitLog_MoveData)'  
   
-   GOTO QUIT  
-END  
+--   GOTO QUIT  
+--END  
   
 SET @c_ColName = ''  
 SET @c_DBTableName = @c_TargetDB + '.'+ @c_TableSchema + '.' + @c_TableName  
@@ -229,12 +230,41 @@ BEGIN
   
       IF @c_Exists = '0'  
       BEGIN  
-           
-       SELECT @n_Continue = 3   
-       SET @n_err = 700007   
-       SELECT @c_errmsg = 'ERROR. Not allow to move ITRN record. (isp_ReTriggerTransmitLog_MoveData)'  
+       --CS01 START    
+       --SELECT @n_Continue = 3   
+       --SET @n_err = 700007   
+       --SELECT @c_errmsg = 'ERROR. Not allow to move ITRN record. (isp_ReTriggerTransmitLog_MoveData)'  
           
-       GOTO QUIT  
+       --GOTO QUIT  
+        BEGIN TRAN
+        SET @c_SQL = ''  
+        SET @c_SQL = N'UPDATE ' +  
+                        QUOTENAME(@c_SourceDB, '[') + '.' + QUOTENAME(@c_TableSchema, '[') + '.' + QUOTENAME(@c_TableName, '[') +  
+                       ' SET TrafficCop = ''9'' ' + CHAR(13) +
+                       ' WHERE ' + QUOTENAME(@c_KeyColumn, '[') + ' =  @c_DocKey '  
+  
+  
+          IF @b_Debug = 1  
+          BEGIN  
+            SELECT @c_SQL '@c_SQL'  
+         END  
+         --EXEC sp_executesql @c_SQL    
+         SET @c_ExecArguments = N'@c_DocKey NVARCHAR(50)'  
+         EXEC sp_executesql @c_SQL  
+                          , @c_ExecArguments  
+                          , @c_DocKey  
+
+
+               IF @@ERROR = 0   
+               BEGIN  
+                  COMMIT TRAN  
+               END  
+               ELSE  
+               BEGIN  
+                  ROLLBACK TRAN  
+                  GOTO QUIT  
+               END
+        
       END  
    END  
   
@@ -267,7 +297,7 @@ BEGIN
       IF @b_Debug = 1  
       BEGIN  
          SELECT @c_ColName '@c_ColName'  
-   select @c_KeyColumn '@c_KeyColumn' , @c_DocKey '@c_DocKey'  
+         SELECT @c_KeyColumn '@c_KeyColumn' , @c_DocKey '@c_DocKey'  
       END  
   
       SET @c_SQL = ''  

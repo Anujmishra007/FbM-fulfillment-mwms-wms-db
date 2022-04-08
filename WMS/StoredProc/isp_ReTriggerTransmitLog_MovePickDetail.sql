@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ReTriggerTransmitLog_MovePickDetail]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ReTriggerTransmitLog_MovePickDetail]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -22,9 +19,10 @@ GO
 /*                                                                      */    
 /* Modifications:                                                       */    
 /* Date         Author    Ver.  Purposes                                */    
+/* 25-FEB-2022  CSCHONG   1.0    Devops Scripts Combine                 */   
 /************************************************************************/    
     
-CREATE PROCEDURE [dbo].[isp_ReTriggerTransmitLog_MovePickDetail]    
+CREATE OR ALTER PROCEDURE [dbo].[isp_ReTriggerTransmitLog_MovePickDetail]    
      @c_SourceDB    NVARCHAR(30)    
    , @c_TargetDB    NVARCHAR(30)    
    , @c_TableSchema NVARCHAR(10)    
@@ -110,7 +108,7 @@ BEGIN
                + 'FROM ' + ISNULL(RTRIM(@c_SourceDB),'') + '.dbo.PickDetail P WITH (NOLOCK) '    
                + 'JOIN ' + ISNULL(RTRIM(@c_TargetDB),'') + '.dbo.OrderDetail O WITH (NOLOCK) '    
                + 'ON (P.OrderKey = O.OrderKey) '    
-         + 'WHERE P.PickDetailKey =  ISNULL(RTRIM(@c_DocKey),'')  '    
+               + 'WHERE P.PickDetailKey =  ISNULL(RTRIM(@c_DocKey),'')  '    
     
    SET @c_ExecArguments = N'@c_DocKey NVARCHAR(50),@b_RecFound INT OUTPUT '    
     
@@ -123,7 +121,7 @@ BEGIN
    BEGIN    
        SELECT @n_Continue = 3      
     SET @n_err = 700010    
-       SELECT @c_errmsg = 'Orders / OrderDetail Not Found. PickDetailKey = ' + ISNULL(RTRIM(@c_DocKey),'') + '. (isp_ReTriggerTransmitLog_MovePickDetail)'    
+       SELECT @c_errmsg = 'PickDetail Not Found. PickDetailKey = ' + ISNULL(RTRIM(@c_DocKey),'') + '. (isp_ReTriggerTransmitLog_MovePickDetail)'    
        GOTO QUIT    
    END    
 END    
@@ -152,7 +150,7 @@ BEGIN
       BEGIN    
           SELECT @n_Continue = 3      
           SET @n_err = 700011    
-          SELECT @c_errmsg = 'Orders / OrderDetail Not Found. OrderKey = ' + ISNULL(RTRIM(@c_DocKey),'') + '. (isp_ReTriggerTransmitLog_MovePickDetail)'    
+          SELECT @c_errmsg = 'PickDetail Not Found. OrderKey = ' + ISNULL(RTRIM(@c_DocKey),'') + '. (isp_ReTriggerTransmitLog_MovePickDetail)'    
          GOTO QUIT    
       END    
   END    
