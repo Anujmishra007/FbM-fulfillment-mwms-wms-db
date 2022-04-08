@@ -18,6 +18,8 @@ GO
 /* 19-Mar-2018  TLTING     1.3   bug fix - Avoid 0 line delete trigger           */  
 /* 18-Mar-2022  Ung        1.4   WMS-16328 Add QTYPrinted                        */
 /*                               Add editdate editwho                            */
+/* 04-May-2022  NJOW01     1.5   WMS-16330 Add new columns                       */
+/* 04-May-2022  NJOW01     1.5   DEVOPS combine script                           */
 /*********************************************************************************/  
 CREATE OR ALTER TRIGGER ntrRFPutawayDelete  
 ON  [dbo].[RFPutaway]  
@@ -86,8 +88,10 @@ BEGIN
       DEALLOCATE CURSOR_DELETED  
    END  
   
-   INSERT INTO RFPutaway_DELLOG (StorerKey, Sku, Lot, FromLoc, SuggestedLoc, Id, ptcid, qty, AddDate, AddWho, TrafficCop, ArchiveCop, CaseID, FromID, RowRef, TaskDetailKey, Func, PABookingKey, QTYPrinted,EditDate,EditWho)
-   SELECT StorerKey, Sku, Lot, FromLoc, SuggestedLoc, Id, ptcid, qty, AddDate, AddWho, TrafficCop, ArchiveCop, CaseID, FromID, RowRef, TaskDetailKey, Func, PABookingKey, QTYPrinted,EditDate,EditWho
+   INSERT INTO RFPutaway_DELLOG (StorerKey, Sku, Lot, FromLoc, SuggestedLoc, Id, ptcid, qty, AddDate, AddWho, TrafficCop, ArchiveCop, CaseID, FromID, RowRef, TaskDetailKey, Func, PABookingKey, QTYPrinted,EditDate,EditWho,
+                                 Receiptkey, ReceiptLineNumber, UDF01, UDF02, UDF03)  --NJOW01
+   SELECT StorerKey, Sku, Lot, FromLoc, SuggestedLoc, Id, ptcid, qty, AddDate, AddWho, TrafficCop, ArchiveCop, CaseID, FromID, RowRef, TaskDetailKey, Func, PABookingKey, QTYPrinted,EditDate,EditWho,
+          Receiptkey, ReceiptLineNumber, UDF01, UDF02, UDF03 --NJOW01
    FROM DELETED
   
 QUIT:  
