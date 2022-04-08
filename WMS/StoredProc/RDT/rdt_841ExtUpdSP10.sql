@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_841ExtUpdSP10]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_841ExtUpdSP10]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -23,9 +19,10 @@ GO
 /* 2021-04-01  1.5  YeeKung  WMS-16718 Add serialno and serialqty       */
 /*                           Params (yeekung02)                         */ 
 /* 2021-07-27  1.6  Chermain WMS-17410 Add VariableTable Param (cc01)   */
+/* 2022-03-28  1.7  James    WMS-19377 Add new print variant (james02)  */
 /************************************************************************/    
   
-CREATE PROC [RDT].[rdt_841ExtUpdSP10] (    
+CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP10] (    
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR( 3),  
@@ -1013,7 +1010,7 @@ BEGIN
                IF EXISTS ( SELECT 1 FROM dbo.ORDERS (NOLOCK)
                            WHERE StorerKey = @cStorerKey
                            AND   OrderKey = @cOrderKey
-                           AND   UserDefine01 = 'VC30')
+                           AND   UserDefine01 IN ('VC30', 'VC40'))
                   SET @cReportType = @cPackList
                ELSE
                   SET @cReportType = 'BAGMANFEST'            
@@ -1333,7 +1330,7 @@ BEGIN
                      IF EXISTS ( SELECT 1 FROM dbo.ORDERS (NOLOCK)
                                  WHERE StorerKey = @cStorerKey
                                  AND   OrderKey = @cOrderKey
-                                 AND   UserDefine01 = 'VC30')
+                                 AND   UserDefine01 IN ('VC30', 'VC40'))
                         SET @cReportType = @cPackList
                      ELSE
                         SET @cReportType = 'BAGMANFEST'            
@@ -1766,7 +1763,7 @@ BEGIN
             IF EXISTS ( SELECT 1 FROM dbo.ORDERS (NOLOCK)
                         WHERE StorerKey = @cStorerKey
                         AND   OrderKey = @cOrderKey
-                        AND   UserDefine01 = 'VC30')
+                        AND   UserDefine01 IN ('VC30', 'VC40'))
                SET @cReportType = @cPackList
             ELSE
                SET @cReportType = 'BAGMANFEST'            
