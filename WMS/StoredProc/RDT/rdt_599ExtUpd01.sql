@@ -15,6 +15,7 @@ GO
 /* 2021-10-18   James     1.0   WMS-18084 Created                       */    
 /* 2022-03-11   James     1.1   WMS-19126 Add option to decide whether  */
 /*                              reverse by id or sku (james01)          */
+/* 2022-04-05   James     1.2   Addhoc bug fix (james02)                */
 /************************************************************************/    
     
 CREATE OR ALTER PROCEDURE rdt.rdt_599ExtUpd01    
@@ -110,7 +111,7 @@ BEGIN
          FROM rdt.rdtPreReceiveSort WITH (NOLOCK)  
          WHERE Storerkey = @cStorerKey  
          AND   ReceiptKey = @cReceiptKey  
-         AND   (( @nReverve_ByID = 1 AND ID = @cID) OR ( @nReverve_ByID = 0 AND SKU = @cSKU))  
+         AND   (( @nReverve_ByID = 1 AND ID = @cID) OR ( @nReverve_ByID = 0 AND SKU = @cSKU AND ID = @cID)) -- (james02) 
          AND   [STATUS] = '9'  
          ORDER BY 1  
          OPEN @cur_PreSort  
@@ -166,7 +167,7 @@ BEGIN
          FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
          WHERE ReceiptKey = @cReceiptKey
          AND   StorerKey = @cStorerKey
-         AND   (( @nReverve_ByID = 1 AND ToId = @cID) OR ( @nReverve_ByID = 0 AND SKU = @cSKU)) 
+         AND   (( @nReverve_ByID = 1 AND ToId = @cID) OR ( @nReverve_ByID = 0 AND SKU = @cSKU AND ToId = @cID))   -- (james02) 
          AND   BeforeReceivedQty = 0
          OPEN @cur_RD
          FETCH NEXT FROM @cur_RD INTO @cRD_Line
