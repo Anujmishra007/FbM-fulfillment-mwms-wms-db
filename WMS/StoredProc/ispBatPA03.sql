@@ -23,6 +23,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 22-Oct-2021 NJOW     1.0   DEVOPS combine script                     */
+/* 04-Apr-2022 NJOW01   1.1   WMS-16330 add receipt info to refputaway  */
+/*                            for ref. PPK checking by receipt line.    */
 /************************************************************************/
 CREATE OR ALTER PROC ispBatPA03
            @c_ReceiptKey     NVARCHAR(MAX)
@@ -1274,7 +1276,12 @@ BEGIN
                   ,  @c_FromLoc     = RD.ToLoc
                   ,  @c_FromID      = RD.ToID --NJOW      
                   ,  @c_ToID      = CASE WHEN ISNULL(LOC.LoseId,'') = '1' THEN '' ELSE RD.ToID END  --NJOW      
-                  ,  @n_QtyReceived = CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty
+                  --,  @n_QtyReceived = CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty
+                  ,  @n_QtyReceived = CASE WHEN @c_PrePackIndicator = '2' AND @n_PackQtyIndicator > 0 THEN  --NJOW01
+                                         FLOOR((CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty) / @n_PackQtyIndicator) * @n_PackQtyIndicator
+                                      ELSE
+                                         CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty
+                                      END                     
                   ,  @c_lottable01 = R.ExternReceiptkey                   --(Wan04)  --NJOW
                   ,  @c_lottable02 = RD.Lottable02                         --(Wan04)
                   ,  @c_lottable03 = RD.Lottable03                         --(Wan04)
@@ -1298,7 +1305,7 @@ BEGIN
                          AND RD1.Sku = RD.Sku
                          AND RD1.ToID = RD.ToID
                          AND RD1.ToLoc = RD.ToLoc
-                         AND RD1.Lottable01 = RD.Lottable01
+                         /*AND RD1.Lottable01 = RD.Lottable01
                          AND RD1.Lottable02 = RD.Lottable02
                          AND RD1.Lottable03 = RD.Lottable03
                          AND ISNULL(RD1.Lottable04,'') = ISNULL(RD.Lottable04,'')
@@ -1308,15 +1315,19 @@ BEGIN
                          AND RD1.Lottable09 = RD.Lottable09
                          AND RD1.Lottable10 = RD.Lottable10
                          AND RD1.Lottable11 = RD.Lottable11
-                         AND RD1.Lottable12 = RD.Lottable12
-                         AND RD1.Receiptkey = RD.Receiptkey) AS PLTTOT
-            LEFT JOIN LOC (NOLOCK) ON RD.ToLoc = LOC.Loc  --NJOW
+                         AND RD1.Lottable12 = RD.Lottable12*/
+                         AND RD1.Receiptkey = RD.Receiptkey
+                         AND RD1.ReceiptLineNumber = RD.ReceiptLineNumber --NJOW01
+                         ) AS PLTTOT
+            LEFT JOIN LOC (NOLOCK) ON RD.ToLoc = LOC.Loc  
             WHERE RD.ReceiptKey IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',', @c_ReceiptKey))
             AND   RD.Storerkey = @c_Storerkey
             AND   RD.Sku = @c_Sku
             AND   (RD.QtyExpected > 0 OR RD.Beforereceivedqty > 0)
             --AND   RD.FinalizeFlag = 'Y'
-            --AND (RD.UserDefine10 = '' OR RD.UserDefine10 IS NULL)   --NJOW01
+            AND (ISNULL(RD.UserDefine10,'') = '' 
+                OR (ISNULL(RD.UserDefine10,'') = CONVERT(NVARCHAR(20), @n_PABookingKey)) --NJOW01
+                 ) 
             AND   RD.Receiptkey+RD.ReceiptLineNumber > @c_CurrReceiptkey+@c_ReceiptLineNumber          
             AND RD.Lottable02 = @c_RDLottable02  
             AND NOT EXISTS(SELECT 1 
@@ -1327,7 +1338,7 @@ BEGIN
                            AND RPA.FromLoc = RD.ToLoc
                            AND RPA.FromID = RD.ToID
                            AND RPA.PABookingKey = RD.Userdefine10
-                           AND LA.Lottable01 = RD.Lottable01
+                           /*AND LA.Lottable01 = RD.Lottable01
                            AND LA.Lottable02 = RD.Lottable02
                            AND LA.Lottable03 = RD.Lottable03
                            AND ISNULL(LA.Lottable04,'') = ISNULL(RD.Lottable04,'')
@@ -1337,8 +1348,10 @@ BEGIN
                            AND LA.Lottable09 = RD.Lottable09
                            AND LA.Lottable10 = RD.Lottable10
                            AND LA.Lottable11 = RD.Lottable11
-                           AND LA.Lottable12 = RD.Lottable12
-                           HAVING SUM(RPA.Qty) >= PLTTOT.RQty)  --make sure the receiptline not fully PA yet         
+                           AND LA.Lottable12 = RD.Lottable12*/
+                           AND RPA.Receiptkey = RD.Receiptkey   --NJOW01
+                           AND RPA.ReceiptLineNumber = RD.ReceiptLineNumber --NJOWO1
+                           HAVING SUM(RPA.Qty) >= PLTTOT.RQty)  --make sure the receiptline not fully PA yet*/         
             AND NOT EXISTS(SELECT 1
                            FROM RECEIPTDETAIL RD2 (NOLOCK)
                            WHERE RD2.Receiptkey = RD.Receiptkey
@@ -1350,6 +1363,11 @@ BEGIN
                            AND @n_PackQtyIndicator > 0              
                            HAVING SUM(CASE WHEN RD2.Beforereceivedqty > 0 THEN RD2.Beforereceivedqty ELSE RD2.QtyExpected END) < @n_PackQtyIndicator
                           )  --if the sku @n_PackQtyIndicator=2, only putaway the sum receipt line with same lottable02,loc >= @n_PackQtyIndicator
+            AND CASE WHEN @c_PrePackIndicator = '2' AND @n_PackQtyIndicator > 0 THEN 
+                   FLOOR((CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty) / @n_PackQtyIndicator) --NJOW01
+                ELSE
+                   CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty
+                END > 0                                     
             ORDER BY RD.Receiptkey, RD.ReceiptLineNumber                                  --(Wan03)
 
             IF @@ROWCOUNT = 0
@@ -1507,7 +1525,9 @@ BEGIN
                             AND FromID = @c_FromID
                             AND SuggestedLoc = @c_SuggestLoc
                             AND ID = @c_ToID
-                            AND PAbookingkey = @n_PABookingKey)
+                            AND PAbookingkey = @n_PABookingKey                            
+                            AND Receiptkey = @c_ReceiptKeyUpdate  --NJOW01
+                            AND ReceiptLineNumber = @c_ReceiptLineUpdate) --NJOW01                           
                   BEGIN
                   	 UPDATE RFPUTAWAY WITH (ROWLOCK)
                   	 SET Qty = Qty + @n_PAInsertQty
@@ -1519,11 +1539,13 @@ BEGIN
                           AND SuggestedLoc = @c_SuggestLoc
                           AND ID = @c_ToID
                           AND PAbookingkey = @n_PABookingKey
+                          AND Receiptkey = @c_ReceiptKeyUpdate  --NJOW01
+                          AND ReceiptLineNumber = @c_ReceiptLineUpdate --NJOW01
                   END
                   ELSE
                   BEGIN                                                
-       	             INSERT INTO dbo.RFPutaway (Storerkey, SKU, LOT, FromLOC, FromID, SuggestedLOC, ID, ptcid, QTY, CaseID, TaskDetailKey, Func, PABookingKey)
-                     VALUES (@c_Storerkey, @c_Sku, @c_FromLot, @c_FromLoc, @c_FromID, @c_SuggestLoc, @c_ToID, @c_UserName, @n_PAInsertQty, '', '', 0, @n_PABookingKey)
+       	             INSERT INTO dbo.RFPutaway (Storerkey, SKU, LOT, FromLOC, FromID, SuggestedLOC, ID, ptcid, QTY, CaseID, TaskDetailKey, Func, PABookingKey, Receiptkey, ReceiptLineNumber) --NJOW01
+                     VALUES (@c_Storerkey, @c_Sku, @c_FromLot, @c_FromLoc, @c_FromID, @c_SuggestLoc, @c_ToID, @c_UserName, @n_PAInsertQty, '', '', 0, @n_PABookingKey, @c_ReceiptKeyUpdate, @c_ReceiptLineUpdate)
                   END
 
                   IF @n_PABookingKey = 0 --renew every sku + lottable02
