@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.7                                                    */
+/* PVCS Version: 2.0                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -37,6 +37,10 @@ GO
 /*                            regardless if there is Home Loc setup.    */
 /* 2022-03-18  Wan08    1.8   WMS-19219 - RG -Adidas Cartonization Logic*/
 /*                            Update                                    */
+/* 2022-04-06  Wan09    1.9   Fixed to remove last record and send API  */
+/*                            if mutli record for 1 unique sku cannot fix*/
+/*                            into Box                                  */
+/* 2022-04-06  Wan10    2.0   Fixed b2b Uom = 2 to get large cartontype */  
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -114,6 +118,8 @@ BEGIN
          , @n_SkuOrigQty_ToPack  INT         = 0         --(Wan08)
          , @n_SkuItemToPackCnt   INT         = 0         --(Wan08)
          , @n_Qty_ToDel          INT         = 0         --(Wan08)
+         
+         , @b_RemoveLastRecord   INT         = 0         --(Wan09)
                   
          , @b_MinQty1ToPack      BIT         = 0
          
@@ -850,7 +856,7 @@ BEGIN
                   ,  ocg.CartonType
                   ,  ocg.[Cube]
                   ,  ocg.MaxWeight 
-           HAVING SUM(pw.PickItemCube) <= ocg.[Cube] AND SUM(pw.PickItemWgt) <= ocg.MaxWeight 
+           --HAVING SUM(pw.PickItemCube) <= ocg.[Cube] AND SUM(pw.PickItemWgt) <= ocg.MaxWeight          --(Wan10) 
            ORDER BY ROW_NUMBER() OVER (PARTITION BY pw.DropID ORDER BY ocg.[Cube], ocg.MaxWeight, ocg.CartonType) 
          ) d
       ) 
@@ -1212,6 +1218,16 @@ BEGIN
                   FROM #OptimizeItemToPack AS oitp 
 
                   SET @n_ItemToPackCnt = @n_ItemToPackCnt - @n_SkuItemToPackCnt 
+                  
+                  --(Wan09) - START
+                  --Check to Handle multi record with 1 unique sku fail to send API 
+                  SET @b_RemoveLastRecord = 0
+                  IF @n_ItemToPackCnt = 0 AND @n_Qty_ToPack < @n_SkuQty_ToPack
+                  BEGIN
+                     SET @n_ItemToPackCnt = @n_SkuItemToPackCnt - 1
+                     SET @b_RemoveLastRecord = 1
+                  END
+                  --(Wan09) - END
 
                   IF @n_ItemToPackCnt = 0 
                   BEGIN
@@ -1291,9 +1307,23 @@ BEGIN
                   
                   IF @n_ItemToPackCnt > 0 OR (@n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0)
                   BEGIN
-                     DELETE oitp             -- delete last record and submit API to check 
-                     FROM #OptimizeItemToPack AS oitp
-                     JOIN #ItemToPackBySku AS itpbs ON itpbs.ID = oitp.ID
+                     --(Wan09) - START
+                     --Check to Handle multi record with 1 unique sku fail to send API
+                     --If Mix Sku, delete all records for the sku and send API again
+                     --If 1 sku, delete last record and send API again
+                     IF @b_RemoveLastRecord = 0 -- Mix Sku. delete all sku and submit API to check 
+                     BEGIN
+                        DELETE oitp               
+                        FROM #OptimizeItemToPack AS oitp  
+                        JOIN #ItemToPackBySku AS itpbs ON itpbs.ID = oitp.ID                    
+                     END 
+                     ELSE
+                     BEGIN                      -- 1 Sku. delete last record and submit API to check 
+                        DELETE oitp               
+                        FROM #OptimizeItemToPack AS oitp  
+                        WHERE oitp.ID = @n_ID_ToPack  
+                     END
+                     --(Wan09) - END
                   END
 
                   IF @n_ItemToPackCnt > 0 
