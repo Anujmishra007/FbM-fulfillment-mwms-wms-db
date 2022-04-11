@@ -12,12 +12,10 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 2018-12-18   Ung       1.0   WMS-6467 Created                              */
 /* 2019-07-31   Ung       1.1   WMS-9941 Add QTYPrinted                       */
-/* 2021-06-01   James     1.2   WMS-17130 Ignore filter from id if it is not  */
-/*                              key in. Deduct QTYPrinted (james01)           */
-/*                              Add deduct pendingmovein                      */
+/* 2021-06-01   James     1.2   WMS-17130 Deduce QTYPrinted                   */
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdt_513Confirm02
+CREATE OR ALTER PROCEDURE [RDT].[rdt_513Confirm02]
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -40,9 +38,6 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cPrePackIndicator NVARCHAR( 30)
-   DECLARE @nPackQtyIndicator INT
-   
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
@@ -57,23 +52,16 @@ BEGIN
             DECLARE @cLOCCat NVARCHAR(10)
             SELECT @cLOCCat = LocationCategory FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
 
-            SELECT 
-               @cPrePackIndicator = PrePackIndicator,
-               @nPackQtyIndicator = PackQtyIndicator 
-            FROM dbo.SKU WITH (NOLOCK) 
-            WHERE StorerKey = @cStorerKey 
-            AND   SKU = @cSKU
-            
             -- Receiving stage
             IF @cLOCCat = 'STAGING'
             BEGIN
             
                DECLARE @nQTY_Bal    INT
                DECLARE @nQTY_RF     INT
+               DECLARE @nQTY_Print  INT
                DECLARE @nQTY_Move   INT
                DECLARE @cLOT        NVARCHAR(10)
                DECLARE @nRowRef     INT
-               DECLARE @nRF_Qty     INT
                
                SET @nQTY_Bal = @nQTY
 
@@ -83,25 +71,24 @@ BEGIN
                -- Loop RFPutaway
                DECLARE @curRF CURSOR
                SET @curRF = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-                  SELECT RowRef, LOT, QTY
+                  SELECT RowRef, LOT, QTY, QTYPrinted
                   FROM dbo.RFPutaway WITH (NOLOCK)
                   WHERE FromLOC = @cFromLOC
-                     AND (( ISNULL( @cFromID, '') = '') OR ( FromID = @cFromID))
+                     AND FromID = @cFromID
                      AND StorerKey = @cStorerKey
                      AND SKU = @cSKU
                      AND SuggestedLOC = @cToLOC
                      AND QTYPrinted > 0
-                     AND qty <> 0
                   ORDER BY RowRef
                OPEN @curRF
-               FETCH NEXT FROM @curRF INTO @nRowRef, @cLOT, @nQTY_RF
+               FETCH NEXT FROM @curRF INTO @nRowRef, @cLOT, @nQTY_RF, @nQTY_Print
                WHILE @@FETCH_STATUS = 0
                BEGIN
                   -- Calc QTY to move
-                  IF @nQTY_RF >= @nQTY_Bal
+                  IF @nQTY_Print >= @nQTY_Bal
                      SET @nQTY_Move = @nQTY_Bal
                   ELSE
-                     SET @nQTY_Move = @nQTY_RF
+                     SET @nQTY_Move = @nQTY_Print
                
                   EXECUTE rdt.rdt_Move
                      @nMobile     = @nMobile,
@@ -125,7 +112,7 @@ BEGIN
                   END
 
                   -- Deduct RFPutaway
-                  IF @nQTY_Move = @nQTY_RF
+                  IF @nQTY_Move = @nQTY_RF AND @nQTY_Move = @nQTY_Print
                   BEGIN
                      DELETE dbo.RFPutaway WITH (ROWLOCK)
                      WHERE  RowRef = @nRowRef
@@ -134,23 +121,13 @@ BEGIN
                   END
                   ELSE
                   BEGIN
-                  	/*Tracing purpose*/
-                  	DECLARE @nOri_Qty INT, @nOri_QtyPrinted INT, @nAf_Qty INT, @nAf_QtyPrinted INT
-                  	SELECT @nOri_Qty = Qty, @nOri_QtyPrinted = QTYPrinted
-                  	FROM dbo.RFPUTAWAY WITH (NOLOCK)
-                  	WHERE RowRef = @nRowRef
-                  	
                      UPDATE dbo.RFPutaway SET 
-                        QTY = QTY - @nQTY,
-                        QTYPrinted = QTYPrinted - @nQTY
+                        QTY = QTY - @nQTY_Move,
+                        QTYPrinted = QTYPrinted - @nQTY_Move
                      WHERE RowRef = @nRowRef
 
                      IF @@ERROR <> 0
                         GOTO RollBackTran
-
-                     SELECT @nAf_Qty = Qty, @nAf_QtyPrinted = QTYPrinted
-                  	FROM dbo.RFPUTAWAY WITH (NOLOCK)
-                  	WHERE RowRef = @nRowRef
                   END
 
                   -- Reduce QTY
@@ -160,7 +137,7 @@ BEGIN
                   IF @nQTY_Bal = 0
                      BREAK
 
-                  FETCH NEXT FROM @curRF INTO @nRowRef, @cLOT, @nQTY_RF
+                  FETCH NEXT FROM @curRF INTO @nRowRef, @cLOT, @nQTY_RF, @nQTY_Print
                END
                
                -- Check fully offset
@@ -171,41 +148,6 @@ BEGIN
                   GOTO RollBackTran
                END
 
-               -- Booking (RFPutaway) qty empty only need clear 
-               IF EXISTS ( SELECT 1
-                           FROM dbo.RFPutaway WITH (NOLOCK)
-                           WHERE FromLOC = @cFromLOC
-                           AND  (( ISNULL( @cFromID, '') = '') OR ( FromID = @cFromID))
-                           AND   StorerKey = @cStorerKey
-                           AND   SKU = @cSKU
-                           AND   SuggestedLOC = @cToLOC)
-               BEGIN
-                  SELECT @nRF_Qty = ISNULL( SUM( QTY), 0)
-                  FROM dbo.RFPutaway WITH (NOLOCK)
-                  WHERE FromLOC = @cFromLOC
-                  AND  (( ISNULL( @cFromID, '') = '') OR ( FromID = @cFromID))
-                  AND   StorerKey = @cStorerKey
-                  AND   SKU = @cSKU
-                  AND   SuggestedLOC = @cToLOC
-
-                  IF @nRF_Qty = 0
-                  BEGIN
-                     -- Unlock  suggested location
-                     EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
-                        ,@cFromLOC      --@cFromLOC
-                        ,@cFromID--@cFromID
-                        ,@cToLOC --@cSuggestedLOC
-                        ,''      --@cStorerKey
-                        ,@nErrNo  OUTPUT
-                        ,@cErrMsg OUTPUT
-                     IF @nErrNo <> 0
-                     BEGIN
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                        GOTO RollBackTran
-                     END
-                  END
-               END
-               
                COMMIT TRAN rdt_513Confirm02
             END
             
@@ -234,20 +176,6 @@ BEGIN
                   GOTO RollBackTran
                END
 
-               -- Unlock  suggested location
-               EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
-                  ,@cFromLOC      --@cFromLOC
-                  ,@cFromID--@cFromID
-                  ,@cToLOC --@cSuggestedLOC
-                  ,''      --@cStorerKey
-                  ,@nErrNo  OUTPUT
-                  ,@cErrMsg OUTPUT
-               IF @nErrNo <> 0
-               BEGIN
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                  GOTO RollBackTran
-               END
-            
                COMMIT TRAN rdt_513Confirm02
             END
          END
@@ -269,5 +197,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_513Confirm02 TO NSQL
+GRANT EXEC ON RDT.rdt_513Confirm02 TO NSQL
 GO
