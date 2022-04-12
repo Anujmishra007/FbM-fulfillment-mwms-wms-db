@@ -1,10 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_CN_ANFQHW]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-BEGIN 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_CN_ANFQHW]  
-END
-GO 
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -14,19 +7,13 @@ GO
 /* Copyright: IDS                                                             */               
 /* Purpose: BarTender Filter by ShipperKey                                    */               
 /*                                                                            */               
-/* Modifications log:                                                         */               
+/* Modifications log: (copy from isp_BT_Bartender_Shipper_Label_DTC           */               
 /*                                                                            */               
 /* Date       Rev  Author     Purposes                                        */               
-/* 2014-07-09 1.0  CSCHONG    Created(SOS 313797)                             */ 
-/* 2014-07-30 2.0  CSCHONG    Change the col18 field value (CS02)             */
-/* 2014-08-01 3.0  CSCHONG    Map col20 to new field (CS03)                   */
-/* 2014-08-14 4.0  CSCHONG    Change the col2,3,4 mapping (CS04)              */
-/* 2017-02-27 4.1  CSCHONG    Remove SET ANSI_WARNINGS OFF (CS05)             */
-/* 2017-04-07 4.2  CSCHONG    Performance tuning addd (NOLOCK) (CS06)         */
-/* 2021-04-23 4.3  Mingle     WMS-16815 - change logic(ML01)                     */
+/* 2021-04-23 1.0  Mingle     WMS-16815 - change logic(ML01)                  */
 /******************************************************************************/              
                 
-CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_CN_ANFQHW]                     
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_CN_ANFQHW]                     
 (  @c_Sparm1            NVARCHAR(250),            
    @c_Sparm2            NVARCHAR(250),            
    @c_Sparm3            NVARCHAR(250),            
@@ -45,7 +32,7 @@ BEGIN
    SET ANSI_NULLS OFF              
    SET QUOTED_IDENTIFIER OFF               
    SET CONCAT_NULL_YIELDS_NULL OFF              
-  -- SET ANSI_WARNINGS OFF            --CS05           
+  -- SET ANSI_WARNINGS OFF                      
                             
    DECLARE                
       @c_OrderKey        NVARCHAR(10),                  
@@ -175,7 +162,7 @@ BEGIN
              +'ORD.c_zip ,ORD.c_country ,F.descr,(F.Address1+F.Address2+F.Address3+F.Address4),F.City,'  --5    
              + CHAR(13) +        
              +'F.State,F.Zip,F.country,ISNULL(c1.Description,''PARCEL DIRECT''),ISNULL(c2.Description,''PRIORITY''),'+ CHAR(13) +     --5   
-             +'Ord.ExternOrderKey,Ord.OrderKey,CSD.TrackingNumber,ISNULL(c3.short,''''),ORD.C_State, '      --(CS02)  --(CS03)
+             +'Ord.ExternOrderKey,Ord.OrderKey,CSD.TrackingNumber,ISNULL(c3.short,''''),ORD.C_State, '      
              + ' '''','''','''','''','''','    --25     
              +' '''','''','''','''','''','     --30      
              + CHAR(13) +        
@@ -183,7 +170,7 @@ BEGIN
              +' '''','''','''','''','''','''','''','''','''','''', '  --50     
              +' '''','''','''','''','''','''','''','''','''','''' '   --60        
              + CHAR(13) +          
-             + ' FROM ORDERS ORD WITH (NOLOCK) JOIN OrderDetail od WITH (NOLOCK) ON od.orderkey = ord.orderkey'    --(CS06)
+             + ' FROM ORDERS ORD WITH (NOLOCK) JOIN OrderDetail od WITH (NOLOCK) ON od.orderkey = ord.orderkey'   
              + ' JOIN Facility F WITH (NOLOCK) ON F.facility=ORD.facility'     
             -- + ' FULL JOIN STORER sto WITH (NOLOCK) ON sto.storerkey = ORD.facility'      
              + ' JOIN SKU s WITH (NOLOCK) ON s.sku=od.sku' 
@@ -194,7 +181,7 @@ BEGIN
              + ' LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.storerkey = ORD.Storerkey AND C1.code=ORD.type and C1.LISTNAME=''AFDTCPddec'' '
              + ' LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.storerkey = ORD.Storerkey AND C2.code=ORD.type and C2.LISTNAME=''AFDTCPdsl'' '
              + ' LEFT JOIN CODELKUP C3 WITH (NOLOCK) ON C3.code=substring(s.itemclass,2,2) AND C3.LISTNAME=''AFDTCDept'' '
-             + ' LEFT JOIN CartonShipmentDetail CSD WITH (NOLOCK) ON CSD.Storerkey = Ord.Storerkey AND CSD.Orderkey = Ord.Orderkey AND CSD.loadkey=Ord.loadkey'         --(CS02)
+             + ' LEFT JOIN CartonShipmentDetail CSD WITH (NOLOCK) ON CSD.Storerkey = Ord.Storerkey AND CSD.Orderkey = Ord.Orderkey AND CSD.loadkey=Ord.loadkey'         
              + ' LEFT JOIN DOCINFO DI WITH (NOLOCK) ON DI.Key1=ORD.Orderkey AND DI.Storerkey=ORD.Storerkey AND DI.tablename=''Orders'' '
              + ' WHERE ORD.LoadKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm1+ '''),'''') <> '''' THEN ''' + @c_Sparm1+ ''' ELSE ORD.LoadKey END'--''' + @c_Sparm1+ ''' '  
              + ' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm2+ '''),'''') <> '''' THEN ''' + @c_Sparm2+ ''' ELSE ORD.OrderKey END'  
