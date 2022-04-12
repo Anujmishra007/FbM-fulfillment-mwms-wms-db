@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_RCM_WV_StampPPAFlag]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_RCM_WV_StampPPAFlag]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -20,7 +15,7 @@ GO
 /*                                                                      */
 /* Parameters:                                                          */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,8 +24,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 28-Oct-2021  WLChooi   1.0   DevOps Combine Script                   */
+/* 28-Mar-2022  WLChooi   1.1   WMS-19326 - Change UserDefine03 to      */
+/*                              UserDefine10 (WL01)                     */
 /************************************************************************/
-CREATE  PROCEDURE [dbo].[isp_RCM_WV_StampPPAFlag]
+CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_WV_StampPPAFlag]
    @c_Wavekey  NVARCHAR(10),
    @b_success  INT OUTPUT,
    @n_err      INT OUTPUT,
@@ -52,7 +49,7 @@ BEGIN
          , @c_Orderkey             NVARCHAR(10)
          , @c_Storerkey            NVARCHAR(15)
          , @c_PPA                  NVARCHAR(10) = 'PPA'
-         , @c_OHUDF03              NVARCHAR(20) = ''
+         , @c_OHUDF10              NVARCHAR(20) = ''   --WL01
          , @n_PPA_Percent          DECIMAL(10,4) = 0.00
          , @n_NoOfOrdersCurrWave   INT = 0
          , @n_NoOfOrdersOthWave    INT = 0
@@ -65,7 +62,7 @@ BEGIN
         Orderkey      NVARCHAR(10)
       , DocType       NVARCHAR(10)
       , C_Country     NVARCHAR(100)
-      , UserDefine03  NVARCHAR(20)
+      , UserDefine10  NVARCHAR(50)   --WL01
       , Storerkey     NVARCHAR(15)
       , StampPPAFlag  NVARCHAR(1)
    )
@@ -96,8 +93,8 @@ BEGIN
       
       --C_Country <> @c_STCountry --Export Orders, Stamp PPA for all orderkey
       --C_Country = @c_STCountry  --Local Orders, Stamp PPA for some orderkey
-      INSERT INTO #TMP_WV (Orderkey, DocType, C_Country, UserDefine03, Storerkey, StampPPAFlag)
-      SELECT OH.Orderkey, OH.Doctype, ISNULL(OH.C_Country,''), ISNULL(OH.UserDefine03,''), OH.StorerKey
+      INSERT INTO #TMP_WV (Orderkey, DocType, C_Country, UserDefine10, Storerkey, StampPPAFlag)   --WL01
+      SELECT OH.Orderkey, OH.Doctype, ISNULL(OH.C_Country,''), ISNULL(OH.UserDefine10,''), OH.StorerKey   --WL01
            , CASE WHEN ISNULL(OH.C_Country,'') <> @c_STCountry THEN 1 ELSE 2 END
       FROM WAVEDETAIL WD (NOLOCK)
       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.Orderkey
@@ -166,7 +163,7 @@ BEGIN
    AND CL.Storerkey = @c_Storerkey
    
    DECLARE CUR_PPA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT DISTINCT WV.UserDefine03
+   SELECT DISTINCT WV.UserDefine10   --WL01
    FROM #TMP_WV WV
    WHERE WV.DocType = 'N'
    AND WV.C_Country = @c_STCountry
@@ -175,7 +172,7 @@ BEGIN
    
    OPEN CUR_PPA
    
-   FETCH NEXT FROM CUR_PPA INTO @c_OHUDF03
+   FETCH NEXT FROM CUR_PPA INTO @c_OHUDF10   --WL01
    
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -186,7 +183,7 @@ BEGIN
    
       SELECT @n_NoOfOrdersCurrWave = COUNT(1)
       FROM #TMP_WV WV
-      WHERE WV.UserDefine03 = @c_OHUDF03 
+      WHERE WV.UserDefine10 = @c_OHUDF10   --WL01 
       AND WV.C_Country = @c_STCountry
       AND WV.Storerkey = @c_Storerkey
    
@@ -196,7 +193,7 @@ BEGIN
       JOIN WAVE W (NOLOCK) ON W.WaveKey = WD.WaveKey
       JOIN STORER ST (NOLOCK) ON ST.StorerKey = OH.StorerKey 
                              AND ST.Country = OH.C_Country
-      WHERE OH.UserDefine03 = @c_OHUDF03 
+      WHERE OH.UserDefine10 = @c_OHUDF10   --WL01 
       AND WD.WaveKey <> @c_Wavekey
       AND OH.StorerKey = @c_Storerkey
       AND OH.DocType = 'N'
@@ -208,7 +205,7 @@ BEGIN
       JOIN WAVE W (NOLOCK) ON W.WaveKey = WD.WaveKey
       JOIN STORER ST (NOLOCK) ON ST.StorerKey = OH.StorerKey 
                              AND ST.Country = OH.C_Country
-      WHERE OH.UserDefine03 = @c_OHUDF03 
+      WHERE OH.UserDefine10 = @c_OHUDF10   --WL01 
       AND WD.WaveKey <> @c_Wavekey
       AND OH.StorerKey = @c_Storerkey
       AND OH.DocType = 'N'
@@ -230,7 +227,7 @@ BEGIN
          SELECT DISTINCT TOP (@n_NoOfOrderReqPPA) WV.Orderkey
          FROM #TMP_WV WV
          WHERE WV.DocType = 'N'
-         AND WV.UserDefine03 = @c_OHUDF03
+         AND WV.UserDefine10 = @c_OHUDF10   --WL01
          AND WV.C_Country = @c_STCountry
          AND WV.Storerkey = @c_Storerkey
          ORDER BY WV.Orderkey
@@ -265,7 +262,7 @@ BEGIN
          DEALLOCATE CUR_UPD
       END
    
-      FETCH NEXT FROM CUR_PPA INTO @c_OHUDF03
+      FETCH NEXT FROM CUR_PPA INTO @c_OHUDF10
    END
    CLOSE CUR_PPA
    DEALLOCATE CUR_PPA
@@ -339,5 +336,5 @@ QUIT_SP:
    END
 END -- End PROC
 GO
-GRANT EXECUTE ON isp_RCM_WV_StampPPAFlag to NSQL
+GRANT EXECUTE ON [dbo].[isp_RCM_WV_StampPPAFlag] to NSQL
 GO
