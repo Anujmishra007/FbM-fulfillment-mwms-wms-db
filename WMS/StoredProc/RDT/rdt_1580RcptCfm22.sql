@@ -318,7 +318,7 @@ BEGIN
       @cTargetDB = TargetDB  
    FROM RDT.RDTReport WITH (NOLOCK)  
    WHERE StorerKey = @cStorerKey  
-      AND ReportType = 'SKULABEL'  
+      AND ReportType = 'SKULABEL01'  
   
    -- Get session info  
    DECLARE @cPrinter NVARCHAR( 10)  
