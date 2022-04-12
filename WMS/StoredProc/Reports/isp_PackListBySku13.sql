@@ -1,6 +1,3 @@
-  IF EXISTS (SELECT Name FROM dbo.sysobjects WHERE Name = 'isp_PackListBySku13' AND Type = 'P')
-   DROP PROC isp_PackListBySku13
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -29,7 +26,7 @@ GO
 /* 13-May-2020 CSCHONG  1.2   WMS-12557 - fix duplicate issue (CS02)    */    
 /* 25-AUG-2021 CSCHONG  1.2   WMS-17750 fix deuplicate detail (CS03)    */
 /************************************************************************/      
-CREATE PROC isp_PackListBySku13      
+CREATE OR ALTER PROC isp_PackListBySku13      
     -- @c_Storerkey         NVARCHAR(20),      
      @c_PickSlipNo        NVARCHAR(10)--,      
    --  @c_StartCartonNo     NVARCHAR(10) = '1',      
@@ -131,7 +128,7 @@ BEGIN
    ,PH.PickSlipNo      
   --          ,S.SKU         --CS02    
    ,''                       --CS02    
-   ,ISNULL(CLR.short,'N') as ShowField             --CS01      
+   ,ISNULL(CLR.short,'N') AS ShowField             --CS01      
  FROM ORDERS     O  WITH (NOLOCK)      
  JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=O.OrderKey      
  JOIN PACKHEADER PH WITH (NOLOCK) ON (O.Orderkey = PH.Orderkey AND O.Storerkey = PH.Storerkey)      
@@ -230,11 +227,11 @@ BEGIN
  ,C_Address4      
  ,C_City      
  ,Descr      
- ,Qty  as qty    
+ ,Qty  AS qty    
  ,ExtPrice      
  ,UserDefine05       
  ,showfield     --cs01      
- from #PLISTBYSKU13    
+ FROM #PLISTBYSKU13    
  --GROUP BY B_Contact1      
  --,B_Address1      
  --,B_Address2      
