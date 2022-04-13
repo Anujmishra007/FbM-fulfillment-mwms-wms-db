@@ -1,12 +1,8 @@
-﻿IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_packing_list_101]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_packing_list_101]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: isp_packing_list_101                                    */
 /* Creation Date: 28-APR-2021                                           */
@@ -25,8 +21,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 07-Apr-2022 CSCHONG  1.0   Devops Scripts Combine                    */
+/* 07-Apr-2022 CSCHONG  1.1   WMS-19422 Add codelkup show address (CS01)*/
 /************************************************************************/
-CREATE PROC isp_packing_list_101
+CREATE OR ALTER PROC [dbo].[isp_packing_list_101]
            @c_PickSlipNo      NVARCHAR(10)
 AS
 BEGIN
@@ -35,32 +33,33 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  
+   DECLARE
            @n_StartTCnt       INT
-         , @n_Continue        INT 
+         , @n_Continue        INT
          , @n_NoOfLine        INT
          , @c_Orderkey        NVARCHAR(20)
          , @c_OHUDF03         NVARCHAR(50)
-         , @c_storerkey       NVARCHAR(20) 
+         , @c_storerkey       NVARCHAR(20)
          , @c_rpttype         NVARCHAR(20)
+         , @c_CONRTNADD       NVARCHAR(500) = '' --CS01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_NoOfLine = 3
    SET @c_Orderkey = ''
-   
+
 
    IF EXISTS (SELECT 1 FROM ORDERS WITH (NOLOCK)
               WHERE Orderkey = @c_PickSlipNo)
    BEGIN
-      SET @c_Orderkey = @c_PickSlipNo 
-   END           
+      SET @c_Orderkey = @c_PickSlipNo
+   END
    ELSE
    BEGIN
       SELECT DISTINCT @c_Orderkey = OrderKey
       FROM PackHeader AS ph WITH (NOLOCK)
       WHERE ph.PickSlipNo=@c_PickSlipNo
-   END   
-      
+   END
+
 
   SELECT @c_OHUDF03 = OH.Userdefine03
           ,@c_storerkey = OH.Storerkey
@@ -72,6 +71,16 @@ BEGIN
    WHERE c.listname = 'CONVSTORE'
    AND C.code = @c_OHUDF03
    AND C.storerkey = @c_storerkey
+
+
+  --CS01 S
+    SELECT @c_CONRTNADD = ISNULL(C.notes,'')
+   FROM Codelkup  C WITH (nolock)
+   WHERE c.listname = 'CONVSTORE'
+   AND C.code = 'CONVSTORERTNADD'
+   AND C.storerkey = @c_storerkey
+
+ --Cs01 E
 
    SELECT  SortBy = ROW_NUMBER() OVER ( ORDER BY ISNULL(PH.PickSlipNo,'')
                                                 ,OH.Storerkey
@@ -89,31 +98,32 @@ BEGIN
          , ISNULL(PH.PickSlipNo,'')
          , OH.Loadkey
          , OH.Orderkey
-         , OHUDF03 = ISNULL(RTRIM(OH.UserDefine03),'') 
+         , OHUDF03 = ISNULL(RTRIM(OH.UserDefine03),'')
          , ExternOrderkey = ISNULL(RTRIM(UPPER(OH.ExternOrderkey)),'')
          , SSUSR5  = ISNULL(RTRIM(SKU.SUSR5),'')  --18
-         , C_Contact1= ISNULL(RTRIM(OH.C_Contact1),'')  
-         , C_Phone1  = ISNULL(RTRIM(OH.C_Phone1),'') 
-         , C_Address = ISNULL(RTRIM(OH.C_State),'') + ' '  
+         , C_Contact1= ISNULL(RTRIM(OH.C_Contact1),'')
+         , C_Phone1  = ISNULL(RTRIM(OH.C_Phone1),'')
+         , C_Address = ISNULL(RTRIM(OH.C_State),'') + ' '
                      + ISNULL(RTRIM(OH.B_Address1),'') + ' '
-                     + ISNULL(RTRIM(OH.C_Address2),'')  
-         --, C_Address = ISNULL(RTRIM(OH.C_Address2),'')   
-         , Manufacturersku  = ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku)) 
+                     + ISNULL(RTRIM(OH.C_Address2),'')
+         --, C_Address = ISNULL(RTRIM(OH.C_Address2),'')
+         , Manufacturersku  = ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))
          , RecGrp  =  (ROW_NUMBER() OVER ( PARTITION BY ISNULL(PH.PickSlipNo,''),OH.Orderkey
                                         ORDER BY ISNULL(PH.PickSlipNo,'')
                                                 ,OH.Storerkey
                                                 ,OH.Orderkey
-                                                ,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku)))-1)/@n_NoOfLine 
+                                                ,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku)))-1)/@n_NoOfLine
          , SkuDesr = ISNULL(RTRIM(SKU.Descr),'')
          , Qty = ISNULL(SUM(OD.originalqty),0)
-         , TrackingNo = OH.TrackingNo   
-         , AddDate = CONVERT(NVARCHAR(10),OH.AddDate,120)   
-         , SKUSize = CASE sku.Busr8 WHEN '20' THEN SKU.Size WHEN '10' THEN sku.Measurement 
-                     WHEN '30' THEN CASE WHEN ISNULL(sku.Measurement,'') = '' THEN SKU.Size ELSE sku.Measurement END ELSE sku.Busr8 END 
+         , TrackingNo = OH.TrackingNo
+         , AddDate = CONVERT(NVARCHAR(10),OH.AddDate,120)
+         , SKUSize = CASE sku.Busr8 WHEN '20' THEN SKU.Size WHEN '10' THEN sku.Measurement
+                     WHEN '30' THEN CASE WHEN ISNULL(sku.Measurement,'') = '' THEN SKU.Size ELSE sku.Measurement END ELSE sku.Busr8 END
          , RptType = @c_rpttype
+         ,CONRTNADD = @c_CONRTNADD
    FROM ORDERS     OH WITH (NOLOCK)
    LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)
-   JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=OH.OrderKey 
+   JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=OH.OrderKey
    --JOIN PICKDETAIL PD WITH (NOLOCK) ON (OH.Orderkey = PD.Orderkey)
    JOIN SKU       SKU WITH (NOLOCK) ON (OD.Storerkey= SKU.Storerkey)
                                     AND(OD.Sku = SKU.Sku)
@@ -122,23 +132,23 @@ BEGIN
          ,  OH.Storerkey
          ,  OH.Loadkey
          ,  OH.Orderkey
-         ,  ISNULL(RTRIM(OH.UserDefine03),'')  
+         ,  ISNULL(RTRIM(OH.UserDefine03),'')
          ,  ISNULL(RTRIM(UPPER(OH.ExternOrderkey)),'')
-         ,  ISNULL(RTRIM(SKU.SUSR5),'') 
-         ,  ISNULL(RTRIM(OH.C_Contact1),'') 
-         ,  ISNULL(RTRIM(OH.C_Phone1),'')   
-         ,  ISNULL(RTRIM(OH.C_State),'')  
-         ,  ISNULL(RTRIM(OH.B_Address1),'') 
-         ,  ISNULL(RTRIM(OH.C_Address2),'')   
+         ,  ISNULL(RTRIM(SKU.SUSR5),'')
+         ,  ISNULL(RTRIM(OH.C_Contact1),'')
+         ,  ISNULL(RTRIM(OH.C_Phone1),'')
+         ,  ISNULL(RTRIM(OH.C_State),'')
+         ,  ISNULL(RTRIM(OH.B_Address1),'')
+         ,  ISNULL(RTRIM(OH.C_Address2),'')
          ,  ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))
          ,  ISNULL(RTRIM(SKU.Descr),'')
-         ,  OH.TrackingNo    
-         ,  CONVERT(NVARCHAR(10),OH.AddDate,120)  
-         , CASE sku.Busr8 WHEN '20' THEN SKU.Size WHEN '10' THEN sku.Measurement 
-                     WHEN '30' THEN CASE WHEN ISNULL(sku.Measurement,'') = '' THEN SKU.Size ELSE sku.Measurement END ELSE sku.Busr8 END 
+         ,  OH.TrackingNo
+         ,  CONVERT(NVARCHAR(10),OH.AddDate,120)
+         , CASE sku.Busr8 WHEN '20' THEN SKU.Size WHEN '10' THEN sku.Measurement
+                     WHEN '30' THEN CASE WHEN ISNULL(sku.Measurement,'') = '' THEN SKU.Size ELSE sku.Measurement END ELSE sku.Busr8 END
 
 
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[isp_packing_list_101] TO nSQL 
+GRANT EXECUTE ON  [dbo].[isp_packing_list_101] TO [NSQL]
 GO

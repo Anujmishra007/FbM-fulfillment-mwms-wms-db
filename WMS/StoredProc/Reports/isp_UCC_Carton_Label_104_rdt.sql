@@ -27,6 +27,7 @@ GO
 /* 2021-11-11  WLChooi  1.2   WMS-17265 - Add CartonType and Userkey    */
 /*                            (WL02)                                    */
 /* 2022-03-31  WLChooi  1.3   WMS-17265 - Modify Logic for CDD (WL03)   */
+/* 2022-04-11  WLChooi  1.4   Bug Fix - Extend VAR Length (WL04)        */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_104_rdt] (    
        @c_Pickslipno   NVARCHAR(10),     
@@ -98,22 +99,22 @@ BEGIN
             DropID         NVARCHAR(20) NULL,    
             Loadkey        NVARCHAR(50) NULL,
             [Route]        NVARCHAR(10) NULL,    
-            C_Company      NVARCHAR(45) NULL,    
-            C_Address1     NVARCHAR(45) NULL,    
-            C_Address2     NVARCHAR(45) NULL,    
-            C_Address3     NVARCHAR(45) NULL,    
-            C_Address4     NVARCHAR(45) NULL,    
-            C_City         NVARCHAR(45) NULL,    
-            C_State        NVARCHAR(45) NULL,       
+            C_Company      NVARCHAR(100) NULL,   --WL04   
+            C_Address1     NVARCHAR(100) NULL,   --WL04   
+            C_Address2     NVARCHAR(100) NULL,   --WL04   
+            C_Address3     NVARCHAR(100) NULL,   --WL04   
+            C_Address4     NVARCHAR(100) NULL,   --WL04   
+            C_City         NVARCHAR(100) NULL,   --WL04   
+            C_State        NVARCHAR(100) NULL,   --WL04      
             StorerKey      NVARCHAR(15) NULL,    
-            Company        NVARCHAR(45) NULL,    
-            Address1       NVARCHAR(45) NULL,    
-            Address2       NVARCHAR(45) NULL,    
-            Address3       NVARCHAR(45) NULL,    
-            Address4       NVARCHAR(45) NULL,    
-            City           NVARCHAR(45) NULL,    
+            Company        NVARCHAR(100) NULL,   --WL04     
+            Address1       NVARCHAR(100) NULL,   --WL04     
+            Address2       NVARCHAR(100) NULL,   --WL04     
+            Address3       NVARCHAR(100) NULL,   --WL04     
+            Address4       NVARCHAR(100) NULL,   --WL04     
+            City           NVARCHAR(100) NULL,   --WL04     
             Phone1         NVARCHAR(18) NULL,    
-            Fax1           NVARCHAR(18) NULL,    
+            Fax1           NVARCHAR(18) NULL,
             CtnCnt1        INT NULL,    
             CartonNo       INT NULL,      
             DeliveryDate   NVARCHAR(11) NULL,

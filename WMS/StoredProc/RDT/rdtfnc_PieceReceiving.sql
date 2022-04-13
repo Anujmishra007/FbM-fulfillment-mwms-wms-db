@@ -127,8 +127,9 @@ GO
 /*                           finish receive (no over receive) (james22) */
 /* 2021-01-15 8.4 Chermaine  WMS-16015 Add DecodeLottableSP config      */
 /*                           in scn4 and ExtValSP config in scn2(cc02)  */
+/* 2021-06-01 8.6 Leong      INC1512999 - Reset variable                */  
 /* 2021-06-09 8.5 Chermaine  WMS-16328 Add SuggestLoc in scn1 (cc03)    */  
-/* 2021-06-01 8.6 Leong      INC1512999 - Reset variable                */
+/*                           and Add ClosePallet SP                     */  
 /* 2021-10-15 8.7 James      WMS-18022 Add eventlog to serial no step   */
 /*                           Add new field into eventlog (james23)      */
 /* 2022-02-24 8.8 Ung        WMS-18950 Add RDT format for Lottable01..4 */
@@ -254,9 +255,11 @@ DECLARE
    @cBackToASNScnWhenFullyRcv   NVARCHAR( 1),
    @cAutoGotoLotScn     NVARCHAR( 1), --(cc01)
    @cDecodeLottableSP   NVARCHAR(20), --(cc02)
-   @cBUSR1              NVARCHAR( 30), -- (james23)
    @cSuggestedLocSP     NVARCHAR(20), --(cc03)
    @cSuggestedLoc       NVARCHAR(10), --(cc03)
+   @cClosePalletSP      NVARCHAR(20), --(cc03)  
+   @cClosePalletOut     NVARCHAR(20), --(cc03)  
+   @cBUSR1              NVARCHAR( 30), -- (james23)
 
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
@@ -376,6 +379,7 @@ SELECT
    @cAutoGotoLotScn         = V_String40, --(cc01)
    @cDecodeLottableSP       = V_String41, --(cc02)
    @cSuggestedLocSP         = V_String42, --(cc03)
+   @cClosePalletSP          = V_String43, --(cc03)  
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -483,7 +487,9 @@ BEGIN
    SET @cSuggestedLocSP = rdt.RDTGetConfig( @nFunc, 'SuggestedLocSP', @cStorer)
    IF @cSuggestedLocSP = '0'
       SET @cSuggestedLocSP = ''
-
+        
+   SET @cClosePalletSP = rdt.RDTGetConfig( @nFunc, 'ClosePalletSP', @cStorer)  
+   
    -- Code lookup
    IF EXISTS( SELECT 1
       FROM CodeLkup WITH (NOLOCK)
@@ -1532,7 +1538,6 @@ BEGIN
          END
          SET @nCount = @nCount + 1
       END
-
   
       -- Skip lottable
       IF @cSkipLottable01 = '1' SELECT @cFieldAttr01 = 'O', @cInField01 = '', @cLottable01 = ''
@@ -1992,22 +1997,62 @@ BEGIN
          SET @nStep = @nStep + 2
       END
 
-      -- Close pallet
-      ELSE IF @cClosePallet = '1'
-      BEGIN
-       	-- Retain lottables
-         SET @cTempLottable01 = @cOutField01
-         SET @cTempLottable02 = @cOutField02
-         SET @cTempLottable03 = @cOutField03
-         SET @cTempLottable04 = @cOutField04
-
-         -- Prepare next screen var
-         SET @cOutField01 = '' -- Option
-
-         -- Go message screen
-         SET @nScn = @nScn + 6
-         SET @nStep = @nStep + 6
-      END
+       -- Close pallet  
+      ELSE IF @cClosePallet = '1'  
+      BEGIN  
+       --some condition no need close pallet  --(cc01)  
+       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cClosePalletSP AND type = 'P')  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cClosePalletSP) +  
+               ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cClosePalletOut OUTPUT'  
+            SET @cSQLParam =  
+               '@cReceiptKey   NVARCHAR( 10), ' +  
+               '@cPOKey        NVARCHAR( 10), ' +  
+               '@cLOC          NVARCHAR( 10), ' +  
+               '@cToID         NVARCHAR( 18), ' +  
+               '@cLottable01   NVARCHAR( 18), ' +  
+               '@cLottable02   NVARCHAR( 18), ' +  
+               '@cLottable03   NVARCHAR( 18), ' +  
+               '@dLottable04   DATETIME,  ' +  
+               '@cStorer       NVARCHAR( 15), ' +  
+               '@cSKU          NVARCHAR( 20), ' +  
+               '@cClosePalletOut NVARCHAR( 1) OUTPUT'  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cClosePalletOut OUTPUT  
+                 
+             IF @cClosePalletOut = '1'  
+             BEGIN  
+                 -- Retain lottables  
+               SET @cTempLottable01 = @cOutField01  
+               SET @cTempLottable02 = @cOutField02  
+               SET @cTempLottable03 = @cOutField03  
+               SET @cTempLottable04 = @cOutField04  
+  
+               -- Prepare next screen var  
+               SET @cOutField01 = '' -- Option  
+  
+               -- Go message screen  
+               SET @nScn = @nScn + 6  
+               SET @nStep = @nStep + 6  
+             END  
+         END  
+         ELSE IF @cClosePallet = '1'  
+         BEGIN  
+          -- Retain lottables  
+            SET @cTempLottable01 = @cOutField01  
+            SET @cTempLottable02 = @cOutField02  
+            SET @cTempLottable03 = @cOutField03  
+            SET @cTempLottable04 = @cOutField04  
+  
+            -- Prepare next screen var  
+            SET @cOutField01 = '' -- Option  
+  
+            -- Go message screen  
+            SET @nScn = @nScn + 6  
+            SET @nStep = @nStep + 6  
+         END  
+      END  
 
       ELSE
       BEGIN
@@ -3325,14 +3370,50 @@ BEGIN
       -- Close pallet
       IF @cClosePallet ='1'
       BEGIN
-      	-- Prepare next screen var
-         SET @cOutField01 = '' -- Option
-
-         -- Go message screen
-         SET @nScn = @nScn + 4
-         SET @nStep = @nStep + 4
-
-         GOTO Quit
+       	--some condition no need close pallet  --(cc01)  
+       	IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cClosePalletSP AND type = 'P')  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cClosePalletSP) +  
+               ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cClosePalletOut OUTPUT'  
+            SET @cSQLParam =  
+               '@cReceiptKey   NVARCHAR( 10), ' +  
+               '@cPOKey        NVARCHAR( 10), ' +  
+               '@cLOC          NVARCHAR( 10), ' +  
+               '@cToID         NVARCHAR( 18), ' +  
+               '@cLottable01   NVARCHAR( 18), ' +  
+               '@cLottable02   NVARCHAR( 18), ' +  
+               '@cLottable03   NVARCHAR( 18), ' +  
+               '@dLottable04   DATETIME,  ' +  
+               '@cStorer       NVARCHAR( 15), ' +  
+               '@cSKU          NVARCHAR( 20), ' +  
+               '@cClosePalletOut NVARCHAR( 1) OUTPUT'  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cClosePalletOut OUTPUT  
+                 
+            IF @cClosePalletOut = '1'  
+            BEGIN  
+             -- Prepare next screen var  
+               SET @cOutField01 = '' -- Option  
+  
+               -- Go message screen  
+               SET @nScn = @nScn + 4  
+               SET @nStep = @nStep + 4  
+  
+               GOTO Quit  
+            END  
+         END  
+         ELSE IF @cClosePallet = '1'  
+         BEGIN  
+          -- Prepare next screen var  
+            SET @cOutField01 = '' -- Option  
+  
+            -- Go message screen  
+            SET @nScn = @nScn + 4  
+            SET @nStep = @nStep + 4  
+  
+            GOTO Quit  
+         END  
       END
 
       -- Auto generate ID
@@ -4105,6 +4186,7 @@ BEGIN
       V_String40   = @cAutoGotoLotScn, --(cc01)
       V_String41   = @cDecodeLottableSP, --(cc02)
       V_String42   = @cSuggestedLocSP, --(cc03)
+      V_String43   = @cClosePalletSP,  --(cc03)  
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
