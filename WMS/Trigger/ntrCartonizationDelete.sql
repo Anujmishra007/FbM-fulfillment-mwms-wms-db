@@ -1,6 +1,6 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrCartonizationHeaderDelete]') 
+IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrCartonizationDelete]') 
 AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrCartonizationHeaderDelete]
+DROP TRIGGER [dbo].[ntrCartonizationDelete]
 GO
 
 SET ANSI_NULLS OFF
