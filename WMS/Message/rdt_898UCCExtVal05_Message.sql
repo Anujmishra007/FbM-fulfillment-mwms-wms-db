@@ -1,0 +1,6 @@
+--rdt_898UCCExtVal05
+rdt.rdtDropMsg 173101 , 173150	
+
+execute rdt.rdtAddMsg 173101, 10, '173101 UCC PONO Diff', 'us_english', 898
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 173101 AND 173150
