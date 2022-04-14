@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_UCC_Label_CARTERSZ]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_BT_Bartender_UCC_Label_CARTERSZ]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,10 +14,11 @@ GO
 /* 2016-01-27 1.0  CSCHONG    Created (SOS 361969)                            */  
 /* 2016-02-23 1.1  CSCHONG    Add new field (CS02)                            */ 
 /* 2016-03-03 1.2  CSCHONG    change field logic (CS03)                       */ 
-/* 2016-08-09 1.3  CSCHONG    Remove SET ANSI_WARNINGS OFF (CS04)             */     
+/* 2016-08-09 1.3  CSCHONG    Remove SET ANSI_WARNINGS OFF (CS04)             */  
+/* 2020-02-13 1.4  CSCHONG    WMS-12084 add new field (CS04)                  */   
 /******************************************************************************/        
           
-CREATE PROC [dbo].[isp_BT_Bartender_UCC_Label_CARTERSZ]               
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_UCC_Label_CARTERSZ]               
 (  @c_Sparm01            NVARCHAR(250),      
    @c_Sparm02            NVARCHAR(250),      
    @c_Sparm03            NVARCHAR(250),      
@@ -59,7 +55,9 @@ BEGIN
       @c_lottable02        NVARCHAR(18),
       @c_Lottable09        NVARCHAR(30),
       @c_lot               NVARCHAR(20),
-      @n_continue          INT
+      @n_continue          INT,
+      @c_ExecStatements    NVARCHAR(4000),   
+      @c_ExecArguments     NVARCHAR(4000)    
      
 
     -- SET RowNo = 0     
@@ -139,7 +137,7 @@ BEGIN
              + CHAR(13) +   
              +' S.DESCR,(UCC.QTY*(CONVERT(FLOAT,S.BUSR1))),UPC.UPC,LOTT.Lottable09,LOTT.Lottable01,'  
              + CHAR(13) +  
-             +' LOTT.Lottable02,UCC.Storerkey,'''','''','''','''','''','''','''','''', '   
+             +' LOTT.Lottable02,UCC.Storerkey,UCC.Qty,'''','''','''','''','''','''','''', '     --CS04
              + CHAR(13) +  
              +' '''','''','''','''','''','''','''','''','''','''', '   
              + CHAR(13) +  
@@ -153,8 +151,8 @@ BEGIN
              + ' JOIN SKU S WITH (NOLOCK) ON S.SKU = UCC.SKU AND S.Storerkey = UCC.Storerkey'
              + ' LEFT JOIN UPC UPC WITH (NOLOCK) ON UPC.SKU = UCC.SKU AND UPC.Storerkey = UCC.Storerkey '
              + ' LEFT JOIN LOTATTRIBUTE LOTT WITH (NOLOCK) ON LOTT.Lot = UCC.Lot'
-             + ' WHERE UCC.UCCNo =''' + @c_Sparm01 + ''' '
-             + ' AND UCC.Storerkey= ''' + @c_Sparm02 + ''' '
+             + ' WHERE UCC.UCCNo = @c_Sparm01  '
+             + ' AND UCC.Storerkey=  @c_Sparm02 '
    
             IF @b_debug='1'
             BEGIN
@@ -170,9 +168,15 @@ BEGIN
 
      SET @c_SQL = @c_SQL + @c_SQLJOIN
 
- 
-      EXEC sp_executesql @c_SQL  
+     -- EXEC sp_executesql @c_SQL  
 
+     SET @c_ExecArguments = N'@c_Sparm01           NVARCHAR(80)'    
+                          + ', @c_Sparm02           NVARCHAR(80) '                      
+                         
+      EXEC sp_ExecuteSql     @c_SQL     
+                           , @c_ExecArguments    
+                           , @c_Sparm01   
+                           , @c_Sparm02   
       IF @b_debug=1
       BEGIN  
          PRINT @c_SQL  
@@ -244,11 +248,12 @@ BEGIN
           Col05 = '',
           Col06 = '',
           Col07 = 'mixed',
-          Col08 = ''
+          Col08 = '',
+          Col13 = 'mixed'         --CS04
       WHERE Col01 =@c_uccno
       AND col12 = @c_storerkey
 
-     IF @@ERROR <> 0            
+      IF @@ERROR <> 0            
       BEGIN              
          SET @n_continue = 3            
          ROLLBACK TRAN            
