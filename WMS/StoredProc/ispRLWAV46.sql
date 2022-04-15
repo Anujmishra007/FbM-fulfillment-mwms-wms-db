@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ispRLWAV46]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispRLWAV46]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* GitLab Version: 1.1                                                   */    
+/* GitLab Version: 1.2                                                   */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
@@ -29,9 +24,10 @@ GO
 /* 2021-08-20   WLChooi  1.0  DevOps Combine Script                      */ 
 /* 2021-12-16   WLChooi  1.1  WMS-17722 Change Message02 & Message03 and */
 /*                            bug fix (WL01)                             */
+/* 2022-02-07   WLChooi  1.2  WMS-18856 Change DPP Loc Assign Logic(WL02)*/
 /*************************************************************************/     
 
-CREATE PROCEDURE [dbo].[ispRLWAV46]        
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV46]        
   @c_wavekey      NVARCHAR(10)    
  ,@b_Success      INT            OUTPUT    
  ,@n_err          INT            OUTPUT    
@@ -123,6 +119,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
          , @c_CasePicker              NVARCHAR(50) 
          , @c_PickWorkBalance         NVARCHAR(10)
          , @n_RowID                   INT   --WL01
+         , @c_PAZone                  NVARCHAR(50)   --WL02
+         , @c_PZDPPLOC                NVARCHAR(20)   --WL02
 
    DECLARE @n_SKUPerPTS               INT
          , @n_CurrentSplitNumber      INT
@@ -249,32 +247,41 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR')
    BEGIN  
       --Current wave assigned dynamic pick location    
-      CREATE TABLE #DYNPICK_LOCASSIGNED ( Rowref INT not NULL identity(1,1) Primary Key  
-                                         ,STORERKEY NVARCHAR(15) NULL  
-                                         ,SKU NVARCHAR(20) NULL  
-                                         ,TOLOC NVARCHAR(10) NULL  
-                                         ,Lottable02 NVARCHAR(18) NULL 
-                                         ,Lottable03 NVARCHAR(18) NULL    
-                                         ,Lottable04 DATETIME NULL    
-                                         ,LocationType NVARCHAR(10) NULL   
-                                         ,UCCToFit INT DEFAULT(0)   
+      CREATE TABLE #DYNPICK_LOCASSIGNED ( Rowref         INT NOT NULL IDENTITY(1,1) PRIMARY KEY  
+                                         ,STORERKEY      NVARCHAR(15) NULL  
+                                         ,SKU            NVARCHAR(20) NULL  
+                                         ,TOLOC          NVARCHAR(10) NULL  
+                                         ,Lottable02     NVARCHAR(18) NULL 
+                                         ,Lottable03     NVARCHAR(18) NULL    
+                                         ,Lottable04     DATETIME NULL    
+                                         ,LocationType   NVARCHAR(10) NULL   
+                                         ,UCCToFit       INT DEFAULT(0)
+                                         ,Putawayzone    NVARCHAR(50) NULL   --WL02
       )  
       CREATE INDEX IDX_TOLOC ON #DYNPICK_LOCASSIGNED (TOLOC)      
        
-      CREATE TABLE #DYNPICK_TASK (Rowref INT not NULL identity(1,1) Primary Key  
-                                 ,TOLOC NVARCHAR(10) NULL)      
+      CREATE TABLE #DYNPICK_TASK (Rowref        INT NOT NULL IDENTITY(1,1) PRIMARY Key  
+                                 ,TOLOC         NVARCHAR(10) NULL
+                                 ,Putawayzone   NVARCHAR(50) NULL   --WL02
+      )      
   
-      CREATE TABLE #DYNPICK_NON_EMPTY (Rowref INT not NULL identity(1,1) Primary Key  
-                                      ,LOC NVARCHAR(10) NULL)    
+      CREATE TABLE #DYNPICK_NON_EMPTY (Rowref         INT NOT NULL IDENTITY(1,1) PRIMARY Key  
+                                      ,LOC            NVARCHAR(10) NULL
+                                      ,Putawayzone    NVARCHAR(50) NULL   --WL02
+      )    
                                                            
-      CREATE TABLE #DYNLOC (Rowref INT not NULL identity(1,1) Primary KEY
-                           ,Loc NVARCHAR(10) NULL
-                           ,logicallocation NVARCHAR(18) NULL
-                           ,MaxPallet INT NULL)
+      CREATE TABLE #DYNLOC (Rowref           INT NOT NULL IDENTITY(1,1) PRIMARY KEY
+                           ,Loc              NVARCHAR(10) NULL
+                           ,logicallocation  NVARCHAR(18) NULL
+                           ,MaxPallet        INT NULL
+                           ,Putawayzone      NVARCHAR(50) NULL   --WL02
+      )
       CREATE INDEX IDX_DLOC ON #DYNLOC (LOC)   
                              
-      CREATE TABLE #EXCLUDELOC (Rowref INT not NULL identity(1,1) Primary Key  
-                               ,LOC NVARCHAR(10) NULL)
+      CREATE TABLE #EXCLUDELOC (Rowref       INT NOT NULL IDENTITY(1,1) PRIMARY Key  
+                               ,LOC          NVARCHAR(10) NULL
+                               ,Putawayzone  NVARCHAR(50) NULL   --WL02
+      )
       CREATE INDEX IDX_LOC ON #EXCLUDELOC (LOC) 
                        
    END   
@@ -363,16 +370,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
    -----Generate SEPB2CALL Temporary Ref Data-----  
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR')
    BEGIN                  
-      INSERT INTO #DYNLOC (Loc, LogicalLocation)
-      SELECT Loc, LogicalLocation             
+      INSERT INTO #DYNLOC (Loc, LogicalLocation, Putawayzone)   --WL02  
+      SELECT Loc, LogicalLocation, PutawayZone   --WL02               
       FROM LOC (NOLOCK)
       WHERE Facility = @c_Facility 
       AND LocationType = 'DYNPPICK'
       AND LocationCategory = 'SHELVING' 
              
       --location have pending Replenishment tasks  
-      INSERT INTO #DYNPICK_TASK (TOLOC)  
-      SELECT TD.TOLOC  
+      INSERT INTO #DYNPICK_TASK (TOLOC, Putawayzone)   --WL02    
+      SELECT TD.TOLOC, L.PutawayZone   --WL02  
       FROM   TASKDETAIL TD (NOLOCK)  
       JOIN   LOC L (NOLOCK) ON  TD.TOLOC = L.LOC  
       WHERE  L.LocationType IN('DYNPPICK')
@@ -380,24 +387,24 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
       AND    L.Facility = @c_Facility  
       AND    TD.Status = '0'          
       AND    TD.Tasktype IN('RPF')  
-      GROUP BY TD.TOLOC  
+      GROUP BY TD.TOLOC, L.PutawayZone   --WL02    
       HAVING SUM(TD.Qty) > 0  
                   
       --Dynamic pick loc have qty and pending move in  
-      INSERT INTO #DYNPICK_NON_EMPTY (LOC)  
-      SELECT LLI.LOC  
+      INSERT INTO #DYNPICK_NON_EMPTY (LOC, Putawayzone)   --WL02    
+      SELECT LLI.LOC, L.PutawayZone   --WL02    
       FROM   LOTXLOCXID LLI (NOLOCK)  
       JOIN   LOC L (NOLOCK) ON LLI.LOC = L.LOC  
       WHERE  L.LocationType IN ('DYNPPICK')   
       AND    L.Facility = @c_Facility  
-      GROUP BY LLI.LOC  
+      GROUP BY LLI.LOC, L.PutawayZone   --WL02  
       HAVING SUM(LLI.Qty + LLI.PendingMoveIN) > 0
         
-      INSERT INTO #EXCLUDELOC (Loc)
-      SELECT E.LOC
+      INSERT INTO #EXCLUDELOC (Loc, Putawayzone)   --WL02
+      SELECT E.LOC, E.Putawayzone  --WL02
       FROM   #DYNPICK_NON_EMPTY E 
       UNION ALL 
-      SELECT ReplenLoc.TOLOC
+      SELECT ReplenLoc.TOLOC, ReplenLoc.Putawayzone   --WL02
       FROM   #DYNPICK_TASK  ReplenLoc 
    END 
    
@@ -652,7 +659,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
              CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(LA.Lottable02,'') ELSE '' END,         
              CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(LA.Lottable03,'') ELSE '' END,         
              CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(LA.Lottable04,'19000101') ELSE NULL END,
-             CASE WHEN @c_DispatchPiecePickMethod = 'SEPB2BPTS' THEN PD.Notes ELSE '' END
+             CASE WHEN @c_DispatchPiecePickMethod = 'SEPB2BPTS' THEN PD.Notes ELSE '' END,
+             CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(SKU.BUSR4,'') ELSE '' END   --WL02
       FROM WAVEDETAIL WD (NOLOCK)  
       JOIN #PICKDETAIL_WIP PD (NOLOCK) ON WD.Orderkey = PD.Orderkey  
       JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot  
@@ -669,13 +677,14 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                     CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(LA.Lottable02,'') ELSE '' END,         
                     CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(LA.Lottable03,'') ELSE '' END,         
                     CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(LA.Lottable04,'19000101') ELSE NULL END,
-                    CASE WHEN @c_DispatchPiecePickMethod = 'SEPB2BPTS' THEN PD.Notes ELSE '' END
+                    CASE WHEN @c_DispatchPiecePickMethod = 'SEPB2BPTS' THEN PD.Notes ELSE '' END,
+                    CASE WHEN @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') THEN ISNULL(SKU.BUSR4,'') ELSE '' END   --WL02
       ORDER BY PD.Storerkey, PD.UOM, PD.Sku, PD.Lot
 
       OPEN cur_PICKUCC    
       FETCH NEXT FROM cur_PICKUCC INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @c_DropID, 
                                        @c_PickMethod, @n_UCCQty, @c_LocType, @c_Loadkey,
-                                       @c_Lottable02, @c_Lottable03, @dt_Lottable04, @c_Notes
+                                       @c_Lottable02, @c_Lottable03, @dt_Lottable04, @c_Notes, @c_SKUBUSR4   --WL02
 
       SELECT @c_TaskType = 'RPF'  
       SELECT @c_ToLoc = ''  
@@ -730,6 +739,16 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
          
          IF @c_DestinationType = 'DPP' --AND @c_DispatchPiecePickMethod IN ('SEPB2CALL','SEPB2BNOR') AND @c_UOM IN ('7')
          BEGIN
+            --WL02 S
+            SELECT @c_PAZone   = ISNULL(CL.Short,'')
+                 , @c_PZDPPLOC = ISNULL(CL.Long,'')
+            FROM CODELKUP CL (NOLOCK)
+            WHERE CL.LISTNAME = 'SEPPAZONE'
+            AND CL.Code = @c_SKUBUSR4
+            AND CL.Storerkey = @c_Storerkey
+            AND CL.Code2 = 'RL'
+            --WL02 E
+
             SELECT @c_NextDynPickLoc = ''  
                                                                 
              -- Assign loc with same sku qty already assigned in current replenishment  
@@ -743,6 +762,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                AND DL.Lottable03 = @c_Lottable03
                AND DL.Lottable04 = @dt_Lottable04
                AND DL.LocationType = 'DPP'  
+               AND DL.Putawayzone = @c_PAZone   --WL02  
                ORDER BY DL.ToLoc                       
             END                  
                         
@@ -763,7 +783,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                SELECT TOP 1 @c_NextDynPickLoc = L.LOC  
                FROM TASKDETAIL TD (NOLOCK)  
                JOIN LOTATTRIBUTE LA (NOLOCK) ON TD.Lot = LA.Lot  
-               JOIN LOC L (NOLOCK) ON TD.TOLOC = L.LOC                      
+               JOIN LOC L (NOLOCK) ON TD.TOLOC = L.LOC    
                WHERE L.LocationType IN ('DYNPPICK')   
                AND L.LocationCategory IN ('SHELVING')  
                AND L.Facility = @c_Facility  
@@ -775,6 +795,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                AND LA.Lottable04 = @dt_Lottable04
                AND TD.Storerkey = @c_Storerkey  
                AND TD.Sku = @c_Sku  
+               AND L.PutawayZone = @c_PAZone   --WL02
                ORDER BY L.LogicalLocation, L.Loc  
             END  
             
@@ -796,6 +817,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                AND LA.Lottable04 = @dt_Lottable04
                AND TD.Storerkey = @c_Storerkey  
                AND TD.Sku = @c_Sku  
+               AND L.PutawayZone = @c_PAZone   --WL02
                ORDER BY L.LogicalLocation, L.Loc  
             END  
               
@@ -815,6 +837,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                AND LA.Lottable04 = @dt_Lottable04 
                AND  LLI.Storerkey = @c_Storerkey  
                AND  LLI.Sku = @c_Sku  
+               AND L.PutawayZone = @c_PAZone   --WL02
                ORDER BY L.LogicalLocation, L.Loc  
             END                                   
                                         
@@ -827,21 +850,36 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                LEFT JOIN #DYNPICK_LOCASSIGNED DynPick ON L.Loc = DynPick.TOLOC
                WHERE EL.Loc IS NULL
                AND DynPick.Toloc IS NULL
+               AND L.Putawayzone = @c_PAZone         --WL02  
                ORDER BY L.LogicalLocation, L.Loc
             END  
-              
-            IF @n_debug = 1  
-               SELECT 'DPP', '@c_NextDynPickLoc', @c_NextDynPickLoc  
-              
+            
+            --WL02 S
+            --IF @n_debug = 1  
+            --   SELECT 'DPP', '@c_NextDynPickLoc', @c_NextDynPickLoc  
+            --WL02 E
+
             -- Terminate. Can't find any dynamic location  
             TERMINATE:  
+            --WL02 S
+            IF ISNULL(@c_NextDynPickLoc,'') = '' 
+            BEGIN
+               SET @c_NextDynPickLoc = @c_PZDPPLOC
+            END
+            --WL02 E
+
             IF ISNULL(@c_NextDynPickLoc,'')=''  
             BEGIN  
                SELECT @n_continue = 3    
                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Dynamic Pick Location Not Setup / Not enough Dynamic Pick Location. (ispRLWAV46)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
                GOTO RETURN_SP  
-            END   
+            END 
+            
+            --WL02 S
+            IF @n_debug = 1  
+               SELECT 'DPP', '@c_NextDynPickLoc', @c_NextDynPickLoc  
+            --WL02 E
             
             SELECT @c_ToLoc = @c_NextDynPickLoc  
                                            
@@ -852,10 +890,11 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
                            AND ToLoc = @c_ToLoc  
                            AND Lottable02 = @c_Lottable02  
                            AND Lottable03 = @c_Lottable03
-                           AND Lottable04 = @dt_Lottable04 )
+                           AND Lottable04 = @dt_Lottable04
+                           AND Putawayzone = @c_PAZone)   --WL02
             BEGIN  
-               INSERT INTO #DYNPICK_LOCASSIGNED (Storerkey, Sku, ToLoc, Lottable02, Lottable03, Lottable04, LocationType)    
-               VALUES (@c_Storerkey, @c_Sku, @c_Toloc, @c_Lottable02, @c_Lottable03, @dt_Lottable04, 'DPP')  
+               INSERT INTO #DYNPICK_LOCASSIGNED (Storerkey, Sku, ToLoc, Lottable02, Lottable03, Lottable04, LocationType, Putawayzone)   --WL02    
+               VALUES (@c_Storerkey, @c_Sku, @c_Toloc, @c_Lottable02, @c_Lottable03, @dt_Lottable04, 'DPP', @c_PAZone)   --WL02  
             END  
 
             IF @c_LocType IN ('BULK')  
@@ -899,7 +938,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV46]
          PICKUCC_NEXT_REC:  
          FETCH NEXT FROM cur_PICKUCC INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @c_DropID, 
                                        @c_PickMethod, @n_UCCQty, @c_LocType, @c_Loadkey,
-                                       @c_Lottable02, @c_Lottable03, @dt_Lottable04, @c_Notes
+                                       @c_Lottable02, @c_Lottable03, @dt_Lottable04, @c_Notes, @c_SKUBUSR4   --WL02
       END --Fetch  
       CLOSE cur_PICKUCC    
       DEALLOCATE cur_PICKUCC                                     
@@ -1354,5 +1393,5 @@ INSERT_TASKS:
    
 END --sp end  
 GO
-GRANT EXECUTE ON ispRLWAV46 TO NSQL
+GRANT EXECUTE ON [dbo].[ispRLWAV46] TO NSQL
 GO
