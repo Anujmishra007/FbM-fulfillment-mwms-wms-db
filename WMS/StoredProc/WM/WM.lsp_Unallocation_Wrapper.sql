@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Unallocation_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Unallocation_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,25 +12,27 @@ GO
 /*                                                                      */  
 /* Called By: Unallocation                                              */  
 /*                                                                      */  
-/* PVCS Version: 1.4                                                    */  
+/* PVCS Version: 1.5                                                   */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author  Ver   Purposes                                  */  
-/* 28-Dec-2020  SWT01   1.0   Adding Begin Try/Catch                    */
-/* 05-Jan-2021  Wan01   1.2   Execute login if current user<>@c_username*/
+/* Date         Author   Ver  Purposes                                  */  
+/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                    */
+/* 05-Jan-2021  Wan01    1.2  Execute login if current user<>@c_username*/
 /*                            Return Error Msg for Big Outer Catch      */
 /*                            Do Not Raise error for WM Script          */
-/* 04-Oct-2021  CheeMun 1.3   JSM-23942 - Extend @c_Sku Length          */
+/* 04-Oct-2021  CheeMun  1.3  JSM-23942 - Extend @c_Sku Length          */
 /* 21-DEC-2021  Wan02   1.4   LFWM-3146 - UAT - TW  Pick Management -   */
 /*                            Order Unallocation - cannot unallocate    */
 /*                            order at once                             */
 /* 21-DEC-2021  Wan02   1.4   DevOps Combine Script                     */
+/* 28-Jan-2022  Wan03    1.5  LFWM-3259 - UAT RG  Unpack function and   */
+/*                            pack management changes (#LFWM3259)       */
 /************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Unallocation_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional
    ,@c_Pickdetailkey NVARCHAR(10) = ''  --optional  
    ,@c_Orderkey NVARCHAR(10) = ''       --optional
@@ -64,7 +61,20 @@ BEGIN
    
    DECLARE @c_SQL             NVARCHAR(1000) = ''
          , @c_SQLParms        NVARCHAR(1000) = ''
+         
+   --(Wan03) - START
+   DECLARE @c_PickHeader_Orderkey   NVARCHAR(10) = ''
+         , @c_PickHeader_Loadkey    NVARCHAR(10) = ''
+         , @c_PickHeaderKey         NVARCHAR(10) = ''
+         , @c_PackStatus            NVARCHAR(10) = ''
+         
+   DECLARE @CUR_DELPICKSLIP   CURSOR
     
+   DECLARE @t_UnAllocate  TABLE ( Orderkey      NVARCHAR(10) NOT NULL DEFAULT('') PRIMARY KEY
+                                 ,Loadkey       NVARCHAR(10) NOT NULL DEFAULT('') 
+                                 ,PickHeaderKey NVARCHAR(10) NOT NULL DEFAULT('')
+                                 ) 
+   --(Wan03) - END    
    SET @n_Err = 0 
     
    IF SUSER_SNAME() <> @c_UserName    --(Wan01)
@@ -78,7 +88,7 @@ BEGIN
     
       EXECUTE AS LOGIN = @c_UserName
    END
-     
+    
    BEGIN TRY -- SWT01 - Begin Outer Begin Try   
     
       DECLARE @n_Continue              INT
@@ -86,7 +96,7 @@ BEGIN
 
       SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
 
-      BEGIN TRAN             --(Wan02)          
+      BEGIN TRAN             --(Wan02)
       IF @n_continue IN(1,2)
       BEGIN      
          IF ISNULL(@c_Pickdetailkey,'') = '' AND ISNULL(@c_Orderkey,'') = '' AND ISNULL(@c_Loadkey,'') = '' AND ISNULL(@c_Wavekey,'') = ''
@@ -97,7 +107,132 @@ BEGIN
                   ': All key parameters are empty. (lsp_Unallocation_Wrapper)'
          END       
       END
-    
+   
+      --(Wan03) - START
+      IF ISNULL(@c_Pickdetailkey,'') <> ''
+      BEGIN
+          INSERT INTO @t_UnAllocate
+              (
+                  Orderkey,
+                  Loadkey
+              )
+          SELECT o.OrderKey, o.LoadKey
+          FROM dbo.PICKDETAIL AS p WITH (NOLOCK)
+          JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = p.OrderKey
+          WHERE p.PickDetailKey = @c_Pickdetailkey
+          GROUP BY o.OrderKey, o.LoadKey
+          ORDER BY o.LoadKey, o.OrderKey
+      END
+   
+      IF ISNULL(@c_Orderkey,'') <> ''
+      BEGIN
+          INSERT INTO @t_UnAllocate
+              (
+                  Orderkey,
+                  Loadkey
+              )
+          SELECT o.OrderKey, o.LoadKey
+          FROM dbo.ORDERS AS o WITH (NOLOCK) 
+          WHERE o.OrderKey = @c_Orderkey
+          AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = o.Orderkey)
+          GROUP BY o.OrderKey, o.LoadKey
+          ORDER BY o.LoadKey, o.OrderKey
+      END
+   
+      IF ISNULL(@c_Loadkey,'') <> ''
+      BEGIN
+          INSERT INTO @t_UnAllocate
+              (
+                  Orderkey,
+                  Loadkey
+              )
+          SELECT lpd.OrderKey, lpd.LoadKey
+          FROM dbo.LoadPlanDetail AS lpd WITH (NOLOCK) 
+          WHERE lpd.Loadkey = @c_Loadkey
+          AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = lpd.Orderkey)
+          GROUP BY lpd.OrderKey, lpd.LoadKey
+          ORDER BY lpd.LoadKey, lpd.OrderKey
+      END
+   
+      IF ISNULL(@c_Wavekey,'') <> ''
+      BEGIN
+          INSERT INTO @t_UnAllocate
+              (
+                  Orderkey,
+                  Loadkey
+              )
+          SELECT lpd.OrderKey, lpd.LoadKey
+          FROM dbo.WAVEDETAIL AS w WITH (NOLOCK) 
+          JOIN dbo.LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.OrderKey = w.OrderKey
+          WHERE w.Wavekey = @c_Wavekey
+          AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = w.Orderkey)
+          GROUP BY lpd.OrderKey, lpd.LoadKey
+          ORDER BY lpd.LoadKey, lpd.OrderKey
+      END
+      
+      SET @CUR_DELPICKSLIP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT tph.Orderkey
+         ,   tph.Loadkey
+      FROM @t_UnAllocate AS tph
+      ORDER BY tph.Orderkey
+      
+      OPEN @CUR_DELPICKSLIP
+      
+      FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeader_Orderkey
+                                          , @c_PickHeader_Loadkey
+      
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_PickHeaderKey = ''
+         
+         SELECT @c_PickHeaderKey = p.PickHeaderKey
+         FROM dbo.PICKHEADER AS p WITH (NOLOCK)
+         WHERE p.OrderKey = @c_PickHeader_Orderkey
+         
+         IF @c_PickHeaderKey = ''
+         BEGIN
+            SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey
+            FROM dbo.PICKHEADER AS p WITH (NOLOCK)
+            WHERE p.ExternOrderKey = @c_PickHeader_Loadkey
+            AND p.OrderKey = ''
+         END
+         
+         IF @c_PickHeaderKey = ''
+         BEGIN
+            SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey
+            FROM dbo.PICKHEADER AS p WITH (NOLOCK)
+            WHERE p.Loadkey = @c_PickHeader_Loadkey
+            AND p.OrderKey = ''
+         END
+         
+         IF @c_PickHeaderKey <> ''
+         BEGIN
+            SET @c_PackStatus = ''
+            SELECT TOP 1 @c_PackStatus = ph.[Status]
+            FROM dbo.PackHeader AS ph WITH (NOLOCK) 
+            JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo
+            WHERE ph.PickSlipNo = @c_PickHeaderKey
+                        
+            IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' )
+            BEGIN 
+               SET @n_continue = 3  
+               SET @n_err = 551808
+               SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Pack data found. Unallocation Abort. (lsp_Unallocation_Wrapper)' 
+               GOTO EXIT_SP
+            END                  
+
+            UPDATE @t_UnAllocate
+               SET PickHeaderKey = @c_PickHeaderKey
+            WHERE Orderkey = @c_PickHeader_Orderkey
+            
+         END         
+         FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeader_Orderkey
+                                             , @c_PickHeader_Loadkey       
+      END
+      CLOSE @CUR_DELPICKSLIP
+      DEALLOCATE @CUR_DELPICKSLIP
+      --(Wan03) - END
+
       IF @n_continue IN(1,2) AND @c_UnallocateFrom = 'UALOAD'    
       BEGIN
          EXECUTE dbo.ispUnallocate_DynamicLPAlloc @c_Storerkey=@c_Storerkey, @c_Loadkey=@c_LoadKey, @c_Sku=@c_SKU 
@@ -121,8 +256,8 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551803
-            SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_TMLoadPlan_Wrapper Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551803
+               SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_TMLoadPlan_Wrapper Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
          END                
       END
 
@@ -135,8 +270,8 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551804
-            SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_DynamicWaveAlloc_byWave Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551804
+               SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_DynamicWaveAlloc_byWave Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
          END                
       END
 
@@ -149,8 +284,8 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551805
-            SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_DynamicWaveAlloc_byLoad Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551805
+               SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_DynamicWaveAlloc_byLoad Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
          END                
       END
     
@@ -163,8 +298,8 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551806
-            SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_DynamicWaveAlloc_bySku Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551806
+               SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Execute dbo.ispUnallocate_DynamicWaveAlloc_bySku Failed. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
          END                
       END
          
@@ -205,6 +340,7 @@ BEGIN
                            ,@c_Storerkey                
                            ,@c_Sku             
          --(Wan02) - END
+
          OPEN CUR_PICKDETAIL
        
          FETCH FROM CUR_PICKDETAIL INTO @c_Pickdetailkey
@@ -228,7 +364,86 @@ BEGIN
          CLOSE CUR_PICKDETAIL
          DEALLOCATE CUR_PICKDETAIL     
       END    
+      
+      --(Wan03) - START
+      IF @@TRANCOUNT = 0
+      BEGIN 
+         BEGIN TRAN
+      END
+
+      SET @CUR_DELPICKSLIP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT tph.PickHeaderKey
+      FROM @t_UnAllocate AS tph
+      WHERE tph.PickHeaderKey <> ''
+      AND NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL AS p WITH (NOLOCK) WHERE p.OrderKey = tph.Orderkey)
+      ORDER BY tph.Orderkey
+      
+      OPEN @CUR_DELPICKSLIP
+      
+      FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeaderKey
+      
+      WHILE @@FETCH_STATUS <> -1 AND @n_continue IN (1,2)
+      BEGIN
+         IF EXISTS (SELECT 1 FROM dbo.PackHeader AS ph WITH (NOLOCK) WHERE ph.PickSlipNo = @c_PickHeaderKey AND ph.[Status] < '9')
+         BEGIN
+            IF EXISTS (SELECT 1 FROM dbo.PackDetail AS pd WITH (NOLOCK) WHERE pd.PickSlipNo = @c_PickHeaderKey)
+            BEGIN
+               ;WITH delpack AS ( SELECT pd.PickSlipNo, pd.CartonNo, pd.LabelNo, pd.LabelLine 
+                                    FROM dbo.PackDetail AS pd WITH (NOLOCK)
+                                    WHERE pd.PickSlipNo = @c_PickHeaderKey  
+                                  )
+               DELETE p FROM dbo.PackDetail AS p WITH (ROWLOCK)
+               JOIN delpack AS d ON p.PickSlipNo = d.PickSlipNo AND p.CartonNo = d.CartonNo 
+                                 AND p.LabelNo = d.LabelNo AND p.LabelLine = d.LabelLine    
+            
+               SET @n_err =  @@ERROR 
+
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_continue = 3  
+                  SET @c_errmsg = ERROR_MESSAGE()
+                  SET @n_err = 551809
+                  SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete PackDetail fail. (lsp_Unallocation_Wrapper)' + ' ( SQLSvr MESSAGE=' + @c_errmsg + ' ) ' 
+               END
+            END 
+            
+            IF @n_continue IN (1,2) 
+            BEGIN      
+               DELETE FROM dbo.PackHeader WITH (ROWLOCK) WHERE PickSlipNo = @c_PickHeaderKey AND [Status] < '9'
+            
+               SET @n_err =  @@ERROR 
+
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_continue = 3  
+                  SET @c_errmsg = ERROR_MESSAGE()
+                  SET @n_err = 551810
+                  SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete Packheader fail. (lsp_Unallocation_Wrapper)' + ' ( SQLSvr MESSAGE=' + @c_errmsg + ' ) ' 
+               END
+            END
+         END
+        
+         IF @n_continue IN (1,2) AND EXISTS (SELECT 1 FROM dbo.PickHeader AS ph WITH (NOLOCK) WHERE ph.PickHeaderKey = @c_PickHeaderKey)
+         BEGIN 
+            DELETE dbo.PickHeader WITH (ROWLOCK) WHERE PickHeaderKey = @c_PickHeaderKey 
+         
+            IF @n_err <> 0
+            BEGIN
+               SET @n_continue = 3  
+               SET @c_errmsg = ERROR_MESSAGE()
+               SET @n_err = 551811
+               SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete PickHeader fail. (lsp_Unallocation_Wrapper)' + ' ( SQLSvr MESSAGE=' + @c_errmsg + ' ) ' 
+            END
+         END
+
+         FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeaderKey      
+      END
+      CLOSE @CUR_DELPICKSLIP
+      DEALLOCATE @CUR_DELPICKSLIP
+      --(Wan03) - END
+    
    END TRY  
+  
    BEGIN CATCH
       SET @n_Continue = 3                       --(Wan01)
       SET @c_ErrMsg = ERROR_MESSAGE()           --(Wan01)      
@@ -241,12 +456,12 @@ BEGIN
    BEGIN
       SET @n_Continue = 3 
       ROLLBACK TRAN
-   END 
-    
+   END  
+   
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  
       SELECT @b_success = 0  
-      IF @n_starttcnt = 0 AND @@TRANCOUNT > @n_starttcnt             ---(Wan02)        
+      IF @n_starttcnt = 0 AND @@TRANCOUNT > @n_starttcnt          --(Wan02)           
       BEGIN  
          ROLLBACK TRAN  
       END  
@@ -259,7 +474,7 @@ BEGIN
       END  
       execute nsp_logerror @n_err, @c_errmsg, 'lsp_Unallocation_Wrapper'  
       --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012 --(Wan01)  
-      --RETURN                                                    --(Wan02) 
+      --RETURN                                                    --(Wan02)
    END  
    ELSE  
    BEGIN  
@@ -268,14 +483,14 @@ BEGIN
       BEGIN  
          COMMIT TRAN  
       END  
-      --RETURN                                                    --(Wan02) 
+      --RETURN                                                    --(Wan02)
    END 
-   
-   WHILE @@TRANCOUNT < @n_starttcnt                               --(Wan02) 
-   BEGIN  
-      BEGIN TRAN  
-   END  
-   REVERT                                                        --(Wan01) - Move Down             
+
+   WHILE @@TRANCOUNT < @n_starttcnt                               --(Wan02)
+   BEGIN
+      BEGIN TRAN
+   END                                                            
+   REVERT                                                         --(Wan01) - Move Down             
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Unallocation_Wrapper] TO nSQL 
