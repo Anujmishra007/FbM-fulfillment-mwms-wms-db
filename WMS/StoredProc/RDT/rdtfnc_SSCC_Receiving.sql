@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2021-12-09 1.0  James    WMS-18515. Created                          */
 /* 17-03-2022 1.1  Leong    JSM-57674 - Add RDTGetConfig                */
+/* 2022-04-05 1.2  YeeKung  WMS-19352 Add ExtendedInfo (yeekung01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdtfnc_SSCC_Receiving (
@@ -267,6 +268,10 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig(@nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+
+   SET @cExtendedInfoSP = rdt.RDTGetConfig(@nFunc, 'ExtendedInfoSP', @cStorerKey)
+   IF @cExtendedInfoSP = '0'
+      SET @cExtendedInfoSP = ''
 
    -- Prep next screen var
    SET @cOutField01 = '' -- SSCC
@@ -584,6 +589,71 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cExtendedInfo =''
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cSSCC, @cLOC, @cID, @cSKU, @nQTY, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @cOption, @dArriveDate, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cFacility     NVARCHAR( 5),  ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cReceiptKey   NVARCHAR( 10), ' +
+               '@cSSCC         NVARCHAR( 20), ' +
+               '@cLOC          NVARCHAR( 20), ' +
+               '@cID           NVARCHAR( 18), ' +
+               '@cSKU          NVARCHAR( 20), ' +
+               '@nQTY          INT,           ' +
+               '@cLottable01   NVARCHAR( 18), ' +
+               '@cLottable02   NVARCHAR( 18), ' +
+               '@cLottable03   NVARCHAR( 18), ' +
+               '@dLottable04   DATETIME,      ' +
+               '@dLottable05   DATETIME,      ' +
+               '@cLottable06   NVARCHAR( 30), ' +
+               '@cLottable07   NVARCHAR( 30), ' +
+               '@cLottable08   NVARCHAR( 30), ' +
+               '@cLottable09   NVARCHAR( 30), ' +
+               '@cLottable10   NVARCHAR( 30), ' +
+               '@cLottable11   NVARCHAR( 30), ' +
+               '@cLottable12   NVARCHAR( 30), ' +
+               '@dLottable13   DATETIME,      ' +
+               '@dLottable14   DATETIME,      ' +
+               '@dLottable15   DATETIME,      ' +
+               '@cOption       NVARCHAR( 1),  ' +
+               '@dArriveDate   DATETIME,      ' +
+               '@cExtendedInfo NVARCHAR(20)  OUTPUT, ' +
+               '@nErrNo        INT           OUTPUT,   ' +
+               '@cErrMsg       NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cSSCC, @cLOC, @cID, @cSKU, @nQTY,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cOption, @dArriveDate, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Quit
+            END
+         END
+      END
+
+
       SELECT @nTtl_RCVQty = SUM( QtyExpected - BeforeReceivedQty)
       FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
@@ -595,6 +665,7 @@ BEGIN
          --prepare next screen variable
          SET @cOutField01 = @cReceiptkey
          SET @cOutField02 = ''
+         SET @cOutField03 =@cExtendedInfo
 
          -- Go to next screen
          SET @nScn = @nScn_Finalize
@@ -630,6 +701,7 @@ BEGIN
          SET @cOutField05 = SUBSTRING( @cSKUDesc, 21, 20)
          SET @cOutField06 = CAST( @nTTL_SCANNED AS NVARCHAR( 3)) + '/' + CAST( @nTTL_SSCC AS NVARCHAR( 3))
          SET @cOutField07 = ''
+         SET @cOutField08=@cExtendedInfo
 
          SET @cSSCC = ''
       END

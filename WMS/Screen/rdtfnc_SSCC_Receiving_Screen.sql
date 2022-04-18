@@ -1,4 +1,4 @@
-\uFEFF-- 5990 = SSCC screen
+-- 5990 = SSCC screen
 DELETE rdt.RDTScn WHERE Scn = 5990 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5990, 'ENG'
    ,@cLine01 = N'SSCC:'
@@ -11,6 +11,7 @@ EXECUTE rdt.rdtAddScn 5990, 'ENG'
    ,@cLine08 = N'TTL/SCANNED: %07d06'
    ,@cLine10 = N'SSCC:'
    ,@cLine11 = N'%30i07'
+   ,@cLine13 = N'%20d08' --WMS-19352 (yeekung01)
    ,@cLine14 = N'%e'
  
 -- 5991 = Confirm finalize screen
@@ -21,5 +22,6 @@ EXECUTE rdt.rdtAddScn 5991, 'ENG'
    ,@cLine04 = N'OPTION %01i02'
    ,@cLine06 = N'1 = YES'
    ,@cLine07 = N'9 = NO'
+   ,@cLine13 = N'%20d03' --WMS-19352 (yeekung01)
    ,@cLine14 = N'%e'
  
