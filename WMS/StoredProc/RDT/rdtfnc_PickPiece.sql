@@ -349,9 +349,11 @@ BEGIN
       @nStep       = @nStep        
         
    -- Prepare next screen var        
- SET @cOutField01 = '' -- PickSlipNo        
- SET @nTtlBalQty  = 0            
- SET @nBalQty      = 0            
+   SET @cOutField01 = '' -- PickSlipNo        
+   SET @nTtlBalQty  = 0            
+   SET @nBalQty      = 0  
+   SET @cExtDescr1 = ''      
+   SET @cExtDescr2 = ''
         
    -- Go to PickSlipNo screen        
    SET @nScn = 4640        
