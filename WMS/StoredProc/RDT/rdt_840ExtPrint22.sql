@@ -6,7 +6,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_840ExtPrint21                                   */
+/* Store procedure: rdt_840ExtPrint22                                   */
 /* Purpose: Print label after pick = pack                               */
 /*                                                                      */
 /* Modifications log:                                                   */
@@ -15,7 +15,7 @@ GO
 /* 2022-03-25 1.0  yeekung    WMS-19302 Created                         */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint21] (
+CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint22] (
    @nMobile     INT,
    @nFunc       INT, 
    @cLangCode   NVARCHAR( 3), 
@@ -134,7 +134,7 @@ AS
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
                      @cShipLabel, -- Report type
                      @tSHIPPLABEL, -- Report params
-                     'rdt_840ExtPrint21', 
+                     'rdt_840ExtPrint22', 
                      @nErrNo  OUTPUT,
                      @cErrMsg OUTPUT 
                END
@@ -153,7 +153,7 @@ AS
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter, 
                      @cPackList, -- Report type
                      @tDELNOTES, -- Report params
-                     'rdt_840ExtPrint21', 
+                     'rdt_840ExtPrint22', 
                      @nErrNo  OUTPUT,
                      @cErrMsg OUTPUT 
                END
@@ -170,5 +170,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_840ExtPrint21 TO NSQL
+GRANT EXECUTE ON rdt.rdt_840ExtPrint22 TO NSQL
 GO
