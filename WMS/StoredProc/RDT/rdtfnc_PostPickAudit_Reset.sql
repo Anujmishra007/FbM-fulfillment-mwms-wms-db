@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_PostPickAudit_Reset]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdtfnc_PostPickAudit_Reset]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -35,9 +32,10 @@ GO
 /* 08-10-2018 1.7  TungGH     Performance                               */  
 /* 11-08-2020 1.8  James      INC1244432 - Bug fix (james02)            */  
 /* 08-12-2021 1.9  James      WMS-18457 Add cfg skip step sku(james03)  */  
+/* 05-04-2022 2.0  yeekung    WMS-19378 Add extendedvalidate (yeekung01)*/
 /************************************************************************/  
   
-CREATE PROC rdt.rdtfnc_PostPickAudit_Reset (  
+CREATE OR ALTER PROC rdt.rdtfnc_PostPickAudit_Reset (  
    @nMobile    int,  
    @nErrNo     int  OUTPUT,  
    @cErrMsg    NVARCHAR( 20) OUTPUT  
@@ -89,6 +87,11 @@ DECLARE
    @cPPACartonIDByPickDetailCaseID  NVARCHAR( 1), -- (ChewKP01)   
    @cExtendedUpdateSP               NVARCHAR( 20),  
    @cFlowThruStepSKU                NVARCHAR( 1),  
+   @cExtendedValidateSP             NVARCHAR( 20), --(yeekung01)
+      
+   @cWhere                          NVARCHAR( 100),  
+   @cSQL                            NVARCHAR( MAX),  
+   @cSQLParam                       NVARCHAR( MAX),  
   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
@@ -136,6 +139,7 @@ SELECT
    @cPPACartonIDByPickDetailCaseID  = V_String9,  
    @cExtendedUpdateSP               = V_String10,  
    @cFlowThruStepSKU  = V_String11,  
+   @cExtendedValidateSP = V_String12,
   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  
@@ -181,6 +185,11 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorer)  
    IF @cExtendedUpdateSP = '0'  
       SET @cExtendedUpdateSP = ''  
+
+   -- (james01)  
+   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorer)  
+   IF @cExtendedValidateSP = '0'  
+      SET @cExtendedValidateSP = ''  
   
    -- (james03)  
    SET @cFlowThruStepSKU  = rdt.rdtGetConfig( @nFunc, 'FlowThruStepSKU', @cStorer)  
@@ -495,6 +504,40 @@ BEGIN
             END  
          END  
       END  
+
+      -- Extended validate  
+      IF @cExtendedValidateSP <> ''  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,   
+                 @cSKU, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
+            SET @cSQLParam =  
+               '@nMobile      INT,       ' +  
+               '@nFunc        INT,       ' +  
+               '@cLangCode    NVARCHAR( 3),  ' +  
+               '@nStep        INT,       ' +  
+               '@nInputKey    INT,       '     +  
+               '@cStorerKey   NVARCHAR( 15), ' +  
+               '@cRefNo       NVARCHAR( 10), ' +  
+               '@cPickSlipNo  NVARCHAR( 10), ' +  
+               '@cLoadKey     NVARCHAR( 10), ' +  
+               '@cOrderKey    NVARCHAR( 10), ' +  
+               '@cDropID      NVARCHAR( 20), ' +  
+               '@cSKU         NVARCHAR( 20), ' +  
+               '@cOption      NVARCHAR( 1),  ' +  
+               '@nErrNo       INT OUTPUT,  ' +  
+               '@cErrMsg      NVARCHAR( 20) OUTPUT'  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,   
+               @cSKU, '', @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0  
+               GOTO STEP_1_Fail  
+         END  
+      END  
   
       -- Prepare next screen var  
       SET @cSKU = ''  
@@ -746,11 +789,6 @@ BEGIN
          GOTO Quit  
       END  
   
-      -- Option = '1'  
-      DECLARE @cWhere      NVARCHAR( 100)  
-      DECLARE @cSQL        NVARCHAR( MAX)  
-      DECLARE @cSQLParam   NVARCHAR( MAX)  
-  
       SET @cWhere = ''  
       SET @cSQL = ''  
   
@@ -947,6 +985,7 @@ BEGIN
       V_String9 = @cPPACartonIDByPickDetailCaseID,  
       V_String10 = @cExtendedUpdateSP,  
       V_String11 = @cFlowThruStepSKU,  
+      V_String12 = @cExtendedValidateSP,
         
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,  

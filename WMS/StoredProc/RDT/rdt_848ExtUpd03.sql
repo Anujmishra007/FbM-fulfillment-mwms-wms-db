@@ -1,11 +1,9 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_848ExtUpd03]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_848ExtUpd03]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO   
+GO 
+  
 /************************************************************************/  
 /* Store procedure: rdt_848ExtUpd03                                     */  
 /*                                                                      */  
@@ -13,9 +11,10 @@ GO
 /*                                                                      */  
 /* Date        Rev  Author      Purposes                                */  
 /* 2021-12-02  1.0  James       WMS-18457. Created                      */  
+/* 2022-04-04  1.1  yeekung     WMS-19378 Add eventlog (yeekung01)      */
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdt_848ExtUpd03] (  
+CREATE OR ALTER PROC [RDT].[rdt_848ExtUpd03] (  
    @nMobile      INT,   
    @nFunc        INT,   
    @cLangCode    NVARCHAR( 3),   
@@ -41,7 +40,9 @@ BEGIN
   
    DECLARE @nTranCount       INT,  
            @cLabelLine        NVARCHAR( 5),  
-           @nCartonNo         INT  
+           @nCartonNo         INT,
+           @cUsername         NVARCHAR(20),
+           @cFacility         NVARCHAR(20)
   
    SET @nTranCount = @@TRANCOUNT  
    BEGIN TRAN  -- Begin our own transaction  
@@ -51,6 +52,11 @@ BEGIN
    BEGIN  
       IF @nStep = 4  
       BEGIN  
+         SELECT @cFacility=facility,
+               @cUsername=username
+         FROM RDT.RDTMOBREC (NOLOCK)
+         WHERE Mobile=@nMobile
+         
          -- Get Orders info  
          SELECT TOP 1 @cPickSlipNo = PickSlipNo   
          FROM dbo.PackDetail WITH (NOLOCK)   
@@ -92,7 +98,18 @@ BEGIN
             FETCH NEXT FROM CUR_DELPACKD INTO @nCartonNo, @cLabelLine  
          END  
          CLOSE CUR_DELPACKD  
-         DEALLOCATE CUR_DELPACKD  
+         DEALLOCATE CUR_DELPACKD
+         
+          EXEC RDT.rdt_STD_EventLog
+           @cActionType   = '3', -- insert Function
+           @cUserID       = @cUserName,
+           @nMobileNo     = @nMobile,
+           @nFunctionID   = @nFunc,
+           @cFacility     = @cFacility,
+           @cStorerKey    = @cStorerKey,
+           @nStep         = @nStep,
+           @cCartonID     = @cDropID,
+           @cDropID       = @cDropID
       END  
   
    END  
@@ -105,13 +122,3 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
          COMMIT TRAN  
 END  
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [rdt].[rdt_848ExtUpd03] TO NSQL
-GO  
-   
