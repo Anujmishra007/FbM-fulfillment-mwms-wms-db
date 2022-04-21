@@ -12,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 1.7                                                       */
+/* PVCS Version: 1.9                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -34,6 +34,8 @@ GO
 /* 2022-01-20  Wan06    1.6   DevOps Combine Script                        */
 /* 2022-03-16  Wan07    1.7   LFWM-3438 - UAT-CN SCE finalize receipt stuck*/
 /*                            Fix InifinityLoop in getting POKey           */
+/* 2022-03-28  SPChin   1.8   JSM-52407 Remove Error Code                  */
+/* 2022-03-18  SPChin   1.9   JSM-56642 Bug Fixed                          */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
@@ -147,7 +149,8 @@ BEGIN
          , @n_SumBeforeReceivedQty     INT            = 0
          , @n_SumFreeGoodQtyReceived   INT            = 0
 
-         , @c_ExternReceiptKey         NVARCHAR(20)   = ''
+         --, @c_ExternReceiptKey         NVARCHAR(20)   = ''	--JSM-56642
+         , @c_ExternReceiptKey         NVARCHAR(50)   = ''		--JSM-56642
          , @c_ExternLineNo             NVARCHAR(20)   = ''
          , @c_POKey                    NVARCHAR(10)   = ''
          , @c_Packkey                  NVARCHAR(10)   = ''
@@ -613,8 +616,7 @@ BEGIN
 
          IF @c_ShipmentNoCfg = '1'  AND @c_ShipmentNo = ''
          BEGIN
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                        + ': Shipment Number Empty. Do you still want to proceed finalize?'
+            SET @c_ErrMsg  = 'Shipment Number Empty. Do you still want to proceed finalize?'	--JSM-52407
                         
             --(Wan06) - START
             SET @n_WarningNo = 1
@@ -1184,6 +1186,37 @@ BEGIN
          VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --(Wan06) -END
       END
+
+      --JSM-56642 Start
+      IF @c_AllowOneASNPerPO = 1
+			BEGIN
+				DECLARE @c_ReceiptKey2 NVARCHAR(10)
+				
+				SET @c_ReceiptKey2 = ''
+				
+				SELECT @c_ReceiptKey2 = R2.Receiptkey
+				FROM RECEIPT R WITH (NOLOCK)              
+			  JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)              
+			  JOIN PO PO WITH (NOLOCK) ON (R.ExternReceiptKey = PO.ExternPOKey AND RD.POKey = PO.POKey)  
+			  LEFT OUTER JOIN RECEIPT R2 WITH (NOLOCK) ON (R2.ExternReceiptKey = PO.ExternPOKey AND
+											          										 R2.StorerKey = R.StorerKey AND
+											          										 R2.Receiptkey <> R.Receiptkey)                      
+			  WHERE R.ReceiptKey = @c_ReceiptKey  
+			  AND   R.StorerKey = @c_Storerkey
+			  
+			  IF @c_ReceiptKey2 <> ''
+			  BEGIN
+			  		SET @n_continue= 3
+			  		SET @n_err     = 550049
+			  		SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
+			  									 + 'Only Allow One PO For One ASN'
+			  		               + 'ExternPoKey existed in Receipt #:' + @c_ReceiptKey + ' (lsp_FinalizeReceipt_Wrapper) |' + @c_ReceiptKey
+			  		
+			  		INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+			  		VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_Storerkey, '', 'ERROR', 0, @n_err, @c_errmsg)
+			  END
+			END
+			--JSM-56642 End      
 
       IF @c_doctype = 'A'
       BEGIN

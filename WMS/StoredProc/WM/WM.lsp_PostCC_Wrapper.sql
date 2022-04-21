@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_PostCC_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_PostCC_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,16 +14,17 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */
-/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/  
+/* Date        Author   Ver   Purposes                                   */
+/* 2021-02-05  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
+/* 2022-04-13  Wan01    1.2   Fixed infinity Loop in COMMIT TRAN         */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_PostCC_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_PostCC_Wrapper]  
    @c_StockTakeKey      NVARCHAR(10)
 ,  @b_Success           INT          = 1   OUTPUT   
 ,  @n_Err               INT          = 0   OUTPUT
@@ -185,11 +181,18 @@ BEGIN
    END CATCH     
    --(mingle01) - END
 EXIT_SP:
+   --(Wan01) - START
+   IF (XACT_STATE()) = -1                                      
+   BEGIN
+      SET @n_Continue = 3
+      ROLLBACK TRAN
+   END 
+   --(Wan01) - END
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt    --(Wan01)
       BEGIN
          ROLLBACK TRAN
       END
