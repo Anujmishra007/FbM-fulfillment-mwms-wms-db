@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_CommecialInvoice_03_sg]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_CommecialInvoice_03_sg]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /*                                                                      */      
 /* Called By: report dw = r_dw_commercialinvoice_03_sg                  */      
 /*                                                                      */      
-/* PVCS Version: 3.1                                                    */      
+/* PVCS Version: 3.3                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -60,13 +55,16 @@ GO
 /* 06-Oct-2021  WLChooi   3.0   DevOps Combine Script                   */
 /* 06-Oct-2021  WLChooi   3.1   WMS-18105 - Modify column logic (WL07)  */
 /* 06-Dec-2021  WLChooi   3.2   Bug Fix for WMS-18105 (WL08)            */
+/* 14-Dec-2021  WLChooi   3.3   WMS-18504 - Change print logic based on */
+/*                              Orders.SpecialHandling (WL09)           */
 /************************************************************************/      
       
-CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (      
+CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (      
     @c_MBOLKey  NVARCHAR(21)        
    ,@c_type     NVARCHAR(10)   = 'H1'      
    ,@c_Orderkey NVARCHAR(10)   = ''  -- Wan01      
-   ,@c_ShipType NVARCHAR(10)   = ''  -- Wan01      
+   ,@c_ShipType NVARCHAR(10)   = ''  -- Wan01   
+   ,@c_SHPFlag  NVARCHAR(10)   = ''  -- WL09   
  )       
  AS       
  BEGIN      
@@ -111,15 +109,26 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
         ,@c_UPDATECCOM    NVARCHAR(1)     -- WL01      
         ,@c_getconsignee  NVARCHAR(45)    --CS06      
     
-        ,@c_OrderKey_Inv  NVARCHAR(11)    --(Wan01)   
+        ,@c_OrderKey_Inv  NVARCHAR(50)    --(Wan01)   --WL09   
         ,@c_NSQLCountry   NVARCHAR(10)    --WL06  
+
+        ,@c_SpecialHandling   NVARCHAR(250) = ''   --WL09
+        ,@c_SplitFlag         NVARCHAR(10)  = 'N'  --WL09
+        ,@c_CombineStr        NVARCHAR(4000) = ''  --WL09
+        ,@c_AllSHPFlag        NVARCHAR(250) = ''   --WL09
+        ,@c_CCountry          NVARCHAR(100) = ''   --WL09
+        ,@n_Continue          INT = 1         --WL09
+        ,@n_Err               INT = 0         --WL09
+        ,@b_Success           INT = 1         --WL09
+        ,@n_Starttcnt         INT = @@TRANCOUNT   --WL09
+        ,@c_Errmsg            NVARCHAR(255)   --WL09
           
     --WL06 START  
     SELECT @c_NSQLCountry = NSQLValue  
     FROM NSQLCONFIG (NOLOCK)  
     WHERE ConfigKey = 'Country'  
     --WL06 END     
-             
+        
     CREATE TABLE #TEMP_CommINV03      
           (  Rowid            INT IDENTITY(1,1),      
              MBOLKey          NVARCHAR(20) NULL,      
@@ -154,8 +163,8 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
              StorerKey        NVARCHAR(15) NULL,      
              SKU              NVARCHAR(20) NULL,      
              Descr            NVARCHAR(90) NULL,      
-             QtyShipped       int NULL,      
-             UnitPrice        decimal(10,2) NULL,      
+             QtyShipped       INT NULL,      
+             UnitPrice        DECIMAL(10,2) NULL,      
              Currency         NVARCHAR(18) NULL,      
              ShipMode         NVARCHAR(18) NULL,      
              SONo             NVARCHAR(30) NULL,      
@@ -177,10 +186,12 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
              TTLPLT           INT NULL,      
              Orderkey         NVARCHAR(20)  NULL,      
              Madein           NVARCHAR(250) NULL      
-          ,  OrderKey_Inv     NVARCHAR(11)  NULL       --(Wan01)        
+          ,  OrderKey_Inv     NVARCHAR(20)  NULL       --(Wan01)   --WL09        
           ,  FreightCharges   INT           NULL       --WL03  
           ,  ShowFOB          NVARCHAR(1)   NULL       --WL03  
           ,  ShowRemark       NVARCHAR(1)   NULL       --WL06  
+          ,  InvResetPageNo   NVARCHAR(100) NULL       --WL09
+          ,  ResetPageNoFlag  NVARCHAR(10)  NULL       --WL09
           )      
                 
     --WL01 Start      
@@ -190,7 +201,7 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
     SKU            NVARCHAR(20) NULL,      
     lot11          NVARCHAR(50) NULL,      
     company        NVARCHAR(45) NULL      
- ,  OrderKey_Inv     NVARCHAR(11)                     --(Wan01)         
+ ,  OrderKey_Inv     NVARCHAR(20)                     --(Wan01)   --WL09         
     )      
     
     SET @c_UPDATECCOM = 'N'                    
@@ -228,7 +239,236 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
        WHERE MBD.MBolKey = @c_MBOLKey      
     END         
     
-    --(Wan01) - END       
+    --(Wan01) - END    
+    
+   --WL09 S
+   --Cater for SHP = 'O' if called from DW for SHP = 'D', will not mixed
+   IF @c_SHPFlag = 'D'
+   BEGIN
+      CREATE TABLE #TMP_OHSHP (
+         SHP   NVARCHAR(100)
+      )
+
+      INSERT INTO #TMP_OHSHP
+      SELECT DISTINCT ISNULL(ORDERS.SpecialHandling,'')
+      FROM ORDERS (NOLOCK)
+      WHERE ORDERS.MBOLKey = @c_MBOLKey
+
+      IF EXISTS (SELECT 1 FROM #TMP_OHSHP
+                 WHERE SHP = 'O')
+      BEGIN
+         SET @c_SHPFlag = ''
+      END
+   END
+
+   IF ISNULL(@c_SHPFlag,'') <> '' AND ISNULL(@c_ShipType,'') = ''
+   BEGIN
+      SELECT @c_CCountry = OH.C_Country   --1 MBOL will not mix C_Country
+      FROM ORDERS OH (NOLOCK)
+      WHERE OH.MBOLKey = @c_MBOLKey
+
+      SET @c_AllSHPFlag = CAST(STUFF((SELECT DISTINCT ',' + RTRIM(ISNULL(OH.SpecialHandling,'')) 
+                                      FROM ORDERS OH (NOLOCK)
+                                      WHERE OH.MBOLKey = @c_MBOLKey
+                                      AND OH.C_Country IN ('ID','TH','VN','MY')
+                                      ORDER BY ',' + RTRIM(ISNULL(OH.SpecialHandling,'')) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(100))
+
+      IF @c_CCountry IN ('ID','TH','VN')
+      BEGIN
+         --Maximum print 2 reports, as SHP E & N will be combined, only SHP D will be splitted
+         IF @c_SHPFlag = 'N' AND @c_AllSHPFlag <> 'N'
+         BEGIN
+            SET @n_Continue = 3
+            SET @c_Errmsg = CONVERT(CHAR(250),@n_Err)
+            SET @n_Err = 69500
+            SET @c_Errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': No Report will be printed. Special Handling = ''N'' is already printed on previous RCM (isp_CommecialInvoice_03_sg)' 
+                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+            GOTO QUIT
+         END
+      END
+      ELSE IF @c_CCountry IN ('MY')
+      BEGIN
+         --Maximum print 3 reports, as SHP D, E, N will be splitted
+         SET @n_Continue = 1
+      END
+
+      IF NOT EXISTS (SELECT 1
+                     FROM dbo.fnc_DelimSplit(',', @c_AllSHPFlag) FDS
+                     WHERE FDS.ColValue IN (SELECT DISTINCT FDS1.ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', @c_SHPFlag) FDS1))
+      BEGIN
+         SET @n_Continue = 3
+         SET @c_Errmsg = CONVERT(CHAR(250),@n_Err)
+         SET @n_Err = 69501
+         SET @c_Errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': No Report will be printed. Special Handling = ''' 
+                       + UPPER(@c_SHPFlag) + ''' is not found (isp_CommecialInvoice_03_sg)' 
+                       + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+         GOTO QUIT
+      END
+   END
+
+   CREATE TABLE #TMP_SHandling (
+      Orderkey             NVARCHAR(10)
+    , OriginalSHandling    NVARCHAR(100)
+    , CombineSHandling     NVARCHAR(100)
+    , SHandlingFlag        NVARCHAR(10)
+    , Country              NVARCHAR(100)
+   )
+
+   IF @c_ShipType <> 'L'
+   BEGIN
+      DECLARE CUR_SHandling CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT TOR.Orderkey
+      FROM #TEMP_Orderkey TOR
+      ORDER BY TOR.Orderkey
+      
+      OPEN CUR_SHandling
+      
+      FETCH NEXT FROM CUR_SHandling INTO @c_GetOrderKey
+      
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SELECT @c_GetCountry      = OH.C_Country
+              , @c_SpecialHandling = ISNULL(OH.SpecialHandling,'')
+         FROM ORDERS OH (NOLOCK)
+         WHERE OH.OrderKey = @c_GetOrderKey
+         
+         --IF @c_GetCountry = ''
+         IF @c_GetCountry IN ('ID','TH','VN','MY') AND @c_SpecialHandling IN ('D','E','N')
+         BEGIN
+            INSERT INTO #TMP_SHandling(Orderkey, OriginalSHandling, CombineSHandling, SHandlingFlag, Country)
+            VALUES(@c_GetOrderKey
+                 , @c_SpecialHandling
+                 , @c_SpecialHandling
+                 , 'N' 
+                 , @c_GetCountry
+               )
+            
+         END
+         ELSE
+         BEGIN
+            INSERT INTO #TMP_SHandling(Orderkey, OriginalSHandling, CombineSHandling, SHandlingFlag, Country)
+            VALUES(@c_GetOrderKey
+                 , ''
+                 , ''
+                 , '' 
+                 , @c_GetCountry
+               )
+         END
+      
+         FETCH NEXT FROM CUR_SHandling INTO @c_GetOrderKey
+      END
+      CLOSE CUR_SHandling
+      DEALLOCATE CUR_SHandling
+      
+      --For ORDERS.C_Country IN ('ID','TH','VN') - START
+      /*
+      DE  - Split & Reset Page No
+      DN  - Combine
+      EN  - Combine
+      NN  - Combine
+      DD  - Combine
+      EE  - Combine
+      DEN - Combine EN, Split D & Reset Page No
+      */
+      IF EXISTS (SELECT 1 FROM #TMP_SHandling TSH WHERE TSH.Country IN ('ID','TH','VN'))
+      BEGIN
+         SELECT @c_CombineStr = REPLACE(CAST(STUFF((SELECT DISTINCT ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) 
+                                                    FROM #TMP_SHandling TSH
+                                                    WHERE TSH.SHandlingFlag = 'N'
+                                                    AND TSH.Country IN ('ID','TH','VN')
+                                                    ORDER BY ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(100)), ',', '')
+         
+         --Combine all first
+         UPDATE #TMP_SHandling
+         SET CombineSHandling = @c_CombineStr
+         WHERE SHandlingFlag = 'N'
+         AND Country IN ('ID','TH','VN')
+         
+         --DEN - Combine EN, Split D & Reset Page No
+         IF EXISTS (SELECT 1 FROM #TMP_SHandling TSH WHERE TSH.CombineSHandling IN ('DEN') AND TSH.Country IN ('ID','TH','VN'))
+         BEGIN
+            SET @c_CombineStr = REPLACE(CAST(STUFF((SELECT DISTINCT ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) 
+                                                    FROM #TMP_SHandling TSH
+                                                    WHERE TSH.Country IN ('ID','TH','VN')
+                                                    AND TSH.OriginalSHandling IN ('E','N')
+                                                    ORDER BY ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(100)), ',', '')
+            
+            UPDATE #TMP_SHandling
+            SET CombineSHandling = CASE WHEN OriginalSHandling = 'D' THEN 'D' ELSE @c_CombineStr END
+              , SHandlingFlag = 'Y'
+            WHERE SHandlingFlag = 'N'
+            AND Country IN ('ID','TH','VN')
+            AND OriginalSHandling IN ('D','E','N')
+         
+            UPDATE #TMP_SHandling
+            SET CombineSHandling = REPLACE(CAST(STUFF((SELECT DISTINCT ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) 
+                                                       FROM #TMP_SHandling TSH
+                                                       WHERE TSH.Country IN ('ID','TH','VN')
+                                                       AND TSH.CombineSHandling IN ('EN')
+                                                       ORDER BY ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(100)), ',', '')
+            WHERE Country IN ('ID','TH','VN')
+            AND CombineSHandling IN ('EN')
+         END
+         
+         --DE  - Split & Reset Page No
+         IF EXISTS (SELECT 1 FROM #TMP_SHandling TSH WHERE TSH.CombineSHandling IN ('DE') AND TSH.Country IN ('ID','TH','VN'))
+         BEGIN
+            SET @c_CombineStr = REPLACE(CAST(STUFF((SELECT DISTINCT ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) 
+                                                    FROM #TMP_SHandling TSH
+                                                    WHERE TSH.Country IN ('ID','TH','VN')
+                                                    AND TSH.OriginalSHandling IN ('E')
+                                                    ORDER BY ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(100)), ',', '')
+            
+            UPDATE #TMP_SHandling
+            SET CombineSHandling = CASE WHEN OriginalSHandling = 'D' THEN 'D' ELSE @c_CombineStr END
+              , SHandlingFlag = 'Y'
+            WHERE SHandlingFlag = 'N'
+            AND Country IN ('ID','TH','VN')
+            AND OriginalSHandling IN ('D','E')
+         END
+         --For ORDERS.C_Country IN ('ID','TH','VN') - END
+      END
+      ELSE IF EXISTS (SELECT 1 FROM #TMP_SHandling TSH WHERE TSH.Country IN ('MY'))
+      BEGIN
+         --For ORDERS.C_Country IN ('MY') - START
+         /*
+         DE  - Split & Reset Page No
+         DN  - Split & Reset Page No
+         EN  - Split & Reset Page No
+         NN  - Combine
+         DD  - Combine
+         EE  - Combine
+         DEN - Split & Reset Page No
+         */
+         SELECT @c_CombineStr = REPLACE(CAST(STUFF((SELECT DISTINCT ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) 
+                                                    FROM #TMP_SHandling TSH
+                                                    WHERE TSH.SHandlingFlag = 'N'
+                                                    AND TSH.Country IN ('MY')
+                                                    ORDER BY ',' + RTRIM(ISNULL(TSH.OriginalSHandling,'')) FOR XML PATH('')),1,1,'' ) AS NVARCHAR(100)), ',', '')
+         
+         --Combine all first
+         UPDATE #TMP_SHandling
+         SET CombineSHandling = @c_CombineStr
+         WHERE SHandlingFlag = 'N'
+         AND Country IN ('MY')
+
+         UPDATE #TMP_SHandling
+         SET CombineSHandling = OriginalSHandling
+           , SHandlingFlag = 'Y'
+         WHERE SHandlingFlag = 'N'
+         AND Country IN ('MY')
+         AND CombineSHandling IN ('DEN','DE','DN','EN')
+         --For ORDERS.C_Country IN ('MY') - END
+      END
+
+      SET @c_GetCountry  = ''
+      SET @c_GetOrderKey = ''
+         
+      IF @c_type = 'DBUG'
+         SELECT 'Overall',* FROM #TMP_SHandling TSH
+   END
+   --WL09 E   
 
     INSERT INTO #TEMP_CommINV03      
     SELECT  MBOL.Mbolkey AS MBOLKEY,      
@@ -403,14 +643,19 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
            ,ORDERS.OrderGroup AS OrdGrp      
            ,'' AS palletkey,0,ORDERS.Orderkey,'' AS madein          --WL01       
            --CS08 START   
-           --, OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN ORDERS.Orderkey ELSE '' END  --(Wan01)      
-             ,OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN   ORDERS.Orderkey   
-                                  WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'O' THEN  MBOL.Mbolkey   
-                                  WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'D' THEN  'D' + MBOL.Mbolkey    
-                                  WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'E' THEN  'E' + MBOL.Mbolkey  
-                                  WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'N' THEN  'N' + MBOL.Mbolkey   
-                                   ELSE '' END    
+           --, OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN ORDERS.Orderkey ELSE '' END  --(Wan01)
+           --WL09 S     
+           ,OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN ORDERS.Orderkey   
+                                WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'O' AND TSH.SHandlingFlag = '' THEN  MBOL.Mbolkey   
+                                WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'D' AND TSH.SHandlingFlag = '' THEN  'D' + MBOL.Mbolkey    
+                                WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'E' AND TSH.SHandlingFlag = '' THEN  'E' + MBOL.Mbolkey  
+                                WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'N' AND TSH.SHandlingFlag = '' THEN  'N' + MBOL.Mbolkey   
+                                WHEN @c_ShipType = '' AND ORDERS.SpecialHandling IN ('D','E','N') AND TSH.SHandlingFlag = 'N' THEN TSH.CombineSHandling + MBOL.Mbolkey 
+                                --WHEN @c_ShipType = '' AND TSH.SpecialHandling    = 'D' AND TSH.SHandlingFlag = 'Y' THEN  'D' + MBOL.Mbolkey  
+                                --WHEN @c_ShipType = '' AND TSH.SpecialHandling   <> 'D' AND TSH.SHandlingFlag = 'Y' THEN  TSH.SpecialHandling + MBOL.Mbolkey   
+                                ELSE '' END    
              --CS08 END    
+           --WL09 E
            , FreightCharges = CASE WHEN ISNUMERIC(ISNULL(CL.Short,0)) = 1 THEN ISNULL(CL.Short,0) ELSE 0 END --WL03  
            , ShowFOB = CASE WHEN ISNULL(CL.Short,'') = '' THEN 'N' ELSE 'Y' END                              --WL03  
            --WL06 START  
@@ -418,7 +663,9 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
                                 AND ORDERS.ConsigneeKey IN ('4925968') AND @c_NSQLCountry = 'CN'  
                                 THEN 'Y' ELSE 'N' END  
            --WL06 END  
-           /*CS05 end*/      
+           /*CS05 end*/   
+           , InvResetPageNo  =  CASE WHEN @c_ShipType = '' AND TSH.SHandlingFlag = 'Y' THEN TSH.CombineSHandling + MBOL.Mbolkey END     --WL09  
+           , ResetPageNoFlag =  CASE WHEN ORDERS.C_Country IN ('ID','TH','VN','MY') AND TSH.SHandlingFlag = 'Y' THEN 'Y' ELSE 'N' END   --WL09  
            FROM MBOL WITH (NOLOCK)      
            INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)      
            INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)      
@@ -458,6 +705,7 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
                         AND (Storerkey = ORDERS.Storerkey OR Storerkey = '')  
                         ORDER BY CASE WHEN Storerkey = '' THEN 2 ELSE 1 END) AS CL2  
            --WL05 END                
+           LEFT JOIN #TMP_SHandling TSH ON TSH.Orderkey = ORDERS.OrderKey   --WL09
     WHERE MBOL.Mbolkey = @c_mbolkey      
     AND EXISTS (SELECT 1 FROM #TEMP_Orderkey TMP WHERE TMP.Orderkey = ORDERS.Orderkey)     --(Wan01)      
     GROUP BY  MBOL.Mbolkey ,      
@@ -526,6 +774,8 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
            ,CASE WHEN ISNUMERIC(ISNULL(CL.Short,0)) = 1 THEN ISNULL(CL.Short,0) ELSE 0 END --WL03  
            ,CASE WHEN ISNULL(CL.Short,'') = '' THEN 'N' ELSE 'Y' END                       --WL03  
            ,ORDERS.SpecialHandling  
+           ,TSH.CombineSHandling   --WL09
+           ,TSH.SHandlingFlag     --WL09
            --CS08 START  
            --,CASE WHEN @c_ShipType = 'L' THEN 'A' + ORDERS.Orderkey   
            --                       WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'O' THEN  MBOL.Mbolkey   
@@ -788,76 +1038,227 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
     
     DELETE FROM #TEMP_madein03      
     -- WL01 END      
-          
+    
     IF @c_type = 'H1' GOTO TYPE_H1         
     IF @c_type = 'S01' GOTO TYPE_S01      
     IF @c_type = 'S02' GOTO TYPE_S02      
            
        
-    TYPE_H1:      
+    TYPE_H1:  
+    
+      --WL09 S
+      IF @c_CCountry IN ('ID','TH','VN') AND @c_SHPFlag IN ('D','E')   --SHP N not included here since it will print together with SHP E
+      BEGIN
+         SELECT Rowid       
+             ,  MBOLKey                  
+             ,  pmtterm                  
+             ,  Lottable11               
+             ,  ExtPOKey                 
+             ,  OHUdf05                  
+             ,  ExternOrdKey             
+             ,  IDS_Company              
+             ,  IDS_Address1             
+             ,  IDS_Address2             
+             ,  IDS_Address3             
+             ,  IDS_Address4             
+             ,  IDS_Phone1               
+             ,  IDS_City                 
+             ,  BILLTO_Company           
+             ,  BILLTO_Address1          
+             ,  BILLTO_Address2          
+             ,  BILLTO_Address3          
+             ,  BILLTO_Address4          
+             ,  BILLTO_City              
+             ,  ShipTO_Company           
+             ,  ShipTO_Address1          
+             ,  ShipTO_Address2          
+             ,  ShipTO_Address3          
+             ,  ShipTO_Address4          
+             ,  ShipTO_City              
+             ,  ShipTO_Phone1            
+             ,  ShipTO_Contact1          
+             ,  ShipTO_Country           
+             ,  From_Country             
+             ,  StorerKey                
+             ,  SKU                      
+             ,  Descr                    
+             ,  QtyShipped               
+             ,  UnitPrice                
+             ,  Currency                 
+             ,  ShipMode                 
+             ,  SONo                     
+             ,  consigneekey             
+             ,  ODUDF05                  
+             ,  Taxtitle                 
+             ,  Amt                      
+             ,  TaxAmt                   
+             ,  TaxCurSymbol             
+             ,  TTLAmt                   
+             ,  ShipTitle             
+             ,  CON_Company            
+             ,  CON_Address1            
+             ,  CON_Address2           
+             ,  CON_Address3          
+             ,  CON_Address4           
+             ,  ORDGRP                
+             ,  PalletKey
+             ,  TTLPLT
+             ,  Madein      
+             ,  ShipType = @c_ShipType      
+             ,  OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END   
+             ,  InvoiceNo =  CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END  --CASE WHEN OrderKey_Inv = '' THEN MBOLKey ELSE 'A' + RTRIM(OrderKey_Inv) END      --CS08  
+             ,  FreightCharges       --WL03   
+             ,  ShowFOB              --WL03  
+             ,  ShowRemark           --WL06  
+             ,  @c_NSQLCountry AS NSQLCountry   --WL06  
+             ,  InvResetPageNo   --WL09
+             ,  ResetPageNoFlag  --WL09
+         FROM #TEMP_CommINV03      
+         WHERE (InvResetPageNo LIKE @c_SHPFlag + '%' OR OrderKey_Inv LIKE @c_SHPFlag + '%')
+         ORDER BY mbolkey,CASE WHEN OrderKey_Inv = '' THEN InvResetPageNo ELSE OrderKey_Inv END,ExternOrdKey   --CS09   --WL09
+      END
+      ELSE IF @c_CCountry IN ('MY') AND @c_SHPFlag IN ('D','E','N')
+      BEGIN
+         SELECT Rowid       
+             ,  MBOLKey                  
+             ,  pmtterm                  
+             ,  Lottable11               
+             ,  ExtPOKey                 
+             ,  OHUdf05                  
+             ,  ExternOrdKey             
+             ,  IDS_Company              
+             ,  IDS_Address1             
+             ,  IDS_Address2             
+             ,  IDS_Address3             
+             ,  IDS_Address4             
+             ,  IDS_Phone1               
+             ,  IDS_City                 
+             ,  BILLTO_Company           
+             ,  BILLTO_Address1          
+             ,  BILLTO_Address2          
+             ,  BILLTO_Address3          
+             ,  BILLTO_Address4          
+             ,  BILLTO_City              
+             ,  ShipTO_Company           
+             ,  ShipTO_Address1          
+             ,  ShipTO_Address2          
+             ,  ShipTO_Address3          
+             ,  ShipTO_Address4          
+             ,  ShipTO_City              
+             ,  ShipTO_Phone1            
+             ,  ShipTO_Contact1          
+             ,  ShipTO_Country           
+             ,  From_Country             
+             ,  StorerKey                
+             ,  SKU                      
+             ,  Descr                    
+             ,  QtyShipped               
+             ,  UnitPrice                
+             ,  Currency                 
+             ,  ShipMode                 
+             ,  SONo                     
+             ,  consigneekey             
+             ,  ODUDF05                  
+             ,  Taxtitle                 
+             ,  Amt                      
+             ,  TaxAmt                   
+             ,  TaxCurSymbol             
+             ,  TTLAmt                   
+             ,  ShipTitle             
+             ,  CON_Company            
+             ,  CON_Address1            
+             ,  CON_Address2           
+             ,  CON_Address3          
+             ,  CON_Address4           
+             ,  ORDGRP                
+             ,  PalletKey
+             ,  TTLPLT
+             ,  Madein      
+             ,  ShipType = @c_ShipType      
+             ,  OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END   
+             ,  InvoiceNo =  CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END  --CASE WHEN OrderKey_Inv = '' THEN MBOLKey ELSE 'A' + RTRIM(OrderKey_Inv) END      --CS08  
+             ,  FreightCharges       --WL03   
+             ,  ShowFOB              --WL03  
+             ,  ShowRemark           --WL06  
+             ,  @c_NSQLCountry AS NSQLCountry   --WL06  
+             ,  InvResetPageNo   --WL09
+             ,  ResetPageNoFlag  --WL09
+         FROM #TEMP_CommINV03   
+         WHERE (LEFT(InvResetPageNo,1) = @c_SHPFlag OR LEFT(OrderKey_Inv,1) = @c_SHPFlag) 
+         ORDER BY mbolkey,CASE WHEN OrderKey_Inv = '' THEN InvResetPageNo ELSE OrderKey_Inv END,ExternOrdKey   --CS09   --WL09
+      END
+      ELSE
+      BEGIN
+         SELECT Rowid       
+             ,  MBOLKey                  
+             ,  pmtterm                  
+             ,  Lottable11               
+             ,  ExtPOKey                 
+             ,  OHUdf05                  
+             ,  ExternOrdKey             
+             ,  IDS_Company              
+             ,  IDS_Address1             
+             ,  IDS_Address2             
+             ,  IDS_Address3             
+             ,  IDS_Address4             
+             ,  IDS_Phone1               
+             ,  IDS_City                 
+             ,  BILLTO_Company           
+             ,  BILLTO_Address1          
+             ,  BILLTO_Address2          
+             ,  BILLTO_Address3          
+             ,  BILLTO_Address4          
+             ,  BILLTO_City              
+             ,  ShipTO_Company           
+             ,  ShipTO_Address1          
+             ,  ShipTO_Address2          
+             ,  ShipTO_Address3          
+             ,  ShipTO_Address4          
+             ,  ShipTO_City              
+             ,  ShipTO_Phone1            
+             ,  ShipTO_Contact1          
+             ,  ShipTO_Country           
+             ,  From_Country             
+             ,  StorerKey                
+             ,  SKU                      
+             ,  Descr                    
+             ,  QtyShipped               
+             ,  UnitPrice                
+             ,  Currency                 
+             ,  ShipMode                 
+             ,  SONo                     
+             ,  consigneekey             
+             ,  ODUDF05                  
+             ,  Taxtitle                 
+             ,  Amt                      
+             ,  TaxAmt                   
+             ,  TaxCurSymbol             
+             ,  TTLAmt                   
+             ,  ShipTitle             
+             ,  CON_Company            
+             ,  CON_Address1            
+             ,  CON_Address2           
+             ,  CON_Address3          
+             ,  CON_Address4           
+             ,  ORDGRP                
+             ,  PalletKey
+             ,  TTLPLT
+             ,  Madein      
+             ,  ShipType = @c_ShipType      
+             ,  OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END   
+             ,  InvoiceNo =  CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END  --CASE WHEN OrderKey_Inv = '' THEN MBOLKey ELSE 'A' + RTRIM(OrderKey_Inv) END      --CS08  
+             ,  FreightCharges       --WL03   
+             ,  ShowFOB              --WL03  
+             ,  ShowRemark           --WL06  
+             ,  @c_NSQLCountry AS NSQLCountry   --WL06  
+             ,  InvResetPageNo   --WL09
+             ,  ResetPageNoFlag  --WL09
+         FROM #TEMP_CommINV03      
+         ORDER BY mbolkey,CASE WHEN OrderKey_Inv = '' THEN InvResetPageNo ELSE OrderKey_Inv END,ExternOrdKey   --CS09   --WL09
+      END
+      --WL09 E    
        
-      SELECT Rowid            ,         
-             MBOLKey          ,         
-             pmtterm          ,         
-             Lottable11       ,         
-             ExtPOKey         ,         
-             OHUdf05          ,         
-             ExternOrdKey     ,         
-             IDS_Company      ,         
-             IDS_Address1     ,         
-             IDS_Address2     ,         
-             IDS_Address3     ,         
-             IDS_Address4     ,         
-             IDS_Phone1       ,         
-             IDS_City         ,         
-             BILLTO_Company   ,         
-             BILLTO_Address1  ,         
-             BILLTO_Address2  ,         
-             BILLTO_Address3  ,         
-             BILLTO_Address4  ,         
-             BILLTO_City      ,         
-             ShipTO_Company   ,         
-             ShipTO_Address1  ,         
-             ShipTO_Address2  ,         
-             ShipTO_Address3  ,         
-             ShipTO_Address4  ,         
-             ShipTO_City      ,         
-             ShipTO_Phone1    ,         
-             ShipTO_Contact1  ,         
-             ShipTO_Country   ,         
-             From_Country     ,         
-             StorerKey        ,         
-             SKU              ,         
-             Descr            ,         
-             QtyShipped       ,         
-             UnitPrice        ,         
-             Currency         ,         
-             ShipMode         ,         
-             SONo             ,         
-             consigneekey     ,         
-             ODUDF05          ,         
-             Taxtitle         ,         
-             Amt              ,         
-             TaxAmt           ,         
-             TaxCurSymbol     ,         
-             TTLAmt           ,         
-             ShipTitle        ,      
-             CON_Company      ,       
-             CON_Address1     ,        
-             CON_Address2     ,       
-             CON_Address3     ,      
-             CON_Address4     ,       
-             ORDGRP           ,      
-     PalletKey, TTLPLT,Madein      
-          ,  ShipType = @c_ShipType      
-          ,  OrderKey_Inv = CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END   
-          ,  InvoiceNo =  CASE WHEN @c_ShipType = 'L' THEN 'A' +  OrderKey_Inv  ELSE  OrderKey_Inv END  --CASE WHEN OrderKey_Inv = '' THEN MBOLKey ELSE 'A' + RTRIM(OrderKey_Inv) END      --CS08  
-          ,  FreightCharges       --WL03   
-          ,  ShowFOB              --WL03  
-          ,  ShowRemark           --WL06  
-          ,  @c_NSQLCountry AS NSQLCountry   --WL06  
-       FROM #TEMP_CommINV03      
-       ORDER BY mbolkey,OrderKey_Inv,ExternOrdKey   --CS09  
+        
            
      GOTO QUIT      
      TYPE_S01:      
@@ -934,22 +1335,62 @@ CREATE PROC [dbo].[isp_CommecialInvoice_03_sg] (
           
      GOTO QUIT      
 QUIT:      
- --(Wan02) - START       
- IF OBJECT_ID('tempdb..#TEMP_CommINV03','u') IS NOT NULL      
- BEGIN      
-    DROP TABLE #TEMP_CommINV03;      
- END      
-       
- IF OBJECT_ID('tempdb..#TEMP_madein03','u') IS NOT NULL      
- BEGIN      
-    DROP TABLE #TEMP_madein03;      
- END      
-    
- IF OBJECT_ID('tempdb..#TEMP_Orderkey','u') IS NOT NULL      
- BEGIN      
-    DROP TABLE #TEMP_Orderkey;      
- END      
- --(Wan02) - END      
+   --(Wan02) - START       
+   IF OBJECT_ID('tempdb..#TEMP_CommINV03','u') IS NOT NULL      
+   BEGIN      
+      DROP TABLE #TEMP_CommINV03;      
+   END      
+         
+   IF OBJECT_ID('tempdb..#TEMP_madein03','u') IS NOT NULL      
+   BEGIN      
+      DROP TABLE #TEMP_madein03;      
+   END      
+      
+   IF OBJECT_ID('tempdb..#TEMP_Orderkey','u') IS NOT NULL      
+   BEGIN      
+      DROP TABLE #TEMP_Orderkey;      
+   END      
+   --(Wan02) - END    
+   
+   --WL09 S
+   IF OBJECT_ID('tempdb..#TMP_SHandling','u') IS NOT NULL      
+   BEGIN      
+      DROP TABLE #TMP_SHandling;      
+   END 
+
+   IF OBJECT_ID('tempdb..#TMP_OHSHP','u') IS NOT NULL      
+   BEGIN      
+      DROP TABLE #TMP_OHSHP;      
+   END 
+
+   IF @n_continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SELECT @b_Success = 0
+      IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_Starttcnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_Starttcnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'isp_CommecialInvoice_03_sg'
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN
+   END
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1
+      WHILE @@TRANCOUNT > @n_Starttcnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
+   --WL09 E
 END   
 GO
 GRANT EXECUTE ON [dbo].[isp_CommecialInvoice_03_sg] TO nSQL 
