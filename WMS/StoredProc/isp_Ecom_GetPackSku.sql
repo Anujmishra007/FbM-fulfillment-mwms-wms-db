@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Ecom_GetPackSku]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Ecom_GetPackSku]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Trigger: isp_Ecom_GetPackSku                                         */
 /* Creation Date: 19-APR-2016                                           */
@@ -32,15 +28,19 @@ GO
 /*                            Orderkey in ErrMsg contains '1205', it    */
 /*                            will cause Exceed to hang and stuck in    */
 /*                            infinite loop (WL01)                      */
+/* 23-Mar-2022 NJOW01   1.2   WMS-19279 allow configure call custom sp  */
+/*                            to get alternate sku                      */
+/* 23-Mar-2022 NJOW01   1.2   DEVOPS combine script                     */
 /************************************************************************/
-CREATE PROC isp_Ecom_GetPackSku 
+CREATE OR ALTER PROC [dbo].[isp_Ecom_GetPackSku]
             @c_OrderKey    NVARCHAR(10)
          ,  @c_StorerKey   NVARCHAR(15)
          ,  @c_Sku         NVARCHAR(60)   OUTPUT
-         ,  @b_Success     INT = 0        OUTPUT 
-         ,  @n_err         INT = 0        OUTPUT 
+         ,  @b_Success     INT = 0        OUTPUT
+         ,  @n_err         INT = 0        OUTPUT
          ,  @c_errmsg      NVARCHAR(250) = '' OUTPUT
-         ,  @c_SerialNo    NVARCHAR(60)  = '' OUTPUT  --(Wan01) 
+         ,  @c_SerialNo    NVARCHAR(60)  = '' OUTPUT  --(Wan01)          
+         ,  @c_TaskBatchNo NVARCHAR(10)  = '' --NJOW01
 AS
 BEGIN
    SET NOCOUNT ON
@@ -48,13 +48,14 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  
+   DECLARE
            @n_StartTCnt    INT
          , @n_Continue     INT
-         
-         , @n_SKUCnt       INT 
+
+         , @n_SKUCnt       INT
          , @c_DecodeSPName NVARCHAR(30)
          , @c_OriginalSku  NVARCHAR(60)
+         , @c_GetSku       NVARCHAR(20)  --NJOW01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -64,12 +65,12 @@ BEGIN
    BEGIN TRAN
 
    SET @c_OriginalSku = ISNULL(@c_Sku,'')
-   
+
    SET @c_DecodeSPName = rdt.RDTGetConfig( 841, 'DecodeLabelNo', @c_StorerKey)
    IF @c_DecodeSPName = '0'
    BEGIN
       SET @c_DecodeSPName = ''
-   END 
+   END
 
    IF @c_DecodeSPName <> ''
    BEGIN
@@ -79,7 +80,7 @@ BEGIN
          ,@c_Storerkey  = @c_StorerKey
          ,@c_ReceiptKey = ''
          ,@c_POKey      = ''
-         ,@c_LangCode   = ''                    -- Blank is default to English                 
+         ,@c_LangCode   = ''                    -- Blank is default to English
          ,@c_oFieled01  = @c_Sku       OUTPUT   -- SKU
          ,@c_oFieled02  = ''
          ,@c_oFieled03  = ''
@@ -98,7 +99,7 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 50005
-         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                         + 'Error Executing ispLabelNo_Decoding_Wrapper.(isp_Ecom_GetPackSku)'
          GOTO QUIT
       END
@@ -118,12 +119,37 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 50010
-         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                         + 'Error Executing isp_SKUDecode_Wrapper.(isp_Ecom_GetPackSku)'
          GOTO QUIT
       END
    END
-
+   
+   --NJOW01 S
+   SET @c_GetSku = ''
+   EXEC isp_GetPackSku_Wrapper                                      
+          @c_TaskBatchNo = @c_TaskBatchNo
+       ,  @c_PickslipNo  = ''   
+       ,  @c_OrderKey  = @c_Orderkey                                               
+       ,  @c_Storerkey = @c_Storerkey                                                                           
+       ,  @c_Sku       = @c_Sku                                                                         
+       ,  @c_NewSku    = @c_GetSku   OUTPUT                                                                     
+       ,  @b_Success   = @b_Success  OUTPUT                                                                     
+       ,  @n_Err       = @n_Err      OUTPUT                                                                     
+       ,  @c_ErrMsg    = @c_ErrMsg   OUTPUT                                                                     
+                                                                                                                
+   IF @b_Success <> 1                                                                                          
+   BEGIN                                                                                                       
+      SET @n_Continue = 3                                                                                      
+      GOTO QUIT                                                                                                
+   END            
+  
+   IF ISNULL(@c_GetSku,'') <> ''
+   BEGIN
+      SET @c_Sku = @c_GetSku
+   END                
+   --NJOW01 E                                                                             
+  
    EXEC rdt.rdt_GETSKUCNT
        @cStorerKey  = @c_StorerKey
       ,@cSKU        = @c_SKU
@@ -136,7 +162,7 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 50085
-      SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+      SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                      + 'Error Executing rdt_GETSKUCNT.(isp_Ecom_GetPackSku)'
       GOTO QUIT
    END
@@ -145,19 +171,19 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 50090
-      SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+      SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                      + 'Invalid Sku Barcode.(isp_Ecom_GetPackSku)'
       GOTO QUIT
-   END 
+   END
 
    IF @n_SKUCnt > 1
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 50095
-      SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+      SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                      + 'Multi Sku Barcode found.(isp_Ecom_GetPackSku)'
       GOTO QUIT
-   END 
+   END
 
    EXEC rdt.rdt_GETSKU
        @cStorerKey  = @c_StorerKey
@@ -166,7 +192,7 @@ BEGIN
       ,@nErr        = @n_Err        OUTPUT
       ,@cErrMsg     = @c_ErrMsg     OUTPUT
 
-   IF ISNULL(@c_Orderkey,'') <> '' 
+   IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
       IF NOT EXISTS  (  SELECT 1
                         FROM ORDERDETAIL WITH (NOLOCK)
@@ -177,12 +203,12 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 50100
-         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                        --+ 'Sku not found for Order #: ' + RTRIM(@c_Orderkey)   --WL01
                        + 'Sku not found for this Order #'   --WL01
                        + '.(isp_Ecom_GetPackSku)'
          GOTO QUIT
-      END 
+      END
    END
 
    --(Wan01) - START
@@ -231,5 +257,5 @@ QUIT:
    END
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[isp_Ecom_GetPackSku] TO nSQL 
+GRANT EXECUTE ON  [dbo].[isp_Ecom_GetPackSku] TO [NSQL]
 GO
