@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Packing_List_103_sg_main]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_Packing_List_103_sg_main]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -25,12 +21,16 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 13-JAN-2022  CSCHONG   1.0 Devops Scripts Combine                    */
+/* 13-JAN-2022  CSCHONG   1.1 WMS-17744 Change print logic based on     */  
+/*                              Orders.SpecialHandling (CS01)           */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_Packing_List_103_sg_main] (  
+CREATE OR ALTER PROC [dbo].[isp_Packing_List_103_sg_main] (  
    @c_MBOLKey  NVARCHAR(21)   
   ,@c_type     NVARCHAR(10)   = ''
   ,@c_ShipType NVARCHAR(10)   = ''  
+  ,@c_SHPFlag  NVARCHAR(10)   = ''     --CS01 
 )   
 AS   
 BEGIN  
@@ -42,7 +42,8 @@ BEGIN
 
    SELECT DISTINCT MBOL.Mbolkey AS mbolkey,
                    Shiptype = @c_ShipType,
-                   ORDERS.type AS ordertype
+                   ORDERS.type AS ordertype,
+                   SHPFlag = @c_SHPFlag               --CS01
    FROM MBOL WITH (NOLOCK)
    INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)  
    INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)
