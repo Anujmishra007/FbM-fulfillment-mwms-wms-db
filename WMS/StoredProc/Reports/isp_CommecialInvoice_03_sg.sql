@@ -57,6 +57,7 @@ GO
 /* 06-Dec-2021  WLChooi   3.2   Bug Fix for WMS-18105 (WL08)            */
 /* 14-Dec-2021  WLChooi   3.3   WMS-18504 - Change print logic based on */
 /*                              Orders.SpecialHandling (WL09)           */
+/* 22-Apr-2022  WLChooi   3.4   Bug Fix for WMS-18504 (WL10)            */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (      
@@ -242,8 +243,8 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
     --(Wan01) - END    
     
    --WL09 S
-   --Cater for SHP = 'O' if called from DW for SHP = 'D', will not mixed
-   IF @c_SHPFlag = 'D'
+   --Cater for SHP = 'O' if called from DW for SHP IN ('D','E','N'), will not mixed
+   IF @c_SHPFlag IN ('D','E','N')   --WL10
    BEGIN
       CREATE TABLE #TMP_OHSHP (
          SHP   NVARCHAR(100)
