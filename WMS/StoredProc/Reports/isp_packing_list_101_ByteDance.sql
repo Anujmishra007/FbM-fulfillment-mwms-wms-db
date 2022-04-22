@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_packing_list_101_ByteDance                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -21,7 +21,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 24-FEB-2022 CSCHONG 1.0    Devops Scripts Combine                    */
+/* 24-FEB-2022 CSCHONG  1.0   Devops Scripts Combine                    */
+/* 22-Apr-2022 WLChooi  1.1   WMS-19530 Add codelkup show address (WL01)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_packing_list_101_ByteDance]
            @c_PickSlipNo      NVARCHAR(10)
@@ -42,6 +43,7 @@ BEGIN
          , @c_rpttype         NVARCHAR(20)
          , @c_OIFNotes        NVARCHAR(120) = ''
          , @c_showqrcode      NVARCHAR(1) = 'Y'
+         , @c_CONRTNADD       NVARCHAR(500) = '' --WL01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_NoOfLine = 3
@@ -61,7 +63,7 @@ BEGIN
    END
 
 
-  SELECT   @c_OHUDF03 = OH.Userdefine03
+   SELECT  @c_OHUDF03 = OH.Userdefine03
           ,@c_storerkey = OH.Storerkey      
    FROM ORDERS OH WITH (NOLOCK)
    WHERE OH.Orderkey = @c_Orderkey
@@ -72,6 +74,13 @@ BEGIN
    AND C.code = @c_OHUDF03
    AND C.storerkey = @c_storerkey
 
+   --WL01 S
+   SELECT @c_CONRTNADD = ISNULL(C.notes,'')
+   FROM Codelkup C WITH (NOLOCK)
+   WHERE C.listname = 'CONVSTORE'
+   AND C.code = 'CONVSTORERTNADD'
+   AND C.storerkey = @c_storerkey
+   --WL01 E
 
   --IF ISNULL(@c_rpttype,'') = ''
   --BEGIN
@@ -129,6 +138,7 @@ BEGIN
          , RptType = @c_rpttype
          , showqrcode = @c_showqrcode
          , qrvalue = @c_OIFNotes
+         , CONRTNADD = @c_CONRTNADD   --WL01
    FROM ORDERS     OH WITH (NOLOCK)
    LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey=OH.OrderKey
