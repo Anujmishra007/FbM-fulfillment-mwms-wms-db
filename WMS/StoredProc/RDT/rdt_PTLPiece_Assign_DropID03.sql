@@ -1,3 +1,9 @@
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
   
 /******************************************************************************/  
 /* Store procedure: rdt_PTLPiece_Assign_DropID03                              */  
@@ -7,7 +13,7 @@
 /* 09-09-2021 1.0  Chermaine  WMS-17331 Created                               */  
 /******************************************************************************/  
   
-alter PROC [RDT].[rdt_PTLPiece_Assign_DropID03] (  
+CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID03] (  
    @nMobile          INT,   
    @nFunc            INT,   
    @cLangCode        NVARCHAR( 3),   
@@ -725,3 +731,12 @@ BEGIN
 Quit:  
   
 END  
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_PTLPiece_Assign_DropID03 TO NSQL
+GO
