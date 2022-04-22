@@ -7,7 +7,7 @@ GO
 /* Copyright      : LF Logistics                                              */  
 /*                                                                            */  
 /* Date       Rev  Author      Purposes                                       */  
-/* 30-09-2019 1.0  Ung         WMS-1072 Created (base on rdt_838ConfirmSP05)  */  
+/* 30-09-2019 1.0  Ung         WMS-10729 Created (base on rdt_838ConfirmSP05) */  
 /* 16-04-2021 1.1  James       WMS-16024 Standard use of TrackingNo (james01) */ 
 /* 21-04-2022 1.2  KuanYee     INC1790688 Add Channel_ID Column (KY01)        */ 
 /******************************************************************************/  
