@@ -85,7 +85,7 @@ BEGIN
          , @n_CntRec            INT = 1
          , @n_TTLpage           INT = 1        
          , @n_CurrentPage       INT = 1 
-         , @n_MaxLine           INT = 10
+         , @n_MaxLine           INT = 5
          , @c_CaseCntSKU01      NVARCHAR(80)
          , @c_CaseCntSKU02      NVARCHAR(80)
          , @c_CaseCntSKU03      NVARCHAR(80)
@@ -393,19 +393,19 @@ BEGIN
                BREAK;    
             END  
            
-           -- INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05,Col06,Col07,Col08,Col09                     
-           --,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22                   
-           --,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                    
-           --,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                     
-           --,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54                   
-           --,Col55,Col56,Col57,Col58,Col59,Col60)     
-           -- SELECT TOP 1 Col01,Col02,Col03,'','','','','','','',         
-           --             '','','','','', '','','','','',  
-           --             '','','',Col24,Col25,Col26,'','','',Col30,                  
-           --             Col31,'','','','', '','','','','',   
-           --             '','','','','', '','','','','',                   
-           --             '','','','','', '','','',Col59,Col60   
-           -- FROM #Result WHERE Col60 <> ''  
+            INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05,Col06,Col07,Col08,Col09                     
+           ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22                   
+           ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34                    
+           ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44                     
+           ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54                   
+           ,Col55,Col56,Col57,Col58,Col59,Col60)     
+            SELECT TOP 1 Col01,Col02,Col03,'',Col05,Col06,'','','','',         
+                        '','','','','', '','','','','',  
+                        '',Col22,Col23,'','','','','','','',                  
+                        '','','','','', '','','','','',   
+                        '','','','','', '','','','','',                   
+                        '','','','','', '','','',Col59,Col60   
+            FROM #Result WHERE Col60 <> ''  
    
             SET @c_SKU01  = ''  
             SET @c_Qty01  = '' 
