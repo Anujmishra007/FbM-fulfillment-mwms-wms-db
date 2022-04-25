@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_SHIPUCCLBL_PacSun]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_SHIPUCCLBL_PacSun]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,10 +10,11 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
-/*01-JUNE-2021 1.0  CHONGCS    Created (WMS-17112)                             */  
+/*01-JUNE-2021 1.0  CHONGCS    Created (WMS-17112)                            */  
+/*15-APR-2022 1.1  MINGLE     Change extordkey to udf03 (WMS-19458)(ML01)     */ 
 /******************************************************************************/                  
                     
-CREATE PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_PacSun]                        
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_PacSun]                        
 (  @c_Sparm01            NVARCHAR(250),                
    @c_Sparm02            NVARCHAR(250),                
    @c_Sparm03            NVARCHAR(250),                
@@ -195,7 +191,7 @@ BEGIN
                   +  ' ISNULL(F.Address3,'''') + ISNULL(F.Address4,''''), '
                   +  ' ISNULL(F.City,'''') + '','' + ISNULL(F.State,'''') + '','' + ISNULL(F.Country,''''),ST.Company, ' + CHAR(13) --5
                   +  ' ISNULL(ST.Address1,'''') + ISNULL(ST.Address2,''''), ISNULL(ST.City,'''') + '','' + ISNULL(ST.State,''''),'  --7
-                  +  ' OH.Consigneekey, ST.Zip, OH.ExternOrderkey, ' + CHAR(13) --10
+                  +  ' OH.Consigneekey, ST.Zip, OH.Userdefine03, ' + CHAR(13) --10	--ML01
                   +  ' @c_descr, @c_sku, @c_Col13, @c_labelno, '''', '''', '''', '''', '''', '''', ' + CHAR(13) --20
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --30
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --40
