@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_MultiSKUBarcode' AND type = 'P')
-   DROP PROC rdt.rdt_MultiSKUBarcode
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -38,9 +35,10 @@ GO
 /* 23-09-2020  2.6  YeeKung     WMS-15415 Add Second doctype(yeekung06) */     
 /* 23-06-2021  2.7  James       WMS-17264 Add container receive(james05)*/
 /* 25-07-2019  2.8  James       WMS9920-Add TaskDetail doctype (james06)*/
+/* 29-03-2022  2.9  Ung         WMS-19254 Add cursor for dynamic scope  */
 /************************************************************************/        
         
-CREATE PROCEDURE [RDT].[rdt_MultiSKUBarcode]        
+CREATE OR ALTER PROCEDURE [RDT].[rdt_MultiSKUBarcode]
    @nMobile    INT,         
    @nFunc      INT,         
    @cLangCode  NVARCHAR( 3),         
@@ -76,10 +74,11 @@ BEGIN
    SET ANSI_NULLS OFF        
    SET CONCAT_NULL_YIELDS_NULL OFF        
         
+   DECLARE @curSKU CURSOR
+   DECLARE @cCurrentStorer NVARCHAR(15)
    DECLARE @cCurrentSKU NVARCHAR(20)        
- DECLARE @cCurrentStorer NVARCHAR(15)        
+
    SET @cCurrentStorer = ''        
-   DECLARE @curSKU CURSOR         
    SET @cCurrentSKU = ''        
         
    /*-------------------------------------------------------------------------------        
@@ -855,7 +854,7 @@ BEGIN
             @cStorerKeyInDoc = A.StorerKey,         
             @cSKUInDoc = A.SKU        
          FROM         
-(        
+         (        
             SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.SKU = @cSKU        
             UNION ALL        
             SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.AltSKU = @cSKU        
@@ -952,6 +951,61 @@ BEGIN
             GOTO Quit  
          END  
       END  
+
+      IF @cDocType = 'CURSOR'
+      BEGIN
+         SET @cStorerKeyInDoc = ''
+         SET @cSKUInDoc = ''
+         SET @nRowCount = 0
+
+         OPEN Cursor_MultiSKUBarcode --Note: global cursor 
+
+         IF @cType = 'POPULATE'
+         BEGIN
+            FETCH NEXT FROM Cursor_MultiSKUBarcode INTO @cStorerKeyInDoc, @cSKUInDoc 
+            WHILE @@FETCH_STATUS = 0 AND @nRowCount <= 2
+            BEGIN
+               SET @nRowCount = @nRowCount + 1
+               FETCH NEXT FROM Cursor_MultiSKUBarcode INTO @cStorerKeyInDoc, @cSKUInDoc 
+            END
+
+            -- Found 1 matched SKU in doc
+            IF @nRowCount = 1
+            BEGIN
+               SET @cStorerKey = @cStorerKeyInDoc
+               SET @cSKU = @cSKUInDoc
+               SET @nErrNo = -1 -- Found and Exit
+               GOTO Quit
+            END
+            
+            ELSE IF @nRowCount = 0
+            BEGIN
+               SET @nErrNo = 2 -- Set to invalid ErrNo
+               GOTO Quit
+            END
+         
+            -- At 1st page, but had pointed to 2nd record. So close and reopen cursor, to pointing back 1st record
+            ELSE
+            BEGIN
+               CLOSE Cursor_MultiSKUBarcode
+               OPEN Cursor_MultiSKUBarcode
+            END
+         END
+         ELSE
+         BEGIN
+            IF @cMultiSKUBarcode = '1' -- Multi SKU
+            BEGIN
+               -- At existing page, need point to 3rd record of page, so populate next page from 4 record onwards
+               FETCH NEXT FROM Cursor_MultiSKUBarcode INTO @cStorerKeyInDoc, @cSKUInDoc
+               WHILE @@FETCH_STATUS = 0
+               BEGIN
+                  IF @cSKUInDoc = @cCurrentSKU
+                     BREAK
+                  FETCH NEXT FROM Cursor_MultiSKUBarcode INTO @cStorerKeyInDoc, @cSKUInDoc
+               END
+            END
+         END
+      END
    END          
    ELSE    
    BEGIN    
@@ -992,8 +1046,23 @@ BEGIN
             ORDER BY A.StorerKey, A.SKU        
    END    
     
-   OPEN @curSKU        
-   FETCH NEXT FROM @curSKU INTO @cStorerCode, @cSKUCode        
+   -- Open cursor and fetch
+   IF @cDocType = 'CURSOR'
+      FETCH NEXT FROM Cursor_MultiSKUBarcode INTO @cStorerCode, @cSKUCode
+   ELSE
+   BEGIN
+      OPEN @curSKU        
+      FETCH NEXT FROM @curSKU INTO @cStorerCode, @cSKUCode        
+   END
+
+   -- Check no more record
+   IF @@FETCH_STATUS <> 0
+   BEGIN
+      SET @nErrNo = 81156
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more record
+      GOTO Fail
+   END
+   
    WHILE @nCount < 4        
    BEGIN        
       -- Get SKU info        
@@ -1024,28 +1093,27 @@ BEGIN
          SET @cOutField09 = CASE WHEN @@FETCH_STATUS = 0 THEN @cStorerCode ELSE '' END        
          SET @cOutField10 = CASE WHEN @@FETCH_STATUS = 0 THEN @cSKUCode    ELSE '' END        
          SET @cOutField11 = CASE WHEN @@FETCH_STATUS = 0 THEN @cSKUDesc1   ELSE '' END        
-     SET @cOutField12 = CASE WHEN @@FETCH_STATUS = 0 THEN @cSKUDesc2   ELSE '' END        
+         SET @cOutField12 = CASE WHEN @@FETCH_STATUS = 0 THEN @cSKUDesc2   ELSE '' END        
       END        
+      
       SET @nCount = @nCount + 1        
-      FETCH NEXT FROM @curSKU INTO @cStorerCode, @cSKUCode        
+      
+      IF @cDocType = 'CURSOR'
+         FETCH NEXT FROM Cursor_MultiSKUBarcode INTO @cStorerCode, @cSKUCode
+      ELSE
+         FETCH NEXT FROM @curSKU INTO @cStorerCode, @cSKUCode        
    END        
         
-   -- Check no more record        
-   IF @nCount = 1        
-   BEGIN        
-      SET @nErrNo = 81156        
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more record        
-      GOTO Fail        
-   END        
-           
 Fail:        
 Quit:        
-END -- End Procedure 
+
+END
 GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS ON 
 GO
+
 GRANT EXECUTE ON rdt.rdt_MultiSKUBarcode TO NSQL 
 GO   
