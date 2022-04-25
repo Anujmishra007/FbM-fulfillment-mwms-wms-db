@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PickByCartonID_Validate]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PickByCartonID_Validate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,9 +11,11 @@ GO
 /* Date        Rev  Author   Purposes                                         */
 /* 2019-03-18  1.0  Ung      WMS-8284 Created                                 */
 /* 2019-10-24  1.1  Ung      WMS-10821 Add PickDetail filter                  */
+/* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
+/*                           Add PickConfirmStatus                            */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_PickByCartonID_Validate] (
+CREATE OR ALTER PROC [RDT].[rdt_PickByCartonID_Validate] (
    @nMobile       INT,             
    @nFunc         INT,             
    @cLangCode     NVARCHAR( 3),    
@@ -46,22 +45,31 @@ BEGIN
    DECLARE @cExternOrderKey   NVARCHAR( 10)
    DECLARE @cZone             NVARCHAR( 18)
    DECLARE @cPickFilter       NVARCHAR( MAX) = ''
+   DECLARE @cPickConfirmStatus NVARCHAR( 1)
 
    SET @nQTY = 0
 	SET @nErrNo = 0
 	SET @cErrMsg = ''
 	SET @nPickQTY = 0
 
+   -- Get storer config
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+
    -- Check carton ID in wave
-   IF NOT EXISTS( SELECT TOP 1 1
-      FROM WaveDetail WD WITH (NOLOCK)
-         JOIN PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey)
-      WHERE WD.WaveKey = @cWaveKey
-         AND PD.CaseID = @cCartonID)
+   IF @cWaveKey <> ''
    BEGIN
-      SET @nErrNo = 136351
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CTNIDNotInWave
-      GOTO Fail
+      IF NOT EXISTS( SELECT TOP 1 1
+         FROM WaveDetail WD WITH (NOLOCK)
+            JOIN PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey)
+         WHERE WD.WaveKey = @cWaveKey
+            AND PD.CaseID = @cCartonID)
+      BEGIN
+         SET @nErrNo = 136351
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CTNIDNotInWave
+         GOTO Fail
+      END
    END
 
    /*
@@ -117,14 +125,14 @@ BEGIN
 	SET @nRowCount = 0
    SET @cSQL = 
       ' SELECT TOP 1 @nRowCount = 1 ' + 
-      ' FROM WaveDetail WD WITH (NOLOCK) ' + 
-         ' JOIN PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' + 
+      ' FROM PickDetail PD WITH (NOLOCK) ' + 
          ' JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
-      ' WHERE WD.WaveKey = @cWaveKey ' + 
-         ' AND PD.CaseID = @cCartonID ' + 
-         ' AND PD.Status < ''5'' ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' JOIN WaveDetail WD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' ELSE '' END + 
+      ' WHERE PD.CaseID = @cCartonID ' + 
+         ' AND PD.Status < @cPickConfirmStatus ' + 
          ' AND PD.Status <> ''4'' ' + 
          ' AND PD.QTY > 0 ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' AND WD.WaveKey = @cWaveKey ' ELSE '' END + 
          CASE WHEN @cPWZone = '' THEN '' ELSE ' AND LOC.PutawayZone = @cPWZone ' END + 
          CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
 
@@ -132,9 +140,10 @@ BEGIN
       ' @cWaveKey    NVARCHAR( 10), ' + 
       ' @cCartonID   NVARCHAR( 20), ' +
       ' @cPWZone     NVARCHAR( 10), ' +
+      ' @cPickConfirmStatus NVARCHAR( 1), ' + 
       ' @nRowCount   INT OUTPUT     ' 
 
-   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cCartonID, @cPWZone, 
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cCartonID, @cPWZone, @cPickConfirmStatus, 
       @nRowCount OUTPUT
 
    IF @nRowCount = 0

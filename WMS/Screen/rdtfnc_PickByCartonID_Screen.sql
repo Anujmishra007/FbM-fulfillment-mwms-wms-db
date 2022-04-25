@@ -1,3 +1,8 @@
+IF NOT EXISTS( SELECT 1 FROM rdt.rdtMsg WITH (NOLOCK) WHERE Message_ID = 831)
+   INSERT INTO rdt.rdtMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName)
+   VALUES (831, 'ENG', 'FNC', 'Pick By CartonID', 'rdtfnc_PickByCartonID')
+GO
+
 -- WaveKey screen
 DELETE rdt.RDTScn WHERE Scn = 5350 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5350, 'ENG'

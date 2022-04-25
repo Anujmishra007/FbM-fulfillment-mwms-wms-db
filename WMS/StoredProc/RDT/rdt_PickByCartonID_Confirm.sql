@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_PickByCartonID_Confirm]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_PickByCartonID_Confirm]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,9 +11,11 @@ GO
 /* Date        Rev  Author   Purposes                                         */
 /* 2019-03-18  1.0  Ung      WMS-8284 Created                                 */
 /* 2019-10-24  1.1  Ung      WMS-10821 Add PickDetail filter                  */
+/* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
+/*                           Add PickConfirmStatus                            */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_PickByCartonID_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_PickByCartonID_Confirm] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -53,10 +52,16 @@ BEGIN
    DECLARE @nQTY_Bal       INT
    DECLARE @nQTY_PD        INT
    DECLARE @cPickDetailKey NVARCHAR( 10)
+   DECLARE @cPickConfirmStatus NVARCHAR( 1)
    DECLARE @cPickFilter    NVARCHAR( MAX) = ''
    DECLARE @curPD          CURSOR
 
    SET @nQTY_Bal = @nQTY
+
+   -- Get storer config
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
 
    -- Get pick filter
    SELECT @cPickFilter = ISNULL( Long, '')
@@ -69,12 +74,11 @@ BEGIN
    -- Loop PickDetail
    SET @cSQL = 
       ' SELECT PD.PickDetailKey, PD.QTY ' + 
-      ' FROM WaveDetail WD WITH (NOLOCK) ' + 
-         ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' + 
+      ' FROM dbo.PickDetail PD WITH (NOLOCK)  ' + 
          ' JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
          ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT) ' + 
-      ' WHERE WD.WaveKey = @cWaveKey ' + 
-         ' AND PD.CaseID = @cCartonID ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' JOIN WaveDetail WD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' ELSE '' END + 
+      ' WHERE PD.CaseID = @cCartonID ' + 
          ' AND PD.LOC = @cLOC ' + 
          ' AND PD.ID = @cID ' + 
          ' AND PD.SKU = @cSKU ' + 
@@ -82,8 +86,9 @@ BEGIN
          ' AND LA.Lottable02 = @cLottable02 ' + 
          ' AND LA.Lottable03 = @cLottable03 ' + 
          ' AND LA.Lottable04 = @dLottable04 ' + 
-         ' AND PD.Status < ''5'' ' + 
+         ' AND PD.Status < @cPickConfirmStatus ' + 
          ' AND PD.Status <> ''4'' ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' AND WD.WaveKey = @cWaveKey ' ELSE '' END + 
          CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END + 
       ' ORDER BY PD.PickDetailKey ' 
          
@@ -103,10 +108,11 @@ BEGIN
       ' @cLottable01 NVARCHAR( 18), ' + 
       ' @cLottable02 NVARCHAR( 18), ' + 
       ' @cLottable03 NVARCHAR( 18), ' + 
-      ' @dLottable04 DATETIME       '
+      ' @dLottable04 DATETIME,      ' + 
+      ' @cPickConfirmStatus NVARCHAR( 1) '
 
    EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @curPD OUTPUT, @cWaveKey, @cCartonID, @cLOC, @cID, @cSKU, 
-      @cLottable01, @cLottable02, @cLottable03, @dLottable04
+      @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cPickConfirmStatus
 
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
@@ -120,7 +126,7 @@ BEGIN
       BEGIN
          -- Update PickDetail
          UPDATE dbo.PickDetail SET 
-            Status = '5',
+            Status = @cPickConfirmStatus,
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME() 
          WHERE PickDetailKey = @cPickDetailKey
@@ -139,7 +145,7 @@ BEGIN
       BEGIN
          -- Update PickDetail
          UPDATE dbo.PickDetail SET 
-            Status = '5',
+            Status = @cPickConfirmStatus,
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME() 
          WHERE PickDetailKey = @cPickDetailKey
@@ -253,7 +259,7 @@ BEGIN
    
             -- Confirm orginal PickDetail with exact QTY
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-               Status = '5',
+               Status = @cPickConfirmStatus,
                EditDate = GETDATE(), 
                EditWho = SUSER_SNAME() 
             WHERE PickDetailKey = @cPickDetailKey
