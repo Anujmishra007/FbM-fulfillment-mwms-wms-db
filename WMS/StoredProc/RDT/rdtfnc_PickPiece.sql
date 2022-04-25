@@ -43,6 +43,7 @@ GO
 /* 2021-04-30   3.3  Chermaine   WMS-16868 Add Config to skip confirm op2 (cc01)*/      
 /* 2021-11-09   3.4  James       WMS-18174 Clear variable b4 gettask (james09)*/      
 /* 2021-11-09   3.5  James       WMS-18293 Allow MultiSKUBarcode (james10)    */      
+/* 2022-03-07   3.6  YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (        
@@ -233,7 +234,7 @@ SELECT
    @cPickConfirmStatus  = V_String31,        
    @cAutoScanOut        = V_String32,        
    @cDefaultPickZone    = V_String33,             
-   @cExtendedInfo       = V_String34,        
+  -- @cExtendedInfo       = V_String34,        
    @cCartonID           = V_String35,  --(yeekung02)          
    @cScanCIDSCN         = V_String36, --(yeekung02)        
    @cDecodeIDSP         = V_String37, --(yeekung02)        
@@ -348,11 +349,11 @@ BEGIN
       @cStorerKey  = @cStorerKey,        
       @nStep       = @nStep        
         
-   -- Prepare next screen var        
+      -- Prepare next screen var        
    SET @cOutField01 = '' -- PickSlipNo        
    SET @nTtlBalQty  = 0            
    SET @nBalQty      = 0  
-   SET @cExtDescr1 = ''      
+   SET @cExtDescr1 = ''        
    SET @cExtDescr2 = ''
         
    -- Go to PickSlipNo screen        
@@ -531,7 +532,7 @@ BEGIN
          @dScanInDate = ScanInDate,        
          @dScanOutDate = ScanOutDate        
       FROM dbo.PickingInfo WITH (NOLOCK)        
- WHERE PickSlipNo = @cPickSlipNo        
+      WHERE PickSlipNo = @cPickSlipNo        
         
       IF @@ROWCOUNT = 0        
       BEGIN        
@@ -568,7 +569,49 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PS scanned out        
             GOTO Step_1_Fail        
          END        
-      END        
+      END       
+      
+      -- (yeekung04)         
+      IF @cExtendedInfoSP <> ''                
+      BEGIN                
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')                
+         BEGIN                
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +                
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +                
+               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY,  @nActQty, @nSuggQTY, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     '                
+            SET @cSQLParam =                
+               ' @nMobile      INT,           ' +                
+               ' @nFunc        INT,           ' +                
+               ' @cLangCode    NVARCHAR( 3),  ' +                
+               ' @nStep        INT,           ' +                
+               ' @nAfterStep   INT,           ' +             
+               ' @nInputKey    INT,           ' +                
+               ' @cFacility    NVARCHAR( 5) , ' +                
+               ' @cStorerKey   NVARCHAR( 15), ' +                
+               ' @cType        NVARCHAR( 10), ' +                
+               ' @cPickSlipNo  NVARCHAR( 10), ' +                
+               ' @cPickZone    NVARCHAR( 10), ' +                
+               ' @cDropID      NVARCHAR( 20), ' +                
+               ' @cLOC         NVARCHAR( 10), ' +                
+               ' @cSKU         NVARCHAR( 20), ' +                
+               ' @nQTY         INT,           ' +                
+               ' @nActQty      INT,           ' +                
+               ' @nSuggQTY     INT,           ' +                
+               ' @cExtendedInfo NVARCHAR(20) OUTPUT,  ' +                
+               ' @nErrNo       INT           OUTPUT, ' +                
+               ' @cErrMsg      NVARCHAR(250) OUTPUT  '                
+                
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                
+               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,                
+               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT                
+                
+            IF @nErrNo <> 0                
+               GOTO Step_1_Fail  
+               
+            SET @cOutField04=@cExtendedInfo
+                              
+         END                
+      END 
         
       -- Prepare next screen var        
       SET @cOutField01 = @cPickSlipNo        
@@ -4369,7 +4412,7 @@ BEGIN
       V_String31     = @cPickConfirmStatus,        
       V_String32     = @cAutoScanOut,        
       V_String33     = @cDefaultPickZone,             
-      V_String34     = @cExtendedInfo,        
+     -- V_String34     = @cExtendedInfo,        
       V_String35     = @cCartonID,   --(yeekung02)        
       V_String36     = @cScanCIDSCN, --(yeekung02)        
       V_String37     = @cDecodeIDSP, --(yeekung02)        
