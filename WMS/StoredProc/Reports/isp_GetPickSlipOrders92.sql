@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GetPickSlipOrders92' AND type = 'P')
-   DROP PROC isp_GetPickSlipOrders92
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -31,7 +28,7 @@ GO
 /* Date        Author      Ver   Purposes                                  */  
 /***************************************************************************/  
   
-CREATE PROC [dbo].[isp_GetPickSlipOrders92] (@c_loadkey NVARCHAR(10))   
+CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders92] (@c_loadkey NVARCHAR(10))   
  AS  
  BEGIN  
    SET NOCOUNT ON   
@@ -385,7 +382,7 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
                 STR(   
                    CAST(@c_pickheaderkey AS int) + ( select count(distinct orderkey)   
                                                      from #TEMP_PICK92 as Rank   
-                                                     WHERE Rank.OrderKey < #TEMP_PICK78.OrderKey )   
+                                                     WHERE Rank.OrderKey < #TEMP_PICK92.OrderKey )   
                     ) -- str  
                     )) -- dbo.fnc_RTrim  
                  , 9)   
