@@ -1,0 +1,6 @@
+--rdt_1837ExtValid02
+rdt.rdtDropMsg 186051 , 186100		
+
+execute rdt.rdtAddMsg 186051, 10, '186051 PALLET CLOSED',    'us_english', 1837
+
+SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 186051 AND 186100	
