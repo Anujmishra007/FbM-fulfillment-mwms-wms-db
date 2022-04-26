@@ -13,6 +13,7 @@ GO
 /* Date        Rev  Author    Purposes                                  */      
 /* 2021-07-07  1.0  Chermaine WMS-17365 Created                         */      
 /* 2022-02-21  1.1  James     WMS-18699 Add sorting priority (james01)  */
+/* 2022-04-26  1.2  James     Add missing Print Export Label (james02)  */
 /************************************************************************/      
     
 CREATE OR ALTER PROC [RDT].[rdt_646ExtPrint01] (      
@@ -50,6 +51,7 @@ BEGIN
    DECLARE @cDropID           NVARCHAR( 20)  
    DECLARE @cShipLabel        NVARCHAR( 10)  
    DECLARE @cCartonLbl        NVARCHAR( 10)  
+   DECLARE @cExportLabel      NVARCHAR( 10)
    DECLARE @cExtendedPrintSP  NVARCHAR( 20)  
    DECLARE @cLabelPrinter     NVARCHAR( 10)  
    DECLARE @nCartonNo         INT  
@@ -61,7 +63,8 @@ BEGIN
    DECLARE @nNoOfTask         INT  
    DECLARE @cCaseID           NVARCHAR( 20)  
    DECLARE @cPriority         NVARCHAR( 10)  
-     
+   DECLARE @cCountry          NVARCHAR( 5)
+   
    DECLARE @cNumTote       NVARCHAR(10)  
    DECLARE @cPickMethod    NVARCHAR(20)  
    DECLARE @ctaskDetailKey NVARCHAR(10)  
@@ -80,7 +83,11 @@ BEGIN
    FROM RDT.RDTMOBREC WITH (NOLOCK)  
    WHERE Mobile = @nMobile  
   
-     
+   SELECT 
+      @cCountry = Country
+   FROM storer WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   
    SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)  
    IF @cShipLabel = '0'  
       SET @cShipLabel = ''  
@@ -93,7 +100,10 @@ BEGIN
    IF @cChkLoadPlan = '0'  
       SET @cChkLoadPlan = ''        
         
-                          
+   SET @cExportLabel = rdt.RDTGetConfig( @nFunc, 'ExportLabel', @cStorerKey)
+   IF @cExportLabel = '0'
+      SET @cExportLabel = ''            
+
    SET @nTranCount = @@TRANCOUNT      
       
    BEGIN TRAN      
@@ -325,60 +335,95 @@ BEGIN
                   FETCH NEXT FROM @curUpdTask INTO @cTaskDetailKey    
                END   
   
-               IF @cCartonLbl <> ''  
-               BEGIN  
-                  --SELECT @cLabelNo '@cLabelNo'  
-                  DECLARE @tCARTONLBL AS VariableTable  
-                  DELETE FROM @tCARTONLBL  
-                  INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)  
-                  INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)  
-                  INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)  
-                  INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)  
-                  INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cToLabelNo',   @cLabelNo)  
-                  INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cDropID',   @cDropID)  
+               --export order label
+               IF EXISTS (SELECT TOP 1 1 
+                          FROM Orders O WITH (NOLOCK) 
+                          JOIN PICKDETAIL PD WITH (NOLOCK) ON (O.orderKey = PD.OrderKey)
+                          WHERE PD.CaseID = @cCaseID 
+                          AND O.C_Country <> @cCountry) --export order
+               BEGIN
+               	IF @cExportLabel <> ''
+                  BEGIN
+                     --SELECT @cLabelNo '@cLabelNo'
+                     DECLARE @tExportLBL AS VariableTable
+                     DELETE FROM @tExportLBL
+                     INSERT INTO @tExportLBL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)
+                     INSERT INTO @tExportLBL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)
+                     INSERT INTO @tExportLBL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)
+                     INSERT INTO @tExportLBL (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)
+                     INSERT INTO @tExportLBL (Variable, Value) VALUES ( '@cToLabelNo',   @cLabelNo)
+                     INSERT INTO @tExportLBL (Variable, Value) VALUES ( '@cDropID',   @cDropID)
+
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
+                        @cExportLabel,  -- Report type
+                        @tExportLBL, -- Report params
+                        'rdt_646ExtPrint01', 
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT 
+
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
+
+                     SET @nNoOfLabel = @nNoOfLabel + 1
+                  END
+               END
+               ELSE
+               BEGIN
+               	IF @cCartonLbl <> ''
+                  BEGIN
+                     --SELECT @cLabelNo '@cLabelNo'
+                     DECLARE @tCARTONLBL AS VariableTable
+                     DELETE FROM @tCARTONLBL
+                     INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)
+                     INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)
+                     INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)
+                     INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)
+                     INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cToLabelNo',   @cLabelNo)
+                     INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cDropID',   @cDropID)
+
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
+                        @cCartonLbl,  -- Report type
+                        @tCARTONLBL, -- Report params
+                        'rdt_646ExtPrint01', 
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT 
+
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
+
+                     SET @nNoOfLabel = @nNoOfLabel + 1
+                  END
+
+                  IF @cShipLabel <> ''
+                  BEGIN
+                     --SELECT @cLabelNo '@cLabelNo'
+                     DECLARE @tSHIPPLABEL AS VariableTable
+                     DELETE FROM @tSHIPPLABEL
+                     INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)
+                     INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)
+                     INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)
+                     INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cFromLabelNo',  @cLabelNo)
+                     INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cToLabelNo',    @cLabelNo)
+                     INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cDropID',    @cDropID)
+
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
+                        @cShipLabel,  -- Report type
+                        @tSHIPPLABEL, -- Report params
+                        'rdt_646ExtPrint01', 
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT 
+
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
+
+                     SET @nNoOfLabel = @nNoOfLabel + 1
+                  END
+               END
   
-                  -- Print label  
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',   
-                     @cCartonLbl,  -- Report type  
-                     @tCARTONLBL, -- Report params  
-                     'rdt_646ExtPrint01',   
-                     @nErrNo  OUTPUT,  
-                     @cErrMsg OUTPUT   
-  
-                  IF @nErrNo <> 0  
-                     GOTO RollBackTran  
-  
-                  SET @nNoOfLabel = @nNoOfLabel + 1  
-               END  
-  
-  
-               IF @cShipLabel <> ''  
-               BEGIN  
-                  --SELECT @cLabelNo '@cLabelNo'  
-                  DECLARE @tSHIPPLABEL AS VariableTable  
-                  DELETE FROM @tSHIPPLABEL  
-                  INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)  
-                  INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)  
-                  INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)  
-                  INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cFromLabelNo',  @cLabelNo)  
-                  INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cToLabelNo',    @cLabelNo)  
-                  INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cDropID',    @cDropID)  
-  
-                  -- Print label  
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',   
-                     @cShipLabel,  -- Report type  
-                     @tSHIPPLABEL, -- Report params  
-                     'rdt_646ExtPrint01',   
-                     @nErrNo  OUTPUT,  
-                     @cErrMsg OUTPUT   
-  
-                  IF @nErrNo <> 0  
-                     GOTO RollBackTran  
-  
-                  SET @nNoOfLabel = @nNoOfLabel + 1  
-               END  
-  
-        FETCH NEXT FROM @curGetTask INTO @cCaseID  
+               FETCH NEXT FROM @curGetTask INTO @cCaseID  
   
                SET @nNoOfTask = @nNoOfTask - 1        
   
