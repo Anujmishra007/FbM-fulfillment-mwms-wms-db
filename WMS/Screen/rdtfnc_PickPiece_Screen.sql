@@ -1,3 +1,5 @@
+
+
 -- 4640 = PickSlipNo screen
 DELETE rdt.RDTScn WHERE Scn = 4640 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4640, 'ENG'
@@ -14,6 +16,7 @@ EXECUTE rdt.rdtAddScn 4641, 'ENG'
    ,@cLine04 = ''
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i03'
+   ,@cLine13 = '%20d04'
    ,@cLine14 = '%e'
    ,@nFunc = 839
 

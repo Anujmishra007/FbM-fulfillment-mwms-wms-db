@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PickByCartonID_GetNextLOC]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PickByCartonID_GetNextLOC]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,9 +11,11 @@ GO
 /* Date        Rev  Author   Purposes                                         */
 /* 2019-03-18  1.0  Ung      WMS-8284 Created                                 */
 /* 2019-10-24  1.1  Ung      WMS-10821 Add PickDetail filter                  */
+/* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
+/*                           Add PickConfirmStatus                            */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_PickByCartonID_GetNextLOC] (
+CREATE OR ALTER PROC [RDT].[rdt_PickByCartonID_GetNextLOC] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -53,10 +52,16 @@ BEGIN
 
    DECLARE @cCurrLogicalLOC   NVARCHAR(18)
    DECLARE @cPickFilter       NVARCHAR( MAX) = ''
+   DECLARE @cPickConfirmStatus NVARCHAR( 1)
    DECLARE @tCartonID         VariableTable   
    
    SET @nErrNo = 0
    SET @cErrMsg = ''
+
+   -- Get storer config
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
 
    -- Get logical LOC
    SET @cCurrLogicalLOC = ''
@@ -118,15 +123,15 @@ BEGIN
    SET @cSQL = 
       ' SELECT TOP 1 ' + 
          ' @cNextLOC = PD.LOC ' + 
-      ' FROM WaveDetail WD WITH (NOLOCK) ' + 
-         ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' + 
+      ' FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
          ' JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
          ' JOIN @tCartonID t ON (PD.CaseID = t.Value) ' + 
-      ' WHERE WD.WaveKey = @cWaveKey ' + 
-         CASE WHEN @cPWZone = '' THEN '' ELSE ' AND LOC.PutawayZone = @cPWZone ' END + 
-         ' AND PD.Status < ''5'' ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' JOIN WaveDetail WD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' ELSE '' END + 
+      ' WHERE PD.Status < @cPickConfirmStatus ' + 
          ' AND PD.Status <> ''4'' ' + 
          ' AND PD.QTY > 0 ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' AND WD.WaveKey = @cWaveKey ' ELSE '' END + 
+         CASE WHEN @cPWZone = '' THEN '' ELSE ' AND LOC.PutawayZone = @cPWZone ' END + 
          CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END + 
          ' AND (LOC.LogicalLocation > @cCurrLogicalLOC ' + 
          ' OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC)) ' + 
@@ -138,11 +143,12 @@ BEGIN
       ' @cPWZone           NVARCHAR( 10), ' + 
       ' @cCurrLOC          NVARCHAR( 10), ' + 
       ' @cCurrLogicalLOC   NVARCHAR( 18), ' +  
+      ' @cPickConfirmStatus NVARCHAR( 1), ' + 
       ' @tCartonID         VariableTable READONLY, ' + 
       ' @cNextLOC          NVARCHAR( 10) OUTPUT,   ' +
       ' @nRowCount         INT           OUTPUT    ' 
 
-   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cPWZone, @cCurrLOC, @cCurrLogicalLOC, @tCartonID, 
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cPWZone, @cCurrLOC, @cCurrLogicalLOC, @cPickConfirmStatus, @tCartonID, 
       @cNextLOC  OUTPUT,
       @nRowCount OUTPUT 
 
@@ -182,28 +188,29 @@ BEGIN
       SET @cSQL = 
    	   ' SELECT TOP 1 ' +
    	      ' @cNextLOC = PD.LOC ' +
-         ' FROM WaveDetail WD WITH (NOLOCK) ' +
-            ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' +
+         ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
             ' JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' +
             ' JOIN @tCartonID t ON (PD.CaseID = t.Value) ' +
-         ' WHERE WD.WaveKey = @cWaveKey ' +
-            ' AND LOC.PutawayZone = @cPWZone ' +
-            CASE WHEN @cPWZone = '' THEN '' ELSE ' AND LOC.PutawayZone = @cPWZone ' END + 
-            CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END + 
-            ' AND PD.Status < ''5'' ' +
+            CASE WHEN @cWaveKey <> '' THEN ' JOIN WaveDetail WD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' ELSE '' END + 
+         ' WHERE PD.Status < @cPickConfirmStatus ' + 
             ' AND PD.Status <> ''4'' ' +
             ' AND PD.QTY > 0 ' +
+            CASE WHEN @cWaveKey <> '' THEN ' AND WD.WaveKey = @cWaveKey ' ELSE '' END + 
+            CASE WHEN @cPWZone = '' THEN '' ELSE ' AND LOC.PutawayZone = @cPWZone ' END + 
+            CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END + 
+
    	   ' ORDER BY LOC.LogicalLocation, LOC.LOC ' +
          ' SET @nRowCount = @@ROWCOUNT '
 
       SET @cSQLParam = 
          ' @cWaveKey    NVARCHAR( 10), ' + 
          ' @cPWZone     NVARCHAR( 10), ' + 
+         ' @cPickConfirmStatus NVARCHAR( 1), ' + 
          ' @tCartonID   VariableTable READONLY, ' + 
          ' @cNextLOC    NVARCHAR( 10) OUTPUT,   ' +
          ' @nRowCount   INT           OUTPUT    ' 
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cPWZone, @tCartonID, 
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cPWZone, @cPickConfirmStatus, @tCartonID, 
          @cNextLOC  OUTPUT,
          @nRowCount OUTPUT 
             

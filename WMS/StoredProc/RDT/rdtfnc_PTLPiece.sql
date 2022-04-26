@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_PTLPiece]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC rdt.rdtfnc_PTLPiece
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -21,9 +18,10 @@ GO
 /* 2020-01-16 1.5  James      WMS-11427 Add default method by config (james03)*/
 /*                            Add extvalid @ step 1                           */
 /* 2021-02-22 1.6  YeeKung    WMS-16066 Add Close carton(yeekung01)           */
+/* 2022-03-29 1.7  Ung        WMS-19254 Add MultiSKUBarocde                   */
 /******************************************************************************/
 
-CREATE PROC rdt.rdtfnc_PTLPiece (
+CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -73,6 +71,7 @@ DECLARE
    @cDeviceID     NVARCHAR( 20),
 
    @cSKU          NVARCHAR(20),
+   @nFromScn      INT,
 
    @cStation      NVARCHAR(10),
    @cMethod       NVARCHAR(1),
@@ -81,13 +80,17 @@ DECLARE
    @cExtendedValidateSP    NVARCHAR( 20),
    @cExtendedUpdateSP      NVARCHAR( 20),
    @cExtendedInfoSP        NVARCHAR( 20),
-   @cDecodeSP         NVARCHAR( 20),
+   @cDecodeSP              NVARCHAR( 20),
    @cLight                 NVARCHAR( 1),
    @cExtendedInfo          NVARCHAR( 20),
+   @cMultiSKUBarcode       NVARCHAR( 1),
+
+   @cUPC                   NVARCHAR( 30), 
+
    @cDefaultDeviceID       NVARCHAR( 20), -- (james01)
    @cUserWhoLockedStation  NVARCHAR( 20), -- (james02)
    @cDefaultMethod         NVARCHAR( 1),  -- (james03)
-   @tExtValid              VARIABLETABLE,  -- (james03)
+   @tExtValid              VARIABLETABLE, -- (james03)
    @cCartonID              NVARCHAR(20),
    @cLOC                   NVARCHAR(20),
 
@@ -122,7 +125,7 @@ DECLARE
    @cErrMsg7    NVARCHAR( 20), @cErrMsg8    NVARCHAR( 20),
    @cErrMsg9    NVARCHAR( 20), @cErrMsg10   NVARCHAR( 20),
    @cErrMsg11   NVARCHAR( 20), @cErrMsg12   NVARCHAR( 20),
-   @cErrMsg13   NVARCHAR( 20), @cErrMsg14    NVARCHAR( 20),
+   @cErrMsg13   NVARCHAR( 20), @cErrMsg14   NVARCHAR( 20),
    @cErrMsg15   NVARCHAR( 20) 
 
 -- Load RDT.RDTMobRec
@@ -141,6 +144,7 @@ SELECT
    @cDeviceID  = DeviceID,
 
    @cSKU        = V_SKU,
+   @nFromScn    = V_FromScn,
 
    @cStation         = V_String1,
    @cMethod          = V_String2,
@@ -155,6 +159,9 @@ SELECT
    @cLight              = V_String24,
    @cExtendedInfo       = V_String25,
    @cCartonID           = V_String26,
+   @cMultiSKUBarcode    = V_String27, 
+
+   @cUPC                = V_String41, 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -192,7 +199,8 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn = 4591. Dynamic assign
    IF @nStep = 3 GOTO Step_3   -- Scn = 4592. SKU
    IF @nStep = 4 GOTO Step_4   -- Scn = 4593. Unassign cart?
-   IF @nStep = 5 GOTO Step_5  -- Scn = 4594 Close Carton
+   IF @nStep = 5 GOTO Step_5   -- Scn = 4594. Close Carton
+   IF @nStep = 6 GOTO Step_6   -- Scn = 3570. Multi SKU screen  
 END
 RETURN -- Do nothing if incorrect step
 
@@ -216,14 +224,10 @@ BEGIN
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
 
-
-
-   -- (james01)
    SET @cDefaultDeviceID = rdt.RDTGetConfig( @nFunc, 'DefaultDeviceID', @cStorerKey)
-
-   -- (james03)
    SET @cDefaultMethod = rdt.RDTGetConfig( @nFunc, 'DefaultMethod', @cStorerKey)
-
+   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey) 
+   
    -- Get storer config
    DECLARE @cBypassTCPSocket NVARCHAR(1)
    SET @cBypassTCPSocket = ''
@@ -592,7 +596,6 @@ BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
       DECLARE @cBarcode NVARCHAR( 60)
-      DECLARE @cUPC     NVARCHAR( 30)
 
       -- Screen mapping
       SET @cBarcode = @cInField11 -- SKU
@@ -689,9 +692,48 @@ BEGIN
       -- Check barcode return multi SKU
       IF @nSKUCnt > 1
       BEGIN
-         SET @nErrNo = 99509
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
-         GOTO Step_3_Fail
+         IF @cMultiSKUBarcode IN ('1', '2')
+         BEGIN
+            EXEC rdt.rdt_PTLPiece_MultiSKU @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @cStation, @cMethod, @cSKU, @cLastPos, @cOption,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,
+               'POPULATE',
+               @cMultiSKUBarcode,
+               @cUPC     OUTPUT,
+               @nErrNo   OUTPUT,
+               @cErrMsg  OUTPUT
+
+            IF @nErrNo = 0 -- Populate multi SKU screen
+            BEGIN
+               -- Go to Multi SKU screen
+               SET @nFromScn = @nScn
+               SET @nScn = 3570
+               SET @nStep = @nStep + 3
+               GOTO Quit
+            END
+            IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen
+               SET @nErrNo = 0
+         END
+         ELSE       
+         BEGIN
+            SET @nErrNo = 99509
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
+            GOTO Step_3_Fail
+         END
       END
       SET @cSKU = @cUPC
 
@@ -731,16 +773,6 @@ BEGIN
       SET @cOutField10 = @cResult10
       SET @cOutField11 = '' -- SKU
       SET @cOutField12 = @cLastPos
-      
-      /*-- EventLog - Sign In Function -- (yeekung01)     
-      EXEC RDT.rdt_STD_EventLog    
-         @cActionType = '3', -- Sign in function    
-         @nMobileNo   = @nMobile,    
-         @nFunctionID = @nFunc,    
-         @cFacility   = @cFacility,    
-         @cStorerKey  = @cStorerKey,  
-         @cSKU        = @cSKU,        
-         @nStep       = @nStep */ --(cc01)      
         
       -- Save last position
       SET @cLastPos = ''
@@ -1100,6 +1132,97 @@ GOTO QUIT
 
 
 /********************************************************************************
+Step 10. Screen = 3570. Multi SKU
+   SKU         (Field01)
+   SKUDesc1    (Field02)
+   SKUDesc2   (Field03)
+   SKU         (Field04)
+   SKUDesc1    (Field05)
+   SKUDesc2    (Field06)
+   SKU         (Field07)
+   SKUDesc1    (Field08)
+   SKUDesc2    (Field09)
+   Option      (Field10, input)
+********************************************************************************/
+Step_6:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      EXEC rdt.rdt_PTLPiece_MultiSKU @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         @cStation, @cMethod, @cSKU, @cLastPos, @cOption,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,
+         'CHECK',
+         @cMultiSKUBarcode,
+         @cUPC     OUTPUT,
+         @nErrNo   OUTPUT,
+         @cErrMsg  OUTPUT
+
+      IF @nErrNo <> 0
+      BEGIN
+         IF @nErrNo = -1
+            SET @nErrNo = 0
+         GOTO Quit
+      END
+      SET @cSKU = @cUPC
+      
+      -- Prepare SKU screen var
+      SET @cOutField01 = '' --@cResult01
+      SET @cOutField02 = '' --@cResult02
+      SET @cOutField03 = '' --@cResult03
+      SET @cOutField04 = '' --@cResult04
+      SET @cOutField05 = '' --@cResult05
+      SET @cOutField06 = '' --@cResult06
+      SET @cOutField07 = '' --@cResult07
+      SET @cOutField08 = '' --@cResult08
+      SET @cOutField09 = '' --@cResult09
+      SET @cOutField10 = '' --@cResult10
+      SET @cOutField11 = @cSKU -- SKU
+      SET @cOutField12 = @cLastPos
+
+      -- Go to next screen
+      SET @nScn = @nFromScn
+      SET @nStep = @nStep - 3
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Prepare SKU screen var
+      SET @cOutField01 = '' --@cResult01
+      SET @cOutField02 = '' --@cResult02
+      SET @cOutField03 = '' --@cResult03
+      SET @cOutField04 = '' --@cResult04
+      SET @cOutField05 = '' --@cResult05
+      SET @cOutField06 = '' --@cResult06
+      SET @cOutField07 = '' --@cResult07
+      SET @cOutField08 = '' --@cResult08
+      SET @cOutField09 = '' --@cResult09
+      SET @cOutField10 = '' --@cResult10
+      SET @cOutField11 = '' -- SKU
+      SET @cOutField12 = @cLastPos
+
+      -- Go to next screen
+      SET @nScn = @nFromScn
+      SET @nStep = @nStep - 3
+   END
+END
+GOTO Quit
+
+
+/********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
@@ -1119,6 +1242,7 @@ BEGIN
       InputKey  = @nInputKey,
 
       V_SKU      = @cSKU,
+      V_FromScn  = @nFromScn,
 
       V_String1  = @cStation,
       V_String2  = @cMethod,
@@ -1133,6 +1257,9 @@ BEGIN
       V_String24 = @cLight,
       V_String25 = @cExtendedInfo,
       V_String26 = @cCartonID,
+      V_String27 = @cMultiSKUBarcode, 
+
+      V_String41 = @cUPC, 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

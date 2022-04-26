@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_PickByCartonID_GetNextTask]')AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_PickByCartonID_GetNextTask]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,9 +11,11 @@ GO
 /* Date        Rev  Author   Purposes                                         */
 /* 2019-03-18  1.0  Ung      WMS-8284 Created                                 */
 /* 2019-10-24  1.1  Ung      WMS-10821 Add PickDetail filter                  */
+/* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
+/*                           Add PickConfirmStatus                            */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_PickByCartonID_GetNextTask] (
+CREATE OR ALTER PROC [RDT].[rdt_PickByCartonID_GetNextTask] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -69,11 +68,17 @@ BEGIN
    DECLARE @cCurrL03 NVARCHAR(18)
    DECLARE @dCurrL04 DATETIME
    DECLARE @cPickFilter NVARCHAR( MAX) = ''
+   DECLARE @cPickConfirmStatus NVARCHAR( 1)
    DECLARE @tCartonID VariableTable
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
-   
+
+   -- Get storer config
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+      
    -- Save current task
    SET @cCurrCartonID = @cCartonID
    SET @cCurrID = @cID
@@ -135,16 +140,16 @@ BEGIN
          ' @cLottable03 = LA.Lottable03, ' + 
          ' @dLottable04 = LA.Lottable04, ' + 
          ' @nQTY        = SUM( PD.QTY)   ' + 
-      ' FROM WaveDetail WD WITH (NOLOCK) ' + 
-         ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' + 
+      ' FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
          ' JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
          ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT) ' + 
          ' JOIN @tCartonID t ON (PD.CaseID = t.Value) ' + 
-      ' WHERE WD.WaveKey = @cWaveKey ' + 
-         ' AND PD.LOC = @cLOC ' + 
-         ' AND PD.Status < ''5'' ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' JOIN WaveDetail WD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' ELSE '' END + 
+      ' WHERE PD.LOC = @cLOC ' + 
+         ' AND PD.Status < @cPickConfirmStatus ' + 
          ' AND PD.Status <> ''4'' ' + 
          ' AND PD.QTY > 0 ' + 
+         CASE WHEN @cWaveKey <> '' THEN ' AND WD.WaveKey = @cWaveKey ' ELSE '' END + 
          CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END + 
       ' GROUP BY PD.ID, PD.SKU, LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, PD.CaseID ' + 
       ' ORDER BY PD.ID, PD.SKU, LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, PD.CaseID ' +
@@ -153,6 +158,7 @@ BEGIN
    SET @cSQLParam = 
       ' @cWaveKey    NVARCHAR( 10), ' + 
       ' @cLOC        NVARCHAR( 10), ' +
+      ' @cPickConfirmStatus NVARCHAR( 1), ' + 
       ' @tCartonID   VariableTable READONLY, ' + 
       ' @cCartonID   NVARCHAR( 20) OUTPUT, ' + 
       ' @cID         NVARCHAR( 18) OUTPUT, ' + 
@@ -164,7 +170,7 @@ BEGIN
       ' @nQTY        INT           OUTPUT, ' + 
       ' @nRowCount   INT           OUTPUT    ' 
 
-   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cLOC, @tCartonID, 
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cLOC, @cPickConfirmStatus, @tCartonID, 
       @cCartonID   OUTPUT, 
       @cID         OUTPUT,
       @cSKU        OUTPUT,
@@ -237,22 +243,22 @@ BEGIN
       SET @cSQL = 
          ' SELECT TOP 1 ' + 
             ' @nTotal = SUM( PD.QTY) ' + 
-         ' FROM WaveDetail WD WITH (NOLOCK) ' + 
-            ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' + 
+         ' FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
             ' JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
             ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT) ' + 
             ' JOIN @tCartonID t ON (PD.CaseID = t.Value) ' + 
-         ' WHERE WD.WaveKey = @cWaveKey ' + 
-            ' AND PD.LOC = @cLOC ' + 
+            CASE WHEN @cWaveKey <> '' THEN ' JOIN WaveDetail WD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey) ' ELSE '' END + 
+         ' WHERE PD.LOC = @cLOC ' + 
             ' AND PD.ID = @cID ' + 
             ' AND PD.SKU = @cSKU ' + 
             ' AND LA.Lottable01 = @cLottable01 ' + 
             ' AND LA.Lottable02 = @cLottable02 ' + 
             ' AND LA.Lottable03 = @cLottable03 ' + 
             ' AND LA.Lottable04 = @dLottable04 ' + 
-            ' AND PD.Status < ''5'' ' + 
+            ' AND PD.Status < @cPickConfirmStatus ' + 
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.QTY > 0 ' + 
+            CASE WHEN @cWaveKey <> '' THEN ' AND WD.WaveKey = @cWaveKey ' ELSE '' END + 
             CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
    
       SET @cSQLParam = 
@@ -264,11 +270,12 @@ BEGIN
          ' @cLottable02 NVARCHAR( 18), ' + 
          ' @cLottable03 NVARCHAR( 18), ' + 
          ' @dLottable04 DATETIME,      ' + 
+         ' @cPickConfirmStatus NVARCHAR( 1), ' + 
          ' @tCartonID   VariableTable READONLY, ' + 
          ' @nTotal      INT           OUTPUT    ' 
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cWaveKey, @cLOC, @cID, @cSKU, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @tCartonID, 
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cPickConfirmStatus, @tCartonID, 
          @nTotal OUTPUT
    END
    

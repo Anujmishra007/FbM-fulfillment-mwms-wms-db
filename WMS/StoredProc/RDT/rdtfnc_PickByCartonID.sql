@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtfnc_PickByCartonID]') AND OBJECTPROPERTY(object_id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtfnc_PickByCartonID]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,12 +11,14 @@ GO
 /* Date        Rev  Author   Purposes                                         */
 /* 2019-03-18  1.0  Ung      WMS-8284 Created                                 */
 /* 2019-08-19  1.1  Ung      WMS-10176 Add fully scan auto go to next screen  */
+/* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
+/*                           Add 1 carton don't need confirm carton ID        */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PickByCartonID] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PickByCartonID] (
    @nMobile    INT,
-   @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR(1024) OUTPUT
+   @nErrNo     INT           OUTPUT,
+   @cErrMsg    NVARCHAR( 20) OUTPUT
 ) AS
 
 SET NOCOUNT ON
@@ -34,6 +33,7 @@ DECLARE
    @cSQL             NVARCHAR(MAX),
    @cSQLParam        NVARCHAR(MAX),
    @nCartonIDCount   INT, 
+   @cFlowThruScreen  NVARCHAR(1), 
    @tVar             VariableTable
 
 -- RDT.RDTMobRec variable
@@ -81,6 +81,7 @@ DECLARE
    @cExtendedUpdateSP   NVARCHAR(20),
    @cExtendedInfoSP     NVARCHAR(20),
    @cExtendedInfo       NVARCHAR(20),
+   @cWaveOptional       NVARCHAR(1),
 
    @nTotalQTY           INT,   -- Total QTY to pick for a LOC, SKU, lottable (across all cartons)
 
@@ -145,6 +146,7 @@ SELECT
    @cExtendedUpdateSP   = V_String22,
    @cExtendedInfoSP     = V_String23,
    @cExtendedInfo       = V_String24,
+   @cWaveOptional       = V_String25,
 
    @nTotalQTY     = V_Integer1,
 
@@ -188,6 +190,8 @@ Step 0. Called from menu (func = 831)
 Step_0:
 BEGIN
    -- Get StorerConfig
+   SET @cWaveOptional = rdt.rdtGetConfig( @nFunc, 'WaveOptional', @cStorerKey)
+
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
@@ -233,36 +237,42 @@ BEGIN
       -- Check blank
       IF @cWaveKey = ''
       BEGIN
-         SET @nErrNo = 136251
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need WAVEKEY
-         EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
-         GOTO Quit
+         IF @cWaveOptional = '0'
+         BEGIN
+            SET @nErrNo = 136251
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need WAVEKEY
+            EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
+            GOTO Quit
+         END
       END
 
       -- Check wave valid
-      IF NOT EXISTS (SELECT 1 FROM dbo.WaveDetail WITH (NOLOCK) WHERE WaveKey = @cWaveKey)
+      IF @cWaveKey <> ''
       BEGIN
-         SET @nErrNo = 136252
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad WAVEKEY
-         EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
-         SET @cOutField01 = ''
-         GOTO Quit
-      END
+         IF NOT EXISTS (SELECT 1 FROM dbo.WaveDetail WITH (NOLOCK) WHERE WaveKey = @cWaveKey)
+         BEGIN
+            SET @nErrNo = 136252
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad WAVEKEY
+            EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
 
-      -- Check diff storer
-      IF EXISTS (SELECT 1 
-         FROM dbo.WaveDetail WD WITH (NOLOCK) 
-            JOIN Orders O WITH (NOLOCK) ON (WD.OrderKey = O.OrderKey)
-         WHERE WD.WaveKey = @cWaveKey
-            AND O.StorerKey <> @cStorerKey)
-      BEGIN
-         SET @nErrNo = 136265
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
-         EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
-         SET @cOutField01 = ''
-         GOTO Quit
+         -- Check diff storer
+         IF EXISTS (SELECT 1 
+            FROM dbo.WaveDetail WD WITH (NOLOCK) 
+               JOIN Orders O WITH (NOLOCK) ON (WD.OrderKey = O.OrderKey)
+            WHERE WD.WaveKey = @cWaveKey
+               AND O.StorerKey <> @cStorerKey)
+         BEGIN
+            SET @nErrNo = 136265
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
+            EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
       END
-
+      
       SET @cOutField01 = @cWaveKey
       SET @cOutField02 = '' -- PWZone
 
@@ -936,6 +946,23 @@ BEGIN
          -- Go to carton ID screen
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
+
+         -- Flow thru if only 1 carton
+         SET @nCartonIDCount = 0
+         IF @cCartonID1 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID2 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID3 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID4 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID5 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID6 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID7 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID8 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID9 <> '' SET @nCartonIDCount += 1 
+         IF @nCartonIDCount = 1  
+         BEGIN
+            SET @cFlowThruScreen = '1'
+            SET @cInField03 = @cCartonID
+         END
       END
    END
 
@@ -1009,6 +1036,10 @@ Step_5_Quit:
          SET @cOutField15 = @cExtendedInfo 
       END
    END
+   
+   IF @cFlowThruScreen = '1'
+      IF @nStep = 6
+         GOTO Step_6 
 END
 GOTO Quit
 
@@ -1304,6 +1335,23 @@ BEGIN
          -- Go to carton ID screen
          SET @nScn  = @nScn - 1
          SET @nStep = @nStep - 1
+
+         -- Flow thru if only 1 carton
+         SET @nCartonIDCount = 0
+         IF @cCartonID1 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID2 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID3 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID4 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID5 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID6 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID7 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID8 <> '' SET @nCartonIDCount += 1 
+         IF @cCartonID9 <> '' SET @nCartonIDCount += 1 
+         IF @nCartonIDCount = 1  
+         BEGIN
+            SET @cFlowThruScreen = '1'
+            SET @cInField03 = @cCartonID
+         END
          
          GOTO Step_7_Quit
       END
@@ -1387,6 +1435,10 @@ Step_7_Quit:
          SET @cOutField15 = @cExtendedInfo 
       END
    END
+
+   IF @cFlowThruScreen = '1'
+      IF @nStep = 6
+         GOTO Step_6 
 END
 GOTO Quit
 
@@ -1435,6 +1487,7 @@ BEGIN
       V_String22   = @cExtendedUpdateSP,
       V_String23   = @cExtendedInfoSP,
       V_String24   = @cExtendedInfo,
+      V_String25   = @cWaveOptional,
 
       V_Integer1   = @nTotalQTY,
 

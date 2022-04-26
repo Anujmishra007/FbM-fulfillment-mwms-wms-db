@@ -134,8 +134,8 @@ BEGIN
    -- Close
    ELSE IF @cType = 'CLOSE' 
    BEGIN
-      DECLARE @bSuccess INT
-      DECLARE @cOrderKey NVARCHAR( 10)
+      DECLARE @bSuccess       INT
+      DECLARE @cOrderKey      NVARCHAR( 10)
       DECLARE @cPickDetailKey NVARCHAR( 10)
 
       BEGIN TRAN
@@ -191,8 +191,8 @@ BEGIN
             END
          END
          
-         -- Completed order
-         ELSE
+         -- Completed order, and not cancel
+         ELSE IF NOT EXISTS( SELECT 1 FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND (Status = 'CANC' OR SOStatus IN ('PENDCANC', 'CANC')))
          BEGIN
             -- Update PackTask
             UPDATE dbo.PackTask SET
