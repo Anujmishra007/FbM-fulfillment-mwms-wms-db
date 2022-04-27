@@ -14,7 +14,7 @@ GO
 /* Called By: RCM - Generate Pickslip                                   */
 /*          : Datawindow - r_dw_print_wave_pickslip_35                  */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -24,8 +24,9 @@ GO
 /* Date         Author   Ver. Purposes                                  */
 /* 28-Oct-2021  WLChooi  1.0  DevOps Combine Script                     */
 /* 03-Mar-2022  WLChooi  1.1  WMS-18172 Change DeliveryDate column(WL01)*/
+/* 14-Mar-2022  WLChooi  1.2  WMS-19171 Add logic for Case Pick (WL02)  */
 /************************************************************************/
-CREATE OR ALTER PROC dbo.isp_GetPickSlipWave_35 (  
+CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave_35] (  
    @c_wavekey_type          NVARCHAR(13)  
 )  
 AS  
@@ -155,16 +156,16 @@ BEGIN
       Pickdetailkey      NVARCHAR(20) NULL,
       packcasecnt        FLOAT,
       ExtOrderkey        NVARCHAR(50) NULL,
-      DeliveryDate       DATE,
+      DeliveryDate       DATE NULL,   --WL02
       [Route]            NVARCHAR(20),
       c_Address1         NVARCHAR(45),
       c_Address2         NVARCHAR(45),
       c_Address3         NVARCHAR(45),
       c_Address4         NVARCHAR(45),
-      c_Zip              NVARCHAR(10),
+      c_Zip              NVARCHAR(45),   --WL02
       c_City             NVARCHAR(45),
-      c_State            NVARCHAR(10),
-      c_Country          NVARCHAR(10),
+      c_State            NVARCHAR(45),   --WL02
+      c_Country          NVARCHAR(45),   --WL02
       BillToKey          NVARCHAR(20),
       b_Company          NVARCHAR(45),    
       b_Address1         NVARCHAR(45),
@@ -173,15 +174,18 @@ BEGIN
       b_Address4         NVARCHAR(45),
       b_Zip              NVARCHAR(10),
       b_City             NVARCHAR(45),
-      b_State            NVARCHAR(10),
-      b_Country          NVARCHAR(10),
+      b_State            NVARCHAR(45),   --WL02
+      b_Country          NVARCHAR(45),   --WL02
       M_VAT              NVARCHAR(50),
       Export             NVARCHAR(50),
       ManufacturerSKU    NVARCHAR(50),
       LogicalLoc         NVARCHAR(20),
       SKUStyle           NVARCHAR(20),
       SortSeq            INT NULL,
-      MaxPickslip        NVARCHAR(10)
+      MaxPickslip        NVARCHAR(10) NULL,   --WL02
+      UserDefine04       NVARCHAR(50),   --WL02
+      UOM                NVARCHAR(10),   --WL02
+      DropID             NVARCHAR(30)    --WL02
    )
 
    CREATE TABLE #TEMP_PICKBYZONE
@@ -265,7 +269,10 @@ BEGIN
       ManufacturerSKU,
       LogicalLoc,
       SKUStyle,
-      MaxPickslip
+      MaxPickslip,
+      UserDefine04,   --WL02
+      UOM,            --WL02
+      Dropid          --WL02
    )                
    SELECT DISTINCT 
       RefKeyLookup.PickSlipNo,  
@@ -276,16 +283,26 @@ BEGIN
       PICKDETAIL.SKU,  
       ISNULL(SKU.Descr, '')  AS  SKUDescr,  
       SUM(PICKDETAIL.qty)            AS Qty,  
-      CASE WHEN W.UserDefine02 <> 'Y' THEN '' ELSE LOC.PickZone END AS LOCZone,    
-      Cartons_cal = CASE PACK.Casecnt  
-                        WHEN 0 THEN 0  
-                        ELSE FLOOR(SUM(PICKDETAIL.qty) / (PACK.Casecnt))  
+      CASE WHEN W.UserDefine02 <> 'Y' THEN '' ELSE LOC.PickZone END AS LOCZone,  
+      --WL02 S
+      --Cartons_cal = CASE PACK.Casecnt  
+      --                  WHEN 0 THEN 0  
+      --                  ELSE FLOOR(SUM(PICKDETAIL.qty) / (PACK.Casecnt))  
+      --             END,   
+      --Each_cal    = CASE PACK.Casecnt  
+      --                  --WHEN 0 THEN 0 
+      --                  WHEN 0 THEN SUM(PICKDETAIL.qty) 
+      --                  ELSE FLOOR(SUM(PICKDETAIL.qty) % CAST(PACK.Casecnt AS INT))  
+      --             END,
+      Cartons_cal = CASE PICKDETAIL.UOM
+                        WHEN 2 THEN 1  
+                        ELSE 0
                    END,   
-      Each_cal    = CASE PACK.Casecnt  
-                        --WHEN 0 THEN 0 
-                        WHEN 0 THEN SUM(PICKDETAIL.qty) 
-                        ELSE FLOOR(SUM(PICKDETAIL.qty) % CAST(PACK.Casecnt AS INT))  
-                   END,   
+      Each_cal    = CASE PICKDETAIL.UOM 
+                        WHEN 6 THEN SUM(PICKDETAIL.qty) 
+                        ELSE 0 
+                   END,
+      --WL02 E
       SKU.SKUGROUP,  
       ORDERS.Storerkey,  
       WD.WaveKey,
@@ -318,7 +335,10 @@ BEGIN
       ISNULL(SKU.MANUFACTURERSKU,''),
       LOC.LogicalLocation,
       ISNULL(SKU.Style,''),
-      (SELECT MAX(PD.Pickslipno) FROM PICKDETAIL PD (NOLOCK) WHERE PD.OrderKey = ORDERS.OrderKey) AS MaxPickslip
+      (SELECT MAX(PD.Pickslipno) FROM PICKDETAIL PD (NOLOCK) WHERE PD.OrderKey = ORDERS.OrderKey) AS MaxPickslip,
+      ORDERS.UserDefine04,   --WL02
+      PICKDETAIL.UOM,        --WL02
+      CASE WHEN PICKDETAIL.UOM = '2' THEN PICKDETAIL.DropID ELSE '' END   --WL02
    FROM WAVEDETAIL      WD  WITH (NOLOCK) 
    JOIN PICKDETAIL WITH (NOLOCK)  ON PICKDETAIL.OrderKey = WD.OrderKey --AND  PICKDETAIL.WaveKey=wd.WaveKey
    LEFT JOIN PICKHEADER WITH (NOLOCK) ON PICKHEADER.ExternOrderKey = PICKDETAIL.PickSlipNo
@@ -334,7 +354,7 @@ BEGIN
    JOIN LOC WITH (NOLOCK) ON  PICKDETAIL.LOC = LOC.LOC  
    LEFT JOIN RefKeyLookup (NOLOCK) ON (RefKeyLookup.PICKDETAILKey = PICKDETAIL.PICKDETAILKey) 
    JOIN WAVE W WITH (NOLOCK) ON (W.WaveKey = WD.WaveKey)
-   WHERE  PICKDETAIL.Status <= '5' --AND ORDERS.status >= '2'  
+   WHERE PICKDETAIL.Status <= '5' --AND ORDERS.status >= '2'  
    AND WD.WaveKey = @c_waveKey  
    GROUP BY RefKeyLookup.PickSlipNo,
             ORDERS.LoadKey,ORDERS.OrderKey,
@@ -374,7 +394,10 @@ BEGIN
             CASE WHEN ORDERS.C_Country <> STORER.Country THEN 'EXPORT' ELSE '' END,
             ISNULL(SKU.MANUFACTURERSKU,''),
             LOC.LogicalLocation,
-            ISNULL(SKU.Style,'')
+            ISNULL(SKU.Style,''),
+            ORDERS.UserDefine04,   --WL02
+            PICKDETAIL.UOM,        --WL02
+            PICKDETAIL.DropID      --WL02
                
    WHILE @@TRANCOUNT > 0  
    BEGIN  
@@ -393,8 +416,8 @@ BEGIN
                  , PickDetailKey, MaxPickslip
    FROM #TMP_PICK  
    WHERE ISNULL(PickSlipNo,'') = ''
-   ORDER BY Orderkey,LOCZone,PickDetailKey        
-  
+   ORDER BY Orderkey,LOCZone,PickDetailKey
+
    OPEN CUR_LOAD  
      
    FETCH NEXT FROM CUR_LOAD INTO @c_loadkey,@c_orderkey   
@@ -682,6 +705,7 @@ BEGIN
                  ) X ON TP.Orderkey = X.Orderkey
                     AND TP.LOCZone = X.LOCZone
                     AND TP.Sku = X.Sku
+            WHERE TP.UOM = '6'   --WL02
             GROUP BY TP.Orderkey, TP.LOCZone, X.Sku_Min_LogLoc, TP.LogicalLoc, TP.Sku, TP.Loc
             ORDER BY TP.Orderkey, TP.LOCZone, X.Sku_Min_LogLoc, TP.Sku, TP.LogicalLoc
          
@@ -698,6 +722,44 @@ BEGIN
             AND LogicalLoc = @c_LogicalLoc
             AND SKU = @c_Sku
             AND LOC = @c_Loc
+            AND UOM = '6'   --WL02
+
+            --WL02 S
+            DECLARE CUR_UPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT DISTINCT PD.PickDetailKey
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE PD.OrderKey = @c_Orderkey
+            AND PD.SKU = @c_Sku
+            AND PD.Loc = @c_Loc
+            AND PD.UOM = '6'
+
+            OPEN CUR_UPD
+
+            FETCH NEXT FROM CUR_UPD INTO @c_PickDetailKey
+
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               UPDATE PICKDETAIL
+               SET TaskManagerReasonKey = @n_SortSeq
+                 , TrafficCop = NULL
+                 , EditDate   = GETDATE()
+                 , EditWho    = SUSER_SNAME()
+               WHERE PickDetailKey = @c_PickDetailKey
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 63005
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+                                  ': UPDATE PICKDETAIL Failed. (isp_GetPickSlipWave_35)'
+                  GOTO QUIT
+               END
+
+               FETCH NEXT FROM CUR_UPD INTO @c_PickDetailKey
+            END 
+            CLOSE CUR_UPD
+            DEALLOCATE CUR_UPD
+            --WL02 E
 
             SET @n_SortSeq = @n_SortSeq + 1
 
@@ -723,6 +785,7 @@ BEGIN
                  ) Y ON TP.OrderKey = Y.OrderKey
                     AND TP.LOCZone  = Y.LOCZone
                     AND TP.SKUStyle = Y.SKUStyle
+            WHERE TP.UOM = '6'   --WL02
             GROUP BY TP.Orderkey, TP.LOCZone, Y.Style_Min_LogLoc, Y.Sku_Min_LogLoc, TP.LogicalLoc, TP.Sku, TP.Loc
             ORDER BY TP.Orderkey, TP.LOCZone, Y.Style_Min_LogLoc, Y.Sku_Min_LogLoc, TP.Sku, TP.LogicalLoc
          
@@ -739,6 +802,44 @@ BEGIN
             AND LogicalLoc = @c_LogicalLoc
             AND SKU = @c_Sku
             AND LOC = @c_Loc
+            AND UOM = '6'   --WL02
+
+            --WL02 S
+            DECLARE CUR_UPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT DISTINCT PD.PickDetailKey
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE PD.OrderKey = @c_Orderkey
+            AND PD.SKU = @c_Sku
+            AND PD.Loc = @c_Loc
+            AND PD.UOM = '6'
+
+            OPEN CUR_UPD
+
+            FETCH NEXT FROM CUR_UPD INTO @c_PickDetailKey
+
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               UPDATE PICKDETAIL
+               SET TaskManagerReasonKey = @n_SortSeq
+                 , TrafficCop = NULL
+                 , EditDate   = GETDATE()
+                 , EditWho    = SUSER_SNAME()
+               WHERE PickDetailKey = @c_PickDetailKey
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 63010
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) + 
+                                  ': UPDATE PICKDETAIL Failed. (isp_GetPickSlipWave_35)'
+                  GOTO QUIT
+               END
+
+               FETCH NEXT FROM CUR_UPD INTO @c_PickDetailKey
+            END 
+            CLOSE CUR_UPD
+            DEALLOCATE CUR_UPD
+            --WL02 E
 
             SET @n_SortSeq = @n_SortSeq + 1
 
@@ -747,8 +848,8 @@ BEGIN
          CLOSE CUR_SKU
          DEALLOCATE CUR_SKU
       END
-   END                                                    
-    
+   END       
+
 QUIT:  
    IF CURSOR_STATUS('LOCAL' , 'CUR_LOAD') in (0 , 1)  
    BEGIN  
@@ -779,6 +880,14 @@ QUIT:
       CLOSE CUR_SKU  
       DEALLOCATE CUR_SKU  
    END
+
+   --WL02 S
+   IF CURSOR_STATUS('LOCAL' , 'CUR_UPD') in (0 , 1)  
+   BEGIN  
+      CLOSE CUR_UPD  
+      DEALLOCATE CUR_UPD  
+   END
+   --WL02 E
   
    IF @n_Continue=3  -- Error Occured - Process And Return    
    BEGIN   
@@ -830,6 +939,16 @@ QUIT:
       ,  #TMP_PICK.Export
       ,  #TMP_PICK.ManufacturerSKU
       ,  #TMP_PICK.SortSeq
+      ,  #TMP_PICK.UserDefine04   --WL02
+      ,  #TMP_PICK.UOM            --WL02
+      ,  #TMP_PICK.DropID         --WL02
+      ,  (SELECT CASE STUFF((SELECT DISTINCT ',' + RTRIM(T.UOM) 
+                      FROM #TMP_PICK T 
+                      WHERE T.OrderKey = #TMP_PICK.OrderKey
+                      ORDER BY 1 FOR XML PATH('')),1,1,'' )
+                 WHEN '2' THEN 'B'
+                 WHEN '6' THEN 'PF'
+                 ELSE 'B & PF' END) AS UOMIndicator   --WL02
    FROM  #TMP_PICK  
    GROUP BY  #TMP_PICK.PickSlipNo     
       ,  #TMP_PICK.LoadKey            
@@ -868,8 +987,16 @@ QUIT:
       ,  #TMP_PICK.Export
       ,  #TMP_PICK.ManufacturerSKU
       ,  #TMP_PICK.SortSeq
-   ORDER BY #TMP_PICK.SortSeq
- 
+      ,  #TMP_PICK.UserDefine04   --WL02
+      ,  #TMP_PICK.UOM            --WL02
+      ,  #TMP_PICK.DropID         --WL02
+      ,  #TMP_PICK.LogicalLoc     --WL02
+   ORDER BY #TMP_PICK.UOM   --WL02
+          , CASE WHEN #TMP_PICK.UOM = '2' THEN #TMP_PICK.OrderKey   ELSE '' END   --WL02
+          , CASE WHEN #TMP_PICK.UOM = '2' THEN #TMP_PICK.LogicalLoc ELSE '' END   --WL02
+          , CASE WHEN #TMP_PICK.UOM = '2' THEN UPPER(#TMP_PICK.LOC) ELSE '' END   --WL02
+          , CASE WHEN #TMP_PICK.UOM = '2' THEN '' ELSE #TMP_PICK.SortSeq END      --WL02
+
    IF OBJECT_ID('tempdb..#TMP_PICK') IS NOT NULL
       DROP TABLE #TMP_PICK
    
@@ -881,5 +1008,5 @@ QUIT:
    RETURN  
 END  
 GO
-GRANT EXECUTE ON isp_GetPickSlipWave_35 TO NSQL
+GRANT EXECUTE ON [dbo].[isp_GetPickSlipWave_35] TO NSQL
 GO   
