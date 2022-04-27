@@ -104,6 +104,8 @@ GO
 /* 14-FEB-2022  NJOW17   3.9  WMS-18820 Allow disable superorderflag    */
 /*                            logic in discrete allocation by config    */
 /* 14-FEB-2022  NJOW17   3.9  DEVOPS combine script                     */
+/* 15-MAR-2022  NJOW18   4.0  WMS-19173 Update pickdetailkey and order  */
+/*                            line no to UCC for UCC allocation         */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -3254,7 +3256,7 @@ BEGIN
          IF @c_prevdropstorer <> @c_dropstorer  
          BEGIN  
             /* IDSV5 - Leo */  
-   SELECT @b_success = 0  
+            SELECT @b_success = 0  
             EXECUTE nspGetRight null,  
                        @c_dropstorer,  
                        @c_dropsku,  
@@ -3435,7 +3437,7 @@ BEGIN
                      WHEN '3' THEN @c_uom2pickmethod -- Inner  
                      WHEN '4' THEN @c_uom5pickmethod -- Other 1  
                      WHEN '5' THEN @c_uom6pickmethod -- Other 2 (uses the same pickmethod AS other1)  
-       WHEN '6' THEN @c_uom3pickmethod -- Piece  
+                     WHEN '6' THEN @c_uom3pickmethod -- Piece  
                      WHEN '7' THEN @c_uom3pickmethod -- Piece  
                      ELSE '0'  
                   END  
@@ -3610,12 +3612,14 @@ BEGIN
                   IF EXISTS(SELECT 1 FROM UCC (NOLOCK)  
                                WHERE UCCNo = @c_UCCNo  
                                AND Storerkey = @c_aStorerkey  
-             AND Sku = @c_aSku  
+                               AND Sku = @c_aSku  
                                AND Status < '3') 
                   BEGIN
                      UPDATE UCC WITH (ROWLOCK)  
                           SET Status = '3',  
-                             Orderkey = @c_Orderkey  
+                              Orderkey = @c_Orderkey,
+                              OrderLineNumber = @c_Aorderlinenumber, --NJOW18
+                              PickDetailKey = @c_PickDetailKey  --NJOW18
                           WHERE UCCNo = @c_UCCNo  
                         AND Storerkey = @c_aStorerkey  
                         AND Sku = @c_aSku  
