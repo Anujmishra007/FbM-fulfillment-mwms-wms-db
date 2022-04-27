@@ -14,7 +14,7 @@ GO
 /* Called By: RCM - Generate Pickslip                                   */
 /*          : Datawindow - r_dw_print_wave_pickslip_35                  */
 /*                                                                      */
-/* GitLab Version: 1.2                                                  */
+/* GitLab Version: 1.3                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* 28-Oct-2021  WLChooi  1.0  DevOps Combine Script                     */
 /* 03-Mar-2022  WLChooi  1.1  WMS-18172 Change DeliveryDate column(WL01)*/
 /* 14-Mar-2022  WLChooi  1.2  WMS-19171 Add logic for Case Pick (WL02)  */
+/* 27-Apr-2022  WLChooi  1.3  WMS-19171 Add condition (WL03)            */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave_35] (  
    @c_wavekey_type          NVARCHAR(13)  
@@ -732,6 +733,7 @@ BEGIN
             AND PD.SKU = @c_Sku
             AND PD.Loc = @c_Loc
             AND PD.UOM = '6'
+            AND PD.[Status] <> '9'   --WL03
 
             OPEN CUR_UPD
 
@@ -812,6 +814,7 @@ BEGIN
             AND PD.SKU = @c_Sku
             AND PD.Loc = @c_Loc
             AND PD.UOM = '6'
+            AND PD.[Status] <> '9'   --WL03
 
             OPEN CUR_UPD
 
