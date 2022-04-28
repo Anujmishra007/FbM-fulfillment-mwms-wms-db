@@ -1,6 +1,3 @@
-if exists (select * from sys.sysobjects where id = object_id(N'[rdt].[rdt_607ExtPA01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_607ExtPA01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +16,10 @@ GO
 /* 13-Aug-2018  Ung       1.2   WMS-5956 Add CPD brand                        */
 /* 19-Feb-2019  James     1.3   WMS-7929 Remove CPD brand                     */
 /* 03-Aug-2020  James     1.4   WMS-14494 - ToLoc Suggestion change (james01) */
+/* 03-Feb-2022  Ung       1.5   WMS-18844 Add suggest LOC by RecType + L06    */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_607ExtPA01]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_607ExtPA01]
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -276,6 +274,7 @@ BEGIN
          WHERE ListName = 'LORRTN' 
          AND   Code = @cRECType
          AND   Storerkey = @cStorerKey
+         AND   Code2 = @cLottable06
          
          IF ISNULL( @cSuggLOC, '') = ''
             SELECT @cSuggLOC = Short 
