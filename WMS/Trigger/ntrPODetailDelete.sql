@@ -276,17 +276,17 @@ BEGIN
                POLineStatus, Facility, shortcode, Best_bf_Date, Lottable01, Lottable02,
                Lottable03, Lottable04, Lottable05, UserDefine01, UserDefine02, UserDefine03, 
                UserDefine04, UserDefine05, UserDefine06, UserDefine07, UserDefine08, 
-               UserDefine09, UserDefine10, ToId, Lottable06, Lottable08, Lottable09, Lottable10,
+               UserDefine09, UserDefine10, ToId, Lottable06, Lottable07,Lottable08, Lottable09, Lottable10,
                Lottable11, Lottable12, Lottable13, Lottable14, Lottable15, Channel)
-      SELECT POKey,POLineNumber,StorerKey,PODetailKey,ExternPOKey,ExternLineNo,
-             MarksContainer,Sku,SKUDescription,ManufacturerSku,RetailSku,AltSku,
-             QtyOrdered,QtyAdjusted,QtyReceived,PackKey,UnitPrice,UOM,Notes,
-             EffectiveDate,  getdate(), suser_sname(), EditDate,EditWho,TrafficCop,ArchiveCop,
-             POLineStatus,Facility,shortcode,Best_bf_Date,Lottable01,Lottable02,
-             Lottable03,Lottable04,Lottable05,UserDefine01,UserDefine02, UserDefine03, 
-             UserDefine04, UserDefine05, UserDefine06, UserDefine07, UserDefine08, UserDefine09, 
-             UserDefine10,ToId, Lottable06,Lottable08,Lottable09,Lottable10, Lottable11,
-             Lottable12,Lottable13,Lottable14,Lottable15,Channel FROM DELETED 
+      SELECT 	POKey,POLineNumber,StorerKey,PODetailKey,ExternPOKey,ExternLineNo,
+             	MarksContainer,Sku,SKUDescription,ManufacturerSku,RetailSku,AltSku,
+             	QtyOrdered,QtyAdjusted,QtyReceived,PackKey,UnitPrice,UOM,Notes,
+             	EffectiveDate,  getdate(), suser_sname(), EditDate,EditWho,TrafficCop,ArchiveCop,
+             	POLineStatus,Facility,shortcode,Best_bf_Date,Lottable01,Lottable02,
+             	Lottable03,Lottable04,Lottable05,UserDefine01,UserDefine02, UserDefine03, 
+             	UserDefine04, UserDefine05, UserDefine06, UserDefine07, UserDefine08, 
+	     	UserDefine09, UserDefine10,ToId, Lottable06,Lottable07,Lottable08,Lottable09,Lottable10, 
+		Lottable11, Lottable12,Lottable13,Lottable14,Lottable15,Channel FROM DELETED 
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
       BEGIN
