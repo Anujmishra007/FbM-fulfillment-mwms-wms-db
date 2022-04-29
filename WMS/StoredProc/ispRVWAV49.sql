@@ -14,7 +14,7 @@ GO
 /*                                                                       */  
 /* Called By: Wave                                                       */  
 /*                                                                       */  
-/* GitLab Version: 1.0                                                   */  
+/* GitLab Version: 1.1                                                   */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -23,6 +23,8 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver   Purposes                                  */  
 /* 26-Jan-2022  WLChooi  1.0   DevOps Combine Script                     */
+/* 29-Apr-2022  WLChooi  1.1   Bug Fix - Fix TaskType = FCP for non PTL  */
+/*                             (WL01)                                    */
 /*************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV49]      
@@ -76,7 +78,9 @@ BEGIN
    BEGIN
       IF NOT EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
                      WHERE TD.Wavekey = @c_Wavekey AND TD.SourceType = 'ispRLWAV49'
-                     AND TD.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType)) )
+                     AND (TD.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType)) 
+                          OR TD.TaskType IN ('FCP') )   --WL01
+                     )
       BEGIN                                          
          SELECT @n_continue = 3  
          SELECT @n_err = 81010  
@@ -90,7 +94,8 @@ BEGIN
       IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
                  WHERE TD.Wavekey = @c_Wavekey
                  AND TD.Sourcetype = 'ispRLWAV49'
-                 AND TD.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType))
+                 AND (TD.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType))
+                      OR TD.TaskType IN ('FCP') )   --WL01
                  AND TD.Status <> '0')
       BEGIN
          SELECT @n_continue = 3  
@@ -107,7 +112,8 @@ BEGIN
       DELETE TASKDETAIL
       WHERE TASKDETAIL.Wavekey = @c_Wavekey 
       AND TASKDETAIL.Sourcetype = 'ispRLWAV49'
-      AND TASKDETAIL.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType))
+      AND (TASKDETAIL.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType))
+           OR TASKDETAIL.TaskType IN ('FCP') )   --WL01
       AND TASKDETAIL.Status = '0'
         
       SELECT @n_err = @@ERROR
