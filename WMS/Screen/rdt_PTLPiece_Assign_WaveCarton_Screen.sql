@@ -12,5 +12,6 @@ EXECUTE rdt.rdtAddScn 4601, 'ENG'
    ,@cLine08 = ''
    ,@cLine09 = 'CARTON ID:     %05d06'
    ,@cLine10 = '%20i04'
+   ,@cLine13 = '%20i07'
    ,@cLine14 = '%e'
    ,@nFunc = 805
