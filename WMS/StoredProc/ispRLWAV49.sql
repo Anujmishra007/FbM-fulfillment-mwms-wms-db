@@ -14,7 +14,7 @@ GO
 /*                                                                       */  
 /* Called By: Wave                                                       */  
 /*                                                                       */  
-/* GitLab Version: 1.0                                                   */  
+/* GitLab Version: 1.1                                                   */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -23,6 +23,8 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver.  Purposes                                  */  
 /* 26-Jan-2022  WLChooi  1.0   DevOps Combine Script                     */
+/* 29-Apr-2022  WLChooi  1.1   Bug Fix - Fix TaskType = FCP for non PTL  */
+/*                             (WL01)                                    */
 /*************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV49]      
@@ -118,7 +120,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV49]
                      FROM WAVEDETAIL WD (NOLOCK)
                      JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
                      LEFT JOIN TASKDETAIL TD (NOLOCK) ON PD.Taskdetailkey = TD.Taskdetailkey AND TD.Sourcetype = @c_SourceType 
-                                                     AND TD.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType))
+                                                     AND (TD.Tasktype IN (SELECT DISTINCT ColValue FROM dbo.fnc_DelimSplit(',', @c_AllTaskType))
+                                                          OR TD.Tasktype IN ('FCP') )  --WL01
                      WHERE WD.Wavekey = @c_Wavekey                   
                      AND PD.Status = '0'
                      AND TD.Taskdetailkey IS NULL
@@ -606,7 +609,13 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV49]
          JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
          JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND PD.Loc = SL.Loc
          JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+         LEFT JOIN TASKDETAIL TD (NOLOCK) ON TD.SourceType = @c_SourceType AND TD.WaveKey = WD.Wavekey         --WL01
+                                         AND TD.OrderKey = PD.OrderKey                                         --WL01
+                                         AND TD.Storerkey = PD.Storerkey AND TD.SKU = PD.SKU                   --WL01
+                                         AND TD.LOT = PD.Lot AND TD.FromLoc = PD.Loc                           --WL01
+                                         AND TD.FROMID = PD.ID AND TD.Message03 = ISNULL(OD.Userdefine05,'')   --WL01 
          WHERE WD.Wavekey = @c_Wavekey
+         AND TD.TaskDetailKey IS NULL   --WL01
          AND PD.Status = '0'
          AND PD.WIP_RefNo = @c_SourceType
          GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID,  
@@ -632,6 +641,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV49]
          SET @n_UOMQty = 0
          SET @c_OrderLineNumber = ''
          SET @c_PackStation = ''
+         SET @c_TaskType = 'FCP'   --WL01
            
          IF @c_PrevOrderkey <> @c_Orderkey
          BEGIN
