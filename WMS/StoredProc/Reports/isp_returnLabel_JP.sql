@@ -1,5 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_returnLabel_JP]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_returnLabel_JP]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -24,10 +22,11 @@ GO
 /*                                                                            */      
 /* Updates:                                                                   */      
 /* Date         Author    Ver.  Purposes                                      */      
-/* 20200130     Grick     1.0   Select Top single result (G01)                */      
+/* 20200130     Grick     1.0   Select Top single result (G01)                */   
+/* 20220421     CHONGCS   1.1   Devops Scripts Combine & WMS-19426 (CS01)     */   
 /******************************************************************************/      
       
-CREATE PROC [dbo].[isp_returnLabel_JP] (      
+CREATE OR ALTER PROC [dbo].[isp_returnLabel_JP] (      
 @c_receiptKey NVARCHAR(20)      
 )      
 AS      
@@ -98,7 +97,50 @@ WHERE RH.ReceiptKey = @c_receiptKey
        INSERT INTO #TEMPRTNLBLJP (storerkey,receiptkey,loc,sku,errmsg)      
        VALUES(@c_storerkey,@c_receiptKey,'','',@c_ErrMsg)    
       END     
-   END      
+   END
+ END  --CS01 S
+   ELSE IF @c_storerkey = 'FJ'      
+   BEGIN      
+      
+   IF EXISTS (select 1 from lotxlocxid lli (nolock)       
+    join lotattribute la (nolock) on lli.lot = la.lot and lli.sku=la.sku      
+    join RECEIPTDETAIL RD WITH (NOLOCK) ON lli.sku = RD.Sku 
+    where RD.StorerKey = @c_storerkey      
+    and lli.qty>0      
+    and la.Lottable03 = 'Good'      
+    and RD.ReceiptKey=@c_receiptKey)      
+   BEGIN      
+    INSERT INTO #TEMPRTNLBLJP (storerkey,receiptkey,loc,sku,errmsg,RecLineNo)      
+    --SELECT   RD.STORERKEY,RD.RECEIPTKEY,B.LOC,RD.SKU,'',RD.RECEIPTLINENUMBER     
+    --FROM RECEIPTDETAIL RD WITH (NOLOCK) 
+    --CROSS APPLY (SELECT TOP 1 LLI.SKU,LLI.LOC FROM LOTXLOCXID LLI (NOLOCK) --G01
+    --JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.SKU=LA.SKU 
+    --AND LLI.QTY>0 AND LLI.SKU = RD.SKU AND RD.LOTTABLE02 = LA.LOTTABLE02 AND LLI.QTY>0) B
+    --JOIN RECEIPT RH WITH (NOLOCK) ON RH.RECEIPTKEY = RD.RECEIPTKEY       
+    --WHERE RD.StorerKey = @c_storerkey      
+    --AND RD.ReceiptKey=@c_receiptKey        
+
+   SELECT   RD.STORERKEY,RD.RECEIPTKEY,B.LOC,RD.SKU,'',RD.RECEIPTLINENUMBER           
+   FROM RECEIPTDETAIL RD WITH (NOLOCK)      
+   CROSS APPLY (SELECT TOP 1 LLI.SKU,LLI.LOC FROM LOTXLOCXID LLI (NOLOCK) --G01      
+                JOIN LOTATTRIBUTE LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.SKU=LA.SKU       
+                AND LLI.QTY>0 AND LLI.SKU = RD.SKU AND LA.LOTTABLE03='Good'
+                AND LLI.QTY>0 --updated on V2.0
+                ORDER by LLI.QTY DESC) B   --updated on V2.0    
+    JOIN RECEIPT RH WITH (NOLOCK) ON RH.RECEIPTKEY = RD.RECEIPTKEY  
+    WHERE RD.StorerKey = @c_storerkey AND RD.ReceiptKey=@c_receiptKey 
+  
+      IF NOT EXISTS (SELECT 1 FROM  #TEMPRTNLBLJP)  
+      BEGIN  
+       SELECT @c_ErrMsg = description       
+       FROM codelkup WITH (NOLOCK)      
+       WHERE Listname='HMRLabel' and short ='Noti' and Long ='2' and storerkey =@c_storerkey      
+        
+       INSERT INTO #TEMPRTNLBLJP (storerkey,receiptkey,loc,sku,errmsg)      
+       VALUES(@c_storerkey,@c_receiptKey,'','',@c_ErrMsg)    
+      END     
+   END
+  --Cs01 E      
    ELSE      
    BEGIN      
          
