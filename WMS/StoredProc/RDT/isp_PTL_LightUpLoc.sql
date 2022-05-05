@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[PTL].[isp_PTL_LightUpLoc]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [PTL].[isp_PTL_LightUpLoc]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -23,12 +20,13 @@ GO
 /* 2019-07-06 1.5  YeeKung    Add Zone feature     (yeekung01)                */   
 /* 2020-11-01 1.6  YeeKung    WMS-14911 Add Fn Close(yeekung02)               */   
 /* 2020-11-01 1.6  YeeKung    WMS-16066 Add loc pickzone(yeekung02)           */   
+/* 2022-03-22 1.2  yeekung    WMS-18729 add params (Yeekung04)                */
 /******************************************************************************/    
-CREATE PROC [PTL].[isp_PTL_LightUpLoc]    
+CREATE OR ALTER PROC [PTL].[isp_PTL_LightUpLoc]    
 (    
    @n_Func           INT    
   ,@n_PTLKey         BIGINT    
-  ,@c_DisplayValue   NVARCHAR(5)    
+  ,@c_DisplayValue   NVARCHAR(10)    
   ,@b_Success        INT OUTPUT    
   ,@n_Err            INT OUTPUT    
   ,@c_ErrMsg         NVARCHAR(215) OUTPUT    
@@ -37,7 +35,8 @@ CREATE PROC [PTL].[isp_PTL_LightUpLoc]
   ,@c_DevicePos      NVARCHAR(10) = ''    
   ,@c_DeviceIP       NVARCHAR(40) = ''    
   ,@c_LModMode       NVARCHAR(10) = ''    
-  ,@c_DeviceProLogKey NVARCHAR(10) = ''    
+  ,@c_DeviceProLogKey NVARCHAR(10) = ''   
+  ,@c_DeviceModel     NVARCHAR(20) = 'Light'
 )    
 AS    
 BEGIN    
@@ -158,9 +157,9 @@ BEGIN
    END    
   
    SET @c_LightAction  = 'Operation'    
-   SELECT @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, @c_LModMode, ISNULL(@c_ForceColor,'') )    
+   SELECT @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, @c_LModMode, ISNULL(@c_ForceColor,''),@c_DeviceModel ) --Yeekung04   
    SET @n_LenOfValues = LEN(@c_DisplayValue)   
-   
+
    --(yeekung01)    
    SELECT @cPTSZone=Putawayzone    
    FROM LOC WITH (NOLOCK)    
@@ -172,26 +171,34 @@ BEGIN
       FROM LOC WITH (NOLOCK)    
       WHERE LOC=@cLoc  
    END
-               
-   IF LEN(RTRIM(@c_DisplayValue)) >= 5    
-   BEGIN    
---      SELECT @c_CommandValue = SUBSTRING(p.DisplayValue,1,5)    
---      FROM   PTL.PTLTran AS p WITH (NOLOCK)    
---      WHERE p.PTLKey = @n_PTLKey    
---      AND   p.[Status]='0'    
-    
-        SET @c_CommandValue = SUBSTRING(@c_DisplayValue,1,5)    
-   END    
-   ELSE IF @n_LenOfValues < 5    
-   BEGIN    
-      SELECT @c_CommandValue = CASE @n_LenOfValues    
-                               WHEN '0'  THEN '$20$20$20$20$20'    
-                               WHEN '1'  THEN '$20$20$20$20' + @c_DisplayValue    
-                               WHEN '2'  THEN '$20$20$20' + @c_DisplayValue    
-                               WHEN '3'  THEN '$20$20' + @c_DisplayValue    
-                               WHEN '4'  THEN '$20' + @c_DisplayValue    
+   
+   IF @c_DeviceModel='BATCH'
+   BEGIN
+      SET @c_CommandValue = @c_DisplayValue 
+   END
+   ELSE
+   BEGIN
+      IF LEN(RTRIM(@c_DisplayValue)) >= 5    
+      BEGIN    
+   --      SELECT @c_CommandValue = SUBSTRING(p.DisplayValue,1,5)    
+   --      FROM   PTL.PTLTran AS p WITH (NOLOCK)    
+   --      WHERE p.PTLKey = @n_PTLKey    
+   --      AND   p.[Status]='0'    
+
+         SET @c_CommandValue = @c_DisplayValue   
       END    
-   END   
+      ELSE IF @n_LenOfValues < 5    
+      BEGIN    
+         SELECT @c_CommandValue = CASE @n_LenOfValues    
+                                    WHEN '0'  THEN '$20$20$20$20$20'    
+                                    WHEN '1'  THEN '$20$20$20$20' + @c_DisplayValue    
+                                    WHEN '2'  THEN '$20$20$20' + @c_DisplayValue    
+                                    WHEN '3'  THEN '$20$20' + @c_DisplayValue    
+                                    WHEN '4'  THEN '$20' + @c_DisplayValue    
+         END    
+      END 
+   END
+
      
    DECLARE @cFnButton NVARCHAR(10),  
            @cFnCommadValue NVARCHAR(100)  
@@ -204,11 +211,27 @@ BEGIN
        SET @cFnCommadValue= 'PP5050501m1$31$22$FFm2$31$22$FFm3$31$FF$3Fma$42'  
        SET @c_LightCommand=@cFnCommadValue+@c_DevicePos+@c_CommandValue++'$20$20CLO'  
    END  
-   ELSE  
+   ELSE IF @c_DeviceModel='BATCH' 
+   BEGIN
+ 
+      SET @c_LightCommand = replace(@c_LightCommand,'@cPos',@c_DevicePos)
+
+
+      SET @c_LightCommand = @c_LightCommand + 
+                             CASE WHEN len(@c_CommandValue)<10 THEN '0'+ CAST(len(@c_CommandValue) AS nvarchar(20))
+                             ELSE CAST(len(@c_CommandValue) AS nvarchar(20)) END
+                            + @c_CommandValue
+
+   END
+   ELSE
    BEGIN  
     
       SET @c_LightCommand = @c_LightCommand + @c_DevicePos + @c_CommandValue --+ @c_DisplayValue    
    END  
+
+
+
+      
   
    SET @dAddDate = Getdate()    
     
