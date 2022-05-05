@@ -13,6 +13,7 @@ GO
 /* 2019-10-24  1.1  Ung      WMS-10821 Add PickDetail filter                  */
 /* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
 /*                           Add PickConfirmStatus                            */
+/* 2021-11-10  1.3  YeeKung  WMS-18218 Add packconfirm (yeekung01)            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PickByCartonID_Confirm] (
@@ -297,7 +298,84 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFullyOffset
       GOTO RollBackTran
    END     
+   
+	DECLARE @nPackConfirm NVARCHAR(1)  
 
+   SET @nPackConfirm = rdt.RDTGetConfig( @nFunc, 'AutoPackCfm', @cStorerkey)   
+
+   IF @nPackConfirm='1'
+   BEGIN
+
+      DECLARE @nSumpackQty INT
+      DECLARE @nSumpickQty INT
+      DECLARE @cpickslipno NVARCHAR(20)
+      DECLARE @cPackConfirm NVARCHAR(5)
+   
+      SELECT @cpickslipno=PH.PickHeaderKey
+      FROM WaveDetail WD WITH (NOLOCK) 
+      JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey)
+      JOIN dbo.PICKHEADER PH (NOLOCK) ON PH.PickHeaderKey=pd.PickSlipNo
+      WHERE wd.WaveKey=@cWaveKey
+
+      SELECT @nSumpackQty= SUM(qty)
+      FROM packdetail (NOLOCK)
+      WHERE PickSlipNo=@cpickslipno
+
+      IF EXISTS(SELECT 1
+               FROM WaveDetail WD WITH (NOLOCK) 
+               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (WD.OrderKey = PD.OrderKey)  
+               JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) 
+               WHERE WD.WaveKey = @cWaveKey 
+                  AND PD.Status < '5' )
+         SET @cPackConfirm='N'
+      ELSE 
+         SET @cPackConfirm = 'Y' 
+
+      -- Check fully packed  
+      IF @cPackConfirm = 'Y'  
+      BEGIN  
+         SELECT @nSumpickQty=SUM(pd.Qty)
+         FROM dbo.PICKHEADER PH (NOLOCK) 
+			JOIN dbo.PickDetail PD WITH (NOLOCK) ON PH.PickHeaderKey=pd.PickSlipNo 
+         JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) 
+         WHERE PH.Pickheaderkey=@cPickslipNo
+            AND PD.Status = '5' 
+           
+         IF @nSumpickQty <> @nSumpackQty  
+            SET @cPackConfirm = 'N'  
+      END  
+
+
+      IF @cPackConfirm = 'Y'  
+      BEGIN  
+
+         UPDATE dbo.PackHeader WITH (ROWLOCK) SET   
+            [Status] = '9'  
+         WHERE PickSlipNo = @cPickSlipNo  
+         AND   [Status] < '9'  
+  
+         IF @@ERROR <> 0  
+         BEGIN  
+            SET @nErrNo = 136511  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackCfm Fail  
+            GOTO RollBackTran  
+         END  
+  
+         SET @nErrNo = 0  
+         EXEC isp_ScanOutPickSlip  
+            @c_PickSlipNo  = @cPickSlipNo,  
+            @n_err         = @nErrNo OUTPUT,  
+            @c_errmsg      = @cErrMsg OUTPUT  
+  
+         IF @nErrNo <> 0  
+         BEGIN  
+            SET @nErrNo = 136512  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scan Out Fail  
+            GOTO RollBackTran  
+         END  
+      END  
+   END
+ 
    COMMIT TRAN rdt_PickByCartonID_Confirm
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
