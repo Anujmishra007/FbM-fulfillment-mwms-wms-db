@@ -42,6 +42,7 @@ BEGIN
    DECLARE @cHostWHCode       NVARCHAR( 10)
    DECLARE @cLocAisle         NVARCHAR( 10)
    DECLARE @cLocLevel         NVARCHAR( 10)
+   DECLARE @cLoc              NVARCHAR( 10)
 
    SELECT TOP 1 @cSKU=SKU
    FROM LOTXLOCXID LLI (NOLOCK)
@@ -61,32 +62,34 @@ BEGIN
    
    SET @cSuggLOC = ''
 
-   SELECT TOP 1 
-      @cSuggLOC = LOC.LOC
+   DECLARE @cCurPickLoc CURSOR
+
+   SET @cCurPickLoc = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+   SELECT LOC
    FROM LOC LOC WITH (NOLOCK) 
    WHERE LOC.Facility = @cFacility
    AND   LOC.LocLevel>=2
-   AND   LOC.locaisle = @cLocAisle
-   AND   LOC not in( SELECT LOC from lotxlocxid(nolock) 
-                     WHERE storerkey =@cStorerkey 
-                        AND qty>0 
-                        AND sku=@cSKU) 
+   AND   LOC.locaisle >= @cLocAisle
    ORDER BY Loc.loc,Loc.LocAisle
 
-   IF @cSuggLOC=''
-   BEGIN
-      SELECT TOP 1 
-         @cSuggLOC = LOC.LOC
-      FROM LOC LOC WITH (NOLOCK) 
-      WHERE LOC.Facility = @cFacility
-      AND   LOC.LocLevel>=2   
-      AND   LOC.locaisle > @cLocAisle
-      AND   LOC not in( SELECT LOC from lotxlocxid(nolock) 
-                        WHERE storerkey =@cStorerkey 
-                           AND qty>0 
-                           AND sku=@cSKU) 
-      ORDER BY Loc.loc,Loc.LocAisle
+   OPEN @cCurPickLoc  
+   FETCH NEXT FROM @cCurPickLoc INTO @cLoc  
+   WHILE @@FETCH_STATUS = 0    
+   BEGIN 
+      IF NOT EXISTS(SELECT 1
+                FROM SKUXLOC (NOLOCK)
+                WHERE LOC=@cLoc
+                AND storerkey=@cStorerkey
+                AND QTY-QTYallocated-QtyPicked>0)
+      BEGIN
+         SET @cSuggLOC=@cLoc
+         BREAK;
+      END
+
+      FETCH NEXT FROM @cCurPickLoc INTO @cLoc  
    END
+   CLOSE @cCurPickLoc  
+   DEALLOCATE @cCurPickLoc
       
 
    -- Lock suggested location
