@@ -1,3 +1,8 @@
+
+
+ 
+
+
 CREATE TABLE [dbo].[PALLETDETAIL]
 (
 [PalletKey] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -16,7 +21,7 @@ CREATE TABLE [dbo].[PALLETDETAIL]
 [ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [TimeStamp] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [UserDefine01] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PalletDetail_UserDefine01] DEFAULT (''),
-[UserDefine02] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PalletDetail_UserDefine02] DEFAULT (''),
+[UserDefine02] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PalletDetail_UserDefine02] DEFAULT (''),
 [UserDefine03] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PalletDetail_UserDefine03] DEFAULT (''),
 [UserDefine04] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PalletDetail_UserDefine04] DEFAULT (''),
 [UserDefine05] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PalletDetail_UserDefine05] DEFAULT ('')
@@ -64,3 +69,16 @@ EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the Storer records
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'PALLETDETAIL', 'COLUMN', N'TrafficCop'
 GO
+
+
+
+
+/*  
+--  5 May 22022  extend field size UserDefine02
+
+ALTER TABLE dbo.PALLETDETAIL
+ALTER COLUMN UserDefine02 NVARCHAR (40) 
+GO 
+
+ 
+*/

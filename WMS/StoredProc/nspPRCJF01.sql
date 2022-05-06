@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRCJF01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPRCJF01]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -17,14 +14,15 @@ GO
 /*                                                                       */  
 /* PVCS Version: 1.0                                                     */  
 /*                                                                       */  
-/* Version: 5.4                                                          */  
+/* Version: 7.0                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 01-Apr-2022  NJOW01   1.0  WMS-19305 change lottable04 filtring       */
 /*************************************************************************/   
-CREATE  PROC [dbo].[nspPRCJF01]    
+CREATE OR ALTER PROC [dbo].[nspPRCJF01]    
    @c_StorerKey NVARCHAR(15) ,    
    @c_SKU NVARCHAR(20) ,    
    @c_LOT NVARCHAR(10) ,    
@@ -143,7 +141,7 @@ BEGIN
         
         IF CONVERT(NVARCHAR(8),@d_Lottable04, 112) <> "19000101" AND @d_Lottable04 IS NOT NULL  
         BEGIN
-            SELECT @c_Condition = RTRIM(@c_Condition) + " AND CONVERT(NVARCHAR(10),Lotattribute.Lottable04, 112) = N'" + RTRIM(CONVERT( NVARCHAR(8), @d_Lottable04, 112)) + "' "
+           SELECT @c_Condition = RTRIM(@c_Condition) + " AND CONVERT(NVARCHAR(10),Lotattribute.Lottable04, 112) >= N'" + RTRIM(CONVERT( NVARCHAR(8), @d_Lottable04, 112)) + "' "  --NJOW01
         END
         ELSE IF @n_ConsigneeMinShelfLife <> 0
         BEGIN
