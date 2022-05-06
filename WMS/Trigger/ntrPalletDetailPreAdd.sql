@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrPalletDetailPreAdd]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrPalletDetailPreAdd]
-GO
+ 
 
 SET ANSI_NULLS OFF
 GO
@@ -42,8 +40,9 @@ GO
 /* 31-Mar-2020  kocy      1.3   Skip when data move from Archive (kocy01)*/
 /* 12-Jan-2021  Shong     1.4   Performance Tuning, Move the logic from */ 
 /*                              Pre-Add Trigger                         */
+/* 05-May-2022  TLTING02  1.5   variable extend field length            */  
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrPalletDetailPreAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrPalletDetailPreAdd]
 ON  [dbo].[PALLETDETAIL]
 INSTEAD OF INSERT  
 AS
@@ -92,7 +91,7 @@ BEGIN
 	[ArchiveCop] [nvarchar](1) NULL,
 	[TimeStamp] [nvarchar](18) NULL,
 	[UserDefine01] [nvarchar](30) NULL,
-	[UserDefine02] [nvarchar](30) NULL,
+	[UserDefine02] [nvarchar](40) NULL,  -- TLTING02
 	[UserDefine03] [nvarchar](30) NULL,
 	[UserDefine04] [nvarchar](30) NULL,
 	[UserDefine05] [nvarchar](30) NULL )
