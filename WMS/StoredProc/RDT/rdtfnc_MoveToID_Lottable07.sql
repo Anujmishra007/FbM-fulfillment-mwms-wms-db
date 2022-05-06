@@ -15,6 +15,7 @@ GO
 /* 2021-08-01 1.0  yeekung  WMS-17527 Created                           */
 /* 2021-12-28 1.1  YeeKung  JSM-42479 Add lottable to confirm sp        */
 /*                          (yeekung01)                                 */
+/* 2022-05-06 1.2  YeeKung  JSM-65266 update the wrong step             */
 /************************************************************************/
 
 CREATE  PROCEDURE [RDT].[rdtfnc_MoveToID_Lottable07] (
@@ -799,7 +800,7 @@ BEGIN
          SET @cOutField11 = CASE WHEN @cDefaultAvlQty2Move = '' THEN '' ELSE @nQTY_Avail END -- @nMQTY_Move  
          
          -- Go to next screen  
-         SET @nScn = @nScn+2  
+         SET @nScn = @nScn+ 1 --(yeekung02) 
          SET @nStep = @nStep+2  
       END
    END
@@ -1429,9 +1430,9 @@ BEGIN
       ELSE  
       BEGIN  
          -- Prep next screen var  
-         SET @cOutField01 = @cSKU  
-         SET @cOutField02 = SUBSTRING( @cSKUDescr, 1, 20)   -- SKU desc 1  
-         SET @cOutField03 = SUBSTRING( @cSKUDescr, 21, 20)  -- SKU desc 2  
+         SET @cOutField01 = @cFromLOC
+         SET @cOutField02 = '' -- SKU
+         SET @cOutField03 = '' -- SKU
   
          -- Go to QTY screen  
          SET @nScn = @nScn-1  
