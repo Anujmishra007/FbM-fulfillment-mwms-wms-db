@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[RDT].[rdt_PickSKU_GoToNextScreen]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_PickSKU_GoToNextScreen
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -18,9 +15,10 @@ GO
 /* 03-10-2017  1.1  Ung         WMS-3052 Add VerifyID                   */
 /* 28-08-2020  1.2  YeeKung     WMS-14706 Add clearid (yeekung01)       */  
 /* 27-12-2020  1.3  YeeKung     WMS-15995 Add PickZone (yeekung02)      */
+/* 08-04-2022  1.4  Ung         WMS-19402 Add AutoScanOut               */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_PickSKU_GoToNextScreen
+CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_GoToNextScreen
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -277,6 +275,16 @@ BEGIN
       -- Go to LOC screen
       SET @nScn = @nScn_PickSlipNo
       SET @nStep = @nStep_PickSlipNo
+
+      -- Scan out        
+      SET @nErrNo = 0        
+      EXEC rdt.rdt_PickSKU_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey        
+         ,@cPickSlipNo        
+         ,@nErrNo       OUTPUT        
+         ,@cErrMsg      OUTPUT        
+      IF @nErrNo <> 0        
+         GOTO Quit  
+         
       GOTO Quit
    END
 
@@ -285,10 +293,10 @@ Quit:
 END
 GO
 
-GRANT EXECUTE ON rdt.rdt_PickSKU_GoToNextScreen TO NSQL 
-GO   
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS ON 
 GO
+
+GRANT EXECUTE ON rdt.rdt_PickSKU_GoToNextScreen TO NSQL 
+GO   
