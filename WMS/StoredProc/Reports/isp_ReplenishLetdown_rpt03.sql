@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_ReplenishLetdown_rpt03]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-DROP PROCEDURE [dbo].[isp_ReplenishLetdown_rpt03]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/      
 /* Store Procedure: isp_RepLENishLetdown_rpt03                          */      
 /* Creation Date: 04-Feb-2009                                           */      
@@ -33,10 +31,11 @@ GO
 /* 02-JUL-17    CSCHONG    WMS-2398 - Add new report config (CS02)      */      
 /* 20-SEP-17    CSCHONG    WMS-2946 - Add new report config (CS03)      */     
 /* 01-JUL-17    KuanYee    INC0759140 - FixBug (KY01)                   */ 
-/* 12-May-20    WLChooi    WMS-13081 - Add ReportCFG (WL01)             */    
+/* 12-May-20    WLChooi    WMS-13081 - Add ReportCFG (WL01)             */ 
+/* 26-Apr-22    Shong      WMS-19555 - Allow Blank Storerkey            */  
 /************************************************************************/      
       
-CREATE PROC isp_RepLENishLetdown_rpt03 (      
+CREATE OR ALTER PROC [dbo].[isp_RepLENishLetdown_rpt03] (      
             @c_Storerkey    NVARCHAR(15)      
           , @c_facility     NVARCHAR(5)      
           , @c_loadkeystart NVARCHAR(10)      
@@ -69,7 +68,17 @@ BEGIN
      @c_showdiffskuformat NVARCHAR(5),               --CS03   
      @c_ShowPackCaseCnt  NVARCHAR(10)                --WL01   
            
-           
+   --Shong
+   IF IsNull(@c_Storerkey,'') = ''  
+   BEGIN  
+      SELECT TOP 1 @c_Storerkey = OD.StorerKey   
+      FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)   
+      JOIN dbo.ORDERS OD WITH (NOLOCK) ON OD.OrderKey = LPD.OrderKey  
+      WHERE LPD.LoadKey >= @c_loadkeystart  
+      AND   LPD.LoadKey <= @c_loadkeyend  
+      AND   OD.Facility = @c_facility  
+   END 
+
    /*CS01 Start*/      
    SET @c_showField = 'N'       
             
@@ -362,5 +371,5 @@ BEGIN
       
 END -- End Procedure   
 GO
-GRANT EXECUTE ON isp_ReplenishLetdown_rpt03 to nSQL
+GRANT EXECUTE ON [dbo].[isp_ReplenishLetdown_rpt03] to nSQL
 GO
