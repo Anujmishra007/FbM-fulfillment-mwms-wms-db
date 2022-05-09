@@ -14,7 +14,7 @@ GO
 /* Called By: RCM - Generate Pickslip                                   */
 /*          : Datawindow - r_dw_print_wave_pickslip_35                  */
 /*                                                                      */
-/* GitLab Version: 1.3                                                  */
+/* GitLab Version: 1.4                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -26,6 +26,7 @@ GO
 /* 03-Mar-2022  WLChooi  1.1  WMS-18172 Change DeliveryDate column(WL01)*/
 /* 14-Mar-2022  WLChooi  1.2  WMS-19171 Add logic for Case Pick (WL02)  */
 /* 27-Apr-2022  WLChooi  1.3  WMS-19171 Add condition (WL03)            */
+/* 09-May-2022  WLChooi  1.4  WMS-19171 Add filter by UOM6 (WL04)       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave_35] (  
    @c_wavekey_type          NVARCHAR(13)  
@@ -702,6 +703,7 @@ BEGIN
             FROM #TMP_PICK TP
             JOIN (SELECT #TMP_PICK.OrderKey, #TMP_PICK.LOCZone, Sku_Min_LogLoc = MIN(#TMP_PICK.LogicalLoc), #TMP_PICK.Sku
                   FROM #TMP_PICK
+                  WHERE #TMP_PICK.UOM = '6'   --WL04
                   GROUP BY #TMP_PICK.OrderKey, #TMP_PICK.LOCZone, #TMP_PICK.Sku
                  ) X ON TP.Orderkey = X.Orderkey
                     AND TP.LOCZone = X.LOCZone
@@ -779,10 +781,12 @@ BEGIN
                    FROM #TMP_PICK TP1
                    JOIN ( SELECT #TMP_PICK.OrderKey, #TMP_PICK.LOCZone, Style_Min_LogLoc = MIN(#TMP_PICK.LogicalLoc), #TMP_PICK.SKUStyle
                           FROM #TMP_PICK
+                          WHERE #TMP_PICK.UOM = '6'   --WL04
                           GROUP BY #TMP_PICK.OrderKey, #TMP_PICK.LOCZone, #TMP_PICK.SKUStyle
                         ) X ON TP1.LOCZone = X.LOCZone
                            AND TP1.SKUStyle = X.SKUStyle
                            AND TP1.OrderKey = X.OrderKey
+                   WHERE TP1.UOM = '6'   --WL04
                    GROUP BY TP1.Orderkey, TP1.LOCZone, X.Style_Min_LogLoc, TP1.SKUStyle
                  ) Y ON TP.OrderKey = Y.OrderKey
                     AND TP.LOCZone  = Y.LOCZone
