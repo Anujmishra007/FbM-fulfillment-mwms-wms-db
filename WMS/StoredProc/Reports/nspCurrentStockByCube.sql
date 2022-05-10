@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 10-MAR-2017  JayLim   1.1  SQL2012 compatibility modification (Jay01)*/ 
 /************************************************************************/
 
 CREATE PROC    nspCurrentStockByCube
@@ -45,7 +46,7 @@ BEGIN
    a.sku,
    MAX (b.descr) descr,
    stdcube = c.cubeuom3,
-   sum(a.qty*b.cube ) Cubes,
+   sum(a.qty*b.[cube] ) Cubes,
    sum(a.qty) as each
    from lotxlocxid a(nolock), sku b(nolock), pack c(nolock), storer d(nolock)
    where a.sku = b.sku
