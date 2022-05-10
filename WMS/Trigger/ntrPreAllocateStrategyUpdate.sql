@@ -1,13 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPreAllocateStrategyUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPreAllocateStrategyUpdate]
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-
 /************************************************************************/
 /* Trigger: ntrPreAllocateStrategyUpdate                                */
 /* Creation Date:  18-March-2020                                        */
@@ -36,9 +26,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 2022-04-12   TLTING   1.2  prevent bulk update or delete             */ 
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPreAllocateStrategyUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrPreAllocateStrategyUpdate]
 ON [dbo].[PreAllocateStrategy] FOR UPDATE
 AS 
 BEGIN
@@ -89,6 +80,13 @@ BEGIN
    	SELECT @n_continue = 4 
    END   
     
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table PreAllocateStrategy. Batch Update not allow! (ntrPreAllocateStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
 	
 	IF @n_continue=3  -- Error Occured - Process And Return
 	BEGIN
@@ -110,4 +108,8 @@ BEGIN
 	END
 END
 GO
+
+ALTER TABLE [dbo].[PreAllocateStrategy] ENABLE TRIGGER [ntrPreAllocateStrategyUpdate]
+GO
+
 

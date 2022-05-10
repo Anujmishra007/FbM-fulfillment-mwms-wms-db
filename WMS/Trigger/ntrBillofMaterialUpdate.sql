@@ -1,13 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrBillofMaterialUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrBillofMaterialUpdate]
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-
 /************************************************************************/
 /* Trigger: ntrBillofMaterialUpdate                                     */
 /* Creation Date:                                                       */
@@ -34,14 +24,16 @@ GO
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
-/* Updates:                                                             */
+/* Updates:     Author     Ver  Purposes                                */
 /* 23-May-2012  TLTING02         DM Data integrity - update editdate    */
 /*                               B4 trafficCop                          */
 /* 28-Oct-2013  TLTING           Review Editdate column update          */
+/* 2022-04-12   TLTING     1.3   prevent bulk update or delete          */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrBillofMaterialUpdate]
-ON  [dbo].[BillOfMaterial] FOR UPDATE
+CREATE OR ALTER TRIGGER [dbo].[ntrBillofMaterialUpdate]
+ON  [dbo].[BillOfMaterial] 
+FOR UPDATE
 AS
 BEGIN
 	IF @@ROWCOUNT = 0
@@ -77,10 +69,11 @@ BEGIN
 		    EditWho = SUSER_SNAME(),
           TrafficCop = NULL
 		FROM BillOfMaterial (NOLOCK), INSERTED (NOLOCK)
-    WHERE BillOfMaterial.Storerkey = INSERTED.Storerkey
-	   AND BillOfMaterial.SKU = INSERTED.SKU
-	   AND BillOfMaterial.ComponentSKU = INSERTED.ComponentSKU
-		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+      WHERE BillOfMaterial.Storerkey = INSERTED.Storerkey
+	     AND BillOfMaterial.SKU = INSERTED.SKU
+	     AND BillOfMaterial.ComponentSKU = INSERTED.ComponentSKU
+		
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 
 		IF @n_err <> 0
 		BEGIN
@@ -94,6 +87,15 @@ BEGIN
 	BEGIN
 		SELECT @n_continue = 4 
 	END
+
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69702   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table BillOfMaterial. Batch Update not allow! (ntrBillOfMaterialUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
 	
 	   /* #INCLUDE <TRTHU1.SQL> */     
 
@@ -125,5 +127,11 @@ BEGIN
 	 END
 END
 
+
+
+GO
+
+ALTER TABLE [dbo].[BillOfMaterial] ENABLE TRIGGER [ntrBillofMaterialUpdate]
+GO
 
 

@@ -1,13 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[ntrTTMStrategyDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrTTMStrategyDetailUpdate]
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-
 /************************************************************************/
 /* Trigger: ntrTTMStrategyDetailUpdate                                  */
 /* Creation Date:  09-Sept-2008                                         */
@@ -35,10 +25,11 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author   Ver  Purposes                                  */
+/* Date         Author    Ver   Purposes                                */
+/* 2022-04-12   TLTING    1.1   prevent bulk update or delete           */ 
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrTTMStrategyDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyDetailUpdate]
 ON [dbo].[TTMStrategyDetail]
 FOR UPDATE
 AS 
@@ -52,11 +43,11 @@ END
    SET QUOTED_IDENTIFIER OFF
 	SET CONCAT_NULL_YIELDS_NULL OFF
 	
-	DECLARE	@n_err                int       -- Error number returned by stored procedure or this trigger
-	,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-	,         @n_continue int                 
-	,         @n_starttcnt int                -- Holds the current transaction count
-	,         @n_cnt int                  
+	DECLARE	@n_err         int       -- Error number returned by stored procedure or this trigger
+	        ,@c_errmsg      NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+	        ,@n_continue    int                 
+	        ,@n_starttcnt   int                -- Holds the current transaction count
+	        ,@n_cnt         int                  
 	
 	SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
@@ -88,9 +79,17 @@ END
    IF UPDATE(TrafficCop)
    BEGIN
    	SELECT @n_continue = 4 
-   END   
-    
-	
+   END  
+   
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table TTMStrategyDetail. Batch Update not allow! (ntrTTMStrategyDetailUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
+    	
 	IF @n_continue=3  -- Error Occured - Process And Return
 	BEGIN
 		IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt

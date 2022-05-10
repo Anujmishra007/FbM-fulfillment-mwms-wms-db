@@ -1,12 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrStrategyUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrStrategyUpdate]
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
 
 /************************************************************************/
 /* Trigger: ntrStrategyUpdate                                           */
@@ -35,13 +26,14 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Purposes                                      */
-/* 25 May 2012  TLTING01  DM integrity - add update editdate B4         */
-/*                        TrafficCop                                    */ 
-/* 28-Oct-2013  TLTING     Review Editdate column update                */ 
+/* Date         Author    Ver    Purposes                               */
+/* 25 May 2012  TLTING01         DM integrity - add update editdate B4  */
+/*                               TrafficCop                             */ 
+/* 28-Oct-2013  TLTING           Review Editdate column update          */ 
+/* 2022-04-12   TLTING    1.1    prevent bulk update or delete          */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrStrategyUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrStrategyUpdate]
 ON  [dbo].[Strategy] FOR UPDATE
 AS
 BEGIN
@@ -94,9 +86,16 @@ BEGIN
 		SELECT @n_continue = 4 
 	END
 	
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69702   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Strategy. Batch Update not allow! (ntrStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+
+
 	   /* #INCLUDE <TRTHU1.SQL> */     
-
-
       /* #INCLUDE <TRTHU2.SQL> */
 	IF @n_continue=3  -- Error Occured - Process And Return
 	BEGIN
@@ -126,4 +125,8 @@ BEGIN
 END
 
 GO
+
+ALTER TABLE [dbo].[Strategy] ENABLE TRIGGER [ntrStrategyUpdate]
+GO
+
 

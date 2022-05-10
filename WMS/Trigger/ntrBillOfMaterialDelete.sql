@@ -1,28 +1,21 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrBillOfMaterialDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrBillOfMaterialDelete]
-GO
 
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-/**************************************************************  
-*  Author  : Ricky Yee                                        *  
-*  Date    : Nov 24th, 2007                                   *  
-*  Purpose : To Check against the Inventory upon              *  
-*         the deletion of the BOM record.                     *  
-*         If Inventory > 0, Delete Not Allow                  *  
-*                                                             *  
-* Date        Rev  Author   Purposes                          *   
-* 24-Nov-2007 1.0  Ricky    Created                           *  
-* 26-Nov-2007 1.1  Vicky    Add in StorerConfigkey to control *  
-*                           deletion (Vicky01)                *  
-* 19-Apr-2011 1.2  TLTING   Insert Delete log                 *
-* 14-Jul-2011 1.3  KHLim02  GetRight for Delete log           *
-***************************************************************/  
+/***************************************************************/  
+/*  Author  : Ricky Yee                                        */  
+/*  Date    : Nov 24th, 2007                                   */  
+/*  Purpose : To Check against the Inventory upon              */  
+/*         the deletion of the BOM record.                     */  
+/*         If Inventory > 0, Delete Not Allow                  */  
+/*                                                             */  
+/* Date        Rev  Author   Purposes                          */   
+/* 24-Nov-2007 1.0  Ricky    Created                           */  
+/* 26-Nov-2007 1.1  Vicky    Add in StorerConfigkey to control */  
+/*                           deletion (Vicky01)                */  
+/* 19-Apr-2011 1.2  TLTING   Insert Delete log                 */
+/* 14-Jul-2011 1.3  KHLim02  GetRight for Delete log           */
+/* 2022-04-12  1.4  TLTING   prevent bulk update or delete     */
+/***************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrBillOfMaterialDelete]  
+CREATE OR ALTER TRIGGER [dbo].[ntrBillOfMaterialDelete]  
 ON  [dbo].[BillOfMaterial]   
 FOR DELETE  
 AS  
@@ -32,50 +25,54 @@ BEGIN
   RETURN  
  END  
   
- SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
    
- DECLARE  
- @b_Success                      int       -- Populated by calls to stored procedures - was the proc successful?  
- ,         @n_err                int       -- Error number returned by stored procedure or this trigger  
- ,         @n_err2               int       -- For Additional Error Detection  
- ,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger  
- ,         @n_continue           int                   
- ,         @n_starttcnt          int       -- Holds the current transaction count  
- ,         @c_preprocess         NVARCHAR(250) -- preprocess  
- ,         @c_pstprocess         NVARCHAR(250) -- post process  
- ,         @n_cnt                int        
- ,         @c_authority          NVARCHAR(1)  -- KHLim02
+   DECLARE  
+        @b_Success         int       -- Populated by calls to stored procedures - was the proc successful?  
+      , @n_err             int       -- Error number returned by stored procedure or this trigger  
+      , @n_err2            int       -- For Additional Error Detection  
+      , @c_errmsg          NVARCHAR(250) -- Error message returned by stored procedure or this trigger  
+      , @n_continue        int                   
+      , @n_starttcnt       int       -- Holds the current transaction count  
+      , @c_preprocess      NVARCHAR(250) -- preprocess  
+      , @c_pstprocess      NVARCHAR(250) -- post process  
+      , @n_cnt             int        
+      , @c_authority       NVARCHAR(1)  -- KHLim02
  
-   DECLARE @cStorerkey   NVARCHAR(15) -- (Vicky01)  
+   DECLARE @cStorerkey     NVARCHAR(15) -- (Vicky01)  
    
- SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
- if (select count(*) from DELETED) =
- (select count(*) from DELETED where DELETED.ArchiveCop = '9')
- BEGIN
- SELECT @n_continue = 4
- END  
- IF @n_continue = 1 or @n_continue = 2  
- BEGIN   
-     -- (Vicky01 - Start)  
-     IF EXISTS (SELECT 1 FROM StorerConfig SCFG (NOLOCK)  
-                JOIN DELETED ON (DELETED.Storerkey = SCFG.Storerkey)  
-                WHERE SCFG.Configkey = 'PrepackByBOM'  
-                AND   SCFG.sValue = '1')  
-     BEGIN -- (Vicky01 - End)  
-     IF (Select Count(1) from lotattribute la (nolock), lotxlocxid lli (nolock), DELETED    
-          Where la.lot = lli.lot   
-            And DELETED.storerkey = LA.storerkey   
-            And DELETED.sku = LA.lottable03   
-            And DELETED.componentsku = LA.sku  
-            And lli.qty > 0) > 0   
-         BEGIN  
-           SELECT @n_continue = 3  
-           SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60001   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-           SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Inventory Exists! Delete trigger On BillOfMaterial Failed. (ntrBillOfMaterialDelete)" 
-           + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "  
-         END  
-      END -- Configkey  
- END  
+   SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
+
+   if (select count(*) from DELETED) =
+   (select count(*) from DELETED where DELETED.ArchiveCop = '9')
+   BEGIN
+      SELECT @n_continue = 4
+   END 
+ 
+   IF @n_continue = 1 or @n_continue = 2  
+   BEGIN   
+       -- (Vicky01 - Start)  
+       IF EXISTS (SELECT 1 FROM StorerConfig SCFG (NOLOCK)  
+                  JOIN DELETED ON (DELETED.Storerkey = SCFG.Storerkey)  
+                  WHERE SCFG.Configkey = 'PrepackByBOM'  
+                  AND   SCFG.sValue = '1')  
+       BEGIN -- (Vicky01 - End)  
+       IF (Select Count(1) from lotattribute la (nolock), lotxlocxid lli (nolock), DELETED    
+            Where la.lot = lli.lot   
+              And DELETED.storerkey = LA.storerkey   
+              And DELETED.sku = LA.lottable03   
+              And DELETED.componentsku = LA.sku  
+              And lli.qty > 0) > 0   
+           BEGIN  
+             SELECT @n_continue = 3  
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60001   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Inventory Exists! Delete trigger On BillOfMaterial Failed. (ntrBillOfMaterialDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "  
+           END  
+        END -- Configkey  
+   END  
 
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
@@ -108,6 +105,14 @@ BEGIN
          END
       END
    END
+
+   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
+       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table BillOfMaterial. Batch Delete not allow! (ntrBillOfMaterialDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
    
  IF @n_continue=3  -- Error Occured - Process And Return  
  BEGIN  
@@ -137,3 +142,9 @@ BEGIN
 END  
    
   
+GO
+
+ALTER TABLE [dbo].[BillOfMaterial] ENABLE TRIGGER [ntrBillOfMaterialDelete]
+GO
+
+

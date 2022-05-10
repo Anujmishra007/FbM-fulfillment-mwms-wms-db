@@ -1,18 +1,6 @@
-IF EXISTS (SELECT name 
-	   FROM   dbo.sysobjects 
-	   WHERE  name = N'ntrAllocateStrategyDetailupdate' 
-	   AND 	  type = 'TR')
-    DROP TRIGGER ntrAllocateStrategyDetailupdate
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
 
 /************************************************************************/
-/* Trigger: ntrAllocateStrategyDetailupdate                             */
+/* Trigger: ntrAllocateStrategyDetailUpdate                             */
 /* Creation Date:  09-Sept-2008                                         */
 /* Copyright: IDS                                                       */
 /* Written by:  TLTING                                                  */
@@ -38,10 +26,11 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author   Ver  Purposes                                  */
+/* Date         Author    Ver   Purposes                                */
+/* 2022-04-12   TLTING    1.1   prevent bulk update or delete           */ 
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrAllocateStrategyDetailupdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrAllocateStrategyDetailUpdate]
 ON [dbo].[AllocateStrategyDetail]
 FOR UPDATE
 AS 
@@ -55,11 +44,11 @@ END
    SET QUOTED_IDENTIFIER OFF
 	SET CONCAT_NULL_YIELDS_NULL OFF
 	
-	DECLARE	@n_err                int       -- Error number returned by stored procedure or this trigger
-	,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-	,         @n_continue int                 
-	,         @n_starttcnt int                -- Holds the current transaction count
-	,         @n_cnt int                  
+	DECLARE	@n_err   int       -- Error number returned by stored procedure or this trigger
+	        ,@c_errmsg        NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+	        ,@n_continue      int                 
+	        ,@n_starttcnt     int                -- Holds the current transaction count
+	        ,@n_cnt           int                  
 	
 	SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
@@ -83,7 +72,7 @@ END
 		BEGIN
 			SELECT @n_continue = 3
 			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62303   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-			SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": UPDATE Failed on AllocateStrategyDetail table. (ntrAllocateStrategyDetailupdate)" 
+			SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": UPDATE Failed on AllocateStrategyDetail table. (ntrAllocateStrategyDetailUpdate)" 
 			         + " ( " + " SQLSvr MESSAGE=" + LTrim(RTrim(@c_errmsg)) + " ) "
 		END
 	END
@@ -91,7 +80,15 @@ END
    IF UPDATE(TrafficCop)
    BEGIN
    	SELECT @n_continue = 4 
-   END   
+   END
+   
+   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
+       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table AllocateStrategyDetail. Batch Update not allow! (ntrAllocateStrategyDetailUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
     
 	
 	IF @n_continue=3  -- Error Occured - Process And Return
@@ -100,7 +97,7 @@ END
 		BEGIN
 			ROLLBACK TRAN
 		END
-		execute nsp_logerror @n_err, @c_errmsg, "ntrAllocateStrategyDetailupdate"
+		execute nsp_logerror @n_err, @c_errmsg, "ntrAllocateStrategyDetailUpdate"
 		RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
 		RETURN
 	END
@@ -113,3 +110,9 @@ END
 		RETURN
 	END
 END
+GO
+
+ALTER TABLE [dbo].[AllocateStrategyDetail] ENABLE TRIGGER [ntrAllocateStrategyDetailUpdate]
+GO
+
+
