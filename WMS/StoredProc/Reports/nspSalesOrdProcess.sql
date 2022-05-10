@@ -1,10 +1,10 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspSalesOrdProcess]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspSalesOrdProcess]
+ 
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+
 
 /************************************************************************/
 /* Stored Procedure: nspSalesOrdProcess                                 */
@@ -24,15 +24,16 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
 /************************************************************************/
 
-CREATE PROC nspSalesOrdProcess (
+CREATE OR ALTER PROC [dbo].[nspSalesOrdProcess] (
 @c_facilitystart NVARCHAR(5),
 @c_facilityend NVARCHAR(5),
 @c_storerstart NVARCHAR(15),
 @c_storerend NVARCHAR(15),
-@d_editdatestart datetime,
-@d_editdateend datetime ,
+@d_editdatestart DATETIME,
+@d_editdateend DATETIME ,
 @c_skustart NVARCHAR(20),
 @c_skuend NVARCHAR(20)
 )
@@ -40,7 +41,7 @@ AS
 BEGIN
 
    Create table #RESULT (
-   externorderkey NVARCHAR(30),
+   externorderkey NVARCHAR(50),  --tlting_ext
    company NVARCHAR(45) null ,
    sku NVARCHAR(20),
    qty int,
@@ -51,9 +52,10 @@ BEGIN
    )
 
    BEGIN
-	 		SET NOCOUNT ON
-	 		SET QUOTED_IDENTIFIER OFF	
-   		SET CONCAT_NULL_YIELDS_NULL OFF
+   SET NOCOUNT ON 
+   SET ANSI_NULLS OFF 
+   SET QUOTED_IDENTIFIER OFF 
+   SET CONCAT_NULL_YIELDS_NULL OFF
       
 
       SELECT Orders.externorderkey, Orders.c_company, OrderDetail.sku ,Orderdetail.shippedqty, Loadplan.weight, Orderdetail.editdate,
@@ -76,7 +78,7 @@ BEGIN
       ORDER BY Orderdetail.editdate
 
       INSERT INTO #RESULT (externorderkey, company, sku, qty, weight, editdate, facility,returnqty)
-      SELECT #TempOrd.*  , '' from #TempOrd
+      SELECT #TempOrd.*  , '' FROM #TempOrd
 
       --select * From #RESULT
 
@@ -106,7 +108,7 @@ BEGIN
       --select * From #temprecpt
 
       INSERT INTO #RESULT ( externorderkey, company, sku, qty, editdate, facility, returnqty)
-      SELECT '', #TempRecpt.carriername, #TempRecpt.sku, '', #TempRecpt.Adddate, #TempRecpt.facility, #TempRecpt.qtyreceived from #TempRecpt
+      SELECT '', #TempRecpt.carriername, #TempRecpt.sku, '', #TempRecpt.Adddate, #TempRecpt.facility, #TempRecpt.qtyreceived FROM #TempRecpt
       WHERE #TempRecpt.ExternReceiptkey <> ' '
    END
 
@@ -119,10 +121,8 @@ BEGIN
 
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
+
+
 
 GRANT EXECUTE ON nspSalesOrdProcess to nSQL
 GO
