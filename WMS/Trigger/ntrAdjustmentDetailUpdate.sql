@@ -1,11 +1,7 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrAdjustmentDetailUpdate' AND type = 'TR')
-   DROP TRIGGER ntrAdjustmentDetailUpdate
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /*******************************************************************************/
 /* Trigger: ntrAdjustmentDetailUpdate                                          */
@@ -56,10 +52,11 @@ GO
 /* 09-Jan-2018  AikLiang     2.0    INC0093779 - Increase lottable06-12 size   */
 /*                                  to 30, tally with itrn table (AL01)        */
 /* 06-Feb-2018  SWT02        2.1    Added Channel Management Logic             */
-/* 23-JUL-2019  Wan05        2.2    WMS-9872 - CN_NIKESDC_Exceed_Channel       */
+/* 23-JUL-2019  Wan05        2.2    WMS-9872 - CN_NIKESDC_Exceed_Channel       */      
+/* 10-May-2022  NJOW02       2.3    Add validation to ensure finalize correctly*/
 /*******************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrAdjustmentDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailUpdate]
 ON  [dbo].[ADJUSTMENTDETAIL]
 FOR UPDATE
 AS
@@ -257,6 +254,23 @@ BEGIN
                 @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err) + ': UPDATE not allowed. (ntrAdjustmentDetailUpdate)'
       END
    END
+
+   --NJOW02
+   IF @n_continue IN(1,2) AND @c_ADJStatusCtrl = '1'
+   BEGIN
+   	  IF EXISTS (SELECT 1
+   	             FROM INSERTED 
+   	             JOIN DELETED ON INSERTED.AdjustmentKey = DELETED.AdjustmentKey   	                  
+   	                          AND INSERTED.AdjustmentLineNumber = DELETED.AdjustmentLineNumber
+   	             WHERE INSERTED.FinalizedFlag = 'Y'
+   	             AND INSERTED.FinalizedFlag <> DELETED.FinalizedFlag
+   	             AND DELETED.FinalizedFlag NOT IN ('N','A'))   	             
+   	  BEGIN
+         SELECT @n_continue = 3                                                                                        
+         SELECT @n_err = 62757    	     
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Error. Previous Status is not N or A. (ntrAdjustmentDetailUpdate)'            	                	  
+      END   
+   END  
 
    IF @n_continue=1 or @n_continue=2      --KH01 start
    BEGIN
@@ -548,6 +562,24 @@ BEGIN
             END
             ELSE
             BEGIN
+            	 --NJOW02
+            	 IF @c_ADJStatusCtrl = '1'
+            	 BEGIN
+            	 	  IF NOT EXISTS(SELECT 1 
+            	 	                FROM ITRN (NOLOCK)
+            	 	                WHERE TranType = 'AJ'
+            	 	                AND SourceType = 'ntrAdjustmentDetailUpdate'
+            	 	                AND SourceKey = @c_SourceKey
+            	 	                AND Storerkey = @c_ADJ_StorerKey
+            	 	                AND Sku = @c_ADJ_Sku)
+            	 	  BEGIN
+                     SELECT @n_continue = 3                                                                                        
+                     SELECT @n_err = 62759    	     
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Error. Create ITRN failed. (ntrAdjustmentDetailUpdate)'        
+                     BREAK    	                	              	 	  	
+            	 	  END                          	 	                
+            	 END
+            	 
                -- SOS75806 UCC Adjustment
                IF @c_ADJ_UCCNo <> ''
                BEGIN
