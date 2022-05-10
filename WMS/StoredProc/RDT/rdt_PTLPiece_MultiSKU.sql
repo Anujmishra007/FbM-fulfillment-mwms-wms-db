@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date        Rev  Author      Purposes                                      */
 /* 29-03-2022  1.0  Ung         WMS-19254 MultiSKUBarcode with dynamic scope  */
+/* 09-05-2022  1.1  Ung         WMS-19254 Add UPC param                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_PTLPiece_MultiSKU]
@@ -66,7 +67,7 @@ BEGIN
    BEGIN
       SET @cSQL = 'EXEC rdt.' + RTRIM( @cMultiSKUBarcodeSP) +
          ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cStation, @cMethod, @cSKU, @cLastPos, @cOption, ' +
-         ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+         ' @cUPC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
       SET @cSQLParam =
          '@nMobile      INT,           ' +
          '@nFunc        INT,           ' +
@@ -80,12 +81,13 @@ BEGIN
          '@cSKU         NVARCHAR( 20), ' +
          '@cLastPos     NVARCHAR( 10), ' +
          '@cOption      NVARCHAR( 1),  ' +
+         '@cUPC         NVARCHAR( 30)  OUTPUT, ' + 
          '@nErrNo       INT            OUTPUT, ' +
          '@cErrMsg      NVARCHAR( 20)  OUTPUT  '
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cStation, @cMethod, @cSKU, @cLastPos, @cOption,
-         @nErrNo OUTPUT, @cErrMsg OUTPUT
+         @cUPC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
       
       IF @nErrNo <> 0
          GOTO Quit

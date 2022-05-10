@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date        Rev  Author      Purposes                                      */
 /* 29-03-2022  1.0  Ung         WMS-19254 Created                             */
+/* 09-05-2022  1.1  Ung         WMS-19254 Add UPC param                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_PTLPiece_MultiSKU_Order]
@@ -26,6 +27,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_PTLPiece_MultiSKU_Order]
    @cSKU         NVARCHAR( 20),
    @cLastPos     NVARCHAR( 10),
    @cOption      NVARCHAR( 1),
+   @cUPC         NVARCHAR( 30)  OUTPUT,
    @nErrNo       INT            OUTPUT,
    @cErrMsg      NVARCHAR( 20)  OUTPUT
 AS
@@ -45,15 +47,15 @@ BEGIN
       SELECT A.StorerKey, A.SKU
       FROM
          (
-            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.SKU = @cSKU
+            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.SKU = @cUPC
             UNION ALL
-            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.AltSKU = @cSKU
+            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.AltSKU = @cUPC
             UNION ALL
-            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.RetailSKU = @cSKU
+            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.RetailSKU = @cUPC
             UNION ALL
-            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.ManufacturerSKU = @cSKU
+            SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.ManufacturerSKU = @cUPC
             UNION ALL
-            SELECT StorerKey, SKU FROM dbo.UPC UPC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND UPC.UPC = @cSKU
+            SELECT StorerKey, SKU FROM dbo.UPC UPC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND UPC.UPC = @cUPC
          ) A 
          JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.StorerKey = A.StorerKey AND PD.SKU = A.SKU)
          JOIN dbo.Orders O WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)  
