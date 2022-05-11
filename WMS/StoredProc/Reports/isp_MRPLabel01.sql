@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_MRPLabel01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_MRPLabel01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,8 +28,9 @@ GO
 /* 17-JUN-2018 JimmyTan 1.3   WMS-5437 - [CR] - SG Logitech - MRP Label */
 /* 23-Aug-2019 CSCHONG  1.2   WMS-10266 revised field logic (CS01)      */
 /* 12-Aug-2020 WLChooi  1.5   WMS-14716 - Modify Logic (WL01)           */
+/* 13-Apr-2021 Mingle   1.6   WMS-16811 - Modify logic (ML01)           */
 /************************************************************************/
-CREATE PROC [dbo].[isp_MRPLabel01]
+CREATE OR ALTER PROC [dbo].[isp_MRPLabel01]
            @c_PickSlipNo         NVARCHAR(10)
          , @c_CartonNoStart      NVARCHAR(10)
          , @c_CartonNoEnd        NVARCHAR(10) 
@@ -379,7 +375,7 @@ QUIT_SP:
                      --+ @c_LGTCC_Zip                   + ' '   --WL01
                      --+ @c_LGTCC_Country  
       ,  LGTCC_Phone1   = 'Tel: ' + @c_LGTCC_Phone1   
-      ,  LGTCC_Email1   = 'Web: ' + @c_LGTCC_Email1   --WL01   
+      ,  LGTCC_Email1   = @c_LGTCC_Email1   --ML01  
       ,  LGTCC_Contact1 = 'For customer complaint, please contact: ' + @c_LGTCC_Contact1 
       ,  LGTCC_Notes1 = CASE WHEN OH.Consigneekey = '218793' THEN  'Value for customs purposes. ' + @c_LGTCC_Notes1 ELSE ' ' END 
       ,  MFGBy_UL = '_________'
