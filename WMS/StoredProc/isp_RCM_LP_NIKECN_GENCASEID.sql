@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Load Plan Dynamic RCM configure at listname 'RCMConfig'   */ 
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 11-Feb-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 11-May-2022  WLChooi  1.1  Bug Fix - Modify Sorting (WL01)           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RCM_LP_NIKECN_GENCASEID] 
@@ -171,7 +172,7 @@ BEGIN
          SELECT Loadkey, SKU, LOC, Pickzone, LogicalLocation, PARTIALS AS QuantityRequired 
          FROM CTE1 
          WHERE PARTIALS > 0
-         ORDER BY LogicalLocation ASC, LOC ASC, SKU ASC, QuantityRequired DESC
+         ORDER BY PickZone ASC, LogicalLocation ASC, LOC ASC, SKU ASC, QuantityRequired DESC   --WL01
 
       OPEN cur_LOADORDER  
       FETCH NEXT FROM cur_LOADORDER INTO @c_Loadkey, @c_SKU, @c_Loc, @c_Pickzone, @c_LogicalLoc, @n_Qty
