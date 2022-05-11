@@ -1,36 +1,9 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_AlertNonExceedTable]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_AlertNonExceedTable]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
-/***************************************************************************/ 
-/* Object Name: isp_AlertNonExceedTable                                    */
-/* Modification History:                                                   */  
-/*                                                                         */  
-/* Called By:  Exceed                                                      */
-/*                                                                         */
-/* PVCS Version: 1.0                                                       */
-/*                                                                         */
-/* Version: 5.4                                                            */
-/*                                                                         */
-/* Data Modifications:                                                     */
-/*                                                                         */
-/* Date         Author    Ver.  Purposes                                   */
-/* 05-Aug-2002            1.0   Initial revision                           */
-/* Oct 25 2012  tlting    1.1   New Table                                  */
-/* Mar 07 2013  tlting    1.2   New table added                            */
-/* May 03 2013  tlting    1.3   New table - DeviceProfile, DeviceProfileLog*/ 
-/*                              ,PTLTran                                   */
-/* Jun 04 2013  tlting    1.4   New table added                            */
-/* Oct 22 2013  tlting    1.5   New table added                            */
-/* Dec 02 2013  khlim     1.6   New Bartender tables                       */
-/***************************************************************************/ 
-CREATE PROCEDURE isp_AlertNonExceedTable   
+CREATE OR ALTER PROCEDURE isp_AlertNonExceedTable   
    @cOperator     NVARCHAR(215) = '',  
    @cRecipients   NVARCHAR(215) = ''  
 AS   
@@ -69,12 +42,12 @@ IF OBJECT_ID('tempdb..#NonStandardTable') IS NOT NULL
    DROP TABLE #NonStandardTable
    
 Create Table #NonStandardTable
-(TableName   NVARCHAR(30),
+(TableName   NVARCHAR(40),
  CreateDate  datetime )
 
 IF OBJECT_ID('tempdb..#StandardTable') IS NOT NULL
    DROP TABLE #NonStandardTable
-CREATE TABLE #StandardTable (TableName NVARCHAR(50))
+CREATE TABLE #StandardTable (TableName NVARCHAR(60))
 
    INSERT INTO #StandardTable( TableName) VALUES ('REPLENISHMENT_LOCK')
    INSERT INTO #StandardTable( TableName) VALUES ('BATCHPICK')
@@ -116,7 +89,7 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPMBOL')
    INSERT INTO #StandardTable( TableName) VALUES ('CCDetail')
    INSERT INTO #StandardTable( TableName) VALUES ('rdsOrderDetailSize')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSSKU')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSSKU')
    INSERT INTO #StandardTable( TableName) VALUES ('CC_Error')
    INSERT INTO #StandardTable( TableName) VALUES ('PODETAIL')
    INSERT INTO #StandardTable( TableName) VALUES ('StorerSODefault')
@@ -203,45 +176,43 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('DEL_ORDERDETAIL')
    INSERT INTO #StandardTable( TableName) VALUES ('UploadinvData')
    INSERT INTO #StandardTable( TableName) VALUES ('ITRNHDR')
-   INSERT INTO #StandardTable( TableName) VALUES ('PO')
-   INSERT INTO #StandardTable( TableName) VALUES ('RCM_DataWindowLookup')
+   INSERT INTO #StandardTable( TableName) VALUES ('PO') 
    INSERT INTO #StandardTable( TableName) VALUES ('WAVE')
    INSERT INTO #StandardTable( TableName) VALUES ('idsPallet')
    INSERT INTO #StandardTable( TableName) VALUES ('InvRptLog')
    INSERT INTO #StandardTable( TableName) VALUES ('WAVEDETAIL')
    INSERT INTO #StandardTable( TableName) VALUES ('TMSLog')
    INSERT INTO #StandardTable( TableName) VALUES ('InventoryQC')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPADJ')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPADJ')
    INSERT INTO #StandardTable( TableName) VALUES ('InventoryQCDetail')
    INSERT INTO #StandardTable( TableName) VALUES ('IDSAllocationPool')
    INSERT INTO #StandardTable( TableName) VALUES ('SerialNo')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPASN')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPASN')
    INSERT INTO #StandardTable( TableName) VALUES ('KIT')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPINVHOLD')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPINVHOLD')
    INSERT INTO #StandardTable( TableName) VALUES ('KITDETAIL')
    INSERT INTO #StandardTable( TableName) VALUES ('nCounterTrigantic')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPKIT')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPKIT')
    INSERT INTO #StandardTable( TableName) VALUES ('LABELLIST')
    INSERT INTO #StandardTable( TableName) VALUES ('RECEIPTDETAIL')
    INSERT INTO #StandardTable( TableName) VALUES ('LOC')
    INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPMBOLBK')
    INSERT INTO #StandardTable( TableName) VALUES ('LOT')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPMOVE')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPMOVE')
    INSERT INTO #StandardTable( TableName) VALUES ('LOTATTRIBUTE')
    INSERT INTO #StandardTable( TableName) VALUES ('XDOCKStrategy')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPSOH')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPSOH')
    INSERT INTO #StandardTable( TableName) VALUES ('LOTNEWBILLTHRUDATE')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPTRF')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSEXPTRF')
    INSERT INTO #StandardTable( TableName) VALUES ('RDSSize')
    INSERT INTO #StandardTable( TableName) VALUES ('LOTxBILLDATE')
    INSERT INTO #StandardTable( TableName) VALUES ('TRIGANTICLOG')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSORD')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSORD')
    INSERT INTO #StandardTable( TableName) VALUES ('LOTxLOCxID')
    INSERT INTO #StandardTable( TableName) VALUES ('DOCLKUP')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSORM')
-   INSERT INTO #StandardTable( TableName) VALUES ('ServiceDuration')
+   INSERT INTO #StandardTable( TableName) VALUES ('WMSORM') 
    INSERT INTO #StandardTable( TableName) VALUES ('WMSPAK')
-   INSERT INTO #StandardTable( TableName) VALUES ('WMSRCD')
+   --INSERT INTO #StandardTable( TableName) VALUES ('WMSRCD')
    INSERT INTO #StandardTable( TableName) VALUES ('idsStkTrfDoc')
    INSERT INTO #StandardTable( TableName) VALUES ('SKU2')
    INSERT INTO #StandardTable( TableName) VALUES ('LoadPlanRetDetail')
@@ -306,7 +277,7 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('LoadPlan')
    INSERT INTO #StandardTable( TableName) VALUES ('PAZoneEquipmentExcludeDetail')
    INSERT INTO #StandardTable( TableName) VALUES ('UploadC4PODetail')
-   INSERT INTO #StandardTable( TableName) VALUES ('CCExtraParm')
+   
    INSERT INTO #StandardTable( TableName) VALUES ('PHYSICAL')
    INSERT INTO #StandardTable( TableName) VALUES ('PHY_A2B_ID')
    INSERT INTO #StandardTable( TableName) VALUES ('PHY_A2B_LOT')
@@ -366,8 +337,7 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('UPLOADTHPOHEADER')
    INSERT INTO #StandardTable( TableName) VALUES ('PutawayStrategyDetail')
    INSERT INTO #StandardTable( TableName) VALUES ('ALERT')
-   INSERT INTO #StandardTable( TableName) VALUES ('PutawayTask')
-   INSERT INTO #StandardTable( TableName) VALUES ('personal_info')
+   INSERT INTO #StandardTable( TableName) VALUES ('PutawayTask') 
    INSERT INTO #StandardTable( TableName) VALUES ('InvHoldTransLog')
    INSERT INTO #StandardTable( TableName) VALUES ('TempStock')
    INSERT INTO #StandardTable( TableName) VALUES ('UCCCounter')
@@ -381,8 +351,7 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('AllocateStrategy')
    INSERT INTO #StandardTable( TableName) VALUES ('WithdrawStock')
    INSERT INTO #StandardTable( TableName) VALUES ('RefKeyLookup')
-   INSERT INTO #StandardTable( TableName) VALUES ('AllocateStrategyDetail')
-   INSERT INTO #StandardTable( TableName) VALUES ('personal')
+   INSERT INTO #StandardTable( TableName) VALUES ('AllocateStrategyDetail') 
    INSERT INTO #StandardTable( TableName) VALUES ('REPLENISHMENT')
    INSERT INTO #StandardTable( TableName) VALUES ('RECUPLOAD')
    INSERT INTO #StandardTable( TableName) VALUES ('ApptId')
@@ -409,8 +378,7 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('HoldStock')
    INSERT INTO #StandardTable( TableName) VALUES ('Pickdet_log') -- US
    INSERT INTO #StandardTable( TableName) VALUES ('IDS_GSISpooler') -- US
-   INSERT INTO #StandardTable( TableName) VALUES ('SKUTrace') 	-- SOS# 143645 -- PH
-   INSERT INTO #StandardTable( TableName) VALUES ('UserTrace')  -- MY
+   
    INSERT INTO #StandardTable( TableName) VALUES ('PackDetail_RDT') -- UK
    INSERT INTO #StandardTable( TableName) VALUES ('rdtBOMCreationLog') -- RDT
    INSERT INTO #StandardTable( TableName) VALUES ('DEL_CCDetail') -- TW
@@ -607,7 +575,6 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('CONTAINERDETAIL_DELLOG')  
    INSERT INTO #StandardTable( TableName) VALUES ('PALLET_DELLOG')  
    INSERT INTO #StandardTable( TableName) VALUES ('PALLETDETAIL_DELLOG')  
-   
    INSERT INTO #StandardTable( TableName) VALUES ('Booking_BlockSlot')
    INSERT INTO #StandardTable( TableName) VALUES ('Booking_In')
    INSERT INTO #StandardTable( TableName) VALUES ('Booking_Out')
@@ -615,15 +582,12 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('UnpickMoveLog')
    INSERT INTO #StandardTable( TableName) VALUES ('SkuInfo')   -- SOS244027
    INSERT INTO #StandardTable( TableName) VALUES ('TriganticLogKey')   -- CN   
-
    INSERT INTO #StandardTable( TableName) VALUES ('LOTxLOCxID_B4Post')    -- US
    INSERT INTO #StandardTable( TableName) VALUES ('StockTakeErrorReport') 
    INSERT INTO #StandardTable( TableName) VALUES ('CCDetail_B4Post') 
-
    INSERT INTO #StandardTable( TableName) VALUES ('DeviceProfile')    -- Put to Light
    INSERT INTO #StandardTable( TableName) VALUES ('DeviceProfileLog') 
    INSERT INTO #StandardTable( TableName) VALUES ('PTLTran') 
-
    INSERT INTO #StandardTable( TableName) VALUES ('ITRNKey')      -- GetKey Enhance
    INSERT INTO #StandardTable( TableName) VALUES ('PickDetailKey')      -- GetKey Enhance
    INSERT INTO #StandardTable( TableName) VALUES ('PreallocatePickDetailKey')      -- GetKey Enhance
@@ -631,22 +595,373 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(50))
    INSERT INTO #StandardTable( TableName) VALUES ('TransmitlogKey')      -- GetKey Enhance
    INSERT INTO #StandardTable( TableName) VALUES ('TransmitlogKey2')      -- GetKey Enhance
    INSERT INTO #StandardTable( TableName) VALUES ('TransmitlogKey3')      -- GetKey Enhance
-   
    INSERT INTO #StandardTable( TableName) VALUES ('WMSCustITRAN')      -- PH interface
    INSERT INTO #StandardTable( TableName) VALUES ('StorerGroup')      -- HK
-   
    INSERT INTO #StandardTable( TableName) VALUES ('rdtMoveToIDLog')      -- VF
    INSERT INTO #StandardTable( TableName) VALUES ('rdtPAFSwapTaskLog')      -- VF
    INSERT INTO #StandardTable( TableName) VALUES ('rdtRPFLog')      -- VF
    INSERT INTO #StandardTable( TableName) VALUES ('rdtSortLaneLocLog')      -- VF
    INSERT INTO #StandardTable( TableName) VALUES ('rdtTrolleyLog')      -- VF
    INSERT INTO #StandardTable( TableName) VALUES ('rdtUCCSwapLog')      -- VF
-   
-   INSERT INTO #StandardTable( TableName) VALUES ('BartenderCmdConfig') 
-   INSERT INTO #StandardTable( TableName) VALUES ('BartenderLabelCfg') 
+   INSERT INTO #StandardTable( TableName) VALUES ('CheckUpKPI')      -- KPI check
+   INSERT INTO #StandardTable( TableName) VALUES ('CheckUpKPIDetail')      -- KPI check
+   INSERT INTO #StandardTable( TableName) VALUES ('LOTKEY')      -- GetKey Enhance
+   INSERT INTO #StandardTable( TableName) VALUES ('Booking_Audit')   
+   INSERT INTO #StandardTable( TableName) VALUES ('BartenderCmdConfig')   
+   INSERT INTO #StandardTable( TableName) VALUES ('BartenderLabelCfg')   
+   INSERT INTO #StandardTable( TableName) VALUES ('Booking_InDetail')   --  eWMS
+   INSERT INTO #StandardTable( TableName) VALUES ('BookingSeqConfig')   -- RDT Booking
+   INSERT INTO #StandardTable( TableName) VALUES ('DEL_SerialNo')   -- SG
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtAssignLoc')   -- ANF
+   INSERT INTO #StandardTable( TableName) VALUES ('TCPOUTLogKey')   -- getkey
+   INSERT INTO #StandardTable( TableName) VALUES ('ABCAnalysis')   -- ABCAnalysis
+   INSERT INTO #StandardTable( TableName) VALUES ('ABCTran')   -- ABCAnalysis
+   INSERT INTO #StandardTable( TableName) VALUES ('NONINV')   -- ABCAnalysis
+   INSERT INTO #StandardTable( TableName) VALUES ('NONITRN')   -- ABCAnalysis
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderInputs')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderJob')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderJobDetail')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderJobMove')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderJobOperation')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderOutputs')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderRequestInputs')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderRouting')   -- WorkStation
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderSteps')   -- WorkStation            
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderPackets')   -- WorkStation  
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderRequest')   -- WorkStation  
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderRequestOutputs')   -- WorkStation        
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkStation')   -- WorkStation               
+   INSERT INTO #StandardTable( TableName) VALUES ('WORKSTATIONLOC')   -- WorkStation                  
+   INSERT INTO #StandardTable( TableName) VALUES ('ITFTriggerConfig')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPickConsoLog')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtUCCPreRCVAuditLog')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('RFPutawayNMV')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('RDTDynamicPickLog_DELLOG')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('RFPUTAWAY_DELLOG')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtFPKLog')   --                   
+   INSERT INTO #StandardTable( TableName) VALUES ('DOCINFO')   --           
+   INSERT INTO #StandardTable( TableName) VALUES ('DocStatusTrack')   --     Generic Doc tracking - replace Trigantics
+   INSERT INTO #StandardTable( TableName) VALUES ('SerialNo_DELLOG')   --           
+   INSERT INTO #StandardTable( TableName) VALUES ('PICKSLIPKey')   --           
+   INSERT INTO #StandardTable( TableName) VALUES ('WCSKey')   --           
+   INSERT INTO #StandardTable( TableName) VALUES ('RDTPPA_DELLOG')   --           
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtFCPLog')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtLottableCode')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('VoiceAssignment')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('VoiceAssignmentDetail')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('VoiceConfig')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('PTLLockLoc')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('PTLTranLog')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('LFLightLink_INLOG')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtMVFLog')   -- 
+   INSERT INTO #StandardTable( TableName) VALUES ('CartonTrack_Pool')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('ReceiptInfo')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('TableActionLog')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPTLCartLog')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('OTMLOG')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('ModuleReports')   --  CN New Build Load                  
+   INSERT INTO #StandardTable( TableName) VALUES ('MoveRefKey')   --   getkey                 
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtReplenishmentLog')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtConReceiveLog')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('PALLETIMAGE')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('GTMTask')   --      Merlion               
+   INSERT INTO #StandardTable( TableName) VALUES ('WCSTran')   --      Merlion               
+   INSERT INTO #StandardTable( TableName) VALUES ('Orderkey')   --                    
+   INSERT INTO #StandardTable( TableName) VALUES ('GTMLog')   --      Merlion               
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPalletReceiveLog')   --      Merlion
+   INSERT INTO #StandardTable( TableName) VALUES ('VehicleDispatch')   --      Merlion
+   INSERT INTO #StandardTable( TableName) VALUES ('VehicleDispatchDetail')   --      Merlion   
+   INSERT INTO #StandardTable( TableName) VALUES ('BartenderPrinterLog')   --         
+   INSERT INTO #StandardTable( TableName) VALUES ('GTMLoop')   ---      Merlion    
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPACartLog')   ---      TW    
+   INSERT INTO #StandardTable( TableName) VALUES ('ULMRFPUTAWAY')   ---      TW    
+   INSERT INTO #StandardTable( TableName) VALUES ('IDS_LP_DRIVER_DELLOG')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('IDS_LP_VEHICLE_DELLOG')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('LFLightLinkLOG')   ---      TW    
+   INSERT INTO #StandardTable( TableName) VALUES ('LightInput')   ---      TW    
+   INSERT INTO #StandardTable( TableName) VALUES ('LightMode')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('LightStatus')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('VASRefKeyLookup')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('WORKORDERJOBRECON')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('OTMIDTrack')   ---     
+   INSERT INTO #StandardTable( TableName) VALUES ('WebService_LOG')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('sysobjects')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrder_Palletize')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrder_UnCasing')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkStation_LOG')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('PalletLabel')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('JobTaskLookup')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('WorkOrderJobMove_DELLOG')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('AreaDetail_DELLOG')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('SKUConfig_DELLOG')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('CourierSortingCode')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtreceiptlog')   ---      SOS364495   
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPTLStationLog')       
+   INSERT INTO #StandardTable( TableName) VALUES ('EC_RECEIPT')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('EC_RECEIPTDETAIL')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('BarcodeConfig')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('BarcodeConfigDetail')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('PALLETMGMT')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('PALLETMGMTDETAIL')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('PMINV')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('PMTRN')   ---      CR332795   
+   INSERT INTO #StandardTable( TableName) VALUES ('Brokerage')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('BrokerageDetail')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('PackTask')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('ExceptionHandling')   ---       
+   INSERT INTO #StandardTable( TableName) VALUES ('PickDetail_WIP')   ---          
+   INSERT INTO #StandardTable( TableName) VALUES ('STOCKTAKEPARMSTRATEGY')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('OrderSelectionCondition')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('PACKTASKDETAIL')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('QCmd_TransmitlogConfig')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('TCPSocket_QueueTask')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtCarterCubicGroupLog')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPTLPieceLog')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPTLStationLog_DELLOG')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('LoadPlan_SUP_Detail')   ---         
+   INSERT INTO #StandardTable( TableName) VALUES ('BuildLoadLog')   ---
+   INSERT INTO #StandardTable( TableName) VALUES ('BuildLoadDetailLog')   ---                                  
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPTSLog')   ---
+   INSERT INTO #StandardTable( TableName) VALUES ('SQLObjectRights')   ---   
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtSortCaseLog')   ---   
+   INSERT INTO #StandardTable( TableName) VALUES ('BTB_FTA')   ---      Logitec
+   INSERT INTO #StandardTable( TableName) VALUES ('CartonList')   ---      
+   INSERT INTO #StandardTable( TableName) VALUES ('CartonListDetail')   ---      
+   INSERT INTO #StandardTable( TableName) VALUES ('MasterSerialNo')   ---  Logitec    
+   INSERT INTO #StandardTable( TableName) VALUES ('BTB_Shipment')   ---      
+   INSERT INTO #StandardTable( TableName) VALUES ('BTB_ShipmentDetail')   ---      
+   INSERT INTO #StandardTable( TableName) VALUES ('BTB_ShipmentList')   ---  Logitec    
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtPrinterGroup')   ---      
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtReportToPrinter')   ---      
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtSpooler')   ---  Logitec    
+   INSERT INTO #StandardTable( TableName) VALUES ('SerialNoKey')   ---  Logitec    
+   INSERT INTO #StandardTable( TableName) VALUES ('TransactionLog')   ---  mobile dashboard    
+   INSERT INTO #StandardTable( TableName) VALUES ('UserRestrictions')   ---  mobile dashboard
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtFCPLog')   ---   PH Colgate
+   INSERT INTO #StandardTable( TableName) VALUES ('ReceiptSerialNo')   ---   Dyson
+   INSERT INTO #StandardTable( TableName) VALUES ('ITrnSerialNo')   ---   Dyson
+   INSERT INTO #StandardTable( TableName) VALUES ('PackSerialNo')   ---   Dyson   
+   INSERT INTO #StandardTable( TableName) VALUES ('REPLENISHKEY')   ---   TH Tune   
+   INSERT INTO #StandardTable( TableName) VALUES ('EPACKPFTDATA')   ---   ECom packing  
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtUCCReceive2Log')   ---     
+   INSERT INTO #StandardTable( TableName) VALUES ('rdtSerialNoLog')   ---   Dyson  
+   INSERT INTO #StandardTable( TableName) VALUES ('MasterSerialNoTrn')   ---   Dyson  
+   INSERT INTO #StandardTable( TableName) VALUES ('ORDERS_TRACKNO_WIP')   ---   Ecom new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatch')   ---   Ecom new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatchDetail')   ---   Ecom new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('TCPSocket_QueueTask_Log')   ---   Ecom new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatchJob')   ---   Ecom new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('TPB_Config')   ---   TPB new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('WMS_TPB_BASE')   ---   TPB new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('TPB_Data_Batch')   ---   TPB new process  
+   INSERT INTO #StandardTable( TableName) VALUES ('TPB_EXTRACTION_HISTORY')   ---   TPB new process  
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtMoveSerialNoLog')    
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPreReceiveSort2Log')    
+    INSERT INTO #StandardTable( TableName) VALUES ('LEAF_Chart_DET')    
+    INSERT INTO #StandardTable( TableName) VALUES ('LEAF_Chart_HDR')    
+    INSERT INTO #StandardTable( TableName) VALUES ('LWMS_WebApiConfig')            
+    INSERT INTO #StandardTable( TableName) VALUES ('GVDocEventLog')            
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtSortAndPackLog')    
 
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatch')    
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatchDetail')    
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatchDetail_Log')    
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatchJob')    
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatchJob_Log')     
+
+    INSERT INTO #StandardTable( TableName) VALUES ('PACKDet')  
+       
+    INSERT INTO #StandardTable( TableName) VALUES ('BuildParm')     
+    INSERT INTO #StandardTable( TableName) VALUES ('BuildParmDetail')     
+    INSERT INTO #StandardTable( TableName) VALUES ('BuildParmGroupCfg')   
+    INSERT INTO #StandardTable( TableName) VALUES ('MailQ')          
+    INSERT INTO #StandardTable( TableName) VALUES ('MailQDet')                            
+                
+    INSERT INTO #StandardTable( TableName) VALUES ('PhotoRepo_Users')      --Photo Repository ( Web Application) security and account     
+    INSERT INTO #StandardTable( TableName) VALUES ('PhotoRepo_Account')                            
+    INSERT INTO #StandardTable( TableName) VALUES ('itfSQLAutoReportExport')                            
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtSTDEventLogLookUp')                               
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtReceivekSerialNoLog')                        
+
+
+     INSERT INTO #StandardTable( TableName) VALUES ('ChannelAttributeConfig')                        
+     INSERT INTO #StandardTable( TableName) VALUES ('ChannelInv')   
+      INSERT INTO #StandardTable( TableName) VALUES ('ChannelItran')   
+      INSERT INTO #StandardTable( TableName) VALUES ('ChannelTransfer')   
+      INSERT INTO #StandardTable( TableName) VALUES ('ChannelTransferDetail')   
+
+      INSERT INTO #StandardTable( TableName) VALUES ('rdtReceiveSerialNoLog')   
+                      
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocBatch_Log')   
+    INSERT INTO #StandardTable( TableName) VALUES ('IDKey')   
+    INSERT INTO #StandardTable( TableName) VALUES ('LogError')   
+    INSERT INTO #StandardTable( TableName) VALUES ('LogSQL')   
+    INSERT INTO #StandardTable( TableName) VALUES ('Orders_Staging')   
+    INSERT INTO #StandardTable( TableName) VALUES ('Orders_StagingNum')   
+    INSERT INTO #StandardTable( TableName) VALUES ('Orders_SUM_SnapShot')   
+    INSERT INTO #StandardTable( TableName) VALUES ('QCSvcConfig')   
+    INSERT INTO #StandardTable( TableName) VALUES ('QCSvcDBConfig')   
+    INSERT INTO #StandardTable( TableName) VALUES ('QCSvcTCPClientConfig')   
+    INSERT INTO #StandardTable( TableName) VALUES ('RDTPrintJob_Log')   
+    INSERT INTO #StandardTable( TableName) VALUES ('ReceiptKey')   
+    INSERT INTO #StandardTable( TableName) VALUES ('eCom_Job_Config')       
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPTLCartLog_Doc')       
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtSortCaseLock')       
+    INSERT INTO #StandardTable( TableName) VALUES ('TBL_PURGECONFIG')                
+
+    INSERT INTO #StandardTable( TableName) VALUES ('TBL_PURGECONFIG')     
+    INSERT INTO #StandardTable( TableName) VALUES ('WMS_ConnectionThread')     
+    INSERT INTO #StandardTable( TableName) VALUES ('WMS_Connection_Sum')     
+
+    INSERT INTO #StandardTable( TableName) VALUES ('PickZone')     
+    INSERT INTO #StandardTable( TableName) VALUES ('PIZoneEquipmentExcludeDetail')     
+    INSERT INTO #StandardTable( TableName) VALUES ('SEQKey')     
+    INSERT INTO #StandardTable( TableName) VALUES ('ExternLotAttribute')     
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtFPKLog')     
+  
+    INSERT INTO #StandardTable( TableName) VALUES ('GVTLog')     
+  
+    INSERT INTO #StandardTable( TableName) VALUES ('PackDetailInfo')     
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtSerialNoCaptureByOrderSKULog')     
+    INSERT INTO #StandardTable( TableName) VALUES ('TH_CustomerLotInfo')     
+  
+    INSERT INTO #StandardTable( TableName) VALUES ('OrdersV2Agg')      
+    INSERT INTO #StandardTable( TableName) VALUES ('OrdersV2AggNum')       
+    INSERT INTO #StandardTable( TableName) VALUES ('OrdersV2Raw')      
+    INSERT INTO #StandardTable( TableName) VALUES ('OrdersV2Status')      
+    INSERT INTO #StandardTable( TableName) VALUES ('OrdersV2Sum')      
+    
+    INSERT INTO #StandardTable( TableName) VALUES ('BUILDWAVEDETAILLOG')      
+    INSERT INTO #StandardTable( TableName) VALUES ('BUILDWAVELOG')      
+    INSERT INTO #StandardTable( TableName) VALUES ('ChannelInvHold')      
+    INSERT INTO #StandardTable( TableName) VALUES ('ChannelInvHoldDetail')      
+    INSERT INTO #StandardTable( TableName) VALUES ('DailyInventoryChannel')      
+    INSERT INTO #StandardTable( TableName) VALUES ('GENREPLENISHMENTLOG')      
+    INSERT INTO #StandardTable( TableName) VALUES ('RDTWatTeamLog')      
+    INSERT INTO #StandardTable( TableName) VALUES ('REPLENISHMENTPARMS')      
+    INSERT INTO #StandardTable( TableName) VALUES ('REPLENISHSTRATEGY')      
+    INSERT INTO #StandardTable( TableName) VALUES ('REPLENISHSTRATEGYDETAIL')      
+    INSERT INTO #StandardTable( TableName) VALUES ('TaskDetail_WIP')      
+    INSERT INTO #StandardTable( TableName) VALUES ('WMREPORT')         
+    INSERT INTO #StandardTable( TableName) VALUES ('WMREPORTDETAIL')         
+    INSERT INTO #StandardTable( TableName) VALUES ('WMS_Error_List')         
+    INSERT INTO #StandardTable( TableName) VALUES ('WMS_TABLE_EVENT_CONFIG')        
+    INSERT INTO #StandardTable( TableName) VALUES ('WMS_USER_CREATION_STATUS') 
+    INSERT INTO #StandardTable( TableName) VALUES ('Orders_Encrypt')     
+    INSERT INTO #StandardTable( TableName) VALUES ('OrderToLocDetail')     
+    INSERT INTO #StandardTable( TableName) VALUES ('PTLTrafficDetail')     
+    INSERT INTO #StandardTable( TableName) VALUES ('RDTMobRec_LOG')     
+    INSERT INTO #StandardTable( TableName) VALUES ('AutoAllocStatus')     
+    INSERT INTO #StandardTable( TableName) VALUES ('ExcelGenerator')     
+    INSERT INTO #StandardTable( TableName) VALUES ('ExcelGeneratorDetail')     
+    INSERT INTO #StandardTable( TableName) VALUES ('GeekPlusRBT_InvSync')    
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtCPVAdjustmentLog')     
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtCPVKitLog')     
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtCPVOrderLog')     
+    INSERT INTO #StandardTable( TableName) VALUES ('LFLightLink_LOG') 
+    INSERT INTO #StandardTable( TableName) VALUES ('eComConfig')
+    INSERT INTO #StandardTable( TableName) VALUES ('eComPromo')
+    INSERT INTO #StandardTable( TableName) VALUES ('idsMEDSKU')
+    INSERT INTO #StandardTable( TableName) VALUES ('IMLAgg')
+    INSERT INTO #StandardTable( TableName) VALUES ('IMLAggLog')
+    INSERT INTO #StandardTable( TableName) VALUES ('MailQSMS')
+    INSERT INTO #StandardTable( TableName) VALUES ('MailQSMSDet')
+    INSERT INTO #StandardTable( TableName) VALUES ('Orders_PI_Encrypted')
+    INSERT INTO #StandardTable( TableName) VALUES ('OrderStage')
+    INSERT INTO #StandardTable( TableName) VALUES ('OrderSum')
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtCaseIDCaptureLog')
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPFLStationLog')
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPPALog')
+    INSERT INTO #StandardTable( TableName) VALUES ('RDTReceiveAudit')
+    INSERT INTO #StandardTable( TableName) VALUES ('SimulationCriteria')
+    INSERT INTO #StandardTable( TableName) VALUES ('TMS_Shipment')
+    INSERT INTO #StandardTable( TableName) VALUES ('TMS_ShipmentTransOrderLink')
+    INSERT INTO #StandardTable( TableName) VALUES ('TMS_TransportOrder')
+    INSERT INTO #StandardTable( TableName) VALUES ('VAS_Demand')
+    INSERT INTO #StandardTable( TableName) VALUES ('VAS_Plan')
+    INSERT INTO #StandardTable( TableName) VALUES ('VAS_Productivity')
+    INSERT INTO #StandardTable( TableName) VALUES ('captured_columns')
+    INSERT INTO #StandardTable( TableName) VALUES ('change_tables')
+    INSERT INTO #StandardTable( TableName) VALUES ('dbo_BuildLoadLog_CT')
+    INSERT INTO #StandardTable( TableName) VALUES ('dbo_CODELKUP_CT')
+    INSERT INTO #StandardTable( TableName) VALUES ('ddl_history')
+    INSERT INTO #StandardTable( TableName) VALUES ('index_columns')
+    INSERT INTO #StandardTable( TableName) VALUES ('lsn_time_mapping')
+    INSERT INTO #StandardTable( TableName) VALUES ('systranschemas')
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPreReceiveSort')
+    INSERT INTO #StandardTable( TableName) VALUES ('EXG_FileDet')
+    INSERT INTO #StandardTable( TableName) VALUES ('EXG_FileHdr')
+    INSERT INTO #StandardTable( TableName) VALUES ('ITrnUCC')
+    INSERT INTO #StandardTable( TableName) VALUES ('CARTONIZATION_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('TrackingID')
+    INSERT INTO #StandardTable( TableName) VALUES ('GEEKPBOT_INTEG_CONFIG')
+    INSERT INTO #StandardTable( TableName) VALUES ('View_JReport') 
+    INSERT INTO #StandardTable( TableName) VALUES ('JReportFolder')      
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPreReceiveSort_DELLOG')      
+       
+     --  WMS-14463
+    INSERT INTO #StandardTable( TableName) VALUES ('ExternOrders') 
+    INSERT INTO #StandardTable( TableName) VALUES ('ExternOrdersDetail') 
+    INSERT INTO #StandardTable( TableName) VALUES ('RFIDMaster') 
+    INSERT INTO #StandardTable( TableName) VALUES ('RFIDTransLog') 
+    INSERT INTO #StandardTable( TableName) VALUES ('PACKQRF') 
+    INSERT INTO #StandardTable( TableName) VALUES ('DBStatusTrack') 
+    INSERT INTO #StandardTable( TableName) VALUES ('DailyInventoryChannel_DELLOG') 
+    INSERT INTO #StandardTable( TableName) VALUES ('RDTPickQCLog') 
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtSortAndPackLOC') 
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtTruckPackInfo') 
+    INSERT INTO #StandardTable( TableName) VALUES ('BTB_FTA_DELLOG') 
+    INSERT INTO #StandardTable( TableName) VALUES ('AppPrinter') 
+    INSERT INTO #StandardTable( TableName) VALUES ('AppSection') 
+    INSERT INTO #StandardTable( TableName) VALUES ('AppWorkstation') 
+    INSERT INTO #StandardTable( TableName) VALUES ('RECEIPTDETAIL_WIP') 
+    INSERT INTO #StandardTable( TableName) VALUES ('GWPTrack') 
+    INSERT INTO #StandardTable( TableName) VALUES ('PickingVoice') 
+    INSERT INTO #StandardTable( TableName) VALUES ('ExecutionLog') 
+    INSERT INTO #StandardTable( TableName) VALUES ('STG_DocStatusTrack') 
+    INSERT INTO #StandardTable( TableName) VALUES ('SkuImage') 
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtPTLStationLogQueue') 
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtReportDetail') 
+    INSERT INTO #StandardTable( TableName) VALUES ('WebSocket_INLog') 
+    INSERT INTO #StandardTable( TableName) VALUES ('WebSocket_OUTLog')    
+
+    INSERT INTO #StandardTable( TableName) VALUES ('TPPRINTCMDLOG') 
+    INSERT INTO #StandardTable( TableName) VALUES ('TPPRINTCONFIG') 
+    INSERT INTO #StandardTable( TableName) VALUES ('TPPRINTERGROUP')    
+    INSERT INTO #StandardTable( TableName) VALUES ('TPPRINTJOB')    
+    INSERT INTO #StandardTable( TableName) VALUES ('AppWorkStation_Log')    
+    INSERT INTO #StandardTable( TableName) VALUES ('PackdetailLabel')    
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtMoveToLOCLog')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_EO')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_EO_STG')    
+
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_ASN')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_LOC')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_PO')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_SKU')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_SO')    
+   
+    INSERT INTO #StandardTable( TableName) VALUES ('CODELIST_DELLOG')    
+    INSERT INTO #StandardTable( TableName) VALUES ('rdtECOMQABatchLog')    
+    INSERT INTO #StandardTable( TableName) VALUES ('SCE_DL_AssignLane')    
+    
+    INSERT INTO #StandardTable( TableName) VALUES ('AllocateStrategy_DELLOG')        
+    INSERT INTO #StandardTable( TableName) VALUES ('AllocateStrategyDetail_DELLOG') 
+    INSERT INTO #StandardTable( TableName) VALUES ('PickZone_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('PreAllocateStrategy_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('PreAllocateStrategyDetail_DELL')
+    INSERT INTO #StandardTable( TableName) VALUES ('PutawayStrategy_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('PutawayStrategyDetail_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('Strategy_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('TTMStrategy_DELLOG')
+    INSERT INTO #StandardTable( TableName) VALUES ('TTMStrategyDetail_DELLOG')
+       
+      
+  
+
+ 
 INSERT INTO #NonStandardTable
-SELECT CAST(NAME AS NVARCHAR(30)) TableName, crDate as CreateDate
+SELECT CAST(NAME AS NVARCHAR(40)) TableName, crDate as CreateDate
 FROM   SYSOBJECTS OBJ 
 WHERE obj.type = 'U' 
 AND NAME NOT IN (SELECT TableName FROM #StandardTable)               
