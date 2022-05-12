@@ -1,0 +1,19 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+-- [PH] - LogiReport_Add_View in UAT Catalog_06May2022 https://jiralfl.atlassian.net/browse/WMS-19626
+
+CREATE OR ALTER VIEW [BI].[V_PTLTran] AS 
+SELECT * 
+   FROM PTL.[PTLTran] WITH (NOLOCK)  
+GO
+GRANT SELECT ON  [BI].[V_PTLTran] TO [JReportRole]
+GO
+/*
+EXEC AS LOGIN = 'JReportUserPH'
+SELECT SUSER_SNAME()
+SELECT * FROM [BI].[V_PTLTran]
+
+REVERT;
+*/
