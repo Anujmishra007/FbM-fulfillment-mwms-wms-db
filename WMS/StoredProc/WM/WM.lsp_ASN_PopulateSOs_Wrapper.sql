@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASN_PopulateSOs_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ASN_PopulateSOs_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,8 +26,13 @@ GO
 /*                            Revert when Raise error                   */
 /* 2021-01-05  Wan02    1.2   Remove debug 'select * from #tRECEIPTDETAIL'*/
 /*                            Execute Login if current login<>@c_Username*/
+/* 2021-12-17  Wan03    1.3   LFWM-3236 - UATRG Trade return not able to*/
+/*                            populate Order                            */
+/* 2021-12-17  Wan03    1.3   DevOps Combine Script                     */
+/* 2021-03-14  Wan04    1.3   LFWM-3382 - UAT  Australia  Return module */
+/*                            populates wrong Lottable03                */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_ASN_PopulateSOs_Wrapper]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_ASN_PopulateSOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
    ,  @c_OrderKeyList         NVARCHAR(4000) = ''  -- Order Keys seperated by '|' if multiple orders to populate
    ,  @b_Success              INT = 1           OUTPUT  
@@ -70,6 +70,8 @@ BEGIN
          ,  @c_TableColumns_Select     NVARCHAR(4000) = ''
          ,  @c_TableColumns            NVARCHAR(4000) = ''
          ,  @c_Table                   NVARCHAR(60) = ''
+         
+         ,  @c_TempTableName           NVARCHAR(50) = ''          --(Wan03) 
 
          ,  @c_TableName               NVARCHAR(50)   = 'RECEIPTDETAIL'
          ,  @c_SourceType              NVARCHAR(50)   = 'lsp_ASN_PopulateSOs_Wrapper'
@@ -335,6 +337,15 @@ BEGIN
       WHILE @@FETCH_STATUS <> - 1
       BEGIN
          SET @c_SQLSchema = ''
+         --(Wan03) - START
+         SET @c_TempTableName = '#t' + @c_Table
+         EXEC isp_BuildTmpTableColFrTable                                                                                                                    
+            @c_TempTableName    =  @c_TempTableName
+         ,  @c_OrginalTableName =  @c_Table             
+         ,  @c_TableColumnNames =  @c_TableColumns_Select   OUTPUT
+         ,  @c_ColumnNames      =  @c_TableColumns          OUTPUT 
+
+         /*
          SET @c_SQLSchema  = RTRIM(ISNULL(CONVERT(NVARCHAR(4000), 
                               ( SELECT 
                               col.column_name 
@@ -359,7 +370,8 @@ BEGIN
 
             EXEC sp_ExecuteSQL @c_SQL
          END
-
+         */
+         --(Wan03) - END
          SET @c_TableColumns_Select = ''
          SET @c_TableColumns_Select = RTRIM(ISNULL(CONVERT(NVARCHAR(4000), 
                               (  SELECT TABLE_NAME + '.' + col.column_name + ','
@@ -531,8 +543,8 @@ BEGIN
       IF @c_DefaultRcptLOC <> ''
       BEGIN
          SELECT @c_ToLoc = Loc 
-		   FROM LOC (NOLOCK) 
-		   WHERE LOC = @c_DefaultRcptLOC
+         FROM LOC (NOLOCK) 
+         WHERE LOC = @c_DefaultRcptLOC
       END 
 
       SELECT TOP 1 
@@ -824,51 +836,6 @@ BEGIN
                ,  ISNULL(OD.UserDefine08,'')  
                ,  ISNULL(OD.UserDefine09,'')
                ,  ISNULL(OD.Channel,'') 
-
-
-               SELECT
-                  @c_ReceiptKey
-               ,  @n_RowRef_OD      --Since Receiptlineumber not used, stored #TORderdetail.rowref to get orderkey and orderlinenumber later 
-               ,  OD.Storerkey  
-               ,  OD.Sku
-               ,  AltSku = ISNULL(OD.ManufacturerSku,'')                  
-               ,  OD.Packkey            
-               ,  OD.UOM               
-            FROM #tORDERDETAIL OD 
-            JOIN #tPICKDETAIL PD  ON OD.Orderkey = PD.Orderkey
-                                  AND OD.OrderLineNumber = PD.OrderLineNumber
-            JOIN #tLOTATTRIBUTE LA ON PD.Lot = LA.Lot
-            WHERE OD.RowRef = @n_RowRef_OD
-            GROUP BY OD.Storerkey  
-               ,  OD.Sku
-               ,  ISNULL(OD.ManufacturerSku,'')                  
-               ,  OD.Packkey           
-               ,  OD.UOM  
-               ,  ISNULL(OD.ExternPOKey,'')              
-               ,  ISNULL(OD.ExternLineNo,'')
-               ,  ISNULL(LA.Lottable01,'')
-               ,  ISNULL(LA.Lottable02,'')
-               ,  ISNULL(LA.Lottable03,'')
-               ,  LA.Lottable04
-               ,  ISNULL(LA.Lottable06,'')
-               ,  ISNULL(LA.Lottable07,'')
-               ,  ISNULL(LA.Lottable08,'')
-               ,  ISNULL(LA.Lottable09,'')
-               ,  ISNULL(LA.Lottable10,'')
-               ,  ISNULL(LA.Lottable11,'')
-               ,  ISNULL(LA.Lottable12,'')
-               ,  LA.Lottable13
-               ,  LA.Lottable14
-               ,  LA.Lottable15
-               ,  ISNULL(OD.UserDefine01,'') 
-               ,  ISNULL(OD.UserDefine02,'')   
-               ,  ISNULL(OD.UserDefine03,'')
-               ,  ISNULL(OD.UserDefine04,'')   
-               ,  ISNULL(OD.UserDefine05,'') 
-               ,  ISNULL(OD.UserDefine08,'')  
-               ,  ISNULL(OD.UserDefine09,'')
-               ,  ISNULL(OD.Channel,'') 
-
          END
       END
 
@@ -894,7 +861,8 @@ BEGIN
          SET @n_RowRef_CL = 0
          WHILE 1 = 1
          BEGIN
-            SELECT @n_RowRef_CL     = T.RowRef
+            SELECT TOP 1                                 --(Wan04)
+                   @n_RowRef_CL     = T.RowRef
                   ,@c_ColName       = T.ColName
                   ,@c_DefaultValue  = T.DefaultValue
             FROM @tCODELKUP T 
