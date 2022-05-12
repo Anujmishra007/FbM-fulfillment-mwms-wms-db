@@ -12,25 +12,27 @@ GO
 /*                                                                      */  
 /* Called By: Unallocation                                              */  
 /*                                                                      */  
-/* PVCS Version: 1.5                                                   */  
+/* PVCS Version: 1.6                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
-/* 28-Dec-2020  SWT01    1.0  Adding Begin Try/Catch                    */
-/* 05-Jan-2021  Wan01    1.2  Execute login if current user<>@c_username*/
+/* Date        Author   Ver   Purposes                                  */  
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
+/* 05-Jan-2021 Wan01    1.2   Execute login if current user<>@c_username*/
 /*                            Return Error Msg for Big Outer Catch      */
 /*                            Do Not Raise error for WM Script          */
-/* 04-Oct-2021  CheeMun  1.3  JSM-23942 - Extend @c_Sku Length          */
-/* 21-DEC-2021  Wan02   1.4   LFWM-3146 - UAT - TW  Pick Management -   */
+/* 04-Oct-2021 CheeMun  1.3   JSM-23942 - Extend @c_Sku Length          */
+/* 21-DEC-2021 Wan02    1.4   LFWM-3146 - UAT - TW  Pick Management -   */
 /*                            Order Unallocation - cannot unallocate    */
 /*                            order at once                             */
-/* 21-DEC-2021  Wan02   1.4   DevOps Combine Script                     */
-/* 28-Jan-2022  Wan03    1.5  LFWM-3259 - UAT RG  Unpack function and   */
+/* 21-DEC-2021 Wan02    1.4   DevOps Combine Script                     */
+/* 28-Jan-2022 Wan03    1.5   LFWM-3259 - UAT RG  Unpack function and   */
 /*                            pack management changes (#LFWM3259)       */
+/* 22-APR-2022 Wan04    1.6   LFWM-3499 - [CN] UAT Carters - Outbound   */
+/*                            unallocate issue                          */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional
@@ -107,132 +109,134 @@ BEGIN
                   ': All key parameters are empty. (lsp_Unallocation_Wrapper)'
          END       
       END
-   
-      --(Wan03) - START
-      IF ISNULL(@c_Pickdetailkey,'') <> ''
-      BEGIN
-          INSERT INTO @t_UnAllocate
-              (
-                  Orderkey,
-                  Loadkey
-              )
-          SELECT o.OrderKey, o.LoadKey
-          FROM dbo.PICKDETAIL AS p WITH (NOLOCK)
-          JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = p.OrderKey
-          WHERE p.PickDetailKey = @c_Pickdetailkey
-          GROUP BY o.OrderKey, o.LoadKey
-          ORDER BY o.LoadKey, o.OrderKey
-      END
-   
-      IF ISNULL(@c_Orderkey,'') <> ''
-      BEGIN
-          INSERT INTO @t_UnAllocate
-              (
-                  Orderkey,
-                  Loadkey
-              )
-          SELECT o.OrderKey, o.LoadKey
-          FROM dbo.ORDERS AS o WITH (NOLOCK) 
-          WHERE o.OrderKey = @c_Orderkey
-          AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = o.Orderkey)
-          GROUP BY o.OrderKey, o.LoadKey
-          ORDER BY o.LoadKey, o.OrderKey
-      END
-   
-      IF ISNULL(@c_Loadkey,'') <> ''
-      BEGIN
-          INSERT INTO @t_UnAllocate
-              (
-                  Orderkey,
-                  Loadkey
-              )
-          SELECT lpd.OrderKey, lpd.LoadKey
-          FROM dbo.LoadPlanDetail AS lpd WITH (NOLOCK) 
-          WHERE lpd.Loadkey = @c_Loadkey
-          AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = lpd.Orderkey)
-          GROUP BY lpd.OrderKey, lpd.LoadKey
-          ORDER BY lpd.LoadKey, lpd.OrderKey
-      END
-   
-      IF ISNULL(@c_Wavekey,'') <> ''
-      BEGIN
-          INSERT INTO @t_UnAllocate
-              (
-                  Orderkey,
-                  Loadkey
-              )
-          SELECT lpd.OrderKey, lpd.LoadKey
-          FROM dbo.WAVEDETAIL AS w WITH (NOLOCK) 
-          JOIN dbo.LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.OrderKey = w.OrderKey
-          WHERE w.Wavekey = @c_Wavekey
-          AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = w.Orderkey)
-          GROUP BY lpd.OrderKey, lpd.LoadKey
-          ORDER BY lpd.LoadKey, lpd.OrderKey
-      END
       
-      SET @CUR_DELPICKSLIP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT tph.Orderkey
-         ,   tph.Loadkey
-      FROM @t_UnAllocate AS tph
-      ORDER BY tph.Orderkey
-      
-      OPEN @CUR_DELPICKSLIP
-      
-      FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeader_Orderkey
-                                          , @c_PickHeader_Loadkey
-      
-      WHILE @@FETCH_STATUS <> -1
+      IF @c_UnAllocateFrom NOT IN ( 'UALOAD', 'UAWAVE', 'UAWAVEBYLOAD', 'UAWAVEBYSKU' )             --(Wan04) - Thease UnAllocateFrom will delete pack data
       BEGIN
-         SET @c_PickHeaderKey = ''
-         
-         SELECT @c_PickHeaderKey = p.PickHeaderKey
-         FROM dbo.PICKHEADER AS p WITH (NOLOCK)
-         WHERE p.OrderKey = @c_PickHeader_Orderkey
-         
-         IF @c_PickHeaderKey = ''
+         IF ISNULL(@c_Pickdetailkey,'') <> ''
          BEGIN
-            SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey
-            FROM dbo.PICKHEADER AS p WITH (NOLOCK)
-            WHERE p.ExternOrderKey = @c_PickHeader_Loadkey
-            AND p.OrderKey = ''
+             INSERT INTO @t_UnAllocate
+                 (
+                     Orderkey,
+                     Loadkey
+                 )
+             SELECT o.OrderKey, o.LoadKey
+             FROM dbo.PICKDETAIL AS p WITH (NOLOCK)
+             JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = p.OrderKey
+             WHERE p.PickDetailKey = @c_Pickdetailkey
+             GROUP BY o.OrderKey, o.LoadKey
+             ORDER BY o.LoadKey, o.OrderKey
          END
-         
-         IF @c_PickHeaderKey = ''
+   
+         IF ISNULL(@c_Orderkey,'') <> ''
          BEGIN
-            SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey
-            FROM dbo.PICKHEADER AS p WITH (NOLOCK)
-            WHERE p.Loadkey = @c_PickHeader_Loadkey
-            AND p.OrderKey = ''
+             INSERT INTO @t_UnAllocate
+                 (
+                     Orderkey,
+                     Loadkey
+                 )
+             SELECT o.OrderKey, o.LoadKey
+             FROM dbo.ORDERS AS o WITH (NOLOCK) 
+             WHERE o.OrderKey = @c_Orderkey
+             AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = o.Orderkey)
+             GROUP BY o.OrderKey, o.LoadKey
+             ORDER BY o.LoadKey, o.OrderKey
          END
-         
-         IF @c_PickHeaderKey <> ''
+   
+         IF ISNULL(@c_Loadkey,'') <> ''
          BEGIN
-            SET @c_PackStatus = ''
-            SELECT TOP 1 @c_PackStatus = ph.[Status]
-            FROM dbo.PackHeader AS ph WITH (NOLOCK) 
-            JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo
-            WHERE ph.PickSlipNo = @c_PickHeaderKey
-                        
-            IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' )
-            BEGIN 
-               SET @n_continue = 3  
-               SET @n_err = 551808
-               SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Pack data found. Unallocation Abort. (lsp_Unallocation_Wrapper)' 
-               GOTO EXIT_SP
-            END                  
-
-            UPDATE @t_UnAllocate
-               SET PickHeaderKey = @c_PickHeaderKey
-            WHERE Orderkey = @c_PickHeader_Orderkey
-            
-         END         
+             INSERT INTO @t_UnAllocate
+                 (
+                     Orderkey,
+                     Loadkey
+                 )
+             SELECT lpd.OrderKey, lpd.LoadKey
+             FROM dbo.LoadPlanDetail AS lpd WITH (NOLOCK) 
+             WHERE lpd.Loadkey = @c_Loadkey
+             AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = lpd.Orderkey)
+             GROUP BY lpd.OrderKey, lpd.LoadKey
+             ORDER BY lpd.LoadKey, lpd.OrderKey
+         END
+   
+         IF ISNULL(@c_Wavekey,'') <> ''
+         BEGIN
+             INSERT INTO @t_UnAllocate
+                 (
+                     Orderkey,
+                     Loadkey
+                 )
+             SELECT lpd.OrderKey, lpd.LoadKey
+             FROM dbo.WAVEDETAIL AS w WITH (NOLOCK) 
+             JOIN dbo.LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.OrderKey = w.OrderKey
+             WHERE w.Wavekey = @c_Wavekey
+             AND NOT EXISTS (SELECT 1 FROM @t_UnAllocate AS tp WHERE tp.Orderkey = w.Orderkey)
+             GROUP BY lpd.OrderKey, lpd.LoadKey
+             ORDER BY lpd.LoadKey, lpd.OrderKey
+         END
+      
+         SET @CUR_DELPICKSLIP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT tph.Orderkey
+            ,   tph.Loadkey
+         FROM @t_UnAllocate AS tph
+         ORDER BY tph.Orderkey
+      
+         OPEN @CUR_DELPICKSLIP
+      
          FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeader_Orderkey
-                                             , @c_PickHeader_Loadkey       
-      END
-      CLOSE @CUR_DELPICKSLIP
-      DEALLOCATE @CUR_DELPICKSLIP
-      --(Wan03) - END
+                                             , @c_PickHeader_Loadkey
+      
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @c_PickHeaderKey = ''
+         
+            SELECT @c_PickHeaderKey = p.PickHeaderKey
+            FROM dbo.PICKHEADER AS p WITH (NOLOCK)
+            WHERE p.OrderKey = @c_PickHeader_Orderkey
+         
+            IF @c_PickHeaderKey = ''
+            BEGIN
+               SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey
+               FROM dbo.PICKHEADER AS p WITH (NOLOCK)
+               WHERE p.ExternOrderKey = @c_PickHeader_Loadkey
+               AND p.OrderKey = ''
+            END
+         
+            IF @c_PickHeaderKey = ''
+            BEGIN
+               SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey
+               FROM dbo.PICKHEADER AS p WITH (NOLOCK)
+               WHERE p.Loadkey = @c_PickHeader_Loadkey
+               AND p.OrderKey = ''
+            END
+         
+            IF @c_PickHeaderKey <> ''
+            BEGIN
+               SET @c_PackStatus = ''
+               SELECT TOP 1 @c_PackStatus = ph.[Status]
+               FROM dbo.PackHeader AS ph WITH (NOLOCK) 
+               JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo
+               WHERE ph.PickSlipNo = @c_PickHeaderKey
+                        
+               IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' )
+               BEGIN 
+                  SET @n_continue = 3  
+                  SET @n_err = 551808
+                  SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Pack data found. Unallocation Abort. (lsp_Unallocation_Wrapper)' 
+                  GOTO EXIT_SP
+               END                  
 
+               UPDATE @t_UnAllocate
+                  SET PickHeaderKey = @c_PickHeaderKey
+               WHERE Orderkey = @c_PickHeader_Orderkey
+            
+            END         
+            FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeader_Orderkey
+                                                , @c_PickHeader_Loadkey       
+         END
+         CLOSE @CUR_DELPICKSLIP
+         DEALLOCATE @CUR_DELPICKSLIP
+         --(Wan03) - END
+      END--(Wan04) - END
+      
       IF @n_continue IN(1,2) AND @c_UnallocateFrom = 'UALOAD'    
       BEGIN
          EXECUTE dbo.ispUnallocate_DynamicLPAlloc @c_Storerkey=@c_Storerkey, @c_Loadkey=@c_LoadKey, @c_Sku=@c_SKU 
