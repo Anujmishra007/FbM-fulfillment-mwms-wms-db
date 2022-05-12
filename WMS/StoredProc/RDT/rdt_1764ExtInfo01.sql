@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_1764ExtInfo01') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_1764ExtInfo01
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -16,9 +13,10 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2015-01-27   Ung       1.0   SOS331666 Created                       */
 /* 2021-09-30   James     1.1   WMS-18045 Add Wave.Descr (james01)      */
+/* 2022-03-29   Ung       1.2   WMS-19137 Add task counter              */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1764ExtInfo01
+CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtInfo01
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -67,7 +65,31 @@ BEGIN
       BEGIN
          IF @cTaskType = 'RP1'
             SET @cExtendedInfo1 = 'LAST UOM: ' + @cUOM
+      
+         IF @cTaskType = 'RPF'
+         BEGIN
+            DECLARE @cPutawayZone NVARCHAR( 10)
+            SELECT @cPutawayZone = PutawayZone
+            FROM dbo.TaskDetail TD WITH (NOLOCK) 
+               JOIN dbo.LOC WITH (NOLOCK) ON (TD.FromLOC = LOC.LOC)
+            WHERE TaskdetailKey = @cTaskdetailKey
+            
+            IF @cPutawayZone <> ''
+            BEGIN
+               -- Get outstanding task
+               DECLARE @nOpenTask INT
+               SELECT @nOpenTask = COUNT(1)
+               FROM dbo.TaskDetail TD WITH (NOLOCK) 
+                  JOIN dbo.LOC WITH (NOLOCK) ON (TD.FromLOC = LOC.LOC)
+               WHERE TD.TaskType = 'RPF'
+                  AND TD.Status = '0'
+                  AND LOC.PutawayZone = @cPutawayZone
+                  
+               SET @cExtendedInfo1 = 'REMAIN TASK: ' + CAST( @nOpenTask AS NVARCHAR(5))
+            END
+         END
       END
+   
    END
 
 Quit:
