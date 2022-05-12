@@ -949,15 +949,14 @@ CREATE TABLE #StandardTable (TableName NVARCHAR(60))
     INSERT INTO #StandardTable( TableName) VALUES ('AllocateStrategyDetail_DELLOG') 
     INSERT INTO #StandardTable( TableName) VALUES ('PickZone_DELLOG')
     INSERT INTO #StandardTable( TableName) VALUES ('PreAllocateStrategy_DELLOG')
-    INSERT INTO #StandardTable( TableName) VALUES ('PreAllocateStrategyDetail_DELL')
+    INSERT INTO #StandardTable( TableName) VALUES ('PreAllocateStrategyDetail_DELLOG')
     INSERT INTO #StandardTable( TableName) VALUES ('PutawayStrategy_DELLOG')
     INSERT INTO #StandardTable( TableName) VALUES ('PutawayStrategyDetail_DELLOG')
     INSERT INTO #StandardTable( TableName) VALUES ('Strategy_DELLOG')
     INSERT INTO #StandardTable( TableName) VALUES ('TTMStrategy_DELLOG')
     INSERT INTO #StandardTable( TableName) VALUES ('TTMStrategyDetail_DELLOG')
        
-      
-  
+       
 
  
 INSERT INTO #NonStandardTable
