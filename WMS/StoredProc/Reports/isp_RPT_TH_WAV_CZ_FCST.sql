@@ -13,7 +13,7 @@ GO
 /*          CartonizationV1.0                                           */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 2.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2022-05-09  Wan      1.0   Created.                                  */
 /* 2022-05-09  Wan      1.0   DevOps Combine Script.                    */
+/* 2022-05-13  Wan01    1.1   Fixed Linking Issue                       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_TH_WAV_CZ_FCST]
    @c_Storerkey   NVARCHAR(15) 
@@ -306,7 +307,7 @@ BEGIN
       SET @CUR_WV = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT w.WaveKey
       FROM dbo.WAVE AS w WITH (NOLOCK)
-      JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.UserDefine09 = w.UserDefine09
+      JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.UserDefine09 = w.Wavekey     --(Wan01)
       WHERE o.StorerKey = @c_Storerkey
       AND w.TMReleaseFlag = 'N'
       AND w.Descr NOT IN ('BYPASSCZFCST')
@@ -318,7 +319,7 @@ BEGIN
       SET @CUR_WV = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT w.WaveKey
       FROM dbo.WAVE AS w WITH (NOLOCK)
-      JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.UserDefine09 = w.UserDefine09
+      JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.UserDefine09 = w.Wavekey     --(Wan01)
       WHERE o.StorerKey = @c_Storerkey
       AND w.WaveKey = @c_Wavekey
       AND w.TMReleaseFlag = 'N'
