@@ -45,6 +45,7 @@ GO
 /* 2022-01-24  WinSern  1.7   INC1722704 @c_SQLWhere 2000 to 4000 (ws01)*/
 /* 2022-02-16  Wan06    1.8   LFWM-3346 - CN NIKECN UAT Wave Release to */
 /*                            limit Qty per wave                        */
+/* 2022-05-16  LZG      1.9   Added missing ISNUMERIC to cond level (ZG01)*/
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -601,7 +602,7 @@ AS
                                           ,@c_Value                                                                                                   
       WHILE @@FETCH_STATUS <> -1                                                                                                                                  
       BEGIN                                                                                                                                                       
-         IF @n_CondLevel = 1                                                                                                                            
+         IF ISNUMERIC(@n_CondLevel) = 1     -- ZG01                                                                                                                   
          BEGIN                                                                                                                                                    
             IF @n_PreCondLevel=0
             BEGIN                                                                                                                                   
