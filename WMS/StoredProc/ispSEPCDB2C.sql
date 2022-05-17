@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ispSEPCDB2C]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispSEPCDB2C]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -27,8 +22,11 @@ GO
 /* Updates:                                                             */  
 /* Date         Author  Ver   Purposes                                  */
 /* 19-Aug-2021  WLChooi 1.0   DevOps Combine Script                     */ 
+/* 29-Apr-2022  WLChooi 1.1   Performance Tuning - Create new TRAN      */
+/*                            before executing sub-sp & commit the TRAN */
+/*                            after execution complete (WL01)           */
 /************************************************************************/  
-CREATE PROC ispSEPCDB2C  
+CREATE OR ALTER PROC [dbo].[ispSEPCDB2C]  
      @c_WaveKey                     NVARCHAR(10)  
    , @c_UOM                         NVARCHAR(10)  
    , @c_LocationTypeOverride        NVARCHAR(10)  
@@ -117,7 +115,14 @@ BEGIN
                     + ': Wave has not generate Loadplan yet'  
                     + '. Allocation is not allowed (ispSEPCDB2C)'  
       GOTO QUIT_SP  
-   END  
+   END 
+   
+   --WL01 S
+   WHILE @@TRANCOUNT > 0 
+   BEGIN
+      COMMIT TRAN
+   END
+   --WL01 E
   
    IF OBJECT_ID('tempdb..#LOT04','U') IS NOT NULL  
    BEGIN  
@@ -337,7 +342,9 @@ BEGIN
                   '@dt_Lottable13: ' + CONVERT(NVARCHAR(25), @dt_Lottable13, 121) + CHAR(13) +  
                   '@dt_InvLot04: ' + CONVERT(NVARCHAR(25), @dt_InvLot04, 121) + CHAR(13)  
          END   
-  
+         
+         BEGIN TRAN   --WL01
+
          EXEC ispSEPCDLoadFP2      --//Pallet @Pallet LOC - Single  
            @c_WaveKey          = @c_WaveKey           
          , @c_WaveType         = @c_WaveType    
@@ -372,15 +379,26 @@ BEGIN
             SET @n_Err = 82020  
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDLoadFP2.'  
-                           + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+                           + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
-  
+         
+         BEGIN TRAN   --WL01
+
          EXEC ispSEPCDLoadFC2      --//CASE @Case & @Pallet Loc, UOM = '2' - Single  
            @c_WaveKey          = @c_WaveKey           
          , @c_WaveType         = @c_WaveType    
@@ -416,14 +434,25 @@ BEGIN
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDLoadFC2.'  
                            + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
-  
+         
+         BEGIN TRAN   --WL01
+
          EXEC ispSEPCDLoadFP6      --//Pallet @Pallet LOC - Multi  
            @c_WaveKey          = @c_WaveKey           
          , @c_WaveType         = @c_WaveType    
@@ -459,14 +488,25 @@ BEGIN
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDLoadFP6.'  
                            + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
-  
+         
+         BEGIN TRAN   --WL01
+
          EXEC ispSEPCDLoadFC6      --//CASE @Case & @Pallet Loc, UOM = '2' - Multi  
            @c_WaveKey          = @c_WaveKey           
          , @c_WaveType         = @c_WaveType    
@@ -502,14 +542,25 @@ BEGIN
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDLoadFC6.'  
                            + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
-  
+         
+         BEGIN TRAN   --WL01
+
          EXEC ispSEPCDConsoFP6   --//Pallet @Pallet LOC - Conso Single & Multi  
            @c_WaveKey          = @c_WaveKey           
          , @c_WaveType         = @c_WaveType     
@@ -544,14 +595,25 @@ BEGIN
             SET @n_Err = 82060  
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDConsoFP6.'  
-                           + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+                           + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')' 
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
+
+         BEGIN TRAN   --WL01
       
          EXEC ispSEPCDConsoFC6  --//CASE @Case & @Pallet Loc, UOM = '6' - Conso Single & Multi  
            @c_WaveKey          = @c_WaveKey           
@@ -588,13 +650,24 @@ BEGIN
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDConsoFC6.'  
                            + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
+
+         BEGIN TRAN   --WL01
   
          EXEC ispSEPCDConsoFQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi, Get DPP > @n_QtyLeftToFullfill
            @c_WaveKey          = @c_WaveKey   
@@ -631,13 +704,24 @@ BEGIN
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDConsoFQ7.'  
                            + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
   
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
+
+         BEGIN TRAN   --WL01
   
          EXEC ispSEPCDConsoLC7  --//Loose Case Qty @Case & @Pallet Loc, UOM = '7' - Conso single + Multi  
            @c_WaveKey          = @c_WaveKey   
@@ -673,14 +757,25 @@ BEGIN
             SET @n_Err = 82090  
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDConsoLC7.'  
-                           + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+                           + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
    
          IF @n_QtyLeftToFullfill <= 0  
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
+
+         BEGIN TRAN   --WL01
 
          EXEC ispSEPCDConsoLQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi, Get DPP >= 0     
            @c_WaveKey          = @c_WaveKey   
@@ -717,8 +812,17 @@ BEGIN
             SET @c_ErrMsg = ISNULL(ERROR_MESSAGE(),'')  
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing ispSEPCDConsoLQ7.'  
                            + '(ispSEPCDB2C)' + ' (' + @c_ErrMsg + ')'  
+            ROLLBACK TRAN   --WL01
             GOTO QUIT_SP  
          END  
+         ELSE   --WL01 S
+         BEGIN
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         --WL01 E
 
          IF @b_debug IN (1,9)  
          BEGIN  
@@ -753,6 +857,11 @@ BEGIN
    DEALLOCATE @CUR_WVSKU    
   
 QUIT_SP:  
+   --WL01 S
+   WHILE @@TRANCOUNT < @n_StartTCnt
+      BEGIN TRAN
+   --WL01 E
+
    IF @n_Continue=3  -- Error Occured - Process And Return  
    BEGIN  
       SET @b_Success = 0  
