@@ -53,6 +53,7 @@ GO
 /* 04-Feb-2019  MCTang    2.5   Add GVTITF (MC09)                       */
 /* 13-Mar-2019  YTKuek    2.6   Add GVTITF Event (YT01)                 */
 /* 06-Apr-2021  MCTang    2.7   Add SOPICKOTM (MC10)                    */
+/* 22-Apr-2022  YTKuek    2.8   Add TNTITF (YT02)                       */
 /************************************************************************/    
     
 CREATE PROC [dbo].[isp_ITF_ntrOrderHeader]    
@@ -618,6 +619,401 @@ BEGIN
       /********************************************/    
       /* GVTITF (End)                             */    
       /********************************************/   
+
+      --(YT02)-S
+      /********************************************/    
+      /* TNTITF (START)                           */    
+      /********************************************/   
+      IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK) 
+                  WHERE STC.StorerKey = 'ALL'   
+                  AND   STC.ConfigKey = 'TNTITF'  
+                  AND   STC.SValue    = '1' )                       
+      BEGIN  
+         IF ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderAdd'
+         BEGIN  
+            
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = 'ALL'   
+                        AND   STC.ConfigKey = 'TNTORDEVENT0'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDEVENT0', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END  
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = 'ALL'   
+                        AND   STC.ConfigKey = 'TNTORDEOK'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDEOK', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = 'ALL'   
+                        AND   STC.ConfigKey = 'TNTORDBPO'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDBPO', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = 'ALL'   
+                        AND   STC.ConfigKey = 'TNTORDEPK'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDEPK', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = 'ALL'   
+                        AND   STC.ConfigKey = 'TNTORDINO'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDINO', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+         END
+         ELSE IF ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate'
+         BEGIN  
+            IF EXISTS(SELECT 1 FROM                                                                               
+                      @t_ColUpdate                                                   
+                      WHERE ColValue IN ('STATUS','SOSTATUS'))        
+            BEGIN  
+               
+               SET @b_Success = 0  
+               SET @c_TableName  = '' 
+               SET @c_TableName2 = '' 
+
+               IF @c_Status = '1'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT1'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '2'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT2'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '3'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT3'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '4'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT4'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '5'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT5'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '6'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT6'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '9'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT9'  
+                  SET @c_TableName2 = 'TNTORDTN'
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = 'CANC'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENTCANC'  
+                  SET @b_Success = 1 
+               END 
+  
+               IF @b_Success = 1  
+               BEGIN  
+  
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = 'ALL'   
+                              AND   STC.ConfigKey = @c_Tablename  
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenTNTLog @c_Tablename, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                     , @b_success   OUTPUT    
+                                     , @n_err       OUTPUT    
+                                     , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END   
+
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = 'ALL'   
+                              AND   STC.ConfigKey = @c_TableName2  
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenTNTLog @c_TableName2, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                     , @b_success   OUTPUT    
+                                     , @n_err       OUTPUT    
+                                     , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END 
+               END -- IF @b_Success = 1  
+            END -- ColValue IN ('STATUS','SOSTATUS')  
+         END -- IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate')    
+      END -- IF EXISTS ( SELECT 1 FROM ITFTriggerConfig WITH (NOLOCK)     
+      ELSE IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK) 
+                       WHERE STC.StorerKey = @c_StorerKey
+                       AND   STC.ConfigKey = 'TNTITF'  
+                       AND   STC.SValue    = '1' ) 
+      BEGIN
+        IF ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderAdd'
+         BEGIN  
+            
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_StorerKey
+                        AND   STC.ConfigKey = 'TNTORDEVENT0'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDEVENT0', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END  
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_StorerKey
+                        AND   STC.ConfigKey = 'TNTORDEOK'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDEOK', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_StorerKey
+                        AND   STC.ConfigKey = 'TNTORDBPO'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDBPO', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_StorerKey
+                        AND   STC.ConfigKey = 'TNTORDEPK'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDEPK', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_StorerKey
+                        AND   STC.ConfigKey = 'TNTORDINO'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenTNTLog 'TNTORDINO', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+         END
+         ELSE IF ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate'
+         BEGIN  
+            IF EXISTS(SELECT 1 FROM                                                                               
+                      @t_ColUpdate                                                   
+                      WHERE ColValue IN ('STATUS','SOSTATUS'))        
+            BEGIN  
+               
+               SET @b_Success = 0  
+               SET @c_TableName  = '' 
+               SET @c_TableName2 = '' 
+
+               IF @c_Status = '1'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT1'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '2'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT2'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '3'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT3'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '4'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT4'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '5'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT5'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '6'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT6'  
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = '9'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENT9'  
+                  SET @c_TableName2 = 'TNTORDTN'
+                  SET @b_Success = 1 
+               END 
+
+               IF @c_Status = 'CANC'   
+               BEGIN  
+                  SET @c_TableName = 'TNTORDEVENTCANC'  
+                  SET @b_Success = 1 
+               END 
+  
+               IF @b_Success = 1  
+               BEGIN  
+  
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = @c_StorerKey
+                              AND   STC.ConfigKey = @c_Tablename  
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenTNTLog @c_Tablename, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                     , @b_success   OUTPUT    
+                                     , @n_err       OUTPUT    
+                                     , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END   
+
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = @c_StorerKey
+                              AND   STC.ConfigKey = @c_TableName2  
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenTNTLog @c_TableName2, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                     , @b_success   OUTPUT    
+                                     , @n_err       OUTPUT    
+                                     , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END 
+               END -- IF @b_Success = 1  
+            END -- ColValue IN ('STATUS','SOSTATUS')  
+         END -- IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate')
+      END     
+      /********************************************/    
+      /* TNTITF (End)                             */    
+      /********************************************/   
+      --(YT02)-E
 
    END -- IF @n_continue = 1 OR @n_continue = 2   
    --(MC02) - E  
