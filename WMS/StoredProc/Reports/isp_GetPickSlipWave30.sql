@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_GetPickSlipWave30]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_GetPickSlipWave30]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -28,9 +25,11 @@ GO
 /* 21-JUL-2021  CSCHONG  WMS-17294 revised field logic (CS01)           */
 /* 10-DEC-2021  MINGLE   WMS-18541 add filter (ML01)                    */
 /* 10-DEC-2021  Mingle   DevOps Combine Script                          */
+/* 11-May-2022  WLChooi  WMS-19648 - Remove Validation control by report*/
+/*                       config (WL01)                                  */
 /************************************************************************/  
   
-CREATE PROC dbo.isp_GetPickSlipWave30 (  
+CREATE OR ALTER PROC dbo.isp_GetPickSlipWave30 (  
 @c_wavekey          NVARCHAR(13)  
 )  
 AS  
@@ -80,6 +79,7 @@ BEGIN
          , @c_ExecStatement      NVARCHAR(4000)
          , @c_GetPHOrdKey        NVARCHAR(20)
          , @c_GetWDOrdKey        NVARCHAR(20)
+         , @n_NoFilterDocType    INT   --WL01
           
    SET @n_StartTCnt  =  @@TRANCOUNT  
    SET @n_Continue   =  1    
@@ -118,6 +118,15 @@ BEGIN
    FROM WAVEDETAIL WD  WITH (NOLOCK)
    JOIN ORDERS ORD WITH (NOLOCK) ON WD.Orderkey = ORD.OrderKey
    WHERE WD.Wavekey = @c_Wavekey      
+
+   --WL01 S
+   SELECT @n_NoFilterDocType  = ISNULL(MAX(CASE WHEN CL.Code = 'NoFilterDocType' THEN 1 ELSE 0 END),0)  
+   FROM CODELKUP CL (NOLOCK)
+   WHERE CL.LISTNAME = 'REPORTCFG'
+   AND CL.Long = 'r_dw_print_wave_pickslip_30'
+   AND (CL.Short IS NULL OR CL.Short <> 'N')
+   AND CL.Storerkey = @c_GetStorerkey
+   --WL01 E
       
    INSERT INTO #TMP_PICK  
          (  
@@ -151,7 +160,7 @@ BEGIN
    JOIN loc WITH (NOLOCK) ON  pickdetail.loc = loc.loc  
    left outer join RefKeyLookup (NOLOCK) ON (RefKeyLookup.PickDetailKey = PICKDETAIL.PickDetailKey) 
    WHERE WD.WaveKey = @c_waveKey
-   AND ORDERS.Doctype = 'E'   --ML01
+   AND (ORDERS.Doctype = 'E' OR @n_NoFilterDocType = 1)   --ML01   --WL01
    GROUP BY RefKeyLookup.PickSlipNo,orders.loadkey ,orders.orderkey ,
             ISNULL(ORDERS.UserDefine09, '') ,      
             ORDERS.Storerkey,  
