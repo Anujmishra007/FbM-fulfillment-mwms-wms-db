@@ -33,6 +33,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author  Ver.  Purposes                                   */
+/* 09-05-2022  KuanYee  1.0   INC1802488-BugFixed                       */
+/*                            Add Stuff() show all PickZone(KY01)       */ 
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_batching_task_summary_06] (
@@ -148,26 +150,47 @@ CREATE PROC [dbo].[isp_batching_task_summary_06] (
     BEGIN
       IF @c_OrderBatchBylocdescr = '1'  
       BEGIN   
-   
-         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','
-         FROM ORDERS O (NOLOCK)
-         JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
-         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
-         JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
-         WHERE LPD.Loadkey = @c_Loadkey
-         GROUP BY LOC.Descr
-         ORDER BY LOC.Descr
+         --KY01 S
+         --SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','  
+         --FROM ORDERS O (NOLOCK)  
+         --JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey       
+         --JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+         --JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey   
+         --WHERE LPD.Loadkey = @c_Loadkey  
+         --GROUP BY LOC.Descr  
+         --ORDER BY LOC.Descr  
+
+         SELECT @c_ZoneList = STUFF((SELECT ',' + RTRIM(Loc.Descr)
+                                     FROM ORDERS O (NOLOCK)  
+                                     JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey       
+                                     JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+                                     JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey   
+                                     WHERE LPD.Loadkey = @c_Loadkey  
+                                     GROUP BY LOC.Descr  
+                                     ORDER BY LOC.Descr FOR XML PATH('')),1,1,'' ) + ','
+         --KY01 E
       END
       ELSE
       BEGIN
-         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
-         FROM ORDERS O (NOLOCK)
-         JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
-         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
-         JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
-         WHERE LPD.Loadkey = @c_Loadkey
-         GROUP BY LOC.PickZone
-         ORDER BY LOC.PickZone         
+         --KY01 S
+         --SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','  
+         --FROM ORDERS O (NOLOCK)  
+         --JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey       
+         --JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+         --JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey   
+         --WHERE LPD.Loadkey = @c_Loadkey  
+         --GROUP BY LOC.PickZone  
+         --ORDER BY LOC.PickZone      
+         
+         SELECT @c_ZoneList = STUFF((SELECT ',' + RTRIM(Loc.PickZone)
+                                     FROM ORDERS O (NOLOCK)  
+                                     JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey       
+                                     JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+                                     JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey   
+                                     WHERE LPD.Loadkey = @c_Loadkey  
+                                     GROUP BY LOC.PickZone  
+                                     ORDER BY LOC.PickZone FOR XML PATH('')),1,1,'' ) + ','
+         --KY01 E      
       END
       
       IF ISNULL(@c_ZoneList,'') <> ''
@@ -177,8 +200,8 @@ CREATE PROC [dbo].[isp_batching_task_summary_06] (
       END
     END       
 
-IF  @c_RptType = 'H'
-BEGIN
+   IF @c_RptType = 'H'
+   BEGIN
       IF UPPER(@c_updatepick) = 'VP'
       BEGIN
                 SET @c_PickByVP = ''
@@ -434,7 +457,7 @@ TYPE_S:
  BEGIN
 
 
- SELECT      LP.Loadkey AS loadkey, 
+      SELECT  LP.Loadkey AS loadkey, 
               COUNT(DISTINCT PD.Sku) AS NoOfSku,
               SUM(PD.Qty) AS Qty,
               L.Descr AS Pickzone
@@ -509,7 +532,7 @@ Quit:
             COMMIT TRAN  
          END  
       END  
-      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispOrderBatching'  
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'isp_batching_task_summary_06'  
         --RAISERROR @n_Err @c_ErrMsg  
         RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN  
@@ -525,6 +548,5 @@ Quit:
    END      
 END /* main procedure */
 GO
-GRANT EXECUTE ON isp_batching_task_summary_06 TO NSQL
+GRANT EXECUTE ON [dbo].[isp_batching_task_summary_06] TO NSQL
 GO
-

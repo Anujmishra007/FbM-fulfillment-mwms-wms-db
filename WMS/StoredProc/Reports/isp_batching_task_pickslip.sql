@@ -55,6 +55,8 @@ GO
 /* 12-JAN-2020 CSCHONG  2.2   WMS-16010 add config (CS03)               */
 /* 05-04-2021  WLChooi  2.3   WMS-16752 Add ReportCFG to show Shipperkey*/
 /*                            (WL04)                                    */
+/* 10-05-2022  KuanYee  2.4   INC1802488-BugFixed                       */
+/*                            Add Stuff() show all PickZone(KY01)       */  
 /************************************************************************/
 
 CREATE PROC isp_batching_task_pickslip (
@@ -122,14 +124,16 @@ CREATE PROC isp_batching_task_pickslip (
        
     IF @c_PickZone = 'ALL'
     BEGIN
-      SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
+      --SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','      
+      SELECT @c_ZoneList = STUFF((SELECT ',' + RTRIM(Loc.PickZone)     --KY01        
       FROM ORDERS O (NOLOCK)
       JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
       JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
       WHERE O.Loadkey = @c_Loadkey
       GROUP BY LOC.PickZone
-      ORDER BY LOC.PickZone
-      
+      --ORDER BY LOC.PickZone      
+      ORDER BY LOC.PickZone FOR XML PATH('')),1,1,'' ) + ','   --KY01     
+           
       IF ISNULL(@c_ZoneList,'') <> ''
       BEGIN
           SET @c_ZoneList = LEFT(@c_ZoneList, LEN(RTRIM(@c_ZoneList)) - 1)

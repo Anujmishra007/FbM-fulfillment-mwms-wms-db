@@ -44,6 +44,8 @@ GO
 /* 16-MAR-2020 CSCHONG  2.2   WMS-16446 add config (CS01)               */
 /* 05-04-2021  WLChooi 1.6   WMS-16751 Add ReportCFG to show Shipperkey */
 /*                           and Loadkey Barcode (WL02)                 */
+/* 10-05-2022  KuanYee 1.7   INC1802488-BugFixed                        */  
+/*                           Add Stuff() show all PickZone(KY01)        */   
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_batching_task_summary] (
@@ -135,25 +137,29 @@ CREATE PROC [dbo].[isp_batching_task_summary] (
       IF @c_OrderBatchBylocdescr = '1'  
       BEGIN   
       	 --NJOW02   	
-         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','
+         --SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.Descr) + ','      
+         SELECT @c_ZoneList = STUFF((SELECT ',' + RTRIM(Loc.Descr)  --KY01             
          FROM ORDERS O (NOLOCK)
          JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
          JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
          WHERE LPD.Loadkey = @c_Loadkey
          GROUP BY LOC.Descr
-         ORDER BY LOC.Descr
+         --ORDER BY LOC.Descr      
+         ORDER BY LOC.Descr FOR XML PATH('')),1,1,'' ) + ',' --KY01  
       END
       ELSE
       BEGIN
-         SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
+         --SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','      
+         SELECT @c_ZoneList = STUFF((SELECT ',' + RTRIM(Loc.PickZone) --KY01             
          FROM ORDERS O (NOLOCK)
          JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
          JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey 
          WHERE LPD.Loadkey = @c_Loadkey
          GROUP BY LOC.PickZone
-         ORDER BY LOC.PickZone      	
+         --ORDER BY LOC.PickZone            
+         ORDER BY LOC.PickZone FOR XML PATH('')),1,1,'' ) + ',' --KY01    	
       END
       
       IF ISNULL(@c_ZoneList,'') <> ''
@@ -370,4 +376,3 @@ END /* main procedure */
 GO
 GRANT EXECUTE ON isp_batching_task_summary TO NSQL
 GO
-
