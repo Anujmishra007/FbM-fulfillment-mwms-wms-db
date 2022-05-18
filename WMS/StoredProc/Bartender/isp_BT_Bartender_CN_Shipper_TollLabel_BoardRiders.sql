@@ -1,27 +1,21 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_CN_Shipper_TollLabel_BoardRiders]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-BEGIN 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_CN_Shipper_TollLabel_BoardRiders]  
-END
-GO 
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
-  
+ 
 /******************************************************************************/                   
 /* Copyright: IDS                                                             */                   
 /* Purpose: isp_BT_Bartender_CN_Shipper_TollLabel_BoardRiders                 */                   
 /*                                                                            */                   
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
-/* Date       Rev  Author     Purposes                                        */  
-/*13-MAY-2019 1.0  WLCHOOI	  Created (WMS-9043)                               */  
+/* Date        Rev  Author      Purposes                                      */  
+/* 13-MAY-2019 1.0  WLCHOOI     Created (WMS-9043)                            */  
+/* 23-Mar-2022 1.1  WLChooi     DevOps Combine Script                         */
+/* 23-Mar-2022 1.1  WLChooi     WMS-18285 - Add Col28 (WL01)                  */
 /******************************************************************************/                  
                     
-CREATE PROC [dbo].[isp_BT_Bartender_CN_Shipper_TollLabel_BoardRiders]                        
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_CN_Shipper_TollLabel_BoardRiders]                        
 (  @c_Sparm01            NVARCHAR(250),                
    @c_Sparm02            NVARCHAR(250),                
    @c_Sparm03            NVARCHAR(250),                
@@ -166,7 +160,7 @@ BEGIN
                   +  ' + LEFT(LTRIM(RTRIM(ISNULL(CL1.UDF03,''''))) + REPLICATE('' '',80), 10) + ''S'' ' --27
                   +  ' + SPACE(40)),80), ' --27
                   + CHAR(13)
-                  +  ' '''', '''', '''', ' + CHAR(13) --30
+                  +  ' ISNULL(CL1.UDF05,''''), '''', '''', ' + CHAR(13) --30   --WL01
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --40
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --50
                   +  ' '''', '''', '''', '''', '''', '''', PH.Pickslipno, @c_Sparm01, ORD.Orderkey, ''CN'' ' + CHAR(13) --60
@@ -176,6 +170,7 @@ BEGIN
                   +  ' JOIN FACILITY F (NOLOCK) ON F.FACILITY = ORD.FACILITY ' + CHAR(13)
                   +  ' LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.STORERKEY = PH.STORERKEY AND CL1.LISTNAME = ''BRToll'' AND CL1.Code = ORD.Shipperkey ' + CHAR(13)
                   +  ' LEFT JOIN CODELKUP CL2 (NOLOCK) ON CL2.STORERKEY = PH.STORERKEY AND CL2.LISTNAME = ''TollCity'' AND CL2.CODE = ORD.C_Zip ' + CHAR(13)
+                  +  '                                AND CL2.UDF01 = ORD.M_Country '+ CHAR(13)   --WL02
                --   +  ' LEFT JOIN CODELKUP CL3 (NOLOCK) ON CL3.STORERKEY = PH.STORERKEY AND CL3.LISTNAME = ''BRCNFAC'' AND CL3.CODE = ORD.Facility ' + CHAR(13)
                   +  ' WHERE ORD.loadkey = @c_Sparm01 '             + CHAR(13)
                   +  ' AND ORD.Orderkey = @c_Sparm02 '              + CHAR(13)
@@ -269,6 +264,5 @@ EXIT_SP:
                                    
 END -- procedure     
 GO
-
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_CN_Shipper_TollLabel_BoardRiders] TO NSQL  
-GO 
+GO
