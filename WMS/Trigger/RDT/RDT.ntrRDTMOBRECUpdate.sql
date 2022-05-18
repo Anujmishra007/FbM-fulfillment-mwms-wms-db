@@ -1,251 +1,8 @@
-CREATE TABLE [RDT].[RDTMOBREC]
-(
-[Mobile] [int] NOT NULL,
-[Func] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Func] DEFAULT ((0)),
-[Scn] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Scn] DEFAULT ((0)),
-[Step] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Step] DEFAULT ((0)),
-[Menu] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Menu] DEFAULT ((0)),
-[Lang_Code] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[InputKey] [int] NOT NULL,
-[ErrMsg] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Facility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserName] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_UserName] DEFAULT ('RDT'),
-[Printer] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[MsgQueueNo] [int] NULL CONSTRAINT [DF_RDTMOBREC_MsgQueueNo] DEFAULT ((0)),
-[V_ReceiptKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ReceiptKey] DEFAULT (''),
-[V_POKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[V_LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LoadKey] DEFAULT (''),
-[V_OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_OrderKey] DEFAULT (''),
-[V_PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_PickSlipNo] DEFAULT (''),
-[V_Zone] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Zone] DEFAULT (''),
-[V_Loc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Loc] DEFAULT (''),
-[V_SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_SKU] DEFAULT (''),
-[V_UOM] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_UOM] DEFAULT (''),
-[V_ID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ID] DEFAULT (''),
-[V_ConsigneeKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ConsigneeKey] DEFAULT (''),
-[V_CaseID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_CaseID] DEFAULT (''),
-[V_SKUDescr] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDescr] DEFAULT (''),
-[V_QTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_QTY] DEFAULT ((0)),
-[V_UCC] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_UCC] DEFAULT (''),
-[V_Lot] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lot] DEFAULT (''),
-[V_Lottable01] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable01] DEFAULT (''),
-[V_Lottable02] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable02] DEFAULT (''),
-[V_Lottable03] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable03] DEFAULT (''),
-[V_Lottable04] [datetime] NULL,
-[V_Lottable05] [datetime] NULL,
-[V_Lottable06] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable06] DEFAULT (''),
-[V_Lottable07] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable07] DEFAULT (''),
-[V_Lottable08] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable08] DEFAULT (''),
-[V_Lottable09] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable09] DEFAULT (''),
-[V_Lottable10] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable10] DEFAULT (''),
-[V_Lottable11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable11] DEFAULT (''),
-[V_Lottable12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[V_Lottable13] [datetime] NULL,
-[V_Lottable14] [datetime] NULL,
-[V_Lottable15] [datetime] NULL,
-[V_LottableLabel01] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel01] DEFAULT (''),
-[V_LottableLabel02] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel02] DEFAULT (''),
-[V_LottableLabel03] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel03] DEFAULT (''),
-[V_LottableLabel04] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel04] DEFAULT (''),
-[V_LottableLabel05] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel05] DEFAULT (''),
-[V_LottableLabel06] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel06] DEFAULT (''),
-[V_LottableLabel07] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel07] DEFAULT (''),
-[V_LottableLabel08] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel08] DEFAULT (''),
-[V_LottableLabel09] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel09] DEFAULT (''),
-[V_LottableLabel10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel10] DEFAULT (''),
-[V_LottableLabel11] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel11] DEFAULT (''),
-[V_LottableLabel12] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel12] DEFAULT (''),
-[V_LottableLabel13] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel13] DEFAULT (''),
-[V_LottableLabel14] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel14] DEFAULT (''),
-[V_LottableLabel15] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel15] DEFAULT (''),
-[I_Field01] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field02] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field03] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field04] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field05] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field06] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field07] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field08] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field09] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field10] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field11] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field12] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field13] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field14] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field15] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field01] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field02] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field03] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field04] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field05] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field06] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field07] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field08] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field09] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field10] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field11] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field12] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field13] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field14] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field15] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[V_String1] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String1] DEFAULT (''),
-[V_String2] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String2] DEFAULT (''),
-[V_String3] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String3] DEFAULT (''),
-[V_String4] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String4] DEFAULT (''),
-[V_String5] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String5] DEFAULT (''),
-[V_String6] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String6] DEFAULT (''),
-[V_String7] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String7] DEFAULT (''),
-[V_String8] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String8] DEFAULT (''),
-[V_String9] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String9] DEFAULT (''),
-[V_String10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String10] DEFAULT (''),
-[V_String11] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String11] DEFAULT (''),
-[V_String12] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String12] DEFAULT (''),
-[V_String13] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String13] DEFAULT (''),
-[V_String14] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String14] DEFAULT (''),
-[V_String15] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String15] DEFAULT (''),
-[V_String16] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String16] DEFAULT (''),
-[V_String17] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String17] DEFAULT (''),
-[V_String18] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String18] DEFAULT (''),
-[V_String19] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String19] DEFAULT (''),
-[V_String20] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String20] DEFAULT (''),
-[V_String21] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String21] DEFAULT (''),
-[V_String22] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String22] DEFAULT (''),
-[V_String23] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String23] DEFAULT (''),
-[V_String24] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String24] DEFAULT (''),
-[V_String25] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String25] DEFAULT (''),
-[V_String26] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String26] DEFAULT (''),
-[V_String27] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String27] DEFAULT (''),
-[V_String28] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String28] DEFAULT (''),
-[V_String29] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String29] DEFAULT (''),
-[V_String30] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String30] DEFAULT (''),
-[V_String31] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String31] DEFAULT (''),
-[V_String32] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String32] DEFAULT (''),
-[V_String33] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String33] DEFAULT (''),
-[V_String34] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String34] DEFAULT (''),
-[V_String35] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String35] DEFAULT (''),
-[V_String36] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String36] DEFAULT (''),
-[V_String37] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String37] DEFAULT (''),
-[V_String38] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String38] DEFAULT (''),
-[V_String39] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String39] DEFAULT (''),
-[V_String40] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String40] DEFAULT (''),
-[FieldAttr01] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr01] DEFAULT (''),
-[FieldAttr02] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr02] DEFAULT (''),
-[FieldAttr03] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr03] DEFAULT (''),
-[FieldAttr04] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr04] DEFAULT (''),
-[FieldAttr05] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr05] DEFAULT (''),
-[FieldAttr06] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr06] DEFAULT (''),
-[FieldAttr07] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr07] DEFAULT (''),
-[FieldAttr08] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr08] DEFAULT (''),
-[FieldAttr09] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr09] DEFAULT (''),
-[FieldAttr10] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr10] DEFAULT (''),
-[FieldAttr11] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr11] DEFAULT (''),
-[FieldAttr12] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr12] DEFAULT (''),
-[FieldAttr13] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr13] DEFAULT (''),
-[FieldAttr14] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr14] DEFAULT (''),
-[FieldAttr15] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr15] DEFAULT (''),
-[AddDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_AddDate] DEFAULT (getdate()),
-[EditDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_EditDate] DEFAULT (getdate()),
-[Printer_Paper] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[MenuStack] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_MenuStack] DEFAULT (''),
-[V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMobRec_V_TaskDetailKey] DEFAULT (''),
-[V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Max] DEFAULT (''),
-[RemotePrint] [int] NULL CONSTRAINT [DF_RDTMOBREC_RemotePrint] DEFAULT ((0)),
-[DeviceID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_DeviceID] DEFAULT (''),
-[LightMode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_LightMode] DEFAULT (''),
-[StorerGroup] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_StorerGroup] DEFAULT (''),
-[V_StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_StorerKey] DEFAULT (''),
-[V_String41] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String41] DEFAULT (''),
-[V_String42] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String42] DEFAULT (''),
-[V_String43] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String43] DEFAULT (''),
-[V_String44] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String44] DEFAULT (''),
-[V_String45] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String45] DEFAULT (''),
-[V_String46] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String46] DEFAULT (''),
-[V_String47] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String47] DEFAULT (''),
-[V_String48] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String48] DEFAULT (''),
-[V_String49] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String49] DEFAULT (''),
-[V_String50] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String50] DEFAULT (''),
-[V_WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_WaveKey] DEFAULT (''),
-[V_Cartonno] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Cartonno] DEFAULT ((0)),
-[V_PUOM_Div] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PUOM_Div] DEFAULT ((0)),
-[V_MQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_MQTY] DEFAULT ((0)),
-[V_PQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PQTY] DEFAULT ((0)),
-[V_FromScn] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_FromScn] DEFAULT ((0)),
-[V_FromStep] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_FromStep] DEFAULT ((0)),
-[V_MTaskQty] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_MTaskQty] DEFAULT ((0)),
-[V_PTaskQty] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PTaskQty] DEFAULT ((0)),
-[V_TaskQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_TaskQty] DEFAULT ((0)),
-[V_Integer1] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer1] DEFAULT ((0)),
-[V_Integer2] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer2] DEFAULT ((0)),
-[V_Integer3] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer3] DEFAULT ((0)),
-[V_Integer4] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer4] DEFAULT ((0)),
-[V_Integer5] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer5] DEFAULT ((0)),
-[V_Integer6] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer6] DEFAULT ((0)),
-[V_Integer7] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer7] DEFAULT ((0)),
-[V_Integer8] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer8] DEFAULT ((0)),
-[V_Integer9] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer9] DEFAULT ((0)),
-[V_Integer10] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer10] DEFAULT ((0)),
-[V_Integer11] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer11] DEFAULT ((0)),
-[V_Integer12] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer12] DEFAULT ((0)),
-[V_Integer13] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer13] DEFAULT ((0)),
-[V_Integer14] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer14] DEFAULT ((0)),
-[V_Integer15] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer15] DEFAULT ((0)),
-[V_DateTime1] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime1] DEFAULT (NULL),
-[V_DateTime2] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime2] DEFAULT (NULL),
-[V_DateTime3] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime3] DEFAULT (NULL),
-[V_DateTime4] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime4] DEFAULT (NULL),
-[V_DateTime5] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime5] DEFAULT (NULL),
-[I_Field16] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field16] DEFAULT (''),
-[I_Field17] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field17] DEFAULT (''),
-[I_Field18] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field18] DEFAULT (''),
-[I_Field19] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field19] DEFAULT (''),
-[I_Field20] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field20] DEFAULT (''),
-[O_Field16] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field16] DEFAULT (''),
-[O_Field17] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field17] DEFAULT (''),
-[O_Field18] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field18] DEFAULT (''),
-[O_Field19] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field19] DEFAULT (''),
-[O_Field20] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field20] DEFAULT (''),
-[FieldAttr16] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr16] DEFAULT (''),
-[FieldAttr17] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr17] DEFAULT (''),
-[FieldAttr18] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr18] DEFAULT (''),
-[FieldAttr19] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr19] DEFAULT (''),
-[FieldAttr20] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr20] DEFAULT (''),
-[V_DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_DropID] DEFAULT (''),
-[V_SerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SerialNo] DEFAULT ('')
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-SET ANSI_NULLS ON
-GO
 
-CREATE  TRIGGER [RDT].[ntrRDTMobRecDelete] ON [RDT].[RDTMOBREC] 
-FOR DELETE 
-AS
-IF EXISTS(SELECT 1 FROM DELETED 
-          JOIN rdtXML ON DELETED.Mobile = rdtXML.Mobile)
-BEGIN
-   DELETE rdtXML
-   FROM rdtXML
-   JOIN DELETED ON DELETED.Mobile = rdtXML.Mobile
-
-   DELETE rdtXML_Elm
-   FROM rdtXML_Elm
-   JOIN DELETED ON DELETED.Mobile = rdtXML_Elm.Mobile
-
-   DELETE rdtXML_Root
-   FROM rdtXML_Root
-   JOIN DELETED ON DELETED.Mobile = rdtXML_Root.Mobile
-
-   DELETE rdtSessionData
-   FROM rdtSessionData
-   JOIN DELETED ON DELETED.Mobile = rdtSessionData.Mobile
-END
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
-GO
-SET ANSI_NULLS ON
-GO
+SET QUOTED_IDENTIFIER OFF
+GO 
 
 /************************************************************************/
 /* Trigger: ntrRDTMobRecUpdate                                          */
@@ -273,6 +30,9 @@ GO
 /*                              When User RESET                         */
 /* 28-Oct-2013  TLTING    1.5 Review Editdate column update             */
 /* 28-Mar-2015  James     1.6 SOS330761-Fix fieldattr not reset(james02)*/
+/* 05-Jul-2018  James     1.7 Add logging (james03)                     */
+/* 06-Jul-2018  James     1.8 Prevent batch Reset active user (james04) */
+/* 03-Jun-2021  YeeKung   1.9 Remove the retired user (yeekung01)       */
 /************************************************************************/
 
 CREATE TRIGGER [RDT].[ntrRDTMobRecUpdate]
@@ -289,158 +49,772 @@ BEGIN
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
- 
+   
+   DECLARE @n_continue INT,
+           @n_starttcnt INT,
+           @n_err         INT,       -- Error number returned by stored procedure or this trigger
+            @c_errmsg      NVARCHAR(250)
+
+   SELECT @n_continue = 1, @n_starttcnt = @@TRANCOUNT
+    
    IF NOT UPDATE(EditDate)
    BEGIN
       
       UPDATE RDTMOBREC WITH (ROWLOCK)
-         SET EditDate = GetDate()
+         SET EditDate = GETDATE()
       FROM RDTMOBREC
       JOIN INSERTED ON INSERTED.Mobile = RDTMOBREC.Mobile
    END
    
    IF UPDATE(UserName)
    BEGIN
-      IF EXISTS ( SELECT 1 FROM RDT.RDTPickLock RPL WITH (NOLOCK)
-                  JOIN INSERTED INSERTED ON INSERTED.Mobile = RPL.Mobile
-                  WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+      DECLARE @nCount INT
+      SELECT @nCount = COUNT(DELETED.UserName) FROM INSERTED
+                  JOIN DELETED ON INSERTED.Mobile = DELETED.Mobile 
+                  WHERE INSERTED.UserName = 'RESET'
                   AND INSERTED.Mobile IS NOT NULL
-                  AND RPL.Status = '1')
+                  AND DATEDIFF( MI, INSERTED.EDITDATE, GETDATE()) < 120  -- Less than 2 hours session cannot reset
+                  AND INSERTED.Func > 0
+
+      IF @nCount > 1
       BEGIN
-         DELETE RPL WITH (ROWLOCK)
-         FROM RDT.RDTPickLock RPL
-         JOIN INSERTED INSERTED ON INSERTED.Mobile = RPL.Mobile
-         WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+         -- Insert data into memory table first before logging
+
+         DECLARE @RDTMobRec_LOG_Temp TABLE (
+	         [Mobile] [INT] NOT NULL,
+	         [Func] [INT] NOT NULL,
+	         [Scn] [INT] NOT NULL,
+	         [Step] [INT] NOT NULL,
+	         [Menu] [INT] NOT NULL,
+	         [Lang_Code] [NVARCHAR](3) NULL,
+	         [InputKey] [INT] NOT NULL,
+	         [ErrMsg] [NVARCHAR](125) NULL,
+	         [StorerKey] [NVARCHAR](15) NULL,
+	         [Facility] [NVARCHAR](5) NULL,
+	         [UserName] [NVARCHAR](18) NOT NULL,
+	         [Printer] [NVARCHAR](10) NULL,
+	         [MsgQueueNo] [INT] NULL,
+	         [V_ReceiptKey] [NVARCHAR](10) NULL,
+	         [V_POKey] [NVARCHAR](10) NULL,
+	         [V_LoadKey] [NVARCHAR](10) NULL,
+	         [V_OrderKey] [NVARCHAR](10) NULL,
+	         [V_PickSlipNo] [NVARCHAR](10) NULL,
+	         [V_Zone] [NVARCHAR](10) NULL,
+	         [V_Loc] [NVARCHAR](10) NULL,
+	         [V_SKU] [NVARCHAR](20) NULL,
+	         [V_UOM] [NVARCHAR](10) NULL,
+	         [V_ID] [NVARCHAR](20) NULL,
+	         [V_ConsigneeKey] [NVARCHAR](15) NULL,
+	         [V_CaseID] [NVARCHAR](20) NULL,
+	         [V_SKUDescr] [NVARCHAR](60) NULL,
+	         [V_QTY] [INT] NULL,
+	         [V_UCC] [NVARCHAR](20) NULL,
+	         [V_Lot] [NVARCHAR](10) NULL,
+	         [V_Lottable01] [NVARCHAR](18) NULL,
+	         [V_Lottable02] [NVARCHAR](18) NULL,
+	         [V_Lottable03] [NVARCHAR](18) NULL,
+	         [V_Lottable04] [DATETIME] NULL,
+	         [V_Lottable05] [DATETIME] NULL,
+	         [V_Lottable06] [NVARCHAR](30) NULL,
+	         [V_Lottable07] [NVARCHAR](30) NULL,
+	         [V_Lottable08] [NVARCHAR](30) NULL,
+	         [V_Lottable09] [NVARCHAR](30) NULL,
+	         [V_Lottable10] [NVARCHAR](30) NULL,
+	         [V_Lottable11] [NVARCHAR](30) NULL,
+	         [V_Lottable12] [NVARCHAR](30) NULL,
+	         [V_Lottable13] [DATETIME] NULL,
+	         [V_Lottable14] [DATETIME] NULL,
+	         [V_Lottable15] [DATETIME] NULL,
+	         [V_LottableLabel01] [NVARCHAR](20) NULL,
+	         [V_LottableLabel02] [NVARCHAR](20) NULL,
+	         [V_LottableLabel03] [NVARCHAR](20) NULL,
+	         [V_LottableLabel04] [NVARCHAR](20) NULL,
+	         [V_LottableLabel05] [NVARCHAR](20) NULL,
+	         [V_LottableLabel06] [NVARCHAR](20) NULL,
+	         [V_LottableLabel07] [NVARCHAR](20) NULL,
+	         [V_LottableLabel08] [NVARCHAR](20) NULL,
+	         [V_LottableLabel09] [NVARCHAR](20) NULL,
+	         [V_LottableLabel10] [NVARCHAR](20) NULL,
+	         [V_LottableLabel11] [NVARCHAR](20) NULL,
+	         [V_LottableLabel12] [NVARCHAR](20) NULL,
+	         [V_LottableLabel13] [NVARCHAR](20) NULL,
+	         [V_LottableLabel14] [NVARCHAR](20) NULL,
+	         [V_LottableLabel15] [NVARCHAR](20) NULL,
+	         [I_Field01] [NVARCHAR](60) NULL,
+	         [I_Field02] [NVARCHAR](60) NULL,
+	         [I_Field03] [NVARCHAR](60) NULL,
+	         [I_Field04] [NVARCHAR](60) NULL,
+	         [I_Field05] [NVARCHAR](60) NULL,
+	         [I_Field06] [NVARCHAR](60) NULL,
+	         [I_Field07] [NVARCHAR](60) NULL,
+	         [I_Field08] [NVARCHAR](60) NULL,
+	         [I_Field09] [NVARCHAR](60) NULL,
+	         [I_Field10] [NVARCHAR](60) NULL,
+	         [I_Field11] [NVARCHAR](60) NULL,
+	         [I_Field12] [NVARCHAR](60) NULL,
+	         [I_Field13] [NVARCHAR](60) NULL,
+	         [I_Field14] [NVARCHAR](60) NULL,
+	         [I_Field15] [NVARCHAR](60) NULL,
+	         [O_Field01] [NVARCHAR](60) NULL,
+	         [O_Field02] [NVARCHAR](60) NULL,
+	         [O_Field03] [NVARCHAR](60) NULL,
+	         [O_Field04] [NVARCHAR](60) NULL,
+	         [O_Field05] [NVARCHAR](60) NULL,
+	         [O_Field06] [NVARCHAR](60) NULL,
+	         [O_Field07] [NVARCHAR](60) NULL,
+	         [O_Field08] [NVARCHAR](60) NULL,
+	         [O_Field09] [NVARCHAR](60) NULL,
+	         [O_Field10] [NVARCHAR](60) NULL,
+	         [O_Field11] [NVARCHAR](60) NULL,
+	         [O_Field12] [NVARCHAR](60) NULL,
+	         [O_Field13] [NVARCHAR](60) NULL,
+	         [O_Field14] [NVARCHAR](60) NULL,
+	         [O_Field15] [NVARCHAR](60) NULL,
+	         [V_String1] [NVARCHAR](20) NULL,
+	         [V_String2] [NVARCHAR](20) NULL,
+	         [V_String3] [NVARCHAR](20) NULL,
+	         [V_String4] [NVARCHAR](20) NULL,
+	         [V_String5] [NVARCHAR](20) NULL,
+	         [V_String6] [NVARCHAR](20) NULL,
+	         [V_String7] [NVARCHAR](20) NULL,
+	         [V_String8] [NVARCHAR](20) NULL,
+	         [V_String9] [NVARCHAR](20) NULL,
+	         [V_String10] [NVARCHAR](20) NULL,
+	         [V_String11] [NVARCHAR](20) NULL,
+	         [V_String12] [NVARCHAR](20) NULL,
+	         [V_String13] [NVARCHAR](20) NULL,
+	         [V_String14] [NVARCHAR](20) NULL,
+	         [V_String15] [NVARCHAR](20) NULL,
+	         [V_String16] [NVARCHAR](20) NULL,
+	         [V_String17] [NVARCHAR](20) NULL,
+	         [V_String18] [NVARCHAR](20) NULL,
+	         [V_String19] [NVARCHAR](20) NULL,
+	         [V_String20] [NVARCHAR](20) NULL,
+	         [V_String21] [NVARCHAR](20) NULL,
+	         [V_String22] [NVARCHAR](20) NULL,
+	         [V_String23] [NVARCHAR](20) NULL,
+	         [V_String24] [NVARCHAR](20) NULL,
+	         [V_String25] [NVARCHAR](20) NULL,
+	         [V_String26] [NVARCHAR](20) NULL,
+	         [V_String27] [NVARCHAR](20) NULL,
+	         [V_String28] [NVARCHAR](20) NULL,
+	         [V_String29] [NVARCHAR](20) NULL,
+	         [V_String30] [NVARCHAR](20) NULL,
+	         [V_String31] [NVARCHAR](20) NULL,
+	         [V_String32] [NVARCHAR](20) NULL,
+	         [V_String33] [NVARCHAR](20) NULL,
+	         [V_String34] [NVARCHAR](20) NULL,
+	         [V_String35] [NVARCHAR](20) NULL,
+	         [V_String36] [NVARCHAR](20) NULL,
+	         [V_String37] [NVARCHAR](20) NULL,
+	         [V_String38] [NVARCHAR](20) NULL,
+	         [V_String39] [NVARCHAR](20) NULL,
+	         [V_String40] [NVARCHAR](20) NULL,
+	         [FieldAttr01] [NVARCHAR](1) NULL,
+	         [FieldAttr02] [NVARCHAR](1) NULL,
+	         [FieldAttr03] [NVARCHAR](1) NULL,
+	         [FieldAttr04] [NVARCHAR](1) NULL,
+	         [FieldAttr05] [NVARCHAR](1) NULL,
+	         [FieldAttr06] [NVARCHAR](1) NULL,
+	         [FieldAttr07] [NVARCHAR](1) NULL,
+	         [FieldAttr08] [NVARCHAR](1) NULL,
+	         [FieldAttr09] [NVARCHAR](1) NULL,
+	         [FieldAttr10] [NVARCHAR](1) NULL,
+	         [FieldAttr11] [NVARCHAR](1) NULL,
+	         [FieldAttr12] [NVARCHAR](1) NULL,
+	         [FieldAttr13] [NVARCHAR](1) NULL,
+	         [FieldAttr14] [NVARCHAR](1) NULL,
+	         [FieldAttr15] [NVARCHAR](1) NULL,
+	         [AddDate] [DATETIME] NULL,
+	         [EditDate] [DATETIME] NULL,
+	         [Printer_Paper] [NVARCHAR](10) NULL,
+	         [MenuStack] [NVARCHAR](60) NULL,
+	         [V_TaskDetailKey] [NVARCHAR](10) NULL,
+	         [V_Max] [NVARCHAR](MAX) NOT NULL,
+	         [RemotePrint] [INT] NULL,
+	         [DeviceID] [NVARCHAR](20) NULL,
+	         [LightMode] [NVARCHAR](10) NULL,
+	         [StorerGroup] [NVARCHAR](20) NOT NULL,
+	         [V_StorerKey] [NVARCHAR](15) NOT NULL,
+	         [V_String41] [NVARCHAR](60) NOT NULL,
+	         [V_String42] [NVARCHAR](60) NOT NULL,
+	         [V_String43] [NVARCHAR](60) NOT NULL,
+	         [V_String44] [NVARCHAR](60) NOT NULL,
+	         [V_String45] [NVARCHAR](60) NOT NULL,
+	         [V_String46] [NVARCHAR](60) NOT NULL,
+	         [V_String47] [NVARCHAR](60) NOT NULL,
+	         [V_String48] [NVARCHAR](60) NOT NULL,
+	         [V_String49] [NVARCHAR](60) NOT NULL,
+	         [V_String50] [NVARCHAR](60) NOT NULL,
+	         [V_WaveKey] [NVARCHAR](10) NOT NULL,
+            [Status] [NVARCHAR](10) NOT NULL,
+            [AppName] [NVARCHAR](1000) NOT NULL,
+            [ProcID] [NVARCHAR](1000) NOT NULL,
+            [UserNameAfterLog] [NVARCHAR](18) NOT NULL,
+            [V_Cartonno] [INT] NULL,          
+            [V_PUOM_Div] [INT] NULL,          
+            [V_MQTY] [INT] NULL,              
+            [V_PQTY] [INT] NULL,              
+            [V_FromScn] [INT] NULL,           
+            [V_FromStep] [INT] NULL,          
+            [V_MTaskQty] [INT] NULL,          
+            [V_PTaskQty] [INT] NULL,          
+            [V_TaskQTY] [INT] NULL,           
+            [V_Integer1] [INT] NULL,          
+            [V_Integer2] [INT] NULL,          
+            [V_Integer3] [INT] NULL,          
+            [V_Integer4] [INT] NULL,          
+            [V_Integer5] [INT] NULL,          
+            [V_Integer6] [INT] NULL,          
+            [V_Integer7] [INT] NULL,          
+            [V_Integer8] [INT] NULL,          
+            [V_Integer9] [INT] NULL,          
+            [V_Integer10] [INT] NULL,         
+            [V_Integer11] [INT] NULL,         
+            [V_Integer12] [INT] NULL,         
+            [V_Integer13] [INT] NULL,         
+            [V_Integer14] [INT] NULL,         
+            [V_Integer15] [INT] NULL,         
+            [V_DateTime1] [DATETIME] NULL,    
+            [V_DateTime2] [DATETIME] NULL,    
+            [V_DateTime3] [DATETIME] NULL,    
+            [V_DateTime4] [DATETIME] NULL,    
+            [V_DateTime5] [DATETIME] NULL,    
+            [I_Field16] [NVARCHAR](60) NULL,  
+            [I_Field17] [NVARCHAR](60) NULL,  
+            [I_Field18] [NVARCHAR](60) NULL,  
+            [I_Field19] [NVARCHAR](60) NULL,  
+            [I_Field20] [NVARCHAR](60) NULL,  
+            [O_Field16] [NVARCHAR](60) NULL,  
+            [O_Field17] [NVARCHAR](60) NULL,  
+            [O_Field18] [NVARCHAR](60) NULL,  
+            [O_Field19] [NVARCHAR](60) NULL,  
+            [O_Field20] [NVARCHAR](60) NULL,  
+            [FieldAttr16] [NVARCHAR](1) NULL, 
+            [FieldAttr17] [NVARCHAR](1) NULL, 
+            [FieldAttr18] [NVARCHAR](1) NULL, 
+            [FieldAttr19] [NVARCHAR](1) NULL, 
+            [FieldAttr20] [NVARCHAR](1) NULL, 
+            [V_DropID] [NVARCHAR](20) NULL)
+
+         INSERT INTO @RDTMobRec_LOG_Temp (
+             Mobile, Func, Scn, Step, Menu
+            ,Lang_Code, InputKey, ErrMsg, StorerKey, Facility
+            ,UserName, Printer, MsgQueueNo, V_ReceiptKey, V_POKey
+            ,V_LoadKey, V_OrderKey, V_PickSlipNo, V_Zone, V_Loc, V_SKU
+            ,V_UOM, V_ID, V_ConsigneeKey, V_CaseID, V_SKUDescr, V_QTY, V_UCC, V_Lot
+            ,V_Lottable01, V_Lottable02, V_Lottable03, V_Lottable04, V_Lottable05
+            ,V_Lottable06, V_Lottable07, V_Lottable08, V_Lottable09, V_Lottable10
+            ,V_Lottable11, V_Lottable12, V_Lottable13, V_Lottable14, V_Lottable15
+            ,V_LottableLabel01, V_LottableLabel02, V_LottableLabel03, V_LottableLabel04, V_LottableLabel05
+            ,V_LottableLabel06, V_LottableLabel07, V_LottableLabel08, V_LottableLabel09, V_LottableLabel10
+            ,V_LottableLabel11, V_LottableLabel12, V_LottableLabel13, V_LottableLabel14, V_LottableLabel15
+            ,I_Field01, I_Field02, I_Field03, I_Field04, I_Field05
+            ,I_Field06, I_Field07, I_Field08, I_Field09, I_Field10
+            ,I_Field11, I_Field12, I_Field13, I_Field14, I_Field15
+            ,O_Field01, O_Field02, O_Field03, O_Field04, O_Field05
+            ,O_Field06, O_Field07, O_Field08, O_Field09, O_Field10
+            ,O_Field11, O_Field12, O_Field13, O_Field14, O_Field15
+            ,V_String1, V_String2, V_String3, V_String4, V_String5
+            ,V_String6, V_String7, V_String8, V_String9, V_String10
+            ,V_String11, V_String12, V_String13, V_String14, V_String15
+            ,V_String16, V_String17, V_String18, V_String19, V_String20
+            ,V_String21, V_String22, V_String23, V_String24, V_String25
+            ,V_String26, V_String27, V_String28, V_String29, V_String30
+            ,V_String31, V_String32, V_String33, V_String34, V_String35
+            ,V_String36, V_String37, V_String38, V_String39, V_String40
+            ,FieldAttr01, FieldAttr02, FieldAttr03, FieldAttr04, FieldAttr05
+            ,FieldAttr06, FieldAttr07, FieldAttr08, FieldAttr09, FieldAttr10
+            ,FieldAttr11, FieldAttr12, FieldAttr13, FieldAttr14, FieldAttr15
+            ,AddDate, EditDate, Printer_Paper, MenuStack, V_TaskDetailKey
+            ,V_Max, RemotePrint, DeviceID, LightMode, StorerGroup
+            ,V_StorerKey, V_String41, V_String42, V_String43, V_String44
+            ,V_String45, V_String46, V_String47, V_String48, V_String49
+            ,V_String50, V_WaveKey, [Status], AppName, ProcID, UserNameAfterLog
+            ,V_Cartonno, V_PUOM_Div, V_MQTY, V_PQTY, V_FromScn
+            ,V_FromStep, V_MTaskQty, V_PTaskQty, V_TaskQTY, V_Integer1
+            ,V_Integer2, V_Integer3, V_Integer4, V_Integer5, V_Integer6
+            ,V_Integer7, V_Integer8, V_Integer9, V_Integer10, V_Integer11
+            ,V_Integer12, V_Integer13, V_Integer14, V_Integer15, V_DateTime1
+            ,V_DateTime2, V_DateTime3, V_DateTime4, V_DateTime5, I_Field16
+            ,I_Field17, I_Field18, I_Field19, I_Field20, O_Field16
+            ,O_Field17, O_Field18, O_Field19, O_Field20, FieldAttr16
+            ,FieldAttr17, FieldAttr18, FieldAttr19,FieldAttr20, V_DropID)
+         SELECT 
+             DELETED.Mobile, DELETED.Func, DELETED.Scn, DELETED.Step, DELETED.Menu
+            ,DELETED.Lang_Code, DELETED.InputKey, DELETED.ErrMsg, DELETED.StorerKey, DELETED.Facility
+            ,DELETED.UserName, DELETED.Printer, DELETED.MsgQueueNo, DELETED.V_ReceiptKey, DELETED.V_POKey
+            ,DELETED.V_LoadKey, DELETED.V_OrderKey, DELETED.V_PickSlipNo, DELETED.V_Zone, DELETED.V_Loc, DELETED.V_SKU
+            ,DELETED.V_UOM, DELETED.V_ID, DELETED.V_ConsigneeKey, DELETED.V_CaseID, DELETED.V_SKUDescr, DELETED.V_QTY, DELETED.V_UCC, DELETED.V_Lot
+            ,DELETED.V_Lottable01, DELETED.V_Lottable02, DELETED.V_Lottable03, DELETED.V_Lottable04, DELETED.V_Lottable05
+            ,DELETED.V_Lottable06, DELETED.V_Lottable07, DELETED.V_Lottable08, DELETED.V_Lottable09, DELETED.V_Lottable10
+            ,DELETED.V_Lottable11, DELETED.V_Lottable12, DELETED.V_Lottable13, DELETED.V_Lottable14, DELETED.V_Lottable15
+            ,DELETED.V_LottableLabel01, DELETED.V_LottableLabel02, DELETED.V_LottableLabel03, DELETED.V_LottableLabel04, DELETED.V_LottableLabel05
+            ,DELETED.V_LottableLabel06, DELETED.V_LottableLabel07, DELETED.V_LottableLabel08, DELETED.V_LottableLabel09, DELETED.V_LottableLabel10
+            ,DELETED.V_LottableLabel11, DELETED.V_LottableLabel12, DELETED.V_LottableLabel13, DELETED.V_LottableLabel14, DELETED.V_LottableLabel15
+            ,DELETED.I_Field01, DELETED.I_Field02, DELETED.I_Field03, DELETED.I_Field04, DELETED.I_Field05
+            ,DELETED.I_Field06, DELETED.I_Field07, DELETED.I_Field08, DELETED.I_Field09, DELETED.I_Field10
+            ,DELETED.I_Field11, DELETED.I_Field12, DELETED.I_Field13, DELETED.I_Field14, DELETED.I_Field15
+            ,DELETED.O_Field01, DELETED.O_Field02, DELETED.O_Field03, DELETED.O_Field04, DELETED.O_Field05
+            ,DELETED.O_Field06, DELETED.O_Field07, DELETED.O_Field08, DELETED.O_Field09, DELETED.O_Field10
+            ,DELETED.O_Field11, DELETED.O_Field12, DELETED.O_Field13, DELETED.O_Field14, DELETED.O_Field15
+            ,DELETED.V_String1, DELETED.V_String2, DELETED.V_String3, DELETED.V_String4, DELETED.V_String5
+            ,DELETED.V_String6, DELETED.V_String7, DELETED.V_String8, DELETED.V_String9, DELETED.V_String10
+            ,DELETED.V_String11, DELETED.V_String12, DELETED.V_String13, DELETED.V_String14, DELETED.V_String15
+            ,DELETED.V_String16, DELETED.V_String17, DELETED.V_String18, DELETED.V_String19, DELETED.V_String20
+            ,DELETED.V_String21, DELETED.V_String22, DELETED.V_String23, DELETED.V_String24, DELETED.V_String25
+            ,DELETED.V_String26, DELETED.V_String27, DELETED.V_String28, DELETED.V_String29, DELETED.V_String30
+            ,DELETED.V_String31, DELETED.V_String32, DELETED.V_String33, DELETED.V_String34, DELETED.V_String35
+            ,DELETED.V_String36, DELETED.V_String37, DELETED.V_String38, DELETED.V_String39, DELETED.V_String40
+            ,DELETED.FieldAttr01, DELETED.FieldAttr02, DELETED.FieldAttr03, DELETED.FieldAttr04, DELETED.FieldAttr05
+            ,DELETED.FieldAttr06, DELETED.FieldAttr07, DELETED.FieldAttr08, DELETED.FieldAttr09, DELETED.FieldAttr10
+            ,DELETED.FieldAttr11, DELETED.FieldAttr12, DELETED.FieldAttr13, DELETED.FieldAttr14, DELETED.FieldAttr15
+            ,DELETED.AddDate, DELETED.EditDate, DELETED.Printer_Paper, DELETED.MenuStack, DELETED.V_TaskDetailKey
+            ,DELETED.V_Max, DELETED.RemotePrint, DELETED.DeviceID, DELETED.LightMode, DELETED.StorerGroup
+            ,DELETED.V_StorerKey, DELETED.V_String41, DELETED.V_String42, DELETED.V_String43, DELETED.V_String44
+            ,DELETED.V_String45, DELETED.V_String46, DELETED.V_String47, DELETED.V_String48, DELETED.V_String49
+            ,DELETED.V_String50, DELETED.V_WaveKey, '1', APP_NAME(), OBJECT_NAME( @@PROCID), INSERTED.UserName
+            ,DELETED.V_Cartonno, DELETED.V_PUOM_Div, DELETED.V_MQTY, DELETED.V_PQTY, DELETED.V_FromScn
+            ,DELETED.V_FromStep, DELETED.V_MTaskQty, DELETED.V_PTaskQty, DELETED.V_TaskQTY, DELETED.V_Integer1
+            ,DELETED.V_Integer2, DELETED.V_Integer3, DELETED.V_Integer4, DELETED.V_Integer5, DELETED.V_Integer6
+            ,DELETED.V_Integer7, DELETED.V_Integer8, DELETED.V_Integer9, DELETED.V_Integer10, DELETED.V_Integer11
+            ,DELETED.V_Integer12, DELETED.V_Integer13, DELETED.V_Integer14, DELETED.V_Integer15, DELETED.V_DateTime1
+            ,DELETED.V_DateTime2, DELETED.V_DateTime3, DELETED.V_DateTime4, DELETED.V_DateTime5, DELETED.I_Field16
+            ,DELETED.I_Field17, DELETED.I_Field18, DELETED.I_Field19, DELETED.I_Field20, DELETED.O_Field16
+            ,DELETED.O_Field17, DELETED.O_Field18, DELETED.O_Field19, DELETED.O_Field20, DELETED.FieldAttr16
+            ,DELETED.FieldAttr17, DELETED.FieldAttr18, DELETED.FieldAttr19, DELETED.FieldAttr20, DELETED.V_DropID            
+         FROM INSERTED
+         JOIN DELETED ON INSERTED.Mobile = DELETED.Mobile 
+         WHERE INSERTED.UserName = 'RESET'
          AND INSERTED.Mobile IS NOT NULL
-         AND RPL.Status = '1'
+         AND DATEDIFF( MI, INSERTED.EDITDATE, GETDATE()) < 120  -- Less than 2 hours session cannot reset
+         AND INSERTED.Func > 0
+
+		   SELECT @n_continue = 3
+		   SELECT @n_err     = 62850   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+		   SELECT @c_errmsg  = 'NSQL'+CONVERT(char(5),@n_err)+': Reset > 1 active user not allowed. (ntrRDTMobRecUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
       END
 
-      IF EXISTS (     Select 1 FROM RDT.RDTDynamicPickLog RPL (NOLOCK)  
-            JOIN DELETED DELETED ON DELETED.UserName = RPL.AddWho  
-            JOIN INSERTED INSERTED ON DELETED.MOBILE = INSERTED.MOBILE
-            WHERE INSERTED.UserName IN ('RESET', 'RETIRED')  
-            AND INSERTED.Mobile IS NOT NULL  )
+      IF @n_continue = 1
       BEGIN
-         DELETE RPL WITH (ROWLOCK) 
-         FROM RDT.RDTDynamicPickLog RPL 
-         JOIN DELETED DELETED ON DELETED.UserName = RPL.AddWho
-         JOIN INSERTED INSERTED ON DELETED.Mobile = INSERTED.Mobile
-         WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
-         AND INSERTED.Mobile IS NOT NULL
-      END
+         IF EXISTS ( SELECT 1 FROM RDT.RDTPickLock RPL WITH (NOLOCK)
+                     JOIN INSERTED INSERTED ON INSERTED.Mobile = RPL.Mobile
+                     WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+                     AND INSERTED.Mobile IS NOT NULL
+                     AND RPL.Status = '1')
+         BEGIN
+            DELETE RPL WITH (ROWLOCK)
+            FROM RDT.RDTPickLock RPL
+            JOIN INSERTED INSERTED ON INSERTED.Mobile = RPL.Mobile
+            WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+            AND INSERTED.Mobile IS NOT NULL
+            AND RPL.Status = '1'
+         END
+
+         IF EXISTS (     Select 1 FROM RDT.RDTDynamicPickLog RPL (NOLOCK)  
+               JOIN DELETED DELETED ON DELETED.UserName = RPL.AddWho  
+               JOIN INSERTED INSERTED ON DELETED.MOBILE = INSERTED.MOBILE
+               WHERE INSERTED.UserName IN ('RESET', 'RETIRED')  
+               AND INSERTED.Mobile IS NOT NULL  )
+         BEGIN
+            DELETE RPL WITH (ROWLOCK) 
+            FROM RDT.RDTDynamicPickLog RPL 
+            JOIN DELETED DELETED ON DELETED.UserName = RPL.AddWho
+            JOIN INSERTED INSERTED ON DELETED.Mobile = INSERTED.Mobile
+            WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+            AND INSERTED.Mobile IS NOT NULL
+         END
       
-      IF EXISTS ( SELECT 1 FROM RDT.RDTCCLOCK CCL WITH (NOLOCK)
-                  JOIN INSERTED INSERTED ON INSERTED.Mobile = CCL.Mobile
-                  WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
-                  AND INSERTED.Mobile IS NOT NULL
-                  AND CCL.Status < '9')
+         IF EXISTS ( SELECT 1 FROM RDT.RDTCCLOCK CCL WITH (NOLOCK)
+                     JOIN INSERTED INSERTED ON INSERTED.Mobile = CCL.Mobile
+                     WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+                     AND INSERTED.Mobile IS NOT NULL
+                     AND CCL.Status < '9')
+         BEGIN
+            -- delete rdtcclock when doing reset (james01)
+            DELETE CCL WITH (ROWLOCK)
+            FROM RDT.RDTCCLOCK CCL
+            JOIN INSERTED INSERTED ON INSERTED.Mobile = CCL.Mobile
+            WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+            AND INSERTED.Mobile IS NOT NULL
+            AND CCL.Status < '9'
+         END
+
+         IF EXISTS ( SELECT 1 FROM RDT.RDTMobRec RDTMOB WITH (NOLOCK)
+                     JOIN INSERTED INSERTED ON INSERTED.Mobile = RDTMOB.Mobile
+                     WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+                     AND INSERTED.Mobile IS NOT NULL )
+         BEGIN
+            INSERT INTO rdt.RDTMobRec_LOG ( 
+             Mobile, Func, Scn, Step, Menu
+            ,Lang_Code, InputKey, ErrMsg, StorerKey, Facility
+            ,UserName, Printer, MsgQueueNo, V_ReceiptKey, V_POKey
+            ,V_LoadKey, V_OrderKey, V_PickSlipNo, V_Zone, V_Loc, V_SKU
+            ,V_UOM, V_ID, V_ConsigneeKey, V_CaseID, V_SKUDescr, V_QTY, V_UCC, V_Lot
+            ,V_Lottable01, V_Lottable02, V_Lottable03, V_Lottable04, V_Lottable05
+            ,V_Lottable06, V_Lottable07, V_Lottable08, V_Lottable09, V_Lottable10
+            ,V_Lottable11, V_Lottable12, V_Lottable13, V_Lottable14, V_Lottable15
+            ,V_LottableLabel01, V_LottableLabel02, V_LottableLabel03, V_LottableLabel04, V_LottableLabel05
+            ,V_LottableLabel06, V_LottableLabel07, V_LottableLabel08, V_LottableLabel09, V_LottableLabel10
+            ,V_LottableLabel11, V_LottableLabel12, V_LottableLabel13, V_LottableLabel14, V_LottableLabel15
+            ,I_Field01, I_Field02, I_Field03, I_Field04, I_Field05
+            ,I_Field06, I_Field07, I_Field08, I_Field09, I_Field10
+            ,I_Field11, I_Field12, I_Field13, I_Field14, I_Field15
+            ,O_Field01, O_Field02, O_Field03, O_Field04, O_Field05
+            ,O_Field06, O_Field07, O_Field08, O_Field09, O_Field10
+            ,O_Field11, O_Field12, O_Field13, O_Field14, O_Field15
+            ,V_String1, V_String2, V_String3, V_String4, V_String5
+            ,V_String6, V_String7, V_String8, V_String9, V_String10
+            ,V_String11, V_String12, V_String13, V_String14, V_String15
+            ,V_String16, V_String17, V_String18, V_String19, V_String20
+            ,V_String21, V_String22, V_String23, V_String24, V_String25
+            ,V_String26, V_String27, V_String28, V_String29, V_String30
+            ,V_String31, V_String32, V_String33, V_String34, V_String35
+            ,V_String36, V_String37, V_String38, V_String39, V_String40
+            ,FieldAttr01, FieldAttr02, FieldAttr03, FieldAttr04, FieldAttr05
+            ,FieldAttr06, FieldAttr07, FieldAttr08, FieldAttr09, FieldAttr10
+            ,FieldAttr11, FieldAttr12, FieldAttr13, FieldAttr14, FieldAttr15
+            ,AddDate, EditDate, Printer_Paper, MenuStack, V_TaskDetailKey
+            ,V_Max, RemotePrint, DeviceID, LightMode, StorerGroup
+            ,V_StorerKey, V_String41, V_String42, V_String43, V_String44
+            ,V_String45, V_String46, V_String47, V_String48, V_String49
+            ,V_String50, V_WaveKey, [Status], AppName, ProcID, UserNameAfterLog
+            ,V_Cartonno, V_PUOM_Div, V_MQTY, V_PQTY, V_FromScn
+            ,V_FromStep, V_MTaskQty, V_PTaskQty, V_TaskQTY, V_Integer1
+            ,V_Integer2, V_Integer3, V_Integer4, V_Integer5, V_Integer6
+            ,V_Integer7, V_Integer8, V_Integer9, V_Integer10, V_Integer11
+            ,V_Integer12, V_Integer13, V_Integer14, V_Integer15, V_DateTime1
+            ,V_DateTime2, V_DateTime3, V_DateTime4, V_DateTime5, I_Field16
+            ,I_Field17, I_Field18, I_Field19, I_Field20, O_Field16
+            ,O_Field17, O_Field18, O_Field19, O_Field20, FieldAttr16
+            ,FieldAttr17, FieldAttr18, FieldAttr19,FieldAttr20, V_DropID)     
+             SELECT 
+             DELETED.Mobile, DELETED.Func, DELETED.Scn, DELETED.Step, DELETED.Menu
+            ,DELETED.Lang_Code, DELETED.InputKey, DELETED.ErrMsg, DELETED.StorerKey, DELETED.Facility
+            ,DELETED.UserName, DELETED.Printer, DELETED.MsgQueueNo, DELETED.V_ReceiptKey, DELETED.V_POKey
+            ,DELETED.V_LoadKey, DELETED.V_OrderKey, DELETED.V_PickSlipNo, DELETED.V_Zone, DELETED.V_Loc, DELETED.V_SKU
+            ,DELETED.V_UOM, DELETED.V_ID, DELETED.V_ConsigneeKey, DELETED.V_CaseID, DELETED.V_SKUDescr, DELETED.V_QTY, DELETED.V_UCC, DELETED.V_Lot
+            ,DELETED.V_Lottable01, DELETED.V_Lottable02, DELETED.V_Lottable03, DELETED.V_Lottable04, DELETED.V_Lottable05
+            ,DELETED.V_Lottable06, DELETED.V_Lottable07, DELETED.V_Lottable08, DELETED.V_Lottable09, DELETED.V_Lottable10
+            ,DELETED.V_Lottable11, DELETED.V_Lottable12, DELETED.V_Lottable13, DELETED.V_Lottable14, DELETED.V_Lottable15
+            ,DELETED.V_LottableLabel01, DELETED.V_LottableLabel02, DELETED.V_LottableLabel03, DELETED.V_LottableLabel04, DELETED.V_LottableLabel05
+            ,DELETED.V_LottableLabel06, DELETED.V_LottableLabel07, DELETED.V_LottableLabel08, DELETED.V_LottableLabel09, DELETED.V_LottableLabel10
+            ,DELETED.V_LottableLabel11, DELETED.V_LottableLabel12, DELETED.V_LottableLabel13, DELETED.V_LottableLabel14, DELETED.V_LottableLabel15
+            ,DELETED.I_Field01, DELETED.I_Field02, DELETED.I_Field03, DELETED.I_Field04, DELETED.I_Field05
+            ,DELETED.I_Field06, DELETED.I_Field07, DELETED.I_Field08, DELETED.I_Field09, DELETED.I_Field10
+            ,DELETED.I_Field11, DELETED.I_Field12, DELETED.I_Field13, DELETED.I_Field14, DELETED.I_Field15
+            ,DELETED.O_Field01, DELETED.O_Field02, DELETED.O_Field03, DELETED.O_Field04, DELETED.O_Field05
+            ,DELETED.O_Field06, DELETED.O_Field07, DELETED.O_Field08, DELETED.O_Field09, DELETED.O_Field10
+            ,DELETED.O_Field11, DELETED.O_Field12, DELETED.O_Field13, DELETED.O_Field14, DELETED.O_Field15
+            ,DELETED.V_String1, DELETED.V_String2, DELETED.V_String3, DELETED.V_String4, DELETED.V_String5
+            ,DELETED.V_String6, DELETED.V_String7, DELETED.V_String8, DELETED.V_String9, DELETED.V_String10
+            ,DELETED.V_String11, DELETED.V_String12, DELETED.V_String13, DELETED.V_String14, DELETED.V_String15
+            ,DELETED.V_String16, DELETED.V_String17, DELETED.V_String18, DELETED.V_String19, DELETED.V_String20
+            ,DELETED.V_String21, DELETED.V_String22, DELETED.V_String23, DELETED.V_String24, DELETED.V_String25
+            ,DELETED.V_String26, DELETED.V_String27, DELETED.V_String28, DELETED.V_String29, DELETED.V_String30
+            ,DELETED.V_String31, DELETED.V_String32, DELETED.V_String33, DELETED.V_String34, DELETED.V_String35
+            ,DELETED.V_String36, DELETED.V_String37, DELETED.V_String38, DELETED.V_String39, DELETED.V_String40
+            ,DELETED.FieldAttr01, DELETED.FieldAttr02, DELETED.FieldAttr03, DELETED.FieldAttr04, DELETED.FieldAttr05
+            ,DELETED.FieldAttr06, DELETED.FieldAttr07, DELETED.FieldAttr08, DELETED.FieldAttr09, DELETED.FieldAttr10
+            ,DELETED.FieldAttr11, DELETED.FieldAttr12, DELETED.FieldAttr13, DELETED.FieldAttr14, DELETED.FieldAttr15
+            ,DELETED.AddDate, DELETED.EditDate, DELETED.Printer_Paper, DELETED.MenuStack, DELETED.V_TaskDetailKey
+            ,DELETED.V_Max, DELETED.RemotePrint, DELETED.DeviceID, DELETED.LightMode, DELETED.StorerGroup
+            ,DELETED.V_StorerKey, DELETED.V_String41, DELETED.V_String42, DELETED.V_String43, DELETED.V_String44
+            ,DELETED.V_String45, DELETED.V_String46, DELETED.V_String47, DELETED.V_String48, DELETED.V_String49
+            ,DELETED.V_String50, DELETED.V_WaveKey, '1', APP_NAME(), OBJECT_NAME( @@PROCID), MOBREC.UserName
+            ,DELETED.V_Cartonno, DELETED.V_PUOM_Div, DELETED.V_MQTY, DELETED.V_PQTY, DELETED.V_FromScn
+            ,DELETED.V_FromStep, DELETED.V_MTaskQty, DELETED.V_PTaskQty, DELETED.V_TaskQTY, DELETED.V_Integer1
+            ,DELETED.V_Integer2, DELETED.V_Integer3, DELETED.V_Integer4, DELETED.V_Integer5, DELETED.V_Integer6
+            ,DELETED.V_Integer7, DELETED.V_Integer8, DELETED.V_Integer9, DELETED.V_Integer10, DELETED.V_Integer11
+            ,DELETED.V_Integer12, DELETED.V_Integer13, DELETED.V_Integer14, DELETED.V_Integer15, DELETED.V_DateTime1
+            ,DELETED.V_DateTime2, DELETED.V_DateTime3, DELETED.V_DateTime4, DELETED.V_DateTime5, DELETED.I_Field16
+            ,DELETED.I_Field17, DELETED.I_Field18, DELETED.I_Field19, DELETED.I_Field20, DELETED.O_Field16
+            ,DELETED.O_Field17, DELETED.O_Field18, DELETED.O_Field19, DELETED.O_Field20, DELETED.FieldAttr16
+            ,DELETED.FieldAttr17, DELETED.FieldAttr18, DELETED.FieldAttr19, DELETED.FieldAttr20, DELETED.V_DropID            
+            FROM RDT.RDTMOBREC MOBREC WITH (NOLOCK)
+            JOIN DELETED DELETED ON MOBREC.Mobile = DELETED.Mobile
+            WHERE MOBREC.UserName IN ('RESET', 'RETIRED')
+            AND DELETED.Mobile IS NOT NULL
+
+            --delete the reset and retired user in rdtmobrec
+
+            DELETE   RDTMOB 
+            FROM  RDT.RDTMobRec RDTMOB JOIN INSERTED INSERTED ON INSERTED.Mobile = RDTMOB.Mobile
+            WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+            AND INSERTED.Mobile IS NOT NULL
+
+            ---- If perform RESET, force user go back to main menu to
+            ---- avoid user from continue using RESET as username
+            --UPDATE RDTMOB WITH (ROWLOCK) SET
+            --   Func = 0,
+            --   Scn  = 0,
+            --   Step = 0,
+            --   Menu = 0,
+            --   ErrMsg = '',
+            --   RDTMOB.I_Field01 = '',
+            --   RDTMOB.I_Field02 = '',
+            --   RDTMOB.I_Field03 = '',
+            --   RDTMOB.I_Field04 = '',
+            --   RDTMOB.O_Field01 = '',
+            --   RDTMOB.O_Field02 = '',
+            --   RDTMOB.O_Field03 = '',
+            --   RDTMOB.O_Field04 = '',
+            --   RDTMOB.FieldAttr01 = '', -- (james02)
+            --   RDTMOB.FieldAttr02 = '', 
+            --   RDTMOB.FieldAttr03 = '', 
+            --   RDTMOB.FieldAttr04 = '', 
+            --   RDTMOB.FieldAttr05 = ''  
+            --FROM RDT.RDTMobRec RDTMOB
+            --JOIN INSERTED INSERTED ON INSERTED.Mobile = RDTMOB.Mobile
+            --WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
+            --AND INSERTED.Mobile IS NOT NULL
+         END
+      END
+   END
+
+   IF @n_continue = 1
+   BEGIN
+      IF UPDATE(Func)
       BEGIN
-         -- delete rdtcclock when doing reset (james01)
-         DELETE CCL WITH (ROWLOCK)
-         FROM RDT.RDTCCLOCK CCL
-         JOIN INSERTED INSERTED ON INSERTED.Mobile = CCL.Mobile
-         WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
-         AND INSERTED.Mobile IS NOT NULL
-         AND CCL.Status < '9'
+         IF EXISTS ( SELECT 1 FROM DELETED DELETED WITH (NOLOCK)
+                     JOIN INSERTED INSERTED ON DELETED.Mobile = INSERTED.Mobile
+                     WHERE INSERTED.Mobile IS NOT NULL 
+                     AND INSERTED.Func = 0
+                     AND DELETED.Func > 500) 
+         BEGIN
+            INSERT INTO rdt.RDTMobRec_LOG ( 
+             Mobile, Func, Scn, Step, Menu
+            ,Lang_Code, InputKey, ErrMsg, StorerKey, Facility
+            ,UserName, Printer, MsgQueueNo, V_ReceiptKey, V_POKey
+            ,V_LoadKey, V_OrderKey, V_PickSlipNo, V_Zone, V_Loc, V_SKU
+            ,V_UOM, V_ID, V_ConsigneeKey, V_CaseID, V_SKUDescr, V_QTY, V_UCC, V_Lot
+            ,V_Lottable01, V_Lottable02, V_Lottable03, V_Lottable04, V_Lottable05
+            ,V_Lottable06, V_Lottable07, V_Lottable08, V_Lottable09, V_Lottable10
+            ,V_Lottable11, V_Lottable12, V_Lottable13, V_Lottable14, V_Lottable15
+            ,V_LottableLabel01, V_LottableLabel02, V_LottableLabel03, V_LottableLabel04, V_LottableLabel05
+            ,V_LottableLabel06, V_LottableLabel07, V_LottableLabel08, V_LottableLabel09, V_LottableLabel10
+            ,V_LottableLabel11, V_LottableLabel12, V_LottableLabel13, V_LottableLabel14, V_LottableLabel15
+            ,I_Field01, I_Field02, I_Field03, I_Field04, I_Field05
+            ,I_Field06, I_Field07, I_Field08, I_Field09, I_Field10
+            ,I_Field11, I_Field12, I_Field13, I_Field14, I_Field15
+            ,O_Field01, O_Field02, O_Field03, O_Field04, O_Field05
+            ,O_Field06, O_Field07, O_Field08, O_Field09, O_Field10
+            ,O_Field11, O_Field12, O_Field13, O_Field14, O_Field15
+            ,V_String1, V_String2, V_String3, V_String4, V_String5
+            ,V_String6, V_String7, V_String8, V_String9, V_String10
+            ,V_String11, V_String12, V_String13, V_String14, V_String15
+            ,V_String16, V_String17, V_String18, V_String19, V_String20
+            ,V_String21, V_String22, V_String23, V_String24, V_String25
+            ,V_String26, V_String27, V_String28, V_String29, V_String30
+            ,V_String31, V_String32, V_String33, V_String34, V_String35
+            ,V_String36, V_String37, V_String38, V_String39, V_String40
+            ,FieldAttr01, FieldAttr02, FieldAttr03, FieldAttr04, FieldAttr05
+            ,FieldAttr06, FieldAttr07, FieldAttr08, FieldAttr09, FieldAttr10
+            ,FieldAttr11, FieldAttr12, FieldAttr13, FieldAttr14, FieldAttr15
+            ,AddDate, EditDate, Printer_Paper, MenuStack, V_TaskDetailKey
+            ,V_Max, RemotePrint, DeviceID, LightMode, StorerGroup
+            ,V_StorerKey, V_String41, V_String42, V_String43, V_String44
+            ,V_String45, V_String46, V_String47, V_String48, V_String49
+            ,V_String50, V_WaveKey, [Status], AppName, ProcID, UserNameAfterLog
+            ,V_Cartonno, V_PUOM_Div, V_MQTY, V_PQTY, V_FromScn
+            ,V_FromStep, V_MTaskQty, V_PTaskQty, V_TaskQTY, V_Integer1
+            ,V_Integer2, V_Integer3, V_Integer4, V_Integer5, V_Integer6
+            ,V_Integer7, V_Integer8, V_Integer9, V_Integer10, V_Integer11
+            ,V_Integer12, V_Integer13, V_Integer14, V_Integer15, V_DateTime1
+            ,V_DateTime2, V_DateTime3, V_DateTime4, V_DateTime5, I_Field16
+            ,I_Field17, I_Field18, I_Field19, I_Field20, O_Field16
+            ,O_Field17, O_Field18, O_Field19, O_Field20, FieldAttr16
+            ,FieldAttr17, FieldAttr18, FieldAttr19,FieldAttr20, V_DropID)     
+             SELECT 
+             DELETED.Mobile, DELETED.Func, DELETED.Scn, DELETED.Step, DELETED.Menu
+            ,DELETED.Lang_Code, DELETED.InputKey, DELETED.ErrMsg, DELETED.StorerKey, DELETED.Facility
+            ,DELETED.UserName, DELETED.Printer, DELETED.MsgQueueNo, DELETED.V_ReceiptKey, DELETED.V_POKey
+            ,DELETED.V_LoadKey, DELETED.V_OrderKey, DELETED.V_PickSlipNo, DELETED.V_Zone, DELETED.V_Loc, DELETED.V_SKU
+            ,DELETED.V_UOM, DELETED.V_ID, DELETED.V_ConsigneeKey, DELETED.V_CaseID, DELETED.V_SKUDescr, DELETED.V_QTY, DELETED.V_UCC, DELETED.V_Lot
+            ,DELETED.V_Lottable01, DELETED.V_Lottable02, DELETED.V_Lottable03, DELETED.V_Lottable04, DELETED.V_Lottable05
+            ,DELETED.V_Lottable06, DELETED.V_Lottable07, DELETED.V_Lottable08, DELETED.V_Lottable09, DELETED.V_Lottable10
+            ,DELETED.V_Lottable11, DELETED.V_Lottable12, DELETED.V_Lottable13, DELETED.V_Lottable14, DELETED.V_Lottable15
+            ,DELETED.V_LottableLabel01, DELETED.V_LottableLabel02, DELETED.V_LottableLabel03, DELETED.V_LottableLabel04, DELETED.V_LottableLabel05
+            ,DELETED.V_LottableLabel06, DELETED.V_LottableLabel07, DELETED.V_LottableLabel08, DELETED.V_LottableLabel09, DELETED.V_LottableLabel10
+            ,DELETED.V_LottableLabel11, DELETED.V_LottableLabel12, DELETED.V_LottableLabel13, DELETED.V_LottableLabel14, DELETED.V_LottableLabel15
+            ,DELETED.I_Field01, DELETED.I_Field02, DELETED.I_Field03, DELETED.I_Field04, DELETED.I_Field05
+            ,DELETED.I_Field06, DELETED.I_Field07, DELETED.I_Field08, DELETED.I_Field09, DELETED.I_Field10
+            ,DELETED.I_Field11, DELETED.I_Field12, DELETED.I_Field13, DELETED.I_Field14, DELETED.I_Field15
+            ,DELETED.O_Field01, DELETED.O_Field02, DELETED.O_Field03, DELETED.O_Field04, DELETED.O_Field05
+            ,DELETED.O_Field06, DELETED.O_Field07, DELETED.O_Field08, DELETED.O_Field09, DELETED.O_Field10
+            ,DELETED.O_Field11, DELETED.O_Field12, DELETED.O_Field13, DELETED.O_Field14, DELETED.O_Field15
+            ,DELETED.V_String1, DELETED.V_String2, DELETED.V_String3, DELETED.V_String4, DELETED.V_String5
+            ,DELETED.V_String6, DELETED.V_String7, DELETED.V_String8, DELETED.V_String9, DELETED.V_String10
+            ,DELETED.V_String11, DELETED.V_String12, DELETED.V_String13, DELETED.V_String14, DELETED.V_String15
+            ,DELETED.V_String16, DELETED.V_String17, DELETED.V_String18, DELETED.V_String19, DELETED.V_String20
+            ,DELETED.V_String21, DELETED.V_String22, DELETED.V_String23, DELETED.V_String24, DELETED.V_String25
+            ,DELETED.V_String26, DELETED.V_String27, DELETED.V_String28, DELETED.V_String29, DELETED.V_String30
+            ,DELETED.V_String31, DELETED.V_String32, DELETED.V_String33, DELETED.V_String34, DELETED.V_String35
+            ,DELETED.V_String36, DELETED.V_String37, DELETED.V_String38, DELETED.V_String39, DELETED.V_String40
+            ,DELETED.FieldAttr01, DELETED.FieldAttr02, DELETED.FieldAttr03, DELETED.FieldAttr04, DELETED.FieldAttr05
+            ,DELETED.FieldAttr06, DELETED.FieldAttr07, DELETED.FieldAttr08, DELETED.FieldAttr09, DELETED.FieldAttr10
+            ,DELETED.FieldAttr11, DELETED.FieldAttr12, DELETED.FieldAttr13, DELETED.FieldAttr14, DELETED.FieldAttr15
+            ,DELETED.AddDate, DELETED.EditDate, DELETED.Printer_Paper, DELETED.MenuStack, DELETED.V_TaskDetailKey
+            ,DELETED.V_Max, DELETED.RemotePrint, DELETED.DeviceID, DELETED.LightMode, DELETED.StorerGroup
+            ,DELETED.V_StorerKey, DELETED.V_String41, DELETED.V_String42, DELETED.V_String43, DELETED.V_String44
+            ,DELETED.V_String45, DELETED.V_String46, DELETED.V_String47, DELETED.V_String48, DELETED.V_String49
+            ,DELETED.V_String50, DELETED.V_WaveKey, '1', APP_NAME(), OBJECT_NAME( @@PROCID), INSERTED.UserName
+            ,DELETED.V_Cartonno, DELETED.V_PUOM_Div, DELETED.V_MQTY, DELETED.V_PQTY, DELETED.V_FromScn
+            ,DELETED.V_FromStep, DELETED.V_MTaskQty, DELETED.V_PTaskQty, DELETED.V_TaskQTY, DELETED.V_Integer1
+            ,DELETED.V_Integer2, DELETED.V_Integer3, DELETED.V_Integer4, DELETED.V_Integer5, DELETED.V_Integer6
+            ,DELETED.V_Integer7, DELETED.V_Integer8, DELETED.V_Integer9, DELETED.V_Integer10, DELETED.V_Integer11
+            ,DELETED.V_Integer12, DELETED.V_Integer13, DELETED.V_Integer14, DELETED.V_Integer15, DELETED.V_DateTime1
+            ,DELETED.V_DateTime2, DELETED.V_DateTime3, DELETED.V_DateTime4, DELETED.V_DateTime5, DELETED.I_Field16
+            ,DELETED.I_Field17, DELETED.I_Field18, DELETED.I_Field19, DELETED.I_Field20, DELETED.O_Field16
+            ,DELETED.O_Field17, DELETED.O_Field18, DELETED.O_Field19, DELETED.O_Field20, DELETED.FieldAttr16
+            ,DELETED.FieldAttr17, DELETED.FieldAttr18, DELETED.FieldAttr19, DELETED.FieldAttr20, DELETED.V_DropID            
+            FROM DELETED DELETED WITH (NOLOCK)
+            JOIN INSERTED INSERTED ON INSERTED.Mobile = INSERTED.Mobile
+            WHERE INSERTED.Mobile IS NOT NULL 
+            AND INSERTED.Func = 0
+            AND DELETED.Func > 500
+         END
+      END
+   END
+
+   /* #INCLUDE <TRAHU2.SQL> */
+   IF @n_continue = 3  -- Error Occured - Process And Return
+   BEGIN
+      DECLARE @n_IsRDT INT
+      EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
+
+      IF @n_IsRDT = 1
+      BEGIN
+         -- RDT cannot handle rollback (blank XML will generate). So we are not going to issue a rollback here
+         -- Instead we commit and raise an error back to parent, let the parent decide
+   
+         -- Commit until the level we begin with
+         WHILE @@TRANCOUNT > @n_starttcnt
+            COMMIT TRAN
+   
+         -- Raise error with severity = 10, instead of the default severity 16. 
+         -- RDT cannot handle error with severity > 10, which stop the processing after executed this trigger
+         RAISERROR (@n_err, 10, 1) WITH SETERROR 
+   
+         -- The RAISERROR has to be last line, to ensure @@ERROR is not getting overwritten
+      END
+      ELSE
+      BEGIN
+         IF @@TRANCOUNT = 1 AND @@TRANCOUNT >= @n_starttcnt
+         BEGIN
+            ROLLBACK TRAN
+         END
+         ELSE
+         BEGIN
+            WHILE @@TRANCOUNT > @n_starttcnt
+            BEGIN
+               COMMIT TRAN
+            END
+         END
+         EXECUTE nsp_logerror @n_err, @c_errmsg, 'ntrRDTMobRecUpdate'
+         RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       END
 
-      IF EXISTS ( SELECT 1 FROM RDT.RDTMobRec RDTMOB WITH (NOLOCK)
-                  JOIN INSERTED INSERTED ON INSERTED.Mobile = RDTMOB.Mobile
-                  WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
-                  AND INSERTED.Mobile IS NOT NULL )
+      INSERT INTO RDT.RDTMobRec_LOG (
+          Mobile, Func, Scn, Step, Menu
+         ,Lang_Code, InputKey, ErrMsg, StorerKey, Facility
+         ,UserName, Printer, MsgQueueNo, V_ReceiptKey, V_POKey
+         ,V_LoadKey, V_OrderKey, V_PickSlipNo, V_Zone, V_Loc, V_SKU
+         ,V_UOM, V_ID, V_ConsigneeKey, V_CaseID, V_SKUDescr, V_QTY, V_UCC, V_Lot
+         ,V_Lottable01, V_Lottable02, V_Lottable03, V_Lottable04, V_Lottable05
+         ,V_Lottable06, V_Lottable07, V_Lottable08, V_Lottable09, V_Lottable10
+         ,V_Lottable11, V_Lottable12, V_Lottable13, V_Lottable14, V_Lottable15
+         ,V_LottableLabel01, V_LottableLabel02, V_LottableLabel03, V_LottableLabel04, V_LottableLabel05
+         ,V_LottableLabel06, V_LottableLabel07, V_LottableLabel08, V_LottableLabel09, V_LottableLabel10
+         ,V_LottableLabel11, V_LottableLabel12, V_LottableLabel13, V_LottableLabel14, V_LottableLabel15
+         ,I_Field01, I_Field02, I_Field03, I_Field04, I_Field05
+         ,I_Field06, I_Field07, I_Field08, I_Field09, I_Field10
+         ,I_Field11, I_Field12, I_Field13, I_Field14, I_Field15
+         ,O_Field01, O_Field02, O_Field03, O_Field04, O_Field05
+         ,O_Field06, O_Field07, O_Field08, O_Field09, O_Field10
+         ,O_Field11, O_Field12, O_Field13, O_Field14, O_Field15
+         ,V_String1, V_String2, V_String3, V_String4, V_String5
+         ,V_String6, V_String7, V_String8, V_String9, V_String10
+         ,V_String11, V_String12, V_String13, V_String14, V_String15
+         ,V_String16, V_String17, V_String18, V_String19, V_String20
+         ,V_String21, V_String22, V_String23, V_String24, V_String25
+         ,V_String26, V_String27, V_String28, V_String29, V_String30
+         ,V_String31, V_String32, V_String33, V_String34, V_String35
+         ,V_String36, V_String37, V_String38, V_String39, V_String40
+         ,FieldAttr01, FieldAttr02, FieldAttr03, FieldAttr04, FieldAttr05
+         ,FieldAttr06, FieldAttr07, FieldAttr08, FieldAttr09, FieldAttr10
+         ,FieldAttr11, FieldAttr12, FieldAttr13, FieldAttr14, FieldAttr15
+         ,AddDate, EditDate, Printer_Paper, MenuStack, V_TaskDetailKey
+         ,V_Max, RemotePrint, DeviceID, LightMode, StorerGroup
+         ,V_StorerKey, V_String41, V_String42, V_String43, V_String44
+         ,V_String45, V_String46, V_String47, V_String48, V_String49
+         ,V_String50, V_WaveKey, [Status], AppName, ProcID, UserNameAfterLog
+         ,V_Cartonno, V_PUOM_Div, V_MQTY, V_PQTY, V_FromScn
+         ,V_FromStep, V_MTaskQty, V_PTaskQty, V_TaskQTY, V_Integer1
+         ,V_Integer2, V_Integer3, V_Integer4, V_Integer5, V_Integer6
+         ,V_Integer7, V_Integer8, V_Integer9, V_Integer10, V_Integer11
+         ,V_Integer12, V_Integer13, V_Integer14, V_Integer15, V_DateTime1
+         ,V_DateTime2, V_DateTime3, V_DateTime4, V_DateTime5, I_Field16
+         ,I_Field17, I_Field18, I_Field19, I_Field20, O_Field16
+         ,O_Field17, O_Field18, O_Field19, O_Field20, FieldAttr16
+         ,FieldAttr17, FieldAttr18, FieldAttr19,FieldAttr20, V_DropID)
+      SELECT 
+          Mobile, Func, Scn, Step, Menu
+         ,Lang_Code, InputKey, ErrMsg, StorerKey, Facility
+         ,UserName, Printer, MsgQueueNo, V_ReceiptKey, V_POKey
+         ,V_LoadKey, V_OrderKey, V_PickSlipNo, V_Zone, V_Loc, V_SKU
+         ,V_UOM, V_ID, V_ConsigneeKey, V_CaseID, V_SKUDescr, V_QTY, V_UCC, V_Lot
+         ,V_Lottable01, V_Lottable02, V_Lottable03, V_Lottable04, V_Lottable05
+         ,V_Lottable06, V_Lottable07, V_Lottable08, V_Lottable09, V_Lottable10
+         ,V_Lottable11, V_Lottable12, V_Lottable13, V_Lottable14, V_Lottable15
+         ,V_LottableLabel01, V_LottableLabel02, V_LottableLabel03, V_LottableLabel04, V_LottableLabel05
+         ,V_LottableLabel06, V_LottableLabel07, V_LottableLabel08, V_LottableLabel09, V_LottableLabel10
+         ,V_LottableLabel11, V_LottableLabel12, V_LottableLabel13, V_LottableLabel14, V_LottableLabel15
+         ,I_Field01, I_Field02, I_Field03, I_Field04, I_Field05
+         ,I_Field06, I_Field07, I_Field08, I_Field09, I_Field10
+         ,I_Field11, I_Field12, I_Field13, I_Field14, I_Field15
+         ,O_Field01, O_Field02, O_Field03, O_Field04, O_Field05
+         ,O_Field06, O_Field07, O_Field08, O_Field09, O_Field10
+         ,O_Field11, O_Field12, O_Field13, O_Field14, O_Field15
+         ,V_String1, V_String2, V_String3, V_String4, V_String5
+         ,V_String6, V_String7, V_String8, V_String9, V_String10
+         ,V_String11, V_String12, V_String13, V_String14, V_String15
+         ,V_String16, V_String17, V_String18, V_String19, V_String20
+         ,V_String21, V_String22, V_String23, V_String24, V_String25
+         ,V_String26, V_String27, V_String28, V_String29, V_String30
+         ,V_String31, V_String32, V_String33, V_String34, V_String35
+         ,V_String36, V_String37, V_String38, V_String39, V_String40
+         ,FieldAttr01, FieldAttr02, FieldAttr03, FieldAttr04, FieldAttr05
+         ,FieldAttr06, FieldAttr07, FieldAttr08, FieldAttr09, FieldAttr10
+         ,FieldAttr11, FieldAttr12, FieldAttr13, FieldAttr14, FieldAttr15
+         ,AddDate, EditDate, Printer_Paper, MenuStack, V_TaskDetailKey
+         ,V_Max, RemotePrint, DeviceID, LightMode, StorerGroup
+         ,V_StorerKey, V_String41, V_String42, V_String43, V_String44
+         ,V_String45, V_String46, V_String47, V_String48, V_String49
+         ,V_String50, V_WaveKey, '3' AS [Status], AppName, ProcID, UserNameAfterLog
+         ,V_Cartonno, V_PUOM_Div, V_MQTY, V_PQTY, V_FromScn
+         ,V_FromStep, V_MTaskQty, V_PTaskQty, V_TaskQTY, V_Integer1
+         ,V_Integer2, V_Integer3, V_Integer4, V_Integer5, V_Integer6
+         ,V_Integer7, V_Integer8, V_Integer9, V_Integer10, V_Integer11
+         ,V_Integer12, V_Integer13, V_Integer14, V_Integer15, V_DateTime1
+         ,V_DateTime2, V_DateTime3, V_DateTime4, V_DateTime5, I_Field16
+         ,I_Field17, I_Field18, I_Field19, I_Field20, O_Field16
+         ,O_Field17, O_Field18, O_Field19, O_Field20, FieldAttr16
+         ,FieldAttr17, FieldAttr18, FieldAttr19,FieldAttr20, V_DropID
+      FROM @RDTMobRec_LOG_Temp 
+
+      RETURN
+   END
+   ELSE
+   BEGIN   
+      WHILE @@TRANCOUNT > @n_starttcnt
       BEGIN
-         -- If perform RESET, force user go back to main menu to
-         -- avoid user from continue using RESET as username
-         UPDATE RDTMOB WITH (ROWLOCK) SET
-            Func = 0,
-            Scn  = 0,
-            Step = 0,
-            Menu = 0,
-            ErrMsg = '',
-            RDTMOB.I_Field01 = '',
-            RDTMOB.I_Field02 = '',
-            RDTMOB.I_Field03 = '',
-            RDTMOB.I_Field04 = '',
-            RDTMOB.O_Field01 = '',
-            RDTMOB.O_Field02 = '',
-            RDTMOB.O_Field03 = '',
-            RDTMOB.O_Field04 = '',
-            RDTMOB.FieldAttr01 = '', -- (james02)
-            RDTMOB.FieldAttr02 = '', 
-            RDTMOB.FieldAttr03 = '', 
-            RDTMOB.FieldAttr04 = '', 
-            RDTMOB.FieldAttr05 = ''  
-         FROM RDT.RDTMobRec RDTMOB
-         JOIN INSERTED INSERTED ON INSERTED.Mobile = RDTMOB.Mobile
-         WHERE INSERTED.UserName IN ('RESET', 'RETIRED')
-         AND INSERTED.Mobile IS NOT NULL
+         COMMIT TRAN
       END
+      RETURN
    END
 END
 GO
-ALTER TABLE [RDT].[RDTMOBREC] ADD CONSTRAINT [PK_RDTMOBREC] PRIMARY KEY CLUSTERED ([Mobile]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_rdtMobRec_Username] ON [RDT].[RDTMOBREC] ([UserName]) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store Carton No', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Cartonno'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store DropID Value', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_DropID'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store current screen no before go to next screen', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromScn'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store current step no before go to next step', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromStep'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer1'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer10'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer11'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer12'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer13'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer14'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer15'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer2'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer3'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer4'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer5'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer6'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer7'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer8'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer9'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MQTY'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MTaskQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store qty in prefered uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PQTY'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in prefered uom ', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PTaskQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store prefered uom configuration', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PUOM_Div'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Serial no', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_SerialNo'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store task qty', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskQTY'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'WaveKey for RDT session', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_WaveKey'
+
+ALTER TABLE [RDT].[ntrRDTMobRecUpdate] ENABLE TRIGGER [ntrRDTMobRecUpdate]
 GO
