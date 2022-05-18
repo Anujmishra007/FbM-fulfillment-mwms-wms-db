@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_Pick]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_Pick]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -66,9 +63,10 @@ GO
 /* 2017-12-27   3.5  James      WMS3621 - Use config hide lot02 value(james14)*/
 /*                   James      Add ID output to swap id sp                   */
 /* 2020-03-17   3.6  James      WMS-12504 Add auto scan in pickslip (james15) */
+/* 2022-03-09   3.7  yeekung    WMS-18588 Add Extendedvalidate (yeekung01)    */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_Pick] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 VARCHAR max
@@ -1720,6 +1718,67 @@ BEGIN
       SET @nActPQty = @cInField14
       SET @nActMQty = @cInField15
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) + ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer ' +
+               ',@cPickSlipNo    ' +
+               ',@cSuggestedLOC  ' +
+               ',@cLOC           ' +
+               ',@cID            ' +
+               ',@cDropID        ' +
+               ',@cSKU           ' +
+               ',@cLottable01    ' +
+               ',@cLottable02    ' +
+               ',@cLottable03    ' +
+               ',@dLottable04    ' +
+               ',@nTaskQTY       ' +
+               ',@nPQTY          ' +
+               ',@cUCC           ' +
+               ',@cOption        ' +
+               ',@nErrNo  OUTPUT ' +
+               ',@cErrMsg OUTPUT '
+            SET @cSQLParam = ' @nMobile INT, @nFunc INT, @cLangCode NVARCHAR(3), @nStep INT, @nInputKey INT, @cFacility NVARCHAR(5), @cStorer NVARCHAR(15)' +
+               ',@cPickSlipNo     NVARCHAR( 10)  ' +
+               ',@cSuggestedLOC   NVARCHAR( 10)  ' +
+               ',@cLOC            NVARCHAR( 10)  ' +
+               ',@cID             NVARCHAR( 18)  ' +
+               ',@cDropID         NVARCHAR( 20)  ' +
+               ',@cSKU            NVARCHAR( 20)  ' +
+               ',@cLottable01     NVARCHAR( 18)  ' +
+               ',@cLottable02     NVARCHAR( 18)  ' +
+               ',@cLottable03     NVARCHAR( 18)  ' +
+               ',@dLottable04     DATETIME       ' +
+               ',@nTaskQTY        INT            ' +
+               ',@nPQTY           INT            ' +
+               ',@cUCC            NVARCHAR( 20)  ' +
+               ',@cOption         NVARCHAR( 1)   ' +
+               ',@nErrNo          INT OUTPUT     ' +
+               ',@cErrMsg         NVARCHAR( 20) OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer
+               ,@cPickSlipNo
+               ,@cSuggestedLOC
+               ,@cLOC
+               ,@cID
+               ,@cDropID
+               ,@cSKU
+               ,@cLottable1
+               ,@cLottable2
+               ,@cLottable3
+               ,@dLottable4
+               ,@nTaskQTY
+               ,@nPQTY
+               ,@cUCC
+               ,@cOption
+               ,@nErrNo  OUTPUT
+               ,@cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Short pick
       IF @nPQTY < @nTaskQTY
       BEGIN
@@ -2098,7 +2157,7 @@ BEGIN
             END
          END
       END
-    ELSE
+      ELSE
       -- Full picked
       -- IF @nPQTY = @nTaskQTY                                                  --MT01
       BEGIN
@@ -3777,6 +3836,68 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Option
          GOTO ShortPick_Option_Fail
       END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) + ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer ' +
+               ',@cPickSlipNo    ' +
+               ',@cSuggestedLOC  ' +
+               ',@cLOC           ' +
+               ',@cID            ' +
+               ',@cDropID        ' +
+               ',@cSKU           ' +
+               ',@cLottable01    ' +
+               ',@cLottable02    ' +
+               ',@cLottable03    ' +
+               ',@dLottable04    ' +
+               ',@nTaskQTY       ' +
+               ',@nPQTY          ' +
+               ',@cUCC           ' +
+               ',@cOption        ' +
+               ',@nErrNo  OUTPUT ' +
+               ',@cErrMsg OUTPUT '
+            SET @cSQLParam = ' @nMobile INT, @nFunc INT, @cLangCode NVARCHAR(3), @nStep INT, @nInputKey INT, @cFacility NVARCHAR(5), @cStorer NVARCHAR(15)' +
+               ',@cPickSlipNo     NVARCHAR( 10)  ' +
+               ',@cSuggestedLOC   NVARCHAR( 10)  ' +
+               ',@cLOC            NVARCHAR( 10)  ' +
+               ',@cID             NVARCHAR( 18)  ' +
+               ',@cDropID         NVARCHAR( 20)  ' +
+               ',@cSKU            NVARCHAR( 20)  ' +
+               ',@cLottable01     NVARCHAR( 18)  ' +
+               ',@cLottable02     NVARCHAR( 18)  ' +
+               ',@cLottable03     NVARCHAR( 18)  ' +
+               ',@dLottable04     DATETIME       ' +
+               ',@nTaskQTY        INT            ' +
+               ',@nPQTY           INT            ' +
+               ',@cUCC            NVARCHAR( 20)  ' +
+               ',@cOption         NVARCHAR( 1)   ' +
+               ',@nErrNo          INT OUTPUT     ' +
+               ',@cErrMsg         NVARCHAR( 20) OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer
+               ,@cPickSlipNo
+               ,@cSuggestedLOC
+               ,@cLOC
+               ,@cID
+               ,@cDropID
+               ,@cSKU
+               ,@cLottable1
+               ,@cLottable2
+               ,@cLottable3
+               ,@dLottable4
+               ,@nTaskQTY
+               ,@nPQTY
+               ,@cUCC
+               ,@cOption
+               ,@nErrNo  OUTPUT
+               ,@cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO ShortPick_Option_Fail
+         END
+      END
+
 
       IF @cOption = '1'  -- Yes
       BEGIN
