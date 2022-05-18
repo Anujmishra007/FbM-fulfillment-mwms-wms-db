@@ -1,23 +1,26 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[PTL].[isp_803PTL_Confirm07]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [PTL].[isp_803PTL_Confirm07]
+USE [SGWMS]
 GO
 
+/****** Object:  StoredProcedure [PTL].[isp_803PTL_Confirm07]    Script Date: 5/18/2022 5:11:38 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: isp_803PTL_Confirm07                                */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Accept QTY in CS-PCS, format 9-999                          */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 07-10-2021 1.0  yeekung    WMS-17823 Created                         */
-/************************************************************************/
 
-CREATE PROC [PTL].[isp_803PTL_Confirm07] (
+/*****************************************************************************/
+/* Store procedure: isp_803PTL_Confirm07                                     */
+/* Copyright      : LF Logistics                                             */
+/*                                                                           */
+/* Purpose: Accept QTY in CS-PCS, format 9-999                               */
+/*                                                                           */
+/* Date       Rev  Author	  Purposes                                       */
+/* 07-10-2021 1.0  yeekung    WMS-17823 Created                              */
+/* 18-05-2022 1.1  CalvinK    Add ChannelID to PickDetail Insertion (CLVN01) */
+/*****************************************************************************/
+
+ALTER PROC [PTL].[isp_803PTL_Confirm07] (
    @cIPAddress    NVARCHAR(30), 
    @cPosition     NVARCHAR(20),
    @cFuncKey      NVARCHAR(2), 
@@ -301,7 +304,8 @@ BEGIN
             PickDetailKey, 
             QTY, 
             TrafficCop,
-            OptimizeCop)
+            OptimizeCop,
+			Channel_ID)
          SELECT 
             CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, 
             UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
@@ -310,7 +314,8 @@ BEGIN
             @cNewPickDetailKey, 
             @nQTY_PD - 1, -- QTY
             NULL, -- TrafficCop
-            '1'   -- OptimizeCop
+            '1',  -- OptimizeCop
+			Channel_ID
          FROM dbo.PickDetail WITH (NOLOCK) 
    		WHERE PickDetailKey = @cPickDetailKey			            
          IF @@ERROR <> 0
@@ -407,11 +412,4 @@ Quit:
 END
 GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON PTL.isp_803PTL_Confirm07 TO NSQL
-GO
 
