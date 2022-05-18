@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_Inquiry]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdtfnc_Inquiry]
-GO
 
 
 SET QUOTED_IDENTIFIER OFF
@@ -64,10 +61,11 @@ GO
 /*                            Remove @nErrNo & @cErrMsg output          */    
 /*                            from rdt_Decode                           */    
 /* 2019-08-13 3.8  YeeKung    WMS-9385 Add Eventlog (yeekung01)         */    
-/* 2020-02-04 3.9  YeeKung    WMS12740 Add ExtendedinfoSP (yeekung02)   */    
+/* 2020-02-04 3.9  YeeKung    WMS12740 Add ExtendedinfoSP (yeekung02)   */   
+/* 2021-06-09 4.0  YeeKung    WMS-17216 Add LOCLookUP (yeekung03)       */ 
 /************************************************************************/      
       
-CREATE PROC [RDT].[rdtfnc_Inquiry] (      
+CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry] (      
    @nMobile    INT,      
    @nErrNo     INT  OUTPUT,      
    @cErrMsg    NVARCHAR(1024) OUTPUT      
@@ -174,7 +172,8 @@ DECLARE
    @dLottable14 DATETIME,       
    @dLottable15 DATETIME,   
    @cExtendedInfoSP     NVARCHAR( 20),    --(yeekung02)  
-   @cExtendedInfo       NVARCHAR( 20),     --(yeekung02)  
+   @cExtendedInfo       NVARCHAR( 20),     --(yeekung02) 
+   @cLOCLookUP          NVARCHAR(20),  --(yeekung03)
       
  -- (james04)      
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),      
@@ -295,6 +294,7 @@ SELECT
    @cDecodeSP              = V_String26,      
    @cExtendedInfoSP        = V_String27,  --(yeekung02)  
    @cExtendedInfo          = V_String28,  --(yeekung02)  
+   @cLOCLookUP             = V_String29,  --(yeekung03)  
       
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,      
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,      
@@ -381,6 +381,11 @@ BEGIN
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)      
    IF @cExtendedInfoSP = '0'      
    SET @cExtendedInfoSP = ''   
+
+   SET @cLOCLookUP = rdt.rdtGetConfig( @nFunc, 'LOCLookUPSP', @cStorerKey)        
+   IF @cLOCLookUP = '0'              
+      SET @cLOCLookUP = ''              
+     
     
    -- EventLog - Sign In Function                          
    EXEC RDT.rdt_STD_EventLog   --(yeekung01)                       
@@ -449,6 +454,17 @@ BEGIN
       -- By LOC      
       IF @cInquiry_LOC <> '' AND @cInquiry_LOC IS NOT NULL      
       BEGIN      
+         IF @cLOCLookUP <> ''       --(yeekung03) 
+         BEGIN        
+            EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,         
+               @cInquiry_LOC OUTPUT,         
+               @nErrNo     OUTPUT,         
+               @cErrMsg    OUTPUT        
+  
+            IF @nErrNo <> 0        
+               GOTO Step_1_Fail        
+         END    
+
          DECLARE @cChkFacility NVARCHAR( 5)      
          SELECT @cChkFacility = Facility      
          FROM dbo.LOC WITH (NOLOCK)      
@@ -469,7 +485,8 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( 60679, @cLangCode, 'DSP') --'Diff facility'      
             EXEC rdt.rdtSetFocusField @nMobile, 1      
             GOTO Step_1_Fail      
-         END      
+         END    
+                
       END      
       
       -- By ID      
@@ -2258,6 +2275,7 @@ BEGIN
       V_String26 = @cDecodeSP,     
       V_String27 = @cExtendedInfoSP,         --(yeekung02)  
       V_String28 = @cExtendedInfo,           --(yeekung02)  
+      V_String29 = @cLOCLookUP,              --(yeekung03)
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,      
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,      

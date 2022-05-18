@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_Inquiry_V7]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_Inquiry_V7]
-GO
 
 
 SET QUOTED_IDENTIFIER OFF
@@ -27,9 +24,10 @@ GO
 /* 05-Jun-2019 1.6  Ung        WMS7485 Temporary fix                    */  
 /* 30-Aug-2019 1.7  James      WMS-10415 Remove Qty hold and replace    */
 /*                             with Pendingmovein (james04)             */
+/* 09-Jun-2021 1.8  YeeKung    WMS-17216 Add LOCLookUP (yeekung01)      */     
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_Inquiry_V7] (  
+CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry_V7] (  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT  
@@ -141,7 +139,8 @@ DECLARE
    @dLottable13 DATETIME,  
    @dLottable14 DATETIME,  
    @dLottable15 DATETIME,  
-   @cHasLottable  NVARCHAR( 1),  
+   @cHasLottable  NVARCHAR( 1), 
+   @cLOCLookUP   NVARCHAR(20),  --(yeekung01) 
   
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),  
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),  
@@ -240,6 +239,7 @@ SELECT
    @cLottableCode          = V_String10,  
    @cCustomInquiryRule_SP  = V_String11,  
    @cType                  = V_String12,  
+   @cLOCLookUP             = V_String13,  --(yeekung01)   
   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  
@@ -329,6 +329,11 @@ BEGIN
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)  
    IF @cDecodeSP = '0'  
       SET @cDecodeSP = ''  
+
+   --(yeekung01)
+   SET @cLOCLookUP = rdt.rdtGetConfig( @nFunc, 'LOCLookUPSP', @cStorerKey)        
+   IF @cLOCLookUP = '0'              
+      SET @cLOCLookUP = ''
   
    -- Init screen  
    SET @cOutField01 = ''  
@@ -476,6 +481,18 @@ BEGIN
       -- By LOC  
       IF @cInquiry_LOC <> '' AND @cInquiry_LOC IS NOT NULL  
       BEGIN  
+         IF @cLOCLookUP <> ''       --(yeekung01) 
+         BEGIN        
+            EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,         
+               @cInquiry_LOC OUTPUT,         
+               @nErrNo     OUTPUT,         
+               @cErrMsg    OUTPUT        
+  
+            IF @nErrNo <> 0        
+               GOTO Step_1_Fail        
+         END  
+
+
          DECLARE @cChkFacility NVARCHAR( 5)  
          SELECT @cChkFacility = Facility  
          FROM dbo.LOC WITH (NOLOCK)  
@@ -496,7 +513,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Diff facility'  
             EXEC rdt.rdtSetFocusField @nMobile, 1  
             GOTO Step_1_Fail  
-         END  
+         END       
       END  
   
       -- By ID  
@@ -1441,6 +1458,7 @@ BEGIN
       V_String10 = @cLottableCode,  
       V_String11 = @cCustomInquiryRule_SP,  
       V_String12 = @cType,  
+      V_String13 = @cLOCLookUP,              --(yeekung03)
   
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,  

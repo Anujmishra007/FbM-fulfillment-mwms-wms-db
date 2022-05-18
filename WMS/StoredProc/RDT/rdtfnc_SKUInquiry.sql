@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_SKUInquiry]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_SKUInquiry]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -42,10 +39,11 @@ GO
 /* 2014-03-20 1.20 TLTING   Bug fix                                     */
 /* 2016-08-11 1.21 James    SOS375234 - Add DecodeSP (james01)          */
 /* 2016-09-30 1.22 Ung      Performance tuning                          */
-/* 2018-10-01 1.23 TungGH   Performance                                 */   
+/* 2018-10-01 1.23 TungGH   Performance                                 */  
+/* 2021-06-09 1.24 YeeKung  WMS-17216 Add LOCLookUP (yeekung01)         */  
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_SKUInquiry] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_SKUInquiry] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(125) OUTPUT
@@ -121,6 +119,7 @@ DECLARE
    @cSQL                NVARCHAR( MAX), 
    @cSQLParam           NVARCHAR( MAX), 
    @nQTY                INT,
+   @cLOCLookUP          NVARCHAR(20),  --(yeekung01)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -161,6 +160,7 @@ SELECT
    @cMax        = V_String8, 
    @cCaseUOM    = V_String9,
    @cEachUOM    = V_String10, 
+   @cLOCLookUP  = V_String11,  --(yeekung01)
    
    @nRec        = V_Integer1,
    @nTotRec     = V_Integer2,
@@ -205,6 +205,10 @@ BEGIN
    SET @cInquiry_LOC = ''
    SET @cOutField01 = '' -- SKU
    SET @cOutField02 = '' -- LOC
+
+   SET @cLOCLookUP = rdt.rdtGetConfig( @nFunc, 'LOCLookUPSP', @cStorerKey)        
+   IF @cLOCLookUP = '0'              
+      SET @cLOCLookUP = ''     
 
    SET @nScn = 820
    SET @nStep = 1
@@ -349,7 +353,18 @@ BEGIN
 
       -- By LOC
       IF @cInquiry_LOC <> '' AND @cInquiry_LOC IS NOT NULL
-      BEGIN
+      BEGIN  
+         IF @cLOCLookUP <> ''       --(yeekung03) 
+         BEGIN        
+            EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,         
+               @cInquiry_LOC OUTPUT,         
+               @nErrNo     OUTPUT,         
+               @cErrMsg    OUTPUT        
+  
+            IF @nErrNo <> 0        
+               GOTO Step_1_Fail        
+         END  
+
          SELECT @cChkFacility = Facility
          FROM dbo.LOC WITH (NOLOCK)
          WHERE LOC = @cInquiry_LOC
@@ -370,7 +385,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( 63730, @cLangCode, 'DSP') --Diff facility
             EXEC rdt.rdtSetFocusField @nMobile, 2
             GOTO Step_1_Fail
-         END
+         END    
       END
 
       -- Get next screen data
@@ -801,6 +816,7 @@ BEGIN
       V_String8 = @cMax, 
       V_String9 = @cCaseUOM,
       V_String10 = @cEachUOM, 
+      V_String11 = @cLOCLookUP,              --(yeekung01)
       
       V_Integer1 = @nRec,
       V_Integer2 = @nTotRec,
