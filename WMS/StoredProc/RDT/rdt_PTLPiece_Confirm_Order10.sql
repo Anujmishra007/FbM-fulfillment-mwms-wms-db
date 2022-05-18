@@ -1,23 +1,29 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLPiece_Confirm_Order10]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLPiece_Confirm_Order10]
+USE [SGWMS]
+GO
+
+/****** Object:  StoredProcedure [RDT].[rdt_PTLPiece_Confirm_Order10]    Script Date: 5/18/2022 5:16:24 PM ******/
+SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO
 
-/************************************************************************/
-/* Store procedure: rdt_PTLPiece_Confirm_Order10                        */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Confirm by order                                            */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 07-10-2021 1.0  yeekung    WMS-17823 Created                         */
-/************************************************************************/
 
-CREATE PROC rdt.rdt_PTLPiece_Confirm_Order10 (
+
+
+/*****************************************************************************/
+/* Store procedure: rdt_PTLPiece_Confirm_Order10                             */
+/* Copyright      : LF Logistics                                             */
+/*                                                                           */
+/* Purpose: Confirm by order                                                 */
+/*                                                                           */
+/* Date       Rev  Author     Purposes                                       */
+/* 07-10-2021 1.0  yeekung    WMS-17823 Created                              */
+/* 20-01-2022 1.1  Calvin     JSM-46277 ChongHwang Bug Fix (CLVN01)          */
+/* 11-05-2022 1.2  Calvin     Add ChannelID to PickDetail Insertion (CLVN02) */
+/*****************************************************************************/
+
+ALTER PROC [RDT].[rdt_PTLPiece_Confirm_Order10] (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -110,7 +116,7 @@ BEGIN
       AND PD.Status NOT IN ('4','0')
       AND O.Status <> 'CANC' 
       AND O.SOStatus <> 'CANC'
-   ORDER BY L.RowRef -- Match order with position first
+   ORDER BY L.RowRef DESC-- Match order with position first					--(CLVN01)
 
    -- Check blank
    IF @cOrderKey = ''
@@ -291,7 +297,8 @@ BEGIN
          PickDetailKey, 
          QTY, 
          TrafficCop,
-         OptimizeCop)
+         OptimizeCop,
+		 Channel_ID)				--(CLVN02)
       SELECT 
          CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, 
          UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
@@ -300,7 +307,8 @@ BEGIN
          @cNewPickDetailKey, 
          @nQTY_PD - 1, -- QTY
          NULL, -- TrafficCop
-         '1'   -- OptimizeCop
+         '1',   -- OptimizeCop
+		 Channel_ID					--(CLVN02)
       FROM dbo.PickDetail WITH (NOLOCK) 
 		WHERE PickDetailKey = @cPickDetailKey			            
       IF @@ERROR <> 0
@@ -537,10 +545,4 @@ Quit:
 END
 GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
 
-GRANT EXECUTE ON RDT.rdt_PTLPiece_Confirm_Order10 TO NSQL
-GO
