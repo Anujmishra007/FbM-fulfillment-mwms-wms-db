@@ -49,5 +49,6 @@ EXECUTE rdt.rdtAddScn 803, 'ENG',
    ,@cLine09 = '%20d08'
    ,@cLine10 = '%20d09'
    ,@cLine11 = '%20d10'
+   ,@cLine13 = N'%20d13'
    ,@cLine14 = '%e'
  
