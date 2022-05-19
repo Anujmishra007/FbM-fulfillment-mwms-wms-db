@@ -1,12 +1,7 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_UCCReceive]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_UCCReceive]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /***************************************************************************/
 /* Store procedure: rdtfnc_UCCReceive                                      */
@@ -52,8 +47,9 @@ GO
 /* 2019-05-03 3.1  James   WMS7987-Add ExtendedValidateSP @ step3 (james01)*/
 /* 2019-07-05 3.2  Ung     Fix performance tuning                          */
 /* 2020-01-22 3.3  Ung     LWP-57 Performance tuning                       */
+/* 2022-04-12 3.4  James   WMS-19453 Add RDTFormat for UCC scan (james02)  */
 /***************************************************************************/
-CREATE PROC [RDT].[rdtfnc_UCCReceive](
+CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -1519,6 +1515,14 @@ BEGIN
          GOTO Step_6_Fail
       END
 
+      -- Check barcode format  
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UCC', @cUCC) = 0  
+      BEGIN  
+         SET @nErrNo = 63173  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format  
+         GOTO Step_6_Fail  
+      END  
+      
       IF rdt.rdtIsValidDate(@cTempLottable04) = 1 --valid date      
         SET @dTempLottable04 = rdt.rdtConvertToDate( @cTempLottable04)     
 
@@ -3626,13 +3630,13 @@ BEGIN
    WHERE Mobile = @nMobile
 
 END
-
 GO
 
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS ON 
 GO
-
-GRANT EXECUTE ON RDT.rdtfnc_UCCReceive TO NSQL
-GO
+GRANT EXECUTE ON [RDT].[rdtfnc_UCCReceive] TO nSQL 
+GO   
+        
+     
