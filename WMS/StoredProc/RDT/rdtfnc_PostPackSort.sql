@@ -1,10 +1,6 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_PostPackSort]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_PostPackSort]
+SET QUOTED_IDENTIFIER OFF
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 
 /***************************************************************************/
@@ -23,9 +19,12 @@ GO
 /* 2020-10-27   1.2  LZG      INC1335308 - Fixed rollback tran (ZG01)      */
 /* 2021-07-10   1.3  Chermain WMS-17386 Add display Msg screen             */
 /*                            Add ExtInfo in scn1 (cc01)                   */
+/* 2022-01-13   1.4  James    WMS-17386 Modify message screen. Set field11 */
+/*                            as default output ExtendedInfo (james03)     */
+/* 2022-01-13   1.5  James    WMS-18506 Add ExtUpdSP to close plt (james04)*/
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PostPackSort](
+CREATE OR ALTER PROC [RDT].[rdtfnc_PostPackSort](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -542,7 +541,7 @@ BEGIN
             	SELECT @cOutField08 = Long FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '7'
             	SELECT @cOutField09 = Long FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '8'
             	SELECT @cOutField10 = Long FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '9'
-            	SELECT @cOutField11 = Long FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '10'
+            	SELECT @cOutField11 = @cExtendedInfo   -- Default for ExtendedInfo (james03)
 
                -- Go to next screen
                SET @nScn = @nScn_Message
@@ -929,6 +928,10 @@ BEGIN
 
       IF @cOption = '1'  -- Yes
       BEGIN
+         SET @nTranCount = @@TRANCOUNT
+         BEGIN TRAN
+         SAVE TRAN Step_ClosePallet
+
          EXEC rdt.rdt_PostPackSort_ClosePallet
             @nMobile       = @nMobile,    
             @nFunc         = @nFunc,    
@@ -946,7 +949,53 @@ BEGIN
             @cErrMsg       = @cErrMsg           OUTPUT    
 
          IF @nErrNo <> 0
-            GOTO Step_ClosePallet_Fail
+            GOTO RollBackTran_ClosePallet
+
+         -- (james04)
+         -- Extended validate
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+                  ' @cCartonID, @cPalletID, @cLoadKey, @cLoc, @cOption, @tExtUpdate, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+               SET @cSQLParam =
+                  ' @nMobile        INT,           ' +
+                  ' @nFunc          INT,           ' +
+                  ' @cLangCode      NVARCHAR( 3),  ' +
+                  ' @nStep          INT,           ' +
+                  ' @nInputKey      INT,           ' +
+                  ' @cFacility      NVARCHAR( 5),  ' +
+                  ' @cStorerKey     NVARCHAR( 15), ' +
+                  ' @cCartonID      NVARCHAR( 20), ' +
+                  ' @cPalletID      NVARCHAR( 20), ' +
+                  ' @cLoadKey       NVARCHAR( 10), ' +
+                  ' @cLoc           NVARCHAR( 10), ' +
+                  ' @cOption        NVARCHAR( 1), ' +
+                  ' @tExtUpdate     VariableTable READONLY, ' + 
+                  ' @nErrNo         INT           OUTPUT, ' +
+                  ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                  @cCartonID, @cPalletID, @cLoadKey, @cPPS_Loc, @cOption, @tExtUpdate, 
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0 
+                  GOTO RollBackTran_ClosePallet
+            END
+
+            GOTO ClosePalletnCommit
+   
+            RollBackTran_ClosePallet:  
+                  ROLLBACK TRAN Step_ClosePallet  
+
+            ClosePalletnCommit:  
+               WHILE @@TRANCOUNT > @nTranCount  
+                  COMMIT TRAN Step_ClosePallet
+         END
       END
 
       -- Prepare next screen var
@@ -1090,9 +1139,10 @@ END
 GO
 
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON 
+SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdtfnc_PostPackSort TO NSQL
+
+GRANT EXECUTE ON RDT.rdtfnc_Scan_To_Container TO NSQL
 GO
