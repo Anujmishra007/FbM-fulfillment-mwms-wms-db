@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_840GetOrders06]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_840GetOrders06]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO  
+
 /************************************************************************/  
 /* Store procedure: rdt_840GetOrders06                                  */  
 /* Copyright      : LF logistics                                        */  
@@ -15,9 +12,11 @@ GO
 /* Modifications log:                                                   */  
 /* Date        Rev  Author      Purposes                                */  
 /* 2021-07-23  1.0  James       WMS-17435. Created                      */  
+/* 2022-02-23  1.1  James       WMS-18931 After tote sort only can start*/
+/*                              do packing (james01)                    */
 /************************************************************************/  
   
-CREATE PROCEDURE [RDT].[rdt_840GetOrders06]  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_840GetOrders06]  
    @nMobile                   INT,  
    @nFunc                     INT,  
    @cLangCode                 NVARCHAR( 3),  
@@ -64,7 +63,22 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Orders   
             GOTO Quit  
          END  
-  
+
+         IF EXISTS ( SELECT 1   
+                     FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
+                     JOIN rdt.rdtPTLPieceLog PTL WITH (NOLOCK) ON ( PD.OrderKey = PTL.OrderKey)  
+                     WHERE PD.Storerkey = @cStorerkey  
+                     AND   PD.[Status] < '9'  
+                     AND   PD.[Status] <> '4'  
+                     AND   PD.QtyMoved = 0  
+                     AND   PTL.LOC = @cRefNo  
+                     AND   PD.CaseID <> 'SORTED')
+         BEGIN  
+            SET @nErrNo = 171702  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not Sorted   
+            GOTO Quit  
+         END 
+                     
          SET @cOrderKey = @cTempOrderKey  
       END  
    END  
