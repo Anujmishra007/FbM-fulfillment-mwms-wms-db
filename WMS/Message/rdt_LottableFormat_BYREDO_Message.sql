@@ -1,8 +1,6 @@
---rdt_LottableFormat_BYREDO
-execute rdt.rdtDropMsg  174701   , 174750
+-- rdt_LottableFormat_Byredo
+execute rdt.rdtDropMsg 182451, 182500
 
-execute rdt.rdtAddMsg 174701, 10, '174701InvalidBatch',    'us_english', 600
-execute rdt.rdtAddMsg 174702, 10, '174702InvalidDay',   'us_english', 600
-execute rdt.rdtAddMsg 174703, 10, '174703InvalidDay',   'us_english', 600
-
-
+execute rdt.rdtAddMsg 182451 , 10, '182451Invalid Batch ', 'us_english', 600
+execute rdt.rdtAddMsg 182452 , 10, '182452Invalid Day   ', 'us_english', 600
+execute rdt.rdtAddMsg 182453 , 10, '182453Invalid Day   ', 'us_english', 600
