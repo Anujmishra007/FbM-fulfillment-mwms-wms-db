@@ -21,6 +21,7 @@ GO
 /* 2021-07-09  1.1  James    WMS-17425-Reset orderkey variable (james01)*/
 /* 2021-08-25  1.2  James    WMS-17773 Extend TrackNo to 40 chars       */
 /*                           Output Label No                            */
+/* 2022-04-28  1.3  James    WMS-18616 Extend barcode length (james02)  */
 /************************************************************************/    
     
 CREATE PROC [RDT].[rdt_1653DecodeSP01] (    
@@ -31,7 +32,7 @@ CREATE PROC [RDT].[rdt_1653DecodeSP01] (
    @nInputKey      INT,
    @cFacility      NVARCHAR( 5),
    @cStorerKey     NVARCHAR( 15),
-   @cBarcode       NVARCHAR( 60),
+   @cBarcode       NVARCHAR( 100),
    @cTrackNo       NVARCHAR( 40)  OUTPUT,
    @cOrderKey      NVARCHAR( 10)  OUTPUT,
    @cLabelNo       NVARCHAR( 20)  OUTPUT,
@@ -44,7 +45,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF    
    SET CONCAT_NULL_YIELDS_NULL OFF    
    
-   DECLARE @cInTrackNo     NVARCHAR( 40)
+   DECLARE @cInTrackNo     NVARCHAR( 40) = ''
    DECLARE @cBuyerPO       NVARCHAR( 20)
    DECLARE @nCaseCnt       INT
    DECLARE @nRowCount      INT
