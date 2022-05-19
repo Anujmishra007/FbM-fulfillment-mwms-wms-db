@@ -1,10 +1,6 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_1837ExtInfo02]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1837ExtInfo02]
-GO
-
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
@@ -16,9 +12,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 2021-07-13  1.0  Chermaine   WMS-17386. Created                      */
+/* 2022-01-13  1.1  James       Set field11 as default ExtInfo (james01)*/
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_1837ExtInfo02] (
+CREATE OR ALTER PROC [RDT].[rdt_1837ExtInfo02] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -62,20 +59,19 @@ BEGIN
       BEGIN
       	IF @cCartonID <> ''
       	BEGIN
-      		
-         SET @cPickDetailCartonID = rdt.RDTGetConfig( @nFunc, 'PickDetailCartonID', @cStorerKey)
-         IF @cPickDetailCartonID NOT IN ('DropID', 'CaseID')
-            SET @cPickDetailCartonID = 'DropID'
+            SET @cPickDetailCartonID = rdt.RDTGetConfig( @nFunc, 'PickDetailCartonID', @cStorerKey)
+            IF @cPickDetailCartonID NOT IN ('DropID', 'CaseID')
+               SET @cPickDetailCartonID = 'DropID'
 
-         SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)  
-         IF @cPickConfirmStatus = '0'  
-            SET @cPickConfirmStatus = '5'  
+            SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)  
+            IF @cPickConfirmStatus = '0'  
+               SET @cPickConfirmStatus = '5'  
             
-         SELECT @cErrMsg01 = '', @cErrMsg06 = '',
-                @cErrMsg02 = '', @cErrMsg07 = '',
-                @cErrMsg03 = '', @cErrMsg08 = '',
-                @cErrMsg04 = '', @cErrMsg09 = '',
-                @cErrMsg05 = '', @cErrMsg10 = ''
+            SELECT @cErrMsg01 = '', @cErrMsg06 = '',
+                   @cErrMsg02 = '', @cErrMsg07 = '',
+                   @cErrMsg03 = '', @cErrMsg08 = '',
+                   @cErrMsg04 = '', @cErrMsg09 = '',
+                   @cErrMsg05 = '', @cErrMsg10 = ''
       
       		--check CartonId hav PPA flag
       		SET @cSQL = 
@@ -102,18 +98,35 @@ BEGIN
                ,@nRowCount OUTPUT
                
             IF @nRowCount > 0
-            BEGIN
             	SET @nErrNo = -1
-            	--SELECT @cErrMsg01 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '1'
-            	--SELECT @cErrMsg02 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '2'
-            	--SELECT @cErrMsg03 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '3'
-            	--SELECT @cErrMsg04 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '4'
-            	--SELECT @cErrMsg05 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '5'
-            	--SELECT @cErrMsg06 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '6'
-            	--SELECT @cErrMsg07 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '7'
-            	--SELECT @cErrMsg08 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '8'
-            	--SELECT @cErrMsg09 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '9'
-            	--SELECT @cErrMsg10 = [Description] FROM codelkup (NOLOCK) WHERE listName = 'RDTMsgQ' AND storerKey = @cStorerKey AND code2 = @nFunc AND code = '10'
+            
+            DECLARE @tCtn TABLE ( CartonID NVARCHAR( 20) NULL)
+            
+            INSERT INTO @tCtn ( CartonID)
+            SELECT DISTINCT PD.CaseID
+            FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)  
+            JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON ( LPD.OrderKey = PD.OrderKey)  
+            WHERE PD.StorerKey = @cStorerKey  
+            AND   PD.QTY > 0  
+            AND   LPD.LoadKey = @cLoadKey  
+            AND   LOC.Facility = @cFacility  
+            AND   (LOC.LocationCategory NOT IN ('PACK&HOLD','PPS','Staging') OR PD.Status <> '5' OR PD.[Status] = '4')
+            SELECT @nRowCount = @@ROWCOUNT
+            
+            IF @nRowCount = 0 OR @nRowCount > 1
+               GOTO Quit
+
+            IF @nRowCount = 1
+            BEGIN
+               SELECT @cExtendedInfo = Long 
+               FROM dbo.CODELKUP WITH (NOLOCK) 
+               WHERE ListName = 'RDTMsgQ'
+               AND   Code = '10' 
+               AND   StorerKey = @cStorerKey 
+               AND   code2 = @nFunc 
+               
+               SET @nErrNo = -1
             END
       	END
       END
@@ -130,5 +143,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_1837ExtInfo02 to nSQL
+GRANT EXECUTE ON RDT.rdtfnc_Scan_To_Container TO NSQL
 GO

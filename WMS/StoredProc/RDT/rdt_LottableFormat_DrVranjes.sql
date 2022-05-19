@@ -5,17 +5,15 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_LottableFormat_Byredo                           */
+/* Store procedure: rdt_LottableFormat_DrVranjes                        */
 /* Copyright      : LF Logistics                                        */
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
-/* 2021-06-20 1.0  YeeKung    WMS-16535 Created                         */
-/* 2022-02-14 1.1  Ung        WMS-18866 Replace with new logic          */
-/*                            Original logic moved to Nautica brand     */
+/* 2022-02-14 1.0  Ung        WMS-18866 Created                         */
 /************************************************************************/
-CREATE OR ALTER PROCEDURE rdt.rdt_LottableFormat_Byredo(
+CREATE OR ALTER PROCEDURE rdt.rdt_LottableFormat_DrVranjes(
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -31,7 +29,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_LottableFormat_Byredo(
    ,@cErrMsg          NVARCHAR( 20) OUTPUT
 )
 AS
-BEGIN
+BEGIN TRY
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -44,72 +42,88 @@ BEGIN
 
    SET @nLength = LEN( @cLottable)
 
-   IF @nLength NOT IN (3, 5, 9, 10)
+   IF @nLength NOT IN (4, 6, 7, 8, 10)
    BEGIN
-      SET @nErrNo = 182451
+      SET @nErrNo = 182401
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Batch
       GOTO Quit
    END
 
-   IF @nLength = 3
-   BEGIN
-      IF SUBSTRING( @cLottable, 2, 1) LIKE '[A-Za-z]' --Alpha
-      BEGIN
-         SELECT @cMonthCode = Short
-         FROM dbo.CodeLKUP WITH (NOLOCK)
-         WHERE ListName = 'RDTDECode'
-            AND Code = 'BYREDOAM'
-            AND Code2 = SUBSTRING( @cLottable, 2, 1)
-            
-         SELECT @cYearCode = Short
-         FROM dbo.CodeLKUP WITH (NOLOCK)
-         WHERE ListName = 'RDTDECode'
-            AND Code = 'BYREDOAY'
-            AND Code2 = SUBSTRING( @cLottable, 3, 1)
-
-         SET @cLottable = '01' + '/' + @cMonthCode + '/' + @cYearCode
-      END
-   
-      ELSE IF SUBSTRING( @cLottable, 2, 1) LIKE '[0-9]' --Numeric
-      BEGIN
-         SELECT @cMonthCode = Short
-         FROM dbo.CodeLKUP WITH (NOLOCK)
-         WHERE ListName = 'RDTDECode'
-            AND Code = 'BYREDOBM'
-            AND Code2 = SUBSTRING( @cLottable, 3, 1)
-
-         SELECT @cYearCode = Short
-         FROM dbo.CodeLKUP WITH (NOLOCK)
-         WHERE ListName = 'RDTDECode'
-            AND Code = 'BYREDOBY'
-            AND Code2 = LEFT( @cLottable, 2)
-
-         SET @cLottable = '01' + '/' + @cMonthCode + '/' + @cYearCode
-      END
-   END
-   
-   ELSE IF @nLength = 5
+   IF @nLength = 4
    BEGIN
       SELECT @cYearCode = Short
       FROM dbo.CodeLKUP WITH (NOLOCK)
       WHERE ListName = 'RDTDECode'
-         AND Code = 'BYREDOCY'
-         AND Code2 = SUBSTRING( @cLottable, 5, 1)
-
-      SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 2, 3)  
-      SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)      
-   END
-
-   ELSE IF @nLength IN (9, 10)
-   BEGIN
-      SELECT @cYearCode = Short
-      FROM dbo.CodeLKUP WITH (NOLOCK)
-      WHERE ListName = 'RDTDECode'
-         AND Code = 'BYREDO'
+         AND Code = 'DRVAY'
          AND Code2 = LEFT( @cLottable, 1)
 
-      SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 2, 3)  
-      SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)      
+      SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 2, 3)
+      SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)
+   END
+
+   ELSE IF @nLength = 6
+   BEGIN
+      IF LEFT( @cLottable, 1) LIKE '[A-Za-z]' --Alpha
+      BEGIN
+         SELECT @cYearCode = Short
+         FROM dbo.CodeLKUP WITH (NOLOCK)
+         WHERE ListName = 'RDTDECode'
+            AND Code = 'DRVAY'
+            AND Code2 = SUBSTRING( @cLottable, 3, 1)
+
+         SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 4, 3)
+         SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)
+      END
+
+      ELSE IF LEFT( @cLottable, 1) LIKE '[0-9]' --Numeric
+      BEGIN
+         SELECT @cYearCode = Short
+         FROM dbo.CodeLKUP WITH (NOLOCK)
+         WHERE ListName = 'RDTDECode'
+            AND Code = 'DRVBY'
+            AND Code2 = SUBSTRING( @cLottable, 5, 2)
+
+         SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 1, 3)
+         SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)
+      END
+   END
+
+   ELSE IF @nLength = 7
+   BEGIN
+      SELECT @cYearCode = Short
+      FROM dbo.CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTDECode'
+         AND Code = 'DRVCY'
+         AND Code2 = SUBSTRING( @cLottable, 3, 1)
+
+      SET @cLottable =
+         SUBSTRING( @cLottable, 1, 1) + SUBSTRING( @cLottable, 5, 1) + '/' +
+         SUBSTRING( @cLottable, 2, 1) + SUBSTRING( @cLottable, 4, 1) + '/' +
+         @cYearCode
+   END
+
+   ELSE IF @nLength = 8
+   BEGIN
+      SELECT @cYearCode = Short
+      FROM dbo.CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTDECode'
+         AND Code = 'DRVAY'
+         AND Code2 = LEFT( @cLottable, 1)
+
+      SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 2, 3)
+      SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)
+   END
+
+   ELSE IF @nLength = 10
+   BEGIN
+      SELECT @cYearCode = Short
+      FROM dbo.CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTDECode'
+         AND Code = 'DRVAY'
+         AND Code2 = SUBSTRING( @cLottable, 3, 1)
+
+      SET @cJulianDate = @cYearCode + SUBSTRING( @cLottable, 4, 3)
+      SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)
    END
 
    IF @cJulianDate <> ''
@@ -121,7 +135,7 @@ BEGIN
       BEGIN
          IF (CAST(SUBSTRING(@cJulianDate,5,3) AS INT) > 366 or CAST(SUBSTRING(@cJulianDate,5,3) AS INT) = 0)
          BEGIN
-            SET @nErrNo = 182452
+            SET @nErrNo = 182402
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Day
             SET @cLottable = ''
             GOTO Quit
@@ -131,7 +145,7 @@ BEGIN
       BEGIN
          IF (CAST(SUBSTRING(@cJulianDate,5,3) AS INT) > 365 or CAST(SUBSTRING(@cJulianDate,5,3) AS INT) = 0)
          BEGIN
-            SET @nErrNo = 182453
+            SET @nErrNo = 182403
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Day
             SET @cLottable = ''
             GOTO Quit
@@ -139,9 +153,13 @@ BEGIN
       END
    END
 
+END TRY
+BEGIN CATCH
+   SET @cLottable = ''
+END CATCH
+
 Quit:
 
-END
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -149,5 +167,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_LottableFormat_Byredo] TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_LottableFormat_DrVranjes] TO NSQL
 GO

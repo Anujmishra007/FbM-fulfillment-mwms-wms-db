@@ -60,3 +60,6 @@ execute rdt.rdtAddMsg 63169, 10, '63169^Different SKU',   'us_english', 898
 execute rdt.rdtAddMsg 63170, 10, '63170^Invalid Format',   'us_english', 898
 execute rdt.rdtAddMsg 63171, 10, '63171^Invalid Format',   'us_english', 898
 execute rdt.rdtAddMsg 63172, 10, '63172^Invalid Format',   'us_english', 898
+
+-- WMS-19453
+execute rdt.rdtAddMsg 63173, 10, '63173^Invalid Format',   'us_english', 898

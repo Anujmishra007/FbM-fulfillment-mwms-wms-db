@@ -11,7 +11,7 @@ EXECUTE rdt.rdtAddScn 5800, 'ENG',
     @cLine01 = 'TRACKNO SORTTOPALLET'
    ,@cLine02 = ''
    ,@cLine03 = 'TRACK NO:'
-   ,@cLine04 = '%60i01'
+   ,@cLine04 = '%100i01'   -- WMS-18616 Extend to 100 chars
    ,@cLine05 = ''
    ,@cLine06 = ''
    ,@cLine07 = ''

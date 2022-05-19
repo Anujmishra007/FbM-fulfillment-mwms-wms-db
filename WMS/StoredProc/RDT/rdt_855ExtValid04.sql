@@ -44,8 +44,8 @@ BEGIN
            @nQTY           INT,
            @nQTY_PPA       INT,
            @nQTY_CHK       INT,
-           @cErrMsg1       NVARCHAR( 20)
-
+           @cPH_Status     NVARCHAR( 1)
+           
    -- Variable mapping
    SELECT @nQTY = Value FROM @tExtValidate WHERE Variable = '@nQTY'
    SELECT @nQTY_PPA = Value FROM @tExtValidate WHERE Variable = '@nQTY_PPA'
@@ -66,6 +66,20 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PPA Done      
                GOTO Quit      
             END      
+
+            SELECT TOP 1 @cPH_Status = PH.Status 
+            FROM dbo.PackHeader PH WITH (NOLOCK)  
+            JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
+            WHERE PD.DropID = @cDropID  
+            AND   PH.StorerKey = @cStorer
+            ORDER BY 1 DESC
+            
+            IF @cPH_Status <> '9'
+            BEGIN      
+               SET @nErrNo = 183802      
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not PackCfm      
+               GOTO Quit      
+            END   
          END
       END
    END

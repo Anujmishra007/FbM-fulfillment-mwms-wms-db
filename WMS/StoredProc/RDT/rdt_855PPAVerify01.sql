@@ -4,18 +4,16 @@ SET ANSI_NULLS OFF
 GO 
 
 /************************************************************************/  
-/* Store procedure: rdt_PPAVerifyDataCapture                            */  
+/* Store procedure: rdt_855PPAVerify01                                  */  
 /* Copyright      : LF Logistics                                        */  
 /*                                                                      */  
 /* Purpose: Verify Data captured                                        */  
 /*                                                                      */  
 /* Date        Rev  Author       Purposes                               */  
-/* 2019-03-29  1.0  James        WMS-8002 Created                       */  
-/* 2021-07-19  1.1  Chermaine    WMS-17439 Add Coo (cc01)               */  
-/* 2022-03-28  1.2  James        WMS-17439 Add custom verify sp(james01)*/
+/* 2022-03-28  1.0  James        WMS-17439. Created                     */  
 /************************************************************************/  
   
-CREATE OR ALTER PROCEDURE rdt.rdt_PPAVerifyDataCapture  
+CREATE OR ALTER PROCEDURE rdt.rdt_855PPAVerify01  
    @nMobile          INT,  
    @nFunc            INT,  
    @cLangCode        NVARCHAR( 3),  
@@ -77,102 +75,15 @@ BEGIN
    DECLARE @cSKU              NVARCHAR( 20)  
    DECLARE @cTaskDetailKey    NVARCHAR( 10)  
 
-   DECLARE @cCaptureInfoSP NVARCHAR(20)
-   SET @cCaptureInfoSP = rdt.RDTGetConfig( @nFunc, 'CaptureInfoSP', @cStorerKey)
-   IF @cCaptureInfoSP = '0'
-      SET @cCaptureInfoSP = ''
 
-   /***********************************************************************************************
-                                     Standard Verify SP
-   ***********************************************************************************************/
-   IF @cCaptureInfoSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCaptureInfoSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cCaptureInfoSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,  ' +
-            ' @tDataCapture,  ' + 
-            ' @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, ' +   
-            ' @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, ' +   
-            ' @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, ' +   
-            ' @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, ' +   
-            ' @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, ' +   
-            ' @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, ' +  
-            ' @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, ' +  
-            ' @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, ' +  
-            ' @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, ' +  
-            ' @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, ' +  
-            ' @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, ' + 
-            ' @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, ' + 
-            ' @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, ' + 
-            ' @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, ' + 
-            ' @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, ' + 
-            ' @cCaptureData OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT ' 
-         SET @cSQLParam =
-            ' @nMobile     INT,           ' +
-            ' @nFunc       INT,           ' +
-            ' @cLangCode   NVARCHAR( 3),  ' +
-            ' @nStep       INT,           ' +
-            ' @nInputKey   INT,           ' +
-            ' @cFacility   NVARCHAR( 5),  ' +
-            ' @cStorerKey  NVARCHAR( 15), ' +
-            ' @cType       NVARCHAR( 10), ' +
-            ' @tDataCapture     VariableTable READONLY,' + 
-            ' @cInField01  NVARCHAR(20) OUTPUT,  @cOutField01 NVARCHAR(20) OUTPUT,  @cFieldAttr01 NVARCHAR(1) OUTPUT, ' +   
-            ' @cInField02  NVARCHAR(20) OUTPUT,  @cOutField02 NVARCHAR(20) OUTPUT,  @cFieldAttr02 NVARCHAR(1) OUTPUT, ' +   
-            ' @cInField03  NVARCHAR(20) OUTPUT,  @cOutField03 NVARCHAR(20) OUTPUT,  @cFieldAttr03 NVARCHAR(1) OUTPUT, ' +   
-            ' @cInField04  NVARCHAR(20) OUTPUT,  @cOutField04 NVARCHAR(20) OUTPUT,  @cFieldAttr04 NVARCHAR(1) OUTPUT, ' +   
-            ' @cInField05  NVARCHAR(20) OUTPUT,  @cOutField05 NVARCHAR(20) OUTPUT,  @cFieldAttr05 NVARCHAR(1) OUTPUT, ' +   
-            ' @cInField06  NVARCHAR(20) OUTPUT,  @cOutField06 NVARCHAR(20) OUTPUT,  @cFieldAttr06 NVARCHAR(1) OUTPUT, ' +  
-            ' @cInField07  NVARCHAR(20) OUTPUT,  @cOutField07 NVARCHAR(20) OUTPUT,  @cFieldAttr07 NVARCHAR(1) OUTPUT, ' +  
-            ' @cInField08  NVARCHAR(20) OUTPUT,  @cOutField08 NVARCHAR(20) OUTPUT,  @cFieldAttr08 NVARCHAR(1) OUTPUT, ' +  
-            ' @cInField09  NVARCHAR(20) OUTPUT,  @cOutField09 NVARCHAR(20) OUTPUT,  @cFieldAttr09 NVARCHAR(1) OUTPUT, ' +  
-            ' @cInField10  NVARCHAR(20) OUTPUT,  @cOutField10 NVARCHAR(20) OUTPUT,  @cFieldAttr10 NVARCHAR(1) OUTPUT, ' +  
-            ' @cInField11  NVARCHAR(20) OUTPUT,  @cOutField11 NVARCHAR(20) OUTPUT,  @cFieldAttr11 NVARCHAR(1) OUTPUT, ' + 
-            ' @cInField12  NVARCHAR(20) OUTPUT,  @cOutField12 NVARCHAR(20) OUTPUT,  @cFieldAttr12 NVARCHAR(1) OUTPUT, ' + 
-            ' @cInField13  NVARCHAR(20) OUTPUT,  @cOutField13 NVARCHAR(20) OUTPUT,  @cFieldAttr13 NVARCHAR(1) OUTPUT, ' + 
-            ' @cInField14  NVARCHAR(20) OUTPUT,  @cOutField14 NVARCHAR(20) OUTPUT,  @cFieldAttr14 NVARCHAR(1) OUTPUT, ' + 
-            ' @cInField15  NVARCHAR(20) OUTPUT,  @cOutField15 NVARCHAR(20) OUTPUT,  @cFieldAttr15 NVARCHAR(1) OUTPUT, ' + 
-            ' @cCaptureData NVARCHAR( 1) OUTPUT,   ' + 
-            ' @nErrNo  INT           OUTPUT, ' +
-            ' @cErrMsg NVARCHAR( 20) OUTPUT  ' 
-         
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, 
-            @tDataCapture,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,   
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,   
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,   
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,   
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,   
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
-            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, 
-            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
-            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, 
-            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
-            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
-            @cCaptureData OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
-      
-         GOTO Quit
-      END
-   END
-
-   /***********************************************************************************************
-                                     Standard Verify SP
-   ***********************************************************************************************/
-   
-   --(cc01)  
    DECLARE   
       @cDropID                         NVARCHAR( 20),  
       @cCheckCoo                       NVARCHAR( 1),   
       @cPPACartonIDByPackDetailDropID  NVARCHAR( 1),  
       @cPPACartonIDByPackDetailLabelNo NVARCHAR( 1),  
-      @cPPACartonIDByPickDetailCaseID  NVARCHAR( 1)
-  
+      @cPPACartonIDByPickDetailCaseID  NVARCHAR( 1), 
+      @cLimitCOOCtry                   NVARCHAR( 1)
+      
    SELECT @cSKU = Value FROM @tDataCapture WHERE Variable = '@cSKU'  
    SELECT @cBarcode = Value FROM @tDataCapture WHERE Variable = '@cBarcode'  
    SELECT @cUserName = Value FROM @tDataCapture WHERE Variable = '@cUserName'  
@@ -184,20 +95,108 @@ BEGIN
    -- Check serial no tally QTY  
    IF @cType = 'CHECK'  
    BEGIN  
-    --(cc01)  
-    IF @nStep = '2'  --statistic [ENTER]  
-    BEGIN  
-        --(cc01)  
+      IF @nStep = '2'  --statistic [ENTER]  
+      BEGIN  
          SET @cCheckCoo = rdt.RDTGetConfig( @nFunc, 'CheckCOO', @cStorerKey)   
          IF @cCheckCoo = '0'  
             SET @cCheckCoo = ''  
+         SET @cLimitCOOCtry = rdt.RDTGetConfig( @nFunc, 'LimitCOOCtry', @cStorerKey)
+         
          SET @cPPACartonIDByPackDetailDropID = rdt.rdtGetConfig( @nFunc, 'PPACartonIDByPackDetailDropID', @cStorerKey)  
          SET @cPPACartonIDByPackDetailLabelNo = rdt.rdtGetConfig( @nFunc, 'PPACartonIDByPackDetailLabelNo', @cStorerKey)  
          SET @cPPACartonIDByPickDetailCaseID = rdt.rdtGetConfig( @nFunc, 'PPACartonIDByPickDetailCaseID', @cStorerKey)  
-           
-         IF @cCheckCoo <> ''   
-       BEGIN  
-        --1. If Carton ID scanned in screen 1 belong to an export order (Orders.DocType = 'N' AND Orders.C_Country <> Storer.Country WHERE Storer.Storerkey = Orders.StorerKey),              
+         
+         -- For capture coo
+         IF @nInputKey = 1
+         BEGIN
+            IF @cCheckCoo <> ''   
+            BEGIN  
+               --1. If Carton ID scanned in screen 1 belong to an export order (Orders.DocType = 'N' AND Orders.C_Country <> Storer.Country WHERE Storer.Storerkey = Orders.StorerKey),              
+               IF @cPPACartonIDByPackDetailDropID = '1'  
+               BEGIN  
+                  IF EXISTS( SELECT 1  
+                     FROM dbo.PackHeader PH WITH (NOLOCK)  
+                        INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
+                        INNER JOIN dbo.Orders O WITH (NOLOCK) ON (O.orderKey = PH.OrderKey AND O.StorerKey = PH.StorerKey)  
+                        INNER JOIN Storer S WITH (NOLOCK) ON (O.StorerKey = S.StorerKey)  
+                     WHERE PD.DropID = @cDropID  
+                        AND PH.StorerKey = @cStorerKey  
+                        AND O.DocType = 'N'  
+                        AND O.C_Country <> S.Country
+                        AND (( @cLimitCOOCtry = '0') OR ( @cLimitCOOCtry = '1' AND O.C_Country IN 
+                            ( SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE LISTNAME = 'COOREQCTRY' AND Storerkey = @cStorerKey))))
+                  BEGIN  
+                     SET @cCaptureData = 1  
+                  END  
+               END  
+               ELSE  
+               IF @cPPACartonIDByPackDetailLabelNo = '1'  
+               BEGIN  
+                  IF EXISTS( SELECT 1  
+                     FROM dbo.PackHeader PH WITH (NOLOCK)  
+                        INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
+                        INNER JOIN dbo.Orders O WITH (NOLOCK) ON (O.orderKey = PH.OrderKey AND O.StorerKey = PH.StorerKey)  
+                        INNER JOIN Storer S WITH (NOLOCK) ON (O.StorerKey = S.StorerKey)  
+                     WHERE PD.LabelNo = @cDropID  
+                        AND PH.StorerKey = @cStorerKey  
+                        AND O.DocType = 'N'  
+                        AND O.C_Country <> S.Country
+                        AND (( @cLimitCOOCtry = '0') OR ( @cLimitCOOCtry = '1' AND O.C_Country IN 
+                            ( SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE LISTNAME = 'COOREQCTRY' AND Storerkey = @cStorerKey))))
+                  BEGIN  
+                     SET @cCaptureData = 1  
+                  END  
+               END  
+               ELSE  
+               IF @cPPACartonIDByPickDetailCaseID = '1'  
+               BEGIN  
+                  IF EXISTS( SELECT 1  
+                     FROM dbo.PickDetail PD WITH (NOLOCK)  
+                        INNER JOIN dbo.Orders O WITH (NOLOCK) ON (O.orderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey)  
+                        INNER JOIN Storer S WITH (NOLOCK) ON (O.StorerKey = S.StorerKey)  
+                     WHERE PD.CaseID = @cDropID  
+                        AND PD.StorerKey = @cStorerKey  
+                        AND ShipFlag <> 'Y'  
+                        AND O.DocType = 'N'  
+                        AND O.C_Country <> S.Country
+                        AND (( @cLimitCOOCtry = '0') OR ( @cLimitCOOCtry = '1' AND O.C_Country IN 
+                            ( SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE LISTNAME = 'COOREQCTRY' AND Storerkey = @cStorerKey))))
+                  BEGIN  
+                     SET @cCaptureData = 1  
+                  END  
+               END  
+               ELSE  
+               BEGIN  
+                  IF EXISTS( SELECT 1  
+                     FROM dbo.PickDetail PD WITH (NOLOCK)  
+                        INNER JOIN dbo.Orders O WITH (NOLOCK) ON (O.orderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey)  
+                        INNER JOIN Storer S WITH (NOLOCK) ON (O.StorerKey = S.StorerKey)  
+                     WHERE DropID = @cDropID  
+                        AND PD.StorerKey = @cStorerKey  
+                        AND ShipFlag <> 'Y'  
+                        AND O.DocType = 'N'  
+                        AND O.C_Country <> S.Country
+                        AND (( @cLimitCOOCtry = '0') OR ( @cLimitCOOCtry = '1' AND O.C_Country IN 
+                            ( SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE LISTNAME = 'COOREQCTRY' AND Storerkey = @cStorerKey))))
+                  BEGIN  
+                     SET @cCaptureData = 1  
+                  END  
+                  ELSE  
+                  BEGIN  
+                     SET @cCaptureData = 0  
+                  END  
+            END  
+          END  
+            ELSE  
+            BEGIN  
+               SET @cCaptureData = 0 -- No need capture data  
+            END  
+         END
+         
+         -- For capture packinfo
+         IF @nInputKey = 0
+         BEGIN
+            --1. If Carton ID scanned in screen 1 belong to an export order (Orders.DocType = 'N' AND Orders.C_Country <> Storer.Country WHERE Storer.Storerkey = Orders.StorerKey),              
             IF @cPPACartonIDByPackDetailDropID = '1'  
             BEGIN  
                IF EXISTS( SELECT 1  
@@ -208,7 +207,7 @@ BEGIN
                   WHERE PD.DropID = @cDropID  
                      AND PH.StorerKey = @cStorerKey  
                      AND O.DocType = 'N'  
-                     AND O.C_Country <> S.Country)  
+                     AND O.C_Country <> S.Country)
                BEGIN  
                   SET @cCaptureData = 1  
                END  
@@ -224,7 +223,7 @@ BEGIN
                   WHERE PD.LabelNo = @cDropID  
                      AND PH.StorerKey = @cStorerKey  
                      AND O.DocType = 'N'  
-                     AND O.C_Country <> S.Country)  
+                     AND O.C_Country <> S.Country)
                BEGIN  
                   SET @cCaptureData = 1  
                END  
@@ -240,7 +239,7 @@ BEGIN
                      AND PD.StorerKey = @cStorerKey  
                      AND ShipFlag <> 'Y'  
                      AND O.DocType = 'N'  
-                     AND O.C_Country <> S.Country)  
+                     AND O.C_Country <> S.Country)
                BEGIN  
                   SET @cCaptureData = 1  
                END  
@@ -255,20 +254,16 @@ BEGIN
                      AND PD.StorerKey = @cStorerKey  
                      AND ShipFlag <> 'Y'  
                      AND O.DocType = 'N'  
-                     AND O.C_Country <> S.Country)  
+                     AND O.C_Country <> S.Country)
                BEGIN  
-                SET @cCaptureData = 1  
+                  SET @cCaptureData = 1  
                END  
-           ELSE  
-           BEGIN  
-            SET @cCaptureData = 0  
-           END  
+               ELSE  
+               BEGIN  
+                  SET @cCaptureData = 0  
+               END  
             END  
-       END  
-       ELSE  
-       BEGIN  
-        SET @cCaptureData = 0 -- No need capture data  
-       END  
+         END
     END  
   
       IF @nStep = 3 --sku  
@@ -461,5 +456,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXEC ON RDT.rdt_PPAVerifyDataCapture TO NSQL
+GRANT EXEC ON RDT.rdt_855PPAVerify01 TO NSQL
 GO

@@ -1,10 +1,7 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[rdt].[rdtfnc_PostPickAudit]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdtfnc_PostPickAudit]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO
+GO  
 
 /************************************************************************/
 /* Store procedure: rdtfnc_PostPickAudit                                */
@@ -83,9 +80,10 @@ GO
 /*                            And Add CaptureDataColName config         */    
 /*                            And Add CapturePackInfo Screen st8 (cc02) */    
 /* 21-12-2021 5.4 James       Bug fix (james10)                         */ 
+/* 28-03-2022 5.5 James       WMS-17439 Bug fix ON DECODESP (james11)   */ 
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PostPickAudit] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -1695,10 +1693,13 @@ BEGIN
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, 
                @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cID, @cTaskDetailKey, @cBarcode, 
-               @cSKU OUTPUT, @nQTY OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+               @cUPC OUTPUT, @nQTY OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO Step_3_Fail
+            
+            IF @nQTY > 0
+               SET @cMQTY = CAST( @nQTY AS NVARCHAR( 5))
          END
       END
 
@@ -4266,9 +4267,11 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 GRANT EXECUTE ON RDT.rdtfnc_PostPickAudit TO NSQL
 GO

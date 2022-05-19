@@ -12,7 +12,9 @@ execute rdt.rdtAddMsg 171558, 10, '171558InsPackDtlFail', 'us_english', 855
 execute rdt.rdtAddMsg 171559, 10, '171559PackCfm Fail  ', 'us_english', 855
 execute rdt.rdtAddMsg 171560, 10, '71560InsPkDtlInfoErr', 'us_english', 855
 execute rdt.rdtAddMsg 171561, 10, '71561UpdPkDtlInfoErr', 'us_english', 855
+execute rdt.rdtAddMsg 171562, 10, '71562 UCC ALDY SCAN ', 'us_english', 855
+execute rdt.rdtAddMsg 171563, 10, '71563 UPD RDTPPA ERR', 'us_english', 855
+execute rdt.rdtAddMsg 171564, 10, '71564 UPD RDTPPA ERR', 'us_english', 855
 
 
 SELECT * FROM rdt.rdtMsg (NOLOCK) WHERE Message_ID BETWEEN 171551 AND  171600
-
