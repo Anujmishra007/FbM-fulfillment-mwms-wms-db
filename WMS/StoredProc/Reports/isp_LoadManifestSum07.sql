@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_LoadManifestSum07]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_LoadManifestSum07]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */      
 /* Called By: PB dw: r_dw_dmanifest_sum07 (RCM ReportType 'MANSUM')     */      
 /*                                                                      */      
-/* PVCS Version: 1.1                                                    */      
+/* PVCS Version: 1.3                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -28,9 +23,12 @@ GO
 /* 03-07-2013   ChewKP  1.0   Remove Join by MBOLDetail (ChewKP01)      */  
 /* 09-JUL-2013  YTWan   1.1   Add ToteID to Report (Wan01)              */
 /* 25-JUL-2013  YTWan   1.2   SOS#284522-Store & Driver Copy (Wan02)    */
+/* 10-May-2022  WLChooi 1.3   DevOps Combine Script                     */
+/* 10-May-2022  WLChooi 1.3   WMS-19628 Extend Userdefine02 column to   */
+/*                            40 (WL01)                                 */
 /************************************************************************/      
       
-CREATE PROC isp_LoadManifestSum07 (      
+CREATE OR ALTER PROC [dbo].[isp_LoadManifestSum07] (      
     @c_mbolkey NVARCHAR(10)      
  )      
  AS      
@@ -55,7 +53,7 @@ CREATE PROC isp_LoadManifestSum07 (
          ,  TransMethod                   NVARCHAR(30)
          ,  PlaceOfLoading                NVARCHAR(30)
          ,  Remarks                       NVARCHAR(255)      
-         ,  Consigneekey                  NVARCHAR(30)       
+         ,  Consigneekey                  NVARCHAR(40)   --WL01       
          ,  TotalTote                     INT
          ,  Company                       NVARCHAR(45)       
          ,  UserDefine05                  NVARCHAR(30)          

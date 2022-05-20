@@ -13,7 +13,7 @@ GO
 /*                                                                        */    
 /* Called By: report dw = r_dw_delivery_note54_SG                         */    
 /*                                                                        */    
-/* PVCS Version: 1.1                                                      */    
+/* PVCS Version: 1.3                                                      */    
 /*                                                                        */    
 /* Version: 5.4                                                           */    
 /*                                                                        */    
@@ -24,6 +24,8 @@ GO
 /* 22-Dec-2021  CHOGNCS   1.1   Devops Scripts Combine                    */
 /* 22-Dec-2021  CHOGNCS   1.2   WMS-17743 - Change print logic based on   */  
 /*                              Orders.SpecialHandling (CS01)             */   
+/* 10-May-2022  WLChooi   1.3   WMS-19628 Extend Userdefine02 column to   */
+/*                              40 (WL01)                                 */
 /**************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[isp_Delivery_Note54_SG] (    
@@ -194,8 +196,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             StorerKey        NVARCHAR(15) NULL,    
             SKU              NVARCHAR(20) NULL,    
             Descr            NVARCHAR(90) NULL,    
-            QtyShipped       int NULL,    
-            UnitPrice        decimal(10,2) NULL,    
+            QtyShipped       INT NULL,    
+            UnitPrice        DECIMAL(10,2) NULL,    
             --Currency         NVARCHAR(18) NULL,    
             ShipMode         NVARCHAR(18) NULL,    
             SONo             NVARCHAR(30) NULL,    
@@ -256,7 +258,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         CREATE TABLE #TMP_PLTDET2 (        
         PLTKEY        NVARCHAR(30) NULL,        
         MBOLKEY       NVARCHAR(20) NULL,        
-        PLTDETUDF02   NVARCHAR(30) NULL,        
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL01        
         ExtOrdKey     NVARCHAR(50) NULL,        
         C_Company     NVARCHAR(45) NULL )        
         
@@ -265,7 +267,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         RN            INT,        
         PLTKEY        NVARCHAR(30) NULL,        
         MBOLKEY       NVARCHAR(20) NULL,        
-        PLTDETUDF02   NVARCHAR(30) NULL,        
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL01        
         GrpExtOrdKey  NVARCHAR(500) NULL,        
         C_Company     NVARCHAR(45) NULL   )        
         
@@ -274,7 +276,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         PLTKEY              NVARCHAR(30) NULL,        
         MBOLKEY             NVARCHAR(20) NULL,        
         PalletType          NVARCHAR(30) NULL,        
-        PLTDETUDF02         NVARCHAR(30) NULL,        
+        PLTDETUDF02         NVARCHAR(40) NULL,   --WL01         
         PLTLength           FLOAT NULL,        
         PLTWidth            FLOAT NULL,        
         PLTHeight           FLOAT NULL,        
@@ -1556,5 +1558,5 @@ IF @n_continue=3  -- Error Occured - Process And Return
 END    
 GO
 
-GRANT EXECUTE ON isp_Delivery_Note54_SG TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Delivery_Note54_SG] TO NSQL
 GO  
