@@ -14,7 +14,7 @@ GO
 /* Called By: RDT                                                       */
 /*          : Datawindow - r_dw_VAS_Launch_Label_01                     */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 05-Apr-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 20-May-2022  WLChooi  1.1  Bug Fix - Select TOP 1 (WL01)             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_VAS_Launch_Label_01] (  
       @c_Storerkey   NVARCHAR(15)
@@ -41,7 +42,7 @@ BEGIN
          , @b_Success            INT  
          , @n_Err                INT  
          , @c_Errmsg             NVARCHAR(255)
-         , @c_OrderLineNo        NVARCHAR(5)
+         , @c_OrderLineNo        NVARCHAR(10)   --WL01
          , @c_Notes              NVARCHAR(4000)
          , @c_L29                NVARCHAR(500)
          , @n_SeqNo              INT
@@ -49,7 +50,7 @@ BEGIN
          , @n_Count              INT
 
    CREATE TABLE #TMP_VAS (
-      OrderLineNo       NVARCHAR(5)
+      OrderLineNo       NVARCHAR(10)   --WL01
     , Notes             NVARCHAR(4000)
     , L29               NVARCHAR(500) NULL
     , TitleLine1        NVARCHAR(250)
@@ -60,9 +61,9 @@ BEGIN
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       INSERT INTO #TMP_VAS(OrderLineNo, Notes, TitleLine1, TitleLine2)
-      SELECT DISTINCT OD.OrderLineNumber, OD.Notes
-                    , 'DO NOT DISPLAY'
-                    , 'BEFORE'
+      SELECT TOP 1 OD.ExternLineNo, OD.Notes   --WL01
+                 , 'DO NOT DISPLAY'
+                 , 'BEFORE'
       FROM PACKDETAIL PD (NOLOCK)
       JOIN PACKHEADER PH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
@@ -104,7 +105,7 @@ BEGIN
             BEGIN
                IF EXISTS ( SELECT COUNT(1)
                            FROM dbo.fnc_DelimSplit('~', @c_ColValue)
-                           WHERE ColValue = @c_OrderLineNo
+                           WHERE ColValue LIKE @c_OrderLineNo + '%'   --WL01
                            AND SeqNo = 3)
                BEGIN
                   SELECT @c_L29 = ColValue
