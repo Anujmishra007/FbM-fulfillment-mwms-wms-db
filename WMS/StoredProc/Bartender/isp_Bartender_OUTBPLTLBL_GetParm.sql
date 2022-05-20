@@ -58,7 +58,8 @@ BEGIN
            @c_lot              NVARCHAR(20),  
            @c_ttlpage          INT,  
            @c_storerkey        NVARCHAR(20),  
-           @c_prevSKU          NVARCHAR(20)  
+           @c_prevSKU          NVARCHAR(20),
+		   @c_prevLOT          NVARCHAR(20)
   
    SET @d_Trace_StartTime = GETDATE()  
    SET @c_Trace_ModuleName = ''  
@@ -75,6 +76,7 @@ BEGIN
    SET @c_ExecArguments = ''  
    SET @n_cnt = 1  
    SET @c_prevSKU = ''  
+   SET @c_prevLOT = ''
   
    --IF ISNULL(@parm02,'') = '' GOTO EXIT_SP  
    IF ISNULL(@parm06,'') = 0 SET @parm06 = 1  
@@ -116,7 +118,8 @@ BEGIN
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
       SET @n_NoOfCopy = @c_ttlpage  
-      IF @c_prevSKU <> @c_sku SET @n_cnt = 1  
+      IF @c_prevSKU <> @c_sku SET @n_cnt = 1 
+	  IF @c_prevLOT <> @c_lot SET @n_cnt = 1
       WHILE @n_NoOfCopy >= 1   
       BEGIN  
       INSERT INTO #TEMP_PICKDETAIL  
@@ -129,7 +132,8 @@ BEGIN
          
       SET @n_NoOfCopy = @n_NoOfCopy - 1  
       SET @n_cnt = @n_cnt + 1   
-      SET @c_prevSKU = @c_sku   
+      SET @c_prevSKU = @c_sku 
+	  SET @c_prevLOT = @c_lot
         
       END       
         
@@ -142,10 +146,11 @@ BEGIN
    ELSE  
    BEGIN  
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-   SELECT DISTINCT PD.Storerkey,PD.SKU,PD.Lot,PD.Qty/P.CaseCnt  
+   SELECT DISTINCT PD.Storerkey,PD.SKU,MAX(PD.Lot),PD.Qty/P.CaseCnt  
    FROM PICKDETAIL PD(NOLOCK)  
    JOIN PACK P(NOLOCK) ON P.PackKey = PD.PackKey  
    WHERE PD.Orderkey = @parm01  
+   GROUP BY PD.Storerkey,PD.SKU,PD.Qty,P.CaseCnt
    --AND PD.Storerkey = @c_Sparm02  
    --AND PD.Sku = @c_Sparm03  
    --AND PD.Lot = @c_Sparm04  
@@ -158,6 +163,7 @@ BEGIN
    BEGIN  
       SET @n_NoOfCopy = @c_ttlpage  
       IF @c_prevSKU <> @c_sku SET @n_cnt = 1  
+	  IF @c_prevLOT <> @c_lot SET @n_cnt = 1
       WHILE @n_NoOfCopy >= 1   
       BEGIN  
       INSERT INTO #TEMP_PICKDETAIL  
@@ -170,7 +176,8 @@ BEGIN
          
       SET @n_NoOfCopy = @n_NoOfCopy - 1  
       SET @n_cnt = @n_cnt + 1   
-      SET @c_prevSKU = @c_sku   
+      SET @c_prevSKU = @c_sku  
+	  SET @c_prevLOT = @c_lot
         
       END       
         
@@ -211,3 +218,4 @@ EXIT_SP:
 GO
 GRANT EXECUTE ON [dbo].[isp_Bartender_OUTBPDLBL_GetParm] TO nsql 
 GO  
+
