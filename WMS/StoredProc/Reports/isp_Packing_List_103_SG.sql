@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,7 +14,7 @@ GO
 /*                                                                      */      
 /* Called By: report dw = r_dw_Packing_List_103_SG_1 & 2                */      
 /*                                                                      */      
-/* PVCS Version: 1.1                                                    */      
+/* PVCS Version: 1.2                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -25,10 +24,12 @@ GO
 /* Date         Author    Ver.  Purposes                                */      
 /* 13-JAN-2022  CSCHONG   1.0 Devops Scripts Combine                    */
 /* 13-JAN-2022  CSCHONG   1.1 WMS-17744 Change print logic based on     */  
-/*                              Orders.SpecialHandling (CS01)           */                     
+/*                              Orders.SpecialHandling (CS01)           */        
+/* 10-May-2022  WLChooi   1.2 WMS-19628 Extend Userdefine02 column to   */
+/*                            40 (WL01)                                 */
 /************************************************************************/      
       
-CREATE OR alter PROC [dbo].[isp_Packing_List_103_SG] (      
+CREATE OR ALTER PROC [dbo].[isp_Packing_List_103_SG] (      
    @c_MBOLKey  NVARCHAR(21)       
   ,@c_type     NVARCHAR(10)   = 'H1'   
   ,@c_ShipType NVARCHAR(10)   = ''      
@@ -200,8 +201,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             StorerKey        NVARCHAR(15) NULL,      
             SKU              NVARCHAR(20) NULL,      
             Descr            NVARCHAR(90) NULL,      
-            QtyShipped       int NULL,      
-            UnitPrice        decimal(10,2) NULL,      
+            QtyShipped       INT NULL,      
+            UnitPrice        DECIMAL(10,2) NULL,      
             ShipMode         NVARCHAR(18) NULL,      
             SONo             NVARCHAR(30) NULL,      
             PCaseCnt         INT,      
@@ -268,7 +269,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         CREATE TABLE #TMP_PLTDET2 (    
         PLTKEY        NVARCHAR(30) NULL,    
         MBOLKEY       NVARCHAR(20) NULL,    
-        PLTDETUDF02   NVARCHAR(30) NULL,    
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL01    
         ExtOrdKey     NVARCHAR(50) NULL,    
         C_Company     NVARCHAR(45) NULL )    
     
@@ -277,7 +278,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         RN            INT,    
         PLTKEY        NVARCHAR(30) NULL,    
         MBOLKEY       NVARCHAR(20) NULL,    
-        PLTDETUDF02   NVARCHAR(30) NULL,    
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL01    
         GrpExtOrdKey  NVARCHAR(500) NULL,    
         C_Company     NVARCHAR(45) NULL   )    
     
@@ -286,7 +287,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         PLTKEY              NVARCHAR(30) NULL,    
         MBOLKEY             NVARCHAR(20) NULL,    
         PalletType          NVARCHAR(30) NULL,    
-        PLTDETUDF02         NVARCHAR(30) NULL,    
+        PLTDETUDF02         NVARCHAR(40) NULL,   --WL01    
         PLTLength           FLOAT NULL,    
         PLTWidth            FLOAT NULL,    
         PLTHeight           FLOAT NULL,    
@@ -1019,7 +1020,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         SET @n_EPWGT_Value = 0.00      
         SET @n_EPCBM_Value = 0.00      
               
-       IF @c_facility in ('WGQAP','YPCN1Æ','WGQBL')     
+       IF @c_facility in ('WGQAP','YPCN1','WGQBL')     
        BEGIN      
               
         SELECT @n_EPWGT_Value = CASE WHEN ISNUMERIC(c.udf02) = 1       
@@ -1629,6 +1630,6 @@ IF @n_continue=3  -- Error Occured - Process And Return
    --CS01 E
 END 
 GO
-GRANT EXECUTE ON isp_Packing_List_103_SG TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Packing_List_103_SG] TO NSQL
 GO
 

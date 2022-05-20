@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetDManifest_02]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetDManifest_02]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */  
 /* Called By: r_dw_dmanifest_02                                         */  
 /*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.4                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -29,8 +24,11 @@ GO
 /* 11-May-2012  YTWan   1.2   SOS#244019 - Change Company Logo.(Wan01)  */   
 /* 28-Nov-2012  NJOW02  1.3   262669-Change fields mapping to           */  
 /*                            palletdetail                              */  
+/* 10-May-2022  WLChooi 1.4   DevOps Combine Script                     */
+/* 10-May-2022  WLChooi 1.4   WMS-19628 Extend Userdefine02 column to   */
+/*                            40 (WL01)                                 */
 /************************************************************************/  
-CREATE PROC [dbo].[isp_GetDManifest_02] (@c_mbolkey NVARCHAR(10))  
+CREATE OR ALTER PROC [dbo].[isp_GetDManifest_02] (@c_mbolkey NVARCHAR(10))  
  AS  
  BEGIN  
     SET NOCOUNT ON   
@@ -41,7 +39,7 @@ CREATE PROC [dbo].[isp_GetDManifest_02] (@c_mbolkey NVARCHAR(10))
     DECLARE @c_PlaceOfLoadingQualifier NVARCHAR(10)  
       
     DECLARE @result TABLE(             
-            store NVARCHAR(60) NULL,  
+            store NVARCHAR(85) NULL,   --WL01  
             labelno NVARCHAR(20) NULL,  
             copydesc NVARCHAR(30) NULL,  
             remark NVARCHAR(100) NULL,  

@@ -1,8 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[isp_Packing_List_37_SG]') 
-             AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-DROP PROCEDURE [dbo].[isp_Packing_List_37_SG]
-GO  
-/****** Object:  StoredProcedure [dbo].[isp_Packing_List_37_SG]    Script Date: 12/7/2020 3:06:15 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /*                                                                      */      
 /* Called By: report dw = r_dw_Packing_List_37_SG                       */      
 /*                                                                      */      
-/* PVCS Version: 1.1                                                    */      
+/* PVCS Version: 3.0                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -50,10 +45,13 @@ GO
 /* 01-FEB-2021  CSCHONG   2.7   Performance tunning - replace view table*/    
 /*                              with Temp table (CS10)                  */    
 /* 18-FEB-2021  CSCHONG   2.8   WMS-16135 revised report grouping (CS11)*/       
-/* 16-JUL-2021  CSCHONG   2.9   WMS-16135 fix sorting issue (CS11a)     */                       
+/* 16-JUL-2021  CSCHONG   2.9   WMS-16135 fix sorting issue (CS11a)     */ 
+/* 10-May-2022  WLChooi   3.0   DevOps Combine Script                   */
+/* 10-May-2022  WLChooi   3.0   WMS-19628 Extend Userdefine02 column to */
+/*                              40 (WL03)                               */
 /************************************************************************/      
       
-CREATE PROC [dbo].[isp_Packing_List_37_SG] (      
+CREATE OR ALTER PROC [dbo].[isp_Packing_List_37_SG] (      
    @c_MBOLKey  NVARCHAR(21)       
   ,@c_type     NVARCHAR(10)   = 'H1'   
   ,@c_ShipType NVARCHAR(10)   = ''  -- CS11     
@@ -206,8 +204,8 @@ DECLARE @c_OrderKey            NVARCHAR(10)
             StorerKey        NVARCHAR(15) NULL,      
             SKU              NVARCHAR(20) NULL,      
             Descr            NVARCHAR(90) NULL,      
-            QtyShipped       int NULL,      
-            UnitPrice        decimal(10,2) NULL,      
+            QtyShipped       INT NULL,      
+            UnitPrice        DECIMAL(10,2) NULL,      
             ShipMode         NVARCHAR(18) NULL,      
             SONo             NVARCHAR(30) NULL,      
             PCaseCnt         INT,      
@@ -274,7 +272,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         CREATE TABLE #TMP_PLTDET2 (    
         PLTKEY        NVARCHAR(30) NULL,    
         MBOLKEY       NVARCHAR(20) NULL,    
-        PLTDETUDF02   NVARCHAR(30) NULL,    
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL03    
         ExtOrdKey     NVARCHAR(50) NULL,    
         C_Company     NVARCHAR(45) NULL )    
     
@@ -283,7 +281,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         RN            INT,    
         PLTKEY        NVARCHAR(30) NULL,    
         MBOLKEY       NVARCHAR(20) NULL,    
-        PLTDETUDF02   NVARCHAR(30) NULL,    
+        PLTDETUDF02   NVARCHAR(30) NULL,   --WL03     
         GrpExtOrdKey  NVARCHAR(500) NULL,    
         C_Company     NVARCHAR(45) NULL   )    
     
@@ -777,7 +775,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         SET @n_EPWGT_Value = 0.00      
         SET @n_EPCBM_Value = 0.00      
               
-       IF @c_facility in ('WGQAP','YPCN1Æ','WGQBL') --(WL01) New Facility     
+       IF @c_facility in ('WGQAP','YPCN1','WGQBL') --(WL01) New Facility     
        BEGIN      
               
         SELECT @n_EPWGT_Value = CASE WHEN ISNUMERIC(c.udf02) = 1       
@@ -1275,5 +1273,5 @@ DECLARE @c_OrderKey            NVARCHAR(10)
 QUIT:      
 END 
 GO
-GRANT EXECUTE ON isp_Packing_List_37_SG TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Packing_List_37_SG] TO NSQL
 GO

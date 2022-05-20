@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Delivery_Note23_SG]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Delivery_Note23_SG]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -18,7 +14,7 @@ GO
 /*                                                                        */  
 /* Called By: report dw = r_dw_delivery_note_23_SG                        */  
 /*                                                                        */  
-/* PVCS Version: 1.1                                                      */  
+/* PVCS Version: 3.1                                                      */  
 /*                                                                        */  
 /* Version: 5.4                                                           */  
 /*                                                                        */  
@@ -51,9 +47,12 @@ GO
 /* 16-JUL-2021  CSCHONG   2.9   WMS-16133 revised sorting for report page */  
 /*                              break issue (CS12)                         */  
 /* 23-JUL-2021  CSCHONG   3.0   WMS-16133 Fix L shiptype sorting (CS12a)  */
+/* 10-May-2022  WLChooi   3.1   DevOps Combine Script                     */
+/* 10-May-2022  WLChooi   3.1   WMS-19628 Extend Userdefine02 column to   */
+/*                              40 (WL04)                                 */
 /**************************************************************************/  
   
-CREATE PROC [dbo].[isp_Delivery_Note23_SG] (  
+CREATE OR ALTER PROC [dbo].[isp_Delivery_Note23_SG] (  
     @c_MBOLKey NVARCHAR(21)  
    ,@c_ShipType NVARCHAR(10)   = ''  -- CS05    
 )  
@@ -263,7 +262,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         CREATE TABLE #TMP_PLTDET2 (      
         PLTKEY        NVARCHAR(30) NULL,      
         MBOLKEY       NVARCHAR(20) NULL,      
-        PLTDETUDF02   NVARCHAR(30) NULL,      
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL04      
         ExtOrdKey     NVARCHAR(50) NULL,      
         C_Company     NVARCHAR(45) NULL )      
       
@@ -272,7 +271,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         RN            INT,      
         PLTKEY        NVARCHAR(30) NULL,      
         MBOLKEY       NVARCHAR(20) NULL,      
-        PLTDETUDF02   NVARCHAR(30) NULL,      
+        PLTDETUDF02   NVARCHAR(40) NULL,   --WL04      
         GrpExtOrdKey  NVARCHAR(500) NULL,      
         C_Company     NVARCHAR(45) NULL   )      
       
@@ -281,7 +280,7 @@ DECLARE @c_OrderKey            NVARCHAR(10)
         PLTKEY              NVARCHAR(30) NULL,      
         MBOLKEY             NVARCHAR(20) NULL,      
         PalletType          NVARCHAR(30) NULL,      
-        PLTDETUDF02         NVARCHAR(30) NULL,      
+        PLTDETUDF02         NVARCHAR(40) NULL,   --WL04      
         PLTLength           FLOAT NULL,      
         PLTWidth            FLOAT NULL,      
         PLTHeight           FLOAT NULL,      
@@ -1059,6 +1058,6 @@ END
 
 GO
 
-GRANT EXECUTE ON isp_Delivery_Note23_SG TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Delivery_Note23_SG] TO NSQL
 GO
   
