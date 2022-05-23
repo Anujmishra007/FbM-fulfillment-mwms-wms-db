@@ -36,7 +36,8 @@ GO
 /* 26-Oct-2015  YTWan    1.5  SOS#353512 - Project Merlion - GW FRR     */
 /*                            Suggested Putaway Location (Wan01)        */
 /* 03-May-2017  NJOW01   1.6    WMS-1798 Allow config to call custom sp */
-/* 14-Oct-2021  KSChin   1.7  add tracker to DEL_ReceiptDetail table    */
+/* 22-Oct-2019  TLTING01 1.7  Blocking tuning                           */
+/* 14-Oct-2021  KSChin   1.8  add tracker to DEL_ReceiptDetail table    */
 /************************************************************************/  
 CREATE TRIGGER [dbo].[ntrReceiptDetailDelete]
 ON [dbo].[RECEIPTDETAIL]
@@ -76,6 +77,7 @@ BEGIN
          , @c_PutawayLoc              NVARCHAR(10)
          , @c_ToID               NVARCHAR(18)
          , @n_QtyReceived        INT
+         , @n_UCC_RowRef         INT
    --(Wan01) - END 
     /* #INCLUDE <TRRDD1.SQL> */       
     IF (
@@ -267,26 +269,62 @@ BEGIN
     -- FOR UCC Tracking  
     IF @n_continue=1 OR @n_continue=2
     BEGIN
-        UPDATE UCC
-        SET    ReceiptKey = ''
-              ,ReceiptLineNumber = ''
-              ,[Status] = CASE WHEN UCC.[Status] = '1' THEN '0' ELSE UCC.[Status] END  
-        FROM   UCC               
-        JOIN DELETED ON  UCC.ReceiptKey = DELETED.ReceiptKey
-                     AND UCC.ReceiptLineNumber = DELETED.ReceiptLineNumber  
+       -- TLTING01 Blocking tune
+      DECLARE CUR_RCPT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT    UCC.UCC_RowRef
+      FROM   UCC   (NOLOCK)            
+      JOIN DELETED ON  UCC.ReceiptKey = DELETED.ReceiptKey
+               AND UCC.ReceiptLineNumber = DELETED.ReceiptLineNumber  
+         
+
+      OPEN CUR_RCPT
+
+      FETCH NEXT FROM CUR_RCPT INTO @n_UCC_RowRef 
+ 
+      WHILE @@FETCH_STATUS <> -1  AND (@n_continue = 1 OR @n_continue = 2)
+      BEGIN
+         UPDATE UCC with (ROWLOCK)
+           SET    ReceiptKey = ''
+                 ,ReceiptLineNumber = ''
+                 ,[Status] = CASE WHEN UCC.[Status] = '1' THEN '0' ELSE UCC.[Status] END  
+          WHERE UCC_RowRef = @n_UCC_RowRef
         
-        SELECT @n_err = @@ERROR
-              ,@n_cnt = @@ROWCOUNT
+           SELECT @n_err = @@ERROR 
         
-        IF @n_err<>0
-        BEGIN
-            SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)  
-            SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
-                   ': Delete failed on table LOTxIDDETAIL. (ntrReceiptDetailDelete)' 
-                  +' ( '+' SQLSvr MESSAGE='+LTrim(RTrim(@c_errmsg)) 
-                  +' ) '
-        END
+           IF @n_err<>0
+           BEGIN
+               SELECT @n_continue = 3  
+               SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)  
+               SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                      ': Delete failed on table LOTxIDDETAIL. (ntrReceiptDetailDelete)' 
+                     +' ( '+' SQLSvr MESSAGE='+LTrim(RTrim(@c_errmsg)) 
+                     +' ) '
+           END
+         FETCH NEXT FROM CUR_RCPT INTO @n_UCC_RowRef 
+      END
+      CLOSE CUR_RCPT
+      DEALLOCATE CUR_RCPT
+
+        --UPDATE UCC
+        --SET    ReceiptKey = ''
+        --      ,ReceiptLineNumber = ''
+        --      ,[Status] = CASE WHEN UCC.[Status] = '1' THEN '0' ELSE UCC.[Status] END  
+        --FROM   UCC               
+        --JOIN DELETED ON  UCC.ReceiptKey = DELETED.ReceiptKey
+        --             AND UCC.ReceiptLineNumber = DELETED.ReceiptLineNumber  
+        
+        --SELECT @n_err = @@ERROR
+        --      ,@n_cnt = @@ROWCOUNT
+        
+        --IF @n_err<>0
+        --BEGIN
+        --    SELECT @n_continue = 3  
+        --    SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)  
+        --    SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+        --           ': Delete failed on table LOTxIDDETAIL. (ntrReceiptDetailDelete)' 
+        --          +' ( '+' SQLSvr MESSAGE='+LTrim(RTrim(@c_errmsg)) 
+        --          +' ) '
+        --END
     END 
 
    --(Wan01) - START
