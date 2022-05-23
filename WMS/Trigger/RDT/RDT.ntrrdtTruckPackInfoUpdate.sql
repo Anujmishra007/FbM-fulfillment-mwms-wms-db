@@ -1,24 +1,4 @@
-CREATE TABLE [RDT].[rdtTruckPackInfo]
-(
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_StorerKey] DEFAULT (''),
-[Facility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_Facility] DEFAULT (''),
-[Destination] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_Destination] DEFAULT (''),
-[VehicleNum] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_VehicleNum] DEFAULT (''),
-[OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_OrderKey] DEFAULT (''),
-[TrackingNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_TrackingNo] DEFAULT (''),
-[Qty] [int] NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_Qty] DEFAULT ((0)),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_AddDate] DEFAULT (getdate()),
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_AddWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_EditDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTruckPackInfo_EditWho] DEFAULT (suser_sname()),
-[CartonType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTruckPackInfo_CartonType] DEFAULT (''),
-[Type] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTruckPackInfo_Type] DEFAULT (''),
-[PalletID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTruckPackInfo_PalletID] DEFAULT (''),
-[ReturnPalletID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTruckPackInfo_ReturnPalletID] DEFAULT (''),
-[IsReturn] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTruckPackInfo_IsReturn] DEFAULT ('')
-) ON [PRIMARY]
-GO
+
 SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_NULLS ON
@@ -139,46 +119,4 @@ END
 
 GO
 ALTER TABLE [RDT].[rdtTruckPackInfo] ADD CONSTRAINT [PK_rdtTruckPackInfo] PRIMARY KEY CLUSTERED ([RowRef]) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[rdtTruckPackInfo] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtTruckPackInfo] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtTruckPackInfo] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtTruckPackInfo] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Add Date', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'AddDate'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Add Who', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'AddWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Carton Type', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'CartonType'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Destination', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'Destination'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Edit Date', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'EditDate'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Edit Who', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'EditWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Facility', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'Facility'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'IsReturn', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'IsReturn'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Order Key', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'OrderKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Pallet  ID', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'PalletID'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Qty', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'Qty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'ReturnPalletID', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'ReturnPalletID'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Row Ref', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'RowRef'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Storer Key', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'StorerKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Tracking No', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'TrackingNo'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Type', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'Type'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Vehicle Num', 'SCHEMA', N'RDT', 'TABLE', N'rdtTruckPackInfo', 'COLUMN', N'VehicleNum'
 GO

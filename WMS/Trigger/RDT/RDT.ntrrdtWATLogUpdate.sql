@@ -1,30 +1,4 @@
-CREATE TABLE [RDT].[rdtWATLog]
-(
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[Module] [nvarchar] (10) NOT NULL,
-[UserName] [nvarchar] (128) NOT NULL,
-[Location] [nvarchar] (30) NOT NULL CONSTRAINT [DF_rdtWATLog_Location] DEFAULT (''),
-[StartDate] [datetime] NOT NULL CONSTRAINT [DF_rdtWATLog_StartDate] DEFAULT (getdate()),
-[TaskCode] [nvarchar] (20) NULL,
-[Description] [nvarchar] (40) NULL,
-[Status] [nvarchar] (1) NOT NULL CONSTRAINT [DF_rdtWATLog_Status] DEFAULT ('0'),
-[EndDate] [datetime] NOT NULL,
-[Comments] [nvarchar] (250) NULL,
-[TrafficCop] [nvarchar] (1) NULL,
-[ArchiveCop] [nvarchar] (1) NULL,
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtWATLog_EditDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) NOT NULL CONSTRAINT [DF_rdtWATLog_EditWho] DEFAULT (suser_sname()),
-[UDF01] [nvarchar] (60) NULL CONSTRAINT [DF_rdtWatLog_UDF01] DEFAULT (''),
-[UDF02] [nvarchar] (60) NULL CONSTRAINT [DF_rdtWatLog_UDF02] DEFAULT (''),
-[UDF03] [nvarchar] (60) NULL CONSTRAINT [DF_rdtWatLog_UDF03] DEFAULT (''),
-[UDF04] [nvarchar] (60) NULL CONSTRAINT [DF_rdtWatLog_UDF04] DEFAULT (''),
-[UDF05] [nvarchar] (60) NULL CONSTRAINT [DF_rdtWatLog_UDF05] DEFAULT (''),
-[StorerKey] [nvarchar] (15) NOT NULL CONSTRAINT [DF_rdtWATLog_StorerKey] DEFAULT (''),
-[Facility] [nvarchar] (5) NOT NULL CONSTRAINT [DF_rdtWATLog_Facility] DEFAULT (''),
-[QTY] [nvarchar] (5) NOT NULL CONSTRAINT [DF_rdtWATLog_QTY] DEFAULT (''),
-[GroupKey] [int] NOT NULL CONSTRAINT [DF_rdtWATLog_GroupKey] DEFAULT ((0))
-) ON [PRIMARY]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -128,14 +102,4 @@ BEGIN
       RETURN
    END
 END
-GO
-GRANT DELETE ON  [RDT].[rdtWATLog] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtWATLog] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtWATLog] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtWATLog] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Grouping multiple records under a group. First record RowRef is the GroupKey', 'SCHEMA', N'RDT', 'TABLE', N'rdtWATLog', 'COLUMN', N'GroupKey'
-GO
+
