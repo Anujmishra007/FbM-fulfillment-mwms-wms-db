@@ -1,24 +1,9 @@
-CREATE TABLE [RDT].[rdtSortCaseLock]
-(
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_WaveKey] DEFAULT (''),
-[LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_LoadKey] DEFAULT (''),
-[OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_OrderKey] DEFAULT (''),
-[LOC] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_LOC] DEFAULT (''),
-[ID] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_ID] DEFAULT (''),
-[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_StorerKey] DEFAULT (''),
-[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_SKU] DEFAULT (''),
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtSortCaseLock_AddWho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtSortCaseLock_AddDate] DEFAULT (getdate()),
-[OptimizeCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[TrafficCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Trigger:  rdtSortCaseLockAdd                                               */
@@ -123,14 +108,3 @@ Quit:
       RETURN
    END
 END
-GO
-ALTER TABLE [RDT].[rdtSortCaseLock] ADD CONSTRAINT [PK_rdtSortCaseLock] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=80) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[rdtSortCaseLock] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtSortCaseLock] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtSortCaseLock] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtSortCaseLock] TO [NSQL]
-GO

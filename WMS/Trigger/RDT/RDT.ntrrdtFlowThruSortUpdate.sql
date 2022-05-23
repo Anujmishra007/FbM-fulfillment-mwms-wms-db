@@ -1,21 +1,7 @@
-CREATE TABLE [RDT].[rdtFlowThruSort]
-(
-[BatchNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[UserName] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Storerkey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Qty] [int] NOT NULL CONSTRAINT [DF_rdtFlowThruSort_Qty] DEFAULT ((0)),
-[Status] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtFlowThruSort_Status] DEFAULT ('0'),
-[AddDate] [datetime] NULL CONSTRAINT [DF_rdtFlowThruSort_AddDate] DEFAULT (getdate()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtFlowThruSort_EditDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtFlowThruSort_EditWho] DEFAULT (suser_sname()),
-[LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtFlowThruSort_LoadKey] DEFAULT ('')
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
@@ -115,18 +101,4 @@ BEGIN
       RETURN
    END
 END
-GO
-CREATE UNIQUE CLUSTERED INDEX [PK_rdtFlowThruSort] ON [RDT].[rdtFlowThruSort] ([BatchNo], [UserName], [WaveKey], [SKU], [Status]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [idx2_rdtFlowThruSort] ON [RDT].[rdtFlowThruSort] ([UserName], [WaveKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [idx1_rdtFlowThruSort] ON [RDT].[rdtFlowThruSort] ([UserName], [WaveKey], [SKU]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[rdtFlowThruSort] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtFlowThruSort] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtFlowThruSort] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtFlowThruSort] TO [NSQL]
 GO
