@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrOrderHeaderUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrOrderHeaderUpdate]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -242,7 +238,7 @@ GO
 /* 11-AUG-2017  WAN05     3.5  WMS-2306 - CN-Nike SDC WMS ECOM Packing CR*/          
 /* 22-Aug-2017  NJOW04    3.6  WMS-2749 SetSOStatusWhileStatusChange     */          
 /*                             include priority filtering. Trafficcop    */          
-/*                      mode still allow run.                     */          
+/*                             mode still allow run.                     */          
 /* 09-Nov-2017  TLTING09  3.7  temp single\Multi Orders                  */          
 /* 10-Nov-2017  Wan06     3.8  Webservice update ORders.SOStatus with    */           
 /*                             Trafficcop = null                         */          
@@ -263,10 +259,13 @@ GO
 /* 05-May-2021  Wan07     4.7  LFWM-2723 - RGMigrate Allocation schedule */          
 /*                             job to QCommander. Calculate Wave Status  */         
 /* 17-Feb-2022  YTWan     4.8  Fix Wave.status not sync with             */        
-/*                             Orders.status      - (JSM-51565)          */           
+/*                             Orders.status      - (JSM-51565)          */  
+/* 19-May-2022  WLChooi   4.9  DevOps Combine Script                     */     
+/* 19-May-2022  WLChooi   4.9  WMS-19687 - Filter UDF03 = ECOM_Platform  */        
+/*                             (WL02)                                    */ 
 /*************************************************************************/          
           
-CREATE    TRIGGER [dbo].[ntrOrderHeaderUpdate]          
+CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]          
 ON  [dbo].[ORDERS]          
 FOR UPDATE          
 AS          
@@ -394,7 +393,8 @@ DECLARE
 ,        @c_Trackingno                    NVARCHAR(40)   --tlting11          
 ,        @c_Authority_DSTORSSOSTATUS    NCHAR(1)      -- TLTING12          
 ,        @c_upordSOstatus               NVARCHAR(10)          
-,        @c_deletedSOstatus             NVARCHAR(10)          
+,        @c_deletedSOstatus             NVARCHAR(10)    
+,        @c_ECOM_Platform               NVARCHAR(30)   --WL02
            
    DECLARE   @n_debug int          
    DECLARE   @c_OrdStatus NVARCHAR(4)          
@@ -929,7 +929,8 @@ BEGIN
              @c_Specialhandling = INSERTED.Specialhandling,   -- (MC02)          
              @c_OrdStatus = INSERTED.Status,          
              @c_DocType   = INSERTED.DocType,          
-             @c_ECOM_PRESALE_FLAG  = INSERTED.ECOM_PRESALE_FLAG --NJOW05          
+             @c_ECOM_PRESALE_FLAG  = INSERTED.ECOM_PRESALE_FLAG, --NJOW05       
+             @c_ECOM_Platform = INSERTED.ECOM_Platform   --WL02
       FROM   INSERTED, DELETED          
       WHERE  INSERTED.Orderkey = DELETED.OrderKey          
       AND    INSERTED.Orderkey = @c_Orderkey       -- tlting04          
@@ -1827,7 +1828,8 @@ BEGIN
          AND    c.Storerkey = @c_Storerkey          
          AND    c.UDF01     = @c_DocType          
          AND   (ISNULL(c.UDF02, '') = '' OR c.UDF02 = @c_ECOM_PRESALE_FLAG)  --NJOW05          
-         ORDER BY c.UDF02 DESC --NJOW03          
+         AND   (ISNULL(c.UDF03, '') = '' OR c.UDF03 = @c_ECOM_Platform)  --WL02      
+         ORDER BY c.UDF02 DESC, c.UDF03 DESC   --NJOW03   --WL02
                      
          IF @c_NewSOStatus IS NULL          
             SET @c_NewSOStatus = ''                      
@@ -3354,7 +3356,7 @@ BEGIN
              TrafficCop = NULL,          
              EditDate = GETDATE(),        --tlting          
              EditWho = SUSER_SNAME()          
-   FROM  MbolDetail          
+         FROM  MbolDetail          
          JOIN  INSERTED ON (MbolDetail.Orderkey = INSERTED.orderkey)          
           
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT          
