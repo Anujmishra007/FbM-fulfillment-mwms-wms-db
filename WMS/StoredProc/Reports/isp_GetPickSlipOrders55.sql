@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = N'isp_GetPickSlipOrders55' AND type = 'P')
-   DROP PROC isp_GetPickSlipOrders55
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -40,9 +37,10 @@ GO
 /* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
 /* 01/09/2020   WLChooi       WMS-15000 - Modify Get SKU Column Logic   */
 /*                            (WL01)                                    */
+/* 13/05/2022   MINGLE        WMS-19625 Add LOGICALLOC in sorting(ML01) */
 /************************************************************************/
 
-CREATE PROC dbo.isp_GetPickSlipOrders55 (@c_loadkey NVARCHAR(10))
+CREATE OR ALTER PROC dbo.isp_GetPickSlipOrders55 (@c_loadkey NVARCHAR(10))
 AS
 BEGIN
    SET NOCOUNT ON   
@@ -135,6 +133,8 @@ BEGIN
    ,  LOC              NVARCHAR(10)
    ,  ID               NVARCHAR(18) 
    ,  CDESCR           NVARCHAR(120)               --CS02
+   ,  LOGICALLOC       NVARCHAR(18)				   --ML01      
+      
  )    
        
    SET @n_continue = 1 
@@ -263,7 +263,7 @@ BEGIN
           FROM   ORDERS WITH (NOLOCK)  
           LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.listname = 'CVS_CONV'
                                         AND CL.STORERKEY=ORDERS.STORERKEY 
-                                        AND CL.UDF01=Left(Orders.MarkforKey,1) 
+                                        AND CL.UDF01=LEFT(Orders.MarkforKey,1) 
           WHERE  ORDERS.OrderKey = @c_OrderKey
       END -- IF @c_OrderKey = ''
 
@@ -368,7 +368,8 @@ BEGIN
          ,  Qty
          ,  ID
          ,  Article   
-         ,  CDESCR                --CS02          
+         ,  CDESCR                --CS02 
+		 ,  LOGICALLOC			  --ML01
          )
       VALUES
          (  @c_PickheaderKey
@@ -401,6 +402,7 @@ BEGIN
          ,  @c_ID
          ,  @c_Article 
          ,  @c_cdescr                    --CS02
+		 ,  @c_Logicalloc			     --ML01
          )
                  
       FETCH NEXT FROM CUR_PICK INTO @c_Orderkey
@@ -498,7 +500,7 @@ BEGIN
       WHERE PICKHEADER.ExternOrderKey = #TEMP_PICK.LoadKey
       AND   PICKHEADER.OrderKey = #TEMP_PICK.OrderKey
       AND   PICKHEADER.Zone = '3'
-      AND   (#TEMP_PICK.PickSlipNo IS NULL OR RTrim(#TEMP_PICK.PickSlipNo) = '')    --(Wan01)
+      AND   (#TEMP_PICK.PickSlipNo IS NULL OR RTRIM(#TEMP_PICK.PickSlipNo) = '')    --(Wan01)
       --AND   #TEMP_PICK.PickSlipNo IS NULL OR RTrim(#TEMP_PICK.PickSlipNo) = ''    --(Wan01)
    END
    GOTO SUCCESS
@@ -579,9 +581,11 @@ BEGIN
             ,  Qty              
             ,  LOC              
             ,  ID       
-            ,  CDESCR                --CS02        
+            ,  CDESCR                --CS02    
+			,  LOGICALLOC
       FROM #TEMP_PICK  
       ORDER BY Orderkey
+			,  LOGICALLOC			 --ML01
             ,  Loc
             ,  ID
             ,  Article
@@ -594,3 +598,4 @@ GO
 
 GRANT EXECUTE ON isp_GetPickSlipOrders55 TO NSQL
 GO
+
