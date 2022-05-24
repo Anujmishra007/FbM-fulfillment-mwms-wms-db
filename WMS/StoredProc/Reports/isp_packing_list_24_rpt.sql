@@ -24,6 +24,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author    Ver.  Purposes                                   */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */  
 /***************************************************************************/
 CREATE PROC [dbo].[isp_packing_list_24_rpt]
            @c_Orderkey    NVARCHAR(10) 
@@ -42,7 +43,7 @@ BEGIN
       CREATE TABLE #TMP_PackingList24
             (  Orderkey                  NVARCHAR(50) NULL
             ,  loadkey                   NVARCHAR(20) NULL
-            ,  ExternOrderkey            NVARCHAR(20) NULL
+            ,  ExternOrderkey            NVARCHAR(50) NULL  --tlting_ext  
             ,  MCompany                  NVARCHAR(45) NULL
             ,  C_Contact1                NVARCHAR(45) NULL
             ,  CAddress                  NVARCHAR(90) NULL
