@@ -25,6 +25,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
 /************************************************************************/
 CREATE PROC isp_packing_list_25_rpt
         @c_PickSlipNoFrom     NVARCHAR(10)
@@ -33,8 +34,8 @@ CREATE PROC isp_packing_list_25_rpt
       , @c_LoadKeyTo          NVARCHAR(10)
       , @c_OrderkeyFrom       NVARCHAR(10)
       , @c_OrderKeyTo         NVARCHAR(10)
-      , @c_ExternOrderkeyFrom NVARCHAR(30)
-      , @c_ExternOrderKeyTo   NVARCHAR(30)
+      , @c_ExternOrderkeyFrom NVARCHAR(50)  --tlting_ext
+      , @c_ExternOrderKeyTo   NVARCHAR(50)
 AS
 BEGIN
    SET NOCOUNT ON
