@@ -1,19 +1,9 @@
-CREATE TABLE [RDT].[RDTMsg]
-(
-[Message_ID] [int] NOT NULL,
-[Lang_Code] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Message_Type] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Message_Text] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[StoredProcName] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMsg_StoredProcName] DEFAULT (''),
-[EventType] [int] NOT NULL CONSTRAINT [DF_RDTMsg_EventType] DEFAULT ((0)),
-[Func] [int] NULL CONSTRAINT [DF_RDTMsg_Func] DEFAULT ((0)),
-[URL] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMsg_URL] DEFAULT ('')
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 CREATE TRIGGER [RDT].[ntrRDTMsgUpdate]
 ON  [RDT].[RDTMsg]
@@ -63,14 +53,4 @@ END
                AND Message_Type = @cMessage_Type
    END
 
-GO
-ALTER TABLE [RDT].[RDTMsg] ADD CONSTRAINT [PK_RDTMsg] PRIMARY KEY CLUSTERED ([Message_ID], [Lang_Code], [Message_Type]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[RDTMsg] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[RDTMsg] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[RDTMsg] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[RDTMsg] TO [NSQL]
 GO

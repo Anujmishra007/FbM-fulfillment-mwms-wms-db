@@ -1,26 +1,10 @@
-CREATE TABLE [RDT].[RDTMenu]
-(
-[MenuNo] [int] NOT NULL,
-[Heading] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[OP1] [int] NULL CONSTRAINT [DF_RDTMenu_OP1] DEFAULT ((0)),
-[OP2] [int] NULL CONSTRAINT [DF_RDTMenu_OP2] DEFAULT ((0)),
-[OP3] [int] NULL CONSTRAINT [DF_RDTMenu_OP3] DEFAULT ((0)),
-[OP4] [int] NULL CONSTRAINT [DF_RDTMenu_OP4] DEFAULT ((0)),
-[OP5] [int] NULL CONSTRAINT [DF_RDTMenu_OP5] DEFAULT ((0)),
-[OP6] [int] NULL CONSTRAINT [DF_RDTMenu_OP6] DEFAULT ((0)),
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMenu_AddWho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_RDTMenu_AddDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMenu_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_RDTMenu_EditDate] DEFAULT (getdate()),
-[OP7] [int] NULL CONSTRAINT [DF_RDTMenu_OP7] DEFAULT ((0)),
-[OP8] [int] NULL CONSTRAINT [DF_RDTMenu_OP8] DEFAULT ((0)),
-[OP9] [int] NULL CONSTRAINT [DF_RDTMenu_OP9] DEFAULT ((0))
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+
 SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 
 CREATE TRIGGER [RDT].[ntrRDTMenuUpdate]
@@ -63,19 +47,6 @@ END
 	   END
    END
 GO
-ALTER TABLE [RDT].[RDTMenu] ADD CONSTRAINT [PK_RDTMenu] PRIMARY KEY CLUSTERED ([MenuNo]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[RDTMenu] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[RDTMenu] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[RDTMenu] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[RDTMenu] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'RDT Menu No. 7', 'SCHEMA', N'RDT', 'TABLE', N'RDTMenu', 'COLUMN', N'OP7'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'RDT Menu No. 8', 'SCHEMA', N'RDT', 'TABLE', N'RDTMenu', 'COLUMN', N'OP8'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'RDT Menu No. 9', 'SCHEMA', N'RDT', 'TABLE', N'RDTMenu', 'COLUMN', N'OP9'
-GO
+
+
+

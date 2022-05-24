@@ -1,36 +1,10 @@
-CREATE TABLE [RDT].[RDTSCNDETAIL]
-(
-[ScnKey] [int] NOT NULL IDENTITY(1, 1),
-[Scn] [int] NOT NULL,
-[FieldNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_FieldNo] DEFAULT (''),
-[XCol] [int] NULL,
-[YRow] [int] NULL,
-[TextColor] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_TextColor] DEFAULT ('White'),
-[ColType] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColType] DEFAULT (''),
-[ColRegExp] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColRegExp] DEFAULT (''),
-[ColText] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColText] DEFAULT (''),
-[ColValue] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColValue] DEFAULT (''),
-[ColValueLength] [smallint] NULL CONSTRAINT [DF_RDTSCNDETAIL_ColValueLength] DEFAULT ((0)),
-[ColLookUpView] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColLookUpView] DEFAULT (''),
-[AddDate] [datetime] NULL CONSTRAINT [DF_RDTSCNDETAIL_AddDate] DEFAULT (getdate()),
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_AddWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NULL CONSTRAINT [DF_RDTSCNDETAIL_EditDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_EditWho] DEFAULT (suser_sname()),
-[Func] [int] NULL,
-[Lang_Code] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ColStringExp] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColStringExp] DEFAULT (''),
-[WebGroup] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSTDEventLog_WebGroup] DEFAULT (''),
-[WebColType] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSTDEventLog_WebColType] DEFAULT (''),
-[FieldMap] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScnDetail_FieldMap] DEFAULT (''),
-[ScanField] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ScanField] DEFAULT ('0'),
-[ScreenFormat] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScnDetail_ScreenFormat] DEFAULT (''),
-[WebColSize] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScnDetail_WebColSize] DEFAULT ('')
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+
 SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /***************************************************************************/  
 /* Trigger: ntrRdtScnDetailUpdate                                          */  
@@ -132,19 +106,4 @@ BEGIN
       END  
       RETURN  
    END  
-END  
-GO
-ALTER TABLE [RDT].[RDTSCNDETAIL] ADD CONSTRAINT [PK_RDTSCNDETAIL] PRIMARY KEY CLUSTERED ([ScnKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_RDTSCNDETAIL_Scn] ON [RDT].[RDTSCNDETAIL] ([Scn], [FieldNo]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[RDTSCNDETAIL] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[RDTSCNDETAIL] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[RDTSCNDETAIL] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[RDTSCNDETAIL] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'RDT Screen colstring expression ', 'SCHEMA', N'RDT', 'TABLE', N'RDTSCNDETAIL', 'COLUMN', N'ColStringExp'
-GO
+END

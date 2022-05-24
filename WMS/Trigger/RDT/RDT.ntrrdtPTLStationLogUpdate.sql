@@ -1,34 +1,8 @@
-CREATE TABLE [RDT].[rdtPTLStationLog]
-(
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[Station] [nvarchar] (10) NOT NULL,
-[IPAddress] [nvarchar] (40) NOT NULL,
-[Position] [nvarchar] (10) NOT NULL,
-[LOC] [nvarchar] (10) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_LOC] DEFAULT (''),
-[Method] [nvarchar] (1) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_Method] DEFAULT (''),
-[CartonID] [nvarchar] (20) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_CartonID] DEFAULT (''),
-[OrderKey] [nvarchar] (10) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_OrderKey] DEFAULT (''),
-[LoadKey] [nvarchar] (10) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_LoadKey] DEFAULT (''),
-[WaveKey] [nvarchar] (10) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_WaveKey] DEFAULT (''),
-[PickSlipNo] [nvarchar] (10) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_PickSlipNo] DEFAULT (''),
-[BatchKey] [nvarchar] (20) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_BatchKey] DEFAULT (''),
-[ConsigneeKey] [nvarchar] (15) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_ConsigneeKey] DEFAULT (''),
-[ShipTo] [nvarchar] (15) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_ShipTo] DEFAULT (''),
-[StorerKey] [nvarchar] (15) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_StorerKey] DEFAULT (''),
-[MaxTask] [int] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_MaxTask] DEFAULT ((0)),
-[UserDefine01] [nvarchar] (30) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_UserDefine01] DEFAULT (''),
-[UserDefine02] [nvarchar] (30) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_UserDefine02] DEFAULT (''),
-[UserDefine03] [nvarchar] (30) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_UserDefine03] DEFAULT (''),
-[SourceKey] [nvarchar] (20) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_SourceKey] DEFAULT (''),
-[SourceType] [nvarchar] (30) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_SourceType] DEFAULT (''),
-[CreatedPTLTran] [nvarchar] (1) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_CreatedPTLTran] DEFAULT (''),
-[AddWho] [nvarchar] (128) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_AddWho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_AddDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_EditDate] DEFAULT (getdate()),
-[SKU] [nvarchar] (20) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_SKU] DEFAULT (''),
-[ItemClass] [nvarchar] (10) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_ItemClass] DEFAULT ('')
-) ON [PRIMARY]
+
+SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER OFF
 GO
 
 
@@ -145,20 +119,4 @@ BEGIN
       RETURN
    END
 END
-GO
-ALTER TABLE [RDT].[rdtPTLStationLog] ADD CONSTRAINT [PK_rdtPTLStationLog] PRIMARY KEY CLUSTERED ([RowRef]) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IDX_rdtPTLStationLog_Loc] ON [RDT].[rdtPTLStationLog] ([LOC]) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IDX_rdtPTLStationLog_Orderkey] ON [RDT].[rdtPTLStationLog] ([OrderKey]) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_rdtPTLStationLog_Station_CartonID_Position] ON [RDT].[rdtPTLStationLog] ([Station], [CartonID], [Position]) WITH (FILLFACTOR=80) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[rdtPTLStationLog] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtPTLStationLog] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtPTLStationLog] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtPTLStationLog] TO [NSQL]
 GO

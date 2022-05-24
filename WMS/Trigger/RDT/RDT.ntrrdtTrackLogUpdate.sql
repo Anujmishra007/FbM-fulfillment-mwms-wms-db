@@ -1,31 +1,10 @@
-CREATE TABLE [RDT].[rdtTrackLog]
-(
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[Mobile] [int] NULL,
-[Username] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Storerkey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Orderkey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[TrackNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Qty] [int] NOT NULL CONSTRAINT [DF_rdtTrackLog_Qty] DEFAULT ((0)),
-[QtyAllocated] [int] NOT NULL CONSTRAINT [DF_rdtTrackLog_QtyAllocated] DEFAULT ((0)),
-[Status] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTrackLog_Status] DEFAULT ('0'),
-[ErrMsg] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTrackLog_AddWho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtTrackLog_AddDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTrackLog_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtTrackLog_EditDate] DEFAULT (getdate()),
-[TrafficCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTrackLog_PickSlipNo] DEFAULT (''),
-[CartonNo] [int] NULL CONSTRAINT [DF_rdtTrackLog_CartonNo] DEFAULT ((0)),
-[LabelNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTrackLog_LabelNo] DEFAULT ('')
-) ON [PRIMARY]
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+
 SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 
 /*******************************************************************************/
@@ -91,12 +70,6 @@ BEGIN
 	BEGIN
 		SELECT @n_continue = 4 
 	END
-
-   IF UPDATE(TrafficCop)
-	BEGIN
-		SELECT @n_continue = 4 
-	END
-	
 	
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
@@ -115,6 +88,11 @@ BEGIN
 			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
 			SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table rdtTrackLog. (ntrRdtTrackLogUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
 		END
+	END
+
+   IF UPDATE(TrafficCop)
+	BEGIN
+		SELECT @n_continue = 4 
 	END
 
 	IF @n_continue=3  -- Error Occured - Process And Return
@@ -144,18 +122,3 @@ BEGIN
 	 END
 END
 
-
-
-GO
-ALTER TABLE [RDT].[rdtTrackLog] ADD CONSTRAINT [PK_rdtTrackLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_rdtTrackLog01] ON [RDT].[rdtTrackLog] ([Orderkey], [TrackNo]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[rdtTrackLog] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtTrackLog] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtTrackLog] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtTrackLog] TO [NSQL]
-GO
