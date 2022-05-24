@@ -1,10 +1,10 @@
-IF EXISTS (SELECT Name FROM dbo.sysobjects WHERE Name = 'isp_Packing_List_32' AND Type = 'P')
-   DROP PROC isp_Packing_List_32
+ 
+SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO 
+
 
  
 /******************************************************************************/              
@@ -25,23 +25,25 @@ GO
 /* Data Modifications:                                                        */              
 /*                                                                            */              
 /* Updates:                                                                   */              
-/* Date         Author    Ver.  Purposes                                      */    
+/* Date         Author    Ver.  Purposes                                      */  
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length           */
 /******************************************************************************/     
   
-CREATE PROC [dbo].[isp_Packing_List_32]             
+CREATE OR ALTER PROC [dbo].[isp_Packing_List_32]             
        (@c_MBOLKey NVARCHAR(20))              
 AS            
-BEGIN            
-   SET NOCOUNT ON            
+BEGIN                       
    SET ANSI_WARNINGS OFF            
-   SET QUOTED_IDENTIFIER OFF            
-   SET CONCAT_NULL_YIELDS_NULL OFF    
+   SET NOCOUNT ON 
+   SET ANSI_NULLS OFF 
+   SET QUOTED_IDENTIFIER OFF 
+   SET CONCAT_NULL_YIELDS_NULL OFF 
   
    DECLARE @n_TTLPDQty        INT   
          , @c_labelno         NVARCHAR(45)  
          , @n_TTLSKU          INT
          , @n_Wgt             FLOAT
-         , @c_ExtOrdkey       NVARCHAR(30)
+         , @c_ExtOrdkey       NVARCHAR(50)  --tlting_ext
          , @c_Issue           NVARCHAR(1)
   
   
@@ -263,5 +265,7 @@ END
 QUIT:
 
 GO
+
+
 GRANT EXECUTE ON  isp_Packing_List_32 TO NSQL
 GO  

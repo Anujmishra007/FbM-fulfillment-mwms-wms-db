@@ -1,10 +1,11 @@
-﻿IF EXISTS (SELECT Name FROM dbo.sysobjects WHERE Name = 'isp_Packing_List_33_rdt' AND Type = 'P')
-   DROP PROC isp_Packing_List_33_rdt
+
+
+SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO 
+
 
  
 /******************************************************************************/              
@@ -31,20 +32,22 @@ GO
 /* 12-01-2016   CSCHONG   1.2   Change the mapping logic (CS03)               */
 /* 23-10-2018   SPChin    1.3   INC0437349 - Add SUM QTY And Filter           */      
 /*                                           By OrderLineNumber               */
+/* 28-Jan-2019  TLTING_ext 1.4  enlarge externorderkey field length           */
 /******************************************************************************/     
   
-CREATE PROC [dbo].[isp_Packing_List_33_rdt]             
+CREATE OR ALTER PROC [dbo].[isp_Packing_List_33_rdt]             
        (@c_Orderkey NVARCHAR(10),
         @c_labelno  NVARCHAR(20))              
 AS            
-BEGIN            
-   SET NOCOUNT ON            
+BEGIN                         
    SET ANSI_WARNINGS OFF            
-   SET QUOTED_IDENTIFIER OFF            
+   SET NOCOUNT ON 
+   SET ANSI_NULLS OFF 
+   SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF    
   
    DECLARE @c_MCompany        NVARCHAR(45)  
-         , @c_Externorderkey  NVARCHAR(30)  
+         , @c_Externorderkey  NVARCHAR(50)   --tlting_ext
          , @c_C_Addresses     NVARCHAR(200)   
          , @c_loadkey         NVARCHAR(10)  
          , @c_Userdef03       NVARCHAR(20)  
@@ -67,7 +70,7 @@ BEGIN
          , c_Phone2        NVARCHAR(18) NULL
          , c_zip           NVARCHAR(18) NULL
          , M_Company        NVARCHAR(45) NULL 
-         , Externorderkey  NVARCHAR(30) NULL 
+         , Externorderkey  NVARCHAR(50) NULL   --tlting_ext
          , PickLOC         NVARCHAR(10)  NULL
          , Style           NVARCHAR(20) NULL
          , SKUColor        NVARCHAR(10) NULL 
@@ -129,12 +132,8 @@ BEGIN
                              (ISNULL(ORDDET.Userdefine01,'')+ ISNULL(ORDDET.Userdefine02,'')) END ,
                    PD.SKU,SUM(PD.qty),	--INC0437349 
 		   ORDDET.UnitPrice,
---                   CASE WHEN OH.UserDefine03 = N'UA官方商城' THEN C1.Udf01
---                        WHEN OH.Userdefine03=N'UA天猫官方旗舰店' THEN C2.Udf01 ELSE '' END,
                      C2.UDF01,
                      COALESCE(S.AltSku,S.RetailSku,S.ManufacturerSku,U.UPC),
---                   ,CASE WHEN OH.UserDefine03 = N'UA官方商城' THEN C1.Udf02
---                        WHEN OH.Userdefine03=N'UA天猫官方旗舰店' THEN C2.Udf02 ELSE '' END                      
                       C2.notes,C2.Notes2,OH.OrderKey,OH.BuyerPO,s.DESCR,S.ALTSKU--STO.Address1,STO.Zip,STO.Contact1,STO.Phone1          --(CS01)  --(CS02)               
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
@@ -142,14 +141,14 @@ BEGIN
    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = ORDDET.Orderkey AND PD.SKU = ORDDET.SKU AND PD.OrderLineNumber = ORDDET.OrderLineNumber --INC0437349
    JOIN SKU S WITH (NOLOCK) ON S.SKU = PD.SKU AND S.Storerkey=PD.Storerkey
    JOIN STORER STO WITH (NOLOCK) ON OH.Storerkey = STO.Storerkey                           --(CS01)
-   LEFT JOIN UPC U WITH (NOLOCK) ON U.Storerkey = PD.storerkey and u.sku=PD.sku
+   LEFT JOIN UPC U WITH (NOLOCK) ON U.Storerkey = PD.storerkey AND u.sku=PD.sku
    LEFT JOIN CODELKUP C1 WITH (NOLOCK) ON C1.Listname = 'UAEPLOCN' AND C1.Storerkey = OH.Storerkey AND C1.Storerkey='UA'
    LEFT JOIN CODELKUP C2 WITH (NOLOCK) ON C2.Listname = 'UAPICLIST' AND C2.Storerkey = OH.Storerkey AND C2.Storerkey='UA'
                                      --  AND C2.long = OH.UserDefine03 
    WHERE PD.Orderkey = @c_orderkey
    AND PD.Caseid = CASE WHEN ISNULL(@c_labelno,'') <> '' THEN  @c_labelno ELSE PD.Caseid END
    --INC0437349 Start
-   Group By 
+   GROUP BY 
 	ISNULL(OH.C_company,''),
         ISNULL(OH.c_Contact1,''),
         (OH.C_address1 + OH.C_address2 + OH.C_address3),
@@ -212,5 +211,7 @@ END
 
 
 GO
+
 GRANT EXECUTE ON  isp_Packing_List_33_rdt TO NSQL
 GO  
+
