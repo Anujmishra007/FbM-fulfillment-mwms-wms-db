@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 15-Mar-2017  CSCHONG 1.0   WMS-1286 add filter by storerkey (CS01)   */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */  
 /************************************************************************/
 CREATE PROC isp_Packing_List_21_1 
             @c_PickSlipNo  NVARCHAR(10)
@@ -47,7 +48,7 @@ BEGIN
    CREATE TABLE #TMP_ORD
    (  RowRef         INT         NOT NULL IDENTITY(1,1)   PRIMARY KEY
    ,  Orderkey       NVARCHAR(10)  
-   ,  ExternOrderkey NVARCHAR(30)
+   ,  ExternOrderkey NVARCHAR(50)  --tlting_ext 
    ,  C_Address1     NVARCHAR(45)
    ,  C_Contact1     NVARCHAR(30) 
    ,  C_Phone1       NVARCHAR(18)
