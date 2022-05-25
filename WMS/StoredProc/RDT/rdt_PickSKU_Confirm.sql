@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[RDT].[rdt_PickSKU_Confirm]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_PickSKU_Confirm
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -21,9 +18,10 @@ GO
 /* 12-03-2019  1.4  YeeKung     WMS-8281 Add eventlog                   */  
 /* 16-10-2019  1.5  James       WMS-10860 Add move to dropid (james01)  */  
 /* 22-12-2020  1.6  YeeKung     WMS-15995 Add PickZone (yeekung01)      */
+/* 24-05-2022  1.7  YeeKung     Add Close Cursor (yeekung02)            */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_PickSKU_Confirm
+CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_Confirm
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -575,6 +573,9 @@ BEGIN
 
       FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
    END
+
+   CLOSE @curPD  --(yeekung02)
+   DEALLOCATE @curPD
    
 	 -- (yeekung01) EventLog - picksku      
 	 EXEC RDT.rdt_STD_EventLog      
