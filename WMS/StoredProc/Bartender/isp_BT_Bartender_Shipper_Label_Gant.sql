@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_Gant]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_Gant]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,10 +10,11 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
-/*02-Dec-2020 1.0  WLChooi    Created (WMS-15785)                             */  
+/*02-Dec-2020 1.0  WLChooi    Created (WMS-15785)                             */ 
+/*18-May-2022 1.1  Mingle     Add new logic (WMS-19641)                       */
 /******************************************************************************/                  
                     
-CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_Gant]                        
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_Gant]                        
 (  @c_Sparm01            NVARCHAR(250),                
    @c_Sparm02            NVARCHAR(250),                
    @c_Sparm03            NVARCHAR(250),                
@@ -98,7 +94,8 @@ BEGIN
            @n_loopno           INT,  
            @c_LastRec          NVARCHAR(1),  
            @c_ExecStatements   NVARCHAR(4000),      
-           @c_ExecArguments    NVARCHAR(4000),   
+           @c_ExecArguments    NVARCHAR(4000), 
+		   @c_busr5            NVARCHAR(30),	--ML01  
            
            @c_MaxLBLLine       INT,
            @c_SumQTY           INT,
@@ -106,7 +103,19 @@ BEGIN
            @c_SSTYLE           NVARCHAR(80),
            @n_SumPack          INT,
            @n_SumPick          INT,
-           @n_MaxCtnNo         INT   
+           @n_MaxCtnNo         INT,
+		   --START ML01
+		   @c_BUSR501         NVARCHAR(50),
+           @c_BUSR502         NVARCHAR(50), 
+           @c_BUSR503         NVARCHAR(50),           
+           @c_BUSR504         NVARCHAR(50),   
+           @c_BUSR505         NVARCHAR(50),           
+           @c_BUSR506         NVARCHAR(50),  
+           @c_BUSR507         NVARCHAR(50),           
+           @c_BUSR508         NVARCHAR(50),
+           @c_BUSR509         NVARCHAR(50),
+           @c_BUSR510         NVARCHAR(50)
+		   --END ML01
 
     SELECT @n_MaxCarton = MAX(PD.CartonNo)
     FROM PACKDETAIL PD (NOLOCK)
@@ -195,7 +204,8 @@ BEGIN
       [Pickslipno]  [NVARCHAR] (20) NULL,
       [style]       [NVARCHAR] (20) NULL,  
       [altSKU]      [NVARCHAR] (80) NULL,             
-      [PQty]        INT)
+      [PQty]        INT,
+	  [busr5]       [NVARCHAR] (30) NULL )	--ML01
       
          
        SET @c_SQLJOIN = +' SELECT DISTINCT ORD.Orderkey, ORD.ExternOrderkey,CASE WHEN ORD.ordergroup=''VIP'' THEN ST.company else ORD.C_Company END, '  --3
@@ -210,7 +220,8 @@ BEGIN
                         +' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', '+ CHAR(13)  --20
                         +' '''','''','''','''','''','''','''','''','''','''', ' + CHAR(13) --30 
                         +' '''','''','''','''','''','''','''','''','''','''', ' + CHAR(13) --40 
-                        +' '''','''',ISNULL(ORD.Userdefine03,''''),ISNULL(ORD.OrderGroup,''''),PIF.CartonGID,PD.LabelNo,'''','''','''','''', ' + CHAR(13) --50
+                        +' '''','''',ISNULL(ORD.Userdefine03,''''),ISNULL(ORD.OrderGroup,''''),CASE WHEN ORD.ordergroup=''VIP'' THEN ORD.Userdefine04 else pif.cartongid END,PD.LabelNo, ' --ML01
+						+' '''','''','''','''', ' + CHAR(13) --50
                         +' '''','''','''','''','''','''', '''','''', ' + CHAR(13) --58
                         +' '''',PD.PICKSLIPNO ' + CHAR(13) --60               
                         +' FROM PACKDETAIL PD  WITH (NOLOCK)      '  + CHAR(13)                          
@@ -277,18 +288,19 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
          PRINT @c_labelno                   
       END   
       
-      INSERT INTO #TEMPSKU (Cartonno,pickslipno, style, altSKU, PQty)          
+      INSERT INTO #TEMPSKU (Cartonno,pickslipno, style, altSKU, PQty,busr5)	--ML01          
       SELECT DISTINCT PD.CartonNo
                     , PH.PICKSLIPNO
                     , LTRIM(RTRIM(ISNULL(Sku.sku,'')))      
                     , sku.altsku
                     , PD.Qty
+					, sku.busr5	--ML01
       FROM PACKDETAIL PD (NOLOCK) 
       JOIN PACKHEADER PH (NOLOCK) ON PH.PICKSLIPNO = PD.PICKSLIPNO
       JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PH.STORERKEY = SKU.STORERKEY
       WHERE PH.PICKSLIPNO = @c_pickslipno
       AND PD.cartonno = @c_cartonno
-      GROUP BY PH.PICKSLIPNO,PD.CartonNo, PD.Qty, LTRIM(RTRIM(ISNULL(Sku.sku,''))),SKU.altsku  --CS01
+      GROUP BY PH.PICKSLIPNO,PD.CartonNo, PD.Qty, LTRIM(RTRIM(ISNULL(Sku.sku,''))),SKU.altsku,sku.busr5  --CS01	--ML01
       ORDER BY PD.CartonNo, sku.altsku
       
       SET @c_SSTYLE01 = ''
@@ -323,7 +335,20 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
       SET @c_SKUQty08 = ''  
       SET @c_SKUQty09 = ''
       SET @c_SKUQty10 = ''
-      
+
+	  --START ML01
+	  SET @c_BUSR501 = ''
+      SET @c_BUSR502 = ''
+      SET @c_BUSR503 = ''
+      SET @c_BUSR504 = ''
+      SET @c_BUSR505 = ''
+      SET @c_BUSR506 = ''
+      SET @c_BUSR507 = ''
+      SET @c_BUSR508 = ''
+      SET @c_BUSR509 = ''
+      SET @c_BUSR510 = ''
+      --END ML01
+
       SELECT @n_CntRec = COUNT (1)  
       FROM #TEMPSKU   
       WHERE pickslipno = @c_pickslipno
@@ -390,14 +415,28 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
             SET @c_SKUQty08 = ''  
             SET @c_SKUQty09 = ''
             SET @c_SKUQty10 = ''
+           
+		    --START ML01
+			SET @c_BUSR501 = ''
+            SET @c_BUSR502 = ''
+            SET @c_BUSR503 = ''
+            SET @c_BUSR504 = ''
+            SET @c_BUSR505 = ''
+            SET @c_BUSR506 = ''
+            SET @c_BUSR507 = ''
+            SET @c_BUSR508 = ''
+            SET @c_BUSR509 = ''
+            SET @c_BUSR510 = ''
+			--END ML01
          END      
                 
-         SELECT @c_SSTYLE = style, 
+         SELECT --@c_SSTYLE = style, 
                 @c_Altsku = altSKU,  
-                @n_skuqty = SUM(PQty)  
+                @n_skuqty = SUM(PQty),
+				@c_busr5 = busr5	--ML01
          FROM #TEMPSKU   
          WHERE ID = @n_intFlag  
-         GROUP BY style,altSKU
+         GROUP BY style,altSKU,busr5 --ML01
 
          SELECT @n_ttlqty = SUM(PQTY)
          FROM #TEMPSKU  
@@ -405,85 +444,95 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
 
          IF (@n_intFlag % @n_MaxLine) = 1 --AND @n_recgrp = @n_CurrentPage  
          BEGIN   
-            SET @c_SSTYLE01 = @c_SSTYLE          
+            --SET @c_SSTYLE01 = @c_SSTYLE 
+			SET @c_BUSR501 = @c_BUSR5	--ML01
             SET @c_altsku01 = @c_altsku  
             SET @c_SKUQty01 = CONVERT(NVARCHAR(10),@n_skuqty)        
          END
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 2  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE02 = @c_SSTYLE        
+            --SET @c_SSTYLE02 = @c_SSTYLE      
+			SET @c_BUSR502 = @c_BUSR5	--ML01
             SET @c_altsku02 = @c_altsku  
             SET @c_SKUQty02 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END   
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 3  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE03 = @c_SSTYLE        
+            --SET @c_SSTYLE03 = @c_SSTYLE 
+			SET @c_BUSR503 = @c_BUSR5	--ML01
             SET @c_altsku03 = @c_altsku  
             SET @c_SKUQty03 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 4  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE04 = @c_SSTYLE        
+            --SET @c_SSTYLE04 = @c_SSTYLE
+			SET @c_BUSR504 = @c_BUSR5	--ML01
             SET @c_altsku04 = @c_altsku  
             SET @c_SKUQty04 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 5  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE05 = @c_SSTYLE        
+            --SET @c_SSTYLE05 = @c_SSTYLE   
+			SET @c_BUSR505 = @c_BUSR5	--ML01
             SET @c_altsku05 = @c_altsku  
             SET @c_SKUQty05 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 6  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE06 = @c_SSTYLE        
+            --SET @c_SSTYLE06 = @c_SSTYLE  
+			SET @c_BUSR506 = @c_BUSR5	--ML01
             SET @c_altsku06 = @c_altsku  
             SET @c_SKUQty06 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 7  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE07 = @c_SSTYLE        
+            --SET @c_SSTYLE07 = @c_SSTYLE 
+			SET @c_BUSR507 = @c_BUSR5	--ML01
             SET @c_altsku07 = @c_altsku  
             SET @c_SKUQty07 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 8  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE08 = @c_SSTYLE        
+            --SET @c_SSTYLE08 = @c_SSTYLE   
+			SET @c_BUSR508 = @c_BUSR5	--ML01
             SET @c_altsku08 = @c_altsku  
             SET @c_SKUQty08 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 9  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE09 = @c_SSTYLE        
+            --SET @c_SSTYLE09 = @c_SSTYLE    
+			SET @c_BUSR509 = @c_BUSR5	--ML01
             SET @c_altsku09 = @c_altsku  
             SET @c_SKUQty09 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
          
          ELSE IF (@n_intFlag % @n_MaxLine) = 0  --AND @n_recgrp = @n_CurrentPage  
          BEGIN      
-            SET @c_SSTYLE10 = @c_SSTYLE        
+            --SET @c_SSTYLE10 = @c_SSTYLE   
+			SET @c_BUSR510 = @c_BUSR5
             SET @c_altsku10 = @c_altsku  
             SET @c_SKUQty10 = CONVERT(NVARCHAR(10),@n_skuqty)           
          END 
 
          UPDATE #Result                    
-         SET Col12 = @c_SSTYLE01, Col11 = @c_altsku01, Col13 = @c_SKUQty01,
-             Col15 = @c_SSTYLE02, Col14 = @c_altsku02, Col16 = @c_SKUQty02, 
-             Col18 = @c_SSTYLE03, Col17 = @c_altsku03, Col19 = @c_SKUQty03,  
-             Col21 = @c_SSTYLE04, Col20 = @c_altsku04, Col22 = @c_SKUQty04, 
-             Col24 = @c_SSTYLE05, Col23 = @c_altsku05, Col25 = @c_SKUQty05, 
-             Col27 = @c_SSTYLE06, Col26 = @c_altsku06, Col28 = @c_SKUQty06, 
-             Col30 = @c_SSTYLE07, Col29 = @c_altsku07, Col31 = @c_SKUQty07,  
-             Col33 = @c_SSTYLE08, Col32 = @c_altsku08, Col34 = @c_SKUQty08,               
-             Col36 = @c_SSTYLE09, Col35 = @c_altsku09, Col37 = @c_SKUQty09,
-             Col39 = @c_SSTYLE10, Col38 = @c_altsku10, Col40 = @c_SKUQty10,
+         SET Col12 = @c_BUSR501, Col11 = @c_altsku01, Col13 = @c_SKUQty01,	--START ML01
+             Col15 = @c_BUSR502, Col14 = @c_altsku02, Col16 = @c_SKUQty02, 
+             Col18 = @c_BUSR503, Col17 = @c_altsku03, Col19 = @c_SKUQty03,  
+             Col21 = @c_BUSR504, Col20 = @c_altsku04, Col22 = @c_SKUQty04, 
+             Col24 = @c_BUSR505, Col23 = @c_altsku05, Col25 = @c_SKUQty05, 
+             Col27 = @c_BUSR506, Col26 = @c_altsku06, Col28 = @c_SKUQty06, 
+             Col30 = @c_BUSR507, Col29 = @c_altsku07, Col31 = @c_SKUQty07,  
+             Col33 = @c_BUSR508, Col32 = @c_altsku08, Col34 = @c_SKUQty08,               
+             Col36 = @c_BUSR509, Col35 = @c_altsku09, Col37 = @c_SKUQty09,
+             Col39 = @c_BUSR510, Col38 = @c_altsku10, Col40 = @c_SKUQty10,	--END ML01
              Col42 = CAST(@n_CurrentPage AS NVARCHAR(5)) + '/' + CAST(@n_TTLpage AS NVARCHAR(5))
          WHERE ID = @n_CurrentPage   
              
@@ -545,6 +594,9 @@ GO
 
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_Shipper_Label_Gant] TO nSQL 
 GO
+
+--EXEC isp_BT_Bartender_Shipper_Label_Gant 'P000170024','1','','','','','','','',''
+
 
 
   
