@@ -133,6 +133,7 @@ GO
 /* 2021-10-15 8.7 James      WMS-18022 Add eventlog to serial no step   */
 /*                           Add new field into eventlog (james23)      */
 /* 2022-02-24 8.8 Ung        WMS-18950 Add RDT format for Lottable01..4 */
+/* 2022-05-19 8.9 Ung        WMS-19667 Migrate to new ExtendedInfoSP    */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -185,7 +186,8 @@ DECLARE
    @nMoreSNO                INT,
    @nBulkSNO                INT,
    @nBulkSNOQTY             INT,
-   @nDecodeQTY              INT
+   @nDecodeQTY              INT, 
+   @tVar                    VariableTable
 
 -- Define a variable
 DECLARE
@@ -1930,23 +1932,62 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC ' + RTRIM( @cExtendedInfoSP) +
-               ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT'
-            SET @cSQLParam =
-               '@cReceiptKey   NVARCHAR( 10), ' +
-               '@cPOKey        NVARCHAR( 10), ' +
-               '@cLOC          NVARCHAR( 10), ' +
-               '@cToID         NVARCHAR( 18), ' +
-               '@cLottable01   NVARCHAR( 18), ' +
-               '@cLottable02   NVARCHAR( 18), ' +
-               '@cLottable03   NVARCHAR( 18), ' +
-               '@dLottable04   DATETIME,  ' +
-               '@cStorer       NVARCHAR( 15), ' +
-               '@cSKU          NVARCHAR( 20), ' +
-               '@cExtendedInfo NVARCHAR( 20) OUTPUT'
+            IF OBJECT_SCHEMA_NAME( OBJECT_ID( @cExtendedInfoSP)) = 'dbo'
+            BEGIN
+               SET @cSQL = 'EXEC ' + RTRIM( @cExtendedInfoSP) +
+                  ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT'
+               SET @cSQLParam =
+                  '@cReceiptKey   NVARCHAR( 10), ' +
+                  '@cPOKey        NVARCHAR( 10), ' +
+                  '@cLOC          NVARCHAR( 10), ' +
+                  '@cToID         NVARCHAR( 18), ' +
+                  '@cLottable01   NVARCHAR( 18), ' +
+                  '@cLottable02   NVARCHAR( 18), ' +
+                  '@cLottable03   NVARCHAR( 18), ' +
+                  '@dLottable04   DATETIME,  ' +
+                  '@cStorer       NVARCHAR( 15), ' +
+                  '@cSKU          NVARCHAR( 20), ' +
+                  '@cExtendedInfo NVARCHAR( 20) OUTPUT'
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT
+            END
+            ELSE
+            BEGIN 
+                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+                  ' @cReceiptKey, @cPOKey, @cRefNo, @cToLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, ' + 
+                  ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                SET @cSQLParam =
+                  ' @nMobile         INT,                    ' +  
+                  ' @nFunc           INT,                    ' + 
+                  ' @cLangCode       NVARCHAR( 3),           ' + 
+                  ' @nStep           INT,                    ' + 
+                  ' @nAfterStep      INT,                    ' + 
+                  ' @nInputKey       INT,                    ' + 
+                  ' @cFacility       NVARCHAR( 5),           ' + 
+                  ' @cStorerKey      NVARCHAR( 15),          ' + 
+                  ' @cReceiptKey     NVARCHAR( 10),          ' + 
+                  ' @cPOKey          NVARCHAR( 10),          ' + 
+                  ' @cRefNo          NVARCHAR( 20),          ' + 
+                  ' @cToLOC          NVARCHAR( 10),          ' + 
+                  ' @cToID           NVARCHAR( 18),          ' + 
+                  ' @cLottable01     NVARCHAR( 18),          ' + 
+                  ' @cLottable02     NVARCHAR( 18),          ' + 
+                  ' @cLottable03     NVARCHAR( 18),          ' + 
+                  ' @dLottable04     DATETIME,               ' + 
+                  ' @cSKU            NVARCHAR( 20),          ' + 
+                  ' @nQTY            INT,                    ' + 
+                  ' @tVar            VariableTable READONLY, ' + 
+                  ' @cExtendedInfo   NVARCHAR( 20) OUTPUT,   ' + 
+                  ' @nErrNo          INT           OUTPUT,   ' + 
+                  ' @cErrMsg         NVARCHAR( 20) OUTPUT    ' 
+
+                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, 5, @nInputKey, @cFacility, @cStorer, 
+                  @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID, @cTempLottable01, @cTempLottable02, @cTempLottable03, @dTempLottable04, @cSKU, @nQTY, @tVar, 
+                  @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            END
          END
       END
 
@@ -2185,7 +2226,7 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-           SET @nDecodeQTY = 0
+            SET @nDecodeQTY = 0
             EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
                @cUPC    = @cSKU    OUTPUT,
                @nQTY    = @nDecodeQTY    OUTPUT,
@@ -2616,30 +2657,31 @@ BEGIN
          SET @nUOM_Div = 1
 
       -- Extended info
-      SET @cExtendedInfo = ''
       IF @cExtendedInfoSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
-            -- SET @cOutField15 = ''
+            IF OBJECT_SCHEMA_NAME( OBJECT_ID( @cExtendedInfoSP)) = 'dbo'
+            BEGIN 
+               SET @cExtendedInfo = ''
+               SET @cSQL = 'EXEC ' + RTRIM( @cExtendedInfoSP) +
+                  ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT'
+               SET @cSQLParam =
+                  '@cReceiptKey   NVARCHAR( 10), ' +
+                  '@cPOKey        NVARCHAR( 10), ' +
+                  '@cLOC          NVARCHAR( 10), ' +
+                  '@cToID         NVARCHAR( 18), ' +
+                  '@cLottable01   NVARCHAR( 18), ' +
+                  '@cLottable02   NVARCHAR( 18), ' +
+                  '@cLottable03   NVARCHAR( 18), ' +
+                  '@dLottable04   DATETIME,  ' +
+                  '@cStorer       NVARCHAR( 15), ' +
+                  '@cSKU          NVARCHAR( 20), ' +
+                  '@cExtendedInfo NVARCHAR( 20) OUTPUT'
 
-            SET @cSQL = 'EXEC ' + RTRIM( @cExtendedInfoSP) +
-               ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT'
-            SET @cSQLParam =
-               '@cReceiptKey   NVARCHAR( 10), ' +
-               '@cPOKey        NVARCHAR( 10), ' +
-               '@cLOC          NVARCHAR( 10), ' +
-               '@cToID         NVARCHAR( 18), ' +
-               '@cLottable01   NVARCHAR( 18), ' +
-               '@cLottable02   NVARCHAR( 18), ' +
-               '@cLottable03   NVARCHAR( 18), ' +
-               '@dLottable04   DATETIME,  ' +
-               '@cStorer       NVARCHAR( 15), ' +
-               '@cSKU          NVARCHAR( 20), ' +
-               '@cExtendedInfo NVARCHAR( 20) OUTPUT'
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT
+            END
          END
       END
 
@@ -2747,7 +2789,7 @@ BEGIN
 
          -- EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, '64273 ', 'QTY Required'
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- QTY
-         GOTO Quit
+         GOTO Step_5_Quit
       END
 
       -- Validate QTY
@@ -2932,7 +2974,7 @@ BEGIN
             -- Go to Serial No screen
             SET @nFromScn = @nScn
             SET @nScn = 4831
-               SET @nStep = @nStep + 4
+            SET @nStep = @nStep + 4
 
             GOTO Step_5_Quit
          END
@@ -3213,7 +3255,7 @@ BEGIN
       IF @cSkipLottable = '1'
          GOTO Step_4
    END
-   GOTO Quit
+   GOTO Step_5_Quit
 
    Step_5_Fail_SKU:
    BEGIN
@@ -3249,6 +3291,54 @@ BEGIN
                SET @nScn = 4830 -- 1D SerialNo screen
 
                GOTO Step_9
+            END
+         END
+      END
+
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            IF OBJECT_SCHEMA_NAME( OBJECT_ID( 'rdt.' + @cExtendedInfoSP)) = 'rdt' 
+            BEGIN 
+               SET @cExtendedInfo = ''
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+                  ' @cReceiptKey, @cPOKey, @cRefNo, @cToLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, ' + 
+                  ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  ' @nMobile         INT,                    ' +  
+                  ' @nFunc           INT,                    ' + 
+                  ' @cLangCode       NVARCHAR( 3),           ' + 
+                  ' @nStep           INT,                    ' + 
+                  ' @nAfterStep      INT,                    ' + 
+                  ' @nInputKey       INT,                    ' + 
+                  ' @cFacility       NVARCHAR( 5),           ' + 
+                  ' @cStorerKey      NVARCHAR( 15),          ' + 
+                  ' @cReceiptKey     NVARCHAR( 10),          ' + 
+                  ' @cPOKey          NVARCHAR( 10),          ' + 
+                  ' @cRefNo          NVARCHAR( 20),          ' + 
+                  ' @cToLOC          NVARCHAR( 10),          ' + 
+                  ' @cToID           NVARCHAR( 18),          ' + 
+                  ' @cLottable01     NVARCHAR( 18),          ' + 
+                  ' @cLottable02     NVARCHAR( 18),          ' + 
+                  ' @cLottable03     NVARCHAR( 18),          ' + 
+                  ' @dLottable04     DATETIME,               ' + 
+                  ' @cSKU            NVARCHAR( 20),          ' + 
+                  ' @nQTY            INT,                    ' + 
+                  ' @tVar            VariableTable READONLY, ' + 
+                  ' @cExtendedInfo   NVARCHAR( 20) OUTPUT,   ' + 
+                  ' @nErrNo          INT           OUTPUT,   ' + 
+                  ' @cErrMsg         NVARCHAR( 20) OUTPUT    ' 
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, 5, @nStep, @nInputKey, @cFacility, @cStorer, 
+                  @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, 
+                  @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            
+               IF @nStep = 5
+                  SET @cOutField15 = @cExtendedInfo
             END
          END
       END
@@ -3572,33 +3662,7 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
    END
-   /*
-    -- Extended info
-    SET @cExtendedInfo = ''
-    IF @cExtendedInfoSP <> ''
-    BEGIN
-       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-       BEGIN
-          SET @cSQL = 'EXEC ' + RTRIM( @cExtendedInfoSP) +
-            ' @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT'
-          SET @cSQLParam =
-             '@cReceiptKey   NVARCHAR( 10), ' +
-    '@cPOKey        NVARCHAR( 10), ' +
-             '@cLOC          NVARCHAR( 10), ' +
-             '@cToID         NVARCHAR( 18), ' +
-             '@cLottable01   NVARCHAR( 18), ' +
-             '@cLottable02   NVARCHAR( 18), ' +
-             '@cLottable03   NVARCHAR( 18), ' +
-             '@dLottable04   DATETIME,  ' +
-             '@cStorer       NVARCHAR( 15), ' +
-             '@cSKU          NVARCHAR( 20), ' +
-             '@cExtendedInfo NVARCHAR( 20) OUTPUT'
 
-          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-             @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cStorer, @cSKU, @cExtendedInfo OUTPUT
-       END
-    END
-   */
     -- Enable field
    SELECT @cFieldAttr04 = ''
    SELECT @cFieldAttr05 = ''
@@ -3624,7 +3688,7 @@ BEGIN
    SET @cOutField10 = CAST( @nToIDQTY AS NVARCHAR( 10))
    SET @cOutField11 = @cSKU -- last SKU
    SET @cOutField12 = @cUOM -- last UOM
-   SET @cOutField15 = @cExtendedInfo
+   SET @cOutField15 = '' --@cExtendedInfo
 
    IF ISNULL( @cOutField02, '') = ''
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
@@ -3634,6 +3698,54 @@ BEGIN
    -- Go to SKU QTY screen
    SET @nScn = 1754 -- @nScn - 2
    SET @nStep = @nStep - 2
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         IF OBJECT_SCHEMA_NAME( OBJECT_ID( 'rdt.' + @cExtendedInfoSP)) = 'rdt' 
+         BEGIN 
+            SET @cExtendedInfo = ''
+             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+               ' @cReceiptKey, @cPOKey, @cRefNo, @cToLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, ' + 
+               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+             SET @cSQLParam =
+               ' @nMobile         INT,                    ' +  
+               ' @nFunc           INT,                    ' + 
+               ' @cLangCode       NVARCHAR( 3),           ' + 
+               ' @nStep           INT,                    ' + 
+               ' @nAfterStep      INT,                    ' + 
+               ' @nInputKey       INT,                    ' + 
+               ' @cFacility       NVARCHAR( 5),           ' + 
+               ' @cStorerKey      NVARCHAR( 15),          ' + 
+               ' @cReceiptKey     NVARCHAR( 10),          ' + 
+               ' @cPOKey          NVARCHAR( 10),          ' + 
+               ' @cRefNo          NVARCHAR( 20),          ' + 
+               ' @cToLOC          NVARCHAR( 10),          ' + 
+               ' @cToID           NVARCHAR( 18),          ' + 
+               ' @cLottable01     NVARCHAR( 18),          ' + 
+               ' @cLottable02     NVARCHAR( 18),          ' + 
+               ' @cLottable03     NVARCHAR( 18),          ' + 
+               ' @dLottable04     DATETIME,               ' + 
+               ' @cSKU            NVARCHAR( 20),          ' + 
+               ' @nQTY            INT,                    ' + 
+               ' @tVar            VariableTable READONLY, ' + 
+               ' @cExtendedInfo   NVARCHAR( 20) OUTPUT,   ' + 
+               ' @nErrNo          INT           OUTPUT,   ' + 
+               ' @cErrMsg         NVARCHAR( 20) OUTPUT    ' 
+
+             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 7, @nStep, @nInputKey, @cFacility, @cStorer, 
+               @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, 
+               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            
+            IF @nStep = 5 -- SKU, QTY
+               SET @cOutField15 = @cExtendedInfo
+         END
+      END
+   END
 END
 GOTO Quit
 
@@ -3699,7 +3811,7 @@ BEGIN
    SET @cOutField10 = CAST( @nToIDQTY AS NVARCHAR( 10))
    SET @cOutField11 = @cSKU -- last SKU
    SET @cOutField12 = @cUOM -- last UOM
-   SET @cOutField15 = @cExtendedInfo
+   SET @cOutField15 = '' -- @cExtendedInfo
 
    EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
 
@@ -3707,6 +3819,53 @@ BEGIN
    SET @nScn = @nFromScn
    SET @nStep = @nStep - 3
 
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         IF OBJECT_SCHEMA_NAME( OBJECT_ID( 'rdt.' + @cExtendedInfoSP)) = 'rdt' 
+         BEGIN 
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+               ' @cReceiptKey, @cPOKey, @cRefNo, @cToLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, ' + 
+               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile         INT,                    ' +  
+               ' @nFunc           INT,                    ' + 
+               ' @cLangCode       NVARCHAR( 3),           ' + 
+               ' @nStep           INT,                    ' + 
+               ' @nAfterStep      INT,                    ' + 
+               ' @nInputKey       INT,                    ' + 
+               ' @cFacility       NVARCHAR( 5),           ' + 
+               ' @cStorerKey      NVARCHAR( 15),          ' + 
+               ' @cReceiptKey     NVARCHAR( 10),          ' + 
+               ' @cPOKey          NVARCHAR( 10),          ' + 
+               ' @cRefNo          NVARCHAR( 20),          ' + 
+               ' @cToLOC          NVARCHAR( 10),          ' + 
+               ' @cToID           NVARCHAR( 18),          ' + 
+               ' @cLottable01     NVARCHAR( 18),          ' + 
+               ' @cLottable02     NVARCHAR( 18),          ' + 
+               ' @cLottable03     NVARCHAR( 18),          ' + 
+               ' @dLottable04     DATETIME,               ' + 
+               ' @cSKU            NVARCHAR( 20),          ' + 
+               ' @nQTY            INT,                    ' + 
+               ' @tVar            VariableTable READONLY, ' + 
+               ' @cExtendedInfo   NVARCHAR( 20) OUTPUT,   ' + 
+               ' @nErrNo          INT           OUTPUT,   ' + 
+               ' @cErrMsg         NVARCHAR( 20) OUTPUT    ' 
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 8, @nStep, @nInputKey, @cFacility, @cStorer, 
+               @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, 
+               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            
+            IF @nStep = 5 -- SKU, QTY
+               SET @cOutField15 = @cExtendedInfo
+         END
+      END
+   END
 END
 GOTO Quit
 
@@ -3771,7 +3930,7 @@ BEGIN
          SET @cOutField10 = CAST( @nToIDQTY AS NVARCHAR( 10)) -- To ID QTY
          SET @cOutField11 = @cSKU -- last SKU
          SET @cOutField12 = @cUOM -- last UOM
-         SET @cOutField15 = @cExtendedInfo
+         SET @cOutField15 = '' -- @cExtendedInfo
 
          SET @cInField05 = @cDefaultPieceRecvQTY
          EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
@@ -3780,7 +3939,7 @@ BEGIN
          SET @nScn = @nFromScn
          SET @nStep = @nStep - 4
 
-         GOTO Quit
+         GOTO Step_9_Quit
       END
 
       IF @nErrNo <> 0
@@ -3911,7 +4070,7 @@ BEGIN
       SET @cOutField10 = CAST( @nToIDQTY AS NVARCHAR( 10))
       SET @cOutField11 = @cSKU -- last SKU
       SET @cOutField12 = @cUOM -- last UOM
-      SET @cOutField15 = @cExtendedInfo
+      SET @cOutField15 = '' -- @cExtendedInfo
 
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
 
@@ -3934,13 +4093,62 @@ BEGIN
       SET @cOutField10 = CAST( @nToIDQTY AS NVARCHAR( 10))
       SET @cOutField11 = @cSKU -- last SKU
       SET @cOutField12 = @cUOM -- last UOM
-      SET @cOutField15 = @cExtendedInfo
+      SET @cOutField15 = '' -- @cExtendedInfo
 
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
 
       -- Go to SKU QTY screen
       SET @nScn = @nFromScn
       SET @nStep = @nStep - 4
+   END
+
+Step_9_Quit:
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         IF OBJECT_SCHEMA_NAME( OBJECT_ID( 'rdt.' + @cExtendedInfoSP)) = 'rdt' 
+         BEGIN 
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+               ' @cReceiptKey, @cPOKey, @cRefNo, @cToLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, ' + 
+               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile         INT,                    ' +  
+               ' @nFunc           INT,                    ' + 
+               ' @cLangCode       NVARCHAR( 3),           ' + 
+               ' @nStep           INT,                    ' + 
+               ' @nAfterStep      INT,                    ' + 
+               ' @nInputKey       INT,                    ' + 
+               ' @cFacility       NVARCHAR( 5),           ' + 
+               ' @cStorerKey      NVARCHAR( 15),          ' + 
+               ' @cReceiptKey     NVARCHAR( 10),          ' + 
+               ' @cPOKey          NVARCHAR( 10),          ' + 
+               ' @cRefNo          NVARCHAR( 20),          ' + 
+               ' @cToLOC          NVARCHAR( 10),          ' + 
+               ' @cToID           NVARCHAR( 18),          ' + 
+               ' @cLottable01     NVARCHAR( 18),          ' + 
+               ' @cLottable02     NVARCHAR( 18),          ' + 
+               ' @cLottable03     NVARCHAR( 18),          ' + 
+               ' @dLottable04     DATETIME,               ' + 
+               ' @cSKU            NVARCHAR( 20),          ' + 
+               ' @nQTY            INT,                    ' + 
+               ' @tVar            VariableTable READONLY, ' + 
+               ' @cExtendedInfo   NVARCHAR( 20) OUTPUT,   ' + 
+               ' @nErrNo          INT           OUTPUT,   ' + 
+               ' @cErrMsg         NVARCHAR( 20) OUTPUT    ' 
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 9, @nStep, @nInputKey, @cFacility, @cStorer, 
+               @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, @tVar, 
+               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            
+            IF @nStep = 5 -- SKU, QTY
+               SET @cOutField15 = @cExtendedInfo
+         END
+      END
    END
 END
 GOTO Quit
