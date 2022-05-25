@@ -24,6 +24,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 07-FEB-2022  CSCHONG   1.0   Devops Scripts Combine                  */
+/* 17-MAY-2022  NJOW01    1.1   WMS-19677 Change tablename and remove   */
+/*                              transmitlog3                            */
+/* 17-MAY-2022  NJOW01    1.1   DEVOPS Combine script                   */
 /************************************************************************/
 CREATE  OR ALTER PROCEDURE isp_RCM_ASN_HM_ASNSHIPUPD01
    @c_Receiptkey NVARCHAR(10),   
@@ -73,7 +76,7 @@ BEGIN
           
    WHILE @@FETCH_STATUS = 0 
    BEGIN   
-     IF EXISTS (SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = 'WS_RCPTHNM9L'
+     IF EXISTS (SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = 'WSRCHNM9L'   --NJOW01   
                          AND Key1 = @c_Receiptkey AND Key2 = @c_key2 AND Key3 = @c_Storerkey)
       BEGIN
          SELECT @n_continue = 3  
@@ -83,7 +86,7 @@ BEGIN
       
       IF @n_continue IN(1,2)
       BEGIN
-         EXEC dbo.ispGenTransmitLog2 'WS_RCPTHNM9L', @c_Receiptkey, @c_key2, @c_StorerKey, ''  
+         EXEC dbo.ispGenTransmitLog2 'WSRCHNM9L', @c_Receiptkey, @c_key2, @c_StorerKey, ''   --NJOW01
               , @b_success OUTPUT  
               , @n_err OUTPUT  
               , @c_errmsg OUTPUT  
@@ -92,6 +95,7 @@ BEGIN
              SELECT @n_continue = 3, @n_err = 60098, @c_errmsg = 'isp_RCM_ASN_HM_ASNSHIPUPD01: ' + rtrim(@c_errmsg)
       END
 
+      /*  --NJOW01 Removed
       IF EXISTS (SELECT 1 FROM TransmitLog3 (NOLOCK) WHERE TableName = 'RCPTHNM9L'
                          AND Key1 = @c_Receiptkey AND Key2 = @c_key2 AND Key3 = @c_Storerkey)
       BEGIN
@@ -109,7 +113,8 @@ BEGIN
               
          IF @b_success = 0
              SELECT @n_continue = 3, @n_err = 60098, @c_errmsg = 'isp_RCM_ASN_HM_ASNSHIPUPD01: ' + rtrim(@c_errmsg)
-      END      
+      END     
+      */ 
         
       FETCH NEXT FROM cur_RECEIPTUDF INTO @c_key2
    END         
