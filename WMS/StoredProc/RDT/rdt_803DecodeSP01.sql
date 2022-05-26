@@ -41,7 +41,7 @@ Begin
         Join Sku SKU (NoLock) On PD.Storerkey = SKU.Storerkey And PD.Sku = SKU.Sku
         JOIN Orders O (NOLOCK) ON PD.orderkey=O.orderkey
         Where o.loadkey=@cLoadkey
-            And ( SKU.Sku = @cUPC Or SKU.AltSku = @cUPC OR SKU.Sku= @cUPC or SKU.RetailSKU=@cUPC) 
+            And ( SKU.Sku = @cUPC Or SKU.AltSku = @cUPC OR SKU.Sku= @cUPC or SKU.RetailSKU=@cUPC or SKU.Manufacturersku=@cUPC) 
             And PD.CaseID <> 'SORTED'
     
         If Isnull(@Sku , '') <> ''
@@ -57,7 +57,7 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON PTL.isp_803PTL_Confirm08 TO NSQL
+GRANT EXECUTE ON rdt.rdt_803DecodeSP01 TO NSQL
 GO
 
 
