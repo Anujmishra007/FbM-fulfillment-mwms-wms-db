@@ -23,6 +23,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 2022-04-06  CHONGCS  1.0   Created - DevOps Combine Script           */
+/* 2022-04-29  CSCHONG  1.1   WMS-19384 fix route mapping (CS01)        */
+/* 2022-05-24  CSCHONG  1.2   WMS-19384 change dropid to labelno (CS02) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_114_sg_rdt] (
     @c_DropID       NVARCHAR(20)  
@@ -61,9 +63,10 @@ DECLARE @t_DropID TABLE (
 
    SELECT @c_pickslipno = PH.PickSlipNo  
          ,@c_Storerkey = PH.StorerKey
+         ,@c_LabelNo = PD.LabelNo
    FROM PACKHEADER PH WITH (NOLOCK)                                         
    JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
-   WHERE PD.DropID = @c_DropID AND PD.Storerkey = 'ADIDAS'    
+   WHERE PD.dropid = @c_DropID AND PD.Storerkey = 'ADIDAS'                        
 
    --DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    --SELECT DISTINCT PD.LabelNo, PD.StorerKey
@@ -77,19 +80,26 @@ DECLARE @t_DropID TABLE (
    --WHILE @@FETCH_STATUS <> -1
    --BEGIN
       IF EXISTS (SELECT 1 FROM PICKDETAIL (NOLOCK) 
-                 WHERE DropID = @c_DropID 
+                 WHERE DropID = @c_LabelNo                         --CS02 
                  AND Storerkey = @c_Storerkey
                  AND UOM = '2')
       BEGIN
          INSERT INTO @t_DropID (LabelNo, Indicator)
-         SELECT @c_DropID, 'FC'
+         SELECT @c_LabelNo, 'FC'
       END
+      --CS01 S
+       IF EXISTS (SELECT 1 FROM ORDERS OH WITH (NOLOCK)
+                  JOIN PackHeader PH WITH (NOLOCK) ON PH.OrderKey=OH.OrderKey
+                  WHERE PH.PickSlipNo =@c_pickslipno AND PH.StorerKey = @c_Storerkey
+                  AND ISNULL(OH.M_vat,'') = 'PPA')
+      BEGIN   
+
 
              IF EXISTS 
             ( SELECT 1 FROM PackDetail PAD
                 LEFT JOIN rdt.RdtPPA PPA ON PPA.Storerkey = @c_Storerkey And PPA.DropID = @c_DropID And PPA.Sku = PAD.SKU
                 Where PAD.Storerkey = @c_Storerkey
-               AND PAD.DropID = @c_DropID 
+               AND PAD.DropID = @c_DropID                            
                 HAVING sum(PAD.Qty) <> sum(IsNull(PPA.CQty,0))
             )
             BEGIN
@@ -103,13 +113,13 @@ DECLARE @t_DropID TABLE (
                 And PPA.CQty > 0 
                 And NOT EXISTS (SELECT 1 
                            FROM PackDetail PAD WHERE PAD.Storerkey = @c_Storerkey
-                           AND PAD.DropID = @c_DropID
+                           AND PAD.DropID = @c_DropID                  
                            And PAD.Sku = PPA.SKU)
             )
             BEGIN
                SET @c_chkNOTPPA2 = 'Y'
             END
-        
+        END   --CS01 E
             IF @c_chkNOTPPA1 = 'Y' OR @c_chkNOTPPA2 = 'Y'
             BEGIN
               SET @c_NOTPPA = 'Y' 
@@ -189,8 +199,8 @@ DECLARE @t_DropID TABLE (
                 AND CODELKUP.STORERKEY = PACKHEADER.Storerkey 
                AND CODELKUP.Code = Sku.SkuGroup 
                AND Sku.Sku = PACKDETAIL.Sku) AS PF    
-   LEFT JOIN @t_DropID TDI ON TDI.LabelNo = PACKDETAIL.dropid                        
-   WHERE PACKDETAIL.DROPID = @c_DropID AND PACKDETAIL.Storerkey = 'ADIDAS'  
+   LEFT JOIN @t_DropID TDI ON TDI.LabelNo = PACKDETAIL.labelno                      --CS02                     
+   WHERE PACKDETAIL.DropID = @c_DropID AND PACKDETAIL.Storerkey = 'ADIDAS'      
    --AND PACKD.CartonNo BETWEEN CAST(@c_FromCartonNo AS INT) AND CAST(@c_ToCartonNo AS INT)
    --AND PACKDETAIL.LabelNo BETWEEN @c_FromLabelNo AND @c_ToLabelNo
    GROUP BY ORDERS.Loadkey
