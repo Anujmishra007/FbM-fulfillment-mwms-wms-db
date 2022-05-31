@@ -10,7 +10,7 @@ GO
 /* Copyright      : LF Logistics                                        */  
 /*                                                                      */  
 /* Date       Rev  Author   Purposes                                    */  
-/* 01/03/2022 1.0  yeekung  WMS-17331 Created                           */  
+/* 01-03-2022 1.0  yeekung  WMS-17331 Created                           */  
 /************************************************************************/    
 CREATE OR ALTER PROC [RDT].[rdt_803MatrixSP08] (        
     @nMobile    INT        
