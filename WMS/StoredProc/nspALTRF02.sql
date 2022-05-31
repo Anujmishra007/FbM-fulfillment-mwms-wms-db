@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALTRF02]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALTRF02]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,16 +12,18 @@ GO
 /*                                                                      */
 /* Called By: Transfer allocation                                       */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.1                                                    */    
 /*                                                                      */    
 /* Version: 1.0                                                         */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author  Ver.  Purposes                                  */    
+/* Date         Author  Ver.  Purposes                                  */  
+/* 25-Feb-2022  WLChooi 1.1   DevOps Combine Script                     */
+/* 25-Feb-2022  WLChooi 1.1   WMS-18993 - Disable filter Lott04&05(WL01)*/
 /************************************************************************/    
-CREATE  PROC [dbo].[nspALTRF02]        
+CREATE OR ALTER PROC [dbo].[nspALTRF02]        
    @c_Orderey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -73,7 +70,8 @@ BEGIN
            @c_PrevLOT          NVARCHAR(10),
            @n_cnt              INT,
            @n_LotQtyAvailable  INT,
-           @c_Source           NCHAR(1)
+           @c_Source           NCHAR(1),
+           @c_DisableLot45Filter NVARCHAR(10) = 'N'   --WL01
 
    DECLARE @c_key1        NVARCHAR(10)    
           ,@c_key2        NVARCHAR(5)    
@@ -119,6 +117,17 @@ BEGIN
    
    IF @n_StorerMinShelfLife IS NULL
       SELECT @n_StorerMinShelfLife = 0
+
+   --WL01 S
+   SELECT @c_DisableLot45Filter = ISNULL(CL.Short,'N')
+   FROM CODELKUP CL (NOLOCK) 
+   WHERE CL.LISTNAME = 'PKCODECFG'
+   AND CL.Storerkey = @c_StorerKey
+   AND CL.Code = 'DisableLot45Filter'
+   AND CL.Long = 'nspALTRF02'
+   AND (CL.Code2 = '' OR CL.Code2 = @c_Facility)
+   ORDER BY CASE WHEN CL.CODE2 = '' THEN 2 ELSE 1 END 
+   --WL01 E
 
    SET @c_SQL = N'   
       DECLARE CURSOR_AVAILABLE CURSOR FAST_FORWARD READ_ONLY FOR
@@ -166,9 +175,11 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
-      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable04, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL AND @c_DisableLot45Filter = 'N'    --WL01 
+           THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable04, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +   --WL01
       CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', LA.Lottable04) > GetDate() ' ELSE ' ' END + 
-      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable05, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL AND @c_DisableLot45Filter = 'N'    --WL01 
+           THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable05, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +   --WL01
       CASE WHEN ISNULL(RTRIM(@c_Lottable06),'') = '' THEN '' ELSE ' AND LA.Lottable06 = @c_Lottable06 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable07),'') = '' THEN '' ELSE ' AND LA.Lottable07 = @c_Lottable07 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable08),'') = '' THEN '' ELSE ' AND LA.Lottable08 = @c_Lottable08 ' END +
