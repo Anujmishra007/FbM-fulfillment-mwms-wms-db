@@ -1,27 +1,28 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPreAL03]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispPreAL03]
+USE [SGWMS]
 GO
 
+/****** Object:  StoredProcedure [dbo].[ispPreAL03]    Script Date: 6/1/2022 5:33:41 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/    
-/* Stored Procedure: ispPreAL03                                         */    
-/* Creation Date: 20-Feb-2018                                           */    
-/* Copyright: LFL                                                       */    
-/* Written by: Wan                                                      */    
-/*                                                                      */    
+
+/************************************************************************/
+/* Stored Procedure: ispPreAL03                                         */
+/* Creation Date: 20-Feb-2018                                           */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: WMS-4046 - Allocation by Lottable03 Based on Consignee      */
-/*                                                                      */    
-/* Called By:                                                           */    
-/*                                                                      */    
-/* PVCS Version: 1.1                                                    */    
-/*                                                                      */    
-/* Data Modifications:                                                  */    
-/*                                                                      */    
-/* Updates:                                                             */    
+/*                                                                      */
+/* Called By:                                                           */
+/*                                                                      */
+/* PVCS Version: 1.1                                                    */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
 /* 24/05/2018  NJOW01   1.0   WMS-5158 modify shelflife checking and    */
 /*                            sorting based on strategykey              */
@@ -33,14 +34,17 @@ GO
 /* 25/03/2020  NJOW06   1.5   WMS-12622 add sku brand and skugroup FEFO */
 /*                            shelflife by consignee                    */
 /* 28/05/2020  NJOW07   1.6   WMS-13544 Change FIFO to use lottable04   */
-/************************************************************************/    
-CREATE  PROC [dbo].[ispPreAL03]        
-           @c_OrderKey NVARCHAR(10) 
-         , @c_LoadKey  NVARCHAR(10)    
-         , @b_Success  INT    OUTPUT  
+/* 14/09/2020  Leong    1.7   INC1283171 - Bug Fix.                     */
+/* 01/06/2022  CLVN01   1.8   JSM-71556 Add LocationFlag <> HOLD        */
+/************************************************************************/
+
+ALTER PROC [dbo].[ispPreAL03]
+           @c_OrderKey NVARCHAR(10)
+         , @c_LoadKey  NVARCHAR(10)
+         , @b_Success  INT    OUTPUT
          , @n_Err      INT    OUTPUT
-         , @c_ErrMsg   NVARCHAR(255) OUTPUT  
-         , @b_debug    INT = 0   
+         , @c_ErrMsg   NVARCHAR(255) OUTPUT
+         , @b_debug    INT = 0
 AS
 BEGIN
    SET NOCOUNT ON
@@ -48,42 +52,42 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_Continue          INT   
-          , @n_StartTCnt         INT 
+   DECLARE  @n_Continue          INT
+          , @n_StartTCnt         INT
           , @c_SQL               NVARCHAR(MAX)
-          , @c_SQLParms          NVARCHAR(MAX)           
-          , @c_AddWhereSQL       NVARCHAR(MAX)       
+          , @c_SQLParms          NVARCHAR(MAX)
+          , @c_AddWhereSQL       NVARCHAR(MAX)
 
    DECLARE @n_MinShelfLife       INT
          , @c_Lottable04Label    NVARCHAR(30)
          , @c_Strategy           NVARCHAR(10)
-   
+
    DECLARE @n_SeqNo              INT
-           
+
          , @n_QtyLeftToFulfill   INT
-         , @n_QtyAvailable       INT 
+         , @n_QtyAvailable       INT
          , @n_QtyToTake          INT
          , @n_Pallet             FLOAT
-         , @n_cPackQty           FLOAT  
- 
+         , @n_cPackQty           FLOAT
 
-         , @c_OrderLineNumber    NVARCHAR(5)  
-         , @c_PickDetailKey      NVARCHAR(10) 
-         , @c_Facility           NVARCHAR(5)      
-         , @c_StorerKey          NVARCHAR(15) 
-         , @c_SKU                NVARCHAR(20)  
+
+         , @c_OrderLineNumber    NVARCHAR(5)
+         , @c_PickDetailKey      NVARCHAR(10)
+         , @c_Facility           NVARCHAR(5)
+         , @c_StorerKey          NVARCHAR(15)
+         , @c_SKU                NVARCHAR(20)
          , @c_Packkey            NVARCHAR(10)
          , @c_aUOM               NVARCHAR(10)
-         , @n_UOMQty             INT   
-         , @c_PickMethod         NVARCHAR(1)                         
+         , @n_UOMQty             INT
+         , @c_PickMethod         NVARCHAR(1)
          , @c_Lot                NVARCHAR(10)
          , @c_Loc                NVARCHAR(10)
          , @c_ID                 NVARCHAR(18)
          , @c_Lottable01         NVARCHAR(18)
          , @c_Lottable02         NVARCHAR(18)
          , @c_Lottable03         NVARCHAR(18)
-         , @dt_Lottable04        DATETIME    
-         , @dt_Lottable05        DATETIME    
+         , @dt_Lottable04        DATETIME
+         , @dt_Lottable05        DATETIME
          , @c_Lottable06         NVARCHAR(30)
          , @c_Lottable07         NVARCHAR(30)
          , @c_Lottable08         NVARCHAR(30)
@@ -91,9 +95,9 @@ BEGIN
          , @c_Lottable10         NVARCHAR(30)
          , @c_Lottable11         NVARCHAR(30)
          , @c_Lottable12         NVARCHAR(30)
-         , @dt_Lottable13        DATETIME    
-         , @dt_Lottable14        DATETIME    
-         , @dt_Lottable15        DATETIME  
+         , @dt_Lottable13        DATETIME
+         , @dt_Lottable14        DATETIME
+         , @dt_Lottable15        DATETIME
 
          , @c_uom3pickmethod     NVARCHAR(10)
          , @c_uom4pickmethod     NVARCHAR(10)
@@ -101,28 +105,28 @@ BEGIN
 
          , @CUR_OD               CURSOR
          , @c_Strategykey        NVARCHAR(10) --NJOW01
-         , @n_ConMinShelfLife    INT --NJOW01 
-         , @n_SkuOGShelflife     INT --NJOW03         
+         , @n_ConMinShelfLife    INT --NJOW01
+         , @n_SkuOGShelflife     INT --NJOW03
          , @n_SkuGroupShelfLife  INT --NJOW06
          , @n_SkuGroupShelfLife2 INT --NJOW06
 
          --NJOW04
    DECLARE @c_CONSIGTAG          NVARCHAR(1)
-         , @c_DMGALLOC           NVARCHAR(1) 
-         , @c_RTNNOALLOC         NVARCHAR(1) 
+         , @c_DMGALLOC           NVARCHAR(1)
+         , @c_RTNNOALLOC         NVARCHAR(1)
          , @c_Lottable03Inc      NVARCHAR(50)
-         
-   SELECT @c_CONSIGTAG = 'N', @c_DMGALLOC = 'N', @c_RTNNOALLOC = 'N' 
+
+   SELECT @c_CONSIGTAG = 'N', @c_DMGALLOC = 'N', @c_RTNNOALLOC = 'N'
 
    IF EXISTS ( SELECT 1
             FROM ORDERS OH WITH (NOLOCK)
             JOIN CODELKUP CL WITH (NOLOCK) ON (CL.ListName = 'CONSIGTAG')
                                              AND(CL.Code = OH.Consigneekey)
                                              AND(CL.Storerkey = OH.Storerkey)
-            WHERE OH.Orderkey = @c_Orderkey 
+            WHERE OH.Orderkey = @c_Orderkey
             )
    BEGIN
-   	  SET @c_CONSIGTAG = 'Y'  --NJOW04
+        SET @c_CONSIGTAG = 'Y'  --NJOW04
       --GOTO QUIT_SP
    END
 
@@ -132,10 +136,10 @@ BEGIN
             JOIN CODELKUP CL WITH (NOLOCK) ON (CL.ListName = 'DMGALLOC')
                                              AND(CL.Code = OH.Consigneekey)
                                              AND(CL.Storerkey = OH.Storerkey)
-            WHERE OH.Orderkey = @c_Orderkey 
+            WHERE OH.Orderkey = @c_Orderkey
             )
    BEGIN
-   	  SET @c_DMGALLOC = 'Y'
+        SET @c_DMGALLOC = 'Y'
    END
 
    IF EXISTS ( SELECT 1
@@ -143,14 +147,14 @@ BEGIN
             JOIN CODELKUP CL WITH (NOLOCK) ON (CL.ListName = 'RTNNOALLOC')
                                              AND(CL.Code = OH.Consigneekey)
                                              AND(CL.Storerkey = OH.Storerkey)
-            WHERE OH.Orderkey = @c_Orderkey 
+            WHERE OH.Orderkey = @c_Orderkey
             )
    BEGIN
-   	  SET @c_RTNNOALLOC = 'Y'
+        SET @c_RTNNOALLOC = 'Y'
    END
-   
+
    --IF @c_CONSIGTAG = 'N' AND @c_DMGALLOC = 'N' AND @c_RTNNOALLOC = 'Y'
-   --   GOTO QUIT_SP 
+   --   GOTO QUIT_SP
    --NJOW04 E
 
    IF EXISTS ( SELECT 1
@@ -162,7 +166,7 @@ BEGIN
       WHERE Orderkey = @c_Orderkey
 
       SET @n_Err = @@ERROR
-      IF @@ERROR > 0 
+      IF @@ERROR > 0
       BEGIN
          SET @n_Continue = 3
          SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_err)
@@ -179,25 +183,25 @@ BEGIN
          ,OD.OrderLineNumber
          ,OD.Storerkey
          ,OD.Sku
-         ,Lottable01 = ISNULL(RTRIM(OD.Lottable01),'')      
-         ,Lottable02 = ISNULL(RTRIM(OD.Lottable02),'')      
-         ,Lottable03 = ISNULL(RTRIM(OD.Lottable03),'')      
-         ,Lottable04 = ISNULL(OD.Lottable04,'19000101')   
-         ,Lottable05 = ISNULL(OD.Lottable05,'19000101')   
-         ,Lottable06 = ISNULL(RTRIM(OD.Lottable06),'')      
-         ,Lottable07 = ISNULL(RTRIM(OD.Lottable07),'')      
-         ,Lottable08 = ISNULL(RTRIM(OD.Lottable08),'')      
-         ,Lottable09 = ISNULL(RTRIM(OD.Lottable09),'')      
-         ,Lottable10 = ISNULL(RTRIM(OD.Lottable10),'')      
-         ,Lottable11 = ISNULL(RTRIM(OD.Lottable11),'')      
-         ,Lottable12 = ISNULL(RTRIM(OD.Lottable12),'')      
-         ,Lottable13 = ISNULL(OD.Lottable13,'19000101')   
-         ,Lottable14 = ISNULL(OD.Lottable14,'19000101')   
-         ,Lottable15 = ISNULL(OD.Lottable15,'19000101') 
+         ,Lottable01 = ISNULL(RTRIM(OD.Lottable01),'')
+         ,Lottable02 = ISNULL(RTRIM(OD.Lottable02),'')
+         ,Lottable03 = ISNULL(RTRIM(OD.Lottable03),'')
+         ,Lottable04 = ISNULL(OD.Lottable04,'19000101')
+         ,Lottable05 = ISNULL(OD.Lottable05,'19000101')
+         ,Lottable06 = ISNULL(RTRIM(OD.Lottable06),'')
+         ,Lottable07 = ISNULL(RTRIM(OD.Lottable07),'')
+         ,Lottable08 = ISNULL(RTRIM(OD.Lottable08),'')
+         ,Lottable09 = ISNULL(RTRIM(OD.Lottable09),'')
+         ,Lottable10 = ISNULL(RTRIM(OD.Lottable10),'')
+         ,Lottable11 = ISNULL(RTRIM(OD.Lottable11),'')
+         ,Lottable12 = ISNULL(RTRIM(OD.Lottable12),'')
+         ,Lottable13 = ISNULL(OD.Lottable13,'19000101')
+         ,Lottable14 = ISNULL(OD.Lottable14,'19000101')
+         ,Lottable15 = ISNULL(OD.Lottable15,'19000101')
          ,PK.Packkey
          ,QtyLeftToFullFill = OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty )
          ,SKU.Lottable04Label
-         ,MinShelfLife = CASE WHEN ISNUMERIC (ISNULL(RTRIM(SKU.Susr2),'0')) = 1 
+         ,MinShelfLife = CASE WHEN ISNUMERIC (ISNULL(RTRIM(SKU.Susr2),'0')) = 1
                               THEN ISNULL(RTRIM(SKU.Susr2),'0')
                               ELSE 0
                               END
@@ -211,41 +215,57 @@ BEGIN
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey  = OD.Orderkey)
    JOIN SKU        SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
                                        AND(OD.Sku       = SKU.Sku)
-   JOIN PACK        PK WITH (NOLOCK) ON (SKU.Packkey  = PK.Packkey) 
-   LEFT JOIN STORER CONS WITH (NOLOCK) ON (OH.Consigneekey = CONS.Storerkey) --NJOW01 
-   LEFT JOIN CODELKUP CL (NOLOCK) ON (OH.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND SKU.SkuGroup = CL.Code2 AND CL.Listname = 'PRESTALLOC'
-                                      AND (CONS.Secondary = CL.UDF01 OR CONS.Secondary = CL.UDF02 OR CONS.Secondary = CL.UDF03 OR CONS.Secondary = CL.UDF04 OR CONS.Secondary = CL.UDF05)) --NJOW06
-   OUTER APPLY (SELECT TOP 1 CL3.Short FROM CODELKUP CL3 (NOLOCK) WHERE OH.Storerkey = CL3.Storerkey AND SKU.Busr6 <> CL3.Code AND SKU.SkuGroup <> CL3.Code2 AND CL3.Listname = 'PRESTALLOC' AND CL3.Code = 'ALLOTHERS'
-               AND (CONS.Secondary = CL3.UDF01 OR CONS.Secondary = CL3.UDF02 OR CONS.Secondary = CL3.UDF03 OR CONS.Secondary = CL3.UDF04 OR CONS.Secondary = CL3.UDF05)) CL2   --NJOW06
+   JOIN PACK        PK WITH (NOLOCK) ON (SKU.Packkey  = PK.Packkey)
+   LEFT JOIN STORER CONS WITH (NOLOCK) ON (OH.Consigneekey = CONS.Storerkey) --NJOW01
+   LEFT JOIN CODELKUP CL (NOLOCK) ON (OH.Storerkey = CL.Storerkey 
+                                       AND SKU.Busr6 = CL.Code AND SKU.SkuGroup = CL.Code2 
+                                       AND CL.Listname = 'PRESTALLOC'
+                                       AND ( (CONS.Secondary = CL.UDF01 
+                                              OR CONS.Secondary = CL.UDF02 
+                                              OR CONS.Secondary = CL.UDF03 
+                                              OR CONS.Secondary = CL.UDF04 
+                                              OR CONS.Secondary = CL.UDF05)
+                                              AND ISNULL(CONS.Secondary, '') <> '' ) -- INC1283171
+                                           ) 
+   OUTER APPLY (SELECT TOP 1 CL3.Short FROM CODELKUP CL3 (NOLOCK) 
+                  WHERE OH.Storerkey = CL3.Storerkey AND SKU.Busr6 <> CL3.Code 
+                  AND SKU.SkuGroup <> CL3.Code2 AND CL3.Listname = 'PRESTALLOC' AND CL3.Code = 'ALLOTHERS'
+                  AND ( (CONS.Secondary = CL3.UDF01 
+                         OR CONS.Secondary = CL3.UDF02 
+                         OR CONS.Secondary = CL3.UDF03 
+                         OR CONS.Secondary = CL3.UDF04 
+                         OR CONS.Secondary = CL3.UDF05)
+                         AND ISNULL(CONS.Secondary, '') <> '' ) -- INC1283171
+                         ) CL2
    WHERE OH.Orderkey = @c_Orderkey
    AND   OH.SOStatus <> 'CANC'
-   AND   OH.Status < '9'      
+   AND   OH.Status < '9'
    AND   OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty) > 0
    ORDER BY OD.OrderKey
          ,  OD.OrderLineNumber
 
    OPEN @CUR_OD
-   
+
    FETCH NEXT FROM @CUR_OD INTO @c_Facility
                               , @c_Orderkey
                               , @c_OrderLineNumber
                               , @c_Storerkey
                               , @c_Sku
-                              , @c_Lottable01     
-                              , @c_Lottable02     
-                              , @c_Lottable03     
-                              , @dt_Lottable04    
-                              , @dt_Lottable05    
-                              , @c_Lottable06     
-                              , @c_Lottable07     
-                              , @c_Lottable08     
-                              , @c_Lottable09     
-                              , @c_Lottable10     
-                              , @c_Lottable11     
-                              , @c_Lottable12     
-                              , @dt_Lottable13    
-                              , @dt_Lottable14    
-                              , @dt_Lottable15 
+                              , @c_Lottable01
+                              , @c_Lottable02
+                              , @c_Lottable03
+                              , @dt_Lottable04
+                              , @dt_Lottable05
+                              , @c_Lottable06
+                              , @c_Lottable07
+                              , @c_Lottable08
+                              , @c_Lottable09
+                              , @c_Lottable10
+                              , @c_Lottable11
+                              , @c_Lottable12
+                              , @dt_Lottable13
+                              , @dt_Lottable14
+                              , @dt_Lottable15
                               , @c_Packkey
                               , @n_QtyLeftToFulFill
                               , @c_Lottable04Label
@@ -271,7 +291,7 @@ BEGIN
       ELSE IF @c_strategykey = 'PPDFEFO'
          SET @c_Strategy = 'FEFO'
       ELSE
-         SET @c_Strategy = 'FIFO'   
+         SET @c_Strategy = 'FIFO'
 
       /*
       SET @c_Strategy = 'FEFO'
@@ -280,149 +300,149 @@ BEGIN
          SET @c_Strategy = 'FIFO'
       END
       */
-           
-      IF @c_Lottable01 <> '' 
-      BEGIN 
+
+      IF @c_Lottable01 <> ''
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable01 = @c_Lottable01'
       END
 
       IF @c_Lottable02 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable02 = @c_Lottable02'
       END
-      
+
       SET @c_Lottable03Inc = ''
-      
+
       IF @c_CONSIGTAG = 'Y' --NJOW04
          SET @c_Lottable03Inc = '''PER-TAG'',''TAG'''
-                           
+
       IF  @c_DMGALLOC = 'Y' --NJOW04
           IF @c_Lottable03Inc = ''
              SET @c_Lottable03Inc = '''DMG-OK'''
-         ELSE    
-             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''DMG-OK'''             
-            
-      IF @c_RTNNOALLOC = 'N' --NJOW04      
+         ELSE
+             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''DMG-OK'''
+
+      IF @c_RTNNOALLOC = 'N' --NJOW04
       BEGIN
           IF @c_Lottable03Inc = ''
              SET @c_Lottable03Inc = '''OK-RTN'''
-         ELSE    
+         ELSE
              SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'''
       END
-      ELSE 
+      ELSE
       BEGIN  -- Y
           IF @c_Lottable03Inc = ''
              SET @c_Lottable03Inc = '''OK-RTN'',''OK'''
-         ELSE    
-             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'',''OK'''      	 
+         ELSE
+             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'',''OK'''
       END
-             
+
       IF @c_Lottable03Inc <> ''
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN(' + @c_Lottable03Inc + ') '
 
-      IF @n_SkuGroupShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW06     
+      IF @n_SkuGroupShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW06
       BEGIN
-      	 SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuGroupShelfLife ' --+ CAST(@n_SkuGroupShelfLife AS NVARCHAR)
+          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuGroupShelfLife ' --+ CAST(@n_SkuGroupShelfLife AS NVARCHAR)
       END
       ELSE IF @n_SkuGroupShelfLife2 > 0 AND @c_Strategy = 'FEFO' --NJOW06
       BEGIN
-      	 SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuGroupShelfLife2 ' --+ CAST(@n_SkuGroupShelfLife2 AS NVARCHAR)
+          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuGroupShelfLife2 ' --+ CAST(@n_SkuGroupShelfLife2 AS NVARCHAR)
       END
       ELSE IF @n_ConMinShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW01
       BEGIN
          --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable04 > CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife, GETDATE()), 112))'
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
-         SET @n_MinShelfLife = @n_ConMinShelfLife 	  
-      END    
+         SET @n_MinShelfLife = @n_ConMinShelfLife
+      END
       ELSE IF @n_SkuOGShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW03
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
       END
       ELSE IF @c_Lottable04Label <> '' AND @n_MinShelfLife > 0
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable04 > CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife, GETDATE()), 112))'
       END
       ELSE IF @c_Strategy = 'FEFO'
       BEGIN
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) > 0 '  --NJOW03      	  
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) > 0 '  --NJOW03
       END
       ELSE
-      BEGIN 
+      BEGIN
          IF CONVERT(NVARCHAR(8), @dt_Lottable04, 112) <> '19000101'
-         BEGIN 
+         BEGIN
             SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable04 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable04, 112))'
          END
       END
 
       IF @n_ConMinShelfLife > 0 AND @c_Strategy = 'FIFO' --NJOW01
       BEGIN
-         --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable05 >= CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife * -1, GETDATE()), 112))'   --NJOW02         
+         --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable05 >= CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife * -1, GETDATE()), 112))'   --NJOW02
          --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW03
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_ConMinShelfLife ' --+ CAST(@n_ConMinShelfLife AS NVARCHAR) --NJOW07
          SET @n_MinShelfLife = @n_ConMinShelfLife
-      END 	  
+      END
       ELSE IF @n_SkuOGShelfLife > 0 AND @c_Strategy = 'FIFO' --NJOW03
       BEGIN
          --SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable05 + SKU.ShelfLife) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW03
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) >= @n_SkuOGShelfLife ' --+ CAST(@n_SkuOGShelfLife AS NVARCHAR) --NJOW07
-         SET @n_MinShelfLife = @n_SkuOGShelfLife        
+         SET @n_MinShelfLife = @n_SkuOGShelfLife
       END
       ELSE IF CONVERT(NVARCHAR(8), @dt_Lottable05, 112) <> '19000101'
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable05 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable05, 112))'
       END
 
       IF @c_Lottable06 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable06 = @c_Lottable06'
       END
 
       IF @c_Lottable07 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable07 = @c_Lottable07'
       END
-      
+
       IF @c_Lottable08 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable08 = @c_Lottable08'
       END
 
       IF @c_Lottable09 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable09 = @c_Lottable09'
       END
 
       IF @c_Lottable10 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable10 = @c_Lottable10'
       END
 
       IF @c_Lottable11 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable11 = @c_Lottable11'
       END
 
       IF @c_Lottable12 <> ''
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable12 = @c_Lottable12'
       END
 
       IF CONVERT(NVARCHAR(8), @dt_Lottable13, 112) <> '19000101'
-      BEGIN 
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable13 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable13, 112))' 
+      BEGIN
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable13 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable13, 112))'
       END
 
       IF CONVERT(NVARCHAR(8), @dt_Lottable14, 112) <> '19000101'
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable14 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable14, 112))'
       END
 
       IF CONVERT(NVARCHAR(8), @dt_Lottable15, 112) <> '19000101'
-      BEGIN 
+      BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable15 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable15, 112))'
       END
-      
-      SET @c_SQL = 
+
+      SET @c_SQL =
                N'DECLARE CUR_LLI CURSOR FAST_FORWARD READ_ONLY FOR'
                + ' SELECT LLI.LOT'
                +       ', LLI.LOC'
@@ -444,14 +464,15 @@ BEGIN
                + ' WHERE LLI.Storerkey = @c_Storerkey'
                + ' AND   LLI.Sku = @c_Sku'
               -- + ' AND ID.Status <> ''HOLD'''  --NJOW04 remove
-              -- + ' AND (LOC.Locationflag = ''HOLD''' 
+              -- + ' AND (LOC.Locationflag = ''HOLD'''
               -- + ' OR  LOC.Status = ''HOLD'')'
+			   + ' AND LOC.Locationflag <> ''HOLD''' --CLVN01
                + ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'' OR LOC.LocationFlag <> ''NONE'')) '  --NJOW04
                + ' AND NOT (LA.Lottable03 IN (''PER-TAG'',''TAG'',''DMG-OK'') AND LOC.LocationCategory = ''STAGING'') '  --NJOW05
               -- + ' AND NOT (LA.Lottable03 IN (''PER-TAG'',''TAG'',''DMG-OK'') AND LOC.LocationCategory = ''STAGING'' AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'' OR LOC.LocationFlag <> ''NONE'')) '  --NJOW05
                + ' AND LOC.Facility = @c_Facility'
                + ' AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED) > 0'
-               + ' ' + @c_AddWhereSQL 
+               + ' ' + @c_AddWhereSQL
                + ' ORDER BY CASE WHEN LA.Lottable03 IN(''PER-TAG'',''TAG'') THEN 1 WHEN LA.Lottable03 = ''DMG-OK'' THEN 2 WHEN LA.Lottable03 = ''OK'' THEN 3 WHEN LA.Lottable03 = ''OK-RTN'' THEN 4 ELSE 5 END'  --NJOW04
                +        ',  LA.Lottable04'
                +        ',  LA.Lottable05'
@@ -459,7 +480,7 @@ BEGIN
                +        ',  aUOM'
                +        ',  LOC.Loc '
 
-      SET @c_SQLParms = N'@c_Facility     NVARCHAR(5)'  
+      SET @c_SQLParms = N'@c_Facility     NVARCHAR(5)'
                       + ',@c_StorerKey    NVARCHAR(15)'
                       + ',@c_Sku          NVARCHAR(20)'
                       + ',@c_Lottable01   NVARCHAR(18)'
@@ -481,7 +502,7 @@ BEGIN
                       + ',@n_Pallet       INT'
                       + ',@n_MinShelfLife INT'
                       + ',@n_SkuOGShelfLife INT'
-                      + ',@n_ConMinShelfLife INT'                      
+                      + ',@n_ConMinShelfLife INT'
                       + ',@n_SkuGroupShelfLife INT'
                       + ',@n_SkuGroupShelfLife2 INT'
 
@@ -490,39 +511,39 @@ BEGIN
          PRINT @c_SQL
       END
 
-      EXEC sp_executesql @c_SQL                                                                                   
-         ,@c_SQLParms     
-         ,@c_Facility                                                                                                  
-         ,@c_StorerKey   
-         ,@c_Sku   
-         ,@c_Lottable01                                                                                          
-     	   ,@c_Lottable02
+      EXEC sp_executesql @c_SQL
+         ,@c_SQLParms
+         ,@c_Facility
+         ,@c_StorerKey
+         ,@c_Sku
+         ,@c_Lottable01
+         ,@c_Lottable02
          ,@c_Lottable03
-         ,@dt_Lottable04  
-         ,@dt_Lottable05 
-         ,@c_Lottable06                                                                                         
-     	   ,@c_Lottable07
+         ,@dt_Lottable04
+         ,@dt_Lottable05
+         ,@c_Lottable06
+         ,@c_Lottable07
          ,@c_Lottable08
-         ,@c_Lottable09  
-         ,@c_Lottable10  
-         ,@c_Lottable11                                                                                          
-     	   ,@c_Lottable12
+         ,@c_Lottable09
+         ,@c_Lottable10
+         ,@c_Lottable11
+         ,@c_Lottable12
          ,@dt_Lottable13
-         ,@dt_Lottable14  
-         ,@dt_Lottable15 
-         ,@c_Strategy     
+         ,@dt_Lottable14
+         ,@dt_Lottable15
+         ,@c_Strategy
          ,@n_Pallet
          ,@n_MinShelfLife
          ,@n_SkuOGShelfLife --NJOW03
          ,@n_ConMinShelfLife
          ,@n_SkuGroupShelfLife
          ,@n_SkuGroupShelfLife2
-         
+
       OPEN CUR_LLI
 
-      FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvailable, @c_aUOM   
-    
-      WHILE @@FETCH_STATUS <> -1 AND @n_QtyLeftToFulfill > 0 
+      FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvailable, @c_aUOM
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_QtyLeftToFulfill > 0
       BEGIN
          SET @n_cPackQty = CASE @c_aUOM  WHEN '1' THEN @n_Pallet
                                          WHEN '6' THEN 1
@@ -533,17 +554,17 @@ BEGIN
          SET @n_QtyAvailable = FLOOR(@n_QtyAvailable / @n_cPackQty) * @n_cPackQty
 
          SET @n_QtyToTake = 0
-       
+
          IF @n_QtyLeftToFulfill <= @n_QtyAvailable
          BEGIN
-            SET @n_QtyToTake = @n_QtyLeftToFulfill 
+            SET @n_QtyToTake = @n_QtyLeftToFulfill
          END
          ELSE
          BEGIN
             SET @n_QtyToTake = @n_QtyAvailable
          END
 
-         SET @n_UOMQty = FLOOR(@n_QtyToTake / @n_cPackQty) 
+         SET @n_UOMQty = FLOOR(@n_QtyToTake / @n_cPackQty)
 
          SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake
 
@@ -553,54 +574,54 @@ BEGIN
                   ,@n_QtyAvailable '@n_QtyAvailable', @n_UOMQty '@n_UOMQty', @c_aUOM '@c_aUOM'
                   ,@n_cPackQty '@n_cPackQty'
          END
-  
+
          IF @n_QtyToTake > 0
-         BEGIN 
-            SELECT  
+         BEGIN
+            SELECT
                   @c_uom3pickmethod = uom3pickmethod -- piece
                  ,@c_uom4pickmethod = uom4pickmethod -- pallet
-                 ,@c_uom7pickmethod = uom3pickmethod  
+                 ,@c_uom7pickmethod = uom3pickmethod
             FROM LOC WITH (NOLOCK)
             JOIN PUTAWAYZONE WITH(NOLOCK) ON (LOC.Putawayzone = PUtawayzone.Putawayzone)
             WHERE LOC.LOC = @c_loc
-            
+
             SET @c_PickMethod =
                   CASE @c_aUOM WHEN '1' THEN @c_uom4pickmethod
                                WHEN '6' THEN @c_uom3pickmethod
                                WHEN '7' THEN @c_uom7pickmethod
                                END
 
-            EXECUTE nspg_getkey  
-               'PickDetailKey'  
-               , 10  
-               , @c_PickDetailKey OUTPUT  
-               , @b_Success       OUTPUT  
-               , @n_Err           OUTPUT  
-               , @c_ErrMsg        OUTPUT  
-                  
-            IF @b_Success <> 1  
+            EXECUTE nspg_getkey
+               'PickDetailKey'
+               , 10
+               , @c_PickDetailKey OUTPUT
+               , @b_Success       OUTPUT
+               , @n_Err           OUTPUT
+               , @c_ErrMsg        OUTPUT
+
+            IF @b_Success <> 1
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 68020
-               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0)) 
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0))
                               + ': Get PickDetailKey Failed. (ispPRNIK01)'
                GOTO QUIT_SP
             END
 
-            INSERT INTO PICKDETAIL 
-                        (  
-                           PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber  
+            INSERT INTO PICKDETAIL
+                        (
+                           PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber
                         ,  Lot, StorerKey, Sku, UOM, UOMQty, Qty
-                        ,  Loc, Id, PackKey, CartonGroup, DoReplenish  
+                        ,  Loc, Id, PackKey, CartonGroup, DoReplenish
                         ,  replenishzone, doCartonize, Trafficcop, PickMethod
                         )
-               VALUES   (  
-                        @c_PickDetailKey, '', '', @c_OrderKey, @c_OrderLineNumber  
+               VALUES   (
+                        @c_PickDetailKey, '', '', @c_OrderKey, @c_OrderLineNumber
                         , @c_Lot, @c_StorerKey, @c_SKU, @c_aUOM, @n_UOMQty, @n_QtyToTake
-                        , @c_Loc, @c_ID, @c_PackKey, '', 'N'  
+                        , @c_Loc, @c_ID, @c_PackKey, '', 'N'
                         , '', NULL, 'U', @c_PickMethod
-                        ) 
-               
+                        )
+
                SET @n_Err = @@ERROR
                IF @n_err > 0
                BEGIN
@@ -612,32 +633,32 @@ BEGIN
                   GOTO QUIT_SP
                END
          END
-          
-         FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvailable, @c_aUOM 
+
+         FETCH NEXT FROM CUR_LLI INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvailable, @c_aUOM
       END
       CLOSE CUR_LLI
       DEALLOCATE CUR_LLI
-      
+
       FETCH NEXT FROM @CUR_OD INTO @c_Facility
                                  , @c_Orderkey
                                  , @c_OrderLineNumber
                                  , @c_Storerkey
                                  , @c_Sku
-                                 , @c_Lottable01     
-                                 , @c_Lottable02     
-                                 , @c_Lottable03     
-                                 , @dt_Lottable04    
-                                 , @dt_Lottable05    
-                                 , @c_Lottable06     
-                                 , @c_Lottable07     
-                                 , @c_Lottable08     
-                                 , @c_Lottable09     
-                                 , @c_Lottable10     
-                                 , @c_Lottable11     
-                                 , @c_Lottable12     
-                                 , @dt_Lottable13    
-                                 , @dt_Lottable14    
-                                 , @dt_Lottable15 
+                                 , @c_Lottable01
+                                 , @c_Lottable02
+                                 , @c_Lottable03
+                                 , @dt_Lottable04
+                                 , @dt_Lottable05
+                                 , @c_Lottable06
+                                 , @c_Lottable07
+                                 , @c_Lottable08
+                                 , @c_Lottable09
+                                 , @c_Lottable10
+                                 , @c_Lottable11
+                                 , @c_Lottable12
+                                 , @dt_Lottable13
+                                 , @dt_Lottable14
+                                 , @dt_Lottable15
                                  , @c_Packkey
                                  , @n_QtyLeftToFulFill
                                  , @c_Lottable04Label
@@ -647,52 +668,51 @@ BEGIN
                                  , @n_ConMinShelfLife --NJOW01
                                  , @n_skuOGShelflife --NJOW03
                                  , @n_SkuGroupShelfLife --NJOW06
-                                 , @n_SkuGroupShelfLife2 --NJOW06                                 
+                                 , @n_SkuGroupShelfLife2 --NJOW06
    END
 
    QUIT_SP:
 
-   IF CURSOR_STATUS( 'VARIABLE', 'CUR_OD') in (0 , 1)  
+   IF CURSOR_STATUS( 'VARIABLE', 'CUR_OD') in (0 , 1)
    BEGIN
       CLOSE CUR_OD
       DEALLOCATE CUR_OD
    END
 
-   IF CURSOR_STATUS( 'GLOBAL', 'CUR_LLI') in (0 , 1)  
+   IF CURSOR_STATUS( 'GLOBAL', 'CUR_LLI') in (0 , 1)
    BEGIN
       CLOSE CUR_LLI
       DEALLOCATE CUR_LLI
    END
 
-   IF @n_Continue=3  -- Error Occured - Process And Return  
-   BEGIN  
-      SELECT @b_Success = 0  
-      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt  
-      BEGIN  
-         ROLLBACK TRAN  
-      END  
-      ELSE  
-      BEGIN  
-         WHILE @@TRANCOUNT > @n_StartTCnt  
-         BEGIN  
-            COMMIT TRAN  
-         END  
-      END  
-      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispPreAL03'  
-      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
-      RETURN  
-   END  
-   ELSE  
-   BEGIN  
-      SELECT @b_Success = 1  
-      WHILE @@TRANCOUNT > @n_StartTCnt  
-      BEGIN  
-         COMMIT TRAN  
-      END  
-      RETURN  
-   END  
-
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SELECT @b_Success = 0
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispPreAL03'
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN
+   END
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
 END -- Procedure
 GO
-GRANT EXECUTE ON [dbo].[ispPreAL03] TO nSQL
-GO
+
+
