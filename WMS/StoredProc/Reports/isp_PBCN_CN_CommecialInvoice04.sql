@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 23-Feb-2021  LZG       1.1   INC1434916 - JOIN PickDetail (ZG01)     */
+/* 25-Feb-2021  ALiang    1.2   Bug Fix                                 */   
 /************************************************************************/
 
 CREATE PROC isp_PBCN_CN_CommecialInvoice04 (
@@ -365,6 +366,7 @@ BEGIN
       FROM PODETAIL POD WITH (NOLOCK)
       WHERE POD.Pokey = @c_POKEY
       AND POD.Storerkey = @c_Storerkey
+      AND POD.SKU= @c_sku     --AL01
 
       IF @n_PODUDF09 = '' OR @n_PODUDF09 = '0'
       BEGIN
