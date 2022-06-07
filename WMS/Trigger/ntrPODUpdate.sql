@@ -1,7 +1,14 @@
+USE [VNWMS]
+GO
+
+/****** Object:  Trigger [dbo].[ntrPODUpdate]    Script Date: 6/7/2022 6:25:46 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
-GO  
+GO
+
+
 /************************************************************************/    
 /* Trigger:  ntrPODUpdate                                               */    
 /* Creation Date:                                                       */    
@@ -64,13 +71,17 @@ GO
 /*                              Validation Enhancement (Wan01)          */  
 /* 12-Aug-2014  MCTang     1.9  New Interface Trigger Points (MC01)     */  
 /* 09-Sep-2014  TLTING     2.0  Doc Status Tracking Log TLTING03        */  
-/* 11-May-2015  TLTING     2.1  Disable Trigantics                      */   
-/* 18-Nov-2021  Wan01      2.2  WMS-18336 - MYS–SBUXM–Default value in  */  
+/* 11-May-2015  TLTING     2.1  Disable Trigantics                      */  
+/* 06-Oct-2017  CheeMun    2.2  IN00484052 - Add Log for update POD     */    
+/*                              (temp only).                            */  
+/* 18-Nov-2021  Wan01      2.3  WMS-18336 - MYSûSBUXMûDefault value in  */  
 /*                              POD Entry column upon update POD Status */  
-/* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */   
+/* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */ 
+/* 18-Nov-2021  TLTING04   2.4  Disable STSORDERS insert 4Docstatustrack*/    
+/* 07-Jun-2022  CLVN01     2.5  Remove 2.2                              */
 /************************************************************************/    
 -- Added by YokeBeen on 14-Jan-2003 (YokeBeen01 - SOS#FBR8465)    
-CREATE OR ALTER TRIGGER [dbo].[ntrPODUpdate]    
+ALTER     TRIGGER [dbo].[ntrPODUpdate]    
 ON  [dbo].[POD]    
 FOR UPDATE    
 AS    
@@ -124,6 +135,32 @@ END
    END    
    -- (SHONG_20060417)    
      
+   --CLVN01 START-- 
+   /*
+   --IN00484052 (START)    
+   DECLARE @c_PMBOLKey          NVARCHAR(10),      
+           @c_POrderkey         NVARCHAR(10),    
+       @c_PODReceivedDate   NVARCHAR(120),    
+       @c_PODDate01     NVARCHAR(120),    
+       @c_Status      NVARCHAR(20)    
+       
+   SELECT @c_PMBOLKey   = INSERTED.MBOLKey,    
+      @c_POrderkey        = INSERTED.Orderkey,    
+      @c_PODReceivedDate  = CONVERT(NVARCHAR(120),INSERTED.PodReceivedDate, 121),     
+      @c_PODDate01    = CONVERT(NVARCHAR(120),INSERTED.PodDate01, 121),     
+      @c_Status       = 'POD ' + INSERTED.STATUS    
+ FROM INSERTED        
+    
+     
+    EXEC isp_Sku_log    
+    @cStorerKey  = @c_PMBOLKey    
+  , @cSKU        = @c_POrderkey    
+  , @cFieldName  = @c_Status    
+  , @cOldValue   = @c_PODReceivedDate    
+  , @cNewValue   = @c_PODDate01    
+   --IN00484052 (END)    
+   */
+   --CLVN01 END--
          
    DECLARE @b_ColumnsUpdated VARBINARY(1000)       --MC01  
    SET @b_ColumnsUpdated = COLUMNS_UPDATED()       --MC01  
@@ -147,193 +184,90 @@ END
    -- Added By SHONG    
    -- begin    
    DECLARE @cOrdKey NVARCHAR(10)    
-   --        @c_TriganticLogkey NVARCHAR(10)    
-   --tlting01    
-   --IF EXISTS( SELECT 1 FROM ORDERS WITH (NOLOCK)    
-   --             JOIN StorerConfig WITH (NOLOCK) ON (StorerConfig.StorerKey = ORDERS.StorerKey)    
-   --             JOIN INSERTED WITH (NOLOCK) ON (INSERTED.OrderKey = ORDERS.OrderKey)     
-   --            WHERE ConfigKey = 'TIPS_POD' AND sValue = '1')    
-   --BEGIN    
+    
+   SELECT @cOrdKey = SPACE(10)    
+          
+   DECLARE C_PODUpdOrdKey  CURSOR LOCAL FAST_FORWARD READ_ONLY  FOR       
+      SELECT INSERTED.OrderKey, ORDERS.StorerKey    
+      FROM   INSERTED     
+      JOIN   DELETED ON (INSERTED.OrderKey = DELETED.OrderKey)     
+      JOIN   ORDERS WITH (NOLOCK) ON (INSERTED.OrderKey = ORDERS.OrderKey)     
+      WHERE  (INSERTED.Status <> DELETED.Status    
+               OR INSERTED.ActualDeliveryDate <> DELETED.ActualDeliveryDate    
+               OR INSERTED.PodReceivedDate <> DELETED.PodReceivedDate)    
+      ORDER BY INSERTED.OrderKey    
+          
+   OPEN C_PODUpdOrdKey    
+    
+   WHILE 1=1 -- Modified - Take Out Fetch Next = 0 from here    
+   BEGIN    
+      FETCH NEXT FROM C_PODUpdOrdKey INTO @cOrdKey, @c_StorerKey    
+       
+      IF @@FETCH_STATUS = -1    
+         BREAK    
+         
+      -- TLTING04
+      -- TLTING03  
+      --IF NOT EXISTS (SELECT 1 FROM DocStatusTrack WITH (NOLOCK)     
+      --                WHERE TableName = 'STSORDERS' AND DocumentNo = @cOrdKey AND DocStatus = '9')      
+      --BEGIN    
+      --   EXEC ispGenDocStatusLog 'STSORDERS', @c_StorerKey, @cOrdKey, '', '', '9'    
+      --                  , @b_success OUTPUT    
+      --                  , @n_err OUTPUT    
+      --                  , @c_errmsg OUTPUT    
+      --   IF NOT @b_success=1    
+      --   BEGIN    
+      --      SELECT @n_continue=3    
+      --   END        
+      --END  
+                
+   END    
+   CLOSE C_PODUpdOrdKey    
+   DEALLOCATE C_PODUpdOrdKey    
+  
+   IF UPDATE(PODDef08) OR UPDATE(PODDef04)    
+   BEGIN    
       SELECT @cOrdKey = SPACE(10)    
           
-      DECLARE C_PODUpdOrdKey  CURSOR LOCAL FAST_FORWARD READ_ONLY  FOR       
-         SELECT INSERTED.OrderKey, ORDERS.StorerKey    
-         FROM   INSERTED     
-         JOIN   DELETED ON (INSERTED.OrderKey = DELETED.OrderKey)     
-         JOIN   ORDERS WITH (NOLOCK) ON (INSERTED.OrderKey = ORDERS.OrderKey)     
-         WHERE  (INSERTED.Status <> DELETED.Status    
-                  OR INSERTED.ActualDeliveryDate <> DELETED.ActualDeliveryDate    
-                  OR INSERTED.PodReceivedDate <> DELETED.PodReceivedDate)    
+      DECLARE C_PODUpdOrdKey_ONE  CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
+      SELECT INSERTED.OrderKey, INSERTED.Storerkey    
+         FROM INSERTED     
+         JOIN DELETED ON (INSERTED.OrderKey = DELETED.OrderKey)     
+         WHERE ( INSERTED.PODDef08 <> ISNULL(DELETED.PODDef08, '') OR    
+               INSERTED.PODDef04 <> ISNULL(DELETED.PODDef04, '') )    
          ORDER BY INSERTED.OrderKey    
           
-      OPEN C_PODUpdOrdKey    
+      OPEN C_PODUpdOrdKey_ONE    
     
-      WHILE 1=1 -- Modified - Take Out Fetch Next = 0 from here    
+      WHILE 1=1     
       BEGIN    
-         FETCH NEXT FROM C_PODUpdOrdKey INTO @cOrdKey, @c_StorerKey    
-       
+         FETCH NEXT FROM C_PODUpdOrdKey_ONE INTO @cOrdKey, @c_StorerKey    
+          
          IF @@FETCH_STATUS = -1    
             BREAK    
-           
-         -- TLTING03  
+  
+         -- TLTING  
          IF NOT EXISTS (SELECT 1 FROM DocStatusTrack WITH (NOLOCK)     
-                         WHERE TableName = 'STSORDERS' AND DocumentNo = @cOrdKey AND DocStatus = '9')      
+                           WHERE TableName = 'STSPOD' AND DocumentNo = @cOrdKey )    
          BEGIN    
-            EXEC ispGenDocStatusLog 'STSORDERS', @c_StorerKey, @cOrdKey, '', '', '9'    
+            EXEC ispGenDocStatusLog 'STSPOD', @c_StorerKey, @cOrdKey, '', '', '9'    
                            , @b_success OUTPUT    
                            , @n_err OUTPUT    
                            , @c_errmsg OUTPUT    
+       
             IF NOT @b_success=1    
-            BEGIN    
+            BEGIN     
                SELECT @n_continue=3    
-            END        
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62905       
+               SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
+                                 + ': INSERT DocStatusTrack Failed (ntrPODUpdate)'     
+                                 + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '    
+            END              
          END  
-                
---         IF NOT EXISTS (SELECT 1 FROM TriganticLog WITH (NOLOCK)     
---                         WHERE TableName = 'ORDERS' AND Key1 = @cOrdKey AND Key2 = '9') -- Vicky    
---         BEGIN    
---            -- TLTING01  
---            EXECUTE dbo.nspg_getkey    
---                   'TRIGANTICKEY'    
---                  , 10    
---                  , @c_TriganticLogkey OUTPUT    
---                  , @b_success OUTPUT    
---                  , @n_err OUTPUT    
---                  , @c_errmsg OUTPUT    
---            IF NOT @b_success = 1    
---            BEGIN    
---               SELECT @n_continue=3    
---            END    
-                
---            IF ( @n_continue = 1 or @n_continue = 2 )     
---           BEGIN    
---               INSERT TriganticLog (TriganticLogkey,tablename,key1, key2, key3)     
---               VALUES (@c_TriganticLogkey, 'ORDERS', @cOrdKey, '9', '') -- Vicky    
-                
---               SELECT @n_err= @@Error    
---               IF NOT @n_err=0    
---               BEGIN    
---                  SELECT @n_continue=3     
---               END     
---            END     
---         END    
---         ELSE    
---         BEGIN    
---            -- Reopen the flag     
---            UPDATE TriganticLog WITH (ROWLOCK)     
---               SET TransmitFlag = '0'    
---             WHERE TableName = 'ORDERS'    
---               AND Key1 = @cOrdKey     
---               AND Key2 = '9' -- Vicky    
---               AND TransmitFlag = '9'    
---         END    
       END    
-      CLOSE C_PODUpdOrdKey    
-      DEALLOCATE C_PODUpdOrdKey    
-   --END    
-   -- end         
-    
-   -- To Make sure it's still trigger the Trianmitflag     
-   -- Added By SHONG on 19-DEC-2003 for Trigantic POD Export    
-   -- begin    
-       
-   -- tlting01    
---   IF EXISTS ( SELECT 1 FROM INSERTED    
---                 JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = INSERTED.OrderKey)    
---                 JOIN StorerConfig WITH (NOLOCK) ON (StorerConfig.StorerKey = ORDERS.StorerKey    
---                                                AND ConfigKey = 'TRIGANTIC' AND sValue = '1') )    
---   BEGIN    
-      IF UPDATE(PODDef08) OR UPDATE(PODDef04)    
-      BEGIN    
-         SELECT @cOrdKey = SPACE(10)    
-          
-         DECLARE C_PODUpdOrdKey_ONE  CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
-         SELECT INSERTED.OrderKey, INSERTED.Storerkey    
-           FROM INSERTED     
-           JOIN DELETED ON (INSERTED.OrderKey = DELETED.OrderKey)     
-          WHERE ( INSERTED.PODDef08 <> ISNULL(DELETED.PODDef08, '') OR    
-                  INSERTED.PODDef04 <> ISNULL(DELETED.PODDef04, '') )    
-          ORDER BY INSERTED.OrderKey    
-          
-         OPEN C_PODUpdOrdKey_ONE    
-    
-         WHILE 1=1     
-         BEGIN    
-            FETCH NEXT FROM C_PODUpdOrdKey_ONE INTO @cOrdKey, @c_StorerKey    
-          
-            IF @@FETCH_STATUS = -1    
-               BREAK    
-  
-            -- TLTING  
-            IF NOT EXISTS (SELECT 1 FROM DocStatusTrack WITH (NOLOCK)     
-                            WHERE TableName = 'STSPOD' AND DocumentNo = @cOrdKey )    
-            BEGIN    
-               EXEC ispGenDocStatusLog 'STSPOD', @c_StorerKey, @cOrdKey, '', '', '9'    
-                              , @b_success OUTPUT    
-                              , @n_err OUTPUT    
-                              , @c_errmsg OUTPUT    
-       
-               IF NOT @b_success=1    
-               BEGIN     
-                  SELECT @n_continue=3    
-                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62905       
-                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
-                                   + ': INSERT DocStatusTrack Failed (ntrPODUpdate)'     
-                                   + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '    
-                    
-               END              
-              
-            END  
-                      
---            IF NOT EXISTS (SELECT 1 FROM TriganticLog WITH (NOLOCK)     
---                          WHERE TableName = 'POD' AND Key1 = @cOrdKey)    
---            BEGIN    
---               EXECUTE nspg_getkey    
---                      'TRIGANTICKEY'    
---                     , 10    
---                     , @c_TriganticLogkey OUTPUT    
---                     , @b_success OUTPUT    
---                     , @n_err OUTPUT    
---                     , @c_errmsg OUTPUT    
---               IF NOT @b_success=1    
---               BEGIN    
---                  SELECT @n_continue=3    
---                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900       
---                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
---                                   + ': GetKey TRIGANTICKEY Failed (ntrPODUpdate)'     
---                                   + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '    
---               END    
-                   
---               IF ( @n_continue = 1 or @n_continue = 2 )     
---               BEGIN    
---                  INSERT TriganticLog (TriganticLogkey,tablename,key1, key2, key3)     
---                  VALUES (@c_TriganticLogkey, 'POD', @cOrdKey, '', '')    
-                   
---                  SELECT @n_err= @@Error    
---                  IF NOT @n_err=0    
---                  BEGIN    
---                     SELECT @n_continue=3     
---                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900      
---                     SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
---                                      + ': Insert Into TriganticLog Table (ORDERS) Failed (ntrPODUpdate)'     
---                                      + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '    
---                  END     
---               END     
---            END    
---            ELSE    
---            BEGIN    
---               -- Reopen the flag     
---               UPDATE TriganticLog WITH (ROWLOCK)     
---                  SET TransmitFlag = '0'    
---                WHERE TableName = 'POD'    
---                  AND Key1 = @cOrdKey     
---                  AND TransmitFlag = '9'    
---            END    
-         END    
-         CLOSE C_PODUpdOrdKey_ONE    
-         DEALLOCATE C_PODUpdOrdKey_ONE    
-      END     
---   END    
+      CLOSE C_PODUpdOrdKey_ONE    
+      DEALLOCATE C_PODUpdOrdKey_ONE    
+   END     
     
    --         
    -- SOS# 9212 Remove Tab Order in Form and make the Checking in Backend    
@@ -860,4 +794,6 @@ END
       RETURN    
    END    
 END       
-  
+GO
+
+
