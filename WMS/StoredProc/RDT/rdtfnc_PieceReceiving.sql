@@ -134,6 +134,7 @@ GO
 /*                           Add new field into eventlog (james23)      */
 /* 2022-02-24 8.8 Ung        WMS-18950 Add RDT format for Lottable01..4 */
 /* 2022-05-19 8.9 Ung        WMS-19667 Migrate to new ExtendedInfoSP    */
+/* 2020-12-07 9.0 YeeKung    Change params in decodesku   (yeekung02)   */    
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -2253,7 +2254,7 @@ BEGIN
 
                EXEC dbo.ispLabelNo_Decoding_Wrapper
                    @c_SPName     = @cDecodeLabelNo
-                  ,@c_LabelNo    = @cSKU
+                  ,@c_LabelNo    = @cBarcode --(yeekung02)
                   ,@c_Storerkey  = @cStorer
                   ,@c_ReceiptKey = ''
                   ,@c_POKey      = ''
