@@ -174,6 +174,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1581RcptCfm07 (
          AND   Lottable01 = @cLottable01  -- Same RSO (batch#)
          AND   ToLoc = @cToLOC
          AND   ToID = @cToID
+         AND   SKU = @cSKUCode            -- Same SKU
          AND   ISNULL( DuplicateFrom, '') = ''
          ORDER BY 1
 
@@ -183,6 +184,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1581RcptCfm07 (
             FROM dbo.RECEIPTDETAIL WITH (NOLOCK) 
             WHERE ReceiptKey = @cReceiptKey
             AND   Lottable01 = @cLottable01  -- Same RSO (batch#)
+            AND   SKU = @cSKUCode            -- Same SKU
             AND   ISNULL( DuplicateFrom, '') = ''
             ORDER BY 1
 
@@ -220,12 +222,13 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1581RcptCfm07 (
          -- Check if same RSO + SKU is over receive then new line need update
          -- with remark
          SELECT TOP 1 
-               @nCopyFromASNLine = ReceiptLineNumber
-            FROM dbo.RECEIPTDETAIL WITH (NOLOCK) 
-            WHERE ReceiptKey = @cReceiptKey
-            AND   Lottable02 = @cLottable02  
-            AND   ISNULL( DuplicateFrom, '') = ''
-            ORDER BY 1
+            @nCopyFromASNLine = ReceiptLineNumber
+         FROM dbo.RECEIPTDETAIL WITH (NOLOCK) 
+         WHERE ReceiptKey = @cReceiptKey
+         AND   Lottable02 = @cLottable02  
+         AND   SKU = @cSKUCode            -- Same SKU
+         AND   ISNULL( DuplicateFrom, '') = ''
+         ORDER BY 1
 
          -- Get original line values
          SELECT 
