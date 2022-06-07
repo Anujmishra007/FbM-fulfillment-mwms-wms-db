@@ -35,8 +35,10 @@ EXECUTE rdt.rdtAddScn 3911, 'ENG',
    ,@cLine09 = '%60i04'       -- Enlarge to 60 chars (WMS893)
    ,@cLine10 = 'TTL PICK: %05d05'
    ,@cLine11 = 'TTL SCAN: %05d06'
+   ,@cLine13 = '%20d07'
    ,@cLine14 = '%e'
    ,@nFunc = 841
+
 
 -- 2402 = ?? screen
 --DELETE rdt.RDTScn WHERE Scn = 3912 AND Lang_Code = 'ENG'
