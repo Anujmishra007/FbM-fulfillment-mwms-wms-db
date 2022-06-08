@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPAKCF09]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPAKCF09]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -20,7 +15,7 @@ GO
 /* Called By:                                                              */      
 /*                                                                         */      
 /*                                                                         */      
-/* PVCS Version: 1.1                                                       */      
+/* PVCS Version: 1.3                                                       */      
 /*                                                                         */      
 /* Version: 7.0                                                            */      
 /*                                                                         */      
@@ -29,9 +24,11 @@ GO
 /* Updates:                                                                */      
 /* Date         Author  Ver   Purposes                                     */      
 /* 12-03-2019   CSCHONG 1.1   WMS-8292-CN_Ecom-Packing_For JD_CR (CS01)    */  
-/* 09-04-2021   Wan01   1.2   WMS-16026 - PB-Standardize TrackingNo        */  
+/* 09-04-2021   Wan01   1.2   WMS-16026 - PB-Standardize TrackingNo        */
+/* 27-05-2022   WLChooi 1.3   DevOps Combine Script                        */
+/* 27-05-2022   WLChooi 1.3   WMS-19766 - Get Keyname filter UDF05 (WL01)  */
 /***************************************************************************/        
-CREATE PROC [dbo].[ispPAKCF09]        
+CREATE OR ALTER PROC [dbo].[ispPAKCF09]        
 (     @c_PickSlipNo  NVARCHAR(10)         
   ,   @c_Storerkey   NVARCHAR(15)      
   ,   @b_Success     INT           OUTPUT      
@@ -70,7 +67,9 @@ BEGIN
       
          , @CUR_PACKSN        CURSOR      
          , @CUR_TrackingNo    CURSOR        --(CS01)    
-         , @CUR_PD            CURSOR        --(CS01)      
+         , @CUR_PD            CURSOR        --(CS01)     
+         
+         , @c_PackLabelToOrd  NVARCHAR(20)   --WL01
        
       
    SET @b_Success= 1       
@@ -114,23 +113,23 @@ BEGIN
    FROM PACKDETAIL WITH (NOLOCK)    
    WHERE Pickslipno = @c_PickSlipNo    
     
-    IF @c_TotalCtn > 0    
-    BEGIN    
-      UPDATE PACKHEADER WITH (ROWLOCK)      
-      SET TTLCNTS = @c_TotalCtn     
-      WHERE PickSlipNo = @c_PickSlipNo      
-    END    
+   IF @c_TotalCtn > 0    
+   BEGIN    
+     UPDATE PACKHEADER WITH (ROWLOCK)      
+     SET TTLCNTS = @c_TotalCtn     
+     WHERE PickSlipNo = @c_PickSlipNo      
+   END    
       
-    SET @n_Err = @@ERROR       
-    IF @n_Err <> 0      
-    BEGIN      
-        SET @n_Continue = 3      
-        SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
-        SET @n_Err = 61804      
-        SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKHEADER Fail. (ispPAKCF09)'      
-                        + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
-        GOTO QUIT_SP      
-    END      
+   SET @n_Err = @@ERROR       
+   IF @n_Err <> 0      
+   BEGIN      
+       SET @n_Continue = 3      
+       SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
+       SET @n_Err = 61804      
+       SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKHEADER Fail. (ispPAKCF09)'      
+                       + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
+       GOTO QUIT_SP      
+   END      
     
     
    SET @CUR_TrackingNo = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
@@ -147,71 +146,75 @@ BEGIN
    OPEN @CUR_TrackingNo        
         
    FETCH NEXT FROM @CUR_TrackingNo INTO @c_Orderkey      
-                                 ,  @c_shipperkey     
-                                 ,  @c_OHTrackingNo     
-                                 ,  @n_TCartonNo      
+                                     ,  @c_shipperkey     
+                                     ,  @c_OHTrackingNo     
+                                     ,  @n_TCartonNo      
       
    WHILE @@FETCH_STATUS <> -1      
    BEGIN     
-    
-    
-   SET @c_keyname = ''    
-   SET @c_Facility = ''    
-   SET @c_TrackingNo = ''    
-   SET @c_Child = '-' + RTRIM(CONVERT(NVARCHAR(10), @n_TCartonNo))    
-   SET @c_CartonTo = '0'    
-    
-   SELECT @c_Facility = OH.Facility    
-   FROM ORDERS OH WITH (NOLOCK)    
-   WHERE OH.Orderkey = @c_Orderkey    
-    
-   SELECT @c_keyname = C.long    
-   FROM CODELKUP C WITH (NOLOCK)    
-   WHERE C.listname = 'AsgnTNo'    
-   AND C.storerkey = @c_Storerkey    
-   AND C.short = @c_shipperkey    
-   AND C.notes=@c_Facility    
-    
-   IF ISNULL(@c_OHTrackingNo,'') = ''    
-    BEGIN    
+      SET @c_keyname = ''    
+      SET @c_Facility = ''    
+      SET @c_TrackingNo = ''    
+      SET @c_Child = '-' + RTRIM(CONVERT(NVARCHAR(10), @n_TCartonNo))    
+      SET @c_CartonTo = '0'    
+       
+      SELECT @c_Facility = OH.Facility    
+      FROM ORDERS OH WITH (NOLOCK)    
+      WHERE OH.Orderkey = @c_Orderkey    
+       
+      SELECT @c_keyname = C.long    
+      FROM CODELKUP C WITH (NOLOCK)    
+      WHERE C.listname = 'AsgnTNo'    
+      AND C.storerkey = @c_Storerkey    
+      AND C.short = @c_shipperkey    
+      AND C.notes = @c_Facility    
+      AND C.UDF05 = ''   --WL01
+       
+      IF ISNULL(@c_OHTrackingNo,'') = ''    
+      BEGIN    
          GOTO NEXT_CARTON    
       END    
+      
+      --WL01 S
+      IF ISNULL(@c_keyname,'') = ''
+      BEGIN
+         GOTO NEXT_CARTON
+      END
+      --WL01 E
+       
+      IF @c_TotalCtn = 1    
+      BEGIN    
+        --SET @c_CartonTo = '-1-'    
+       
+        SET @c_TrackingNo = @c_OHTrackingNo +  @c_Child --+ @c_CartonTo    
+      END    
+      ELSE    
+      BEGIN    
+            
+         IF @n_TCartonNo <> @c_TotalCtn    
+         BEGIN    
+           --SET @c_CartonTo = '-0-'    
+          
+           SET @c_TrackingNo = @c_OHTrackingNo +  @c_Child --+ @c_CartonTo    
+          
+         END    
+         ELSE    
+         BEGIN    
+          
+           --SET @c_CartonTo = '-' + RTRIM(CONVERT(NVARCHAR(10), @n_TCartonNo)) + '-'    
+          
+           SET @c_TrackingNo = @c_OHTrackingNo + @c_Child --+ @c_CartonTo    
+          
+         END    
+      END    
     
-    
-   IF @c_TotalCtn = 1    
-   BEGIN    
-     --SET @c_CartonTo = '-1-'    
-    
-     SET @c_TrackingNo = @c_OHTrackingNo +  @c_Child --+ @c_CartonTo    
-   END    
-   ELSE    
-   BEGIN    
-         
-   IF @n_TCartonNo <> @c_TotalCtn    
-   BEGIN    
-     --SET @c_CartonTo = '-0-'    
-    
-     SET @c_TrackingNo = @c_OHTrackingNo +  @c_Child --+ @c_CartonTo    
-    
-   END    
-   ELSE    
-   BEGIN    
-    
-     --SET @c_CartonTo = '-' + RTRIM(CONVERT(NVARCHAR(10), @n_TCartonNo)) + '-'    
-    
-     SET @c_TrackingNo = @c_OHTrackingNo + @c_Child --+ @c_CartonTo    
-    
-   END    
-    
-    END    
-    
- SET @CUR_PD =CURSOR FAST_FORWARD READ_ONLY FOR      
+      SET @CUR_PD =CURSOR FAST_FORWARD READ_ONLY FOR      
       SELECT PD.LabelLine      
          ,   DropID = ISNULL(RTRIM(PD.DropID),'')      
          ,   TrackingNo_PI = CASE WHEN ISNULL(PF.TrackingNo,'') <> '' THEN PF.TrackingNo ELSE '' END    --(Wan01)   
          --,   TrackingNo_PI = CASE WHEN ISNULL(PF.TrackingNo,'') <> '' THEN PF.TrackingNo ELSE ISNULL(PF.RefNo,'') END    --(Wan01)                                                                                                                                   
       FROM   PACKDETAIL PD WITH (NOLOCK)      
-   JOIN PackInfo PF WITH (NOLOCK) ON PF.PickSlipNo=PD.PickSlipNo and PF.CartonNo=PD.CartonNo    
+      JOIN PackInfo PF WITH (NOLOCK) ON PF.PickSlipNo=PD.PickSlipNo and PF.CartonNo=PD.CartonNo    
       WHERE  PD.PickSlipNo = @c_PickSlipNo      
       AND    PD.CartonNo = @n_TCartonNo      
       ORDER BY PD.LabelLine      
@@ -227,7 +230,8 @@ BEGIN
          IF @c_DropID <> @c_TrackingNo                
          BEGIN                                                                 
             UPDATE PACKDETAIL WITH (ROWLOCK)      
-            SET DropID = @c_TrackingNo     
+            SET DropID = @c_TrackingNo    
+              , LabelNo = @c_TrackingNo   --WL01
             WHERE PickSlipNo = @c_PickSlipNo      
             AND   CartonNo = @n_TCartonNo      
             AND   LabelLine= @c_LabelLine      
@@ -244,36 +248,36 @@ BEGIN
             END      
          END        
        
-   IF @c_TrackingNo_PI <> @c_TrackingNo                
-   BEGIN                                                                 
-     UPDATE PACKINFO WITH (ROWLOCK)      
-     SET --refno = @c_TrackingNo 
-        --,TrackingNo = @c_TrackingNo        --(Wan01)     
-        TrackingNo = @c_TrackingNo           --(Wan01)   
-     WHERE PickSlipNo = @c_PickSlipNo      
-     AND   CartonNo = @n_TCartonNo      
+         IF @c_TrackingNo_PI <> @c_TrackingNo                
+         BEGIN                                                                 
+            UPDATE PACKINFO WITH (ROWLOCK)      
+            SET --refno = @c_TrackingNo 
+               --,TrackingNo = @c_TrackingNo        --(Wan01)     
+               TrackingNo = @c_TrackingNo           --(Wan01)   
+            WHERE PickSlipNo = @c_PickSlipNo      
+            AND   CartonNo = @n_TCartonNo      
      
-      SET @n_Err = @@ERROR       
-        IF @n_Err <> 0      
-        BEGIN      
-          SET @n_Continue = 3      
-          SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
-          SET @n_Err = 61802      
-          SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKINFO Fail. (ispPAKCF09)'      
-                            + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
-          GOTO QUIT_SP      
-         END      
-    END                                                          
+            SET @n_Err = @@ERROR       
+            IF @n_Err <> 0      
+            BEGIN      
+               SET @n_Continue = 3      
+               SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
+               SET @n_Err = 61802      
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKINFO Fail. (ispPAKCF09)'      
+                             + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
+               GOTO QUIT_SP      
+            END      
+         END                                                          
       
-    FETCH NEXT FROM @CUR_PD INTO @c_LabelLine      
-                               , @c_DropID     
-                               , @c_TrackingNo_PI                 
+         FETCH NEXT FROM @CUR_PD INTO @c_LabelLine      
+                                    , @c_DropID     
+                                    , @c_TrackingNo_PI                 
       END      
       CLOSE @CUR_PD      
       DEALLOCATE @CUR_PD      
     
     
-   IF EXISTS ( SELECT 1    
+      IF EXISTS ( SELECT 1    
                   FROM CartonTrack WITH (NOLOCK)    
                   WHERE TrackingNo = @c_TrackingNo    
                   AND LabelNo  = @c_Orderkey    
@@ -283,7 +287,7 @@ BEGIN
          GOTO NEXT_CARTON    
       END                                                     
     
-     INSERT INTO CARTONTRACK     
+      INSERT INTO CARTONTRACK     
             (  TrackingNo    
             ,  CarrierName    
             ,  KeyName    
@@ -301,7 +305,7 @@ BEGIN
             )    
        
     
-   --SELECT  @c_TrackingNo '@c_TrackingNo',@c_shipperkey '@c_shipperkey',@c_KeyName + '_Child' as keyname,@c_Orderkey '@c_Orderkey'    
+      --SELECT  @c_TrackingNo '@c_TrackingNo',@c_shipperkey '@c_shipperkey',@c_KeyName + '_Child' as keyname,@c_Orderkey '@c_Orderkey'    
       SET @n_Err = @@ERROR     
       IF @n_Err <> 0    
       BEGIN    
@@ -315,15 +319,55 @@ BEGIN
     
       NEXT_CARTON:                                                --(CS01)      
     
-   FETCH NEXT FROM @CUR_TrackingNo INTO @c_Orderkey      
-                                 ,  @c_shipperkey    
-                                 ,  @c_OHTrackingNo      
-                                 ,  @n_TCartonNo    
+      FETCH NEXT FROM @CUR_TrackingNo INTO @c_Orderkey      
+                                        ,  @c_shipperkey    
+                                        ,  @c_OHTrackingNo      
+                                        ,  @n_TCartonNo    
    END      
    CLOSE @CUR_TrackingNo      
-   DEALLOCATE @CUR_TrackingNo      
+   DEALLOCATE @CUR_TrackingNo 
+
+   --WL01 S
+   EXEC nspGetRight 
+      ''                   -- facility
+   ,  @c_storerkey         -- Storerkey
+   ,  null                 -- Sku
+   ,  'AssignPackLabelToOrdCfg'       -- Configkey
+   ,  @b_success           OUTPUT 
+   ,  @c_PackLabelToOrd    OUTPUT 
+   ,  @n_err               OUTPUT 
+   ,  @c_errmsg            OUTPUT
+
+   IF @b_success <> 1
+   BEGIN
+      SET @n_continue = 3
+      SET @n_err = 61805 
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing nspGetRight. (ispPAKCF09)' 
+                     + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+      GOTO QUIT_SP
+   END 
+
+   IF @c_PackLabelToOrd = '1'
+   BEGIN
+      EXEC isp_AssignPackLabelToOrderByLoad
+            @c_PickSlipNo= @c_PickSlipNo
+         ,  @b_Success   = @b_Success  OUTPUT
+         ,  @n_Err       = @n_Err      OUTPUT
+         ,  @c_ErrMsg    = @c_ErrMsg   OUTPUT
+
+      IF @b_Success <> 1
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 61806
+         SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
+                        + 'Error Executing isp_AssignPackLabelToOrderByLoad.(ispPAKCF09)'
+         GOTO QUIT_SP
+      END
+   END
+   --WL01 E
+
    --CS01 End    
-    SERIAL_UPDATE:    
+   SERIAL_UPDATE:    
    SET @CUR_PACKSN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
    SELECT DISTINCT       
           PH.Orderkey      
