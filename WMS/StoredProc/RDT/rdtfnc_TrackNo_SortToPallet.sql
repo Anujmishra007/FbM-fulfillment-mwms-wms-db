@@ -29,6 +29,7 @@ GO
 /*                            error to fix no error shown bug (ZG01)    */  
 /* 2022-04-28   1.8  James    WMS-18616 Extend the length of barcode    */
 /*                            to 100 chars (james07)                    */
+/* 2022-06-08   1.9  yeekung  WMS-18350 Add extendedupdatesp (yeekung01)*/
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (  
@@ -734,7 +735,42 @@ BEGIN
             GOTO RollBackTran_CreateMbol  
          END  
       END  
-  
+      
+       -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, @tExtUpdateVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cTrackNo       NVARCHAR( 40), ' +
+               ' @cOrderKey      NVARCHAR( 20),' +
+               ' @cPalletKey     NVARCHAR( 20), ' +
+               ' @cMBOLKey       NVARCHAR( 10), ' +
+               ' @tExtUpdateVar  VariableTable READONLY, ' +
+               ' @nErrNo         INT           OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, @tExtUpdateVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO RollBackTran_CreateMbol
+         END
+      END 
+       
       COMMIT TRAN rdt_CreateMbol  
   
       GOTO Quit_CreateMbol  
