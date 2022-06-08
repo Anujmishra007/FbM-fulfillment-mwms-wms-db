@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_1653GetMbolKey01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_1653GetMbolKey01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +16,11 @@ GO
 /* 2020-08-01  1.0  James    WMS-14248. Created                         */  
 /* 2021-07-07  1.1  James    WMS-17425 Add Move orders (james01)        */
 /* 2021-08-25  1.2  James    WMS-17773 Extend TrackNo to 40 chars       */
+/* 2022-03-07  1.3  James    WMS-18350 Filter storer when suggest       */
+/*                           palletkey (james02)                        */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_1653GetMbolKey01] (    
+CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey01] (    
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -76,9 +75,22 @@ BEGIN
          FROM dbo.MBOLDETAIL MD WITH (NOLOCK)
          JOIN dbo.MBOL M WITH (NOLOCK) ON ( MD.MbolKey = M.MbolKey)
          JOIN dbo.OrderInfo OI WITH (NOLOCK) ON ( MD.OrderKey = OI.OrderKey)
+         JOIN dbo.ORDERS O WITH (NOLOCK) ON ( OI.OrderKey = O.OrderKey)
          WHERE M.[Status] = '0'
          AND   OI.OrderInfo04 = @cOrderInfo04
+         AND   O.StorerKey = @cStorerKey
          ORDER BY 1 DESC
+
+         IF EXISTS (SELECT 1 FROM MBOLDETAIL MD WITH (NOLOCK)
+                     JOIN dbo.MBOL M WITH (NOLOCK) ON ( MD.MbolKey = M.MbolKey)
+                     JOIN dbo.ORDERS O WITH (NOLOCK) ON ( MD.OrderKey = O.OrderKey)
+                     WHERE O.storerkey<>@cStorerKey
+                     AND M.[Status] = '0'
+                     AND MD.mbolkey=@cMBOLKey)
+         BEGIN
+            SET @cMBOLKey=''
+         END
+
       END
       
 Quit:    

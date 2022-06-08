@@ -1,10 +1,10 @@
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO    
+
 /************************************************************************/    
-/* Store procedure: rdt_1653ExtUpd01                                    */    
+/* Store procedure: rdt_1653ExtUpd04                                    */    
 /* Copyright      : IDS                                                 */    
 /*                                                                      */    
 /* Called from: rdtfnc_TrackNo_SortToPallet                             */    
@@ -13,12 +13,10 @@ GO
 /*                                                                      */    
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
-/* 2020-08-01  1.0  James    WMS-14248. Created                         */  
-/* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars       */
-/* 2022-05-31  1.2  yeekung  WMS-18350. Add delete pickdetail           */  
+/* 2021-11-19  1.0  James    WMS-18350. Created                         */  
 /************************************************************************/    
     
-CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd01] (    
+CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd04] (    
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -40,15 +38,14 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF    
    SET CONCAT_NULL_YIELDS_NULL OFF    
    
-   
    DECLARE @bSuccess    INT
    DECLARE @nRowRef     INT
    DECLARE @nTranCount  INT
 
-
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_1653ExtUpd01 -- For rollback or commit only our own transaction
+   SAVE TRAN rdt_1653ExtUpd04 -- For rollback or commit only our own transaction
+
    
    IF @nStep = 2
    BEGIN
@@ -70,10 +67,11 @@ BEGIN
             
             DELETE PickDetail where pickdetailkey=@cPickdetailkey
 
+              
             IF @@ERROR <> 0  
             BEGIN  
-               SET @nErrNo = 156452  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Del ShtPickEr'  
+               SET @nErrNo = 183701  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --' Del ShtPickEr'  
                GOTO RollBackTran  
             END
             FETCH NEXT FROM CUR_PD INTO @cPickdetailkey 
@@ -81,18 +79,17 @@ BEGIN
          CLOSE CUR_PD  
          DEALLOCATE CUR_PD 
 
-         GOTO QUIT
       END
+      GOTO QUIT
    END
 
    IF @nStep = 4
    BEGIN
       IF @nInputKey = 1
       BEGIN
-
          -- Insert transmitlog2 here
          EXECUTE ispGenTransmitLog2 
-            @c_TableName      = 'WSCRSOCLOSEMP', 
+            @c_TableName      = 'WSLBLREQLOGMF', 
             @c_Key1           = @cMBOLKey, 
             @c_Key2           = '', 
             @c_Key3           = @cStorerkey, 
@@ -102,21 +99,18 @@ BEGIN
             @c_errmsg         = @cErrMsg    OUTPUT    
 
          IF @bSuccess <> 1    
-         BEGIN
-            SET @nErrNo = 156451
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert TL2 Err
-            GOTO Quit
-         END
+            GOTO RollBackTran
       END
       GOTO QUIT
    END
-   
+
+
 RollBackTran:
    Rollback tran
    
 Quit:  
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN rdt_1653ExtUpd01
+      COMMIT TRAN rdt_1653ExtUpd04
 END    
 GO
 
@@ -125,5 +119,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_1653ExtUpd01 TO NSQL
+GRANT EXECUTE ON RDT.rdt_1653ExtUpd04 TO NSQL
 GO
