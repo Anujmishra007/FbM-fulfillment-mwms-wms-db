@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_513SuggestLOC07]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_513SuggestLOC07]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /* 26-04-2018  1.0  Ung      WMS-4687 Created                           */
 /* 10-07-2018  1.1  Ung      WMS-5665 Add LocationCategory              */
 /* 10-11-2021  1.2  James    WMS-18325 Change Min Loc logic (james01)   */
+/* 09-05-2022  1.3  yeekung  WMS-19609 exclude fromloc    (yeekung01)   */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_513SuggestLOC07] (
+CREATE OR ALTER PROC [RDT].[rdt_513SuggestLOC07] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -106,6 +104,7 @@ BEGIN
             @cSuggLOC = SL.LOC
          FROM #tFriendLOC F
             JOIN SKUxLOC SL WITH (NOLOCK) ON (F.LOC = SL.LOC)
+         WHERE SL.loc <> @cFromLoc  --(yeekung01)
          GROUP BY SL.LOC
          ORDER BY SUM( SL.QTY-SL.QTYPicked-SL.QtyAllocated), SL.Loc
       END
@@ -123,6 +122,8 @@ BEGIN
             AND LOC.PutawayZone = @cPutawayZone
             AND LOC.HostWHCode = ''
             AND LOC.LocationCategory <> 'STAGE'
+            AND LOC.loc <> @cFromLoc --(yeekung01)
+            AND LLI.qty<>0 --(yeekung01)
          GROUP BY LOC.PALogicalLOC, LOC.LOC
          HAVING SUM( ISNULL( LLI.QTY, 0)-ISNULL( LLI.QTYPicked, 0)-ISNULL( LLI.QtyAllocated, 0)) = 0
             AND SUM( ISNULL( LLI.PendingMoveIn, 0)) = 0
