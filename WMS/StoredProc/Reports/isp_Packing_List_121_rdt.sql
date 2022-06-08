@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                   */              
 /* Date         Author    Ver.  Purposes                                      */    
 /* 22-Feb-2022  CSCHONG   1.0   Devops Scripts Combine                        */
+/* 30-May-2022  MINGLE    1.1   Add new column(ML01)                          */
 /******************************************************************************/     
   
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_121_rdt]             
@@ -61,7 +62,7 @@ BEGIN
   
   
  CREATE TABLE #PACKLIST121rdt 
-         ( Seqno           INT NOT NULL identity(1,1) PRIMARY KEY
+         ( Seqno           INT NOT NULL IDENTITY(1,1) PRIMARY KEY
          , c_Contact1      NVARCHAR(30) NULL   
          , C_Addresses     NVARCHAR(200) NULL  
          , c_Phone1        NVARCHAR(18) NULL  
@@ -78,7 +79,8 @@ BEGIN
          , RecGrp          INT
          , SDESCR          NVARCHAR(120)            
          , ExtenOrdKey     NVARCHAR(50)     
-         , companyname     NVARCHAR(80)     
+         , companyname     NVARCHAR(80) 
+		 , TrackingNo      NVARCHAR(40) NULL	--ML01
          )  
           
   
@@ -131,15 +133,17 @@ BEGIN
                      , RecGrp 
                      , SDESCR    
                      , ExtenOrdKey  
-                     , companyname        
+                     , companyname  
+					 , TrackingNo	--ML01
                            )             
    SELECT ISNULL(OH.c_Contact1,''),(ISNULL(OH.C_state,'')+ISNULL(OH.C_City,'')+ISNULL(OH.C_address1,'')+ISNULL(OH.C_address2,'') ),
                    ISNULL(OH.C_Phone1,''),'' AS remarks,
                    ORDDET.SKU,(PICKD.Qty),OH.OrderKey,
                    OH.Notes,ISNULL(CONVERT(NVARCHAR(10),LOTT.Lottable04,120),''),CONVERT(NVARCHAR(10),GETDATE(),111) AS prndate,
                    S.ALTSKU,'EA' AS Unit,(ISNULL(Oh.Type,'')+ISNULL(OH.Notes2,'')),
-                   (Row_Number() OVER (PARTITION BY OH.Orderkey ORDER BY ORDDET.sku Asc)-1)/5 
-                   , S.DESCR,OH.ExternOrderkey ,'Erno Laszlo ' AS companyname                      
+                   (ROW_NUMBER() OVER (PARTITION BY OH.Orderkey ORDER BY ORDDET.sku ASC)-1)/5 
+                   , S.DESCR,OH.ExternOrderkey ,'Erno Laszlo ' AS companyname
+				   , OH.TrackingNo	--ML01
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
    JOIN SKU S WITH (NOLOCK) ON S.SKU = ORDDET.SKU AND S.Storerkey=ORDDET.Storerkey
@@ -152,7 +156,7 @@ BEGIN
    --                JOIN PACKDETAIL (NOLOCK) ON PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo
    --                WHERE PACKHEADER.PickSlipNo = PH.PickSlipNo) AS PD
    JOIN #TMP_Orders TOS ON TOS.orderkey = OH.Orderkey   
-   ORDER By ORDDET.sku
+   ORDER BY ORDDET.sku
 
     SELECT @n_maxrecgrp = MAX(RecGrp)
     FROM #PACKLIST121rdt 
@@ -232,7 +236,8 @@ BEGIN
                      , RecGrp 
                      , SDESCR    
                      , ExtenOrdKey
-                     , companyname                 
+                     , companyname 
+					 , TrackingNo	--ML01
          FROM #PACKLIST121rdt  
          ORDER BY Seqno
 END
