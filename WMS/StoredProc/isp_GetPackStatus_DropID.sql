@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPackStatus_DropID]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetPackStatus_DropID]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -26,8 +21,12 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 16-JUN-2017 Wan01    1.1   WMS-1466 - Use refno2 to get qtypacked    */
 /* 30-Aug-2017 TLTING   1.2   Performance tune                          */
+/* 20-Oct-2020 TLTING01 1.3   Performance tune - DropID check           */
+/* 18-Nov-2020 LZG      1.4   INC1332162-Quit SP if blank DropID (ZG01) */  
+/* 2022-03-24  Wan02    1.5   DevOps Combine Script                     */
+/* 2022-03-24  Wan02    1.5   WMS-19299 - CN Logitech ToteID Packing CR */
 /************************************************************************/
-CREATE PROC [dbo].[isp_GetPackStatus_DropID] 
+CREATE OR ALTER PROC [dbo].[isp_GetPackStatus_DropID] 
        @c_DropID  NVARCHAR(20)
 AS
 BEGIN
@@ -49,6 +48,9 @@ BEGIN
          , @c_StorerKey                NVARCHAR(15)
          , @c_PACKToteSumQtyByRefNo2   NVARCHAR(30)
          --(Wan01) - END
+         
+         , @c_UserName        NVARCHAR(128)  = SUSER_SNAME()               --(Wan02)
+
 
    SET @n_StartTCnt = @@TRANCOUNT
 
@@ -56,6 +58,31 @@ BEGIN
    BEGIN
       COMMIT TRAN
    END;
+   
+   -- ZG01 (Start)  
+   IF ISNULL(@c_DropID, '') = ''
+   BEGIN
+      DECLARE @t_Dummy TABLE
+            (  Storerkey      NVARCHAR(15) NULL     
+            ,  Sku            NVARCHAR(20) NULL     
+            ,  QtyAllocated   INT   NULL            
+            ,  QtyPacked      INT   NULL            
+            ,  BalQty         INT   NULL            
+            ,  rowfocusindicatorcol NVARCHAR(15) NULL
+            ,  UserQtyPacked  INT   NULL  DEFAULT(0)        --Wan02
+            )   
+      SELECT Storerkey      
+            ,  Sku            
+            ,  QtyAllocated   
+            ,  QtyPacked      
+            ,  BalQty
+            ,  rowfocusindicatorcol
+            ,  UserQtyPacked                                --Wan02
+      FROM @t_Dummy 
+      GOTO QUIT_SP 
+   END
+   -- ZG01 (End)  
+
 
    SET @c_Wavekey = ''
    IF @c_DropID <> ''
@@ -91,21 +118,22 @@ BEGIN
             JOIN WAVEDETAIL WD WITH (NOLOCK) ON (PD.Orderkey = WD.Orderkey)
             WHERE PD.DropID = @c_DropID
             AND   WD.Wavekey= @c_Wavekey
-            AND @c_DropID <> ''
+            --AND @c_DropID <> ''                                                   --TLTING01
             GROUP BY PD.Storerkey
                   ,  PD.Sku
          )
       ,
-         PACK_ORD( Storerkey, Sku, QtyPacked)
+         PACK_ORD( Storerkey, Sku, QtyPacked, UserQtyPacked)                        --(Wan02)
          AS (  SELECT PD.Storerkey
                      ,PD.Sku
                      ,QtyPacked = ISNULL(SUM(PD.Qty),0)
+                     ,UserQtyPacked = SUM(IIF(PD.AddWho = @c_UserName, PD.Qty, 0))  --(Wan02)
                FROM PACKDETAIL PD WITH (NOLOCK) 
                JOIN PACKHEADER PH WITH (NOLOCK) ON (PD.PickSlipNo = PH.PickSlipNo)
                JOIN WAVEDETAIL WD WITH (NOLOCK) ON (PH.Orderkey = WD.Orderkey)
                WHERE  ( PD.RefNo2 = @c_DropID   )  -- AND @c_PACKToteSumQtyByRefNo2 =  '1'
                AND   WD.Wavekey= @c_Wavekey
-               AND   @c_DropID <> ''
+               --AND   @c_DropID <> ''                                              --TLTING01
                GROUP BY PD.Storerkey
                      ,  PD.Sku          
             )
@@ -115,7 +143,8 @@ BEGIN
             ,QtyAllocated = PICK_ORD.QtyAllocated
             ,QtyPacked    = ISNULL(PACK_ORD.QtyPacked,0)
             ,BalQty       = PICK_ORD.QtyAllocated - ISNULL(PACK_ORD.QtyPacked,0)
-		      ,'    ' rowfocusindicatorcol    
+          ,'    ' rowfocusindicatorcol 
+            ,UserQtyPacked = ISNULL(PACK_ORD.UserQtyPacked,0)                       --(Wan02)               
       FROM PICK_ORD
       LEFT JOIN PACK_ORD ON  (PICK_ORD.Storerkey = PACK_ORD.Storerkey)
                          AND (PICK_ORD.Sku = PACK_ORD.Sku)
@@ -135,21 +164,22 @@ BEGIN
             JOIN WAVEDETAIL WD WITH (NOLOCK) ON (PD.Orderkey = WD.Orderkey)
             WHERE PD.DropID = @c_DropID
             AND   WD.Wavekey= @c_Wavekey
-            AND @c_DropID <> ''
+            --AND @c_DropID <> ''                                                   --TLTING01
             GROUP BY PD.Storerkey
                   ,  PD.Sku
          )
       ,
-         PACK_ORD( Storerkey, Sku, QtyPacked)
+         PACK_ORD( Storerkey, Sku, QtyPacked, UserQtyPacked)                        --(Wan02)
          AS (  SELECT PD.Storerkey
                      ,PD.Sku
                      ,QtyPacked = ISNULL(SUM(PD.Qty),0)
+                     ,UserQtyPacked = SUM(IIF(PD.AddWho = @c_UserName, PD.Qty, 0))  --(Wan02)
                FROM PACKDETAIL PD WITH (NOLOCK) 
                JOIN PACKHEADER PH WITH (NOLOCK) ON (PD.PickSlipNo = PH.PickSlipNo)
                JOIN WAVEDETAIL WD WITH (NOLOCK) ON (PH.Orderkey = WD.Orderkey)
                WHERE ( PD.DropID = @c_DropID  )    -- AND @c_PACKToteSumQtyByRefNo2 <> '1'
                AND   WD.Wavekey= @c_Wavekey
-               AND   @c_DropID <> ''
+               --AND   @c_DropID <> ''                                              --TLTING01
                GROUP BY PD.Storerkey
                      ,  PD.Sku          
             )
@@ -159,7 +189,8 @@ BEGIN
             ,QtyAllocated = PICK_ORD.QtyAllocated
             ,QtyPacked    = ISNULL(PACK_ORD.QtyPacked,0)
             ,BalQty       = PICK_ORD.QtyAllocated - ISNULL(PACK_ORD.QtyPacked,0)
-		      ,'    ' rowfocusindicatorcol    
+            ,'    ' rowfocusindicatorcol 
+            ,UserQtyPacked = ISNULL(PACK_ORD.UserQtyPacked,0)                       --(Wan02)               
       FROM PICK_ORD
       LEFT JOIN PACK_ORD ON  (PICK_ORD.Storerkey = PACK_ORD.Storerkey)
                          AND (PICK_ORD.Sku = PACK_ORD.Sku)
