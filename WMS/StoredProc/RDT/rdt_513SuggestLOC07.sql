@@ -105,6 +105,7 @@ BEGIN
          FROM #tFriendLOC F
             JOIN SKUxLOC SL WITH (NOLOCK) ON (F.LOC = SL.LOC)
          WHERE SL.loc <> @cFromLoc  --(yeekung01)
+            AND SL.qty<>0 --(yeekung01)
          GROUP BY SL.LOC
          ORDER BY SUM( SL.QTY-SL.QTYPicked-SL.QtyAllocated), SL.Loc
       END
@@ -123,7 +124,6 @@ BEGIN
             AND LOC.HostWHCode = ''
             AND LOC.LocationCategory <> 'STAGE'
             AND LOC.loc <> @cFromLoc --(yeekung01)
-            AND LLI.qty<>0 --(yeekung01)
          GROUP BY LOC.PALogicalLOC, LOC.LOC
          HAVING SUM( ISNULL( LLI.QTY, 0)-ISNULL( LLI.QTYPicked, 0)-ISNULL( LLI.QtyAllocated, 0)) = 0
             AND SUM( ISNULL( LLI.PendingMoveIn, 0)) = 0
