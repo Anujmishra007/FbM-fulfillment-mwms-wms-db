@@ -1,35 +1,37 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].ispALADSLQ') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispALADSLQ]
+USE [VNWMS]
 GO
 
+/****** Object:  StoredProcedure [dbo].[ispALADSLQ]    Script Date: 6/10/2022 3:51:22 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Proc: ispALADSLQ                                              */
-/* Creation Date: 2021-07-08                                            */
-/* Copyright: LF Logistics                                              */
-/* Written by: Wan                                                      */
-/*                                                                      */
-/* Purpose: WMS-17271 - RG - Adidas Allocation Strategy                 */
-/*        : Loose Quantity from Home Location PickCode                  */
-/* Called By: ispPRALC06                                                */
-/*          :                                                           */
-/* PVCS Version: 1.1                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 2021-07-08  Wan      1.0   Created.                                  */
-/* 2021-10-06  Wan      1.0   DevOps Combine Script                     */
-/* 2022-02-09  Wan01    1.1   CR 1.5. Exclude Lot & ID Hold Inventory   */
-/************************************************************************/
-CREATE PROC dbo.[ispALADSLQ]
+
+/*******************************************************************************/
+/* Stored Proc: ispALADSLQ                                                     */
+/* Creation Date: 2021-07-08                                                   */
+/* Copyright: LF Logistics                                                     */
+/* Written by: Wan                                                             */
+/*                                                                             */
+/* Purpose: WMS-17271 - RG - Adidas Allocation Strategy                        */
+/*        : Loose Quantity from Home Location PickCode                         */
+/* Called By: ispPRALC06                                                       */
+/*          :                                                                  */
+/* PVCS Version: 1.1                                                           */
+/*                                                                             */
+/* Version: 7.0                                                                */
+/*                                                                             */
+/* Data Modifications:                                                         */
+/*                                                                             */
+/* Updates:                                                                    */
+/* Date        Author   Ver   Purposes                                         */
+/* 2021-07-08  Wan      1.0   Created.                                         */
+/* 2021-10-06  Wan      1.0   DevOps Combine Script                            */
+/* 2022-02-09  Wan01    1.1   CR 1.5. Exclude Lot & ID Hold Inventory          */
+/* 2022-06-10  CLVN01   1.2   JSM-73316 Change variable initial from dt_ to d_ */
+/*******************************************************************************/
+ALTER PROC [dbo].[ispALADSLQ]
       @c_Wavekey           NVARCHAR(10)  
    ,  @c_Facility          NVARCHAR(5)     
    ,  @c_StorerKey         NVARCHAR(15)     
@@ -37,8 +39,8 @@ CREATE PROC dbo.[ispALADSLQ]
    ,  @c_Lottable01        NVARCHAR(18)    
    ,  @c_Lottable02        NVARCHAR(18)    
    ,  @c_Lottable03        NVARCHAR(18)    
-   ,  @dt_Lottable04       DATETIME
-   ,  @dt_Lottable05       DATETIME    
+   ,  @d_Lottable04       DATETIME			--(CLVN01)
+   ,  @d_Lottable05       DATETIME			--(CLVN01)
    ,  @c_Lottable06        NVARCHAR(30)    
    ,  @c_Lottable07        NVARCHAR(30)    
    ,  @c_Lottable08        NVARCHAR(30)    
@@ -46,9 +48,9 @@ CREATE PROC dbo.[ispALADSLQ]
    ,  @c_Lottable10        NVARCHAR(30)    
    ,  @c_Lottable11        NVARCHAR(30)    
    ,  @c_Lottable12        NVARCHAR(30)    
-   ,  @dt_Lottable13       DATETIME    
-   ,  @dt_Lottable14       DATETIME    
-   ,  @dt_Lottable15       DATETIME    
+   ,  @d_Lottable13       DATETIME			--(CLVN01)
+   ,  @d_Lottable14       DATETIME			--(CLVN01)
+   ,  @d_Lottable15       DATETIME			--(CLVN01)
    ,  @c_UOM               NVARCHAR(10)   = '' 
    ,  @c_HostWHCode        NVARCHAR(10)   = '' 
    ,  @n_UOMBase           INT            = 1
@@ -147,8 +149,8 @@ BEGIN
               + CASE WHEN @c_Lottable01 = '' THEN '' ELSE N' AND l2.Lottable01 = @c_Lottable01' END
               + CASE WHEN @c_Lottable02 = '' THEN '' ELSE N' AND l2.Lottable02 = @c_Lottable02' END  
               + CASE WHEN @c_Lottable03 = '' THEN '' ELSE N' AND l2.Lottable03 = @c_Lottable03' END
-              + CASE WHEN CONVERT(NCHAR(10), @dt_Lottable04, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable04 = @dt_Lottable04' END              
-              + CASE WHEN CONVERT(NCHAR(10), @dt_Lottable05, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable05 = @dt_Lottable05' END
+              + CASE WHEN CONVERT(NCHAR(10), @d_Lottable04, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable04 = @dt_Lottable04' END  --(CLVN01)             
+              + CASE WHEN CONVERT(NCHAR(10), @d_Lottable05, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable05 = @dt_Lottable05' END	 --(CLVN01)
               + CASE WHEN @c_Lottable06 = '' THEN '' ELSE N' AND l2.Lottable06 = @c_Lottable06' END              
               + CASE WHEN @c_Lottable07 = '' THEN '' ELSE N' AND l2.Lottable07 = @c_Lottable07' END    
               + CASE WHEN @c_Lottable08 = '' THEN '' ELSE N' AND l2.Lottable08 = @c_Lottable08' END              
@@ -156,9 +158,9 @@ BEGIN
               + CASE WHEN @c_Lottable10 = '' THEN '' ELSE N' AND l2.Lottable10 = @c_Lottable10' END     
               + CASE WHEN @c_Lottable11 = '' THEN '' ELSE N' AND l2.Lottable11 = @c_Lottable11' END
               + CASE WHEN @c_Lottable12 = '' THEN '' ELSE N' AND l2.Lottable12 = @c_Lottable12' END  
-              + CASE WHEN CONVERT(NCHAR(10), @dt_Lottable13, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable13 = @dt_Lottable13' END
-              + CASE WHEN CONVERT(NCHAR(10), @dt_Lottable14, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable14 = @dt_Lottable14' END              
-              + CASE WHEN CONVERT(NCHAR(10), @dt_Lottable15, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable15 = @dt_Lottable15' END
+              + CASE WHEN CONVERT(NCHAR(10), @d_Lottable13, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable13 = @dt_Lottable13' END  --(CLVN01)
+              + CASE WHEN CONVERT(NCHAR(10), @d_Lottable14, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable14 = @dt_Lottable14' END  --(CLVN01)              
+              + CASE WHEN CONVERT(NCHAR(10), @d_Lottable15, 121) = '1900-01-01' THEN '' ELSE N' AND l2.Lottable15 = @dt_Lottable15' END  --(CLVN01)
               + ' ORDER BY l.LogicalLocation'  
               +         ', l2.Lottable05'  
       
@@ -172,8 +174,8 @@ BEGIN
                    + ',@c_Lottable01         NVARCHAR(18)'    
                    + ',@c_Lottable02         NVARCHAR(18)'    
                    + ',@c_Lottable03         NVARCHAR(18)'    
-                   + ',@dt_Lottable04        DATETIME'
-                   + ',@dt_Lottable05        DATETIME'
+                   + ',@d_Lottable04        DATETIME'		--(CLVN01)
+                   + ',@d_Lottable05        DATETIME'		--(CLVN01)
                    + ',@c_Lottable06         NVARCHAR(30)'    
                    + ',@c_Lottable07         NVARCHAR(30)'    
                    + ',@c_Lottable08         NVARCHAR(30)'    
@@ -181,9 +183,9 @@ BEGIN
                    + ',@c_Lottable10         NVARCHAR(30)'    
                    + ',@c_Lottable11         NVARCHAR(30)'    
                    + ',@c_Lottable12         NVARCHAR(30)'    
-                   + ',@dt_Lottable13        DATETIME'
-                   + ',@dt_Lottable14        DATETIME'
-                   + ',@dt_Lottable15        DATETIME'
+                   + ',@d_Lottable13        DATETIME'		--(CLVN01)
+                   + ',@d_Lottable14        DATETIME'		--(CLVN01)
+                   + ',@d_Lottable15        DATETIME'		--(CLVN01)
 
    IF @b_debug = 2
    BEGIN
@@ -199,8 +201,8 @@ BEGIN
                         , @c_Lottable01         
                         , @c_Lottable02         
                         , @c_Lottable03         
-                        , @dt_Lottable04       
-                        , @dt_Lottable05       
+                        , @d_Lottable04     --(CLVN01)   
+                        , @d_Lottable05     --(CLVN01)   
                         , @c_Lottable06         
                         , @c_Lottable07         
                         , @c_Lottable08         
@@ -208,9 +210,9 @@ BEGIN
                         , @c_Lottable10         
                         , @c_Lottable11         
                         , @c_Lottable12         
-                        , @dt_Lottable13       
-                        , @dt_Lottable14       
-                        , @dt_Lottable15 
+                        , @d_Lottable13     --(CLVN01)  
+                        , @d_Lottable14     --(CLVN01)  
+                        , @d_Lottable15 	--(CLVN01)
 
    END
    ELSE
@@ -233,8 +235,8 @@ BEGIN
                         , @c_Lottable01         
                         , @c_Lottable02         
                         , @c_Lottable03         
-                        , @dt_Lottable04       
-                        , @dt_Lottable05       
+                        , @d_Lottable04      --(CLVN01)  
+                        , @d_Lottable05      --(CLVN01)  
                         , @c_Lottable06         
                         , @c_Lottable07         
                         , @c_Lottable08         
@@ -242,9 +244,9 @@ BEGIN
                         , @c_Lottable10         
                         , @c_Lottable11         
                         , @c_Lottable12         
-                        , @dt_Lottable13       
-                        , @dt_Lottable14       
-                        , @dt_Lottable15 
+                        , @d_Lottable13      --(CLVN01) 
+                        , @d_Lottable14      --(CLVN01) 
+                        , @d_Lottable15 	 --(CLVN01)
    END
 
    IF @@ROWCOUNT = 0
@@ -261,5 +263,5 @@ BEGIN
    END 
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[ispALADSLQ] TO nSQL 
-GO
+
+
