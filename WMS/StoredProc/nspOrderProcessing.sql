@@ -1,7 +1,14 @@
+USE [VNWMS]
+GO
+
+/****** Object:  StoredProcedure [dbo].[nspOrderProcessing]    Script Date: 6/10/2022 4:28:14 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
+
 
 /************************************************************************/  
 /* Stored Procedure: nspOrderProcessing                                 */  
@@ -106,9 +113,10 @@ GO
 /* 14-FEB-2022  NJOW17   3.9  DEVOPS combine script                     */
 /* 15-MAR-2022  NJOW18   4.0  WMS-19173 Update pickdetailkey and order  */
 /*                            line no to UCC for UCC allocation         */
+/* 10-Jun-2022  CLVN01   4.1  JSM-73316 Change var size from 10 to 30   */
 /************************************************************************/  
   
-CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
+ALTER   PROC [dbo].[nspOrderProcessing]  
      @c_OrderKey     NVARCHAR(10)  
    , @c_oskey        NVARCHAR(10)  
    , @c_docarton     NVARCHAR(1)  
@@ -1164,7 +1172,7 @@ BEGIN
             @b_candidateexhausted Int, @n_candidateline Int,  
             @n_Available Int, @n_QtyToTake Int, @n_UOMQty Int ,  @n_cPackQty Int,  
             @n_jumpsource Int,  
-            @c_sCurrentLineNumber NVARCHAR(5), @c_sAllocatePickCode NVARCHAR(10) ,  
+            @c_sCurrentLineNumber NVARCHAR(5), @c_sAllocatePickCode NVARCHAR(30) ,  --(CLVN01)
             @c_sLocationTypeOverride NVARCHAR(10), @c_sLocationTypeOverridestripe NVARCHAR(10),  
             @c_pickloc NVARCHAR(10), @b_overcontinue Int, @c_pickId NVARCHAR(18), @n_pickQty Int,  
             @n_rownum Int, @n_qtytoovertake Int, @n_TempBatchPickQty Int,  
@@ -3665,9 +3673,5 @@ BEGIN
    END  
 END  
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO
-GRANT EXECUTE ON [dbo].[nspOrderProcessing] TO nSQL 
-GO
+
+
