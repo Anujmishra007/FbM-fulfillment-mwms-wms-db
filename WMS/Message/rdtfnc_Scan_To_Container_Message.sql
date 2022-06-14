@@ -59,4 +59,12 @@ execute rdt.rdtAddMsg 95898, 10, '95898^Pallet Scanned', 'us_english', 1637
 -- WMS11663
 execute rdt.rdtAddMsg 95899, 10, '95899^UpdContFail',   'us_english', 1637
 
+--WMS12381
+execute rdt.rdtAddMsg 95900, 10, '95900^Inv Format',   'us_english', 1637
+execute rdt.rdtAddMsg 149201, 10, '49201^Inv Format',   'us_english', 1637
+execute rdt.rdtAddMsg 149202, 10, '49202^Inv Format',   'us_english', 1637
+execute rdt.rdtAddMsg 149203, 10, '49203^Inv Format',   'us_english', 1637
+execute rdt.rdtAddMsg 149204, 10, '49204^Inv Format',   'us_english', 1637
+
+
 
