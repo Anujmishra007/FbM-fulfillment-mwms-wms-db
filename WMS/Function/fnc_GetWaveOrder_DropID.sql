@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetWaveOrder_DropID]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
-DROP FUNCTION [dbo].[fnc_GetWaveOrder_DropID]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +15,7 @@ GO
 /*          :  isp_DropID_Insert_Packing                                */
 /*          :                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,8 +23,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2022-05-09  Wan01    1.1   DevOps Combine Script                     */
+/* 2022-05-09  Wan01    1.1   Performance Tune                          */
 /************************************************************************/
-CREATE FUNCTION [dbo].[fnc_GetWaveOrder_DropID] 
+CREATE OR ALTER FUNCTION [dbo].[fnc_GetWaveOrder_DropID] 
   ( 
      @c_DropID    NVARCHAR(20)
   )
@@ -41,8 +39,8 @@ RETURNS @t_OrderWave TABLE
 )     
 AS
 BEGIN
-   SET ANSI_NULLS OFF
-   SET QUOTED_IDENTIFIER OFF
+   --SET ANSI_NULLS OFF                                                                               --(Wan01)
+   --SET QUOTED_IDENTIFIER OFF                                                                        --(Wan01)
    
    DECLARE @c_Wavekey   NVARCHAR(10)
          , @c_Orderkey  NVARCHAR(10)
@@ -53,8 +51,8 @@ BEGIN
    SELECT TOP 1 @c_Wavekey = WD.Wavekey
    FROM PICKDETAIL PD WITH (NOLOCK) 
    JOIN WAVEDETAIL WD WITH (NOLOCK) ON (PD.OrderKey = WD.Orderkey)
-   LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON (WD.OrderKey = PH.Orderkey)
-   WHERE DropID = @c_DropID
+   LEFT JOIN PACKHEADER PH WITH (NOLOCK) ON (WD.OrderKey = PH.Orderkey) AND PH.Orderkey <> ''         --(Wan01)
+   WHERE PD.DropID = @c_DropID
    AND   PD.Status < '9'
    AND   PD.ShipFlag <> 'Y'
    AND   ISNULL(PH.Status,'0') < '9'
