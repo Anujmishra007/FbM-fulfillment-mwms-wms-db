@@ -75,5 +75,10 @@ execute rdt.rdtAddMsg 90500, 10, '90500^Invalid Weight',    'us_english',@nFunc
 execute rdt.rdtAddMsg 172051, 10, '172051^Need Cube   ',    'us_english',@nFunc
 execute rdt.rdtAddMsg 172052, 10, '172052^Invalid cube',    'us_english',@nFunc
 
+--WMS-19811
+execute rdt.rdtAddMsg 172053, 10, '172053 Invalid Range',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172054, 10, '172054 Invalid Range',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172055, 10, '172055 InvalidFormat',   'us_english',@nFunc
+
 select * from rdt.rdtMsg (nolock) where message_id between 90451 and 90500
 select * from rdt.rdtMsg (nolock) where message_id between 172051 and 172100
