@@ -31,6 +31,7 @@ GO
 /* 23-Mar-2022 NJOW01   1.2   WMS-19279 allow configure call custom sp  */
 /*                            to get alternate sku                      */
 /* 23-Mar-2022 NJOW01   1.2   DEVOPS combine script                     */
+/* 25-May-2022 WLChooi  1.3   Fix Errormsg to show orderkey + SKU (WL02)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Ecom_GetPackSku]
             @c_OrderKey    NVARCHAR(10)
@@ -205,7 +206,8 @@ BEGIN
          SET @n_Err = 50100
          SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'
                        --+ 'Sku not found for Order #: ' + RTRIM(@c_Orderkey)   --WL01
-                       + 'Sku not found for this Order #'   --WL01
+                       + 'Sku not found for this Order #: ' + RTRIM(REPLACE(@c_Orderkey, '1205', 'lZOS')) + ' '   --WL01   --WL02
+                       + 'SKU: ' + @c_Sku   --WL02
                        + '.(isp_Ecom_GetPackSku)'
          GOTO QUIT
       END
