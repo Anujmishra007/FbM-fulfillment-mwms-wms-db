@@ -18,7 +18,7 @@ SELECT SC.StorerKey,
 FROM   StorerConfig  AS SC WITH (NOLOCK)
        JOIN CODELIST AS CL WITH (NOLOCK) ON  CL.ListGroup = SC.SValue
 WHERE  SC.ConfigKey = 'BuildLoadParm'
-AND Cl.UDF04 = 'BACKENDALLOC'
+AND Cl.UDF04 IN ('BACKENDALLOC', 'BACKENDSOALLOC')
 GO
 
 GRANT SELECT ON V_Backend_Allocate_Parm_Header to NSQL
