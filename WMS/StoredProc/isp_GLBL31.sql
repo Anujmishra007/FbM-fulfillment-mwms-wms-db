@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[isp_GLBL31]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GLBL31]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -22,7 +17,7 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenSSCCLabel_Wrapper                            */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -31,9 +26,11 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 04-Aug-2021  WLChooi 1.0   DevOps Combine Script                     */
+/* 29-Mar-2022  WLChooi 1.1   WMS-19339 - Unique Keyname for different  */
+/*                            Storerkey (WL01)                          */
 /************************************************************************/
-CREATE PROC isp_GLBL31 ( 
-         @c_PickSlipNo   NVARCHAR(10) 
+CREATE OR ALTER PROC [dbo].[isp_GLBL31] ( 
+         @c_PickSlipNo   NVARCHAR(10)
       ,  @n_CartonNo     INT
       ,  @c_SSCC_LabelNo NVARCHAR(20)   OUTPUT )
 AS
@@ -62,7 +59,7 @@ BEGIN
          , @c_Option5            NVARCHAR(4000) = ''
          , @c_Storerkey          NVARCHAR(15)   = ''
          , @c_Authority          NVARCHAR(10)   = ''
-        
+         , @c_KeyName            NVARCHAR(30)   = ''   --WL01
 
    DECLARE @n_SumOdd             INT
          , @n_SumEven            INT
@@ -91,6 +88,13 @@ BEGIN
    FROM PACKHEADER (NOLOCK)
    WHERE PickSlipNo = @c_PickSlipNo
 
+   --WL01 S
+   SET @c_KeyName = LEFT('SSCCLabelNo_' + TRIM(@c_Storerkey), 30)
+
+   IF ISNULL(@c_KeyName,'') = ''
+      SET @c_KeyName = 'SSCCLabelNo_LOGIEU'
+   --WL01 E
+
    EXECUTE nspGetRight   
       '',   --Facility    
       @c_StorerKey,                
@@ -110,7 +114,7 @@ BEGIN
    SET @c_Label_Company = CASE WHEN ISNULL(@c_Option2,'') = '' THEN '' ELSE LEFT(TRIM(@c_Option2), 10) END
 
    /*******************************************************************************************************/
-   /* Calucuation of Check Digit                                                                          */
+   /* Calculation of Check Digit                                                                          */
    /* ==========================                                                                          */
    /* Eg. SSCCLabelNo = 00093139381000000041                                                              */
    /* The last digit is a check digit and is calculated using the following formula:                      */
@@ -124,7 +128,7 @@ BEGIN
    -- Form SSCC Label
    -- Get running number
    EXECUTE dbo.nspg_GetKey
-      'SSCCLabelNo_LOGIEU',
+      @c_KeyName,   --'SSCCLabelNo_LOGIEU',   --WL01
       9,
       @c_Label_SeqNo OUTPUT,
       @b_Success     OUTPUT,
@@ -205,5 +209,5 @@ BEGIN
    END
 END
 GO
-GRANT EXECUTE ON isp_GLBL31 TO NSQL
+GRANT EXECUTE ON [dbo].[isp_GLBL31] TO NSQL
 GO
