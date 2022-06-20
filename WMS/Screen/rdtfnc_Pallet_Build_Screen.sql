@@ -3,7 +3,7 @@ DELETE rdt.RDTScn WHERE Scn = 2320 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2320, 'ENG',
     @cLine01 = 'PALLET BUILD'
    ,@cLine03 = 'DROP ID:'
-   ,@cLine04 = '%18i01'
+   ,@cLine04 = '%20i01'
    ,@cLine14 = '%e'
    ,@nFunc = 1641
 
@@ -12,7 +12,7 @@ DELETE rdt.RDTScn WHERE Scn = 2321 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2321, 'ENG',
     @cLine01 = 'PALLET BUILD'
    ,@cLine03 = 'DROP ID:'
-   ,@cLine04 = '%18d01'
+   ,@cLine04 = '%20d01'
    ,@cLine05 = 'LOC:'
    ,@cLine06 = '%10i02'
    ,@cLine14 = '%e'
@@ -23,7 +23,7 @@ DELETE rdt.RDTScn WHERE Scn = 2322 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2322, 'ENG',
     @cLine01 = 'PALLET BUILD'
    ,@cLine03 = 'DROP ID:'
-   ,@cLine04 = '%18d01'
+   ,@cLine04 = '%20d01'
    ,@cLine05 = 'LOC:'
    ,@cLine06 = '%10d02'
    ,@cLine07 = 'UCC NO:'
