@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdtfnc_TM_Assist_PalletPA_Cfm') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdtfnc_TM_Assist_PalletPA_Cfm
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,10 +11,11 @@ GO
 /* Purpose: Confirm pick pallet                                         */
 /*                                                                      */
 /* Date       Ver. Author   Purposes                                    */
-/* 2020-10-12 1.0  YeeKung  WMS-15379 Created                           */
+/* 2020-10-12 1.0  YeeKung  WMS-15379 Created                           */  
+/* 2022-05-26 1.1  YeeKung  JSM-70023 Add PickLock (yeekung01)         */
 /************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdtfnc_TM_Assist_PalletPA_Cfm]
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_TM_Assist_PalletPA_Cfm]
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -97,7 +95,7 @@ BEGIN
    EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'    
       ,'' --@cSuggFromLOC    
       ,''     
-      ,@cFinalLOC --@cSuggToLOC    
+      ,@cToLOC --@cSuggToLOC    
       ,@cStorerKey    
       ,@nErrNo  OUTPUT    
       ,@cErrMsg OUTPUT    
@@ -124,6 +122,17 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CreatePATaskFail  
       GOTO RollBackTran  
    END   
+
+      -- Unlock SuggestedLOC    
+   EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK'    
+      ,'' --@cSuggFromLOC    
+      ,''     
+      ,@cFinalLOC -- yeekung01    
+      ,@cStorerKey    
+      ,@nErrNo  OUTPUT    
+      ,@cErrMsg OUTPUT    
+   IF @nErrNo <> 0    
+      GOTO RollBackTran  
    
    -- Update task
    UPDATE dbo.TaskDetail WITH (ROWLOCK)
