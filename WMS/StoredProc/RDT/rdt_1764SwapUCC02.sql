@@ -1,6 +1,4 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[rdt_1764SwapUCC02]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [rdt].[rdt_1764SwapUCC02]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +13,10 @@ GO
 /* 14-10-2019 1.0  Ung       WMS-10698 Created (based on rdt_1764SwapUCC01)   */
 /* 11-08-2020 1.1  LZG       INC1218399 - Added logic to swap UCC.Status(ZG01)*/
 /* 22-09-2020 1.2  Ung       WMS-15563 Add swap Packdetail                    */
+/* 10-05-2022 1.3  YeeKung   WMS-19577 Add No swap packdetail config (yeekung01)*/
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1764SwapUCC02
+CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapUCC02
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -49,6 +48,7 @@ BEGIN
    DECLARE @cActTaskDetailKey    NVARCHAR( 10)
    DECLARE @nActUCCQTY           INT
    DECLARE @nActSystemQTY        INT
+   DECLARE @nActReplenQTY        INT
    DECLARE @nActPendingMoveIn    INT
    DECLARE @cActUOM              NVARCHAR( 5)
    DECLARE @cActSuggestedLOC     NVARCHAR( 10)
@@ -62,6 +62,7 @@ BEGIN
    DECLARE @cTaskSKU             NVARCHAR( 20)
    DECLARE @nTaskQTY             INT
    DECLARE @nTaskSystemQTY       INT
+   DECLARE @nTaskReplenQTY       INT
    DECLARE @nTaskPendingMoveIn   INT
    DECLARE @cTaskSuggestedLOC    NVARCHAR( 10)
 
@@ -73,6 +74,8 @@ BEGIN
    DECLARE @cLabelLine     NVARCHAR( 5)
    DECLARE @nQTY           INT
    DECLARE @curPD          CURSOR
+   DECLARE @cNoSwapPack    NVARCHAR(1)
+   DECLARE @cSwapQtyReplen NVARCHAR(1)
 
    DECLARE @tTaskPD TABLE
    (
@@ -89,6 +92,7 @@ BEGIN
       QTY           INT           NOT NULL
       PRIMARY KEY CLUSTERED (PickDetailKey)
    )
+
 
    SET @nTranCount = @@TRANCOUNT
    SET @cActUCCNo = @cBarcode
@@ -113,7 +117,8 @@ BEGIN
       @cTaskSKU = SKU,
       @nTaskQTY = QTY,
       @nTaskSystemQTY = SystemQTY,
-    @nTaskPendingMoveIn = PendingMoveIn
+      @nTaskReplenQTY = qtyreplen,
+      @nTaskPendingMoveIn = PendingMoveIn
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
    IF @@ROWCOUNT = 0
@@ -122,6 +127,15 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadTaskDtlKey
       GOTO Fail
    END
+
+   SET @cNoSwapPack = rdt.rdtGetConfig( @nFunc, 'NoSwapPack', @cStorerKey)
+   IF ISNULL(@cNoSwapPack,'')=''
+      SET @cNoSwapPack = 0
+
+   SET @cSwapQtyReplen = rdt.rdtGetConfig( @nFunc, 'SwapQtyReplen', @cStorerKey)
+   IF ISNULL(@cSwapQtyReplen,'')=''
+      SET @cSwapQtyReplen = 0
+
 
    -- Get UCC record
    SELECT @nRowCount = COUNT( 1)
@@ -391,7 +405,8 @@ BEGIN
       @cActTaskDetailKey = TaskDetailKey,
       @nActSystemQTY = SystemQTY,
       @nActPendingMoveIn = PendingMoveIn, 
-      @cActUOM = UOM
+      @cActUOM = UOM,
+      @nActReplenQTY = qtyreplen
    FROM TaskDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND TaskType = @cTaskType
@@ -678,45 +693,48 @@ BEGIN
          END
       END
 
-      -- PackDetail
-      IF @cActUOM = '2' -- Full carton to outbound
+      IF @cNoSwapPack='0' --(yeekung01)
       BEGIN
-         SELECT 
-            @cPickSlipNo = PickSlipNo, 
-            @nCartonNo = CartonNo, 
-            @cLabelLine = LabelLine
-         FROM PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND LabelNo = @cActUCCNo
-         SET @nRowCount = @@ROWCOUNT 
-         
-         IF @nRowCount = 0
+         -- PackDetail
+         IF @cActUOM = '2' -- Full carton to outbound
          BEGIN
-            SET @nErrNo = 145142
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
-            GOTO RollBackTran
-         END
+            SELECT 
+               @cPickSlipNo = PickSlipNo, 
+               @nCartonNo = CartonNo, 
+               @cLabelLine = LabelLine
+            FROM PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND LabelNo = @cActUCCNo
+            SET @nRowCount = @@ROWCOUNT 
          
-         IF @nRowCount > 1
-         BEGIN
-            SET @nErrNo = 145143
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
-            GOTO RollBackTran
-         END 
+            IF @nRowCount = 0
+            BEGIN
+               SET @nErrNo = 145142
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
+               GOTO RollBackTran
+            END
          
-         UPDATE PackDetail SET
-            LabelNo = @cTaskUCCNo,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-         WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo 
-            AND LabelNo = @cActUCCNo
-            AND LabelLine = @cLabelLine
-         SET @nErrNo = @@ERROR
-         IF @nErrNo <> 0
-         BEGIN
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            GOTO RollBackTran
+            IF @nRowCount > 1
+            BEGIN
+               SET @nErrNo = 145143
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
+               GOTO RollBackTran
+            END 
+         
+            UPDATE PackDetail SET
+               LabelNo = @cTaskUCCNo,
+               EditDate = GETDATE(),
+               EditWho = SUSER_SNAME()
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo = @nCartonNo 
+               AND LabelNo = @cActUCCNo
+               AND LabelLine = @cLabelLine
+            SET @nErrNo = @@ERROR
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO RollBackTran
+            END
          END
       END
 
@@ -952,45 +970,48 @@ BEGIN
          END
       END
 
-      -- PackDetail
-      IF @cTaskUOM = '2' -- Full carton to outbound
+      IF @cNoSwapPack='0' --(yeekung01)
       BEGIN
-         SELECT 
-            @cPickSlipNo = PickSlipNo, 
-            @nCartonNo = CartonNo, 
-            @cLabelLine = LabelLine
-         FROM PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND LabelNo = @cTaskUCCNo
-         SET @nRowCount = @@ROWCOUNT 
-         
-         IF @nRowCount = 0
+         -- PackDetail
+         IF @cTaskUOM = '2' -- Full carton to outbound
          BEGIN
-            SET @nErrNo = 145144
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
-            GOTO RollBackTran
-         END
+            SELECT 
+               @cPickSlipNo = PickSlipNo, 
+               @nCartonNo = CartonNo, 
+               @cLabelLine = LabelLine
+            FROM PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND LabelNo = @cTaskUCCNo
+            SET @nRowCount = @@ROWCOUNT 
          
-         IF @nRowCount > 1
-         BEGIN
-            SET @nErrNo = 145145
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
-            GOTO RollBackTran
-         END 
+            IF @nRowCount = 0
+            BEGIN
+               SET @nErrNo = 145144
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
+               GOTO RollBackTran
+            END
          
-         UPDATE PackDetail SET
-            LabelNo = @cActUCCNo,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-         WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo 
-            AND LabelNo = @cTaskUCCNo
-            AND LabelLine = @cLabelLine
-         SET @nErrNo = @@ERROR
-         IF @nErrNo <> 0
-         BEGIN
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            GOTO RollBackTran
+            IF @nRowCount > 1
+            BEGIN
+               SET @nErrNo = 145145
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
+               GOTO RollBackTran
+            END 
+         
+            UPDATE PackDetail SET
+               LabelNo = @cActUCCNo,
+               EditDate = GETDATE(),
+               EditWho = SUSER_SNAME()
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo = @nCartonNo 
+               AND LabelNo = @cTaskUCCNo
+               AND LabelLine = @cLabelLine
+            SET @nErrNo = @@ERROR
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO RollBackTran
+            END
          END
       END
 
@@ -1072,6 +1093,38 @@ BEGIN
             GOTO RollBackTran
          END
       END
+
+      IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
+      BEGIN
+         UPDATE LOTXLOCXID WITH (ROWLOCK)
+         SET Qtyreplen=@nActReplenQTY
+         WHERE SKU=@cSKU
+         AND loc=@cTaskLOC
+         AND lot=@cTaskLOT
+         AND ID=@cTaskID
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 145146
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
+            GOTO RollBackTran
+         END
+
+         UPDATE LOTXLOCXID WITH (ROWLOCK)
+         SET Qtyreplen=@nTaskReplenQTY
+         WHERE SKU=@cSKU
+         AND loc=@cActUCCLOC
+         AND lot=@cActUCCLOT
+         AND ID=@cActUCCID
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 145147
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
+            GOTO RollBackTran
+         END
+      END
+
 
       GOTO CommitTran
    END
@@ -1182,45 +1235,48 @@ BEGIN
          END
       END
 
-      -- PackDetail
-      IF @cTaskUOM = '2' -- Full carton to outbound
+      IF @cNoSwapPack='0'
       BEGIN
-         SELECT 
-            @cPickSlipNo = PickSlipNo, 
-            @nCartonNo = CartonNo, 
-            @cLabelLine = LabelLine
-         FROM PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND LabelNo = @cTaskUCCNo
-         SET @nRowCount = @@ROWCOUNT 
-         
-         IF @nRowCount = 0
+         -- PackDetail
+         IF @cTaskUOM = '2' -- Full carton to outbound
          BEGIN
-            SET @nErrNo = 145146
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
-            GOTO RollBackTran
-         END
+            SELECT 
+               @cPickSlipNo = PickSlipNo, 
+               @nCartonNo = CartonNo, 
+               @cLabelLine = LabelLine
+            FROM PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND LabelNo = @cTaskUCCNo
+            SET @nRowCount = @@ROWCOUNT 
          
-         IF @nRowCount > 1
-         BEGIN
-            SET @nErrNo = 145147
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
-            GOTO RollBackTran
-         END 
+            IF @nRowCount = 0
+            BEGIN
+               SET @nErrNo = 145146
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
+               GOTO RollBackTran
+            END
          
-         UPDATE PackDetail SET
-            LabelNo = @cActUCCNo,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-         WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo 
-            AND LabelNo = @cTaskUCCNo
-            AND LabelLine = @cLabelLine
-         SET @nErrNo = @@ERROR
-         IF @nErrNo <> 0
-         BEGIN
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            GOTO RollBackTran
+            IF @nRowCount > 1
+            BEGIN
+               SET @nErrNo = 145147
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
+               GOTO RollBackTran
+            END 
+         
+            UPDATE PackDetail SET
+               LabelNo = @cActUCCNo,
+               EditDate = GETDATE(),
+               EditWho = SUSER_SNAME()
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo = @nCartonNo 
+               AND LabelNo = @cTaskUCCNo
+               AND LabelLine = @cLabelLine
+            SET @nErrNo = @@ERROR
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO RollBackTran
+            END
          END
       END
 
@@ -1348,6 +1404,37 @@ BEGIN
                ,@nFunc = 0
                ,@cMoveQTYAlloc = '1'
             IF @nErrNo <> 0
+            GOTO RollBackTran
+         END
+      END
+
+      IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
+      BEGIN
+         UPDATE LOTXLOCXID WITH (ROWLOCK)
+         SET Qtyreplen=@nActReplenQTY
+         WHERE SKU=@cSKU
+         AND loc=@cTaskLOC
+         AND lot=@cTaskLOT
+         AND ID=@cTaskID
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 145144
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
+            GOTO RollBackTran
+         END
+
+         UPDATE LOTXLOCXID WITH (ROWLOCK)
+         SET Qtyreplen=@nTaskReplenQTY
+         WHERE SKU=@cSKU
+         AND loc=@cActUCCLOC
+         AND lot=@cActUCCLOT
+         AND ID=@cActUCCID
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 145145
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
       END
@@ -1556,102 +1643,105 @@ BEGIN
          END
       END
 
-      -- PackDetail
-      IF @cTaskUOM = '2' OR -- Full carton to outbound
-         @cActUOM  = '2' 
+      IF @cNoSwapPack='0' --(yeekung01)
       BEGIN
-         -- Task (find out which PackDetail line)
-         IF @cTaskUOM = '2'
+         -- PackDetail
+         IF @cTaskUOM = '2' OR -- Full carton to outbound
+            @cActUOM  = '2' 
          BEGIN
-            SELECT 
-               @cPickSlipNo = PickSlipNo, 
-               @nCartonNo = CartonNo, 
-               @cLabelLine = LabelLine
-            FROM PackDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND LabelNo = @cTaskUCCNo
-            SET @nRowCount = @@ROWCOUNT 
-            
-            IF @nRowCount = 0
+            -- Task (find out which PackDetail line)
+            IF @cTaskUOM = '2'
             BEGIN
-               SET @nErrNo = 145148
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
-               GOTO RollBackTran
-            END
+               SELECT 
+                  @cPickSlipNo = PickSlipNo, 
+                  @nCartonNo = CartonNo, 
+                  @cLabelLine = LabelLine
+               FROM PackDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cTaskUCCNo
+               SET @nRowCount = @@ROWCOUNT 
             
-            IF @nRowCount > 1
-            BEGIN
-               SET @nErrNo = 145149
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
-               GOTO RollBackTran
+               IF @nRowCount = 0
+               BEGIN
+                  SET @nErrNo = 145148
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
+                  GOTO RollBackTran
+               END
+            
+               IF @nRowCount > 1
+               BEGIN
+                  SET @nErrNo = 145149
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
+                  GOTO RollBackTran
+               END
             END
-         END
 
-         -- Actual (find out which PackDetail line)
-         IF @cActUOM = '2'
-         BEGIN
-            DECLARE @cActPickSlipNo NVARCHAR(10)
-            DECLARE @nActCartonNo   INT
-            DECLARE @cActLabelLine  NVARCHAR(5)
-            SELECT 
-               @cActPickSlipNo = PickSlipNo, 
-               @nActCartonNo = CartonNo, 
-               @cActLabelLine = LabelLine
-            FROM PackDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND LabelNo = @cActUCCNo
-            SET @nRowCount = @@ROWCOUNT 
-            
-            IF @nRowCount = 0
+            -- Actual (find out which PackDetail line)
+            IF @cActUOM = '2'
             BEGIN
-               SET @nErrNo = 145150
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
-               GOTO RollBackTran
-            END
+               DECLARE @cActPickSlipNo NVARCHAR(10)
+               DECLARE @nActCartonNo   INT
+               DECLARE @cActLabelLine  NVARCHAR(5)
+               SELECT 
+                  @cActPickSlipNo = PickSlipNo, 
+                  @nActCartonNo = CartonNo, 
+                  @cActLabelLine = LabelLine
+               FROM PackDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cActUCCNo
+               SET @nRowCount = @@ROWCOUNT 
             
-            IF @nRowCount > 1
-            BEGIN
-               SET @nErrNo = 160101
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
-               GOTO RollBackTran
+               IF @nRowCount = 0
+               BEGIN
+                  SET @nErrNo = 145150
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
+                  GOTO RollBackTran
+               END
+            
+               IF @nRowCount > 1
+               BEGIN
+                  SET @nErrNo = 160101
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
+                  GOTO RollBackTran
+               END
             END
-         END
          
-         -- Task (swap base on PackDetail found)
-         IF @cTaskUOM = '2'
-         BEGIN
-            UPDATE PackDetail SET
-               LabelNo = @cActUCCNo,
-               EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo = @nCartonNo 
-               AND LabelNo = @cTaskUCCNo
-               AND LabelLine = @cLabelLine
-            SET @nErrNo = @@ERROR
-            IF @nErrNo <> 0
+            -- Task (swap base on PackDetail found)
+            IF @cTaskUOM = '2'
             BEGIN
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-               GOTO RollBackTran
+               UPDATE PackDetail SET
+                  LabelNo = @cActUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo 
+                  AND LabelNo = @cTaskUCCNo
+                  AND LabelLine = @cLabelLine
+               SET @nErrNo = @@ERROR
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO RollBackTran
+               END
             END
-         END
 
-         -- Actual
-         IF @cActUOM = '2'
-         BEGIN
-            UPDATE PackDetail SET
-               LabelNo = @cTaskUCCNo,
-               EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
-            WHERE PickSlipNo = @cActPickSlipNo
-               AND CartonNo = @nActCartonNo 
-               AND LabelNo = @cActUCCNo
-               AND LabelLine = @cActLabelLine
-            SET @nErrNo = @@ERROR
-            IF @nErrNo <> 0
+            -- Actual
+            IF @cActUOM = '2'
             BEGIN
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-               GOTO RollBackTran
+               UPDATE PackDetail SET
+                  LabelNo = @cTaskUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cActPickSlipNo
+                  AND CartonNo = @nActCartonNo 
+                  AND LabelNo = @cActUCCNo
+                  AND LabelLine = @cActLabelLine
+               SET @nErrNo = @@ERROR
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO RollBackTran
+               END
             END
          END
       END
@@ -1753,6 +1843,38 @@ BEGIN
             GOTO RollBackTran
          END
       END
+
+      IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
+      BEGIN
+         UPDATE LOTXLOCXID WITH (ROWLOCK)
+         SET Qtyreplen=@nActReplenQTY
+         WHERE SKU=@cSKU
+         AND loc=@cTaskLOC
+         AND lot=@cTaskLOT
+         AND ID=@cTaskID
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 145142
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
+            GOTO RollBackTran
+         END
+
+         UPDATE LOTXLOCXID WITH (ROWLOCK)
+         SET Qtyreplen=@nTaskReplenQTY
+         WHERE SKU=@cSKU
+         AND loc=@cActUCCLOC
+         AND lot=@cActUCCLOT
+         AND ID=@cActUCCID
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 145143
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
+            GOTO RollBackTran
+         END
+      END
+
 
       GOTO CommitTran
    END
