@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_838DecodeSN02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_838DecodeSN02]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_838DecodeSN02                                   */
 /* Copyright      : LF Logistics                                        */
@@ -14,9 +11,11 @@ GO
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
 /* 2020-02-27  1.0  James        WMS-12052. Created                     */
+/* 2022-06-08  1.1  James        WMS-19856 Add RDT format check for bulk*/
+/*                               serial no (james01)                    */
 /************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_838DecodeSN02]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSN02]
    @nMobile     INT,           
    @nFunc       INT,           
    @cLangCode   NVARCHAR( 3),  
@@ -132,6 +131,50 @@ BEGIN
    -- Bulk serial no
    ELSE
    BEGIN
+      -- (james01)
+      -- Bulk serial no but user scan 1 serial no at one time 
+      IF CHARINDEX( ';', @cBarcode) = 0
+      BEGIN
+         -- Check barcode format
+         IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'SerialNo', @cSerialNo) = 0
+         BEGIN
+            SET @nErrNo = 148803
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+            GOTO Quit
+         END
+      END
+      ELSE  -- User scan bulk serial no with ; delimiter. Need validate each serial no format
+      BEGIN
+         DECLARE @c_Delim CHAR(1)       
+         DECLARE @nSeqno INT
+         DECLARE @cSingleSerialNo  NVARCHAR( 30)
+         DECLARE @t_SerialNo TABLE (      
+            Seqno    INT,       
+            ColValue NVARCHAR(MAX) )      
+
+         SET @c_Delim = ';'  
+
+         INSERT INTO @t_SerialNo     
+         SELECT * FROM dbo.fnc_DelimSplit(@c_Delim, @cBarcode)  
+         
+         DECLARE @curChkFormat CURSOR    
+         SET @curChkFormat = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
+         SELECT Seqno, ColValue FROM @t_SerialNo ORDER BY Seqno  
+         OPEN @curChkFormat  
+         FETCH NEXT FROM @curChkFormat INTO @nSeqno, @cSingleSerialNo  
+         WHILE @@FETCH_STATUS = 0  
+         BEGIN
+            -- Check barcode format
+            IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'SerialNo', @cSingleSerialNo) = 0
+            BEGIN
+               SET @nErrNo = 148804
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+               GOTO Quit
+            END
+            
+            FETCH NEXT FROM @curChkFormat INTO @nSeqno, @cSingleSerialNo
+         END
+      END
       -- Check serial no scanned match qty to pack (james01)
       SELECT @nSerialNo_Cnt = SUM( LEN( RTRIM( @cBarcode)) - LEN( REPLACE( RTRIM( @cBarcode), ';', '')) + 1)
 
