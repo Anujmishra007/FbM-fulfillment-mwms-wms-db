@@ -15,7 +15,7 @@ GO
 /*                                                                      */  
 /* Parameters:                                                          */  
 /*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.3                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -27,6 +27,7 @@ GO
 /*                              Records (WL01)                          */
 /* 2022-May-06  WLChooi   1.2   DevOps Combine Script                   */
 /* 2022-May-06  WLChooi   1.2   WMS-19598 - New Logic (WL02)            */
+/* 2022-Jun-22  WLChooi   1.3   WMS-19598 - Remove Validation (WL03)    */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_ASN_NIKECN_1M1C_PA]  
@@ -78,23 +79,25 @@ BEGIN
       GOTO ENDPROC  
    END
    --WL01 END
-     
-   SELECT @n_QtyRecv = SUM(RD.QtyReceived)   
-   FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = @c_Receiptkey  
-     
-   SELECT @n_RFPAQty = SUM(RFPA.Qty)  
-   FROM RFPUTAWAY RFPA (NOLOCK)  
-   JOIN RECEIPTDETAIL RD (NOLOCK) ON RD.UserDefine10 = RFPA.PABookingKey AND RD.StorerKey = RFPA.StorerKey  
-                                 AND RD.SKU = RFPA.SKU  
-   WHERE RD.RECEIPTKEY = @c_Receiptkey  
-     
-   IF(@n_RFPAQty < @n_QtyRecv)  
-   BEGIN  
-      SELECT @n_continue = 3    
-      SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Cannot unlock as RFPutaway.Qty < Receiptdetail.QtyReceived (isp_RCM_ASN_NIKECN_1M1C_PA)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-      GOTO ENDPROC  
-   END  
+   
+   --WL03 S
+   --SELECT @n_QtyRecv = SUM(RD.QtyReceived)   
+   --FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = @c_Receiptkey  
+   --  
+   --SELECT @n_RFPAQty = SUM(RFPA.Qty)  
+   --FROM RFPUTAWAY RFPA (NOLOCK)  
+   --JOIN RECEIPTDETAIL RD (NOLOCK) ON RD.UserDefine10 = RFPA.PABookingKey AND RD.StorerKey = RFPA.StorerKey  
+   --                              AND RD.SKU = RFPA.SKU  
+   --WHERE RD.RECEIPTKEY = @c_Receiptkey  
+   --  
+   --IF(@n_RFPAQty < @n_QtyRecv)  
+   --BEGIN  
+   --   SELECT @n_continue = 3    
+   --   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+   --   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Cannot unlock as RFPutaway.Qty < Receiptdetail.QtyReceived (isp_RCM_ASN_NIKECN_1M1C_PA)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+   --   GOTO ENDPROC  
+   --END 
+   --WL03 E 
    
    --WL02 S
    CREATE TABLE #TMP_RD (
