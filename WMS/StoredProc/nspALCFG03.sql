@@ -132,8 +132,8 @@ BEGIN
            @c_SQLStatement    NVARCHAR(MAX),
            @c_SQLParms        NVARCHAR(MAX)='',       --(Wan01)
            @C_SortBy          NVARCHAR(2000),
-           @c_Orderkey        NVARCHAR(10),
-           @c_OrderLineNumber NVARCHAR(5),
+           @c_Orderkey        NVARCHAR(10)='',
+           @c_OrderLineNumber NVARCHAR(5)='',
            @c_ID              NVARCHAR(18),
            @c_UDF01 NVARCHAR(30),
            @c_UDF02 NVARCHAR(30),
@@ -168,7 +168,7 @@ BEGIN
            @c_AllocateGetCasecntFrLottable NVARCHAR(30),
            @n_LotQtyAvailable  INT,
            @c_SkipLottableFilter NVARCHAR(60) --NJOW04
-
+            
     SET @c_LocTypeList = ''
     SET @c_LocTypeSort = ''
     SET @c_CLKCondition = ''
@@ -197,14 +197,14 @@ BEGIN
 
       IF ISNULL(@c_OrderLineNumber,'') <> ''
       BEGIN
-         SELECT @c_Orderkey = LEFT(@c_OtherParms, 10)
+         SELECT @c_Orderkey = LEFT(@c_OtherParms, 10)  --discrete by order
 
          SELECT @c_ID = ID,
                 @n_OrderMinShelfLife = MinShelfLife
          FROM ORDERDETAIL(NOLOCK)
          WHERE Orderkey = @c_Orderkey
          AND OrderLineNumber = @c_OrderLineNumber
-      END
+      END      
    END
 
    DECLARE  @TMP_CODELKUP TABLE (
@@ -225,8 +225,9 @@ BEGIN
        )
 
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
-                          QtyAvailable INT NULL DEFAULT(0))
-
+                          QtyAvailable INT NULL DEFAULT(0))                                     
+   
+   --Get strategy from sku
    SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey
    FROM SKU (NOLOCK)
    JOIN STRATEGY (NOLOCK) ON SKU.Strategykey = STRATEGY.Strategykey
