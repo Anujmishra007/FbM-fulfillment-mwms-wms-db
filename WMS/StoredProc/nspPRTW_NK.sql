@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRTW_NK]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPRTW_NK]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF
@@ -46,9 +42,11 @@ GO
 /* 06-Jun-2017  NJOW06  1.5  WMS-1914 Add sorting logic                 */
 /* 12-Oct-2017  SPChin  1.6  INC0021705 - Add Filter By StorerKey       */
 /* 04-Dec-2017  CSCHONG 1.7  WMS-3481-revise available qty logic (CS01) */
+/* 23-Jul-2021  NJOW07  1.8  WMS-17543 Lottable12 filtering changes     */
+/* 23-Jul-2021  NJOW07  1.8  DEVOPS Combine script                      */
 /************************************************************************/
 
-CREATE PROC  nspPRTW_NK 
+CREATE OR ALTER PROC  nspPRTW_NK 
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
@@ -135,7 +133,7 @@ BEGIN
          -- lottable01 is used for loc.HostWhCode -- modified by Jeff
          IF ISNULL(@c_Lottable01,'') <> '' 
          BEGIN
-            SELECT @c_Condition = ' AND LOC.HostWhCode = N''' + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) + ''' '
+            SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOC.HostWhCode = N''' + RTRIM(ISNULL(@c_Lottable01,'')) + ''' '
          END
          BEGIN
          	  --NJOW04
@@ -146,13 +144,13 @@ BEGIN
          	                 AND CL.Long = 'nspPRTW_NK'
          	                 AND ISNULL(CL.Short,'') <> 'N') 
          	  BEGIN              
-              SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE01 = '''' '
+              SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE01 = '''' '
             END
          END
 
          IF ISNULL(@c_Lottable02,'') <> '' 
          BEGIN
-            SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE02 = N''' + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable02)) + ''' '
+            SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE02 = N''' + RTRIM(ISNULL(@c_Lottable02,'')) + ''' '
          END
          ELSE
          BEGIN
@@ -164,24 +162,24 @@ BEGIN
          	                 AND CL.Long = 'nspPRTW_NK'
          	                 AND ISNULL(CL.Short,'') <> 'N') 
          	  BEGIN              
-              SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE02 = '''' '
+              SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE02 = '''' '
             END
          END
 
          IF CONVERT(char(10), @d_Lottable04, 103) <> '01/01/1900' AND @d_Lottable04 IS NOT NULL
             BEGIN
-               SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE04 = N''' + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) + ''' '
+               SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE04 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) + ''' '
             END
 
          IF CONVERT(char(10), @d_Lottable05, 103) <> '01/01/1900' AND @d_Lottable05 IS NOT NULL
             BEGIN
-               SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE05 = N''' + dbo.fnc_RTrim(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) + ''' '
+               SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE05 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) + ''' '
             END
          
          --NJOW04   
          IF ISNULL(@c_Lottable11,'') <> '' 
          BEGIN
-            SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE11 = N''' + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable11)) + ''' '
+            SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE11 = N''' + RTRIM(ISNULL(@c_Lottable11,'')) + ''' '
          END
          ELSE
          BEGIN
@@ -192,7 +190,25 @@ BEGIN
          	                 AND CL.Long = 'nspPRTW_NK'
          	                 AND ISNULL(CL.Short,'') <> 'N') 
          	  BEGIN              
-              SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND LOTTABLE11 = '''' '
+              SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE11 = '''' '
+            END
+         END            
+
+         --NJOW07  
+         IF ISNULL(@c_Lottable12,'') <> '' 
+         BEGIN
+            SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE12 = N''' + RTRIM(ISNULL(@c_Lottable12,'')) + ''' '
+         END
+         ELSE
+         BEGIN
+         	  IF NOT EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+         	                 WHERE CL.Storerkey = @c_Storerkey
+         	                 AND CL.Code = 'NOFILTEREMPTYLOT12'
+         	                 AND CL.Listname = 'PKCODECFG'
+         	                 AND CL.Long = 'nspPRTW_NK'
+         	                 AND ISNULL(CL.Short,'') <> 'N') 
+         	  BEGIN              
+              SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND LOTTABLE12 = '''' '
             END
          END            
 
@@ -201,8 +217,8 @@ BEGIN
             BEGIN
                IF CONVERT(char(10), @d_Lottable04, 103) = '01/01/1900' OR @d_Lottable04 IS NULL
                   BEGIN
-                     SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' AND ( DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', Lotattribute.Lottable04) > GetDate() ' 
-                     SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + ' OR Lotattribute.Lottable04 IS NULL ) '
+                     SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' AND ( DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', Lotattribute.Lottable04) > GetDate() ' 
+                     SELECT @c_Condition = RTRIM(ISNULL(@c_Condition,'')) + ' OR Lotattribute.Lottable04 IS NULL ) '
                   END
             END
 
@@ -267,25 +283,25 @@ BEGIN
    			       
    			       IF @n_cnt = 0
    			       BEGIN
-                  SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
+                  SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
                   
                   --NJOW06
                   IF ISNULL(@c_casecond,'') <> ''
-                     SET @c_condition = dbo.fnc_RTrim(@c_Condition) + ',' + @c_Casecond 
+                     SET @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ',' + @c_Casecond 
                   
-                  SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
-                  SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + @c_Orderby + ' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, LOTATTRIBUTE.Lottable04, LOT.Lot'  --NJOW05
+                  SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
+                  SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + @c_Orderby + ' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, LOTATTRIBUTE.Lottable04, LOT.Lot'  --NJOW05
                END
                ELSE IF ISNULL(@c_LocType,'') <> ''
                BEGIN
-                  SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
+                  SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
 
                   --NJOW06
                   IF ISNULL(@c_casecond,'') <> ''
-                     SET @c_condition = dbo.fnc_RTrim(@c_Condition) + ',' + @c_Casecond 
+                     SET @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ',' + @c_Casecond 
 
-                  SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
-                  SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + @c_Orderby +' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, ' +
+                  SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
+                  SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + @c_Orderby +' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, ' +
                                                                      'CASE WHEN MIN(LOC.LocationType) = ''' +RTRIM(@c_LocType)+ ''' THEN 0 ELSE 1 END,LOT.Lot' --NJOW05                                 
                END
                ELSE
@@ -297,33 +313,33 @@ BEGIN
          	                   AND CL.Long = 'nspPRTW_NK'
          	                   AND ISNULL(CL.Short,'') <> 'N') AND @c_LoadPickMethod <> 'L-ORDER'  --NJOW03
          	        BEGIN         	        	
-                     SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, ISNULL(LOC.Floor,''''), LOTATTRIBUTE.Lottable06 '
+                     SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, ISNULL(LOC.Floor,''''), LOTATTRIBUTE.Lottable06 '
 
                      --NJOW06
                      IF ISNULL(@c_casecond,'') <> ''
-                        SET @c_condition = dbo.fnc_RTrim(@c_Condition) + ',' + @c_Casecond 
+                        SET @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ',' + @c_Casecond 
 
-                     SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
-                     SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + @c_Orderby + ' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, ISNULL(LOC.Floor,'''') DESC, LOT.Lot' --NJOW05               
+                     SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
+                     SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + @c_Orderby + ' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, ISNULL(LOC.Floor,'''') DESC, LOT.Lot' --NJOW05               
          	        END
          	        ELSE 
          	        BEGIN         	        	          
-                     SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
+                     SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
 
                      --NJOW06
                      IF ISNULL(@c_casecond,'') <> ''
-                        SET @c_condition = dbo.fnc_RTrim(@c_Condition) + ',' + @c_Casecond 
+                        SET @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ',' + @c_Casecond 
 
-                     SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
-                     SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + @c_Orderby + ' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, LOT.Lot' --NJOW05              
+                     SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
+                     SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + @c_Orderby + ' CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, LOT.Lot' --NJOW05              
                   END
                END
    		      END
    		      ELSE
    		      BEGIN
-               SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
-               SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
-               SELECT @c_condition = dbo.fnc_RTrim(@c_Condition) + ' ORDER BY CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, LOTATTRIBUTE.Lottable04, LOT.Lot'  --NJOW05 		        
+               SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable06 '
+               SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) > 0  '
+               SELECT @c_condition = RTRIM(ISNULL(@c_Condition,'')) + ' ORDER BY CASE WHEN LOTATTRIBUTE.Lottable06 = ''' + RTRIM(ISNULL(@c_lottable06,'')) +''' THEN 1 ELSE 2 END, LOTATTRIBUTE.Lottable04, LOT.Lot'  --NJOW05 		        
             END
 
             EXEC (' DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR ' +
