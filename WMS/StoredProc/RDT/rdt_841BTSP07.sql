@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM  dbo.sysobjects WHERE ID = OBJECT_ID(N'[rdt].[rdt_841BTSP07]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdt_841BTSP07]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -23,10 +21,11 @@ GO
 /* Modifications log:                                                   */      
 /*                                                                      */      
 /* Date        Rev  Author   Purposes                                   */      
-/* 17-01-2022  1.0  yeekung  WMS-18241 Created                          */            
+/* 17-01-2022  1.0  yeekung  WMS-18241 Created                          */  
+/* 24-06-2022  1.1  yeekung  JSM-76518 Fix bugs (yeekung01)             */
 /************************************************************************/      
       
-CREATE PROC [RDT].[rdt_841BTSP07] (      
+CREATE OR ALTER PROC [RDT].[rdt_841BTSP07] (      
         @nMobile     int      
       , @nFunc       int      
       , @cLangCode   nvarchar(3)      
@@ -67,14 +66,14 @@ BEGIN
    IF @cShipLabel = '0'          
       SET @cShipLabel = ''     
           
-     SELECT @cPickSlipNo=v_string31  
-     FROM rdt.RDTMOBREC (nolock)     
-     WHERE mobile=@nMobile    
-        
+   SELECT @cPickSlipNo=v_string31  
+   FROM rdt.RDTMOBREC (nolock)     
+   WHERE mobile=@nMobile    
+
    -- (ChewKP01)      
    IF ISNULL(RTRIM(@cPickSlipNo),'') = ''      
    BEGIN      
-      SELECT --@cPickSlipNo = PH.PickHeaderKey      
+      SELECT TOP 1--@cPickSlipNo = PH.PickHeaderKey      
              @cOrderKey   = PH.OrderKey      
       FROM dbo.Pickheader PH WITH (NOLOCK)      
       INNER JOIN dbo.PickDetail PD WITH (NOLOCK)  ON PD.OrderKey = PH.OrderKey      
@@ -84,13 +83,32 @@ BEGIN
    END      
    ELSE      
    BEGIN      
-      SELECT @cOrderKey = OrderKey      
+      SELECT TOP 1 @cOrderKey = OrderKey      
       FROM dbo.pickdetail WITH (NOLOCK)      
       WHERE StorerKey = @cStorerKey      
-      AND PickSlipNo = @cPickSlipNo      
+      AND PickSlipNo = @cPickSlipNo 
       AND CaseID     = @cLabelNo   
+   END     
+
+	IF ISNULL(@cOrderKey,'')=''
+	BEGIN      
+		if ISNULL(@cloadkey,'')=''
+		BEGIN
+			select top 1 @cloadkey= loadkey
+			FROM dbo.pickdetail PD WITH (NOLOCK)     
+			JOIN orders o (nolock) ON PD.orderkey=o.orderkey
+			WHERE pd.StorerKey = @cStorerKey      
+			AND pd.PickSlipNo = @cPickSlipNo
+		END
+
+      SELECT @cOrderKey = PH.OrderKey      --yeekung01
+      FROM dbo.packheader PH WITH (NOLOCK)     
+		JOIN dbo.packdetail PD (nolock) ON PH.pickslipno=PD.pickslipno
+      WHERE pd.StorerKey = @cStorerKey      
+		   AND PH.loadkey =  @cloadkey
+         AND PD.labelno     = @cLabelNo   
    END      
-      
+
    SELECT  @cExternOrderKey = ExternOrderKey      
           ,@cShipperKey     = ShipperKey      
           ,@cLoadKey        = LoadKey      
@@ -168,14 +186,16 @@ BEGIN
              , @b_Debug        = '0'      
              , @c_Returnresult = 'N'      
              , @n_err          = @nErrNo  OUTPUT      
-             , @c_errmsg       = @cERRMSG OUTPUT      
+             , @c_errmsg  = @cERRMSG OUTPUT      
       END      
    END      
       
    -- To Proceed Ecomm Despatch while printing having error --      
    SET @nErrNo     = 0      
-   SET @cERRMSG    = ''      
+   SET @cERRMSG    = ''
+QUIT:
 END 
+ 
 GO
 SET QUOTED_IDENTIFIER OFF
 GO

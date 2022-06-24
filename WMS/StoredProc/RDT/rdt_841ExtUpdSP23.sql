@@ -16,7 +16,8 @@ GO
 /* 2021-11-30  1.0  yeekung   WMS-18241 Created                         */ 
 /* 2021-07-27  1.1  Chermain WMS-17410 Add VariableTable Param (cc01)   */
 /* 2022-03-01  1.2  yeekung   WMS-19008 Add packdetail support orderkey */
-/*                            (yeekung01)                               */  
+/*                            (yeekung01)                               */ 
+/* 2022-06-24  1.3  yeekung  JSM-76518 Fix bugs (yeekung01)             */
 /************************************************************************/    
   
 CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP23] (    
@@ -88,7 +89,7 @@ BEGIN
           ,@cPickDetailKey    NVARCHAR(10)  
           ,@cOrderGroup       NVARCHAR( 20)  -- (james01)  
           ,@cPrtInvoice       NVARCHAR( 10)  -- (james01)  
-          ,@cTrackingNo       NVARCHAR( 30)  -- (james01)  
+          ,@cTrackingNo       NVARCHAR( 30) -- (james01)  
           ,@nInputKey         INT            -- (james01)  
           ,@cAutoMBOLPack     NVARCHAR( 1)   -- (james02)
           ,@cErrMsg01         NVARCHAR( 20)  -- (james03)
@@ -403,7 +404,7 @@ BEGIN
                END    
     
                SELECT @cPickSlipNo = MIN(RTRIM(ISNULL(PickHeaderKey,'')))    
-               FROM   dbo.PickHeader PH WITH (NOLOCK)                   
+              FROM   dbo.PickHeader PH WITH (NOLOCK)                   
                WHERE  Orderkey = @cOrderkey    
 
             END -- packheader does not exist    
@@ -587,7 +588,7 @@ BEGIN
                WHERE Orderkey = @cOrderKey    
                AND Storerkey = @cStorerKey    
     
-               IF @@ERROR <> 0    
+  IF @@ERROR <> 0    
                BEGIN    
                   SET @nErrNo = 179425    
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdOrderFail    
@@ -595,31 +596,20 @@ BEGIN
                END    
             END    
     
+            UPDATE dbo.PickDetail WITH (ROWLOCK)    
+            SET CASEID     = @cLabelNo  
+               ,TrafficCop = NULL  
+               ,EditDate = GETDATE()  
+               ,EditWho = SUSER_SNAME()  
+            WHERE StorerKey = @cStorerKey       
+            AND OrderKey = @cOrderKey    
     
-            IF EXISTS ( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK)    
-                            WHERE StorerKey = @cStorerKey    
-                            AND orderkey=@corderkey  
-                            AND ISNULL(CaseID,'')  = ''         
-                            AND (Status IN ('3', '5') OR ShipFlag = 'P')) -- (ChewKP01)      
+            IF @@ERROR <> 0    
             BEGIN    
-    
-               UPDATE dbo.PickDetail WITH (ROWLOCK)    
-               SET CASEID     = @cLabelNo  
-                  ,TrafficCop = NULL  
-                  ,EditDate = GETDATE()  
-                  ,EditWho = SUSER_SNAME()  
-               WHERE StorerKey = @cStorerKey       
-               AND OrderKey = @cOrderKey    
-    
-               IF @@ERROR <> 0    
-               BEGIN    
-                  SET @nErrNo = 179426    
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdPickDetFull    
-                  GOTO RollBackTran    
-               END    
-            END    
-    
-    
+               SET @nErrNo = 179426    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdPickDetFull    
+               GOTO RollBackTran    
+            END      
     
             DECLARE C_TOTE_DETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
             SELECT ECOMM.SKU, ECOMM.ScannedQTY    
@@ -854,7 +844,7 @@ BEGIN
                                              ' , @cLoadKey              ' +    
                                              ' , @cLabelNo              ' +    
                                              ' , @cUserName             ' +    
-                                             ' , @nErrNo       OUTPUT   ' +    
+                             ' , @nErrNo       OUTPUT   ' +    
                                              ' , @cErrMSG      OUTPUT   '    
     
     
@@ -1049,7 +1039,7 @@ BEGIN
             SET @nTotalPickQty = 0    
             SELECT @nTotalPickQty = SUM(PD.QTY)    
             FROM PICKDETAIL PD WITH (NOLOCK)    
-            WHERE PD.ORDERKEY = @cOrderKey    
+WHERE PD.ORDERKEY = @cOrderKey    
             AND PD.Storerkey = @cStorerkey    
             AND PD.Status NOT IN ( '4' , '9' )  
                  
@@ -1145,7 +1135,7 @@ BEGIN
                   AND PickDetailKey = @cPickDetailKey  
           
                   IF @@ERROR <> 0    
-                  BEGIN    
+BEGIN    
                      SET @nErrNo = 179435    
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdPickDetailFail    
                      GOTO RollBackTran    
@@ -1217,7 +1207,7 @@ BEGIN
                                           , @cLabelNo    
                                           , @cUserName    
                                           , @nErrNo       OUTPUT    
-                                          , @cErrMSG      OUTPUT    
+                 , @cErrMSG      OUTPUT    
     
                         IF @nErrNo <> 0    
                         BEGIN    
@@ -1318,7 +1308,7 @@ BEGIN
                      'ANF_CUSTOMERMANIFEST',    -- PrintJobName    
                      @cDataWindow,    
                      @cPaperPrinter,    
-                     @cTargetDB,    
+                     @cTargetDB,   
                      @cLangCode,    
                      @nErrNo  OUTPUT,    
                      @cErrMsg OUTPUT,    
@@ -1622,7 +1612,7 @@ BEGIN
                                     , @cLabelNo    
                                     , @cUserName    
                                     , @nErrNo       OUTPUT    
-                                    , @cErrMSG      OUTPUT    
+                          , @cErrMSG      OUTPUT    
     
                IF @nErrNo <> 0    
                BEGIN    
@@ -1855,10 +1845,8 @@ Quit:
       COMMIT TRAN rdt_841ExtUpdSP23          
             
     
-END    
+END        
 GO
-
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
