@@ -12,7 +12,7 @@ GO
 /*                                                                       */          
 /* Called By: When Udpate Order Header Record                            */          
 /*                                                                       */          
-/* PVCS Version: 1.20                                                    */          
+/* PVCS Version: 4.10                                                    */          
 /*                                                                       */          
 /* Version: 5.4                                                          */          
 /*                                                                       */          
@@ -263,6 +263,8 @@ GO
 /* 19-May-2022  WLChooi   4.9  DevOps Combine Script                     */     
 /* 19-May-2022  WLChooi   4.9  WMS-19687 - Filter UDF03 = ECOM_Platform  */        
 /*                             (WL02)                                    */ 
+/* 19-May-2022  WLChooi   4.10 WMS-19704 - TrafficCopAllowITFTriggerCfg  */        
+/*                             (WL03)                                    */ 
 /*************************************************************************/          
           
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]          
@@ -304,7 +306,7 @@ DECLARE
 ,         @c_authority_pmtl            NVARCHAR(1)          
 ,         @c_authority_owitf           NVARCHAR(1)          
 ,         @c_authority_fujiitf         NVARCHAR(1)          
-,       @c_authority_pkitf           NVARCHAR(1)          
+,         @c_authority_pkitf           NVARCHAR(1)          
 ,         @c_authority_dscpick         NVARCHAR(1)          
 ,         @c_authority_mandommy        NVARCHAR(1)          
 ,         @c_authority_nwitf           NVARCHAR(1)          
@@ -314,7 +316,7 @@ DECLARE
 ,         @c_Status                    NVARCHAR(10)          
 ,         @c_UserDefine08              NVARCHAR(10)          
 ,         @c_ContainerType             NVARCHAR(20)          
-,   @n_ContainerQty              int          
+,         @n_ContainerQty              int          
 ,         @c_Issued                    NVARCHAR(1)          
 ,         @c_OrderLineNumber           NVARCHAR(5)          
 ,         @n_Qtytobill                 int          
@@ -391,10 +393,11 @@ DECLARE
 ,        @c_SINGLE_Multi_Flag                       NCHAR(1) = ''          
 ,        @c_TrafficCopAllowEPACKStatusUpd NVARCHAR(10)   --(Wan06)          
 ,        @c_Trackingno                    NVARCHAR(40)   --tlting11          
-,        @c_Authority_DSTORSSOSTATUS    NCHAR(1)      -- TLTING12          
-,        @c_upordSOstatus               NVARCHAR(10)          
-,        @c_deletedSOstatus             NVARCHAR(10)    
-,        @c_ECOM_Platform               NVARCHAR(30)   --WL02
+,        @c_Authority_DSTORSSOSTATUS      NCHAR(1)      -- TLTING12          
+,        @c_upordSOstatus                 NVARCHAR(10)          
+,        @c_deletedSOstatus               NVARCHAR(10)    
+,        @c_ECOM_Platform                 NVARCHAR(30)   --WL02
+,        @c_TrafficCopAllowITFTriggerCfg  NVARCHAR(10)   --WL03
            
    DECLARE   @n_debug int          
    DECLARE   @c_OrdStatus NVARCHAR(4)          
@@ -614,7 +617,17 @@ BEGIN
          SET @c_TrafficCopAllowEPACKStatusUpd = 'Y'           
       END          
    END          
-   --(Wan06) - END          
+   --(Wan06) - END      
+   
+   --WL03 S          
+   IF EXISTS (SELECT 1 FROM INSERTED I             
+              JOIN StorerConfig S WITH (NOLOCK) ON I.Storerkey = S.Storerkey               
+              WHERE S.Configkey = 'TrafficCopAllowITFTriggerCfg' AND I.TrafficCop IS NULL
+              AND S.SValue = '1')           
+   BEGIN          
+       SELECT @c_TrafficCopAllowITFTriggerCfg = 'Y'          
+   END
+   --WL03 E
           
    SELECT @n_continue = '4'          
 END          
@@ -3461,7 +3474,8 @@ END
 /********************************************************/          
 /* Interface Trigger Points Calling Process - (Start)   */          
 /********************************************************/          
-IF @n_continue = 1 OR @n_continue = 2          
+IF @n_continue = 1 OR @n_continue = 2
+   OR (@c_TrafficCopAllowITFTriggerCfg = 'Y' AND @n_continue <> 3)   --WL03
 BEGIN          
    DECLARE @t_ColumnUpdated TABLE (COLUMN_NAME NVARCHAR(50))          
              
