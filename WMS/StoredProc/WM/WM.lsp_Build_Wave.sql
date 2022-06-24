@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Build_Wave]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Build_Wave]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.6                                                    */                                                                                  
+/* PVCS Version: 2.0                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -46,8 +41,9 @@ GO
 /* 2022-02-16  Wan06    1.8   LFWM-3346 - CN NIKECN UAT Wave Release to */
 /*                            limit Qty per wave                        */
 /* 2022-05-16  LZG      1.9   Added missing ISNUMERIC to cond level (ZG01)*/
+/* 2022-05-24  Wan07    2.0   LFWM-3534 - Issue during 2022-05-12 SVT   */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_Build_Wave]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
    ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)  
@@ -1214,7 +1210,8 @@ AS
       SET @n_FetchOrderStatus = @@FETCH_STATUS                                                                                                                       
       WHILE @n_FetchOrderStatus <> -1 
       BEGIN  
-                                                                                                                                                 
+         SET @n_Weight = ISNULL(@n_Weight,0.00)             --Wan07  Fix Insert TotalWeigh as NULL to BuildWaveDetailLog           
+         SET @n_Cube   = ISNULL(@n_Cube,0.00)               --Wan07  Fix Insert TotalWeigh as NULL to BuildWaveDetailLog                                                                                                                         
          IF @@TRANCOUNT = 0                                                                                                                                       
             BEGIN TRAN;                                                                                                                                           
                        
