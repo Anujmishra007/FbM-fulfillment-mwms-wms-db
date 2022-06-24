@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */ 
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 27-May-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 23-Jun-2022  WLChooi  1.1  WMS-19669 - Skip generate Pickheader(WL01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV53]      
@@ -660,39 +661,41 @@ BEGIN
       END
    END
 
-   --Create Pickslip
-   IF (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN
-      IF @@TRANCOUNT = 0
-         BEGIN TRAN
+   --WL01 S
+   ----Create Pickslip
+   --IF (@n_Continue = 1 OR @n_Continue = 2)
+   --BEGIN
+   --   IF @@TRANCOUNT = 0
+   --      BEGIN TRAN
 
-      EXEC dbo.isp_CreatePickSlip @c_Wavekey = @c_Wavekey,       
-                                  @c_PickslipType = N'3',     
-                                  @b_Success = @b_Success OUTPUT,
-                                  @n_Err = @n_Err OUTPUT,        
-                                  @c_ErrMsg = @c_ErrMsg OUTPUT   
+   --   EXEC dbo.isp_CreatePickSlip @c_Wavekey = @c_Wavekey,       
+   --                               @c_PickslipType = N'3',     
+   --                               @b_Success = @b_Success OUTPUT,
+   --                               @n_Err = @n_Err OUTPUT,        
+   --                               @c_ErrMsg = @c_ErrMsg OUTPUT   
 
-      IF @n_err <> 0   
-      BEGIN  
-         SELECT @n_continue = 3  
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63050     
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': EXEC isp_CreatePickSlip Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
-         GOTO QUIT_SP
-      END 
+   --   IF @n_err <> 0   
+   --   BEGIN  
+   --      SELECT @n_continue = 3  
+   --      SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63050     
+   --      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': EXEC isp_CreatePickSlip Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+   --      GOTO QUIT_SP
+   --   END 
       
-      WHILE @@TRANCOUNT > 0
-      BEGIN
-         COMMIT TRAN
-      END
+   --   WHILE @@TRANCOUNT > 0
+   --   BEGIN
+   --      COMMIT TRAN
+   --   END
 
-      ;WITH CTE AS (SELECT DISTINCT PICKDETAIL.Pickdetailkey, PICKDETAIL.Pickslipno
-                    FROM PICKDETAIL (NOLOCK)
-                    JOIN #PickDetail_WIP PDW (NOLOCK) ON PDW.OrderKey = PICKDETAIL.OrderKey)
-      UPDATE #PickDetail_WIP
-      SET #PickDetail_WIP.PickSlipNo = CTE.PickSlipNo
-      FROM CTE
-      WHERE #PickDetail_WIP.PickDetailKey = CTE.PickDetailKey
-   END
+   --   ;WITH CTE AS (SELECT DISTINCT PICKDETAIL.Pickdetailkey, PICKDETAIL.Pickslipno
+   --                 FROM PICKDETAIL (NOLOCK)
+   --                 JOIN #PickDetail_WIP PDW (NOLOCK) ON PDW.OrderKey = PICKDETAIL.OrderKey)
+   --   UPDATE #PickDetail_WIP
+   --   SET #PickDetail_WIP.PickSlipNo = CTE.PickSlipNo
+   --   FROM CTE
+   --   WHERE #PickDetail_WIP.PickDetailKey = CTE.PickDetailKey
+   --END
+   --WL01 E
 
    IF @c_WaveType IN ('0') SET @c_WaveType = ''
 
