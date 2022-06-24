@@ -1,15 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_ReceiptReversal_Confirm]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-BEGIN 
-   DROP PROCEDURE [RDT].[rdt_ReceiptReversal_Confirm]  
-END
-GO 
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /************************************************************************/
 /* Store procedure: rdt_ReceiptReversal_Confirm                         */
@@ -29,9 +21,10 @@ GO
 /* 28-Jul-2015 1.0  James       SOS338503 - Created                     */
 /* 30-Jun-2016 1.1  Leong       IN00075246 - Initialize variable.       */
 /* 21-Aug-2017 1.2  James       WMS2702 - Include PODetail (james01)    */
+/* 19-May-2021 1.3  James       WMS-19674 Add channel mgmt (james02)    */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_ReceiptReversal_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_ReceiptReversal_Confirm] (
    @nMobile                INT,
    @nFunc                  INT,
    @cLangCode              NVARCHAR( 3),
@@ -108,8 +101,16 @@ BEGIN
    @cRD_SKU             NVARCHAR( 20), -- (james01)
    @nRD_QtyReceived     INT,           -- (james01)
    @nPO_QtyReceived     INT,           -- (james01)
-   @nBeforeReceivedQty  INT            -- (james01)
-
+   @nBeforeReceivedQty  INT,           -- (james01)
+   @cChannelInventoryMgmt  NVARCHAR( 1) = '',
+   @cChannel            NVARCHAR( 20) = '',
+   @nChannel_ID         BIGINT = 0
+   
+   SELECT TOP 1 @cChannelInventoryMgmt = SC.Authority
+   FROM dbo.RECEIPT R WITH (NOLOCK)
+   CROSS APPLY fnc_SelectGetRight (R.facility, R.StorerKey, '', 'ChannelInventoryMgmt') SC
+   WHERE r.ReceiptKey = @cReceiptKey
+         
    set @bdebug = 0
 
    SET @nTranCount = @@TRANCOUNT
@@ -214,6 +215,19 @@ BEGIN
 
       IF @@ROWCOUNT > 0
       BEGIN
+      	IF @cChannelInventoryMgmt = '1'
+      	BEGIN
+      		SELECT TOP 1
+      		   @cChannel = Channel,
+      		   @nChannel_ID = Channel_ID
+      		FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+      		WHERE ReceiptKey = @cReceiptKey
+            AND   ToID = @cID
+            AND   SKU = CASE WHEN @cSKU = '' THEN SKU ELSE @cSKU END
+            AND   ( BeforeReceivedQty > 0 OR QtyReceived > 0)
+      		ORDER BY 1
+      	END
+      	
          EXECUTE  nspItrnAddAdjustment
                   @n_ItrnSysId  = NULL,
                   @c_StorerKey  = @cStorerKey,
@@ -255,7 +269,9 @@ BEGIN
                   @c_itrnkey    = @cItrnKey OUTPUT,
                   @b_Success    = @bSuccess OUTPUT,
                   @n_err        = @nErrNo   OUTPUT,
-                  @c_errmsg     = @cErrmsg  OUTPUT
+                  @c_errmsg     = @cErrmsg  OUTPUT, 
+                  @c_Channel    = @cChannel, 
+                  @n_Channel_ID = @nChannel_ID OUTPUT
 
             IF @bSuccess <> 1
                GOTO Quit
