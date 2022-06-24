@@ -13,7 +13,8 @@ GO
 /*                                                                      */      
 /* Date         Rev  Author      Purposes                               */      
 /* 2021-10-28   1.0  Chermaine   WMS-18161. Created                     */    
-/* 2022-03-04   1.1  yeekung  WMS-19073  New PA stragey (yeekung01)     */    
+/* 2022-03-04   1.1  yeekung     WMS-19074  New PA stragey (yeekung01)  */    
+/* 2022-12-05   1.2  YeeKung     WMS-19662 Add Requirement(yeekung02)   */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [rdt].[rdt_523ExtPA43] (      
@@ -52,7 +53,12 @@ BEGIN
               WHERE storerKey = @cStorerKey      
               AND listname = 'ADSTKSTS'      
               AND Code = @cHostWHCode      
-              AND Long = 'B' )      
+              AND Long = 'B' ) 
+    OR EXISTS ( SELECT 1   
+               FROM LOC WITH (NOLOCK)      
+               WHERE Facility = @cFacility  
+                  AND LOC = @cLOC 
+                  AND HOSTWHCODE ='aBL') 
    BEGIN      
     --Look for latest Lottable05 with same HostWHCode of the SKU      
       SELECT TOP 1         
@@ -89,7 +95,12 @@ BEGIN
             WHERE storerKey = @cStorerKey      
             AND listname = 'ADSTKSTS'      
             AND Code = @cHostWHCode      
- AND Long  IN ('I','U') )      
+            AND Long  IN ('I','U') ) 
+    OR EXISTS ( SELECT 1   
+               FROM LOC WITH (NOLOCK)      
+               WHERE Facility = @cFacility  
+                  AND LOC = @cLOC 
+                  AND HOSTWHCODE ='aQI') 
    BEGIN      
     --HomeLOC      
       SELECT TOP 1            
@@ -155,6 +166,7 @@ BEGIN
    Quit:      
       
 END  
+
 GO
 
 SET QUOTED_IDENTIFIER OFF
