@@ -48,6 +48,7 @@ GO
 /* 2019-07-05 3.2  Ung     Fix performance tuning                          */
 /* 2020-01-22 3.3  Ung     LWP-57 Performance tuning                       */
 /* 2022-04-12 3.4  James   WMS-19453 Add RDTFormat for UCC scan (james02)  */
+/* 2020-05-04 3.5  YeeKung WMS-11867 Add verifySKU (yeekung01)             */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -115,6 +116,7 @@ DECLARE
    @cPPK                 NVARCHAR(30),
    @nCaseCntQty          INT,
    @nCnt                 INT,
+   @nFromScn             INT, --(yeekung01)
    @cExtendedUpdateSP    NVARCHAR(20),
    @cUCCExtValidate      NVARCHAR(20),
    @cClosePallet         NVARCHAR(1),
@@ -129,6 +131,7 @@ DECLARE
    @cDisableQTYField     NVARCHAR( 1),
    @cExtendedInfoSP      NVARCHAR( 20),
    @cExtendedInfo        NVARCHAR( 20),
+   @cVerifySKU           NVARCHAR( 1), 
 
    @cLottable01       NVARCHAR(18),
    @cLottable02       NVARCHAR(18),
@@ -258,10 +261,12 @@ SELECT
    @cDisableQTYField       = V_String30,
    @cExtendedInfoSP        = V_String31,
    @cExtendedInfo          = V_String32,
+   @cVerifySKU             = V_String33,
    
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
    @nCnt             = V_Integer3,
+   @nFromScn         = V_Integer4,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -307,6 +312,7 @@ BEGIN
    IF @nStep =10 GOTO Step_10  -- Scn = 1309   Extra data info
    IF @nStep =11 GOTO Step_11  -- Scn = 1310   Message. Not all ucc received. ESC anyway?
    IF @nStep =12 GOTO Step_12  -- Scn = 1311   Message. Close pallet?
+   IF @nStep =13 GOTO Step_13  -- Scn = 3950   Verify SKU
 END
 
 RETURN -- Do nothing if incorrect step
@@ -346,6 +352,7 @@ BEGIN
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
+   SET @cVerifySKU = rdt.RDTGetConfig( @nFunc, 'VerifySKU', @cStorerKey)  
 
    -- Added by Vicky for SOS#105011 (Start - Vicky01)
    SET @cCheckPOUCC = ''
@@ -2411,6 +2418,38 @@ BEGIN
       END
       ELSE
       BEGIN
+      	-- Verify SKU  
+         IF @cVerifySKU = '1'  
+         BEGIN  
+            EXEC rdt.rdt_VerifySKU_V7 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cActSku, '', 'CHECK',  
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,      
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,      
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,      
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,      
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,      
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,     
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,     
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,     
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,     
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,     
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,    
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,    
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,    
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,    
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,    
+               @nErrNo     OUTPUT,  
+               @cErrMsg    OUTPUT  
+  
+            IF @nErrNo <> 0  
+            BEGIN  
+               -- Go to verify SKU screen  
+               SET @nFromScn = @nScn  
+               SET @nScn = 3951  
+               SET @nStep = @nStep + 5  
+  
+               GOTO Quit  
+            END  
+         END  
          -- Get SKU/UPC
          SELECT
             @nSKUCnt = COUNT( DISTINCT A.SKU),
@@ -3539,7 +3578,93 @@ BEGIN
    END
 END
 GOTO Quit
-
+/********************************************************************************  
+Step 10. Screen = 3950. Verify SKU  
+   SKU            (Field01)  
+   SKUDesc1       (Field02)  
+   SKUDesc2       (Field03)  
+   Field label 1  (Field04)  
+   Field value 1  (Field05, input)  
+   Field label 2  (Field06)  
+   Field value 2  (Field07, input)  
+   Field label 3  (Field08)  
+   Field value 3  (Field09, input)  
+   Field label 4  (Field10)  
+   Field value 4  (Field11, input)  
+   Field label 5  (Field12)  
+   Field value 5  (Field13, input)  
+********************************************************************************/  
+Step_13:  
+BEGIN  
+   IF @nInputKey = 1 -- ENTER  
+   BEGIN  
+      -- Update SKU setting  
+      EXEC rdt.rdt_VerifySKU_V7 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cActSKU, '', 'UPDATE',  
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,      
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,      
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,      
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,      
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,      
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,     
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,     
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,     
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,     
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,     
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,    
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,    
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,    
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,    
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,    
+         @nErrNo     OUTPUT,  
+         @cErrMsg    OUTPUT  
+  
+      IF @nErrNo <> 0  
+         GOTO Quit  
+  
+      -- Enable field  
+      SET @cFieldAttr04 = '' -- Dynamic verify SKU 1..5  
+      SET @cFieldAttr06 = '' --  
+      SET @cFieldAttr08 = '' --  
+      SET @cFieldAttr10 = '' --  
+      SET @cFieldAttr12 = '' --  
+        
+      -- Prepare prev screen var  
+      SET @cOutField01 = @cUCC    
+  
+      -- Go back to SKU screen  
+      SET @nScn = @nFromScn  
+      SET @nStep = @nStep - 5  
+   END  
+  
+   IF @nInputKey = 0 -- ESC  
+   BEGIN  
+      -- Enable field  
+      SET @cFieldAttr04 = '' -- Dynamic verify SKU 1..5  
+      SET @cFieldAttr06 = '' --  
+      SET @cFieldAttr08 = '' --  
+      SET @cFieldAttr10 = '' --  
+      SET @cFieldAttr12 = '' --  
+  
+      -- Prepare prev screen var  
+      SET @cOutField01 = @cUCC  
+  
+      -- Go back to SKU screen  
+      SET @nScn = @nFromScn  
+      SET @nStep = @nStep - 5 
+   END  
+  
+   -- Enable field  
+   SELECT @cFieldAttr04 = ''  
+   SELECT @cFieldAttr05 = ''  
+   SELECT @cFieldAttr06 = ''  
+   SELECT @cFieldAttr07 = ''  
+   SELECT @cFieldAttr08 = ''  
+   SELECT @cFieldAttr09 = ''  
+   SELECT @cFieldAttr10 = ''  
+   SELECT @cFieldAttr11 = ''  
+   SELECT @cFieldAttr12 = ''  
+END  
+GOTO Quit  
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -3578,6 +3703,7 @@ BEGIN
       V_Integer1 = @nQTY,
       V_Integer2 = @nCaseCntQty,
       V_Integer3 = @nCnt,
+      V_Integer4 = @nFromScn,
       
       V_String18 = @cCheckPOUCC, -- Vicky01
       V_String19 = @cExtendedUpdateSP,
@@ -3595,6 +3721,7 @@ BEGIN
       V_String30 = @cDisableQTYField,
       V_String31 = @cExtendedInfoSP,
       V_String32 = @cExtendedInfo,
+      V_String33 = @cActSKU,
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,

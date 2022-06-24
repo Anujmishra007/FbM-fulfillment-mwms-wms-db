@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_LottableProcess_RCValidateLottable]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_LottableProcess_RCValidateLottable]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2021-03-11  James     1.0   WMS-16529 Created                              */
+/* 2021-06-11  yeekung   1.1   WMS-17153 Add Overreceive (yeekung01)          */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_LottableProcess_RCValidateLottable
+CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_RCValidateLottable
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -101,6 +99,17 @@ BEGIN
       BEGIN
    	   SET @nErrNo = 164752
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data Not Found
+         GOTO Quit
+      END
+
+      IF EXISTS ( SELECT 1 FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                  WHERE ReceiptKey = @cReceiptKey
+                  AND   Sku = @cSKU
+                  AND   Lottable06 = @cLottable06Value
+                  AND   QtyExpected<=BeforeReceivedQty)
+      BEGIN
+   	   SET @nErrNo = 164753
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --overreceive
          GOTO Quit
       END
 
