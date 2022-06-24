@@ -10,9 +10,9 @@ GO
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */ 
 /* 2022-03-06 1.0  MINGLE     Created (WMS-19026)                             */                   
-/* 2022-03-06 1.0  MINGLE     DevOps Combine Script                           */                   
-/******************************************************************************/                  
-                    
+/* 2022-03-06 1.0  MINGLE     DevOps Combine Script                           */   
+/* 2022-06-16 1.1  CHONGCS    WMS-19810 revised page no (CS01)                */                
+/******************************************************************************/                         
 CREATE OR ALTER PROC [dbo].[isp_Bartender_OUTBPDLBL_CN_GetParm]                        
 (  @parm01            NVARCHAR(250),                
    @parm02            NVARCHAR(250),                
@@ -56,10 +56,15 @@ BEGIN
            @c_ExecArguments    NVARCHAR(4000),  
            @n_NoOfCopy         INT,  
            @c_lot              NVARCHAR(20),  
-           @c_ttlpage          INT,  
+           @c_ttlpage          FLOAT,      --CS01
            @c_storerkey        NVARCHAR(20),  
            @c_prevSKU          NVARCHAR(20),
-		   @c_prevLOT          NVARCHAR(20)
+           @c_prevLOT          NVARCHAR(20),
+           @n_ttlprnpage       FLOAT,                --CS01
+           @n_ttlsku           INT = 1,              --CS01
+           @n_ttllot           INT = 1,               --CS01 
+           @n_Prevttlpage      INT = 1               --CS01 
+
   
    SET @d_Trace_StartTime = GETDATE()  
    SET @c_Trace_ModuleName = ''  
@@ -119,7 +124,7 @@ BEGIN
    BEGIN  
       SET @n_NoOfCopy = @c_ttlpage  
       IF @c_prevSKU <> @c_sku SET @n_cnt = 1 
-	  IF @c_prevLOT <> @c_lot SET @n_cnt = 1
+     IF @c_prevLOT <> @c_lot SET @n_cnt = 1
       WHILE @n_NoOfCopy >= 1   
       BEGIN  
       INSERT INTO #TEMP_PICKDETAIL  
@@ -133,7 +138,8 @@ BEGIN
       SET @n_NoOfCopy = @n_NoOfCopy - 1  
       SET @n_cnt = @n_cnt + 1   
       SET @c_prevSKU = @c_sku 
-	  SET @c_prevLOT = @c_lot
+      SET @c_prevLOT = @c_lot
+      
         
       END       
         
@@ -146,11 +152,11 @@ BEGIN
    ELSE  
    BEGIN  
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-   SELECT DISTINCT PD.Storerkey,PD.SKU,MAX(PD.Lot),PD.Qty/P.CaseCnt  
+   SELECT DISTINCT PD.Storerkey,PD.SKU,PD.Lot,SUM(PD.Qty)/P.CaseCnt     --CS01
    FROM PICKDETAIL PD(NOLOCK)  
    JOIN PACK P(NOLOCK) ON P.PackKey = PD.PackKey  
    WHERE PD.Orderkey = @parm01  
-   GROUP BY PD.Storerkey,PD.SKU,PD.Qty,P.CaseCnt
+   GROUP BY PD.Storerkey,PD.SKU,P.CaseCnt,pd.lot                        --CS01
    --AND PD.Storerkey = @c_Sparm02  
    --AND PD.Sku = @c_Sparm03  
    --AND PD.Lot = @c_Sparm04  
@@ -161,23 +167,58 @@ BEGIN
      
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
-      SET @n_NoOfCopy = @c_ttlpage  
-      IF @c_prevSKU <> @c_sku SET @n_cnt = 1  
-	  IF @c_prevLOT <> @c_lot SET @n_cnt = 1
+      SET @n_NoOfCopy = CEILING(@c_ttlpage)                  --CS01  
+      SET @n_ttlprnpage = CEILING(@c_ttlpage)                --CS01 S
+   --   SELECT @c_ttlpage '@c_ttlpage',@n_ttlprnpage '@n_ttlprnpage',@c_prevSKU '@c_prevSKU', @c_sku '@c_sku',@c_prevLOT '@c_prevLOT', @c_lot '@c_lot'
+      IF ISNULL(@c_prevSKU,'') <> '' AND @c_prevSKU <> @c_sku 
+      BEGIN 
+         SET @n_cnt = 1  
+     END 
+     --ELSE IF ISNULL(@c_prevSKU,'') <> '' AND @c_prevSKU = @c_sku AND @c_prevLOT <> @c_lot
+     --BEGIN
+     --    SELECT @n_ttlprnpage = CEILING(@n_ttlprnpage) + CEILING(@c_ttlpage)  
+     --    SET @n_ttlsku = 2
+     --    SET @n_ttllot = 2
+        
+     --END
+     --  SELECT 'chk 1',@c_ttlpage '@c_ttlpage',@n_ttlprnpage '@n_ttlprnpage'
+     --IF @c_prevLOT <> @c_lot SET @n_cnt = 1
+      IF ISNULL(@c_prevSKU,'') <> '' AND @c_prevSKU <> @c_sku AND @c_prevLOT <> @c_lot --OR (ISNULL(@c_prevSKU,'') <> '' AND @c_prevSKU = @c_sku AND @c_prevLOT <> @c_lot )
+      BEGIN
+        
+        SET @n_ttlprnpage = CEILING(@n_ttlprnpage)      --CS01 E
+        SET @n_cnt = 1 
+      END
+      ELSE IF (ISNULL(@c_prevSKU,'') <> '' AND @c_prevSKU = @c_sku AND @c_prevLOT <> @c_lot )
+      BEGIN
+            --SELECT @n_ttlprnpage '@n_ttlprnpage', @c_ttlpage '@c_ttlpage'
+            SELECT @n_ttlprnpage = @n_Prevttlpage + CEILING(@c_ttlpage)  
+            SET @n_ttlsku = 2
+            SET @n_ttllot = 2
+      END
       WHILE @n_NoOfCopy >= 1   
       BEGIN  
       INSERT INTO #TEMP_PICKDETAIL  
       SELECT PARM1 = @parm01, PARM2 = @c_storerkey,  
              PARM3 = @c_sku,  
-             PARM4 = @c_lot, PARM5 = @c_ttlpage, PARM6 = @n_cnt, PARM7 = '',  
+             PARM4 = @c_lot, PARM5 = @n_ttlprnpage, PARM6 = @n_cnt, PARM7 = '',       --CS01
              PARM8 = '', PARM9 = '', PARM10 = '',  
              Key1 = 'Orderkey', Key2 = '', Key3 = '', Key4 = '', Key5 = ''  
+
+
+       IF @n_ttlsku > 1 AND @n_ttllot >1 
+       BEGIN
+              UPDATE #TEMP_PICKDETAIL  
+              SET  PARM5 = @n_ttlprnpage
+              WHERE PARM2 = @c_storerkey AND PARM3 = @c_sku AND  Key1 = 'Orderkey'
+       END
         
          
       SET @n_NoOfCopy = @n_NoOfCopy - 1  
       SET @n_cnt = @n_cnt + 1   
       SET @c_prevSKU = @c_sku  
-	  SET @c_prevLOT = @c_lot
+      SET @c_prevLOT = @c_lot
+      SET @n_Prevttlpage = @n_ttlprnpage
         
       END       
         

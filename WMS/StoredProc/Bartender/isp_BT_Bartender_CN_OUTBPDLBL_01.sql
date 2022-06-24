@@ -10,6 +10,8 @@ GO
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */                   
 /* 2022-03-06 1.0  MINGLE     Created (WMS-19026)                             */   
+/* 2022-06-21 1.1  CHONGCS    DevOps Combine Script                           */   
+/* 2022-06-21 1.1  CHONGCS    WMS-19810 fix duplicate record issue (CS01)     */  
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_CN_OUTBPDLBL_01]                        
@@ -145,7 +147,7 @@ BEGIN
      )          
                
   
- SET @c_SQLJOIN = +' SELECT OD.Userdefine01,OD.Userdefine02,S.BUSR6,LOT.Lottable02,OH.Externorderkey,'+ CHAR(13)  --5        
+ SET @c_SQLJOIN = +' SELECT DISTINCT OD.Userdefine01,OD.Userdefine02,S.BUSR6,LOT.Lottable02,OH.Externorderkey,'+ CHAR(13)  --5           --CS01
              + ' PD.Sku,P.Casecnt,'''','''','''','     --10    
              + ' '''','''','''','''','''','     --15    
              + ' '''','''','''','''','''','     --20         
