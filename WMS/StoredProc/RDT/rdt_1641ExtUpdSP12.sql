@@ -15,6 +15,7 @@ GO
 /* Modifications log:                                                   */  
 /* Date        Rev  Author    Purposes                                  */  
 /* 2021-11-05  1.0  Chermaine WMS-18186 Created                         */
+/* 2022-05-20  1.1  YeeKung   WMS-19685 Left country,2 (yeekung01)      */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP12] (  
@@ -58,7 +59,8 @@ BEGIN
             @cTrackingNumber05 NVARCHAR(20)='',
             @cTrackingNumber06 NVARCHAR(20)='',
             @cTrackingNumber07 NVARCHAR(20)='', 
-            @cPalletCaseID NVARCHAR(20)
+            @cPalletCaseID NVARCHAR(20),
+            @cOrderGroup   NVARCHAR(20)
 
    SELECT @nStep = Step,
           @nInputKey = InputKey,
@@ -119,12 +121,29 @@ BEGIN
             @cOdrCountry  = C_Country,
             @cRoute = ROUTE,
             @cShipperKey = shipperKey,
-            @cSalesMan = Salesman
+            @cSalesMan = Salesman,
+            @cOrderGroup = ordergroup
          FROM Orders WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
          AND OrderKey =  @cOrderKey
-         
-         SELECT @cMarketPlace = Long FROM codelkup WITH (NOLOCK) WHERE listName = 'COURIERLBL' AND storerKey = @cStorerKey AND code = @cSalesMan
+
+         IF @cOrderGroup<>'aCommerce'
+         BEGIN
+            SELECT @cMarketPlace = Long 
+            FROM codelkup WITH (NOLOCK) 
+            WHERE listName = 'COURIERLBL' 
+               AND storerKey = @cStorerKey 
+               AND code = @cSalesMan
+         END
+         ELSE
+         BEGIN
+            SELECT 
+               @cMarketPlace = oi.Platform 
+            FROM Orders O WITH (NOLOCK)
+               JOIN orderinfo OI (Nolock) ON O.orderkey=OI.orderkey
+            WHERE StorerKey = @cStorerKey
+               AND o.OrderKey =  @cOrderKey
+         END
 
          SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
          FROM dbo.PalletDetail WITH (NOLOCK)
@@ -164,7 +183,7 @@ BEGIN
             INSERT INTO dbo.PalletDetail 
             (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02) 
             VALUES
-            (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, @cOdrCountry+@cShipperKey+@cMarketPlace, @cOrderKey)
+            (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, LEFT(@cOdrCountry,2)+@cShipperKey+@cMarketPlace, @cOrderKey) --yeekung01
 
             IF @@ERROR <> 0
             BEGIN
