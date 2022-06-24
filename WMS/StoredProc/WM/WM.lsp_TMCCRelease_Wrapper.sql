@@ -15,7 +15,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.3                                                          */  
+/* Version: 1.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -28,6 +28,7 @@ GO
 /* 2021-12-16  Wan02    1.3   DevOps Combine Script                      */
 /* 2021-12-16  Wan02    1.3   LFWM-3258 - CN NIKECN UAT Release cycle    */
 /*                            count Options Deviation                    */
+/* 2022-02-24  Wan03    1.4   LFWM-3287 - CN NIKECN Release Cycle Count  */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
    @c_CountType            NVARCHAR(10)  
@@ -40,7 +41,7 @@ CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
 ,  @c_AlertKey             NVARCHAR(18) = ''
 ,  @n_MaxCount             INT          = 0
 ,  @c_GroupKeyTableField   NVARCHAR(50) = ''
-,  @c_FitlerCode           NVARCHAR(30) = ''
+,  @c_FilterCode           NVARCHAR(30) = ''             --(Wan03) Rename @c_FitlerCode to correct Variable name 
 ,  @n_TotalTaskCnt         INT          = 0   OUTPUT
 ,  @n_TotalSkuCnt          INT          = 0   OUTPUT  
 ,  @n_TotalLocCnt          INT          = 0   OUTPUT              
@@ -51,6 +52,9 @@ CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
 ,  @n_WarningNo            INT          = 0   OUTPUT
 ,  @c_ProceedWithWarning   CHAR(1)      = 'N' 
 ,  @c_UserName             NVARCHAR(128)= ''
+,  @c_Facility             NVARCHAR(5)  = ''             --(Wan03)
+,  @c_CountType_Code       NVARCHAR(10) = ''             --(Wan03)
+,  @n_MaxAisleCount        INT          = 0              --(Wan03)
 
 AS  
 BEGIN  
@@ -63,7 +67,7 @@ BEGIN
          , @n_StartTCnt       INT = @@TRANCOUNT
 
          , @n_Count           INT = 0 
-         , @c_Facility        NVARCHAR(5)
+         --, @c_Facility        NVARCHAR(5)              --(Wan03)
          , @c_LocAisle        NVARCHAR(10)
          , @c_LocLevel        INT
 
@@ -115,7 +119,7 @@ BEGIN
    --(mingle01) - START
    BEGIN TRY
       SET @c_GroupKeyTableField = ISNULL(RTRIM(@c_GroupKeyTableField),'')
-      SET @c_FitlerCode = ISNULL(RTRIM(@c_FitlerCode),'')
+      SET @c_FilterCode = ISNULL(RTRIM(@c_FilterCode),'')
 
       SELECT @c_PickMethod = ISNULL(RTRIM(udf01), '') 
             ,@c_TaskType   = ISNULL(RTRIM(udf02), '')
@@ -207,6 +211,64 @@ BEGIN
       -----------------------------------------------
       -- Start Generating TASKDETAIL/ TASKDETAIL_WIP
       -----------------------------------------------
+      --(Wan03) - START    ----Sku Release Data has BULK INserted to TASKDETAIL_WIP
+      SET @c_Sku_Prev = ISNULL(RTRIM(@c_Sku_Prev),'')
+      SET @c_Loc_Prev = ISNULL(RTRIM(@c_Loc_Prev),'')      
+      SET @c_BatchNo = ISNULL(RTRIM(@c_BatchNo),'')
+      SET @c_AlertKey = ISNULL(RTRIM(@c_AlertKey),'') 
+
+      IF @c_Sku_Prev = '' AND @c_Loc_Prev = '' AND @c_BatchNo <> '' AND @c_AlertKey = ''     --First Record
+      BEGIN
+         SET @b_Success = 1
+         EXEC dbo.isp_TMCCRelease_Wrapper   
+              @c_TaskWIPBatchNo     = @c_BatchNo   
+            , @c_Facility           = @c_Facility  
+            , @c_Storerkey          = @c_Storerkey            
+            , @c_Counttype_Code     = @c_CountType_Code   
+            , @n_MaxCount           = @n_MaxCount  
+            , @n_MaxAisleCount      = @n_MaxAisleCount   
+            , @c_GroupKeyTableField = @c_GroupKeyTableField      
+            , @c_ReleaseFilterCode  = @c_FilterCode   
+            , @n_ttltaskcnt         = @n_TotalTaskCnt OUTPUT  
+            , @n_distinctskucnt     = @n_TotalSkuCnt  OUTPUT  
+            , @n_distinctloccnt     = @n_TotalLocCnt  OUTPUT                       
+            , @b_Success            = @b_Success      OUTPUT--0: fail, 1= Success, 2: Continue PB Logic to generate TMCC  
+            , @n_Err                = @n_Err          OUTPUT  
+            , @c_ErrMsg             = @c_ErrMsg       OUTPUT 
+            , @b_ForceAdvanceTMCC   = 0                     --If AdvanceTMCC = 0, Use Storerconfig to check SkipAdvanceCCRelease
+            
+         IF @b_Success IN ( 0, 1 )                          --If Return 2, continue to Release TMCC using AdvanceCCRelease method
+         BEGIN
+            SET @n_Continue = 4                             --Set to Stop Looping If no error
+               
+            GOTO EXIT_SP
+         END
+         
+         -- Call isp_TMCCRelease_Wrapper to force and use Advance CC Release
+         SET @b_Success = 1
+         EXEC dbo.isp_TMCCRelease_Wrapper   
+              @c_TaskWIPBatchNo     = @c_BatchNo   
+            , @c_Facility           = @c_Facility  
+            , @c_Storerkey          = @c_Storerkey            
+            , @c_Counttype_Code     = @c_CountType_Code   
+            , @n_MaxCount           = @n_MaxCount  
+            , @n_MaxAisleCount      = @n_MaxAisleCount   
+            , @c_GroupKeyTableField = @c_GroupKeyTableField      
+            , @c_ReleaseFilterCode  = @c_FilterCode   
+            , @n_ttltaskcnt         = @n_TotalTaskCnt OUTPUT  
+            , @n_distinctskucnt     = @n_TotalSkuCnt  OUTPUT  
+            , @n_distinctloccnt     = @n_TotalLocCnt  OUTPUT                        
+            , @b_Success            = @b_Success      OUTPUT--0: fail, 1= Success, 2: Continue PB Logic to generate TMCC  
+            , @n_Err                = @n_Err          OUTPUT  
+            , @c_ErrMsg             = @c_ErrMsg       OUTPUT 
+            , @b_ForceAdvanceTMCC   = 1 
+         
+          SET @n_Continue = 4                               --Set to Stop Looping If no error
+               
+          GOTO EXIT_SP
+      END 
+      --(Wan03) - END
+      
       IF ISNULL(RTRIM(@c_BatchNo),'') = '' AND ISNULL(RTRIM(@c_AlertKey),'') = ''
       BEGIN
          WHILE 1= 1
@@ -329,12 +391,12 @@ BEGIN
          SET @c_Sku = ''
       END
 
-      IF @c_FitlerCode <> ''
+      IF @c_FilterCode <> ''
       BEGIN
          SET @n_Count = 0
          SELECT @n_Count = 1 
          FROM sys.objects WITH (NOLOCK) 
-         WHERE [name] = @c_FitlerCode
+         WHERE [name] = @c_FilterCode
          AND [type] = 'P'
 
          IF  @n_Count = 1 
@@ -347,7 +409,7 @@ BEGIN
                               + ',@c_Loc        NVARCHAR(10)'
                               + ',@b_success    INT  OUTPUT ' 
 
-               EXEC sp_Execute @c_FitlerCode
+               EXEC sp_Execute @c_FilterCode
                            ,  @c_SQLParms
                            ,  @c_Storerkey
                            ,  @c_Sku
@@ -360,7 +422,7 @@ BEGIN
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @n_err    = 554259
                SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) 
-                             + ': Error Executing ' + @c_FitlerCode + '. (lsp_TMCCRelease_Wrapper)'
+                             + ': Error Executing ' + @c_FilterCode + '. (lsp_TMCCRelease_Wrapper)'
                              + '( ' + @c_errmsg + ' )'
                GOTO EXIT_SP   
             END CATCH   
@@ -655,7 +717,7 @@ BEGIN
          BEGIN
             BEGIN TRY
                INSERT INTO IDS_GENERALLOG (udf01, udf02, udf03, udf04, udf05)
-               VALUES ('SKURELOPTION', @c_BatchNo, @c_PickMethod, @c_GroupKeyTableField , @c_FitlerCode )
+               VALUES ('SKURELOPTION', @c_BatchNo, @c_PickMethod, @c_GroupKeyTableField , @c_FilterCode )
             END TRY
 
             BEGIN CATCH
