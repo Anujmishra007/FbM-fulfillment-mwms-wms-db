@@ -12,7 +12,7 @@ GO
 /*                                                                       */          
 /* Called By: When Udpate Order Header Record                            */          
 /*                                                                       */          
-/* PVCS Version: 4.10                                                    */          
+/* PVCS Version: 4.11                                                    */          
 /*                                                                       */          
 /* Version: 5.4                                                          */          
 /*                                                                       */          
@@ -265,6 +265,7 @@ GO
 /*                             (WL02)                                    */ 
 /* 19-May-2022  WLChooi   4.10 WMS-19704 - TrafficCopAllowITFTriggerCfg  */        
 /*                             (WL03)                                    */ 
+/* 21-Jun-2022  TLTING13  4.11 Update Status 9 data - skip trigger script*/  
 /*************************************************************************/          
           
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]          
@@ -654,7 +655,20 @@ BEGIN
                    + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '          
     END          
    END          
-END          
+END   
+
+
+-- (TLTING13)              
+IF @n_continue=1 or @n_continue=2              
+BEGIN              
+  IF EXISTS ( SELECT 1 FROM INSERTED, DELETED              
+        WHERE INSERTED.OrderKey = DELETED.OrderKey              
+               AND INSERTED.[status] = DELETED.[status]  
+               AND INSERTED.[status] = '9'  )        
+   BEGIN   
+      SELECT @n_continue = '4'      
+   END              
+END 
           
 -- Validation Script here          
 IF @n_continue=1 or @n_continue=2          
