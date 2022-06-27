@@ -257,7 +257,7 @@ BEGIN
    	SET @cSQLDynamicSelect = '
          ,'''' ,'''+@cDynamicCol2+''' AS DynamicColName2 
          ,''''
-         ,' +@cDynamicTb2+ '.' + @cDynamicCol2 + ' AS DynamicColValue2 
+         ,'+'ISNULL(' +@cDynamicTb2+ '.' + @cDynamicCol2 + ','''')'+ ' AS DynamicColValue2 
          '
       SET @cSQLGropBy = '
       ,' +@cDynamicTb2+ '.' + @cDynamicCol2 + ' 
@@ -268,7 +268,7 @@ BEGIN
    BEGIN
    	SET @cSQLDynamicSelect = '
       ,'''+@cDynamicCol1+''' AS DynamicColName1 ,''''
-      ,' +@cDynamicTb1+ '.' + @cDynamicCol1 + ' AS DynamicColValue1
+      ,'+'ISNULL('  +@cDynamicTb1+ '.' + @cDynamicCol1+ ','''')' + ' AS DynamicColValue1
       ,'''' 
       '
       
@@ -281,8 +281,8 @@ BEGIN
    BEGIN
    	SET @cSQLDynamicSelect = '
       ,'''+@cDynamicCol1+''' AS DynamicColName1 ,'''+@cDynamicCol2+''' AS DynamicColName2 
-      ,' +@cDynamicTb1+ '.' + @cDynamicCol1 + ' AS DynamicColValue1
-      ,' +@cDynamicTb2+ '.' + @cDynamicCol2 + ' AS DynamicColValue2 
+      ,'+'ISNULL(' +@cDynamicTb1+ '.' + @cDynamicCol1 + ','''')'+ ' AS DynamicColValue1
+      ,'+'ISNULL(' +@cDynamicTb2+ '.' + @cDynamicCol2 + ','''')'+ ' AS DynamicColValue2 
       '
       
       SET @cSQLGropBy = '
@@ -427,14 +427,14 @@ IF @EcomSingle = '1'
 BEGIN
 	SET @cSQLMainSelect = '
    SELECT 
-   sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(sum(pick.QtyToPack)-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType
+   RTRIM(sku.SKU), RTRIM(SKU.descr), RTRIM(ISNULL(SKU.RetailSKU,'''')),  RTRIM(ISNULL(SKU.ManufacturerSKU,'''')),RTRIM(ISNULL(SKU.ALTSKU,'''')),(sum(pick.QtyToPack)-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType
 '
 END
 ELSE
 BEGIN
 	SET @cSQLMainSelect = '
    SELECT 
-   sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType
+   RTRIM(sku.SKU), RTRIM(SKU.descr), RTRIM(ISNULL(SKU.RetailSKU,'''')),  RTRIM(ISNULL(SKU.ManufacturerSKU,'''')),RTRIM(ISNULL(SKU.ALTSKU,'''')),(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType
 '
 END
 
@@ -485,7 +485,7 @@ WHILE @@FETCH_STATUS = 0
       EXEC [API].[isp_Get_SKU_Image_UR] 
       --exec rdt.[Get_SKU_Image_URL_test]       
       --EXEC [MYWMS].[WM].[lsp_WM_Get_SKU_Image_URL]
-         'NIKEMY'      
+        @cstorerkey     
       , @cSku            
       , @cUserName         
       , @b_Success        OUTPUT  
@@ -520,7 +520,7 @@ SET @b_Success = 1
 SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo,(SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,
 @cDynamicRightName1 AS DynamicRightName1,@cDynamicRightValue1 AS DynamicRightValue1,@skipCartonize AS skipCartonize,@navCtnScn AS navCtnScn, @hidePackedSku AS hidePackedSku,@EcomSingle AS EcomSingle,
 --COUNT(PKI.cartonStatus) AS HoldStatus,
-   (SELECT p.*,UPC.upc
+   (SELECT p.*,case when UPC.upc IS NULL then '' else UPC.UPC end AS UPC
    FROM @packSKUDetail p 
    left JOIN (SELECT UPC,sku FROM UPC (NOLOCK) WHERE StorerKey = @cStorerKey) UPC
    ON UPC.sku = p.sku 
@@ -531,6 +531,8 @@ LEFT JOIN PackDetail PD WITH (NOLOCK) ON (PSKU.pickslipno = PD.pickslipNo)
 --WHERE PD.PickSlipNo = @cPickSlipNo
 AND StorerKey = @cStorerKey
 FOR JSON AUTO, INCLUDE_NULL_VALUES)
+
+select @jResult
 
 DROP TABLE #pickSKUDetail 
 
