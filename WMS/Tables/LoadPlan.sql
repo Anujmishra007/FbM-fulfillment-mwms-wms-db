@@ -74,7 +74,8 @@ CREATE TABLE [dbo].[LoadPlan]
 [MBOLGroupMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [DefaultStrategykey] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [BookingNo] [int] NULL,
-[OTM_DispatchDate] [datetime] NOT NULL CONSTRAINT [DF_LoadPlan_OTM_DispatchDate] DEFAULT ('')
+[OTM_DispatchDate] [datetime] NOT NULL CONSTRAINT [DF_LoadPlan_OTM_DispatchDate] DEFAULT (''),
+PickupDate DATETIME NULL 
 ) ON [PRIMARY]
 GO
 
@@ -188,3 +189,16 @@ EXEC sp_addextendedproperty N'MS_Description', 'Total weight count for the load'
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'Maximum weight for the load - calculated in batch planning only', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'weightlimit'
 GO
+
+
+/*
+-- WMS-19449
+
+
+ALTER TABLE dbo.LoadPlan
+ADD PickupDate DATETIME NULL 
+GO
+
+
+EXEC sp_addextendedproperty N'MS_Description', N'Pickup Date', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'PickupDate'
+*/
