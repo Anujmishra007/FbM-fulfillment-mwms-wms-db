@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 2.0                                                    */                                                                                  
+/* PVCS Version: 2.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -42,6 +42,7 @@ GO
 /*                            limit Qty per wave                        */
 /* 2022-05-16  LZG      1.9   Added missing ISNUMERIC to cond level (ZG01)*/
 /* 2022-05-24  Wan07    2.0   LFWM-3534 - Issue during 2022-05-12 SVT   */
+/* 2022-05-31  Wan08    2.1   LFWM-3543 - SCE Order Parameter Enhancement*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -689,6 +690,12 @@ AS
             SET @c_Operator = 'IN'
          END
          --(Wan02 - END
+         --(Wan08) - START
+         IF @c_Operator = 'NOT IN SQL'
+         BEGIN
+            SET @c_Operator = 'NOT IN'
+         END
+         --(Wan02) - END
                                                                                                                                                    
          IF @c_ColType IN ('char', 'nvarchar', 'varchar', 'nchar')                                                                                                     
             SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator +                                                                                 
