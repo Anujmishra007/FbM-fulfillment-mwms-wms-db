@@ -3,6 +3,8 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
+
 /***************************************************************************/
 /* Store procedure: rdtfnc_UCCReceive                                      */
 /* Copyright      : IDS                                                    */
@@ -49,6 +51,7 @@ GO
 /* 2020-01-22 3.3  Ung     LWP-57 Performance tuning                       */
 /* 2022-04-12 3.4  James   WMS-19453 Add RDTFormat for UCC scan (james02)  */
 /* 2020-05-04 3.5  YeeKung WMS-11867 Add verifySKU (yeekung01)             */
+/* 2021-12-06 3.6  YeeKung WMS-18390 Add Multi UCC status (yeekung01)      */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -98,8 +101,8 @@ DECLARE
    @nInputKey     NVARCHAR(3),
 
    @cStorerKey    NVARCHAR(15),
-   @cFacility     NVARCHAR(5),
-
+   @cFacility     NVARCHAR(5),   
+   
    @cReceiptKey          NVARCHAR(10),
    @cPOKey               NVARCHAR(10),
    @cPOKeyDefaultValue   NVARCHAR(10),
@@ -132,6 +135,9 @@ DECLARE
    @cExtendedInfoSP      NVARCHAR( 20),
    @cExtendedInfo        NVARCHAR( 20),
    @cVerifySKU           NVARCHAR( 1), 
+   @cMultiUCC            NVARCHAR(  1),
+   @cDecodeSP            NVARCHAR( 20), --(yeekung01)
+   @cDecodeQty           NVARCHAR(1) ,--(yeekung01)
 
    @cLottable01       NVARCHAR(18),
    @cLottable02       NVARCHAR(18),
@@ -167,7 +173,7 @@ DECLARE
    @cCheckPOUCC        NVARCHAR(1), -- (Vicky01)
    @cUCCWithMultiSKU   NVARCHAR(1), 
 
-   @cUserName          NVARCHAR(18), -- (Vicky06)
+   @cUserName          NVARCHAR(18), -- (Vicky06)   
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -262,6 +268,9 @@ SELECT
    @cExtendedInfoSP        = V_String31,
    @cExtendedInfo          = V_String32,
    @cVerifySKU             = V_String33,
+   @cMultiUCC              = V_String34,
+   @cDecodeSP              = V_String35, --(yeekung01)
+   @cDecodeQty             = V_String36, --(yeekung01)
    
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
@@ -331,6 +340,8 @@ BEGIN
    ELSE
       SET @cOutField02 = @cPOKeyDefaultValue
 
+   SET @cMultiUCC = rdt.RDTGetConfig( @nFunc, 'multiUCC', @cStorerKey)
+
    SET @cSkipEstUCCOnID = rdt.RDTGetConfig( @nFunc, 'SkipEstUCCOnID', @cStorerKey)
    SET @cSkipLottable01 = rdt.RDTGetConfig( @nFunc, 'SkipLottable01', @cStorerKey)
    SET @cSkipLottable02 = rdt.RDTGetConfig( @nFunc, 'SkipLottable02', @cStorerKey)
@@ -353,6 +364,12 @@ BEGIN
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
    SET @cVerifySKU = rdt.RDTGetConfig( @nFunc, 'VerifySKU', @cStorerKey)  
+      
+   SET @cDecodeSP  = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey) --(yeekung01)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+
+   SET @cDecodeQty = rdt.RDTGetConfig( @nFunc, 'DecodeQty', @cStorerKey) --(yeekung01)
 
    -- Added by Vicky for SOS#105011 (Start - Vicky01)
    SET @cCheckPOUCC = ''
@@ -1521,7 +1538,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 63135, @cLangCode, 'DSP') -->Max No of CTN
          GOTO Step_6_Fail
       END
-
+      
       -- Check barcode format  
       IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UCC', @cUCC) = 0  
       BEGIN  
@@ -1564,6 +1581,64 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO Step_6_Fail
+         END
+      END
+      
+      SET @nQTY = 0
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         DECLARE @nUCCQTY INT
+
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
+               ' @cUCC        OUTPUT, @nUCCQTY     OUTPUT,' +
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
+               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
+               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cReceiptKey  NVARCHAR( 10), ' +
+               ' @cPOKey       NVARCHAR( 10), ' +
+               ' @cLOC         NVARCHAR( 10), ' +
+               ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
+               ' @nUCCQTY      INT            OUTPUT, ' +
+               ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +
+               ' @dLottable04  DATETIME       OUTPUT, ' +
+               ' @dLottable05  DATETIME       OUTPUT, ' +
+               ' @cLottable06  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable07  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable08  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable09  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable10  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable11  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable12  NVARCHAR( 30)  OUTPUT, ' +
+               ' @dLottable13  DATETIME       OUTPUT, ' +
+               ' @dLottable14  DATETIME       OUTPUT, ' +
+               ' @dLottable15  DATETIME       OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, 
+               @cUCC        OUTPUT, @nUCCQTY     OUTPUT,
+               @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+               @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+               @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+               @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+
          END
       END
 
@@ -1624,7 +1699,7 @@ BEGIN
       WHERE StorerKey = @cStorerKey
         AND UCCNo = @cUCC
 
-      IF RTRIM(@cUCCStatus) = '1'
+      IF RTRIM(@cUCCStatus) = '1' AND @cMultiUCC<>'1'
       BEGIN
          SET @nErrNo = 63138
          SET @cErrMsg = rdt.rdtgetmessage( 63138, @cLangCode, 'DSP') --UCC Received
@@ -1662,12 +1737,13 @@ BEGIN
 	      FROM dbo.Pack Pack WITH (NOLOCK)
 	      WHERE PackKey = @cPackKey
 
-		  --Get UCC Qty
-		   SET @nQTY = 0
-		   SELECT @nQTY = QTY
-		   FROM dbo.UCC WITH (NOLOCK)
-		   WHERE StorerKey = @cStorerKey
-		      AND UCCNo = @cUCC
+		   IF @nQTY = 0
+         BEGIN
+		      SELECT @nQTY = QTY
+		      FROM dbo.UCC WITH (NOLOCK)
+		      WHERE StorerKey = @cStorerKey
+		         AND UCCNo = @cUCC
+         END
 
 		   --Compare case count with UCC Qty
          SET @cUCCWithDynamicCaseCnt = ''
@@ -2048,7 +2124,11 @@ BEGIN
                   SET @cDesc = ''
                   SET @cPPK = ''
                   SET @cPQIndicator = ''
-                  SET @nQTY = @nTotalQTY
+
+                  IF @cDecodeQTY='1'
+                     SET @nQTY = @nUCCQTY
+                  ELSE
+                     SET @nQTY = @nTotalQTY
                   
                   SET @cOutField02 = @cSKU
                   SET @cOutField03 = SUBSTRING( @cDesc,  1, 20)
@@ -2135,10 +2215,10 @@ BEGIN
                      SET @cFieldAttr02 = 'O'
                      
                   GOTO Step_6_Quit
-               END
-            END
-
-            -- Retain in current screen
+         		END
+      		END
+      		
+      		-- Retain in current screen
             SET @cOutField01 = '' --UCC
             SET @cOutField11 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END -- (ChewKP01)
          END
@@ -2449,7 +2529,7 @@ BEGIN
   
                GOTO Quit  
             END  
-         END  
+         END 
          -- Get SKU/UPC
          SELECT
             @nSKUCnt = COUNT( DISTINCT A.SKU),
@@ -3578,6 +3658,7 @@ BEGIN
    END
 END
 GOTO Quit
+
 /********************************************************************************  
 Step 10. Screen = 3950. Verify SKU  
    SKU            (Field01)  
@@ -3666,6 +3747,7 @@ BEGIN
 END  
 GOTO Quit  
 
+
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -3677,7 +3759,7 @@ BEGIN
       Func = @nFunc,
       Step = @nStep,
       Scn = @nScn,
-      
+     
       V_Receiptkey = @cReceiptkey,
       V_POKey = @cPOKey,
       V_LOC = @cLOC,
@@ -3722,6 +3804,9 @@ BEGIN
       V_String31 = @cExtendedInfoSP,
       V_String32 = @cExtendedInfo,
       V_String33 = @cActSKU,
+      V_String34 = @cMultiUCC,
+      V_String35 = @cDecodeSP,
+      V_String36 = @cDecodeQty,
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,
@@ -3757,13 +3842,13 @@ BEGIN
    WHERE Mobile = @nMobile
 
 END
+
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON 
+SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON [RDT].[rdtfnc_UCCReceive] TO nSQL 
-GO   
-        
-     
+
+GRANT EXECUTE ON RDT.rdtfnc_UCCReceive TO NSQL
+GO
