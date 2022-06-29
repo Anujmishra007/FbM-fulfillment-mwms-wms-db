@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_606ExtUpd01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_606ExtUpd01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,11 +10,12 @@ GO
 /*                                                                            */
 /* Purpose: Based on custom defined field, update receipt table               */
 /*                                                                            */
-/* Date        Author   Ver.  Purposes                                        */
-/* 11-Apr-2019 James    1.0   WMS-8630 Created                                */
+/* Date        Author      Ver.  Purposes                                     */
+/* 11-Apr-2019 James       1.0   WMS-8630 Created                             */
+/* 16-Dec-2020 Chermaine   1.1   WMS-15858 Add Config to update status (cc01) */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_606ExtUpd01
+CREATE OR ALTER PROCEDURE rdt.rdt_606ExtUpd01
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -45,13 +43,16 @@ BEGIN
       @cReceiptKey          NVARCHAR( 10),
       @cID                  NVARCHAR( 18),
       @cReturnRegisterField NVARCHAR( 20),
-      @nQty                 INT        
+      @nQty                 INT,        
+      @cCaptureStatus       NVARCHAR( 1)
 
    -- Variable mapping
    SELECT @cReceiptKey = ISNULL( Value, '') FROM @tExtUpdVar WHERE Variable = '@cReceiptKey'
    SELECT @nQty = ISNULL( Value, 0) FROM @tExtUpdVar WHERE Variable = '@nQty'
    SELECT @cID = ISNULL( Value, '') FROM @tExtUpdVar WHERE Variable = '@cID'
    SELECT @cReturnRegisterField = ISNULL( Value, '') FROM @tExtUpdVar WHERE Variable = '@cReturnRegisterField'
+   
+   SET @cCaptureStatus = rdt.RDTGetConfig( @nFunc, 'CaptureStatus', @cStorerKey) --(cc01)
    
 
    IF @nStep = 1
@@ -60,8 +61,18 @@ BEGIN
       BEGIN
          SET @cStartSQL = N' UPDATE Receipt SET
                                ContainerQTY = @nQTY, '
-
-         SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() '
+         
+         --(cc01)
+         IF @cCaptureStatus = 1
+         BEGIN
+            SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() ' +
+                              ', ASNStatus = ''RCVD'' ' 
+         END
+         ELSE
+         BEGIN
+         	SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() '
+         END
+         
 
          SET @cEndSQL = N' WHERE ReceiptKey = @cReceiptKey'
 
@@ -90,7 +101,18 @@ BEGIN
                                ContainerQTY = @nQTY, 
                                UserDefine02 = @cID, '
 
-         SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() '
+         --(cc01)
+         IF @cCaptureStatus = 1
+         BEGIN
+            SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() ' +
+                              ', ASNStatus = ''RCVD'' ' 
+         END
+         ELSE
+         BEGIN
+         	SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() '
+         END
+
+         --SET @cCustomSQL = @cReturnRegisterField + ' = GETDATE() '
 
          SET @cEndSQL = N' WHERE ReceiptKey = @cReceiptKey'
 
