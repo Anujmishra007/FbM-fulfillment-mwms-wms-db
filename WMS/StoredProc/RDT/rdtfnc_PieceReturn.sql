@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_PieceReturn]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_PieceReturn]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -43,8 +40,9 @@ GO
 /* 2019-10-08   2.8  Ung        WMS-10643 Add rdt format for ID               */
 /*                              Add ExtendedValidateSP to post lottable screen*/
 /*                              Performance tuning                            */
+/* 2021-07-22   2.9  Chermaine  WMS-16119 Add ExtUpdate in scn2 (cc01)        */
 /******************************************************************************/
-CREATE  PROC [RDT].[rdtfnc_PieceReturn](
+CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReturn](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -1199,6 +1197,67 @@ BEGIN
          @cPreLottable06 = '', @cPreLottable07 = '', @cPreLottable08 = '',   @cPreLottable09 = '',   @cPreLottable10 = '',
          @cPreLottable11 = '', @cPreLottable12 = '', @dPreLottable13 = NULL, @dPreLottable14 = NULL, @dPreLottable15 = NULL
 
+      -- Extended update  --(cc01)
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cPOKey, @cRefNo, @cID, @cLOC, @cMethod, @cSKU, @nQTY, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @cRDLineNo, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nAfterStep    INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cFacility     NVARCHAR( 5),  ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cReceiptKey   NVARCHAR( 10), ' +
+               '@cPOKey        NVARCHAR( 10), ' +
+               '@cRefNo        NVARCHAR( 30), ' +
+               '@cID           NVARCHAR( 18), ' +
+               '@cLOC          NVARCHAR( 10), ' +
+               '@cMethod       NVARCHAR( 1),  ' +
+               '@cSKU          NVARCHAR( 20), ' +
+               '@nQTY          INT,           ' +
+               '@cLottable01   NVARCHAR( 18), ' +
+               '@cLottable02   NVARCHAR( 18), ' +
+               '@cLottable03   NVARCHAR( 18), ' +
+               '@dLottable04   DATETIME,      ' +
+               '@dLottable05   DATETIME,      ' +
+               '@cLottable06   NVARCHAR( 30), ' +
+               '@cLottable07   NVARCHAR( 30), ' +
+               '@cLottable08   NVARCHAR( 30), ' +
+               '@cLottable09   NVARCHAR( 30), ' +
+               '@cLottable10   NVARCHAR( 30), ' +
+               '@cLottable11   NVARCHAR( 30), ' +
+               '@cLottable12   NVARCHAR( 30), ' +
+               '@dLottable13   DATETIME,      ' +
+               '@dLottable14   DATETIME,      ' +
+               '@dLottable15   DATETIME,      ' +
+               '@cRDLineNo     NVARCHAR( 10),   ' +
+               '@nErrNo        INT           OUTPUT, ' +
+               '@cErrMsg       NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cPOKey, @cRefNo, @cID, @cLOC, @cMethod, @cSKU, @nQTY,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cRDLineNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+      
       IF @cMethod = '1' -- Lottable, SKU
       BEGIN
          -- Dynamic lottable (PRE at storer level)

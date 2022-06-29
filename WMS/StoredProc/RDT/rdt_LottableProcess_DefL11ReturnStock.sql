@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_LottableProcess_DefL11ReturnStock]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_LottableProcess_DefL11ReturnStock]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 01-Dec-2016  Ung       1.0   WMS-723 Created                               */
+/* 13-Jul-2021  Chermaine 1.1   WMS-16119 Add codelkup (cc01)                 */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_LottableProcess_DefL11ReturnStock
+CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_DefL11ReturnStock
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -67,9 +65,24 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+   
+   DECLARE @cReceiptKey NVARCHAR( 10)
+   DECLARE @cRecType    NVARCHAR(10) 
+   DECLARE @cUDF03      NVARCHAR(60)    
 
-   IF @cLottable11 = ''
-      SET @cLottable11 = 'R' -- Return stock
+   SELECT @cReceiptKey = V_ReceiptKey FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+   SELECT @cRecType = Rectype FROM Receipt WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cReceiptKey
+   SELECT @cUDF03 = UDF03 FROM  Codelkup WITH(nolock) WHERE Listname='RecType' AND Storerkey=@cStorerKey AND Code= @cRecType
+               
+   IF @cUDF03 = ''
+   BEGIN
+      SET @cUDF03 = @cRecType
+   END
+            
+   SET @cLottable11 = @cUDF03
+
+   --IF @cLottable11 = ''
+   --   SET @cLottable11 = 'R' -- Return stock
 END
 GO
 
