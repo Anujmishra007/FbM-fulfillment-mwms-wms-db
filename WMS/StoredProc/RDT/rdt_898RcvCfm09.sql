@@ -1,19 +1,18 @@
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 
 /******************************************************************************/
 /* Store procedure: rdt_898RcvCfm09                                           */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
-/* Purpose: If UCC is having multi lines same sku then need to combine first  */
-/*          before receive. Create new ucc line with sum(qty) then delete the */
-/*          existing multi line ucc. Get the max value for Udf01, 06-10.      */
+/* Purpose: Support transfer UCC with multi SKU, even same SKU multi lines    */
 /*                                                                            */
-/* Date       Rev  Author      Purposes                                       */
-/* 2021-12-03 1.0  yeekung     WMS-18390 Created                               */
+/* Date       Rev  Author     Purposes                                        */
+/* 2021-12-10 1.0  Ung        WMS-18390 Created                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_898RcvCfm09 (
@@ -73,8 +72,16 @@ BEGIN
       AND Status = '0'
    ORDER BY UCC_RowRef
 
+   /*
+      Transfer UCC with same SKU multiple line, but wrong POType, is treated as normal multi SKU UCC
+      rdt_Receive update UCC is by SKU (not lines), causing next loop of same SKU have no UCC.status = 0
+   */
    IF @@ROWCOUNT <> 1
-      GOTO RollBackTran
+   BEGIN
+      SET @nErrNo = 179901
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PO/UCC DataErr
+      GOTO Quit
+   END
 
    -- Check if transfer ASN
    IF EXISTS( SELECT 1 FROM dbo.PO WITH (NOLOCK) WHERE POKey = @cUCC_POKey AND POType = 'STO')
@@ -91,7 +98,7 @@ BEGIN
          AND SKU.SKU = @cUCCSKU
 
       -- Get finalize setting
-      SET @cNotFinalizeRD = rdt.RDTGetConfig( 0, 'RDT_NotFinalizeReceiptDetail', @cStorerKey) 
+      SET @cNotFinalizeRD = rdt.RDTGetConfig( 0, 'RDT_NotFinalizeReceiptDetail', @cStorerKey)
 
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdt_898RcvCfm09 -- For rollback or commit only our own transaction
@@ -107,9 +114,11 @@ BEGIN
       */
       -- Stamp UCC (for use in filter SP later)
       UPDATE rdt.rdtMobRec SET
-         V_UCC = @cUCC, 
+         V_UCC = @cUCC,
          EditDate = GETDATE()
-      WHERE Mobile = @nMobile      
+      WHERE Mobile = @nMobile
+      IF @@ERROR <> 0
+         GOTO RollBackTran
 
       -- Receive as loose QTY (without UCC)
       EXEC rdt.rdt_Receive
@@ -145,8 +154,8 @@ BEGIN
 
       -- Auto finalize, get the LOT
       IF @cNotFinalizeRD <> '1'  -- 1=Not finalize
-         SELECT @cLOT = LOT 
-         FROM dbo.ITRn WITH (NOLOCK) 
+         SELECT @cLOT = LOT
+         FROM dbo.ITRn WITH (NOLOCK)
          WHERE SourceKey = @cReceiptKey + @cReceiptLineNumber
             AND TranType = 'DP'
 
@@ -161,7 +170,7 @@ BEGIN
          EditWho = SUSER_SNAME()
       WHERE UCC_RowRef = @nUCC_RowRef
       SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT
-      IF @nErrNo  <> 0 OR @nRowCount <> 1
+      IF @nErrNo <> 0 OR @nRowCount <> 1
          GOTO RollBackTran
 
       COMMIT TRAN rdt_898RcvCfm09
@@ -210,9 +219,11 @@ Quit:
       COMMIT TRAN
 END
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXEC ON RDT.rdt_898RcvCfm09 TO NSQL
+
+GRANT EXECUTE ON RDT.rdt_898RcvCfm09 TO NSQL
 GO
