@@ -243,8 +243,8 @@ BEGIN
       FROM (SELECT PD.Orderkey
             FROM dbo.PICKDETAIL PD WITH (NOLOCK)   
 		      JOIN dbo.Orders O WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey and pd.storerkey=o.storerkey)
-		      WHERE PD.Storerkey = 'LOR' 
-		      AND   O.loadkey='0001139605'
+		      WHERE PD.Storerkey = @cStorerKey
+		      AND   O.loadkey=@cLoadkey
             GROUP BY PD.Orderkey) as records
 
       IF EXISTS (SELECT 1 
