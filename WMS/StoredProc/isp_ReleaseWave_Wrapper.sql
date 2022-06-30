@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_ReleaseWave_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_ReleaseWave_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,8 +25,10 @@ GO
 /*                            sostatus to release                        */ 
 /* 17-Sep-2017  TLTING   1.1  NOLOCK                                     */
 /* 22-Oct-2019  Wan01    1.2  Update TMReleaseFlag, Sync Exceed & SCE    */
+/* 21-Mar-2022  NJOW02   1.3  WMS-19267 Support config by facility       */
+/* 21-Mar-2022  NJOW02   1.3  DEVOPS Combine script                      */
 /*************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_ReleaseWave_Wrapper]  
+CREATE OR ALTER PROCEDURE [dbo].[isp_ReleaseWave_Wrapper]  
       @c_WaveKey    NVARCHAR(10) 
    ,  @b_Success    INT OUTPUT    
    ,  @n_Err        INT OUTPUT
@@ -65,12 +62,9 @@ BEGIN
    JOIN ORDERS O (NOLOCK) ON (WD.Orderkey = O.Orderkey)
    WHERE WD.Wavekey = @c_Wavekey  
 
-   SELECT @c_SPCode = sVALUE 
-   FROM   StorerConfig WITH (NOLOCK) 
-   WHERE  StorerKey = @c_StorerKey
-   AND    ConfigKey = 'ReleaseWave_SP'  
+   SET @c_SPCode = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP')  --NJOW02
 
-   IF ISNULL(RTRIM(@c_SPCode),'') = ''
+   IF ISNULL(RTRIM(@c_SPCode),'') IN('','0') --NJOW02
    BEGIN  
         SET @c_SPCode = 'nspReleaseWave'
    END
