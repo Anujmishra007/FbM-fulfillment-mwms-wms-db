@@ -27,6 +27,7 @@ GO
 /* 10-DEC-2021  Mingle   DevOps Combine Script                          */
 /* 11-May-2022  WLChooi  WMS-19648 - Remove Validation control by report*/
 /*                       config (WL01)                                  */
+/* 24-Jun-2022 CSCHONG   WMS-20054 revised sorting rule (CS02)          */
 /************************************************************************/  
   
 CREATE OR ALTER PROC dbo.isp_GetPickSlipWave30 (  
@@ -171,7 +172,7 @@ BEGIN
           wd.WaveKey,
           UPPER(SUBSTRING(loc.pickzone,1,2)),
           loc.PickZone ,pickdetail.pickdetailkey
-ORDER BY pickdetail.pickdetailkey,orders.orderkey,loc.PickZone
+ORDER BY pickdetail.pickdetailkey,orders.orderkey,loc.PickZone                                      
                
    WHILE @@TRANCOUNT > 0  
    BEGIN  
@@ -486,7 +487,8 @@ QUIT:
       ,  #TMP_PICK.Wavekey ,  #TMP_PICK.Storerkey          
       ,  #TMP_PICK.OrderGrp,#TMP_Pick.GPAZone,#TMP_PICK.PAZone  
       ,  #TMP_PICK.OHUDF09 
-   ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.GPAZone,#TMP_PICK.PAZone
+   --ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.GPAZone,#TMP_PICK.PAZone     --CS02
+    ORDER BY #TMP_PICK.GPAZone,#TMP_PICK.PAZone      --CS02
      
   --SELECT '1' AS PickSlipNo
   
