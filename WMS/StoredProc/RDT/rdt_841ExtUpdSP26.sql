@@ -221,28 +221,6 @@ BEGIN
       from cartontrack (nolock)  
       where labelno =@cOrderkey  
   
-  
-      IF NOT EXISTS (SELECT 1         
-                     from cartontrack (nolock)  
-                     where labelno =@cOrderkey  
-                     AND carriername ='SN')  
-      BEGIN  
-  
-         SET @cTrackingNo=@cTrackingNo+'-1'  
-  
-         INSERT INTO cartontrack(trackingno,carriername,keyname,labelno,CarrierRef1,CarrierRef2)  
-         select @cTrackingNo,carriername,keyname+'_child',labelno,CarrierRef1,CarrierRef2  
-         from cartontrack (nolock)  
-         where labelno =@cOrderkey  
-
-          IF @@ERROR <> 0          
-          BEGIN          
-            SET @nErrNo = 187417          
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsCTFail          
-            GOTO RollBackTran          
-         END          
-      END  
-  
       -- Update PackDetail.Qty if it is already exists          
       IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)          
                  WHERE StorerKey = @cStorerkey          
@@ -345,10 +323,10 @@ BEGIN
     
             -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign          
             INSERT INTO dbo.PackDetail          
-               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)          
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)          
             VALUES          
                (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerkey, @cSKU, 1,          
-               @cTrackingNo, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(),@cTrackingNo , @cBarcode)         
+               '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(),'' , @cBarcode)         
       
             IF @@ERROR <> 0         
             BEGIN          
@@ -378,7 +356,7 @@ BEGIN
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)          
             VALUES          
                (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerkey, @cSKU, 1,          
-               @cTrackingNo, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @cTrackingNo, @cBarcode)          
+               '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cBarcode)          
       
             IF @@ERROR <> 0          
             BEGIN          
@@ -394,8 +372,8 @@ BEGIN
     ****************************/        
       IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)        
       BEGIN        
-         INSERT INTO dbo.PackInfo(PickslipNo, CartonNo, CartonType, Refno, AddWho, AddDate, EditWho, EditDate,qty)        
-         SELECT DISTINCT PD.PickSlipNo, PD.CartonNo, @cDropIDType, RefNo, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(),PD.qty       
+         INSERT INTO dbo.PackInfo(PickslipNo, CartonNo, CartonType, Refno, AddWho, AddDate, EditWho, EditDate,qty,trackingno)        
+         SELECT DISTINCT PD.PickSlipNo, PD.CartonNo, @cDropIDType, RefNo, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(),PD.qty,@cTrackingNo       
          FROM   PACKHEADER PH WITH (NOLOCK)        
          JOIN   PACKDETAIL PD WITH (NOLOCK) ON (PH.PickslipNo = PD.PickSlipNo)        
          WHERE  PH.Orderkey = @cOrderkey       
