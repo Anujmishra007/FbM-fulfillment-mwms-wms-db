@@ -34,7 +34,7 @@ BEGIN
 		      format(MI.AddDate,'yyyyMMddHHmm')         AS 'TranscationDate',
 		--   MI.filename,
 		--   Substring(MI.filename, 8, Len(MI.filename)-1),
-         REPLACE(Substring(MI.filename, 8, Len(MI.filename)-1), '.txt', '.xml') AS 'filename'
+         REPLACE(Substring(MI.filename, 8, Len(MI.filename)), '.txt', '.xml') AS 'filename'
 
 	FROM BI.V_transferdetail trfd
 	JOIN Bi.V_transfer trf   ON trf.transferkey = trfd.transferkey
@@ -57,7 +57,7 @@ BEGIN
 	FORMAT(MI.AddDate,'yyyyMMddHHmm')                     AS 'TranscationDate',
 		--   MI.filename,
 		--   Substring(MI.filename, 8, Len(MI.filename)-1),
-   REPLACE(Substring(MI.filename, 8, Len(MI.filename)-1), '.txt', '.xml') AS 'filename'
+   REPLACE(Substring(MI.filename, 8, Len(MI.filename)), '.txt', '.xml') AS 'filename'
 
 
 	FROM BI.V_transferdetail trfd
@@ -82,7 +82,7 @@ BEGIN
 	FORMAT(MI.AddDate,'yyyyMMddHHmm')           AS 'TranscationDate',
 	--   MI.filename,
 	--   Substring(MI.filename, 8, Len(MI.filename)-1),
-   REPLACE(Substring(MI.filename, 8, Len(MI.filename)-1), '.txt', '.xml') AS 'filename'
+   REPLACE(Substring(MI.filename, 8, Len(MI.filename)), '.txt', '.xml') AS 'filename'
 
 
 	FROM BI.V_transferdetail trfd
