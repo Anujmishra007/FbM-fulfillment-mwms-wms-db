@@ -15,7 +15,7 @@ GO
 /*          : r_dw_carton_MRP_Label01_2                                 */
 /*          : r_dw_carton_MRP_Label01_3                                 */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,8 @@ GO
 /* 23-Aug-2019 CSCHONG  1.2   WMS-10266 revised field logic (CS01)      */
 /* 12-Aug-2020 WLChooi  1.5   WMS-14716 - Modify Logic (WL01)           */
 /* 13-Apr-2021 Mingle   1.6   WMS-16811 - Modify logic (ML01)           */
+/* 11-May-2022 WLChooi  1.6   DevOps Combine Script                     */
+/* 11-May-2022 WLChooi  1.7   WMS-19617 - Modify Logic (WL02)           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_MRPLabel01]
            @c_PickSlipNo         NVARCHAR(10)
@@ -77,6 +79,11 @@ BEGIN
          , @n_RowRef             INT
          , @n_NoOfCopy           INT
 
+         , @c_ColValue           NVARCHAR(4000)   --WL02
+         , @c_ColValue_New       NVARCHAR(4000)   --WL02
+         , @c_SI_ExtFld22        NVARCHAR(4000)   --WL02
+         , @c_SI_ExtFld22_New    NVARCHAR(4000)   --WL02
+
    SET @n_StartTCnt = @@TRANCOUNT
    SET @c_LGTCC_Company  = ''
    SET @c_LGTCC_Address1 = ''
@@ -109,10 +116,11 @@ BEGIN
       ,  Sku            NVARCHAR(10)
       ,  MaxSurface     FLOAT
       ,  Qty            INT
-      ,  COO			   NVARCHAR(150)
+      ,  COO            NVARCHAR(150)
       ,  SI_ExtFld03    MONEY           NULL  DEFAULT(0.00)
       ,  SI_ExtFld21    NVARCHAR(4000)  NULL  DEFAULT('')
       ,  SI_ExtFld22    NVARCHAR(4000)  NULL  DEFAULT('')
+      ,  ManufactureDT  NVARCHAR(50)    NULL   --WL02
       )
 
    IF OBJECT_ID('tempdb..#TMP_PRNCOPY','U') IS NOT NULL
@@ -148,7 +156,8 @@ BEGIN
       ,  Sku
       ,  MaxSurface
       ,  Qty
-      ,	COO
+      ,  COO
+      ,  ManufactureDT   --WL02
       )
    SELECT DISTINCT   
          PACKHEADER.Orderkey
@@ -166,13 +175,35 @@ BEGIN
                            END
       ,  Qty = SUM(PACKDETAIL.Qty)
       ,  COO = IsNull((Select MAX(CL.Description)
-				From dbo.PickDetail PD with (nolock) Inner Join dbo.LotAttribute LA with (nolock) 
-						ON LA.StorerKey = PD.StorerKey and LA.SKU = PD.SKU and LA.Lot = PD.Lot
-						Inner Join dbo.CodeLkUp CL with (nolock) on CL.Code = LA.Lottable11 AND CL.Storerkey = PD.Storerkey   --(CS01)
-				Where PD.StorerKey = PACKDETAIL.Storerkey
-				And PD.OrderKey = PACKHEADER.Orderkey
-				And PD.SKU = PACKDETAIL.Sku		   
-				And CL.ListName = 'LOGICTRY'), '') --WMS-5437    
+                       From dbo.PickDetail PD with (nolock) 
+                       INNER Join dbo.LotAttribute LA with (nolock) 
+                             ON LA.StorerKey = PD.StorerKey and LA.SKU = PD.SKU and LA.Lot = PD.Lot
+                       INNER Join dbo.CodeLkUp CL with (nolock) on CL.Code = LA.Lottable11 AND CL.Storerkey = PD.Storerkey   --(CS01)
+                       Where PD.StorerKey = PACKDETAIL.Storerkey
+                       And PD.OrderKey = PACKHEADER.Orderkey
+                       And PD.SKU = PACKDETAIL.Sku         
+                       And CL.ListName = 'LOGICTRY'), '') --WMS-5437 
+      --WL02 S   
+      --Example:
+      --LEFT(TRIM(SN.SerialNo),4) = 2208
+      --SUBSTRING(LEFT(TRIM(SN.SerialNo),4),1,2) = 22 -> 2022
+      --Get the month of Week 8 of 2022 -> February
+      --Formula below will get the first Monday of year, which is 2022-01-03 then add 8 weeks, then get the month
+      ,  ManufactureDT = CASE WHEN SKU.BUSR7 = 'YES' AND ISNULL(SN.SerialNo,'') <> ''
+                                 THEN CAST(DATENAME(MONTH, DATEADD(WEEK, CAST(SUBSTRING(LEFT(TRIM(SN.SerialNo),4),3,2) AS INT), 
+                                           DATEADD(DAY, (@@DATEFIRST - DATEPART(WEEKDAY, DATEADD(YEAR, SUBSTRING(CAST(DATEPART(year,GETDATE()) AS NVARCHAR),1,2)
+                                          + SUBSTRING(LEFT(TRIM(SN.SerialNo),4),1,2) - 1900, 0))
+                                          + (8 - @@DATEFIRST) * 2) % 7, DATEADD(YEAR, SUBSTRING(CAST(DATEPART(year,GETDATE()) AS NVARCHAR),1,2) 
+                                          + SUBSTRING(LEFT(TRIM(SN.SerialNo),4),1,2) - 1900, 0)))) AS NVARCHAR) + ' '
+                                       + SUBSTRING(CAST(DATEPART(year,GETDATE()) AS NVARCHAR),1,2) + SUBSTRING(LEFT(TRIM(SN.SerialNo),4),1,2)
+                              WHEN ISNULL(SKU.BUSR7,'') IN ('','NO')
+                                 THEN CASE WHEN ISNULL(MAX(LAT.Lottable05),'19000101') = '19000101'
+                                           THEN ''
+                                           ELSE CAST(DATENAME(MONTH, DATEADD(MONTH, -2, MAX(LAT.Lottable05))) + ' ' +
+                                                DATENAME(YEAR, DATEADD(MONTH, -2, MAX(LAT.Lottable05))) AS NVARCHAR)
+                                           END
+                              END
+      --WL02 E
    FROM PACKHEADER   WITH (NOLOCK)
    JOIN PACKDETAIL   WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
    JOIN SKU          WITH (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey)
@@ -180,6 +211,17 @@ BEGIN
    JOIN PACK         WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
    JOIN ORDERS       WITH (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
    LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = ORDERS.Consigneekey AND ST.consigneefor = 'LOGITECH'     --CS01
+   LEFT JOIN SERIALNO SN  WITH (NOLOCK) ON (SN.PickSlipNo = PACKDETAIL.PickSlipNo   --WL02
+                                        AND SN.CartonNo = PACKDETAIL.CartonNo       --WL02
+                                        AND SN.LabelLine = PACKDETAIL.LabelLine)    --WL02
+   CROSS APPLY (SELECT TOP 1 LA.Lottable05                                                --WL02
+                FROM PickDetail PD WITH (NOLOCK)                                          --WL02
+                INNER JOIN LotAttribute LA WITH (NOLOCK) ON LA.StorerKey = PD.StorerKey   --WL02
+                                                        AND LA.SKU = PD.SKU               --WL02
+                                                        AND LA.Lot = PD.Lot               --WL02
+                WHERE PD.StorerKey = PACKDETAIL.Storerkey                                 --WL02
+                And PD.OrderKey = PACKHEADER.Orderkey                                     --WL02
+                And PD.SKU = PACKDETAIL.Sku) AS LAT                                       --WL02
    WHERE PACKDETAIL.PickSlipNo = @c_PickSlipNo
    AND   PACKDETAIL.CartonNo >= CONVERT(INT, @c_CartonNoStart) 
    AND   PACKDETAIL.CartonNo <= CONVERT(INT, @c_CartonNoEnd)
@@ -194,6 +236,8 @@ BEGIN
          ,  PACK.WidthUOM3 
          ,  PACK.LengthUOM3
          ,  PACK.HeightUOM3
+         ,  SKU.BUSR7     --WL02
+         ,  SN.SerialNo   --WL02
    
 
    IF (  SELECT COUNT(1) FROM #TMP_PACKSKU 
@@ -216,6 +260,54 @@ BEGIN
                                        AND(TMP.Sku  = SI.Sku )
    WHERE TMP.PickSlipNo = @c_PickSlipNo
    AND   TMP.MaxSurface Between @n_MaxSurfaceFr AND @n_MaxSurfaceTo 
+
+   --WL02 S
+   SET @c_SI_ExtFld22_New = ''
+
+   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT TP.SI_ExtFld22
+      FROM #TMP_PACKSKU TP
+      WHERE TP.PickSlipNo = @c_PickSlipNo
+      AND   TP.MaxSurface BETWEEN @n_MaxSurfaceFr AND @n_MaxSurfaceTo 
+
+   OPEN CUR_LOOP
+
+   FETCH NEXT FROM CUR_LOOP INTO @c_SI_ExtFld22
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      SELECT @c_SI_ExtFld22_New = REPLACE(@c_SI_ExtFld22,',','')
+
+      DECLARE CUR_DS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT FDS.ColValue
+         FROM dbo.fnc_DelimSplit(' ', @c_SI_ExtFld22_New) FDS
+         WHERE FDS.ColValue LIKE '%[0-9]N%'
+      
+      OPEN CUR_DS
+      
+      FETCH NEXT FROM CUR_DS INTO @c_ColValue
+      
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_ColValue_New = REPLACE(@c_ColValue, 'N', ' Unit')
+
+         SET @c_SI_ExtFld22 = REPLACE(@c_SI_ExtFld22, @c_ColValue, @c_ColValue_New)
+
+         FETCH NEXT FROM CUR_DS INTO @c_ColValue
+      END
+      CLOSE CUR_DS
+      DEALLOCATE CUR_DS
+
+      UPDATE #TMP_PACKSKU
+      SET   #TMP_PACKSKU.SI_ExtFld22 = @c_SI_ExtFld22
+      WHERE #TMP_PACKSKU.PickSlipNo = @c_PickSlipNo
+      AND   #TMP_PACKSKU.MaxSurface Between @n_MaxSurfaceFr AND @n_MaxSurfaceTo 
+
+      FETCH NEXT FROM CUR_LOOP INTO @c_SI_ExtFld22
+   END
+   CLOSE CUR_LOOP
+   DEALLOCATE CUR_LOOP
+   --WL02 E
 
    SELECT
          @c_LGTCC_Company  = ISNULL(RTRIM(Company ),'')
@@ -358,12 +450,13 @@ QUIT_SP:
       ,  RegisteredBy= 'Registered Address: '  
                      + ISNULL(@c_LGTRGST_Addr,'')
       ,  ExtFld21 = 'Generic Name: ' + TMP.SI_ExtFld21
-      ,  Qty = 'Net Quantity: 1N'
+      ,  Qty = 'Net Quantity: 1 Unit'   --WL02
       ,  COO = 'Country of Origin: ' + TMP.COO
       ,  ExtFld22 = 'Package Contains: ' + TMP.SI_ExtFld22 
       --,  N'MRP ' + FORMAT(CONVERT(FLOAT,TMP.SI_ExtFld03), 'C', 'ta-IN') + ' (inclusive of all taxes)'
       ,  SI_ExtFld03 = N'MRP ' + NCHAR(8377) + ' ' + FORMAT(TMP.SI_ExtFld03, '###,###,##0.00') + ' (Inclusive of all taxes)'  --(Wan02)
-      ,  printdate = 'Month and Year of Import: ' + DATENAME(MONTH, @dt_PrintDate) + ' ' +  DATENAME(YEAR, @dt_PrintDate)
+      --,  printdate = 'Month and Year of Import: ' + DATENAME(MONTH, @dt_PrintDate) + ' ' +  DATENAME(YEAR, @dt_PrintDate)   --WL02
+      ,  printdate = 'Month and Year of Manufacture: ' + ISNULL(TMP.ManufactureDT,'')   --WL02 
       ,  Sku = 'VPN: ' + TMP.Sku
       ,  ComplainTo  = @c_LGTCC_Company               + ' '
                      + @c_LGTCC_Address1              + ' '
