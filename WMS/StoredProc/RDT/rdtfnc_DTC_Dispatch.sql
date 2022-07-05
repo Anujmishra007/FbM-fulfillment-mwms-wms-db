@@ -68,6 +68,9 @@ GO
 /*                         Fix carton type screen fieldattr not reset        */  
 /*2022-06-01 1.42 James    WMS-19811 Add pack info range check (james17)     */
 /*                         Add Refno valid format check                      */
+/*2021-01-27 1.43 YeeKung  WMS-18630 ADd GetOrders_SP at step 1 wavekey      */    
+/*                         (yeekung)                                         */ 
+/*2022-06-07 1.44 James    WMS-19882 Add Std SKU decode sp (james16)         */
 /*****************************************************************************/        
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](        
    @nMobile    INT,        
@@ -193,7 +196,9 @@ DECLARE
    @tExtUpd             VariableTable,  --(cc01)      
    @cAllowWeightZero    NVARCHAR( 1),   --(cc01)       
    @cAllowCubeZero      NVARCHAR( 1),   --(cc01)      
-            
+   @cDecodeSP           NVARCHAR( 20),  
+   @cUPC                NVARCHAR( 30),
+   
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),        
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),        
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),        
@@ -280,7 +285,9 @@ SELECT
    @cCube               = V_String31,  --(cc01)      
    @cWeight             = V_String32,  --(cc01)      
    @cRefNo              = V_String33,  --(cc01)      
-         
+   @cRefNoInsLogSP      = V_String34,    
+   @cDecodeSP           = V_String35,
+   
    @nPrevScn         = V_FromScn,        
    @nPrevStep        = V_FromStep,        
    @nTotalPickedQty  = V_Integer1,        
@@ -431,13 +438,23 @@ BEGIN
    SET @cDefaultCtnType = rdt.RDTGetConfig( @nFunc, 'DefaultCtnType', @cStorerkey)      
    IF @cDefaultCtnType = '0'                        
     SET @cDefaultCtnType = ''                 
-      
+
+   -- (james14)    
+   SET @cRefNoInsLogSP = rdt.RDTGetConfig( @nFunc, 'RefNoInsLogSP', @cStorerkey)    
+   IF @cRefNoInsLogSP = '0'                    
+    SET @cRefNoInsLogSP = ''        
+
    --(yeekung02)        
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)          
       
    --(james14)      
    SET @cUseUdf04AsTrackNo = rdt.RDTGetConfig( @nFunc, 'UseUdf04AsTrackNo', @cStorerKey)      
-         
+
+   -- (james16)  
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)  
+   IF @cDecodeSP = '0'  
+      SET @cDecodeSP = ''  
+      
    SET @b_success = 0              
    EXECUTE nspGetRight              
       @cFacility,              
@@ -526,7 +543,8 @@ BEGIN
       END        
       -- End        
 
-      -- (james14)       -- Lookup ref no         
+      -- (james14)       
+      -- Lookup ref no         
       IF @cRefNo <> ''          
       BEGIN            
          SET @cRefNoLookupSP = rdt.RDTGetConfig( @nFunc, 'RefNoLookupSP', @cStorerkey)                                
@@ -657,6 +675,43 @@ BEGIN
                END        
             END        
             
+            -- Custom get orderkey sp. Can do swap lot inside the sp and insert ecommlog      
+            IF @cGetOrders_SP <> ''      
+               AND EXISTS ( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetOrders_SP AND type = 'P')      
+            BEGIN      
+               SET @cSQL = 'EXEC rdt.' + RTRIM(@cGetOrders_SP) +      
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cToteno,       
+               @cWaveKey, @cLoadKey, @cSKU, @cPickSlipNo, @cTrackNo, @cDropIDType, @cOrderkey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+               SET @cSQLParam =      
+               '@nMobile        INT, ' +      
+               '@nFunc          INT, ' +      
+               '@cLangCode      NVARCHAR( 3),  ' +      
+               '@nStep          INT, ' +      
+               '@nInputKey      INT, ' +      
+               '@cUserName      NVARCHAR( 18), ' +      
+               '@cFacility      NVARCHAR( 5), ' +      
+               '@cStorerKey     NVARCHAR( 15), ' +      
+               '@cToteno        NVARCHAR( 20), ' +      
+               '@cWaveKey       NVARCHAR( 10), ' +      
+               '@cLoadKey       NVARCHAR( 10), ' +      
+               '@cSKU           NVARCHAR( 20), ' +      
+               '@cPickSlipNo    NVARCHAR( 10), ' +      
+               '@cTrackNo       NVARCHAR( 20), ' +      
+               '@cDropIDType    NVARCHAR( 10),  ' +     
+               '@cOrderkey      NVARCHAR( 10) OUTPUT, ' +      
+               '@nErrNo         INT           OUTPUT, ' +      
+               '@cErrMsg        NVARCHAR( 20) OUTPUT'      
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,      
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cToteno,       
+               @cWaveKey, @cLoadKey, @cSKU, @cPickSlipNo, @cTrackNo, @cDropIDType, @cOrderkey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT      
+
+               IF @nErrNo <> 0      
+               BEGIN      
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')     
+                  GOTO Step_1_Fail      
+               END      
+            END      
             SET @cNoToteFlag = '1'        
                     
             SET @cOutField02 = ''        
@@ -970,52 +1025,93 @@ BEGIN
       /****************************        
        INSERT INTO rdtECOMMLog        
       ****************************/        
-      IF @cOrderWithTrackNo = '1'         
-      BEGIN         
-         INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)        
-         SELECT @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()        
-         FROM dbo.PICKDETAIL PK WITH (NOLOCK)        
-         JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey        
-         WHERE PK.DROPID = @cToteNo        
-           AND (PK.Status IN ('3', '5') OR PK.ShipFlag = 'P') -- (ChewKP04)                 
-           AND PK.CaseID = ''        
-           AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS',       
-                          'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)      
-           AND PK.Qty > 0 -- SOS# 329265        
-           AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)         
-           AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> ''))   -- (james14)      
-         GROUP BY PK.OrderKey, PK.SKU        
-      END        
-      ELSE        
-      BEGIN        
-         INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)        
-         SELECT @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()        
-         FROM dbo.PICKDETAIL PK WITH (NOLOCK)        
-         JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey        
-         WHERE PK.DROPID = @cToteNo        
-           AND (PK.Status IN ('3', '5') OR PK.ShipFlag = 'P') -- (ChewKP04)                 
-           AND PK.CaseID = ''        
-           AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS',       
-                          'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)      
-           AND PK.Qty > 0 -- SOS# 329265        
-           AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)         
-         GROUP BY PK.OrderKey, PK.SKU        
-      END        
-      IF @@ROWCOUNT = 0 -- No data inserted        
-      BEGIN        
-         --ROLLBACK TRAN        
-         SET @nErrNo = 90457        
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'NoRecToProcess'        
-         GOTO Step_1_Fail        
-      END        
-        
-      IF @@ERROR <> 0        
-      BEGIN        
-         --ROLLBACK TRAN        
-         SET @nErrNo = 90458        
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Ins EcommFail'        
-         GOTO Step_1_Fail        
-      END        
+      -- (james15)    
+      -- Custom get orderkey sp. Can do swap lot inside the sp and insert ecommlog      
+      IF @cGetOrders_SP <> ''      
+         AND EXISTS ( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetOrders_SP AND type = 'P')      
+      BEGIN      
+         SET @cSQL = 'EXEC rdt.' + RTRIM(@cGetOrders_SP) +      
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cToteno,       
+              @cWaveKey, @cLoadKey, @cSKU, @cPickSlipNo, @cTrackNo, @cDropIDType, @cOrderkey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+         SET @cSQLParam =      
+            '@nMobile        INT, ' +      
+            '@nFunc          INT, ' +      
+            '@cLangCode      NVARCHAR( 3),  ' +      
+            '@nStep          INT, ' +      
+            '@nInputKey      INT, ' +      
+            '@cUserName      NVARCHAR( 18), ' +      
+            '@cFacility      NVARCHAR( 5), ' +      
+            '@cStorerKey     NVARCHAR( 15), ' +      
+            '@cToteno        NVARCHAR( 20), ' +      
+            '@cWaveKey       NVARCHAR( 10), ' +      
+            '@cLoadKey       NVARCHAR( 10), ' +      
+            '@cSKU           NVARCHAR( 20), ' +      
+            '@cPickSlipNo    NVARCHAR( 10), ' +      
+            '@cTrackNo       NVARCHAR( 20), ' +      
+            '@cDropIDType    NVARCHAR( 10),  ' +     
+            '@cOrderkey      NVARCHAR( 10) OUTPUT, ' +      
+            '@nErrNo         INT           OUTPUT, ' +                  
+            '@cErrMsg        NVARCHAR( 20) OUTPUT'      
+    
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,      
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cToteno,       
+            @cWaveKey, @cLoadKey, @cSKU, @cPickSlipNo, @cTrackNo, @cDropIDType, @cOrderkey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT      
+      
+         IF @nErrNo <> 0      
+         BEGIN      
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')     
+            GOTO Step_1_Fail      
+         END      
+      END      
+      ELSE     
+      BEGIN    
+         IF @cOrderWithTrackNo = '1'   
+         BEGIN   
+            INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)  
+            SELECT @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()  
+            FROM dbo.PICKDETAIL PK WITH (NOLOCK)  
+            JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey  
+            WHERE PK.DROPID = @cToteNo  
+              AND (PK.Status IN ('3', '5') OR PK.ShipFlag = 'P') -- (ChewKP04)           
+              AND PK.CaseID = ''  
+              AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS', 
+                             'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)
+              AND PK.Qty > 0 -- SOS# 329265  
+              AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)   
+              AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> ''))   -- (james14)
+            GROUP BY PK.OrderKey, PK.SKU  
+         END  
+         ELSE  
+         BEGIN  
+            INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)  
+            SELECT @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()  
+            FROM dbo.PICKDETAIL PK WITH (NOLOCK)  
+            JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey  
+            WHERE PK.DROPID = @cToteNo  
+              AND (PK.Status IN ('3', '5') OR PK.ShipFlag = 'P') -- (ChewKP04)           
+              AND PK.CaseID = ''  
+              AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS', 
+                             'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)
+              AND PK.Qty > 0 -- SOS# 329265  
+              AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)   
+            GROUP BY PK.OrderKey, PK.SKU  
+         END  
+         IF @@ROWCOUNT = 0 -- No data inserted  
+         BEGIN  
+            --ROLLBACK TRAN  
+            SET @nErrNo = 90457  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'NoRecToProcess'  
+            GOTO Step_1_Fail  
+         END  
+     
+         IF @@ERROR <> 0  
+         BEGIN  
+            --ROLLBACK TRAN  
+            SET @nErrNo = 90458  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Ins EcommFail'  
+            GOTO Step_1_Fail  
+         END  
+      END
         
       /****************************        
        prepare next screen variable        
@@ -1125,6 +1221,7 @@ BEGIN
       -- Screen mapping        
       SET @cInSku    = @cInField04        
       SET @cBarcode  = @cInField04  -- (james02)        
+      SET @cUPC = LEFT( @cInField04, 30) -- SKU
       
       IF ISNULL(@cInSKU, '') = ''        
       BEGIN        
@@ -1181,7 +1278,61 @@ BEGIN
          END        
          ELSE        
          BEGIN        
-            SET @cSKU  = @cInSku        
+            -- Decode
+            IF @cDecodeSP <> ''
+            BEGIN
+               -- Standard decode
+               IF @cDecodeSP = '1'
+               BEGIN
+                  EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+                     @cUPC    = @cUPC       OUTPUT,
+                     @nErrNo  = @nErrNo     OUTPUT,
+                     @cErrMsg = @cErrMsg    OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+
+               -- Customize decode
+               ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                     ' @cToteno, @cWaveKey, @cLoadKey, @cPickSlipNo, @cTrackNo, @cDropIDType, @cBarcode ' +
+                     ' @cSKU OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                  SET @cSQLParam =
+                     ' @nMobile        INT,           ' +
+                     ' @nFunc          INT,           ' +
+                     ' @cLangCode      NVARCHAR( 3),  ' +
+                     ' @nStep          INT,           ' +
+                     ' @nInputKey      INT,           ' +
+                     ' @cFacility      NVARCHAR( 5),  ' +
+                     ' @cStorerKey     NVARCHAR( 15), ' +
+                     ' @cToteno        NVARCHAR( 20), ' +  
+                     ' @cWaveKey       NVARCHAR( 10), ' +  
+                     ' @cLoadKey       NVARCHAR( 10), ' +  
+                     ' @cPickSlipNo    NVARCHAR( 10), ' +  
+                     ' @cTrackNo       NVARCHAR( 20), ' +  
+                     ' @cDropIDType    NVARCHAR( 10),  ' + 
+                     ' @cBarcode       NVARCHAR( 60), ' +
+                     ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
+                     ' @nErrNo         INT            OUTPUT, ' +
+                     ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                     @cToteno, @cWaveKey, @cLoadKey, @cPickSlipNo, @cTrackNo, @cDropIDType, @cBarcode,
+                     @cUPC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+
+               SET @cSku = @cUPC
+            END
+            ELSE  
+            BEGIN  
+               SET @cSKU  = @cInSku  
+            END
          END        
       END        
       ELSE        
@@ -1292,94 +1443,150 @@ BEGIN
              INSERT INTO rdtECOMMLog        
             ****************************/        
                     
-            IF ISNULL(RTRIM(@cWaveKey),'')  <> ''         
-            BEGIN      
-               IF @cOrderWithTrackNo = '1' -- (ChewKP10)         
-               BEGIN         
-                  INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)        
-                  SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()          
-                  FROM dbo.PICKDETAIL PK WITH (NOLOCK)          
-                  JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey           
-                  JOIN WAVEDETAIL AS w WITH(NOLOCK) ON w.OrderKey = O.OrderKey         
-                  WHERE W.WaveKey = ISNULL(RTRIM(@cWaveKey),'')         
-                    AND PK.StorerKey = @cStorerKey         
-                    AND PK.SKU = @cSKU          
-                    AND PK.Status = '0'  AND PK.ShipFlag = '0' --(ChewKP09)        
-                    AND PK.CaseID = ''                                
-                    AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS',       
-                                      'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08) --(yeekung01)        
-                    AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)         
-                    AND PK.Qty > 0 -- SOS# 329265          
-                    AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> ''))   -- (james14)      
-                    AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)           
-                                     WHERE RE.OrderKey = O.OrderKey          
-                                     AND Status < '9'  )           
-                  GROUP BY PK.OrderKey, PK.SKU          
-               END        
-               ELSE        
-               BEGIN        
-                  INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)        
-                  SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()          
-                  FROM dbo.PICKDETAIL PK WITH (NOLOCK)          
-                  JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey           
-                  JOIN WAVEDETAIL AS w WITH(NOLOCK) ON w.OrderKey = O.OrderKey         
-                  WHERE W.WaveKey = ISNULL(RTRIM(@cWaveKey),'')         
-                    AND PK.StorerKey = @cStorerKey                            
- AND PK.SKU = @cSKU          
-                    AND PK.Status = '0'  AND PK.ShipFlag = '0' --(ChewKP09)        
-                    AND PK.CaseID = ''          
-                    AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS',       
-                                      'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)      
-                    AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)         
-                    AND PK.Qty > 0 -- SOS# 329265          
-                    AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)           
-                                     WHERE RE.OrderKey = O.OrderKey          
-                                     AND Status < '9'  )           
-                  GROUP BY PK.OrderKey, PK.SKU          
-               END        
-            END        
-            ELSE IF ISNULL(RTRIM(@cLoadKey),'')  <> ''         
-            BEGIN        
-               IF @cOrderWithTrackNo = '1' -- (ChewKP10)         
-               BEGIN        
-                  INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)        
-                  SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()          
-                  FROM dbo.PICKDETAIL PK WITH (NOLOCK)          
-                  JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey AND O.LoadKey = ISNULL(RTRIM(@cLoadKey),'')        
-                  WHERE PK.SKU = @cSKU          
-                    AND PK.Status = '0' AND PK.ShipFlag = '0' --(ChewKP09)        
-                    AND PK.CaseID = ''          
-                    AND PK.StorerKey = @cStorerKey          
-                    AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS',       
-                                   'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)      
-                    AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD' , 'PENDCANC' ) -- (ChewKP05)         
-                    AND PK.Qty > 0 -- SOS# 329265          
-                    AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> ''))   -- (james14)      
-                    AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)           
-                                     WHERE RE.OrderKey = O.OrderKey           
-                                     AND Status < '9'  )           
-                  GROUP BY PK.OrderKey, PK.SKU          
-               END        
-               ELSE        
-               BEGIN        
- INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)        
-                  SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()          
-                  FROM dbo.PICKDETAIL PK WITH (NOLOCK)          
-                  JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey AND O.LoadKey = ISNULL(RTRIM(@cLoadKey),'')        
-                  WHERE PK.SKU = @cSKU          
-                    AND PK.Status = '0' AND PK.ShipFlag = '0' --(ChewKP09)        
-                    AND PK.CaseID = ''          
-                    AND PK.StorerKey = @cStorerKey          
-                    AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS',       
-                                   'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)      
-                    AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD' , 'PENDCANC' ) -- (ChewKP05)         
-                    AND PK.Qty > 0 -- SOS# 329265          
-                    AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)           
-                                     WHERE RE.OrderKey = O.OrderKey           
-                                     AND Status < '9'  )           
-                  GROUP BY PK.OrderKey, PK.SKU          
-               END        
-  END        
+            IF ISNULL( @cRefNo, '') <> ''    
+            BEGIN    
+               IF @cRefNoInsLogSP <> ''      
+               BEGIN      
+                   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cRefNoInsLogSP AND type = 'P')      
+                   BEGIN      
+                      SET @nErrNo = 0    
+                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cRefNoInsLogSP) +      
+                         ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cToteNo, @cWaveKey, @cLoadKey, @cSKU, @cDropIDType, @cUserName,     
+                           @nErrNo OUTPUT, @cErrMsg OUTPUT'                      
+                      SET @cSQLParam =      
+                         '@nMobile        INT, ' +      
+                         '@nFunc          INT, ' +      
+                         '@cLangCode      NVARCHAR( 3),  ' +     
+                         '@nStep          NVARCHAR( 18), ' +     
+                         '@nInputKey      NVARCHAR( 5),  ' +     
+                         '@cStorerKey     NVARCHAR( 15), ' +     
+                         '@cRefNo         NVARCHAR( 20), ' +     
+                         '@cToteNo        NVARCHAR( 20), ' +     
+                         '@cWaveKey       NVARCHAR( 10), ' +     
+                         '@cLoadKey       NVARCHAR( 10), ' +     
+                         '@cSKU           NVARCHAR( 20), ' +     
+                         '@cDropIDType    NVARCHAR( 10), ' +     
+                         '@cUserName      NVARCHAR( 18), ' +     
+                         '@nErrNo         INT           OUTPUT, ' +      
+                         '@cErrMsg        NVARCHAR( 20) OUTPUT  '                  
+                      
+                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                      
+                         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cToteNo, @cWaveKey, @cLoadKey, @cSKU, @cDropIDType, @cUserName,     
+                         @nErrNo OUTPUT, @cErrMsg OUTPUT             
+                      
+                      IF @nErrNo <> 0     
+                         GOTO Step_2_Fail      
+      
+                   END      
+               END      
+            END    
+            ELSE     
+            BEGIN    
+               IF ISNULL(RTRIM(@cWaveKey),'')  <> ''   
+               BEGIN  
+                  IF @cOrderWithTrackNo = '1' -- (ChewKP10)   
+                  BEGIN   
+                     INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)  
+                     SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()    
+                     FROM dbo.PICKDETAIL PK WITH (NOLOCK)    
+                     JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey     
+                     JOIN WAVEDETAIL AS w WITH(NOLOCK) ON w.OrderKey = O.OrderKey   
+                     WHERE W.WaveKey = ISNULL(RTRIM(@cWaveKey),'')   
+                       AND PK.StorerKey = @cStorerKey   
+                       AND PK.SKU = @cSKU    
+                       AND PK.Status = '0'  AND PK.ShipFlag = '0' --(ChewKP09)  
+                       AND PK.CaseID = ''                          
+                       AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS', 
+                                         'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08) --(yeekung01)  
+                       AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)   
+                       AND PK.Qty > 0 -- SOS# 329265    
+                       AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> ''))   -- (james14)
+                       AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)     
+                                        WHERE RE.OrderKey = O.OrderKey    
+                                        AND Status < '9'  )     
+                     GROUP BY PK.OrderKey, PK.SKU    
+                  END  
+                  ELSE  
+                  BEGIN  
+                     INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)  
+                     SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()    
+                     FROM dbo.PICKDETAIL PK WITH (NOLOCK)    
+                     JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey     
+                     JOIN WAVEDETAIL AS w WITH(NOLOCK) ON w.OrderKey = O.OrderKey   
+                     WHERE W.WaveKey = ISNULL(RTRIM(@cWaveKey),'')   
+                       AND PK.StorerKey = @cStorerKey                      
+                       AND PK.SKU = @cSKU    
+                       AND PK.Status = '0'  AND PK.ShipFlag = '0' --(ChewKP09)  
+                       AND PK.CaseID = ''    
+                       AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS', 
+                                         'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)
+                       AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)   
+                       AND PK.Qty > 0 -- SOS# 329265    
+                       AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)     
+                                        WHERE RE.OrderKey = O.OrderKey    
+                                        AND Status < '9'  )     
+                     GROUP BY PK.OrderKey, PK.SKU    
+                  END  
+               END  
+               ELSE IF ISNULL(RTRIM(@cLoadKey),'')  <> ''   
+               BEGIN  
+                  IF @cOrderWithTrackNo = '1' -- (ChewKP10)   
+                  BEGIN  
+                     INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)  
+                     SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()    
+                     FROM dbo.PICKDETAIL PK WITH (NOLOCK)    
+                     JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey AND O.LoadKey = ISNULL(RTRIM(@cLoadKey),'')  
+                     WHERE PK.SKU = @cSKU    
+                       AND PK.Status = '0' AND PK.ShipFlag = '0' --(ChewKP09)  
+                       AND PK.CaseID = ''    
+                       AND PK.StorerKey = @cStorerKey    
+                       AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS', 
+                                      'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)
+                       AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD' , 'PENDCANC' ) -- (ChewKP05)   
+                       AND PK.Qty > 0 -- SOS# 329265    
+                       AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> ''))   -- (james14)
+                       AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)     
+                                        WHERE RE.OrderKey = O.OrderKey     
+                                        AND Status < '9'  )     
+                     GROUP BY PK.OrderKey, PK.SKU    
+                  END  
+                  ELSE  
+                  BEGIN  
+                     INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)  
+                     SELECT TOP 1 @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()    
+                     FROM dbo.PICKDETAIL PK WITH (NOLOCK)    
+                     JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey AND O.LoadKey = ISNULL(RTRIM(@cLoadKey),'')  
+                     WHERE PK.SKU = @cSKU    
+                       AND PK.Status = '0' AND PK.ShipFlag = '0' --(ChewKP09)  
+                       AND PK.CaseID = ''    
+                       AND PK.StorerKey = @cStorerKey    
+                       AND O.Type IN ('DTC', 'TMALL', 'NORMAL', 'COD', 'SS', 
+                                      'EX', 'TMALLCN', 'NORMAL1', 'VIP', 'B2C','0')   -- (Chee01) -- (ChewKP09) -- (james07) -- (james08)   --(yeekung01)
+                       AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD' , 'PENDCANC' ) -- (ChewKP05)   
+                       AND PK.Qty > 0 -- SOS# 329265    
+                       AND NOT EXISTS ( SELECT 1 FROM rdt.rdtECOMMLog RE WITH (NOLOCK)     
+                                        WHERE RE.OrderKey = O.OrderKey     
+                                        AND Status < '9'  )     
+                     GROUP BY PK.OrderKey, PK.SKU    
+                  END  
+               END  
+                 
+               IF @@ROWCOUNT = 0 -- No data inserted  
+               BEGIN  
+                  --ROLLBACK TRAN  
+                  SET @nErrNo = 90481  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'NoRecToProcess'  
+                  GOTO Step_2_Fail  
+               END  
+           
+               IF @@ERROR <> 0  
+               BEGIN  
+                  --ROLLBACK TRAN  
+                  SET @nErrNo = 90482  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Ins EcommFail'  
+                  GOTO Step_2_Fail  
+               END  
+            END
                     
             IF @@ROWCOUNT = 0 -- No data inserted        
             BEGIN        
@@ -4759,7 +4966,7 @@ BEGIN
        ErrMsg        = @cErrMsg,        
        Func          = @nFunc,        
        Step          = @nStep,        
-    Scn           = @nScn,        
+       Scn           = @nScn,        
         
        StorerKey     = @cStorerKey,        
        Facility      = @cFacility,        
@@ -4788,7 +4995,7 @@ BEGIN
        V_String15     = @cWaveKey, -- (ChewKP01)         
        V_String16     = @cNoToteFlag, -- (ChewKP01)         
        V_String17     = @cGenPackDetail,         
-      V_String18     = @cBackendPickConfirm,        
+       V_String18     = @cBackendPickConfirm,        
        V_String19     = @cOrderWithTrackNo, -- (ChewKP10)        
        V_String20     = @cSKUStatus, -- (james03)         
        V_String21     = @cDefaultCursor,        
@@ -4804,7 +5011,9 @@ BEGIN
        V_String31     = @cCube, --(cc01)      
        V_String32     = @cWeight,   --(cc01)      
        V_String33     = @cRefNo,  --(cc01)      
-             
+       V_String34     = @cRefNoInsLogSP,        
+       V_String35     = @cDecodeSP,
+       
        V_FromScn      = @nPrevScn,        
        V_FromStep     = @nPrevStep,        
        V_Integer1     = @nTotalPickedQty,        
