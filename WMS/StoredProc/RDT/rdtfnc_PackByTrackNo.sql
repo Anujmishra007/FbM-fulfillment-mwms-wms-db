@@ -110,6 +110,7 @@ GO
 /* 2021-11-11 6.7  James    WMS-18225 Add CaptureInfoSP (james47)            */
 /*                          Add config to disallow carton no change          */
 /* 2022-03-18 6.8  James    WMS-19123 Add CaptureInfoSP to step3 (james48)   */  
+/* 2022-06-15 6.9  James    WMS-19935 Not auto convert weight to kg (james49)*/
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](  
@@ -272,6 +273,8 @@ DECLARE
    @cDataCapture           NVARCHAR( 1),
    @cDataCaptureInfo       NVARCHAR( 1),
    @cSKUDataCapture        NVARCHAR( 1),
+   @nFromStep              INT,
+   @cNotConvertWgt2KG      NVARCHAR( 1),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
@@ -338,6 +341,7 @@ SELECT
    
    @nCartonNo        = V_Cartonno,  
    @nFromScn         = V_FromScn,  
+   @nFromStep        = V_FromStep,
   
    @cTrackNo         = V_String1,  
    @cShipperKey      = V_String2,  
@@ -368,6 +372,7 @@ SELECT
    @cCaptureInfoSP      = V_String26,
    @cPackSkipTrackNo_SP = V_String27,
    @cDataCapture        = V_String28,
+   @cNotConvertWgt2KG   = V_String29,
    
    @cRefNo              = V_String41,  -- (james40)  
    @cSerialNoCapture    = V_String42,  
@@ -534,6 +539,9 @@ BEGIN
    
    SET @cDataCapture = rdt.RDTGetConfig( @nFunc, 'DataCapture', @cStorerkey)
    
+   -- (james49)
+   SET @cNotConvertWgt2KG = rdt.RDTGetConfig( @nFunc, 'NotConvertWgt2KG', @cStorerkey)
+
    EXEC rdt.rdtSetFocusField @nMobile, 1        
 END  
 GOTO Quit  
@@ -2007,6 +2015,7 @@ BEGIN
          BEGIN
             -- Go to next screen
             SET @nFromScn = @nScn
+            SET @nFromStep = @nStep
             SET @nScn = @nScn + 5
             SET @nStep = @nStep + 6
 
@@ -3020,13 +3029,18 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 5  
             GOTO Quit  
          END  
-  
-         SET @fCtnWeight = CAST(@cCtnWeight AS REAL) * 1000  
-  
+         
+         -- (james49)
+         IF @cNotConvertWgt2KG = '0'
+            SET @fCtnWeight = CAST(@cCtnWeight AS REAL) * 1000  
+         ELSE
+            SET @fCtnWeight = CAST(@cCtnWeight AS FLOAT)
+
          -- (james03)  
          SET @cMaxCtnWeight = rdt.RDTGetConfig( @nFunc, 'MaxWeight', @cStorerKey)  
   
-         IF @fCtnWeight > (CAST(@cMaxCtnWeight AS REAL) * 1000)  
+         IF (@cNotConvertWgt2KG = '0' AND @fCtnWeight > (CAST(@cMaxCtnWeight AS REAL) * 1000)) OR
+            (@cNotConvertWgt2KG = '1' AND @fCtnWeight > (CAST(@cMaxCtnWeight AS FLOAT))) -- (james49)
          BEGIN  
             SET @nErrNo = 76492  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'EXCEED MAX WGT'  
@@ -4937,6 +4951,190 @@ BEGIN
          END      
       END      
       
+      IF @nFromStep = 3
+      BEGIN
+      	SET @cSerialNo = ''
+
+         IF ISNULL(@cPackSwapLot_SP, '') NOT IN ('', '0') AND   
+            EXISTS( SELECT 1 FROM sys.sysobjects WHERE name = @cPackSwapLot_SP AND type = 'P')  
+         BEGIN  
+            SET @nErrNo = 0  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cPackSwapLot_SP) +  
+               ' @n_Mobile,     @c_Storerkey,  @c_OrderKey,   @c_TrackNo,    @c_PickSlipNo, ' +  
+               ' @n_CartonNo,   @c_LOC,        @c_ID,         @c_SKU, ' +  
+               ' @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, ' +  
+               ' @c_Barcode,    @b_Success   OUTPUT,  @n_ErrNo OUTPUT,  @c_ErrMsg OUTPUT '  
+  
+            SET @cSQLParam =  
+               '@n_Mobile         INT,           ' +  
+               '@c_Storerkey      NVARCHAR( 15),  ' +  
+               '@c_OrderKey       NVARCHAR( 10), ' +  
+               '@c_TrackNo        NVARCHAR( 20), ' +  
+               '@c_PickSlipNo     NVARCHAR( 10), ' +  
+               '@n_CartonNo       INT, ' +  
+               '@c_LOC            NVARCHAR( 10), ' +  
+               '@c_ID             NVARCHAR( 18), ' +  
+               '@c_SKU            NVARCHAR( 20), ' +  
+               '@c_Lottable01     NVARCHAR( 18), ' +  
+               '@c_Lottable02     NVARCHAR( 18), ' +  
+               '@c_Lottable03     NVARCHAR( 18), ' +  
+               '@d_Lottable04     DATETIME,      ' +  
+               '@d_Lottable05     DATETIME,      ' +  
+               '@c_Barcode        NVARCHAR( 40), ' +  
+               '@b_Success        INT           OUTPUT, ' +  
+               '@n_ErrNo          INT           OUTPUT, ' +  
+               '@c_ErrMsg         NVARCHAR( 20) OUTPUT  '  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                 @nMobile, @cStorerkey, @cOrderKey, @cTrackNo, @cPickSlipNo, @nCartonNo, @cLOC, @cID, @cSKU,  
+                 @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
+                 @cInField06, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0  
+               GOTO Quit  
+         END  
+         ELSE  
+         BEGIN  
+            -- Extended insert pack info stored proc here (james16)  
+            IF @cExtendedInsPackSP <> '' AND   
+               EXISTS( SELECT 1 FROM sys.sysobjects WHERE name = @cExtendedInsPackSP AND type = 'P')  
+            BEGIN  
+               SET @nErrNo = 0  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInsPackSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nQty, @nCartonNo, @cSerialNo,@nSerialQTY,@cLabelNo OUTPUT,' +  
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+  
+               SET @cSQLParam =  
+                  '@nMobile                   INT,           ' +  
+                  '@nFunc                     INT,           ' +  
+                  '@cLangCode                 NVARCHAR( 3),  ' +  
+                  '@nStep                     INT,           ' +  
+                  '@nInputKey                 INT,           ' +  
+                  '@cStorerkey                NVARCHAR( 15), ' +  
+                  '@cOrderKey                 NVARCHAR( 10), ' +  
+                  '@cPickSlipNo               NVARCHAR( 10), ' +  
+                  '@cTrackNo                  NVARCHAR( 20), ' +  
+                  '@cSKU                      NVARCHAR( 20), ' +  
+                  '@nQty                      INT,           ' +  
+                  '@nCartonNo                 INT,           ' +  
+                  '@cSerialNo                 NVARCHAR( 30), ' +   
+                  '@nSerialQTY                INT,           ' +  
+                  '@cLabelNo                  NVARCHAR( 20) OUTPUT,  ' +                       
+                  '@nErrNo                    INT           OUTPUT,  ' +  
+                  '@cErrMsg                   NVARCHAR( 20) OUTPUT   '  
+  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nQty, @nCartonNo,@cSerialNo,@nSerialQTY, @cLabelNo OUTPUT  
+                     ,@nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+               IF @nErrNo <> 0  
+                  GOTO Quit  
+            END  
+         END  
+      
+         -- 1 orders 1 tracking no  
+         -- discrete pickslip, 1 ordes 1 pickslipno  
+         SET @nExpectedQty = 0  
+         SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
+         WHERE Orderkey = @cOrderkey  
+            AND Storerkey = @cStorerkey  
+            AND Status < '9'  
+  
+         SET @nPackedQty = 0  
+         SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
+         WHERE PickSlipNo = @cPickSlipNo  
+  
+         -- (james26)  
+         IF @cExtendedMsgQSP <> ''  
+         BEGIN  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedMsgQSP AND type = 'P')  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedMsgQSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,' +  
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+               SET @cSQLParam =  
+                  '@nMobile          INT,           ' +  
+                  '@nFunc            INT,           ' +  
+                  '@cLangCode        NVARCHAR( 3),  ' +  
+                  '@nStep            INT,           ' +  
+                  '@nAfterStep       INT,           ' +  
+                  '@nInputKey        INT,           ' +  
+                  '@cStorerkey       NVARCHAR( 15), ' +  
+                  '@cOrderKey        NVARCHAR( 10), ' +  
+                  '@cPickSlipNo      NVARCHAR( 10), ' +  
+                  '@cTrackNo         NVARCHAR( 20), ' +  
+                  '@cSKU             NVARCHAR( 20), ' +  
+                  '@nCartonNo        INT,           ' +  
+                  '@nErrNo           INT           OUTPUT, ' +  
+                  '@cErrMsg          NVARCHAR( 20) OUTPUT  '  
+  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                    @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,  
+                    @nErrNo OUTPUT, @cErrMsg OUTPUT  
+            END  
+         END  
+        
+         IF @nExpectedQty = @nPackedQty  
+         BEGIN  
+            SET @nScn = @nFromScn  
+            SET @nStep = @nFromStep   
+            GOTO CONTINUE_STEP3  
+         END  
+  
+         -- Extended info  
+         SET @cExtendedInfo = ''  
+         IF @cExtendedInfoSP <> ''  
+         BEGIN  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
+            BEGIN  
+               SET @cExtendedInfo = ''  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +       
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,' +   
+                  ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+               SET @cSQLParam =      
+                  '@nMobile          INT,           ' +  
+                  '@nFunc            INT,           ' +  
+                  '@cLangCode        NVARCHAR( 3),  ' +  
+                  '@nStep            INT,           ' +   
+                  '@nAfterStep       INT,           ' +   
+                  '@nInputKey        INT,           ' +  
+                  '@cStorerkey       NVARCHAR( 15), ' +  
+                  '@cOrderKey        NVARCHAR( 10), ' +  
+                  '@cPickSlipNo      NVARCHAR( 10), ' +  
+                  '@cTrackNo         NVARCHAR( 20), ' +  
+                  '@cSKU             NVARCHAR( 20), ' +  
+                  '@nCartonNo        INT,           ' +  
+                  '@cExtendedInfo    NVARCHAR( 20) OUTPUT, ' +   
+                  '@nErrNo           INT           OUTPUT, ' +  
+                  '@cErrMsg          NVARCHAR( 20) OUTPUT  '   
+                 
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,       
+                    @nMobile, @nFunc, @cLangCode, 3, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,   
+                    @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT       
+            END  
+         END  
+  
+         SET @cOutField01 = @cOrderkey  
+         SET @cOutField02 = @cTrackNo  
+         SET @cOutField03 = @nCartonNo  
+         SET @cOutField04 = @nExpectedQty  
+         SET @cOutField05 = @nPackedQty  
+         SET @cOutField06 = ''  
+         SET @cOutField15 = @cExtendedInfo  
+  
+         SET @cInField03=''  
+  
+         EXEC rdt.rdtSetFocusField @nMobile, 6    
+
+         IF @nDisAllowChangeCtnNo = 1
+            SET @cFieldAttr03 = 'O'
+         
+         SET @nScn = @nFromScn  
+         SET @nStep = @nFromStep
+         
+         GOTO Quit       
+      END
+      
       IF LEN( RTRIM( @cPackSkipTrackNo_SP)) > 1  
       BEGIN  
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cPackSkipTrackNo_SP AND type = 'P')  
@@ -5160,7 +5358,8 @@ BEGIN
   
        V_Cartonno    = @nCartonNo,  
        V_FromScn     = @nFromScn,  
-         
+       V_FromStep    = @nFromStep,
+   
        V_Integer1    = @nIsMoveOrders,  
        V_Integer2    = @nDisAllowChangeCtnNo,
        
@@ -5192,6 +5391,7 @@ BEGIN
        V_String26    = @cCaptureInfoSP,
        V_String27    = @cPackSkipTrackNo_SP,
        V_String28    = @cDataCapture,
+       V_String29    = @cNotConvertWgt2KG,
    
        V_String41    = @cRefNo,  
        V_String42    = @cSerialNoCapture,  
