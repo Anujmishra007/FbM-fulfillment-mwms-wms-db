@@ -108,7 +108,8 @@ BEGIN
                    SKU                NVARCHAR(20) NULL,
                    Class              NVARCHAR(20) NULL,
                    SIZE               NVARCHAR(10) NULL,
-                   SUSR1              NVARCHAR(18) NULL)
+                   SUSR1              NVARCHAR(18) NULL,--)  
+       BUSR5              NVARCHAR(30) NULL)
                  --  SUSR2              NVARCHAR(18) NULL) 		
   	         
   CREATE TABLE #TEMPSKUM (
@@ -201,14 +202,16 @@ BEGIN
 	  		SKU,
 	  		Class,
 	  		[SIZE],
-	  		SUSR1
+	  		SUSR1,
+	  		BUSR5
 	  	)
 	  		SELECT DISTINCT  PACKHEADER.PickSlipNo,
 		                    PACKDETAIL.cartonno,
 		                    PACKDETAIL.SKU,
 		                    sKU.CLASS,
 		                    SKU.Size,
-		                    SKU.SUSR1
+		                    SKU.SUSR1,
+		                    SKU.BUSR5
 		   FROM PACKHEADER  WITH (NOLOCK)  
 			JOIN PACKDETAIL  WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
 			JOIN SKU         WITH (NOLOCK) ON (PACKDETAIL.Storerkey  = SKU.Storerkey)     
@@ -294,6 +297,12 @@ BEGIN
 		                          ISNULL(RTRIM(CODELKUP.UDF02),'N/A'),TS.SUSR1 
          FROM #TEMPSKU TS
 			LEFT JOIN CODELKUP (nolock) ON LISTNAME='BWSSIZECON' and UDF01=TS.size and UDF03=TS.CLASS
+			AND   
+            (CASE  
+             WHEN ISNULL(TS.BUSR5,'')='Vionic' THEN TS.BUSR5  
+             WHEN ISNULL(TS.BUSR5,'')<> 'Vionic' THEN ''  
+             END   
+            ) = ISNULL(code2,'')
 			WHERE TS.PickSlipNo = @c_PickSlipNo
 			AND   TS.cartonno     = @c_CartonNo
 		   --ORDER BY CODELKUP.long,CONVERT(Float,ISNULL(RTRIM(CODELKUP.UDF02),'')) --CONVERT(Float,ISNULL(RTRIM(SKU.Size),'')	) 
@@ -717,6 +726,12 @@ BEGIN
 		                          CONVERT(Float,ISNULL(RTRIM(CODELKUP.UDF02),'')),TS.SUSR1 
          FROM #TEMPSKU TS
 			LEFT JOIN CODELKUP (nolock) ON LISTNAME='BWSSIZECON' and UDF01=TS.size and UDF03=TS.CLASS
+			AND   
+            (CASE  
+             WHEN ISNULL(TS.BUSR5,'')='Vionic' THEN TS.BUSR5  
+             WHEN ISNULL(TS.BUSR5,'')<> 'Vionic' THEN ''  
+             END   
+            ) = ISNULL(code2,'')
 			WHERE TS.PickSlipNo = @c_PickSlipNo
 			AND   TS.cartonno     = @c_CartonNo
 		   --ORDER BY CODELKUP.long,CONVERT(Float,ISNULL(RTRIM(CODELKUP.UDF02),'')) --CONVERT(Float,ISNULL(RTRIM(SKU.Size),'')	) 
