@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 04-JUL-2017 Wan01    1.1   WMS-2332 - Changes to Logitech Packing    */
 /* 23-Aug-2019 CSCHONG  1.2   WMS-10266 revised field logic (CS01)      */
+/* 25-May-2022 Mingle   1.3   WMS-19712 modify logic (ML01)             */
 /************************************************************************/
 CREATE PROC isp_MRPINLabel01
            @c_PickSlipNo         NVARCHAR(10)
@@ -231,7 +232,8 @@ QUIT_SP:
                      + ISNULL(RTRIM(CSG.B_Country),'') 
       ,  ExtFld21 = 'Generic Name: ' + TMP.SI_ExtFld21
       ,  Sku = 'VPN: ' + TMP.Sku
-      ,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.InnerPack )) + 'N'
+      --,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.InnerPack )) + 'N'
+	  ,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.CaseCnt )) + ' Unit'	--ML01
       ,  IMPBy_UL = '______________________________'
       ,  RGSTBy_UL= '____________________'
    FROM #TMP_PACKSKU TMP   
@@ -252,3 +254,4 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_MRPINLabel01] TO nSQL 
 GO
+

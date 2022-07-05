@@ -28,6 +28,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 04-JUL-2017 Wan01    1.1   WMS-2332 - Changes to Logitech Packing    */
 /* 23-Aug-2019 CSCHONG  1.2   WMS-10266 revised field logic (CS01)      */
+/* 25-May-2022 Mingle   1.3   WMS-19712 modify logic (ML01)             */
 /************************************************************************/
 CREATE PROC isp_MRPMSLabel01
            @c_PickSlipNo         NVARCHAR(10)
@@ -153,7 +154,7 @@ BEGIN
    JOIN SKUINFO      SI  WITH (NOLOCK) ON (TMP.Storerkey = SI.Storerkey)
                                        AND(TMP.Sku  = SI.Sku )
    WHERE TMP.PickSlipNo = @c_PickSlipNo
-   AND   TMP.MaxSurface Between @n_MaxSurfaceFr AND @n_MaxSurfaceTo 
+   AND   TMP.MaxSurface BETWEEN @n_MaxSurfaceFr AND @n_MaxSurfaceTo 
    
 QUIT_SP:
 
@@ -179,7 +180,8 @@ QUIT_SP:
                      + ISNULL(RTRIM(CSG.B_Country),'') 
       ,  ExtFld21 = 'Generic Name: ' + TMP.SI_ExtFld21
       ,  Sku = 'VPN: ' + TMP.Sku
-      ,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.CaseCnt )) + 'N'
+      --,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.CaseCnt )) + 'N'
+	  ,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.CaseCnt )) + ' Unit'	--ML01
       ,  Notes = CASE WHEN InnerPack > 1 THEN '"PACKAGING IS MEANT FOR TRANSPORT PURPOSE ONLY"'  
                                          ELSE ''
                                          END
