@@ -49,7 +49,7 @@ GO
 /* 2022-07-05 3.8  Calvin	Fixed Cursor variable (CLVN01)              */
 /************************************************************************/
 
-ALTER   PROCEDURE [RDT].[rdtfnc_Move_ID] (
+CREATE OR ALTER   PROCEDURE [RDT].[rdtfnc_Move_ID] (
    @nMobile    INT,
    @nErrNo     INT           OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
