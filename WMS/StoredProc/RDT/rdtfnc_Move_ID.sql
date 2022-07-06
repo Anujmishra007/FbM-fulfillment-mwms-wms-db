@@ -1,8 +1,8 @@
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 
 /************************************************************************/
 /* Copyright: IDS                                                       */
@@ -46,9 +46,10 @@ GO
 /*                          from rdt_Decode (james10)                   */
 /* 2019-10-18 3.6  James    WMS-10922 Add ExtValid in step 1 (james11)  */
 /* 2022-01-23 3.7  Ung      WMS-18784 Fix DefaultFromLOC                */
+/* 2022-07-05 3.8  Calvin	Fixed Cursor variable (CLVN01)              */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdtfnc_Move_ID (
+ALTER   PROCEDURE [RDT].[rdtfnc_Move_ID] (
    @nMobile    INT,
    @nErrNo     INT           OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -1258,8 +1259,8 @@ BEGIN
             WHERE LLI.LOC = @cFromLOC
             AND   LLI.ID = @cFromID
             AND   EXISTS (SELECT 1 from dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey)
-         OPEN curStorer
-         FETCH NEXT FROM curStorer INTO @cLoop_StorerKey
+         OPEN @curStorer										--(CLVN01)
+         FETCH NEXT FROM @curStorer INTO @cLoop_StorerKey		--(CLVN01)
          WHILE @@FETCH_STATUS <> -1
          BEGIN
             -- Loop thru every storer within the pallet id
@@ -1456,3 +1457,5 @@ GO
 
 GRANT EXECUTE ON RDT.rdtfnc_Move_ID TO NSQL
 GO
+
+
