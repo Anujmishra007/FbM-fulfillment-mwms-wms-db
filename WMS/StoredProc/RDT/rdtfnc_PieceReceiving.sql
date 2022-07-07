@@ -1,3 +1,4 @@
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -134,7 +135,8 @@ GO
 /*                           Add new field into eventlog (james23)      */
 /* 2022-02-24 8.8 Ung        WMS-18950 Add RDT format for Lottable01..4 */
 /* 2022-05-19 8.9 Ung        WMS-19667 Migrate to new ExtendedInfoSP    */
-/* 2020-12-07 9.0 YeeKung    Change params in decodesku   (yeekung02)   */    
+/* 2019-04-16 9.0 MT         Add missing nBulkSNOQTY in line 2576       */
+/* 2020-12-07 9.1 YeeKung    Change params in decodesku   (yeekung02)   */  
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -2254,9 +2256,9 @@ BEGIN
 
                EXEC dbo.ispLabelNo_Decoding_Wrapper
                    @c_SPName     = @cDecodeLabelNo
-                  ,@c_LabelNo    = @cBarcode --(yeekung02)
+                  ,@c_LabelNo    = @cBarcode --(yeekung01)
                   ,@c_Storerkey  = @cStorer
-                  ,@c_ReceiptKey = ''
+                  ,@c_ReceiptKey = @cReceiptkey
                   ,@c_POKey      = ''
                   ,@c_LangCode   = @cLangCode
                   ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
@@ -3031,7 +3033,9 @@ BEGIN
          @cReceiptLineNumber = @cReceiptLineNumber OUTPUT,
          @cSerialNo      = @cSerialNo,
          @nSerialQTY     = @nSerialQTY,
-         @nBulkSNO       = @nBulkSNO
+         @nBulkSNO       = @nBulkSNO,
+         @nBulkSNOQTY    = @nBulkSNOQTY        --MT   
+   
 
       IF @nErrNo <> 0
       BEGIN
