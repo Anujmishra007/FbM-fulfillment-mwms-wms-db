@@ -15,7 +15,7 @@ GO
 /*          : r_dw_carton_MRP_Label01_2                                 */
 /*          : r_dw_carton_MRP_Label01_3                                 */
 /*                                                                      */
-/* PVCS Version: 1.7                                                    */
+/* PVCS Version: 1.8                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,6 +31,7 @@ GO
 /* 13-Apr-2021 Mingle   1.6   WMS-16811 - Modify logic (ML01)           */
 /* 11-May-2022 WLChooi  1.6   DevOps Combine Script                     */
 /* 11-May-2022 WLChooi  1.7   WMS-19617 - Modify Logic (WL02)           */
+/* 07-Jul-2022 WLChooi  1.8   Bug Fix - Get Correct Month (WL03)        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_MRPLabel01]
            @c_PickSlipNo         NVARCHAR(10)
@@ -189,8 +190,9 @@ BEGIN
       --SUBSTRING(LEFT(TRIM(SN.SerialNo),4),1,2) = 22 -> 2022
       --Get the month of Week 8 of 2022 -> February
       --Formula below will get the first Monday of year, which is 2022-01-03 then add 8 weeks, then get the month
+      --Bug Fix - the no of week should minus one   --WL03
       ,  ManufactureDT = CASE WHEN SKU.BUSR7 = 'YES' AND ISNULL(SN.SerialNo,'') <> ''
-                                 THEN CAST(DATENAME(MONTH, DATEADD(WEEK, CAST(SUBSTRING(LEFT(TRIM(SN.SerialNo),4),3,2) AS INT), 
+                                 THEN CAST(DATENAME(MONTH, DATEADD(WEEK, CAST(SUBSTRING(LEFT(TRIM(SN.SerialNo),4),3,2) AS INT) - 1,   --WL03 
                                            DATEADD(DAY, (@@DATEFIRST - DATEPART(WEEKDAY, DATEADD(YEAR, SUBSTRING(CAST(DATEPART(year,GETDATE()) AS NVARCHAR),1,2)
                                           + SUBSTRING(LEFT(TRIM(SN.SerialNo),4),1,2) - 1900, 0))
                                           + (8 - @@DATEFIRST) * 2) % 7, DATEADD(YEAR, SUBSTRING(CAST(DATEPART(year,GETDATE()) AS NVARCHAR),1,2) 
