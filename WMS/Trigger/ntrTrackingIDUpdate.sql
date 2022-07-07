@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTrackingIDUpdate]') 
-           and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrTrackingIDUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -24,7 +19,7 @@ GO
 /*                                                                               */
 /* Called By: When records updated                                               */
 /*                                                                               */
-/* PVCS Version: 1.0                                                             */
+/* PVCS Version: 1.1                                                             */
 /*                                                                               */
 /* Version: 5.4                                                                  */
 /*                                                                               */
@@ -32,9 +27,12 @@ GO
 /*                                                                               */
 /* Updates:                                                                      */
 /* Date         Author    Ver.  Purposes                                         */
+/* 06-Jul-2022  WLChooi   1.1   JSM-77218 Skip Trigger if updating ArchiveCop to */
+/*                              9 (WL01)                                         */
+/* 06-Jul-2022  WLChooi   1.1   DevOps Combine Script                            */
 /*********************************************************************************/  
 
-CREATE TRIGGER [dbo].[ntrTrackingIDUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrTrackingIDUpdate]
 ON  [dbo].[TrackingID]
 FOR UPDATE
 AS
@@ -64,6 +62,13 @@ BEGIN -- main
    BEGIN
       SELECT @n_continue = 4 
    END
+
+   --WL01 S
+   IF UPDATE(ArchiveCop)  
+   BEGIN
+      SELECT @n_continue = 4 
+   END
+   --WL01 E
 
    IF (@n_continue = 1 or @n_continue = 2)  AND NOT UPDATE(EditDate)
    BEGIN
@@ -110,8 +115,3 @@ BEGIN -- main
    END
 END -- main
 GO
-
---ALTER TABLE [dbo].[TrackingID] ENABLE TRIGGER [ntrTrackingIDUpdate]
---GO
-
-
