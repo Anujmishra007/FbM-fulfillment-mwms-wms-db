@@ -21,3 +21,8 @@ execute rdt.rdtAddMsg 88909 ,10, '88909^UpdDropIdFail', 'us_english',@nFunc
 
 execute rdt.rdtAddMsg 88910 ,10, '88910^UpdWCSRODetFail', 'us_english',@nFunc
 execute rdt.rdtAddMsg 88911 ,10, '88911^UpdWCSROFail', 'us_english',@nFunc
+
+
+--WMS18432
+execute rdt.rdtAddMsg 88912 ,10, '88912^UpdPDFail', 'us_english',@nFunc
+execute rdt.rdtAddMsg 88913 ,10, '88913^UpdPDFail', 'us_english',@nFunc
