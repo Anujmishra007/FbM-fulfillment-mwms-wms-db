@@ -47,7 +47,7 @@ BEGIN
    SAVE TRAN rdt_1653ExtUpd04 -- For rollback or commit only our own transaction
 
    
-   IF @nStep = 2
+   IF @nStep IN( 2,3)
    BEGIN
       IF @nInputKey = 1
       BEGIN
