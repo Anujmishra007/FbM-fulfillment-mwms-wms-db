@@ -18,6 +18,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */    
 /* 2018-05-25 1.0  James    WMS5163 - Created                           */    
 /* 2018-10-11 1.1  TungGH   Performance                                 */
+/* 2021-12-31 1.2  YeeKung  WMS-18493 add pass through (yeekung01)      */
 /************************************************************************/    
     
 CREATE PROC [RDT].[rdtfnc_SortAndPack2] (    
@@ -74,6 +75,7 @@ DECLARE
    @cExtendedInfoSP     NVARCHAR(20),     
    @nQTY                      INT,     
    @cDecodeLabelNo            NVARCHAR( 20),
+   @cPassThroughStep1   NVARCHAR(20),      
 
    @cRetainParm1Value   NVARCHAR( 1),
    @cRetainParm2Value   NVARCHAR( 1),
@@ -406,7 +408,7 @@ BEGIN
          @cParam5 = '' 
       BEGIN
          IF EXISTS ( SELECT 1 
-            FROM rdtSortAndPackLog WITH (NOLOCK) 
+            FROM rdt.rdtSortAndPackLog WITH (NOLOCK) 
             WHERE AddWho = @cUserName
             AND   Status < '9')
          BEGIN
@@ -556,6 +558,32 @@ BEGIN
       SET @cOutField10 = ''
       SET @cOutField11 = @cExtendedInfo1
       SET @cOutField12 = @cExtendedInfo2
+
+      SET @cPassThroughStep1='1'
+
+      IF @cPassThroughStep1='1'
+      BEGIN
+         -- Prep next screen var    
+         SET @cOutField01 = '' -- SKU    
+         SET @cFieldAttr01 = ''    
+         SET @cFieldAttr02 = ''    
+         SET @cFieldAttr03 = ''    
+         SET @cFieldAttr04 = ''    
+         SET @cFieldAttr05 = ''     
+         SET @cFieldAttr06 = ''    
+         SET @cFieldAttr07 = ''    
+         SET @cFieldAttr08 = ''    
+         SET @cFieldAttr09 = ''    
+         SET @cFieldAttr10 = ''    
+         SET @cFieldAttr11 = ''    
+         SET @cFieldAttr12 = ''    
+         SET @cFieldAttr13 = ''    
+         SET @cFieldAttr14 = ''    
+         SET @cFieldAttr15 = ''    
+
+         SET @nScn  = @nScn + 1    
+         SET @nStep = @nStep + 1    
+      END
 
    END    
     
@@ -826,7 +854,7 @@ BEGIN
 
       -- Prepare next screen var    
       SET @cOutField01 = @cSKU   
-      SET @cOutField02 = ''
+      SET @cOutField02 = @cSKU--''
       SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)    
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)    
       SET @cOutField05 = @nExpQTY
@@ -835,6 +863,8 @@ BEGIN
                               ELSE '' END
       SET @cOutField07 = @cExtendedInfo1
       SET @cOutField08 = @cExtendedInfo2
+
+      EXEC rdt.rdtSetFocusField @nMobile, 6 --QTY 
 
       -- Go to next screen    
       SET @nScn  = @nScn + 1    
@@ -906,8 +936,10 @@ BEGIN
       DECLARE @cActSKU NVARCHAR(20)    
           
       -- Screen mapping    
-      SET @cActSKU = @cInField02
+      SET @cActSKU = CASE WHEN ISNULL(@csku,'')<>'' THEN @csku ELSE @cInField02 END
       SET @cActQTY = @cInField06    
+
+
 
       -- Decode SKU (james08)
       SET @cDecodeLabelNo = ''    
@@ -967,7 +999,7 @@ BEGIN
       IF @nSKUCnt > 1    
       BEGIN    
          SET @nErrNo = 124407    
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SameBarCodeSKU    
+         SET @cErrMsg =@cActSKU-- rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SameBarCodeSKU    
          GOTO Step_3_Fail    
       END    
        
