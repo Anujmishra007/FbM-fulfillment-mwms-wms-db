@@ -2,6 +2,8 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO  
+
+
   
 /************************************************************************/  
 /* Stored Proc : ispPKLBLToOrd02                                        */  
@@ -22,9 +24,11 @@ GO
 /* 29-Mar-2022 WLChooi  1.1   DevOps Combine Script                     */ 
 /* 29-Mar-2022 WLChooi  1.1   WMS-19346 - Enhance logic (WL01)          */
 /* 14-Jun-2022 WLChooi  1.2   WMS-19948 - Enhance logic (WL02)          */
+/* 07-Jul-2022 Calvin	1.3   JSM-79951 - Include Channel_ID  (CLVN01)  */
+/*                                        and TaskManagerReasonKey      */
 /************************************************************************/  
   
-CREATE OR ALTER PROC [dbo].[ispPKLBLToOrd02]  
+ALTER   PROC [dbo].[ispPKLBLToOrd02]  
 (@c_Pickslipno NVARCHAR(10),  
  @b_Success      INT       OUTPUT,  
  @n_err          INT       OUTPUT,  
@@ -481,7 +485,7 @@ BEGIN
                        DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                        ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
                        WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo   
-                     , TaskDetailKey                                                
+                     , TaskDetailKey, Channel_ID, TaskManagerReasonKey	--(CLVN01)                                                
                       )  
                SELECT @c_newpickdetailkey  
                     , CASE WHEN @c_Option2 = 'CaseID' THEN '' ELSE PICKDETAIL.CaseID END                              
@@ -491,7 +495,7 @@ BEGIN
                     , Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                       ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
                       WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo  
-                    , TaskDetailKey                                               
+                    , TaskDetailKey, Channel_ID, TaskManagerReasonKey	--(CLVN01)                                               
                FROM PICKDETAIL (NOLOCK)  
                WHERE PickdetailKey = @c_pickdetailkey  
          
@@ -557,5 +561,7 @@ BEGIN
    END  
 END  
 GO
+
 GRANT EXECUTE ON [dbo].[ispPKLBLToOrd02] TO NSQL
 GO
+

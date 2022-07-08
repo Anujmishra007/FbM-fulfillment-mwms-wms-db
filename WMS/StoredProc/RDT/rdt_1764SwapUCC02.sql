@@ -48,7 +48,7 @@ BEGIN
    DECLARE @cActTaskDetailKey    NVARCHAR( 10)
    DECLARE @nActUCCQTY           INT
    DECLARE @nActSystemQTY        INT
-   DECLARE @nActReplenQTY        INT
+   DECLARE @nActReplenQTY        INT = 0
    DECLARE @nActPendingMoveIn    INT
    DECLARE @cActUOM              NVARCHAR( 5)
    DECLARE @cActSuggestedLOC     NVARCHAR( 10)
@@ -62,7 +62,7 @@ BEGIN
    DECLARE @cTaskSKU             NVARCHAR( 20)
    DECLARE @nTaskQTY             INT
    DECLARE @nTaskSystemQTY       INT
-   DECLARE @nTaskReplenQTY       INT
+   DECLARE @nTaskReplenQTY       INT = 0
    DECLARE @nTaskPendingMoveIn   INT
    DECLARE @cTaskSuggestedLOC    NVARCHAR( 10)
 
@@ -1094,6 +1094,9 @@ BEGIN
          END
       END
 
+      SET @nTaskReplenQTY= CASE WHEN ISNULL(@nTaskReplenQTY,'')='' THEN 0 ELSE @nTaskReplenQTY END
+      SET @nActReplenQTY= CASE WHEN ISNULL(@nActReplenQTY,'')='' THEN 0 ELSE @nActReplenQTY END
+
       IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
       BEGIN
          UPDATE LOTXLOCXID WITH (ROWLOCK)
@@ -1407,6 +1410,9 @@ BEGIN
             GOTO RollBackTran
          END
       END
+
+      SET @nTaskReplenQTY= CASE WHEN ISNULL(@nTaskReplenQTY,'')='' THEN 0 ELSE @nTaskReplenQTY END
+      SET @nActReplenQTY= CASE WHEN ISNULL(@nActReplenQTY,'')='' THEN 0 ELSE @nActReplenQTY END
 
       IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
       BEGIN
@@ -1843,6 +1849,9 @@ BEGIN
             GOTO RollBackTran
          END
       END
+
+      SET @nTaskReplenQTY= CASE WHEN ISNULL(@nTaskReplenQTY,'')='' THEN 0 ELSE @nTaskReplenQTY END
+      SET @nActReplenQTY= CASE WHEN ISNULL(@nActReplenQTY,'')='' THEN 0 ELSE @nActReplenQTY END
 
       IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
       BEGIN

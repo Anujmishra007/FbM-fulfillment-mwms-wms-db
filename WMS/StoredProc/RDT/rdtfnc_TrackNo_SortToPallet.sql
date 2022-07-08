@@ -1,3 +1,5 @@
+
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -992,6 +994,41 @@ BEGIN
             GOTO RollBackTran_CreateMbolDetail  
          END  
       END  
+      
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, @tExtUpdateVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cTrackNo       NVARCHAR( 40), ' +
+               ' @cOrderKey      NVARCHAR( 20),' +
+               ' @cPalletKey     NVARCHAR( 20), ' +
+               ' @cMBOLKey       NVARCHAR( 10), ' +
+               ' @tExtUpdateVar  VariableTable READONLY, ' +
+               ' @nErrNo         INT           OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, @tExtUpdateVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO RollBackTran_CreateMbol
+         END
+      END 
   
       COMMIT TRAN rdt_CreateMbolDetail  
   

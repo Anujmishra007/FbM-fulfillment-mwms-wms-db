@@ -15,6 +15,7 @@ GO
 /* Modifications log:                                                   */  
 /* Date        Rev  Author   Purposes                                   */  
 /* 2020-12-25  1.0  YeeKung   Created                                   */  
+/* 2021-12-01  1.1  YeeKung  WMS-18432 add dropid (yeeekung01)          */ 
 /************************************************************************/  
   
 CREATE PROC [RDT].[rdt_816ExtUpdateSP02] (  
@@ -29,6 +30,7 @@ CREATE PROC [RDT].[rdt_816ExtUpdateSP02] (
    @cDropID     NVARCHAR( 20),  
    @cLoadKey    NVARCHAR( 10),  
    @cWaveKey    NVARCHAR( 10),  
+   @cCloseCartonID NVARCHAR( 20),  --(yeekung01)
    @nErrNo      INT          OUTPUT,  
    @cErrMsg     NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max  
 ) AS  
