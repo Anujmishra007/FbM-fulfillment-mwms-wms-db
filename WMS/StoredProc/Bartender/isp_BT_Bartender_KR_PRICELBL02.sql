@@ -12,7 +12,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2022-05-09 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-19582)    */           
+/* 2022-05-09 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-19582)    */    
+/* 2022-07-07 1.0  MINGLE     Add col 16,17 (WMS-20067)(ML01)                 */ 
 /******************************************************************************/                
                   
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_KR_PRICELBL02]                      
@@ -137,10 +138,10 @@ BEGIN
                          ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54      
                          ,Col55,Col56,Col57,Col58,Col59,Col60) 
           
-    SELECT DISTINCT S.sku,s.style,SUBSTRING(ISNULL(s.NOTES1,''),1,80), @c_Sparm03,isnull(s.susr1,''), --5   
-              isnull(s.susr2,'') ,isnull(s.susr3,'') ,isnull(s.susr4,'') ,isnull(s.susr5,'') ,isnull(s.busr6,'') ,     --10   
-              isnull(s.busr7,'') ,isnull(s.busr8,'') ,isnull(s.busr9,'') ,isnull(s.busr10,'') ,SUBSTRING(isnull(s.notes2,''),1,80),     --15         
-              '','','','','',         --20      
+    SELECT DISTINCT S.sku,s.style,SUBSTRING(ISNULL(s.NOTES1,''),1,80), @c_Sparm03,ISNULL(s.susr1,''), --5   
+              ISNULL(s.susr2,'') ,ISNULL(s.susr3,'') ,ISNULL(s.susr4,'') ,ISNULL(s.susr5,'') ,ISNULL(s.busr6,'') ,     --10   
+              ISNULL(s.busr7,'') ,ISNULL(s.busr8,'') ,ISNULL(s.busr9,'') ,ISNULL(s.busr10,'') ,SUBSTRING(ISNULL(s.notes2,''),1,80),     --15         
+              S.LOTTABLE01LABEL,S.LOTTABLE02LABEL,'','','',         --20	--ML01      
               '','','','','','','','','','',  --30  
               '','','','','','','','','','',   --40       
               '','','','','','','','','','',   --50       
