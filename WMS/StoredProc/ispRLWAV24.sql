@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV24]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLWAV24]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -29,9 +26,11 @@ GO
 /*                            include single order full case to packstation */
 /* 21-Jun-2019 NJOW04   1.3   Fix null value filtering for ECOM_SINGLE_FLAG */
 /* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                             */
+/* 28-03-2022  NJOW05   1.5   WMS-19303 Support loc table at mastgroup      */
+/* 28-03-2022  NJOW05   1.6   DEVOPS combine script                         */
 /****************************************************************************/   
 
-CREATE PROCEDURE [dbo].[ispRLWAV24]      
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
  ,@n_err          int        OUTPUT  
@@ -103,6 +102,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
             ,@c_DocType NVARCHAR(1)
             ,@c_BatchNo NVARCHAR(10)
             ,@c_CLPriority NVARCHAR(10) --NJOW03
+            ,@c_Floor NVARCHAR(3) --NJOW05
+            ,@c_PrevFloor NVARCHAR(30) --NJOW05
+            ,@c_CheckFloor NVARCHAR(1) --NJOW05
             
     DECLARE @c_Field01 NVARCHAR(60)
            ,@c_Field02 NVARCHAR(60)
@@ -1109,25 +1111,29 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           WHERE ListName = 'MASTGROUP'  
           AND Short = @c_Userdefine01   
           AND Storerkey = @c_Storerkey
-          ORDER BY Code  
+          ORDER BY CASE WHEN Long = 'LOC.FLOOR' THEN 1 ELSE 2 END, --NJOW05
+                   Code  
          
        OPEN CUR_CODELKUP  
          
        FETCH NEXT FROM CUR_CODELKUP INTO @c_TableColumnName  
          
-       SELECT @c_SQLField = '', @c_SQLWhere = '', @c_SQLGroup = '', @n_cnt = 0  
+       SELECT @c_SQLField = '', @c_SQLWhere = '', @c_SQLGroup = '', @n_cnt = 0, @c_CheckFloor = 'N' 
        WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
        BEGIN  
+       	  IF @c_TableColumnName = 'LOC.FLOOR'  --NJOW05
+       	     SET @c_CheckFloor = 'Y'
+       	     
           SET @n_cnt = @n_cnt + 1   
           SET @c_TableName = LEFT(@c_TableColumnName, CharIndex('.', @c_TableColumnName) - 1)  
           SET @c_ColumnName = SUBSTRING(@c_TableColumnName,   
                               CharIndex('.', @c_TableColumnName) + 1, LEN(@c_TableColumnName) - CharIndex('.', @c_TableColumnName))  
        
-          IF ISNULL(RTRIM(@c_TableName), '') <> 'SKU'   
+          IF ISNULL(RTRIM(@c_TableName), '') NOT IN ('SKU','LOC')  --NJOW05
           BEGIN  
              SELECT @n_continue = 3  
              SELECT @n_err = 83150  
-             SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Grouping Only Allow Refer To SKU Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispRLWAV24)"  
+             SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Grouping Only Allow Refer To SKU/LOC Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispRLWAV24)"  
              GOTO RETURN_SP                      
           END   
          
@@ -1214,6 +1220,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           + ' FROM #PickDetail_WIP PICKDETAIL '  
           + ' JOIN ORDERS (NOLOCK) ON PICKDETAIL.Orderkey = ORDERS.Orderkey '
           + ' JOIN SKU WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey AND PICKDETAIL.Sku = SKU.Sku) '  
+          + ' JOIN LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) '  --NJOW05
           + ' WHERE SKU.Busr9 <> ''BEAUTY'' '
           + ' AND PICKDETAIL.UOM <> ''2'' '
           + ' GROUP BY ORDERS.Loadkey ' + @c_SQLGroup  
@@ -1230,10 +1237,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        SET @n_cnt = 1
        SET @c_BatchNo = ''
        SET @c_PrevLoadkey = ''
+       SET @c_PrevFloor = ''      
 
        WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)    
        BEGIN
+       	   IF @c_CheckFloor = 'Y'  --NJOW05
+       	      SET @c_Floor = @c_Field01
+       	   
            IF @n_cnt > @n_NoofTotePerBatch OR @c_PrevLoadkey <> @c_Loadkey 
+              OR (@c_PrevFloor <> @c_Floor AND @c_CheckFloor = 'Y')  --NJOW05
               SET @n_cnt = 1
            
            IF @n_cnt = 1
@@ -1258,6 +1270,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           + ' FROM #PickDetail_WIP PICKDETAIL '  
           + ' JOIN SKU WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey AND PICKDETAIL.Sku = SKU.Sku) '  
           + ' JOIN LOADPLANDETAIL WITH (NOLOCK) ON (PICKDETAIL.Orderkey = LOADPLANDETAIL.Orderkey) '  
+          + ' JOIN LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) '  --NJOW05
           + ' WHERE SKU.Busr9 <> ''BEAUTY'' '
           + ' AND LOADPLANDETAIL.Loadkey = @c_LoadKey '  
           + ' AND PICKDETAIL.UOM <> ''2'' '          
@@ -1297,6 +1310,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           
            SET @n_cnt = @n_cnt + 1
            SET @c_PrevLoadkey = @c_Loadkey 
+           
+           IF @c_CheckFloor = 'Y'  --NJOW05
+       	      SET @c_PrevFloor = @c_Floor
+       	              
            FETCH NEXT FROM cur_Group INTO @c_Loadkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,   
                                          @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10            
        END
@@ -1313,25 +1330,29 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           WHERE ListName = 'MASTGROUP'  
           AND Short = '3'   
           AND Storerkey = @c_Storerkey
-          ORDER BY Code  
+          ORDER BY CASE WHEN Long = 'LOC.FLOOR' THEN 1 ELSE 2 END, --NJOW05
+                   Code  
          
        OPEN CUR_CODELKUP  
          
        FETCH NEXT FROM CUR_CODELKUP INTO @c_TableColumnName  
          
-       SELECT @c_SQLField = '', @c_SQLWhere = '', @c_SQLGroup = '', @n_cnt = 0  
+       SELECT @c_SQLField = '', @c_SQLWhere = '', @c_SQLGroup = '', @n_cnt = 0, @c_CheckFloor = 'N' 
        WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
        BEGIN  
+       	  IF @c_TableColumnName = 'LOC.FLOOR'  --NJOW05
+       	     SET @c_CheckFloor = 'Y'
+       	
           SET @n_cnt = @n_cnt + 1   
           SET @c_TableName = LEFT(@c_TableColumnName, CharIndex('.', @c_TableColumnName) - 1)  
           SET @c_ColumnName = SUBSTRING(@c_TableColumnName,   
                               CharIndex('.', @c_TableColumnName) + 1, LEN(@c_TableColumnName) - CharIndex('.', @c_TableColumnName))  
        
-          IF ISNULL(RTRIM(@c_TableName), '') <> 'SKU'   
+          IF ISNULL(RTRIM(@c_TableName), '') NOT IN('SKU','LOC')  --NJOW05
           BEGIN  
              SELECT @n_continue = 3  
              SELECT @n_err = 83180  
-             SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Grouping Only Allow Refer To SKU Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispRLWAV24)"  
+             SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Grouping Only Allow Refer To SKU/LOC Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispRLWAV24)"  
              GOTO RETURN_SP                      
           END   
          
@@ -1418,6 +1439,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           + ' FROM #PickDetail_WIP PICKDETAIL '  
           + ' JOIN ORDERS (NOLOCK) ON PICKDETAIL.Orderkey = ORDERS.Orderkey '
           + ' JOIN SKU WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey AND PICKDETAIL.Sku = SKU.Sku) '  
+          + ' JOIN LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) '  --NJOW05
           + ' WHERE SKU.Busr9 = ''BEAUTY'' '
           + ' AND PICKDETAIL.UOM <> ''2'' '
           + ' GROUP BY ORDERS.Loadkey ' + @c_SQLGroup  
@@ -1434,10 +1456,15 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
        SET @n_cnt = 1
        SET @c_BatchNo = ''
        SET @c_PrevLoadkey = ''
+       SET @c_PrevFloor = ''      
               
        WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)    
        BEGIN
+       	   IF @c_CheckFloor = 'Y'  --NJOW05
+       	      SET @c_Floor = @c_Field01
+
            IF @n_cnt > @n_NoofTotePerBatch OR @c_PrevLoadkey <> @c_Loadkey 
+              OR (@c_PrevFloor <> @c_Floor AND @c_CheckFloor = 'Y')  --NJOW05           
               SET @n_cnt = 1
            
            IF @n_cnt = 1
@@ -1462,6 +1489,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           + ' FROM #PickDetail_WIP PICKDETAIL '  
           + ' JOIN SKU WITH (NOLOCK) ON (PICKDETAIL.Storerkey = SKU.Storerkey AND PICKDETAIL.Sku = SKU.Sku) '  
           + ' JOIN LOADPLANDETAIL WITH (NOLOCK) ON (PICKDETAIL.Orderkey = LOADPLANDETAIL.Orderkey) '  
+          + ' JOIN LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) ' --NJOW05           
           + ' WHERE SKU.Busr9 = ''BEAUTY'' '
           + ' AND LOADPLANDETAIL.Loadkey = @c_LoadKey '  
           + ' AND PICKDETAIL.UOM <> ''2'' '
@@ -1501,6 +1529,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV24]
           
            SET @n_cnt = @n_cnt + 1
            SET @c_PrevLoadkey = @c_Loadkey 
+
+           IF @c_CheckFloor = 'Y'  --NJOW05
+       	      SET @c_PrevFloor = @c_Floor
+           
            FETCH NEXT FROM cur_Group INTO @c_Loadkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,   
                                          @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10            
        END
