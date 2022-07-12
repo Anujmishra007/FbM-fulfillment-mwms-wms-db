@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_PutawayBySKU]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_PutawayBySKU]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -76,9 +72,10 @@ GO
 /* 2020-02-18 4.4  Chermaine WMS-11813 Add upc to RDTMOBREC (cc01)            */ 
 /* 2020-12-15 4.5  James    WMS-15820 Restructure output @ Qty screen(james12)*/
 /*                          Add ExtInfo @ step 2 & 4, ExtValid @ step 3       */
+/* 2022-07-08 4.6  James    WMS-20188 Add flow thru screen 3-> 4 (james13)    */
 /******************************************************************************/  
   
-CREATE PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (  
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (  
    @nMobile    INT,  
    @nErrNo     INT           OUTPUT,  
    @cErrMsg    NVARCHAR( 20) OUTPUT  
@@ -171,6 +168,7 @@ DECLARE
    @cSKUVar             NVARCHAR( 20), -- (yeekung04)  
    @cSKUDefault         NVARCHAR( 20), --(yeekung04)  
    @cUPC                NVARCHAR( 30),  --(cc01)
+   @cFlowThruQtyScn     NVARCHAR( 1),
    
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),  
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),  
@@ -228,7 +226,8 @@ SELECT
    @cQTY_Alloc    = V_String8,  
    @cQTY_PMoveIn  = V_String9,  
    @cSKUBarcode   = V_String11,
-     
+   @cFlowThruQtyScn = V_String12,
+   
    @nPUOM_Div     = V_PUOM_Div,  
    @nPQTY         = V_PQTY,  
    @nMQTY         = V_MQTY,  
@@ -338,6 +337,9 @@ BEGIN
    IF @cSKUStatus = '0'  
     SET @cSKUStatus = ''  
   
+   -- (james13)
+   SET @cFlowThruQtyScn = rdt.RDTGetConfig( @nFunc, 'FlowThruQtyScn', @cStorer)
+   
    -- EventLog  
    EXEC RDT.rdt_STD_EventLog  
       @cActionType = '1', -- Sign-in  
@@ -1155,6 +1157,13 @@ BEGIN
       SET @cOutField12 = CAST( @nMQTY_PWY AS NVARCHAR( 5))  
       SET @cOutField13 = ''  
       SET @cOutField14 = CASE WHEN @cDefaultQTY = '1' THEN '1' ELSE '' END  
+      
+      IF @cFlowThruQtyScn = '1' AND @cDefaultQTY = '1'
+      BEGIN
+      	SET @cInField14 = @cDefaultQTY
+         GOTO Step_3
+      END
+
    END  
   
    IF @nInputKey = 0 -- Esc or No  
@@ -1774,6 +1783,36 @@ BEGIN
          END  
       END  
 
+      -- (james13)
+      IF @cFlowThruQtyScn = '1' AND @cDefaultQTY = '1'
+      BEGIN
+         -- Go to prev screen  
+         SET @nScn = @nScn - 1  
+         SET @nStep = @nStep - 1  
+
+         -- Prepare next screen variable  
+         SET @cSKU = ''  
+         SET @cOutField01 = @cID  
+         SET @cOutField02 = @cUCC  
+         SET @cOutField03 = @cLOC  
+         SET @cOutField04 = @cSuggestSKU  
+         SET @cOutField05 = @cSKU  
+         SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)  
+         SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)  
+         SET @cOutField08 = ''
+         SET @cOutField09 = ''
+         SET @cOutField10 = ''
+         SET @cOutField11 = ''
+         SET @cOutField12 = ''
+         SET @cOutField13 = ''
+         SET @cOutField14 = ''
+         
+         -- Set to 3 here because wanna it stop at step 2
+         SET @nInputKey = 3
+         
+         GOTO Step_2
+      END
+
       -- Prepare next screen variable  
       SET @cOutField01 = @cSKU  
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)  
@@ -2184,7 +2223,8 @@ BEGIN
       V_String8  = @cQTY_Alloc,  
       V_String9  = @cQTY_PMoveIn,  
       V_String11 = @cSKUBarcode,
-  
+      V_String12 = @cFlowThruQtyScn,
+      
       V_PUOM_Div = @nPUOM_Div ,  
       V_PQTY     = @nPQTY,  
       V_MQTY     = @nMQTY,  
