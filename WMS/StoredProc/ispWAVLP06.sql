@@ -14,7 +14,7 @@ GO
 /* Copyright: LFL                                                       */
 /* Written by:                                                          */
 /*                                                                      */
-/* Purpose:  WMS-14646 Converse generate load plan                      */
+/* Purpose:  WMS-14636 Converse generate load plan                      */
 /*           Storerconfig: WAVEGENLOADPLAN                              */
 /*                                                                      */
 /* Input Parameters:  @c_WaveKey  - (WaveKey)                           */
