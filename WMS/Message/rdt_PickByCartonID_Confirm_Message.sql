@@ -11,3 +11,5 @@ execute rdt.rdtAddMsg 136507, 10, '136507UPD PKDtl Fail',   'us_english', 831
 execute rdt.rdtAddMsg 136508, 10, '136508UPD PKDtl Fail',   'us_english', 831
 execute rdt.rdtAddMsg 136509, 10, '136509UPD PKDtl Fail',   'us_english', 831
 execute rdt.rdtAddMsg 136510, 10, '136510NotFullyOffset',   'us_english', 831
+execute rdt.rdtAddMsg 136511, 10, '136511PackCfmFail ',   'us_english', 831
+execute rdt.rdtAddMsg 136512, 10, '136512ScanOutFail ',   'us_english', 831

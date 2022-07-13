@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_LottableProcess_DefL2NIK]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_LottableProcess_DefL2NIK]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 14-Sep-2015  Ung       1.0   SOS352968 Created                             */
+/* 13-Jul-2021  Chermaine 1.1   WMS-16119 Add codelkup (cc01)                 */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_LottableProcess_DefL2NIK
+CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_DefL2NIK
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -67,9 +65,23 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+   
+   DECLARE @cReceiptKey NVARCHAR( 10)
+   DECLARE @cLOC        NVARCHAR( 10)
+   DECLARE @cLong       NVARCHAR( 18)
+   DECLARE @cExtRecKey  NVARCHAR(20)
+   DECLARE @cUDF02      NVARCHAR(60)   
 
-   IF @cLottable02 = ''
-      SET @cLottable02 = '01000'
+   SELECT @cReceiptKey = V_ReceiptKey, @cLOC = V_LOC FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+   SELECT @cExtRecKey = ExternReceiptKey FROM Receipt WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cReceiptKey
+   SELECT @cUDF02 = UDF02, @cLong = Long FROM  Codelkup WITH(nolock) WHERE Listname='RTNLOC2L10' AND Storerkey=@cStorerKey AND Code= @cLOC 
+           
+   SET @cLottable02 = @cLong
+   SET @cLottable12 = @cUDF02
+   SET @cLottable09 = @cExtRecKey
+              
+   --IF @cLottable02 = ''
+   --   SET @cLottable02 = '01000'
 END
 GO
 

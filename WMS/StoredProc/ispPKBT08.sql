@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPKBT08]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispPKBT08]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: isp_Packing_Bartender_Print                               */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,9 +21,11 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 26-Oct-2021 WLChooi  1.0   DevOps Combine Script                     */
+/* 20-Apr-2022 WLChooi  1.1   DevOps Combine Script                     */
+/* 20-Apr-2022 WLChooi  1.1   WMS-19490 - Merged with ispPKBT06 (WL01)  */
 /************************************************************************/
-CREATE PROCEDURE [dbo].[ispPKBT08]
+
+CREATE OR ALTER PROCEDURE [dbo].[ispPKBT08]
    @c_printerid  NVARCHAR(50) = '',  
    @c_labeltype  NVARCHAR(30) = '',  
    @c_userid     NVARCHAR(18) = '',  
@@ -60,7 +57,9 @@ BEGIN
          , @c_Orderkey        NVARCHAR(10) = ''
          , @c_DocType         NVARCHAR(10) = ''
          , @c_OrderGroup      NVARCHAR(20) = ''
+         , @c_OIFPlatform     NVARCHAR(20) = ''   --WL01
          , @c_UDF05           NVARCHAR(20) = ''
+         , @c_BuyerPO         NVARCHAR(50) = ''   --WL01
                                                       
    SET @n_err = 0
    SET @b_success = 1
@@ -69,42 +68,41 @@ BEGIN
    
    SET @c_Pickslipno = @c_Parm01
 
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   SELECT @c_OrderKey    = ORDERS.OrderKey 
+        , @c_OrderGroup  = ORDERS.OrderGroup
+        , @c_DocType     = ORDERS.Doctype
+        , @c_OIFPlatform = ORDERINFO.[Platform]   --WL01
+        , @c_BuyerPO     = ORDERS.BuyerPO   --WL01
+   FROM PACKHEADER (NOLOCK)
+   JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
+   LEFT JOIN ORDERINFO (NOLOCK) ON OrderInfo.OrderKey = ORDERS.OrderKey
+   WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
+   
+   --Consider Conso
+   IF ISNULL(@c_OrderKey,'') = ''
    BEGIN
       SELECT @c_OrderKey    = ORDERS.OrderKey 
            , @c_OrderGroup  = ORDERS.OrderGroup
            , @c_DocType     = ORDERS.Doctype
+           , @c_OIFPlatform = ORDERINFO.[Platform]   --WL01
+           , @c_BuyerPO     = ORDERS.BuyerPO   --WL01
       FROM PACKHEADER (NOLOCK)
-      JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
+      JOIN LOADPLANDETAIL (NOLOCK) ON LOADPLANDETAIL.Loadkey = PACKHEADER.Loadkey
+      JOIN ORDERS (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey
       LEFT JOIN ORDERINFO (NOLOCK) ON OrderInfo.OrderKey = ORDERS.OrderKey
-      WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
-      
-      --Consider Conso
-      IF ISNULL(@c_OrderKey,'') = ''
-      BEGIN
-         SELECT @c_OrderKey    = ORDERS.OrderKey 
-              , @c_OrderGroup  = ORDERS.OrderGroup
-              , @c_DocType     = ORDERS.Doctype
-         FROM PACKHEADER (NOLOCK)
-         JOIN LOADPLANDETAIL (NOLOCK) ON LOADPLANDETAIL.Loadkey = PACKHEADER.Loadkey
-         JOIN ORDERS (NOLOCK) ON LOADPLANDETAIL.Orderkey = ORDERS.Orderkey
-         LEFT JOIN ORDERINFO (NOLOCK) ON OrderInfo.OrderKey = ORDERS.OrderKey
-         WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo
-      END
+      WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo
    END
    
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   --WL01 S
+   IF LTRIM(RTRIM(@c_OrderGroup)) = 'aCommerce'
    BEGIN
-      IF @c_DocType = 'E'
+      IF @c_DocType = 'E' AND @c_BuyerPO NOT LIKE '%LOAN%'   --WL01
       BEGIN
-         SELECT @c_UDF05 = ISNULL(CL.UDF05,'') 
-         FROM Orders OH (NOLOCK)
-         JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'COURIERLBL'
-                                  AND CL.Storerkey  = OH.Storerkey
-                                  AND CL.Code = OH.Salesman
-         WHERE OH.Orderkey = @c_Orderkey
-
-         IF @c_UDF05 = 'Y'
+         IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK) 
+                    WHERE CL.LISTNAME = 'ACOM-IDLBL' 
+                    AND CL.Storerkey = @c_Storerkey
+                    AND CL.Code = @c_OIFPlatform
+                    AND CL.Short = '1')
          BEGIN
             EXEC isp_BT_GenBartenderCommand   	  
                      @cPrinterID = @c_PrinterID
@@ -129,17 +127,89 @@ BEGIN
             IF @n_Err <> 0 
             BEGIN
                SET @n_continue = 3
-            END
+            END                    --@n_Err <> 0       
+         END                       --Exists Codelkup
 
-            SET @b_success = 1 
-         END
-         ELSE   -- <> Zalora
+         SET @b_success = 2        --PrintCartonLabelByITF
+      END                          --DocType = 'E'
+      ELSE IF @c_DocType <> 'E' OR @c_BuyerPO LIKE '%LOAN%'   --WL01
+      BEGIN                        --DocType <> 'E' OR @c_BuyerPO LIKE '%LOAN%'
+         EXEC isp_BT_GenBartenderCommand   	  
+                  @cPrinterID = @c_PrinterID
+               ,  @c_LabelType = @c_LabelType
+               ,  @c_userid = @c_UserId
+               ,  @c_Parm01 = @c_Parm01 --pickslipno
+               ,  @c_Parm02 = @c_Parm02 --carton from
+               ,  @c_Parm03 = @c_Parm03 --carton to
+               ,  @c_Parm04 = @c_Parm04
+               ,  @c_Parm05 = @c_Parm05
+               ,  @c_Parm06 = @c_Parm06
+               ,  @c_Parm07 = @c_Parm07
+               ,  @c_Parm08 = @c_Parm08
+               ,  @c_Parm09 = @c_Parm09
+               ,  @c_Parm10 = @c_Parm10
+               ,  @c_Storerkey = @c_Storerkey
+               ,  @c_NoCopy = @c_NoOfCopy
+               ,  @c_Returnresult = 'N' 
+               ,  @n_err = @n_Err OUTPUT
+               ,  @c_errmsg = @c_ErrMsg OUTPUT   	
+                                  
+         IF @n_Err <> 0 
          BEGIN
-            SET @b_success = 1   --PACKUCC2PDF Should be printed before this
+            SET @n_continue = 3
+         END                       --@n_Err <> 0       
+      END                          --DocType <> 'E' OR @c_BuyerPO LIKE '%LOAN%'
+   END                             --OrderGroup
+   ELSE IF @c_DocType = 'E'        --OrderGroup <> 'aCommerce' AND DocType = 'E'
+   BEGIN
+      SELECT @c_UDF05 = ISNULL(CL.UDF05,'') 
+      FROM Orders OH (NOLOCK)
+      JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'COURIERLBL'
+                               AND CL.Storerkey  = OH.Storerkey
+                               AND CL.Code = OH.Salesman
+      WHERE OH.Orderkey = @c_Orderkey
+
+      IF @c_UDF05 = 'Y'
+      BEGIN
+         EXEC isp_BT_GenBartenderCommand   	  
+                  @cPrinterID = @c_PrinterID
+               ,  @c_LabelType = @c_LabelType
+               ,  @c_userid = @c_UserId
+               ,  @c_Parm01 = @c_Parm01 --pickslipno
+               ,  @c_Parm02 = @c_Parm02 --carton from
+               ,  @c_Parm03 = @c_Parm03 --carton to
+               ,  @c_Parm04 = @c_Parm04
+               ,  @c_Parm05 = @c_Parm05
+               ,  @c_Parm06 = @c_Parm06
+               ,  @c_Parm07 = @c_Parm07
+               ,  @c_Parm08 = @c_Parm08
+               ,  @c_Parm09 = @c_Parm09
+               ,  @c_Parm10 = @c_Parm10
+               ,  @c_Storerkey = @c_Storerkey
+               ,  @c_NoCopy = @c_NoOfCopy
+               ,  @c_Returnresult = 'N' 
+               ,  @n_err = @n_Err OUTPUT
+               ,  @c_errmsg = @c_ErrMsg OUTPUT   	
+                                  
+         IF @n_Err <> 0 
+         BEGIN
+            SET @n_continue = 3
          END
+
+         SET @b_success = 1
+      END
+      ELSE   -- <> Zalora
+      BEGIN
+         SET @b_success = 1   --PACKUCC2PDF Should be printed before this
       END
    END
-
+   ELSE                            --OrderGroup <> 'aCommerce' AND DocType <> 'E'
+   BEGIN   --WL01 E
+      --Print PDF (PACKUCC2PDF)
+      --PDF Should be printed before Bartender
+      SET @b_success = 1
+   END
+                     
 QUIT_SP:
    IF @n_continue = 3
    BEGIN
@@ -149,11 +219,5 @@ QUIT_SP:
    END   
 END  
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO
-
-GRANT EXECUTE ON ispPKBT08 TO NSQL
+GRANT EXECUTE ON [dbo].[ispPKBT08] TO NSQL
 GO

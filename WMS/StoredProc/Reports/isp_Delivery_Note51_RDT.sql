@@ -54,11 +54,11 @@ BEGIN
    SET @b_Success   = 1    
    SET @n_Err       = 0    
    SET @c_Errmsg    = ''   
-   SET @n_MaxLineno = 35
+   SET @n_MaxLineno = 30
    SET @n_MaxRec = 0
  
    CREATE TABLE #DELNOTE51RDT( 
-      RowNo        INT NOT NULL identity(1,1) 
+      RowNo        INT NOT NULL IDENTITY(1,1) 
      ,Orderkey     NVARCHAR(20) 
      ,C_Company    NVARCHAR(45)   
      ,C_Addresses  NVARCHAR(255)  
@@ -78,9 +78,12 @@ BEGIN
      ,C09          NVARCHAR(150) 
      ,C10          NVARCHAR(150) 
      ,C11          NVARCHAR(150) 
+	 ,C12          NVARCHAR(150)	--ML01
+	 ,C13          NVARCHAR(150)	--ML01
+	 ,ExternOrderKey NVARCHAR(45)
    )          
    INSERT INTO #DELNOTE51RDT (Orderkey,C_Company,C_Addresses,Contact1,LabelNo,C01,C02
-                             ,C03,SKU,SDESCR,C04,C05,Qty,C06,C07,C08,C09,C10,C11)
+                             ,C03,SKU,SDESCR,C04,C05,Qty,C06,C07,C08,C09,C10,C11,C12,C13,ExternOrderKey)	--ML01
    SELECT OH.Orderkey as Orderkey 
         , OH.C_Company AS C_Company  
         , LTRIM(RTRIM(ISNULL(OH.C_Address1,''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address2,''))) +
@@ -101,6 +104,9 @@ BEGIN
         , C09 = ISNULL(MAX(CASE WHEN CL.Code ='C09' THEN RTRIM(CL.Long) ELSE '' END),'')
         , C10 = ISNULL(MAX(CASE WHEN CL.Code ='C10' THEN RTRIM(CL.Long) ELSE '' END),'')
         , C11 = ISNULL(MAX(CASE WHEN CL.Code ='C11' THEN RTRIM(CL.Long) ELSE '' END),'')
+		, C12 = ISNULL(MAX(CASE WHEN CL.Code ='C12' THEN RTRIM(CL.Long) ELSE '' END),'')	--ML01
+		, C13 = ISNULL(MAX(CASE WHEN CL.Code ='C13' THEN RTRIM(CL.Long) ELSE '' END),'')	--ML01
+		, OH.ExternOrderKey
    FROM ORDERS OH (NOLOCK)  
    JOIN PACKHEADER PH WITH (NOLOCK) ON PH.orderkey = OH.Orderkey
    JOIN PACKDETAIL PAD WITH (NOLOCK) ON PAD.Pickslipno = PH.Pickslipno
@@ -117,7 +123,9 @@ BEGIN
           , ISNULL(S.descr,'')
           , PAD.LabelNo
           , PAD.Qty
-   ORDER BY PAD.Qty DESC   --WL01
+		  , OH.ExternOrderKey
+   --ORDER BY PAD.Qty DESC   --WL01
+   ORDER BY ISNULL(S.descr,'')   --ML01
 
    SET @n_MaxRec = 0
    
@@ -128,9 +136,9 @@ BEGIN
    WHILE @n_MaxRec > 0 AND @n_MaxRec< @n_MaxLineno
    BEGIN
       INSERT INTO #DELNOTE51RDT (Orderkey,C_Company,C_Addresses,Contact1,LabelNo,C01,C02
-                                ,C03,SKU,SDESCR,C04,C05,Qty,C06,C07,C08,C09,C10,C11)
+                                ,C03,SKU,SDESCR,C04,C05,Qty,C06,C07,C08,C09,C10,C11,C12,C13,ExternOrderKey)
       SELECT TOP 1 Orderkey,C_Company,C_Addresses,Contact1,LabelNo,C01,C02
-                ,C03,'','',C04,C05,'',C06,C07,C08,C09,C10,C11
+                ,C03,'','',C04,C05,'',C06,C07,C08,C09,C10,C11,C12,C13,ExternOrderKey
       FROM #DELNOTE51RDT
       ORDER BY RowNo
 
@@ -139,7 +147,7 @@ BEGIN
 
  
    SELECT Orderkey,C_Company,C_Addresses,Contact1,LabelNo,C01,C02
-         ,C03,SKU,SDESCR,C04,C05,Qty,C06,C07,C08,C09,C10,C11
+         ,C03,SKU,SDESCR,C04,C05,Qty,C06,C07,C08,C09,C10,C11,C12,C13,ExternOrderKey
    FROM #DELNOTE51RDT
    ORDER BY RowNo
  
@@ -176,5 +184,17 @@ GO
        
 GRANT EXECUTE ON isp_Delivery_Note51_RDT TO NSQL
 GO     
+
+--EXEC isp_Delivery_Note51_RDT '0000199596','1','1'
+
+--SELECT DISTINCT OH.OrderKey
+--FROM ORDERS OH (NOLOCK)  
+--   JOIN PACKHEADER PH WITH (NOLOCK) ON PH.orderkey = OH.Orderkey
+--   JOIN PACKDETAIL PAD WITH (NOLOCK) ON PAD.Pickslipno = PH.Pickslipno
+--   JOIN SKU S WITH (NOLOCK) ON S.storerkey = PAD.Storerkey AND S.sku = PAD.sku
+--   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.ListName= 'DNOTECONST' AND CL.Storerkey = OH.Storerkey --AND CL.Notes = 'B2B' 
+--   WHERE OH.storerkey = 'IIC'
+
+--   SELECT * FROM codelkup(NOLOCK) WHERE LISTNAME = 'DNOTECONST' 
   
 

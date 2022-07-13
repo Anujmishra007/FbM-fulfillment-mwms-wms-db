@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ntrReceiptDetailUpdate]') 
-AND OBJECTPROPERTY(id ,N'IsTrigger') = 1 ) 
-DROP TRIGGER [dbo].[ntrReceiptDetailUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -168,11 +163,13 @@ GO
 /* 09-Jun-2020  NJOW11    5.0   WMS-13612 add new column support for        */
 /*                              CopyRecDetValueToLottable.                  */
 /* 13-Jul-2020  NJOW12    5.1   WMS-14228 storerconfig add facility         */
+/* 01-Jun-2021  NJOW13    5.2   WMS-16944 additional from ASNStatus change  */
+/*                              to status 1 by codelkup                     */
 /* 27-Aug-2021  TLTING06  5.3   Extend ExternReceiptKey field length        */
 /* 14-Mar-2022  James     5.4   Fix RDT error no & message (james03)        */
 /****************************************************************************/ 
  
-CREATE TRIGGER [dbo].[ntrReceiptDetailUpdate] 
+CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
 ON  [dbo].[RECEIPTDETAIL] 
 FOR UPDATE 
 AS 
@@ -2706,7 +2703,10 @@ BEGIN
    BEGIN 
       IF EXISTS (SELECT 1 FROM RECEIPT WITH (NOLOCK) 
                    JOIN INSERTED ON (INSERTED.RECEIPTKey = RECEIPT.RECEIPTKey) 
-                  WHERE RECEIPT.ASNStatus = '0'  
+                  WHERE (RECEIPT.ASNStatus = '0'
+                        OR RECEIPT.ASNStatus IN (SELECT Code FROM CODELKUP(NOLOCK) 
+                                                 WHERE Listname = 'ASNSTSTO1'
+                                                 AND Storerkey = RECEIPT.Storerkey)) --NJOW13
                     AND INSERTED.BeforeReceivedQty > 0) 
       BEGIN 
          UPDATE RECEIPT WITH (ROWLOCK)  
@@ -2715,8 +2715,10 @@ BEGIN
               , EditWho = SUSER_SNAME() 
            FROM RECEIPT 
            JOIN INSERTED ON (RECEIPT.ReceiptKey  = INSERTED.ReceiptKey) 
-          WHERE RECEIPT.ASNStatus = '0' 
- 
+           WHERE (RECEIPT.ASNStatus = '0' 
+                 OR RECEIPT.ASNStatus IN (SELECT Code FROM CODELKUP(NOLOCK) 
+                                          WHERE Listname = 'ASNSTSTO1'
+                                          AND Storerkey = RECEIPT.Storerkey)) --NJOW13 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT 
  
          IF @n_err <> 0 

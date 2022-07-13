@@ -17,6 +17,7 @@ GO
 /* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars       */
 /* 2022-05-12  1.2  James    WMS-19645 Change pallet status to 9 when   */  
 /*                           check pallet close (james02)               */  
+/* 2022-02-28  1.3  James    WMS-18350 Filter short pick (james01)      */
 /************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid01] (        
@@ -80,6 +81,7 @@ BEGIN
          SELECT @nQty_Picked = ISNULL( SUM( Qty), 0)    
          FROM dbo.PickDetail WITH (NOLOCK)    
          WHERE OrderKey = @cOrderKey    
+         AND   [Status] <> '4'
   
          SELECT @nQty_Packed = ISNULL( SUM( Qty), 0)    
          FROM dbo.PackDetail PD WITH (NOLOCK)    

@@ -1,6 +1,4 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_Scan_To_Container]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_Scan_To_Container]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -48,9 +46,12 @@ GO
 /* 2020-10-01 3.2  Chermaine WMS-15384 Add print Delivery List (cc02)        */
 /* 2021-03-08 3.3  James    WMS16476-Add CaptureContainerInfoSP (james12)    */
 /* 2021-04-16 3.4  James     WMS-16024 Standarized use of TrackingNo(james13)*/
+/* 2020-03-09 3.5  YeeKung  WMS-12381 Add RDTFormat step_8   (yeekung03)     */     
+/* 2020-04-24 3.6  YeeKung  WMS-13025 Add popup Message (yeekung04)          */ 
+/* 2020-07-08 3.7  YeeKung  WMS-13899 Add PalletLbl print (yeekung05)        */   
 /*****************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_Scan_To_Container](  
+CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Container](  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -108,6 +109,7 @@ DECLARE
    @cTargetDB           NVARCHAR(20), -- (james02)  
   
    @cKeyName            NVARCHAR(30), -- (james02)  
+  	@cShowPopOutMsg      NVARCHAR( 1), -- (yeekung01)     
   
    @nScanCnt            INT,  
    @nScanCTNCnt         INT,  
@@ -146,6 +148,7 @@ DECLARE
    @cCaptureContainerInfoSP      NVARCHAR( 20),    --(james12)
    @cContainerNoIsOptional       NVARCHAR( 1),     --(james12) 
    @tCaptureVar         VARIABLETABLE,
+   @cPalletLabel        NVARCHAR( 10),      --(yeekung05)  
    
    @cParam1    NVARCHAR( 20),   @cParamLabel1 NVARCHAR( 20),  
    @cParam2    NVARCHAR( 20),   @cParamLabel2 NVARCHAR( 20),  
@@ -223,6 +226,8 @@ SELECT
    @cAction          = V_String27,  
  	@cVerifypalletstatus = V_String28, 
  	@cDelList         = V_String29,  --(cc02)
+ 	@cShowPopOutMsg   = V_String30,
+   @cPalletLabel     = V_String31,
  	@cPalletKeyPrev   = V_String41,  --(cc02)
    @cData1           = V_String42,
    @cData2           = V_String43,
@@ -284,7 +289,9 @@ Step 0. Called from menu (func = 1634)
 Step_0:  
 BEGIN  
    -- Storer config  
-   SET @cVerifyPallet = rdt.rdtGetConfig( @nFunc, 'VerifyPallet', @cStorerKey)  
+   SET @cVerifyPallet = rdt.rdtGetConfig( @nFunc, 'VerifyPallet', @cStorerKey)
+   
+   SET @cShowPopOutMsg = rdt.rdtGetConfig( @nFunc, 'ShowPopOutMsg', @cStorerKey)    
   
    SET @cVerifypalletstatus = rdt.rdtGetConfig( @nFunc, 'Verifypalletstatus', @cStorerKey)      --(yeekung01)
    
@@ -314,7 +321,10 @@ BEGIN
       SET @cCloseContainerStatus = ''        
    SET @cContainerManifest = rdt.RDTGetConfig( @nFunc, 'ContainerManifest', @cStorerKey)  
    IF @cContainerManifest = '0'  
-      SET @cContainerManifest = ''        
+      SET @cContainerManifest = ''  
+   SET @cPalletLabel = rdt.rdtGetConfig( @nFunc, 'PalletLbl', @cStorerKey)      --(yeekung05)
+   IF @cPalletLabel = '0'        
+      SET @cPalletLabel = ''                
   
    SET @cDefaultContainerType = rdt.RDTGetConfig( @nFunc, 'DefaultContainerType', @cStorerKey)  
    IF @cDefaultContainerType = '0'  
@@ -1327,26 +1337,66 @@ BEGIN
   
       IF @cVerifyPallet = '1'  
       BEGIN  
-         -- Pallet not in container  
-         IF NOT EXISTS (SELECT 1 FROM dbo.ContainerDetail WITH (NOLOCK) WHERE ContainerKey = @cContainerKey AND PalletKey = @cPalletKey)  
-         BEGIN  
-            SET @nErrNo = 95870  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PL not in Cont  
-            GOTO Step_3_Fail  
+      	IF (@cShowPopOutMsg='1')  
+         BEGIN   
+            SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)        
+            IF @cExtendedValidateSP NOT IN ('0', '')        
+            BEGIN        
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +        
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cContainerKey, @cContainerNo, ' +         
+                  ' @cMBOLKey, @cSSCCNo, @cPalletKey, @cTrackNo, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT '        
+                
+               SET @cSQLParam =        
+                  '@nMobile                   INT,           ' +        
+                  '@nFunc                     INT,           ' +        
+                  '@cLangCode                 NVARCHAR( 3),  ' +        
+                  '@nStep                     INT,           ' +        
+                  '@nInputKey                 INT,           ' +        
+                  '@cStorerkey                NVARCHAR( 15), ' +        
+                  '@cContainerKey             NVARCHAR( 10), ' +        
+                  '@cContainerNo              NVARCHAR( 20), ' +        
+                  '@cMBOLKey                  NVARCHAR( 10), ' +        
+                  '@cSSCCNo                   NVARCHAR( 20), ' +        
+                  '@cPalletKey                NVARCHAR( 30), ' +        
+                  '@cTrackNo                  NVARCHAR( 20), ' +        
+                  '@cOption                   NVARCHAR( 1), '  +        
+                  '@nErrNo                    INT           OUTPUT,  ' +        
+                  '@cErrMsg                   NVARCHAR( 20) OUTPUT   '        
+                
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cContainerKey, @cContainerNo,         
+                  @cMBOLKey, @cSSCCNo, @cPalletKey, @cTrackNo, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT        
+                
+               IF @nErrNo <> 0        
+               BEGIN        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')         
+                  GOTO Step_3_Fail                
+               END        
+            END    
          END  
-  
-         -- Check if pallet scanned (for 2nd time verify only)  
-         IF EXISTS ( SELECT 1 FROM dbo.ContainerDetail WITH (NOLOCK)   
-                     WHERE ContainerKey = @cContainerKey   
-                     AND   PalletKey = @cPalletKey  
-                     AND   [Status] = '5'  
-                     AND   (( @nFunc = 1651 AND 1 = 1) OR ( 1 = 0)))  
-         BEGIN  
-            SET @nErrNo = 95898  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet scanned   
-            GOTO Step_3_Fail  
-         END  
-  
+         ELSE  
+         BEGIN 
+	         -- Pallet not in container  
+	         IF NOT EXISTS (SELECT 1 FROM dbo.ContainerDetail WITH (NOLOCK) WHERE ContainerKey = @cContainerKey AND PalletKey = @cPalletKey)  
+	         BEGIN  
+	            SET @nErrNo = 95870  
+	            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PL not in Cont  
+	            GOTO Step_3_Fail  
+	         END  
+	  
+	         -- Check if pallet scanned (for 2nd time verify only)  
+	         IF EXISTS ( SELECT 1 FROM dbo.ContainerDetail WITH (NOLOCK)   
+	                     WHERE ContainerKey = @cContainerKey   
+	                     AND   PalletKey = @cPalletKey  
+	                     AND   [Status] = '5'  
+	                     AND   (( @nFunc = 1651 AND 1 = 1) OR ( 1 = 0)))  
+	         BEGIN  
+	            SET @nErrNo = 95898  
+	            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet scanned   
+	            GOTO Step_3_Fail  
+	         END  
+	  		END  
+	  		
          BEGIN TRAN  
      
          -- ContainerDetail  
@@ -1372,8 +1422,8 @@ BEGIN
          FROM dbo.CONTAINERDETAIL WITH (NOLOCK)  
          WHERE ContainerKey = @cContainerKey  
             AND Status = '5'  
-      END  
-      ELSE  
+   	END 
+   	ELSE
       BEGIN  
   
          --PalletID exists in Container  
@@ -2068,9 +2118,33 @@ BEGIN
                GOTO Step_6_Fail
             END
          END
+         
+         IF ISNULL(@cPalletLabel,'')<>'' --(yeekung05)
+         BEGIN
+            DECLARE @tPalletLbl AS VariableTable 
 
-         WHILE @@TRANCOUNT > @nTranCount
-            COMMIT TRAN
+            INSERT INTO @tPalletLbl (Variable, Value) VALUES ( '@cContainerKey',  @cContainerKey)  
+            INSERT INTO @tPalletLbl (Variable, Value) VALUES ( '@cStorerkey', @cStorerKey)  
+
+            -- Print Carton label  
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
+               @cPalletLabel, -- Report type  
+               @tPalletLbl, -- Report params  
+               'rdtfnc_Scan_To_Container',   
+               @nErrNo  OUTPUT,  
+               @cErrMsg OUTPUT 
+           
+            IF @nErrNo <> 0  
+            BEGIN      
+               ROLLBACK TRAN Step_6_CloseContainer      
+               WHILE @@TRANCOUNT > @nTranCount        
+                  COMMIT TRAN        
+               GOTO Step_6_Fail      
+            END    
+         END     
+      
+         WHILE @@TRANCOUNT > @nTranCount      
+            COMMIT TRAN  
          
          --eventlog  --(cc01)
          EXEC RDT.rdt_STD_EventLog
@@ -2247,7 +2321,47 @@ BEGIN
       SET @cOutField06 = @cInField06  
       SET @cOutField08 = @cInField08  
       SET @cOutField10 = @cInField10  
-  
+      
+		-- Check format        
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UDF01', @cParam1) = 0    --(yeekung03)    
+      BEGIN        
+         SET @nErrNo = 95900        
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format       
+         GOTO Step_8_Fail        
+      END      
+    
+      -- Check format        
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UDF02', @cParam2) = 0    --(yeekung03)    
+      BEGIN        
+         SET @nErrNo = 149201        
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format       
+         GOTO Step_8_Fail        
+      END     
+    
+      -- Check format        
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UDF03', @cParam3) = 0    --(yeekung03)    
+      BEGIN        
+         SET @nErrNo = 149202       
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format       
+         GOTO Step_8_Fail        
+      END       
+    
+       -- Check format        
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UDF04', @cParam4) = 0    --(yeekung03)    
+      BEGIN        
+         SET @nErrNo = 149203        
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format       
+         GOTO Step_8_Fail        
+      END      
+    
+      -- Check format        
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UDF05', @cParam5) = 0    --(yeekung03)    
+      BEGIN        
+         SET @nErrNo = 149204        
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format       
+         GOTO Step_8_Fail        
+      END      
+      
       SET @nErrNo = 0  
       SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)  
       IF @cExtendedValidateSP NOT IN ('0', '')  
@@ -2386,7 +2500,7 @@ BEGIN
                      '@cSSCCNo         NVARCHAR( 20), ' +  
                      '@cPalletKey      NVARCHAR( 18), ' +  
                      '@cTrackNo        NVARCHAR( 20), ' +  
-          '@cOption         NVARCHAR( 1), ' +  
+                     '@cOption         NVARCHAR( 1), ' +  
                      '@cExtendedInfo1  NVARCHAR( 20) OUTPUT '  
      
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
@@ -2430,7 +2544,43 @@ BEGIN
       SET @cFieldAttr06 = ''  
       SET @cFieldAttr08 = ''  
       SET @cFieldAttr10 = ''  
-  
+          
+      SET @nErrNo = 0 --(yeekung03)    
+      SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)          
+      IF @cExtendedValidateSP NOT IN ('0', '')        
+      BEGIN        
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +        
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cContainerKey, @cContainerNo,  ' +        
+            ' @cMBOLKey, @cSSCCNo, @cPalletKey, @cTrackNo, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT '        
+                
+         SET @cSQLParam =        
+            '@nMobile                   INT,           ' +        
+            '@nFunc                     INT,           ' +        
+            '@cLangCode                 NVARCHAR( 3),  ' +        
+            '@nStep     INT,           ' +        
+            '@nInputKey                 INT,           ' +        
+            '@cStorerkey                NVARCHAR( 15), ' +        
+            '@cContainerKey             NVARCHAR( 10), ' +        
+            '@cContainerNo              NVARCHAR( 20), ' +        
+            '@cMBOLKey                  NVARCHAR( 10), ' +        
+            '@cSSCCNo                   NVARCHAR( 20), ' +        
+            '@cPalletKey                NVARCHAR( 18), ' +        
+            '@cTrackNo                  NVARCHAR( 20), ' +        
+            '@cOption                   NVARCHAR( 1), '  +        
+            '@nErrNo                    INT           OUTPUT,  ' +        
+            '@cErrMsg                   NVARCHAR( 20) OUTPUT   '        
+                
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cContainerKey, @cContainerNo,         
+               @cMBOLKey, @cSSCCNo, @cPalletKey, @cTrackNo, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT        
+                
+         IF @nErrNo <> 0        
+         BEGIN        
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')         
+            GOTO Step_8_Fail                
+         END        
+      END      
+        
       -- Decide where to go  
       IF @cAction = 'PRE'  
       BEGIN  
@@ -2746,6 +2896,8 @@ BEGIN
       V_String27    = @cAction,  
 		V_String28    = @cVerifypalletstatus, 
 		V_String29    = @cDelList,  --(cc02)
+		V_String30    = @cShowPopOutMsg, 
+      V_String31    = @cPalletLabel, --(yeekung05)      
 		V_String41    = @cPalletKeyPrev, --(cc02)--more then nvarchar(20)
 
       V_String42    = @cData1,

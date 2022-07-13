@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_PTLPiece_Assign_DropID04]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_PTLPiece_Assign_DropID04]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -15,7 +13,7 @@ GO
 /* 2021-02-16 1.0  yeekung  WMS-18729 Created                                 */  
 /******************************************************************************/  
   
-CREATE PROC [RDT].[rdt_PTLPiece_Assign_DropID04] (  
+CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID04] (  
    @nMobile          INT,   
    @nFunc            INT,   
    @cLangCode        NVARCHAR( 3),   
@@ -243,8 +241,8 @@ BEGIN
       FROM (SELECT PD.Orderkey
             FROM dbo.PICKDETAIL PD WITH (NOLOCK)   
 		      JOIN dbo.Orders O WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey and pd.storerkey=o.storerkey)
-		      WHERE PD.Storerkey = 'LOR' 
-		      AND   O.loadkey='0001139605'
+		      WHERE PD.Storerkey = @cStorerKey
+		      AND   O.loadkey=@cLoadkey
             GROUP BY PD.Orderkey) as records
 
       IF EXISTS (SELECT 1 

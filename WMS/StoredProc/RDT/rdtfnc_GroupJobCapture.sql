@@ -1,6 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_GroupJobCapture]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_GroupJobCapture]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -15,10 +13,12 @@ GO
 /*                                                                      */                      
 /* Date        Rev  Author     Purposes                                 */                      
 /* 20-07-2019  1.0  YeeKung    WMS-8855 Created                         */    
-/* 10-10-2019  1.1  YeeKung    WMS-10672 RDT 707 Enhancement            */                        
+/* 10-10-2019  1.1  YeeKung    WMS-10672 RDT 707 Enhancement            */     
+/* 08-06-2022  1.2  YeeKung    WMS-19782 Add New screen Data capture    */
+/*                             (yeekung01)                              */
 /************************************************************************/                      
                       
-CREATE PROC [RDT].[rdtfnc_GroupJobCapture] (                      
+CREATE OR ALTER PROC [RDT].[rdtfnc_GroupJobCapture] (                      
    @nMobile    INT,                      
    @nErrNo     INT  OUTPUT,                      
    @cErrMsg    NVARCHAR(1024) OUTPUT                      
@@ -45,7 +45,8 @@ DECLARE
    @cUserName           NVARCHAR( 10),                      
    @nInputKey           INT,                      
    @nMenu               INT,                  
-   @cOption             INT,                      
+   @cOption             INT,  
+   @cTotalUser          INT,
                                       
    @cStorerKey          NVARCHAR( 15),                      
    @cFacility           NVARCHAR( 5),                      
@@ -79,15 +80,18 @@ DECLARE
    @cFunc02             NVARCHAR( 10),       
    @cFunc03             NVARCHAR( 10),                        
    @cFunc04             NVARCHAR( 10),                      
-   @cFunc05     NVARCHAR( 10),                 
+   @cFunc05             NVARCHAR( 10),                 
    @cFunc06             NVARCHAR( 10),                    
    @cFunc07             NVARCHAR( 10),                       
    @cFunc08             NVARCHAR( 10),                 
    @cFunc09             NVARCHAR( 10),                
    @cFuncID             NVARCHAR( 10),                
    @cExtendedValidateSP NVARCHAR( 20),                      
-   @tVar                VariableTable,    
-   @cConfirmEnd         NVARCHAR(  1),                            
+   @tVar                VariableTable,  
+   @tUserID             VariableTable,
+   @cConfirmEnd         NVARCHAR(  1),   
+   @cCaptureProcess     NVARCHAR(  1),
+
                       
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),                      
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),                      
@@ -141,7 +145,7 @@ SELECT
    @cRef03              = V_String24,                   
    @cRef04              = V_String25,                   
    @cRef05              = V_String26,                   
-   @cRef06           = V_String27,                   
+   @cRef06              = V_String27,                   
    @cRef07              = V_String28,                   
    @cRef08              = V_String29,                   
    @cRef09              = V_String30,                 
@@ -154,7 +158,8 @@ SELECT
    @cFunc07             = V_String37,                     
    @cFunc08             = V_String38,                 
    @cFunc09             = V_String39,     
- @cConfirmEnd         = V_String40,                          
+   @cConfirmEnd         = V_String40, 
+   @cCaptureProcess     = V_String41,
                     
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,                 
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,                      
@@ -182,7 +187,8 @@ BEGIN
    IF @nStep = 1 GOTO Step_1   -- 5480 UserID                      
    IF @nStep = 2 GOTO Step_2   -- 5481 Capture UserID                      
    IF @nStep = 3 GOTO Step_3   -- 5482 Capture Process     
-  IF @nStep = 4 GOTO Step_4   -- 5483 Confirm End                       
+   IF @nStep = 4 GOTO Step_4   -- 5483 Confirm End 
+   IF @nStep = 5 GOTO Step_5   -- 5484 Capture Process 
 END                      
                       
 RETURN -- Do nothing if incorrect step                      
@@ -201,7 +207,9 @@ BEGIN
    IF @cCaptureUser <> ''                  
    BEGIN                   
       SET @cInField01 = @cUserName                  
-   END                   
+   END    
+   
+   SET @cCaptureProcess = rdt.rdtGetConfig( @nFunc, 'CaptureProcess', @cStorerKey)   
     
    SET @cConfirmEnd = rdt.rdtGetConfig( @nFunc, 'ConfirmEnd', @cStorerKey)                       
                       
@@ -523,7 +531,8 @@ BEGIN
                IF @i = 1 SET @cUserID01 = @cInField01                  
                IF @i = 2 SET @cUserID02 = @cInField02                  
                IF @i = 3 SET @cUserID03 = @cInField03                  
-               IF @i = 4 SET @cUserID04 = @cInField04                               IF @i = 5 SET @cUserID05 = @cInField05                  
+               IF @i = 4 SET @cUserID04 = @cInField04                               
+               IF @i = 5 SET @cUserID05 = @cInField05                  
                IF @i = 6 SET @cUserID06 = @cInField06                  
                IF @i = 7 SET @cUserID07 = @cInField07                  
                IF @i = 8 SET @cUserID08 = @cInField08                  
@@ -547,67 +556,76 @@ BEGIN
          IF @i > 9 SET @i = 1    
          EXEC rdt.rdtSetFocusField @nMobile, @i                 
       END     
-     ELSE                
+      ELSE                
       BEGIN            
                   
-       SELECT 1 FROM DBO.CODELKUP WITH (NOLOCK)                  
-       WHERE STORERKEY= @cStorerKey                  
-       AND LISTNAME= 'JOBLMSType'                  
-       AND Code2 = @cFacility                  
+         SELECT 1 FROM DBO.CODELKUP WITH (NOLOCK)                  
+         WHERE STORERKEY= @cStorerKey                  
+         AND LISTNAME= 'JOBLMSType'                  
+         AND Code2 = @cFacility                  
                    
-       IF @@ROWCOUNT = 0                    
-       BEGIN                    
-          SET @nErrNo = 139106                    
-          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'JobType No Setup'                    
-          EXEC rdt.rdtSetFocusField @nMobile, @i                    
-          GOTO Quit                  
-       END              
+         IF @@ROWCOUNT = 0                    
+         BEGIN                    
+            SET @nErrNo = 139106                    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'JobType No Setup'                    
+            EXEC rdt.rdtSetFocusField @nMobile, @i                    
+            GOTO Quit                  
+         END              
                
-       SET @cOutField01 =''            
-       SET @cOutField02 =''                
-       SET @cOutField03 =''             
-       SET @cOutField04 =''            
-       SET @cOutField05 =''                
-       SET @cOutField06 =''             
-       SET @cOutField07 =''            
-       SET @cOutField08 =''                
-       SET @cOutField09 =''             
+         SET @cOutField01 =''            
+         SET @cOutField02 =''                
+         SET @cOutField03 =''             
+         SET @cOutField04 =''            
+         SET @cOutField05 =''                
+         SET @cOutField06 =''             
+         SET @cOutField07 =''            
+         SET @cOutField08 =''                
+         SET @cOutField09 ='' 
+         
+         If @cCaptureProcess ='1'
+         BEGIN                     
+            -- Go to next screen    
+            SET @cOutField01=@cUserID
+            SET @nScn = @nScn + 3                  
+            SET @nStep = @nStep + 3 
+            GOTO QUIT
+         END
                   
-       Declare @cCode NVARCHAR(20),@cCount INT = 1 , @cFuncIDs NVARCHAR(10)                
+         Declare @cCode NVARCHAR(20),@cCount INT = 1 , @cFuncIDs NVARCHAR(10)                
                    
-       DECLARE CURS CURSOR FOR                  
-       SELECT  Top 9 code,UDF01 FROM DBO.CODELKUP WITH (NOLOCK)                  
-       WHERE STORERKEY= @cStorerKey                  
-          AND LISTNAME= 'JOBLMSType'                  
-          AND Code2 = @cFacility                  
+         DECLARE CURS CURSOR FOR                  
+         SELECT  Top 9 code,UDF01 FROM DBO.CODELKUP WITH (NOLOCK)                  
+         WHERE STORERKEY= @cStorerKey                  
+            AND LISTNAME= 'JOBLMSType'                  
+            AND Code2 = @cFacility                  
                    
-       OPEN CURS                  
-       FETCH NEXT FROM CURS into @cCode,@cFuncIDs                  
+         OPEN CURS                  
+         FETCH NEXT FROM CURS into @cCode,@cFuncIDs                  
                    
-       while(@@FETCH_STATUS=0)                    
-       BEGIN                    
+         while(@@FETCH_STATUS=0)                    
+         BEGIN                    
                    
-          IF @cCount = 1 BEGIN SET @cOutField01 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef01=@cCode SET @cFunc01 =@cFuncIDs END                  
-          IF @cCount = 2 BEGIN SET @cOutField02 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef02=@cCode SET @cFunc02 =@cFuncIDs END                  
-          IF @cCount = 3 BEGIN SET @cOutField03 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef03=@cCode SET @cFunc03 =@cFuncIDs END            
-          IF @cCount = 4 BEGIN SET @cOutField04 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef04=@cCode SET @cFunc04 =@cFuncIDs END                  
-          IF @cCount = 5 BEGIN SET @cOutField05 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef05=@cCode SET @cFunc05 =@cFuncIDs END                  
-          IF @cCount = 6 BEGIN SET @cOutField06 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef06=@cCode SET @cFunc06 =@cFuncIDs END                  
-          IF @cCount = 7 BEGIN SET @cOutField07 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef07=@cCode SET @cFunc07 =@cFuncIDs END                  
-          IF @cCount = 8 BEGIN SET @cOutField08 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef08=@cCode SET @cFunc08 =@cFuncIDs END                  
-          IF @cCount = 9 BEGIN SET @cOutField09 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef09=@cCode SET @cFunc09 =@cFuncIDs END                  
+            IF @cCount = 1 BEGIN SET @cOutField01 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef01=@cCode SET @cFunc01 =@cFuncIDs END                  
+            IF @cCount = 2 BEGIN SET @cOutField02 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef02=@cCode SET @cFunc02 =@cFuncIDs END                  
+            IF @cCount = 3 BEGIN SET @cOutField03 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef03=@cCode SET @cFunc03 =@cFuncIDs END            
+            IF @cCount = 4 BEGIN SET @cOutField04 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef04=@cCode SET @cFunc04 =@cFuncIDs END                  
+            IF @cCount = 5 BEGIN SET @cOutField05 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef05=@cCode SET @cFunc05 =@cFuncIDs END                  
+            IF @cCount = 6 BEGIN SET @cOutField06 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef06=@cCode SET @cFunc06 =@cFuncIDs END                  
+            IF @cCount = 7 BEGIN SET @cOutField07 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef07=@cCode SET @cFunc07 =@cFuncIDs END                  
+            IF @cCount = 8 BEGIN SET @cOutField08 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef08=@cCode SET @cFunc08 =@cFuncIDs END                  
+            IF @cCount = 9 BEGIN SET @cOutField09 = Cast(@cCount AS NVARCHAR(02)) + '-' + @cCode  SET @cRef09=@cCode SET @cFunc09 =@cFuncIDs END                  
                    
-          SET @cCount = @cCount + 1                  
+            SET @cCount = @cCount + 1                  
                    
-          Fetch next from CURS into @cCode,@cFuncIDs                    
-       END                    
-       Close CURS                     
-       DEALLOCATE CURS                  
+            Fetch next from CURS into @cCode,@cFuncIDs                    
+         END                    
+         Close CURS                     
+         DEALLOCATE CURS                  
                          
-       -- Go to next screen                  
-       SET @nScn = @nScn + 1                  
-       SET @nStep = @nStep + 1    
-  END     
+         -- Go to next screen                  
+         SET @nScn = @nScn + 1                  
+         SET @nStep = @nStep + 1    
+      END     
    END                  
                       
    IF @nInputKey = 0 -- ESC                      
@@ -677,24 +695,22 @@ BEGIN
          IF @cOption = 9 BEGIN SET @cJobType = @cRef09 SET @cFuncID= @cFunc09 END                 
       END         
     
-  -- Put all User into temp table                        
-  DECLARE @tUserID VariableTable      
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID)                         
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID01)                        
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID02)                           
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID03)            
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID04)            
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID05)            
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID06)            
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID07)            
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID08)            
-   INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID09)            
-        
-  DECLARE @cTotalUser int      
+      -- Put all User into temp table                           
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID)                         
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID01)                        
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID02)                           
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID03)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID04)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID05)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID06)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID07)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID08)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID09)            
+            
     
-  SELECT  @cTotalUser=COUNT(*)      
-  FROM @tUserID     
-  WHERE isnull(value,'')<>'';            
+      SELECT  @cTotalUser=COUNT(*)      
+      FROM @tUserID     
+      WHERE isnull(value,'')<>'';            
       
       -- Confirm                          
       EXEC rdt.rdt_GroupJobCapture_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'START',                           
@@ -819,7 +835,103 @@ BEGIN
    SET @nStep = @nStep - 3                        
         
 END        
-GOTO Quit                            
+GOTO Quit        
+
+                      
+/********************************************************************************                      
+Step 3. Screen = 5482. Capture Process                    
+   Process:                     
+   (Field01)                     
+   (Field02)                    
+   (Field03)                    
+   (Field04)                    
+   (Field05)                      
+   (Field06)                     
+   (Field07)                    
+   (Field08)                    
+   (Field09)                     
+   Option:    (Field10,input)                    
+********************************************************************************/                      
+Step_5:                      
+BEGIN                      
+   IF @nInputKey = 1 -- ENTER                      
+   BEGIN                  
+                        
+      SET @cJobType = @cInField02     
+      
+      IF NOT EXISTS ( SELECT 1 FROM DBO.CODELKUP WITH (NOLOCK)                  
+                     WHERE STORERKEY= @cStorerKey                  
+                        AND LISTNAME= 'JOBLMSType'                  
+                        AND Code2 = @cFacility   
+                        AND Code = @cJobType )
+      BEGIN        
+         SET @nErrNo = 139112        
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid option        
+         SET @cOutField02 = ''        
+         GOTO Quit        
+      END        
+
+
+      -- Put all User into temp table                        
+            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID)                         
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID01)                        
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID02)                           
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID03)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID04)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID05)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID06)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID07)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID08)            
+      INSERT INTO @tUserID (variable, value) VALUES ('Users',@cUserID09)            
+        
+      SELECT  @cTotalUser=COUNT(*)      
+      FROM @tUserID     
+      WHERE isnull(value,'')<>'';            
+      
+      -- Confirm                          
+      EXEC rdt.rdt_GroupJobCapture_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'START',                           
+         @cUserID   = @cUserID,                           
+         @cJobType  = @cJobType,       
+         @cTable    = @tUserID,                          
+         @cStart    = @cStart    OUTPUT,                           
+         @cEnd      = @cEnd      OUTPUT,                           
+         @cDuration = @cDuration OUTPUT,                     
+         @nErrNo    = @nErrNo    OUTPUT,                           
+         @cErrMsg   = @cErrMsg   OUTPUT,                    
+         @cRef01    = @cFuncID,      
+         @cRef02    = @cTotalUser                       
+      IF @nErrNo <> 0                      
+         GOTO Quit                    
+                        
+      -- Prepare next screen var                      
+      SET @cOutField01 = '' -- UserID                      
+      SET @cOutField02 = @cStart                      
+      SET @cOutField03 = '' -- End                      
+      SET @cOutField04 = '' -- Duration                   
+                  
+      SET @nScn  = @nScn - 4                      
+      SET @nStep = @nStep - 4                    
+   END                      
+                      
+   IF @nInputKey = 0 -- ESC                      
+   BEGIN                      
+      -- Prepare next screen var                      
+      SET @cOutField01 = @cUserID01                   
+      SET @cOutField02 = @cUserID02                  
+      SET @cOutField03 = @cUserID03                   
+      SET @cOutField04 = @cUserID04                   
+      SET @cOutField05 = @cUserID05                   
+      SET @cOutField06 = @cUserID06                   
+      SET @cOutField07 = @cUserID07                   
+      SET @cOutField08 = @cUserID08                    
+      SET @cOutField09 = @cUserID09           
+                   
+      SET @nScn  = @nScn - 3                      
+      SET @nStep = @nStep - 3                      
+   END                      
+END                      
+GOTO Quit    
                                             
 /********************************************************************************                      
 Quit. Update back to I/O table, ready to be pick up by JBOSS                      
@@ -872,7 +984,8 @@ BEGIN
       V_String37     = @cFunc07,                            
       V_String38     = @cFunc08,                               
       V_String39     = @cFunc09,    
-      V_String40     = @cConfirmEnd,                       
+      V_String40     = @cConfirmEnd,     
+      V_String41     = @cCaptureProcess,
                                           
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,                      
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,                      

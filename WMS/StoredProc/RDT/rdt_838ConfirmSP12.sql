@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 11-02-2022 1.0  Ung        WMS-19000 Created                         */
+/* 02-06-2022 1.1  Ung        WMS-19000 Fix get max PackDetail.RefNo    */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ConfirmSP12 (
@@ -276,20 +277,23 @@ BEGIN
 
          -- Get group carton no
          DECLARE @cMaxCartonNo NVARCHAR( 20)
-         SELECT @cMaxCartonNo = ISNULL( MAX( RefNo), '')
-         FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
+         IF @cCartonPrefix = ''
+            SELECT @cMaxCartonNo = ISNULL( MAX( CAST( RefNo AS INT)), '')
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+         ELSE
+            SELECT @cMaxCartonNo = ISNULL( MAX( CAST( SUBSTRING( RefNo, LEN( @cCartonPrefix) + 1, LEN( RefNo)) AS INT)), '')
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
 
          -- Add carton no
-         IF @cMaxCartonNo = ''
+         IF @cMaxCartonNo = '0' -- 1st carton
          BEGIN
             SET @cCartonStartNo = CAST( @cCartonStartNo AS INT) + 1
             SET @cMaxCartonNo = @cCartonPrefix + @cCartonStartNo
          END
          ELSE
          BEGIN
-            IF @cCartonPrefix <> ''
-               SET @cMaxCartonNo = SUBSTRING( @cMaxCartonNo, LEN( @cCartonPrefix) + 1, LEN( @cMaxCartonNo)) -- Remove prefix
             SET @cMaxCartonNo = CAST( @cMaxCartonNo AS INT) + 1
             SET @cMaxCartonNo = @cCartonPrefix + @cMaxCartonNo
          END
@@ -330,23 +334,29 @@ BEGIN
          BEGIN
             -- Get group carton no
             DECLARE @cMaxGroupCartonNo NVARCHAR( 20)
-            SELECT @cMaxGroupCartonNo = ISNULL( MAX( PD.RefNo), '')
-            FROM dbo.PackHeader PH WITH (NOLOCK)
-               JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey)
-               JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-            WHERE O.StorerKey = @cStorerKey
-               AND O.OrderGroup = @cOrderGroup
-               
+            IF @cGroupCartonPrefix = ''
+               SELECT @cMaxGroupCartonNo = ISNULL( MAX( CAST( PD.RefNo AS INT)), '')
+               FROM dbo.PackHeader PH WITH (NOLOCK)
+                  JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey)
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.StorerKey = @cStorerKey
+                  AND O.OrderGroup = @cOrderGroup
+            ELSE
+               SELECT @cMaxGroupCartonNo = ISNULL( MAX( CAST( SUBSTRING( PD.RefNo, LEN( @cGroupCartonPrefix) + 1, LEN( PD.RefNo)) AS INT)), '')
+               FROM dbo.PackHeader PH WITH (NOLOCK)
+                  JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey)
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.StorerKey = @cStorerKey
+                  AND O.OrderGroup = @cOrderGroup
+                  
             -- Add carton no
-            IF @cMaxGroupCartonNo = ''
+            IF @cMaxGroupCartonNo = '0' -- 1st carton
             BEGIN
                SET @cGroupCartonStartNo = CAST( @cGroupCartonStartNo AS INT) + 1
                SET @cMaxGroupCartonNo = @cGroupCartonPrefix + @cGroupCartonStartNo
             END
             ELSE
             BEGIN
-               IF @cGroupCartonPrefix <> ''
-                  SET @cMaxGroupCartonNo = SUBSTRING( @cMaxGroupCartonNo, LEN( @cGroupCartonPrefix) + 1, LEN( @cMaxGroupCartonNo)) -- Remove prefix
                SET @cMaxGroupCartonNo = CAST( @cMaxGroupCartonNo AS INT) + 1
                SET @cMaxGroupCartonNo = @cGroupCartonPrefix + @cMaxGroupCartonNo
             END

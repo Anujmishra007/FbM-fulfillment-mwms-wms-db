@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispCTNLBLITF03]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispCTNLBLITF03]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: isp_PrintCartonLabel_Interface                            */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,8 +21,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 03-Nov-2021  WLChooi 1.0   DevOps Combine Script                     */
+/* 20-Apr-2022  WLChooi 1.1   WMS-19490 - Modify Logic (WL01)           */
 /************************************************************************/
-CREATE PROCEDURE [dbo].[ispCTNLBLITF03]
+CREATE OR ALTER PROCEDURE [dbo].[ispCTNLBLITF03]
       @c_Pickslipno   NVARCHAR(10)     
   ,   @n_CartonNo_Min INT 
   ,   @n_CartonNo_Max INT 
@@ -54,6 +51,7 @@ BEGIN
          , @c_Option1                 NVARCHAR(255)
          , @c_Option2                 NVARCHAR(255)
          , @c_Option3                 NVARCHAR(255)
+         , @c_BuyerPO                 NVARCHAR(50)   --WL01
                                                                                                
    SET @n_err = 0
    SET @b_success = 1
@@ -79,6 +77,7 @@ BEGIN
 
    SELECT @c_ECOM_S_Flag = OH.ECOM_SINGLE_Flag
         , @c_Storerkey   = OH.StorerKey
+        , @c_BuyerPO     = OH.BuyerPO   --WL01
    FROM ORDERS OH (NOLOCK)
    WHERE OH.OrderKey = @c_Orderkey
 
@@ -105,6 +104,15 @@ BEGIN
       SET @n_continue = 1      
       SET @c_errmsg = ''   
    END
+   --WL01 S
+   ELSE IF EXISTS (SELECT 1   
+              FROM PACKHEADER (NOLOCK)
+              WHERE PickSlipNo = @c_Pickslipno AND [Status] < '9' ) AND @c_BuyerPO LIKE '%LOAN%'   
+   BEGIN  
+      SET @n_continue = 1      
+      SET @c_errmsg = ''   
+   END
+   --WL01 E
    --Only proceed insert Transmitlog2 in isp_PrintCartonLabel_Interface if already pack confirmed (Status = 9) (Multi-Order)
    --Call from PostPackConfirmSP, for single order, already pack confirmed and Packinfo.Weight & Cube are updated, proceed to trigger EDI
    ELSE IF EXISTS (SELECT 1   

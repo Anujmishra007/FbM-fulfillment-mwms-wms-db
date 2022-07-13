@@ -1,0 +1,13 @@
+
+CREATE TABLE [RDT].[rdtPTLPieceLog_Dellog](
+   [RowRef] [int] IDENTITY(1,1) NOT NULL,
+   [RowRefSource] int NOT NULL,
+   [Status]  NVARCHAR (1) NOT NULL CONSTRAINT  DF_rdtPTLPieceLog_Dellog_Status DEFAULT ('0'),
+   [AddDate] DATETIME NOT NULL CONSTRAINT  DF_rdtPTLPieceLog_Dellog_AddDate DEFAULT (getdate()) ,
+   [AddWho] NVARCHAR (128) NOT NULL CONSTRAINT  DF_rdtPTLPieceLog_Dellog_AddWho DEFAULT (suser_name())
+   
+ CONSTRAINT [PK_rdtPTLPieceLog_Dellog] PRIMARY KEY CLUSTERED 
+(
+	[RowRef] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80 ) ON [PRIMARY]
+) ON [PRIMARY]

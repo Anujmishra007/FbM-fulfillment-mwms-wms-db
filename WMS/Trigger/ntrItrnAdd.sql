@@ -110,6 +110,8 @@ GO
 /* 05-Mar-2020  MCTang       3.0    Add ISNULL for HostWhCode (MC03)           */
 /* 26-Nov-2020  LZG          3.1    INC1360752 - Get ITRN.ToLoc if user        */
 /*                                  leave blank ToLoc (ZG01)                   */
+/* 17-May-2022  YTKuek       3.2    Add additional move trigger for            */
+/*                                  WebService interface (YT01)                */
 /*******************************************************************************/  
 alter TRIGGER [dbo].[ntrItrnAdd]  
 ON  [dbo].[ITRN]  
@@ -293,6 +295,7 @@ BEGIN
           , @c_FromLocationCategory NVARCHAR(10)      --(KH01)
           , @c_ToLocationCategory NVARCHAR(10)        --(KH01)
           , @c_authority_wsinvmovwhcdlog NVARCHAR(1)  --(KH02)
+          , @c_authority_wsinvmovwhcdlog2 NVARCHAR(1) --(YT01)
           , @c_authority_OMSITRNLOGMOV   NVARCHAR(1)  --(MC02)
   
     DECLARE @c_authority_tblhkitf  NVARCHAR(1)  
@@ -381,6 +384,7 @@ BEGIN
    SET @c_authority_trigantic = '1'       -- tlting01 
    SET @c_authority_wsinvmovlog = ''      --(KH01) 
    SET @c_authority_wsinvmovwhcdlog = ''  --(KH02) 
+   SET @c_authority_wsinvmovwhcdlog2 = '' --(YT01) 
    SET @c_authority_OMSITRNLOGMOV = ''    --(MC02)
   
    DECLARE CUR_Rights CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
@@ -392,6 +396,7 @@ BEGIN
                   ,'InsertBONDSKU'        -- tlting04 
                   ,'WSINVMOVELOG'         --(KH01) 
                   ,'WSINVMOVEWHCDLOG'     --(KH02) 
+                  ,'WSINVMOVEWHCDLOG2'    --(YT01) 
                   ,'OMSITRNLOGMOV'        --(MC02)
                   )
   
@@ -427,6 +432,10 @@ BEGIN
       --(KH02)
       IF @c_ConfigKey = 'WSINVMOVEWHCDLOG' AND @c_sValue = '1'  
          SET @c_authority_wsinvmovwhcdlog = '1' 
+
+      --(YT01)
+      IF @c_ConfigKey = 'WSINVMOVEWHCDLOG2' AND @c_sValue = '1'  
+         SET @c_authority_wsinvmovwhcdlog2 = '1' 
 
       --(MC02)
       IF @c_ConfigKey = 'OMSITRNLOGMOV' AND @c_sValue = '1'  
@@ -2325,7 +2334,10 @@ BEGIN
 
             --(KH02) - Start
             --IF @c_authority_wsinvmovwhcdlog = '1'                                     --(MC02)  
-            IF @c_authority_wsinvmovwhcdlog = '1' OR @c_authority_OMSITRNLOGMOV = '1'   --(MC02)
+            --IF @c_authority_wsinvmovwhcdlog = '1' OR @c_authority_OMSITRNLOGMOV = '1'   --(MC02)
+            IF (@c_authority_wsinvmovwhcdlog = '1'       --(YT01)
+                OR @c_authority_wsinvmovwhcdlog2 = '1'   --(YT01)
+                OR @c_authority_OMSITRNLOGMOV = '1')     --(YT01)
             BEGIN  
                SET @c_fromwhcode = ''  
                SET @c_towhcode = ''  
@@ -2362,6 +2374,25 @@ BEGIN
                                              '(SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'  
                         END  
                      END
+
+                     --(YT01)-S
+                     IF @c_authority_wsinvmovwhcdlog2 = '1'
+                     BEGIN
+                        EXEC dbo.ispGenTransmitLog2 'WSITRNLOGWHCDMOV2', @c_itrnkey, '', @c_InsertStorerKey, ''  
+                              , @b_success OUTPUT  
+                              , @n_err OUTPUT  
+                              , @c_errmsg OUTPUT 
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SELECT @n_continue = 3  
+                           SELECT @n_err= 61162  
+                           SELECT @c_errmsg= 'NSQL'+ISNULL(CONVERT(char(5), @n_err),'')+  
+                                             ':Insert failed on TransmitLog2. (ntrItrnAdd)'+  
+                                             '(SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'  
+                        END  
+                     END
+                     --(YT01)-E
                      
                      --(MC02) - S
                      IF @c_authority_OMSITRNLOGMOV = '1' 

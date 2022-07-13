@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_Confirm_TM_Task]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [RDT].[rdtfnc_Confirm_TM_Task]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -13,9 +9,10 @@ GO
 /*                                                                            */
 /* Date         Rev  Author      Purposes                                     */
 /* 2019-06-20   1.0  James       WMS9480 Created                              */
+/* 2022-06-15   1.1  James       WMS-19554 Add eventlog (james01)             */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_Confirm_TM_Task] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_Confirm_TM_Task] (
    @nMobile    INT,
    @nErrNo     INT          OUTPUT,
    @cErrMsg    NVARCHAR(20) OUTPUT
@@ -304,6 +301,17 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Step_1_Fail
 
+      -- EventLog (james01)
+      EXEC RDT.rdt_STD_EventLog  
+         @cActionType   = '21', -- Activity Tracking  
+         @cUserID       = @cUserName,  
+         @nMobileNo     = @nMobile,  
+         @nFunctionID   = @nFunc,  
+         @cFacility     = @cFacility,  
+         @cStorerKey    = @cStorerKey,  
+         @cRefNo1       = @cGroupKey,  
+         @nStep         = @nStep  
+         
       -- Go to Message screen
       SET @nScn = @nScn_Message
       SET @nStep = @nStep_Message

@@ -67,7 +67,8 @@ GO
 /* 11-May-2015  TLTING     2.1  Disable Trigantics                      */   
 /* 18-Nov-2021  Wan01      2.2  WMS-18336 - MYS–SBUXM–Default value in  */  
 /*                              POD Entry column upon update POD Status */  
-/* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */   
+/* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */ 
+/* 18-Nov-2021  TLTING04   2.4  Disable STSORDERS insert 4Docstatustrack*/      
 /************************************************************************/    
 -- Added by YokeBeen on 14-Jan-2003 (YokeBeen01 - SOS#FBR8465)    
 CREATE OR ALTER TRIGGER [dbo].[ntrPODUpdate]    
@@ -176,57 +177,20 @@ END
             BREAK    
            
          -- TLTING03  
-         IF NOT EXISTS (SELECT 1 FROM DocStatusTrack WITH (NOLOCK)     
-                         WHERE TableName = 'STSORDERS' AND DocumentNo = @cOrdKey AND DocStatus = '9')      
-         BEGIN    
-            EXEC ispGenDocStatusLog 'STSORDERS', @c_StorerKey, @cOrdKey, '', '', '9'    
-                           , @b_success OUTPUT    
-                           , @n_err OUTPUT    
-                           , @c_errmsg OUTPUT    
-            IF NOT @b_success=1    
-            BEGIN    
-               SELECT @n_continue=3    
-            END        
-         END  
-                
---         IF NOT EXISTS (SELECT 1 FROM TriganticLog WITH (NOLOCK)     
---                         WHERE TableName = 'ORDERS' AND Key1 = @cOrdKey AND Key2 = '9') -- Vicky    
+--         IF NOT EXISTS (SELECT 1 FROM DocStatusTrack WITH (NOLOCK)     
+--                         WHERE TableName = 'STSORDERS' AND DocumentNo = @cOrdKey AND DocStatus = '9')      
 --         BEGIN    
---            -- TLTING01  
---            EXECUTE dbo.nspg_getkey    
---                   'TRIGANTICKEY'    
---                  , 10    
---                  , @c_TriganticLogkey OUTPUT    
---                  , @b_success OUTPUT    
---                  , @n_err OUTPUT    
---                  , @c_errmsg OUTPUT    
---            IF NOT @b_success = 1    
+--            EXEC ispGenDocStatusLog 'STSORDERS', @c_StorerKey, @cOrdKey, '', '', '9'    
+--                           , @b_success OUTPUT    
+--                           , @n_err OUTPUT    
+--                           , @c_errmsg OUTPUT    
+--            IF NOT @b_success=1    
 --            BEGIN    
 --               SELECT @n_continue=3    
---            END    
+--            END        
+--         END  
                 
---            IF ( @n_continue = 1 or @n_continue = 2 )     
---           BEGIN    
---               INSERT TriganticLog (TriganticLogkey,tablename,key1, key2, key3)     
---               VALUES (@c_TriganticLogkey, 'ORDERS', @cOrdKey, '9', '') -- Vicky    
-                
---               SELECT @n_err= @@Error    
---               IF NOT @n_err=0    
---               BEGIN    
---                  SELECT @n_continue=3     
---               END     
---            END     
---         END    
---         ELSE    
---         BEGIN    
---            -- Reopen the flag     
---            UPDATE TriganticLog WITH (ROWLOCK)     
---               SET TransmitFlag = '0'    
---             WHERE TableName = 'ORDERS'    
---               AND Key1 = @cOrdKey     
---               AND Key2 = '9' -- Vicky    
---               AND TransmitFlag = '9'    
---         END    
+
       END    
       CLOSE C_PODUpdOrdKey    
       DEALLOCATE C_PODUpdOrdKey    
@@ -238,11 +202,6 @@ END
    -- begin    
        
    -- tlting01    
---   IF EXISTS ( SELECT 1 FROM INSERTED    
---                 JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = INSERTED.OrderKey)    
---                 JOIN StorerConfig WITH (NOLOCK) ON (StorerConfig.StorerKey = ORDERS.StorerKey    
---                                                AND ConfigKey = 'TRIGANTIC' AND sValue = '1') )    
---   BEGIN    
       IF UPDATE(PODDef08) OR UPDATE(PODDef04)    
       BEGIN    
          SELECT @cOrdKey = SPACE(10)    
@@ -285,50 +244,7 @@ END
               
             END  
                       
---            IF NOT EXISTS (SELECT 1 FROM TriganticLog WITH (NOLOCK)     
---                          WHERE TableName = 'POD' AND Key1 = @cOrdKey)    
---            BEGIN    
---               EXECUTE nspg_getkey    
---                      'TRIGANTICKEY'    
---                     , 10    
---                     , @c_TriganticLogkey OUTPUT    
---                     , @b_success OUTPUT    
---                     , @n_err OUTPUT    
---                     , @c_errmsg OUTPUT    
---               IF NOT @b_success=1    
---               BEGIN    
---                  SELECT @n_continue=3    
---                  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900       
---                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
---                                   + ': GetKey TRIGANTICKEY Failed (ntrPODUpdate)'     
---                                   + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '    
---               END    
-                   
---               IF ( @n_continue = 1 or @n_continue = 2 )     
---               BEGIN    
---                  INSERT TriganticLog (TriganticLogkey,tablename,key1, key2, key3)     
---                  VALUES (@c_TriganticLogkey, 'POD', @cOrdKey, '', '')    
-                   
---                  SELECT @n_err= @@Error    
---                  IF NOT @n_err=0    
---                  BEGIN    
---                     SELECT @n_continue=3     
---                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900      
---                     SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
---                                      + ': Insert Into TriganticLog Table (ORDERS) Failed (ntrPODUpdate)'     
---                                      + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '    
---                  END     
---               END     
---            END    
---            ELSE    
---            BEGIN    
---               -- Reopen the flag     
---               UPDATE TriganticLog WITH (ROWLOCK)     
---                  SET TransmitFlag = '0'    
---                WHERE TableName = 'POD'    
---                  AND Key1 = @cOrdKey     
---                  AND TransmitFlag = '9'    
---            END    
+
          END    
          CLOSE C_PODUpdOrdKey_ONE    
          DEALLOCATE C_PODUpdOrdKey_ONE    

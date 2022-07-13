@@ -51,6 +51,7 @@ GO
 /* 27-Dec-2020  TLTING03  Archive old Packing items                     */
 /* 20-Oct-2021  TLTING04  add PackDetailInfo                            */
 /* 28-May-2022  TLTING05  add PackQRF, PackdetailLabel                  */
+/* 02-Jun-2022  TLTING06  archive more for Packdeader                   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_ArchivePicknPack]
@@ -509,7 +510,18 @@ begin -- main
                  AND ( OD1.ArchiveCop <> '9' OR  OD1.ArchiveCop is NULL )
                AND R1.PickSlipNo = PH.PickHeaderKey   )
 
-
+       -- TLTING06
+       INSERT INTO #temp1 (PickSlipNo)
+       SELECT DISTINCT PH.PickSlipNo
+       FROM   PACKHEADER PH (NOLOCK) 
+       WHERE PH.STATUS = '9'
+       AND   NOT EXISTS (SELECT TOP 1 1 FROM #temp1 L (NOLOCK) WHERE L.PickSlipNo = PH.PICKSLIPNO)
+       AND   EXISTS ( SELECT TOP 1 1
+               FROM   ORDERS O WITH (NOLOCK) 
+               WHERE O.OrderKey =  PH.OrderKey AND O.ArchiveCop = '9'   )    
+       AND   PH.OrderKey IS NOT NULL AND PH.OrderKey <> ''
+         
+         
          -- TLTING03
        INSERT INTO #temp1 (PickSlipNo)
        SELECT PH.pickslipno

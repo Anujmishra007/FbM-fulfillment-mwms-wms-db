@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 06-08-2019 1.0  Ung      WMS-18742 Based on rdt_PTLCart_Assign_Totes02     */
 /*                          change OrderKey to LoadKey                        */
+/* 10-06-2022 1.1  yeekung  WMS-19875 Add Validate for cartID(yeekung01)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLCart_Assign_Totes03_Lottable (
@@ -86,6 +87,7 @@ BEGIN
    DECLARE @cWhere2     NVARCHAR( MAX)
    DECLARE @cGroupBy    NVARCHAR( MAX)
    DECLARE @cOrderBy    NVARCHAR( MAX)
+   DECLARE @cLong       NVARCHAR( 60) --(yeekung01)
 
    SET @nTranCount = @@TRANCOUNT
       
@@ -175,7 +177,7 @@ BEGIN
    IF @cType = 'CHECK'
    BEGIN
       DECLARE @cPickConfirmStatus NVARCHAR( 1)
-      SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+      SET @cPickConfirmStatus = rdt.rdt_PTLCart_GetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey, @cMethod)
       IF @cPickConfirmStatus = '0'
          SET @cPickConfirmStatus = '5'
 
@@ -199,6 +201,20 @@ BEGIN
       IF @cToteID = ''
       BEGIN
          SET @nErrNo = 181751
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToteID
+         EXEC rdt.rdtSetFocusField @nMobile, 5 -- ToteID
+         SET @cOutField05 = ''
+         GOTO Quit
+      END
+
+      IF NOT EXISTS(SELECT 1
+               FROM CODELKUP (NOLOCK)
+               WHERE LISTNAME='cartmethod'
+               AND code = @cMethod
+               AND storerkey = @cstorerkey
+               AND @cToteID BETWEEN Substring (long,1,10) and Substring (long,PATINDEX('%[-]%',long)+1,10)) --(yeekung01)
+      BEGIN
+         SET @nErrNo = 181759
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToteID
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- ToteID
          SET @cOutField05 = ''
@@ -282,7 +298,7 @@ BEGIN
                   ' AND L.LoadKey = O.LoadKey)' +
             CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
             CASE WHEN @cFinalLOC = '' THEN '' ELSE ' AND TD.FinalLOC = @cFinalLOC ' END + 
-         ' ORDER BY TD.Priority '
+         ' ORDER BY TD.Priority,TD.TaskDetailKey '
       SET @cSQLParam = 
          '@cFacility  NVARCHAR( 5),  ' + 
          '@cStorerKey NVARCHAR( 15), ' + 

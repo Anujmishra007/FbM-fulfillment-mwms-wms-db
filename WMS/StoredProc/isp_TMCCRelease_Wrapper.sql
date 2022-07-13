@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_TMCCRelease_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_TMCCRelease_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,8 +22,10 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-04-14  Wan      1.0   Created                                   */
+/* 2022-02-24  Wan01    1.1   LFWM-3287 - CN NIKECN Release Cycle Count */
+/* 2022-02-24  Wan01    1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_TMCCRelease_Wrapper 
+CREATE OR ALTER PROC isp_TMCCRelease_Wrapper 
            @c_TaskWIPBatchNo     NVARCHAR(10) = '' 
          , @c_Facility           NVARCHAR(5)  = ''
          , @c_Storerkey          NVARCHAR(15)= ''            
@@ -42,7 +39,9 @@ CREATE PROC isp_TMCCRelease_Wrapper
          , @n_distinctloccnt     INT = 0           OUTPUT                     
          , @b_Success            INT          = 1  OUTPUT   --0: fail, 1= Success, 2: Continue PB Logic to generate TMCC
          , @n_Err                INT          = 0  OUTPUT
-         , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT       
+         , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT  
+         , @b_ForceAdvanceTMCC   INT = 0                    --0: Check Storerconfig to SkipAdvanceCCRelase, Exceed call SP and use default value = 0
+                                
 AS
 BEGIN
    SET NOCOUNT ON
@@ -117,14 +116,19 @@ BEGIN
       END        
    END    
    
-   SELECT @c_SkipAdvanceCCRelease = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SkipAdvanceCCRelease')
-   
-   IF @c_SkipAdvanceCCRelease = '1'
+   --(Wan01) START
+   IF @b_ForceAdvanceTMCC = 0 
    BEGIN
-      SET @b_Success = 2
-      GOTO QUIT_SP
-   END
-    
+      SELECT @c_SkipAdvanceCCRelease = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SkipAdvanceCCRelease')
+   
+      IF @c_SkipAdvanceCCRelease = '1' 
+      BEGIN
+         SET @b_Success = 2
+         GOTO QUIT_SP
+      END
+   END 
+   --(Wan01) END
+   
    SELECT @c_Counttype = ISNULL(CL.UDF01,'')
          ,@c_TaskType  = ISNULL(CL.UDF02,'')
          ,@c_TMCCRelease_SP = ISNULL(CL.Long,'')
@@ -190,6 +194,7 @@ BEGIN
                ,  @c_Loc      = tdw.FromLoc
          FROM dbo.TaskDetail_WIP AS tdw (NOLOCK) 
          WHERE tdw.TaskWIPBatchNo = @c_TaskWIPBatchNo
+         AND tdw.RowID > @n_RowID                      --Fixed 2021-10-12
          ORDER BY tdw.RowID ASC
          
          IF @@ROWCOUNT = 0 OR @n_RowID = 0

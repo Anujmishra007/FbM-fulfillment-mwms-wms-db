@@ -61,3 +61,13 @@ EXECUTE rdt.rdtAddScn 5483, 'ENG'
    ,@cLine14 = N'%e'
    ,@nFunc = 707
  
+-- 5484 = Capture the process
+DELETE rdt.RDTScn WHERE Scn = 5484 AND Lang_Code = 'ENG' --wms19782
+EXECUTE rdt.rdtAddScn 5484, 'ENG'
+   ,@cLine01 = 'UserID:'
+   ,@cLine02 = '%15d01'
+   ,@cLine03 = ''
+   ,@cLine04 = 'Job Type:'
+   ,@cLine05 = '%20i02'
+   ,@cLine14 = '%e'
+   ,@nFunc = 707

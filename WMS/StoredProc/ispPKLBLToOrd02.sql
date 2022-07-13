@@ -2,6 +2,8 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO  
+
+
   
 /************************************************************************/  
 /* Stored Proc : ispPKLBLToOrd02                                        */  
@@ -13,7 +15,7 @@ GO
 /*                                                                      */  
 /* Called By: Confirm pick                                              */  
 /*                                                                      */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -21,9 +23,12 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 29-Mar-2022 WLChooi  1.1   DevOps Combine Script                     */ 
 /* 29-Mar-2022 WLChooi  1.1   WMS-19346 - Enhance logic (WL01)          */
+/* 14-Jun-2022 WLChooi  1.2   WMS-19948 - Enhance logic (WL02)          */
+/* 07-Jul-2022 Calvin	1.3   JSM-79951 - Include Channel_ID  (CLVN01)  */
+/*                                        and TaskManagerReasonKey      */
 /************************************************************************/  
   
-CREATE OR ALTER PROC [dbo].[ispPKLBLToOrd02]  
+ALTER   PROC [dbo].[ispPKLBLToOrd02]  
 (@c_Pickslipno NVARCHAR(10),  
  @b_Success      INT       OUTPUT,  
  @n_err          INT       OUTPUT,  
@@ -215,6 +220,16 @@ BEGIN
                             AND PAD.Sku = PICKDETAIL.Sku   
                             AND PICKDETAIL.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PAD.LabelNo ELSE PICKDETAIL.CaseID END  
                             AND PICKDETAIL.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PICKDETAIL.DropID ELSE PAD.LabelNo END  
+                            AND ((SELECT SUM(QTY)  --WL02 S
+                                  FROM PICKDETAIL PD1 (NOLOCK) 
+                                  JOIN LOADPLANDETAIL LPD1 (NOLOCK) ON LPD1.OrderKey = PD1.OrderKey
+                                  WHERE LPD1.LoadKey = @c_loadkey
+                                  AND PD1.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PAD.LabelNo ELSE PD1.CaseID END 
+                                  AND PD1.DROPID = CASE WHEN @c_Option2 = 'CaseID' THEN PD1.DropID ELSE PAD.LabelNo END) = 
+                                  (SELECT SUM(QTY) 
+                                   FROM PACKDETAIL PAD1 (NOLOCK) 
+                                   WHERE PAD1.PickSlipNo = PAH.PickSlipNo 
+                                   AND PAD1.LabelNo = PAD.LabelNo))   --WL02 E
                             )  
       END  
       ELSE  
@@ -228,7 +243,16 @@ BEGIN
                             WHERE PAH.Orderkey = PICKDETAIL.Orderkey  
                             AND PAD.Sku = PICKDETAIL.Sku   
                             AND PICKDETAIL.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PAD.LabelNo ELSE PICKDETAIL.CaseID END  
-                            AND PICKDETAIL.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PICKDETAIL.DropID ELSE PAD.LabelNo END  
+                            AND PICKDETAIL.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PICKDETAIL.DropID ELSE PAD.LabelNo END
+                            AND ((SELECT SUM(QTY)  --WL02 S
+                                  FROM PICKDETAIL PD1 (NOLOCK) 
+                                  WHERE PD1.ORDERKEY = @c_orderkey
+                                  AND PD1.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PAD.LabelNo ELSE PD1.CaseID END 
+                                  AND PD1.DROPID = CASE WHEN @c_Option2 = 'CaseID' THEN PD1.DropID ELSE PAD.LabelNo END) = 
+                                  (SELECT SUM(QTY) 
+                                   FROM PACKDETAIL PAD1 (NOLOCK) 
+                                   WHERE PAD1.PickSlipNo = PAH.PickSlipNo 
+                                   AND PAD1.LabelNo = PAD.LabelNo))   --WL02 E
                             )  
       END  
      
@@ -461,7 +485,7 @@ BEGIN
                        DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                        ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
                        WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo   
-                     , TaskDetailKey                                                
+                     , TaskDetailKey, Channel_ID, TaskManagerReasonKey	--(CLVN01)                                                
                       )  
                SELECT @c_newpickdetailkey  
                     , CASE WHEN @c_Option2 = 'CaseID' THEN '' ELSE PICKDETAIL.CaseID END                              
@@ -471,7 +495,7 @@ BEGIN
                     , Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                       ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
                       WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo  
-                    , TaskDetailKey                                               
+                    , TaskDetailKey, Channel_ID, TaskManagerReasonKey	--(CLVN01)                                               
                FROM PICKDETAIL (NOLOCK)  
                WHERE PickdetailKey = @c_pickdetailkey  
          
@@ -537,5 +561,7 @@ BEGIN
    END  
 END  
 GO
+
 GRANT EXECUTE ON [dbo].[ispPKLBLToOrd02] TO NSQL
 GO
+

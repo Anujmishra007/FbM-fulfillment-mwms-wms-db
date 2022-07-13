@@ -23,6 +23,7 @@ GO
 /* 27-May-2013  NJOW01    1.0   278733-Add sku.color                          */
 /* 27-Nov-2013	NJOW02    1.1   295959-Map carrier(consigneekey) to           */
 /*                              orders.deliveryplace                          */
+/* 25-JAN-2017  JayLim   1.2  SQL2012 compatibility modification (Jay01)*/  
 /* 28-Jan-2019  TLTING_ext 1.2  enlarge externorderkey field length      */
 /******************************************************************************/  
   
@@ -133,7 +134,7 @@ BEGIN
                , Busr3			      NVARCHAR(30) 
                , Busr4			      NVARCHAR(30) 
                , Weight			      FLOAT
-               , Cube               FLOAT
+               , [Cube]               FLOAT
                , DET_Userdefine03   NVARCHAR(18)
                , DET_Userdefine05   NVARCHAR(18)
                , SizeCOL1 		      NVARCHAR(5)  NULL	, QtyCOL1 	INT	NULL	
@@ -238,7 +239,7 @@ BEGIN
                      , Busr3		 
                      , Busr4
                      , Weight
-                     , Cube
+                     , [Cube]
                      , DET_Userdefine03
                      , DET_Userdefine05
                      , NoOfCarton)
@@ -283,7 +284,7 @@ BEGIN
         , ISNULL(RTRIM(S.Busr3),'')                               AS Busr3
         , ISNULL(RTRIM(S.Busr4),'')                               AS Busr4
         , SUM(ISNULL(S.StdGrossWgt,0.00000) * ISNULL(PCK.Qty,0))  AS Weight
-        , ISNULL(PI.Cube,0.00000)                                 AS Cube
+        , ISNULL(PI.[Cube],0.00000)                                 AS Cube
         , ISNULL(RTRIM(OD.UserDefine03),'')                       AS DET_UserDefine03
         , ISNULL(RTRIM(OD.UserDefine05),'')                       AS DET_UserDefine05
         , @n_NoOfCarton                                           AS NoOfCarton
@@ -504,7 +505,7 @@ BEGIN
          ,Busr3         = ISNULL(RTRIM(Busr3),'')           
          ,Busr4         = ISNULL(RTRIM(Busr4),'')  
          ,Weight        = ISNULL(Weight,0.00000) 
-         ,Cube          = ISNULL(Cube,0.00000) 
+         ,[Cube]          = ISNULL([Cube],0.00000) 
          ,DET_UserDefine03= ISNULL(RTRIM(DET_UserDefine03),'')  
          ,DET_UserDefine05= ISNULL(RTRIM(DET_UserDefine05),'')            
 	      ,SizeCOL1      = ISNULL(RTRIM(SizeCOL1),'') , QtyCOL1    = ISNULL(QtyCOL1 ,0)

@@ -1,25 +1,19 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLStation_Assign_WaveCarton03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_PTLStation_Assign_WaveCarton03
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
-  
-  
 /******************************************************************************/  
 /* Store procedure: rdt_PTLStation_Assign_WaveCarton03                        */  
 /* Copyright      : LFLogistics                                               */  
 /*                                                                            */  
 /* Date       Rev  Author   Purposes                                          */  
 /* 04-08-2021 1.0  yeekung  WMS-17625 Created                                 */  
-/* 14-09-2021 1.1  yeekung  WMS-17691 Add rdtformat for catonid (yeekung01)   */  
+/* 14-09-2021 1.1  yeekung  JSM-19563 Add rdtformat for catonid (yeekung01)   */  
 /* 16-11-2021 1.2  yeekung  JSM-32585 add Flowthrough bug (yeekung02)         */  
 /******************************************************************************/  
   
-CREATE PROC rdt.rdt_PTLStation_Assign_WaveCarton03 (  
+CREATE OR ALTER PROC rdt.rdt_PTLStation_Assign_WaveCarton03 (  
    @nMobile          INT,   
    @nFunc            INT,   
    @cLangCode        NVARCHAR( 3),   
@@ -74,7 +68,7 @@ BEGIN
           ,@cWaveKey        NVARCHAR(10)   
           ,@cOrderKey       NVARCHAR(10)   
           ,@cPairStation    NVARCHAR(10)   
-          ,@cPairPosition   NVARCHAR(10)   
+         ,@cPairPosition   NVARCHAR(10)   
           ,@cPairLocation   NVARCHAR(10)   
           , @cShort NVARCHAR(20)  
             
@@ -385,7 +379,7 @@ BEGIN
       -- Get Total  
       SELECT @nTotalLoad = COUNT(1)   
       FROM rdt.rdtPTLStationLog WITH (NOLOCK)   
-      WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
+WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
         
       SELECT @nTotalCarton = COUNT(1)   
       FROM rdt.rdtPTLStationLog WITH (NOLOCK)   
@@ -436,9 +430,6 @@ Quit:
       COMMIT TRAN  
 END  
   
-  
-
-
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -447,5 +438,4 @@ SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON RDT.rdt_PTLStation_Assign_WaveCarton03 TO NSQL
-GO
-
+GO 

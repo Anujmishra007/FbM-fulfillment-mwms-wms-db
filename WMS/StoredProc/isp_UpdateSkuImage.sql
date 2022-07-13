@@ -30,6 +30,8 @@ GO
 /* 06-Feb-2017  TLTING  1.1   debug flag                                */
 /* 06-AUG-2020  Wan01   1.2   LFWM-2824 - UATMulti SKU Image Upload and */
 /*                            Display (Backend)                         */
+/* 08-JUL-2022  NJOW02  1.3   Add sku image file upload logging         */
+/* 08-JUL-2022  NJOW02  1.3   DEVOPS Combine script                     */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[isp_UpdateSkuImage]
    @c_storerkey NVARCHAR(15),
@@ -367,7 +369,7 @@ BEGIN
                   END
                   */
                END         
-               
+                                                
                IF @c_sku = @c_SkuImageFile   --(Wan01)
                BEGIN
                   UPDATE SKU WITH (ROWLOCK)
@@ -388,6 +390,10 @@ BEGIN
                   END                  --(Wan01)
                END                     --(Wan01)
                
+               --NJOW02
+               INSERT INTO UploadSkuImageLog (Storerkey, Sku, ImagePath, ImageFolder, ImageFile, MainImageFlag, LogDate)
+               VALUES (@c_Storerkey, @c_Sku, RTRIM(@c_SkuImagePath), RTRIM(@c_ToSubFolder), @c_ImageFile, CASE WHEN @c_sku = @c_SkuImageFile THEN 'Y' ELSE 'N' END, GetDate())                  
+                                                           
                --(Wan01)- START
                IF @n_SImgFound = 0 
                BEGIN

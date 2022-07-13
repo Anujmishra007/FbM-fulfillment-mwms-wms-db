@@ -181,7 +181,8 @@ BEGIN
             ,b_phone1       = 'T:' + OH.b_phone1
             ,Caddress       = (ISNULL(OH.C_Address1,'') + ISNULL(OH.C_Address2,'')  )
             ,SDESCR         = S.descr
-            ,SKU            = S.style + '-' + S.color + '-' + S.size --TMP.SKU
+            --,SKU            = S.style + '-' + S.color + '-' + S.size --TMP.SKU
+			,SKU            = CASE WHEN OH.Storerkey = 'SS' THEN S.RetailSku ELSE S.style + '-' + S.color + '-' + S.size END --ML02
             ,C_Zip          = (ISNULL(oh.c_city,'') + ISNULL(oh.c_State,'') +ISNULL(oh.c_Zip,'') )
             ,OrderDate      = ISNULL(RTRIM(OH.OrderDate),'')
             ,Qty            = TMP.TotalQty
@@ -238,6 +239,7 @@ BEGIN
                    ,Case when ISNULL(OH.Userdefine02,'') = '' THEN ISNULL(OH.ExternOrderKey,'')
                                Else  ISNULL(OH.Userdefine02,'') END              --CS01
                    ,ISNULL(CL4.SHORT,'') --ML01
+				   ,S.RetailSku --ML02
       ORDER BY TMP.SeqNo
 
 

@@ -1,6 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtUpd03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtUpd03]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /* 2018-08-27 1.0  Ung      WMS-6128 Created                                  */  
 /* 2018-11-08 1.1  Ung      WMS-7003 Check interface had sent (TLog2 archived)*/  
 /* 2020-09-08 1.2  YeeKung  WMS-15056 add update carrierkey(yeekung01)        */
+/* 2022-04-07 1.3  YeeKung  WMS-19318 Disable the trigger (yeekung02)         */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtUpd03](
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd03](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -54,7 +52,7 @@ BEGIN
          BEGIN
             -- Consignment planning interface 
             -- (send MBOL, IKEA return a flag, store at MBOL header, indicate permission to ship, and user close MBOL to ship)
-            IF EXISTS( SELECT 1 FROM MBOL WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND OtherReference = '')
+            IF EXISTS( SELECT 1 FROM MBOL WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND STATUS = '0' AND BookingReference = 'Y' )
             BEGIN
 
                
@@ -75,7 +73,6 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdateMBOLFail
                   GOTO Quit
                END
-
 
                EXEC dbo.ispGenTransmitLog2
                     'WSMBOLADDLOG' -- TableName

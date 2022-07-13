@@ -1,12 +1,3 @@
-/****** Object:  StoredProcedure [dbo].[isp_carton_shipping_label_KidsRUS]    Script Date: 3/18/2019 10:07:50 AM ******/
-IF EXISTS (
-       SELECT *
-       FROM   dbo.sysobjects
-       WHERE  id = OBJECT_ID(N'[dbo].[isp_carton_shipping_label_KidsRUS]')
-              AND OBJECTPROPERTY(id, N'IsProcedure') = 1
-   )
-    DROP PROCEDURE [dbo].[isp_carton_shipping_label_KidsRUS]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -22,7 +13,7 @@ GO
 /*                                                                            */    
 /* Called By: Powerbuilder                                                    */    
 /*                                                                            */    
-/* PVCS Version: 1.1                                                          */    
+/* PVCS Version: 2.4                                                          */    
 /*                                                                            */    
 /* Version: 5.4                                                               */    
 /*                                                                            */    
@@ -43,9 +34,11 @@ GO
 /* 11-Mar-2020  KuanYee   2.1  INC1072061-Add Join statement condition (KY01) */      
 /* 30-Mar-2020  WLChooi   2.2  WMS-11877 Add Special Mark (WL01)              */    
 /* 09-Apr-2020  WLChooi   2.3  Fix missing UPCCode by Ran Zhou and tune the   */
-/*                             query (WL02)                                   */   
+/*                             query (WL02)                                   */
+/* 07-Jun-2022  WLChooi   2.4  DevOps Combine Script                          */
+/* 07-Jun-2022  WLChooi   2.4  Performance Tune - Filter UDF01 <> '' (WL03)   */
 /******************************************************************************/    
-CREATE PROC [dbo].[isp_carton_shipping_label_KidsRUS](@c_LabelNo NVARCHAR(20))    
+CREATE OR ALTER PROC [dbo].[isp_carton_shipping_label_KidsRUS](@c_LabelNo NVARCHAR(20))    
 AS    
    SET NOCOUNT ON   
    SET ANSI_NULLS OFF   
@@ -303,6 +296,7 @@ BEGIN
             AND S.sku = BOM.Sku  
             WHERE UDF01=@c_ODUDef03                                             --(CS08)  
             AND BOM.Storerkey = @c_Storerkey                                    --(CS04)  
+            AND BOM.UDF01 <> ''   --WL03
      
             IF ISNULL(@c_Altsku,'') <> ''  
             BEGIN  
@@ -536,6 +530,6 @@ BEGIN
    DROP TABLE #TempKidsRUSCartonLBL  
 END    
 GO
-GRANT EXECUTE ON isp_carton_shipping_label_KidsRUS TO NSQL
+GRANT EXECUTE ON [dbo].[isp_carton_shipping_label_KidsRUS] TO NSQL
 GO
 

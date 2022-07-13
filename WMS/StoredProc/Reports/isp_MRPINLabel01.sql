@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_MRPINLabel01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_MRPINLabel01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: isp_MRPINLabel01                                        */
 /* Creation Date: 25-APR-2017                                           */
@@ -18,7 +14,7 @@ GO
 /* Called By: r_dw_carton_MRPIN_Label01_1                               */
 /*          : r_dw_carton_MRPIN_Label01_2                               */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,8 +24,12 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 04-JUL-2017 Wan01    1.1   WMS-2332 - Changes to Logitech Packing    */
 /* 23-Aug-2019 CSCHONG  1.2   WMS-10266 revised field logic (CS01)      */
+/* 25-May-2022 Mingle   1.3   WMS-19712 modify logic (ML01)             */
+/* 06-Jul-2022 WLChooi  1.4   Bug Fix - Use Innerpack instead of Casecnt*/
+/*                            (WL01)                                    */
+/* 06-Jul-2022 WLChooi  1.4   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_MRPINLabel01
+CREATE OR ALTER PROC [dbo].[isp_MRPINLabel01]
            @c_PickSlipNo         NVARCHAR(10)
          , @c_CartonNoStart      NVARCHAR(10)
          , @c_CartonNoEnd        NVARCHAR(10) 
@@ -231,7 +231,8 @@ QUIT_SP:
                      + ISNULL(RTRIM(CSG.B_Country),'') 
       ,  ExtFld21 = 'Generic Name: ' + TMP.SI_ExtFld21
       ,  Sku = 'VPN: ' + TMP.Sku
-      ,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.InnerPack )) + 'N'
+      --,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.InnerPack )) + 'N'
+      ,  Qty = 'Net Quantity: ' + RTRIM(CONVERT( NVARCHAR(10), TMP.InnerPack )) + ' Unit'	--ML01   --WL01
       ,  IMPBy_UL = '______________________________'
       ,  RGSTBy_UL= '____________________'
    FROM #TMP_PACKSKU TMP   

@@ -9,3 +9,4 @@ execute rdt.rdtAddMsg 181755, 10, '181755INS Log Fail  ', 'us_english', 808
 execute rdt.rdtAddMsg 181756, 10, '181756INS PTL Fail  ', 'us_english', 808
 execute rdt.rdtAddMsg 181757, 10, '181757UPD Task Fail ', 'us_english', 808
 execute rdt.rdtAddMsg 181758, 10, '181758UPD Task Fail ', 'us_english', 808
+execute rdt.rdtAddMsg 181759, 10, '181759InvToteID', 'us_english', 808

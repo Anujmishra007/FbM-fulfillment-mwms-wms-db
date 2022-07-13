@@ -43,4 +43,11 @@ execute rdt.rdtAddMsg 145139, 10, '145139Data error    ', 'us_english', 1764
 execute rdt.rdtAddMsg 145140, 10, '145140UPD UCC Fail  ', 'us_english', 1764
 execute rdt.rdtAddMsg 145141, 10, '145141UPD UCC Fail  ', 'us_english', 1764
 
+--WMS-19577
+execute rdt.rdtAddMsg 145142, 10, '145142UPDLLIFail  ', 'us_english', 1764
+execute rdt.rdtAddMsg 145143, 10, '145143UPDLLIFail  ', 'us_english', 1764
+execute rdt.rdtAddMsg 145144, 10, '145144UPDLLIFail  ', 'us_english', 1764
+execute rdt.rdtAddMsg 145145, 10, '145145UPDLLIFail  ', 'us_english', 1764
+execute rdt.rdtAddMsg 145146, 10, '145146UPDLLIFail  ', 'us_english', 1764
+execute rdt.rdtAddMsg 145147, 10, '145147UPDLLIFail  ', 'us_english', 1764
 

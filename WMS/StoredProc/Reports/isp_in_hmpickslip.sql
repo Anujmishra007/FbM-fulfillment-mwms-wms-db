@@ -34,9 +34,10 @@ GO
 /* 29-Dec-2021  WLChooi   1.4   WMS-18621 - Change date mapping & format(WL04)*/ 
 /* 28-Apr-2021  WLChooi   1.5   WMS-16923 Enable printing by range of loadkey */ 
 /*                              (WL05)                                        */
+/* 26-Jun-2022  Mingle    1.6   WMS-20041 - Add showadddate(ML01)             */ 
 /******************************************************************************/        
       
-CREATE proc [dbo].[isp_in_hmpickslip]      
+CREATE PROC [dbo].[isp_in_hmpickslip]      
    --WL05 S 
    @c_storerkey   NVARCHAR(15),   
    @c_loadkeyfrom NVARCHAR(10),        
@@ -89,7 +90,7 @@ BEGIN
    --WHERE LPD.Loadkey = @c_Loadkey   --WL03   --WL05  
    WHERE LPD.Loadkey BETWEEN @c_Loadkeyfrom AND @c_Loadkeyto   --WL05
    AND OH.Storerkey = @c_Storerkey   --WL05
-   AND (OH.Route = @c_Route or @c_Route = 0)   --WL03     
+   AND (OH.Route = @c_Route OR @c_Route = 0)   --WL03     
    GROUP BY OH.Orderkey, ISNULL(PD.Notes,''), OH.LoadKey   --WL05     
 
    IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) 
@@ -131,7 +132,8 @@ BEGIN
     Pickzone            NVARCHAR(10),  --WL01
     LocAisle            NVARCHAR(10),  --WL01 
     MarketPlace         NVARCHAR(50),  --WL03
-    LPAddDate           NVARCHAR(10)   --WL03
+    LPAddDate           NVARCHAR(10),  --WL03
+	ShowAddDate         NVARCHAR(5)	   --ML01
     )        
          
    --WL05 S
@@ -155,7 +157,8 @@ BEGIN
     , Pickzone          NVARCHAR(10)
     , LocAisle          NVARCHAR(10)
     , MarketPlace       NVARCHAR(50)
-    , LPAddDate         NVARCHAR(10) 
+    , LPAddDate         NVARCHAR(10)
+	, ShowAddDate       NVARCHAR(5)
    )
    
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -179,7 +182,7 @@ BEGIN
       AND (Route = @c_Route or @c_Route = 0)   --WL03         
       
       INSERT INTO #Temp2(Orderkey, SKU, LogicalLocation, LOC, Route, Qty, ExternLineNo, SKUDESCR, Score, [Floor], Pickzone
-                       , LocAisle, MarketPlace, LPAddDate)   --WL05
+                       , LocAisle, MarketPlace, LPAddDate,ShowAddDate)   --WL05	--ML01
       SELECT a.OrderKey as orderkey, b.SKU as sku, c.LogicalLocation as LogicalLocation ,b.Loc as loc , a.Route as [Route], SUM(b.Qty) as qty,       
              d.ExternLineNo as ExternLineNo,RTRIM(ISNULL(d.UserDefine01,'')) + RTRIM(ISNULL(d.UserDefine02,'')) as SKUDESCR  
           /* 2016/11/28 --> Start */  
@@ -188,6 +191,7 @@ BEGIN
           , c.[Floor], c.PickZone, c.LocAisle   --WL01
           , ISNULL(CL.Short,'HM') AS MarketPlace   --WL03
           , CONVERT(NVARCHAR(5), a.AddDate, 103) + RIGHT(CONVERT(NVARCHAR(10), a.AddDate, 103),5) AS LPAddDate   --WL03   --WL04
+		  , ISNULL(CL2.SHORT,'') AS ShowAddDate	--ML01
       --INTO #TEMP2      
       FROM Orders a WITH (NOLOCK)      
       JOIN PickDetail b(NOLOCK) on a.OrderKey = b.OrderKey        
@@ -196,6 +200,8 @@ BEGIN
       JOIN #HM_Orderkey t on a.OrderKey = t.Orderkey   
       LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'MARKETPLAC' AND CL.Code = a.[Type]   --WL03
                                     AND CL.Storerkey = a.Storerkey   --WL03
+      LEFT JOIN CODELKUP CL2 (NOLOCK) ON CL2.LISTNAME = 'REPORTCFG' AND CL2.Long = 'r_in_hmpickslip'   
+                                    AND CL2.Storerkey = a.Storerkey AND CL2.Code = 'ShowAddDate'	--ML01
       --JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.OrderKey = a.OrderKey   --WL03   --WL04
    --JOIN LOADPLAN LP (NOLOCK) ON LP.LoadKey = LPD.LoadKey   --WL03   --WL04
       WHERE a.Storerkey = @c_Storerkey   --WL03 
@@ -209,13 +215,14 @@ BEGIN
           , c.[Floor], c.PickZone, c.LocAisle   --WL01
           , ISNULL(CL.Short,'HM')   --WL03
           , CONVERT(NVARCHAR(5), a.AddDate, 103) + RIGHT(CONVERT(NVARCHAR(10), a.AddDate, 103),5)   --WL03   --WL04
+		  , ISNULL(CL2.SHORT,'')
                
       INSERT INTO #HM_Label1        
              (OrderNo,            OrderKey,           LogicalLocation,            SKU,        
               Route,              Qty,                Loc,                        Loadkey,        
               ExternLineNo,       LineNumber,         TotalLines,                 SKUDESCR,
               [Floor],            Pickzone,           LocAisle,                   MarketPlace,   --WL01   --WL03
-              LPAddDate)   --WL03        
+              LPAddDate,ShowAddDate)   --WL03	--ML01        
       SELECT  t1.OrderNo,         t1.OrderKey,        t2.LogicalLocation,         t2.SKU,        
               t2.Route,           t2.Qty,             t2.Loc,                     t1.LoadKey,        
               t2.ExternLineNo,      
@@ -228,7 +235,8 @@ BEGIN
       /* 2016/11/28 <-- End */  
       /* 2017/11/15 <-- End */  
       0,   t2.SKUDESCR,
-      t2.[Floor], t2.Pickzone, t2.LocAisle, t2.MarketPlace, t2.LPAddDate   --WL01   --WL03          
+      t2.[Floor], t2.Pickzone, t2.LocAisle, t2.MarketPlace, t2.LPAddDate,   --WL01   --WL03  
+	  t2.ShowAddDate	--ML01
       from #TEMP1 AS t1 JOIN #TEMP2 AS t2 ON t1.orderkey = t2.orderkey       
       /* 2016/11/28 --> Start */   
       -- order by t2.LogicalLocation,t2.Loc,t2.SKU,t1.OrderKey        
@@ -292,7 +300,7 @@ BEGIN
    Route,              Qty,                Loc,                        Loadkey,        
    ExternLineNo,       LineNumber,         TotalLines,                 SKUDESCR,
    [Floor],            Pickzone,           LocAisle,                   MarketPlace,   --WL01   --WL03
-   LPAddDate   --WL03
+   LPAddDate,ShowAddDate   --WL03	--ML01
    FROM #HM_Label1(NOLOCK)        
    ORDER BY Loadkey DESC, LineNumber DESC  --WL02   --WL05
    --ORDER BY [Floor], Pickzone, LocAisle, LogicalLocation DESC      --WL02
@@ -320,3 +328,8 @@ GO
        
 GRANT EXECUTE ON isp_in_hmpickslip TO NSQL
 GO   
+
+
+
+
+

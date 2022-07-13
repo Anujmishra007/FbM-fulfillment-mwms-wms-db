@@ -1,6 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_SimpleCC]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_SimpleCC]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -55,15 +53,18 @@ GO
 /* 2019-08-05 3.6  James    WMS9996-Add ExtendedInfoSP @ step ID (james11)   */        
 /*                          Add Reset count by ID screen                     */    
 /*                         Loc counted screen, option 2 allow continue count*/    
-/*        without reset loc                                */    
+/*        without reset loc                                                  */    
 /* 2019-08-21 3.7  James    WMS-10272 Add IsValidFormat to SKU & Qty         */    
 /*                          Add ExtendedValidateSP @ step 8                  */    
 /*                          Add check SKUStatus (james12)                    */    
 /* 2019-11-22 3.8  James    WMS-11122 Add ExtendedUpdateSP @ step 4 (james13)*/    
-/* 2020-02-08 3.9  YeeKung  WMS-16273 Add UOM qty  (yeekung01)                */    
+/* 2020-02-08 3.9  YeeKung  WMS-16273 Add UOM qty  (yeekung01)                */  
+/* 2021-09-03 4.0  CikFun   JSM- Change @cOutField08 as blank; @cOutField09  */  
+/*         						as defaultqty         										*/  
+/* 2021-11-21 4.1  YeeKung  WMS-18333 Add Multiskubarcode (yeekung02)        */ 
 /*****************************************************************************/    
     
-CREATE PROC [RDT].[rdtfnc_SimpleCC](    
+CREATE OR ALTER PROC [RDT].[rdtfnc_SimpleCC](    
    @nMobile    INT,    
    @nErrNo     INT  OUTPUT,    
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max    
@@ -125,7 +126,8 @@ DECLARE
    @nTotalQtyCounted    INT,    
    @nTotalQtyCountNo1   INT,    
    @nTotalQtyCountNo2   INT,    
-   @nTotalQtyCountNo3   INT,       
+   @nTotalQtyCountNo3   INT, 
+   @nSKUCnt             INT,    --(yeekung02) 
    @cResetLoc           NVARCHAR(1),    
    @cDefaultQTY         NVARCHAR(10),    
    @nInQty              INT,    
@@ -152,6 +154,7 @@ DECLARE
    @cExtendedInfoSP     NVARCHAR(20),   --(james03)    
    @cExtendedInfo       NVARCHAR(20),   --(james03)    
    @cConfirmSkipLOC     NVARCHAR(1),    
+   @cMultiSKUBarcode    NVARCHAR( 3),  --(yeekung02)
     
    @cExtendedFetchTaskSP   NVARCHAR(20),   --(james04)    
    @cCurrSuggestSKU        NVARCHAR(20),   --(james04)    
@@ -297,7 +300,8 @@ SELECT
    --(yeekung01)    
    @cMUOM                     = V_String29, -- (yeekung01)    
    @cMUOM_Desc                = V_String30,        
-   @cPUOM_Desc                = V_String31,      
+   @cPUOM_Desc                = V_String31,    
+   @cMultiSKUBarcode          = V_String32,  --(yeekung02)
     
    @cLottable01 = V_Lottable01,    
    @cLottable02 = V_Lottable02,    
@@ -357,7 +361,8 @@ BEGIN
    IF @nStep = 7  GOTO Step_7   -- Scn = 2776 Skip LOC?    
    IF @nStep = 8  GOTO Step_8   -- Scn = 2777 LOC counted?    
    IF @nStep = 9 GOTO Step_9   -- Scn = 2778 ID?    
-   IF @nStep = 10 GOTO Step_10  -- Scn = 2779 Reset ID?    
+   IF @nStep = 10 GOTO Step_10  -- Scn = 2779 Reset ID? 
+   IF @nStep = 11 GOTO Step_11  -- Scn = 3570 multi sku    
 END    
     
 RETURN -- Do nothing if incorrect step    
@@ -394,6 +399,8 @@ BEGIN
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)    
    IF @cExtendedValidateSP = '0'    
       SET @cExtendedValidateSP = ''    
+
+   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)    --(yeekung02)
     
    IF @cDisableQTYField = '1'    
       IF @cDefaultQTY = ''    
@@ -515,7 +522,7 @@ BEGIN
       WHERE StockTakeKey = @cCCKey    
     
       IF @cCountNo > 3    
-      BEGIN    
+     BEGIN    
          SET @nErrNo = 72777    
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'InvCoutNo'    
          GOTO Step_1_Fail    
@@ -1156,7 +1163,7 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'LocNotMatch'    
                EXEC rdt.rdtSetFocusField @nMobile, 1    
                GOTO Step_2_Fail    
-            END    
+           END    
          END    
       END    
     
@@ -1439,7 +1446,7 @@ BEGIN
             ELSE IF ISNULL(RTRIM(@cCountNo),'') = '3'    
             BEGIN    
                IF NOT EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)    
-                          WHERE CCKey = @cCCKey    
+                    WHERE CCKey = @cCCKey    
                           AND ( StorerKey = '' OR StorerKey = @cStorerKey)    
                           AND   FinalizeFlag_Cnt3 = 'N'    
                           AND (( ISNULL( @cCCSheetNo, '') = '') OR ( CCSheetNo = @cCCSheetNo)))    
@@ -1516,7 +1523,7 @@ BEGIN
                @cSuggestLogiLOC OUTPUT,    
                @cSuggestLOC     OUTPUT,    
                @cSuggestSKU     OUTPUT,    
-               @cCountNo,    
+       @cCountNo,    
                @cUserName    
             END    
     
@@ -1988,7 +1995,7 @@ BEGIN
          BEGIN    
             SET @cBarcode = @cInSKU    
             SET @cUPC = SUBSTRING( @cInSKU, 1, 30)    
-            SET @nErrNo = 0    
+            SET @nErrNo = 0 
     
             -- Standard decode    
             IF @cDecodeSP = '1'    
@@ -2067,7 +2074,69 @@ BEGIN
                IF ISNULL( @nQty, 0) <> 0    
                   SET @nInQty = CAST( @nQty AS NVARCHAR( 5))    
             END    
-         END   -- End for DecodeSP    
+         END   -- End for DecodeSP   
+         
+         EXEC [RDT].[rdt_GETSKUCNT]  
+          @cStorerKey  = @cStorerKey  
+         ,@cSKU        = @cSKU  
+         ,@nSKUCnt     = @nSKUCnt       OUTPUT  
+         ,@bSuccess    = @b_Success     OUTPUT  
+         ,@nErr        = @n_Err         OUTPUT  
+         ,@cErrMsg     = @c_ErrMsg      OUTPUT  
+  
+         -- Check barcode return multi SKU  
+         IF @nSKUCnt > 1  
+         BEGIN  
+            -- (james03)  
+            IF @cMultiSKUBarcode IN ('1', '2')  
+            BEGIN  
+               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,  
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,  
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,  
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,  
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,  
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,  
+                  'POPULATE',  
+                  @cMultiSKUBarcode,  
+                  @cStorerKey,  
+                  @cSKU     OUTPUT,  
+                  @nErrNo   OUTPUT,  
+                  @cErrMsg  OUTPUT,  
+                  '',    -- DocType  
+                  ''  
+  
+               IF @nErrNo = 0 -- Populate multi SKU screen  
+               BEGIN  
+                  -- Go to Multi SKU screen  
+                  SET @nFromScn = @nScn  
+                  SET @nScn = 3570  
+                  SET @nStep = @nStep + 7 
+                  GOTO Quit  
+               END  
+               IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen  
+               BEGIN  
+                  SET @nErrNo = 0  
+           SET @cSKU = @cSKU  
+               END  
+            END  
+            ELSE  
+            BEGIN  
+               SET @nErrNo = 59425  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod  
+               GOTO Step_4_Fail  
+            END  
+  
+         END   
     
          EXEC [RDT].[rdt_GETSKU]    
                   @cStorerKey  = @cStorerkey,    
@@ -2152,7 +2221,7 @@ BEGIN
          BEGIN        
             EXEC rdt.rdtSetFocusField @nMobile, 9    
             SET @cOutField14 = rdt.rdtRightAlign( @cMUOM_Desc, 5)     
-            SET @cPUOM_Desc = ''      
+    SET @cPUOM_Desc = ''      
             SET @nPQTY = 0        
             SET @nMQTY = @cDefaultQTY        
             SET @cFieldAttr08 = 'O' -- @nPQTY       
@@ -2236,7 +2305,7 @@ BEGIN
       SET @cCCUpdateSP = rdt.RDTGetConfig( @nFunc, 'SimpleCCUpdateLogic', @cStorerkey)    
     
       IF ISNULL(@cCCUpdateSP,'') NOT IN ('0', '') -- (james02)    
-      BEGIN    
+      BEGIN   
          EXEC dbo.ispCycleCount_Wrapper    
           @c_SPName     = @cCCUpdateSP    
          ,@c_SKU        = @cSKU    
@@ -2315,7 +2384,7 @@ BEGIN
       AND   Loc = @cLoc    
       AND   SKU = @cSKU    
       AND (( ISNULL( @cCCSheetNo, '') = '') OR ( CCSheetNo = @cCCSheetNo))    
-      AND (( @cCaptureID = '' AND ID = ID) OR ( @cCaptureID = '1' AND ID = @cID))    
+      AND (( @cCaptureID IN('','0') AND ID = ID) OR ( @cCaptureID = '1' AND ID = @cID)) 
     
       -- Enable / disable QTY field    (james01)    
       SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
@@ -2412,7 +2481,7 @@ BEGIN
                GOTO Quit    
     
             IF @nStep = 4    
-               SET @cOutField12 = @cExtendedInfo    
+               SET @cOutField15 = @cExtendedInfo    
          END    
       END    
    END    
@@ -2518,7 +2587,7 @@ BEGIN
         Qty      = CASE WHEN @cCountNo = '1' THEN 0 ELSE Qty  END    
       , Qty_Cnt2 = CASE WHEN @cCountNo = '2' THEN 0 ELSE Qty_Cnt2 END    
       , Qty_Cnt3 = CASE WHEN @cCountNo = '3' THEN 0 ELSE Qty_Cnt3 END    
-      , Status  = '2'    
+      , Status  = '2'  
       , Counted_Cnt1 = CASE WHEN @cCountNo = '1' THEN '1' ELSE Counted_Cnt1 END    
       , Counted_Cnt2 = CASE WHEN @cCountNo = '2' THEN '1' ELSE Counted_Cnt2 END    
       , Counted_Cnt3 = CASE WHEN @cCountNo = '3' THEN '1' ELSE Counted_Cnt3 END    
@@ -2764,7 +2833,7 @@ BEGIN
                ' @cStorerKey     NVARCHAR( 15),  ' +    
                ' @cCCKey         NVARCHAR( 10),  ' +    
                ' @cCCSheetNo     NVARCHAR( 10),  ' +    
-               ' @cCountNo       NVARCHAR( 1),   ' +    
+               ' @cCountNo       NVARCHAR( 1),   ' +  
                ' @cLOC           NVARCHAR( 10),  ' +    
                ' @cSKU           NVARCHAR( 20),  ' +    
                ' @nQTY           INT,            ' +    
@@ -2790,8 +2859,10 @@ BEGIN
    BEGIN    
       SET @cSKU = ''    
       SET @cOutField03 = ''    
-      SET @cOutField08 = CASE WHEN @cDefaultQTY NOT IN ('', '0') THEN @cDefaultQTY ELSE '' END    
-    
+   --SET @cOutField08 = CASE WHEN @cDefaultQTY NOT IN ('', '0') THEN @cDefaultQTY ELSE '' END --(CIKFUN01)  
+   	SET @cOutField08 = ''                   --(CIKFUN01)  
+      SET @cOutField09 = CASE WHEN @cDefaultQTY NOT IN ('', '0') THEN @cDefaultQTY ELSE '' END  --(CIKFUN01)  
+     
       -- Enable / disable QTY field    (james01)    
       SET @cFieldAttr08 =  'O'   
       SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
@@ -2963,7 +3034,7 @@ BEGIN
          SET @cOutField03 = @cCountNo    
     
          -- (ChewKP02)    
-         IF @nFunc = 732    
+    IF @nFunc = 732    
          BEGIN    
             SET @cOutField04 = @cSuggestLoc    
          END    
@@ -3202,21 +3273,22 @@ BEGIN
                   SET @cDefaultQTY = '1'    
          END    
     
-         -- Enable / disable QTY field    (james01)    
-         SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
-    
-         SET @cOutField01 = @cCCKey    
-         SET @cOutField02 = @cLoc    
-         SET @cOutField03 = ''    
-         SET @cOutField04 = ''    
-         SET @cOutField05 = ''    
-         SET @cOutField06 = @cCountNo    
-         SET @cOutField07 = ''    
-         SET @cOutField08 = @cDefaultQTY    
-    
-         SET @cOutField09 = ''    
-         SET @cOutField11 = @cCCSheetNo    
-         SET @cOutField12 = '' -- @cExtendedInfo    
+         -- Enable / disable QTY field    (james01)         
+         SET @cFieldAttr08 = 'O'       
+         SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY          
+          
+         SET @cOutField01 = @cCCKey          
+         SET @cOutField02 = @cLoc          
+         SET @cOutField03 = ''          
+         SET @cOutField04 = ''          
+         SET @cOutField05 = ''          
+         SET @cOutField06 = @cCountNo          
+         SET @cOutField07 = ''          
+         SET @cOutField08 = ''          
+         SET @cOutField09 = @cDefaultQTY         
+         SET @cOutField10 = ''            
+         SET @cOutField11 = ''          
+         SET @cOutField12 = @cCCSheetNo -- @cExtendedInfo        
     
     
          -- Goto SKU , Qty Screen    
@@ -3329,21 +3401,23 @@ BEGIN
                   SET @cDefaultQTY = '1'    
          END    
     
-         -- Enable / disable QTY field    (james01)    
-         SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
-    
-         SET @cOutField01 = @cCCKey    
-         SET @cOutField02 = @cLoc    
-         SET @cOutField03 = ''    
-         SET @cOutField04 = ''    
-         SET @cOutField05 = ''    
-         SET @cOutField06 = @cCountNo    
-         SET @cOutField07 = ''    
-         SET @cOutField08 = @cDefaultQTY    
-    
-         SET @cOutField09 = ''    
-         SET @cOutField11 = @cCCSheetNo    
-         SET @cOutField12 = '' -- @cExtendedInfo    
+          
+         -- Enable / disable QTY field    (james01)        
+         SET @cFieldAttr08 = 'O'        
+         SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY          
+          
+         SET @cOutField01 = @cCCKey          
+         SET @cOutField02 = @cLoc          
+         SET @cOutField03 = ''          
+         SET @cOutField04 = ''          
+         SET @cOutField05 = ''          
+         SET @cOutField06 = @cCountNo          
+         SET @cOutField07 = ''          
+         SET @cOutField08 = ''          
+         SET @cOutField09 = @cDefaultQTY         
+         SET @cOutField10 = ''            
+         SET @cOutField11 = ''          
+         SET @cOutField12 = @cCCSheetNo         
     
     
          -- Goto SKU , Qty Screen    
@@ -3393,7 +3467,7 @@ BEGIN
             IF @nStep = 3    
                SET @cOutField07 = @cExtendedInfo    
             IF @nStep = 4    
-               SET @cOutField12 = @cExtendedInfo    
+               SET @cOutField15 = @cExtendedInfo    
          END    
       END    
    END    
@@ -3405,7 +3479,7 @@ BEGIN
       SET @cOutField03 = '' -- (ChewKP01)    
       SET @cOutField06 = @cCountNo -- (ChewKP01)    
     
-      IF @cHideScanInformation = '1'    
+      IF @cHideScanInformation = '1'  
       BEGIN    
          SET @cOutField04 = ''    
          SET @cOutField05 = ''    
@@ -3586,7 +3660,7 @@ BEGIN
     
          IF @@ROWCOUNT = 0 -- No data in CCDetail    
          BEGIN    
-            SET @nErrNo = 72786    
+            SET @nErrNo = 72786   
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Blank Record'    
             GOTO Quit    
          END    
@@ -3931,7 +4005,7 @@ BEGIN
          IF ISNULL(RTRIM(@cCountNo),'') = '1'    
          BEGIN    
             UPDATE dbo.CCDetail WITH (ROWLOCK)    
-            SET Qty = 0    
+            SET Qty = 0  
             , EditWho = @cUserName    
             , EditDate = GetDate()    
             , Status = CASE WHEN Status = '2' THEN '0' ELSE [Status] END    
@@ -4056,21 +4130,25 @@ BEGIN
                      SET @cDefaultQTY = '1'    
             END    
     
-            -- Enable / disable QTY field    (james01)    
-            SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
-    
-            SET @cOutField01 = @cCCKey    
-            SET @cOutField02 = @cLoc    
-            SET @cOutField03 = ''    
-            SET @cOutField04 = ''    
-            SET @cOutField05 = ''    
-            SET @cOutField06 = @cCountNo    
-            SET @cOutField07 = ''    
-            SET @cOutField08 = @cDefaultQTY    
-    
-            SET @cOutField09 = ''    
-            SET @cOutField11 = @cCCSheetNo    
-            SET @cOutField12 = '' -- @cExtendedInfo    
+            -- Enable / disable QTY field    (james01)      
+            SET @cFieldAttr08 ='O'          
+            SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY          
+          
+            SET @cOutField01 = @cCCKey          
+            SET @cOutField02 = @cLoc          
+            SET @cOutField03 = ''          
+            SET @cOutField04 = ''          
+            SET @cOutField05 = ''          
+            SET @cOutField06 = @cCountNo          
+            SET @cOutField07 = ''          
+            SET @cOutField08 = ''          
+            SET @cOutField09 = @cDefaultQTY          
+            SET @cOutField10 =''          
+            SET @cOutField11 =''          
+            SET @cOutField12 = @cCCSheetNo          
+            SET @cOutField13 = ''           
+            SET @cOutField14 =''          
+            SET @cOutField15 ='' -- ExtendedInfo     
     
             -- Goto SKU , Qty Screen    
             SET @nScn = @nScn - 4    
@@ -4168,17 +4246,19 @@ BEGIN
       SET @cOutField05 = SUBSTRING( @cSKUDesc, 1, 20)  -- SKU desc 1    
       SET @cOutField06 = @cCountNo    
       SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20) -- SKU desc 2    
-      SET @cOutField08 = @cDefaultQTY    
+      SET @cOutField08 = ''          
+      SET @cOutField09 = @cDefaultQTY         
+      
+      IF @cCountNo = '1' SET @cOutField10 = CAST( @nTotalSKUQty AS NVARCHAR(5)) ELSE          
+      IF @cCountNo = '2' SET @cOutField10 = CAST( @nTotalQty2   AS NVARCHAR(5)) ELSE          
+      IF @cCountNo = '3' SET @cOutField10 = CAST( @nTotalQty3   AS NVARCHAR(5))          
           
-      IF @cCountNo = '1' SET @cOutField09 = CAST( @nTotalSKUQty AS NVARCHAR(5)) ELSE    
-      IF @cCountNo = '2' SET @cOutField09 = CAST( @nTotalQty2   AS NVARCHAR(5)) ELSE    
-      IF @cCountNo = '3' SET @cOutField09 = CAST( @nTotalQty3   AS NVARCHAR(5))    
+      SET @cOutField11 = ''          
+      SET @cOutField12 = @cCCSheetNo     
     
-      SET @cOutField11 = @cCCSheetNo    
-      SET @cOutField12 = '' -- ExtendedInfo    
-    
-      -- Enable / disable QTY field    (james01)    
-      SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
+      -- Enable / disable QTY field    (james01)        
+      SET @cFieldAttr08 = 'O'        
+      SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY     
     
       EXEC rdt.rdtSetFocusField @nMobile, 3    
     
@@ -4195,7 +4275,7 @@ Step_8_Quit:
       BEGIN    
          SET @cExtendedInfo = ''    
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +    
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+          ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
             ' @cCCKey, @cCCSheetNo, @cCountNo, @cLOC, @cSKU, @nQTY, @cOption, @tVar, ' +    
             ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
          SET @cSQLParam =    
@@ -4287,7 +4367,7 @@ BEGIN
              SET @nErrNo = 129010    
              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') -- ID Counted    
              GOTO Quit    
-         END    
+      END    
          ELSE    
          BEGIN    
             IF NOT EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)    
@@ -4372,7 +4452,7 @@ BEGIN
       BEGIN    
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')    
          BEGIN    
-            INSERT INTO @tVar (Variable, Value) VALUES     
+           INSERT INTO @tVar (Variable, Value) VALUES     
             ('@cID',       @cID)    
     
             SET @cExtendedInfo = ''    
@@ -4409,23 +4489,23 @@ BEGIN
             IF @nErrNo <> 0    
                GOTO Quit    
     
-            SET @cOutField12 = @cExtendedInfo    
+            SET @cOutField15 = @cExtendedInfo    
          END    
       END    
     
-      -- Prepare Next Screen Var    
-      SET @cOutField01 = @cCCKey    
-      SET @cOutField02 = @cLoc    
-      SET @cOutField03 = ''    
-      SET @cOutField04 = ''    
-      SET @cOutField05 = ''    
-      SET @cOutField06 = @cCountNo    
-      SET @cOutField07 = ''    
-      SET @cOutField08 = @cDefaultQTY    
-    
-      SET @cOutField09 = ''    
-      SET @cOutField11 = @cCCSheetNo    
-      --SET @cOutField12 = '' -- ExtendedInfo    
+      -- Prepare Next Screen Var          
+      SET @cOutField01 = @cCCKey          
+      SET @cOutField02 = @cLoc          
+      SET @cOutField03 = ''          
+      SET @cOutField04 = ''          
+      SET @cOutField05 = ''          
+      SET @cOutField06 = @cCountNo          
+      SET @cOutField07 = ''          
+      SET @cOutField08 = ''          
+      SET @cOutField09 = @cDefaultQTY         
+      SET @cOutField10 = ''         
+      SET @cOutField11 = ''          
+      SET @cOutField12 = @cCCSheetNo       
     
       SET @nScn = @nScn - 5    
       SET @nStep = @nStep - 5    
@@ -4653,7 +4733,7 @@ BEGIN
             , Counted_Cnt2 = '0'    
             WHERE CCKey = @cCCKey    
             AND   Loc = @cLoc    
-            AND ( StorerKey = '' OR StorerKey = @cStorerKey)    
+            AND ( StorerKey = '' OR StorerKey = @cStorerKey)   
             AND (( ISNULL( @cCCSheetNo, '') = '') OR ( CCSheetNo = @cCCSheetNo))    
             AND   ID = @cID    
     
@@ -4686,7 +4766,7 @@ BEGIN
                SET @nErrNo = 129016    
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') -- UpdCCDet Fail    
                EXEC rdt.rdtSetFocusField @nMobile, 1    
-   GOTO Step_10_Fail    
+               GOTO Step_10_Fail    
             END    
          END    
     
@@ -4783,25 +4863,30 @@ BEGIN
                IF @nErrNo <> 0    
                   GOTO Quit    
     
-               SET @cOutField12 = @cExtendedInfo    
+               SET @cOutField15 = @cExtendedInfo    
             END    
          END    
-    
-         -- Enable / disable QTY field    (james01)    
-         SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
-    
-         SET @cOutField01 = @cCCKey    
-         SET @cOutField02 = @cLoc    
-         SET @cOutField03 = ''    
-         SET @cOutField04 = ''    
-         SET @cOutField05 = ''    
-         SET @cOutField06 = @cCountNo    
-         SET @cOutField07 = ''    
-         SET @cOutField08 = @cDefaultQTY    
-    
-         SET @cOutField09 = ''    
-         SET @cOutField11 = @cCCSheetNo    
---SET @cOutField12 = '' -- @cExtendedInfo    
+         
+         -- Enable / disable QTY field    (james01)        
+         SET @cFieldAttr08 = 'O'        
+         SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY       
+          
+         -- Prepare Next Screen Var          
+         SET @cOutField01 = @cCCKey          
+         SET @cOutField02 = @cLoc          
+         SET @cOutField03 = ''          
+         SET @cOutField04 = ''          
+         SET @cOutField05 = ''          
+         SET @cOutField06 = @cCountNo          
+         SET @cOutField07 = ''          
+         SET @cOutField08 = ''          
+         SET @cOutField09 = @cDefaultQTY          
+         SET @cOutField10 =''          
+         SET @cOutField11 =''          
+         SET @cOutField12 = @cCCSheetNo          
+         SET @cOutField13 = ''           
+         SET @cOutField14 =''          
+         SET @cOutField15 ='' -- ExtendedInfo       
     
     
          -- Goto SKU , Qty Screen    
@@ -4835,6 +4920,271 @@ BEGIN
    END    
 END    
 GOTO Quit    
+
+/********************************************************************************  
+Step 13. Screen = 3570. Multi SKU  
+   SKU         (Field01)  
+   SKUDesc1    (Field02)  
+   SKUDesc2    (Field03)  
+   SKU         (Field04)  
+   SKUDesc1    (Field05)  
+   SKUDesc2    (Field06)  
+   SKU         (Field07)  
+   SKUDesc1    (Field08)  
+   SKUDesc2    (Field09)  
+   Option      (Field10, input)  
+********************************************************************************/  
+Step_11:  
+BEGIN  
+   IF @nInputKey = 1 -- ENTER  
+   BEGIN  
+      EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,  
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  
+         'CHECK',  
+         @cMultiSKUBarcode,  
+         @cStorerKey,  
+         @cSKU     OUTPUT,  
+         @nErrNo   OUTPUT,  
+         @cErrMsg  OUTPUT  
+  
+      IF @nErrNo <> 0  
+      BEGIN  
+         IF @nErrNo = -1  
+            SET @nErrNo = 0  
+         GOTO Quit  
+      END   
+  
+      SELECT  
+         @cSKUDesc = IsNULL( DescR, ''),  
+         @cMUOM_Desc = Pack.PackUOM3,  
+         @cPUOM_Desc =  
+            CASE @cPUOM  
+               WHEN '2' THEN Pack.PackUOM1 -- Case  
+               WHEN '3' THEN Pack.PackUOM2 -- Inner pack  
+               WHEN '6' THEN Pack.PackUOM3 -- Master unit  
+               WHEN '1' THEN Pack.PackUOM4 -- Pallet  
+               WHEN '4' THEN Pack.PackUOM8 -- Other unit 1  
+               WHEN '5' THEN Pack.PackUOM9 -- Other unit 2  
+            END,  
+            @nPUOM_Div = CAST( IsNULL(  
+            CASE @cPUOM  
+               WHEN '2' THEN Pack.CaseCNT  
+               WHEN '3' THEN Pack.InnerPack  
+               WHEN '6' THEN Pack.QTY  
+               WHEN '1' THEN Pack.Pallet  
+               WHEN '4' THEN Pack.OtherUnit1  
+               WHEN '5' THEN Pack.OtherUnit2  
+            END, 1) AS INT)  
+      FROM dbo.SKU SKU WITH (NOLOCK)  
+      JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)  
+      WHERE SKU.StorerKey = @cStorerKey  
+      AND   SKU.SKU = @cSKU  
+  
+      -- Convert to prefer UOM QTY  
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit  
+         @nPUOM_Div = 0  -- UOM not setup  
+      BEGIN  
+         SET @cPUOM_Desc = ''  
+         SET @nPQTY = 0  
+         SET @nMQTY = @nQTY  
+         SET @cFieldAttr08 = 'O' -- @nPQTY  
+      END  
+      ELSE  
+      BEGIN  
+         SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM  
+         SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit  
+         SET @cFieldAttr08 = '' -- @nPQTY  
+      END  
+    
+      SELECT @nTotalSKUQty = Sum(Qty),    
+         @nTotalQty2 = Sum(Qty_Cnt2),    
+         @nTotalQty3 = Sum(Qty_Cnt3)    
+      FROM dbo.CCDetail WITH (NOLOCK)    
+      WHERE ( StorerKey = '' OR StorerKey = @cStorerKey)    
+      AND   CCKey = @cCCKey    
+      AND   Loc = @cLoc    
+      AND   SKU = @cSKU    
+      AND (( ISNULL( @cCCSheetNo, '') = '') OR ( CCSheetNo = @cCCSheetNo))    
+      AND (( @cCaptureID = '' AND ID = ID) OR ( @cCaptureID = '1' AND ID = @cID)) 
+
+      SET @cOutField08 = CASE WHEN @cDefaultQTY NOT IN ('', '0') THEN @cDefaultQTY ELSE '' END    
+    
+      -- Enable / disable QTY field    (james01)    
+      SET @cFieldAttr08 =  'O'   
+      SET @cFieldAttr09 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY 
+  
+  
+      -- Disable QTY field  
+      IF @cDisableQTYFieldSP <> ''  
+      BEGIN  
+         IF @cDisableQTYFieldSP = '1'  
+         SET @cDisableQTYField = @cDisableQTYFieldSP  
+         ELSE  
+         BEGIN  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableQTYFieldSP AND type = 'P')  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableQTYFieldSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  
+                  ' @cCCKey, @cCCSheetNo, @cCountNo, @cLOC, @cID, @tVar, ' +  
+                  ' @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+               SET @cSQLParam =  
+                  ' @nMobile           INT,            ' +  
+                  ' @nFunc             INT,            ' +  
+                  ' @cLangCode         NVARCHAR( 3),   ' +  
+                  ' @nStep             INT,            ' +  
+                  ' @nInputKey         INT,            ' +  
+                  ' @cFacility         NVARCHAR( 5),   ' +  
+                  ' @cStorerKey        NVARCHAR( 15),  ' +  
+                  ' @cCCKey            NVARCHAR( 10),  ' +  
+                  ' @cCCSheetNo        NVARCHAR( 10),  ' +  
+                  ' @cCountNo          NVARCHAR( 1),   ' +  
+                  ' @cLOC              NVARCHAR( 10),  ' +  
+                  ' @cID               NVARCHAR( 18),  ' +  
+                  ' @tVar              VariableTable READONLY, ' +  
+                  ' @cDisableQTYField  NVARCHAR( 1)  OUTPUT,   ' +  
+                  ' @nErrNo            INT           OUTPUT,   ' +  
+                  ' @cErrMsg           NVARCHAR( 20) OUTPUT    '  
+  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,  
+                  @cCCKey, @cCCSheetNo, @cCountNo, @cLOC, @cID, @tVar,  
+                  @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+            END  
+         END  
+  
+         SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'SimpleCCDefaultQTY', @cStorerkey)  
+         IF @cDefaultQTY = '0'  
+            SET @cDefaultQTY = ''  
+  
+         IF @cDisableQTYField = '1'  
+            IF @cDefaultQTY = ''  
+               SET @cDefaultQTY = '1'  
+      END  
+  
+      -- Enable / disable QTY field    (james01)  
+      SET @cFieldAttr13 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY  
+ 
+      -- Prepare Next Screen Var  
+      SET @cOutField01 = @cCCKey  
+      SET @cOutField02 = @cLoc  
+      SET @cOutField03 = @cSKU  
+      SET @cOutField04 = @cSKU
+      SET @cOutField05 = ''  
+      SET @cOutField06 = ''  
+      SET @cOutField07 = SUBSTRING(@cSKUDesc,21,40)
+      SET @cOutField09 = @cDefaultQTY    
+
+      IF @cCountNo = '1' SET @cOutField10 = CAST( @nTotalSKUQty AS NVARCHAR(5)) ELSE    
+      IF @cCountNo = '2' SET @cOutField10 = CAST( @nTotalQty2   AS NVARCHAR(5)) ELSE    
+      IF @cCountNo = '3' SET @cOutField10 = CAST( @nTotalQty3   AS NVARCHAR(5))   
+        
+      SET @cOutField11 = ''  
+      SET @cOutField12 = '' -- ExtendedInfo  
+  
+      -- Set Focus on Field01  
+      EXEC rdt.rdtSetFocusField @nMobile, 3  
+  
+      -- Go to SKU QTY screen  
+      SET @nScn = @nFromScn  
+      SET @nStep = @nStep - 7
+   END
+
+   IF @nInputKey=0
+   BEGIN
+       -- Disable QTY field    
+      IF @cDisableQTYFieldSP <> ''  
+      BEGIN    
+         IF @cDisableQTYFieldSP = '1'    
+            SET @cDisableQTYField = @cDisableQTYFieldSP    
+         ELSE    
+         BEGIN    
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableQTYFieldSP AND type = 'P')    
+            BEGIN    
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableQTYFieldSP) +    
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+                  ' @cCCKey, @cCCSheetNo, @cCountNo, @cLOC, @cID, @tVar, ' +    
+                  ' @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+               SET @cSQLParam =    
+                  ' @nMobile           INT,            ' +    
+                  ' @nFunc             INT,            ' +    
+                  ' @cLangCode         NVARCHAR( 3),   ' +    
+                  ' @nStep             INT,            ' +    
+                  ' @nInputKey         INT,            ' +    
+                  ' @cFacility         NVARCHAR( 5),   ' +    
+                  ' @cStorerKey        NVARCHAR( 15),  ' +    
+                  ' @cCCKey            NVARCHAR( 10),  ' +    
+                  ' @cCCSheetNo        NVARCHAR( 10),  ' +    
+                  ' @cCountNo          NVARCHAR( 1),   ' +    
+                  ' @cLOC              NVARCHAR( 10),  ' +    
+                  ' @cID               NVARCHAR( 18),  ' +    
+                  ' @tVar              VariableTable READONLY, ' +    
+                  ' @cDisableQTYField  NVARCHAR( 1)  OUTPUT,   ' +    
+                  ' @nErrNo            INT           OUTPUT,   ' +    
+                  ' @cErrMsg           NVARCHAR( 20) OUTPUT    '    
+    
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,    
+                  @cCCKey, @cCCSheetNo, @cCountNo, @cLOC, @cID, @tVar,    
+                  @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT    
+            END    
+         END    
+    
+         SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'SimpleCCDefaultQTY', @cStorerkey)    
+         IF @cDefaultQTY = '0'    
+            SET @cDefaultQTY = ''    
+    
+         IF @cDisableQTYField = '1'    
+            IF @cDefaultQTY = ''    
+               SET @cDefaultQTY = '1'    
+      END    
+    
+      -- Enable / disable QTY field    (james01)    
+      SET @cFieldAttr08 = 'o'    
+      SET @cFieldAttr09= CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END --QTY    
+    
+      SET @cSKUValidated = '0'     
+    
+      -- Prepare Next Screen Var    
+      SET @cOutField01 = @cCCKey    
+      SET @cOutField02 = @cLoc    
+      SET @cOutField03 = ''    
+      SET @cOutField04 = ''    
+      SET @cOutField05 = ''    
+      SET @cOutField06 = @cCountNo    
+      SET @cOutField07 = ''    
+      SET @cOutField08 = ''    
+      SET @cOutField09 = @cDefaultQTY    
+      SET @cOutField10 =''    
+      SET @cOutField11 =''    
+      SET @cOutField12 = @cCCSheetNo    
+      SET @cOutField13 = ''     
+      SET @cOutField14 =''    
+      SET @cOutField15 ='' -- ExtendedInfo    
+    
+      -- Set Focus on Field01    
+      EXEC rdt.rdtSetFocusField @nMobile, 3    
+    
+      -- Go to SKU QTY screen  
+      SET @nScn = @nFromScn  
+      SET @nStep = @nStep - 7
+   END
+  
+END  
+GOTO Quit  
     
 /********************************************************************************    
 Quit. Update back to I/O table, ready to be pick up by JBOSS    
@@ -4849,7 +5199,7 @@ BEGIN
       Scn           = @nScn,    
     
       StorerKey     = @cStorerKey,    
-      Facility      = @cFacility,    
+      Facility  = @cFacility,    
       Printer       = @cPrinter,    
       Printer_Paper = @cPrinter_Paper,    
     
@@ -4895,7 +5245,8 @@ BEGIN
       V_String29    = @cMUOM ,        
       V_String30    = @cMUOM_Desc,    
       V_String31    = @cPUOM_Desc,    
-    
+      V_String32    = @cMultiSKUBarcode,
+
       V_Lottable01  = @cLottable01,    
       V_Lottable02  = @cLottable02,    
       V_Lottable03  = @cLottable03,    
@@ -4940,7 +5291,7 @@ BEGIN
     
    WHERE Mobile = @nMobile    
     
-END      
+END           
 GO
 
 SET QUOTED_IDENTIFIER OFF

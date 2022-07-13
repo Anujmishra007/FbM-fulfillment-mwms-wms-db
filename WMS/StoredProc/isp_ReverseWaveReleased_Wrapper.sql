@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ReverseWaveReleased_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ReverseWaveReleased_Wrapper]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -28,8 +25,10 @@ GO
 /* 04-AUG-2014  YTWan    1.1  SOS#313850 - Wave Enhancement - Delete     */
 /*                            Orders. (Wan01)                            */
 /* 22-Oct-2019  Wan02    1.2  Update TMReleaseFlag, Sync Exceed & SCE    */
+/* 21-Mar-2022  NJOW01   1.3  WMS-19267 Support config by facility       */
+/* 21-Mar-2022  NJOW01   1.3  DEVOPS Combine script                      */
 /*************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_ReverseWaveReleased_Wrapper]  
+CREATE OR ALTER PROCEDURE [dbo].[isp_ReverseWaveReleased_Wrapper]  
       @c_WaveKey    NVARCHAR(10) 
    ,  @c_Orderkey   NVARCHAR(10) = ''                 --(Wan01)
    ,  @b_Success    INT OUTPUT    
@@ -46,6 +45,7 @@ BEGIN
    DECLARE @n_Continue     INT
          , @c_SPCode       NVARCHAR(50)
          , @c_StorerKey    NVARCHAR(15)
+         , @c_Facility     NVARCHAR(5)
          , @c_SQL          NVARCHAR(MAX)
 
    SET @n_err        = 0
@@ -57,17 +57,15 @@ BEGIN
    SET @c_StorerKey  = ''
    SET @c_SQL        = ''
    
-   SELECT TOP 1 @c_StorerKey = O.Storerkey
+   SELECT TOP 1 @c_StorerKey = O.Storerkey,
+                @c_Facility = O.Facility    --NJOW01
    FROM WAVEDETAIL WD (NOLOCK)
    JOIN ORDERS O (NOLOCK) ON (WD.Orderkey = O.Orderkey)
    WHERE WD.Wavekey = @c_Wavekey  
+   
+   SET @c_SPCode = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ReverseWaveReleased_SP')  --NJOW01
 
-   SELECT @c_SPCode = sVALUE 
-   FROM   StorerConfig WITH (NOLOCK) 
-   WHERE  StorerKey = @c_StorerKey
-   AND    ConfigKey = 'ReverseWaveReleased_SP'  
-
-   IF ISNULL(RTRIM(@c_SPCode),'') = ''
+   IF ISNULL(RTRIM(@c_SPCode),'') IN('','0')  --NJOW01
    BEGIN  
        SET @n_Continue = 3  
        SET @n_Err = 31210

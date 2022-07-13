@@ -14,6 +14,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author   Purposes                                       */
 /* 2021-06-02 1.0  James    WMS-17143. Created                             */
+/* 2022-03-14 1.1  Jame     WMS-19131 Add pdf printing (james01)           */
 /***************************************************************************/
 
 CREATE PROC rdt.rdt_593Print33 (
@@ -72,6 +73,17 @@ AS
            @cErrMsg14        NVARCHAR( 20),
            @cErrMsg15        NVARCHAR( 20)
 
+   DECLARE @cFilePath         NVARCHAR(100)       
+   DECLARE @cPrintFilePath    NVARCHAR(100)      
+   DECLARE @cFilePrefix       NVARCHAR( 30)
+   DECLARE @cFileName         NVARCHAR( 50)
+   DECLARE @cWinPrinter       NVARCHAR(128)
+   DECLARE @cWinPrinterName   NVARCHAR(100)
+   DECLARE @cPrintCommand     NVARCHAR(MAX)
+   DECLARE @cPrinterName      NVARCHAR(100)
+   DECLARE @cPaperPrinterPDF1 NVARCHAR( 10)
+   DECLARE @cPaperPrinterPDF2 NVARCHAR( 10)
+
    -- Parameter mapping
    SET @cOrderKey = ''
 
@@ -126,7 +138,45 @@ AS
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --ReportType req
       GOTO Quit
    END
-   
+
+   IF ISNULL( @cUDF01, '') <> ''
+   BEGIN
+      SELECT @cFilePath = Long, 
+             @cPrintFilePath = Notes, 
+             @cReportType = Code2, 
+             @cFilePrefix = UDF01
+      FROM dbo.CODELKUP WITH (NOLOCK)      
+      WHERE LISTNAME = 'PrtbyShipK'      
+      AND   StorerKey = @cStorerKey
+      AND   code2 = @cUDF01 + '_PDF'
+      
+      IF ISNULL( @cFilePath, '') = ''    
+      BEGIN    
+         SET @nErrNo = 168705     
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Setup FilePath    
+         GOTO Quit   
+      END
+   END
+
+   IF ISNULL( @cUDF02, '') <> ''
+   BEGIN
+      SELECT @cFilePath = Long, 
+             @cPrintFilePath = Notes, 
+             @cReportType = Code2, 
+             @cFilePrefix = UDF01
+      FROM dbo.CODELKUP WITH (NOLOCK)      
+      WHERE LISTNAME = 'PrtbyShipK'      
+      AND   StorerKey = @cStorerKey
+      AND   code2 = @cUDF02 + '_PDF'
+      
+      IF ISNULL( @cFilePath, '') = ''    
+      BEGIN    
+         SET @nErrNo = 168706     
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Setup FilePath    
+         GOTO Quit   
+      END
+   END
+
    IF ISNULL( @cUDF01, '') <> ''
    BEGIN
       SELECT @cPaperPrinter1 = PrinterID
@@ -147,6 +197,48 @@ AS
          @cErrMsg OUTPUT   
                
       IF @nErrNo <> 0
+         GOTO Quit
+
+      SELECT @cPaperPrinterPDF1 = PrinterID
+      FROM rdt.rdtReportToPrinter WITH (NOLOCK)
+      WHERE Function_ID = @nFunc
+      AND   StorerKey = @cStorerKey
+      AND   PrinterGroup = @cPaperPrinter
+      AND   ReportType = @cUDF01 + '_PDF'
+      
+      -- Print pdf
+      SET @cWinPrinter = ''
+      SET @cPrinterName = ''
+      
+      SELECT @cWinPrinter = WinPrinter
+      FROM rdt.rdtPrinter WITH (NOLOCK)  
+      WHERE PrinterID = @cPaperPrinterPDF1
+
+      IF CHARINDEX(',' , @cWinPrinter) > 0 
+      BEGIN
+         SET @cPrinterName = LEFT( @cWinPrinter , (CHARINDEX(',' , @cWinPrinter) - 1) )    
+         SET @cWinPrinterName = @cPrinterName
+      END
+      ELSE
+      BEGIN
+         SET @cPrinterName =  @cPaperPrinterPDF1
+         SET @cWinPrinterName = @cWinPrinter
+      END
+         
+      SET @cFilePrefix = @cFilePrefix + CASE WHEN ISNULL( @cFilePrefix, '') <> '' THEN '_' ELSE '' END
+      SET @cFileName = @cFilePrefix + RTRIM( @cOrderKey) + '.pdf'     
+      SET @cPrintCommand = '"' + @cPrintFilePath + '" "' + @cFilePath + '\' + @cFileName + '" "0" "2" "' + @cWinPrinterName + '"'                              
+
+      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cPrinterName,
+         @cUDF01,     -- Report type
+         @tCR,    -- Report params
+         'rdt_593Print33', 
+         @nErrNo  OUTPUT,
+         @cErrMsg OUTPUT,
+         1,
+         @cPrintCommand
+
+	   IF @nErrNo <> 0
          GOTO Quit
    END
 
@@ -170,6 +262,48 @@ AS
          @cErrMsg OUTPUT   
                
       IF @nErrNo <> 0
+         GOTO Quit
+
+      SELECT @cPaperPrinterPDF2 = PrinterID
+      FROM rdt.rdtReportToPrinter WITH (NOLOCK)
+      WHERE Function_ID = @nFunc
+      AND   StorerKey = @cStorerKey
+      AND   PrinterGroup = @cPaperPrinter
+      AND   ReportType = @cUDF02 + '_PDF'
+      
+      -- Print pdf
+      SET @cWinPrinter = ''
+      SET @cPrinterName = ''
+      
+      SELECT @cWinPrinter = WinPrinter
+      FROM rdt.rdtPrinter WITH (NOLOCK)  
+      WHERE PrinterID = @cPaperPrinterPDF2
+
+      IF CHARINDEX(',' , @cWinPrinter) > 0 
+      BEGIN
+         SET @cPrinterName = LEFT( @cWinPrinter , (CHARINDEX(',' , @cWinPrinter) - 1) )    
+         SET @cWinPrinterName = @cPrinterName
+      END
+      ELSE
+      BEGIN
+         SET @cPrinterName =  @cPaperPrinterPDF2
+         SET @cWinPrinterName = @cWinPrinter
+      END
+         
+      SET @cFilePrefix = @cFilePrefix + CASE WHEN ISNULL( @cFilePrefix, '') <> '' THEN '_' ELSE '' END
+      SET @cFileName = @cFilePrefix + RTRIM( @cOrderKey) + '.pdf'     
+      SET @cPrintCommand = '"' + @cPrintFilePath + '" "' + @cFilePath + '\' + @cFileName + '" "0" "2" "' + @cWinPrinterName + '"'                              
+
+      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cPrinterName,
+         @cUDF02,     -- Report type
+         @tSI,    -- Report params
+         'rdt_593Print33', 
+         @nErrNo  OUTPUT,
+         @cErrMsg OUTPUT,
+         1,
+         @cPrintCommand
+
+	   IF @nErrNo <> 0
          GOTO Quit
    END
 Quit:

@@ -20,7 +20,8 @@ GO
 /* Data Modifications:                                                        */              
 /*                                                                            */              
 /* Updates:                                                                   */              
-/* Date         Author    Ver.  Purposes                                      */    
+/* Date         Author    Ver.  Purposes                                      */ 
+/* 30-MAY-2022  MINGLE    1.1   Add new column(ML01)                          */
 /******************************************************************************/     
   
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_120_rdt]             
@@ -91,6 +92,8 @@ END
          , TTLUnitPrice    FLOAT
          , TrackingNo      NVARCHAR(30)
          , CLK1UDF05       NVARCHAR(60)
+		 , BuyerPO         NVARCHAR(20)  NULL	--ML01
+		 , SDESCR          NVARCHAR(60)  NULL	--ML01
          )  
          
 
@@ -116,7 +119,9 @@ END
        UnitPrice,
        TTLUnitPrice,
        TrackingNo,
-       CLK1UDF05 
+       CLK1UDF05,
+	   BuyerPO,	--ML01
+	   SDESCR	--ML01
    )      
    SELECT ISNULL(OH.c_Contact1,''),(ISNULL(OH.C_Zip,'')+ISNULL(OH.C_address1,'')+ISNULL(OH.C_address2,'') + ISNULL(OH.C_address3,'') + ISNULL(OH.C_address4,'')),
                    ISNULL(OH.C_Phone1,''),ISNULL(OIF.EcomOrderId,''),OH.PmtTerm,ISNULL(ORDDET.Notes,''), ISNULL(ORDDET.Notes2,''),
@@ -126,11 +131,14 @@ END
                    CONVERT(NVARCHAR(10),OH.OrderDate,120) AS ORDDate, ISNULL(C5.notes,'') AS pic05,
                    ORDDET.UnitPrice,pd.qty * ORDDET.UnitPrice,
                    CASE WHEN CLK.short='711' THEN SubString(OH.TrackingNo, 7 , 3)+ Right(OH.TrackingNo,8) ELSE OH.TrackingNo END,
-                   ISNULL(CLK1.UDF05,'')                     
+                   ISNULL(CLK1.UDF05,''),
+				   OH.BuyerPO,	--ML01
+				   S.DESCR	--ML01
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
    JOIN dbo.OrderInfo OIF WITH (NOLOCK) ON OIF.Orderkey = OH.Orderkey 
    JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON PD.Storerkey = ORDDET.StorerKey AND PD.OrderKey = ORDDET.OrderKey AND PD.sku = ORDDET.sku AND PD.OrderLineNumber = ORDDET.OrderLineNumber
+   JOIN SKU S WITH (NOLOCK) ON S.StorerKey = ORDDET.StorerKey AND S.Sku = ORDDET.Sku	--ML01 
    JOIN CODELKUP C1 WITH (NOLOCK) ON c1.LISTNAME='ReprotCFG'  AND c1.Storerkey=oh.StorerKey AND c1.Code = oh.IntermodalVehicle AND c1.code2='01'
    JOIN CODELKUP C2 WITH (NOLOCK) ON c2.LISTNAME='ReprotCFG'  AND c2.Storerkey=oh.StorerKey AND c2.Code = oh.IntermodalVehicle AND c2.code2='02'
    JOIN CODELKUP C3 WITH (NOLOCK) ON c3.LISTNAME='ReprotCFG'  AND c3.Storerkey=oh.StorerKey AND c3.Code = oh.IntermodalVehicle AND c3.code2='03'
@@ -161,7 +169,9 @@ END
                 UnitPrice,
                 TTLUnitPrice,
                 TrackingNo,
-                CLK1UDF05               
+                CLK1UDF05,
+				BuyerPO,	--ML01
+				SDESCR	--ML01
          FROM #PACKLIST120rdt  
          GROUP BY c_Contact1,
                 C_Addresses,
@@ -182,11 +192,14 @@ END
                 UnitPrice,
                 TTLUnitPrice,
                 TrackingNo,
-                CLK1UDF05 
+                CLK1UDF05,
+				BuyerPO,	--ML01
+				SDESCR	--ML01
          ORDER BY OrderKey,paSKU  
                
 END
 GO
 GRANT EXECUTE ON [dbo].[isp_Packing_List_120_rdt] TO nSQL 
 GO
+
 

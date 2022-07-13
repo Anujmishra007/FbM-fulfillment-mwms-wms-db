@@ -39,7 +39,7 @@ EXECUTE rdt.rdtAddScn 5801, 'ENG',
    ,@cLine10 = ''
    ,@cLine11 = ''
    ,@cLine12 = ''
-   ,@cLine13 = ''
+   ,@cLine13 = '%20d15' -- WMS-18350
    ,@cLine14 = '%e'
    ,@nFunc = 1653
 
@@ -58,7 +58,7 @@ EXECUTE rdt.rdtAddScn 5802, 'ENG',
    ,@cLine10 = 'PALLETKEY:'
    ,@cLine11 = '%20i04'
    ,@cLine12 = ''
-   ,@cLine13 = ''
+   ,@cLine13 = '%20d15' -- WMS-18350
    ,@cLine14 = '%e'
    ,@nFunc = 1653   
 

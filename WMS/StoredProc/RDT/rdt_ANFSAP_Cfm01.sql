@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_ANFSAP_Cfm01]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_ANFSAP_Cfm01]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -29,9 +26,10 @@ GO
 /* 2015-04-27  1.5  Leong    SOS# 340315 - Add TraceInfo.               */ 
 /* 2021-04-19  1.5  Chermain WMS-16851 Add Channel_ID when split        */
 /*                           pickDetail (cc01)                          */
+/* 2022-06-07  1.6  yeekung  WMS-19703 Add eventlog (yeekung01)         */
 /************************************************************************/  
   
-CREATE PROCEDURE [rdt].[rdt_ANFSAP_Cfm01]  
+CREATE or ALTER PROCEDURE [rdt].[rdt_ANFSAP_Cfm01]  
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR(3),  
@@ -76,7 +74,8 @@ BEGIN
       @c_ConsigneeKey    NVARCHAR(15), -- (Chee02)  
       @c_SKU             NVARCHAR(20), -- (Chee02)  
       @n_QTY             INT,          -- (Chee02) 
-      @cGenLabelByUserForDCToStoreOdr NVARCHAR(20)   -- (Chee03)
+      @cGenLabelByUserForDCToStoreOdr NVARCHAR(20),   -- (Chee03)
+      @nStep             INT
 
    DECLARE @cuserid NVARCHAR(20) -- SOS# 340315  
    SET @cuserid = SUSER_SNAME()  
@@ -90,7 +89,8 @@ BEGIN
    SET @cErrMsg = ''
 
    -- Get UserName (Chee02)
-   SELECT @cUserName = UserName
+   SELECT @cUserName = UserName,
+          @nStep = step
    FROM rdt.RDTMOBREC WITH (NOLOCK)    
    WHERE Mobile = @nMobile 
 
@@ -767,6 +767,21 @@ UpdateDB:
          GOTO RollBackTran   
       END  
    END -- IF @nTotalPickedQty = @nTotalPackedQty  
+
+
+   -- Add eventlog  (yeekung01)      
+   EXEC RDT.rdt_STD_EventLog      
+      @cActionType = '3', -- Sign in function      
+      @cUserID     = @cUserName,      
+      @nMobileNo   = @nMobile,      
+      @nFunctionID = @nFunc,      
+      @cFacility   = @cFacility,      
+      @cStorerKey  = @cStorerkey,  
+      @nStep       = @nStep,
+      @cLoadKey    = @cLoadkey,
+      @cUCC        = @cUCCNo,
+      @cLabelNo    = @cLabelNo
+
    GOTO Quit
   
 RollBackTran:  

@@ -1,41 +1,40 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV16]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLWAV16]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/*************************************************************************/  
-/* Stored Procedure: ispRLWAV16                                          */  
-/* Creation Date: 20-APR-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by:                                                           */  
-/*                                                                       */  
-/* Purpose: WMS-4345 - CN UA Release Wave (B2B)                          */
-/*                                                                       */  
-/* Called By: wave                                                       */  
-/*                                                                       */  
-/* PVCS Version: 1.5                                                     */  
-/*                                                                       */  
-/* Version: 7.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */  
-/* 08-Apr-2019 NJOW01   1.0   Fix - make sure uom 2 converted to uom 6   */
-/*                            for conso carton                           */ 
-/* 15-May-2019 NJOW02   1.1   WNMS-8924 Change PTS assign logic.         */
-/*                            Replenish addition carton if the           */
-/*                            location no more available qty after pick. */
-/* 15-Aug-2019 NJOW03   1.2   WMS-9825 create replenishment records by   */
-/*                            ucc for manual replenshment as backup plan */
-/* 23-Oct-2019 NJOW04   1.3   Fix split pickdetail issue                 */
-/* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                          */ 
-/* 25-08-2021  WLChooi  1.5   WMS-17812 - Set Priority to 4 (WL01)       */ 
-/*************************************************************************/   
+/***************************************************************************/  
+/* Stored Procedure: ispRLWAV16                                            */  
+/* Creation Date: 20-APR-2018                                              */  
+/* Copyright: LFL                                                          */  
+/* Written by:                                                             */  
+/*                                                                         */  
+/* Purpose: WMS-4345 - CN UA Release Wave (B2B)                            */
+/*                                                                         */  
+/* Called By: wave                                                         */  
+/*                                                                         */  
+/* PVCS Version: 1.5                                                       */  
+/*                                                                         */  
+/* Version: 7.0                                                            */  
+/*                                                                         */  
+/* Data Modifications:                                                     */  
+/*                                                                         */  
+/* Updates:                                                                */  
+/* Date        Author   Ver   Purposes                                     */  
+/* 08-Apr-2019 NJOW01   1.0   Fix - make sure uom 2 converted to uom 6     */
+/*                            for conso carton                             */ 
+/* 15-May-2019 NJOW02   1.1   WNMS-8924 Change PTS assign logic.           */
+/*                            Replenish addition carton if the             */
+/*                            location no more available qty after pick.   */
+/* 15-Aug-2019 NJOW03   1.2   WMS-9825 create replenishment records by     */
+/*                            ucc for manual replenshment as backup plan   */
+/* 23-Oct-2019 NJOW04   1.3   Fix split pickdetail issue                   */
+/* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                            */ 
+/* 25-08-2021  WLChooi  1.5   WMS-17812 - Set Priority to 4 (WL01)         */ 
+/* 21-Mar-2022 NJOW05   1.6   WMS-19267 if facility=UABJ gen pickslip only */
+/* 21-Mar-2022 NJOW05   1.6   DEVOPS Combine script                        */
+/***************************************************************************/   
 
-CREATE PROCEDURE [dbo].[ispRLWAV16]      
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV16]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
  ,@n_err          int        OUTPUT  
@@ -134,7 +133,25 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
     SET @c_TaskType = 'RPF'
     SET @c_PickMethod = 'PP'
 
-    -----Wave Validation-----            
+    --NJOW05
+    IF EXISTS(SELECT 1
+              FROM WAVE W (NOLOCK)
+              JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
+              JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+              AND W.Wavekey = @c_Wavekey
+              AND O.Facility = 'UABJ')
+     BEGIN               
+        EXEC isp_CreatePickSlip
+                  @c_Wavekey = @c_Wavekey
+                 ,@c_LinkPickSlipToPick = 'Y'  --Y=Update pickslipno to pickdetail.pickslipno 
+                 ,@b_Success = @b_Success OUTPUT
+                 ,@n_Err = @n_err OUTPUT 
+                 ,@c_ErrMsg = @c_errmsg OUTPUT     
+                        
+        GOTO UPDATE_WAVE        
+     END            
+
+    -----Wave Validation-----               
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN 
        IF NOT EXISTS (SELECT 1 
@@ -788,11 +805,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                    SET @c_ToLoc = ''
                    SET @c_Message03 = 'PICKLOC'
                    
-                   SELECT TOP 1 @c_ToLoc = Loc
-                   FROM SKUXLOC (NOLOCK)
-                   WHERE Storerkey = @c_Storerkey
-                   AND Sku = @c_Sku
-                   AND LocationType = 'PICK'
+                   SELECT TOP 1 @c_ToLoc = SL.Loc
+                   FROM SKUXLOC SL (NOLOCK)
+                   JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc
+                   WHERE SL.Storerkey = @c_Storerkey
+                   AND SL.Sku = @c_Sku
+                   AND SL.LocationType = 'PICK'
+                   AND LOC.Facility = @c_Facility --NJOW05
 
                    IF ISNULL(@c_ToLoc,'') = ''
                    BEGIN
@@ -1294,6 +1313,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
                 AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) > 0
                 AND LLI.Storerkey = @c_Storerkey
                 AND LLI.Sku = @c_Sku
+                AND LOC.Facility = @c_Facility --NJOW05
                 --AND LLI.Lot = @c_Lot --NJOW02 removed
                 ORDER BY CASE WHEN LLI.Lot = @c_Lot THEN 1 ELSE 2 END, --NJOW02
                          LOC.LocationGroup, LOC.Loclevel, QtyAvailable, LOC.Logicallocation, LOC.Loc
@@ -1467,7 +1487,9 @@ CREATE PROCEDURE [dbo].[ispRLWAV16]
           CLOSE cur_LPLane
           DEALLOCATE cur_LPLane            
     END
-            
+
+UPDATE_WAVE:        
+    
     -----Update Wave Status-----
     IF @n_continue = 1 or @n_continue = 2  
     BEGIN  

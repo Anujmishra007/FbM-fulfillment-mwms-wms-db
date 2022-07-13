@@ -1,12 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdtfnc_Pallet_Build]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_Pallet_Build]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_Pallet_Build                                       */
@@ -30,9 +26,10 @@ GO
 /* 2019-08-08 1.8  YeeKung  WMS-10083 Add Reopen the palletid (yeekung01)     */  
 /* 2020-06-10 1.9  James    WMS-13606 Add capture pallet info (james03)       */
 /* 2020-07-25 2.0  Ung      WMS-13505 Add AutoGenDropID, DecodeSP             */
+/* 2022-04-20 2.1  Ung      WMS-19340 Expand DropID to 20 chars               */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_Pallet_Build](
+CREATE OR ALTER PROC [RDT].[rdtfnc_Pallet_Build](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -61,7 +58,7 @@ DECLARE
    @cStorerKey          NVARCHAR(15),
    @cFacility           NVARCHAR(5),
 
-   @cDropID             NVARCHAR(18),
+   @cDropID             NVARCHAR(20),
    @cUCCNo              NVARCHAR(20),
    @cOrderkey           NVARCHAR(10),
    @cDropLOC            NVARCHAR(10),
@@ -942,6 +939,9 @@ BEGIN
          END
       END
 
+      DECLARE @cToID NVARCHAR( 18)
+      SET @cToID = LEFT( @cDropID, 18)
+
       -- insert to Eventlog
       EXEC RDT.rdt_STD_EventLog
          @cActionType   = '4', -- Move
@@ -951,7 +951,8 @@ BEGIN
          @cFacility     = @cFacility,
          @cStorerKey    = @cStorerkey,
          @cToLocation   = @cDropLoc,
-         @cToID         = @cDropID,
+         @cToID         = @cToID,
+         @cDropID       = @cDropID, 
          @cRefNo2       = @cOrderkey,
          @cRefNo3       = @cUCCNo
 

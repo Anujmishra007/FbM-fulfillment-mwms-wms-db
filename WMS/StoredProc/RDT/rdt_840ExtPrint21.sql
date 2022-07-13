@@ -11,6 +11,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2022-03-18 1.0  James      WMS-19123. Created                        */  
+/* 2022-06-15 1.1  James      WMS-19935 Last Carton of the order only   */
+/*                            print packing list (james01)              */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint21] (  
@@ -38,8 +40,10 @@ AS
    DECLARE @cPaperPrinter     NVARCHAR( 10),  
            @cLabelPrinter     NVARCHAR( 10),  
            @cShipLabel        NVARCHAR( 10),  
-           @cPackList         NVARCHAR( 10)
-             
+           @cPackList         NVARCHAR( 10),
+           @nExpectedQty      INT = 0,
+           @nPackedQty        INT = 0
+
   
    DECLARE @tShipLabel     VariableTable  
    DECLARE @tPackList      VariableTable  
@@ -71,7 +75,19 @@ AS
                @nErrNo  OUTPUT,    
                @cErrMsg OUTPUT    
          END  
+         
+         -- (james01)
+         SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)
+         WHERE Orderkey = @cOrderkey
+            AND Storerkey = @cStorerkey
+            AND Status < '9'
 
+         SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+
+         IF @nExpectedQty > @nPackedQty
+            GOTO Quit
+            
          SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PACKLIST', @cStorerkey)    
          IF @cPackList = '0'    
             SET @cPackList = ''    
