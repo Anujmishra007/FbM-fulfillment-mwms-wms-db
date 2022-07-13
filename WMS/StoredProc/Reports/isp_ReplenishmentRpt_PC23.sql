@@ -1,7 +1,7 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ReplenishmentRpt_PC23]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[isp_ReplenishmentRpt_PC23]
 GO
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF
 GO
@@ -33,8 +33,6 @@ GO
 /*                            Strategy                                     */
 /* 20-AUG-2019  Wan02   1.3   WMS-10309 - [PH] Unilever Replenishment      */
 /*                            Strategy - CR                                */
-/* 03-JUN-2022  LZG     1.4   JSM-71223 - Follow Parameters to follow      */
-/*                            Datawindow Seq (ZG01)                        */
 /***************************************************************************/
 CREATE PROC [dbo].[isp_ReplenishmentRpt_PC23]
                @c_zone01           NVARCHAR(10)
@@ -51,10 +49,8 @@ CREATE PROC [dbo].[isp_ReplenishmentRpt_PC23]
 ,              @c_zone12           NVARCHAR(10)
 ,              @c_storerkey        NVARCHAR(15)
 ,              @c_ReplGrp          NVARCHAR(30)    --PickZone
---,              @c_backendjob       NVARCHAR(10) = 'N' --NJOW01
---,              @c_Functype         NCHAR(1) = ''        --(Wan01)
-,              @c_Functype         NCHAR(1) = ''      -- ZG01
-,              @c_backendjob       NVARCHAR(10) = 'N' -- ZG01
+,              @c_backendjob       NVARCHAR(10) = 'N' --NJOW01
+,              @c_Functype         NCHAR(1) = ''        --(Wan01) 
 AS
 BEGIN
    SET NOCOUNT ON
@@ -77,14 +73,14 @@ BEGIN
          , @c_ToLocationType  NVARCHAR(10)
          , @n_CaseCnt         FLOAT
          , @n_Pallet          FLOAT
-
+         
          , @n_FilterQty       INT          = 0  --(Wan02)
          , @c_ReplFullPallet  NVARCHAR(10) = 'N'--(Wan02)
          , @c_Storerkey_CL    NVARCHAR(15) = '' --(Wan02)
-         , @c_ReplFreshStock  NVARCHAR(10) = 'N'--(Wan03)
-         , @c_SUSR2           NVARCHAR(18) = '' --(Wan03)
-         , @n_shelflife       INT          = 0  --(Wan03)
-         , @d_today           DATETIME          --(Wan03)
+         , @c_ReplFreshStock  NVARCHAR(10) = 'N'--(Wan03)      
+         , @c_SUSR2           NVARCHAR(18) = '' --(Wan03) 
+         , @n_shelflife       INT          = 0  --(Wan03)   
+         , @d_today           DATETIME          --(Wan03)        
 
    DECLARE @c_priority        NVARCHAR(5)
          , @c_ReplLottable02  NVARCHAR(18)
@@ -101,9 +97,9 @@ BEGIN
    END
 
    --(Wan01) - START
-   IF @c_FuncType IN ( 'P' )
+   IF @c_FuncType IN ( 'P' )                                     
    BEGIN
-      GOTO QUIT_SP
+      GOTO QUIT_SP    
    END
    --(Wan01) - END
 
@@ -185,8 +181,8 @@ BEGIN
       FROM SKUxLOC    WITH (NOLOCK)
       JOIN LOC        WITH (NOLOCK) ON (SKUxLOC.Loc = LOC.Loc)
       LEFT JOIN LOTXLOCXID WITH (NOLOCK) ON (SKUxLOC.Storerkey = LOTXLOCXID.Storerkey AND SKUxLOC.Sku = LOTXLOCXID.Sku AND SKUxLOC.Loc = LOTXLOCXID.Loc) --NJOW01
-      LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (SKUxLOC.Storerkey = CLR.Storerkey AND CLR.Code = 'REPLCASETOPICK'
-                                          AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_replenishment_report_pc23' AND ISNULL(CLR.Short,'') <> 'N')  --NJOW02
+      LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (SKUxLOC.Storerkey = CLR.Storerkey AND CLR.Code = 'REPLCASETOPICK' 
+                                          AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_replenishment_report_pc23' AND ISNULL(CLR.Short,'') <> 'N')  --NJOW02 
       WHERE (SKUxLOC.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')
       AND   (SKUxLOC.LOCationtype = 'CASE' or SKUxLOC.LOCationtype = 'PALLET' or SKUxLOC.LOCationtype = 'PICK')
       AND   SKUxLOC.ReplenishmentCasecnt > 0
@@ -209,27 +205,27 @@ BEGIN
              , SKUxLOC.QtyLocationLimit
              , LOC.Locationtype
              , CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END --NJOW02
-      HAVING (SKUxLOC.Qty - SKUxLOC.QtyPicked) + SUM(ISNULL(LOTXLOCXID.PendingMoveIN,0)) <= SKUxLOC.QtyLocationMinimum --NJOW01
+      HAVING (SKUxLOC.Qty - SKUxLOC.QtyPicked) + SUM(ISNULL(LOTXLOCXID.PendingMoveIN,0)) <= SKUxLOC.QtyLocationMinimum --NJOW01      
       --HAVING SUM((LOTXLOCXID.Qty - LOTXLOCXID.QtyPicked) + LOTXLOCXID.PendingMoveIN) <= SKUxLOC.QtyLocationMinimum --NJOW01
       ORDER  By SKUxLOC.StorerKey
              , SKUxLOC.SKU
-             , SKUxLOC.LOC
+             , SKUxLOC.LOC 
 
       IF @@ROWCOUNT > 0  AND ISNULL(@c_ReplGrp,'') IN ('ALL','') --NJOW01
       BEGIN
-         EXECUTE nspg_GetKey
-            'REPLENGROUP',
-            9,
-            @c_ReplenishmentGroup OUTPUT,
-            @b_success OUTPUT,
-            @n_err OUTPUT,
-            @c_errmsg OUTPUT
-
-         IF @b_success = 1
-            SELECT @c_ReplenishmentGroup = 'T' + @c_ReplenishmentGroup
+         EXECUTE nspg_GetKey                                                     
+            'REPLENGROUP',                                                       
+            9,                                                                   
+            @c_ReplenishmentGroup OUTPUT,                                        
+            @b_success OUTPUT,                                                   
+            @n_err OUTPUT,                                                       
+            @c_errmsg OUTPUT                                                     
+                                                                                 
+         IF @b_success = 1                                                      
+            SELECT @c_ReplenishmentGroup = 'T' + @c_ReplenishmentGroup           
       END
       ELSE
-         SET @c_ReplenishmentGroup = @c_ReplGrp
+         SET @c_ReplenishmentGroup = @c_ReplGrp  
 
       /* Loop through SKUxLOC for the currentSKU, current storer */
       /* to pickup the next severity */
@@ -271,7 +267,7 @@ BEGIN
                ,@n_CaseCnt= ISNULL(CaseCnt,0)
                ,@c_Packkey = P.PackKey
                ,@c_UOM = P.PackUOM3
-               ,@c_SUSR2 = ISNULL(S.SUSR2,'')         --(Wan03)
+               ,@c_SUSR2 = ISNULL(S.SUSR2,'')         --(Wan03) 
          FROM SKU  S WITH (NOLOCK)
          JOIN PACK P WITH (NOLOCK) ON (S.Packkey = P.Packkey)
          WHERE S.StorerKey = @c_CurrentStorer
@@ -311,31 +307,31 @@ BEGIN
             SET @c_ReplFreshStock = 'N'
             --SELECT @c_ReplFullPallet = CASE WHEN IsNull(CL.Short, 'N') <> 'N' THEN 'Y' ELSE 'N' END
             --FROM CODELKUP CL WITH (NOLOCK)
-            --WHERE CL.ListName = 'REPORTCFG'
+            --WHERE CL.ListName = 'REPORTCFG' 
             --AND CL.Code = 'ReplFullPallet'
-            --AND CL.Long = 'r_replenishment_report_pc23'
+            --AND CL.Long = 'r_replenishment_report_pc23' 
             --AND CL.Storerkey = @c_Storerkey
 
             SELECT @c_ReplFullPallet = ISNULL(MAX(CASE WHEN CL.Code ='ReplFullPallet' THEN 'Y' ELSE 'N' END),'N')
                   ,@c_ReplFreshStock = ISNULL(MAX(CASE WHEN CL.Code ='ReplFreshStock' THEN 'Y' ELSE 'N' END),'N')
             FROM CODELKUP CL WITH (NOLOCK)
-            WHERE CL.ListName = 'REPORTCFG'
-            AND CL.Long = 'r_replenishment_report_pc23'
+            WHERE CL.ListName = 'REPORTCFG' 
+            AND CL.Long = 'r_replenishment_report_pc23' 
             AND CL.Storerkey = @c_Storerkey
             AND CL.Short = 'Y'
             --(Wan03) - END
-
+                        
             SET @c_Storerkey_CL = @c_Storerkey
-         END
+         END  
 
          SET @n_FilterQty = 1
          IF @c_ReplFullPallet = 'Y'
          BEGIN
-            IF @n_Pallet = 0
-            BEGIN
-               GOTO NEXT_SKUxLOC
-            END
-            SET @n_FilterQty = @n_Pallet
+            IF @n_Pallet = 0   
+            BEGIN  
+               GOTO NEXT_SKUxLOC    
+            END  
+            SET @n_FilterQty = @n_Pallet                          
          END
          --(Wan02) - END
 
@@ -346,12 +342,12 @@ BEGIN
          BEGIN
             IF ISNUMERIC(@c_SUSR2) = 1
             BEGIN
-               SET @n_ShelfLife = CONVERT(INT, @c_SUSR2)
+               SET @n_ShelfLife = CONVERT(INT, @c_SUSR2)  
             END
-            SET @d_today = CONVERT(NVARCHAR(10), GETDATE(),120)
+            SET @d_today = CONVERT(NVARCHAR(10), GETDATE(),120) 
          END
          --(Wan03) - END
-
+         
          DECLARE CUR_REPL CURSOR FAST_FORWARD READ_ONLY FOR
          SELECT LOTxLOCxID.LOT
                ,LOTxLOCxID.Loc
@@ -368,7 +364,7 @@ BEGIN
          AND LOTxLOCxID.StorerKey = @c_CurrentStorer
          AND LOTxLOCxID.SKU = @c_CurrentSku
          --AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen > 0 --NJOW01   --(Wan02)
-         AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= @n_FilterQty  --(Wan02)
+         AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= @n_FilterQty  --(Wan02)         
          AND LOTxLOCxID.QtyExpected = 0 -- make sure we aren't going to try to pull from a LOCation that needs stuff to satisfy existing demand
          AND LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')
          --AND LOC.LocationType NOT IN (CASE WHEN @c_ReplGrp = 'CASE' THEN @c_ReplGrp ELSE 'PALLET' END
@@ -384,7 +380,7 @@ BEGIN
          OR  @c_zone02 = 'ALL')
          AND LOT.Status     = 'OK'
          AND LOTATTRIBUTE.Lottable02= CASE WHEN @c_NoMixLottable02 = '1' AND @n_InvCnt > 0 THEN @c_Lottable02 ELSE LOTATTRIBUTE.Lottable02 END
-         AND ( @c_ReplFreshStock = 'N' OR                                                                --(Wan03)
+         AND ( @c_ReplFreshStock = 'N' OR                                                                --(Wan03)  
               (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_shelfLife, @d_today)))--(Wan03)
          ORDER BY --CASE WHEN LOC.LocationType = 'CASE'   THEN 1
                   --     WHEN LOC.LocationType = 'PALLET' THEN 2
@@ -483,29 +479,29 @@ BEGIN
                BEGIN
                   IF @c_CaseToPick = 'Y'  --NJOW02
                   BEGIN
-                     IF CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt > @n_FromQty
-                        SET @n_FromQty = FLOOR(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
-                     ELSE
-                        SET @n_FromQty = CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
+                     IF CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt > @n_FromQty     
+                        SET @n_FromQty = FLOOR(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt                      
+                     ELSE              
+                        SET @n_FromQty = CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt                    
                   END
                   ELSE
                   -- (Wan02) - START
-                  --   SET @n_FromQty = 0
-                  BEGIN
+                  --   SET @n_FromQty = 0                   
+                  BEGIN 
                      IF @c_ReplFullPallet = 'Y'
                      BEGIN
                         IF @n_RemainingQty >= @n_Pallet
                         BEGIN
-                           SET @n_FromQty = FLOOR(@n_RemainingQty/@n_Pallet) * @n_Pallet
+                           SET @n_FromQty = FLOOR(@n_RemainingQty/@n_Pallet) * @n_Pallet  
                         END
-                        ELSE
+                        ELSE 
                         BEGIN
-                           SET @n_FromQty = 0
+                           SET @n_FromQty = 0 
                         END
                      END
                      ELSE
                      BEGIN
-                        SET @n_FromQty = 0
+                        SET @n_FromQty = 0 
                      END
                   END
                   -- (Wan02) - END
@@ -526,9 +522,9 @@ BEGIN
             BEGIN
                IF @n_FromQty > @n_RemainingQty
                   IF CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt > @n_FromQty
-                     SET @n_FromQty = FLOOR(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
+                     SET @n_FromQty = FLOOR(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt                                                       
                   ELSE
-                     SET @n_FromQty = CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
+                     SET @n_FromQty = CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt                                                        
                ELSE
                   SET @n_FromQty = FLOOR(@n_FromQty/@n_CaseCnt) * @n_CaseCnt
             END
@@ -684,10 +680,10 @@ BEGIN
             ,  PackKey
             ,  Confirmed
             ,  RefNo  --NJOW01
-
+            
             )
                VALUES (
-               @c_ReplenishmentGroup  --@c_ReplGrp  NJOW01
+               @c_ReplenishmentGroup  --@c_ReplGrp  NJOW01             
             ,  @c_ReplenishmentKey
             ,  @c_CurrentStorer
             ,  @c_CurrentSKU
@@ -699,7 +695,7 @@ BEGIN
             ,  @c_UOM
             ,  @c_PackKey
             ,  'N'
-            , 'PC23'  --NJOW01
+            , 'PC23'  --NJOW01    
             )
          SET @n_err = @@ERROR
 
@@ -725,7 +721,7 @@ BEGIN
    IF @c_backendjob <> 'Y' --NJOW01
    BEGIN
       --(Wan01) - START
-      IF @c_FuncType IN ( 'G' )
+      IF @c_FuncType IN ( 'G' )                                     
       BEGIN
          RETURN
       END
@@ -741,7 +737,7 @@ BEGIN
             ,R.PackKey
             ,SKU.Descr
             ,R.Priority
-            ,CASE WHEN ISNULL(CLR.Code,'') = '' THEN
+            ,CASE WHEN ISNULL(CLR.Code,'') = '' THEN   
                LOC.PutawayZone ELSE '' END AS Putawayzone --NJOW02
             ,PACK.CaseCnt
             ,PACK.Pallet
@@ -753,9 +749,9 @@ BEGIN
             ,PACK.PackUOM3
             ,R.ReplenishmentKey
             ,LA.Lottable02
-            ,CASE WHEN ISNULL(CLR.Code,'') <> '' THEN
+            ,CASE WHEN ISNULL(CLR.Code,'') <> '' THEN   
                FRLOC.LocationGroup ELSE '' END AS LocationGroup --NJOW02
-            ,CASE WHEN ISNULL(CLR.Code,'') <> '' THEN
+            ,CASE WHEN ISNULL(CLR.Code,'') <> '' THEN   
                 CASE WHEN LOC.LocationType = 'CASE' THEN 'Pick-Case'
                      wHEN LOC.LocationType = 'PICK' THEN 'Pick-Piece'
                      ELSE LOC.LocationType END
@@ -766,8 +762,8 @@ BEGIN
       JOIN  LOC FRLOC       WITH (NOLOCK) ON (R.FromLoc = FRLOC.Loc) --NJOW02
       JOIN  PACK            WITH (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
       JOIN  LOTATTRIBUTE LA  WITH (NOLOCK) ON (R.Lot = LA.Lot)
-      LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (R.Storerkey = CLR.Storerkey AND CLR.Code = 'REPLCASETOPICK'
-                                            AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_replenishment_report_pc18' AND ISNULL(CLR.Short,'') <> 'N')   --NJOW02
+      LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (R.Storerkey = CLR.Storerkey AND CLR.Code = 'REPLCASETOPICK' 
+                                            AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_replenishment_report_pc18' AND ISNULL(CLR.Short,'') <> 'N')   --NJOW02      
       WHERE R.ReplenishmentGroup = @c_ReplenishmentGroup --@c_ReplGrp NJOW01
       AND  (LOC.PickZone = @c_ReplGrp OR @c_ReplGrp = 'ALL')
       AND   LOC.facility = @c_zone01
@@ -775,9 +771,9 @@ BEGIN
       AND  (LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
       OR  @c_zone02 = 'ALL')
       AND R.Confirmed = 'N'
-      ORDER BY CASE WHEN ISNULL(CLR.Code,'') <> '' THEN
+      ORDER BY CASE WHEN ISNULL(CLR.Code,'') <> '' THEN   
                FRLOC.LocationGroup ELSE LOC.PutawayZone END  --NJOW02
-            ,  CASE WHEN ISNULL(CLR.Code,'') <> '' THEN
+            ,  CASE WHEN ISNULL(CLR.Code,'') <> '' THEN   
                     LOC.LocationType ELSE '' END  --NJOW02
             ,  FRLOC.LogicalLocation --NJOW02
             ,  R.FromLoc
@@ -788,9 +784,9 @@ BEGIN
 
 END
 GO
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF 
 GO
 
 
