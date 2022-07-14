@@ -14,6 +14,7 @@ GO
 /* 2021-06-20 1.0  YeeKung    WMS-16535 Created                         */
 /* 2022-02-14 1.1  Ung        WMS-18866 Replace with new logic          */
 /*                            Original logic moved to Nautica brand     */
+/* 2022-06-21 1.2  Ung        WMS-19994 Add len = 4, 6 to group D logic */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE rdt.rdt_LottableFormat_Byredo(
     @nMobile          INT
@@ -44,7 +45,7 @@ BEGIN
 
    SET @nLength = LEN( @cLottable)
 
-   IF @nLength NOT IN (3, 5, 9, 10)
+   IF @nLength NOT IN (3, 4, 5, 6, 9, 10)
    BEGIN
       SET @nErrNo = 182451
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Batch
@@ -100,7 +101,7 @@ BEGIN
       SET @cLottable = CONVERT(NVARCHAR,(DATEADD(dd, (@cJulianDate - ((@cJulianDate/1000) * 1000)) - 1, DATEADD(yy, @cJulianDate/1000 - 1900, 0)) ),103)      
    END
 
-   ELSE IF @nLength IN (9, 10)
+   ELSE IF @nLength IN (4, 6, 9, 10)
    BEGIN
       SELECT @cYearCode = Short
       FROM dbo.CodeLKUP WITH (NOLOCK)
