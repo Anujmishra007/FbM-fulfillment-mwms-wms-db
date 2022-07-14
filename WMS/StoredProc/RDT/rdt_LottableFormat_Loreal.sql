@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2022-02-14 1.0  Ung        WMS-18866 Created                         */
+/* 2022-07-04 1.1  Ung        WMS-20103 Minor correct on spec           */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE rdt.rdt_LottableFormat_Loreal(
     @nMobile          INT
@@ -51,7 +52,7 @@ BEGIN
    SET @cMonthCode = SUBSTRING( @cLottable, 4, 1)
 
 
-   IF @cYearCode NOT BETWEEN 'K' AND 'Z'
+   IF @cYearCode NOT BETWEEN 'A' AND 'Z'
    BEGIN
       SET @nErrNo = 182552
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidLOREALY
