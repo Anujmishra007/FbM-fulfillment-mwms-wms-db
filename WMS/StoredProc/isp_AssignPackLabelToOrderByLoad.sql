@@ -42,7 +42,7 @@ GO
 /* 18-OCT-2018 NJOW07   2.2   WMS-6774 SKIPSTAMPED cater for conso pack */  
 /* 09-Nov-2018 James    2.3   Add filter storerkey (james01)            */  
 /* 22-Oct-2020 LZG      2.4   INC1332368 - Add Channel_ID column (ZG01) */
-/* 08-Nov-2021 NJOW08   2.5   WMS-10647 allow configure custom search   */
+/* 08-Nov-2021 NJOW08   2.5   WMS-18346 allow configure custom search   */
 /*                            picketail conditon                        */
 /* 08-Nov-2021 NJOW08   2.5   DEVOPS combine script                     */
 /* 02-Dec-2021 NJOW09   2.6   WMS-18514 add label parameter to          */
