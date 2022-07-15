@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Validate_AdjustmentDetail_Std]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Validate_AdjustmentDetail_Std]
-GO
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -29,8 +24,11 @@ GO
 /* 2021-02-10  mingle01 1.2   Add Big Outer Begin try/Catch              */
 /* 2021-04-23  Wan03    1.3   LFWM-2569 - UAT - TW  Finalize Adjustment  */
 /*                            Alert                                      */
+/* 2022-06-14  Wan04    1.2   LFWM-3501 - PROD & UAT - GIT SCE Adjustment*/
+/*                            Issue                                      */
+/* 2022-06-14  Wan04    1.2   DevObj Combine script                      */
 /*************************************************************************/   
-CREATE PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
+CREATE OR ALTER PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
 , @b_Success            INT OUTPUT
@@ -295,7 +293,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 552052
-            SET @c_errmsg = 'Disallow to open/submit/approve/reject detail record. (lsp_Validate_AdjustmentDetail_Std)'
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow to open/submit/approve/reject detail record. (lsp_Validate_AdjustmentDetail_Std)'
             GOTO EXIT_SP
          END
 
@@ -303,7 +301,7 @@ BEGIN
          BEGIN 
             SET @n_Continue = 3
             SET @n_Err = 552053
-            SET @c_errmsg = 'User is disallow to approve/reject detail record. (lsp_Validate_AdjustmentDetail_Std)'
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': User is disallow to approve/reject detail record. (lsp_Validate_AdjustmentDetail_Std)'
             GOTO EXIT_SP
          END
 
@@ -311,7 +309,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 552054
-            SET @c_errmsg = 'Disallow to Change Detail Finalized Status. (lsp_Validate_AdjustmentDetail_Std)'
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow to Change Detail Finalized Status. (lsp_Validate_AdjustmentDetail_Std)'
             GOTO EXIT_SP
          END
       END
@@ -448,8 +446,9 @@ BEGIN
             BEGIN 
                SET @n_Continue = 3
                SET @n_Err = 552055
-               SET @c_errmsg = 'Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_AdjustmentDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_LottableLabel
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK!'
+                             + ' (lsp_Validate_AdjustmentDetail_Std)'
+                             + '|' + @c_Cnt + '|' + @c_LottableLabel
                GOTO EXIT_SP
             END                                                                                          --(Wan02)
          END
@@ -469,8 +468,9 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 552056
-               SET @c_errmsg = 'Lottable' + @c_Cnt + ' value does not match in List Name:' + @c_MatchCfgValue + '. (lsp_Validate_AdjustmentDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_MatchCfgValue
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lottable' + @c_Cnt + ' value does not match in List Name:' + @c_MatchCfgValue 
+                             + '. (lsp_Validate_AdjustmentDetail_Std)'
+                             + '|' + @c_Cnt + '|' + @c_MatchCfgValue
                GOTO EXIT_SP
             END
          
@@ -482,8 +482,8 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 552057
-               SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_AdjustmentDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_Sku
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_AdjustmentDetail_Std)'
+                             + '|' + @c_Cnt + '|' + @c_Sku
                GOTO EXIT_SP
             END
          END
@@ -516,7 +516,7 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 552058
-               SET @c_errmsg = 'Cannot adjust negative qty to a non exist uccno. (lsp_Validate_AdjustmentDetail_Std)'
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Cannot adjust negative qty to a non exist uccno. (lsp_Validate_AdjustmentDetail_Std)'
                GOTO EXIT_SP
             END
          END
@@ -526,7 +526,7 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 552059
-               SET @c_errmsg = 'Inconsistence UCC Sku and Adjustment sku. (lsp_Validate_AdjustmentDetail_Std)'
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Inconsistence UCC Sku and Adjustment sku. (lsp_Validate_AdjustmentDetail_Std)'
                GOTO EXIT_SP
             END
          END
@@ -568,20 +568,31 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 552060
-               SET @c_errmsg = 'Invalid Lot found. (lsp_Validate_AdjustmentDetail_Std)'
-                              + '|' + @c_Lot 
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid Lot found. (lsp_Validate_AdjustmentDetail_Std)'
+                             + '|' + @c_Lot 
                GOTO EXIT_SP
             END
             ELSE
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 552061
-               SET @c_errmsg = 'Lot is not required. Please empty lot for system to generate lot. (lsp_Validate_AdjustmentDetail_Std)'
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lot is not required. Please empty lot for system to generate lot'
+                             + '. (lsp_Validate_AdjustmentDetail_Std)'
                GOTO EXIT_SP
             END
          END
       END
       --(Wan01) - END 
+      
+      --(Wan04) - START
+      IF @c_ReasonCode = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 552063
+         SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Please Enter Reason Code. (lsp_Validate_AdjustmentDetail_Std)'
+         GOTO EXIT_SP         
+      END
+      --(Wan04) - END
    END TRY
    
    BEGIN CATCH
