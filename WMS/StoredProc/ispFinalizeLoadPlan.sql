@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispFinalizeLoadPlan]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispFinalizeLoadPlan]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,32 +12,37 @@ GO
 /*                                                                      */
 /* Called By: nep_n_cst_loadplan.Event ue_finalizeLoadPlan              */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 6.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date        Author   Ver   Purposes                                  */
+/* 2021-12-13  Wan01    1.1   LFWM-3249 - UAT RG  Dock door booking     */
+/*                            backend + SP                              */
+/*                            DevOps Combine Order                      */
 /************************************************************************/
-CREATE PROC ispFinalizeLoadPlan 
+CREATE OR ALTER PROC ispFinalizeLoadPlan 
       @c_Loadkey        NVARCHAR(10) 
    ,  @b_Success        INT = 0  OUTPUT 
    ,  @n_err            INT = 0  OUTPUT 
    ,  @c_errmsg         NVARCHAR(215) = '' OUTPUT
 AS
 BEGIN
-   DECLARE @n_StartTranCnt              INT
-         , @n_Continue                  INT 
-         , @c_Storerkey                 NVARCHAR(15)
-         , @c_Facility                  NVARCHAR(5)
-         , @c_Status                    NVARCHAR(10)
-         , @c_FinalizeFlag              NVARCHAR(1)
-         , @c_LOADExtendedValidation    NVARCHAR(10)   
-         , @c_PostFinalizeLoadPlan_SP   NVARCHAR(10)
-         , @c_SQL                       NVARCHAR(2000)
-         , @c_RaiseErr                  NCHAR(1)
+   DECLARE @n_StartTranCnt             INT
+         , @n_Continue                 INT 
+         , @c_Storerkey                NVARCHAR(15)
+         , @c_Facility                 NVARCHAR(5)
+         , @c_Status                   NVARCHAR(10)
+         , @c_FinalizeFlag             NVARCHAR(1)
+         , @c_LOADExtendedValidation   NVARCHAR(10)   
+         , @c_PostFinalizeLoadPlan_SP  NVARCHAR(10)
+         , @c_SQL                      NVARCHAR(2000)
+         , @c_RaiseErr                 NCHAR(1)
+         
+         , @c_LoadToTransportOrder     NVARCHAR(30) = ''             --(Wan01)
 
    SET @n_StartTranCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -65,7 +65,7 @@ BEGIN
    BEGIN
       SET @n_continue = 3
       SET @n_err = 72800
-      SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Finalize rejected. LOADPLAN had been shipped. (ispFinalizeLoadPlan)'
+      SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Finalize rejected. LOADPLAN had been shipped. (ispFinalizeLoadPlan)'
       GOTO QUIT
    END
 
@@ -73,7 +73,7 @@ BEGIN
    BEGIN
       SET @n_continue=3
       SET @n_err=72805
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize rejected. LOADPLAN had been finalized. (ispFinalizeLoadPlan)'
+      SET @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Finalize rejected. LOADPLAN had been finalized. (ispFinalizeLoadPlan)'
       GOTO QUIT
    END
 
@@ -114,7 +114,7 @@ BEGIN
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': LOADPLAN Validation Failed. (ispFinalizeLoadPlan) ' 
                          + @c_errmsg
             GOTO QUIT
-         END     	
+         END      
       END
       ELSE
       BEGIN
@@ -139,7 +139,28 @@ BEGIN
          END  
       END
    END
-  
+   
+   --(Wan01) - START
+   IF @n_Continue IN ( 1, 2 )
+   BEGIN
+      SELECT @c_LoadToTransportOrder = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'LoadToTransportOrder')
+      IF @c_LoadToTransportOrder = '1'
+      BEGIN
+         EXEC isp_LoadToTransportOrder
+               @c_Loadkey  = @c_Loadkey   
+            ,  @b_Success  = @b_Success   OUTPUT 
+            ,  @n_err      = @n_err       OUTPUT 
+            ,  @c_errmsg   = @c_errmsg    OUTPUT
+            
+         IF @b_Success = 0 
+         BEGIN
+            SET @n_Continue = 3
+            GOTO QUIT
+         END  
+      END
+   END
+   --(Wan01) - END
+
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       UPDATE LOADPLAN WITH (ROWLOCK)
