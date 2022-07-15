@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispFinalizeMBOL]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispFinalizeMBOL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,21 +12,24 @@ GO
 /*                                                                      */
 /* Called By: nep_n_cst_MBOL.Event ue_finalizeMBOL                      */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 6.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author   Ver Purposes                                   */
-/* 29-APR-2015  YTWan    1.1 SOS#339247 - LFLHK - Maxim Auto MBOL(WAN01)*/
-/* 24-FEB-2017  NJOW01   1.2 WMS-988 add post finalize call custom sp   */ 
-/*                           ispMBFZ??                                  */
-/* 13-SEP-2018  NJOW02   1.3 WMS-5961 add call From for validatembol    */
-/* 01-FEB-2021  NJOW03   1.4  WMS-16002 - LEGO add transmitlog2         */
+/* Date        Author   Ver   Purposes                                  */
+/* 29-APR-2015 YTWan    1.1   SOS#339247 - LFLHK - Maxim Auto MBOL(WAN01)*/
+/* 24-FEB-2017 NJOW01   1.2   WMS-988 add post finalize call custom sp  */ 
+/*                            ispMBFZ??                                 */
+/* 13-SEP-2018 NJOW02   1.3   WMS-5961 add call From for validatembol   */
+/* 01-FEB-2021 NJOW03   1.4   WMS-16002 - LEGO add transmitlog2         */
+/* 12-DEC-2021 Wan02    1.5   LFWM-3249 - UAT RG  Dock door booking     */
+/*                            backend + SP                              */
+/*                            DevOps Combine Order                      */
 /************************************************************************/
-CREATE PROC ispFinalizeMBOL 
+CREATE OR ALTER PROC ispFinalizeMBOL 
       @c_MBOLkey        NVARCHAR(10) 
    ,  @b_Success        INT = 0  OUTPUT 
    ,  @n_err            INT = 0  OUTPUT 
@@ -40,20 +38,20 @@ CREATE PROC ispFinalizeMBOL
    ,  @b_ContFinalize   INT = 0              -- (WAN01)
 AS
 BEGIN
-   DECLARE @n_StartTranCnt        INT
-         , @n_Continue            INT 
-                                  
-         , @c_Storerkey           NVARCHAR(15)
-         , @c_Facility            NVARCHAR(5)
-         , @c_OrderKey            NVARCHAR(10)
-         , @c_Status              NVARCHAR(10)
-         , @c_FinalizeFlag        NVARCHAR(1)                                  
-         , @c_FNZMBOLValidation   NVARCHAR(10)   -- (WAN01)
-         , @c_FNZMBOLStatus       NVARCHAR(10)   -- (WAN01)
-         , @c_PostFinalizeMBOL_SP NVARCHAR(30)   --NJOW01
-         , @c_SQL                 NVARCHAR(2000) --NJOW01
+   DECLARE @n_StartTranCnt          INT
+         , @n_Continue              INT 
+                                    
+         , @c_Storerkey             NVARCHAR(15)
+         , @c_Facility              NVARCHAR(5)
+         , @c_OrderKey              NVARCHAR(10)
+         , @c_Status                NVARCHAR(10)
+         , @c_FinalizeFlag          NVARCHAR(1)                                  
+         , @c_FNZMBOLValidation     NVARCHAR(10)   -- (WAN01)
+         , @c_FNZMBOLStatus         NVARCHAR(10)   -- (WAN01)
+         , @c_PostFinalizeMBOL_SP   NVARCHAR(30)   --NJOW01
+         , @c_SQL                   NVARCHAR(2000) --NJOW01
 
-
+         , @c_MBOLToTransportOrder  NVARCHAR(30) = ''             --(Wan02)
    SET @n_StartTranCnt = @@TRANCOUNT
    SET @n_Continue = 1
    
@@ -147,6 +145,27 @@ BEGIN
  
    CONTINUE_FNZ:
 
+   --(Wan02) - START
+   IF @n_Continue IN ( 1, 2 )
+   BEGIN
+      SELECT @c_MBOLToTransportOrder = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'MBOLToTransportOrder')
+      IF @c_MBOLToTransportOrder = '1'
+      BEGIN
+         EXEC isp_MBOLToTransportOrder
+               @c_MBOLkey  = @c_MBOLkey   
+            ,  @b_Success  = @b_Success   OUTPUT 
+            ,  @n_err      = @n_err       OUTPUT 
+            ,  @c_errmsg   = @c_errmsg    OUTPUT
+            
+         IF @b_Success = 0 
+         BEGIN
+            SET @n_Continue = 3
+            GOTO QUIT
+         END  
+      END
+   END
+   --(Wan02) - END
+   
    SET @c_FNZMBOLStatus = '0'
    SET @b_success = 0
    EXECUTE dbo.nspGetRight @c_facility    -- facility   
