@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLBLP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLBLP01]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -27,10 +24,11 @@ GO
 /* 01/04/2019   NJOW01   1.0  Change WIP using temp table and fix        */
 /* 15/05/2019   NJOW02   1.1  WMS-9070 Replenish addition carton if the  */
 /*                            location no more available qty after pick  */
-/* 25/08/2021   WLChooi  1.2   WMS-17812 - Set Priority to 4 for UA(WL01)*/ 
+/* 25/08/2021   WLChooi  1.2  WMS-17812 - Set Priority to 4 for UA(WL01) */ 
+/* 15/07/2022   NJOW03   1.3  fix to filter facility for replenishment   */ 
 /*************************************************************************/  
   
-CREATE PROC ispRLBLP01  
+CREATE OR ALTER PROC ispRLBLP01  
    @c_LoadKey     NVARCHAR(10),  
    @b_Success     INT = 1            OUTPUT,
    @n_err         INT = 0            OUTPUT,  
@@ -500,6 +498,7 @@ BEGIN
             AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) > 0
             AND LLI.Storerkey = @c_Storerkey
             AND LLI.Sku = @c_Sku
+            AND LOC.Facility = @c_Facility  --NJOW03
             --AND LLI.Lot = @c_Lot  --NJOW02 removed
             ORDER BY CASE WHEN LLI.Lot = @c_Lot THEN 1 ELSE 2 END, --NJOW02
                   LOC.LocationGroup, LOC.Loclevel, QtyAvailable, LOC.Logicallocation, LOC.Loc
