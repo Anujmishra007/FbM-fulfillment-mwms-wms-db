@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_OutDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrBooking_OutDelete]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -27,19 +23,21 @@ GO
 /*                                                                      */
 /* Called By: When records Deleted                                      */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date       Author    Ver.     Purposes                               */
-/* 19MAY2015  YTWan     1.1      SOS#341308 - PH CPPI Allow Deletion for*/
-/*                               Finalized Booking (Wan01)              */   
+/* Date        Author   Ver.  Purposes                                  */
+/* 19MAY2015   YTWan    1.1   SOS#341308 - PH CPPI Allow Deletion for   */
+/*                            Finalized Booking (Wan01)                 */ 
+/* 2022-03-03  Wan02    1.2   LFWM-3336 - Door Booking SPsDB queries    */
+/*                            clarification                             */
 /************************************************************************/
 
-CREATE TRIGGER ntrBooking_OutDelete
+CREATE OR ALTER TRIGGER ntrBooking_OutDelete
 ON  Booking_Out
 FOR DELETE
 AS
@@ -53,8 +51,8 @@ BEGIN
             @b_Success        int       -- Populated by calls to stored procedures - was the proc successful?
    ,        @n_err            int       -- Error number returned by stored procedure or this trigger
    ,        @c_errmsg         NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-   ,        @n_continue       int
-   ,        @n_starttcnt      int       -- Holds the current transaction count
+   ,        @n_Continue       int
+   ,        @n_StartTCnt      int       -- Holds the current transaction count
 
    ,        @n_BookingNo            INT
    ,        @c_Loadkey              NVARCHAR(10)   --(Wan01)
@@ -63,17 +61,157 @@ BEGIN
    ,        @c_Facility             NVARCHAR(5)    --(Wan01)
    ,        @c_StorerKey            NVARCHAR(15)   --(Wan01)
    ,        @c_AllowDelFinalizedBKO NVARCHAR(10)   --(Wan01)
+   
+   ,        @n_RowRef_SHPM          INT            --(Wan02)
+   ,        @c_ShipmentGID          NVARCHAR(50)   --(Wan02)
+   DECLARE @CUR_BKO                 CURSOR         --(Wan02) 
+         , @CUR_LOAD                CURSOR         --(Wan02)
+         , @CUR_SHPM                CURSOR         --(Wan02)
  
-   SET @n_continue=1
-   SET @n_starttcnt=@@TRANCOUNT
+   SET @n_Continue=1
+   SET @n_StartTCnt=@@TRANCOUNT
 
    IF (SELECT COUNT(1) FROM DELETED) =
       (SELECT COUNT(1) FROM DELETED WHERE DELETED.ArchiveCop = '9')
    BEGIN
-      SET @n_continue = 4
+      SET @n_Continue = 4
    END
-    
-   IF (@n_continue=1 OR @n_continue=2) 
+   --(Wan02) - START 
+  
+   IF (@n_Continue=1 OR @n_Continue=2) 
+   BEGIN 
+      SET @CUR_BKO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT Deleted.Facility
+            ,Deleted.BookingNo
+            ,Deleted.FinalizeFlag
+      FROM DELETED
+      ORDER BY Deleted.BookingNo
+      
+      OPEN @CUR_BKO
+      
+      FETCH NEXT FROM @CUR_BKO INTO @c_Facility
+                                 ,  @n_BookingNo
+                                 ,  @c_finalizeflag
+      
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         SET @CUR_LOAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT lp.LoadKey
+         FROM dbo.LoadPlan AS lp WITH (NOLOCK)
+         WHERE lp.BookingNo = @n_BookingNo
+         ORDER BY lp.LoadKey
+      
+         OPEN @CUR_LOAD
+      
+         FETCH NEXT FROM @CUR_LOAD INTO @c_Loadkey
+      
+         WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+         BEGIN
+            
+            SET @c_Storerkey= ''
+            SELECT TOP 1 @c_Storerkey = o.Storerkey
+            FROM dbo.LoadPlanDetail AS lpd WITH (NOLOCK)
+            JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = lpd.OrderKey
+            WHERE lpd.LoadKey = @c_Loadkey
+            ORDER BY lpd.LoadLineNumber
+            
+            SET @c_AllowDelFinalizedBKO = ''
+            SELECT @c_AllowDelFinalizedBKO = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AllowDelFinalizedBKO')
+         
+            IF @c_AllowDelFinalizedBKO IN ('1')
+            BEGIN
+               IF EXISTS (SELECT 1
+                          FROM dbo.TaskDetail AS td WITH (NOLOCK)
+                          WHERE td.Loadkey = @c_Loadkey
+                          AND Status <> 'X'
+                         )
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_err=74915  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Loadkey Released. Not allow to delete booking.'
+                               +' (ntrBooking_OutDelete)'
+                  GOTO QUIT_TR 
+               END
+            END
+            ELSE IF @c_AllowDelFinalizedBKO IN ('', '0')
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
+                            +' (ntrBooking_OutDelete)'
+               GOTO QUIT_TR  
+            END            
+
+            FETCH NEXT FROM @CUR_LOAD INTO @c_Loadkey
+         END
+         CLOSE @CUR_LOAD
+         DEALLOCATE @CUR_LOAD 
+         
+         SET @CUR_SHPM = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT ts.RowRef
+               ,ts.ShipmentGID
+         FROM dbo.TMS_Shipment AS ts WITH (NOLOCK)
+         WHERE ts.BookingNo = @n_BookingNo
+         ORDER BY ts.ShipmentGID
+      
+         OPEN @CUR_SHPM
+      
+         FETCH NEXT FROM @CUR_SHPM INTO @n_RowRef_SHPM
+                                       ,@c_ShipmentGID
+      
+         WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+         BEGIN
+            SELECT TOP 1 @c_StorerKey = o.StorerKey
+            FROM dbo.TMS_ShipmentTransOrderLink AS tstol WITH (NOLOCK)
+            JOIN dbo.TMS_TransportOrder AS tto WITH (NOLOCK) ON tto.ProvShipmentID = tstol.ProvShipmentID
+            JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = tto.OrderSourceID
+            WHERE tstol.ShipmentGID = @c_ShipmentGID
+            ORDER BY tto.Rowref
+            
+            SET @c_AllowDelFinalizedBKO = ''
+            SELECT @c_AllowDelFinalizedBKO = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AllowDelFinalizedBKO')
+         
+            IF @c_AllowDelFinalizedBKO IN ('', '0')
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
+                            +' (ntrBooking_OutDelete)'
+               GOTO QUIT_TR               
+            END
+            
+            UPDATE dbo.TMS_Shipment WITH (ROWLOCK)
+            SET BookingNo = ''
+               ,Editwho = SUSER_NAME()
+               ,EditDate= GETDATE()
+            WHERE Rowref = @n_RowRef_SHPM
+            
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+               SET @n_err=74910   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TMS_Shipment Fail. (ntrBooking_OutDelete)'
+               GOTO QUIT_TR 
+            END
+            
+            FETCH NEXT FROM @CUR_SHPM INTO @n_RowRef_SHPM
+                                          ,@c_ShipmentGID
+         END
+         CLOSE @CUR_SHPM
+         DEALLOCATE @CUR_SHPM 
+         
+         FETCH NEXT FROM @CUR_BKO INTO @c_Facility
+                                    ,  @n_BookingNo
+                                    ,  @c_finalizeflag  
+            
+      END
+      CLOSE @CUR_BKO
+      DEALLOCATE @CUR_BKO
+   END
+   
+   /*
+   IF (@n_Continue=1 OR @n_Continue=2) 
    BEGIN
       --(Wan01) - START  
       SET @n_BookingNo=0
@@ -91,7 +229,7 @@ BEGIN
                            WHERE LOADPLAN.BookingNo = @n_BookingNo
                         )
          BEGIN
-            SET @n_continue = 3
+            SET @n_Continue = 3
             SET @n_err=74905   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking. (ntrBooking_OutDelete)'
             GOTO QUIT_TR
@@ -99,8 +237,7 @@ BEGIN
       END
    END
 
-
-   IF (@n_continue=1 OR @n_continue=2) 
+   IF (@n_Continue=1 OR @n_Continue=2) 
    BEGIN
 --   
 --      UPDATE LOADPLAN WITH (ROWLOCK)
@@ -112,7 +249,7 @@ BEGIN
 --     
 --      IF @@ERROR <> 0
 --      BEGIN
---         SET @n_continue = 3
+--         SET @n_Continue = 3
 --         SET @c_errmsg = CONVERT(CHAR(250),@n_err)
 --         SET @n_err=74910   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
 --         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Error on Booking_Out. (ntrBooking_OutDelete)'
@@ -150,7 +287,7 @@ BEGIN
             
             IF @b_success <> 1
             BEGIN
-               SET @n_continue = 3
+               SET @n_Continue = 3
                SET @n_err = 74910
                SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Error getting Storerconfig AllowDelFinalizedBKO:' 
                              + RTRIM(@c_errmsg) + '. (ntrBooking_OutDelete)'
@@ -165,7 +302,7 @@ BEGIN
                           AND Status <> 'X'
                          )
                BEGIN
-                  SET @n_continue = 3
+                  SET @n_Continue = 3
                   SET @n_err=74915  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                   SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Loadkey Released. Not allow to delete booking.'
                                +' (ntrBooking_OutDelete)'
@@ -174,7 +311,7 @@ BEGIN
             END
             ELSE
             BEGIN
-               SET @n_continue = 3
+               SET @n_Continue = 3
                SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
                             +' (ntrBooking_OutDelete)'
@@ -206,23 +343,27 @@ BEGIN
       DEALLOCATE CUR_LOAD 
       ----(Wan01) - END               
    END
+   */
+   --(Wan02) - END
    QUIT_TR:
 
-   IF CURSOR_STATUS('LOCAL' , 'CUR_LOAD') in (0 , 1)
-   BEGIN
-      CLOSE CUR_LOAD
-      DEALLOCATE CUR_LOAD
-   END
+   --(Wan02) - START
+   --IF CURSOR_STATUS('LOCAL' , 'CUR_LOAD') in (0 , 1)
+   --BEGIN
+   --   CLOSE CUR_LOAD
+   --   DEALLOCATE CUR_LOAD
+   --END
+   --(Wan04) - END
    
-   IF @n_continue=3  -- Error Occured - Process And Return
+   IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
-      IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
+      IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_StartTCnt
       BEGIN
          ROLLBACK TRAN
       END
       ELSE
       BEGIN
-          WHILE @@TRANCOUNT > @n_starttcnt
+          WHILE @@TRANCOUNT > @n_StartTCnt
           BEGIN
              COMMIT TRAN
           END
@@ -234,7 +375,7 @@ BEGIN
    END
    ELSE
    BEGIN
-      WHILE @@TRANCOUNT > @n_starttcnt
+      WHILE @@TRANCOUNT > @n_StartTCnt
       BEGIN
        COMMIT TRAN
       END
