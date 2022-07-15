@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_1764ExtInfo02') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_1764ExtInfo02
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* 2017-04-06   Ung       1.0   WMS-1579 Created                        */
+/* 2022-07-13   Ung       1.1   WMS-20206 Add balance task              */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1764ExtInfo02
+CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtInfo02
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -51,6 +49,33 @@ BEGIN
 
          IF @@ROWCOUNT = 1 
             SET @cExtendedInfo1 = RIGHT( RTRIM( @cUCCNo) + '--' + RTRIM(CAST( @nQTY AS NVARCHAR(5))), 20)
+      END
+      
+      IF @nAfterStep = 5 -- Cont next task / close pallet
+      BEGIN
+         DECLARE @cMsg NVARCHAR( 20) = ''
+         DECLARE @cStorerKey NVARCHAR( 20)
+         DECLARE @cWaveKey NVARCHAR( 10)
+         DECLARE @nOpenTask INT
+         
+         -- Get task info
+         SELECT 
+            @cStorerKey = StorerKey, 
+            @cWaveKey = WaveKey
+         FROM TaskDetail (NOLOCK)
+         WHERE TaskDetailKey = @cTaskDetailKey
+
+         -- Get open tasks
+         SELECT @nOpenTask = COUNT(1)
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND WaveKey = @cWaveKey
+            AND TaskType = 'RPF'
+            AND Status = '0'
+            
+         SET @cMsg = rdt.rdtgetmessage( 188301, @cLangCode, 'DSP') --REMAIN TASK:
+         SET @cMsg = RTRIM( @cMsg) + ' ' + CAST( @nOpenTask AS NVARCHAR(3))
+         SET @cExtendedInfo1 = @cMsg
       END
    END
 END
