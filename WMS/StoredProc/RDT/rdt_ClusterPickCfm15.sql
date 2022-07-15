@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_ClusterPickCfm15]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_ClusterPickCfm15]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -26,9 +22,10 @@ GO
 /* 2021-01-18  1.4  James       Adhoc fix QtyMoved upd wrongly (james03)*/
 /* 2021-08-03  1.5  James       WMS-17497-Add config for short pick     */
 /*                              reallocate (james04)                    */
+/* 2022-07-14  1.6  James       Addhoc perf tuning (james05)            */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_ClusterPickCfm15] (    
+CREATE OR ALTER PROC [RDT].[rdt_ClusterPickCfm15] (    
    @nMobile                   INT,    
    @nFunc                     INT,    
    @cLangCode                 NVARCHAR( 3),    
@@ -108,7 +105,9 @@ BEGIN
    DECLARE @cLottable03          NVARCHAR( 18)    
    DECLARE @ctest NVARCHAR( 10)    
    DECLARE @cProcessShortPickReAllocate   NVARCHAR( 1)
-   
+   DECLARE @curUpd            CURSOR
+   DECLARE @cT_PickDetailKey  NVARCHAR( 10)
+      	   
    SET @nSwapLot = 1     
        
    IF @nStep = 9  -- Short pick no need swap lot    
@@ -363,24 +362,56 @@ BEGIN
       END      
       ELSE            
       BEGIN      
-         UPDATE TOP (1) dbo.PickDetail SET       
-            QTYMoved = QTYMoved + 1      
+      	-- (james05)
+      	SET @curUpd = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+      	SELECT PD.PickDetailKey
          FROM dbo.PickDetail PD WITH (NOLOCK)       
-            JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)      
+         JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)      
          WHERE PD.StorerKey = @cStorerkey      
-            AND PD.OrderKey = @cOrderKey      
-            AND PD.SKU = @cSKU      
-            AND PD.Status < '9'      
-            AND PD.QtyMoved < PD.QTY      
-            AND LA.Lottable02 = @cLottable02      
-            AND LA.Lottable03 = @cLottable03    
+         AND   PD.OrderKey = @cOrderKey      
+         AND   PD.SKU = @cSKU      
+         AND   PD.Status < '9'      
+         AND   PD.QtyMoved < PD.QTY      
+         AND   LA.Lottable02 = @cLottable02      
+         AND   LA.Lottable03 = @cLottable03    
+         OPEN @curUpd
+         FETCH NEXT FROM @curUpd INTO @cT_PickDetailKey
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+         	UPDATE dbo.PickDetail SET 
+         	   QTYMoved = QTYMoved + 1,
+         	   EditWho = SUSER_SNAME(),
+         	   EditDate = GETDATE()
+         	WHERE PickDetailKey = @cT_PickDetailKey
+
+            IF @@ERROR <> 0          
+            BEGIN          
+               SET @nErrNo = 152007          
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') ----'UPDPKDET Fail'       
+               GOTO RollBackTran          
+            END       
+
+         	FETCH NEXT FROM @curUpd INTO @cT_PickDetailKey
+         END
+      	
+         --UPDATE TOP (1) dbo.PickDetail SET       
+         --   QTYMoved = QTYMoved + 1      
+         --FROM dbo.PickDetail PD WITH (NOLOCK)       
+         --   JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)      
+         --WHERE PD.StorerKey = @cStorerkey      
+         --   AND PD.OrderKey = @cOrderKey      
+         --   AND PD.SKU = @cSKU      
+         --   AND PD.Status < '9'      
+         --   AND PD.QtyMoved < PD.QTY      
+         --   AND LA.Lottable02 = @cLottable02      
+         --   AND LA.Lottable03 = @cLottable03    
       
-         IF @@ERROR <> 0          
-         BEGIN          
-            SET @nErrNo = 152007          
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') ----'UPDPKDET Fail'       
-            GOTO RollBackTran          
-         END       
+         --IF @@ERROR <> 0          
+         --BEGIN          
+         --   SET @nErrNo = 152007          
+         --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') ----'UPDPKDET Fail'       
+         --   GOTO RollBackTran          
+         --END       
       END      
       
       -- 3. Swap with available inventory         
