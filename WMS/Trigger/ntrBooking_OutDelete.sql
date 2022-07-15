@@ -23,7 +23,7 @@ GO
 /*                                                                      */
 /* Called By: When records Deleted                                      */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -35,6 +35,12 @@ GO
 /*                            Finalized Booking (Wan01)                 */ 
 /* 2022-03-03  Wan02    1.2   LFWM-3336 - Door Booking SPsDB queries    */
 /*                            clarification                             */
+/* 2022-03-03  Wan02    1.2   LFWM-3336 - Door Booking SPsDB queries    */
+/*                            clarification                             */
+/* 2022-07-15  Wan03    1.3   As Per LFWM-3336 Technical Spec, Should not*/
+/*                            allow to delete closed Booking            */
+/*                            To be same as Exceed to check Allowdelete */
+/*                            if FinalizeFlag = 'Y'                     */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrBooking_OutDelete
@@ -64,6 +70,10 @@ BEGIN
    
    ,        @n_RowRef_SHPM          INT            --(Wan02)
    ,        @c_ShipmentGID          NVARCHAR(50)   --(Wan02)
+   ,        @c_Loadkey_BO           NVARCHAR(10)   --(Wan03)
+   ,        @c_MBOLkey_BO           NVARCHAR(10)   --(Wan03)
+   ,        @c_Status_BO            NVARCHAR(10)   --(Wan03)
+   
    DECLARE @CUR_BKO                 CURSOR         --(Wan02) 
          , @CUR_LOAD                CURSOR         --(Wan02)
          , @CUR_SHPM                CURSOR         --(Wan02)
@@ -84,6 +94,9 @@ BEGIN
       SELECT Deleted.Facility
             ,Deleted.BookingNo
             ,Deleted.FinalizeFlag
+            ,Loadkey = ISNULL(Deleted.Loadkey,'')              --(Wan03)
+            ,MBOLkey = ISNULL(Deleted.MBOLKey,'')              --(Wan03)
+            ,Deleted.[Status]                                  --(Wan03)
       FROM DELETED
       ORDER BY Deleted.BookingNo
       
@@ -92,9 +105,36 @@ BEGIN
       FETCH NEXT FROM @CUR_BKO INTO @c_Facility
                                  ,  @n_BookingNo
                                  ,  @c_finalizeflag
+                                 ,  @c_Loadkey_BO              --(Wan03)
+                                 ,  @c_MBOLkey_BO              --(Wan03) 
+                                 ,  @c_Status_BO               --(Wan03)                                  
       
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
       BEGIN
+         --(Wan03) - START
+         IF @c_Status_BO = '9'
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err=74906   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete closed booking. (ntrBooking_OutDelete)'
+            GOTO QUIT_TR
+         END
+         
+         IF @c_finalizeflag = 'Y' AND (@c_Loadkey_BO <> '' OR @c_MBOLkey_BO <> '')
+         BEGIN
+            IF NOT EXISTS  (  SELECT 1       
+                              FROM LOADPLAN WITH (NOLOCK)
+                              WHERE LOADPLAN.BookingNo = @n_BookingNo
+                           )
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_err=74905   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking. (ntrBooking_OutDelete)'
+               GOTO QUIT_TR
+            END
+         END
+         --(Wan03) - END
+      
          SET @CUR_LOAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT lp.LoadKey
          FROM dbo.LoadPlan AS lp WITH (NOLOCK)
@@ -107,41 +147,42 @@ BEGIN
       
          WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
          BEGIN
-            
-            SET @c_Storerkey= ''
-            SELECT TOP 1 @c_Storerkey = o.Storerkey
-            FROM dbo.LoadPlanDetail AS lpd WITH (NOLOCK)
-            JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = lpd.OrderKey
-            WHERE lpd.LoadKey = @c_Loadkey
-            ORDER BY lpd.LoadLineNumber
-            
-            SET @c_AllowDelFinalizedBKO = ''
-            SELECT @c_AllowDelFinalizedBKO = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AllowDelFinalizedBKO')
-         
-            IF @c_AllowDelFinalizedBKO IN ('1')
+            IF @c_finalizeflag = 'Y'                  -- (Wan03)
             BEGIN
-               IF EXISTS (SELECT 1
-                          FROM dbo.TaskDetail AS td WITH (NOLOCK)
-                          WHERE td.Loadkey = @c_Loadkey
-                          AND Status <> 'X'
-                         )
+               SET @c_Storerkey= ''
+               SELECT TOP 1 @c_Storerkey = o.Storerkey
+               FROM dbo.LoadPlanDetail AS lpd WITH (NOLOCK)
+               JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = lpd.OrderKey
+               WHERE lpd.LoadKey = @c_Loadkey
+               ORDER BY lpd.LoadLineNumber
+               
+               SET @c_AllowDelFinalizedBKO = ''
+               SELECT @c_AllowDelFinalizedBKO = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AllowDelFinalizedBKO')
+            
+               IF @c_AllowDelFinalizedBKO IN ('1')
+               BEGIN
+                  IF EXISTS (SELECT 1
+                             FROM dbo.TaskDetail AS td WITH (NOLOCK)
+                             WHERE td.Loadkey = @c_Loadkey
+                             AND Status <> 'X'
+                            )
+                  BEGIN
+                     SET @n_Continue = 3
+                     SET @n_err=74915  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                     SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Loadkey Released. Not allow to delete booking.'
+                                  +' (ntrBooking_OutDelete)'
+                     GOTO QUIT_TR 
+                  END
+               END
+               ELSE IF @c_AllowDelFinalizedBKO IN ('', '0')
                BEGIN
                   SET @n_Continue = 3
-                  SET @n_err=74915  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Loadkey Released. Not allow to delete booking.'
+                  SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
                                +' (ntrBooking_OutDelete)'
-                  GOTO QUIT_TR 
-               END
-            END
-            ELSE IF @c_AllowDelFinalizedBKO IN ('', '0')
-            BEGIN
-               SET @n_Continue = 3
-               SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
-                            +' (ntrBooking_OutDelete)'
-               GOTO QUIT_TR  
-            END            
-
+                  GOTO QUIT_TR  
+               END            
+            END                                    -- (Wan03)
             FETCH NEXT FROM @CUR_LOAD INTO @c_Loadkey
          END
          CLOSE @CUR_LOAD
@@ -161,27 +202,30 @@ BEGIN
       
          WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
          BEGIN
-            SELECT TOP 1 @c_StorerKey = o.StorerKey
-            FROM dbo.TMS_ShipmentTransOrderLink AS tstol WITH (NOLOCK)
-            JOIN dbo.TMS_TransportOrder AS tto WITH (NOLOCK) ON tto.ProvShipmentID = tstol.ProvShipmentID
-            JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = tto.OrderSourceID
-            WHERE tstol.ShipmentGID = @c_ShipmentGID
-            ORDER BY tto.Rowref
-            
-            SET @c_AllowDelFinalizedBKO = ''
-            SELECT @c_AllowDelFinalizedBKO = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AllowDelFinalizedBKO')
-         
-            IF @c_AllowDelFinalizedBKO IN ('', '0')
+            IF @c_finalizeflag = 'Y'               -- (Wan03) 
             BEGIN
-               SET @n_Continue = 3
-               SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
-                            +' (ntrBooking_OutDelete)'
-               GOTO QUIT_TR               
-            END
+               SELECT TOP 1 @c_StorerKey = o.StorerKey
+               FROM dbo.TMS_ShipmentTransOrderLink AS tstol WITH (NOLOCK)
+               JOIN dbo.TMS_TransportOrder AS tto WITH (NOLOCK) ON tto.ProvShipmentID = tstol.ProvShipmentID
+               JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = tto.OrderSourceID
+               WHERE tstol.ShipmentGID = @c_ShipmentGID
+               ORDER BY tto.Rowref
+               
+               SET @c_AllowDelFinalizedBKO = ''
+               SELECT @c_AllowDelFinalizedBKO = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AllowDelFinalizedBKO')
+            
+               IF @c_AllowDelFinalizedBKO IN ('', '0')
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_err=74920  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to delete finalized booking.'
+                               +' (ntrBooking_OutDelete)'
+                  GOTO QUIT_TR               
+               END
+            END                                    -- (Wan03)
             
             UPDATE dbo.TMS_Shipment WITH (ROWLOCK)
-            SET BookingNo = ''
+            SET BookingNo = 0                      -- (Wan03)
                ,Editwho = SUSER_NAME()
                ,EditDate= GETDATE()
             WHERE Rowref = @n_RowRef_SHPM
@@ -203,7 +247,10 @@ BEGIN
          
          FETCH NEXT FROM @CUR_BKO INTO @c_Facility
                                     ,  @n_BookingNo
-                                    ,  @c_finalizeflag  
+                                    ,  @c_finalizeflag 
+                                    ,  @c_Loadkey_BO           --(Wan03)
+                                    ,  @c_MBOLkey_BO           --(Wan03) 
+                                    ,  @c_Status_BO            --(Wan03) 
             
       END
       CLOSE @CUR_BKO
