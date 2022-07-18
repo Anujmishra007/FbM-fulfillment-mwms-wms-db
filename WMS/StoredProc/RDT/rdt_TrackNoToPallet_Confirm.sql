@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_TrackNoToPallet_Confirm]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [RDT].[rdt_TrackNoToPallet_Confirm]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /******************************************************************************/
 /* Store procedure: rdt_TrackNoToPallet_Confirm                               */
@@ -20,13 +16,14 @@ GO
 /* 2018-07-18 1.2  Ung      WMS-4304 Add PalletDetail.UserDefine01            */
 /* 2019-04-24 1.3  James    WMS-8751 Enable accumulate mbold weight (james01) */
 /* 2019-07-16 1.4  Ung      Fix MBOL shipped                                  */
-/* 2020-10-01 1.5  Chermaine WMS-15370 Add StdEventLog (cc01)                */
+/* 2020-10-01 1.5  Chermaine WMS-15370 Add StdEventLog (cc01)                 */
 /* 2021-04-08 1.6  James    WMS-16024 Standarized use of TrackingNo (james02) */
 /* 2021-09-23 1.7  James    WMS-17937 Add update cartontype and weight        */
 /*                          into packinfo table                               */
+/* 2022-06-23 1.8  Ung      WMS-19666 Add recheck status                      */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_TrackNoToPallet_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_TrackNoToPallet_Confirm] (
    @nMobile           INT,           
    @nFunc             INT,           
    @cLangCode         NVARCHAR( 3),  
@@ -57,6 +54,140 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   /***********************************************************************************************
+                                       Recheck status (same as parent)
+   ***********************************************************************************************/
+   -- This is to close the gap where after scanned tracking no, and before carton type/weight/cube, 
+   -- interface receive to cancel the order
+   IF @nStep <> 3 -- Tracking no. 
+   BEGIN
+      -- Get order info  
+      DECLARE @cStatus NVARCHAR(10)  
+      DECLARE @cSOStatus NVARCHAR(10)  
+      SELECT  
+         @cStatus = Status,  
+         @cSOStatus = SOStatus
+      FROM dbo.Orders WITH (NOLOCK)  
+      WHERE OrderKey = @cOrderKey  
+
+      -- Check order status  
+      IF @cStatus < '5'  
+      BEGIN  
+         SET @nErrNo = 111267  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrderNotPick  
+         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+         GOTO Quit  
+      END  
+      
+      DECLARE @cExtendedCheckSOStatusSP NVARCHAR(20)
+      SET @cExtendedCheckSOStatusSP = rdt.RDTGetConfig( @nFunc, 'ExtendedCheckSOStatusSP', @cStorerKey)
+      IF @cExtendedCheckSOStatusSP = '0'
+         SET @cExtendedCheckSOStatusSP = ''
+
+      -- Extended validate sostatus
+      IF @cExtendedCheckSOStatusSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedCheckSOStatusSP AND type = 'P')
+         BEGIN
+            DECLARE @cSQL NVARCHAR( MAX)
+            DECLARE @cSQLParam NVARCHAR( MAX)
+            DECLARE @cOption NVARCHAR(1)
+            DECLARE @tValidateSOStatus VariableTable
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedCheckSOStatusSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cPalletKey, @cPalletLOC, @cMBOLKey, @cTrackNo, @cOrderKey, @cShipperKey, @cCartonType, @cWeight, @cOption, ' + 
+               ' @cSOStatus, @tValidateSOStatus, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cPalletKey      NVARCHAR( 20), ' + 
+               '@cPalletLOC      NVARCHAR( 10), ' + 
+               '@cMBOLKey        NVARCHAR( 10), ' + 
+               '@cTrackNo        NVARCHAR( 20), ' + 
+               '@cOrderKey       NVARCHAR( 10), ' + 
+               '@cShipperKey     NVARCHAR( 15), ' +  
+               '@cCartonType     NVARCHAR( 10), ' +  
+               '@cWeight         NVARCHAR( 10), ' + 
+               '@cOption         NVARCHAR( 1),  ' + 
+               '@cSOStatus       NVARCHAR( 10), ' + 
+               '@tValidateSOStatus VariableTable   READONLY, ' + 
+               '@nErrNo          INT               OUTPUT,   ' +
+               '@cErrMsg         NVARCHAR( 20)     OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 3, @nInputKey, @cFacility, @cStorerKey, -- Force step = 3, same as parent
+               @cPalletKey, @cPalletLOC, @cMBOLKey, @cTrackNo, @cOrderKey, @cShipperKey, @cCartonType, @cWeight, @cOption, 
+               @cSOStatus, @tValidateSOStatus, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+
+            IF @nErrNo <> 0
+            BEGIN
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
+               GOTO Quit
+            END
+         END
+      END
+      ELSE
+      BEGIN
+         -- Check extern status  
+         IF @cSOStatus = 'HOLD'  
+         BEGIN  
+            SET @nErrNo = 111268  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order on HOLD  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+            GOTO Quit  
+         END  
+     
+         ELSE IF @cSOStatus = 'PENDPACK'  
+         BEGIN  
+            SET @nErrNo = 111269  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pending Update  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+            GOTO Quit  
+         END  
+     
+         ELSE IF @cSOStatus = 'PENDCANC'  
+         BEGIN  
+            SET @nErrNo = 111270  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pending CANC  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+            GOTO Quit  
+         END  
+     
+         IF @cSOStatus = 'CANC'  
+         BEGIN  
+            SET @nErrNo = 111271  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order CANCEL  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+            GOTO Quit  
+         END  
+     
+         IF @cSOStatus = 'PACK&HOLD'  
+         BEGIN  
+            SET @nErrNo = 111284  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrderPACK&HOLD  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+            GOTO Quit  
+         END  
+     
+         -- Check SOStatus blocked  
+         IF EXISTS( SELECT TOP 1 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'SOSTSBLOCK' AND Code = @cSOStatus AND StorerKey = @cStorerKey AND Code2 = @nFunc)  
+         BEGIN  
+            SET @nErrNo = 111286  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Status blocked  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg  
+            GOTO Quit  
+         END  
+      END
+   END
+   
+   /***********************************************************************************************
+                                              Confirm
+   ***********************************************************************************************/
    DECLARE @nWeight        FLOAT
    DECLARE @nCube          FLOAT
    DECLARE @nUseSequence   INT
