@@ -25,7 +25,6 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
 /* 01-12-2020  Wan02    1.2   Add (NOLOCK)                               */
-/* 26-01-2022  SYChua   1.3   Temp Trace (SY01)                          */
 /* 17-03-2022  SYChua   1.4   JSM-48082 - Fix reverse taskdetail.qty, to */
 /*                            deduct correctly (SY01)                    */
 /*************************************************************************/
@@ -231,14 +230,6 @@ CREATE PROCEDURE [dbo].[ispRVWAV24]
                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Taskdetail Table Failed. (ispRVWAV24)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
 
-               --SY01 START
-               INSERT TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3, Col4)
-               SELECT 'MASTRVWAVE', GETDATE(), TD.Qty, TD.SystemQty, TD.QtyReplen, TD.Taskdetailkey, @n_ShortQty, @n_Qty, @n_QtyBal,
-               LLI.QtyAllocated, LLI.QtyReplen
-               FROM TASKDETAIL TD (NOLOCK)
-               JOIN LOTXLOCXID LLI (NOLOCK) ON TD.Lot = LLI.Lot AND TD.FromLoc = LLI.Loc AND TD.FromID = LLI.Id
-               WHERE TD.Taskdetailkey = @c_Taskdetailkey
-               --SY01 END
               END
               ELSE
               BEGIN
