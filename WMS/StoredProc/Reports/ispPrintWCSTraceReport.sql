@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By:  dw = r_dw_wcsrouting_trace_report                        */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -26,8 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 22-Sep-2015  Leong         SOS# 352283 - Bug fix.                    */
+/* 24-Feb-2019  TLTING01      linked server to WCS db                   */  
 /************************************************************************/
-
 CREATE PROC [dbo].[ispPrintWCSTraceReport]
 ( @cToteNo  NVARCHAR(20) -- SOS# 352283
 )
@@ -35,6 +35,9 @@ AS
 BEGIN
 
 SET NOCOUNT ON
+-- linked SERVER  
+SET ANSI_NULLS ON   
+SET ANSI_WARNINGS ON  
 
 DECLARE @nBoxNumber       NUMERIC(20,0), -- SOS# 352283
         @cWCSKey          NVARCHAR(10),
