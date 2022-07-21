@@ -1,0 +1,49 @@
+ 
+SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Booking_Event](
+	[BookingKey] [INT] IDENTITY(1,1) NOT NULL,
+	[BookingNo] [INT] NOT NULL,
+	[BookingType] [NVARCHAR](5) NOT NULL,
+	[EventCode] [NVARCHAR](30) NOT NULL,
+	[EventDate] [DATETIME] NULL,
+	[ItrStatus] [NVARCHAR](1) NOT NULL,
+	[UserDefine01] [NVARCHAR](50) NULL,
+	[UserDefine02] [NVARCHAR](50) NULL,
+	[UserDefine03] [NVARCHAR](50) NULL,
+	[UserDefine04] [NVARCHAR](50) NULL,
+	[UserDefine05] [NVARCHAR](50) NULL,
+	[AddDate] [DATETIME] NOT NULL,
+	[AddWho] [NVARCHAR](128) NOT NULL,
+	[EditDate] [DATETIME] NOT NULL,
+	[EditWho] [NVARCHAR](128) NOT NULL,
+ CONSTRAINT [PKRefno] PRIMARY KEY CLUSTERED 
+(
+	[BookingKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[Booking_Event] ADD  CONSTRAINT [DF_Booking_Event_BookingType]  DEFAULT (' ') FOR [BookingType]
+GO
+
+ALTER TABLE [dbo].[Booking_Event] ADD  CONSTRAINT [DF_Booking_Event_EventCode]  DEFAULT (' ') FOR [EventCode]
+GO
+
+ALTER TABLE [dbo].[Booking_Event] ADD  CONSTRAINT [DF_Booking_Event_AddDate]  DEFAULT (GETDATE()) FOR [AddDate]
+GO
+
+ALTER TABLE [dbo].[Booking_Event] ADD  CONSTRAINT [DF_Booking_Event_AddWho]  DEFAULT (SUSER_SNAME()) FOR [AddWho]
+GO
+
+ALTER TABLE [dbo].[Booking_Event] ADD  CONSTRAINT [DF_Booking_Event_EditDate]  DEFAULT (GETDATE()) FOR [EditDate]
+GO
+
+ALTER TABLE [dbo].[Booking_Event] ADD  CONSTRAINT [DF_Booking_Event_EditWho]  DEFAULT (SUSER_SNAME()) FOR [EditWho]
+GO
+
+
