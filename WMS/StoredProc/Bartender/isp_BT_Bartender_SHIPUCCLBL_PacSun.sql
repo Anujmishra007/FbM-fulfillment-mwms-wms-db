@@ -2,7 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO  
-  
+
 /******************************************************************************/                   
 /* Copyright: LFL                                                             */                   
 /* Purpose: isp_BT_Bartender_SHIPUCCLBL_PacSun                                */                   
@@ -11,7 +11,8 @@ GO
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
 /*01-JUNE-2021 1.0  CHONGCS    Created (WMS-17112)                            */  
-/*15-APR-2022 1.1  MINGLE     Change extordkey to udf03 (WMS-19458)(ML01)     */ 
+/*15-APR-2022 1.1  MINGLE     Change extordkey to udf03 (WMS-19458)(ML01)     */
+/*07-JUL-2022 1.2  MINGLE     Add col 15-17 (WMS-20128)(ML02)                 */
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_PacSun]                        
@@ -192,7 +193,7 @@ BEGIN
                   +  ' ISNULL(F.City,'''') + '','' + ISNULL(F.State,'''') + '','' + ISNULL(F.Country,''''),ST.Company, ' + CHAR(13) --5
                   +  ' ISNULL(ST.Address1,'''') + ISNULL(ST.Address2,''''), ISNULL(ST.City,'''') + '','' + ISNULL(ST.State,''''),'  --7
                   +  ' OH.Consigneekey, ST.Zip, OH.Userdefine03, ' + CHAR(13) --10	--ML01
-                  +  ' @c_descr, @c_sku, @c_Col13, @c_labelno, '''', '''', '''', '''', '''', '''', ' + CHAR(13) --20
+                  +  ' @c_descr, @c_sku, @c_Col13, @c_labelno, oh.bizunit, oh.userdefine02, oh.userdefine04, '''', '''', '''', ' + CHAR(13) --20	--ML02
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --30
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --40
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --50
