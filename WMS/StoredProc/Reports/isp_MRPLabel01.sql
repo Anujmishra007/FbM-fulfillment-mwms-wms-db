@@ -32,6 +32,7 @@ GO
 /* 11-May-2022 WLChooi  1.6   DevOps Combine Script                     */
 /* 11-May-2022 WLChooi  1.7   WMS-19617 - Modify Logic (WL02)           */
 /* 07-Jul-2022 WLChooi  1.8   Bug Fix - Get Correct Month (WL03)        */
+/* 13-Jul-2022 Calvin	1.9   JSM-83301 KarSiong's CR (CLVN01)          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_MRPLabel01]
            @c_PickSlipNo         NVARCHAR(10)
@@ -361,7 +362,8 @@ BEGIN
                                        AND(CSG.Type = '2') 
    WHERE OH.Orderkey = @c_Orderkey                                                                    
 
-   IF @c_OrderGroup = 'S01'
+   --(CLVN01) START--
+   /*IF @c_OrderGroup = 'S01'
    BEGIN
       SELECT
          @c_LGTIM_Addr  = ISNULL(RTRIM(Company ),'') + CHAR(13)
@@ -384,7 +386,8 @@ BEGIN
                         + ISNULL(RTRIM(B_Country),'') + ' ' 
       FROM STORER WITH (NOLOCK)
       WHERE Storerkey = 'LOGITECHIM'
-   END
+   END*/
+   --(CLVN01) END--
     
    DECLARE CUR_PSLIP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT RowRef
