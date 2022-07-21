@@ -9,7 +9,7 @@ GO
 /* Copyright: LFL                                                          */      
 /* Written by: WLChooi                                                     */      
 /*                                                                         */      
-/* Purpose: isp_RPT_WV_PLIST_WAVE_005_ECOM                                 */      
+/* Purpose: WMS-19758 - [TW] JET Pick Slip CR                              */      
 /*                                                                         */      
 /* Called By: RPT_WV_PLIST_WAVE_005_ECOM                                   */      
 /*                                                                         */      
