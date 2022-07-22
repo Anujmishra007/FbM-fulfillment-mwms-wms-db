@@ -15,7 +15,7 @@ GO
 /*                                                                      */  
 /* Parameters:                                                          */  
 /*                                                                      */  
-/* PVCS Version: 1.3                                                    */  
+/* PVCS Version: 1.4                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -28,6 +28,7 @@ GO
 /* 2022-May-06  WLChooi   1.2   DevOps Combine Script                   */
 /* 2022-May-06  WLChooi   1.2   WMS-19598 - New Logic (WL02)            */
 /* 2022-Jun-22  WLChooi   1.3   WMS-19598 - Remove Validation (WL03)    */
+/* 2022-Jul-22  WLChooi   1.4   Fix Trancount error from SCE (WL04)     */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_ASN_NIKECN_1M1C_PA]  
@@ -98,6 +99,13 @@ BEGIN
    --   GOTO ENDPROC  
    --END 
    --WL03 E 
+
+   --WL04 S
+   WHILE @@TRANCOUNT > 0 
+   BEGIN
+      COMMIT TRAN
+   END
+   --WL04 E
    
    --WL02 S
    CREATE TABLE #TMP_RD (
@@ -293,6 +301,11 @@ ENDPROC:
    IF OBJECT_ID('tempdb..#TMP_LOC') IS NOT NULL
       DROP TABLE #TMP_LOC
    --WL02 E
+
+   --WL04 S
+   WHILE @@TRANCOUNT < @n_StartTCnt 
+      BEGIN TRAN
+   --WL04 E
 
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  
