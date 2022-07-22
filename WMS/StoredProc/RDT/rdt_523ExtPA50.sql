@@ -56,6 +56,7 @@ BEGIN
    SKU sku (NOLOCK) ON LLI.SKU=SKU.SKU and LLI.storerkey=SKU.storerkey
    WHERE loc.putawayzone=@cPutawayZone
       AND sku.storerkey=@cStorerkey
+      AND LOC.facility=@cFacility
       AND loc.loc<>@cLOC
       AND sku.sku=@csku
       AND LLI.qty<>0
@@ -68,6 +69,7 @@ BEGIN
       loc loc (nolock) ON LLI.loc=loc.loc
       WHERE loc.putawayzone=@cPutawayZone
          AND loc.loc<>@cLOC
+         AND facility=@cFacility
       GROUP BY LLI.LOC 
       HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) = 0  
       ORDER BY  LLI.LOC 
@@ -84,7 +86,9 @@ BEGIN
                               loc loc (nolock) ON LLI.loc=loc.loc
                               WHERE loc.putawayzone=@cPutawayZone
                                  AND loc.loc<>@cLOC
+                                 AND LOC.facility=@cFacility
                               GROUP BY LLI.LOC)
+         AND LOC.facility=@cFacility
       ORDER BY  loc.LOC 
    END
 
