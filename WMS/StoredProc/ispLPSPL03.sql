@@ -23,7 +23,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC Split Load Plan                                      */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,6 +32,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver  Purposes                                   */
 /* 24-Jun-2022 WLChooi  1.0  DevOps Combine Script                      */
+/* 14-Jul-2022 WLChooi  1.1  Logic Fix - No need split if all PICK(WL01)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispLPSPL03]
       @c_LoadKey NVARCHAR(10),
@@ -298,6 +299,43 @@ BEGIN
       END
    END --select @c_SQLField, @c_SQLGroup, @c_SQLWhere, @c_Field01
    --BEGIN TRAN
+
+   --WL01 S
+   -------------------------- PreValidation ------------------------------
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      SELECT @c_SQLDYN01 = 'DECLARE cur_PreVal CURSOR FAST_FORWARD READ_ONLY FOR ' + CHAR(13) + 
+         + ' SELECT ORDERS.Storerkey ' + REPLACE(@c_SQLField,',ORDERS.Orderkey',',''''') + CHAR(13) + 
+         + ' FROM ORDERS WITH (NOLOCK) '
+         + ' JOIN LoadPlanDetail LD WITH (NOLOCK) ON (ORDERS.OrderKey = LD.OrderKey) '  + CHAR(13) + 
+         + ' JOIN PICKDETAIL PD WITH (NOLOCK) ON (PD.Orderkey = ORDERS.Orderkey) '  + CHAR(13) + 
+         + ' JOIN LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) '  + CHAR(13) + 
+         + ' WHERE LD.LoadKey = ''' +  RTRIM(@c_LoadKey) +''''  + CHAR(13) + 
+         + ' GROUP BY ORDERS.Storerkey ' + REPLACE(@c_SQLGroup,', ORDERS.Orderkey','')  + CHAR(13) + 
+         + ' ORDER BY ORDERS.Storerkey ' + REPLACE(@c_SQLSort,',ORDERS.Orderkey','')
+
+      EXEC (@c_SQLDYN01)
+
+      OPEN cur_PreVal
+      
+      FETCH NEXT FROM cur_PreVal INTO @c_Storerkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,
+                                      @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10
+                                       
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+      BEGIN
+         --No Group Orderkey, whole Load All is Pick, no need to split
+         IF (@c_Field01 = @c_Field02) AND @c_Field02 = 'PICK' AND @c_Field03 = '2'
+         BEGIN
+            GOTO RETURN_SP
+         END
+
+         FETCH NEXT FROM cur_PreVal INTO @c_Storerkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,
+                                         @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10               
+      END
+      CLOSE cur_PreVal
+      DEALLOCATE cur_PreVal
+   END
+   --WL01 E
    
    -------------------------- SPLIT LOAD PLAN ------------------------------
    
@@ -563,13 +601,15 @@ BEGIN
       DEALLOCATE cur_LPSplit
    END
 
-   IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
-      IF @n_loadcount > 0
-         SELECT @c_errmsg = RTRIM(CAST(@n_loadcount AS CHAR)) + ' New Load Plan Generated'
-      ELSE
-         SELECT @c_errmsg = 'No New Load Plan Generated'
-   END
+   --WL01 S
+   --IF @n_continue = 1 OR @n_continue = 2
+   --BEGIN
+   --   IF @n_loadcount > 0
+   --      SELECT @c_errmsg = RTRIM(CAST(@n_loadcount AS CHAR)) + ' New Load Plan Generated'
+   --   ELSE
+   --      SELECT @c_errmsg = 'No New Load Plan Generated'
+   --END
+   --WL01 E
 
    --Delete Parent Load from BuildLoadLog and BuildLoadDetailLog table AND add Child load into these 2 tables
    IF (@n_continue = 1 OR @n_continue = 2) AND EXISTS (SELECT 1 FROM #TMP_LocType TLT WHERE TLT.LocType = 'PICK')
@@ -684,6 +724,51 @@ BEGIN
    END
    
 RETURN_SP:
+   --WL01 S
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      IF @n_loadcount > 0 AND ISNULL(@c_errmsg,'') = ''
+      BEGIN
+         SELECT @c_errmsg = RTRIM(CAST(@n_loadcount AS CHAR)) + ' New Load Plan Generated'
+      END
+      IF @n_loadcount > 0 AND ISNULL(@c_errmsg,'') <> ''
+      BEGIN
+         SELECT @c_errmsg = RTRIM(CAST(@n_loadcount AS CHAR)) + ' New Load Plan Generated with error: ' 
+                          + @c_errmsg
+      END
+      ELSE
+      BEGIN
+         IF ISNULL(@c_errmsg,'') = ''
+         BEGIN
+            SELECT @c_errmsg = 'No New Load Plan Generated'
+         END
+         ELSE
+         BEGIN
+            SELECT @c_errmsg = 'No New Load Plan Generated. Error: '
+                             + @c_errmsg
+         END
+      END
+   END
+
+   IF CURSOR_STATUS('GLOBAL', 'cur_PreVal') IN (0 , 1)
+   BEGIN
+      CLOSE cur_PreVal
+      DEALLOCATE cur_PreVal   
+   END
+
+   IF CURSOR_STATUS('GLOBAL', 'cur_LPSplit') IN (0 , 1)
+   BEGIN
+      CLOSE cur_LPSplit
+      DEALLOCATE cur_LPSplit   
+   END
+
+   IF CURSOR_STATUS('GLOBAL', 'cur_loadplansp') IN (0 , 1)
+   BEGIN
+      CLOSE cur_loadplansp
+      DEALLOCATE cur_loadplansp   
+   END
+   --WL01 E
+   
    IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
    BEGIN
       CLOSE CUR_LOOP

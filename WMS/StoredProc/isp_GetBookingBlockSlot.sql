@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_GetBookingBlockSlot]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_GetBookingBlockSlot]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -15,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Block Booking Calendar                                    */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -25,9 +22,12 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 13-JUN-2012  YTWan    1.0  SOS#244706:Marks booking slots with color */
 /*                            (Wan01)                                   */
+/* 04-APR-2022  Wan02    1.2  DevOps Combine Script                     */
+/* 04-APR-2022  Wan02    1.2  LFWM-3336 - Door Booking SPsDB queries    */
+/*                            clarification                             */
 /************************************************************************/
 
-CREATE PROCEDURE isp_GetBookingBlockSlot
+CREATE OR ALTER PROCEDURE isp_GetBookingBlockSlot
    @c_Facility NVARCHAR(5) = '',
    @d_Date     DATETIME,   
    @c_InOut    CHAR(1) = 'I', 
@@ -67,6 +67,8 @@ BEGIN
           END AS timeto
          ,BS.Color                     --(Wan01)
          ,BS.ColorOnly                 --(Wan01)
+         ,BS.Blockslotkey              --(Wan02)
+         ,BS.Descr                     --(Wan02)
    INTO #TMP_BLOCKSLOT
    FROM Booking_BlockSlot BS (NOLOCK)
    JOIN LOC ON (BS.Loc = LOC.Loc)
@@ -91,6 +93,8 @@ BEGIN
           END AS timeto
          ,BS.Color                     --(Wan01)
          ,BS.ColorOnly                 --(Wan01)
+         ,BS.Blockslotkey              --(Wan02)
+         ,BS.Descr                     --(Wan02)         
    FROM Booking_BlockSlot BS (NOLOCK)
    JOIN LOC ON (BS.Facility = LOC.Facility)
    WHERE BS.Facility = @c_Facility

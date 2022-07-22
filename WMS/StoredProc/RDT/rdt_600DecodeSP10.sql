@@ -14,6 +14,7 @@ GO
 /* 05-10-2021  Chermaine 1.0   WMS-18007 Created                              */
 /* 30-05-2022  Ung       1.1   WMS-19757 Scan case SSCC, auto retrieve QTY    */
 /*                             and its pallet SSCC at Lottable09              */
+/* 02-06-2022  Ung       1.2   WMS-19808 Map case SSCC to ReceiptDetail       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600DecodeSP10 (
@@ -110,8 +111,7 @@ BEGIN
                	----2.Pallet SSCC (00)030244808343339608(93)
                   IF left( @cBarcode,2) = '00'
                   BEGIN
-               	   --IF SUBSTRING( @cBarcode, 21, 2) = '93'
-               	   IF LEN(@cBarcode)-2 = 18
+               	   IF SUBSTRING( @cBarcode, 21, 2) = '93'
                	   BEGIN
                		   SET @cPalleSSCC = SUBSTRING( @cBarcode,  3, 18)
 
@@ -141,13 +141,14 @@ BEGIN
                      	      @cLottable01 = RD.Lottable01, 
                      	      @cLottable02 = RD.Lottable02, 
                      	      @cLottable03 = RD.Lottable03, 
-                     	      @cLottable09 = @cPalleSSCC
+                     	      @cLottable09 = RD.Lottable09
                		      FROM receiptDetail RD WITH (NOLOCK)
                		      JOIN UCC U WITH (NOLOCK) ON (RD.StorerKey = U.Storerkey AND RD.ExternReceiptKey = U.ExternKey AND RD.Lottable09 = U.Userdefined03)
                		      WHERE RD.StorerKey = @cStorerKey
                		      AND RD.ReceiptKey = @cReceiptKey
                		      AND RD.Lottable09 = @cPalleSSCC
                            AND RD.FinalizeFlag <> 'Y'
+                           AND ISNULL( RD.DuplicateFrom, '') = '' -- Original line
 
                		      IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
                		      BEGIN
@@ -207,11 +208,14 @@ BEGIN
                         	      @cLottable02 = RD.Lottable02, 
                         	      @cLottable03 = RD.Lottable03, 
                         	      @cLottable09 = RD.Lottable09
-                        	   FROM UCC U WITH (NOLOCK)
-                        	      JOIN ReceiptDetail RD WITH (NOLOCK) ON (RD.StorerKey = U.Storerkey AND RD.ExternReceiptKey = U.ExternKey AND RD.Lottable09 = U.Userdefined03 AND  RD.SKU = U.SKU)
-                              WHERE U.UccNo = @cCaseSSCC
-                                 AND U.storerKey = @cStorerKey
+                        	   FROM UCC WITH (NOLOCK)
+                        	      JOIN ReceiptDetail RD WITH (NOLOCK) ON (RD.StorerKey = UCC.Storerkey  
+                        	         AND RD.SKU = UCC.SKU  
+                        	         AND UCC.UserDefined01 = RD.Lottable02  
+                        	         AND UCC.userDefined03 = RD.Lottable09)
+                              WHERE UCC.UCCNo = @cCaseSSCC
                                  AND RD.ReceiptKey = @cReceiptKey
+                                 AND ISNULL( RD.DuplicateFrom, '') = '' -- Original line
                         END
                   	END
                   	ELSE

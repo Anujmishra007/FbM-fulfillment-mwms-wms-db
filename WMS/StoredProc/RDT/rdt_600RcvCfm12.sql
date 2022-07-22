@@ -13,6 +13,8 @@ GO
 /* Date        Author    Ver.  Purposes                                       */
 /* 2021-10-14  Chermaine 1.0   WMS-18007 Created                              */
 /* 2022-05-30  Ung       1.1   WMS-19757 case SSCC, update UDF03 = ToID       */
+/* 2022-06-10  Yee Kung  1.2   WMS-19808 Default Lottable06                   */
+/*                             change UCC.UDF03 to UDF04 = ToID               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600RcvCfm12 (
@@ -88,6 +90,12 @@ BEGIN
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
+      SELECT top 1 @cLottable06=lottable06  
+      FROM receiptdetail (NOLOCK)  
+      WHERE receiptkey=@cReceiptKey  
+      AND SKU=@cSKUCode  
+      AND ISNULL(duplicatefrom,'') =''  
+
    	-- Receive
       EXEC rdt.rdt_Receive_V7
          @nFunc         = @nFunc,
@@ -206,7 +214,7 @@ BEGIN
       	         Receiptkey = @cReceiptKey,
       	         ReceiptLineNumber = @cReceiptLineNumberOutput,
       	         STATUS = '1', 
-      	         UserDefined03 = @cToID, 
+      	         UserDefined04 = @cToID, 
       	         EditDate = GETDATE(), 
       	         EditWho = SUSER_NAME()
       	      WHERE UccNo = @cUCC

@@ -89,6 +89,7 @@ GO
 /* 11-Feb-2022  NJOW12  3.5   DEVOPS Combine script                     */
 /* 11-Mar-2022  SYChua  3.6   JSM-56364 - Fix for 18467 that has 9 digit*/
 /*                            Score value (SY01)                        */
+/* 21-Jul-2022  WLChooi 3.7   WMS-20271 - Remove SKU.BUSR7 filter (WL01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispOrderBatching]
@@ -1021,7 +1022,7 @@ BEGIN
             FROM PICKDETAIL PD (NOLOCK)
             JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
             WHERE PD.Orderkey = @c_Orderkey
-            AND SKU.BUSR7 = '20'
+            --AND SKU.BUSR7 = '20'   --WL01
 
             IF @n_CurrOrdQty + @n_CurrBatchQty > @n_MaxBatchQty
             BEGIN

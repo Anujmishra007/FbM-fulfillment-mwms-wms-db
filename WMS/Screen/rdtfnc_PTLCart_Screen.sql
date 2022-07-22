@@ -22,8 +22,8 @@ EXECUTE rdt.rdtAddScn 4130, 'ENG'
 -- SKU
 DELETE rdt.RDTScn WHERE Scn = 4132 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4132, 'ENG'
-   ,@cLine01 = 'LOC: %10d01'
-   ,@cLine02 = 'SKU:'
+   ,@cLine01 = 'LOC: %15d01'
+   ,@cLine02 = 'SKU:        QTY: %03d12'
    ,@cLine03 = '%20d02'
    ,@cLine04 = '%40i03' -- SKU barcode expanded to 40 char
    ,@cLine05 = '%20d04'

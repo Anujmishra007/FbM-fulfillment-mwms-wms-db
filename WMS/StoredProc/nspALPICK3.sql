@@ -1,12 +1,8 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nspALPICK3' AND type = 'P')
-   DROP PROC nspALPICK3
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
-  
 /************************************************************************/  
 /* Stored Procedure: nspALPICK3                                         */  
 /* Creation Date: 18-MAR-2015                                           */  
@@ -18,7 +14,7 @@ GO
 /*          Copy and modify from nspALPICK2                             */  
 /* Called By:  nspLoadProcessing                                        */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -27,8 +23,11 @@ GO
 /* Updates:                                                             */  
 /* Date         Author  Ver   Purposes                                  */  
 /* 11-Nov-2015  Shong01 1.1   Bug Fixing                                */
+/* 15-Jul-2022  WLChooi 1.2   WMS-20191 - Filter Lottable06-15 if have  */
+/*                            value (WL01)                              */
+/* 15-Jul-2022  WLChooi 1.2   DevOps Combine Script                     */
 /************************************************************************/  
-CREATE PROCEDURE [dbo].[nspALPICK3]   
+CREATE OR ALTER PROCEDURE [dbo].[nspALPICK3]   
    @c_LoadKey    NVARCHAR(10),   
    @c_Facility   NVARCHAR(5),   
    @c_StorerKey  NVARCHAR(15),   
@@ -37,7 +36,17 @@ CREATE PROCEDURE [dbo].[nspALPICK3]
    @c_Lottable02 NVARCHAR(18),    --(Wan01)     
    @c_Lottable03 NVARCHAR(18),    --(Wan01)   
    @c_Lottable04 NVARCHAR(20),    --(Wan01)    
-   @c_Lottable05 NVARCHAR(20),    --(Wan01)  
+   @c_Lottable05 NVARCHAR(20),    --(Wan01) 
+   @c_Lottable06 NVARCHAR(30),    --WL01    
+   @c_Lottable07 NVARCHAR(30),    --WL01    
+   @c_Lottable08 NVARCHAR(30),    --WL01    
+   @c_Lottable09 NVARCHAR(30),    --WL01    
+   @c_Lottable10 NVARCHAR(30),    --WL01    
+   @c_Lottable11 NVARCHAR(30),    --WL01    
+   @c_Lottable12 NVARCHAR(30),    --WL01    
+   @d_Lottable13 DATETIME,        --WL01
+   @d_Lottable14 DATETIME,        --WL01
+   @d_Lottable15 DATETIME,        --WL01
    @c_UOM        NVARCHAR(10),  
    @c_HostWHCode NVARCHAR(10),  
    @n_UOMBase    INT,  
@@ -97,6 +106,16 @@ BEGIN
                                THEN '' ELSE ' AND LOTATTRIBUTE.Lottable04 = @c_Lottable04 ' END   
                        +  CASE WHEN ISNULL(CONVERT(DATETIME, @c_Lottable05, 121), '1900-01-01 00:00:00.000') = '1900-01-01 00:00:00.000'       
                                THEN '' ELSE ' AND LOTATTRIBUTE.Lottable05 = @c_Lottable05 ' END   
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable06),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable06 = @c_Lottable06 ' END +  --WL01
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable07),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable07 = @c_Lottable07 ' END +  --WL01
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable08),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable08 = @c_Lottable08 ' END +  --WL01
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable09),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable09 = @c_Lottable09 ' END +  --WL01
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable10 = @c_Lottable10 ' END +  --WL01
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable11 = @c_Lottable11 ' END +  --WL01
+                       + CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable12 = @c_Lottable12 ' END +  --WL01
+                       + CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +  --WL01
+                       + CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +  --WL01
+                       + CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +  --WL01
                        + ' ORDER BY LOC.LocLevel, QTYAVAILABLE, LOC.LOC '  
     
    SET @c_SQLArguements= N'@c_Facility    NVARCHAR(5)'  
@@ -106,7 +125,17 @@ BEGIN
                        + ',@c_Lottable02  NVARCHAR(18)'  
                        + ',@c_Lottable03  NVARCHAR(18)'  
                        + ',@c_Lottable04  NVARCHAR(20)'  
-                       + ',@c_Lottable05  NVARCHAR(20)'  
+                       + ',@c_Lottable05  NVARCHAR(20)' 
+                       + ',@c_Lottable06  NVARCHAR(30)'   --WL01
+                       + ',@c_Lottable07  NVARCHAR(30)'   --WL01
+                       + ',@c_Lottable08  NVARCHAR(30)'   --WL01
+                       + ',@c_Lottable09  NVARCHAR(30)'   --WL01
+                       + ',@c_Lottable10  NVARCHAR(30)'   --WL01
+                       + ',@c_Lottable11  NVARCHAR(30)'   --WL01
+                       + ',@c_Lottable12  NVARCHAR(30)'   --WL01
+                       + ',@d_Lottable13  DATETIME'       --WL01
+                       + ',@d_Lottable14  DATETIME'       --WL01
+                       + ',@d_Lottable15  DATETIME'       --WL01
     
    EXEC sp_ExecuteSQL @c_SQLStatement  
                      ,@c_SQLArguements  
@@ -117,9 +146,18 @@ BEGIN
                      ,@c_Lottable02  
                      ,@c_Lottable03  
                      ,@c_Lottable04  
-                     ,@c_Lottable05  
+                     ,@c_Lottable05 
+                     ,@c_Lottable06   --WL01
+                     ,@c_Lottable07   --WL01
+                     ,@c_Lottable08   --WL01
+                     ,@c_Lottable09   --WL01
+                     ,@c_Lottable10   --WL01
+                     ,@c_Lottable11   --WL01
+                     ,@c_Lottable12   --WL01
+                     ,@d_Lottable13   --WL01
+                     ,@d_Lottable14   --WL01
+                     ,@d_Lottable15   --WL01
 END  
 GO 
-
-GRANT EXECUTE ON nspALPICK3 TO NSQL 
+GRANT EXECUTE ON [dbo].[nspALPICK3] TO NSQL 
 GO

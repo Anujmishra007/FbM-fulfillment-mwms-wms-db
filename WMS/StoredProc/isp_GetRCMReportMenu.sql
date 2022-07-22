@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetRCMReportMenu]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetRCMReportMenu]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,21 +12,24 @@ GO
 /*        :                                                             */
 /* Called By:  d_dw_rcmreport_menu                                      */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
-/* 22-04-2021   WLChooi   1.1 Missing NOLOCK (WL01)                     */
+/* Date        Author   Ver   Purposes                                  */
+/* 22-04-2021  WLChooi  1.1   Missing NOLOCK (WL01)                     */
+/* 2022-07-05  Wan01    1.2   Packing Application CR                    */
+/* 2022-07-05  Wan01    1.2   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC [isp_GetRCMReportMenu] 
+CREATE OR ALTER PROC [isp_GetRCMReportMenu] 
             @c_Storerkey      NVARCHAR(10)
          ,  @c_UserID         NVARCHAR(30)
          ,  @c_ComputerName   NVARCHAR(30)
          ,  @c_Reporttypes    NVARCHAR(255)
+         ,  @c_ShortAppName   NVARCHAR(30)   = ''              --(Wan01)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -49,6 +47,7 @@ BEGIN
          , @c_RCMUsingUserID  NVARCHAR(10)
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
+
 
    CREATE TABLE #TMP_RPTTYPE
       ( ReportType   NVARCHAR(10) NULL 
@@ -69,15 +68,31 @@ BEGIN
         ,   @n_Err            OUTPUT
         ,   @c_ErrMsg         OUTPUT
 
+   -- Wan01 - START      
+  ;WITH Top1 AS 
+  (
+   SELECT RowID=ROW_NUMBER() OVER (PARTITION BY rr.reporttype ORDER BY IIF(rr.ComputerName = @c_ComputerName,1,2)) 
+         , rr.ComputerName
+         , rr.ReportType
+         , rr.storerkey
+   FROM dbo.RCMReport AS rr (NOLOCK)  
+   JOIN #TMP_RPTTYPE AS tr ON tr.ReportType = rr.ReportType
+   WHERE storerkey = @c_Storerkey
+   )
+   UPDATE tr
+      SET tr.ComputerName = IIF(top1.ComputerName = @c_ComputerName, top1.ComputerName, @c_ShortAppName)
+   FROM #TMP_RPTTYPE AS tr
+   JOIN Top1 ON Top1.ReportType = tr.ReportType
+   WHERE top1.Rowid = 1
+   -- Wan01 - END
 
    UPDATE #TMP_RPTTYPE
         SET ComputerName = CASE WHEN CL.ListName IS NOT NULL OR @c_RCMUsingUserID = '1' 
-                                THEN @c_userid ELSE @c_ComputerName END
+                                THEN @c_userid ELSE ComputerName END                      --(Wan01)
    FROM #TMP_RPTTYPE RT
    LEFT JOIN CODELKUP CL WITH (NOLOCK) ON  (CL.ListName = 'RCMBYUSER')
                                        AND (RT.ReportType = CL.Code)
                                        AND (CL.Storerkey = @c_Storerkey)
-
    SELECT  RT.ReportType
          , Description= CL.Description + 
                         CASE WHEN Row_Number() OVER (PARTITION by RT.ReportType ORDER BY RT.ReportType) = 2  
@@ -92,7 +107,6 @@ BEGIN
                                         AND(RCMR.ReportType = CL.Code)
    WHERE RCMR.Storerkey = @c_Storerkey
    ORDER BY RT.ReportType
-
 END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_GetRCMReportMenu] TO nSQL 

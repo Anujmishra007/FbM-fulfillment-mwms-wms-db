@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPalletMgmt_TransferInProgress]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPalletMgmt_TransferInProgress]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,20 +12,26 @@ GO
 /*                                                                      */
 /* Called By: n_cst_palletmgmt.Event ue_transferinprogress              */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date        Author   Ver   Purposes                                  */
+/* 2022-01-24  Wan01    1.1   LFWM-3158 - TH-SCE All Account - Pallet   */
+/*                            Management - Transfer                     */
+/* 2022-01-24  Wan01    1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC dbo.ispPalletMgmt_TransferInProgress 
-            @c_PMkey    NVARCHAR(10) 
-         ,  @b_Success  INT = 0  OUTPUT 
-         ,  @n_err      INT = 0  OUTPUT 
-         ,  @c_errmsg   NVARCHAR(215) = '' OUTPUT
+CREATE OR ALTER PROC dbo.ispPalletMgmt_TransferInProgress 
+            @c_PMkey             NVARCHAR(10) 
+         ,  @b_Success           INT = 0  OUTPUT 
+         ,  @n_err               INT = 0  OUTPUT 
+         ,  @c_errmsg            NVARCHAR(215) = '' OUTPUT
+         ,  @c_SourceApp         NVARCHAR(10)  = '' --Default Blank = 'Exceed', SCE - 'WM'
+         ,  @c_StorerRestrict    NVARCHAR(250) = '' --Default Blank if from Exceed, SCE will pass restrict storers list   
+         ,  @c_FacilityRestrict  NVARCHAR(250) = '' --Default Blank if from Exceed, SCE will pass restrict facilities list 
 AS
 BEGIN
    SET NOCOUNT ON
@@ -50,8 +51,8 @@ BEGIN
          , @c_TranType           NVARCHAR(10)
          , @c_Country            NVARCHAR(30)
          , @c_username           NVARCHAR(128)  
-         , @c_StorerRestrict     NVARCHAR(250)     
-         , @c_FacilityRestrict   NVARCHAR(250)     
+         --, @c_StorerRestrict     NVARCHAR(250)               --(Wan01)     
+         --, @c_FacilityRestrict   NVARCHAR(250)               --(Wan01) 
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -164,7 +165,7 @@ BEGIN
 
    IF @c_Country = 'TH'
    BEGIN
-   	  IF EXISTS (SELECT 1 
+        IF EXISTS (SELECT 1 
                  FROM PALLETMGMT       PMH WITH (NOLOCK)
                  JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
                  WHERE PMH.PMKey = @c_PMkey 
@@ -185,9 +186,9 @@ BEGIN
          SET @n_err = 81090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
          SET @c_errmsg= 'Found Duplicate DocketNo. (ispPalletMgmt_TransferInProgress)' 
          GOTO QUIT_SP         
-      END              	  	
+      END                  
 
-   	  IF EXISTS (SELECT 1 
+        IF EXISTS (SELECT 1 
                  FROM PALLETMGMT       PMH WITH (NOLOCK)
                  JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
                  WHERE PMH.PMKey = @c_PMkey 
@@ -201,22 +202,27 @@ BEGIN
          SET @c_errmsg= 'Userdefine03 or Userdefine04 Cannot be empty. (ispPalletMgmt_TransferInProgress)' 
          GOTO QUIT_SP         
       END    
-         	
-      SET ANSI_NULLS ON
-      SET ANSI_WARNINGS ON
+      
+      --(Wan01) - START
+      IF @c_SourceApp = ''             --If from Exceed
+      BEGIN    
+         SET ANSI_NULLS ON
+         SET ANSI_WARNINGS ON
             
-      SET @c_username = SUSER_SNAME()
+         SET @c_username = SUSER_SNAME()
 
-      EXEC isp_GetUserRestriction
-         @c_username = @c_username  
-        ,@c_StorerRestrict = @c_StorerRestrict OUTPUT  
-        ,@c_FacilityRestrict = @c_FacilityRestrict OUTPUT  
-        ,@b_Success = @b_Success OUTPUT    
-        ,@n_Err = @n_Err OUTPUT    
-        ,@c_ErrMsg = @c_ErrMsg OUTPUT        
+         EXEC isp_GetUserRestriction
+            @c_username = @c_username  
+           ,@c_StorerRestrict = @c_StorerRestrict OUTPUT  
+           ,@c_FacilityRestrict = @c_FacilityRestrict OUTPUT  
+           ,@b_Success = @b_Success OUTPUT    
+           ,@n_Err = @n_Err OUTPUT    
+           ,@c_ErrMsg = @c_ErrMsg OUTPUT        
                         
-      SET ANSI_NULLS OFF
-      SET ANSI_WARNINGS OFF
+         SET ANSI_NULLS OFF
+         SET ANSI_WARNINGS OFF
+      END
+      --(Wan01) - END
       
       SET @c_FromStorerkey = ''
       SELECT TOP 1 @c_FromStorerkey = PMD.FromStorerkey
@@ -224,7 +230,7 @@ BEGIN
       JOIN PALLETMGMTDETAIL PMD WITH (NOLOCK) ON (PMH.PMKey = PMD.PMkey)
       WHERE PMH.PMKey = @c_PMkey 
       AND PMD.Status < '9'
-      AND PMD.FromStorerkey NOT IN (SELECT RTRIM(LTRIM(fds.Colvalue)) FROM dbo.fnc_DelimSplit(',',@c_StorerRestrict) AS fds)        	      
+      AND PMD.FromStorerkey NOT IN (SELECT RTRIM(LTRIM(fds.Colvalue)) FROM dbo.fnc_DelimSplit(',',@c_StorerRestrict) AS fds)                 
 
       IF ISNULL(@c_FromStorerkey,'') <> ''
       BEGIN      

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_finalizeADJ_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.3                                                          */  
+/* Version: 1.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -30,8 +25,11 @@ GO
 /*                            Revert when SP Raise error                 */
 /*                      1.2   Fixed Uncommitable Transaction             */
 /* 2021-01-15  Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2022-07-13  Wan04    1.4   LFWM-3501 - PROD & UAT - GIT SCE Adjustment*/
+/*                            Issue                                      */
+/* 2022-07-13  Wan04    1.4   DevObj Combine script                      */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]  
    @c_AdjustmentKey  NVARCHAR(10)
 ,  @b_Success        INT          = 1   OUTPUT   
 ,  @n_Err            INT          = 0   OUTPUT
@@ -97,6 +95,7 @@ BEGIN
          , @n_Qty             INT
          
          , @c_CrossWH         NVARCHAR(30)
+         , @c_ReasonCode      NVARCHAR(30)   = ''              --(Wan04)
 
          , @CUR_AJD           CURSOR
 
@@ -196,7 +195,7 @@ BEGIN
          ,  AdjustmentLineNumber NVARCHAR(10) NOT NULL   DEFAULT ('')    
          )    
 
-      SET @CUR_AJD = CURSOR FAST_FORWARD READ_ONLY FOR
+      SET @CUR_AJD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                  --(Wan04)
       SELECT AdjLineNo  = AD.AdjustmentLineNumber
             ,Storerkey  = RTRIM(AD.Storerkey)
             ,Sku        = RTRIM(AD.Sku)
@@ -218,6 +217,7 @@ BEGIN
             ,Lottable14 = AD.Lottable14
             ,Lottable15 = AD.Lottable15 
             ,Qty        = AD.Qty
+            ,ReasonCode = AD.ReasonCode                           --(Wan04)
       FROM ADJUSTMENTDETAIL AD WITH (NOLOCK)
       WHERE AD.AdjustmentKey = @c_Adjustmentkey
       AND AD.FinalizedFlag <> 'Y'
@@ -246,6 +246,7 @@ BEGIN
                                     ,  @d_Lottable14
                                     ,  @d_Lottable15
                                     ,  @n_Qty
+                                    ,  @c_ReasonCode              --(Wan04)
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -716,7 +717,28 @@ BEGIN
             END
          
          END -- @c_Lot = ''
-   
+
+         --(Wan04) - START
+         IF @c_ReasonCode = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 551123
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Reason Code is required. (lsp_finalizeADJ_Wrapper)'
+
+            EXEC [WM].[lsp_WriteError_List] 
+                       @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                     , @c_TableName   = @c_TableName
+                     , @c_SourceType  = @c_SourceType
+                     , @c_Refkey1     = @c_AdjustmentKey
+                     , @c_Refkey2     = @c_AdjLineNo
+                     , @c_Refkey3     = ''
+                     , @n_err2        = @n_err
+                     , @c_errmsg2     = @c_errmsg
+                     , @b_Success     = @b_Success   
+                     , @n_err         = @n_err       
+                     , @c_errmsg      = @c_errmsg          
+         END
+         --(Wan04) - END   
          FETCH NEXT FROM @CUR_AJD INTO    @c_AdjLineNo 
                                        ,  @c_Storerkey 
                                        ,  @c_Sku       
@@ -738,6 +760,7 @@ BEGIN
                                        ,  @d_Lottable14
                                        ,  @d_Lottable15
                                        ,  @n_Qty
+                                       ,  @c_ReasonCode              --(Wan04)
       END
       CLOSE @CUR_AJD
       DEALLOCATE @CUR_AJD

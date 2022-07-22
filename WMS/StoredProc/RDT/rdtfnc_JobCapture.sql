@@ -22,13 +22,14 @@ GO
 /*                            (yeekung01)                                     */
 /* 27-07-2021  1.7  YeeKung   JSM-11627 go through step 1 to ref screen       */
 /*                            (yeekung02)                                     */
-/* 23-08-2021 1.8   Ung       WMS-18427                                       */
+/* 23-08-2021  1.8  Ung       WMS-18427                                       */
 /*                            Add QTY UOM                                     */
 /*                            Add CaptureQTY = M                              */ 
 /*                            Add CaptureData = M                             */ 
 /*                            Add Confirm end job to all scenario             */
 /*                            Change CaptureData = 1, confirm end job flow    */
 /*                            Clean up source                                 */
+/* 14-06-2022  1.9  Ung       WMS-19943 Add JobCapColC.Notes as script        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_JobCapture] (
@@ -1177,26 +1178,34 @@ BEGIN
          DECLARE @nCursorPos  INT
 
          SET @curData = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT Code, Short
+            SELECT Code, Short, ISNULL( Notes, '')
             FROM dbo.CodeLKUP WITH (NOLOCK)
             WHERE ListName = 'JOBCapColC' -- Note: there is a C suffix, not the usual JOBCapCol
                AND Storerkey = @cStorerKey
+               AND Code IN (@cUDF01, @cUDF02, @cUDF03, @cUDF04, @cUDF05)
                AND Code2 = @nFunc
-            ORDER BY Code
+            ORDER BY 
+               CASE WHEN Code = @cUDF01 THEN 1
+                    WHEN Code = @cUDF02 THEN 2
+                    WHEN Code = @cUDF03 THEN 3
+                    WHEN Code = @cUDF04 THEN 4
+                    WHEN Code = @cUDF05 THEN 5
+                    ELSE 6
+               END
          OPEN @curData
-         FETCH NEXT FROM @curData INTO @cCode, @cCheck
+         FETCH NEXT FROM @curData INTO @cCode, @cCheck, @cSQL
          WHILE @@FETCH_STATUS = 0
          BEGIN
+            -- Get data
+            IF @cCode = @cUDF01 SELECT @cData = @cRef01, @nCursorPos = 2  ELSE
+            IF @cCode = @cUDF02 SELECT @cData = @cRef02, @nCursorPos = 4  ELSE
+            IF @cCode = @cUDF03 SELECT @cData = @cRef03, @nCursorPos = 6  ELSE
+            IF @cCode = @cUDF04 SELECT @cData = @cRef04, @nCursorPos = 8  ELSE
+            IF @cCode = @cUDF05 SELECT @cData = @cRef05, @nCursorPos = 10
+
             -- Check require field
             IF @cCheck <> ''
             BEGIN
-               -- Get data
-               IF @cCode = @cUDF01 SELECT @cData = @cRef01, @nCursorPos = 2  ELSE
-               IF @cCode = @cUDF02 SELECT @cData = @cRef02, @nCursorPos = 4  ELSE
-               IF @cCode = @cUDF03 SELECT @cData = @cRef03, @nCursorPos = 6  ELSE
-               IF @cCode = @cUDF04 SELECT @cData = @cRef04, @nCursorPos = 8  ELSE
-               IF @cCode = @cUDF05 SELECT @cData = @cRef05, @nCursorPos = 10
-
                -- Check blank
                IF CHARINDEX( 'R', @cCheck) > 0 AND @cData = ''
                BEGIN
@@ -1218,8 +1227,56 @@ BEGIN
                   END
                END
             END
+            
+            IF @cSQL <> ''
+            BEGIN
+               DELETE @tVar
+               INSERT INTO @tVar (Variable, Value) VALUES
+                  ('@cUserID',      @cUserID),
+                  ('@cJobType',     @cJobType),
+                  ('@cQTY',         @cQTY),
+                  ('@cLOC',         @cLOC),
+                  ('@cStart',       @cStart),
+                  ('@cEnd',         @cEnd),
+                  ('@cDuration',    @cDuration),
+                  ('@cCode',        @cCode), 
+                  ('@cRef01',       @cRef01),
+                  ('@cRef02',       @cRef02),
+                  ('@cRef03',       @cRef03),
+                  ('@cRef04',       @cRef04),
+                  ('@cRef05',       @cRef05)
 
-            FETCH NEXT FROM @curData INTO @cCode, @cCheck
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@tVar            VariableTable READONLY, ' +
+                  '@nErrNo          INT           OUTPUT,   ' +
+                  '@cErrMsg         NVARCHAR( 20) OUTPUT    '
+
+               BEGIN TRY
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+                     GOTO Quit
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 128516
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Script error
+                  EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+                  GOTO Quit
+               END CATCH
+            END
+
+            FETCH NEXT FROM @curData INTO @cCode, @cCheck, @cSQL
          END
       END
 
@@ -1228,6 +1285,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
+            DELETE @tVar
             INSERT INTO @tVar (Variable, Value) VALUES
                ('@cUserID',      @cUserID),
                ('@cJobType',     @cJobType),

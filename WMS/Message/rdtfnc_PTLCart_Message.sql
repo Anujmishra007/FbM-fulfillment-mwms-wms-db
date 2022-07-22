@@ -29,12 +29,10 @@ execute rdt.rdtAddMsg 53425, 10, '53425^Need Option   ', 'us_english', 808
 execute rdt.rdtAddMsg 53426, 10, '53426^Invalid Option', 'us_english', 808
 execute rdt.rdtAddMsg 53427, 10, '53427^Tote no task  ', 'us_english', 808
 execute rdt.rdtAddMsg 53428, 10, '53428^Invalid format', 'us_english', 808
-
--- WMS1933
-execute rdt.rdtAddMsg 53429, 10, '53429^Invalid Col  ', 'us_english', 808
-execute rdt.rdtAddMsg 53430, 10, '53430^Over max Col ', 'us_english', 808
-execute rdt.rdtAddMsg 53431, 10, '53431^Invalid Row  ', 'us_english', 808
-execute rdt.rdtAddMsg 53432, 10, '53432^Over max Row ', 'us_english', 808
-
--- WMS-11909
+execute rdt.rdtAddMsg 53429, 10, '53429^Invalid Col   ', 'us_english', 808
+execute rdt.rdtAddMsg 53430, 10, '53430^Over max Col  ', 'us_english', 808
+execute rdt.rdtAddMsg 53431, 10, '53431^Invalid Row   ', 'us_english', 808
+execute rdt.rdtAddMsg 53432, 10, '53432^Over max Row  ', 'us_english', 808
 execute rdt.rdtAddMsg 53433, 10, '53433^MultiSKUBarcod', 'us_english', 808
+execute rdt.rdtAddMsg 53434, 10, '53434^Over pick     ', 'us_english', 808
+execute rdt.rdtAddMsg 53435, 10, '53435^QTYScanConfDif', 'us_english', 808

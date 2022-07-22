@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 2021-10-28  1.0  Ung         WMS-19546  Created                      */
+/* 2022-07-14  1.1  yeekung     WMS-20175  add loc category(yeekung01)  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_513SuggestLOC16] (
@@ -68,9 +69,11 @@ BEGIN
       DECLARE @cPutawayZone      NVARCHAR( MAX) = ''
       DECLARE @cHostWHCode       NVARCHAR( MAX) = ''
       DECLARE @cLottable         NVARCHAR( MAX) = ''
+      DECLARE @cLocationCategory NVARCHAR( MAX) = ''--(yeekung01)
 
       DECLARE @cFromHostWHCode   NVARCHAR( 10)
       DECLARE @cFromPutawayZone  NVARCHAR( 10)
+      DECLARE @cFromLocationCategory   NVARCHAR(10)
       DECLARE @cLottable01       NVARCHAR( 18)
       DECLARE @cLottable02       NVARCHAR( 18)
       DECLARE @cLottable03       NVARCHAR( 18)
@@ -98,7 +101,8 @@ BEGIN
       -- Get LOC info
       SELECT 
          @cFromHostWHCode = HostWHCode, 
-         @cFromPutawayZone = PutawayZone
+         @cFromPutawayZone = PutawayZone,
+         @cFromLocationCategory =LocationCategory
       FROM dbo.LOC WITH (NOLOCK)
       WHERE LOC = @cFromLOC
    
@@ -134,6 +138,7 @@ BEGIN
          SET @cPutawayZone = ''
          SET @cHostWHCode  = ''
          SET @cLottable    = ''
+         SET @cLocationCategory = ''
          
          DECLARE @curCodeLKUP CURSOR
          SET @curCodeLKUP = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -181,6 +186,16 @@ BEGIN
                ELSE If @cUDF02 <> ''
                   SET @cLottable = @cLottable + ' AND LA.Lottable' + @cLottableNo + ' NOT IN (' + @cUDF02 + ') ' 
             END
+
+            IF @cCode = 'LocationCategory'
+            BEGIN
+                IF @cShort = 'Y'
+                  SET @cLocationCategory = ' AND LOC.LocationCategory = @cFromLocationCategory' 
+               ELSE If @cUDF01 <> ''
+                  SET @cLocationCategory = ' AND LOC.LocationCategory IN (' + @cUDF01 + ') ' 
+               ELSE If @cUDF02 <> ''
+                  SET @cLocationCategory = ' AND LOC.LocationCategory NOT IN (' + @cUDF02 + ') ' 
+            END
             FETCH NEXT FROM @curCodeLKUP INTO @cCode, @cShort, @cUDF01, @cUDF02
          END
 
@@ -197,6 +212,7 @@ BEGIN
                @cHostWHCode + 
                @cPutawayZone + 
                @cLottable + 
+               @cLocationCategory +
             ' GROUP BY LOC.LOC ' + 
             ' HAVING SUM( LLI.QTY - LLI.QTYPicked - LLI.QTYAllocated + LLI.PendingMoveIn) > 0 ' +
             ' ORDER BY SUM( LLI.QTY - LLI.QTYPicked - LLI.QTYAllocated + LLI.PendingMoveIn) '
@@ -208,6 +224,7 @@ BEGIN
             ' @cFromLOC         NVARCHAR( 10), ' + 
             ' @cFromHostWHCode  NVARCHAR( 10), ' + 
             ' @cFromPutawayZone NVARCHAR( 10), ' + 
+            ' @cFromLocationCategory NVARCHAR(10), '+
             ' @cLottable01      NVARCHAR( 18), ' +    
             ' @cLottable02      NVARCHAR( 18), ' +    
             ' @cLottable03      NVARCHAR( 18), ' +    
@@ -232,6 +249,7 @@ BEGIN
             ,@cFromLOC
             ,@cFromHostWHCode
             ,@cFromPutawayZone
+            ,@cFromLocationCategory
             ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05    
             ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10    
             ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15  

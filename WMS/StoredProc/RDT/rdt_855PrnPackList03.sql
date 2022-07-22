@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_855PrnPackList03') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_855PrnPackList03
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -20,9 +17,10 @@ GO
 /* 2019-03-29 1.3  James      WMS-8002 Add TaskDetailKey param (james01)*/
 /* 2021-10-21 1.4  James      WMS-18152 Add logic to determine whether  */
 /*                            print packing list or not (james02)       */
+/* 2022-07-18 1.5  Ung        WMS-20261 Add AssignPackLabelToOrdCfg     */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_855PrnPackList03 (
+CREATE OR ALTER PROC rdt.rdt_855PrnPackList03 (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -312,9 +310,9 @@ AS
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
             GOTO Quit
          END
-/*
+
          -- Get storer config
-         DECLARE @cAssignPackLabelToOrdCfg NVARCHAR(1)
+         DECLARE @cAssignPackLabelToOrdCfg NVARCHAR(1), @bSuccess INT
          EXECUTE nspGetRight
             @cFacility,
             @cStorerKey,
@@ -325,7 +323,7 @@ AS
             @nErrNo                   OUTPUT,
             @cErrMsg                  OUTPUT
          IF @nErrNo <> 0
-            GOTO RollBackTran
+            GOTO Quit
 
          -- Assign
          IF @cAssignPackLabelToOrdCfg = '1'
@@ -337,9 +335,10 @@ AS
                ,@nErrNo   OUTPUT
                ,@cErrMsg  OUTPUT
             IF @nErrNo <> 0
-               GOTO RollBackTran
+               GOTO Quit
          END
 
+/*
          -- Get storer config
          DECLARE @cDefault_PackInfo NVARCHAR(1)
          EXECUTE nspGetRight

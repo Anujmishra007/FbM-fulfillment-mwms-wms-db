@@ -16,3 +16,4 @@ execute rdt.rdtAddMsg 128512, 10, '128512Need data     ', 'us_english', 705
 execute rdt.rdtAddMsg 128513, 10, '128513Need option   ', 'us_english', 705
 execute rdt.rdtAddMsg 128514, 10, '128514Invalid option', 'us_english', 705
 execute rdt.rdtAddMsg 128515, 10, '128515Invalid format', 'us_english', 705
+execute rdt.rdtAddMsg 128516, 10, '128516Script error  ', 'us_english', 705

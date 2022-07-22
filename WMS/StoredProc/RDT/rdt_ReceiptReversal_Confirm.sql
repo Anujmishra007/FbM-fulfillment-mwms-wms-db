@@ -1,3 +1,5 @@
+
+GO 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -22,9 +24,10 @@ GO
 /* 30-Jun-2016 1.1  Leong       IN00075246 - Initialize variable.       */
 /* 21-Aug-2017 1.2  James       WMS2702 - Include PODetail (james01)    */
 /* 19-May-2021 1.3  James       WMS-19674 Add channel mgmt (james02)    */
+/* 19-Jul-2022 1.4  YeeKung     JSM-81095 Join RDetail (yeekung01)      */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_ReceiptReversal_Confirm] (
+CREATE OR ALTER  PROC [RDT].[rdt_ReceiptReversal_Confirm] (
    @nMobile                INT,
    @nFunc                  INT,
    @cLangCode              NVARCHAR( 3),
@@ -161,11 +164,13 @@ BEGIN
       SET @cSKU = ''
 
    DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-   SELECT LLI.LOT, LLI.LOC, LLI.SKU,  ISNULL( SUM( LLI.Qty), 0)
+   SELECT LLI.LOT, LLI.LOC, LLI.SKU,  ISNULL( SUM( RD.QtyReceived), 0) --(yeekung01)
    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
    JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
+   JOIN dbo.RECEIPTDETAIL RD(NOLOCK) ON LLI.loc=RD.toloc AND LLI.SKU=RD.SKU AND LLI.ID=RD.TOID AND LLI.storerkey=RD.storerkey --(yeekung01)
    WHERE LLI.StorerKey = @cStorerKey
    AND   LLI.ID = @cID
+   AND   RD.Receiptkey=@cReceiptkey
    AND   LLI.SKU = CASE WHEN @cSKU = '' THEN LLI.SKU ELSE @cSKU END
    AND   LOC.Facility = @cFacility
    GROUP BY LLI.LOT, LLI.LOC, LLI.SKU

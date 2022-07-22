@@ -73,6 +73,9 @@ BEGIN
             SELECT @cRecType = Rectype FROM Receipt WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cReceiptKey
             SELECT @nQTYExpected = SUM(QtyExpected), @nBeforeReceivedQTY = SUM(BeforeReceivedQTY) FROM ReceiptDetail WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cReceiptKey AND SKU = @cSKU
             
+            SET @nQTYExpected = CASE WHEN ISNULL(@nQTYExpected,'')=NULL THEN 0 ELSE @nQTYExpected END
+            SET @nBeforeReceivedQTY = CASE WHEN ISNULL(@nBeforeReceivedQTY,'')=NULL THEN 0 ELSE @nBeforeReceivedQTY END
+
             IF (@nBeforeReceivedQTY + @nQty) > @nQTYExpected
             BEGIN
             	IF EXISTS (SELECT TOP 1 1 FROM Codelkup WITH(nolock) WHERE Listname='RECTYPE' AND Storerkey=@cStorerKey AND UDF02='N' AND Code= @cRecType)
