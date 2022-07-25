@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPRNKP04]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPRNKP04]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        : Allocate Partial or Full Case if DPP <= loc minimum         */
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.1                                                    */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
@@ -26,8 +21,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
 /* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
+/* 2022-05-30  Wan01    1.1   WMS-19632 - TH-Nike-Wave Allocate         */
 /************************************************************************/    
-CREATE  PROC [dbo].[ispPRNKP04]        
+CREATE OR ALTER PROC [dbo].[ispPRNKP04]        
     @c_WaveKey                      NVARCHAR(10)
   , @c_UOM                          NVARCHAR(10)
   , @c_LocationTypeOverride         NVARCHAR(10)
@@ -242,7 +238,7 @@ BEGIN
         AND O.SOStatus <> 'CANC'   
         AND O.Status < '9'   
         AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0
-        AND ISNULL(RTRIM(OD.Lottable01),'') <> ''  
+        --AND ISNULL(RTRIM(OD.Lottable01),'') <> ''               --(Wan01) CR 1.3     
       GROUP BY O.Facility
             ,  O.Orderkey
             ,  OD.Storerkey         
@@ -397,7 +393,7 @@ BEGIN
       --NJOW01
       IF @n_PackQtyIndicator > 1
       BEGIN
-      	 SELECT @n_QtyLeftToFullFill = FLOOR(@n_QtyLeftToFullFill / @n_PackQtyIndicator) * @n_PackQtyIndicator
+          SELECT @n_QtyLeftToFullFill = FLOOR(@n_QtyLeftToFullFill / @n_PackQtyIndicator) * @n_PackQtyIndicator
       END
       
       INSERT INTO #UCCPAlloc ( Storerkey, Sku, UCCNo, UCCQty, UCCQtyAvail )
@@ -667,7 +663,7 @@ BEGIN
                --NJOW01
                IF @n_PackQtyIndicator > 1
                BEGIN
-               	 SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+                   SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
                END
 
                IF @n_OrderQty >= @n_RemainUCCQty

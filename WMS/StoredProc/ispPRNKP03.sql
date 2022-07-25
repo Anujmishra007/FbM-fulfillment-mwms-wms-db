@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPRNKP03]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPRNKP03]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*          order                                                       */
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.1                                                    */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
@@ -26,8 +21,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
 /* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
+/* 2022-05-11  Wan01    1.1   WMS-19632 - TH-Nike-Wave Allocate         */
 /************************************************************************/    
-CREATE PROC [dbo].[ispPRNKP03]        
+CREATE OR ALTER PROC [dbo].[ispPRNKP03]        
     @c_WaveKey                      NVARCHAR(10)
   , @c_UOM                          NVARCHAR(10)
   , @c_LocationTypeOverride         NVARCHAR(10)
@@ -83,18 +79,22 @@ BEGIN
          , @c_LocationType       NVARCHAR(10) = ''    
          , @c_LocationCategory   NVARCHAR(10) = ''
          , @c_LocationHandling   NVARCHAR(10) = ''
+         
          , @c_Status             NVARCHAR(10) = '0'
          , @c_TaskDetailkey      NVARCHAR(10) = ''
          , @n_PackQtyIndicator   INT          = 0  --NJOW01
+         
+         , @c_PickZone_RTV       NVARCHAR(10) = ''                                     --(Wan01)
 
          , @CUR_ORDERLINES       CURSOR
          , @CUR_ORD              CURSOR
-         , @CUR_INV              CURSOR          
-
+         , @CUR_INV              CURSOR      
+         
    SET @c_LocationType = 'DPBULK'      
    SET @c_LocationCategory = 'SHELVING'    
    SET @c_UOM = '7'
-
+   SET @c_PickZone_RTV = 'NIKE-M3'
+   
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue=1
    SET @b_Success=1
@@ -109,7 +109,7 @@ BEGIN
    BEGIN   
       GOTO QUIT_SP
    END                     
-   
+
    /*****************************/
    /***   CREATE TEMP TABLE   ***/
    /*****************************/
@@ -154,12 +154,93 @@ BEGIN
    ,  UCCQty            INT            NOT NULL DEFAULT (0)
    ,  UCC_RowRef        BIGINT         NOT NULL DEFAULT (0) 
    )
+   
    /***************************************************************/
    /***  GET ORDERLINES OF WAVE Group By Ship To & Omnia Order# ***/
    /***************************************************************/
+
+   --(Wan01) - START
+   SET @c_SQL = N'SELECT' 
+               + ' O.Facility'
+               + ',O.Orderkey'
+               + ',OD.Storerkey'   
+               + ',OD.Sku'
+               + ',SKU.PackKey'
+               + ',SUM(OD.OpenQty - (OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked))'
+               + ',ISNULL(RTRIM(OD.Lottable01),'''')'                                           
+               + ',ISNULL(RTRIM(OD.Lottable02),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable03),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable06),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable07),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable08),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable09),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable10),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable11),'''')'
+               + ',ISNULL(RTRIM(OD.Lottable12),'''')'
+               + ',SKU.PackQtyIndicator'                                                   
+               + ' FROM ORDERS      O   WITH (NOLOCK)'       
+               + ' JOIN ORDERDETAIL OD  WITH (NOLOCK) ON (O.OrderKey = OD.OrderKey)'
+               + ' JOIN WAVEDETAIL  WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)' 
+               + ' JOIN SKU         SKU WITH (NOLOCK) ON (SKU.StorerKey = OD.StorerKey)'
+               +                                    ' AND(SKU.Sku = OD.Sku)'
+               + ' LEFT OUTER JOIN dbo.STORER AS s WITH (NOLOCK) ON s.StorerKey = o.ConsigneeKey AND o.ConsigneeKey <> '''' AND s.[Secondary] = ''RTV''' 
+               + ' WHERE WD.Wavekey = @c_WaveKey'
+               + ' AND O.Type NOT IN ( ''M'', ''I'' )'  
+               + ' AND O.SOStatus <> ''CANC'''  
+               + ' AND O.Status < ''9'''  
+               + ' AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0'
+               +  CASE WHEN @c_LocationTypeOverride = '' THEN ''              --CR 1.3 ' AND ISNULL(RTRIM(OD.Lottable01),'''') <> ''''' 
+                        ELSE ' AND ISNULL(RTRIM(OD.Lottable01),'''') = ''''' 
+                        END
+               +  CASE WHEN @c_LocationTypeOverRideStripe = 'RTV' THEN ' AND s.[Secondary] IS NOT NULL'                       
+                        ELSE ' AND s.[Secondary] IS NULL' END
+               + ' GROUP BY O.Facility'
+               +         ', O.Orderkey'
+               +         ', OD.Storerkey'        
+               +         ', OD.Sku'       
+               +         ', SKU.PackKey'
+               +         ', ISNULL(RTRIM(OD.Lottable01),'''')'                                      
+               +         ', ISNULL(RTRIM(OD.Lottable02),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable03),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable06),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable07),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable08),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable09),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable10),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable11),'''')'
+               +         ', ISNULL(RTRIM(OD.Lottable12),'''')'
+               +         ', SKU.PackQtyIndicator '               
+               + ' ORDER BY ISNULL(RTRIM(OD.Lottable01),'''') DESC' 
+                
+   SET @c_SQLParm = N'@c_Wavekey NVARCHAR(10)' 
+   
+   INSERT INTO #ORDERLINES 
+      (  Facility 
+      ,  Orderkey 
+      ,  StorerKey       
+      ,  Sku 
+      ,  PackKey 
+      ,  OrderQty 
+      ,  Lottable01  
+      ,  Lottable02  
+      ,  Lottable03  
+      ,  Lottable06  
+      ,  Lottable07  
+      ,  Lottable08  
+      ,  Lottable09  
+      ,  Lottable10  
+      ,  Lottable11  
+      ,  Lottable12
+      ,  PackQtyIndicator
+      )      
+   EXEC sp_ExecuteSQL @c_SQL
+                     ,@c_SQLParm
+                     ,@c_WaveKey                        
+   --(Wan01) - END
+   /*Wan01 - START
    IF @c_LocationTypeOverride = ''
    BEGIN
-      INSERT INTO #ORDERLINES 
+            INSERT INTO #ORDERLINES 
          (  Facility 
          ,  Orderkey 
          ,  StorerKey       
@@ -205,8 +286,8 @@ BEGIN
         AND O.Type NOT IN ( 'M', 'I' )   
         AND O.SOStatus <> 'CANC'   
         AND O.Status < '9'   
-        AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0
-        AND ISNULL(RTRIM(OD.Lottable01),'') <> ''  
+        AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0 
+        AND ISNULL(RTRIM(OD.Lottable01),'') <> '' 
       GROUP BY O.Facility
             ,  O.Orderkey
             ,  OD.Storerkey         
@@ -222,9 +303,8 @@ BEGIN
             ,  ISNULL(RTRIM(OD.Lottable10),'') 
             ,  ISNULL(RTRIM(OD.Lottable11),'') 
             ,  ISNULL(RTRIM(OD.Lottable12),'')
-            ,  SKU.PackQtyIndicator  --NJOW01                  
-      ORDER BY ISNULL(RTRIM(OD.Lottable01),'') DESC           
-
+            ,  SKU.PackQtyIndicator  --NJOW01                     
+      ORDER BY O.Orderkey    
    END
    ELSE
    BEGIN  
@@ -275,7 +355,8 @@ BEGIN
         AND O.SOStatus <> 'CANC'   
         AND O.Status < '9'   
         AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0 
-        AND ISNULL(RTRIM(OD.Lottable01),'') = ''   
+        AND ISNULL(RTRIM(OD.Lottable01),'') = '' 
+
       GROUP BY O.Facility
             ,  O.Orderkey
             ,  OD.Storerkey         
@@ -294,6 +375,8 @@ BEGIN
             ,  SKU.PackQtyIndicator  --NJOW01                     
       ORDER BY O.Orderkey           
    END
+   */
+   
    IF @b_Debug = 1
    BEGIN
       SELECT * FROM #ORDERLINES WITH (NOLOCK)
@@ -346,6 +429,7 @@ BEGIN
                ', @c_LocationTypeOverride: ' + @c_LocationTypeOverride + CHAR(13) + 
                ', @c_LocationCategory: ' + @c_LocationCategory + CHAR(13) + 
                ', @c_LocationType: ' + @c_LocationType+ CHAR(13) + 
+               ', @c_PickZone_RTV: ' + @c_PickZone_RTV+ CHAR(13) + 
                '--------------------------------------------' 
       END
       
@@ -370,7 +454,8 @@ BEGIN
    + CHAR(13) +  'AND LOTxLOCxID.Storerkey = @c_StorerKey '
    + CHAR(13) +  'AND LOTxLOCxID.Sku = @c_SKU ' 
    + CHAR(13) +  'AND LOC.LocationType = @c_LocationType '        
-   + CHAR(13) +  'AND LOC.LocationCategory = @c_LocationCategory '        
+   + CHAR(13) +  'AND LOC.LocationCategory = @c_LocationCategory '    
+   + CHAR(13) + CASE WHEN @c_LocationTypeOverRideStripe   = '' THEN ' AND LOC.PickZone <> @c_PickZone_RTV ' ELSE ' AND LOC.PickZone = @c_PickZone_RTV ' END              --(Wan01)   
    + CHAR(13) + CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN ' AND LA.Lottable01 = @c_LocationTypeOverride ' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END       
               + CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END       
               + CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END   
@@ -390,15 +475,16 @@ BEGIN
                      +  ',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30) ' 
                      +  ',@c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), @c_Lottable11 NVARCHAR(30) '  
                      +  ',@c_Lottable12 NVARCHAR(30) '
-                     +  ',@c_LocationTypeOverride NVARCHAR(10) '           
+                     +  ',@c_LocationTypeOverride NVARCHAR(10) ' 
+                     +  ',@c_PickZone_RTV NVARCHAR(10) '                                                --(Wan01)          
       EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU
                         ,@c_LocationType, @c_LocationCategory 
                         ,@c_Lottable01, @c_Lottable02, @c_Lottable03 
                         ,@c_Lottable06, @c_Lottable07, @c_Lottable08
                         ,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12
-
-                        ,@c_LocationTypeOverride 
-                                                        
+                        ,@c_LocationTypeOverride
+                        ,@c_PickZone_RTV                                                                  --(Wan01) 
+ PRINT @c_SQL                                                       
       /*****************************************************************************/
       /***  START ALLOC BY ORDER Key                                             ***/
       /*****************************************************************************/
@@ -418,10 +504,10 @@ BEGIN
          SET @n_RemainingQty = @n_QtyAvail
 
          --NJOW01
-      	 IF @n_PackQtyIndicator > 1
-      	 BEGIN
-      	 	 SELECT @n_RemainingQty = FLOOR(@n_RemainingQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
-      	 END
+          IF @n_PackQtyIndicator > 1
+          BEGIN
+             SELECT @n_RemainingQty = FLOOR(@n_RemainingQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+          END
 
          SET @c_PickMethod = ''  
          SELECT @c_PickMethod = UOM3PickMethod -- piece        
@@ -456,11 +542,11 @@ BEGIN
          WHILE (@@FETCH_STATUS = 0) AND @n_RemainingQty > 0         
          BEGIN 
             --NJOW01
-      	    IF @n_PackQtyIndicator > 1
-      	    BEGIN
-      	    	 SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
-      	    END
-         	
+             IF @n_PackQtyIndicator > 1
+             BEGIN
+                SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+             END
+            
             IF @n_OrderQty >= @n_RemainingQty
             BEGIN
                SET @n_QtyToInsert = @n_RemainingQty

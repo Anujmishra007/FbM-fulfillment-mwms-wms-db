@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPRNKP01]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispPRNKP01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */     
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.2                                                    */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
@@ -28,8 +23,9 @@ GO
 /* 2019-10-08  Wan02    1.0   Fixed wrong deduct orderqty               */
 /* 2021-10-21  NJOW01   1.1   WMS-18109 Prepack qty restriction check   */
 /* 2021-10-21  NJOW01   1.1   DEVOPS Combine script                     */
+/* 2022-05-30  Wan03    1.2   WMS-19632 - TH-Nike-Wave Allocate         */
 /************************************************************************/    
-CREATE  PROC [dbo].[ispPRNKP01]        
+CREATE OR ALTER PROC [dbo].[ispPRNKP01]        
     @c_WaveKey                      NVARCHAR(10)
   , @c_UOM                          NVARCHAR(10)
   , @c_LocationTypeOverride         NVARCHAR(10)
@@ -223,7 +219,7 @@ BEGIN
         AND O.SOStatus <> 'CANC'   
         AND O.Status < '9'   
         AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0
-        AND ISNULL(RTRIM(OD.Lottable01),'') <> ''               
+        --AND ISNULL(RTRIM(OD.Lottable01),'') <> ''               --(Wan03) CR 1.3              
       GROUP BY O.Facility
             ,  O.Orderkey
             ,  OD.Storerkey         
@@ -494,12 +490,12 @@ BEGIN
       --Retrieve all the order groups of the sku      
       WHILE (@@FETCH_STATUS <> -1)  
       BEGIN    
-      	 --NJOW01
-      	 IF @n_PackQtyIndicator > 1
-      	 BEGIN
-      	 	 SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
-      	 END
-      	 
+          --NJOW01
+          IF @n_PackQtyIndicator > 1
+          BEGIN
+             SELECT @n_OrderQty = FLOOR(@n_OrderQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+          END
+          
          IF @b_Debug = 1
          BEGIN
             PRINT 'Orderkey: ' + @c_Orderkey + ', OrderQty: ' + CAST(@n_OrderQty AS NVARCHAR) 

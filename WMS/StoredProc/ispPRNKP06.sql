@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPRNKP06]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispPRNKP06]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */    
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */   
+/* PVCS Version: 1.1                                                    */   
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
@@ -26,8 +21,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
 /* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
+/* 2022-05-11  Wan01    1.1   WMS-19632 - TH-Nike-Wave Allocate         */
 /************************************************************************/    
-CREATE PROC [dbo].[ispPRNKP06]        
+CREATE OR ALTER PROC [dbo].[ispPRNKP06]        
     @c_WaveKey                      NVARCHAR(10)
   , @c_UOM                          NVARCHAR(10)
   , @c_LocationTypeOverride         NVARCHAR(10)
@@ -261,7 +257,9 @@ BEGIN
         AND O.SOStatus <> 'CANC'   
         AND O.Status < '9'   
         AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0  
-        AND ISNULL(RTRIM(OD.Lottable01),'') <> ''
+        --AND ISNULL(RTRIM(OD.Lottable01),'') <> ''                                                      -- (Wan03) CR 1.3
+        AND NOT EXISTS (SELECT 1 FROM dbo.CODELKUP AS c WITH (NOLOCK) WHERE C.ListName = 'SKUGROUP'      -- (Wan03)
+                        AND c.Code = SKU.BUSR7 AND c.Storerkey = SKU.Storerkey AND c.UDF04 ='0')         -- (Wan03)
       GROUP BY O.Facility
             ,  O.Orderkey
             ,  OD.Storerkey         
@@ -330,6 +328,8 @@ BEGIN
          AND O.Status < '9'   
          AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0 
          AND ISNULL(RTRIM(OD.Lottable01),'') = ''  
+         AND NOT EXISTS (SELECT 1 FROM dbo.CODELKUP AS c WITH (NOLOCK) WHERE C.ListName = 'SKUGROUP'      -- (Wan03)
+                         AND c.Code = SKU.BUSR7 AND c.Storerkey = SKU.Storerkey AND c.UDF04 ='0')      -- (Wan03)
       GROUP BY O.Facility
             ,  O.Orderkey
             ,  OD.Storerkey         
@@ -351,7 +351,7 @@ BEGIN
 
    IF @b_Debug = 1
    BEGIN
-      SELECT * FROM #ORDERLINES WITH (NOLOCK)
+      SELECT 'ispNKP06',* FROM #ORDERLINES WITH (NOLOCK)
    END
 
    /*******************************/
@@ -442,6 +442,7 @@ BEGIN
    + CHAR(13) +  'AND LOTxLOCxID.Storerkey = @c_StorerKey '
    + CHAR(13) +  'AND LOTxLOCxID.Sku = @c_SKU ' 
    + CHAR(13) +  'AND UCC.CTNCount - CEILING(LOTxLOCxID.QTYALLOCATED/(UCC.Qty * 1.0)) > 0 '
+   + CHAR(13) +  'AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED > 0 '              -- 2022-07-05 Fix UCC Not Tally with Lotxlocxid Qty
    + CHAR(13) + CASE WHEN ISNULL(RTRIM(@c_LocationType),'') = '' THEN ' ' 
                      ELSE 'AND LOC.LocationType = ''' + @c_LocationType + ''' ' END      
    + CHAR(13) + CASE WHEN ISNULL(RTRIM(@c_LocationCategory),'') = '' THEN ''       
@@ -760,7 +761,7 @@ BEGIN
                   --NJOW01
                   IF @n_PackQtyIndicator > 1
                   BEGIN
-                  	 SELECT @n_OrderLineQty = FLOOR(@n_OrderLineQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
+                      SELECT @n_OrderLineQty = FLOOR(@n_OrderLineQty / @n_PackQtyIndicator) * @n_PackQtyIndicator
                   END
 
                   IF @n_OrderLineQty <= @n_CTNQty 
