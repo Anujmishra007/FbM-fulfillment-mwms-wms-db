@@ -45,6 +45,7 @@ GO
 /* 2021-11-09   3.5  James       WMS-18293 Allow MultiSKUBarcode (james10)    */ 
 /* 2022-03-07   3.6  YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */    
 /* 2022-03-21   3.7  YeeKung     WMS-19113 Fix step5 (yeekung03)              */
+/* 2022-07-21   3.8  Ung         Fix scan wrong SKU but clear lottable field  */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (        
@@ -2063,7 +2064,7 @@ BEGIN
         
    Step_3_Fail:        
    BEGIN        
-      SET @cOutField08 = '' -- SKU        
+      SET @cOutField05 = '' -- SKU        
    END        
 END        
 GOTO Quit        
