@@ -207,21 +207,25 @@ BEGIN
             ,@cErrMsg      OUTPUT
       IF @nErrNo <> 0
          GOTO Quit
+
+      IF ISNULL(@cDisplay,'')<>''
+      BEGIN
       
-      EXEC PTL.isp_PTL_LightUpLoc
-         @n_Func           = @nFunc
-         ,@n_PTLKey         = 0
-         ,@c_DisplayValue   = @cDisplay 
-         ,@b_Success        = @bSuccess    OUTPUT    
-         ,@n_Err            = @nErrNo      OUTPUT  
-         ,@c_ErrMsg         = @cErrMsg     OUTPUT
-         ,@c_DeviceID       = @cStation
-         ,@c_DevicePos      = @cPosition
-         ,@c_DeviceIP       = @cIPAddress  
-         ,@c_LModMode       = '14'
-         ,@c_DeviceModel    = 'BATCH'
-      IF @nErrNo <> 0
-            GOTO Quit
+         EXEC PTL.isp_PTL_LightUpLoc
+            @n_Func           = @nFunc
+            ,@n_PTLKey         = 0
+            ,@c_DisplayValue   = @cDisplay 
+            ,@b_Success        = @bSuccess    OUTPUT    
+            ,@n_Err            = @nErrNo      OUTPUT  
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT
+            ,@c_DeviceID       = @cStation
+            ,@c_DevicePos      = @cPosition
+            ,@c_DeviceIP       = @cIPAddress  
+            ,@c_LModMode       = '14'
+            ,@c_DeviceModel    = 'BATCH'
+         IF @nErrNo <> 0
+               GOTO Quit
+      END
    END
 
 Quit:
