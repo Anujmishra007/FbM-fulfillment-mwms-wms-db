@@ -1,10 +1,8 @@
 
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
 /******************************************************************************/
 /* Store procedure: rdt_608ExtVal10                                           */
 /* Copyright      : LF Logistics                                              */
@@ -73,8 +71,8 @@ BEGIN
             SELECT @cRecType = Rectype FROM Receipt WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cReceiptKey
             SELECT @nQTYExpected = SUM(QtyExpected), @nBeforeReceivedQTY = SUM(BeforeReceivedQTY) FROM ReceiptDetail WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cReceiptKey AND SKU = @cSKU
             
-            SET @nQTYExpected = CASE WHEN ISNULL(@nQTYExpected,'')=NULL THEN 0 ELSE @nQTYExpected END
-            SET @nBeforeReceivedQTY = CASE WHEN ISNULL(@nBeforeReceivedQTY,'')=NULL THEN 0 ELSE @nBeforeReceivedQTY END
+            SET @nQTYExpected = CASE WHEN ISNULL(@nQTYExpected,'')='' THEN 0 ELSE @nQTYExpected END
+            SET @nBeforeReceivedQTY = CASE WHEN ISNULL(@nBeforeReceivedQTY,'')='' THEN 0 ELSE @nBeforeReceivedQTY END
 
             IF (@nBeforeReceivedQTY + @nQty) > @nQTYExpected
             BEGIN
@@ -110,6 +108,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
+
 GO
 
 SET QUOTED_IDENTIFIER OFF
