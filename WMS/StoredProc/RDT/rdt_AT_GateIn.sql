@@ -219,12 +219,14 @@ AS
          FROM BOOKING_OUT (NOLOCK)
          WHERE bookingno=@cRefNo1
 
-         SELECT   @cOutField03 = 'Driver Name:',
+         SELECT  
                   @cOutField04 =  DriverName,
-                  @cOutField05 = 'License No:',
                   @cOutField06 = licenseno
          FROM BookingVehicle (NOLOCK)
          WHERE bookingno=@cRefNo1
+
+         SET  @cOutField03 = 'Driver Name:'
+         SET  @cOutField05 = 'License No:'
          
          SET  @cOutField11= CASE WHEN @cActivityStatus = '1' THEN 'GATE In' 
                                  WHEN @cActivityStatus = '9' THEN 'GATE OUT' END
