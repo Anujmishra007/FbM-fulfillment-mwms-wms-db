@@ -97,6 +97,8 @@ GO
 /*                            Custom SP                                 */  
 /* 01-Dec-2020  NJOW26  4.5   WMS-15746 get channel hold qty by config  */    
 /* 10-Sep-2021  LZG     4.6   JSM-19631 - Wrong PD.Channel bug fix(ZG01)*/
+/* 18-MAY-2022  NJOW28  4.7   WMS-19173 UCC allocation not allow partial*/
+/*                            UCC if the channel insufficient stock     */
 /************************************************************************/      
   
 CREATE PROC [dbo].[ispWaveProcessing]        
@@ -1903,8 +1905,11 @@ BEGIN
                                  WHERE ci.Channel_ID = @n_Channel_ID  
                                    
                                  IF @n_Channel_Qty_Available < @n_cQtyAvailable  
-                                 BEGIN   
-                                    SET @n_cQtyAvailable = @n_Channel_Qty_Available     
+                                 BEGIN                                    	
+                                 	  IF @c_UCCAllocation = '1' AND ISNULL(@c_UCCNo,'') <> '' AND @c_aUOM = '2' --NJOW28  not to take partial UCC 
+                                 	     SET @n_cQtyAvailable = 0 
+                                 	  ELSE   
+                                       SET @n_cQtyAvailable = @n_Channel_Qty_Available     
                                  END                 
                               END   
                               ELSE IF ISNULL(RTRIM(@c_Channel), '') <> ''   
