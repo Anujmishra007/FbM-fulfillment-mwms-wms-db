@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_803ExtUpd01]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE rdt.rdt_803ExtUpd01
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,9 +11,10 @@ GO
 /* 13-07-2016 1.0  Ung      SOS368861 Created                                 */
 /* 04-05-2017 1.1  Ung      WMS-1856 Fix sum with null                        */
 /* 05-12-2017 1.2  Ung      WMS-3568 Add UpdateStatus                         */
+/* 03-06-2022 1.3  Ung      WMS-19779 Add variance report                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_803ExtUpd01 (
+CREATE OR ALTER PROC rdt.rdt_803ExtUpd01 (
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -133,6 +130,7 @@ BEGIN
             
             -- Prompt outstanding
             IF @cMsg01 <> ''
+            BEGIN
                EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
                   @cMsg01, 
                   @cMsg02, 
@@ -144,9 +142,39 @@ BEGIN
                   @cMsg08, 
                   @cMsg09, 
                   @cMsg10
+
+               -- Variance report
+               DECLARE @cVarianceReport NVARCHAR( 10)
+               SET @cVarianceReport = rdt.RDTGetConfig( @nFunc, 'VarianceReport', @cStorerKey)
+               IF @cVarianceReport = '0'
+                  SET @cVarianceReport = ''
+               IF @cVarianceReport <> ''
+               BEGIN
+                  -- Common params
+                  DECLARE @tVarianceReport AS VariableTable
+                  INSERT INTO @tVarianceReport (Variable, Value) VALUES
+                     ( '@cStorerKey',  @cStorerKey),
+                     ( '@cFacility',   @cFacility),
+                     ( '@cStation',    @cStation),
+                     ( '@cMethod',     @cMethod)
+
+                  -- Print label
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cStation, @cStation,  -- @cLabelPrinter, @cPaperPrinter,
+                     @cVarianceReport, -- Report type
+                     @tVarianceReport, -- Report params
+                     'rdt_803ExtUpd01',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+            END
          END
       END
    END
+
+Quit:
+
 END
 GO
 

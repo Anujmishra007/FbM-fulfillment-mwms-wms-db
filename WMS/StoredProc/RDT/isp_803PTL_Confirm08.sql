@@ -5,15 +5,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: isp_803PTL_Confirm08                                */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Accept QTY in CS-PCS, format 9-999                          */
-/*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 31-03-2021 1.0  yeekung    WMS-18729 Created                         */
-/************************************************************************/
+/******************************************************************************/
+/* Store procedure: isp_803PTL_Confirm08                                      */
+/* Copyright      : LF Logistics                                              */
+/*                                                                            */
+/* Purpose: Accept QTY in CS-PCS, format 9-999                                */
+/*                                                                            */
+/* Date       Rev  Author     Purposes                                        */
+/* 31-03-2021 1.0  yeekung    WMS-18729 Created                               */
+/* 03-06-2022 1.1  Ung        WMS-19779 Change codelkup to printer group      */
+/******************************************************************************/
 
 CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm08] (
    @cIPAddress    NVARCHAR(30), 
@@ -547,21 +548,24 @@ BEGIN
       WHERE ORDERKEY=@cOrderKey
          AND PD.storerkey=@cStorerKey
 
+      /*
       SELECT @cLabelPrinter = udf01      
             ,@cPaperPrinter = udf02      
       FROM codelkup WITH (NOLOCK)      
       WHERE listname='PTLPrinter'
       AND CODE=@cStation
       AND storerkey=@cStorerKey
+      */
 
       IF @cShipLbl <>''
       BEGIN 
-         INSERT INTO @tShipLABEL (Variable, Value) VALUES ( '@cPickslipno',    @cPickslipNo) 
-         INSERT INTO @tShipLABEL (Variable, Value) VALUES ( '@cCartonNoS',      @cCartonNoS)  
-         INSERT INTO @tShipLABEL (Variable, Value) VALUES ( '@cCartonNoE',      @cCartonNoE)  
+         INSERT INTO @tShipLABEL (Variable, Value) VALUES 
+            ( '@cPickslipno',    @cPickslipNo), 
+            ( '@cCartonNoS',     @cCartonNoS), 
+            ( '@cCartonNoE',     @cCartonNoE)  
 
          -- Print label
-         EXEC RDT.rdt_Print '99', @nFunc, @cLangCode, '4', '1', @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter, 
+         EXEC RDT.rdt_Print '99', @nFunc, @cLangCode, '4', '1', @cFacility, @cStorerkey, @cStation, @cStation, --@cLabelPrinter, @cPaperPrinter, 
             @cShipLbl, -- Report type
             @tShipLABEL, -- Report params
             'isp_803PTL_Confirm08', 
@@ -582,7 +586,7 @@ BEGIN
             INSERT INTO @tVASLABEL (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)  
 
             --Print label
-            EXEC RDT.rdt_Print '99', @nFunc, @cLangCode, '4', '1', @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter, 
+            EXEC RDT.rdt_Print '99', @nFunc, @cLangCode, '4', '1', @cFacility, @cStorerkey, @cStation, @cStation, --@cLabelPrinter, @cPaperPrinter, 
                @cVasLbl, -- Report type
                @tVASLABEL, -- Report params
                'isp_803PTL_Confirm08', 
@@ -601,7 +605,7 @@ BEGIN
          INSERT INTO @tDNotes (Variable, Value) VALUES ( '@cOrderKey',      @cOrderKey)  
 
          -- Print label
-         EXEC RDT.rdt_Print '99', @nFunc, @cLangCode, '4', '1', @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter, 
+         EXEC RDT.rdt_Print '99', @nFunc, @cLangCode, '4', '1', @cFacility, @cStorerkey, @cStation, @cStation, --@cLabelPrinter, @cPaperPrinter, 
             @cDNotesLbl, -- Report type
             @tDNotes, -- Report params
             'isp_803PTL_Confirm08', 
