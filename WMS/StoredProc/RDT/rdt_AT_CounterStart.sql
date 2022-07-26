@@ -141,7 +141,7 @@ AS
                            WHERE bookingno=@cRefNo1
                            AND eventcode='09')
             BEGIN
-               SET @nErrNo = 185102
+               SET @nErrNo = 185105
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvApptNo
                GOTO QUIT
             END
