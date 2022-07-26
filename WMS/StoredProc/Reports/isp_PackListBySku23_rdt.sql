@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver   Purposes                                 */
 /* 21-MAR-2022  CHONGCS  1.0   Devops Scripts Comnbine                  */
+/* 24-MAY-2022  MINGLE   1.1   Add new logic(ML01)                      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_PackListBySku23_rdt]
            @c_PickSlipNo      NVARCHAR(10)
@@ -39,10 +40,34 @@ BEGIN
          , @n_MaxRec          INT
          , @n_CurrentRec      INT
          , @n_Maxrecgrp       INT
+		 , @c_Orderkey        NVARCHAR(10)
 
    SET @n_StartTCnt = @@TRANCOUNT
 
    SET @n_MaxLineno = 10   
+
+   --IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE OrderKey = @c_Pickslipno)
+   --BEGIN
+   --	  SELECT @c_Pickslipno = Pickheaderkey
+   --	  FROM PICKHEADER (NOLOCK)
+   --	  WHERE OrderKey = @c_Pickslipno
+   --END
+
+   --IF EXISTS (SELECT 1 FROM ORDERS (NOLOCK) WHERE OrderKey = @c_Pickslipno)
+   --BEGIN
+   --	  SELECT @c_Pickslipno = Orderkey
+   --	  FROM ORDERS (NOLOCK)
+   --	  WHERE OrderKey = @c_Pickslipno
+   --END
+
+   SET @c_Orderkey = @c_Pickslipno  
+  
+   IF EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE PickSlipNo = @c_Pickslipno)  
+   BEGIN  
+      SELECT @c_Orderkey = OrderKey  
+      FROM PACKHEADER (NOLOCK)  
+      WHERE PickSlipNo = @c_Pickslipno  
+   END  
 
   CREATE TABLE #TMP_PICKLISTBYSKU23RDT (
     ExternOrderkey        NVARCHAR(50),
@@ -62,7 +87,8 @@ BEGIN
     Orderkey              NVARCHAR(20),
     recgrp                INT NULL,
     Contact               NVARCHAR(45),
-    Altsku                NVARCHAR(20)
+    Altsku                NVARCHAR(20),
+	DevicePosition        NVARCHAR(10)
   )
   
 INSERT INTO #TMP_PICKLISTBYSKU23RDT
@@ -84,7 +110,8 @@ INSERT INTO #TMP_PICKLISTBYSKU23RDT
     Orderkey,
     recgrp,
     Contact,
-    Altsku
+    Altsku,
+	DevicePosition
 )
 
    SELECT  ExternOrderkey = ISNULL(RTRIM(OH.ExternOrderkey),'')
@@ -105,7 +132,7 @@ INSERT INTO #TMP_PICKLISTBYSKU23RDT
          , OH.Loadkey
          , OHUDF03 = ISNULL(RTRIM(OH.UserDefine03),'')
          , SKU= RTRIM(PD.sku)
-         , SDescr= ISNULL(RTRIM(sku.descr),'')
+         , SDescr= ISNULL(RTRIM(s.descr),'')
          , st_BAdd3  = ISNULL(RTRIM(ST.B_Address3),'')
          , ODNotst_notes1es2 = ISNULL(RTRIM(ST.notes1),'')
          , st_BAdd4  = ISNULL(RTRIM(ST.B_Address4),'')
@@ -120,15 +147,17 @@ INSERT INTO #TMP_PICKLISTBYSKU23RDT
          --                             )/(@n_MaxLineno+1)
          ,Recgrp = 1
          ,Contact = '***'
-         ,SKU.ALTSKU
-   FROM PACKHEADER PH WITH (NOLOCK)
-   JOIN ORDERS     OH WITH (NOLOCK) ON (PH.orderkey = OH.orderkey)
-   JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = OH.OrderKey
-   JOIN PICKDETAIL PD WITH (NOLOCK) ON (OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber=PD.OrderLineNumber AND OD.SKU = PD.Sku)
-   JOIN SKU       SKU WITH (NOLOCK) ON (PD.Storerkey= SKU.Storerkey)
-                                    AND(PD.Sku = SKU.Sku)
+         ,S.ALTSKU
+		 ,ISNULL(PT.DevicePosition,'')
+   FROM ORDERS OH WITH (NOLOCK)
+   JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
+   JOIN SKU S (NOLOCK) ON S.StorerKey = OH.StorerKey AND S.SKU = OD.SKU
+   JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey AND PD.OrderLineNumber = OD.OrderLineNumber AND
+                               PD.Sku = OD.Sku
+   LEFT JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
    LEFT JOIN dbo.STORER ST WITH (NOLOCK) ON ST.StorerKey = OH.StorerKey -- AND ST.type='2'
-   WHERE PH.PickSlipNo = @c_PickSlipNo
+   LEFT JOIN PACKTASK PT(NOLOCK) ON PT.Orderkey = OH.OrderKey
+   WHERE OH.Orderkey = @c_Orderkey
    GROUP BY PH.PickSlipNo
          ,  OH.Storerkey
          ,  OH.Loadkey
@@ -137,11 +166,12 @@ INSERT INTO #TMP_PICKLISTBYSKU23RDT
          ,  ISNULL(RTRIM(OH.ExternOrderkey),'')
          ,  OH.OrderDate
          ,  RTRIM(PD.sku)
-         ,  ISNULL(RTRIM(sku.descr),'')
+         ,  ISNULL(RTRIM(s.descr),'')
          ,  ISNULL(RTRIM(ST.B_Address3),'')
          ,  ISNULL(RTRIM(ST.B_Address4),'')
          ,  ISNULL(RTRIM(ST.notes1),'')
-         ,  SKU.ALTSKU
+         ,  S.ALTSKU
+		 ,  ISNULL(PT.DevicePosition,'')
 
     SET @n_Maxrecgrp = 1
     SET @n_MaxRec = 1
@@ -163,7 +193,8 @@ INSERT INTO #TMP_PICKLISTBYSKU23RDT
              Orderkey,
              recgrp,
              Contact,
-             Altsku
+             Altsku,
+			 DevicePosition
    FROM #TMP_PICKLISTBYSKU23RDT
    ORDER BY PickSlipNo,Orderkey,sku
 
@@ -171,3 +202,14 @@ END -- procedure
 GO
 GRANT EXECUTE ON  [dbo].[isp_PackListBySku23_rdt] TO [NSQL]
 GO
+
+
+
+
+
+
+
+
+	
+
+
