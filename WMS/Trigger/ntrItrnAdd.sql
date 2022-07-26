@@ -109,11 +109,12 @@ GO
 /* 18-Nov-2019  MCTang       2.9    Duplicate WMS-9799 for OMS (MC02)          */
 /* 05-Mar-2020  MCTang       3.0    Add ISNULL for HostWhCode (MC03)           */
 /* 26-Nov-2020  LZG          3.1    INC1360752 - Get ITRN.ToLoc if user        */
-/*                                  leave blank ToLoc (ZG01)                   */
+/*                                  leave blank ToLoc (ZG01)                   */  
 /* 17-May-2022  YTKuek       3.2    Add additional move trigger for            */
 /*                                  WebService interface (YT01)                */
+/* 23-May-2022  LiLiChua     3.3    LFI-5880 - Add Configkey 'HWCDMV2LOG'(LL01)*/
 /*******************************************************************************/  
-alter TRIGGER [dbo].[ntrItrnAdd]  
+CREATE OR ALTER TRIGGER [dbo].[ntrItrnAdd]  
 ON  [dbo].[ITRN]  
 FOR INSERT  
 AS 
@@ -297,6 +298,7 @@ BEGIN
           , @c_authority_wsinvmovwhcdlog NVARCHAR(1)  --(KH02)
           , @c_authority_wsinvmovwhcdlog2 NVARCHAR(1) --(YT01)
           , @c_authority_OMSITRNLOGMOV   NVARCHAR(1)  --(MC02)
+			 , @c_authority_hwcdmv2log NVARCHAR(1)       --(LL01)
   
     DECLARE @c_authority_tblhkitf  NVARCHAR(1)  
     DECLARE @c_authority_utlitf    NVARCHAR(1)  
@@ -386,6 +388,7 @@ BEGIN
    SET @c_authority_wsinvmovwhcdlog = ''  --(KH02) 
    SET @c_authority_wsinvmovwhcdlog2 = '' --(YT01) 
    SET @c_authority_OMSITRNLOGMOV = ''    --(MC02)
+	SET @c_authority_hwcdmv2log = ''			--(LL01)
   
    DECLARE CUR_Rights CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
     SELECT ConfigKey, sValue  
@@ -398,6 +401,7 @@ BEGIN
                   ,'WSINVMOVEWHCDLOG'     --(KH02) 
                   ,'WSINVMOVEWHCDLOG2'    --(YT01) 
                   ,'OMSITRNLOGMOV'        --(MC02)
+						,'HWCDMV2LOG'				--(LL01)
                   )
   
    OPEN CUR_Rights  
@@ -436,10 +440,13 @@ BEGIN
       --(YT01)
       IF @c_ConfigKey = 'WSINVMOVEWHCDLOG2' AND @c_sValue = '1'  
          SET @c_authority_wsinvmovwhcdlog2 = '1' 
-
       --(MC02)
       IF @c_ConfigKey = 'OMSITRNLOGMOV' AND @c_sValue = '1'  
          SET @c_authority_OMSITRNLOGMOV = '1' 
+
+      --(LL01) 
+      IF @c_ConfigKey = 'HWCDMV2LOG' AND @c_sValue = '1'  
+         SET @c_authority_hwcdmv2log = '1'  
       
       -- For SOS#61049  
       -- IF @c_ConfigKey = 'INVMOVELOG-LOCFLA' AND @c_sValue = '1'  
@@ -2421,6 +2428,7 @@ BEGIN
             -- Added by MC on 09-May-2007  
             -- For SOS#75233 (Start)  
             IF (@c_authority_hwcdmvlog = '1') OR (@c_authority_owitf = '1') 
+				 OR (@c_authority_hwcdmv2log = '1')	--(LL01)
             BEGIN  
                SELECT @c_fromwhcode = ISNULL(HOSTWHCODE, '')      --(MC03)
                FROM  LOC WITH (NOLOCK)  
@@ -2481,9 +2489,27 @@ BEGIN
                            -- (YokeBeen06) - End  
                         END -- -- IF ConfigKey = 'OWHWCDMV'  
                      END -- IF (@c_authority_owitf = '1') 
+							--(LL01)-S
+							IF (@c_authority_hwcdmv2log = '1')  
+                     BEGIN  
+                        EXEC dbo.ispGenTransmitLog3 'HWCDMV2LOG', @c_itrnkey, '', @c_InsertStorerKey, ''  
+                           , @b_success OUTPUT  
+                           , @n_err OUTPUT  
+                           , @c_errmsg OUTPUT  
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SELECT @n_continue = 3  
+                           SELECT @n_err = 61252  
+                           SELECT @c_errmsg = 'NSQL' + CONVERT(char(5), @n_err)  
+                                            + ':Insert failed on TransmitLog3. (ntrItrnAdd) (SQLSvr MESSAGE='  
+                                            + LTRIM(RTRIM(@c_errmsg)) + ')'  
+                        END  
+                     END -- IF (@c_authority_hwcdmv2log = '1')  
+							--(LL01)-E
                   END -- trantype = MV  
                END -- IF (@c_fromwhcode <> @c_towhcode)  
-            END -- IF (@c_authority_hwcdmvlog = '1') OR (@c_authority_owitf = '1')  
+            END -- IF (@c_authority_hwcdmvlog = '1') OR (@c_authority_owitf = '1')  OR (@c_authority_hwcdmv2log = '1')
             -- For SOS#75233 (End)  
             -- (YokeBeen05) - End  
   
