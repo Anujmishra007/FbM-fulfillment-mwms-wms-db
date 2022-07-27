@@ -33,6 +33,7 @@ GO
 /* 2022-01-05  Wan03    1.2   WMS-17299 - CR 2.9. Revise Priority Values*/
 /*                            for TM RPF Task. Additional validation to */
 /*                            prompt HomeLoc Assignment                 */
+/* 2022-07-27  CheeMun  1.3   JSM-68356 - Bug Fix&Skip UOM 2 DP checking*/
 /************************************************************************/  
 CREATE PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -457,16 +458,33 @@ BEGIN
    END  
 
    SET @n_NoOfUCCToDP = 0  
-   SELECT @n_NoOfUCCToDP = ISNULL(SUM(PCK.NoOfUCCToDP),0)  
-   FROM   
-      (  SELECT NoOfUCCToDP = COUNT(DISTINCT TP.DropID)  
-         FROM #TMP_PICK TP WITH (NOLOCK)   
-         WHERE TP.UOM IN ('2','6')
-         AND   TP.ECSingleFlag = 'M'
-         AND   TP.DropID <> ''  
-         --GROUP BY TP.Storerkey  
-         --       , TP.Sku  
-      ) PCK  
+   --JSM-68356 (START)    
+   SELECT @n_NoOfUCCToDP = COUNT(DISTINCT PCK.NoOfUCCToDP)    
+   FROM (    
+      SELECT NoOfUCCToDP = TP.DropID    
+      FROM #TMP_PICK TP WITH (NOLOCK)    
+      WHERE TP.UOM = '6'    
+      --AND TP.ECSingleFlag = 'M'    
+      AND Doctype = 'N'    
+      AND TP.DropID <> ''    
+      GROUP BY TP.DropID    
+      UNION    
+      SELECT TP.DropID    
+      FROM #TMP_PICK TP WITH (NOLOCK)    
+      JOIN dbo.PICKDETAIL p WITH (NOLOCK) ON p.Storerkey = TP.Storerkey AND p.DropID = TP.DropID    
+      JOIN dbo.WAVEDETAIL AS w WITH (NOLOCK) ON p.Orderkey = w.OrderKey    
+      JOIN dbo.PackTask AS PT WITH (NOLOCK) ON w.orderkey = PT.orderkey    
+      JOIN DeviceProfile DP (NOLOCK) ON DP.DevicePosition = PT.DevicePosition    
+      JOIN LOC L (NOLOCK) ON L.LOC = DP.Loc    
+      WHERE TP.UOM = '6'    
+      AND TP.ECSingleFlag = 'M'    
+      AND TP.DropID <> ''    
+      AND p.[Status] < '5'    
+      AND w.WaveKey = @c_Wavekey    
+      GROUP BY TP.DropID    
+      HAVING COUNT(DISTINCT l.PickZone) > 1    
+      ) PCK    
+   --JSM-68356 (END)					
    
    SET @n_TotalEmptyLoc = 0      
    SELECT @n_TotalEmptyLoc = ISNULL(SUM(DP.EmptyLoc),0)      
