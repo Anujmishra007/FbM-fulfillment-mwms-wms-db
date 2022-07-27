@@ -21,6 +21,7 @@ GO
 /* 2021-12-10  1.3  James    WMS-18613-Add flag to prevent label        */
 /*                           reprint (james01)                          */
 /*                           Merge option 1 & 2                         */
+/* 2022-07-18  1.4  SYCHUA   JSM-82342 - Add storerkey restriction(SY01)*/
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_593Print34] (
@@ -65,7 +66,7 @@ BEGIN
    DECLARE @cOPSPosition      NVARCHAR( 60)
    DECLARE @cUserName         NVARCHAR( 18)
    DECLARE @nRowRef           INT
-   
+
    DECLARE @tCT TABLE
    (
       Seq       INT IDENTITY(1,1) NOT NULL,
@@ -83,6 +84,7 @@ BEGIN
    SELECT TOP 1 @cLabelNo = LabelNo
    FROM dbo.PackDetail WITH (NOLOCK)
    WHERE DropID = @cParam1
+   AND Storerkey = @cStorerKey     --SY01
    ORDER BY 1 DESC   -- ZG01
 
    IF ISNULL( @cLabelNo, '') = ''
@@ -95,13 +97,13 @@ BEGIN
    SELECT @cLabelPrinter = Printer,
           @cPaperPrinter = Printer_Paper,
           @cFacility = Facility,
-          @nInputKey = InputKey, 
+          @nInputKey = InputKey,
           @cUserName = UserName
    FROM rdt.rdtMobrec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   IF EXISTS ( SELECT 1 FROM dbo.CartonTrack WITH (NOLOCK) 
-               WHERE KeyName = @cStorerKey 
+   IF EXISTS ( SELECT 1 FROM dbo.CartonTrack WITH (NOLOCK)
+               WHERE KeyName = @cStorerKey
                AND   LabelNo = @cLabelNo
                AND   CarrierRef2 = 'PRINTED')
    BEGIN
@@ -127,7 +129,7 @@ BEGIN
       GOTO Quit
 
    INSERT INTO @tCT (LabelNo) VALUES (@cLabelNo)
-   
+
    SELECT @cFilePath = Long,
    @cPrintFilePath = Notes,
    @cReportType = Code2,
@@ -162,14 +164,14 @@ BEGIN
    DECLARE @curPrint   CURSOR
    SET @curPrint = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
    --SELECT DISTINCT PD.LabelNo, PH.OrderKey  --AAY001
-   SELECT DISTINCT TOP 1 PD.LabelNo, PH.OrderKey 
+   SELECT DISTINCT TOP 1 PD.LabelNo, PH.OrderKey
    FROM dbo.PackDetail PD WITH (NOLOCK)
    JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
    WHERE ( @cParam1 = '') OR ( PD.DropID = @cParam1)
    AND   ( @cParam2 = '') OR ( PH.OrderKey = @cParam2)
    AND   PH.StorerKey = @cStorerKey
    --ORDER BY 1 --AAY001
-   ORDER BY PD.LABELNO DESC 
+   ORDER BY PD.LABELNO DESC
    OPEN @curPrint
    FETCH NEXT FROM @curPrint INTO @cLabelNo, @cOrderKey
    WHILE @@FETCH_STATUS = 0
@@ -191,17 +193,17 @@ BEGIN
 
       IF @nErrNo <> 0
          GOTO Quit
-      
+
       IF NOT EXISTS ( SELECT 1 FROM @tCT WHERE LabelNo = @cLabelNo)
          INSERT INTO @tCT (LabelNo) VALUES (@cLabelNo)
 
       FETCH NEXT FROM @curPrint INTO @cLabelNo, @cOrderKey
    END
 
-   DECLARE @nTranCount INT  
-   SET @nTranCount = @@TRANCOUNT  
-   BEGIN TRAN  
-   SAVE TRAN rdt_593Print34  
+   DECLARE @nTranCount INT
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN
+   SAVE TRAN rdt_593Print34
 
    DECLARE @cur_CT   CURSOR
    SET @cur_CT = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -226,16 +228,16 @@ BEGIN
          GOTO RollBackTran_593Print34
       END
 
-   	FETCH NEXT FROM @cur_CT INTO @nRowRef
+    FETCH NEXT FROM @cur_CT INTO @nRowRef
    END
-   
+
    GOTO CommitTran_593Print34
-   
-   RollBackTran_593Print34:  
-         ROLLBACK TRAN rdt_593Print34  
-   CommitTran_593Print34:  
-      WHILE @@TRANCOUNT > @nTranCount  
-         COMMIT TRAN  
+
+   RollBackTran_593Print34:
+         ROLLBACK TRAN rdt_593Print34
+   CommitTran_593Print34:
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
 
    Quit:
 END
