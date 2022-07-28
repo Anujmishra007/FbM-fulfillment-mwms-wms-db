@@ -111,6 +111,7 @@ GO
 /*                          Add config to disallow carton no change          */
 /* 2022-03-18 6.8  James    WMS-19123 Add CaptureInfoSP to step3 (james48)   */  
 /* 2022-06-15 6.9  James    WMS-19935 Not auto convert weight to kg (james49)*/
+/* 2022-07-19 7.0  James    INC1862140 Add SKUStatus filter (james50)        */
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](  
@@ -275,6 +276,7 @@ DECLARE
    @cSKUDataCapture        NVARCHAR( 1),
    @nFromStep              INT,
    @cNotConvertWgt2KG      NVARCHAR( 1),
+   @cSKUStatus             NVARCHAR( 10),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
@@ -373,6 +375,7 @@ SELECT
    @cPackSkipTrackNo_SP = V_String27,
    @cDataCapture        = V_String28,
    @cNotConvertWgt2KG   = V_String29,
+   @cSKUStatus          = V_String30, 
    
    @cRefNo              = V_String41,  -- (james40)  
    @cSerialNoCapture    = V_String42,  
@@ -542,6 +545,11 @@ BEGIN
    -- (james49)
    SET @cNotConvertWgt2KG = rdt.RDTGetConfig( @nFunc, 'NotConvertWgt2KG', @cStorerkey)
 
+   -- (james50)  
+   SET @cSKUStatus = rdt.RDTGetConfig( @nFunc, 'SKUStatus', @cStorerkey)    
+   IF @cSKUStatus = '0'  
+      SET @cSKUStatus = ''  
+      
    EXEC rdt.rdtSetFocusField @nMobile, 1        
 END  
 GOTO Quit  
@@ -1731,7 +1739,8 @@ BEGIN
          @nSKUCnt     = @nSKUCnt       OUTPUT,  
          @bSuccess    = @bSuccess      OUTPUT,  
          @nErr        = @nErrNo        OUTPUT,  
-         @cErrMsg     = @cErrMsg       OUTPUT  
+         @cErrMsg     = @cErrMsg       OUTPUT,
+         @cSKUStatus  = @cSKUStatus  
   
       IF @nSKUCnt = 0  
       BEGIN  
@@ -1819,7 +1828,8 @@ BEGIN
             @cSKU        = @cActSKU       OUTPUT,  
             @bSuccess    = @bSuccess      OUTPUT,  
             @nErr        = @nErrNo        OUTPUT,  
-            @cErrMsg     = @cErrMsg       OUTPUT  
+            @cErrMsg     = @cErrMsg       OUTPUT,
+            @cSKUStatus  = @cSKUStatus  
       END  
   
       SET @cSKU = @cActSKU  
@@ -5392,7 +5402,8 @@ BEGIN
        V_String27    = @cPackSkipTrackNo_SP,
        V_String28    = @cDataCapture,
        V_String29    = @cNotConvertWgt2KG,
-   
+       V_String30    = @cSKUStatus,
+          
        V_String41    = @cRefNo,  
        V_String42    = @cSerialNoCapture,  
        V_String43    = @cPackSwapLot_SP,  
@@ -5430,6 +5441,7 @@ BEGIN
    WHERE Mobile = @nMobile  
 END  
 GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
