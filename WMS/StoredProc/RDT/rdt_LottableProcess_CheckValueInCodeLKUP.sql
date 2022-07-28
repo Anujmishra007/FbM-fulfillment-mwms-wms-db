@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_LottableProcess_CheckValueInCodeLKUP]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_LottableProcess_CheckValueInCodeLKUP]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_LottableProcess_CheckValueInCodeLKUP                  */
@@ -15,11 +12,12 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 19-06-2019  Ung       1.0   WMS-9504 Created                               */
-/* 21-08-2019  James     1.1   WMS-10217 Add retrieve default value (james01) */  
+/* 21-08-2019  James     1.1   WMS-10217 Add retrieve default value (james01) */
 /* 04-12-2020  Ung       1.2   WMS-14691 Fix default value                    */
+/* 27-07-2022  Ung       1.3   Fix PRE should not prompt error                */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_LottableProcess_CheckValueInCodeLKUP
+CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_CheckValueInCodeLKUP]
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -71,66 +69,60 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @nExist INT = 0
-   
+
    IF @cType = 'PRE'
    BEGIN
       IF @cLottable = ''
       BEGIN
-         -- Get default  
-         IF @nLottableNo =  1 SELECT @cLottable01 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  2 SELECT @cLottable02 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  3 SELECT @cLottable03 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  4 SELECT @dLottable04 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  5 SELECT @dLottable05 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  6 SELECT @cLottable06 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  7 SELECT @cLottable07 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  8 SELECT @cLottable08 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo =  9 SELECT @cLottable09 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo = 10 SELECT @cLottable10 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo = 11 SELECT @cLottable11 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo = 12 SELECT @cLottable12 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo = 13 SELECT @dLottable13 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo = 14 SELECT @dLottable14 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE   
-         IF @nLottableNo = 15 SELECT @dLottable15 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%'  
+         -- Get default
+         IF @nLottableNo =  1 SELECT @cLottable01 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  2 SELECT @cLottable02 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  3 SELECT @cLottable03 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  4 SELECT @dLottable04 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  5 SELECT @dLottable05 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  6 SELECT @cLottable06 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  7 SELECT @cLottable07 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  8 SELECT @cLottable08 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo =  9 SELECT @cLottable09 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo = 10 SELECT @cLottable10 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo = 11 SELECT @cLottable11 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo = 12 SELECT @cLottable12 = Code                        FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo = 13 SELECT @dLottable13 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo = 14 SELECT @dLottable14 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%' ELSE
+         IF @nLottableNo = 15 SELECT @dLottable15 = rdt.rdtConvertToDate( Code) FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND StorerKey = @cStorerKey AND Code2 = @nLottableNo AND Short LIKE '%D%'
       END
    END
    ELSE
    BEGIN
       -- Check lottable
-      IF @nLottableNo =  1 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable01Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  2 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable02Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  3 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable03Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  4 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable04Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  5 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable05Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  6 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable06Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  7 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable07Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  8 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable08Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo =  9 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable09Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo = 10 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable10Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo = 11 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable11Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo = 12 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable12Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo = 13 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable13Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
-      IF @nLottableNo = 14 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable14Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE 
+      IF @nLottableNo =  1 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable01Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  2 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable02Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  3 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable03Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  4 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable04Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  5 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable05Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  6 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable06Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  7 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable07Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  8 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable08Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo =  9 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable09Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo = 10 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable10Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo = 11 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable11Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo = 12 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @cLottable12Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo = 13 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable13Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
+      IF @nLottableNo = 14 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable14Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo ELSE
       IF @nLottableNo = 15 SELECT @nExist = 1 FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTLOTVal' AND Code = @dLottable15Value AND StorerKey = @cStorerKey AND Code2 = @nLottableNo
+
+      -- Check value exist in code lookup
+      IF @nExist = 0
+      BEGIN
+         SET @nErrNo = 140601
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ValueNotInList
+         GOTO Quit
+      END
    END
-   
-   -- Check value exist in code lookup
-   IF @nExist = 0
-   BEGIN
-      SET @nErrNo = 140601
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ValueNotInList
-      GOTO Quit
-   END
-   
+
 Quit:
-   
+
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
-GRANT EXECUTE ON rdt.rdt_LottableProcess_CheckValueInCodeLKUP TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_LottableProcess_CheckValueInCodeLKUP] TO [NSQL]
 GO
