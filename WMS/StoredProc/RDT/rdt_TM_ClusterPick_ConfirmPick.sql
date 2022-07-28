@@ -12,6 +12,7 @@ GO
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
 /* 2020-06-18 1.0  James      WMS-12055 Created                               */  
+/* 2021-09-07 1.1  James      WMS-17429 Add AssignPackLabelToOrdCfg (james01) */
 /******************************************************************************/  
   
 CREATE PROC rdt.rdt_TM_ClusterPick_ConfirmPick (  
@@ -99,7 +100,10 @@ BEGIN
    DECLARE @cTaskKey       NVARCHAR( 10)
    DECLARE @cGroupKey      NVARCHAR( 10)
    DECLARE @cCartID        NVARCHAR( 20)
-      
+   DECLARE @nPackQTY       INT = 0 
+   DECLARE @nPickQTY       INT = 0 
+   DECLARE @cPackConfirm   NVARCHAR(1) = '' 
+
    SET @cOrderKey = ''  
    SET @cLoadKey = ''  
    SET @cZone = ''  
@@ -322,7 +326,8 @@ BEGIN
                Status,  
                QTY,  
                TrafficCop,  
-               OptimizeCop)  
+               OptimizeCop, 
+               Channel_ID)  
             SELECT  
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,  
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,  
@@ -332,7 +337,8 @@ BEGIN
                Status,  
                @nQTY_PD - @nQTY_Bal, -- QTY  
                NULL, -- TrafficCop  
-               '1'   -- OptimizeCop  
+               '1',  -- OptimizeCop  
+               Channel_ID
             FROM dbo.PickDetail WITH (NOLOCK)  
             WHERE PickDetailKey = @cPickDetailKey  
             IF @@ERROR <> 0  
@@ -441,7 +447,165 @@ BEGIN
 
       FETCH NEXT FROM @curUpdTask INTO @cTaskKey
    END
-   
+
+   -- Get Pack QTY  
+   SELECT @nPackQTY = ISNULL( SUM( PD.QTY), 0)  
+   FROM dbo.PackDetail PD WITH (NOLOCK)   
+   WHERE PD.PickSlipNo = @cPickSlipNo  
+
+   -- Get Pick QTY  
+   -- Cross dock PickSlip  
+   IF @cZone IN ('XD', 'LB', 'LP')  
+   BEGIN  
+      -- Check outstanding PickDetail  
+      IF EXISTS( SELECT TOP 1 1  
+         FROM dbo.RefKeyLookup RKL WITH (NOLOCK)  
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)  
+         WHERE RKL.PickSlipNo = @cPickSlipNo  
+            AND PD.Status < '5'  
+            AND PD.QTY > 0  
+            AND (PD.Status = '4' OR PD.Status <> @cPickConfirmStatus))  -- Short or not yet pick  
+         SET @cPackConfirm = 'N'  
+      ELSE  
+         SET @cPackConfirm = 'Y'  
+        
+      -- Check fully packed  
+      IF @cPackConfirm = 'Y'  
+      BEGIN  
+         SELECT @nPickQTY = SUM( QTY)   
+         FROM dbo.RefKeyLookup RKL WITH (NOLOCK)  
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)  
+         WHERE RKL.PickSlipNo = @cPickSlipNo  
+           
+         IF @nPickQTY <> @nPackQTY  
+            SET @cPackConfirm = 'N'  
+      END  
+   END  
+  
+   -- Discrete PickSlip  
+   ELSE IF @cOrderKey <> ''  
+   BEGIN  
+      -- Check outstanding PickDetail  
+      IF EXISTS( SELECT TOP 1 1  
+         FROM dbo.PickDetail PD WITH (NOLOCK)  
+         WHERE PD.OrderKey = @cOrderKey  
+            AND PD.Status < '5'  
+            AND PD.QTY > 0  
+            AND (PD.Status = '4' OR PD.Status <> @cPickConfirmStatus))  -- Short or not yet pick  
+         SET @cPackConfirm = 'N'  
+      ELSE  
+         SET @cPackConfirm = 'Y'  
+        
+      -- Check fully packed  
+      IF @cPackConfirm = 'Y'  
+      BEGIN  
+         SELECT @nPickQTY = SUM( PD.QTY)   
+         FROM dbo.PickDetail PD WITH (NOLOCK)   
+         WHERE PD.OrderKey = @cOrderKey  
+           
+         IF @nPickQTY <> @nPackQTY  
+            SET @cPackConfirm = 'N'  
+      END  
+   END  
+     
+   -- Conso PickSlip  
+   ELSE IF @cLoadKey <> ''  
+   BEGIN  
+      -- Check outstanding PickDetail  
+      IF EXISTS( SELECT TOP 1 1   
+         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)   
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)  
+         WHERE LPD.LoadKey = @cLoadKey  
+            AND PD.Status < '5'  
+            AND PD.QTY > 0  
+            AND (PD.Status = '4' OR PD.Status <> @cPickConfirmStatus))  -- Short or not yet pick  
+         SET @cPackConfirm = 'N'  
+      ELSE  
+         SET @cPackConfirm = 'Y'  
+        
+      -- Check fully packed  
+      IF @cPackConfirm = 'Y'  
+      BEGIN  
+         SELECT @nPickQTY = SUM( PD.QTY)   
+         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)   
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)  
+         WHERE LPD.LoadKey = @cLoadKey  
+           
+         IF @nPickQTY <> @nPackQTY  
+            SET @cPackConfirm = 'N'  
+      END  
+   END  
+  
+   -- Custom PickSlip  
+   ELSE  
+   BEGIN  
+      -- Check outstanding PickDetail  
+      IF EXISTS( SELECT TOP 1 1   
+         FROM PickDetail PD WITH (NOLOCK)   
+         WHERE PD.PickSlipNo = @cPickSlipNo  
+            AND PD.Status < '5'  
+            AND PD.QTY > 0  
+            AND (PD.Status = '4' OR PD.Status <> @cPickConfirmStatus))  -- Short or not yet pick  
+         SET @cPackConfirm = 'N'  
+      ELSE  
+         SET @cPackConfirm = 'Y'  
+  
+      -- Check fully packed  
+      IF @cPackConfirm = 'Y'  
+      BEGIN  
+         SELECT @nPickQTY = SUM( PD.QTY)   
+         FROM PickDetail PD WITH (NOLOCK)   
+         WHERE PD.PickSlipNo = @cPickSlipNo  
+           
+         IF @nPickQTY <> @nPackQTY  
+            SET @cPackConfirm = 'N'  
+      END  
+   END  
+
+   -- Pack confirm  
+   IF @cPackConfirm = 'Y'  
+   BEGIN  
+      -- Pack confirm  
+      UPDATE dbo.PackHeader SET   
+         Status = '9'   
+      WHERE PickSlipNo = @cPickSlipNo  
+         AND Status <> '9'  
+         
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @nErrNo = 149013  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail  
+         GOTO RollBackTran  
+      END  
+  
+      -- Get storer config  
+      DECLARE @cAssignPackLabelToOrdCfg NVARCHAR(1)  
+      EXECUTE nspGetRight  
+         @cFacility,  
+         @cStorerKey,  
+         '', --@c_sku  
+         'AssignPackLabelToOrdCfg',  
+         @bSuccess                 OUTPUT,  
+         @cAssignPackLabelToOrdCfg OUTPUT,  
+         @nErrNo                   OUTPUT,  
+         @cErrMsg                  OUTPUT  
+      IF @nErrNo <> 0  
+         GOTO RollBackTran  
+  
+      -- Assign  
+      IF @cAssignPackLabelToOrdCfg = '1'  
+      BEGIN  
+         -- Update PickDetail, base on PackDetail.DropID  
+         EXEC isp_AssignPackLabelToOrderByLoad  
+             @cPickSlipNo  
+            ,@bSuccess OUTPUT  
+            ,@nErrNo   OUTPUT  
+            ,@cErrMsg  OUTPUT  
+         IF @nErrNo <> 0  
+            GOTO RollBackTran  
+      END  
+   END  
+
    COMMIT TRAN rdt_TM_ClusterPick_ConfirmPick  
   
  
