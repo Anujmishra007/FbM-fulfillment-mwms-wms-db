@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV07]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV07]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By: ReleaseWave_SP                                            */  
 /*          :                                                           */  
-/* PVCS Version: 1.8                                                    */  
+/* PVCS Version: 1.9                                                    */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -37,8 +32,10 @@ GO
 /* 24-JUL-2018  Wan07   1.6   WMS-5771 - CN - NIKESDC_WMS_ReleaseWave_CR*/  
 /* 16-JAN-2020  NJOW02  1.7   WMS-11717 Generate transmitlog2           */  
 /* 01-04-2020   Wan08   1.8   Sync Exceed & SCE                         */
+/* 18-JUL-2022  WLChooi 1.9   WMS-20258 - Gen TL2 - WSSOCFMLOGB2B (WL01)*/
+/* 18-JUL-2022  WLChooi 1.9   DevOps Combine Script                     */ 
 /************************************************************************/  
-CREATE PROC ispRLWAV07  
+CREATE OR ALTER PROC [dbo].[ispRLWAV07]
         @c_wavekey      NVARCHAR(10)    
        ,@b_Success      INT            OUTPUT    
        ,@n_err          INT            OUTPUT    
@@ -107,6 +104,8 @@ BEGIN
          , @c_PackOrderkey       NVARCHAR(10)               --(Wan07)  
          , @c_Zone               NVARCHAR(10)               --(Wan07)  
          , @c_Status             NVARCHAR(10)               --NJOW02  
+
+         , @c_DocType            NVARCHAR(10)               --WL01
      
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -724,7 +723,7 @@ BEGIN
          WHERE TD.TaskType IN ('RPF','RP1','RPT')  
          AND   TD.Storerkey= @c_Storerkey  
          AND   TD.Sku = @c_Sku   
-AND   TD.Qty > 0   
+         AND   TD.Qty > 0   
          AND   TD.Status = '0'  
          AND   LOC.Facility = @c_Facility  
          AND   LOC.LocationCategory = 'SHELVING'  
@@ -1237,7 +1236,7 @@ AND   TD.Qty > 0
      
    --NJOW02  
    DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT O.Orderkey, O.Storerkey, O.Status  
+      SELECT O.Orderkey, O.Storerkey, O.Status, O.DocType   --WL01
       FROM ORDERS O WITH (NOLOCK)  
       JOIN WAVEDETAIL WD WITH (NOLOCK) ON O.Orderkey = WD.Orderkey  
       WHERE WD.Wavekey = @c_Wavekey        
@@ -1245,7 +1244,7 @@ AND   TD.Qty > 0
   
    OPEN CUR_ORD        
   
-   FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Storerkey, @c_Status  
+   FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Storerkey, @c_Status, @c_DocType   --WL01
   
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
@@ -1297,8 +1296,29 @@ AND   TD.Qty > 0
          SET @n_continue = 3    
          GOTO QUIT_SP  
       END   
+
+      --WL01 S
+      IF @c_DocType = 'N'
+      BEGIN
+         EXEC ispGenTransmitlog2  
+            @c_TableName = 'WSSOCFMLOGB2B'    
+           ,@c_Key1 = @c_Orderkey           
+           ,@c_Key2 = '2'  
+           ,@c_Key3 = @c_Storerkey              
+           ,@c_TransmitBatch = ''    
+           ,@b_Success = @b_success OUTPUT             
+           ,@n_err = @n_err OUTPUT                 
+           ,@c_errmsg = @c_errmsg OUTPUT                
         
-      FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Storerkey, @c_Status  
+         IF @b_Success <> 1    
+         BEGIN  
+            SET @n_continue = 3    
+            GOTO QUIT_SP  
+         END 
+      END
+      --WL01 E
+        
+      FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Storerkey, @c_Status, @c_DocType   --WL01
    END       
    CLOSE CUR_ORD  
    DEALLOCATE CUR_ORD  
