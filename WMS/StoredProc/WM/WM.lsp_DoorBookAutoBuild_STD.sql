@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: [WM].[lsp_DoorBookAutoBuild_Wrapper]                      */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2022-04-12  Wan      1.0   Created & DevOps Combine Script           */
+/* 2022-07-20  Wan      1.1   LFWM-3482 Version 2                       */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_DoorBookAutoBuild_STD]
       @c_DoorBookingStrategyKey  NVARCHAR(10)
@@ -98,8 +99,9 @@ BEGIN
          , @n_RowID_Start                 INT            = 0
          , @n_RowID_End                   INT            = 0 
          
+         , @b_FindAvailableFromLastBlock  BIT            = 0               --2022-07-20 Fix         
          , @n_RowID_lastLoc               INT            = ''              --2022-07-15 Fix
-         , @n_RowID_lastblock             INT            = 0               --2022-07-07 Fix
+         , @n_RowID_lastblock             INT            = 0               --2022-07-07 Fix 
          , @n_BookingNo_Shpm              INT            = 0
          , @n_BookingNo                   INT            = 0
          , @c_BookingNo                   NVARCHAR(10)   = '' 
@@ -365,6 +367,7 @@ BEGIN
             
             IF @c_MatchSubBannerToLocField <> ''
             BEGIN
+               SET @c_SubBanners = ''              --2022-07-22 Fixed
                SELECT @c_SubBanners = c.UDF01 + '|' + c.UDF02 + '|' + c.UDF03 + '|'  + c.UDF04 + '|' + c.UDF05                               
                FROM dbo.CODELKUP AS c WITH (NOLOCK)
                WHERE c.LISTNAME = 'ULPDOORBK'
@@ -444,6 +447,8 @@ BEGIN
             GROUP BY cps.AppointmentID
          END
         
+         SET @c_VehicleType = ''             --2022-07-22
+  
          SELECT @c_VehicleType = c.Code
                ,@n_Duration    = IIF(ISNUMERIC(ISNULL(c.Short,@n_Duration)) = 0, @n_Duration, CONVERT(INT, ISNULL(c.Short,@n_Duration)))  
          FROM dbo.CODELKUP AS c WITH (NOLOCK)
@@ -469,19 +474,6 @@ BEGIN
                PRINT '-----------------------------------------------------'   
             END
            
-            --SELECT TOP 1 @n_BookingNo_Shpm = ts.BookingNo
-            --FROM dbo.TMS_Shipment AS ts (NOLOCK)
-            --WHERE ts.BookingNo <> '' AND ts.BookingNo IS NOT NULL
-            --AND ts.Wave = @c_ShipmentWave
-            --AND ts.SubBanner = @c_SubBanner
-            --AND ts.ShipmentPlannedStartDate BETWEEN CONVERT(NVARCHAR(10), @dt_EarlyPickupDate,121) AND CONVERT(NVARCHAR(11), @dt_EarlyPickupDate,121) + '23:59:59.999'
-            --AND EXISTS (SELECT 1 FROM dbo.TMS_ShipmentTransOrderLink AS tstol WITH (NOLOCK)
-            --            JOIN dbo.TMS_TransportOrder AS tso WITH (NOLOCK) ON tso.ProvShipmentID = tstol.ProvShipmentID
-            --            WHERE tstol.ShipmentGID = ts.ShipmentGID
-            --            AND tso.FacilityID = @c_Facility
-            --           )
-            --ORDER BY ts.Rowref
-            
             SET @n_BookingNo_Shpm = 0
             SET @c_LocBay = ''
             SELECT TOP 1 
@@ -495,14 +487,6 @@ BEGIN
             AND L.LocationCategory IN ( 'BAY', 'BAYOUT' )
             ORDER BY bo.BookingDate DESC
             
-            --IF @n_BookingNo_Shpm <> '' 
-            --BEGIN
-            --   SELECT @c_LocBay = tl.LocBay
-            --   FROM dbo.Booking_Out AS bo WITH (NOLOCK)
-            --   JOIN #TMP_LOC AS tl WITH (NOLOCK) ON bo.Loc = tl.loc
-            --   WHERE bo.BookingNo = @n_BookingNo_Shpm
-            --END 
-                 
             IF @n_BookingNo_Shpm = 0--IF @c_CycleLocBayByWave = 'Y' AND @c_LocBay = ''
             BEGIN
                --Next Last use LocBay
@@ -656,7 +640,7 @@ BEGIN
 
          TRUNCATE TABLE #TMP_BOOKLOC;  
          WHILE @n_RowID_Start > 0 AND @n_Continue IN (1,2)
-         BEGIN  
+         BEGIN
             --2022-07-15 Enhance - START
             IF @c_DoorLimitByCase = 'Y' AND @n_TotalCasePerAPM = 0 -- Continue Next Shipment
             BEGIN
@@ -673,10 +657,10 @@ BEGIN
 
             IF @b_debug = 1
             BEGIN
-               SELECT @c_DoorBookingStrategyKey'@c_DoorBookingStrategyKey', @c_AppointmentID '@c_AppointmentID'
-                    , @n_RowID_Start '@n_RowID_Start',@n_RowID_End '@n_RowID_End',* 
-               FROM #TMP_LOC_WIP AS tlw WITH (NOLOCK)
-               WHERE tlw.RowID BETWEEN @n_RowID_Start AND @n_RowID_End
+               --SELECT @c_DoorBookingStrategyKey'@c_DoorBookingStrategyKey', @c_AppointmentID '@c_AppointmentID'
+               --     , @n_RowID_Start '@n_RowID_Start',@n_RowID_End '@n_RowID_End',* 
+               --FROM #TMP_LOC_WIP AS tlw WITH (NOLOCK)
+               --WHERE tlw.RowID BETWEEN @n_RowID_Start AND @n_RowID_End
                
                PRINT  ' @n_RowID_Start: ' + CAST(@n_RowID_Start AS NVARCHAR(3))
                   +  ', @n_RowID_End: ' + CAST(@n_RowID_End AS NVARCHAR(3))
@@ -736,7 +720,7 @@ BEGIN
             IF @b_debug = 1
             BEGIN
                PRINT  ' Total Book Loc: ' + CAST(@@ROWCOUNT AS NVARCHAR(3))
-               SELECT @c_DoorBookingStrategyKey'@c_DoorBookingStrategyKey', @c_AppointmentID '@c_AppointmentID',* FROM #TMP_BOOKLOC 
+               --SELECT @c_DoorBookingStrategyKey'@c_DoorBookingStrategyKey', @c_AppointmentID '@c_AppointmentID',* FROM #TMP_BOOKLOC 
             END
 
           
@@ -784,7 +768,7 @@ BEGIN
          SET @c_Loc = '' 
          SET @c_ToLoc = ''
          
-         IF @c_DoorLimitByCase = 'N'                        --2022-07-12 Only calculate door if totalcaseperAPM > 0. No door to be booked if shipment not allocated
+         IF @c_DoorLimitByCase = 'N'                           --2022-07-12 Only calculate door if totalcaseperAPM > 0. No door to be booked if shipment not allocated
          BEGIN
             SELECT TOP 1 @c_Loc = tb.Loc
                         ,@c_ToLoc = tb.Loc
@@ -794,44 +778,45 @@ BEGIN
          END
          ELSE IF @n_TotalCasePerAPM > 0                        --2022-07-12 Only calculate door if totalcaseperAPM > 0. No door to be booked if shipment not allocated
          BEGIN
-            --2022-07-07 - Fix - START
-            SET @n_RowID_lastblock = 0                      
-            SELECT TOP 1 @n_RowID_lastblock = tb.RowID
-            FROM #TMP_BOOKLOC AS tb 
-            WHERE (tb.BookingNo <> 0 OR tb.BlockSlotKey <> '')            
-            ORDER BY tb.RowID DESC
-            
-            IF @n_RowID_lastblock = 0
-            BEGIN
-               SELECT TOP 1 @c_Loc = tb.Loc
-               FROM #TMP_BOOKLOC AS tb
-               ORDER BY tb.RowID
-            END 
-            ELSE
-            BEGIN
-               SELECT TOP 1 @c_Loc = tb.Loc
-               FROM #TMP_BOOKLOC AS tb
-               WHERE tb.RowID > @n_RowID_lastblock
-               ORDER BY tb.RowID
-            END  
-            
-            SELECT TOP 1 @n_RowID_lastLoc = tb.RowID                                               --2022-07-15 Fix 
+            -- Find from Same Sub Banner torward Hierarchy Loc
+            --2022-07-20 - Fix - START
+            SET @b_FindAvailableFromLastBlock = 0
+
+            SET @n_RowID_lastblock = 0
+            SELECT TOP 1 @c_Loc = tb.Loc 
+            , @n_RowID_lastblock = tb.RowID - 1                                                 
+            FROM #TMP_BOOKLOC AS tb
+            WHERE (tb.BookingNo = 0 AND tb.BlockSlotKey = '')                                    
+            ORDER BY tb.RowID  
+
+            SET @n_RowID_lastLoc = 0
+            SELECT TOP 1 @n_RowID_lastLoc = tb.RowID - 1                                         
             FROM #TMP_BOOKLOC AS tb  
-            WHERE tb.RowID > @n_RowID_lastblock  
-            ORDER BY tb.RowID DESC
-                                    
+            WHERE tb.RowID > @n_RowID_lastblock 
+            AND (tb.BookingNo <> 0 OR tb.BlockSlotKey <> '')  
+            ORDER BY tb.RowID 
+
+            IF @n_RowID_lastLoc = 0
+            BEGIN
+               SELECT TOP 1 @n_RowID_lastLoc = tb.RowID - 1                                        
+               FROM #TMP_BOOKLOC AS tb  
+               ORDER BY tb.RowID DESC
+            END
+            --2022-07-20 - Fix - END   
+              
+            FIND_AVAILABLE_LOC:                                                                    --2022-07-20 Fix                
             IF @c_Loc <> ''
             BEGIN
                ;WITH tl AS
                (  
-                  SELECT TOP 1 tb.RowID_Loc
-                  FROM #TMP_BOOKLOC AS tb 
-                  JOIN #TMP_BOOKLOC AS tb2 ON tb.RowID_Loc >= tb2.RowID_Loc
+                  SELECT TOP 1 tb.RowID_Loc  
+                  FROM #TMP_BOOKLOC AS tb   
+                  JOIN #TMP_BOOKLOC AS tb2 ON tb.RowID_Loc >= tb2.RowID_Loc 
                   WHERE tb.RowID > @n_RowID_lastblock AND tb.RowID <= @n_RowID_lastLoc             --2022-07-15 Fix
                   AND tb2.RowID > @n_RowID_lastblock AND tb.RowID <= @n_RowID_lastLoc              --2022-07-15 Fix
-                  GROUP BY tb.RowID_Loc
-                  HAVING @n_TotalCasePerAPM BETWEEN 1 AND SUM(tb2.MaxCarton)
-                  ORDER BY tb.RowID_Loc               
+                  GROUP BY tb.RowID_Loc  
+                  HAVING @n_TotalCasePerAPM BETWEEN 1 AND SUM(tb2.MaxCarton)  
+                  ORDER BY tb.RowID_Loc                
                   
                )
                SELECT TOP 1 @c_ToLoc = tb.loc
@@ -852,6 +837,40 @@ BEGIN
                   SET @c_ToLoc = ''                
                END
             END 
+            
+            --2022-07-20 - FIX START
+            IF @c_Loc = '' AND @c_ToLoc = '' AND @b_FindAvailableFromLastBlock = 0 
+            BEGIN
+               SET @n_RowID_lastblock = 0                        
+               SELECT TOP 1 @n_RowID_lastblock = tb.RowID  
+               FROM #TMP_BOOKLOC AS tb   
+               WHERE (tb.BookingNo <> 0 OR tb.BlockSlotKey <> '')              
+               ORDER BY tb.RowID DESC  
+              
+               IF @n_RowID_lastblock = 0  
+               BEGIN  
+                  SELECT TOP 1 @c_Loc = tb.Loc  
+                  FROM #TMP_BOOKLOC AS tb  
+                  ORDER BY tb.RowID  
+               END   
+               ELSE  
+               BEGIN  
+                  SELECT TOP 1 @c_Loc = tb.Loc  
+                  FROM #TMP_BOOKLOC AS tb  
+                  WHERE tb.RowID > @n_RowID_lastblock  
+                  ORDER BY tb.RowID  
+               END   
+
+               SET @n_RowID_lastLoc = @n_RowID_lastblock                                           --2022-07-18 
+               SELECT TOP 1 @n_RowID_lastLoc = tb.RowID                                            --2022-07-15 Fix 
+               FROM #TMP_BOOKLOC AS tb  
+               WHERE tb.RowID > @n_RowID_lastblock  
+               ORDER BY tb.RowID DESC
+
+               SET @b_FindAvailableFromLastBlock = 1
+               GOTO FIND_AVAILABLE_LOC
+            END
+            --2022-07-20 - FIX END
             
             ----2022-07-18 - FIX START
             IF @c_Loc <> '' AND @c_ToLoc <> '' AND @c_ToLoc < @c_Loc
