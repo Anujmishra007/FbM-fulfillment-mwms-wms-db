@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -51,8 +46,9 @@ GO
 /* 13-Feb-2017 TLTING02 2.4   Performance tune                           */ 
 /* 03-Oct-2019 NJOW10   2.5   WMS-9533 Add Ecom order handling           */
 /* 01-04-2020  Wan01    2.6   Sync Exceed & SCE                          */
+/* 31-07-2022  KY01     2.7   Performance tune                           */
 /*************************************************************************/   
-CREATE PROCEDURE [dbo].[ispRLWAV01]      
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV01]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
  ,@n_err          int        OUTPUT  
@@ -283,6 +279,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV01]
         AND LLI.Storerkey = @c_Storerkey
         AND LLI.Qty > 0
         GROUP BY LLI.Storerkey, LLI.Loc, LLI.ID  
+        OPTION ( FORCE ORDER )                                    --KY01
         
         SELECT PD.Storerkey, PD.Loc, PD.ID, 
                CASE WHEN LI.QtyAvailable < ISNULL(LI.UCCQty,0) AND LOC.LocationType <> 'DYNPPICK' AND LOC.LocationHandling = '1' THEN 
