@@ -24,7 +24,8 @@ GO
 /* 09-09-2020 1.9  YeeKung     WMS-15011 Add Balance Control            */  
 /*                             in extendedgettask (yeekung02)           */  
 /* 20-08-2020 2.0  YeeKung      WMS-14630 Add suggID(yeekung03)         */  
-/* 02-04-2021 2.1  YeeKung      WMS-16741 Add close type (yeekung04)    */    
+/* 02-04-2021 2.1  YeeKung      WMS-16741 Add close type (yeekung04)    */   
+/* 19-07-2021 2.2  YeeKung      WMS-20239 Add DisExtValue(yeekung05)    */  
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_PickPiece_GetTask] (    
@@ -2146,7 +2147,13 @@ BEGIN
       -- Get SKU description    
       DECLARE @cDispStyleColorSize  NVARCHAR( 20)    
       SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)    
+      
+
+      --yeekung05
+      DECLARE @cDispExtValue  NVARCHAR( 20)    
+      SET @cDispExtValue = rdt.RDTGetConfig( @nFunc, 'DispExtValues', @cStorerKey)  --(yeekung03)  
           
+
       IF @cDispStyleColorSize = '0'    
          SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU    
           
@@ -2158,6 +2165,40 @@ BEGIN
          FROM SKU WITH (NOLOCK)     
          WHERE StorerKey = @cStorerKey     
             AND SKU = @cSKU    
+
+      IF @cDispExtValue ='1' --(yeekung05)
+      BEGIN
+         DECLARE @cTable NVARCHAR(20)
+         DECLARE @cNotes NVARCHAR(MAX)
+         DECLARE @cColumnName NVARCHAR(20)
+
+         SELECT @cTable=long,
+                @cNotes = notes,
+                @cColumnName=udf01
+         FROM codelkup (NOLOCK)
+         where storerkey=@cStorerKey
+         AND LISTNAME='RefColLkup'
+
+        SET @cSQL =             
+         '    SELECT @cSKUDescr = ' + @cNotes +
+         '    FROM dbo.'+@cTable + ' WITH (NOLOCK)' +
+         '    WHERE storerkey=@cStorerkey ' +            
+         '       AND ' + @cColumnName + '= @c' + @cColumnName              
+  
+         SET @cSQLParam =          
+            '@cOrderKey   NVARCHAR( 10) , ' +      
+            '@cStorerkey  NVARCHAR( 20) , ' +        
+            '@cSKU        NVARCHAR( 20) , ' + 
+            '@cSKUDescr   NVARCHAR( 60)   ' 
+    
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
+            @cStorerKey = @cStorerKey,      
+            @cOrderKey   = @cOrderKey,          
+            @cSKU        = @cSuggSKU,        
+            @cSKUDescr   = @cSKUDescr        OUTPUT  
+
+
+      END
     
       -- Get DisableQTYField    
       DECLARE @cDisableQTYFieldSP NVARCHAR( 20)    
