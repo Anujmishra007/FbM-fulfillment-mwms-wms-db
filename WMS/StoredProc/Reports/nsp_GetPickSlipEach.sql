@@ -6,6 +6,28 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
+/***************************************************************************/    
+/* Stored Procedure: nsp_GetPickSlipCase                                   */    
+/* Creation Date:                                                          */    
+/* Copyright: LFL                                                          */    
+/* Written by:                                                             */    
+/*                                                                         */    
+/* Purpose:                                                                */                                   
+/*                                                                         */    
+/* Called By:                                                              */    
+/*                                                                         */    
+/*                                                                         */    
+/* PVCS Version: 1.0                                                       */    
+/*                                                                         */    
+/* Version: 5.4                                                            */    
+/*                                                                         */    
+/* Data Modifications:                                                     */    
+/*                                                                         */    
+/* Updates:                                                                */    
+/* Date           Ver    Author   Purposes                                 */    
+/* 20-MAY-2020    1.1    CSCHONG  Change to use # Temp table (CS01)        */  
+/***************************************************************************/
+
 CREATE PROC dbo.nsp_GetPickSlipEach (@c_loadkey NVARCHAR(10)) 
 AS
 BEGIN
@@ -391,9 +413,34 @@ BEGIN
          ELSE
   	    ROLLBACK TRAN
       END
+      --CS01 Disable Insert
+      --INSERT INTO TempPickSlip
+      --SELECT *, '6' FROM #temp_pick
 
-      INSERT INTO TempPickSlip
-      SELECT *, '6' FROM #temp_pick
+      --BY CSCHONG 08-MAY-2020 Add traceinfo to track the record insert to TempPickSlip table
+
+      DECLARE @d_CurrentDate DATETIME   
+        
+      SET @d_CurrentDate = GETDATE()
+
+      EXEC isp_InsertTraceInfo   
+      @c_TraceCode = 'TempPickSlip',  
+      @c_TraceName = 'nsp_GetPickSlipEach',  
+      @c_starttime = @d_CurrentDate,  
+      @c_endtime = @d_CurrentDate,  
+      @c_step1 = '',  
+      @c_step2 = '',  
+      @c_step3 = '',  
+      @c_step4 = '',  
+      @c_step5 = '',  
+      @c_col1 = @c_loadkey,   
+      @c_col2 = '6',  
+      @c_col3 = '',  
+      @c_col4 = '',  
+      @c_col5 = '',  
+      @b_Success = 1,  
+      @n_Err = 0,  
+      @c_ErrMsg = ''
    END
    ELSE
    BEGIN
