@@ -12,7 +12,8 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author   Purposes                                    */  
-/* 20-03-2022 1.0  yeekung  WMS-19154. Created                          */  
+/* 20-03-2022 1.0  yeekung  WMS-19154. Created                          */
+/* 07-05-2022 1.1  Ung      WMS-19982 Add swap UCC                      */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_DynamicPick_PickUCC] (  
@@ -63,6 +64,7 @@ DECLARE
    @cSuggSKU          NVARCHAR(20),
    @nSuggQTY          INT,
    @cDropid           NVARCHAR(20),
+   @cSwapUCCSP        NVARCHAR(20),
   
    @cInField01 NVARCHAR(60),   @cOutField01 NVARCHAR(60),  
    @cInField02 NVARCHAR(60),   @cOutField02 NVARCHAR(60),  
@@ -110,6 +112,7 @@ SELECT
    @cSuggSKU           = V_String12,
    @cUCCNo             = V_String13,
    @cDropid            = V_String14,
+   @cSwapUCCSP         = V_String15,
 
    @nSuggQTY           = V_Integer1,
   
@@ -169,7 +172,10 @@ BEGIN
    SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)  
    IF @cExtendedValidateSP = '0'  
       SET @cExtendedValidateSP = ''  
-
+   SET @cSwapUCCSP = rdt.RDTGetConfig( @nFunc, 'SwapUCCSP', @cStorerKey)
+   IF @cSwapUCCSP = '0'
+      SET @cSwapUCCSP = ''
+      
    -- Prep next screen var  
    SET @cOutField01 = '' -- PickSlipno  
   
@@ -626,10 +632,47 @@ BEGIN
       -- Check if blank  
       IF @cSuggUCCNo <> @cUCCno
       BEGIN  
-         -- Go to confirm short screen  
-         SET @nErrno= 184464
-         SET @cErrMSg= rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidUCC
-         GOTO Quit  
+         -- Swap UCC (must be same FromLOC, FromID, SKU, QTY)
+         IF @cSwapUCCSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSwapUCCSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cSwapUCCSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cPickSlipNo, @cLOC, @cSuggSKU, @nSuggQTY, @cSuggUCCNo,  ' + 
+                  ' @cUCCNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile            INT,           ' +
+                  '@nFunc              INT,           ' +
+                  '@cLangCode          NVARCHAR( 3),  ' +
+                  '@nStep              INT,           ' +
+                  '@nInputKey          INT,           ' +
+                  '@cFacility          NVARCHAR( 5),  ' +  
+                  '@cStorerKey         NVARCHAR( 15), ' +  
+                  '@cPickSlipNo        NVARCHAR( 20), ' +  
+                  '@cLOC               NVARCHAR( 10), ' +
+                  '@cSuggSKU           NVARCHAR( 20), ' +
+                  '@nSuggQTY           INT,           ' +
+                  '@cSuggUCCNo         NVARCHAR( 20), ' +
+                  '@cUCCNo             NVARCHAR( 20)  OUTPUT,' +
+                  '@nErrNo             INT            OUTPUT, ' +
+                  '@cErrMsg            NVARCHAR( 20)  OUTPUT  '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                  @cPickSlipNo, @cLOC, @cSuggSKU, @nSuggQTY, @cSuggUCCNo, 
+                  @cUCCNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+         ELSE
+         BEGIN
+            SET @nErrno= 184464
+            SET @cErrMSg= rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidUCC
+            GOTO Quit  
+         END
       END 
         
       -- Extended update  
@@ -1148,6 +1191,7 @@ BEGIN
       V_String12   = @cSuggSKU,
       V_String13   = @cUCCNo,
       V_String14   = @cDropid,
+      V_String15   = @cSwapUCCSP,
 
       V_Integer1  = @nSuggQTY,
   
