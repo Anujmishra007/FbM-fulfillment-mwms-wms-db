@@ -106,6 +106,9 @@ GO
 /* 14-FEB-2022  NJOW17   3.9  DEVOPS combine script                     */
 /* 15-MAR-2022  NJOW18   4.0  WMS-19173 Update pickdetailkey and order  */
 /*                            line no to UCC for UCC allocation         */
+/* 18-MAY-2022  NJOW19   4.1  WMS-19173 UCC allocation not allow partial*/
+/*                            UCC if the channel insufficient stock     */
+/* 18-MAY-2022  NJOW19   4.1  DEVOPS combine script                     */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -768,10 +771,10 @@ BEGIN
                        @n_PackQty     Int  
   
                CREATE TABLE #TempBatchPick (  
-      StorerKey    NVARCHAR(15),  
+                  StorerKey    NVARCHAR(15),  
                   SKU          NVARCHAR(20),  
                   LOT          NVARCHAR(10),  
-  UOM          NVARCHAR(10), -- (ChewKP01)  
+                  UOM          NVARCHAR(10), -- (ChewKP01)  
                   Qty          Int )  
   
                IF @c_SuperFlag = 'Y'  
@@ -1164,7 +1167,7 @@ BEGIN
             @b_candidateexhausted Int, @n_candidateline Int,  
             @n_Available Int, @n_QtyToTake Int, @n_UOMQty Int ,  @n_cPackQty Int,  
             @n_jumpsource Int,  
-            @c_sCurrentLineNumber NVARCHAR(5), @c_sAllocatePickCode NVARCHAR(10) ,  
+            @c_sCurrentLineNumber NVARCHAR(5), @c_sAllocatePickCode NVARCHAR(30) ,  
             @c_sLocationTypeOverride NVARCHAR(10), @c_sLocationTypeOverridestripe NVARCHAR(10),  
             @c_pickloc NVARCHAR(10), @b_overcontinue Int, @c_pickId NVARCHAR(18), @n_pickQty Int,  
             @n_rownum Int, @n_qtytoovertake Int, @n_TempBatchPickQty Int,  
@@ -2252,7 +2255,10 @@ BEGIN
                                     WHERE ci.Channel_ID = @n_Channel_ID  
                                     IF @n_Channel_Qty_Available < @n_cQtyAvailable  
                                     BEGIN   
-                                       SET @n_cQtyAvailable = @n_Channel_Qty_Available     
+                                 	     IF @c_UCCAllocation = '1' AND ISNULL(@c_UCCNo,'') <> '' AND @c_aUOM = '2' --NJOW19  not to take partial UCC 
+                                 	        SET @n_cQtyAvailable = 0 
+                                 	     ELSE                                       	
+                                          SET @n_cQtyAvailable = @n_Channel_Qty_Available     
                                     END                 
                                  END   
                                  ELSE IF ISNULL(RTRIM(@c_Channel), '') <> ''   

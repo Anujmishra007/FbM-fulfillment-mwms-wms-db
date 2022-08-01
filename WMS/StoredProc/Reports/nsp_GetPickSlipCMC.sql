@@ -30,6 +30,7 @@ GO
 /* 09-Nov-2006  Vicky         Fix pickslipno generation                 */
 /* 15-Nov-2006  James         SOS62253 - add sorting by pickslipno      */
 /* 15-Jul-2010  KHLim     Replace USER_NAME to sUSER_sName              */ 
+/* 25-JAN-2017  JayLim        SQL2012 compatibility modification (Jay01)*/ 
 /************************************************************************/
 
 CREATE PROC nsp_GetPickSlipCMC (@c_LoadKey NVARCHAR(10))
@@ -241,7 +242,7 @@ BEGIN
       Storername = CO.Company, 
       Storer.Company, Storer.Address1, Storer.Address2, Storer.Address3,
       Weight = SUM(#TempPickDetail.QTY * SKU.StdGrosswgt),
-      Cube = SUM(#TempPickDetail.QTY * SKU.StdCube),
+      [Cube] = SUM(#TempPickDetail.QTY * SKU.StdCube),
       LOCType = LOC.LocationType,
       UserName = MAX( sUser_sName()),
       ISNULL( MAX( CONVERT( FLOAT, DATEDIFF( DAY, #TempPickDetail.AlLOCDate, (LA.LOTtable04 - ISNULL( CONVERT( INT, SKU.BUSR6), 0)))) / 30), 0),

@@ -12,6 +12,7 @@ GO
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
 /* 2020-06-18 1.0  James      WMS-12055 Created                               */  
+/* 2021-08-19 1.1  James      WMS-17429 Fix confirm sp structure (james01)    */
 /******************************************************************************/  
   
 CREATE PROC rdt.rdt_TM_ClusterPick_ConfirmToLoc (  
@@ -38,23 +39,23 @@ BEGIN
    DECLARE @cSQL        NVARCHAR( MAX)  
    DECLARE @cSQLParam   NVARCHAR( MAX)  
    DECLARE @nTranCount  INT  
-   DECLARE @cConfirmSP  NVARCHAR( 20)  
+   DECLARE @cConfirmToLocSP  NVARCHAR( 20)  
   
    -- Get storer config  
-   SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)  
-   IF @cConfirmSP = '0'  
-      SET @cConfirmSP = ''  
+   SET @cConfirmToLocSP = rdt.RDTGetConfig( @nFunc, 'ConfirmToLocSP', @cStorerKey)  
+   IF @cConfirmToLocSP = '0'  
+      SET @cConfirmToLocSP = ''  
   
    /***********************************************************************************************  
                                               Custom confirm  
    ***********************************************************************************************/  
    -- Check confirm SP blank  
-   IF @cConfirmSP <> ''  
+   IF @cConfirmToLocSP <> ''  
    BEGIN  
       -- Confirm SP  
-      SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +  
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmToLocSP) +  
          ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cToLOC, ' +  
-         ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+         ' @tConfirm, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
       SET @cSQLParam =  
          ' @nMobile        INT,           ' +  
          ' @nFunc          INT,           ' +  
@@ -64,13 +65,14 @@ BEGIN
          ' @cFacility      NVARCHAR( 5) , ' +  
          ' @cStorerKey     NVARCHAR( 15), ' +  
          ' @cTaskDetailKey NVARCHAR( 10), ' +  
-         ' @@cToLOC        NVARCHAR( 10), ' +  
+         ' @cToLOC         NVARCHAR( 10), ' +
+         ' @tConfirm       VARIABLETABLE READONLY, ' +
          ' @nErrNo         INT           OUTPUT, ' +  
          ' @cErrMsg        NVARCHAR(250) OUTPUT  '  
   
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cToLOC,
-         @nErrNo OUTPUT, @cErrMsg OUTPUT  
+         @tConfirm, @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
       GOTO Quit  
    END  
@@ -82,6 +84,12 @@ BEGIN
    DECLARE @cGroupKey   NVARCHAR( 10)
    DECLARE @cCartID     NVARCHAR( 20)
    DECLARE @cTaskKey    NVARCHAR( 10)
+   DECLARE @cSKU        NVARCHAR( 20)
+   DECLARE @nQty        INT
+   DECLARE @cFromLOC    NVARCHAR( 10)
+   DECLARE @cFromID     NVARCHAR( 18)
+   DECLARE @cCaseID     NVARCHAR( 20)
+    
    
    SELECT TOP 1 
       @cGroupKey = Groupkey,
@@ -95,13 +103,13 @@ BEGIN
    SAVE TRAN rdt_TM_ClusterPick_ConfirmToLoc -- For rollback or commit only our own transaction  
 
    SET @cur = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-   SELECT TaskdetailKey
+   SELECT TaskdetailKey, FromLOC, FromID, Sku, Qty, CaseID
    FROM dbo.TASKDETAIL WITH (NOLOCK)
    WHERE Groupkey = @cGroupKey 
    AND   DeviceID = @cCartID 
    AND   [Status] = '5'
    OPEN @cur
-   FETCH NEXT FROM @cur INTO @cTaskKey
+   FETCH NEXT FROM @cur INTO @cTaskKey, @cFromLOC, @cFromID, @cSKU, @nQty, @cCaseID
    WHILE @@FETCH_STATUS = 0
    BEGIN
       UPDATE dbo.TaskDetail SET 
@@ -117,8 +125,8 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Confirm Fail  
          GOTO RollBackTran  
       END
-            
-      FETCH NEXT FROM @cur INTO @cTaskKey
+
+      FETCH NEXT FROM @cur INTO @cTaskKey, @cFromLOC, @cFromID, @cSKU, @nQty, @cCaseID
    END
    
   

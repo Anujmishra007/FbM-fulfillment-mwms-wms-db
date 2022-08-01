@@ -1,5 +1,5 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_640Matrix01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_640Matrix01]
+if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_640Matrix02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [RDT].[rdt_640Matrix02]
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -7,7 +7,7 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store procedure: rdt_640Matrix01                                     */
+/* Store procedure: rdt_640Matrix02                                     */
 /* Copyright      : IDS                                                 */
 /*                                                                      */
 /* Purpose: Show carton matrix based on SKUGROUP (Division)             */
@@ -18,7 +18,7 @@ GO
 /* 2021-09-07   1.0  James    WMS-17429 Created                         */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_640Matrix01] (
+CREATE PROC [RDT].[rdt_640Matrix02] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -86,14 +86,14 @@ BEGIN
    FETCH NEXT FROM @curPD INTO @cPickSlipNo, @nCartonNo, @cCartonType, @cLabelNo
    WHILE @@FETCH_STATUS = 0
    BEGIN
-      IF @nCount = 1 SET @cResult01 = '1-' + @cCartonType
-      IF @nCount = 2 SET @cResult02 = '2-' + @cCartonType
-      IF @nCount = 3 SET @cResult03 = '3-' + @cCartonType
-      IF @nCount = 4 SET @cResult04 = '4-' + @cCartonType
-      IF @nCount = 5 SET @cResult05 = '5-' + @cCartonType
-      IF @nCount = 6 SET @cResult06 = '6-' + @cCartonType
-      IF @nCount = 7 SET @cResult07 = '7-' + @cCartonType
-      IF @nCount = 8 SET @cResult08 = '8-' + @cCartonType
+      IF @nCount = 1 SET @cResult01 = '1-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 2 SET @cResult02 = '2-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 3 SET @cResult03 = '3-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 4 SET @cResult04 = '4-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 5 SET @cResult05 = '5-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 6 SET @cResult06 = '6-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 7 SET @cResult07 = '7-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
+      IF @nCount = 8 SET @cResult08 = '8-' + RTRIM( @cCartonType) + ' ' + @cLabelNo
 
       UPDATE TASKDETAIL WITH (ROWLOCK) SET 
          StatusMsg = @nCount, 
@@ -123,5 +123,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_640Matrix01 TO NSQL
+GRANT EXECUTE ON RDT.rdt_640Matrix02 TO NSQL
 GO

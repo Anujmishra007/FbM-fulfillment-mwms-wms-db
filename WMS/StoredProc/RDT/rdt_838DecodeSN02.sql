@@ -13,6 +13,8 @@ GO
 /* 2020-02-27  1.0  James        WMS-12052. Created                     */
 /* 2022-06-08  1.1  James        WMS-19856 Add RDT format check for bulk*/
 /*                               serial no (james01)                    */
+/* 2022-07-19  1.2  James        INC1853699 - Bug fix. For single scan  */
+/*                               ignore ; when check qty scan (james02) */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSN02]
@@ -142,6 +144,9 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
             GOTO Quit
          END
+
+         -- Check serial no scanned match qty to pack (james01)
+         SELECT @nSerialNo_Cnt = SUM( LEN( RTRIM( @cBarcode)) - LEN( REPLACE( RTRIM( @cBarcode), ';', '')) + 1)
       END
       ELSE  -- User scan bulk serial no with ; delimiter. Need validate each serial no format
       BEGIN
@@ -174,9 +179,10 @@ BEGIN
             
             FETCH NEXT FROM @curChkFormat INTO @nSeqno, @cSingleSerialNo
          END
+
+         -- Check serial no scanned match qty to pack (james01)
+         SELECT @nSerialNo_Cnt = SUM( LEN( RTRIM( @cBarcode)) - LEN( REPLACE( RTRIM( @cBarcode), ';', '')))
       END
-      -- Check serial no scanned match qty to pack (james01)
-      SELECT @nSerialNo_Cnt = SUM( LEN( RTRIM( @cBarcode)) - LEN( REPLACE( RTRIM( @cBarcode), ';', '')) + 1)
 
       IF @nBalQTY < @nSerialNo_Cnt
       BEGIN

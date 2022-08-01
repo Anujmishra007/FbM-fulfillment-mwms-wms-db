@@ -13,7 +13,7 @@ GO
 /*                                                                         */  
 /* Called By:                                                              */  
 /*                                                                         */  
-/* PVCS Version: 1.0                                                       */  
+/* PVCS Version: 1.1                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */  
 /* Date        Author      Ver   Purposes                                  */
 /* 08-Jun-2022 WLChooi     1.0   DevOps Combine Script                     */  
+/* 27-Jul-2022 WLChooi     1.1   Enhancement (WL01)                        */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_AutoInsertWMReport] (
@@ -171,6 +172,15 @@ BEGIN
          SELECT @c_ReportTitle = MAX(ReportTitle)
          FROM  WMREPORTDETAIL WITH (NOLOCK)  
          WHERE ReportID = @c_ReportID  
+
+         --WL01 S
+         IF ISNULL(@c_ReportTitle,'') = ''
+         BEGIN
+            SELECT @c_ReportTitle = TRIM(W.ReportTitle)
+            FROM WMREPORT W (NOLOCK)
+            WHERE W.ReportID = @c_ReportID
+         END
+         --WL01 E
 
          SET @c_CurrentReportLine = RIGHT('00000' + CONVERT(NVARCHAR(5), CAST(@c_WMDRptLineNo AS INT) + 1) , 5)
 

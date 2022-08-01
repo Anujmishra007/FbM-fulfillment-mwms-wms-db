@@ -14,4 +14,7 @@ execute rdt.rdtAddMsg 149010, 10, '49010^UPD PKDtl Fail',   'us_english', 640
 execute rdt.rdtAddMsg 149011, 10, '49011^UPD PKDtl Fail',   'us_english', 640
 execute rdt.rdtAddMsg 149012, 10, '49012^UPD Task  Fail',   'us_english', 640
 
+--WMS-17429
+execute rdt.rdtAddMsg 149013, 10, '49013^PackCfm Fail',     'us_english', 640
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 149001 AND 149050

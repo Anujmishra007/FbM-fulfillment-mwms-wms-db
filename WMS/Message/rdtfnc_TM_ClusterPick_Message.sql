@@ -1,4 +1,4 @@
--- rdtfnc_TM_ClusterPick
+-- rdtfnc_PostPackSort
 rdt.rdtDropMsg 148901 , 148950	
 
 execute rdt.rdtAddMsg 148901, 10, '48901^CartId req',       'us_english', 640
@@ -16,8 +16,8 @@ execute rdt.rdtAddMsg 148912, 10, '48912^AllShortWithQTY',  'us_english', 640
 execute rdt.rdtAddMsg 148913, 10, '48913^Over Pick',        'us_english', 640
 execute rdt.rdtAddMsg 148914, 10, '48914^Option required',  'us_english', 640
 execute rdt.rdtAddMsg 148915, 10, '48915^Invalid Option',   'us_english', 640
-execute rdt.rdtAddMsg 148916, 10, '48916^Option required',  'us_english', 640
-execute rdt.rdtAddMsg 148917, 10, '48917^Invalid Option',   'us_english', 640
+execute rdt.rdtAddMsg 148916, 10, '48916^CaseID required',  'us_english', 640
+execute rdt.rdtAddMsg 148917, 10, '48917^CaseID NotMatch',  'us_english', 640
 execute rdt.rdtAddMsg 148918, 10, '48918^ToLOC needed',     'us_english', 640
 execute rdt.rdtAddMsg 148919, 10, '48919^ToLOC Diff',       'us_english', 640
 execute rdt.rdtAddMsg 148920, 10, '48920^Invalid LOC',      'us_english', 640
@@ -28,11 +28,12 @@ execute rdt.rdtAddMsg 148924, 10, '48924^InsSkipTskFail',   'us_english', 640
 execute rdt.rdtAddMsg 148925, 10, '48925^UpdTaskdetFail',   'us_english', 640
 execute rdt.rdtAddMsg 148926, 10, '48926^UpdTaskdetFail',   'us_english', 640
 
--- WMS-17689
-execute rdt.rdtAddMsg 148927, 10, '48924^InsSkipTskFail',   'us_english', 640
-execute rdt.rdtAddMsg 148928, 10, '48925^UpdTaskdetFail',   'us_english', 640
-execute rdt.rdtAddMsg 148929, 10, '48926^UpdTaskdetFail',   'us_english', 640
 
+--WMS-17429
+execute rdt.rdtAddMsg 148927, 10, '48927^Need Case Id',     'us_english', 640
+execute rdt.rdtAddMsg 148928, 10, '48928^CaseIdNotMatch',   'us_english', 640
 
+--WMS-17689
+execute rdt.rdtAddMsg 148929, 10, '48929^Need NewCaseId',   'us_english', 640
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 148901 AND 148950	
