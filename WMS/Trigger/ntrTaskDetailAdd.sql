@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTaskDetailAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrTaskDetailAdd]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -43,9 +39,11 @@ GO
 /* 12-JAN-2018  2.0     Wan02    Fixed to use output err from           */
 /*                               rdt_Putaway_PendingMoveIn instead @@ERROR */
 /* 13-Jan-2020  2.1     NJOW03   WMS-11388 call custom stored proc      */ 
+/* 27-Jul-2022  2.1     Wan03    Fix to set @n_err = 0 as Output blank  */ 
+/*                               and caused Prompt error 67994          */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrTaskDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailAdd]
 ON [dbo].[TaskDetail]
 FOR  INSERT
 AS
@@ -220,7 +218,7 @@ BEGIN
                   ,@c_sourcekey = sourcekey
                   ,@c_status = STATUS
                   ,@c_reasonkey = reasonkey
-                  ,@n_uomqty = uomqty	/* add by mmlee 07/07/2001 - FBR028c , to grab the uomqty  */
+                  ,@n_uomqty = uomqty  /* add by mmlee 07/07/2001 - FBR028c , to grab the uomqty  */
                   ,
                    @c_uom = uom /* add by mmlee 07/08/2001 - FBR028c , to grab the uom  */
                   ,@c_SourceType = SourceType                                                      --(Wan01)
@@ -552,8 +550,9 @@ BEGIN
             
             IF @n_continue IN(1,2)  --NJOW01
             BEGIN
-            	 IF @n_PendingMoveIn > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' 
-            	 BEGIN
+                IF @n_PendingMoveIn > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' 
+                BEGIN
+                  SET @n_Err = 0             --Wan03
                   EXEC rdt.rdt_Putaway_PendingMoveIn 
                        @cUserName = ''
                       ,@cType = 'LOCK'
@@ -580,17 +579,17 @@ BEGIN
                      SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
                             ':  Execute rdt.rdt_Putaway_PendingMoveIn Failed! (ntrTaskDetailAdd)'
                   END                                                                                              
-            	 END            	 
+                END               
 
-            	 IF @n_QtyReplen > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' 
-            	 BEGIN
+                IF @n_QtyReplen > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' 
+                BEGIN
                   IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
                             WHERE Lot = @c_Lot                                                                        
                             AND Loc = @c_FromLoc                                                                      
                             AND ID = @c_FromID)                                                                       
                   BEGIN                                                                                               
-                  	 UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
-                  	 SET QtyReplen = QtyReplen + @n_QtyReplen                                                  
+                      UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
+                      SET QtyReplen = QtyReplen + @n_QtyReplen                                                  
                      WHERE Lot = @c_Lot                                                                               
                      AND Loc = @c_FromLoc                                                                             
                      AND ID = @c_FromID                                                                               
@@ -605,7 +604,7 @@ BEGIN
                                ':  Update LOTXLOCXID Failed! (ntrTaskDetailAdd)'
                      END                                                                                              
                   END                                                                                                 
-            	 END
+                END
             END
         END -- WHILE 1=1
     END
