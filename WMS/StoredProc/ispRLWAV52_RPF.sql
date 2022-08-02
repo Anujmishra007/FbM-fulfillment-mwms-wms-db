@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: ReleaseWave_SP                                            */  
 /*          :                                                           */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -21,6 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2022-05-12  Wan      1.0   Created.                                  */
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
+/* 2022-07-27  Wan01    1.1   Fixed. Not to get Not tally UCC for replen*/
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV52_RPF]  
    @c_Wavekey     NVARCHAR(10)    
@@ -1486,6 +1487,7 @@ BEGIN
             )   CS ON LLI.Lot = CS.Lot AND LLI.Loc = CS.Loc AND LLI.ID = CS.ID  
       WHERE LLI.Storerkey = @c_Storerkey  
       AND   LLI.Sku = @c_Sku  
+      AND   LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked >= CS.UCCQty              --(Wan01)
       AND   LOC.Facility = @c_Facility              
       AND   LOC.LocationType = 'OTHER'  
       AND   LOC.LocationCategory = 'BULK'  
