@@ -22,6 +22,8 @@ GO
 /* Date         Author  Ver.  Purposes                                  */  
 /* 25-Feb-2022  WLChooi 1.1   DevOps Combine Script                     */
 /* 25-Feb-2022  WLChooi 1.1   WMS-18993 - Disable filter Lott04&05(WL01)*/
+/* 23-Jun-2022  NJOW01  1.2   WMS-20049 Cater for Kit allocation and    */
+/*                            allow disable lottable02 filter           */          
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALTRF02]        
    @c_Orderey    NVARCHAR(10),  
@@ -71,7 +73,8 @@ BEGIN
            @n_cnt              INT,
            @n_LotQtyAvailable  INT,
            @c_Source           NCHAR(1),
-           @c_DisableLot45Filter NVARCHAR(10) = 'N'   --WL01
+           @c_DisableLot45Filter NVARCHAR(10) = 'N',   --WL01
+           @c_DisableLot2Filter NVARCHAR(10) = 'N'  --NJOW01
 
    DECLARE @c_key1        NVARCHAR(10)    
           ,@c_key2        NVARCHAR(5)    
@@ -90,7 +93,7 @@ BEGIN
    BEGIN   	    
       SET @c_key1 = LEFT(@c_OtherParms, 10) --Orderkey, Loadkey(conso), Wavekey(conso), Transferkey
       SET @c_key2 = SUBSTRING(@c_OtherParms, 11, 5) --OrderLineNumber, TransferLineNumber      	    
-      SET @c_Source = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave, T=Transfer A=Adjustment   	               
+      SET @c_Source = SUBSTRING(@c_OtherParms, 16, 1) --W=Wave, T=Transfer A=Adjustment K-kitting  	               
    END
    
    IF @c_Source = 'T' AND ISNULL(@c_Key2,'') <> ''
@@ -118,6 +121,16 @@ BEGIN
    IF @n_StorerMinShelfLife IS NULL
       SELECT @n_StorerMinShelfLife = 0
 
+   --NJOW01
+   SELECT @c_DisableLot2Filter = ISNULL(CL.Short,'N')
+   FROM CODELKUP CL (NOLOCK) 
+   WHERE CL.LISTNAME = 'PKCODECFG'
+   AND CL.Storerkey = @c_StorerKey
+   AND CL.Code = 'DisableLot2Filter'
+   AND CL.Long = 'nspALTRF02'
+   AND (CL.Code2 = '' OR CL.Code2 = @c_Facility)
+   ORDER BY CASE WHEN CL.CODE2 = '' THEN 2 ELSE 1 END 
+   
    --WL01 S
    SELECT @c_DisableLot45Filter = ISNULL(CL.Short,'N')
    FROM CODELKUP CL (NOLOCK) 
@@ -160,20 +173,30 @@ BEGIN
                ' GROUP BY AD.Lot, AD.Loc, AD.ID) AS ADJLLI ON LOTXLOCXID.Lot = ADJLLI.Lot 
                                                                           AND LOTXLOCXID.Loc = ADJLLI.Loc 
                                                                           AND LOTXLOCXID.ID = ADJLLI.ID             
+      LEFT JOIN (SELECT KD.Lot, KD.Loc, KD.ID, SUM(KD.Qty) AS Qty
+                 FROM KIT K (NOLOCK)
+                 JOIN KITDETAIL KD (NOLOCK) ON K.KitKey = KD.Kitkey
+                 WHERE K.Status < ''9''
+                 AND KD.Type = ''F''
+                 AND K.Storerkey = @c_Storerkey ' +
+               ' AND KD.Sku = @c_Sku ' +
+               ' GROUP BY KD.Lot, KD.Loc, KD.ID) AS KITLLI ON LOTXLOCXID.Lot = KITLLI.Lot 
+                                                                          AND LOTXLOCXID.Loc = KITLLI.Loc 
+                                                                          AND LOTXLOCXID.ID = KITLLI.ID             
       WHERE LOC.LocationFlag <> ''HOLD''
       AND LOC.LocationFlag <> ''DAMAGE''
       AND LOC.Status <> ''HOLD''
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''
       AND LOC.Facility = @c_Facility
-      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0) - ISNULL(ADJLLI.Qty,0)) > 0
+      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0) - ISNULL(ADJLLI.Qty,0) - ISNULL(KITLLI.Qty,0)) > 0
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
       AND LOTxLOCxID.SKU = @c_SKU 
       AND LOTxLOCxID.Id = CASE WHEN ISNULL(@c_ID,'''') <> '''' THEN @c_ID ELSE LOTxLOCxID.Id END ' +      
       --AND LOC.LocationType = ''OTHER'' ' +
       --CASE WHEN @c_UOM = '1' THEN '  AND (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QtyReplen + ISNULL(TRFLLI.FromQty,0)) = 0 ' ELSE ' ' END + 
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
-      CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') <> '' AND @c_DisableLot2Filter = 'N' THEN ' AND LA.Lottable02 = @c_Lottable02 ' ELSE ' ' END +  --NJOW01
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL AND @c_DisableLot45Filter = 'N'    --WL01 
            THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable04, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +   --WL01
@@ -190,7 +213,7 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable13, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable14, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND CONVERT( NVARCHAR(20), LA.Lottable15, 106) = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +      
-      ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0) - ISNULL(ADJLLI.Qty,0)) >= @n_UOMBase '  +
+      ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0) - ISNULL(ADJLLI.Qty,0) - ISNULL(KITLLI.Qty,0)) >= @n_UOMBase '  +
       ' ORDER BY LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
@@ -225,6 +248,12 @@ BEGIN
       	           AND AD.Finalizedflag = 'N'
       	           AND AD.Qty < 0 
       	           AND AD.Lot = LOT.Lot)      	    
+      	        - (SELECT SUM(KD.Qty)   --NJOW01
+      	           FROM KIT K (NOLOCK)
+      	           JOIN KITDETAIL KD (NOLOCK) ON K.Kitkey = KD.Kitkey      	           
+      	           AND KD.Lot = LOT.Lot
+      	           AND KD.Type = 'F'
+      	           WHERE K.Status < '9')      	    
       	 FROM LOT (NOLOCK)
       	 WHERE LOT = @c_LOT
        	 GROUP BY Lot
