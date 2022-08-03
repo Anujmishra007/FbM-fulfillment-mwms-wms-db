@@ -1827,8 +1827,7 @@ END
                SELECT TOP 1      
                   @cSuggLOC = LOC.LOC,       
                   @cSuggSKU = PD.SKU,       
-                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                  @cOrderkey=Orderkey
+                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)      
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -1838,8 +1837,8 @@ END
                   AND PD.UOM IN ( '6' , '7')    
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))      
-               GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-               ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+               GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
+               ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                 
             END     
             ELSE      
@@ -1848,8 +1847,7 @@ END
                SELECT TOP 1      
                   @cSuggLOC = LOC.LOC,       
                   @cSuggSKU = PD.SKU,       
-                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                  @cOrderkey = Orderkey
+                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)      
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -1860,8 +1858,8 @@ END
                   AND PD.UOM IN ( '6', '7')    
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))      
-               GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-               ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
+               GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
+               ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                
             END    
          END      
@@ -2318,8 +2316,7 @@ END
                   SELECT TOP 1      
                      @cSuggLOC = LOC.LOC,       
                      @cSuggSKU = PD.SKU,       
-                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                     @cOrderKey = Orderkey
+                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                   FROM dbo.PickDetail PD WITH (NOLOCK)      
                      JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                   WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2329,15 +2326,14 @@ END
                      AND PD.UOM IN ('6','7')    
                      AND LOC.LOC >= @cCurrLOC      
                      AND PD.Sku >= @cCurrSKU  
-                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
+                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU    
                     
                   IF @@ROWCOUNT = 0  
                      SELECT TOP 1      
                         @cSuggLOC = LOC.LOC,       
                         @cSuggSKU = PD.SKU,       
-                        @nSuggQTY = ISNULL( SUM( PD.QTY), 0),  
-                        @cOrderKey = Orderkey
+                        @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                      FROM dbo.PickDetail PD WITH (NOLOCK)      
                         JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                      WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2347,15 +2343,14 @@ END
                         AND PD.UOM IN ( '6', '7')    
                         AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                         OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC >= @cCurrLOC))      
-                     GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                     ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
+                     GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
+                     ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
                END  
                ELSE  
                   SELECT TOP 1 
                      @cSuggLOC = LOC.LOC,       
                      @cSuggSKU = PD.SKU,       
-                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                     @cOrderKey = Orderkey
+                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                   FROM dbo.PickDetail PD WITH (NOLOCK)      
                      JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                   WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2365,8 +2360,8 @@ END
                      AND PD.UOM IN ( '6', '7')    
                      AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                      OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))      
-                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
+                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
+                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
                  
             END    
             ELSE      
@@ -2376,8 +2371,7 @@ END
                   SELECT TOP 1      
                      @cSuggLOC = LOC.LOC,       
                      @cSuggSKU = PD.SKU,       
-                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                     @cOrderKey = Orderkey
+                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                   FROM dbo.PickDetail PD WITH (NOLOCK)      
                      JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                   WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2388,15 +2382,14 @@ END
                      AND PD.UOM IN ('6','7')    
                      AND LOC.LOC >= @cCurrLOC      
                      AND PD.Sku >= @cCurrSKU  
-                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
+                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                     
                   IF @@ROWCOUNT = 0  
                      SELECT TOP 1      
                         @cSuggLOC = LOC.LOC,       
                         @cSuggSKU = PD.SKU,       
-                        @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                        @cOrderKey = Orderkey
+                        @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                      FROM dbo.PickDetail PD WITH (NOLOCK)      
                         JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                      WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2407,15 +2400,14 @@ END
                         AND PD.UOM IN ('6' , '7')    
                         AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                         OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC >= @cCurrLOC))      
-                     GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                     ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+                     GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
+                     ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                END  
                ELSE  
                   SELECT TOP 1      
                      @cSuggLOC = LOC.LOC,       
                      @cSuggSKU = PD.SKU,       
-                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                     @cOrderKey = Orderkey
+                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                   FROM dbo.PickDetail PD WITH (NOLOCK)      
                      JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                   WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2426,10 +2418,9 @@ END
                      AND PD.UOM IN ('6' , '7')    
                      AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                      OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))      
-                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
-                
-            END     
+                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU      
+                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
+            END  
          END      
          
          -- Get SKU info      
@@ -2721,26 +2712,24 @@ END
             BEGIN    
                SELECT TOP 1      
                   @cSuggSKU = PD.SKU,       
-                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                  @cOrderKey = Orderkey
+                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)      
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                WHERE PD.PickSlipNo = @cPickSlipNo      
                   AND PD.QTY > 0      
                   AND PD.Status <> '4'      
                   AND PD.Status < @cPickConfirmStatus     
-      AND PD.UOM IN ('6' , '7')     
+                  AND PD.UOM IN ('6' , '7')     
                   AND LOC.LOC = @cCurrLOC      
                   AND PD.SKU > @cCurrSKU  
-                  GROUP BY PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY PD.StorerKey, PD.SKU,Orderkey      
+                  GROUP BY PD.StorerKey, PD.SKU     
+                  ORDER BY PD.StorerKey, PD.SKU     
             END    
             ELSE      
             BEGIN    
                SELECT TOP 1      
                   @cSuggSKU = PD.SKU,       
-                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                  @cOrderkey = Orderkey
+                  @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)      
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -2751,8 +2740,8 @@ END
                   AND PD.UOM IN ( '6','7')    
                   AND LOC.LOC = @cCurrLOC      
                   AND PD.SKU > @cCurrSKU  
-                  GROUP BY PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY PD.StorerKey, PD.SKU,Orderkey      
+                  GROUP BY PD.StorerKey, PD.SKU     
+                  ORDER BY PD.StorerKey, PD.SKU     
             END    
          END      
          
@@ -3217,8 +3206,7 @@ END
                   SELECT TOP 1      
                      @cSuggLOC = LOC.LOC,       
                      @cSuggSKU = PD.SKU,       
-                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                     @cOrderkey = Orderkey
+                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                   FROM dbo.PickDetail PD WITH (NOLOCK)      
                      JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                   WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -3229,15 +3217,14 @@ END
                      AND PD.UOM IN ('6','7')    
                      AND LOC.LOC >= @cCurrLOC      
                      AND PD.Sku >= @cCurrSKU  
-                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU    
+                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                     
                   IF @@ROWCOUNT = 0  
                      SELECT TOP 1      
                         @cSuggLOC = LOC.LOC,       
                         @cSuggSKU = PD.SKU,       
-                        @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                        @cOrderkey = Orderkey
+                        @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                      FROM dbo.PickDetail PD WITH (NOLOCK)      
                         JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                      WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -3248,15 +3235,14 @@ END
                         AND PD.UOM IN ('6' , '7')    
                         AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                         OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC >= @cCurrLOC))      
-                     GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                     ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+                     GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU   
+                     ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                END  
                ELSE  
                   SELECT TOP 1      
                      @cSuggLOC = LOC.LOC,       
                      @cSuggSKU = PD.SKU,       
-                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0),
-                     @COrderkey = Orderkey
+                     @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                   FROM dbo.PickDetail PD WITH (NOLOCK)      
                      JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)      
                   WHERE PD.PickSlipNo = @cPickSlipNo      
@@ -3267,8 +3253,8 @@ END
                      AND PD.UOM IN ('6' , '7')    
                      AND (LOC.LogicalLocation > @cCurrLogicalLOC      
                      OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))      
-                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey      
-                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU,Orderkey     
+                  GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
+                  ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU     
                 
             END     
          END      
@@ -3696,7 +3682,17 @@ END
       --yeekung05
       DECLARE @cDispExtValue  NVARCHAR( 20)    
       SET @cDispExtValue = rdt.RDTGetConfig( @nFunc, 'DispExtValues', @cStorerKey)  --(yeekung04)  
-          
+      
+      
+      SELECT TOP 1 @cOrderkey=orderkey
+      FROM pickdetail PD (nolock)
+         WHERE PD.PickSlipNo = @cPickSlipNo        
+            AND PD.QTY > 0      
+            AND PD.Status <> '4'   
+            AND PD.Loc = @cSuggLOC
+            AND PD.SKU = @cSuggSKU
+            AND PD.Status < @cPickConfirmStatus      
+            AND PD.UOM IN ('6' , '7') 
             
       IF @cDispStyleColorSize = '0'      
          SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU      

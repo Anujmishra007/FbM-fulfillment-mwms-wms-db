@@ -1,6 +1,4 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_MoveToID_Lottable07]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_MoveToID_Lottable07]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -13,12 +11,9 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2021-08-01 1.0  yeekung  WMS-17527 Created                           */
-/* 2021-12-28 1.1  YeeKung  JSM-42479 Add lottable to confirm sp        */
-/*                          (yeekung01)                                 */
-/* 2022-05-06 1.2  YeeKung  JSM-65266 update the wrong step             */
 /************************************************************************/
 
-CREATE  PROCEDURE [RDT].[rdtfnc_MoveToID_Lottable07] (
+CREATE OR ALTER  PROCEDURE [RDT].[rdtfnc_MoveToID_Lottable] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 char max
@@ -800,7 +795,7 @@ BEGIN
          SET @cOutField11 = CASE WHEN @cDefaultAvlQty2Move = '' THEN '' ELSE @nQTY_Avail END -- @nMQTY_Move  
          
          -- Go to next screen  
-         SET @nScn = @nScn+ 1 --(yeekung02) 
+         SET @nScn = @nScn+2  
          SET @nStep = @nStep+2  
       END
    END
@@ -1302,7 +1297,7 @@ BEGIN
       END    
 
       -- Confirm  
-      EXEC rdt.rdt_MoveToID_Confirm_lottable --(yeekung01)
+      EXEC rdt.rdt_MoveToID_Confirm  
          @nMobile     = @nMobile,  
          @nFunc       = @nFunc,  
          @cLangCode   = @cLangCode,  
@@ -1313,21 +1308,6 @@ BEGIN
          @cSKU        = @cSKU,  
          @cUCC        = @cBarcode,  
          @nQTY        = @nQTY,   
-         @cLottable01 = @cLottable01 ,
-         @cLottable02 = @cLottable02 ,
-         @cLottable03 = @cLottable03 ,
-         @dLottable04 = @dLottable04 ,
-         @dLottable05 = @dLottable05 ,
-         @cLottable06 = @cLottable06 ,
-         @cLottable07 = @cLottable07 ,
-         @cLottable08 = @cLottable08 ,
-         @cLottable09 = @cLottable09 ,
-         @cLottable10 = @cLottable10 ,
-         @cLottable11 = @cLottable11 ,
-         @cLottable12 = @cLottable12 ,
-         @dLottable13 = @dLottable13 ,
-         @dLottable14 = @dLottable14 ,
-         @dLottable15 = @dLottable15 ,
          @nErrNo      = @nErrNo  OUTPUT,  
          @cErrMsg     = @cErrMsg OUTPUT  
       IF @nErrNo <> 0  
@@ -1357,33 +1337,18 @@ BEGIN
   
    IF @nInputKey = 0 -- Esc or No  
    BEGIN  
-           -- Confirm  
-      EXEC rdt.rdt_MoveToID_Confirm_lottable
+      -- Unconfirm  
+      EXEC rdt.rdt_MoveToID_Confirm  
          @nMobile     = @nMobile,  
          @nFunc       = @nFunc,  
          @cLangCode   = @cLangCode,  
-         @cType       = 'Y', --Undo  
+         @cType       = 'N', --Undo  
          @cStorerKey  = @cStorerKey,   
          @cToID       = @cToID,  
-         @cFromLOC    = @cFromLOC,  
-         @cSKU        = @cSKU,  
-         @cUCC        = @cBarcode,  
-         @nQTY        = @nQTY,   
-         @cLottable01 = @cLottable01 ,
-         @cLottable02 = @cLottable02 ,
-         @cLottable03 = @cLottable03 ,
-         @dLottable04 = @dLottable04 ,
-         @dLottable05 = @dLottable05 ,
-         @cLottable06 = @cLottable06 ,
-         @cLottable07 = @cLottable07 ,
-         @cLottable08 = @cLottable08 ,
-         @cLottable09 = @cLottable09 ,
-         @cLottable10 = @cLottable10 ,
-         @cLottable11 = @cLottable11 ,
-         @cLottable12 = @cLottable12 ,
-         @dLottable13 = @dLottable13 ,
-         @dLottable14 = @dLottable14 ,
-         @dLottable15 = @dLottable15 ,
+         @cFromLOC    = '',  
+         @cSKU        = '',   
+         @cUCC        = '',  
+         @nQTY        = 0,   
          @nErrNo      = @nErrNo  OUTPUT,  
          @cErrMsg     = @cErrMsg OUTPUT  
       IF @nErrNo <> 0  
@@ -1431,8 +1396,7 @@ BEGIN
       BEGIN  
          -- Prep next screen var  
          SET @cOutField01 = @cFromLOC
-         SET @cOutField02 = '' -- SKU
-         SET @cOutField03 = '' -- SKU
+         SET @cOutField02 = ''  
   
          -- Go to QTY screen  
          SET @nScn = @nScn-1  
@@ -1822,5 +1786,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdtfnc_MoveToID_Lottable07 TO NSQL
+GRANT EXECUTE ON RDT.rdtfnc_MoveToID_Lottable TO NSQL
 GO
