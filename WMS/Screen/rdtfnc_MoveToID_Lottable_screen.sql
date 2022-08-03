@@ -2,12 +2,12 @@
 IF NOT EXISTS (SELECT 1 FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID=648 AND Message_Type='fnc')
 BEGIN 
    INSERT INTO rdt.rdtmsg(Message_ID,Lang_Code,Message_Type,Message_Text,StoredProcName)
-   VALUES('648','ENG','FNC','MOVETOID lottable07', 'rdtfnc_MoveToID_Lottable07')
+   VALUES('648','ENG','FNC','MOVETOID lottable', 'rdtfnc_MoveToID_Lottable')
 
 END
 
 
---rdtfnc_MoveToID_Lottable07
+--rdtfnc_MoveToID_Lottable
 -- 3390 = TO ID
 DELETE rdt.RDTScn WHERE Scn = 5960 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5960, 'ENG'

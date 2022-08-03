@@ -20,6 +20,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 04-JUL-2022  CSCHONG  1.1  WMS-16175 disable trafficcop update (CS01)*/
+/* 06-JUL-2022  CSCHONG  1.2  WMS-16175 add insert Trans2 table (CS02)  */
 /************************************************************************/
 
 CREATE OR ALTER PROC ispREC05   
@@ -35,12 +37,24 @@ BEGIN
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF  
      
-   DECLARE @n_Continue     INT,
-           @n_StartTCnt    INT,
-           @c_Receiptkey   NVARCHAR(10),
-           @c_doctype NCHAR(1)           
+   DECLARE @n_Continue        INT,
+           @n_StartTCnt       INT,
+           @c_Receiptkey      NVARCHAR(10),
+           @c_doctype         NCHAR(1),
+           @c_TransmitLogKey  NVARCHAR(10),
+           @c_TableName       NVARCHAR(30)     
+
+
+  DECLARE   @c_TriggerName          nvarchar(120)  
+          , @c_SourceTable          nvarchar(60)  
+        --  , @c_ReceiptKey           nvarchar(10)  
+          , @c_ColumnsUpdated       VARCHAR(1000)                    
                                              
     SELECT @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_Success = 1
+
+     SET @c_TableName = 'WSRCU6EXELLOG'
+     SET @c_SourceTable    = 'RECEIPT'  
+     SET @c_ColumnsUpdated = 'ASNStatus'
 
    IF @c_Action NOT IN('INSERT','UPDATE','DELETE')
       GOTO QUIT_SP      
@@ -63,14 +77,28 @@ BEGIN
                  WHERE I.Userdefine06 <> ISNULL(D.Userdefine06,'1900-01-01 00:00:00.000') AND I.Storerkey = @c_Storerkey)
        BEGIN   
 
-          UPDATE RECEIPT WITH (ROWLOCK)
+             UPDATE RECEIPT WITH (ROWLOCK)
              SET ASNStatus = 'RCVD',
-                 Trafficcop = NULL,
+               --  Trafficcop = NULL,                       --CS01
                  EditWho = SUSER_SNAME(),
                  EditDate = GETDATE()
              WHERE Receiptkey = @c_Receiptkey
 
-        END
+
+               SELECT @b_success = 1     --CS02 S
+               
+               EXEC dbo.ispGenTransmitLog2 @c_TableName, @c_Receiptkey, 'RCVD', @c_StorerKey, ''
+                 , @b_success OUTPUT
+                 , @n_err OUTPUT
+                 , @c_errmsg OUTPUT
+
+            IF @b_success = 0
+            BEGIN    
+               SELECT @n_continue = 3, @n_err = 60098, @c_errmsg = 'ispREC05: ' + rtrim(@c_errmsg)
+            END
+
+      END --CS02 E
+
    END
       
    QUIT_SP:
