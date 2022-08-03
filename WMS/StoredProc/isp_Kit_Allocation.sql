@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[isp_Kit_Allocation]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE isp_Kit_Allocation
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -28,8 +24,10 @@ GO
 /* Date         Author  Ver.  Purposes                                  */ 
 /* 09-SEP-2021  NJOW01  1.0   WMS-17858 Add post kit allocation         */
 /* 22-NOV-2021  NJOW01  1.0   DEVOPS combine script                     */
+/* 23-JUN-2022  NJOW02  1.1   WMS-20049 allow configure to copy qty to  */
+/*                            expectedqty                               */ 
 /************************************************************************/
-CREATE PROC  isp_Kit_Allocation  
+CREATE OR ALTER PROC  isp_Kit_Allocation  
       @c_KitKey              NVARCHAR(10)
      ,@c_AllocateStrategykey NVARCHAR(10) = ''    
      ,@b_Success             INT            OUTPUT
@@ -120,6 +118,7 @@ BEGIN
    --NJOW01      
    DECLARE @c_AllocateStrategykey_SC   NVARCHAR(10)                                
          , @c_UpdateUsedQty            NVARCHAR(5)
+         , @c_UpdateExpectedQty        NVARCHAR(5) --NJOW02
          , @c_LineAllocated            INT
          , @c_option1                  NVARCHAR(50)
          , @c_option2                  NVARCHAR(50)
@@ -141,6 +140,7 @@ BEGIN
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_continue = 1, @b_success = 1, @n_err = 0, @c_errmsg = '', @c_LineAllocated = 0
    SET @c_ExpectedQtyFlag = 'Y'  --default Y get from ExpectedQty field
    SET @c_UpdateUsedQty = 'N'  --default N Update qty field  --NJOW01
+   SET @c_UpdateExpectedQty = 'N' --NJOW02
    
    IF @@TRANCOUNT = 0 --NJOW01
       BEGIN TRAN
@@ -183,6 +183,7 @@ BEGIN
 
    SELECT @c_ExpectedQtyFlag = dbo.fnc_GetParamValueFromString('@c_ExpectedQtyFlag', @c_Option5, @c_ExpectedQtyFlag)
    SELECT @c_UpdateUsedQty = dbo.fnc_GetParamValueFromString('@c_UpdateUsedQty', @c_Option5, @c_UpdateUsedQty)
+   SELECT @c_UpdateExpectedQty = dbo.fnc_GetParamValueFromString('@c_UpdateExpectedQty', @c_Option5, @c_UpdateExpectedQty)  --NJOW02
    
    --NJOW01 E
    
@@ -892,6 +893,35 @@ BEGIN
          SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kitdetail Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		  END   	            
    END
+   
+   --NJOW02
+   IF @n_continue IN(1,2) AND @c_UpdateExpectedQty = 'Y' AND @c_ExpectedQtyFlag = 'N' AND @c_LineAllocated > 0
+   BEGIN
+      UPDATE KITDETAIL WITH (ROWLOCK)
+      SET ExpectedQty = Qty,
+          TrafficCop = NULL 
+      WHERE Kitkey = @c_KitKey 
+      AND (
+            (Type = 'F'
+             AND Lot <> ''
+             AND Lot IS NOT NULL
+             AND ExpectedQty = 0
+             AND Qty > 0)
+         OR (Type = 'T'
+             AND ExpectedQty = 0
+             AND Qty > 0)
+           )
+                                                  
+      SELECT @n_err = @@ERROR                
+      
+      IF @n_err <> 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 63540   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kitdetail Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
+		  END   	            
+   END
+
          
    --NJOW01      
    IF @n_continue IN(1,2) AND @c_LineAllocated > 0
@@ -931,7 +961,7 @@ BEGIN
       	  IF @n_err <> 0
       	  BEGIN
              SET @n_continue = 3
-             SET @n_err = 63540   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SET @n_err = 63550   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
              SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Kit Failed! (isp_Kit_Allocation)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	  END   	      
    	   END             
