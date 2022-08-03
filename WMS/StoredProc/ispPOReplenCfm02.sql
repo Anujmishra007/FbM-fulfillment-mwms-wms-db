@@ -12,7 +12,7 @@ GO
 /*                                                                      */ 
 /* Called By: ispPostGenEOrderReplenWrapper                             */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -20,7 +20,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 26-Apr-2022 NJOW     1.0  DEVOPS Combine script                      */
+/* 26-Apr-2022 NJOW     1.0   DEVOPS Combine script                     */
+/* 02-Aug-2022 WLChooi  1.1   WMS-20378 Remove update TrafficCop (WL01) */
 /************************************************************************/
 CREATE OR ALTER PROC ispPOReplenCfm02
            @c_ReplenishmentGroup NVARCHAR(10) 
@@ -62,9 +63,9 @@ BEGIN
    WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
    BEGIN   
    	  UPDATE ORDERS WITH (ROWLOCK)
-   	  SET Status = '3',
-   	      Trafficcop = NULL
+   	  SET Status = '3'--, Trafficcop = NULL   --WL01
    	  WHERE Orderkey = @c_Orderkey
+        AND [Status] < '3'   --WL01
 
       IF @@ERROR <> 0
       BEGIN
