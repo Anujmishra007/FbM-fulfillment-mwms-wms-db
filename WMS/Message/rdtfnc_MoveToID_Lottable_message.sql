@@ -1,4 +1,4 @@
---rdtfnc_MoveToID_Lottable07
+--rdtfnc_MoveToID_Lottable
 exec rdt.rdtDropMsg 173401  , 173450		
 
 execute rdt.rdtAddMsg 173401, 10, '173401ToIDneeded',   'us_english', 648
