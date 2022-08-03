@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_608RefNoLKUP05]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_608RefNoLKUP05]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -16,9 +12,10 @@ GO
 /* Date         Author    Ver.  Purposes                                      */  
 /* 03-Jul-2018  James     1.0   WMS-5444 Created                              */  
 /* 25-Jul-2018  James     1.1   Add ExternReceiptKey to ReceiptDetail(james01)*/  
+/* 05-Jul-2022  James     1.2   WMS-20062 Add new column (james02)            */
 /******************************************************************************/  
   
-CREATE PROCEDURE rdt.rdt_608RefNoLKUP05  
+CREATE OR ALTER PROCEDURE rdt.rdt_608RefNoLKUP05  
    @nMobile       INT,             
    @nFunc         INT,             
    @cLangCode     NVARCHAR( 3),    
@@ -395,9 +392,11 @@ BEGIN
            
          -- Copy OrderDetail to ReceiptDetail  
          INSERT INTO ReceiptDetail  
-            (ReceiptKey, ReceiptLineNumber, ExternReceiptKey, Userdefine01, Userdefine02, Userdefine03, Lottable02, StorerKey, SKU, QTYExpected, Packkey, UOM, ToLOC)  
+            (ReceiptKey, ReceiptLineNumber, ExternReceiptKey, Userdefine01, Userdefine02, Userdefine03, 
+            Lottable01, Lottable02, Lottable03, StorerKey, SKU, QTYExpected, Packkey, UOM, ToLOC)  
          SELECT   
-            @cNewReceiptKey, OrderLineNumber, OrderKey, Userdefine01, Userdefine02, Userdefine03, Lottable02, StorerKey, SKU, ShippedQty, PackKey, UOM, @cLOC  
+            @cNewReceiptKey, OrderLineNumber, OrderKey, Userdefine01, Userdefine02, Userdefine03, 
+            Lottable01, Lottable02, Lottable03, StorerKey, SKU, ShippedQty, PackKey, UOM, @cLOC  
          FROM OrderDetail WITH (NOLOCK)   
          WHERE OrderKey = @cOrderKey   
          IF @@ERROR <> 0  
