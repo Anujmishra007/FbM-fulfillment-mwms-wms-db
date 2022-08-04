@@ -99,4 +99,6 @@ EXECUTE rdt.rdtAddScn 1047, 'ENG',
    @cLine04 = '',
    @cLine05 = 'Press ENTER or ESC',
    @cLine06 = 'to continue',
+   @cLine07 = '',
+   @cLine08 = 'TO LOC: %10d01',
    @cLine14 = '%e'
