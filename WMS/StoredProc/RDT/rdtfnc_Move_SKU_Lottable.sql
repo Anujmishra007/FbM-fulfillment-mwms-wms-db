@@ -40,6 +40,7 @@ GO
 /* 2020-01-06 2.6  YeeKung  Add MultiSKU Barcode(yeekung01)             */
 /* 2021-04-07 2.7  chermain WMS-16638 Add @cDecodeLabelNo (cc01)        */
 /* 2022-07-27 2.8  Ung      WMS-20274 Add TOLOC at success move screen  */
+/* 2022-08-04 2.9  Ung      WMS-16638 Fix @cToLOC not reset             */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable] (
@@ -560,6 +561,7 @@ BEGIN
       SET @dPreLottable04 = 0
       SET @dPreLottable05 = 0
       SET @cQTY = ''
+      SET @cToLOC = ''
 
       -- Decode  --(cc01)
       -- Standard decode
@@ -1553,7 +1555,7 @@ BEGIN
       SET @cOutField08 = @cMUOM_Desc
       SET @cOutField09 = CAST( @nMQTY_Move AS NVARCHAR( 5))
       SET @cOutField10 = @cToID
-      SET @cOutField11 = CASE WHEN ISNULL(@cToLOC,'') ='' THEN '' ELSE @cToLOC END -- @cToLOC  --(cc01)
+      SET @cOutField11 = @cToLOC
 
       -- Go to next screen
       SET @nScn = @nScn + 1
