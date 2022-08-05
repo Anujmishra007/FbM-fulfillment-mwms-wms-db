@@ -68,22 +68,24 @@ BEGIN
       AND SKU.Style= @cStyle
       AND LOC.Facility = @cFacility  
       AND LOC.LOC <> @cLOC
-   ORDER By LLI.Qty DESC
+   GROUP BY LOC.Putawayzone ,LOC.LocAisle
+   ORDER By SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)
 
    -- Search Empty Location on same zone , same aisle
    SELECT TOP 1
          @cSuggestedLOC =  LOC.LOC  
    FROM dbo.LOC LOC WITH (NOLOCK)  
          LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)  
+         JOIN SKU SKU (NOLOCK) ON SKU.SKU = LLI.SKU AND SKU.StorerKey = LLI.StorerKey
    WHERE LOC.Facility = @cFacility  
          AND LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')  
          AND LOC.LOC <> @cLOC  
 		   AND LOC.LocationCategory  = @cLocationCategory
-		   AND LOC.LocAisle = @cLocAisle
-		   AND LOC.Putawayzone = @cPutawayZone
-   GROUP BY LOC.PALogicalLOC, LOC.LOC  
-   HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) = 0  
-   ORDER BY LOC.PALogicalLOC, LOC.LOC 
+		   AND SKU.Style= @cStyle
+         AND Loc.PutawayZone = @cPutawayZone
+   GROUP BY LOC.LOC  
+   HAVING  SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)>0
+   ORDER BY SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked),LOC.LOC 
       
    IF ISNULL(@cSuggestedLOC,'')  = ''
    BEGIN
@@ -93,12 +95,15 @@ BEGIN
       	@cSuggestedLOC =  LOC.LOC 
       FROM dbo.LOC LOC WITH (NOLOCK)  
       	LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)  
+         LEFT JOIN dbo.SKU WITH (NOLOCK) ON (LLI.SKU=SKU.SKU AND LLI.storerkey=SKU.SKU)
       WHERE LOC.Facility = @cFacility  
       	AND LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')  
       	AND LOC.LOC <> @cLOC  
-		   AND LOC.LocationCategory  = @cLocationCategory
+      	AND LOC.LocationCategory  = @cLocationCategory
+         AND LOC.Facility=@cFacility
       	AND LOC.LocAisle > @cLocAisle
       	AND LOC.Putawayzone = @cPutawayZone
+         AND SKU.Style = @cStyle
       GROUP BY LOC.LocAisle,LOC.PALogicalLOC, LOC.LOC  
       HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) = 0  
       ORDER BY LOC.LocAisle,LOC.PALogicalLOC, LOC.LOC 

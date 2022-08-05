@@ -76,22 +76,23 @@ BEGIN
       AND SKU.Style= @cStyle
       AND LOC.Facility=@cFacility
       AND LOC.LOC <> @cFromLOC
-   ORDER By LLI.Qty DESC
+   GROUP BY LOC.Putawayzone ,LOC.LocAisle
+   ORDER By SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)
 
    SELECT TOP 1
       @cSuggLOC = LOC.LOC
    FROM dbo.LOC LOC WITH (NOLOCK)
    LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+   JOIN SKU SKU (NOLOCK) ON SKU.SKU = LLI.SKU AND SKU.StorerKey = LLI.StorerKey
    WHERE LOC.Facility = @cFacility
       AND LOC.LocationFlag  NOT IN ('HOLD', 'DAMAGE')
       AND LOC.LOC <> @cFromLOC
       AND LOC.LocationCategory = @cLocationCategory
-      AND LOC.Facility=@cFacility
-      AND LOC.LocAisle = @cLocAisle
-      AND LOC.Putawayzone = @cPutawayZone
-   GROUP BY LOC.PALogicalLOC, LOC.LOC
-   HAVING SUM( ISNULL( LLI.QTY, 0) - ISNULL( LLI.QtyAllocated,0) - ISNULL( LLI.QTYPicked, 0)) = 0
-   ORDER BY LOC.PALogicalLOC, LOC.LOC
+      AND SKU.Style= @cStyle
+      AND Loc.PutawayZone = @cPutawayZone
+   GROUP BY LOC.LOC
+   HAVING  SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)>0
+   ORDER BY SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked), LOC.LOC
 
    IF ISNULL(@cSuggLOC,'')  = ''
    BEGIN
@@ -100,13 +101,14 @@ BEGIN
       SELECT TOP 1
       	@cSuggLOC =  LOC.LOC 
       FROM dbo.LOC LOC WITH (NOLOCK)  
-      	LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)  
+      	JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)  
+         JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.SKU = LLI.SKU)  
       WHERE LOC.Facility = @cFacility  
       	AND LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')  
       	AND LOC.LOC <> @cFromLOC  
       	AND LOC.LocationCategory  = @cLocationCategory
-         AND LOC.Facility=@cFacility
-      	AND LOC.LocAisle > @cLocAisle
+         AND SKU.Style = @cStyle
+      	AND LOC.LocAisle <> @cLocAisle
       	AND LOC.Putawayzone = @cPutawayZone
       GROUP BY LOC.LocAisle,LOC.PALogicalLOC, LOC.LOC  
       HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) = 0  
