@@ -54,6 +54,7 @@ GO
 /* 2020-01-31 CSCHONG      2.5   WMS-11977 new config for sorting rule(CS06)*/
 /* 2020-07-16 WLChooi      2.6   WMS-14269 - Add ReportCFG to show Pallet   */
 /*                               ID (WL04)                                  */
+/* 2022-08-05 MINGLE       2.7   WMS-20323 add reportcfg to show lottable10(ML01)*/
 /****************************************************************************/    
     
 CREATE PROC dbo.nsp_GetPickSlipOrders03 (@c_loadkey NVARCHAR(10))    
@@ -126,7 +127,8 @@ DECLARE  @c_pickheaderkey        NVARCHAR(10),
        , @n_SortBySkuLoc         INT            --(Wan02)    
        , @c_PalletID             NVARCHAR(30)     
        , @c_ExtraInfo            NVARCHAR(255) = '' --(WL02)  
-       , @n_SortByLoc            INT            --(CS06)         
+       , @n_SortByLoc            INT            --(CS06)   
+       , @c_Lottable10           NVARCHAR(30) --ML01        
           
 DECLARE  @c_PrevOrderKey NVARCHAR(10),    
          @n_Pallets      INT,    
@@ -147,7 +149,7 @@ END
 SET @n_pickslips_required = 0 -- (Leong01)    
   
 --WL02 Start  
-SET @c_ExtraInfo = N'“PLEASE USE/CHANGE TO BLACK CARTON” for HNWI customer'  
+SET @c_ExtraInfo = N'ï¿½PLEASE USE/CHANGE TO BLACK CARTONï¿½ for HNWI customer'  
 --WL02 End  
     
 BEGIN TRAN    
@@ -213,6 +215,8 @@ BEGIN TRAN
       ,   ManufacturerSKU   NVARCHAR(20)           --(WL03) 
       ,   SortByLoc         INT        NULL        --(CS06)    
       ,   ShowPickdetailID  NVARCHAR(10)           --(WL04)  
+      ,   Lottable10  NVARCHAR(30) NULL      --ML01  
+   ,   ShowLottable10    NVARCHAR(10)           --ML01  
       )    
    --(Wan01) - START    
    --SELECT TOP 1 @c_Storerkey = Storerkey    
@@ -289,6 +293,8 @@ BEGIN TRAN
    ,  ManufacturerSKU  --(WL03)  
    ,  SortByLoc        --(CS06)
    ,  ShowPickdetailID --(WL04)
+   ,  Lottable10    --ML01  
+   ,  ShowLottable10   --ML01 
    )    
    SELECT (SELECT PICKHEADERKEY FROM PICKHEADER (NOLOCK)    
            WHERE ExternOrderKey = @c_LoadKey    
@@ -370,6 +376,8 @@ BEGIN TRAN
       ,  SKU.ManufacturerSKU                 --(WL03)  
       ,  ISNULL(SortByLoc,0)                 --(CS06)  
       ,  ISNULL(CLR.Short,'N') AS ShowPickdetailID --(WL04)  
+      ,  Lotattribute.Lottable10    --ML01  
+   ,  ISNULL(CLR.Short,'N') AS ShowLottable10 --ML01 
    FROM LOADPLANDETAIL (NOLOCK)    
    JOIN ORDERS (NOLOCK) ON (ORDERS.Orderkey = LoadPlanDetail.Orderkey)    
    -- Start : SOS38059    
@@ -394,6 +402,11 @@ BEGIN TRAN
    ON (Orders.Storerkey = CLR.Storerkey AND CLR.Code = 'ShowPickdetailID' AND CLR.Code2 = 'r_dw_print_pickorder03'                                            
    AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_print_pickorder03' AND ISNULL(CLR.Short,'') <> 'N')  
    --WL04 END   
+   --ML01 START  
+   LEFT OUTER JOIN Codelkup CLR2 (NOLOCK)  
+   ON (Orders.Storerkey = CLR2.Storerkey AND CLR2.Code = 'ShowLottable10' AND CLR2.Code2 = 'r_dw_print_pickorder03'  
+   AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_print_pickorder03' AND ISNULL(CLR2.Short,'') <> 'N')  
+   --ML01 END  
    WHERE PickDetail.Status >= '0'    
     AND LoadPlanDetail.LoadKey = @c_LoadKey    
    GROUP BY PickDetail.OrderKey,    
@@ -462,6 +475,8 @@ BEGIN TRAN
          ,  SKU.ManufacturerSKU                    --(WL03)  
          ,  ISNULL(SortByLoc,0)                    --(CS06) 
          ,  ISNULL(CLR.Short,'N')                  --(WL04) 
+         ,  Lotattribute.Lottable10       --ML01  
+   ,  ISNULL(CLR2.Short,'N')                 --ML04  
   
    BEGIN TRAN    
    -- Uses PickType as a Printed Flag       
@@ -614,6 +629,8 @@ SUCCESS:
       ,  CASE WHEN ISNULL(ShowExtraSKUInfo,0) = 1 THEN RetailSKU ELSE '' END AS RetailSKU  --(WL03)  
       ,  CASE WHEN ISNULL(ShowExtraSKUInfo,0) = 1 THEN ManufacturerSKU ELSE '' END AS ManufacturerSKU  --(WL03)  
       ,  ShowPickdetailID   --WL04
+      ,  Lottable10   --ML01  
+   ,  ShowLottable10  --ML01  
    FROM #TEMP_PICK    
    --(Wan02) - START    
    ORDER BY Company    
