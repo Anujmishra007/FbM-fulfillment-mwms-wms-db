@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_UCC_Carton_Label_100]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_UCC_Carton_Label_100]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: isp_UCC_Carton_Label_100                                */
 /* Creation Date: 27-Jan-2021                                           */
@@ -17,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_ucc_carton_label_100                                 */
 /*          :                                                           */
-/* GitLab Version: 1.2                                                  */
+/* GitLab Version: 1.4                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,8 +26,10 @@ GO
 /* 2021-12-07   WLChooi   1.2 WMS-18335 - Add ShowDCName Flag (WL02)    */
 /* 2021-12-13   WLChooi   1.3 Bug Fix - Initialize @c_ShowDCName to 'N' */
 /*                            (WL03)                                    */
+/* 2022-07-20   WLChooi   1.4 WMS-20287 - Revise show flag logic (WL04) */
+/* 2022-07-20   WLChooi   1.4 DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC [dbo].[isp_UCC_Carton_Label_100]
+CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_100]
            @c_Storerkey       NVARCHAR(15)
          , @c_PickSlipNo      NVARCHAR(10)
          , @c_StartCartonNo   NVARCHAR(10)
@@ -94,7 +92,7 @@ BEGIN
    )
 
    INSERT INTO #TMP_Pickzone(Loadkey, Pickzone)
-   SELECT DISTINCT LPD.LoadKey, L.PickZone
+   SELECT DISTINCT LPD.LoadKey, CONVERT(NVARCHAR, L.LocLevel)   --WL04
    FROM LOADPLANDETAIL LPD (NOLOCK)
    JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = LPD.OrderKey
    JOIN LOC L (NOLOCK) ON L.Loc = PD.Loc
@@ -107,12 +105,12 @@ BEGIN
    SELECT @n_CountCertainPickzone = COUNT(DISTINCT TP.Pickzone)
    FROM #TMP_Pickzone TP
    WHERE TP.Loadkey = @c_Loadkey
-   AND TP.Pickzone IN ('BS01','BS08')
+   AND TP.Pickzone IN ('0','4')   --WL04
 
    IF EXISTS (SELECT 1
               FROM #TMP_Pickzone PZ
               WHERE PZ.LoadKey = @c_Loadkey
-              AND PZ.PickZone = 'BS08'
+              AND PZ.PickZone = '0'   --WL04
               AND @n_CountPickzone = 1)
    BEGIN
       SET @c_ShowFlag = 'N'
@@ -121,7 +119,7 @@ BEGIN
    IF EXISTS (SELECT 1
               FROM #TMP_Pickzone PZ
               WHERE PZ.LoadKey = @c_Loadkey
-              AND PZ.PickZone = 'BS01'
+              AND PZ.PickZone = '4'   --WL04
               AND @n_CountPickzone = 1 )
    BEGIN
       SET @c_ShowFlag = 'N'
@@ -141,7 +139,7 @@ BEGIN
    IF EXISTS (SELECT 1
               FROM #TMP_Pickzone PZ
               WHERE PZ.LoadKey = @c_Loadkey
-              AND PZ.PickZone IN ('BS01','BS08')
+              AND PZ.PickZone IN ('0','4')   --WL04
               AND @n_CountPickzone = 2 
               AND @n_CountPickzone = @n_CountCertainPickzone)
    BEGIN

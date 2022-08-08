@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By: r_dw_packing_list_101                                     */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 07-Apr-2022 CSCHONG  1.0   Devops Scripts Combine                    */
 /* 07-Apr-2022 CSCHONG  1.1   WMS-19422 Add codelkup show address (CS01)*/
+/* 14-Jul-2022 WLChooi  1.2   WMS-20244 Modify SKU Logic (WL01)         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_packing_list_101]
            @c_PickSlipNo      NVARCHAR(10)
@@ -61,8 +62,8 @@ BEGIN
    END
 
 
-  SELECT @c_OHUDF03 = OH.Userdefine03
-          ,@c_storerkey = OH.Storerkey
+   SELECT @c_OHUDF03 = OH.Userdefine03
+         ,@c_storerkey = OH.Storerkey
    FROM ORDERS OH WITH (NOLOCK)
    WHERE OH.Orderkey = @c_Orderkey
 
@@ -73,25 +74,35 @@ BEGIN
    AND C.storerkey = @c_storerkey
 
 
-  --CS01 S
-    SELECT @c_CONRTNADD = ISNULL(C.notes,'')
+   --CS01 S
+   SELECT @c_CONRTNADD = ISNULL(C.notes,'')
    FROM Codelkup  C WITH (nolock)
    WHERE c.listname = 'CONVSTORE'
    AND C.code = 'CONVSTORERTNADD'
    AND C.storerkey = @c_storerkey
 
- --Cs01 E
+   --Cs01 E
 
    SELECT  SortBy = ROW_NUMBER() OVER ( ORDER BY ISNULL(PH.PickSlipNo,'')
                                                 ,OH.Storerkey
                                                 ,OH.Orderkey
-                                                ,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))
+                                                --,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))   --WL01 S
+                                                ,CASE WHEN ISNULL(SKU.Manufacturersku,'') = '' 
+                                                      THEN CASE WHEN SKU.RETAILSKU LIKE '69%' THEN SKU.RETAILSKU
+                                                                WHEN SKU.ALTSKU LIKE '69%' THEN SKU.ALTSKU
+                                                                ELSE SKU.SKU END
+                                                      ELSE SKU.Manufacturersku END   --WL01 E
                                      )
          , RowNo  = ROW_NUMBER() OVER ( PARTITION BY ISNULL(PH.PickSlipNo,'')
                                         ORDER BY ISNULL(PH.PickSlipNo,'')
                                                 ,OH.Storerkey
                                                 ,OH.Orderkey
-                                                ,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))
+                                                --,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))   --WL01 S
+                                                ,CASE WHEN ISNULL(SKU.Manufacturersku,'') = '' 
+                                                      THEN CASE WHEN SKU.RETAILSKU LIKE '69%' THEN SKU.RETAILSKU
+                                                                WHEN SKU.ALTSKU LIKE '69%' THEN SKU.ALTSKU
+                                                                ELSE SKU.SKU END
+                                                      ELSE SKU.Manufacturersku END   --WL01 E
                                       )
          , PrintTime      = GETDATE()
          , OH.Storerkey
@@ -107,12 +118,23 @@ BEGIN
                      + ISNULL(RTRIM(OH.B_Address1),'') + ' '
                      + ISNULL(RTRIM(OH.C_Address2),'')
          --, C_Address = ISNULL(RTRIM(OH.C_Address2),'')
-         , Manufacturersku  = ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))
+         --, Manufacturersku  = ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))   --WL01 S
+         , Manufacturersku  = CASE WHEN ISNULL(SKU.Manufacturersku,'') = '' 
+                                   THEN CASE WHEN SKU.RETAILSKU LIKE '69%' THEN SKU.RETAILSKU
+                                             WHEN SKU.ALTSKU LIKE '69%' THEN SKU.ALTSKU
+                                             ELSE SKU.SKU END
+                                   ELSE SKU.Manufacturersku END
+         --WL01 E
          , RecGrp  =  (ROW_NUMBER() OVER ( PARTITION BY ISNULL(PH.PickSlipNo,''),OH.Orderkey
                                         ORDER BY ISNULL(PH.PickSlipNo,'')
                                                 ,OH.Storerkey
                                                 ,OH.Orderkey
-                                                ,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku)))-1)/@n_NoOfLine
+                                                --,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))   --WL01 S
+                                                ,CASE WHEN ISNULL(SKU.Manufacturersku,'') = '' 
+                                                      THEN CASE WHEN SKU.RETAILSKU LIKE '69%' THEN SKU.RETAILSKU
+                                                                WHEN SKU.ALTSKU LIKE '69%' THEN SKU.ALTSKU
+                                                                ELSE SKU.SKU END
+                                                      ELSE SKU.Manufacturersku END)-1)/@n_NoOfLine   --WL01 E
          , SkuDesr = ISNULL(RTRIM(SKU.Descr),'')
          , Qty = ISNULL(SUM(OD.originalqty),0)
          , TrackingNo = OH.TrackingNo
@@ -140,7 +162,12 @@ BEGIN
          ,  ISNULL(RTRIM(OH.C_State),'')
          ,  ISNULL(RTRIM(OH.B_Address1),'')
          ,  ISNULL(RTRIM(OH.C_Address2),'')
-         ,  ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))
+         --,ISNULL(RTRIM(SKU.Manufacturersku),RTRIM(SKU.sku))   --WL01 S
+         ,  CASE WHEN ISNULL(SKU.Manufacturersku,'') = '' 
+                 THEN CASE WHEN SKU.RETAILSKU LIKE '69%' THEN SKU.RETAILSKU
+                           WHEN SKU.ALTSKU LIKE '69%' THEN SKU.ALTSKU
+                           ELSE SKU.SKU END
+                 ELSE SKU.Manufacturersku END   --WL01 E
          ,  ISNULL(RTRIM(SKU.Descr),'')
          ,  OH.TrackingNo
          ,  CONVERT(NVARCHAR(10),OH.AddDate,120)
