@@ -5,7 +5,7 @@ SET ANSI_NULLS OFF
 GO
   
 /************************************************************************/  
-/* Store procedure: rdt_ClusterPickCfm22                                */  
+/* Store procedure: rdt_ClusterPickCfm23                                */  
 /* Copyright      : IDS                                                 */  
 /*                                                                      */  
 /* Purpose: IIC Comfirm Pick SP. Packcfm after pick = pack              */  
@@ -20,7 +20,7 @@ GO
 /* 2021-12-08  1.0  yeekung     WMS18523. Created                       */  
 /************************************************************************/  
   
-CREATE OR ALTER PROC [RDT].[rdt_ClusterPickCfm22] (  
+CREATE OR ALTER PROC [RDT].[rdt_ClusterPickCfm23] (  
    @nMobile                   INT,  
    @nFunc                     INT,  
    @cLangCode                 NVARCHAR( 3),  
@@ -119,7 +119,7 @@ BEGIN
   
    SET @nTranCount = @@TRANCOUNT  
    BEGIN TRAN  
-   SAVE TRAN rdt_ClusterPickCfm22  
+   SAVE TRAN rdt_ClusterPickCfm23  
  
    -- Get RDT.RDTPickLock candidate to offset  
    DECLARE curRPL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
@@ -788,11 +788,11 @@ BEGIN
    GOTO Quit  
   
    RollBackTran:  
-      ROLLBACK TRAN rdt_ClusterPickCfm22  
+      ROLLBACK TRAN rdt_ClusterPickCfm23  
   
    Quit:  
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-         COMMIT TRAN rdt_ClusterPickCfm22  
+         COMMIT TRAN rdt_ClusterPickCfm23  
   
 END    
 GO
@@ -801,5 +801,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_ClusterPickCfm22 TO NSQL
+GRANT EXECUTE ON RDT.rdt_ClusterPickCfm23 TO NSQL
 GO
