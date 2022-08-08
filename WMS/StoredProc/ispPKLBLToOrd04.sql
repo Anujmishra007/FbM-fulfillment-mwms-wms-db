@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM SysObjects WHERE name = N'ispPKLBLToOrd04' AND TYPE = 'P')
-DROP PROC ispPKLBLToOrd04
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,9 +21,10 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 12-Nov-2011 NJOW     1.0   DEVOPS combine script                     */
+/* 06-Apr-2022 NJOW01   1.1   WMS-19418 check UPC null value            */
 /************************************************************************/  
   
-CREATE PROC [dbo].[ispPKLBLToOrd04]  
+CREATE OR ALTER PROC [dbo].[ispPKLBLToOrd04]  
 (@c_Pickslipno NVARCHAR(10),   
  @b_Success      INT       OUTPUT,  
  @n_err          INT       OUTPUT,  
@@ -238,7 +235,7 @@ BEGIN
          DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
             SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
                    PACKHEADER.Orderkey,  
-                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue  
+                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, ISNULL(PACKDETAIL.UPC,''), PACKDETAIL.DropId, PACKDETAIL.LottableValue  
             FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
             WHERE  PACKHEADER.Pickslipno = @c_Pickslipno 
             AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
@@ -252,7 +249,7 @@ BEGIN
             UNION ALL  
             SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
                    PACKHEADER.Orderkey, 
-                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue  
+                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, ISNULL(PACKDETAIL.UPC,''), PACKDETAIL.DropId, PACKDETAIL.LottableValue  
             FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
             WHERE  PACKHEADER.Pickslipno = @c_Pickslipno  
             AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
@@ -270,7 +267,7 @@ BEGIN
          DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
                 PACKHEADER.Orderkey,  
-                PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue  
+                PACKDETAIL.RefNo, PACKDETAIL.RefNo2, ISNULL(PACKDETAIL.UPC,''), PACKDETAIL.DropId, PACKDETAIL.LottableValue  
          FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
          WHERE  PACKHEADER.Pickslipno = @c_Pickslipno  
          ORDER BY PACKDETAIL.Sku, PACKDETAIL.Labelno  
