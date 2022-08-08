@@ -6,16 +6,15 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_PTLCart_Assign_PickslipPosTote_Lottable01             */
+/* Store procedure: rdt_PTLCart_Assign_PickslipPosTote_Lottable02             */
 /* Copyright      : LFLogistics                                               */
-/*                 PickslipPosTote_Lottable->PickslipPosTote_Lottable01       */
 /*                                                                            */
+/*                 PickslipPosTote_Lottable->PickslipPosTote_Lottable02       */
 /* Date       Rev  Author   Purposes                                          */
-/* 21-05-2021 1.0  yeekung  WMS-17002 Created                                 */
-/* 28-12-2021 1.1  YeeKung  WMS-18463 Group by lot (yeekung01)						*/
+/* 28-12-2021 1.0  YeeKung  WMS-18463 Created (yeekung01)						   */
 /******************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_PTLCart_Assign_PickslipPosTote_Lottable01 (
+CREATE OR ALTER PROC rdt.rdt_PTLCart_Assign_PickslipPosTote_Lottable02 (
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -85,7 +84,6 @@ BEGIN
    DECLARE @dLottable13   DATETIME
    DECLARE @dLottable14   DATETIME
    DECLARE @dLottable15   DATETIME
-   DECLARE @cLOT          NVARCHAR(20)
    
    DECLARE @cSelect  NVARCHAR( MAX)
    DECLARE @cFrom    NVARCHAR( MAX)
@@ -106,6 +104,7 @@ BEGIN
    DECLARE @cTemp_OrderKey       NVARCHAR( 10) = ''
    DECLARE @cTemp_LoadKey        NVARCHAR( 10) = ''
    DECLARE @cM_PickSlipNo        NVARCHAR( 10) = ''
+   DECLARE @cLOT                 NVARCHAR( 20)
    
    SET @nTranCount = @@TRANCOUNT
       
@@ -148,7 +147,6 @@ BEGIN
       SET @cPosition = @cInField04
       SET @cToteID = @cInField05
 
-
       -- Get total
       SELECT @nTotalTote = COUNT(1) FROM rdt.rdtPTLCartLog WITH (NOLOCK) WHERE CartID = @cCartID
 
@@ -161,7 +159,7 @@ BEGIN
       -- Check blank
 		IF @cPickSlipNo = '' 
       BEGIN
-         SET @nErrNo = 168201
+         SET @nErrNo = 189251
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedPickSlipNo
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- PickSlipNo
          GOTO Quit
@@ -177,9 +175,10 @@ BEGIN
          FROM rdt.rdtPTLCartLog WITH (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
             AND (PickZone = @cPickZone OR PickZone = '')
-      IF ISNULL(@nErrNo,'') NOT IN('',0)
+
+      IF @nErrNo <> 0
       BEGIN
-         SET @nErrNo = 168202
+         SET @nErrNo = 189261
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PS Assigned
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- PickSlipNo
          SET @cOutField03 = ''
@@ -206,7 +205,7 @@ BEGIN
             AND   PickSlipNo = @cPickSlipNo
             AND   Status < '4')
          BEGIN
-            SET @nErrNo = 168203
+            SET @nErrNo = 189260
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad PickSlipNo
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- PickSlipNo
             GOTO Quit
@@ -220,8 +219,8 @@ BEGIN
             SELECT TOP 1 @cTemp_OrderKey = OrderKey
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE Storerkey = @cStorerKey
-               AND   PickSlipNo = @cPickSlipNo
-               AND   Status < '4'
+            AND   PickSlipNo = @cPickSlipNo
+            AND   Status < '4'
             ORDER BY 1
 
             -- Look for discrete pickslipno
@@ -264,37 +263,19 @@ BEGIN
       -- Check PickSlip in Zone
       SET @nErrNo = 1
       IF @cPSType = 'DISCRETE'
-      BEGIN
-         DECLARE @cPickinProcess NVARCHAR(20)
-
-         Select @cPickinProcess = Max(CL.UDF03)
-         FROM Orders O(Nolock) LEFT Join CODELKUP CL(Nolock)On O.Stop = CL.Code
-         JOIN PickHeader PH(Nolock) On PH.Orderkey = O.Orderkey
-         WHERE CL.Listname = 'LORBRD' 
-            AND PH.PickHeaderKey = @cPickSlipNo
-    
-         If @cPickinProcess = 'PickInProcess' 
-         Begin
-            Set @cPickConfirmStatus = '3' 
-         End
-         Else 
-         Begin
-            Set @cPickConfirmStatus = '5'
-         End
-
          SET @cSQL =   
-         ' SELECT TOP 1 @nErrNo = 0, @cTemp_PickSlipNo = @cPickSlipNo ' +   
+         ' SELECT TOP 1 @nErrNo = 0, @cTemp_PickSlipNo = MAX(IIF(PD.PickSlipNo <> @cPickSlipNo, PD.PickSlipNo, ''''))  ' +   
          ' FROM dbo.Orders O WITH (NOLOCK) ' +
          ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey) ' + 
          CASE WHEN @cPickZone <> '' THEN ' JOIN dbo.LOC LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' ELSE '' END + 
          ' WHERE O.OrderKey = @cOrderKey ' +
-         ' AND ( PD.Status < @cPickConfirmStatus) ' +
+         ' AND ( ( @cPickConfirmStatus <> '''' AND PD.Status < @cPickConfirmStatus) OR ' +
+         '       ( @cPickConfirmStatus = '''' AND PD.Status < ''4'')) ' +
          ' AND   PD.QTY > 0 ' +
          ' AND   O.Status <> ''CANC'' ' +
          ' AND   O.SOStatus <> ''CANC''' +
          CASE WHEN @cPickZone <> '' THEN ' AND LOC.PickZone = @cPickZone' ELSE '' END +
          ' ORDER BY 1'
-      END
 
       IF @cPSType = 'CONSO'
          SET @cSQL =   
@@ -355,9 +336,9 @@ BEGIN
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
          @cLoadKey, @cOrderKey, @cPickSlipNo, @cPickZone, @cPickConfirmStatus, @cTemp_PickSlipNo OUTPUT, @nErrNo OUTPUT
       
-      IF  ISNULL(@cTemp_PickSlipNo,'')=''
+      IF @nErrNo <> 0
       BEGIN
-         SET @nErrNo = 168204
+         SET @nErrNo = 189252
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PS NoPickTask
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- PickSlipNo
          SET @cOutField03 = ''
@@ -371,7 +352,7 @@ BEGIN
       IF @cPSType <> 'CUSTOM' AND ISNULL( @cTemp_PickSlipNo, '') <> '' AND 
          ISNULL(@cTemp_PickSlipNo,'') <> ISNULL(@cPickSlipNo,'')
       BEGIN
-         SET @nErrNo = 168205
+         SET @nErrNo = 189264
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateTask
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- PickSlipNo
          SET @cOutField03 = ''
@@ -393,68 +374,72 @@ BEGIN
          BEGIN
             SELECT TOP 1 @nReplenExists = (1)
             FROM dbo.PICKHEADER PH WITH (NOLOCK)
-               JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON ( WD.Orderkey=PH.Orderkey)
-               JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( PD.Orderkey=WD.Orderkey)
-               JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc=PD.Loc)
-               JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON  ( RP.Wavekey = WD.Wavekey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
+            JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON ( WD.Orderkey=PH.Orderkey)
+            JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( PD.Orderkey=WD.Orderkey)
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc=PD.Loc)
+            JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON 
+            ( RP.Wavekey = WD.Wavekey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
             WHERE PH.PickHeaderKey = @cPickSlipNo 
-               AND   PD.Status < '4' 
-               AND   PD.Qty > 0 
-               AND   RP.Confirmed = 'N'
-               AND  ( @cPickZone = '' OR LOC.PickZone = @cPickZone)
-               AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
+            AND   PD.Status < '4' 
+            AND   PD.Qty > 0 
+            AND   RP.Confirmed = 'N'
+            AND  ( @cPickZone = '' OR LOC.PickZone = @cPickZone)
+            AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
          END
          
          IF @cPSType = 'CONSO' 
          BEGIN
             SELECT TOP 1 @nReplenExists = (1)
             FROM dbo.PICKHEADER PH WITH (NOLOCK)
-               JOIN dbo.LOADPLANDETAIL LD WITH (NOLOCK) ON ( LD.Loadkey = PH.ExternOrderkey)
-               JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( PD.Orderkey = LD.Orderkey)
-               JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc = PD.Loc)
-               JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON ( RP.Loadkey = LD.Loadkey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
+            JOIN dbo.LOADPLANDETAIL LD WITH (NOLOCK) ON ( LD.Loadkey = PH.ExternOrderkey)
+            JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( PD.Orderkey = LD.Orderkey)
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc = PD.Loc)
+            JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON 
+            ( RP.Loadkey = LD.Loadkey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
             WHERE PH.PickHeaderKey = @cPickSlipNo 
-               AND   PD.Status < '4' 
-               AND   PD.Qty > 0 
-               AND   RP.Confirmed = 'N'
-               AND  ( @cPickZone ='' OR LOC.PickZone = @cPickZone)
-               AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
+            AND   PD.Status < '4' 
+            AND   PD.Qty > 0 
+            AND   RP.Confirmed = 'N'
+            AND  ( @cPickZone ='' OR LOC.PickZone = @cPickZone)
+            AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
          END
          
          IF @cPSType = 'XD' 
          BEGIN
             SELECT TOP 1 @nReplenExists = (1)
             FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
-               JOIN dbo.RefKeyLookup RKL WITH (NOLOCK) ON ( PD.PickDetailKey = RKL.PickDetailKey) 
-               JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.LoadKey)
-               JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc = PD.Loc)
-               JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON ( RP.Loadkey = O.Loadkey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
+            JOIN dbo.RefKeyLookup RKL WITH (NOLOCK) ON ( PD.PickDetailKey = RKL.PickDetailKey) 
+            JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.LoadKey)
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc = PD.Loc)
+            JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON 
+            ( RP.Loadkey = O.Loadkey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
             WHERE RKL.Pickslipno = @cPickSlipNo 
-               AND   PD.Status < '4' 
-               AND   PD.Qty > 0 
-               AND   RP.Confirmed = 'N'
-               AND  ( @cPickZone ='' OR LOC.PickZone = @cPickZone)
-               AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
+            AND   PD.Status < '4' 
+            AND   PD.Qty > 0 
+            AND   RP.Confirmed = 'N'
+            AND  ( @cPickZone ='' OR LOC.PickZone = @cPickZone)
+            AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
          END
 
          IF @cPSType = 'CUSTOM'
          BEGIN
             SELECT TOP 1 @nReplenExists = (1)
             FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
-               JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.LoadKey)
-               JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc = PD.Loc)
-               JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON ( RP.Loadkey = O.Loadkey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
+            JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.LoadKey)
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LOC.Loc = PD.Loc)
+            JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON 
+            ( RP.Loadkey = O.Loadkey AND RP.Lot = PD.Lot AND RP.FromLoc = PD.Loc AND RP.ID = PD.ID)
             WHERE PD.Pickslipno = @cPickSlipNo 
-               AND   PD.Status < '4' 
-               AND   PD.Qty > 0 
-               AND   RP.Confirmed = 'N'
-               AND  ( @cPickZone ='' OR LOC.PickZone = @cPickZone)
-               AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
+            AND   PD.Status < '4' 
+            AND   PD.Qty > 0 
+            AND   RP.Confirmed = 'N'
+            AND  ( @cPickZone ='' OR LOC.PickZone = @cPickZone)
+            AND  ( @cCheckReplenGroup = '' OR RP.ReplenishmentGroup = @cCheckReplenGroup)
          END
 
          IF @nReplenExists > 0
          BEGIN
-            SET @nErrNo = 168206
+            SET @nErrNo = 189263
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pending Replen
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- Position
             SET @cOutField03 = ''
@@ -467,7 +452,7 @@ BEGIN
       -- Check position blank
       IF @cPosition = ''
       BEGIN
-         SET @nErrNo = 168207
+         SET @nErrNo = 189253
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Position
          EXEC rdt.rdtSetFocusField @nMobile, 4 -- Position
          SET @cOutField04 = ''
@@ -481,39 +466,12 @@ BEGIN
             AND DeviceID = @cCartID
             AND DevicePosition = @cPosition)
       BEGIN
-         SET @nErrNo = 168208
+         SET @nErrNo = 189254
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad Position
          EXEC rdt.rdtSetFocusField @nMobile, 4 -- Position
          SET @cOutField04 = ''
          GOTO Quit
       END
-
-      If EXISTS ( Select 1 From rdt.rdtPTLCartLog WITH (NOLOCK) Where CartID = @cCartID  )
-      BEGIN
-         Declare @cOrderGroup nvarchar(10) , @cPTLOrderGroup nvarchar(10)
-
-         Select  @cOrderGroup=CD.UDF02 
-         FROM Orders O (Nolock) Left Join CODELKUP CD (Nolock) On (O.Stop = CD.Code)
-         Where CD.Listname = 'LORBRD'
-         AND O.Orderkey = @cOrderKey
-
-         Select TOP 1 @cPTLOrderGroup = Max(CD.UDF02) 
-         FROM Orders  O(Nolock)   Left Join CODELKUP CD(Nolock)  On (O.Stop = CD.Code) 
-         JOIN PickHeader PH(Nolock) ON (PH.Orderkey = O.Orderkey)
-         Join rdt.rdtPTLCartLog CL(Nolock) On (CL.PickSlipNo = PH.PickHeaderkey)
-         Where CD.Listname = 'LORBRD' 
-            AND CL.Cartid = @cCartID
-
-         If @cPTLOrderGroup <> @cOrderGroup
-         Begin
-            SET @nErrNo = 168209
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DiffOrderGroup
-            EXEC rdt.rdtSetFocusField @nMobile, 4 -- Position
-            SET @cOutField04 = ''
-            GOTO Quit
-         End
-      End     
-
 
       -- Check position assigned
       IF EXISTS( SELECT 1
@@ -521,7 +479,7 @@ BEGIN
          WHERE CartID = @cCartID
             AND Position = @cPosition)
       BEGIN
-         SET @nErrNo = 168210
+         SET @nErrNo = 189255
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pos assigned
          EXEC rdt.rdtSetFocusField @nMobile, 4 -- Position
          SET @cOutField04 = ''
@@ -532,7 +490,7 @@ BEGIN
       -- Check blank tote
       IF @cToteID = ''
       BEGIN
-         SET @nErrNo = 168211
+         SET @nErrNo = 189256
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToteID
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- ToteID
          SET @cOutField05 = ''
@@ -545,7 +503,7 @@ BEGIN
          WHERE CartID = @cCartID
             AND ToteID = @cToteID)
       BEGIN
-         SET @nErrNo = 168212
+         SET @nErrNo = 189257
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote Assigned
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- ToteID
          SET @cOutField05 = ''
@@ -573,7 +531,7 @@ BEGIN
       VALUES (@cCartID, @cPosition, @cToteID, @cDPLKey, @cMethod, @cPickZone, @cPickSeq, @cPickSlipNo, @cStorerKey)
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 168213
+         SET @nErrNo = 189258
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
          GOTO RollBackTran
       END
@@ -588,8 +546,8 @@ BEGIN
          IF NOT EXISTS ( SELECT 1 
             FROM dbo.CODELKUP WITH (NOLOCK)
             WHERE LISTNAME = @cFilterLocType
-               AND   Storerkey = @cStorerKey
-               AND  (code2 = @nFunc OR code2 = 0))
+            AND   Storerkey = @cStorerKey
+            AND  (code2 = @nFunc OR code2 = 0))
             SET @cFilterLocType = ''
       END
 
@@ -601,7 +559,7 @@ BEGIN
          ' FROM Orders O WITH (NOLOCK) ' +
          ' JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey) ' + 
          ' JOIN LOC LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
-         ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+         ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
          CASE WHEN @cFilterLocType <> '' THEN ' JOIN @tLocationType t ON (LOC.LocationType = t.LocationType) ' 
               ELSE '' END +
          ' WHERE O.OrderKey = @cOrderKey ' +
@@ -611,16 +569,16 @@ BEGIN
          ' AND   O.Status <> ''CANC'' ' +
          ' AND   O.SOStatus <> ''CANC''' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +   
-         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04 ' --(yeekung01)
+         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04  ' 
          
       IF @cPSType = 'CONSO'
          SET @cSQL =   
-         ' SELECT PD.LOC, PD.SKU, SUM( PD.QTY),Lottable02,lottable04,PD.LOT   ' +   
+         ' SELECT PD.LOC, PD.SKU, SUM( PD.QTY),Lottable02,lottable04,PD.LOT  ' +   
          ' FROM LoadPlanDetail LPD WITH (NOLOCK) ' +    
          ' JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey) ' +
          ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' +
          ' JOIN LOC LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
-         ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+        	' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
          CASE WHEN @cFilterLocType <> '' THEN ' JOIN @tLocationType t ON (LOC.LocationType = t.LocationType) ' 
               ELSE '' END +
          ' WHERE LPD.Loadkey = @cLoadKey ' +
@@ -630,16 +588,16 @@ BEGIN
          ' AND   O.Status <> ''CANC'' ' +
          ' AND   O.SOStatus <> ''CANC''' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +   
-         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04  ' 
+         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04   ' 
 
       IF @cPSType = 'XD'
          SET @cSQL =   
-         ' SELECT PD.LOC, PD.SKU, SUM( PD.QTY),Lottable02,lottable04,PD.LOT   ' +   
+         ' SELECT PD.LOC, PD.SKU, SUM( PD.QTY),Lottable02,lottable04,PD.LOT  ' +   
          ' FROM Orders O WITH (NOLOCK) ' +    
          ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' +
          ' JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey) ' +
          ' JOIN LOC LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
-         ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+         ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
          CASE WHEN @cFilterLocType <> '' THEN ' JOIN @tLocationType t ON (LOC.LocationType = t.LocationType) ' 
               ELSE '' END +
          ' WHERE RKL.PickslipNo = @cPickSlipNo ' +
@@ -649,15 +607,15 @@ BEGIN
          ' AND   O.Status <> ''CANC'' ' +
          ' AND   O.SOStatus <> ''CANC''' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +   
-         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04  ' 
+         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04   ' 
 
       IF @cPSType = 'CUSTOM'
          SET @cSQL =   
-         ' SELECT PD.LOC, PD.SKU, SUM( PD.QTY),Lottable02,lottable04,PD.LOT    ' +   
+         ' SELECT PD.LOC, PD.SKU, SUM( PD.QTY),Lottable02,lottable04,PD.LOT  ' +   
          ' FROM Orders O WITH (NOLOCK) ' +    
          ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' +
-         ' JOIN LOC LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
-         ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+         ' JOIN LOC LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' +
+       	' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
          CASE WHEN @cFilterLocType <> '' THEN ' JOIN @tLocationType t ON (LOC.LocationType = t.LocationType) ' 
               ELSE '' END +
          ' WHERE PD.PickslipNo = @cPickSlipNo ' +
@@ -667,7 +625,7 @@ BEGIN
          ' AND   O.Status <> ''CANC'' ' +
          ' AND   O.SOStatus <> ''CANC''' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +   
-         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04  ' 
+         ' GROUP BY PD.LOC, PD.SKU,PD.LOT,Lottable02,lottable04   ' 
 
       -- Set loc type filter
       SET @cSQLFilterLocType =   
@@ -683,6 +641,7 @@ BEGIN
             AND  (code2 = @nFunc OR code2 = '''')
             ORDER BY code2 DESC 
          END ' 
+
       -- Open cursor  
       SET @cSQL =   
          ' SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +   
@@ -731,9 +690,8 @@ BEGIN
          -- By lottables
          IF @cSelect <> ''
          BEGIN
-
             SET @cSQL = 
-                ' INSERT INTO PTL.PTLTran ( ' + 
+               ' INSERT INTO PTL.PTLTran ( ' + 
                   ' IPAddress, DeviceID, DevicePosition, Status, PTLType, ' + 
                   ' DeviceProfileLogKey, DropID, SourceKey, Storerkey, SKU, LOC, ExpectedQTY, QTY,LOT, ' + @cGroupBy + ') ' + 
               ' SELECT ' + 
@@ -774,7 +732,7 @@ BEGIN
                   --CASE WHEN @cWhere2 = '' THEN '' ELSE ' = '   + @cWhere2 END +  
                   ' AND O.Status <> ''CANC''' + 
                   ' AND O.SOStatus <> ''CANC''' + 
-               ' GROUP BY PD.LOT, ' + @cGroupBy + 
+               ' GROUP BY PD.LOT,' + @cGroupBy + 
                ' ORDER BY ' + @cOrderBy 
 
             SET @cSQLParam = 
@@ -825,8 +783,7 @@ BEGIN
                @dLottable14,
                @dLottable15,
                @cLOT
-
-         END
+END
          ELSE
          BEGIN
             INSERT INTO PTL.PTLTran (
@@ -839,13 +796,13 @@ BEGIN
       
          IF @@ERROR <> ''
          BEGIN
-            SET @nErrNo = 168214
+            SET @nErrNo = 189259
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') --INS PTL Fail
             GOTO RollBackTran
          END
 
          FETCH NEXT FROM @curPD INTO @cLOC, @cSKU, @nQTY,@cLottable02,@dLottable04,@cLOT
-      END
+     	END
 
       -- (james02)
       SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorerKey)  
@@ -875,7 +832,7 @@ BEGIN
 
             IF @nErrNo <> 0
             BEGIN
-               SET @nErrNo = 168215
+               SET @nErrNo = 189262
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --Fail scan-in
                GOTO RollBackTran
             END
@@ -914,5 +871,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_PTLCart_Assign_PickslipPosTote_Lottable01 TO NSQL
+GRANT EXECUTE ON rdt.rdt_PTLCart_Assign_PickslipPosTote_Lottable02 TO NSQL
 GO
