@@ -69,7 +69,7 @@ LEFT JOIN dbo.LotAttribute  LotAttribute  (nolock)
 LEFT JOIN dbo.Receipt Receipt (nolock)
        ON LEFT(ITrn.SourceKey,10) = Receipt.ReceiptKey       AND ITrn.SourceType = 'ntrReceiptDetailUpdate'
 LEFT JOIN dbo.ReceiptDetail ReceiptDetail (nolock)
-       ON ITrn.SourceKey = ReceiptDetail.ReceiptKey + ReceiptDetail.ReceiptLineNumber AND ITrn.SourceType = 'ntrReceiptDetailUpdate'
+       ON LEFT(ITrn.SourceKey,10) = ReceiptDetail.ReceiptKey  AND  RIGHT(ITrn.SourceKey,5) = ReceiptDetail.ReceiptLineNumber AND ITrn.SourceType = 'ntrReceiptDetailUpdate'
 
 LEFT JOIN dbo.PickDetail    PickDetail (nolock)
        ON ITrn.SourceKey = PickDetail.pickdetailkey          AND ITrn.SourceType = 'ntrPickDetailUpdate'
