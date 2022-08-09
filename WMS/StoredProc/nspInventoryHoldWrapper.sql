@@ -42,6 +42,8 @@ GO
 /* 01-DEC-2021  Wan02     1.7   Fixed. Remark Delete from #LotByBatch & */
 /*                              Not to Rollback if @@Trancount not 1    */
 /* 01-DEC-2021  Wan02     1.7   DevOps Combine Script                   */
+/* 21-JUL-2022  NJOW03    1.8   WMS-20297 allow inventory hold in channel*/
+/*                              management by config.                   */
 /************************************************************************/
 CREATE PROC [dbo].[nspInventoryHoldWrapper]
      @c_lot          NVARCHAR(10)
@@ -91,6 +93,13 @@ BEGIN
           ,@c_TransmitLogKey          NVARCHAR(10)    --(MC01)
           ,@c_Exec_Cur                NVARCHAR(4000)  --(MC01)
           ,@c_ChannelInventoryMgmt    NVARCHAR(10) = '0' -- (SWT01)            
+   
+   --NJOW03       
+   DECLARE @c_Option1                 NVARCHAR(50)    
+          ,@c_Option2                 NVARCHAR(50)  
+          ,@c_Option3                 NVARCHAR(50)  
+          ,@c_Option4                 NVARCHAR(50)  
+          ,@c_Option5                 NVARCHAR(4000)      
 
    DECLARE @c_InventoryHoldKey        NVARCHAR(10)
 
@@ -166,14 +175,19 @@ BEGIN
       BEGIN
          SELECT @b_success = 0
          EXECUTE nspGetRight2 --(Wan01) 
-         '',
-         @c_StorerKey,        -- Storer
-         '',                   -- Sku
-         'ChannelInventoryMgmt',  -- ConfigKey
-         @b_success    OUTPUT,
-         @c_ChannelInventoryMgmt  OUTPUT,
-         @n_Err        OUTPUT,
-         @c_ErrMsg     OUTPUT
+          @c_Facility  = '',
+          @c_StorerKey = @c_StorerKey,        -- Storer
+          @c_sku       = '',                  -- Sku
+          @c_ConfigKey = 'ChannelInventoryMgmt',  -- ConfigKey
+          @b_Success   = @b_success    OUTPUT,
+          @c_authority = @c_ChannelInventoryMgmt  OUTPUT,
+          @n_err       = @n_Err        OUTPUT,
+          @c_errmsg    = @c_ErrMsg     OUTPUT,                            
+          @c_Option1   = @c_Option1    OUTPUT,  --NJOW03
+          @c_Option2   = @c_Option2    OUTPUT,
+          @c_Option3   = @c_Option3    OUTPUT,
+          @c_Option4   = @c_Option4    OUTPUT,
+          @c_Option5   = @c_Option5    OUTPUT
 
          IF @b_success <> 1
          BEGIN
@@ -181,6 +195,7 @@ BEGIN
          END
       END               
       IF @c_ChannelInventoryMgmt = '1'
+         AND dbo.fnc_GetParamValueFromString('@c_AllowInvHoldInChannelMgmt', @c_Option5, 'N') <> 'Y'  --NJOW03
       BEGIN
          SELECT @n_continue = 3
          SELECT @b_Success = 0
@@ -984,14 +999,19 @@ BEGIN
          BEGIN
             SELECT @b_success = 0
             EXECUTE nspGetRight2 --(Wan01) 
-            '',
-            @c_StorerKey,        -- Storer
-            '',                   -- Sku
-            'ChannelInventoryMgmt',  -- ConfigKey
-            @b_success    OUTPUT,
-            @c_ChannelInventoryMgmt  OUTPUT,
-            @n_Err        OUTPUT,
-            @c_ErrMsg     OUTPUT
+             @c_Facility  = '',
+             @c_StorerKey = @c_StorerKey,        -- Storer
+             @c_sku       = '',                  -- Sku
+             @c_ConfigKey = 'ChannelInventoryMgmt',  -- ConfigKey
+             @b_Success   = @b_success    OUTPUT,
+             @c_authority = @c_ChannelInventoryMgmt  OUTPUT,
+             @n_err       = @n_Err        OUTPUT,
+             @c_errmsg    = @c_ErrMsg     OUTPUT,                            
+             @c_Option1   = @c_Option1    OUTPUT,  --NJOW03
+             @c_Option2   = @c_Option2    OUTPUT,
+             @c_Option3   = @c_Option3    OUTPUT,
+             @c_Option4   = @c_Option4    OUTPUT,
+             @c_Option5   = @c_Option5    OUTPUT
 
             IF @b_success <> 1
             BEGIN
@@ -999,6 +1019,7 @@ BEGIN
             END
          END               
          IF @c_ChannelInventoryMgmt = '1'
+            AND dbo.fnc_GetParamValueFromString('@c_AllowInvHoldInChannelMgmt', @c_Option5, 'N') <> 'Y'  --NJOW03         
          BEGIN
             SELECT @n_continue = 3
             SELECT @b_Success = 0
@@ -1006,7 +1027,7 @@ BEGIN
             SELECT @c_Errmsg = 'Inventory Hold Not allow for Channel Management Customer. [nspInventoryHoldWrapper]'
             GOTO EXIT_SP 
          END
-      
+                        
          --NJOW01-Start
          SELECT @c_CurrHold = ''
 
