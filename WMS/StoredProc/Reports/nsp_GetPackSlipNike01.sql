@@ -43,6 +43,7 @@ GO
 /* 28-Jan-2019  TLTING_ext 1.4  enlarge externorderkey field length      */
 /* 18-Feb-2019  CSCHONG  1.6  WMS-7680 - new sorting rule and new field(CS03)*/
 /* 24-JUL-2019  SPChin   1.7  INC0734382 - Filter By StorerKey              */
+/* 13-SEP-2021  MINGLE   1.8  WMS-17766 - Add b_company(ML01)               */
 /****************************************************************************/
 
 create PROC dbo.nsp_GetPackSlipNike01 (@c_LoadKey nvarchar(10)) 
@@ -239,7 +240,8 @@ BEGIN
     Qty34           int      NULL,
     Qty35           int      NULL,
     Qty36           int      NULL,
-    MoreField       NVARCHAR(30) NULL)             --CS03 End
+    MoreField       NVARCHAR(30) NULL,        --CS03 End    
+    B_Company         nvarchar(45) NULL)      --ML01 
 
    SELECT @c_TempOrderKey = '', @n_Count = 0      
    SELECT @c_SkuSize1='',  @c_SkuSize2='',  @c_SkuSize3='',  @c_SkuSize4=''
@@ -990,7 +992,8 @@ BEGIN
                         THEN SUM(OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty)
                         ELSE 0
                         END
-                ,@c_MoreField      
+                ,@c_MoreField 
+                ,ORDERS.B_Company      --ML01        
                 --CS03 End                                            
             FROM ORDERDETAIL OD (NOLOCK) 
             JOIN ORDERS (NOLOCK) ON OD.OrderKey = ORDERS.OrderKey 
@@ -1109,7 +1112,8 @@ BEGIN
                     STORER.Address1,
                     STORER.Address2,
                     STORER.Phone1,                                                      
-                    STORER.Company                                                      
+                    STORER.Company,    
+                    ORDERS.B_Company      --ML01                                                     
             HAVING SUM(OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty) > 0
             ORDER BY ORDERS.OrderKey,
                     StyleColour,
@@ -1195,7 +1199,7 @@ BEGIN
          SUM(Qty23) Qty23, SUM(Qty24) Qty24, SUM(Qty25) Qty25, SUM(Qty26) Qty26, SUM(Qty27) Qty27, SUM(Qty28) Qty28, 
          SUM(Qty29) Qty29, SUM(Qty30) Qty30, SUM(Qty31) Qty31, SUM(Qty32) Qty32,
          StorerAdd1, StorerAdd2, StorerPhone1, StorerCompany, SkuSize33, SkuSize34, SkuSize35, SkuSize36,   --CS03
-         SUM(Qty33) Qty33, SUM(Qty34) Qty34, SUM(Qty35) Qty35, SUM(Qty36) Qty36,MoreField                             --CS03
+         SUM(Qty33) Qty33, SUM(Qty34) Qty34, SUM(Qty35) Qty35, SUM(Qty36) Qty36,MoreField,B_Company         --CS03 --ML01 
    FROM #TempPickSlip
    GROUP BY PickSlipNo, Loadkey, OrderKey, ExternOrderKey, ExternPOkey, Notes, 
             ConsigneeKey, Company, c_Address1, c_Address2, c_Address3, c_City, c_Zip, Userdefine06, Type,
@@ -1205,7 +1209,7 @@ BEGIN
           SkuSize9, SkuSize10, SkuSize11, SkuSize12, SkuSize13, SkuSize14, SkuSize15, SkuSize16,
           SkuSize17, SkuSize18, SkuSize19, SkuSize20, SkuSize21, SkuSize22, SkuSize23, SkuSize24, 
           SkuSize25, SkuSize26, SkuSize27, SkuSize28, SkuSize29, SkuSize30, SkuSize31, SkuSize32,
-          StorerAdd1, StorerAdd2, StorerPhone1, StorerCompany, SkuSize33, SkuSize34, SkuSize35, SkuSize36,MoreField       --CS03
+          StorerAdd1, StorerAdd2, StorerPhone1, StorerCompany, SkuSize33, SkuSize34, SkuSize35, SkuSize36,MoreField,B_Company  --CS03 --ML01  
 
    DROP TABLE #TempOrder
    DROP TABLE #TempPickSlip
